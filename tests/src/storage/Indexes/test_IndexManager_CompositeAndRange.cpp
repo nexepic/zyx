@@ -279,6 +279,30 @@ TEST_F(IndexManagerCompositeTest, FindNodeIdsByPropertyRange_Basic) {
 	EXPECT_GE(results.size(), 2UL); // 20, 30, 40
 }
 
+TEST_F(IndexManagerCompositeTest, FindNodeIdsByPropertyRange_HonorsExclusiveBounds) {
+	(void)indexManager->createIndex("idx_exclusive_level", "node", "Player", "level");
+
+	int64_t labelId = dataManager->getOrCreateTokenId("Player");
+	for (int i = 1; i <= 5; ++i) {
+		graph::Node n(0, labelId);
+		dataManager->addNode(n);
+		dataManager->addNodeProperties(n.getId(), {{"level", static_cast<int64_t>(i * 10)}});
+	}
+
+	auto results = indexManager->findNodeIdsByPropertyRange(
+		"level",
+		PropertyValue(static_cast<int64_t>(20)),
+		PropertyValue(static_cast<int64_t>(40)),
+		false,
+		false);
+
+	ASSERT_EQ(results.size(), 1UL);
+	auto node = dataManager->getNode(results[0]);
+	auto props = dataManager->getNodeProperties(node.getId());
+	ASSERT_TRUE(props.contains("level"));
+	EXPECT_EQ(props["level"], PropertyValue(static_cast<int64_t>(30)));
+}
+
 TEST_F(IndexManagerCompositeTest, FindNodeIdsByPropertyRange_EmptyResult) {
 	(void)indexManager->createIndex("idx_score", "node", "G", "score");
 

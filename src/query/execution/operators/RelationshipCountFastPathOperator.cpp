@@ -76,8 +76,16 @@ namespace {
 	std::vector<int64_t> RelationshipCountFastPathOperator::collectSeedIds() const {
 		const auto candidateStart = Clock::now();
 		NodeCandidateSource source(dm_, im_);
-		const auto candidates = source.collect(seedConfig_);
+		const auto candidateSet = source.collectWithMetadata(seedConfig_);
+		const auto &candidates = candidateSet.ids;
 		addProfile("relationship_expand.seed_candidates", candidateStart);
+
+		if (seedPredicates_.empty() &&
+		    seedRequirements_.materialization == NodeMaterializationMode::NSM_ID_ONLY &&
+		    (!seedRequirements_.needsActiveCheck || candidateSet.activeOnly) &&
+		    (!seedRequirements_.needsLabels || candidateSet.labelsSatisfied)) {
+			return candidates;
+		}
 
 		const auto loadStart = Clock::now();
 		NodeBatchLoader loader(dm_, threadPool_);

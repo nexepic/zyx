@@ -24,7 +24,7 @@ namespace graph::query::execution {
 		                                  const NodeScanRequirements &requirements) const;
 
 	private:
-		[[nodiscard]] bool matchesLabels(const Node &node, const NodeScanConfig &config) const;
+		[[nodiscard]] bool matchesLabels(const Node &node, const std::vector<int64_t> &labelIds) const;
 
 		std::shared_ptr<storage::DataManager> dm_;
 		concurrent::ThreadPool *threadPool_ = nullptr;

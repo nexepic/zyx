@@ -27,6 +27,7 @@ protected:
 		(void)execute("CREATE (:User {id: 'u2'})");
 		(void)execute("CREATE (:User {id: 'u3'})");
 		(void)execute("CREATE (:User {id: 'u4'})");
+		(void)execute("CREATE INDEX ON :User(id)");
 		(void)execute("MATCH (a:User {id: 'u1'}), (b:User {id: 'u2'}) CREATE (a)-[:FOLLOWS {weight: 1}]->(b)");
 		(void)execute("MATCH (a:User {id: 'u1'}), (b:User {id: 'u3'}) CREATE (a)-[:FOLLOWS {weight: 2}]->(b)");
 		(void)execute("MATCH (a:User {id: 'u2'}), (b:User {id: 'u4'}) CREATE (a)-[:FOLLOWS {weight: 1}]->(b)");
@@ -74,6 +75,7 @@ TEST_F(RelationshipExpandFastPathIntegrationTest, CountsOneHopExpandWithFastPath
 
 	const auto snapshot = debug::PerfTrace::snapshotAndReset();
 	EXPECT_TRUE(snapshot.contains("relationship_expand.count"));
+	EXPECT_FALSE(snapshot.contains("relationship_expand.seed_load"));
 }
 
 TEST_F(RelationshipExpandFastPathIntegrationTest, CountsTwoHopExpandWithFastPathProfilePhase) {
@@ -102,6 +104,16 @@ TEST_F(RelationshipExpandFastPathIntegrationTest, EdgePropertyFilterUsesLegacyPa
 	debug::PerfTrace::reset();
 
 	EXPECT_EQ(runCount("MATCH (:User {id: 'u1'})-[r:FOLLOWS]->(v:User) WHERE r.weight = 1 RETURN count(v) AS count"), 1);
+
+	const auto snapshot = debug::PerfTrace::snapshotAndReset();
+	EXPECT_FALSE(snapshot.contains("relationship_expand.count"));
+}
+
+TEST_F(RelationshipExpandFastPathIntegrationTest, AnchoredExpandWithoutSeedIndexUsesLegacyPath) {
+	debug::PerfTrace::setEnabled(true);
+	debug::PerfTrace::reset();
+
+	EXPECT_EQ(runCount("MATCH (:User {missing: 'u1'})-[:FOLLOWS]->(v:User) RETURN count(v) AS count"), 0);
 
 	const auto snapshot = debug::PerfTrace::snapshotAndReset();
 	EXPECT_FALSE(snapshot.contains("relationship_expand.count"));

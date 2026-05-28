@@ -726,8 +726,20 @@ namespace graph::query::indexes {
 		return leaf.findValues(key, dataManager_, keyComparator_);
 	}
 
+	size_t IndexTreeManager::count(int64_t rootId, const PropertyValue &key) const {
+		std::shared_lock lock(mutex_);
+		if (rootId == 0)
+			return 0;
+
+		int64_t leafId = findLeafNode(rootId, key);
+		auto leaf = dataManager_->getIndex(leafId);
+		return leaf.countValues(key, dataManager_, keyComparator_);
+	}
+
 	std::vector<int64_t> IndexTreeManager::findRange(int64_t rootId, const PropertyValue &minKey,
-													 const PropertyValue &maxKey) const {
+													 const PropertyValue &maxKey,
+													 bool minInclusive,
+													 bool maxInclusive) const {
 		std::shared_lock lock(mutex_);
 		if (rootId == 0)
 			return {};
@@ -735,6 +747,9 @@ namespace graph::query::indexes {
 		int64_t leafId = findLeafNode(rootId, minKey);
 		std::vector<int64_t> results;
 		bool continueScan = true;
+		const auto equalsKey = [&](const PropertyValue &a, const PropertyValue &b) {
+			return !keyComparator_(a, b) && !keyComparator_(b, a);
+		};
 
 		while (leafId != 0 && continueScan) {
 			auto leaf = dataManager_->getIndex(leafId);
@@ -743,7 +758,13 @@ namespace graph::query::indexes {
 			for (const auto &entry: allEntries) {
 				if (keyComparator_(entry.key, minKey))
 					continue;
+				if (!minInclusive && equalsKey(entry.key, minKey))
+					continue;
 				if (keyComparator_(maxKey, entry.key)) {
+					continueScan = false;
+					break;
+				}
+				if (!maxInclusive && equalsKey(entry.key, maxKey)) {
 					continueScan = false;
 					break;
 				}
@@ -753,6 +774,28 @@ namespace graph::query::indexes {
 				leafId = leaf.getNextLeafId();
 		}
 		return results;
+	}
+
+	size_t IndexTreeManager::countRange(int64_t rootId, const PropertyValue &minKey,
+	                                    const PropertyValue &maxKey,
+	                                    bool minInclusive,
+	                                    bool maxInclusive) const {
+		std::shared_lock lock(mutex_);
+		if (rootId == 0)
+			return 0;
+
+		int64_t leafId = findLeafNode(rootId, minKey);
+		size_t count = 0;
+		bool continueScan = true;
+
+		while (leafId != 0 && continueScan) {
+			auto leaf = dataManager_->getIndex(leafId);
+			count += leaf.countValuesInRange(
+					minKey, maxKey, minInclusive, maxInclusive, continueScan, dataManager_, keyComparator_);
+			if (continueScan)
+				leafId = leaf.getNextLeafId();
+		}
+		return count;
 	}
 
 	std::vector<PropertyValue> IndexTreeManager::scanKeys(int64_t rootId, size_t limit) const {

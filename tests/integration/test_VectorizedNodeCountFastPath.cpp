@@ -85,6 +85,73 @@ TEST_F(VectorizedNodeCountFastPathIntegrationTest, CountsPropertyEqualityNodesWi
 	EXPECT_TRUE(snapshot.contains("node_scan.count"));
 }
 
+TEST_F(VectorizedNodeCountFastPathIntegrationTest, IndexedEqualityCountAvoidsPropertyMaterialization) {
+	auto indexResult = execute("CREATE INDEX ON :Person(age)");
+	ASSERT_EQ(indexResult.rowCount(), 1U);
+	debug::PerfTrace::setEnabled(true);
+	debug::PerfTrace::reset();
+
+	EXPECT_EQ(runCount("MATCH (n:Person {age: 42}) RETURN count(n) AS count"), 1);
+
+	const auto snapshot = debug::PerfTrace::snapshotAndReset();
+	EXPECT_TRUE(snapshot.contains("node_scan.count"));
+	EXPECT_TRUE(snapshot.contains("node_scan.candidates"));
+	EXPECT_FALSE(snapshot.contains("node_scan.load_nodes"));
+	EXPECT_FALSE(snapshot.contains("node_scan.label_check"));
+	EXPECT_FALSE(snapshot.contains("node_scan.load_properties"));
+	EXPECT_FALSE(snapshot.contains("node_scan.load_property_entities"));
+}
+
+TEST_F(VectorizedNodeCountFastPathIntegrationTest, IndexedInclusiveRangeCountAvoidsPropertyMaterialization) {
+	auto indexResult = execute("CREATE INDEX ON :Person(age)");
+	ASSERT_EQ(indexResult.rowCount(), 1U);
+	debug::PerfTrace::setEnabled(true);
+	debug::PerfTrace::reset();
+
+	EXPECT_EQ(runCount("MATCH (n:Person) WHERE n.age >= 30 AND n.age <= 65 RETURN count(n) AS count"), 2);
+
+	const auto snapshot = debug::PerfTrace::snapshotAndReset();
+	EXPECT_TRUE(snapshot.contains("node_scan.count"));
+	EXPECT_TRUE(snapshot.contains("node_scan.candidates"));
+	EXPECT_FALSE(snapshot.contains("node_scan.load_nodes"));
+	EXPECT_FALSE(snapshot.contains("node_scan.label_check"));
+	EXPECT_FALSE(snapshot.contains("node_scan.load_properties"));
+	EXPECT_FALSE(snapshot.contains("node_scan.load_property_entities"));
+}
+
+TEST_F(VectorizedNodeCountFastPathIntegrationTest, IndexedExclusiveRangeCountAvoidsPropertyMaterialization) {
+	auto indexResult = execute("CREATE INDEX ON :Person(age)");
+	ASSERT_EQ(indexResult.rowCount(), 1U);
+	debug::PerfTrace::setEnabled(true);
+	debug::PerfTrace::reset();
+
+	EXPECT_EQ(runCount("MATCH (n:Person) WHERE n.age >= 30 AND n.age < 65 RETURN count(n) AS count"), 1);
+
+	const auto snapshot = debug::PerfTrace::snapshotAndReset();
+	EXPECT_TRUE(snapshot.contains("node_scan.count"));
+	EXPECT_TRUE(snapshot.contains("node_scan.candidates"));
+	EXPECT_FALSE(snapshot.contains("node_scan.load_nodes"));
+	EXPECT_FALSE(snapshot.contains("node_scan.label_check"));
+	EXPECT_FALSE(snapshot.contains("node_scan.load_properties"));
+	EXPECT_FALSE(snapshot.contains("node_scan.load_property_entities"));
+}
+
+TEST_F(VectorizedNodeCountFastPathIntegrationTest, IndexedUnlabeledCountAvoidsNodeLoads) {
+	auto indexResult = execute("CREATE INDEX ON :Person(age)");
+	ASSERT_EQ(indexResult.rowCount(), 1U);
+	debug::PerfTrace::setEnabled(true);
+	debug::PerfTrace::reset();
+
+	EXPECT_EQ(runCount("MATCH (n {age: 42}) RETURN count(n) AS count"), 2);
+
+	const auto snapshot = debug::PerfTrace::snapshotAndReset();
+	EXPECT_TRUE(snapshot.contains("node_scan.count"));
+	EXPECT_TRUE(snapshot.contains("node_scan.candidates"));
+	EXPECT_FALSE(snapshot.contains("node_scan.load_nodes"));
+	EXPECT_FALSE(snapshot.contains("node_scan.label_check"));
+	EXPECT_FALSE(snapshot.contains("node_scan.load_properties"));
+}
+
 TEST_F(VectorizedNodeCountFastPathIntegrationTest, CountsWhereLowerBoundPropertyFilterWithFastPathProfilePhase) {
 	debug::PerfTrace::setEnabled(true);
 	debug::PerfTrace::reset();

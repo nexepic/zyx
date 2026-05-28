@@ -63,6 +63,11 @@ namespace graph::query::execution::operators {
 		[[nodiscard]] std::vector<const PhysicalOperator *> getChildren() const override { return {child_.get()}; }
 
 	private:
+		struct DecoratedRecord {
+			Record record;
+			std::vector<PropertyValue> sortKeys;
+		};
+
 		std::unique_ptr<PhysicalOperator> child_;
 		std::vector<SortItem> sortItems_;
 
@@ -73,6 +78,9 @@ namespace graph::query::execution::operators {
 		static constexpr size_t BATCH_SIZE = 1000;
 
 		void performSort();
+		[[nodiscard]] std::vector<PropertyValue> evaluateSortKeys(const Record &record) const;
+		[[nodiscard]] bool compareKeys(const std::vector<PropertyValue> &left,
+		                                const std::vector<PropertyValue> &right) const;
 	};
 
 } // namespace graph::query::execution::operators

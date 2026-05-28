@@ -74,7 +74,16 @@ namespace graph::query::indexes {
 		// Find nodes with property value in range
 		std::vector<int64_t> findRange(const std::string &key,
 		                                const PropertyValue &minValue,
-		                                const PropertyValue &maxValue) const;
+		                                const PropertyValue &maxValue,
+		                                bool minInclusive = true,
+		                                bool maxInclusive = true) const;
+
+		size_t countExactMatch(const std::string &key, const PropertyValue &value) const;
+		size_t countRange(const std::string &key,
+		                  const PropertyValue &minValue,
+		                  const PropertyValue &maxValue,
+		                  bool minInclusive = true,
+		                  bool maxInclusive = true) const;
 
 		const std::vector<std::string> &getIndexedKeys() const;
 

@@ -30,6 +30,11 @@
 #include "graph/storage/state/SystemStateKeys.hpp"
 
 namespace graph::query::indexes {
+namespace {
+	std::string scopedNodePropertyKey(const std::string &label, const std::string &property) {
+		return "__zyx_scoped_node_property__" + label + "__" + property;
+	}
+} // namespace
 
 	IndexManager::IndexManager(std::shared_ptr<storage::FileStorage> storage) :
 		storage_(std::move(storage)), dataManager_(storage_->getDataManager()) {
@@ -178,7 +183,7 @@ namespace graph::query::indexes {
 				// Create property index for nodes
 				// Note: We use the new createPropertyIndex method which handles 'hasKeyIndexed' check internally.
 				success = nodeIndexManager_->createPropertyIndex(property, [&]() {
-					return executeBuildTask([&]() { return indexBuilder_->buildNodePropertyIndex(property); });
+					return executeBuildTask([&]() { return indexBuilder_->buildNodePropertyIndex(property, label); });
 				});
 			} else if (entityType == "edge") {
 				// Create property index for edges
@@ -221,6 +226,9 @@ namespace graph::query::indexes {
 		bool physicalDropSuccess = false;
 		if (meta.entityType == "node") {
 			physicalDropSuccess = nodeIndexManager_->dropIndex(meta.indexType, meta.property);
+			if (physicalDropSuccess && meta.indexType == "property" && !meta.label.empty() && !meta.property.empty()) {
+				nodeIndexManager_->getPropertyIndex()->dropKey(scopedNodePropertyKey(meta.label, meta.property));
+			}
 		} else {
 			physicalDropSuccess = edgeIndexManager_->dropIndex(meta.indexType, meta.property);
 		}
@@ -328,6 +336,7 @@ namespace graph::query::indexes {
 	// --- Event Handlers simply delegate to the appropriate manager ---
 	void IndexManager::onNodeAdded(const Node &node) {
 		nodeIndexManager_->onEntityAdded(node);
+		updateScopedPropertyIndexesForNode(Node{}, node);
 
 		// Update composite indexes
 		updateCompositeIndexForNode(node);
@@ -346,6 +355,9 @@ namespace graph::query::indexes {
 	void IndexManager::onNodesAdded(const std::vector<Node> &nodes) {
 		// 1. Standard Indexes
 		nodeIndexManager_->onEntitiesAdded(nodes);
+		for (const auto &node : nodes) {
+			updateScopedPropertyIndexesForNode(Node{}, node);
+		}
 
 		// 2. Vector Indexes (Batch) — use batch API for graph construction efficiency
 		if (vectorIndexManager_ && !nodes.empty()) {
@@ -370,6 +382,7 @@ namespace graph::query::indexes {
 
 	void IndexManager::onNodeUpdated(const Node &oldNode, const Node &newNode) {
 		nodeIndexManager_->onEntityUpdated(oldNode, newNode);
+		updateScopedPropertyIndexesForNode(oldNode, newNode);
 
 		// Update composite indexes
 		removeCompositeIndexForNode(oldNode);
@@ -388,6 +401,7 @@ namespace graph::query::indexes {
 	void IndexManager::onNodeDeleted(const Node &node) {
 		// 1. Update Standard Indexes
 		nodeIndexManager_->onEntityDeleted(node);
+		removeScopedPropertyIndexesForNode(node);
 
 		// 2. Update composite indexes
 		removeCompositeIndexForNode(node);
@@ -433,11 +447,92 @@ namespace graph::query::indexes {
 
 	std::vector<int64_t> IndexManager::findNodeIdsByPropertyRange(const std::string &key,
 	                                                               const PropertyValue &minValue,
-	                                                               const PropertyValue &maxValue) const {
+	                                                               const PropertyValue &maxValue,
+	                                                               bool minInclusive,
+	                                                               bool maxInclusive) const {
 		log::Log::debug("IndexManager::findNodeIdsByPropertyRange - key: {}", key);
 		lookups_.fetch_add(1, std::memory_order_relaxed);
-		auto result = nodeIndexManager_->getPropertyIndex()->findRange(key, minValue, maxValue);
+		auto result = nodeIndexManager_->getPropertyIndex()->findRange(key, minValue, maxValue, minInclusive, maxInclusive);
 		if (!result.empty()) indexHits_.fetch_add(1, std::memory_order_relaxed);
+		return result;
+	}
+
+	bool IndexManager::hasNodePropertyIndexForLabel(const std::string &label, const std::string &key) const {
+		if (label.empty() || key.empty()) {
+			return false;
+		}
+		return nodeIndexManager_->getPropertyIndex()->hasKeyIndexed(scopedNodePropertyKey(label, key));
+	}
+
+	std::vector<int64_t> IndexManager::findNodeIdsByLabelAndProperty(
+	    const std::string &label,
+	    const std::string &key,
+	    const PropertyValue &value) const {
+		log::Log::debug("IndexManager::findNodeIdsByLabelAndProperty - label: {}, key: {}", label, key);
+		lookups_.fetch_add(1, std::memory_order_relaxed);
+		auto result = nodeIndexManager_->getPropertyIndex()->findExactMatch(scopedNodePropertyKey(label, key), value);
+		if (!result.empty()) indexHits_.fetch_add(1, std::memory_order_relaxed);
+		return result;
+	}
+
+	std::vector<int64_t> IndexManager::findNodeIdsByLabelAndPropertyRange(
+	    const std::string &label,
+	    const std::string &key,
+	    const PropertyValue &minValue,
+	    const PropertyValue &maxValue,
+	    bool minInclusive,
+	    bool maxInclusive) const {
+		log::Log::debug("IndexManager::findNodeIdsByLabelAndPropertyRange - label: {}, key: {}", label, key);
+		lookups_.fetch_add(1, std::memory_order_relaxed);
+		auto result = nodeIndexManager_->getPropertyIndex()->findRange(
+			scopedNodePropertyKey(label, key), minValue, maxValue, minInclusive, maxInclusive);
+		if (!result.empty()) indexHits_.fetch_add(1, std::memory_order_relaxed);
+		return result;
+	}
+
+	size_t IndexManager::countNodeIdsByProperty(const std::string &key, const PropertyValue &value) const {
+		log::Log::debug("IndexManager::countNodeIdsByProperty - key: {}", key);
+		lookups_.fetch_add(1, std::memory_order_relaxed);
+		auto result = nodeIndexManager_->getPropertyIndex()->countExactMatch(key, value);
+		if (result != 0) indexHits_.fetch_add(1, std::memory_order_relaxed);
+		return result;
+	}
+
+	size_t IndexManager::countNodeIdsByPropertyRange(const std::string &key,
+	                                                 const PropertyValue &minValue,
+	                                                 const PropertyValue &maxValue,
+	                                                 bool minInclusive,
+	                                                 bool maxInclusive) const {
+		log::Log::debug("IndexManager::countNodeIdsByPropertyRange - key: {}", key);
+		lookups_.fetch_add(1, std::memory_order_relaxed);
+		auto result = nodeIndexManager_->getPropertyIndex()->countRange(key, minValue, maxValue, minInclusive, maxInclusive);
+		if (result != 0) indexHits_.fetch_add(1, std::memory_order_relaxed);
+		return result;
+	}
+
+	size_t IndexManager::countNodeIdsByLabelAndProperty(
+	    const std::string &label,
+	    const std::string &key,
+	    const PropertyValue &value) const {
+		log::Log::debug("IndexManager::countNodeIdsByLabelAndProperty - label: {}, key: {}", label, key);
+		lookups_.fetch_add(1, std::memory_order_relaxed);
+		auto result = nodeIndexManager_->getPropertyIndex()->countExactMatch(scopedNodePropertyKey(label, key), value);
+		if (result != 0) indexHits_.fetch_add(1, std::memory_order_relaxed);
+		return result;
+	}
+
+	size_t IndexManager::countNodeIdsByLabelAndPropertyRange(
+	    const std::string &label,
+	    const std::string &key,
+	    const PropertyValue &minValue,
+	    const PropertyValue &maxValue,
+	    bool minInclusive,
+	    bool maxInclusive) const {
+		log::Log::debug("IndexManager::countNodeIdsByLabelAndPropertyRange - label: {}, key: {}", label, key);
+		lookups_.fetch_add(1, std::memory_order_relaxed);
+		auto result = nodeIndexManager_->getPropertyIndex()->countRange(
+			scopedNodePropertyKey(label, key), minValue, maxValue, minInclusive, maxInclusive);
+		if (result != 0) indexHits_.fetch_add(1, std::memory_order_relaxed);
 		return result;
 	}
 
@@ -596,6 +691,64 @@ namespace graph::query::indexes {
 			if (allPresent) {
 				propIndex->removeCompositeEntry(node.getId(), keys, values);
 			}
+		}
+	}
+
+	void IndexManager::updateScopedPropertyIndexesForNode(const Node &oldNode, const Node &newNode) {
+		removeScopedPropertyIndexesForNode(oldNode);
+
+		auto *propIndex = nodeIndexManager_->getPropertyIndex().get();
+		if (!propIndex || newNode.getId() == 0 || !newNode.isActive()) return;
+
+		auto sysState = storage_->getSystemStateManager();
+		auto allIndexes = sysState->getMap<std::string>(storage::state::keys::SYS_INDEXES);
+		const auto &props = newNode.getProperties();
+		if (props.empty()) return;
+
+		std::vector<std::tuple<int64_t, std::string, PropertyValue>> scopedEntries;
+		for (const auto &[name, rawMeta] : allIndexes) {
+			IndexMetadata meta = IndexMetadata::fromString(name, rawMeta);
+			if (meta.entityType != "node" || meta.indexType != "property" || meta.label.empty() || meta.property.empty()) {
+				continue;
+			}
+			const int64_t labelId = dataManager_->resolveTokenId(meta.label);
+			if (labelId == 0 || !newNode.hasLabelId(labelId)) {
+				continue;
+			}
+			auto propIt = props.find(meta.property);
+			if (propIt == props.end() || propIt->second.getType() == PropertyType::NULL_TYPE) {
+				continue;
+			}
+			scopedEntries.emplace_back(newNode.getId(), scopedNodePropertyKey(meta.label, meta.property), propIt->second);
+		}
+		if (!scopedEntries.empty()) {
+			propIndex->addPropertiesBatch(scopedEntries);
+		}
+	}
+
+	void IndexManager::removeScopedPropertyIndexesForNode(const Node &node) {
+		auto *propIndex = nodeIndexManager_->getPropertyIndex().get();
+		if (!propIndex || node.getId() == 0) return;
+
+		auto sysState = storage_->getSystemStateManager();
+		auto allIndexes = sysState->getMap<std::string>(storage::state::keys::SYS_INDEXES);
+		const auto &props = node.getProperties();
+		if (props.empty()) return;
+
+		for (const auto &[name, rawMeta] : allIndexes) {
+			IndexMetadata meta = IndexMetadata::fromString(name, rawMeta);
+			if (meta.entityType != "node" || meta.indexType != "property" || meta.label.empty() || meta.property.empty()) {
+				continue;
+			}
+			const int64_t labelId = dataManager_->resolveTokenId(meta.label);
+			if (labelId == 0 || !node.hasLabelId(labelId)) {
+				continue;
+			}
+			auto propIt = props.find(meta.property);
+			if (propIt == props.end() || propIt->second.getType() == PropertyType::NULL_TYPE) {
+				continue;
+			}
+			propIndex->removeProperty(node.getId(), scopedNodePropertyKey(meta.label, meta.property), propIt->second);
 		}
 	}
 

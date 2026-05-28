@@ -37,6 +37,20 @@ TEST_F(IndexTreeManagerTest, RangeQuerySpansMultipleLeaves) {
 	ASSERT_EQ(results.back(), 499);
 }
 
+TEST_F(IndexTreeManagerTest, CountRangeAvoidsMaterializingValues) {
+	for (int i = 0; i < 600; ++i) {
+		stringRootId_ = stringTreeManager_->insert(stringRootId_, PropertyValue(generatePaddedKey(i)), i);
+	}
+
+	EXPECT_EQ(stringTreeManager_->count(stringRootId_, PropertyValue(generatePaddedKey(250))), 1UL);
+	EXPECT_EQ(stringTreeManager_->count(stringRootId_, PropertyValue("missing")), 0UL);
+	EXPECT_EQ(stringTreeManager_->countRange(
+		stringRootId_,
+		PropertyValue(generatePaddedKey(100)),
+		PropertyValue(generatePaddedKey(499))),
+		400UL);
+}
+
 TEST_F(IndexTreeManagerTest, FindReturnsEmptyForNonExistentKey) {
 	// Tests that find returns empty vector for non-existent keys
 	auto results = stringTreeManager_->find(stringRootId_, PropertyValue("non_existent_key"));
@@ -110,6 +124,23 @@ TEST_F(IndexTreeManagerTest, FindRangeExactBounds) {
 		PropertyValue(static_cast<int64_t>(20)),
 		PropertyValue(static_cast<int64_t>(50)));
 	ASSERT_EQ(results.size(), 4UL);
+}
+
+TEST_F(IndexTreeManagerTest, FindRangeHonorsExclusiveBounds) {
+	for (int i = 0; i < 10; ++i) {
+		intRootId_ = intTreeManager_->insert(intRootId_, PropertyValue(static_cast<int64_t>(i * 10)), i);
+	}
+
+	auto results = intTreeManager_->findRange(
+		intRootId_,
+		PropertyValue(static_cast<int64_t>(20)),
+		PropertyValue(static_cast<int64_t>(50)),
+		false,
+		false);
+
+	ASSERT_EQ(results.size(), 2UL);
+	EXPECT_EQ(results[0], 3);
+	EXPECT_EQ(results[1], 4);
 }
 
 TEST_F(IndexTreeManagerTest, FindRangeStartsBelowAllEntries) {

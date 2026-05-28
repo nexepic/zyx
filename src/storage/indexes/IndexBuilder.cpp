@@ -28,8 +28,14 @@
 #include "graph/storage/indexes/IndexManager.hpp"
 #include "graph/storage/indexes/LabelIndex.hpp"
 #include "graph/storage/indexes/PropertyIndex.hpp"
+#include <unordered_map>
 
 namespace graph::query::indexes {
+namespace {
+	std::string scopedPropertyKey(const std::string &label, const std::string &property) {
+		return "__zyx_scoped_node_property__" + label + "__" + property;
+	}
+} // namespace
 
 	IndexBuilder::IndexBuilder(std::shared_ptr<IndexManager> indexManager,
 							   std::shared_ptr<storage::FileStorage> storage) :
@@ -97,12 +103,22 @@ namespace graph::query::indexes {
 	}
 
 	bool IndexBuilder::buildNodePropertyIndex(const std::string &key) const {
+		return buildNodePropertyIndex(key, "");
+	}
+
+	bool IndexBuilder::buildNodePropertyIndex(const std::string &key, const std::string &label) const {
 		try {
 			auto propertyIndex = indexManager_->getNodeIndexManager()->getPropertyIndex();
+			const int64_t scopedLabelId = label.empty() ? 0 : dataManager_->resolveTokenId(label);
+			const std::string scopedKey = label.empty() ? "" : scopedPropertyKey(label, key);
 
 			// CRITICAL CHANGE: Use clearIndexData instead of clearKey.
 			// clearKey would remove the definition; clearIndexData only resets the tree/data.
 			propertyIndex->clearIndexData(key);
+			if (!scopedKey.empty()) {
+				propertyIndex->createIndex(scopedKey);
+				propertyIndex->clearIndexData(scopedKey);
+			}
 
 			std::vector<int64_t> batchIds;
 			batchIds.reserve(BATCH_SIZE);
@@ -110,14 +126,14 @@ namespace graph::query::indexes {
 				for (int64_t id = startId; id <= endId; id++) {
 					batchIds.push_back(id);
 					if (batchIds.size() == BATCH_SIZE) {
-						processNodeBatch(batchIds, nullptr, propertyIndex, key);
+						processNodeBatch(batchIds, nullptr, propertyIndex, key, scopedLabelId, scopedKey);
 						batchIds.clear();
 					}
 				}
 			}
 			// Process remaining entities
 			if (!batchIds.empty()) {
-				processNodeBatch(batchIds, nullptr, propertyIndex, key);
+				processNodeBatch(batchIds, nullptr, propertyIndex, key, scopedLabelId, scopedKey);
 			}
 			return true;
 		} catch (...) {
@@ -157,7 +173,15 @@ namespace graph::query::indexes {
 	void IndexBuilder::processNodeBatch(const std::vector<int64_t> &nodeIds,
 										const std::shared_ptr<LabelIndex> &labelIndex,
 										const std::shared_ptr<PropertyIndex> &propertyIndex,
-										const std::string &propertyKey) const {
+										const std::string &propertyKey,
+										int64_t scopedLabelId,
+										const std::string &scopedPropertyKey) const {
+		std::unordered_map<int64_t, std::vector<int64_t>> nodeIdsByLabelId;
+		std::vector<std::tuple<int64_t, std::string, PropertyValue>> propertyEntries;
+		if (propertyIndex) {
+			propertyEntries.reserve(nodeIds.size() * (scopedPropertyKey.empty() ? 1 : 2));
+		}
+
 		for (int64_t id: nodeIds) {
 			Node node = dataManager_->getNode(id);
 			if (node.getId() == 0 || !node.isActive())
@@ -166,9 +190,10 @@ namespace graph::query::indexes {
 			int64_t nodeId = node.getId();
 
 			if (labelIndex) {
-				if (node.getLabelId() != 0) {
-					std::string labelStr = dataManager_->resolveTokenName(node.getLabelId());
-					labelIndex->addNode(nodeId, labelStr);
+				for (const int64_t labelId : node.getLabelIds()) {
+					if (labelId != 0) {
+						nodeIdsByLabelId[labelId].push_back(nodeId);
+					}
 				}
 			}
 
@@ -176,8 +201,29 @@ namespace graph::query::indexes {
 				auto properties = dataManager_->getNodeProperties(nodeId);
 				// Index specific property
 				if (auto it = properties.find(propertyKey); it != properties.end()) {
-					propertyIndex->addProperty(nodeId, propertyKey, it->second);
+					propertyEntries.emplace_back(nodeId, propertyKey, it->second);
+					if (scopedLabelId != 0 && node.hasLabelId(scopedLabelId) && !scopedPropertyKey.empty()) {
+						propertyEntries.emplace_back(nodeId, scopedPropertyKey, it->second);
+					}
 				}
+			}
+		}
+
+		if (propertyIndex && !propertyEntries.empty()) {
+			propertyIndex->addPropertiesBatch(propertyEntries);
+		}
+
+		if (labelIndex && !nodeIdsByLabelId.empty()) {
+			std::unordered_map<std::string, std::vector<int64_t>> nodeIdsByLabel;
+			nodeIdsByLabel.reserve(nodeIdsByLabelId.size());
+			for (auto &[labelId, ids] : nodeIdsByLabelId) {
+				auto label = dataManager_->resolveTokenName(labelId);
+				if (!label.empty()) {
+					nodeIdsByLabel.emplace(std::move(label), std::move(ids));
+				}
+			}
+			if (!nodeIdsByLabel.empty()) {
+				labelIndex->addNodesBatch(nodeIdsByLabel);
 			}
 		}
 	}
@@ -186,6 +232,12 @@ namespace graph::query::indexes {
 										const std::shared_ptr<LabelIndex> &labelIndex,
 										const std::shared_ptr<PropertyIndex> &propertyIndex,
 										const std::string &propertyKey) const {
+		std::unordered_map<int64_t, std::vector<int64_t>> edgeIdsByTypeId;
+		std::vector<std::tuple<int64_t, std::string, PropertyValue>> propertyEntries;
+		if (propertyIndex) {
+			propertyEntries.reserve(edgeIds.size());
+		}
+
 		for (int64_t id: edgeIds) {
 			Edge edge = dataManager_->getEdge(id);
 			if (edge.getId() == 0 || !edge.isActive())
@@ -195,8 +247,7 @@ namespace graph::query::indexes {
 
 			if (labelIndex) {
 				if (edge.getTypeId() != 0) {
-					std::string labelStr = dataManager_->resolveTokenName(edge.getTypeId());
-					labelIndex->addNode(edgeId, labelStr);
+					edgeIdsByTypeId[edge.getTypeId()].push_back(edgeId);
 				}
 			}
 
@@ -204,8 +255,26 @@ namespace graph::query::indexes {
 				auto properties = dataManager_->getEdgeProperties(edgeId);
 				// Index specific property
 				if (auto it = properties.find(propertyKey); it != properties.end()) {
-					propertyIndex->addProperty(edgeId, propertyKey, it->second);
+					propertyEntries.emplace_back(edgeId, propertyKey, it->second);
 				}
+			}
+		}
+
+		if (propertyIndex && !propertyEntries.empty()) {
+			propertyIndex->addPropertiesBatch(propertyEntries);
+		}
+
+		if (labelIndex && !edgeIdsByTypeId.empty()) {
+			std::unordered_map<std::string, std::vector<int64_t>> edgeIdsByType;
+			edgeIdsByType.reserve(edgeIdsByTypeId.size());
+			for (auto &[typeId, ids] : edgeIdsByTypeId) {
+				auto type = dataManager_->resolveTokenName(typeId);
+				if (!type.empty()) {
+					edgeIdsByType.emplace(std::move(type), std::move(ids));
+				}
+			}
+			if (!edgeIdsByType.empty()) {
+				labelIndex->addNodesBatch(edgeIdsByType);
 			}
 		}
 	}

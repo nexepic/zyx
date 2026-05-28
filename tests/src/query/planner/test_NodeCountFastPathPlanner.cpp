@@ -113,6 +113,23 @@ TEST(NodeCountFastPathPlannerTest, AddsRequiredPropertiesAndEqPredicateForPushed
 	EXPECT_EQ(plan->predicates[0].value, PropertyValue(int64_t{42}));
 }
 
+TEST(NodeCountFastPathPlannerTest, AbsorbsEqualityPredicateHandledByPropertyCandidateSource) {
+	std::vector<std::pair<std::string, PropertyValue>> predicates = {{"age", PropertyValue(int64_t{42})}};
+	auto scan = std::make_unique<LogicalNodeScan>("n", std::vector<std::string>{"Person"}, predicates);
+	scan->setPreferredScanType(execution::ScanType::PROPERTY_SCAN);
+	LogicalAggregate aggregate(std::move(scan), {}, makeAggs());
+
+	auto plan = tryBuildNodeCountFastPathPlan(aggregate);
+
+	ASSERT_TRUE(plan.has_value());
+	EXPECT_EQ(plan->config.type, execution::ScanType::PROPERTY_SCAN);
+	EXPECT_EQ(plan->config.indexKey, "age");
+	EXPECT_EQ(plan->config.indexValue, PropertyValue(int64_t{42}));
+	EXPECT_EQ(plan->requirements.materialization, execution::NodeMaterializationMode::NSM_ID_ONLY);
+	EXPECT_TRUE(plan->requirements.requiredProperties.empty());
+	EXPECT_TRUE(plan->predicates.empty());
+}
+
 TEST(NodeCountFastPathPlannerTest, AddsClosedRangePredicateForInclusiveBounds) {
 	RangePredicate inclusive;
 	inclusive.key = "age";
@@ -134,6 +151,51 @@ TEST(NodeCountFastPathPlannerTest, AddsClosedRangePredicateForInclusiveBounds) {
 	EXPECT_EQ(plan->predicates[0].value, PropertyValue(int64_t{18}));
 	ASSERT_TRUE(plan->predicates[0].upperValue.has_value());
 	EXPECT_EQ(plan->predicates[0].upperValue.value(), PropertyValue(int64_t{65}));
+}
+
+TEST(NodeCountFastPathPlannerTest, AbsorbsInclusiveRangeHandledByRangeCandidateSource) {
+	RangePredicate inclusive;
+	inclusive.key = "age";
+	inclusive.minValue = PropertyValue(int64_t{18});
+	inclusive.maxValue = PropertyValue(int64_t{65});
+	inclusive.minInclusive = true;
+	inclusive.maxInclusive = true;
+	auto scan = makeScan();
+	scan->setPreferredScanType(execution::ScanType::RANGE_SCAN);
+	scan->setRangePredicates({inclusive});
+	LogicalAggregate aggregate(std::move(scan), {}, makeAggs());
+
+	auto plan = tryBuildNodeCountFastPathPlan(aggregate);
+
+	ASSERT_TRUE(plan.has_value());
+	EXPECT_EQ(plan->config.type, execution::ScanType::RANGE_SCAN);
+	EXPECT_EQ(plan->config.indexKey, "age");
+	EXPECT_EQ(plan->requirements.materialization, execution::NodeMaterializationMode::NSM_ID_ONLY);
+	EXPECT_TRUE(plan->requirements.requiredProperties.empty());
+	EXPECT_TRUE(plan->predicates.empty());
+}
+
+TEST(NodeCountFastPathPlannerTest, AbsorbsExclusiveRangeHandledByRangeCandidateSource) {
+	RangePredicate exclusive;
+	exclusive.key = "age";
+	exclusive.minValue = PropertyValue(int64_t{30});
+	exclusive.maxValue = PropertyValue(int64_t{40});
+	exclusive.minInclusive = true;
+	exclusive.maxInclusive = false;
+	auto scan = makeScan();
+	scan->setPreferredScanType(execution::ScanType::RANGE_SCAN);
+	scan->setRangePredicates({exclusive});
+	LogicalAggregate aggregate(std::move(scan), {}, makeAggs());
+
+	auto plan = tryBuildNodeCountFastPathPlan(aggregate);
+
+	ASSERT_TRUE(plan.has_value());
+	EXPECT_EQ(plan->config.type, execution::ScanType::RANGE_SCAN);
+	EXPECT_TRUE(plan->config.minInclusive);
+	EXPECT_FALSE(plan->config.maxInclusive);
+	EXPECT_EQ(plan->requirements.materialization, execution::NodeMaterializationMode::NSM_ID_ONLY);
+	EXPECT_TRUE(plan->requirements.requiredProperties.empty());
+	EXPECT_TRUE(plan->predicates.empty());
 }
 
 TEST(NodeCountFastPathPlannerTest, AddsLowerBoundRangePredicateForInclusiveAndExclusiveBounds) {
@@ -240,6 +302,61 @@ TEST(NodeCountFastPathPlannerTest, DeduplicatesRequiredPropertiesAcrossPredicate
 	ASSERT_TRUE(plan.has_value());
 	EXPECT_EQ(plan->requirements.requiredProperties, (std::vector<std::string>{"age", "name"}));
 	EXPECT_EQ(plan->predicates.size(), 4U);
+}
+
+TEST(NodeCountFastPathPlannerTest, AbsorbsCompositeEqualityHandledByCompositeCandidateSource) {
+	std::vector<std::pair<std::string, PropertyValue>> predicates = {
+			{"country", PropertyValue("CN")},
+			{"age", PropertyValue(int64_t{42})}};
+	auto scan = std::make_unique<LogicalNodeScan>("u", std::vector<std::string>{"User"}, predicates);
+	CompositeEqualityPredicate composite;
+	composite.keys = {"country", "age"};
+	composite.values = {PropertyValue("CN"), PropertyValue(int64_t{42})};
+	scan->setCompositeEquality(std::move(composite));
+	scan->setPreferredScanType(execution::ScanType::COMPOSITE_SCAN);
+	LogicalAggregate aggregate(std::move(scan), {}, makeAggs("count", std::make_shared<expressions::VariableReferenceExpression>("u")));
+
+	auto plan = tryBuildNodeCountFastPathPlan(aggregate);
+
+	ASSERT_TRUE(plan.has_value());
+	EXPECT_EQ(plan->config.type, execution::ScanType::COMPOSITE_SCAN);
+	EXPECT_EQ(plan->config.compositeKeys, (std::vector<std::string>{"country", "age"}));
+	EXPECT_EQ(plan->requirements.materialization, execution::NodeMaterializationMode::NSM_ID_ONLY);
+	EXPECT_TRUE(plan->requirements.requiredProperties.empty());
+	EXPECT_TRUE(plan->predicates.empty());
+}
+
+TEST(NodeCountFastPathPlannerTest, RejectsMalformedCompositeEquality) {
+	auto scan = makeScan();
+	CompositeEqualityPredicate composite;
+	composite.keys = {"country", "age"};
+	composite.values = {PropertyValue("CN")};
+	scan->setCompositeEquality(std::move(composite));
+	LogicalAggregate aggregate(std::move(scan), {}, makeAggs());
+
+	EXPECT_FALSE(tryBuildNodeCountFastPathPlan(aggregate).has_value());
+}
+
+TEST(NodeCountFastPathPlannerTest, RejectsEmptyRangePredicate) {
+	auto scan = makeScan();
+	RangePredicate range;
+	range.key = "age";
+	scan->setRangePredicates({range});
+	LogicalAggregate aggregate(std::move(scan), {}, makeAggs());
+
+	EXPECT_FALSE(tryBuildNodeCountFastPathPlan(aggregate).has_value());
+}
+
+TEST(NodeCountFastPathPlannerTest, InvalidPreferredPropertyScanFallsBackToLabelScan) {
+	auto scan = makeScan();
+	scan->setPreferredScanType(execution::ScanType::PROPERTY_SCAN);
+	LogicalAggregate aggregate(std::move(scan), {}, makeAggs());
+
+	auto plan = tryBuildNodeCountFastPathPlan(aggregate);
+
+	ASSERT_TRUE(plan.has_value());
+	EXPECT_EQ(plan->config.type, execution::ScanType::LABEL_SCAN);
+	EXPECT_TRUE(plan->config.indexKey.empty());
 }
 
 TEST(NodeCountFastPathPlannerTest, OpenRangeScanFallsBackToLabelOrFullCandidateDiscovery) {

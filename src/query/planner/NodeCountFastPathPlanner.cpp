@@ -4,6 +4,7 @@
 #include <utility>
 
 #include "graph/query/logical/operators/LogicalNodeScan.hpp"
+#include "graph/storage/indexes/IndexManager.hpp"
 
 namespace graph::query::planner {
 namespace {
@@ -58,6 +59,24 @@ bool hasOpenRangeBounds(const execution::NodeScanConfig &config) {
 	       (config.rangeMin.getType() == PropertyType::NULL_TYPE || config.rangeMax.getType() == PropertyType::NULL_TYPE);
 }
 
+bool isEqualityHandledByConfig(const execution::NodeScanConfig &config, const std::string &key) {
+	if (config.type == execution::ScanType::PROPERTY_SCAN) {
+		return config.indexKey == key;
+	}
+	if (config.type != execution::ScanType::COMPOSITE_SCAN) {
+		return false;
+	}
+	return std::find(config.compositeKeys.begin(), config.compositeKeys.end(), key) != config.compositeKeys.end();
+}
+
+bool isRangeHandledByConfig(const execution::NodeScanConfig &config, const logical::RangePredicate &range) {
+	return config.type == execution::ScanType::RANGE_SCAN &&
+	       config.indexKey == range.key &&
+	       config.minInclusive == range.minInclusive &&
+	       config.maxInclusive == range.maxInclusive &&
+	       !hasOpenRangeBounds(config);
+}
+
 bool addRangePredicates(NodeCountFastPathPlan &plan,
                         const std::string &variable,
                         const logical::RangePredicate &range) {
@@ -92,10 +111,122 @@ bool addRangePredicates(NodeCountFastPathPlan &plan,
 	return true;
 }
 
+void fillPreferredConfig(execution::NodeScanConfig &config, const logical::LogicalNodeScan &scan) {
+	config.type = scan.getPreferredScanType();
+	switch (config.type) {
+		case execution::ScanType::PROPERTY_SCAN:
+			if (!scan.getPropertyPredicates().empty()) {
+				config.indexKey = scan.getPropertyPredicates().front().first;
+				config.indexValue = scan.getPropertyPredicates().front().second;
+			}
+			break;
+		case execution::ScanType::RANGE_SCAN:
+			if (!scan.getRangePredicates().empty()) {
+				const auto &range = scan.getRangePredicates().front();
+				config.indexKey = range.key;
+				config.rangeMin = range.minValue;
+				config.rangeMax = range.maxValue;
+				config.minInclusive = range.minInclusive;
+				config.maxInclusive = range.maxInclusive;
+			}
+			break;
+		case execution::ScanType::COMPOSITE_SCAN:
+			if (scan.getCompositeEquality().has_value()) {
+				config.compositeKeys = scan.getCompositeEquality()->keys;
+				config.compositeValues = scan.getCompositeEquality()->values;
+			}
+			break;
+		case execution::ScanType::LABEL_SCAN:
+		case execution::ScanType::FULL_SCAN:
+			break;
+	}
+}
+
+execution::NodeScanConfig chooseCountConfig(const logical::LogicalNodeScan &scan,
+                                            const std::shared_ptr<indexes::IndexManager> &indexManager) {
+	execution::NodeScanConfig config;
+	config.variable = scan.getVariable();
+	config.labels = scan.getLabels();
+
+	if (!indexManager) {
+		fillPreferredConfig(config, scan);
+		return config;
+	}
+
+	if (const auto &composite = scan.getCompositeEquality();
+	    composite.has_value() &&
+	    composite->keys.size() >= 2 &&
+	    composite->keys.size() == composite->values.size() &&
+	    indexManager->hasCompositeIndex("node", composite->keys)) {
+		config.type = execution::ScanType::COMPOSITE_SCAN;
+		config.compositeKeys = composite->keys;
+		config.compositeValues = composite->values;
+		return config;
+	}
+
+	for (const auto &[key, value] : scan.getPropertyPredicates()) {
+		if (indexManager->hasPropertyIndex("node", key)) {
+			config.type = execution::ScanType::PROPERTY_SCAN;
+			config.indexKey = key;
+			config.indexValue = value;
+			return config;
+		}
+	}
+
+	for (const auto &range : scan.getRangePredicates()) {
+		if (indexManager->hasPropertyIndex("node", range.key) &&
+		    hasValueBound(range.minValue) &&
+		    hasValueBound(range.maxValue)) {
+			config.type = execution::ScanType::RANGE_SCAN;
+			config.indexKey = range.key;
+			config.rangeMin = range.minValue;
+			config.rangeMax = range.maxValue;
+			config.minInclusive = range.minInclusive;
+			config.maxInclusive = range.maxInclusive;
+			return config;
+		}
+	}
+
+	if (!config.label().empty() && indexManager->hasLabelIndex("node")) {
+		config.type = execution::ScanType::LABEL_SCAN;
+	}
+	return config;
+}
+
+bool hasValidIndexConfig(const execution::NodeScanConfig &config) {
+	switch (config.type) {
+		case execution::ScanType::PROPERTY_SCAN:
+		case execution::ScanType::RANGE_SCAN:
+			return !config.indexKey.empty();
+		case execution::ScanType::COMPOSITE_SCAN:
+			return !config.compositeKeys.empty() && config.compositeKeys.size() == config.compositeValues.size();
+		case execution::ScanType::LABEL_SCAN:
+		case execution::ScanType::FULL_SCAN:
+			return true;
+	}
+	return false;
+}
+
+void fallbackToLabelOrFull(execution::NodeScanConfig &config) {
+	config.type = config.labels.empty() ? execution::ScanType::FULL_SCAN : execution::ScanType::LABEL_SCAN;
+	config.indexKey.clear();
+	config.indexValue = PropertyValue();
+	config.rangeMin = PropertyValue();
+	config.rangeMax = PropertyValue();
+	config.compositeKeys.clear();
+	config.compositeValues.clear();
+}
+
 } // namespace
 
 std::optional<NodeCountFastPathPlan>
 tryBuildNodeCountFastPathPlan(const logical::LogicalAggregate &aggregate) {
+	return tryBuildNodeCountFastPathPlan(aggregate, nullptr);
+}
+
+std::optional<NodeCountFastPathPlan>
+tryBuildNodeCountFastPathPlan(const logical::LogicalAggregate &aggregate,
+                              const std::shared_ptr<indexes::IndexManager> &indexManager) {
 	if (!aggregate.getGroupByExprs().empty() || aggregate.getAggregations().size() != 1) {
 		return std::nullopt;
 	}
@@ -117,20 +248,27 @@ tryBuildNodeCountFastPathPlan(const logical::LogicalAggregate &aggregate) {
 	}
 
 	NodeCountFastPathPlan plan;
-	plan.config.type = scan->getPreferredScanType();
-	plan.config.variable = scan->getVariable();
-	plan.config.labels = scan->getLabels();
+	plan.config = chooseCountConfig(*scan, indexManager);
 	plan.outputAlias = agg.alias.empty() ? "count" : agg.alias;
 	plan.requirements.materialization = execution::NodeMaterializationMode::NSM_ID_ONLY;
 	plan.requirements.countOnly = true;
 	plan.requirements.needsLabels = true;
 	plan.requirements.needsActiveCheck = true;
 
+	if (!hasValidIndexConfig(plan.config) || hasOpenRangeBounds(plan.config)) {
+		fallbackToLabelOrFull(plan.config);
+	}
+
 	for (const auto &[key, value] : scan->getPropertyPredicates()) {
-		addEqualityPredicate(plan, scan->getVariable(), key, value);
+		if (!isEqualityHandledByConfig(plan.config, key)) {
+			addEqualityPredicate(plan, scan->getVariable(), key, value);
+		}
 	}
 
 	for (const auto &range : scan->getRangePredicates()) {
+		if (isRangeHandledByConfig(plan.config, range)) {
+			continue;
+		}
 		if (!addRangePredicates(plan, scan->getVariable(), range)) {
 			return std::nullopt;
 		}
@@ -142,45 +280,14 @@ tryBuildNodeCountFastPathPlan(const logical::LogicalAggregate &aggregate) {
 			return std::nullopt;
 		}
 		for (size_t i = 0; i < composite.keys.size(); ++i) {
-			addEqualityPredicate(plan, scan->getVariable(), composite.keys[i], composite.values[i]);
+			if (!isEqualityHandledByConfig(plan.config, composite.keys[i])) {
+				addEqualityPredicate(plan, scan->getVariable(), composite.keys[i], composite.values[i]);
+			}
 		}
 	}
 
 	if (!plan.predicates.empty()) {
 		plan.requirements.materialization = execution::NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
-	}
-
-	// Keep candidate discovery aligned with the optimizer's selected scan strategy.
-	switch (plan.config.type) {
-		case execution::ScanType::PROPERTY_SCAN:
-			if (!scan->getPropertyPredicates().empty()) {
-				plan.config.indexKey = scan->getPropertyPredicates().front().first;
-				plan.config.indexValue = scan->getPropertyPredicates().front().second;
-			}
-			break;
-		case execution::ScanType::RANGE_SCAN:
-			if (!scan->getRangePredicates().empty()) {
-				const auto &range = scan->getRangePredicates().front();
-				plan.config.indexKey = range.key;
-				plan.config.rangeMin = range.minValue;
-				plan.config.rangeMax = range.maxValue;
-				plan.config.minInclusive = range.minInclusive;
-				plan.config.maxInclusive = range.maxInclusive;
-			}
-			break;
-		case execution::ScanType::COMPOSITE_SCAN:
-			if (scan->getCompositeEquality().has_value()) {
-				plan.config.compositeKeys = scan->getCompositeEquality()->keys;
-				plan.config.compositeValues = scan->getCompositeEquality()->values;
-			}
-			break;
-		case execution::ScanType::LABEL_SCAN:
-		case execution::ScanType::FULL_SCAN:
-			break;
-	}
-
-	if (hasOpenRangeBounds(plan.config)) {
-		plan.config.type = plan.config.labels.empty() ? execution::ScanType::FULL_SCAN : execution::ScanType::LABEL_SCAN;
 	}
 
 	return plan;

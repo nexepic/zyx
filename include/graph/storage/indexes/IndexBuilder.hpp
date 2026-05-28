@@ -72,6 +72,7 @@ namespace graph::query::indexes {
 		 * @return true if successful, false otherwise.
 		 */
 		bool buildNodePropertyIndex(const std::string &key) const;
+		bool buildNodePropertyIndex(const std::string &key, const std::string &label) const;
 
 		/**
 		 * @brief Builds an index for a specific property key on all edges.
@@ -106,7 +107,9 @@ namespace graph::query::indexes {
 		 */
 		void processNodeBatch(const std::vector<int64_t> &nodeIds, const std::shared_ptr<LabelIndex> &labelIndex,
 							  const std::shared_ptr<PropertyIndex> &propertyIndex,
-							  const std::string &propertyKey = "") const;
+							  const std::string &propertyKey = "",
+							  int64_t scopedLabelId = 0,
+							  const std::string &scopedPropertyKey = "") const;
 
 		/**
 		 * @brief Processes a batch of edge IDs, adding them to the provided indexes.

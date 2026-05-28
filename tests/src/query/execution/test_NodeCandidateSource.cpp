@@ -94,6 +94,23 @@ TEST_F(NodeCandidateSourceTest, LabelScanReturnsSortedUniqueIds) {
 	EXPECT_EQ(candidates, (std::vector<int64_t>{1, 2, 3}));
 }
 
+TEST_F(NodeCandidateSourceTest, LabelScanMetadataMarksActiveAndLabelSatisfied) {
+	EXPECT_TRUE(indexManager->createIndex("idx_node_labels_meta", "node", "", ""));
+	const int64_t personLabel = dataManager->getOrCreateTokenId("Person");
+	Node node(1, personLabel);
+	indexManager->onNodeAdded(node);
+
+	NodeScanConfig config;
+	config.type = ScanType::LABEL_SCAN;
+	config.labels = {"Person"};
+
+	auto candidates = makeSource().collectWithMetadata(config);
+
+	EXPECT_EQ(candidates.ids, (std::vector<int64_t>{1}));
+	EXPECT_TRUE(candidates.activeOnly);
+	EXPECT_TRUE(candidates.labelsSatisfied);
+}
+
 TEST_F(NodeCandidateSourceTest, MissingLabelScanReturnsEmpty) {
 	EXPECT_TRUE(indexManager->createIndex("idx_node_labels", "node", "", ""));
 
@@ -124,4 +141,75 @@ TEST_F(NodeCandidateSourceTest, PropertyScanReturnsMatchingIds) {
 	auto candidates = makeSource().collect(config);
 
 	EXPECT_EQ(candidates, (std::vector<int64_t>{1}));
+}
+
+TEST_F(NodeCandidateSourceTest, PropertyScanUsesScopedLabelIndexAndMarksLabelsSatisfied) {
+	EXPECT_TRUE(indexManager->createIndex("idx_person_name_meta", "node", "Person", "name"));
+	const int64_t personLabel = dataManager->getOrCreateTokenId("Person");
+	const int64_t animalLabel = dataManager->getOrCreateTokenId("Animal");
+	Node alice(1, personLabel);
+	Node animal(2, animalLabel);
+	dataManager->addNode(alice);
+	dataManager->addNode(animal);
+	dataManager->addNodeProperties(1, {{"name", std::string("Alice")}});
+	dataManager->addNodeProperties(2, {{"name", std::string("Alice")}});
+
+	NodeScanConfig config;
+	config.type = ScanType::PROPERTY_SCAN;
+	config.labels = {"Person"};
+	config.indexKey = "name";
+	config.indexValue = PropertyValue(std::string("Alice"));
+
+	auto candidates = makeSource().collectWithMetadata(config);
+
+	EXPECT_EQ(candidates.ids, (std::vector<int64_t>{1}));
+	EXPECT_TRUE(candidates.activeOnly);
+	EXPECT_TRUE(candidates.labelsSatisfied);
+}
+
+TEST_F(NodeCandidateSourceTest, CountUsesScopedLabelIndexWithoutMaterializingIds) {
+	EXPECT_TRUE(indexManager->createIndex("idx_person_score_count", "node", "Person", "score"));
+	const int64_t personLabel = dataManager->getOrCreateTokenId("Person");
+	const int64_t animalLabel = dataManager->getOrCreateTokenId("Animal");
+	for (int64_t id = 1; id <= 6; ++id) {
+		Node node(id, id <= 4 ? personLabel : animalLabel);
+		dataManager->addNode(node);
+		dataManager->addNodeProperties(id, {{"score", PropertyValue(id)}});
+	}
+
+	NodeScanConfig config;
+	config.type = ScanType::RANGE_SCAN;
+	config.labels = {"Person"};
+	config.indexKey = "score";
+	config.rangeMin = PropertyValue(int64_t{2});
+	config.rangeMax = PropertyValue(int64_t{5});
+
+	auto count = makeSource().countWithMetadata(config);
+
+	EXPECT_TRUE(count.available);
+	EXPECT_TRUE(count.activeOnly);
+	EXPECT_TRUE(count.labelsSatisfied);
+	EXPECT_EQ(count.count, 3);
+}
+
+TEST_F(NodeCandidateSourceTest, RangeScanHonorsExclusiveBounds) {
+	EXPECT_TRUE(indexManager->createIndex("idx_person_age", "node", "Person", "age"));
+	const int64_t personLabel = dataManager->getOrCreateTokenId("Person");
+	for (int64_t id = 1; id <= 4; ++id) {
+		Node node(id, personLabel);
+		dataManager->addNode(node);
+		dataManager->addNodeProperties(id, {{"age", id * 10}});
+	}
+
+	NodeScanConfig config;
+	config.type = ScanType::RANGE_SCAN;
+	config.indexKey = "age";
+	config.rangeMin = PropertyValue(int64_t{10});
+	config.rangeMax = PropertyValue(int64_t{40});
+	config.minInclusive = false;
+	config.maxInclusive = false;
+
+	auto candidates = makeSource().collect(config);
+
+	EXPECT_EQ(candidates, (std::vector<int64_t>{2, 3}));
 }
