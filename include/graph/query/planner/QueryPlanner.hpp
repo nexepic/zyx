@@ -55,6 +55,17 @@ namespace graph::query::execution {
 
 namespace graph::query {
 
+	namespace planner_detail {
+		[[nodiscard]] bool recordHasAllLabels(const execution::Record &record,
+		                                      const std::string &variable,
+		                                      const std::vector<int64_t> &labelIds);
+
+		[[nodiscard]] bool recordHasPropertyValue(const execution::Record &record,
+		                                          const std::string &variable,
+		                                          const std::string &key,
+		                                          const PropertyValue &value);
+	} // namespace planner_detail
+
 	class QueryPlanner {
 	public:
 		/**

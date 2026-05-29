@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <limits>
 #include "graph/query/QueryContext.hpp"
 #include <string>
 #include "graph/concurrent/ThreadPool.hpp"
@@ -30,6 +31,55 @@
 #include "graph/query/expressions/ExpressionEvaluator.hpp"
 
 namespace graph::query::execution::operators {
+
+namespace {
+
+	std::optional<PropertyValue> evaluateDirectAccess(
+			const Record &record,
+			const graph::query::expressions::Expression *expression) {
+		using namespace graph::query::expressions;
+		const auto type = expression->getExpressionType();
+		if (type != ExpressionType::VARIABLE_REFERENCE && type != ExpressionType::PROPERTY_ACCESS) {
+			return std::nullopt;
+	}
+
+	const auto *var = static_cast<const VariableReferenceExpression *>(expression);
+	const auto &variableName = var->getVariableName();
+	if (!var->hasProperty()) {
+		if (auto node = record.getNodeRef(variableName)) {
+			return PropertyValue(node->get().getId());
+		}
+		if (auto edge = record.getEdgeRef(variableName)) {
+			return PropertyValue(edge->get().getId());
+		}
+		if (auto value = record.getValueRef(variableName)) {
+			return value->get();
+		}
+		return PropertyValue();
+	}
+
+	const auto &propertyName = var->getPropertyName();
+	if (auto node = record.getNodeRef(variableName)) {
+		const auto &props = node->get().getProperties();
+		auto it = props.find(propertyName);
+		return it != props.end() ? std::optional<PropertyValue>(it->second) : std::optional<PropertyValue>(PropertyValue());
+	}
+	if (auto edge = record.getEdgeRef(variableName)) {
+		const auto &props = edge->get().getProperties();
+		auto it = props.find(propertyName);
+		return it != props.end() ? std::optional<PropertyValue>(it->second) : std::optional<PropertyValue>(PropertyValue());
+	}
+	if (auto value = record.getValueRef(variableName);
+	    value && value->get().getType() == PropertyType::MAP) {
+		const auto &map = value->get().getMap();
+		auto it = map.find(propertyName);
+		return it != map.end() ? std::optional<PropertyValue>(it->second) : std::optional<PropertyValue>(PropertyValue());
+	}
+
+	return PropertyValue();
+}
+
+} // namespace
 
 void SortOperator::open() {
 	if (child_)
@@ -40,22 +90,26 @@ void SortOperator::open() {
 }
 
 std::optional<RecordBatch> SortOperator::next() {
-	// 1. Materialize Phase (Blocking)
 	if (!isSorted_) {
-		while (true) {
-			if (queryContext_) queryContext_->checkGuard();
-			auto batchOpt = child_->next();
-			if (!batchOpt)
-				break;
+		if (topNLimit_) {
+			performTopN();
+		} else {
+			// 1. Materialize Phase (Blocking)
+			while (true) {
+				if (queryContext_) queryContext_->checkGuard();
+				auto batchOpt = child_->next();
+				if (!batchOpt)
+					break;
 
-			// Accumulate all records
-			auto &batch = *batchOpt;
-			sortedRecords_.insert(sortedRecords_.end(), std::make_move_iterator(batch.begin()),
-								  std::make_move_iterator(batch.end()));
+				// Accumulate all records
+				auto &batch = *batchOpt;
+				sortedRecords_.insert(sortedRecords_.end(), std::make_move_iterator(batch.begin()),
+									  std::make_move_iterator(batch.end()));
+			}
+
+			// 2. Sort Phase
+			performSort();
 		}
-
-		// 2. Sort Phase
-		performSort();
 		isSorted_ = true;
 	}
 
@@ -93,6 +147,12 @@ std::string SortOperator::toString() const {
 		if (i < sortItems_.size() - 1) {
 			s += ", ";
 		}
+	}
+	if (topNLimit_) {
+		if (!sortItems_.empty()) {
+			s += ", ";
+		}
+		s += "LIMIT " + std::to_string(*topNLimit_);
 	}
 	s += ")";
 	return s;
@@ -169,9 +229,7 @@ void SortOperator::performSort() {
 
 			size_t mergeBegin = chunks[left].begin;
 			size_t mergeMid = chunks[right].begin;
-			size_t mergeEnd = std::min(right + step, numChunks) <= numChunks
-								 ? chunks[std::min(right + step, numChunks) - 1].end
-								 : chunks[numChunks - 1].end;
+			size_t mergeEnd = chunks[std::min(right + step, numChunks) - 1].end;
 
 			std::inplace_merge(decorated.begin() + mergeBegin,
 							   decorated.begin() + mergeMid,
@@ -191,6 +249,65 @@ void SortOperator::performSort() {
 											  .count()));
 }
 
+void SortOperator::performTopN() {
+	using Clock = std::chrono::steady_clock;
+	uint64_t sortNanos = 0;
+
+	sortedRecords_.clear();
+	const size_t limit = topNLimit_.value_or(0);
+	if (limit == 0) {
+		debug::PerfTrace::addDuration("sort", 0);
+		return;
+	}
+
+	std::vector<DecoratedRecord> heap;
+	heap.reserve(limit);
+	auto heapComparator = [this](const DecoratedRecord &a, const DecoratedRecord &b) -> bool {
+		// compareKeys() defines final output order, so the heap root is the
+		// current worst retained row and can be replaced by a better candidate.
+		return compareKeys(a.sortKeys, b.sortKeys);
+	};
+
+	while (true) {
+		if (queryContext_) queryContext_->checkGuard();
+		auto batchOpt = child_->next();
+		if (!batchOpt)
+			break;
+
+		auto sortStart = Clock::now();
+		auto &batch = *batchOpt;
+		for (auto &record: batch) {
+			auto keys = evaluateSortKeys(record);
+			DecoratedRecord candidate{std::move(record), std::move(keys)};
+			if (heap.size() < limit) {
+				heap.push_back(std::move(candidate));
+				std::push_heap(heap.begin(), heap.end(), heapComparator);
+			} else if (compareKeys(candidate.sortKeys, heap.front().sortKeys)) {
+				std::pop_heap(heap.begin(), heap.end(), heapComparator);
+				heap.back() = std::move(candidate);
+				std::push_heap(heap.begin(), heap.end(), heapComparator);
+			}
+		}
+		sortNanos += static_cast<uint64_t>(
+			std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - sortStart).count());
+	}
+
+	auto finalSortStart = Clock::now();
+	auto finalComparator = [this](const DecoratedRecord &a, const DecoratedRecord &b) -> bool {
+		return compareKeys(a.sortKeys, b.sortKeys);
+	};
+	std::sort(heap.begin(), heap.end(), finalComparator);
+
+	sortedRecords_.reserve(heap.size());
+	for (auto &item: heap) {
+		sortedRecords_.push_back(std::move(item.record));
+	}
+	sortNanos += static_cast<uint64_t>(
+		std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - finalSortStart).count());
+
+	debug::PerfTrace::addDuration("sort", sortNanos);
+}
+
 std::vector<PropertyValue> SortOperator::evaluateSortKeys(const Record &record) const {
 	std::vector<PropertyValue> keys;
 	keys.reserve(sortItems_.size());
@@ -198,7 +315,9 @@ std::vector<PropertyValue> SortOperator::evaluateSortKeys(const Record &record) 
 	for (const auto &item: sortItems_) {
 		PropertyValue value;
 		if (item.expression) {
-			if (queryContext_ && !queryContext_->parameters.empty()) {
+			if (auto directValue = evaluateDirectAccess(record, item.expression.get())) {
+				value = std::move(*directValue);
+			} else if (queryContext_ && !queryContext_->parameters.empty()) {
 				graph::query::expressions::EvaluationContext context(record, queryContext_->parameters);
 				graph::query::expressions::ExpressionEvaluator evaluator(context);
 				value = evaluator.evaluate(item.expression.get());
@@ -224,6 +343,15 @@ bool SortOperator::compareKeys(const std::vector<PropertyValue> &left,
 		return sortItems_[i].ascending ? left[i] < right[i] : left[i] > right[i];
 	}
 	return false;
+}
+
+size_t SortOperator::normalizeLimit(int64_t limit) {
+	if (limit <= 0) {
+		return 0;
+	}
+	const auto unsignedLimit = static_cast<uint64_t>(limit);
+	const auto maxSize = static_cast<uint64_t>(std::numeric_limits<size_t>::max());
+	return static_cast<size_t>(std::min(unsignedLimit, maxSize));
 }
 
 } // namespace graph::query::execution::operators

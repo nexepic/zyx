@@ -19,13 +19,13 @@ namespace graph::query::execution {
 		                                const NodeColumnBatch &batch,
 		                                size_t rowIndex,
 		                                const NodeScanRequirements &requirements) {
-			Node node = dm.getNode(nodeId);
-
 			if (requirements.needsFullNode()) {
+				Node node = dm.getNode(nodeId);
 				node.setProperties(dm.getNodeProperties(nodeId));
 				return node;
 			}
 
+			Node node(nodeId, 0);
 			for (const auto &[key, column] : batch.propertyColumns) {
 				if (rowIndex < column.size() && column[rowIndex].has_value()) {
 					node.addProperty(key, *column[rowIndex]);
@@ -59,7 +59,7 @@ namespace graph::query::execution {
 			++materializedIndex;
 
 			Record record;
-			record.setNode(variable, node);
+			record.setNode(variable, std::move(node));
 			records.push_back(std::move(record));
 		}
 

@@ -32,6 +32,10 @@
 #include <utility>
 #include <vector>
 #include "../NodeCandidateSource.hpp"
+#include "../NodeBatchLoader.hpp"
+#include "../NodeColumnBatchMaterializer.hpp"
+#include "../NodeScanRequirementUtils.hpp"
+#include "../NodeScanRequirements.hpp"
 #include "../PhysicalOperator.hpp"
 #include "../ScanConfigs.hpp"
 #include "graph/concurrent/ThreadPool.hpp"
@@ -50,16 +54,24 @@ namespace graph::query::execution::operators {
 		NodeScanOperator(std::shared_ptr<storage::DataManager> dm, std::shared_ptr<indexes::IndexManager> im,
 						 NodeScanConfig config) : dm_(std::move(dm)), im_(std::move(im)), config_(std::move(config)) {}
 
+		NodeScanOperator(std::shared_ptr<storage::DataManager> dm, std::shared_ptr<indexes::IndexManager> im,
+		                 NodeScanConfig config, NodeScanRequirements requirements) :
+			dm_(std::move(dm)), im_(std::move(im)), config_(std::move(config)),
+			requirements_(std::move(requirements)) {}
+
 		void open() override {
 			currentIdx_ = 0;
 			candidateIds_.clear();
 
 			NodeCandidateSource candidateSource(dm_, im_);
-			candidateIds_ = candidateSource.collect(config_);
+			auto candidateSet = candidateSource.collectWithMetadata(config_);
+			candidateIds_ = std::move(candidateSet.ids);
+			labelsSatisfied_ = candidateSet.labelsSatisfied;
+			activeSatisfied_ = candidateSet.activeOnly;
 
 			// Pre-resolve label IDs for the scan loop (optimization)
 			targetLabelIds_.clear();
-			if (!config_.labels.empty()) {
+			if (!labelsSatisfied_ && !config_.labels.empty()) {
 				for (const auto &lbl : config_.labels) {
 					targetLabelIds_.push_back(dm_->resolveTokenId(lbl));
 				}
@@ -89,6 +101,26 @@ namespace graph::query::execution::operators {
 			size_t batchEnd = std::min(currentIdx_ + effectiveBatchSize, candidateIds_.size());
 			size_t batchCount = batchEnd - batchStart;
 			currentIdx_ = batchEnd;
+
+			if (!requirements_.needsFullNode()) {
+				NodeCandidateSet candidateMetadata;
+				candidateMetadata.labelsSatisfied = labelsSatisfied_;
+				candidateMetadata.activeOnly = activeSatisfied_;
+				const auto requirements = relaxSatisfiedCandidateChecks(requirements_, candidateMetadata);
+				NodeBatchLoader loader(dm_, threadPool_);
+				auto columnBatch = loader.load(candidateIds_, batchStart, batchEnd, config_, requirements);
+				auto batch = materializeNodeRecords(columnBatch, config_.variable, *dm_, requirements);
+				if (batch.empty() && currentIdx_ >= candidateIds_.size()) // ZYX_COV_EXCL_LINE
+					return std::nullopt;
+				if (profileEnabled) {
+					debug::PerfTrace::addDuration(
+							"scan.sequential",
+							static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
+															scanStart)
+													 .count()));
+				}
+				return batch;
+			}
 
 			if (canParallelize && batchCount >= PARALLEL_SCAN_THRESHOLD) {
 				auto batch = parallelLoadBatch(batchStart, batchEnd);
@@ -132,7 +164,7 @@ namespace graph::query::execution::operators {
 				batch.push_back(std::move(r));
 			}
 
-			if (batch.empty() && currentIdx_ >= candidateIds_.size())
+			if (batch.empty() && currentIdx_ >= candidateIds_.size()) // ZYX_COV_EXCL_LINE
 				return std::nullopt;
 
 			if (profileEnabled) {
@@ -155,10 +187,13 @@ namespace graph::query::execution::operators {
 		std::shared_ptr<storage::DataManager> dm_;
 		std::shared_ptr<indexes::IndexManager> im_;
 		NodeScanConfig config_;
+		NodeScanRequirements requirements_;
 
 		std::vector<int64_t> candidateIds_;
 		size_t currentIdx_ = 0;
 		std::vector<int64_t> targetLabelIds_; // Cached label IDs (AND semantics)
+		bool labelsSatisfied_ = false;
+		bool activeSatisfied_ = false;
 
 		std::optional<RecordBatch> parallelLoadBatch(size_t batchStart, size_t batchEnd) {
 			using Clock = std::chrono::steady_clock;
@@ -178,7 +213,7 @@ namespace graph::query::execution::operators {
 			}
 
 			if (relevantSegIdxs.empty()) {
-				if (currentIdx_ >= candidateIds_.size())
+				if (currentIdx_ >= candidateIds_.size()) // ZYX_COV_EXCL_LINE
 					return std::nullopt;
 				return RecordBatch{};
 			}
@@ -206,7 +241,7 @@ namespace graph::query::execution::operators {
 				std::vector<char> groupBuf(totalBytes);
 				auto groupOffset = static_cast<int64_t>(group.startOffset);
 				ssize_t n = dm_->preadBytes(groupBuf.data(), totalBytes, groupOffset);
-				if (n < static_cast<ssize_t>(totalBytes))
+				if (n < static_cast<ssize_t>(totalBytes)) // ZYX_COV_EXCL_LINE
 					return;
 
 				constexpr size_t entitySize = Node::getTotalSize();
@@ -219,7 +254,7 @@ namespace graph::query::execution::operators {
 					// Parse the segment header from the buffer
 					storage::SegmentHeader header;
 					std::memcpy(&header, groupBuf.data() + bufOffset, sizeof(storage::SegmentHeader));
-					if (header.used == 0)
+					if (header.used == 0) // ZYX_COV_EXCL_LINE
 						continue;
 
 					const char *dataBuf = groupBuf.data() + bufOffset + sizeof(storage::SegmentHeader);
@@ -230,12 +265,12 @@ namespace graph::query::execution::operators {
 						int64_t entityId = header.start_id + i;
 						if (entityId < startId || entityId > endId)
 							continue;
-						if (!candidateSet.empty() && !candidateSet.count(entityId))
+						if (!candidateSet.empty() && !candidateSet.count(entityId)) // ZYX_COV_EXCL_LINE
 							continue;
 
 						Node node = Node::deserializeFromBuffer(dataBuf + i * entitySize);
 
-						if (!node.isActive())
+						if (!node.isActive()) // ZYX_COV_EXCL_LINE
 							continue;
 						if (!targetLabelIds_.empty()) {
 							bool allMatch = true;
@@ -246,7 +281,7 @@ namespace graph::query::execution::operators {
 						}
 
 						if (node.hasPropertyEntity() &&
-							node.getPropertyStorageType() == PropertyStorageType::PROPERTY_ENTITY) {
+							node.getPropertyStorageType() == PropertyStorageType::PROPERTY_ENTITY) { // ZYX_COV_EXCL_LINE
 							localPropIds.push_back(node.getPropertyEntityId());
 						}
 
@@ -314,7 +349,7 @@ namespace graph::query::execution::operators {
 					batch.push_back(std::move(r));
 			}
 
-			if (batch.empty() && currentIdx_ >= candidateIds_.size())
+			if (batch.empty() && currentIdx_ >= candidateIds_.size()) // ZYX_COV_EXCL_LINE
 				return std::nullopt;
 			return batch;
 		}

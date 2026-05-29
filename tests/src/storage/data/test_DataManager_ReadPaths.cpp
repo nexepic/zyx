@@ -157,6 +157,180 @@ TEST_F(DataManagerTest, LoadEntityDirectReturnsDirtyOverrideAndDiskFallback) {
 	EXPECT_FALSE(directDeleted.isActive());
 }
 
+TEST_F(DataManagerTest, SnapshotReadsReturnBackupsForAllEntityKinds) {
+	auto n1 = createTestNode(dataManager, "SnapshotAllSource");
+	auto n2 = createTestNode(dataManager, "SnapshotAllTarget");
+	dataManager->addNode(n1);
+	dataManager->addNode(n2);
+
+	auto edge = createTestEdge(dataManager, n1.getId(), n2.getId(), "SNAPSHOT_ALL_EDGE");
+	dataManager->addEdge(edge);
+
+	Property property = createTestProperty(n1.getId(), Node::typeId, {{"p", PropertyValue(int64_t(1))}});
+	dataManager->addPropertyEntity(property);
+
+	Blob blob = createTestBlob("snapshot_blob_before");
+	dataManager->addBlobEntity(blob);
+
+	Index index = createTestIndex(Index::NodeType::LEAF, 100);
+	dataManager->addIndexEntity(index);
+
+	State state = createTestState("snapshot.all.state");
+	state.setData("state_before");
+	dataManager->addStateEntity(state);
+
+	fileStorage->flush();
+
+	CommittedSnapshot snapshot;
+
+	Edge edgeBackup = dataManager->getEdge(edge.getId());
+	edgeBackup.setTypeId(dataManager->getOrCreateTokenId("SNAPSHOT_ALL_EDGE_UPDATED"));
+	snapshot.edges[edge.getId()] = DirtyEntityInfo<Edge>(EntityChangeType::CHANGE_MODIFIED, edgeBackup);
+	EXPECT_EQ(dataManager->getEntityWithSnapshot<Edge>(edge.getId(), &snapshot).getTypeId(), edgeBackup.getTypeId());
+	snapshot.edges[edge.getId()] = DirtyEntityInfo<Edge>(EntityChangeType::CHANGE_DELETED);
+	EXPECT_FALSE(dataManager->getEntityWithSnapshot<Edge>(edge.getId(), &snapshot).isActive());
+
+	Property propertyBackup = dataManager->getProperty(property.getId());
+	propertyBackup.setProperties({{"p", PropertyValue(int64_t(2))}});
+	snapshot.properties[property.getId()] =
+			DirtyEntityInfo<Property>(EntityChangeType::CHANGE_MODIFIED, propertyBackup);
+	EXPECT_EQ(std::get<int64_t>(dataManager->getEntityWithSnapshot<Property>(property.getId(), &snapshot)
+										.getPropertyValues()
+										.at("p")
+										.getVariant()),
+			  2);
+	snapshot.properties[property.getId()] = DirtyEntityInfo<Property>(EntityChangeType::CHANGE_DELETED);
+	EXPECT_FALSE(dataManager->getEntityWithSnapshot<Property>(property.getId(), &snapshot).isActive());
+
+	Blob blobBackup = dataManager->getBlob(blob.getId());
+	blobBackup.setData("snapshot_blob_after");
+	snapshot.blobs[blob.getId()] = DirtyEntityInfo<Blob>(EntityChangeType::CHANGE_MODIFIED, blobBackup);
+	EXPECT_EQ(dataManager->getEntityWithSnapshot<Blob>(blob.getId(), &snapshot).getDataAsString(),
+			  "snapshot_blob_after");
+	snapshot.blobs[blob.getId()] = DirtyEntityInfo<Blob>(EntityChangeType::CHANGE_DELETED);
+	EXPECT_FALSE(dataManager->getEntityWithSnapshot<Blob>(blob.getId(), &snapshot).isActive());
+
+	Index indexBackup = dataManager->getIndex(index.getId());
+	indexBackup.setLevel(3);
+	snapshot.indexes[index.getId()] = DirtyEntityInfo<Index>(EntityChangeType::CHANGE_MODIFIED, indexBackup);
+	EXPECT_EQ(dataManager->getEntityWithSnapshot<Index>(index.getId(), &snapshot).getLevel(), 3);
+	snapshot.indexes[index.getId()] = DirtyEntityInfo<Index>(EntityChangeType::CHANGE_DELETED);
+	EXPECT_FALSE(dataManager->getEntityWithSnapshot<Index>(index.getId(), &snapshot).isActive());
+
+	State stateBackup = dataManager->getState(state.getId());
+	stateBackup.setData("state_after");
+	snapshot.states[state.getId()] = DirtyEntityInfo<State>(EntityChangeType::CHANGE_MODIFIED, stateBackup);
+	EXPECT_EQ(dataManager->getEntityWithSnapshot<State>(state.getId(), &snapshot).getDataAsString(), "state_after");
+	snapshot.states[state.getId()] = DirtyEntityInfo<State>(EntityChangeType::CHANGE_DELETED);
+	EXPECT_FALSE(dataManager->getEntityWithSnapshot<State>(state.getId(), &snapshot).isActive());
+}
+
+TEST_F(DataManagerTest, DirectReadsReturnDirtyBackupsForAllEntityKinds) {
+	auto n1 = createTestNode(dataManager, "DirectAllSource");
+	auto n2 = createTestNode(dataManager, "DirectAllTarget");
+	dataManager->addNode(n1);
+	dataManager->addNode(n2);
+
+	auto edge = createTestEdge(dataManager, n1.getId(), n2.getId(), "DIRECT_ALL_EDGE");
+	dataManager->addEdge(edge);
+
+	Property property = createTestProperty(n1.getId(), Node::typeId, {{"p", PropertyValue(int64_t(10))}});
+	dataManager->addPropertyEntity(property);
+
+	Blob blob = createTestBlob("direct_blob_before");
+	dataManager->addBlobEntity(blob);
+
+	Index index = createTestIndex(Index::NodeType::LEAF, 200);
+	dataManager->addIndexEntity(index);
+
+	State state = createTestState("direct.all.state");
+	state.setData("direct_state_before");
+	dataManager->addStateEntity(state);
+
+	fileStorage->flush();
+
+	Edge edgeBackup = dataManager->getEdge(edge.getId());
+	edgeBackup.setTypeId(dataManager->getOrCreateTokenId("DIRECT_ALL_EDGE_UPDATED"));
+	dataManager->setEntityDirty(DirtyEntityInfo<Edge>(EntityChangeType::CHANGE_MODIFIED, edgeBackup));
+	EXPECT_EQ(dataManager->loadEntityDirect<Edge>(edge.getId()).getTypeId(), edgeBackup.getTypeId());
+	dataManager->deleteEdge(edgeBackup);
+	EXPECT_FALSE(dataManager->loadEntityDirect<Edge>(edge.getId()).isActive());
+
+	Property propertyBackup = dataManager->getProperty(property.getId());
+	propertyBackup.setProperties({{"p", PropertyValue(int64_t(11))}});
+	dataManager->setEntityDirty(DirtyEntityInfo<Property>(EntityChangeType::CHANGE_MODIFIED, propertyBackup));
+	EXPECT_EQ(std::get<int64_t>(dataManager->loadEntityDirect<Property>(property.getId())
+										.getPropertyValues()
+										.at("p")
+										.getVariant()),
+			  11);
+	dataManager->deleteProperty(propertyBackup);
+	EXPECT_FALSE(dataManager->loadEntityDirect<Property>(property.getId()).isActive());
+
+	Blob blobBackup = dataManager->getBlob(blob.getId());
+	blobBackup.setData("direct_blob_after");
+	dataManager->setEntityDirty(DirtyEntityInfo<Blob>(EntityChangeType::CHANGE_MODIFIED, blobBackup));
+	EXPECT_EQ(dataManager->loadEntityDirect<Blob>(blob.getId()).getDataAsString(), "direct_blob_after");
+	dataManager->deleteBlob(blobBackup);
+	EXPECT_FALSE(dataManager->loadEntityDirect<Blob>(blob.getId()).isActive());
+
+	Index indexBackup = dataManager->getIndex(index.getId());
+	indexBackup.setLevel(4);
+	dataManager->setEntityDirty(DirtyEntityInfo<Index>(EntityChangeType::CHANGE_MODIFIED, indexBackup));
+	EXPECT_EQ(dataManager->loadEntityDirect<Index>(index.getId()).getLevel(), 4);
+	dataManager->deleteIndex(indexBackup);
+	EXPECT_FALSE(dataManager->loadEntityDirect<Index>(index.getId()).isActive());
+
+	State stateBackup = dataManager->getState(state.getId());
+	stateBackup.setData("direct_state_after");
+	dataManager->setEntityDirty(DirtyEntityInfo<State>(EntityChangeType::CHANGE_MODIFIED, stateBackup));
+	EXPECT_EQ(dataManager->loadEntityDirect<State>(state.getId()).getDataAsString(), "direct_state_after");
+	dataManager->deleteState(stateBackup);
+	EXPECT_FALSE(dataManager->loadEntityDirect<State>(state.getId()).isActive());
+}
+
+TEST_F(DataManagerTest, MemoryAndSnapshotDiskReadsReturnActiveEntitiesForAllEntityKinds) {
+	auto n1 = createTestNode(dataManager, "DiskAllSource");
+	auto n2 = createTestNode(dataManager, "DiskAllTarget");
+	dataManager->addNode(n1);
+	dataManager->addNode(n2);
+
+	auto edge = createTestEdge(dataManager, n1.getId(), n2.getId(), "DISK_ALL_EDGE");
+	dataManager->addEdge(edge);
+
+	Property property = createTestProperty(n1.getId(), Node::typeId, {{"p", PropertyValue(int64_t(21))}});
+	dataManager->addPropertyEntity(property);
+
+	Blob blob = createTestBlob("disk_blob");
+	dataManager->addBlobEntity(blob);
+
+	Index index = createTestIndex(Index::NodeType::LEAF, 300);
+	dataManager->addIndexEntity(index);
+
+	State state = createTestState("disk.all.state");
+	state.setData("disk_state");
+	dataManager->addStateEntity(state);
+
+	fileStorage->flush();
+	dataManager->clearCache();
+
+	CommittedSnapshot snapshot;
+	EXPECT_TRUE(dataManager->getEntityFromMemoryOrDisk<Node>(n1.getId()).isActive());
+	EXPECT_TRUE(dataManager->getEntityFromMemoryOrDisk<Edge>(edge.getId()).isActive());
+	EXPECT_TRUE(dataManager->getEntityFromMemoryOrDisk<Property>(property.getId()).isActive());
+	EXPECT_TRUE(dataManager->getEntityFromMemoryOrDisk<Blob>(blob.getId()).isActive());
+	EXPECT_TRUE(dataManager->getEntityFromMemoryOrDisk<Index>(index.getId()).isActive());
+	EXPECT_TRUE(dataManager->getEntityFromMemoryOrDisk<State>(state.getId()).isActive());
+
+	dataManager->clearCache();
+	EXPECT_TRUE(dataManager->getEntityWithSnapshot<Node>(n1.getId(), &snapshot).isActive());
+	EXPECT_TRUE(dataManager->getEntityWithSnapshot<Edge>(edge.getId(), &snapshot).isActive());
+	EXPECT_TRUE(dataManager->getEntityWithSnapshot<Property>(property.getId(), &snapshot).isActive());
+	EXPECT_TRUE(dataManager->getEntityWithSnapshot<Blob>(blob.getId(), &snapshot).isActive());
+	EXPECT_TRUE(dataManager->getEntityWithSnapshot<Index>(index.getId(), &snapshot).isActive());
+	EXPECT_TRUE(dataManager->getEntityWithSnapshot<State>(state.getId(), &snapshot).isActive());
+}
+
 // ============================================================================
 // getNodePropertiesFromMap: inactive non-zero node → early-return {}
 // Covers the !node.isActive() branch at line ~307 (node.getId()!=0 but inactive)
@@ -411,4 +585,3 @@ TEST_F(DataManagerTest, GetNodePropertiesDirect_BlobEntityStorage) {
 	const auto direct = dataManager->getNodePropertiesDirect(storedNode);
 	EXPECT_EQ(direct.size(), largeProps.size());
 }
-

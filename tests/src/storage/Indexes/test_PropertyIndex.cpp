@@ -201,6 +201,41 @@ TEST_F(PropertyIndexTest, CountExactAndRangeMatchesFindResults) {
 	EXPECT_EQ(propertyIndex->countExactMatch("missing", graph::PropertyValue(int64_t{3})), 0UL);
 }
 
+TEST_F(PropertyIndexTest, CountRangePromotesCompatibleNumericBounds) {
+	propertyIndex->createIndex("double_score");
+	propertyIndex->addProperty(1, "double_score", graph::PropertyValue(1.5));
+	propertyIndex->addProperty(2, "double_score", graph::PropertyValue(2.5));
+	propertyIndex->addProperty(3, "double_score", graph::PropertyValue(3.5));
+
+	EXPECT_EQ(propertyIndex->countRange(
+		"double_score",
+		graph::PropertyValue(int64_t{1}),
+		graph::PropertyValue(int64_t{3}),
+		true,
+		true),
+		2UL);
+
+	propertyIndex->createIndex("integer_score");
+	propertyIndex->addProperty(10, "integer_score", graph::PropertyValue(int64_t{2}));
+	propertyIndex->addProperty(11, "integer_score", graph::PropertyValue(int64_t{3}));
+	propertyIndex->addProperty(12, "integer_score", graph::PropertyValue(int64_t{4}));
+
+	EXPECT_EQ(propertyIndex->countRange(
+		"integer_score",
+		graph::PropertyValue(2.1),
+		graph::PropertyValue(3.9),
+		true,
+		true),
+		1UL);
+	EXPECT_EQ(propertyIndex->countRange(
+		"integer_score",
+		graph::PropertyValue(std::string("low")),
+		graph::PropertyValue(int64_t{5}),
+		true,
+		true),
+		0UL);
+}
+
 TEST_F(PropertyIndexTest, GetIndexedKeys) {
 	// [FIX] Arrange: Explicitly create the indexes first!
 	// PropertyIndex requires the key to be registered before adding data.
@@ -1223,6 +1258,67 @@ TEST_F(PropertyIndexTest, FindRange_IntegerWithFractionalBounds) {
 	// So only value 20 is in range [11, 29]
 	ASSERT_EQ(results.size(), 1u);
 	EXPECT_EQ(results[0], 2);
+}
+
+TEST_F(PropertyIndexTest, RangeQueriesHandleOpenAndIncompatibleBounds) {
+	propertyIndex->addProperty(1, "open_int_range", 10);
+	propertyIndex->addProperty(2, "open_int_range", 20);
+	propertyIndex->addProperty(3, "open_int_range", 30);
+
+	auto incompatibleMin = propertyIndex->findRange(
+		"open_int_range",
+		graph::PropertyValue(std::string("not-a-number")),
+		graph::PropertyValue(int64_t{30}));
+	EXPECT_TRUE(incompatibleMin.empty());
+
+	auto incompatibleMax = propertyIndex->findRange(
+		"open_int_range",
+		graph::PropertyValue(int64_t{10}),
+		graph::PropertyValue(std::string("not-a-number")));
+	EXPECT_TRUE(incompatibleMax.empty());
+}
+
+TEST_F(PropertyIndexTest, CountQueriesHandleOpenBoundsAndMissingRoots) {
+	propertyIndex->addProperty(1, "count_open_double", 1.5);
+	propertyIndex->addProperty(2, "count_open_double", 2.5);
+
+	EXPECT_EQ(propertyIndex->countRange(
+				  "count_open_double",
+				  graph::PropertyValue(std::string("low")),
+				  graph::PropertyValue(3.0)),
+			  0u);
+
+	constexpr uint32_t indexType = graph::query::indexes::IndexTypes::NODE_PROPERTY_TYPE;
+	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
+	auto sysState = database->getStorage()->getSystemStateManager();
+
+	std::unordered_map<std::string, int64_t> typeMap;
+	typeMap["count_orphan_int"] = static_cast<int64_t>(graph::PropertyType::INTEGER);
+	typeMap["count_orphan_bool"] = static_cast<int64_t>(graph::PropertyType::BOOLEAN);
+	sysState->setMap(stateKeyPrefix + graph::storage::state::keys::SUFFIX_KEY_TYPES, typeMap);
+
+	auto inconsistentIndex = std::make_unique<graph::query::indexes::PropertyIndex>(
+			dataManager, sysState, indexType, stateKeyPrefix);
+
+	EXPECT_EQ(inconsistentIndex->countExactMatch("count_orphan_int", graph::PropertyValue(int64_t{1})), 0u);
+	EXPECT_EQ(inconsistentIndex->countRange(
+				  "count_orphan_int",
+				  graph::PropertyValue(int64_t{0}),
+				  graph::PropertyValue(int64_t{10})),
+			  0u);
+	EXPECT_EQ(inconsistentIndex->countRange(
+				  "count_orphan_bool",
+				  graph::PropertyValue(false),
+				  graph::PropertyValue(true)),
+			  0u);
+}
+
+TEST_F(PropertyIndexTest, MultipleCompositeIndexesReuseTreeManager) {
+	propertyIndex->createCompositeIndex({"first", "last"});
+	propertyIndex->createCompositeIndex({"city", "zip"});
+
+	EXPECT_TRUE(propertyIndex->hasCompositeIndex({"first", "last"}));
+	EXPECT_TRUE(propertyIndex->hasCompositeIndex({"city", "zip"}));
 }
 
 /**

@@ -20,6 +20,8 @@
 
 #pragma once
 
+#include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 #include "../PhysicalOperator.hpp"
@@ -50,6 +52,11 @@ namespace graph::query::execution::operators {
 		SortOperator(std::unique_ptr<PhysicalOperator> child, std::vector<SortItem> sortItems) :
 			child_(std::move(child)), sortItems_(std::move(sortItems)) {}
 
+		SortOperator(std::unique_ptr<PhysicalOperator> child, std::vector<SortItem> sortItems,
+		             int64_t limit) :
+			child_(std::move(child)), sortItems_(std::move(sortItems)),
+			topNLimit_(normalizeLimit(limit)) {}
+
 		void open() override;
 		std::optional<RecordBatch> next() override;
 		void close() override;
@@ -70,6 +77,7 @@ namespace graph::query::execution::operators {
 
 		std::unique_ptr<PhysicalOperator> child_;
 		std::vector<SortItem> sortItems_;
+		std::optional<size_t> topNLimit_;
 
 		// Buffer
 		std::vector<Record> sortedRecords_;
@@ -78,9 +86,11 @@ namespace graph::query::execution::operators {
 		static constexpr size_t BATCH_SIZE = 1000;
 
 		void performSort();
+		void performTopN();
 		[[nodiscard]] std::vector<PropertyValue> evaluateSortKeys(const Record &record) const;
 		[[nodiscard]] bool compareKeys(const std::vector<PropertyValue> &left,
 		                                const std::vector<PropertyValue> &right) const;
+		[[nodiscard]] static size_t normalizeLimit(int64_t limit);
 	};
 
 } // namespace graph::query::execution::operators

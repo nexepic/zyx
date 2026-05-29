@@ -494,6 +494,59 @@ TEST_F(IndexManagerTest, HasIndex_EdgeCases) {
 	EXPECT_FALSE(indexManager->hasPropertyIndex("", "prop"));
 }
 
+TEST_F(IndexManagerTest, ScopedPropertyMaintenanceSkipsInvalidNodesAndMetadata) {
+	const int64_t scopedLabel = dataManager->getOrCreateTokenId("Scoped");
+	(void)dataManager->getOrCreateTokenId("Other");
+
+	EXPECT_FALSE(indexManager->hasNodePropertyIndexForLabel("", "age"));
+	EXPECT_FALSE(indexManager->hasNodePropertyIndexForLabel("Scoped", ""));
+
+	ASSERT_TRUE(indexManager->createIndex("idx_scoped_age", "node", "Scoped", "age"));
+	ASSERT_TRUE(indexManager->createIndex("idx_other_age", "node", "Other", "other_age"));
+	ASSERT_TRUE(indexManager->createIndex("idx_scoped_missing", "node", "Scoped", "missing"));
+	ASSERT_TRUE(indexManager->createIndex("idx_all_labels", "node", "", ""));
+	ASSERT_TRUE(indexManager->createCompositeIndex("idx_scoped_composite", "node", "Scoped", {"age", "name"}));
+
+	graph::Node invalid(0, scopedLabel);
+	invalid.addProperty("age", PropertyValue(int64_t{42}));
+	EXPECT_NO_THROW(indexManager->onNodeAdded(invalid));
+
+	graph::Node node(12345, scopedLabel);
+	node.addProperty("age", PropertyValue(int64_t{42}));
+	EXPECT_NO_THROW(indexManager->onNodeAdded(node));
+
+	auto matches = indexManager->findNodeIdsByLabelAndProperty("Scoped", "age", PropertyValue(int64_t{42}));
+	ASSERT_EQ(matches.size(), 1u);
+	EXPECT_EQ(matches[0], node.getId());
+
+	EXPECT_NO_THROW(indexManager->onNodeDeleted(node));
+	EXPECT_TRUE(indexManager->findNodeIdsByLabelAndProperty("Scoped", "age", PropertyValue(int64_t{42})).empty());
+}
+
+TEST_F(IndexManagerTest, EmptyPropertyLookupsDoNotRecordIndexHits) {
+	ASSERT_TRUE(indexManager->createIndex("idx_empty_age", "node", "EmptyLookup", "age"));
+	ASSERT_TRUE(indexManager->createCompositeIndex("idx_empty_composite", "node", "EmptyLookup", {"age", "name"}));
+	ASSERT_TRUE(indexManager->createIndex("idx_empty_edge_weight", "edge", "WEIGHTED", "weight"));
+
+	EXPECT_TRUE(indexManager->findNodeIdsByProperty("age", PropertyValue(int64_t{404})).empty());
+	EXPECT_TRUE(indexManager->findNodeIdsByPropertyRange(
+			"age", PropertyValue(int64_t{1}), PropertyValue(int64_t{10}), true, true).empty());
+	EXPECT_TRUE(indexManager->findNodeIdsByLabelAndProperty(
+			"EmptyLookup", "age", PropertyValue(int64_t{404})).empty());
+	EXPECT_TRUE(indexManager->findNodeIdsByLabelAndPropertyRange(
+			"EmptyLookup", "age", PropertyValue(int64_t{1}), PropertyValue(int64_t{10}), true, true).empty());
+	EXPECT_EQ(indexManager->countNodeIdsByProperty("age", PropertyValue(int64_t{404})), 0u);
+	EXPECT_EQ(indexManager->countNodeIdsByPropertyRange(
+			"age", PropertyValue(int64_t{1}), PropertyValue(int64_t{10}), true, true), 0u);
+	EXPECT_EQ(indexManager->countNodeIdsByLabelAndProperty(
+			"EmptyLookup", "age", PropertyValue(int64_t{404})), 0u);
+	EXPECT_EQ(indexManager->countNodeIdsByLabelAndPropertyRange(
+			"EmptyLookup", "age", PropertyValue(int64_t{1}), PropertyValue(int64_t{10}), true, true), 0u);
+	EXPECT_TRUE(indexManager->findNodeIdsByCompositeIndex(
+			{"age", "name"}, {PropertyValue(int64_t{404}), PropertyValue("missing")}).empty());
+	EXPECT_TRUE(indexManager->findEdgeIdsByProperty("weight", PropertyValue(int64_t{404})).empty());
+}
+
 TEST_F(IndexManagerTest, ExplicitStorageFlushCall) {
 	// This is just to hit the line coverage for the method wrapper
 	// The actual logic is covered by integration tests, but direct call ensures no crashes.

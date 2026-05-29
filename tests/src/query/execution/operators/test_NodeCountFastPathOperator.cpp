@@ -120,6 +120,80 @@ TEST_F(NodeCountFastPathOperatorTest, CountsRowsMatchingPropertyPredicate) {
 	EXPECT_EQ(readCount(*batch), 1);
 }
 
+TEST_F(NodeCountFastPathOperatorTest, CountOnlyPropertyPredicateUsesMetadataBatchWhenClean) {
+	static constexpr size_t kNodeCount = 300;
+	for (size_t i = 0; i < kNodeCount; ++i) {
+		addPerson({{"age", PropertyValue(static_cast<int64_t>(i % 3))}});
+	}
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+	debug::PerfTrace::setEnabled(true);
+	debug::PerfTrace::reset();
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "n";
+	config.labels = {"Person"};
+
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+	requirements.requiredProperties = {"age"};
+	requirements.countOnly = true;
+
+	VectorizedPropertyPredicate predicate;
+	predicate.variable = "n";
+	predicate.propertyKey = "age";
+	predicate.op = VectorPredicateOp::VPO_EQ;
+	predicate.value = PropertyValue(int64_t{1});
+
+	NodeCountFastPathOperator op(dm, im, config, requirements, {predicate}, "count");
+	op.open();
+	auto batch = op.next();
+
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(readCount(*batch), 100);
+	const auto snapshot = debug::PerfTrace::snapshotAndReset();
+	ASSERT_TRUE(snapshot.contains("node_scan.load_node_metadata"));
+	EXPECT_FALSE(snapshot.contains("node_scan.load_nodes"));
+	EXPECT_FALSE(snapshot.contains("node_scan.bulk_load_nodes"));
+}
+
+TEST_F(NodeCountFastPathOperatorTest, SkipsRedundantChecksForLabelIndexCandidatesWithPredicates) {
+	ASSERT_TRUE(im->createIndex("idx_person_label_count_operator", "node", "", ""));
+	for (int64_t i = 0; i < 300; ++i) {
+		addPerson({{"age", PropertyValue(i % 3)}});
+	}
+	addLabeledNode({"Animal"}, {{"age", PropertyValue(int64_t{1})}});
+	db->getStorage()->flush();
+	debug::PerfTrace::setEnabled(true);
+	debug::PerfTrace::reset();
+
+	NodeScanConfig config;
+	config.type = ScanType::LABEL_SCAN;
+	config.variable = "n";
+	config.labels = {"Person"};
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+	requirements.requiredProperties = {"age"};
+	requirements.countOnly = true;
+
+	VectorizedPropertyPredicate predicate;
+	predicate.variable = "n";
+	predicate.propertyKey = "age";
+	predicate.op = VectorPredicateOp::VPO_EQ;
+	predicate.value = PropertyValue(int64_t{1});
+
+	NodeCountFastPathOperator op(dm, im, config, requirements, {predicate}, "count");
+	op.open();
+	auto batch = op.next();
+
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(readCount(*batch), 100);
+	const auto snapshot = debug::PerfTrace::snapshotAndReset();
+	EXPECT_TRUE(snapshot.contains("node_scan.count"));
+	EXPECT_FALSE(snapshot.contains("node_scan.label_check"));
+}
+
 TEST_F(NodeCountFastPathOperatorTest, ReturnsNulloptAfterFirstBatch) {
 	addPerson();
 
@@ -210,4 +284,138 @@ TEST_F(NodeCountFastPathOperatorTest, PerfTraceEmitsNodeScanCountWhenEnabled) {
 
 	const auto snapshot = debug::PerfTrace::snapshotAndReset();
 	EXPECT_TRUE(snapshot.contains("node_scan.count"));
+}
+
+TEST_F(NodeCountFastPathOperatorTest, CountsFullScanCandidatesDirectlyWhenChecksAreSatisfiedByRequirements) {
+	addPerson();
+	addLabeledNode({"Animal"});
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "n";
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_ID_ONLY;
+	requirements.countOnly = true;
+	requirements.needsActiveCheck = false;
+	requirements.needsLabels = false;
+
+	NodeCountFastPathOperator op(dm, im, config, requirements, {}, "count");
+	op.open();
+	auto batch = op.next();
+
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(readCount(*batch), 2);
+}
+
+TEST_F(NodeCountFastPathOperatorTest, NonCountOnlyRequirementFallsBackToBatchCounting) {
+	addPerson();
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "n";
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_ID_ONLY;
+	requirements.countOnly = false;
+	requirements.needsActiveCheck = false;
+	requirements.needsLabels = false;
+
+	NodeCountFastPathOperator op(dm, im, config, requirements, {}, "count");
+	op.open();
+	auto batch = op.next();
+
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(readCount(*batch), 1);
+}
+
+TEST_F(NodeCountFastPathOperatorTest, PredicateDisablesDirectCandidateCounting) {
+	addPerson({{"age", PropertyValue(int64_t{42})}});
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "n";
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_ID_ONLY;
+	requirements.countOnly = true;
+	requirements.needsActiveCheck = false;
+	requirements.needsLabels = false;
+	VectorizedPropertyPredicate predicate;
+	predicate.variable = "n";
+	predicate.propertyKey = "age";
+	predicate.op = VectorPredicateOp::VPO_EQ;
+	predicate.value = PropertyValue(int64_t{42});
+
+	NodeCountFastPathOperator op(dm, im, config, requirements, {predicate}, "count");
+	op.open();
+	auto batch = op.next();
+
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(readCount(*batch), 0);
+}
+
+TEST_F(NodeCountFastPathOperatorTest, DirectCountFallsBackWhenResidualLabelsAreRequired) {
+	ASSERT_TRUE(im->createIndex("idx_age_global_count", "node", "", "age"));
+	addPerson({{"age", PropertyValue(int64_t{42})}});
+	addLabeledNode({"Animal"}, {{"age", PropertyValue(int64_t{42})}});
+
+	NodeScanConfig config;
+	config.type = ScanType::PROPERTY_SCAN;
+	config.variable = "n";
+	config.labels = {"Person"};
+	config.indexKey = "age";
+	config.indexValue = PropertyValue(int64_t{42});
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_ID_ONLY;
+	requirements.countOnly = true;
+
+	NodeCountFastPathOperator op(dm, im, config, requirements, {}, "count");
+	op.open();
+	auto batch = op.next();
+
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(readCount(*batch), 1);
+}
+
+TEST_F(NodeCountFastPathOperatorTest, CandidateCountingChecksResidualLabelsWhenActiveCheckIsDisabled) {
+	addPerson();
+	addLabeledNode({"Animal"});
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "n";
+	config.labels = {"Person"};
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_ID_ONLY;
+	requirements.countOnly = true;
+	requirements.needsActiveCheck = false;
+	requirements.needsLabels = true;
+
+	NodeCountFastPathOperator op(dm, im, config, requirements, {}, "count");
+	op.open();
+	auto batch = op.next();
+
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(readCount(*batch), 1);
+}
+
+TEST_F(NodeCountFastPathOperatorTest, DirectIndexCountHonorsDisabledRequirementChecks) {
+	addPerson();
+	addPerson();
+	ASSERT_TRUE(im->createIndex("idx_person_label_count", "node", "", ""));
+
+	NodeScanConfig config;
+	config.type = ScanType::LABEL_SCAN;
+	config.variable = "n";
+	config.labels = {"Person"};
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_ID_ONLY;
+	requirements.countOnly = true;
+	requirements.needsActiveCheck = false;
+	requirements.needsLabels = false;
+
+	NodeCountFastPathOperator op(dm, im, config, requirements, {}, "count");
+	op.open();
+	auto batch = op.next();
+
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(readCount(*batch), 2);
 }

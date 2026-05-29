@@ -25,12 +25,14 @@ namespace {
 		left = std::move(intersection);
 	}
 
-	bool applyLabelIndexFilter(const std::shared_ptr<indexes::IndexManager> &im,
-	                           const NodeScanConfig &config,
-	                           NodeCandidateSet &candidateSet) {
-		if (!im || config.labels.empty() || !im->hasLabelIndex("node")) {
-			return config.labels.empty();
-		}
+		bool applyLabelIndexFilter(const std::shared_ptr<indexes::IndexManager> &im,
+		                           const NodeScanConfig &config,
+		                           NodeCandidateSet &candidateSet) {
+			// Called only after the primary label scan has produced candidates for a non-empty
+			// multi-label request; an absent label index means those residual labels are unsatisfied.
+			if (!im->hasLabelIndex("node")) {
+				return false;
+			}
 
 		for (const auto &label : config.labels) {
 			auto labelIds = im->findNodeIdsByLabel(label);

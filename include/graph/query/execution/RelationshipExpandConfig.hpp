@@ -3,7 +3,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <vector>
+
+#include "graph/core/PropertyTypes.hpp"
 
 namespace graph::query::execution {
 	enum class RelationshipMaterializationMode {
@@ -21,6 +24,13 @@ namespace graph::query::execution {
 		std::vector<std::string> targetLabels;
 		int64_t edgeTypeId = 0;
 		std::vector<int64_t> targetLabelIds;
+	};
+
+	struct DirectRelationshipCountConfig {
+		bool enabled = false;
+		std::string edgeType;
+		std::string direction = "out";
+		std::unordered_map<std::string, PropertyValue> edgeProperties;
 	};
 
 	struct RelationshipExpandRequirements {

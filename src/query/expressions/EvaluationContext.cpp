@@ -55,18 +55,18 @@ std::optional<PropertyValue> EvaluationContext::resolveVariable(const std::strin
 	}
 
 	// Try to get as a Node first
-	if (auto node = record_.getNode(variableName)) {
-		return PropertyValue(node->getId());
+	if (auto node = record_.getNodeRef(variableName)) {
+		return PropertyValue(node->get().getId());
 	}
 
 	// Try to get as an Edge
-	if (auto edge = record_.getEdge(variableName)) {
-		return PropertyValue(edge->getId());
+	if (auto edge = record_.getEdgeRef(variableName)) {
+		return PropertyValue(edge->get().getId());
 	}
 
 	// Try to get as a computed value
-	if (auto value = record_.getValue(variableName)) {
-		return *value;
+	if (auto value = record_.getValueRef(variableName)) {
+		return value->get();
 	}
 
 	return std::nullopt;
@@ -75,8 +75,8 @@ std::optional<PropertyValue> EvaluationContext::resolveVariable(const std::strin
 std::optional<PropertyValue> EvaluationContext::resolveProperty(const std::string &variableName,
                                                                 const std::string &propertyName) const {
 	// Try to get property from a Node
-	if (auto node = record_.getNode(variableName)) {
-		const auto &props = node->getProperties();
+	if (auto node = record_.getNodeRef(variableName)) {
+		const auto &props = node->get().getProperties();
 		auto it = props.find(propertyName);
 		if (it != props.end()) {
 			return it->second;
@@ -85,8 +85,8 @@ std::optional<PropertyValue> EvaluationContext::resolveProperty(const std::strin
 	}
 
 	// Try to get property from an Edge
-	if (auto edge = record_.getEdge(variableName)) {
-		const auto &props = edge->getProperties();
+	if (auto edge = record_.getEdgeRef(variableName)) {
+		const auto &props = edge->get().getProperties();
 		auto it = props.find(propertyName);
 		if (it != props.end()) {
 			return it->second;
@@ -95,9 +95,9 @@ std::optional<PropertyValue> EvaluationContext::resolveProperty(const std::strin
 	}
 
 	// Try map property access: row.name where row is a MAP PropertyValue
-	if (auto val = record_.getValue(variableName)) {
-		if (val->getType() == PropertyType::MAP) {
-			const auto &map = val->getMap();
+	if (auto val = record_.getValueRef(variableName)) {
+		if (val->get().getType() == PropertyType::MAP) {
+			const auto &map = val->get().getMap();
 			auto it = map.find(propertyName);
 			if (it != map.end()) {
 				return it->second;

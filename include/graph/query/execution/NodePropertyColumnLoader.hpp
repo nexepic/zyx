@@ -9,6 +9,7 @@
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/core/PropertyTypes.hpp"
+#include "graph/query/execution/NodeMetadataColumnLoader.hpp"
 #include "graph/storage/data/DataManager.hpp"
 
 namespace graph::query::execution {
@@ -20,6 +21,11 @@ namespace graph::query::execution {
 
 		[[nodiscard]] std::unordered_map<std::string, std::vector<std::optional<PropertyValue>>>
 		loadColumns(const std::vector<Node> &nodes,
+		            const std::vector<uint8_t> &selected,
+		            const std::vector<std::string> &requiredProperties) const;
+
+		[[nodiscard]] std::unordered_map<std::string, std::vector<std::optional<PropertyValue>>>
+		loadColumns(const NodeMetadataBatch &metadataBatch,
 		            const std::vector<uint8_t> &selected,
 		            const std::vector<std::string> &requiredProperties) const;
 

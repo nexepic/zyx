@@ -97,6 +97,57 @@ TEST(NodePropertyColumnLoaderTest, InvalidSelectionVectorSizeReturnsEmptyColumns
 	EXPECT_TRUE(columns.empty());
 }
 
+TEST(NodePropertyColumnLoaderTest, SkipsInvalidInactiveAndUnhelpfulNodeRows) {
+	Node missingId = makeNode(0);
+	missingId.addProperty("age", PropertyValue(int64_t{99}));
+	Node inactive = makeNode(2);
+	inactive.addProperty("age", PropertyValue(int64_t{100}));
+	inactive.markInactive();
+	Node selectedOut = makeNode(3);
+	selectedOut.addProperty("age", PropertyValue(int64_t{101}));
+	NodePropertyColumnLoader loader(nullptr);
+
+	auto columns = loader.loadColumns({missingId, inactive, selectedOut}, {1, 1, 0}, {"age"});
+
+	ASSERT_EQ(columns.size(), 1U);
+	ASSERT_EQ(columns["age"].size(), 3U);
+	EXPECT_FALSE(columns["age"][0].has_value());
+	EXPECT_FALSE(columns["age"][1].has_value());
+	EXPECT_FALSE(columns["age"][2].has_value());
+}
+
+TEST(NodePropertyColumnLoaderTest, MetadataBatchValidatesSelectionAndSkipsInactiveRows) {
+	NodeMetadataBatch batch;
+	batch.appendDefault();
+	batch.nodeIds[0] = 1;
+	batch.active[0] = 1;
+	batch.propertyStorageTypes[0] = PropertyStorageType::PROPERTY_ENTITY;
+	batch.propertyEntityIds[0] = 0;
+	batch.appendDefault();
+	batch.nodeIds[1] = 2;
+	batch.active[1] = 0;
+	batch.propertyStorageTypes[1] = PropertyStorageType::PROPERTY_ENTITY;
+	batch.propertyEntityIds[1] = 42;
+	batch.appendDefault();
+	batch.nodeIds[2] = 0;
+	batch.active[2] = 1;
+	batch.propertyStorageTypes[2] = PropertyStorageType::PROPERTY_ENTITY;
+	batch.propertyEntityIds[2] = 43;
+
+	NodePropertyColumnLoader loader(nullptr);
+
+	EXPECT_TRUE(loader.loadColumns(batch, {}, {}).empty());
+	EXPECT_TRUE(loader.loadColumns(batch, {1, 0}, {"age"}).empty());
+
+	auto columns = loader.loadColumns(batch, {1, 1, 1}, {"age", "age"});
+	ASSERT_EQ(columns.size(), 1U);
+	ASSERT_TRUE(columns.contains("age"));
+	ASSERT_EQ(columns["age"].size(), 3U);
+	EXPECT_FALSE(columns["age"][0].has_value());
+	EXPECT_FALSE(columns["age"][1].has_value());
+	EXPECT_FALSE(columns["age"][2].has_value());
+}
+
 class NodePropertyColumnLoaderStorageTest : public ::testing::Test {
 protected:
 	void SetUp() override {
@@ -146,6 +197,29 @@ TEST_F(NodePropertyColumnLoaderStorageTest, ExternalPropertyEntityValuesPopulate
 	EXPECT_FALSE(columns.contains("name"));
 }
 
+TEST_F(NodePropertyColumnLoaderStorageTest, MetadataBatchExternalPropertiesPopulateRequestedColumns) {
+	Node node(1, 0);
+	dm->addNode(node);
+	dm->addNodeProperties(1, {{"age", PropertyValue(int64_t{42})}, {"name", PropertyValue("Alice")}});
+	Node stored = dm->getNode(1);
+	ASSERT_TRUE(stored.hasPropertyEntity());
+	ASSERT_EQ(stored.getPropertyStorageType(), PropertyStorageType::PROPERTY_ENTITY);
+
+	NodeMetadataBatch metadataBatch;
+	metadataBatch.appendDefault();
+	metadataBatch.setFromNode(0, stored);
+	NodePropertyColumnLoader loader(dm);
+
+	auto columns = loader.loadColumns(metadataBatch, {}, {"age"});
+
+	ASSERT_EQ(columns.size(), 1U);
+	ASSERT_TRUE(columns.contains("age"));
+	ASSERT_EQ(columns["age"].size(), 1U);
+	ASSERT_TRUE(columns["age"][0].has_value());
+	EXPECT_EQ(columns["age"][0].value(), PropertyValue(int64_t{42}));
+	EXPECT_FALSE(columns.contains("name"));
+}
+
 TEST_F(NodePropertyColumnLoaderStorageTest, BlobBackedPropertiesFallbackToDirectLoading) {
 	std::string largeValue(512, 'x');
 	Node node(1, 0);
@@ -165,6 +239,29 @@ TEST_F(NodePropertyColumnLoaderStorageTest, BlobBackedPropertiesFallbackToDirect
 	ASSERT_TRUE(columns["age"][0].has_value());
 	EXPECT_EQ(columns["payload"][0].value(), PropertyValue(largeValue));
 	EXPECT_EQ(columns["age"][0].value(), PropertyValue(int64_t{42}));
+}
+
+TEST_F(NodePropertyColumnLoaderStorageTest, MetadataBatchBlobRowsFallbackToDirectLoading) {
+	std::string largeValue(512, 'z');
+	Node node(1, 0);
+	dm->addNode(node);
+	dm->addNodeProperties(1, {{"payload", PropertyValue(largeValue)}});
+	Node stored = dm->getNode(1);
+	ASSERT_TRUE(stored.hasPropertyEntity());
+	ASSERT_EQ(stored.getPropertyStorageType(), PropertyStorageType::BLOB_ENTITY);
+
+	NodeMetadataBatch metadataBatch;
+	metadataBatch.appendDefault();
+	metadataBatch.setFromNode(0, stored);
+
+	NodePropertyColumnLoader loader(dm);
+	auto columns = loader.loadColumns(metadataBatch, {}, {"payload"});
+
+	ASSERT_EQ(columns.size(), 1U);
+	ASSERT_TRUE(columns.contains("payload"));
+	ASSERT_EQ(columns["payload"].size(), 1U);
+	ASSERT_TRUE(columns["payload"][0].has_value());
+	EXPECT_EQ(columns["payload"][0].value(), PropertyValue(largeValue));
 }
 
 TEST_F(NodePropertyColumnLoaderStorageTest, MissingBulkResultFallbackPreservesValues) {

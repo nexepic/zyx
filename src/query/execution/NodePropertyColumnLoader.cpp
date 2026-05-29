@@ -42,6 +42,18 @@ namespace graph::query::execution {
 				}
 			}
 		}
+
+		void appendRowsMissingFromBulkLoad(const std::vector<size_t> &externalRows,
+		                                   std::vector<size_t> loadedRows,
+		                                   std::vector<size_t> &fallbackRows) {
+			std::sort(loadedRows.begin(), loadedRows.end());
+			loadedRows.erase(std::unique(loadedRows.begin(), loadedRows.end()), loadedRows.end());
+			for (const size_t row : externalRows) {
+				if (!std::binary_search(loadedRows.begin(), loadedRows.end(), row)) {
+					fallbackRows.push_back(row);
+				}
+			}
+		}
 	} // namespace
 
 	NodePropertyColumnLoader::NodePropertyColumnLoader(std::shared_ptr<storage::DataManager> dm,
@@ -95,38 +107,103 @@ namespace graph::query::execution {
 			}
 		}
 
-		std::sort(propertyEntityIds.begin(), propertyEntityIds.end());
-		propertyEntityIds.erase(std::unique(propertyEntityIds.begin(), propertyEntityIds.end()), propertyEntityIds.end());
-
 		if (traceEnabled) {
 			debug::PerfTrace::addDuration("node_scan.extract_property_columns", elapsedNs(extractStart));
 		}
 
-		std::unordered_map<int64_t, Property> propertyMap;
+		std::vector<size_t> loadedRows;
 		if (dm_ && !propertyEntityIds.empty()) {
 			const auto bulkStart = traceEnabled ? Clock::now() : Clock::time_point{};
-			propertyMap = dm_->bulkLoadPropertyEntities(propertyEntityIds, threadPool_);
+			loadedRows = dm_->bulkLoadPropertyEntityColumns(
+				propertyEntityIds, externalRows, nodes.size(), requestedProperties, columns, threadPool_);
 			if (traceEnabled) {
 				debug::PerfTrace::addDuration("node_scan.load_property_entities", elapsedNs(bulkStart));
 			}
 		}
 
 		const auto fillStart = traceEnabled ? Clock::now() : Clock::time_point{};
-		for (const size_t row : externalRows) {
-			const auto &node = nodes[row];
-			auto propIt = propertyMap.find(node.getPropertyEntityId());
-			if (propIt != propertyMap.end() && propIt->second.getId() != 0 && propIt->second.isActive()) {
-				assignRequestedValues(columns, requestedProperties, row, propIt->second.getPropertyValues());
-			} else {
-				fallbackRows.push_back(row);
-			}
-		}
+		appendRowsMissingFromBulkLoad(externalRows, std::move(loadedRows), fallbackRows);
 
 		if (dm_) {
 			std::sort(fallbackRows.begin(), fallbackRows.end());
 			fallbackRows.erase(std::unique(fallbackRows.begin(), fallbackRows.end()), fallbackRows.end());
 			for (const size_t row : fallbackRows) {
 				assignRequestedValues(columns, requestedProperties, row, dm_->getNodePropertiesDirect(nodes[row]));
+			}
+		}
+
+		if (traceEnabled) {
+			debug::PerfTrace::addDuration("node_scan.extract_property_columns", elapsedNs(fillStart));
+		}
+
+		return columns;
+	}
+
+	std::unordered_map<std::string, std::vector<std::optional<PropertyValue>>>
+	NodePropertyColumnLoader::loadColumns(const NodeMetadataBatch &metadataBatch,
+	                                      const std::vector<uint8_t> &selected,
+	                                      const std::vector<std::string> &requiredProperties) const {
+		std::unordered_map<std::string, std::vector<std::optional<PropertyValue>>> columns;
+		if (requiredProperties.empty()) {
+			return columns;
+		}
+		if (!selected.empty() && selected.size() != metadataBatch.size()) {
+			return columns;
+		}
+
+		const auto requestedProperties = deduplicateProperties(requiredProperties);
+		for (const auto &key : requestedProperties) {
+			columns.emplace(key, std::vector<std::optional<PropertyValue>>(metadataBatch.size(), std::nullopt));
+		}
+
+		const bool traceEnabled = debug::PerfTrace::isEnabled();
+		const auto extractStart = traceEnabled ? Clock::now() : Clock::time_point{};
+
+		std::vector<int64_t> propertyEntityIds;
+		std::vector<size_t> externalRows;
+		std::vector<size_t> fallbackRows;
+		propertyEntityIds.reserve(metadataBatch.size());
+		externalRows.reserve(metadataBatch.size());
+		fallbackRows.reserve(metadataBatch.size());
+
+		for (size_t row = 0; row < metadataBatch.size(); ++row) {
+			if (!isSelectedRow(selected, row) || !metadataBatch.isValid(row) || metadataBatch.active[row] == 0) {
+				continue;
+			}
+
+			const auto storageType = metadataBatch.propertyStorageTypes[row];
+			const int64_t propertyEntityId = metadataBatch.propertyEntityIds[row];
+			if (storageType == PropertyStorageType::PROPERTY_ENTITY && propertyEntityId != 0) {
+				propertyEntityIds.push_back(propertyEntityId);
+				externalRows.push_back(row);
+			} else if (storageType == PropertyStorageType::BLOB_ENTITY && propertyEntityId != 0) {
+				fallbackRows.push_back(row);
+			}
+		}
+
+		if (traceEnabled) {
+			debug::PerfTrace::addDuration("node_scan.extract_property_columns", elapsedNs(extractStart));
+		}
+
+		std::vector<size_t> loadedRows;
+		if (dm_ && !propertyEntityIds.empty()) {
+			const auto bulkStart = traceEnabled ? Clock::now() : Clock::time_point{};
+			loadedRows = dm_->bulkLoadPropertyEntityColumns(
+				propertyEntityIds, externalRows, metadataBatch.size(), requestedProperties, columns, threadPool_);
+			if (traceEnabled) {
+				debug::PerfTrace::addDuration("node_scan.load_property_entities", elapsedNs(bulkStart));
+			}
+		}
+
+		const auto fillStart = traceEnabled ? Clock::now() : Clock::time_point{};
+		appendRowsMissingFromBulkLoad(externalRows, std::move(loadedRows), fallbackRows);
+
+		if (dm_) {
+			std::sort(fallbackRows.begin(), fallbackRows.end());
+			fallbackRows.erase(std::unique(fallbackRows.begin(), fallbackRows.end()), fallbackRows.end());
+			for (const size_t row : fallbackRows) {
+				Node node = metadataBatch.toNode(row);
+				assignRequestedValues(columns, requestedProperties, row, dm_->getNodePropertiesDirect(node));
 			}
 		}
 

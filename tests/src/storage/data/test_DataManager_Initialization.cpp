@@ -21,6 +21,9 @@
 #include <gtest/gtest.h>
 #include <array>
 #include <memory>
+#include <optional>
+#include <unordered_map>
+#include <vector>
 #include "graph/storage/IDAllocator.hpp"
 #include "graph/storage/SegmentTracker.hpp"
 #include "graph/storage/StorageIO.hpp"
@@ -206,4 +209,20 @@ TEST(DataManagerInitialization, BulkLoadPropertyEntities_EmptyIds_ReturnsEmpty) 
     std::vector<int64_t> empty;
     auto result = dm->bulkLoadPropertyEntities(empty, nullptr);
     EXPECT_TRUE(result.empty());
+}
+
+TEST(DataManagerInitialization, ColumnPropertyReaders_NoPread_ReturnEmptyResults) {
+    auto dm = makeMinimalDataManager(/*useNullStorageIO=*/false);
+    EXPECT_FALSE(dm->hasPreadSupport());
+
+    EXPECT_TRUE(dm->bulkLoadPropertyEntityValues({1}, {"key"}, nullptr).empty());
+
+    std::unordered_map<std::string, std::vector<std::optional<graph::PropertyValue>>> columns;
+    columns.emplace("key", std::vector<std::optional<graph::PropertyValue>>(1, std::nullopt));
+    EXPECT_TRUE(dm->bulkLoadPropertyEntityColumns({1}, {0}, 1, {"key"}, columns, nullptr).empty());
+
+    auto matches = dm->bulkMatchPropertyEntityPredicates(
+        {1}, {0}, 1, {{"key", graph::PropertyValue(int64_t{1})}}, nullptr);
+    EXPECT_TRUE(matches.loadedRows.empty());
+    EXPECT_TRUE(matches.matchedRows.empty());
 }

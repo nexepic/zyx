@@ -9,6 +9,7 @@
 
 #include <gtest/gtest.h>
 
+#include "api/driver_abi/DriverAbiInternal.hpp"
 #include "zyx/zyx_driver_abi.h"
 
 namespace fs = std::filesystem;
@@ -22,6 +23,28 @@ std::string uniqueDbPath() {
     return (fs::temp_directory_path() / ("zyx_driver_abi_nested_values_" + std::to_string(now) + "_" +
                                         std::to_string(std::rand()) + "_" + std::to_string(sequence)))
         .string();
+}
+
+struct RegisteredResultOwner {
+    zyx_driver_result_t result;
+
+    RegisteredResultOwner() {
+        registerResultHandle(&result);
+    }
+
+    ~RegisteredResultOwner() {
+        unregisterResultHandle(&result);
+    }
+};
+
+void expectLocalError(zyx_driver_status_t status,
+                      zyx_driver_status_t expected,
+                      zyx_driver_error_t *&error) {
+    EXPECT_EQ(status, expected);
+    ASSERT_NE(error, nullptr);
+    EXPECT_EQ(zyx_driver_error_code(error), expected);
+    zyx_driver_error_free(error);
+    error = nullptr;
 }
 
 } // namespace
@@ -256,6 +279,45 @@ TEST_F(DriverAbiNestedValuesTest, ReadsNestedEdgeEntityThroughValueRef) {
     zyx_driver_value_free(edgeValue, &error);
     zyx_driver_value_free(relsValue, &error);
     zyx_driver_params_free(params, &error);
+}
+
+TEST_F(DriverAbiNestedValuesTest, RawVectorValueRefsExposeListAccessors) {
+    RegisteredResultOwner owner;
+
+    const size_t floatSlot = appendValueRefBuffer(&owner.result, std::vector<float>{1.25f, 2.5f});
+    zyx_driver_value_ref_t floatRef = makeValueRef(&owner.result, floatSlot);
+
+    uint32_t count = 0;
+    ASSERT_EQ(zyx_driver_value_ref_list_count(&floatRef, &count, &error), ZYX_DRIVER_OK);
+    EXPECT_EQ(count, 2u);
+    EXPECT_EQ(zyx_driver_value_ref_type(&floatRef), ZYX_DRIVER_VALUE_LIST);
+
+    double numericValue = 0.0;
+    ASSERT_EQ(zyx_driver_value_ref_list_get_double(&floatRef, 0, &numericValue, &error), ZYX_DRIVER_OK);
+    EXPECT_DOUBLE_EQ(numericValue, 1.25);
+    expectError(zyx_driver_value_ref_list_get_double(&floatRef, 9, &numericValue, &error), ZYX_DRIVER_OUT_OF_RANGE);
+
+    zyx_driver_value_ref_t numericItem{};
+    ASSERT_EQ(zyx_driver_value_ref_list_get(&floatRef, 1, &numericItem, &error), ZYX_DRIVER_OK);
+    EXPECT_EQ(zyx_driver_value_ref_type(&numericItem), ZYX_DRIVER_VALUE_DOUBLE);
+    expectError(zyx_driver_value_ref_list_get(&floatRef, 9, &numericItem, &error), ZYX_DRIVER_OUT_OF_RANGE);
+
+    const size_t stringSlot =
+            appendValueRefBuffer(&owner.result, std::vector<std::string>{"alpha", "beta"});
+    zyx_driver_value_ref_t stringRef = makeValueRef(&owner.result, stringSlot);
+    ASSERT_EQ(zyx_driver_value_ref_list_count(&stringRef, &count, &error), ZYX_DRIVER_OK);
+    EXPECT_EQ(count, 2u);
+
+    const char *text = nullptr;
+    ASSERT_EQ(zyx_driver_value_ref_list_get_string(nullptr, &stringRef, 0, &text, &error), ZYX_DRIVER_OK);
+    ASSERT_NE(text, nullptr);
+    EXPECT_STREQ(text, "alpha");
+    expectError(zyx_driver_value_ref_list_get_string(nullptr, &stringRef, 9, &text, &error),
+                ZYX_DRIVER_OUT_OF_RANGE);
+
+    zyx_driver_value_ref_t stringItem{};
+    ASSERT_EQ(zyx_driver_value_ref_list_get(&stringRef, 1, &stringItem, &error), ZYX_DRIVER_OK);
+    EXPECT_EQ(zyx_driver_value_ref_type(&stringItem), ZYX_DRIVER_VALUE_STRING);
 }
 
 TEST_F(DriverAbiNestedValuesTest, MarkerMapResultValueTypeStaysMapWhileValueRefMaterializesEntity) {
@@ -977,4 +1039,248 @@ TEST_F(DriverAbiNestedValuesTest, ReportsTypeMismatchAndOutOfRangeForInvalidTrav
     zyx_driver_value_free(mapValue, &error);
     zyx_driver_value_free(listValue, &error);
     zyx_driver_params_free(params, &error);
+}
+
+TEST(DriverAbiValueRefRawPathsTest, DirectOwnerTraversesCompactVectorRefs) {
+    RegisteredResultOwner owner;
+    zyx_driver_error_t *error = nullptr;
+
+    const size_t slot = appendValueRefBuffer(&owner.result, std::vector<float>{1.25F, 2.5F});
+    zyx_driver_value_ref_t ref = makeValueRef(&owner.result, slot);
+
+    EXPECT_EQ(zyx_driver_value_ref_type(&ref), ZYX_DRIVER_VALUE_LIST);
+
+    uint32_t count = 0;
+    ASSERT_EQ(zyx_driver_value_ref_list_count(&ref, &count, &error), ZYX_DRIVER_OK);
+    EXPECT_EQ(count, 2u);
+
+    double value = 0.0;
+    ASSERT_EQ(zyx_driver_value_ref_list_get_double(&ref, 0, &value, &error), ZYX_DRIVER_OK);
+    EXPECT_DOUBLE_EQ(value, 1.25);
+    ASSERT_EQ(zyx_driver_value_ref_list_get_double(&ref, 1, &value, &error), ZYX_DRIVER_OK);
+    EXPECT_DOUBLE_EQ(value, 2.5);
+
+    zyx_driver_value_ref_t element{};
+    ASSERT_EQ(zyx_driver_value_ref_list_get(&ref, 1, &element, &error), ZYX_DRIVER_OK);
+    EXPECT_EQ(zyx_driver_value_ref_type(&element), ZYX_DRIVER_VALUE_DOUBLE);
+    ASSERT_EQ(zyx_driver_value_ref_get_double(&element, &value, &error), ZYX_DRIVER_OK);
+    EXPECT_DOUBLE_EQ(value, 2.5);
+
+    int64_t intValue = 0;
+    const char *stringValue = nullptr;
+    expectLocalError(zyx_driver_value_ref_list_get_int64(&ref, 0, &intValue, &error),
+                     ZYX_DRIVER_TYPE_MISMATCH,
+                     error);
+    expectLocalError(zyx_driver_value_ref_list_get_string(nullptr, &ref, 0, &stringValue, &error),
+                     ZYX_DRIVER_TYPE_MISMATCH,
+                     error);
+    expectLocalError(zyx_driver_value_ref_list_get_double(&ref, 2, &value, &error),
+                     ZYX_DRIVER_OUT_OF_RANGE,
+                     error);
+
+    element = {};
+    expectLocalError(zyx_driver_value_ref_list_get(&ref, 2, &element, &error),
+                     ZYX_DRIVER_OUT_OF_RANGE,
+                     error);
+}
+
+TEST(DriverAbiValueRefRawPathsTest, DirectOwnerTraversesStringVectorRefsAndRejectsStaleRefs) {
+    RegisteredResultOwner owner;
+    zyx_driver_error_t *error = nullptr;
+
+    const size_t slot = appendValueRefBuffer(&owner.result, std::vector<std::string>{"Ada", "Grace"});
+    zyx_driver_value_ref_t ref = makeValueRef(&owner.result, slot);
+
+    EXPECT_EQ(zyx_driver_value_ref_type(&ref), ZYX_DRIVER_VALUE_LIST);
+
+    uint32_t count = 0;
+    ASSERT_EQ(zyx_driver_value_ref_list_count(&ref, &count, &error), ZYX_DRIVER_OK);
+    EXPECT_EQ(count, 2u);
+
+    const char *name = nullptr;
+    ASSERT_EQ(zyx_driver_value_ref_list_get_string(nullptr, &ref, 1, &name, &error), ZYX_DRIVER_OK);
+    ASSERT_NE(name, nullptr);
+    EXPECT_STREQ(name, "Grace");
+
+    zyx_driver_value_ref_t element{};
+    ASSERT_EQ(zyx_driver_value_ref_list_get(&ref, 0, &element, &error), ZYX_DRIVER_OK);
+    EXPECT_EQ(zyx_driver_value_ref_type(&element), ZYX_DRIVER_VALUE_STRING);
+    ASSERT_EQ(zyx_driver_value_ref_get_string(nullptr, &element, &name, &error), ZYX_DRIVER_OK);
+    ASSERT_NE(name, nullptr);
+    EXPECT_STREQ(name, "Ada");
+
+    expectLocalError(zyx_driver_value_ref_list_get_string(nullptr, &ref, 2, &name, &error),
+                     ZYX_DRIVER_OUT_OF_RANGE,
+                     error);
+
+    zyx_driver_value_ref_t outOfRange{};
+    expectLocalError(zyx_driver_value_ref_list_get(&ref, 2, &outOfRange, &error),
+                     ZYX_DRIVER_OUT_OF_RANGE,
+                     error);
+
+    zyx_driver_value_ref_t badSlot = ref;
+    badSlot.slot = std::numeric_limits<uint64_t>::max();
+    expectLocalError(zyx_driver_value_ref_list_count(&badSlot, &count, &error),
+                     ZYX_DRIVER_INVALID_ARGUMENT,
+                     error);
+
+    zyx_driver_value_ref_t stale = ref;
+    ++stale.owner_cookie;
+    expectLocalError(zyx_driver_value_ref_list_count(&stale, &count, &error),
+                     ZYX_DRIVER_INVALID_ARGUMENT,
+                     error);
+
+    zyx_driver_value_ref_t released = ref;
+    unregisterResultHandle(&owner.result);
+    expectLocalError(zyx_driver_value_ref_list_count(&released, &count, &error),
+                     ZYX_DRIVER_INVALID_ARGUMENT,
+                     error);
+}
+
+TEST(DriverAbiValueRefRawPathsTest, EntityMarkerRefsExposeJsonAndTypedMismatches) {
+    RegisteredResultOwner owner;
+    zyx_driver_error_t *error = nullptr;
+
+    auto nodeMap = std::make_shared<zyx::ValueMap>();
+    nodeMap->entries["__zyx_driver_entity"] = std::string("node");
+    nodeMap->entries["id"] = int64_t{77};
+    nodeMap->entries["label0"] = std::string("RawNode");
+    nodeMap->entries["prop:embedding"] = std::vector<float>{1.0F, 2.5F};
+    nodeMap->entries["prop:nullList"] = std::shared_ptr<zyx::ValueList>{};
+    nodeMap->entries["prop:nullMap"] = std::shared_ptr<zyx::ValueMap>{};
+
+    zyx_driver_value_ref_t nodeRef = makeValueRef(&owner.result, appendValueRefBuffer(&owner.result, nodeMap));
+    ASSERT_EQ(zyx_driver_value_ref_type(&nodeRef), ZYX_DRIVER_VALUE_NODE);
+
+    int64_t id = 0;
+    ASSERT_EQ(zyx_driver_value_ref_get_node_id(&nodeRef, &id, &error), ZYX_DRIVER_OK);
+    EXPECT_EQ(id, 77);
+
+    const char *json = nullptr;
+    ASSERT_EQ(zyx_driver_value_ref_get_entity_properties_json(nullptr, &nodeRef, &json, &error), ZYX_DRIVER_OK);
+    ASSERT_NE(json, nullptr);
+    const std::string text(json);
+    EXPECT_NE(text.find("\"embedding\":[1,2.5]"), std::string::npos);
+    EXPECT_NE(text.find("\"nullList\":null"), std::string::npos);
+    EXPECT_NE(text.find("\"nullMap\":null"), std::string::npos);
+
+    expectLocalError(zyx_driver_value_ref_get_edge_id(&nodeRef, &id, &error),
+                     ZYX_DRIVER_TYPE_MISMATCH,
+                     error);
+    expectLocalError(zyx_driver_value_ref_get_entity_properties_json(nullptr,
+                                                                    nullptr,
+                                                                    &json,
+                                                                    &error),
+                     ZYX_DRIVER_INVALID_ARGUMENT,
+                     error);
+}
+
+TEST(DriverAbiValueRefRawPathsTest, EntityPropertyJsonSerializesDirectGraphRefsAndRejectsScalars) {
+    RegisteredResultOwner owner;
+    zyx_driver_error_t *error = nullptr;
+
+    auto nestedList = std::make_shared<zyx::ValueList>();
+    nestedList->elements.emplace_back(int64_t{3});
+    nestedList->elements.emplace_back(std::string("item"));
+
+    auto nestedMap = std::make_shared<zyx::ValueMap>();
+    nestedMap->entries["enabled"] = true;
+    nestedMap->entries["ratio"] = 2.5;
+
+    auto node = std::make_shared<zyx::Node>();
+    node->id = 91;
+    node->label = "DirectNode";
+    node->properties["null"] = std::monostate{};
+    node->properties["flag"] = false;
+    node->properties["count"] = int64_t{5};
+    node->properties["name"] = std::string("Ada\nLovelace");
+    node->properties["tags"] = std::vector<std::string>{"math", "engine"};
+    node->properties["embedding"] = std::vector<float>{1.5F, 2.25F};
+    node->properties["list"] = nestedList;
+    node->properties["map"] = nestedMap;
+
+    zyx_driver_value_ref_t nodeRef = makeValueRef(&owner.result, appendValueRefBuffer(&owner.result, node));
+    const char *json = nullptr;
+    ASSERT_EQ(zyx_driver_value_ref_get_entity_properties_json(&owner.result, &nodeRef, &json, &error),
+              ZYX_DRIVER_OK);
+    ASSERT_NE(json, nullptr);
+    const std::string text(json);
+    EXPECT_NE(text.find("\"null\":null"), std::string::npos);
+    EXPECT_NE(text.find("\"flag\":false"), std::string::npos);
+    EXPECT_NE(text.find("\"count\":5"), std::string::npos);
+    EXPECT_NE(text.find("\"name\":\"Ada\\nLovelace\""), std::string::npos);
+    EXPECT_NE(text.find("\"embedding\":[1.5,2.25]"), std::string::npos);
+    EXPECT_NE(text.find("\"tags\":[\"math\",\"engine\"]"), std::string::npos);
+    EXPECT_NE(text.find("\"list\":[3,\"item\"]"), std::string::npos);
+    EXPECT_NE(text.find("\"map\":"), std::string::npos);
+
+    auto edge = std::make_shared<zyx::Edge>();
+    edge->id = 92;
+    edge->sourceId = 1;
+    edge->targetId = 2;
+    edge->type = "KNOWS";
+    edge->properties["weight"] = 0.75;
+    zyx_driver_value_ref_t edgeRef = makeValueRef(&owner.result, appendValueRefBuffer(&owner.result, edge));
+    ASSERT_EQ(zyx_driver_value_ref_get_entity_properties_json(&owner.result, &edgeRef, &json, &error),
+              ZYX_DRIVER_OK);
+    ASSERT_NE(json, nullptr);
+    EXPECT_NE(std::string(json).find("\"weight\":0.75"), std::string::npos);
+
+    zyx_driver_value_ref_t scalarRef = makeValueRef(&owner.result, appendValueRefBuffer(&owner.result, int64_t{7}));
+    expectLocalError(zyx_driver_value_ref_get_entity_properties_json(&owner.result,
+                                                                    &scalarRef,
+                                                                    &json,
+                                                                    &error),
+                     ZYX_DRIVER_TYPE_MISMATCH,
+                     error);
+
+    uint32_t labelCount = 0;
+    expectLocalError(zyx_driver_value_ref_get_node_label_count(&scalarRef, &labelCount, &error),
+                     ZYX_DRIVER_TYPE_MISMATCH,
+                     error);
+    expectLocalError(zyx_driver_value_ref_get_node_label(&owner.result, &scalarRef, 0, &json, &error),
+                     ZYX_DRIVER_TYPE_MISMATCH,
+                     error);
+    expectLocalError(zyx_driver_value_ref_get_edge_type(&owner.result, &scalarRef, &json, &error),
+                     ZYX_DRIVER_TYPE_MISMATCH,
+                     error);
+}
+
+TEST(DriverAbiValueRefRawPathsTest, MapRefErrorsCoverOwnerBackedAccessors) {
+    RegisteredResultOwner owner;
+    zyx_driver_error_t *error = nullptr;
+
+    const size_t scalarSlot = appendValueRefBuffer(&owner.result, int64_t{9});
+    zyx_driver_value_ref_t scalarRef = makeValueRef(&owner.result, scalarSlot);
+
+    const char *key = nullptr;
+    zyx_driver_value_ref_t nested{};
+    expectLocalError(zyx_driver_value_ref_map_key(nullptr, &scalarRef, 0, &key, &error),
+                     ZYX_DRIVER_TYPE_MISMATCH,
+                     error);
+    expectLocalError(zyx_driver_value_ref_map_get(&scalarRef, "missing", &nested, &error),
+                     ZYX_DRIVER_TYPE_MISMATCH,
+                     error);
+    expectLocalError(zyx_driver_value_ref_list_get(&scalarRef, 0, &nested, &error),
+                     ZYX_DRIVER_TYPE_MISMATCH,
+                     error);
+}
+
+TEST(DriverAbiValueRefRawPathsTest, DirectOwnerRejectsIncompleteOwnerTokens) {
+    RegisteredResultOwner owner;
+
+    const auto originalOwnerId = owner.result.value_ref_owner_id;
+    const auto originalCookie = owner.result.value_ref_cookie;
+    const auto originalGeneration = owner.result.value_ref_generation;
+
+    owner.result.value_ref_cookie = 0;
+    EXPECT_EQ(makeValueRef(&owner.result, 0).owner_id, 0U);
+
+    owner.result.value_ref_cookie = originalCookie;
+    owner.result.value_ref_generation = 0;
+    EXPECT_EQ(makeValueRef(&owner.result, 0).owner_id, 0U);
+
+    owner.result.value_ref_owner_id = originalOwnerId;
+    owner.result.value_ref_cookie = originalCookie;
+    owner.result.value_ref_generation = originalGeneration;
 }

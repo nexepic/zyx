@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "graph/query/execution/NodeColumnBatch.hpp"
+#include "graph/query/execution/NodeScanRequirementUtils.hpp"
 #include "graph/query/execution/NodeScanRequirements.hpp"
 
 namespace {
@@ -33,6 +34,29 @@ TEST(NodeScanRequirementsTest, IdOnlyWithoutRequiredPropertiesDoesNotNeedPropert
 	EXPECT_TRUE(requirements.requiredProperties.empty());
 	EXPECT_FALSE(requirements.needsFullNode());
 	EXPECT_FALSE(requirements.needsProperties());
+}
+
+TEST(NodeScanRequirementsTest, RelaxSatisfiedCandidateChecksClearsOnlyGuaranteedChecks) {
+	graph::query::execution::NodeScanRequirements requirements;
+	graph::query::execution::NodeCandidateSet candidates;
+	candidates.activeOnly = true;
+	candidates.labelsSatisfied = false;
+
+	auto relaxed = graph::query::execution::relaxSatisfiedCandidateChecks(requirements, candidates);
+	EXPECT_FALSE(relaxed.needsActiveCheck);
+	EXPECT_TRUE(relaxed.needsLabels);
+
+	candidates.labelsSatisfied = true;
+	relaxed = graph::query::execution::relaxSatisfiedCandidateChecks(requirements, candidates);
+	EXPECT_FALSE(relaxed.needsActiveCheck);
+	EXPECT_FALSE(relaxed.needsLabels);
+}
+
+TEST(NodeScanRequirementsTest, ColumnarBatchSizeUsesWideBatchesAboveThreshold) {
+	EXPECT_EQ(graph::query::execution::chooseColumnarNodeBatchSize(100, nullptr, 1000), 100U);
+	EXPECT_EQ(graph::query::execution::chooseColumnarNodeBatchSize(4095, nullptr, 1000), 1000U);
+	EXPECT_EQ(graph::query::execution::chooseColumnarNodeBatchSize(4096, nullptr, 1000), 4096U);
+	EXPECT_EQ(graph::query::execution::chooseColumnarNodeBatchSize(70000, nullptr, 1000), 65536U);
 }
 
 TEST(NodeColumnBatchTest, SizeAndSelectedCountUseSelectionVector) {

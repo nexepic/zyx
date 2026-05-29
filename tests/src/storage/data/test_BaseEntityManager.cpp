@@ -25,6 +25,7 @@
 #include <fstream>
 #include <gtest/gtest.h>
 #include <memory>
+#include <stdexcept>
 #include "graph/core/Database.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
@@ -134,6 +135,28 @@ TEST_F(BaseEntityManagerTest, UpdateNodeEntity) {
 
 	graph::Node retrievedNode = nodeManager->get(nodeId);
 	EXPECT_EQ(dataManager->resolveTokenName(retrievedNode.getLabelId()), "UpdatedLabel");
+}
+
+TEST_F(BaseEntityManagerTest, BatchAddAndMutationGuardsHandleNoOpInputs) {
+	std::vector<graph::Node> emptyNodes;
+	nodeManager->addBatch(emptyNodes);
+	EXPECT_TRUE(emptyNodes.empty());
+	std::vector<graph::Edge> emptyEdges;
+	edgeManager->addBatch(emptyEdges);
+	EXPECT_TRUE(emptyEdges.empty());
+
+	graph::Node idless = createTestNode(dataManager, "NoId");
+	nodeManager->update(idless);
+	EXPECT_EQ(idless.getId(), 0);
+
+	graph::Node inactive = createTestNode(dataManager, "InactiveUpdate");
+	nodeManager->add(inactive);
+	inactive.markInactive();
+	EXPECT_THROW(nodeManager->update(inactive), std::runtime_error);
+
+	graph::Node empty;
+	nodeManager->remove(empty);
+	EXPECT_EQ(empty.getId(), 0);
 }
 
 // Tests for remove method

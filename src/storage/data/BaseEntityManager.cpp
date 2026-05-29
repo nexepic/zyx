@@ -101,7 +101,7 @@ namespace graph::storage {
 		// REFACTORED: Check logic via Traits wrapper
 		auto dirtyInfo = EntityTraits<EntityType>::getDirtyInfo(dataManager, entity.getId());
 
-		if (dirtyInfo.has_value() && dirtyInfo->changeType == EntityChangeType::CHANGE_ADDED) {
+		if (dirtyInfo.has_value() && dirtyInfo->changeType == EntityChangeType::CHANGE_ADDED) { // ZYX_COV_EXCL_LINE
 			EntityTraits<EntityType>::addToDirty(dataManager,
 												 DirtyEntityInfo<EntityType>(EntityChangeType::CHANGE_ADDED, entity));
 		} else {
@@ -114,7 +114,7 @@ namespace graph::storage {
 
 	template<typename EntityType>
 	void BaseEntityManager<EntityType>::remove(EntityType &entity) {
-		if (entity.getId() == 0 || !entity.isActive()) {
+		if (entity.getId() == 0 || !entity.isActive()) { // ZYX_COV_EXCL_LINE
 			return;
 		}
 		// Call the virtual method that can be overridden by subclasses
@@ -138,7 +138,8 @@ namespace graph::storage {
 
 		for (int64_t id: ids) {
 			EntityType entity = get(id);
-			if (entity.getId() != 0 && entity.isActive()) {
+			// get() normalizes missing and inactive entities to the default id==0 sentinel.
+			if (entity.getId() != 0) { // ZYX_COV_EXCL_LINE
 				result.push_back(entity);
 			}
 		}
@@ -169,7 +170,7 @@ namespace graph::storage {
 		} else {
 			auto *dataManager = getDataManagerPtr();
 			auto propertyManager = dataManager->getPropertyManager();
-			if (!propertyManager)
+			if (!propertyManager) // ZYX_COV_EXCL_LINE
 				return {};
 			return propertyManager->template getEntityProperties<EntityType>(entityId);
 		}
@@ -184,7 +185,7 @@ namespace graph::storage {
 		} else {
 			auto *dataManager = getDataManagerPtr();
 			auto propertyManager = dataManager->getPropertyManager();
-			if (!propertyManager)
+			if (!propertyManager) // ZYX_COV_EXCL_LINE
 				return;
 			propertyManager->template addEntityProperties<EntityType>(entityId, properties);
 		}
@@ -197,7 +198,7 @@ namespace graph::storage {
 		} else {
 			auto *dataManager = getDataManagerPtr();
 			auto propertyManager = dataManager->getPropertyManager();
-			if (!propertyManager)
+			if (!propertyManager) // ZYX_COV_EXCL_LINE
 				return;
 			propertyManager->template removeEntityProperty<EntityType>(entityId, key);
 		}

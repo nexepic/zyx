@@ -182,6 +182,17 @@ TEST_F(VectorizedNodeCountFastPathIntegrationTest, CountsWhereEqualityAndRangeFi
 	EXPECT_TRUE(snapshot.contains("node_scan.count"));
 }
 
+TEST_F(VectorizedNodeCountFastPathIntegrationTest, CountsDistinctPropertyWithColumnarFastPath) {
+	debug::PerfTrace::setEnabled(true);
+	debug::PerfTrace::reset();
+
+	EXPECT_EQ(runCount("MATCH (u:Person) RETURN count(DISTINCT u.country) AS count"), 1);
+
+	const auto snapshot = debug::PerfTrace::snapshotAndReset();
+	EXPECT_TRUE(snapshot.contains("node_scan.distinct_count"));
+	EXPECT_FALSE(snapshot.contains("scan.sequential"));
+}
+
 TEST_F(VectorizedNodeCountFastPathIntegrationTest, ReturningNodesUsesLegacyPath) {
 	debug::PerfTrace::setEnabled(true);
 	debug::PerfTrace::reset();
@@ -191,4 +202,20 @@ TEST_F(VectorizedNodeCountFastPathIntegrationTest, ReturningNodesUsesLegacyPath)
 
 	const auto snapshot = debug::PerfTrace::snapshotAndReset();
 	EXPECT_FALSE(snapshot.contains("node_scan.count"));
+}
+
+TEST_F(VectorizedNodeCountFastPathIntegrationTest, TopKPropertySortUsesColumnarFastPath) {
+	debug::PerfTrace::setEnabled(true);
+	debug::PerfTrace::reset();
+
+	auto result = execute("MATCH (u:Person) RETURN u.name AS name ORDER BY u.score DESC LIMIT 2");
+	ASSERT_EQ(result.rowCount(), 2U);
+	ASSERT_TRUE(result.getRows()[0].contains("name"));
+	ASSERT_TRUE(result.getRows()[1].contains("name"));
+	EXPECT_EQ(result.getRows()[0].at("name").asPrimitive().toString(), "Bob");
+	EXPECT_EQ(result.getRows()[1].at("name").asPrimitive().toString(), "Alice");
+
+	const auto snapshot = debug::PerfTrace::snapshotAndReset();
+	EXPECT_TRUE(snapshot.contains("node_scan.topk"));
+	EXPECT_FALSE(snapshot.contains("scan.sequential"));
 }

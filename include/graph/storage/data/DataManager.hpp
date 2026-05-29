@@ -25,8 +25,10 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <unordered_map>
 #include <cstdint>
+#include <vector>
 
 // Platform-specific type definitions for Windows compatibility
 #ifdef _WIN32
@@ -88,6 +90,35 @@ namespace graph::storage {
 	class IndexEntityManager;
 	class StateManager;
 	class PropertyManager;
+
+	struct PropertyEntityPredicateMatchResult {
+		std::vector<size_t> loadedRows;
+		std::vector<size_t> matchedRows;
+		size_t loadedCount = 0;
+		size_t matchedCount = 0;
+	};
+
+	struct PropertyEntityPredicateMatchOptions {
+		bool collectLoadedRows = true;
+		bool collectMatchedRows = true;
+	};
+
+	enum class PropertyEntityPredicateOp {
+		PEP_EQ,
+		PEP_NE,
+		PEP_LT,
+		PEP_LE,
+		PEP_GT,
+		PEP_GE,
+		PEP_RANGE_CLOSED
+	};
+
+	struct PropertyEntityPredicate {
+		std::string key;
+		PropertyEntityPredicateOp op = PropertyEntityPredicateOp::PEP_EQ;
+		PropertyValue value;
+		std::optional<PropertyValue> upperValue;
+	};
 
 	/**
 	 * Core data management class coordinating all entity operations
@@ -159,6 +190,61 @@ namespace graph::storage {
 		// Bulk-load Property entities by a set of IDs using parallel segment pread.
 		std::unordered_map<int64_t, Property> bulkLoadPropertyEntities(
 			const std::vector<int64_t> &ids, concurrent::ThreadPool *pool = nullptr) const;
+		// Bulk-load only selected values from Property entities. This avoids full
+		// Property materialization for column-oriented scans.
+		std::unordered_map<int64_t, std::unordered_map<std::string, PropertyValue>> bulkLoadPropertyEntityValues(
+			const std::vector<int64_t> &ids,
+			const std::vector<std::string> &keys,
+			concurrent::ThreadPool *pool = nullptr) const;
+		// Bulk-load selected Property entity values directly into row-aligned columns.
+		// Returns rows whose backing Property entity was found and parsed successfully.
+		std::vector<size_t> bulkLoadPropertyEntityColumns(
+			const std::vector<int64_t> &ids,
+			const std::vector<size_t> &rows,
+			size_t rowCount,
+			const std::vector<std::string> &keys,
+			std::unordered_map<std::string, std::vector<std::optional<PropertyValue>>> &columns,
+			concurrent::ThreadPool *pool = nullptr) const;
+		// Evaluate equality predicates directly while scanning Property entities.
+		// This avoids materializing row-aligned columns when the caller only needs
+		// rows matching a filter.
+		PropertyEntityPredicateMatchResult bulkMatchPropertyEntityPredicates(
+			const std::vector<int64_t> &ids,
+			const std::vector<size_t> &rows,
+			size_t rowCount,
+			const std::unordered_map<std::string, PropertyValue> &expected,
+			concurrent::ThreadPool *pool = nullptr) const {
+			return bulkMatchPropertyEntityPredicates(
+				ids, rows, rowCount, expected, pool, PropertyEntityPredicateMatchOptions{});
+		}
+		PropertyEntityPredicateMatchResult bulkMatchPropertyEntityPredicates(
+			const std::vector<int64_t> &ids,
+			const std::vector<size_t> &rows,
+			size_t rowCount,
+			const std::unordered_map<std::string, PropertyValue> &expected,
+			concurrent::ThreadPool *pool,
+			bool collectMatchedRows) const {
+			return bulkMatchPropertyEntityPredicates(
+				ids,
+				rows,
+				rowCount,
+				expected,
+				pool,
+				PropertyEntityPredicateMatchOptions{true, collectMatchedRows});
+		}
+		PropertyEntityPredicateMatchResult bulkMatchPropertyEntityPredicates(
+			const std::vector<int64_t> &ids,
+			const std::vector<size_t> &rows,
+			size_t rowCount,
+			const std::unordered_map<std::string, PropertyValue> &expected,
+			concurrent::ThreadPool *pool,
+			PropertyEntityPredicateMatchOptions options) const;
+		PropertyEntityPredicateMatchResult bulkMatchPropertyEntityPredicateSpecs(
+			const std::vector<int64_t> &ids,
+			const std::vector<size_t> &rows,
+			size_t rowCount,
+			const std::vector<PropertyEntityPredicate> &predicates,
+			concurrent::ThreadPool *pool = nullptr) const;
 		void addNodeProperties(int64_t nodeId, const std::unordered_map<std::string, PropertyValue> &properties) const;
 		void removeNodeProperty(int64_t nodeId, const std::string &key) const;
 		std::unordered_map<std::string, PropertyValue> getNodeProperties(int64_t nodeId) const;

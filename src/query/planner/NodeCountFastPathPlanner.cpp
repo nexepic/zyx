@@ -18,6 +18,16 @@ bool isVariableCountArgument(const std::shared_ptr<expressions::Expression> &arg
 	return var != nullptr && !var->hasProperty() && var->getVariableName() == variable;
 }
 
+const expressions::VariableReferenceExpression *
+asPropertyAccess(const std::shared_ptr<expressions::Expression> &argument,
+                 const std::string &variable) {
+	const auto *property = dynamic_cast<const expressions::VariableReferenceExpression *>(argument.get());
+	if (!property || !property->hasProperty() || property->getVariableName() != variable) {
+		return nullptr;
+	}
+	return property;
+}
+
 void addRequiredProperty(execution::NodeScanRequirements &requirements, const std::string &key) {
 	if (std::find(requirements.requiredProperties.begin(), requirements.requiredProperties.end(), key) ==
 	    requirements.requiredProperties.end()) {
@@ -25,7 +35,8 @@ void addRequiredProperty(execution::NodeScanRequirements &requirements, const st
 	}
 }
 
-void addEqualityPredicate(NodeCountFastPathPlan &plan,
+template <typename Plan>
+void addEqualityPredicate(Plan &plan,
                           const std::string &variable,
                           const std::string &key,
                           const PropertyValue &value) {
@@ -77,7 +88,8 @@ bool isRangeHandledByConfig(const execution::NodeScanConfig &config, const logic
 	       !hasOpenRangeBounds(config);
 }
 
-bool addRangePredicates(NodeCountFastPathPlan &plan,
+template <typename Plan>
+bool addRangePredicates(Plan &plan,
                         const std::string &variable,
                         const logical::RangePredicate &range) {
 	const bool hasMin = hasValueBound(range.minValue);
@@ -288,6 +300,79 @@ tryBuildNodeCountFastPathPlan(const logical::LogicalAggregate &aggregate,
 
 	if (!plan.predicates.empty()) {
 		plan.requirements.materialization = execution::NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+	}
+
+	return plan;
+}
+
+std::optional<NodeDistinctCountFastPathPlan>
+tryBuildNodeDistinctCountFastPathPlan(const logical::LogicalAggregate &aggregate) {
+	return tryBuildNodeDistinctCountFastPathPlan(aggregate, nullptr);
+}
+
+std::optional<NodeDistinctCountFastPathPlan>
+tryBuildNodeDistinctCountFastPathPlan(const logical::LogicalAggregate &aggregate,
+                                      const std::shared_ptr<indexes::IndexManager> &indexManager) {
+	if (!aggregate.getGroupByExprs().empty() || aggregate.getAggregations().size() != 1) {
+		return std::nullopt;
+	}
+
+	const auto &agg = aggregate.getAggregations()[0];
+	if (agg.functionName != "count" || !agg.distinct || !agg.argument) {
+		return std::nullopt;
+	}
+
+	const auto children = aggregate.getChildren();
+	if (children.size() != 1 || children[0] == nullptr ||
+	    children[0]->getType() != logical::LogicalOpType::LOP_NODE_SCAN) {
+		return std::nullopt;
+	}
+
+	const auto *scan = static_cast<const logical::LogicalNodeScan *>(children[0]);
+	const auto *distinctProperty = asPropertyAccess(agg.argument, scan->getVariable());
+	if (distinctProperty == nullptr) {
+		return std::nullopt;
+	}
+
+	NodeDistinctCountFastPathPlan plan;
+	plan.config = chooseCountConfig(*scan, indexManager);
+	plan.distinctProperty = distinctProperty->getPropertyName();
+	plan.outputAlias = agg.alias.empty() ? "count" : agg.alias;
+	plan.requirements.materialization = execution::NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+	plan.requirements.countOnly = true;
+	plan.requirements.needsLabels = true;
+	plan.requirements.needsActiveCheck = true;
+	addRequiredProperty(plan.requirements, plan.distinctProperty);
+
+	if (!hasValidIndexConfig(plan.config) || hasOpenRangeBounds(plan.config)) {
+		fallbackToLabelOrFull(plan.config);
+	}
+
+	for (const auto &[key, value] : scan->getPropertyPredicates()) {
+		if (!isEqualityHandledByConfig(plan.config, key)) {
+			addEqualityPredicate(plan, scan->getVariable(), key, value);
+		}
+	}
+
+	for (const auto &range : scan->getRangePredicates()) {
+		if (isRangeHandledByConfig(plan.config, range)) {
+			continue;
+		}
+		if (!addRangePredicates(plan, scan->getVariable(), range)) {
+			return std::nullopt;
+		}
+	}
+
+	if (scan->getCompositeEquality().has_value()) {
+		const auto &composite = scan->getCompositeEquality().value();
+		if (composite.keys.size() != composite.values.size()) {
+			return std::nullopt;
+		}
+		for (size_t i = 0; i < composite.keys.size(); ++i) {
+			if (!isEqualityHandledByConfig(plan.config, composite.keys[i])) {
+				addEqualityPredicate(plan, scan->getVariable(), composite.keys[i], composite.values[i]);
+			}
+		}
 	}
 
 	return plan;

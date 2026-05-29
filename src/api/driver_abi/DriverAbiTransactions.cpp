@@ -13,6 +13,18 @@ zyx_driver_status_t transactionExceptionStatus(const std::exception &ex) { // ZY
     return ZYX_DRIVER_TRANSACTION_ERROR;
 }
 
+zyx_driver_status_t catchTransactionException(zyx_driver_error_t **out_error) noexcept {
+    try {
+        throw;
+    } catch (const std::bad_alloc &) {
+        return setError(out_error, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
+    } catch (const std::exception &ex) {
+        return setError(out_error, transactionExceptionStatus(ex), ex.what());
+    } catch (...) {
+        return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, "unknown error");
+    }
+}
+
 void unregisterTransaction(zyx_driver_txn_t *txn) {
     if (txn != nullptr && !txn->finalized) { // ZYX_COV_EXCL_LINE: public close paths pass valid unfinalized transactions
         if (txn->owner != nullptr) { // ZYX_COV_EXCL_LINE: public transactions retain their owner until unregistered
@@ -56,12 +68,8 @@ zyx_driver_status_t zyx_driver_txn_begin(zyx_driver_db_t *db, zyx_driver_txn_t *
         }
         *out_txn = handle.release();
         return ZYX_DRIVER_OK;
-    } catch (const std::bad_alloc &) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
-    } catch (const std::exception &ex) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_TRANSACTION_ERROR, ex.what());
-    } catch (...) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, "unknown error");
+    } catch (...) {
+        return catchTransactionException(out_error);
     }
 }
 
@@ -85,12 +93,8 @@ zyx_driver_status_t zyx_driver_txn_begin_read_only(zyx_driver_db_t *db, zyx_driv
         }
         *out_txn = handle.release();
         return ZYX_DRIVER_OK;
-    } catch (const std::bad_alloc &) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
-    } catch (const std::exception &ex) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_TRANSACTION_ERROR, ex.what());
-    } catch (...) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, "unknown error");
+    } catch (...) {
+        return catchTransactionException(out_error);
     }
 }
 
@@ -118,12 +122,8 @@ zyx_driver_status_t zyx_driver_txn_execute(zyx_driver_txn_t *txn, const char *cy
         registerResultHandle(handle.get());
         *out_result = handle.release();
         return ZYX_DRIVER_OK;
-    } catch (const std::bad_alloc &) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
-    } catch (const std::exception &ex) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, transactionExceptionStatus(ex), ex.what());
-    } catch (...) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, "unknown error");
+    } catch (...) {
+        return catchTransactionException(out_error);
     }
 }
 
@@ -137,12 +137,8 @@ zyx_driver_status_t zyx_driver_txn_commit(zyx_driver_txn_t *txn, zyx_driver_erro
         txn->txn.commit();
         unregisterTransaction(txn);
         return ZYX_DRIVER_OK;
-    } catch (const std::bad_alloc &) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
-    } catch (const std::exception &ex) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, transactionExceptionStatus(ex), ex.what());
-    } catch (...) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, "unknown error");
+    } catch (...) {
+        return catchTransactionException(out_error);
     }
 }
 
@@ -158,12 +154,8 @@ zyx_driver_status_t zyx_driver_txn_rollback(zyx_driver_txn_t *txn, zyx_driver_er
         }
         unregisterTransaction(txn);
         return ZYX_DRIVER_OK;
-    } catch (const std::bad_alloc &) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
-    } catch (const std::exception &ex) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, transactionExceptionStatus(ex), ex.what());
-    } catch (...) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, "unknown error");
+    } catch (...) {
+        return catchTransactionException(out_error);
     }
 }
 
@@ -180,18 +172,11 @@ zyx_driver_status_t zyx_driver_txn_close(zyx_driver_txn_t *txn, zyx_driver_error
         unregisterTransaction(txn);
         delete txn;
         return ZYX_DRIVER_OK;
-    } catch (const std::bad_alloc &) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
+    } catch (...) {
+        const auto status = catchTransactionException(out_error);
         unregisterTransaction(txn);
         delete txn;
-        return setError(out_error, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
-    } catch (const std::exception &ex) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        unregisterTransaction(txn);
-        delete txn;
-        return setError(out_error, transactionExceptionStatus(ex), ex.what());
-    } catch (...) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        unregisterTransaction(txn);
-        delete txn;
-        return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, "unknown error");
+        return status;
     }
 }
 

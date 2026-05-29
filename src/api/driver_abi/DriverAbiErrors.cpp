@@ -88,6 +88,19 @@ zyx_driver_status_t catchAbiException(zyx_driver_error_t **out_error) noexcept {
     }
 }
 
+zyx_driver_status_t catchAbiExceptionAs(zyx_driver_error_t **out_error,
+                                        zyx_driver_status_t exception_status) noexcept {
+    try {
+        throw;
+    } catch (const std::bad_alloc &) {
+        return setError(out_error, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
+    } catch (const std::exception &ex) {
+        return setError(out_error, exception_status, ex.what());
+    } catch (...) {
+        return internalError(out_error, "unknown error");
+    }
+}
+
 extern "C" {
 
 uint32_t zyx_driver_abi_version_major(void) { return 1; }

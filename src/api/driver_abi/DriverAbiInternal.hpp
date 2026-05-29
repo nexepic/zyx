@@ -54,6 +54,8 @@ void clearError(zyx_driver_error_t **out_error);
 zyx_driver_status_t setError(zyx_driver_error_t **out_error, zyx_driver_status_t code, const char *message) noexcept;
 zyx_driver_status_t setError(zyx_driver_error_t **out_error, zyx_driver_status_t code, std::string message) noexcept;
 zyx_driver_status_t catchAbiException(zyx_driver_error_t **out_error) noexcept;
+zyx_driver_status_t catchAbiExceptionAs(zyx_driver_error_t **out_error,
+                                        zyx_driver_status_t exception_status) noexcept;
 zyx_driver_status_t validateColumn(const zyx_driver_result_t *result, uint32_t column, zyx_driver_error_t **out_error);
 zyx::Value resultValue(const zyx_driver_result_t *result, uint32_t column);
 zyx_driver_value_type_t valueType(const zyx::Value &value);
@@ -65,6 +67,7 @@ std::string &storeString(zyx_driver_result_t *result, std::string value);
 zyx::Value deepCopyValue(const zyx::Value &value);
 zyx_driver_status_t resultErrorStatus(const zyx::Result &result);
 zyx_driver_status_t transactionExceptionStatus(const std::exception &ex);
+zyx_driver_status_t catchTransactionException(zyx_driver_error_t **out_error) noexcept;
 zyx_driver_status_t validateActiveTransaction(zyx_driver_txn_t *txn, zyx_driver_error_t **out_error);
 void unregisterTransaction(zyx_driver_txn_t *txn);
 
