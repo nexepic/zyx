@@ -156,3 +156,27 @@ TEST_F(NodeColumnBatchMaterializerTest, FullNodeFallbackPreservesNodeIdAndProper
 	EXPECT_EQ(records[1].getNode("n")->getProperty("age"), PropertyValue(int64_t{20}));
 	EXPECT_EQ(records[1].getNode("n")->getProperty("name"), PropertyValue("from-disk"));
 }
+
+TEST_F(NodeColumnBatchMaterializerTest, PropertyMaterializationIgnoresMissingColumnSlots) {
+	const int64_t first = addPerson({{"age", PropertyValue(int64_t{10})}});
+	const int64_t second = addPerson({{"age", PropertyValue(int64_t{20})}});
+	const int64_t third = addPerson({{"age", PropertyValue(int64_t{30})}});
+
+	NodeColumnBatch batch;
+	batch.nodeIds = {first, second, third};
+	batch.selected = {1, 1, 1};
+	batch.propertyColumns["age"] = {PropertyValue(int64_t{101}), std::nullopt};
+
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+	requirements.requiredProperties = {"age"};
+	const auto records = materializeNodeRecords(batch, "n", *dm, requirements);
+
+	ASSERT_EQ(records.size(), 3U);
+	ASSERT_TRUE(records[0].getNode("n").has_value());
+	ASSERT_TRUE(records[1].getNode("n").has_value());
+	ASSERT_TRUE(records[2].getNode("n").has_value());
+	EXPECT_EQ(records[0].getNode("n")->getProperty("age"), PropertyValue(int64_t{101}));
+	EXPECT_FALSE(records[1].getNode("n")->hasProperty("age"));
+	EXPECT_FALSE(records[2].getNode("n")->hasProperty("age"));
+}

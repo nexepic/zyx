@@ -19,9 +19,12 @@
  **/
 
 #include "graph/storage/data/DataManager.hpp"
+#include <algorithm>
 #include <cstring>
 #include <map>
+#include <optional>
 #include <sstream>
+#include <type_traits>
 #include <unordered_set>
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/storage/CommittedSnapshot.hpp"
@@ -48,6 +51,7 @@
 #include "graph/storage/dictionaries/TokenRegistry.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 #include "graph/traversal/RelationshipTraversal.hpp"
+#include "graph/utils/Serializer.hpp"
 
 namespace graph::storage {
 
@@ -88,7 +92,519 @@ namespace graph::storage {
 		class membuf : public std::streambuf {
 		public:
 			membuf(char *base, size_t size) { this->setg(base, base, base + size); }
+			[[nodiscard]] size_t consumed() const {
+				return static_cast<size_t>(this->gptr() - this->eback());
+			}
 		};
+
+		size_t remainingBytes(const char *cursor, const char *end) {
+			return static_cast<size_t>(end - cursor);
+		}
+
+		bool readRawBytes(const char *&cursor, const char *end, void *out, size_t size) {
+			if (remainingBytes(cursor, end) < size) { // ZYX_COV_EXCL_LINE
+				return false;
+			}
+			std::memcpy(out, cursor, size);
+			cursor += size;
+			return true;
+		}
+
+		template<typename T>
+		bool readPod(const char *&cursor, const char *end, T &out) {
+			static_assert(std::is_trivial_v<T>, "readPod can only read trivial values");
+			return readRawBytes(cursor, end, &out, sizeof(T));
+		}
+
+		template<typename T>
+		void readUncheckedPod(const char *&cursor, T &out) {
+			static_assert(std::is_trivial_v<T>, "readUncheckedPod can only read trivial values");
+			std::memcpy(&out, cursor, sizeof(T));
+			cursor += sizeof(T);
+		}
+
+		bool readString(const char *&cursor, const char *end, std::string &out) {
+			uint32_t size = 0;
+			if (!readPod(cursor, end, size) || remainingBytes(cursor, end) < size) { // ZYX_COV_EXCL_LINE
+				return false;
+			}
+			out.assign(cursor, cursor + size);
+			cursor += size;
+			return true;
+		}
+
+		struct SerializedStringView {
+			const char *data = nullptr;
+			uint32_t size = 0;
+		};
+
+		struct PropertyRecordHeader {
+			int64_t propertyId = 0;
+			int64_t entityId = 0;
+			uint32_t entityType = 0;
+			bool active = false;
+			uint32_t propertyCount = 0;
+		};
+
+		bool readPropertyRecordHeader(const char *&cursor, const char *end, PropertyRecordHeader &header) {
+			constexpr size_t headerBytes = sizeof(header.propertyId) + sizeof(header.entityId) +
+			                               sizeof(header.entityType) + sizeof(header.active) +
+			                               sizeof(header.propertyCount);
+			if (remainingBytes(cursor, end) < headerBytes) { // ZYX_COV_EXCL_LINE
+				return false;
+			}
+			readUncheckedPod(cursor, header.propertyId);
+			readUncheckedPod(cursor, header.entityId);
+			readUncheckedPod(cursor, header.entityType);
+			readUncheckedPod(cursor, header.active);
+			readUncheckedPod(cursor, header.propertyCount);
+			return true;
+		}
+
+		std::optional<PropertyRecordHeader> readActivePropertyRecordHeader(const char *&cursor, const char *end) {
+			PropertyRecordHeader header;
+			if (!readPropertyRecordHeader(cursor, end, header)) { // ZYX_COV_EXCL_LINE
+				return std::nullopt;
+			}
+			if (!header.active || header.propertyId == 0) { // ZYX_COV_EXCL_LINE
+				return std::nullopt;
+			}
+			return header;
+		}
+
+		bool readStringView(const char *&cursor, const char *end, SerializedStringView &out) {
+			uint32_t size = 0;
+			if (!readPod(cursor, end, size) || remainingBytes(cursor, end) < size) { // ZYX_COV_EXCL_LINE
+				return false;
+			}
+			out = {cursor, size};
+			cursor += size;
+			return true;
+		}
+
+		bool stringViewEquals(const SerializedStringView &view, const std::string &value) {
+			return view.size == value.size() &&
+			       (view.size == 0 || std::memcmp(view.data, value.data(), view.size) == 0); // ZYX_COV_EXCL_LINE
+		}
+
+		bool skipBytes(const char *&cursor, const char *end, size_t size) {
+			if (remainingBytes(cursor, end) < size) { // ZYX_COV_EXCL_LINE
+				return false;
+			}
+			cursor += size;
+			return true;
+		}
+
+		bool skipString(const char *&cursor, const char *end) {
+			uint32_t size = 0;
+			return readPod(cursor, end, size) && skipBytes(cursor, end, size); // ZYX_COV_EXCL_LINE
+		}
+
+		bool skipPropertyValue(const char *&cursor, const char *end) {
+			PropertyType type = PropertyType::UNKNOWN;
+			if (!readPod(cursor, end, type)) { // ZYX_COV_EXCL_LINE
+				return false;
+			}
+
+			switch (type) {
+				case PropertyType::NULL_TYPE:
+					return true;
+				case PropertyType::BOOLEAN:
+					return skipBytes(cursor, end, sizeof(bool));
+				case PropertyType::INTEGER:
+					return skipBytes(cursor, end, sizeof(int64_t));
+				case PropertyType::DOUBLE:
+					return skipBytes(cursor, end, sizeof(double));
+				case PropertyType::STRING:
+					return skipString(cursor, end);
+				case PropertyType::LIST: {
+					uint32_t count = 0;
+					if (!readPod(cursor, end, count)) { // ZYX_COV_EXCL_LINE
+						return false;
+					}
+					for (uint32_t i = 0; i < count; ++i) {
+						if (!skipPropertyValue(cursor, end)) { // ZYX_COV_EXCL_LINE
+							return false;
+						}
+					}
+					return true;
+				}
+				case PropertyType::MAP: {
+					uint32_t count = 0;
+					if (!readPod(cursor, end, count)) { // ZYX_COV_EXCL_LINE
+						return false;
+					}
+					for (uint32_t i = 0; i < count; ++i) {
+						if (!skipString(cursor, end) || !skipPropertyValue(cursor, end)) { // ZYX_COV_EXCL_LINE
+							return false;
+						}
+					}
+					return true;
+				}
+				case PropertyType::DATE:
+					return skipBytes(cursor, end, sizeof(int32_t));
+				case PropertyType::DATETIME:
+					return skipBytes(cursor, end, sizeof(int64_t));
+				case PropertyType::DURATION:
+					return skipBytes(cursor, end, sizeof(int64_t) * 3);
+				default: // ZYX_COV_EXCL_LINE
+					return false;
+			}
+		}
+
+		std::optional<PropertyValue> readSerializedPropertyValue(const char *&cursor, const char *end) {
+			if (cursor > end) { // ZYX_COV_EXCL_LINE
+				return std::nullopt;
+			}
+			try {
+				membuf valueBuffer(const_cast<char *>(cursor), static_cast<size_t>(end - cursor));
+				std::istream stream(&valueBuffer);
+				auto value = utils::Serializer::deserialize<PropertyValue>(stream);
+				const size_t consumed = valueBuffer.consumed();
+				if (consumed == 0 || static_cast<size_t>(end - cursor) < consumed) { // ZYX_COV_EXCL_LINE
+					return std::nullopt;
+				}
+				cursor += consumed;
+				return value;
+			} catch (...) {
+				return std::nullopt;
+			}
+		}
+
+		std::optional<std::unordered_map<std::string, PropertyValue>> readSelectedPropertyValues(
+				const char *buf,
+				const std::unordered_set<std::string> &requestedKeys) {
+			const char *cursor = buf;
+			const char *end = buf + Property::TOTAL_PROPERTY_SIZE;
+
+			auto header = readActivePropertyRecordHeader(cursor, end);
+			if (!header.has_value()) {
+				return std::nullopt;
+			}
+
+			std::unordered_map<std::string, PropertyValue> values;
+			values.reserve(std::min<size_t>(header->propertyCount, requestedKeys.size()));
+			for (uint32_t i = 0; i < header->propertyCount; ++i) {
+				std::string key;
+				if (!readString(cursor, end, key)) { // ZYX_COV_EXCL_LINE
+					return std::nullopt;
+				}
+
+				if (requestedKeys.contains(key)) {
+					auto value = readSerializedPropertyValue(cursor, end);
+					if (!value.has_value()) { // ZYX_COV_EXCL_LINE
+						return std::nullopt;
+					}
+					values.emplace(std::move(key), std::move(*value));
+				} else if (!skipPropertyValue(cursor, end)) { // ZYX_COV_EXCL_LINE
+					return std::nullopt;
+				}
+			}
+			return values;
+		}
+
+		struct PropertyEntityRowRef {
+			int64_t id = 0;
+			size_t row = 0;
+		};
+
+		struct PredicateExpectation {
+			const std::string *key = nullptr;
+			const PropertyValue *value = nullptr;
+		};
+
+		struct SinglePredicateExpectation {
+			const std::string *key = nullptr;
+			const PropertyValue *value = nullptr;
+		};
+
+		struct PredicateSpecExpectation {
+			const std::string *key = nullptr;
+			const PropertyValue *value = nullptr;
+			const PropertyValue *upperValue = nullptr;
+			PropertyEntityPredicateOp op = PropertyEntityPredicateOp::PEP_EQ;
+		};
+
+		int64_t readSerializedPropertyId(const char *buf) {
+			int64_t id = 0;
+			std::memcpy(&id, buf, sizeof(int64_t));
+			return id;
+		}
+
+		bool readSelectedPropertyColumns(
+				const char *buf,
+				const std::unordered_map<std::string, size_t> &requestedKeyIndices,
+				const std::vector<std::vector<std::optional<PropertyValue>> *> &columnTargets,
+				const std::vector<PropertyEntityRowRef> &refs,
+				size_t refBegin,
+				size_t refEnd) {
+			const char *cursor = buf;
+			const char *end = buf + Property::TOTAL_PROPERTY_SIZE;
+
+			auto header = readActivePropertyRecordHeader(cursor, end);
+			if (!header.has_value()) {
+				return false;
+			}
+
+			for (uint32_t i = 0; i < header->propertyCount; ++i) {
+				std::string key;
+				if (!readString(cursor, end, key)) { // ZYX_COV_EXCL_LINE
+					return false;
+				}
+
+				auto keyIt = requestedKeyIndices.find(key);
+				if (keyIt == requestedKeyIndices.end()) {
+					if (!skipPropertyValue(cursor, end)) { // ZYX_COV_EXCL_LINE
+						return false;
+					}
+					continue;
+				}
+
+				auto value = readSerializedPropertyValue(cursor, end);
+				if (!value.has_value()) { // ZYX_COV_EXCL_LINE
+					return false;
+				}
+
+				auto &column = *columnTargets[keyIt->second];
+				if (refEnd == refBegin + 1) {
+					column[refs[refBegin].row] = std::move(*value);
+				} else {
+					for (size_t ref = refBegin; ref < refEnd; ++ref) {
+						column[refs[ref].row] = *value;
+					}
+				}
+			}
+			return true;
+		}
+
+		std::optional<bool> serializedPropertyValueEquals(const char *&cursor,
+		                                                  const char *end,
+		                                                  const PropertyValue &expected) {
+			const char *valueStart = cursor;
+			PropertyType type = PropertyType::UNKNOWN;
+			if (!readPod(cursor, end, type)) { // ZYX_COV_EXCL_LINE
+				return std::nullopt;
+			}
+			if (type != expected.getType()) {
+				return false;
+			}
+
+			switch (type) {
+				case PropertyType::NULL_TYPE: // ZYX_COV_EXCL_LINE
+					return true;
+				case PropertyType::BOOLEAN: {
+					bool value = false;
+					if (!readPod(cursor, end, value)) { // ZYX_COV_EXCL_LINE
+						return std::nullopt;
+					}
+					return value == std::get<bool>(expected.getVariant());
+				}
+				case PropertyType::INTEGER: {
+					int64_t value = 0;
+					if (!readPod(cursor, end, value)) { // ZYX_COV_EXCL_LINE
+						return std::nullopt;
+					}
+					return value == std::get<int64_t>(expected.getVariant());
+				}
+				case PropertyType::DOUBLE: {
+					double value = 0.0;
+					if (!readPod(cursor, end, value)) { // ZYX_COV_EXCL_LINE
+						return std::nullopt;
+					}
+					return value == std::get<double>(expected.getVariant());
+				}
+				case PropertyType::STRING: {
+					SerializedStringView value;
+					if (!readStringView(cursor, end, value)) { // ZYX_COV_EXCL_LINE
+						return std::nullopt;
+					}
+					return stringViewEquals(value, std::get<std::string>(expected.getVariant()));
+				}
+				case PropertyType::DATE: {
+					int32_t epochDays = 0;
+					if (!readPod(cursor, end, epochDays)) { // ZYX_COV_EXCL_LINE
+						return std::nullopt;
+					}
+					return epochDays == std::get<TemporalDate>(expected.getVariant()).epochDays;
+				}
+				case PropertyType::DATETIME: {
+					int64_t epochMillis = 0;
+					if (!readPod(cursor, end, epochMillis)) { // ZYX_COV_EXCL_LINE
+						return std::nullopt;
+					}
+					return epochMillis == std::get<TemporalDateTime>(expected.getVariant()).epochMillis;
+				}
+				case PropertyType::DURATION: {
+					TemporalDuration value;
+					if (!readPod(cursor, end, value.months) || !readPod(cursor, end, value.days) || // ZYX_COV_EXCL_LINE
+					    !readPod(cursor, end, value.nanos)) { // ZYX_COV_EXCL_LINE
+						return std::nullopt;
+					}
+					return value == std::get<TemporalDuration>(expected.getVariant());
+				}
+				case PropertyType::LIST: // ZYX_COV_EXCL_LINE
+				case PropertyType::MAP: { // ZYX_COV_EXCL_LINE
+					cursor = valueStart;
+					auto value = readSerializedPropertyValue(cursor, end);
+					if (!value.has_value()) { // ZYX_COV_EXCL_LINE
+						return std::nullopt;
+					}
+					return value.value() == expected;
+				}
+				default: // ZYX_COV_EXCL_LINE
+					return std::nullopt;
+			}
+		}
+
+		const PredicateExpectation *findPredicateExpectation(
+				const SerializedStringView &key,
+				const std::vector<PredicateExpectation> &expected) {
+			for (const auto &entry : expected) {
+				if (stringViewEquals(key, *entry.key)) {
+					return &entry;
+				}
+			}
+			return nullptr;
+		}
+
+		std::optional<bool> readPropertyEntityPredicateMatch(
+				const char *buf,
+				const std::vector<PredicateExpectation> &expected) {
+			const char *cursor = buf;
+			const char *end = buf + Property::TOTAL_PROPERTY_SIZE;
+
+			auto header = readActivePropertyRecordHeader(cursor, end);
+			if (!header.has_value()) {
+				return std::nullopt;
+			}
+
+			size_t matchedKeys = 0;
+			for (uint32_t i = 0; i < header->propertyCount; ++i) {
+				SerializedStringView key;
+				if (!readStringView(cursor, end, key)) { // ZYX_COV_EXCL_LINE
+					return std::nullopt;
+				}
+
+				const auto *expectedEntry = findPredicateExpectation(key, expected);
+				if (expectedEntry == nullptr) {
+					if (!skipPropertyValue(cursor, end)) { // ZYX_COV_EXCL_LINE
+						return std::nullopt;
+					}
+					continue;
+				}
+
+				auto matches = serializedPropertyValueEquals(cursor, end, *expectedEntry->value);
+				if (!matches.has_value()) { // ZYX_COV_EXCL_LINE
+					return std::nullopt;
+				}
+				if (!matches.value()) {
+					return false;
+				}
+				++matchedKeys;
+			}
+			return matchedKeys == expected.size();
+		}
+
+		std::optional<bool> readPropertyEntitySinglePredicateMatch(
+				const char *buf,
+				const SinglePredicateExpectation &expected) {
+			const char *cursor = buf;
+			const char *end = buf + Property::TOTAL_PROPERTY_SIZE;
+
+			auto header = readActivePropertyRecordHeader(cursor, end);
+			if (!header.has_value()) {
+				return std::nullopt;
+			}
+
+			for (uint32_t i = 0; i < header->propertyCount; ++i) {
+				SerializedStringView key;
+				if (!readStringView(cursor, end, key)) { // ZYX_COV_EXCL_LINE
+					return std::nullopt;
+				}
+
+				if (!stringViewEquals(key, *expected.key)) {
+					if (!skipPropertyValue(cursor, end)) { // ZYX_COV_EXCL_LINE
+						return std::nullopt;
+					}
+					continue;
+				}
+
+				return serializedPropertyValueEquals(cursor, end, *expected.value);
+			}
+			return false;
+		}
+
+		const PredicateSpecExpectation *findPredicateSpecExpectation(
+				const SerializedStringView &key,
+				const std::vector<PredicateSpecExpectation> &expected) {
+			for (const auto &entry : expected) {
+				if (stringViewEquals(key, *entry.key)) {
+					return &entry;
+				}
+			}
+			return nullptr;
+		}
+
+		bool propertyValueSatisfiesPredicate(const PropertyValue &actual,
+		                                     const PredicateSpecExpectation &expected) {
+			switch (expected.op) {
+				case PropertyEntityPredicateOp::PEP_EQ:
+					return actual == *expected.value;
+				case PropertyEntityPredicateOp::PEP_NE:
+					return actual != *expected.value;
+				case PropertyEntityPredicateOp::PEP_LT:
+					return actual < *expected.value;
+				case PropertyEntityPredicateOp::PEP_LE:
+					return actual <= *expected.value;
+				case PropertyEntityPredicateOp::PEP_GT:
+					return actual > *expected.value;
+				case PropertyEntityPredicateOp::PEP_GE:
+					return actual >= *expected.value;
+				case PropertyEntityPredicateOp::PEP_RANGE_CLOSED:
+					return expected.upperValue != nullptr &&
+					       actual >= *expected.value &&
+					       actual <= *expected.upperValue;
+			}
+			return false;
+		}
+
+		std::optional<bool> readPropertyEntityPredicateMatch(
+				const char *buf,
+				const std::vector<PredicateSpecExpectation> &expected) {
+			const char *cursor = buf;
+			const char *end = buf + Property::TOTAL_PROPERTY_SIZE;
+
+			auto header = readActivePropertyRecordHeader(cursor, end);
+			if (!header.has_value()) {
+				return std::nullopt;
+			}
+
+			size_t matchedKeys = 0;
+			for (uint32_t i = 0; i < header->propertyCount; ++i) {
+				SerializedStringView key;
+				if (!readStringView(cursor, end, key)) { // ZYX_COV_EXCL_LINE
+					return std::nullopt;
+				}
+
+				const auto *expectedEntry = findPredicateSpecExpectation(key, expected);
+				if (expectedEntry == nullptr) {
+					if (!skipPropertyValue(cursor, end)) { // ZYX_COV_EXCL_LINE
+						return std::nullopt;
+					}
+					continue;
+				}
+
+				auto actual = readSerializedPropertyValue(cursor, end);
+				if (!actual.has_value()) { // ZYX_COV_EXCL_LINE
+					return std::nullopt;
+				}
+				if (!propertyValueSatisfiesPredicate(*actual, *expectedEntry)) {
+					return false;
+				}
+				++matchedKeys;
+			}
+			return matchedKeys == expected.size();
+		}
 	} // namespace
 
 	void DataManager::initialize(bool skipSegmentIndexBuild) {
@@ -427,7 +943,8 @@ namespace graph::storage {
 				size_t dataBytes = static_cast<size_t>(header.used) * entitySize;
 				std::vector<char> buf(dataBytes);
 				auto dataOffset = static_cast<int64_t>(seg.segmentOffset + sizeof(SegmentHeader));
-				ssize_t n = preadBytes(buf.data(), dataBytes, dataOffset);				if (n < static_cast<ssize_t>(dataBytes))
+				ssize_t n = preadBytes(buf.data(), dataBytes, dataOffset);
+				if (n < static_cast<ssize_t>(dataBytes))
 					continue;
 
 				for (size_t i = w.idBegin; i < w.idEnd; ++i) {
@@ -441,6 +958,779 @@ namespace graph::storage {
 						result[id] = std::move(prop);
 				}
 			}
+		}
+
+		return result;
+	}
+
+	std::unordered_map<int64_t, std::unordered_map<std::string, PropertyValue>>
+	DataManager::bulkLoadPropertyEntityValues(
+		const std::vector<int64_t> &ids,
+		const std::vector<std::string> &keys,
+		concurrent::ThreadPool *pool) const {
+		std::unordered_map<int64_t, std::unordered_map<std::string, PropertyValue>> result;
+		if (ids.empty() || keys.empty() || !hasPreadSupport()) {
+			return result;
+		}
+
+		std::vector<int64_t> sortedIds(ids);
+		std::sort(sortedIds.begin(), sortedIds.end());
+		sortedIds.erase(std::unique(sortedIds.begin(), sortedIds.end()), sortedIds.end());
+
+		std::unordered_set<std::string> requestedKeys;
+		requestedKeys.reserve(keys.size());
+		for (const auto &key : keys) {
+			requestedKeys.insert(key);
+		}
+
+		const auto &segIndex = segmentIndexManager_->getPropertySegmentIndex();
+		constexpr size_t entitySize = Property::getTotalSize();
+
+		struct SegWork {
+			size_t segIdx;
+			size_t idBegin;
+			size_t idEnd;
+		};
+		std::vector<SegWork> work;
+		for (size_t s = 0; s < segIndex.size(); ++s) {
+			auto lo = std::lower_bound(sortedIds.begin(), sortedIds.end(), segIndex[s].startId);
+			auto hi = std::upper_bound(lo, sortedIds.end(), segIndex[s].endId);
+			if (lo != hi) {
+				work.push_back({s,
+					static_cast<size_t>(lo - sortedIds.begin()),
+					static_cast<size_t>(hi - sortedIds.begin())});
+			}
+		}
+
+		if (work.empty()) {
+			return result;
+		}
+
+		auto readPropertyValues = [&](const char *entityBuffer)
+			-> std::optional<std::unordered_map<std::string, PropertyValue>> {
+			return readSelectedPropertyValues(entityBuffer, requestedKeys);
+		};
+
+		if (pool && !pool->isSingleThreaded() && work.size() > 1) { // ZYX_COV_EXCL_LINE
+			std::vector<size_t> workSegIndices;
+			workSegIndices.reserve(work.size());
+			for (const auto &w : work) {
+				workSegIndices.push_back(w.segIdx);
+			}
+
+			auto groups = buildCoalescedGroups(workSegIndices, segIndex);
+			std::vector<std::vector<std::pair<int64_t, std::unordered_map<std::string, PropertyValue>>>> perWork(work.size());
+
+			pool->parallelFor(0, groups.size(), [&](size_t gi) {
+				const auto &group = groups[gi];
+				size_t totalBytes = group.segCount * TOTAL_SEGMENT_SIZE;
+				std::vector<char> groupBuf(totalBytes);
+				auto groupOffset = static_cast<int64_t>(group.startOffset);
+				ssize_t n = preadBytes(groupBuf.data(), totalBytes, groupOffset);
+				if (n < static_cast<ssize_t>(totalBytes)) {
+					return;
+				}
+
+				for (size_t mi = 0; mi < group.memberIndices.size(); ++mi) {
+					size_t wi = group.memberIndices[mi];
+					const auto &w = work[wi];
+					size_t bufOffset = mi * TOTAL_SEGMENT_SIZE;
+
+					SegmentHeader header;
+					std::memcpy(&header, groupBuf.data() + bufOffset, sizeof(SegmentHeader));
+					if (header.used == 0) {
+						continue;
+					}
+
+					const char *dataBuf = groupBuf.data() + bufOffset + sizeof(SegmentHeader);
+					auto &local = perWork[wi];
+					for (size_t i = w.idBegin; i < w.idEnd; ++i) {
+						int64_t id = sortedIds[i];
+						uint32_t slot = static_cast<uint32_t>(id - header.start_id);
+						if (slot >= header.used) {
+							continue;
+						}
+						auto values = readPropertyValues(dataBuf + slot * entitySize);
+						if (values.has_value()) {
+							local.emplace_back(id, std::move(*values));
+						}
+					}
+				}
+			});
+
+			size_t totalCount = 0;
+			for (const auto &values : perWork) {
+				totalCount += values.size();
+			}
+			result.reserve(totalCount);
+			for (auto &values : perWork) {
+				for (auto &[id, propertyValues] : values) {
+					result.emplace(id, std::move(propertyValues));
+				}
+			}
+		} else {
+			result.reserve(sortedIds.size());
+			for (const auto &w : work) {
+				const auto &seg = segIndex[w.segIdx];
+				SegmentHeader header = segmentTracker_->getSegmentHeaderCopy(seg.segmentOffset);
+				if (header.used == 0) {
+					continue;
+				}
+
+				size_t dataBytes = static_cast<size_t>(header.used) * entitySize;
+				std::vector<char> buf(dataBytes);
+				auto dataOffset = static_cast<int64_t>(seg.segmentOffset + sizeof(SegmentHeader));
+				ssize_t n = preadBytes(buf.data(), dataBytes, dataOffset);
+				if (n < static_cast<ssize_t>(dataBytes)) {
+					continue;
+				}
+
+				for (size_t i = w.idBegin; i < w.idEnd; ++i) {
+					int64_t id = sortedIds[i];
+					uint32_t slot = static_cast<uint32_t>(id - header.start_id);
+					if (slot >= header.used) {
+						continue;
+					}
+					auto values = readPropertyValues(buf.data() + slot * entitySize);
+					if (values.has_value()) {
+						result.emplace(id, std::move(*values));
+					}
+				}
+			}
+		}
+
+		return result;
+	}
+
+	std::vector<size_t> DataManager::bulkLoadPropertyEntityColumns(
+		const std::vector<int64_t> &ids,
+		const std::vector<size_t> &rows,
+		size_t rowCount,
+		const std::vector<std::string> &keys,
+		std::unordered_map<std::string, std::vector<std::optional<PropertyValue>>> &columns,
+		concurrent::ThreadPool *pool) const {
+		std::vector<size_t> loadedRows;
+		if (ids.empty() || rows.size() != ids.size() || keys.empty() || rowCount == 0 || !hasPreadSupport()) {
+			return loadedRows;
+		}
+
+		std::unordered_map<std::string, size_t> requestedKeyIndices;
+		std::vector<std::vector<std::optional<PropertyValue>> *> columnTargets;
+		requestedKeyIndices.reserve(keys.size());
+		columnTargets.reserve(keys.size());
+		for (const auto &key : keys) {
+			if (requestedKeyIndices.contains(key)) {
+				continue;
+			}
+			auto columnIt = columns.find(key);
+			if (columnIt == columns.end() || columnIt->second.size() < rowCount) {
+				continue;
+			}
+			const size_t index = columnTargets.size();
+			requestedKeyIndices.emplace(key, index);
+			columnTargets.push_back(&columnIt->second);
+		}
+		if (columnTargets.empty()) {
+			return loadedRows;
+		}
+
+		std::vector<PropertyEntityRowRef> refs;
+		refs.reserve(ids.size());
+		std::vector<uint8_t> rowSeen(rowCount, 0);
+		for (size_t i = 0; i < ids.size(); ++i) {
+			if (ids[i] != 0 && rows[i] < rowCount && rowSeen[rows[i]] == 0) {
+				rowSeen[rows[i]] = 1;
+				refs.push_back({ids[i], rows[i]});
+			}
+		}
+		if (refs.empty()) {
+			return loadedRows;
+		}
+
+		auto refLess = [](const PropertyEntityRowRef &lhs, const PropertyEntityRowRef &rhs) {
+			if (lhs.id != rhs.id) {
+				return lhs.id < rhs.id;
+			}
+			return lhs.row < rhs.row;
+		};
+		if (!std::is_sorted(refs.begin(), refs.end(), refLess)) {
+			std::sort(refs.begin(), refs.end(), refLess);
+		}
+
+		std::vector<int64_t> sortedIds;
+		std::vector<std::pair<size_t, size_t>> refRanges;
+		sortedIds.reserve(refs.size());
+		refRanges.reserve(refs.size());
+		for (size_t begin = 0; begin < refs.size();) {
+			size_t end = begin + 1;
+			while (end < refs.size() && refs[end].id == refs[begin].id) {
+				++end;
+			}
+			sortedIds.push_back(refs[begin].id);
+			refRanges.emplace_back(begin, end);
+			begin = end;
+		}
+
+		const auto &segIndex = segmentIndexManager_->getPropertySegmentIndex();
+		constexpr size_t entitySize = Property::getTotalSize();
+
+		struct SegWork {
+			size_t segIdx;
+			size_t idBegin;
+			size_t idEnd;
+		};
+		std::vector<SegWork> work;
+		for (size_t s = 0; s < segIndex.size(); ++s) {
+			auto lo = std::lower_bound(sortedIds.begin(), sortedIds.end(), segIndex[s].startId);
+			auto hi = std::upper_bound(lo, sortedIds.end(), segIndex[s].endId);
+			if (lo != hi) {
+				work.push_back({s,
+					static_cast<size_t>(lo - sortedIds.begin()),
+					static_cast<size_t>(hi - sortedIds.begin())});
+			}
+		}
+
+		if (work.empty()) {
+			return loadedRows;
+		}
+
+		if (pool && !pool->isSingleThreaded() && work.size() > 1) { // ZYX_COV_EXCL_LINE
+			std::vector<size_t> workSegIndices;
+			workSegIndices.reserve(work.size());
+			for (const auto &w : work) {
+				workSegIndices.push_back(w.segIdx);
+			}
+
+			auto groups = buildCoalescedGroups(workSegIndices, segIndex);
+			std::vector<std::vector<size_t>> perWorkLoadedRows(work.size());
+
+			pool->parallelFor(0, groups.size(), [&](size_t gi) {
+				const auto &group = groups[gi];
+				size_t totalBytes = group.segCount * TOTAL_SEGMENT_SIZE;
+				std::vector<char> groupBuf(totalBytes);
+				auto groupOffset = static_cast<int64_t>(group.startOffset);
+				ssize_t n = preadBytes(groupBuf.data(), totalBytes, groupOffset);
+				if (n < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
+					return;
+				}
+
+				for (size_t mi = 0; mi < group.memberIndices.size(); ++mi) {
+					size_t wi = group.memberIndices[mi];
+					const auto &w = work[wi];
+					size_t bufOffset = mi * TOTAL_SEGMENT_SIZE;
+
+					SegmentHeader header;
+					std::memcpy(&header, groupBuf.data() + bufOffset, sizeof(SegmentHeader));
+					if (header.used == 0) {
+						continue;
+					}
+
+					const char *dataBuf = groupBuf.data() + bufOffset + sizeof(SegmentHeader);
+					auto &localLoadedRows = perWorkLoadedRows[wi];
+					for (size_t i = w.idBegin; i < w.idEnd; ++i) {
+						int64_t id = sortedIds[i];
+						uint32_t slot = static_cast<uint32_t>(id - header.start_id);
+						if (slot >= header.used) { // ZYX_COV_EXCL_LINE
+							continue;
+						}
+						const char *entityBuffer = dataBuf + slot * entitySize;
+						if (readSerializedPropertyId(entityBuffer) != id) {
+							continue;
+						}
+						const auto [refBegin, refEnd] = refRanges[i];
+						if (readSelectedPropertyColumns(
+								entityBuffer, requestedKeyIndices, columnTargets, refs, refBegin, refEnd)) {
+							for (size_t ref = refBegin; ref < refEnd; ++ref) {
+								localLoadedRows.push_back(refs[ref].row);
+							}
+						}
+					}
+				}
+			});
+
+			size_t loadedCount = 0;
+			for (const auto &rowsForWork : perWorkLoadedRows) {
+				loadedCount += rowsForWork.size();
+			}
+			loadedRows.reserve(loadedCount);
+			for (auto &rowsForWork : perWorkLoadedRows) {
+				loadedRows.insert(loadedRows.end(), rowsForWork.begin(), rowsForWork.end());
+			}
+		} else {
+			loadedRows.reserve(refs.size());
+			for (const auto &w : work) {
+				const auto &seg = segIndex[w.segIdx];
+				SegmentHeader header = segmentTracker_->getSegmentHeaderCopy(seg.segmentOffset);
+				if (header.used == 0) {
+					continue;
+				}
+
+				size_t dataBytes = static_cast<size_t>(header.used) * entitySize;
+				std::vector<char> buf(dataBytes);
+				auto dataOffset = static_cast<int64_t>(seg.segmentOffset + sizeof(SegmentHeader));
+				ssize_t n = preadBytes(buf.data(), dataBytes, dataOffset);
+				if (n < static_cast<ssize_t>(dataBytes)) {
+					continue;
+				}
+
+				for (size_t i = w.idBegin; i < w.idEnd; ++i) {
+					int64_t id = sortedIds[i];
+					uint32_t slot = static_cast<uint32_t>(id - header.start_id);
+					if (slot >= header.used) {
+						continue;
+					}
+					const char *entityBuffer = buf.data() + slot * entitySize;
+					if (readSerializedPropertyId(entityBuffer) != id) {
+						continue;
+					}
+					const auto [refBegin, refEnd] = refRanges[i];
+					if (readSelectedPropertyColumns(
+							entityBuffer, requestedKeyIndices, columnTargets, refs, refBegin, refEnd)) {
+						for (size_t ref = refBegin; ref < refEnd; ++ref) {
+							loadedRows.push_back(refs[ref].row);
+						}
+					}
+				}
+			}
+		}
+
+		return loadedRows;
+	}
+
+	PropertyEntityPredicateMatchResult DataManager::bulkMatchPropertyEntityPredicates(
+		const std::vector<int64_t> &ids,
+		const std::vector<size_t> &rows,
+		size_t rowCount,
+		const std::unordered_map<std::string, PropertyValue> &expected,
+		concurrent::ThreadPool *pool,
+		PropertyEntityPredicateMatchOptions options) const {
+		PropertyEntityPredicateMatchResult result;
+		if (ids.empty() || rows.size() != ids.size() || rowCount == 0 || expected.empty() || !hasPreadSupport()) {
+			return result;
+		}
+
+		std::vector<PropertyEntityRowRef> refs;
+		refs.reserve(ids.size());
+		std::vector<uint8_t> rowSeen(rowCount, 0);
+		for (size_t i = 0; i < ids.size(); ++i) {
+			if (ids[i] != 0 && rows[i] < rowCount && rowSeen[rows[i]] == 0) {
+				rowSeen[rows[i]] = 1;
+				refs.push_back({ids[i], rows[i]});
+			}
+		}
+		if (refs.empty()) {
+			return result;
+		}
+
+		std::vector<PredicateExpectation> predicateExpectations;
+		predicateExpectations.reserve(expected.size());
+		for (const auto &[key, value] : expected) {
+			predicateExpectations.push_back({&key, &value});
+		}
+		const bool useSinglePredicate = predicateExpectations.size() == 1;
+		const SinglePredicateExpectation singlePredicate = useSinglePredicate
+			? SinglePredicateExpectation{predicateExpectations.front().key, predicateExpectations.front().value}
+			: SinglePredicateExpectation{};
+
+		auto refLess = [](const PropertyEntityRowRef &lhs, const PropertyEntityRowRef &rhs) {
+			if (lhs.id != rhs.id) {
+				return lhs.id < rhs.id;
+			}
+			return lhs.row < rhs.row;
+		};
+		if (!std::is_sorted(refs.begin(), refs.end(), refLess)) {
+			std::sort(refs.begin(), refs.end(), refLess);
+		}
+
+		std::vector<int64_t> sortedIds;
+		std::vector<std::pair<size_t, size_t>> refRanges;
+		sortedIds.reserve(refs.size());
+		refRanges.reserve(refs.size());
+		for (size_t begin = 0; begin < refs.size();) {
+			size_t end = begin + 1;
+			while (end < refs.size() && refs[end].id == refs[begin].id) {
+				++end;
+			}
+			sortedIds.push_back(refs[begin].id);
+			refRanges.emplace_back(begin, end);
+			begin = end;
+		}
+
+		const auto &segIndex = segmentIndexManager_->getPropertySegmentIndex();
+		constexpr size_t entitySize = Property::getTotalSize();
+
+		struct SegWork {
+			size_t segIdx;
+			size_t idBegin;
+			size_t idEnd;
+		};
+		std::vector<SegWork> work;
+		for (size_t s = 0; s < segIndex.size(); ++s) {
+			auto lo = std::lower_bound(sortedIds.begin(), sortedIds.end(), segIndex[s].startId);
+			auto hi = std::upper_bound(lo, sortedIds.end(), segIndex[s].endId);
+			if (lo != hi) {
+				work.push_back({s,
+					static_cast<size_t>(lo - sortedIds.begin()),
+					static_cast<size_t>(hi - sortedIds.begin())});
+			}
+		}
+
+		if (work.empty()) {
+			return result;
+		}
+
+		auto appendPredicateResult = [&](std::vector<size_t> &loadedRows,
+		                                 std::vector<size_t> *matchedRows,
+		                                 size_t &loadedCount,
+		                                 size_t &matchedCount,
+		                                 size_t idIndex,
+		                                 std::optional<bool> matches) {
+			if (!matches.has_value()) {
+				return;
+			}
+			const auto [refBegin, refEnd] = refRanges[idIndex];
+			for (size_t ref = refBegin; ref < refEnd; ++ref) {
+				++loadedCount;
+				if (options.collectLoadedRows) {
+					loadedRows.push_back(refs[ref].row);
+				}
+				if (matches.value()) {
+					++matchedCount;
+					if (matchedRows != nullptr) {
+						matchedRows->push_back(refs[ref].row);
+					}
+				}
+			}
+		};
+
+		if (pool && !pool->isSingleThreaded() && work.size() > 1) { // ZYX_COV_EXCL_LINE
+			std::vector<size_t> workSegIndices;
+			workSegIndices.reserve(work.size());
+			for (const auto &w : work) {
+				workSegIndices.push_back(w.segIdx);
+			}
+
+			auto groups = buildCoalescedGroups(workSegIndices, segIndex);
+			std::vector<std::vector<size_t>> perWorkLoadedRows(work.size());
+			std::vector<std::vector<size_t>> perWorkMatchedRows(options.collectMatchedRows ? work.size() : 0);
+			std::vector<size_t> perWorkLoadedCounts(work.size(), 0);
+			std::vector<size_t> perWorkMatchedCounts(work.size(), 0);
+
+			pool->parallelFor(0, groups.size(), [&](size_t gi) {
+				const auto &group = groups[gi];
+				size_t totalBytes = group.segCount * TOTAL_SEGMENT_SIZE;
+				std::vector<char> groupBuf(totalBytes);
+				auto groupOffset = static_cast<int64_t>(group.startOffset);
+				ssize_t n = preadBytes(groupBuf.data(), totalBytes, groupOffset);
+				if (n < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
+					return;
+				}
+
+				for (size_t mi = 0; mi < group.memberIndices.size(); ++mi) {
+					size_t wi = group.memberIndices[mi];
+					const auto &w = work[wi];
+					size_t bufOffset = mi * TOTAL_SEGMENT_SIZE;
+
+					SegmentHeader header;
+					std::memcpy(&header, groupBuf.data() + bufOffset, sizeof(SegmentHeader));
+					if (header.used == 0) {
+						continue;
+					}
+
+					const char *dataBuf = groupBuf.data() + bufOffset + sizeof(SegmentHeader);
+					for (size_t i = w.idBegin; i < w.idEnd; ++i) {
+						int64_t id = sortedIds[i];
+						uint32_t slot = static_cast<uint32_t>(id - header.start_id);
+						if (slot >= header.used) {
+							continue;
+						}
+						const char *entityBuffer = dataBuf + slot * entitySize;
+						if (readSerializedPropertyId(entityBuffer) != id) {
+							continue;
+						}
+						appendPredicateResult(
+							perWorkLoadedRows[wi],
+							options.collectMatchedRows ? &perWorkMatchedRows[wi] : nullptr,
+							perWorkLoadedCounts[wi],
+							perWorkMatchedCounts[wi],
+							i,
+							useSinglePredicate
+								? readPropertyEntitySinglePredicateMatch(entityBuffer, singlePredicate)
+								: readPropertyEntityPredicateMatch(entityBuffer, predicateExpectations));
+					}
+				}
+			});
+
+			size_t loadedCount = 0;
+			for (size_t i = 0; i < work.size(); ++i) {
+				loadedCount += perWorkLoadedCounts[i];
+				result.matchedCount += perWorkMatchedCounts[i];
+			}
+			result.loadedCount = loadedCount;
+			if (options.collectLoadedRows) {
+				result.loadedRows.reserve(loadedCount);
+			}
+			if (options.collectMatchedRows) {
+				result.matchedRows.reserve(result.matchedCount);
+			}
+			for (size_t i = 0; i < work.size(); ++i) {
+				if (options.collectLoadedRows) {
+					result.loadedRows.insert(result.loadedRows.end(), perWorkLoadedRows[i].begin(), perWorkLoadedRows[i].end());
+				}
+				if (options.collectMatchedRows) {
+					result.matchedRows.insert(result.matchedRows.end(), perWorkMatchedRows[i].begin(), perWorkMatchedRows[i].end());
+				}
+			}
+		} else {
+			if (options.collectLoadedRows) {
+				result.loadedRows.reserve(refs.size());
+			}
+			if (options.collectMatchedRows) {
+				result.matchedRows.reserve(refs.size());
+			}
+			for (const auto &w : work) {
+				const auto &seg = segIndex[w.segIdx];
+				SegmentHeader header = segmentTracker_->getSegmentHeaderCopy(seg.segmentOffset);
+				if (header.used == 0) {
+					continue;
+				}
+
+				size_t dataBytes = static_cast<size_t>(header.used) * entitySize;
+				std::vector<char> buf(dataBytes);
+				auto dataOffset = static_cast<int64_t>(seg.segmentOffset + sizeof(SegmentHeader));
+				ssize_t n = preadBytes(buf.data(), dataBytes, dataOffset);
+				if (n < static_cast<ssize_t>(dataBytes)) {
+					continue;
+				}
+
+				for (size_t i = w.idBegin; i < w.idEnd; ++i) {
+					int64_t id = sortedIds[i];
+					uint32_t slot = static_cast<uint32_t>(id - header.start_id);
+					if (slot >= header.used) {
+						continue;
+					}
+					const char *entityBuffer = buf.data() + slot * entitySize;
+					if (readSerializedPropertyId(entityBuffer) != id) {
+						continue;
+					}
+					appendPredicateResult(
+						result.loadedRows,
+						options.collectMatchedRows ? &result.matchedRows : nullptr,
+						result.loadedCount,
+						result.matchedCount,
+						i,
+						useSinglePredicate
+							? readPropertyEntitySinglePredicateMatch(entityBuffer, singlePredicate)
+							: readPropertyEntityPredicateMatch(entityBuffer, predicateExpectations));
+				}
+			}
+		}
+
+		return result;
+	}
+
+
+	PropertyEntityPredicateMatchResult DataManager::bulkMatchPropertyEntityPredicateSpecs(
+		const std::vector<int64_t> &ids,
+		const std::vector<size_t> &rows,
+		size_t rowCount,
+		const std::vector<PropertyEntityPredicate> &predicates,
+		concurrent::ThreadPool *pool) const {
+		PropertyEntityPredicateMatchResult result;
+		if (ids.empty() || rows.size() != ids.size() || rowCount == 0 || predicates.empty() || !hasPreadSupport()) {
+			return result;
+		}
+
+		std::vector<PropertyEntityRowRef> refs;
+		refs.reserve(ids.size());
+		std::vector<uint8_t> rowSeen(rowCount, 0);
+		for (size_t i = 0; i < ids.size(); ++i) {
+			if (ids[i] != 0 && rows[i] < rowCount && rowSeen[rows[i]] == 0) {
+				rowSeen[rows[i]] = 1;
+				refs.push_back({ids[i], rows[i]});
+			}
+		}
+		if (refs.empty()) {
+			return result;
+		}
+
+		std::vector<PredicateSpecExpectation> predicateExpectations;
+		predicateExpectations.reserve(predicates.size());
+		for (const auto &predicate : predicates) {
+			predicateExpectations.push_back({
+				&predicate.key,
+				&predicate.value,
+				predicate.upperValue.has_value() ? &*predicate.upperValue : nullptr,
+				predicate.op});
+		}
+
+		auto refLess = [](const PropertyEntityRowRef &lhs, const PropertyEntityRowRef &rhs) {
+			if (lhs.id != rhs.id) {
+				return lhs.id < rhs.id;
+			}
+			return lhs.row < rhs.row;
+		};
+		if (!std::is_sorted(refs.begin(), refs.end(), refLess)) {
+			std::sort(refs.begin(), refs.end(), refLess);
+		}
+
+		std::vector<int64_t> sortedIds;
+		std::vector<std::pair<size_t, size_t>> refRanges;
+		sortedIds.reserve(refs.size());
+		refRanges.reserve(refs.size());
+		for (size_t begin = 0; begin < refs.size();) {
+			size_t end = begin + 1;
+			while (end < refs.size() && refs[end].id == refs[begin].id) {
+				++end;
+			}
+			sortedIds.push_back(refs[begin].id);
+			refRanges.emplace_back(begin, end);
+			begin = end;
+		}
+
+		const auto &segIndex = segmentIndexManager_->getPropertySegmentIndex();
+		constexpr size_t entitySize = Property::getTotalSize();
+
+		struct SegWork {
+			size_t segIdx;
+			size_t idBegin;
+			size_t idEnd;
+		};
+		std::vector<SegWork> work;
+		for (size_t s = 0; s < segIndex.size(); ++s) {
+			auto lo = std::lower_bound(sortedIds.begin(), sortedIds.end(), segIndex[s].startId);
+			auto hi = std::upper_bound(lo, sortedIds.end(), segIndex[s].endId);
+			if (lo != hi) {
+				work.push_back({s,
+					static_cast<size_t>(lo - sortedIds.begin()),
+					static_cast<size_t>(hi - sortedIds.begin())});
+			}
+		}
+
+		if (work.empty()) {
+			return result;
+		}
+
+		auto appendPredicateResult = [&](std::vector<size_t> &loadedRows,
+		                                 std::vector<size_t> &matchedRows,
+		                                 size_t &matchedCount,
+		                                 size_t idIndex,
+		                                 std::optional<bool> matches) {
+			if (!matches.has_value()) {
+				return;
+			}
+			const auto [refBegin, refEnd] = refRanges[idIndex];
+			for (size_t ref = refBegin; ref < refEnd; ++ref) {
+				loadedRows.push_back(refs[ref].row);
+				if (matches.value()) {
+					++matchedCount;
+					matchedRows.push_back(refs[ref].row);
+				}
+			}
+		};
+
+		if (pool && !pool->isSingleThreaded() && work.size() > 1) { // ZYX_COV_EXCL_LINE
+			std::vector<size_t> workSegIndices;
+			workSegIndices.reserve(work.size());
+			for (const auto &w : work) {
+				workSegIndices.push_back(w.segIdx);
+			}
+
+			auto groups = buildCoalescedGroups(workSegIndices, segIndex);
+			std::vector<std::vector<size_t>> perWorkLoadedRows(work.size());
+			std::vector<std::vector<size_t>> perWorkMatchedRows(work.size());
+			std::vector<size_t> perWorkMatchedCounts(work.size(), 0);
+
+			pool->parallelFor(0, groups.size(), [&](size_t gi) {
+				const auto &group = groups[gi];
+				size_t totalBytes = group.segCount * TOTAL_SEGMENT_SIZE;
+				std::vector<char> groupBuf(totalBytes);
+				auto groupOffset = static_cast<int64_t>(group.startOffset);
+				ssize_t n = preadBytes(groupBuf.data(), totalBytes, groupOffset);
+				if (n < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
+					return;
+				}
+
+				for (size_t mi = 0; mi < group.memberIndices.size(); ++mi) {
+					size_t wi = group.memberIndices[mi];
+					const auto &w = work[wi];
+					size_t bufOffset = mi * TOTAL_SEGMENT_SIZE;
+
+					SegmentHeader header;
+					std::memcpy(&header, groupBuf.data() + bufOffset, sizeof(SegmentHeader));
+					if (header.used == 0) {
+						continue;
+					}
+
+					const char *dataBuf = groupBuf.data() + bufOffset + sizeof(SegmentHeader);
+					for (size_t i = w.idBegin; i < w.idEnd; ++i) {
+						int64_t id = sortedIds[i];
+						uint32_t slot = static_cast<uint32_t>(id - header.start_id);
+						if (slot >= header.used) {
+							continue;
+						}
+						const char *entityBuffer = dataBuf + slot * entitySize;
+						if (readSerializedPropertyId(entityBuffer) != id) {
+							continue;
+						}
+						appendPredicateResult(
+							perWorkLoadedRows[wi],
+							perWorkMatchedRows[wi],
+							perWorkMatchedCounts[wi],
+							i,
+							readPropertyEntityPredicateMatch(entityBuffer, predicateExpectations));
+					}
+				}
+			});
+
+			size_t loadedCount = 0;
+			for (size_t i = 0; i < work.size(); ++i) {
+				loadedCount += perWorkLoadedRows[i].size();
+				result.matchedCount += perWorkMatchedCounts[i];
+			}
+			result.loadedCount = loadedCount;
+			result.loadedRows.reserve(loadedCount);
+			result.matchedRows.reserve(result.matchedCount);
+			for (size_t i = 0; i < work.size(); ++i) {
+				result.loadedRows.insert(result.loadedRows.end(), perWorkLoadedRows[i].begin(), perWorkLoadedRows[i].end());
+				result.matchedRows.insert(result.matchedRows.end(), perWorkMatchedRows[i].begin(), perWorkMatchedRows[i].end());
+			}
+		} else {
+			result.loadedRows.reserve(refs.size());
+			for (const auto &w : work) {
+				const auto &seg = segIndex[w.segIdx];
+				SegmentHeader header = segmentTracker_->getSegmentHeaderCopy(seg.segmentOffset);
+				if (header.used == 0) {
+					continue;
+				}
+
+				size_t dataBytes = static_cast<size_t>(header.used) * entitySize;
+				std::vector<char> buf(dataBytes);
+				auto dataOffset = static_cast<int64_t>(seg.segmentOffset + sizeof(SegmentHeader));
+				ssize_t n = preadBytes(buf.data(), dataBytes, dataOffset);
+				if (n < static_cast<ssize_t>(dataBytes)) {
+					continue;
+				}
+
+				for (size_t i = w.idBegin; i < w.idEnd; ++i) {
+					int64_t id = sortedIds[i];
+					uint32_t slot = static_cast<uint32_t>(id - header.start_id);
+					if (slot >= header.used) {
+						continue;
+					}
+					const char *entityBuffer = buf.data() + slot * entitySize;
+					if (readSerializedPropertyId(entityBuffer) != id) {
+						continue;
+					}
+					appendPredicateResult(
+						result.loadedRows,
+						result.matchedRows,
+						result.matchedCount,
+						i,
+						readPropertyEntityPredicateMatch(entityBuffer, predicateExpectations));
+				}
+			}
+			result.loadedCount = result.loadedRows.size();
 		}
 
 		return result;
@@ -488,7 +1778,7 @@ namespace graph::storage {
 			// Links external properties using the ID assigned in Step 1
 			propertyManager_->storeProperties(edge);
 
-			if (EntityPropertyTraits<Edge>::hasPropertyEntity(edge)) {
+			if (EntityPropertyTraits<Edge>::hasPropertyEntity(edge)) { // ZYX_COV_EXCL_LINE
 				// Persist the modification (link to external prop)
 				edgeManager_->update(edge);
 			}

@@ -20,6 +20,7 @@
 #include "graph/query/execution/operators/TraversalOperator.hpp"
 #include "graph/query/execution/operators/VarLengthTraversalOperator.hpp"
 #include "graph/query/execution/operators/NodeScanOperator.hpp"
+#include "graph/query/execution/operators/NodeTopKFastPathOperator.hpp"
 #include "graph/query/execution/operators/ForeachOperator.hpp"
 #include "graph/query/execution/operators/CallSubqueryOperator.hpp"
 #include "graph/query/execution/operators/LoadCsvOperator.hpp"
@@ -34,6 +35,8 @@
 #include "graph/query/execution/operators/CreateVectorIndexOperator.hpp"
 #include "graph/query/execution/operators/ExplainOperator.hpp"
 #include "graph/query/execution/operators/ProfileOperator.hpp"
+#include "graph/query/execution/operators/ProjectOperator.hpp"
+#include "graph/query/execution/operators/SortOperator.hpp"
 #include "graph/query/expressions/Expression.hpp"
 
 #include "graph/query/logical/operators/LogicalTraversal.hpp"
@@ -53,6 +56,9 @@
 #include "graph/query/logical/operators/LogicalCreateVectorIndex.hpp"
 #include "graph/query/logical/operators/LogicalExplain.hpp"
 #include "graph/query/logical/operators/LogicalProfile.hpp"
+#include "graph/query/logical/operators/LogicalLimit.hpp"
+#include "graph/query/logical/operators/LogicalProject.hpp"
+#include "graph/query/logical/operators/LogicalSort.hpp"
 #include "graph/query/logical/operators/LogicalCreateEdge.hpp"
 #include "graph/query/logical/operators/LogicalCreateNode.hpp"
 #include "graph/query/logical/operators/LogicalAggregate.hpp"
@@ -222,6 +228,181 @@ TEST_F(PhysicalPlanConverterTraversalTest, NodeScanWithMultipleLabels) {
 	auto scan = std::make_unique<LogicalNodeScan>("n", labels);
 	auto phys = converter->convert(scan.get());
 	ASSERT_NE(phys, nullptr);
+}
+
+TEST_F(PhysicalPlanConverterTraversalTest, MultiLabelScanRejectsNodesMissingSecondaryLabel) {
+	const auto firstLabel = dataManager->getOrCreateTokenId("MultilabelPerson");
+	const auto secondLabel = dataManager->getOrCreateTokenId("MultilabelEmployee");
+	graph::Node both(0, firstLabel);
+	ASSERT_TRUE(both.addLabelId(secondLabel));
+	graph::Node firstOnly(0, firstLabel);
+	dataManager->addNode(both);
+	dataManager->addNode(firstOnly);
+
+	auto scan = std::make_unique<LogicalNodeScan>(
+		"n", std::vector<std::string>{"MultilabelPerson", "MultilabelEmployee"});
+	auto phys = converter->convert(scan.get());
+	ASSERT_NE(phys, nullptr);
+
+	phys->open();
+	auto batch = phys->next();
+	ASSERT_TRUE(batch.has_value());
+	ASSERT_EQ(batch->size(), 1U);
+	auto node = batch->front().getNode("n");
+	ASSERT_TRUE(node.has_value());
+	EXPECT_EQ(node->getId(), both.getId());
+	EXPECT_FALSE(phys->next().has_value());
+	phys->close();
+}
+
+TEST_F(PhysicalPlanConverterTraversalTest, ResidualPropertyScanRejectsNodesMissingRequestedProperty) {
+	const auto label = dataManager->getOrCreateTokenId("ResidualPropertyPerson");
+	graph::Node complete(0, label);
+	complete.addProperty("status", graph::PropertyValue("active"));
+	complete.addProperty("tenant", graph::PropertyValue("east"));
+	graph::Node missingTenant(0, label);
+	missingTenant.addProperty("status", graph::PropertyValue("active"));
+	dataManager->addNode(complete);
+	dataManager->addNode(missingTenant);
+
+	std::vector<std::pair<std::string, graph::PropertyValue>> predicates = {
+		{"status", graph::PropertyValue("active")},
+		{"tenant", graph::PropertyValue("east")},
+	};
+	auto scan = std::make_unique<LogicalNodeScan>(
+		"n", std::vector<std::string>{"ResidualPropertyPerson"}, predicates);
+	auto phys = converter->convert(scan.get());
+	ASSERT_NE(phys, nullptr);
+
+	phys->open();
+	auto batch = phys->next();
+	ASSERT_TRUE(batch.has_value());
+	ASSERT_EQ(batch->size(), 1U);
+	auto node = batch->front().getNode("n");
+	ASSERT_TRUE(node.has_value());
+	EXPECT_EQ(node->getId(), complete.getId());
+	EXPECT_FALSE(phys->next().has_value());
+	phys->close();
+}
+
+TEST_F(PhysicalPlanConverterTraversalTest, CompositeNodeScanKeepsOnlyResidualPropertyPredicates) {
+	const auto personLabel = dataManager->getOrCreateTokenId("CompositePerson");
+	graph::Node active(0, personLabel);
+	graph::Node inactiveStatus(0, personLabel);
+	dataManager->addNode(active);
+	dataManager->addNode(inactiveStatus);
+	dataManager->addNodeProperties(active.getId(), {
+			{"country", graph::PropertyValue("CN")},
+			{"age", graph::PropertyValue(int64_t{30})},
+			{"status", graph::PropertyValue("active")}});
+	dataManager->addNodeProperties(inactiveStatus.getId(), {
+			{"country", graph::PropertyValue("CN")},
+			{"age", graph::PropertyValue(int64_t{30})},
+			{"status", graph::PropertyValue("inactive")}});
+	ASSERT_TRUE(indexManager->createCompositeIndex("idx_composite_person_country_age",
+	                                               "node",
+	                                               "CompositePerson",
+	                                               {"country", "age"}));
+
+	std::vector<std::pair<std::string, graph::PropertyValue>> predicates = {
+			{"country", graph::PropertyValue("CN")},
+			{"age", graph::PropertyValue(int64_t{30})},
+			{"status", graph::PropertyValue("active")},
+	};
+	auto scan = std::make_unique<LogicalNodeScan>("n", std::vector<std::string>{"CompositePerson"}, predicates);
+	scan->setCompositeEquality({{"country", "age"}, {graph::PropertyValue("CN"), graph::PropertyValue(int64_t{30})}});
+
+	auto phys = converter->convert(scan.get());
+	ASSERT_NE(phys, nullptr);
+}
+
+TEST_F(PhysicalPlanConverterTraversalTest, IndexedRangeScanOmitsMatchingResidualRangePredicate) {
+	const auto userLabel = dataManager->getOrCreateTokenId("RangePerson");
+	graph::Node inside(0, userLabel);
+	graph::Node outside(0, userLabel);
+	dataManager->addNode(inside);
+	dataManager->addNode(outside);
+	dataManager->addNodeProperties(inside.getId(), {{"age", graph::PropertyValue(int64_t{30})}});
+	dataManager->addNodeProperties(outside.getId(), {{"age", graph::PropertyValue(int64_t{70})}});
+	ASSERT_TRUE(indexManager->createIndex("idx_range_person_age", "node", "RangePerson", "age"));
+
+	auto scan = std::make_unique<LogicalNodeScan>("n", std::vector<std::string>{"RangePerson"});
+	scan->setRangePredicates({RangePredicate{"age", graph::PropertyValue(int64_t{18}), graph::PropertyValue(int64_t{65}), true, true}});
+
+	auto phys = converter->convert(scan.get());
+	ASSERT_NE(phys, nullptr);
+	phys->open();
+	auto batch = phys->next();
+	ASSERT_TRUE(batch.has_value());
+	ASSERT_EQ(batch->size(), 1U);
+	auto node = batch->front().getNode("n");
+	ASSERT_TRUE(node.has_value());
+	EXPECT_EQ(node->getId(), inside.getId());
+	EXPECT_FALSE(phys->next().has_value());
+	phys->close();
+}
+
+TEST_F(PhysicalPlanConverterTraversalTest, LimitOverSortUsesBoundedSort) {
+	auto input = std::make_unique<LogicalSingleRow>();
+
+	std::vector<LogicalSortItem> sortItems;
+	sortItems.emplace_back(std::make_shared<VariableReferenceExpression>("x"), false);
+	auto sort = std::make_unique<LogicalSort>(std::move(input), std::move(sortItems));
+	auto limit = std::make_unique<LogicalLimit>(std::move(sort), 3);
+
+	auto phys = converter->convert(limit.get());
+	auto *sortPhys = dynamic_cast<SortOperator *>(phys.get());
+	ASSERT_NE(sortPhys, nullptr);
+	EXPECT_NE(sortPhys->toString().find("LIMIT 3"), std::string::npos);
+}
+
+TEST_F(PhysicalPlanConverterTraversalTest, ProjectLimitSortNodeScanUsesTopKFastPath) {
+	const auto userLabel = dataManager->getOrCreateTokenId("User");
+	graph::Node low(1, userLabel);
+	graph::Node high(2, userLabel);
+	graph::Node mid(3, userLabel);
+	dataManager->addNode(low);
+	dataManager->addNode(high);
+	dataManager->addNode(mid);
+	dataManager->addNodeProperties(low.getId(), {
+		{"id", graph::PropertyValue(std::string("low"))},
+		{"score", graph::PropertyValue(1.0)},
+		{"extra", graph::PropertyValue(std::string("ignored"))}});
+	dataManager->addNodeProperties(high.getId(), {
+		{"id", graph::PropertyValue(std::string("high"))},
+		{"score", graph::PropertyValue(9.0)},
+		{"extra", graph::PropertyValue(std::string("ignored"))}});
+	dataManager->addNodeProperties(mid.getId(), {
+		{"id", graph::PropertyValue(std::string("mid"))},
+		{"score", graph::PropertyValue(5.0)},
+		{"extra", graph::PropertyValue(std::string("ignored"))}});
+	ASSERT_TRUE(indexManager->createIndex("idx_user_label_topk", "node", "User", ""));
+
+	auto scan = std::make_unique<LogicalNodeScan>("u", std::vector<std::string>{"User"});
+
+	std::vector<LogicalSortItem> sortItems;
+	sortItems.emplace_back(std::make_shared<VariableReferenceExpression>("u", "score"), false);
+	auto sort = std::make_unique<LogicalSort>(std::move(scan), std::move(sortItems));
+	auto limit = std::make_unique<LogicalLimit>(std::move(sort), 2);
+
+	std::vector<LogicalProjectItem> projectItems;
+	projectItems.emplace_back(std::make_shared<VariableReferenceExpression>("u", "id"), "id");
+	auto project = std::make_unique<LogicalProject>(std::move(limit), std::move(projectItems));
+
+	auto phys = converter->convert(project.get());
+	auto *topKPhys = dynamic_cast<NodeTopKFastPathOperator *>(phys.get());
+	ASSERT_NE(topKPhys, nullptr);
+
+	phys->open();
+	auto batch = phys->next();
+	ASSERT_TRUE(batch.has_value());
+	ASSERT_EQ(batch->size(), 2UL);
+	ASSERT_TRUE((*batch)[0].getValue("id").has_value());
+	ASSERT_TRUE((*batch)[1].getValue("id").has_value());
+	EXPECT_EQ(std::get<std::string>((*batch)[0].getValue("id")->getVariant()), "high");
+	EXPECT_EQ(std::get<std::string>((*batch)[1].getValue("id")->getVariant()), "mid");
+	EXPECT_FALSE(phys->next().has_value());
+	phys->close();
 }
 
 // ============================================================================

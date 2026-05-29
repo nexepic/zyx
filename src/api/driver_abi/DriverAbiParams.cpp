@@ -11,6 +11,24 @@ const std::unordered_map<std::string, zyx::Value> &emptyParams() {
     return empty;
 }
 
+template <typename Assign>
+zyx_driver_status_t assignParamValue(zyx_driver_params_t *params, const char *key, Assign assign,
+                                     zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (params == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "params must not be null");
+    }
+    if (key == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "key must not be null");
+    }
+    try {
+        assign(params->values[key]);
+        return ZYX_DRIVER_OK;
+    } catch (...) {
+        return catchAbiExceptionAs(out_error, ZYX_DRIVER_INVALID_ARGUMENT);
+    }
+}
+
 } // namespace
 
 std::unordered_map<std::string, zyx::Value> paramsToMap(const zyx_driver_params_t *params) {
@@ -33,12 +51,8 @@ zyx_driver_status_t zyx_driver_params_create(zyx_driver_params_t **out_params, z
     try {
         *out_params = new zyx_driver_params_t();
         return ZYX_DRIVER_OK;
-    } catch (const std::bad_alloc &) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
-    } catch (const std::exception &ex) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, ex.what());
-    } catch (...) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, "unknown error");
+    } catch (...) {
+        return catchAbiException(out_error);
     }
 }
 
@@ -49,86 +63,22 @@ void zyx_driver_params_free(zyx_driver_params_t *params, zyx_driver_error_t **ou
 
 zyx_driver_status_t zyx_driver_params_set_null(zyx_driver_params_t *params, const char *key,
                                                zyx_driver_error_t **out_error) {
-    clearError(out_error);
-    if (params == nullptr) {
-        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "params must not be null");
-    }
-    if (key == nullptr) {
-        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "key must not be null");
-    }
-    try {
-        params->values[key] = std::monostate{};
-        return ZYX_DRIVER_OK;
-    } catch (const std::bad_alloc &) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
-    } catch (const std::exception &ex) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, ex.what());
-    } catch (...) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, "unknown error");
-    }
+    return assignParamValue(params, key, [](zyx::Value &slot) { slot = std::monostate{}; }, out_error);
 }
 
 zyx_driver_status_t zyx_driver_params_set_bool(zyx_driver_params_t *params, const char *key, bool value,
                                                zyx_driver_error_t **out_error) {
-    clearError(out_error);
-    if (params == nullptr) {
-        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "params must not be null");
-    }
-    if (key == nullptr) {
-        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "key must not be null");
-    }
-    try {
-        params->values[key] = value;
-        return ZYX_DRIVER_OK;
-    } catch (const std::bad_alloc &) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
-    } catch (const std::exception &ex) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, ex.what());
-    } catch (...) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, "unknown error");
-    }
+    return assignParamValue(params, key, [value](zyx::Value &slot) { slot = value; }, out_error);
 }
 
 zyx_driver_status_t zyx_driver_params_set_int64(zyx_driver_params_t *params, const char *key, int64_t value,
                                                 zyx_driver_error_t **out_error) {
-    clearError(out_error);
-    if (params == nullptr) {
-        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "params must not be null");
-    }
-    if (key == nullptr) {
-        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "key must not be null");
-    }
-    try {
-        params->values[key] = value;
-        return ZYX_DRIVER_OK;
-    } catch (const std::bad_alloc &) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
-    } catch (const std::exception &ex) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, ex.what());
-    } catch (...) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, "unknown error");
-    }
+    return assignParamValue(params, key, [value](zyx::Value &slot) { slot = value; }, out_error);
 }
 
 zyx_driver_status_t zyx_driver_params_set_double(zyx_driver_params_t *params, const char *key, double value,
                                                  zyx_driver_error_t **out_error) {
-    clearError(out_error);
-    if (params == nullptr) {
-        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "params must not be null");
-    }
-    if (key == nullptr) {
-        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "key must not be null");
-    }
-    try {
-        params->values[key] = value;
-        return ZYX_DRIVER_OK;
-    } catch (const std::bad_alloc &) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
-    } catch (const std::exception &ex) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, ex.what());
-    } catch (...) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, "unknown error");
-    }
+    return assignParamValue(params, key, [value](zyx::Value &slot) { slot = value; }, out_error);
 }
 
 zyx_driver_status_t zyx_driver_params_set_string(zyx_driver_params_t *params, const char *key, const char *value,
@@ -146,12 +96,8 @@ zyx_driver_status_t zyx_driver_params_set_string(zyx_driver_params_t *params, co
     try {
         params->values[key] = std::string(value);
         return ZYX_DRIVER_OK;
-    } catch (const std::bad_alloc &) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
-    } catch (const std::exception &ex) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, ex.what());
-    } catch (...) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, "unknown error");
+    } catch (...) {
+        return catchAbiExceptionAs(out_error, ZYX_DRIVER_INVALID_ARGUMENT);
     }
 }
 
@@ -179,12 +125,8 @@ zyx_driver_status_t zyx_driver_params_set_string_list(zyx_driver_params_t *param
         }
         params->values[key] = std::move(list);
         return ZYX_DRIVER_OK;
-    } catch (const std::bad_alloc &) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
-    } catch (const std::exception &ex) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, ex.what());
-    } catch (...) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, "unknown error");
+    } catch (...) {
+        return catchAbiExceptionAs(out_error, ZYX_DRIVER_INVALID_ARGUMENT);
     }
 }
 
@@ -209,12 +151,8 @@ zyx_driver_status_t zyx_driver_params_set_float_list(zyx_driver_params_t *params
         }
         params->values[key] = std::move(list);
         return ZYX_DRIVER_OK;
-    } catch (const std::bad_alloc &) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
-    } catch (const std::exception &ex) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, ex.what());
-    } catch (...) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
-        return setError(out_error, ZYX_DRIVER_INTERNAL_ERROR, "unknown error");
+    } catch (...) {
+        return catchAbiExceptionAs(out_error, ZYX_DRIVER_INVALID_ARGUMENT);
     }
 }
 

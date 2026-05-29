@@ -5,6 +5,8 @@
 #include <utility>
 
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/query/execution/NodeColumnarPredicateCounter.hpp"
+#include "graph/query/execution/NodeScanRequirementUtils.hpp"
 
 namespace graph::query::execution::operators {
 
@@ -68,12 +70,30 @@ namespace graph::query::execution::operators {
 		} else if (canCountCandidatesDirectly) {
 			count = static_cast<int64_t>(candidateSet_.ids.size());
 		} else {
-			NodeBatchLoader loader(dm_, threadPool_);
-			for (size_t begin = 0; begin < candidateSet_.ids.size(); begin += PhysicalOperator::DEFAULT_BATCH_SIZE) {
-				const size_t end = std::min(begin + PhysicalOperator::DEFAULT_BATCH_SIZE, candidateSet_.ids.size());
-				auto batch = loader.load(candidateSet_.ids, begin, end, config_, requirements_);
-				applyPredicates(batch, predicates_);
-				count += static_cast<int64_t>(batch.selectedCount());
+			bool countedByPredicateKernel = false;
+			if (!predicates_.empty() && requirements_.countOnly &&
+			    requirements_.materialization == NodeMaterializationMode::NSM_SELECTED_PROPERTIES) {
+				NodeColumnarPredicateCounter counter(dm_, threadPool_);
+				const auto predicateCount = counter.count(
+						candidateSet_.ids, candidateSet_, config_, requirements_, predicates_);
+				if (predicateCount.available) {
+					count = predicateCount.count;
+					countedByPredicateKernel = true;
+				}
+			}
+
+			if (!countedByPredicateKernel) {
+				NodeBatchLoader loader(dm_, threadPool_);
+				const auto requirements = relaxSatisfiedCandidateChecks(requirements_, candidateSet_);
+				for (size_t begin = 0; begin < candidateSet_.ids.size();) {
+					const size_t batchSize = chooseColumnarNodeBatchSize(
+							candidateSet_.ids.size() - begin, threadPool_, PhysicalOperator::DEFAULT_BATCH_SIZE);
+					const size_t end = begin + batchSize;
+					auto batch = loader.load(candidateSet_.ids, begin, end, config_, requirements);
+					applyPredicates(batch, predicates_);
+					count += static_cast<int64_t>(batch.selectedCount());
+					begin = end;
+				}
 			}
 		}
 

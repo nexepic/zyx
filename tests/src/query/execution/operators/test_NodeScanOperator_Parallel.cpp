@@ -174,6 +174,81 @@ TEST_F(NodeScanOperatorParallelTest, ParallelLabelScanUsesCandidateSetPath) {
 	op.close();
 }
 
+TEST_F(NodeScanOperatorParallelTest, InterleavedLabelScanFiltersNonCandidateNodes) {
+	static constexpr size_t kMatchCount = 4200;
+	static constexpr size_t kOtherCount = 4200;
+	const int64_t matchLabelId = dm->getOrCreateTokenId("InterleavedMatch");
+	const int64_t otherLabelId = dm->getOrCreateTokenId("InterleavedOther");
+
+	std::vector<Node> nodes;
+	nodes.reserve(kMatchCount + kOtherCount);
+	for (size_t i = 0; i < kMatchCount; ++i) {
+		Node match;
+		match.setLabelId(matchLabelId);
+		nodes.push_back(match);
+
+		Node other;
+		other.setLabelId(otherLabelId);
+		nodes.push_back(other);
+	}
+	dm->addNodes(nodes);
+
+	ASSERT_TRUE(im->createIndex("idx_interleaved_match_label_parallel", "node", "InterleavedMatch", ""));
+
+	db->getStorage()->flush();
+	dm->clearCache();
+
+	NodeScanConfig cfg;
+	cfg.type = ScanType::LABEL_SCAN;
+	cfg.variable = "n";
+	cfg.labels = {"InterleavedMatch"};
+
+	NodeScanOperator op(dm, im, cfg);
+	concurrent::ThreadPool pool(4);
+	op.setThreadPool(&pool);
+
+	op.open();
+	auto batch = op.next();
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(batch->size(), kMatchCount);
+	EXPECT_FALSE(op.next().has_value());
+	op.close();
+}
+
+TEST_F(NodeScanOperatorParallelTest, ParallelFullScanSkipsNodesStoredInactive) {
+	static constexpr size_t kNodeCount = 4200;
+	const int64_t labelId = dm->getOrCreateTokenId("StoredInactive");
+	std::vector<Node> nodes;
+	nodes.reserve(kNodeCount);
+	for (size_t i = 0; i < kNodeCount; ++i) {
+		Node node;
+		node.setLabelId(labelId);
+		if (i % 2 == 0) {
+			node.markInactive();
+		}
+		nodes.push_back(node);
+	}
+	dm->addNodes(nodes);
+
+	db->getStorage()->flush();
+	dm->clearCache();
+
+	NodeScanConfig cfg;
+	cfg.type = ScanType::FULL_SCAN;
+	cfg.variable = "n";
+
+	NodeScanOperator op(dm, im, cfg);
+	concurrent::ThreadPool pool(4);
+	op.setThreadPool(&pool);
+
+	op.open();
+	auto batch = op.next();
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(batch->size(), kNodeCount / 2);
+	EXPECT_FALSE(op.next().has_value());
+	op.close();
+}
+
 TEST_F(NodeScanOperatorParallelTest, ParallelFullScanWithNonMatchingLabelReturnsNullopt) {
 	static constexpr size_t kNodeCount = 4200;
 	(void)addNodes("OnlyLabel", kNodeCount);
@@ -189,6 +264,24 @@ TEST_F(NodeScanOperatorParallelTest, ParallelFullScanWithNonMatchingLabelReturns
 
 	op.open();
 	// Parallel path runs, but all rows are filtered by targetLabelIds_.
+	EXPECT_FALSE(op.next().has_value());
+	op.close();
+}
+
+TEST_F(NodeScanOperatorParallelTest, ColumnarScanWithNonMatchingLabelReturnsNullopt) {
+	(void)addNodes("ColumnarOnlyLabel", 3);
+
+	NodeScanConfig cfg;
+	cfg.type = ScanType::FULL_SCAN;
+	cfg.variable = "n";
+	cfg.labels = {"ColumnarMissingLabel"};
+
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_ID_ONLY;
+	requirements.countOnly = true;
+
+	NodeScanOperator op(dm, im, cfg, requirements);
+	op.open();
 	EXPECT_FALSE(op.next().has_value());
 	op.close();
 }

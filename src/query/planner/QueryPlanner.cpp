@@ -50,6 +50,36 @@
 
 namespace graph::query {
 
+	namespace planner_detail {
+		bool recordHasAllLabels(const execution::Record &record,
+		                        const std::string &variable,
+		                        const std::vector<int64_t> &labelIds) {
+			auto node = record.getNode(variable);
+			if (!node) {
+				return false;
+			}
+			for (int64_t labelId : labelIds) {
+				if (!node->hasLabelId(labelId)) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		bool recordHasPropertyValue(const execution::Record &record,
+		                            const std::string &variable,
+		                            const std::string &key,
+		                            const PropertyValue &value) {
+			auto node = record.getNode(variable);
+			if (!node) {
+				return false;
+			}
+			const auto &props = node->getProperties();
+			auto it = props.find(key);
+			return it != props.end() && it->second == value;
+		}
+	} // namespace planner_detail
+
 	QueryPlanner::QueryPlanner(std::shared_ptr<storage::DataManager> dm,
 							   const std::shared_ptr<indexes::IndexManager> &im,
 							   std::shared_ptr<storage::constraints::ConstraintManager> cm)
@@ -85,19 +115,14 @@ namespace graph::query {
 
 		// Multi-label: additional labels beyond the first need filtering
 		// (first label handled by index/scan, rest are residual filters)
-		if (labels.size() > 1) {
-			auto allLabelIds = std::vector<int64_t>();
-			for (const auto &lbl : labels) {
-				allLabelIds.push_back(dm_->resolveTokenId(lbl));
-			}
-			auto predicate = [variable, allLabelIds](const execution::Record &r) {
-				auto n = r.getNode(variable);
-				if (!n) return false;
-				for (int64_t lid : allLabelIds) {
-					if (!n->hasLabelId(lid)) return false;
+			if (labels.size() > 1) {
+				auto allLabelIds = std::vector<int64_t>();
+				for (const auto &lbl : labels) {
+					allLabelIds.push_back(dm_->resolveTokenId(lbl));
 				}
-				return true;
-			};
+				auto predicate = [variable, allLabelIds](const execution::Record &r) {
+					return planner_detail::recordHasAllLabels(r, variable, allLabelIds);
+				};
 			std::string desc = "MultiLabel(" + variable + ")";
 			rootOp = filterOp(std::move(rootOp), predicate, desc);
 		}
@@ -105,14 +130,9 @@ namespace graph::query {
 		if (!key.empty()) {
 			if (config.type != execution::ScanType::PROPERTY_SCAN) {
 				// Case: Index NOT used. Add explicit Filter.
-				auto predicate = [variable, key, value](const execution::Record &r) {
-					auto n = r.getNode(variable);
-					if (!n)
-						return false;
-					const auto &props = n->getProperties();
-					auto it = props.find(key);
-					return it != props.end() && it->second == value;
-				};
+					auto predicate = [variable, key, value](const execution::Record &r) {
+						return planner_detail::recordHasPropertyValue(r, variable, key, value);
+					};
 
 				std::string desc = variable + "." + key + " == " + value.toString() + " (Residual)";
 				rootOp = filterOp(std::move(rootOp), predicate, desc);

@@ -22,6 +22,7 @@ struct RelationshipCountFastPathPlan {
 	execution::NodeScanRequirements seedRequirements;
 	std::vector<execution::VectorizedPropertyPredicate> seedPredicates;
 	std::vector<execution::RelationshipExpandConfig> hops;
+	execution::DirectRelationshipCountConfig directCount;
 	std::string outputAlias;
 };
 

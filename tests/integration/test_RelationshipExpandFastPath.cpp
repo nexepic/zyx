@@ -109,6 +109,28 @@ TEST_F(RelationshipExpandFastPathIntegrationTest, EdgePropertyFilterUsesLegacyPa
 	EXPECT_FALSE(snapshot.contains("relationship_expand.count"));
 }
 
+TEST_F(RelationshipExpandFastPathIntegrationTest, CountsUnanchoredRelationshipTypeWithExpandFastPath) {
+	debug::PerfTrace::setEnabled(true);
+	debug::PerfTrace::reset();
+
+	EXPECT_EQ(runCount("MATCH ()-[r:FOLLOWS]->() RETURN count(r) AS count"), 4);
+
+	const auto snapshot = debug::PerfTrace::snapshotAndReset();
+	EXPECT_TRUE(snapshot.contains("relationship_expand.count"));
+}
+
+TEST_F(RelationshipExpandFastPathIntegrationTest, CountsUnanchoredRelationshipPropertyWithDirectFastPath) {
+	debug::PerfTrace::setEnabled(true);
+	debug::PerfTrace::reset();
+
+	EXPECT_EQ(runCount("MATCH ()-[r:FOLLOWS]->() WHERE r.weight = 1 RETURN count(r) AS count"), 3);
+
+	const auto snapshot = debug::PerfTrace::snapshotAndReset();
+	EXPECT_TRUE(snapshot.contains("relationship_expand.count"));
+	EXPECT_TRUE(snapshot.contains("relationship_count.direct_scan"));
+	EXPECT_FALSE(snapshot.contains("relationship_expand.seed_load"));
+}
+
 TEST_F(RelationshipExpandFastPathIntegrationTest, AnchoredExpandWithoutSeedIndexUsesLegacyPath) {
 	debug::PerfTrace::setEnabled(true);
 	debug::PerfTrace::reset();

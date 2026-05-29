@@ -1,0 +1,196 @@
+#include "graph/query/execution/NodeColumnarPredicateCounter.hpp"
+
+#include <algorithm>
+#include <chrono>
+#include <optional>
+#include <unordered_map>
+#include <utility>
+
+#include "graph/debug/PerfTrace.hpp"
+#include "graph/query/execution/NodeMetadataColumnLoader.hpp"
+#include "graph/query/execution/NodeScanRequirementUtils.hpp"
+
+namespace graph::query::execution {
+namespace {
+	using Clock = std::chrono::steady_clock;
+
+	uint64_t elapsedNs(Clock::time_point start) {
+		return static_cast<uint64_t>(
+			std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count());
+	}
+
+	storage::PropertyEntityPredicateOp toStoragePredicateOp(VectorPredicateOp op) {
+		switch (op) { // ZYX_COV_EXCL_LINE
+			case VectorPredicateOp::VPO_EQ:
+				return storage::PropertyEntityPredicateOp::PEP_EQ;
+			case VectorPredicateOp::VPO_NE:
+				return storage::PropertyEntityPredicateOp::PEP_NE;
+			case VectorPredicateOp::VPO_LT:
+				return storage::PropertyEntityPredicateOp::PEP_LT;
+			case VectorPredicateOp::VPO_LE:
+				return storage::PropertyEntityPredicateOp::PEP_LE;
+			case VectorPredicateOp::VPO_GT:
+				return storage::PropertyEntityPredicateOp::PEP_GT;
+			case VectorPredicateOp::VPO_GE:
+				return storage::PropertyEntityPredicateOp::PEP_GE;
+			case VectorPredicateOp::VPO_RANGE_CLOSED:
+				return storage::PropertyEntityPredicateOp::PEP_RANGE_CLOSED;
+		}
+		return storage::PropertyEntityPredicateOp::PEP_EQ; // ZYX_COV_EXCL_LINE
+	}
+
+	std::vector<storage::PropertyEntityPredicate> toStoragePredicates(
+			const std::vector<VectorizedPropertyPredicate> &predicates) {
+		std::vector<storage::PropertyEntityPredicate> storagePredicates;
+		storagePredicates.reserve(predicates.size());
+		for (const auto &predicate : predicates) {
+			storage::PropertyEntityPredicate storagePredicate;
+			storagePredicate.key = predicate.propertyKey;
+			storagePredicate.op = toStoragePredicateOp(predicate.op);
+			storagePredicate.value = predicate.value;
+			storagePredicate.upperValue = predicate.upperValue;
+			storagePredicates.push_back(std::move(storagePredicate));
+		}
+		return storagePredicates;
+	}
+
+	std::vector<int64_t> resolveLabelIds(const std::shared_ptr<storage::DataManager> &dm,
+	                                    const NodeScanConfig &config,
+	                                    const NodeScanRequirements &requirements) {
+		std::vector<int64_t> labelIds;
+		if (!requirements.needsLabels) {
+			return labelIds;
+		}
+		labelIds.reserve(config.labels.size());
+		for (const auto &label : config.labels) {
+			const int64_t labelId = dm->resolveTokenId(label);
+			labelIds.push_back(labelId == 0 ? -1 : labelId);
+		}
+		return labelIds;
+	}
+
+	bool rowMatchesLabels(const NodeMetadataBatch &batch, size_t row, const std::vector<int64_t> &labelIds) {
+		for (const int64_t labelId : labelIds) {
+			if (!batch.hasLabelId(row, labelId)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	bool propertyMapMatches(const std::unordered_map<std::string, PropertyValue> &properties,
+	                        const std::vector<VectorizedPropertyPredicate> &predicates) {
+		for (const auto &predicate : predicates) {
+			const auto it = properties.find(predicate.propertyKey);
+			const std::optional<PropertyValue> actual = it == properties.end()
+				? std::nullopt
+				: std::optional<PropertyValue>(it->second);
+			if (!evaluatePredicateValue(actual, predicate)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	void appendRowsMissingFromBulkMatch(const std::vector<size_t> &externalRows,
+	                                  std::vector<size_t> loadedRows,
+	                                  std::vector<size_t> &fallbackRows) {
+		if (loadedRows.size() == externalRows.size()) {
+			return;
+		}
+		std::sort(loadedRows.begin(), loadedRows.end());
+		loadedRows.erase(std::unique(loadedRows.begin(), loadedRows.end()), loadedRows.end());
+		for (const size_t row : externalRows) {
+			if (!std::binary_search(loadedRows.begin(), loadedRows.end(), row)) {
+				fallbackRows.push_back(row);
+			}
+		}
+	}
+} // namespace
+
+	NodeColumnarPredicateCounter::NodeColumnarPredicateCounter(std::shared_ptr<storage::DataManager> dm,
+	                                                       concurrent::ThreadPool *threadPool)
+		: dm_(std::move(dm)), threadPool_(threadPool) {}
+
+	NodeColumnarPredicateCountResult NodeColumnarPredicateCounter::count(
+			const std::vector<int64_t> &candidateIds,
+			const NodeCandidateSet &candidateSet,
+			const NodeScanConfig &config,
+			const NodeScanRequirements &inputRequirements,
+			const std::vector<VectorizedPropertyPredicate> &predicates) const {
+		NodeColumnarPredicateCountResult result;
+		if (!dm_ || candidateIds.empty() || predicates.empty()) {
+			return result;
+		}
+
+		const bool traceEnabled = debug::PerfTrace::isEnabled();
+		const auto traceStart = traceEnabled ? Clock::now() : Clock::time_point{};
+		const auto storagePredicates = toStoragePredicates(predicates);
+		const NodeScanRequirements requirements = relaxSatisfiedCandidateChecks(inputRequirements, candidateSet);
+		const auto labelIds = resolveLabelIds(dm_, config, requirements);
+		NodeMetadataColumnLoader metadataLoader(dm_);
+
+		static constexpr size_t kColumnarCountBatchSize = 65536;
+		for (size_t begin = 0; begin < candidateIds.size();) {
+			const size_t end = std::min(candidateIds.size(), begin + kColumnarCountBatchSize);
+			auto metadata = metadataLoader.loadBatch(candidateIds, begin, end);
+			if (!metadata.has_value()) {
+				return NodeColumnarPredicateCountResult{};
+			}
+
+			std::vector<int64_t> propertyEntityIds;
+			std::vector<size_t> propertyRows;
+			std::vector<size_t> fallbackRows;
+			propertyEntityIds.reserve(metadata->size());
+			propertyRows.reserve(metadata->size());
+
+			for (size_t row = 0; row < metadata->size(); ++row) {
+				if (!metadata->isValid(row)) {
+					continue;
+				}
+				if (requirements.needsActiveCheck && metadata->active[row] == 0) { // ZYX_COV_EXCL_LINE
+					continue;
+				}
+				if (!labelIds.empty() && !rowMatchesLabels(*metadata, row, labelIds)) {
+					continue;
+				}
+
+				const int64_t propertyEntityId = metadata->propertyEntityIds[row];
+				const auto storageType = metadata->propertyStorageTypes[row];
+				if (storageType == PropertyStorageType::PROPERTY_ENTITY && propertyEntityId != 0) {
+					propertyEntityIds.push_back(propertyEntityId);
+					propertyRows.push_back(row);
+				} else if (storageType == PropertyStorageType::BLOB_ENTITY && propertyEntityId != 0) {
+					fallbackRows.push_back(row);
+				}
+			}
+
+			if (!propertyEntityIds.empty()) {
+				auto predicateResult = dm_->bulkMatchPropertyEntityPredicateSpecs(
+					propertyEntityIds, propertyRows, metadata->size(), storagePredicates, threadPool_);
+				result.count += static_cast<int64_t>(predicateResult.matchedRows.size());
+				appendRowsMissingFromBulkMatch(propertyRows, std::move(predicateResult.loadedRows), fallbackRows);
+			}
+
+			if (!fallbackRows.empty()) {
+				std::sort(fallbackRows.begin(), fallbackRows.end());
+				fallbackRows.erase(std::unique(fallbackRows.begin(), fallbackRows.end()), fallbackRows.end());
+				for (const size_t row : fallbackRows) {
+					Node node = metadata->toNode(row);
+					if (propertyMapMatches(dm_->getNodePropertiesDirect(node), predicates)) {
+						++result.count;
+					}
+				}
+			}
+
+			begin = end;
+		}
+
+		result.available = true;
+		if (traceEnabled) {
+			debug::PerfTrace::addDuration("node_scan.predicate_count", elapsedNs(traceStart));
+		}
+		return result;
+	}
+
+} // namespace graph::query::execution

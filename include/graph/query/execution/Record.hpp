@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <functional>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -40,15 +41,24 @@ namespace graph::query::execution {
 	public:
 		// Stores node variables (e.g., MATCH (n))
 		void setNode(const std::string &variable, const Node &node);
+		void setNode(const std::string &variable, Node &&node);
 		[[nodiscard]] std::optional<Node> getNode(const std::string &variable) const;
+		[[nodiscard]] std::optional<std::reference_wrapper<const Node>> getNodeRef(
+			const std::string &variable) const;
 
 		// Stores edge variables (e.g., MATCH (n)-[e]->(m))
 		void setEdge(const std::string &variable, const Edge &edge);
+		void setEdge(const std::string &variable, Edge &&edge);
 		[[nodiscard]] std::optional<Edge> getEdge(const std::string &variable) const;
+		[[nodiscard]] std::optional<std::reference_wrapper<const Edge>> getEdgeRef(
+			const std::string &variable) const;
 
 		// Stores projected or calculated values
 		void setValue(const std::string &key, const PropertyValue &value);
+		void setValue(const std::string &key, PropertyValue &&value);
 		[[nodiscard]] std::optional<PropertyValue> getValue(const std::string &key) const;
+		[[nodiscard]] std::optional<std::reference_wrapper<const PropertyValue>> getValueRef(
+			const std::string &key) const;
 
 		void merge(const Record &other);
 

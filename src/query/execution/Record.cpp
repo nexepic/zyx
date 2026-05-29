@@ -20,9 +20,13 @@
 
 #include "graph/query/execution/Record.hpp"
 
+#include <utility>
+
 namespace graph::query::execution {
 
 	void Record::setNode(const std::string &variable, const Node &node) { nodes_[variable] = node; }
+
+	void Record::setNode(const std::string &variable, Node &&node) { nodes_[variable] = std::move(node); }
 
 	std::optional<Node> Record::getNode(const std::string &variable) const {
 		auto it = nodes_.find(variable);
@@ -32,7 +36,17 @@ namespace graph::query::execution {
 		return std::nullopt;
 	}
 
+	std::optional<std::reference_wrapper<const Node>> Record::getNodeRef(const std::string &variable) const {
+		auto it = nodes_.find(variable);
+		if (it != nodes_.end()) {
+			return std::cref(it->second);
+		}
+		return std::nullopt;
+	}
+
 	void Record::setEdge(const std::string &variable, const Edge &edge) { edges_[variable] = edge; }
+
+	void Record::setEdge(const std::string &variable, Edge &&edge) { edges_[variable] = std::move(edge); }
 
 	std::optional<Edge> Record::getEdge(const std::string &variable) const {
 		auto it = edges_.find(variable);
@@ -42,12 +56,30 @@ namespace graph::query::execution {
 		return std::nullopt;
 	}
 
+	std::optional<std::reference_wrapper<const Edge>> Record::getEdgeRef(const std::string &variable) const {
+		auto it = edges_.find(variable);
+		if (it != edges_.end()) {
+			return std::cref(it->second);
+		}
+		return std::nullopt;
+	}
+
 	void Record::setValue(const std::string &key, const PropertyValue &value) { values_[key] = value; }
+
+	void Record::setValue(const std::string &key, PropertyValue &&value) { values_[key] = std::move(value); }
 
 	std::optional<PropertyValue> Record::getValue(const std::string &key) const {
 		auto it = values_.find(key);
 		if (it != values_.end()) {
 			return it->second;
+		}
+		return std::nullopt;
+	}
+
+	std::optional<std::reference_wrapper<const PropertyValue>> Record::getValueRef(const std::string &key) const {
+		auto it = values_.find(key);
+		if (it != values_.end()) {
+			return std::cref(it->second);
 		}
 		return std::nullopt;
 	}

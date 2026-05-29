@@ -20,6 +20,7 @@
 
 #include "graph/query/execution/operators/ProjectOperator.hpp"
 #include <sstream>
+#include <utility>
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/query/expressions/ExpressionEvaluationHelper.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
@@ -48,16 +49,16 @@ Record ProjectOperator::projectRecord(const Record &record) const {
 			if (!varRef->hasProperty()) {
 				const std::string& varName = varRef->getVariableName();
 
-				if (auto node = record.getNode(varName)) {
-					newRecord.setNode(key, *node);
+				if (auto node = record.getNodeRef(varName)) {
+					newRecord.setNode(key, node->get());
 					continue;
 				}
-				if (auto edge = record.getEdge(varName)) {
-					newRecord.setEdge(key, *edge);
+				if (auto edge = record.getEdgeRef(varName)) {
+					newRecord.setEdge(key, edge->get());
 					continue;
 				}
-				if (auto value = record.getValue(varName)) {
-					newRecord.setValue(key, *value);
+				if (auto value = record.getValueRef(varName)) {
+					newRecord.setValue(key, value->get());
 					continue;
 				}
 			}
@@ -80,7 +81,7 @@ Record ProjectOperator::projectRecord(const Record &record) const {
 			value = PropertyValue();
 		}
 
-		newRecord.setValue(key, value);
+		newRecord.setValue(key, std::move(value));
 	}
 
 	return newRecord;

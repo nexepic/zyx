@@ -3,6 +3,7 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
 #include <gtest/gtest.h>
+#include <set>
 
 #include "graph/core/Database.hpp"
 #include "graph/query/execution/RelationshipAdjacencyCursor.hpp"
@@ -147,4 +148,80 @@ TEST_F(RelationshipAdjacencyCursorTest, MissingEdgeTypeReturnsNoRows) {
 
 	EXPECT_TRUE(batch.rows.empty());
 	EXPECT_EQ(batch.selectedCount(), 0U);
+}
+
+TEST_F(RelationshipAdjacencyCursorTest, NullManagerAndInvalidTargetLabelReturnNoRows) {
+	const int64_t source = addNode();
+	const int64_t target = addNode();
+	(void)addEdge(source, target, "FOLLOWS");
+
+	RelationshipExpandConfig config;
+	config.direction = "out";
+	config.edgeTypeId = followsType;
+	config.targetLabelIds = {0};
+	RelationshipExpandRequirements requirements;
+
+	RelationshipAdjacencyCursor nullCursor(nullptr);
+	EXPECT_TRUE(nullCursor.expand({source}, config, requirements).rows.empty());
+
+	RelationshipAdjacencyCursor cursor(dm);
+	EXPECT_TRUE(cursor.expand({source}, config, requirements).rows.empty());
+}
+
+TEST_F(RelationshipAdjacencyCursorTest, ExpandsBothDirectionsAndCanSkipTargetChecks) {
+	const int64_t source = addNode();
+	const int64_t inbound = addNode();
+	const int64_t outbound = addNode();
+	const int64_t inboundEdge = addEdge(inbound, source, "FOLLOWS");
+	const int64_t outboundEdge = addEdge(source, outbound, "FOLLOWS");
+
+	RelationshipExpandConfig config;
+	config.direction = "both";
+	config.edgeTypeId = followsType;
+	RelationshipExpandRequirements requirements;
+	requirements.needsTargetLabels = false;
+	RelationshipAdjacencyCursor cursor(dm);
+
+	const auto batch = cursor.expand({source}, config, requirements);
+
+	ASSERT_EQ(batch.rows.size(), 2U);
+	const auto firstTarget = batch.rows[0].edgeId == inboundEdge ? inbound : outbound;
+	const auto secondTarget = batch.rows[1].edgeId == inboundEdge ? inbound : outbound;
+	EXPECT_EQ(batch.rows[0].targetId, firstTarget);
+	EXPECT_EQ(batch.rows[1].targetId, secondTarget);
+	EXPECT_NE(batch.rows[0].edgeId, batch.rows[1].edgeId);
+	EXPECT_TRUE(batch.rows[0].edgeId == inboundEdge || batch.rows[0].edgeId == outboundEdge);
+	EXPECT_TRUE(batch.rows[1].edgeId == inboundEdge || batch.rows[1].edgeId == outboundEdge);
+}
+
+TEST_F(RelationshipAdjacencyCursorTest, WildcardTypeCanSkipRuntimeActiveChecks) {
+	const int64_t source = addNode();
+	const int64_t inbound = addNode();
+	const int64_t outbound = addNode();
+	const int64_t inboundEdge = addEdge(inbound, source, "FOLLOWS");
+	const int64_t outboundEdge = addEdge(source, outbound, "LIKES");
+
+	RelationshipExpandConfig config;
+	config.direction = "both";
+	config.edgeTypeId = 0;
+	RelationshipExpandRequirements requirements;
+	requirements.needsEdgeActiveCheck = false;
+	requirements.needsTargetActiveCheck = false;
+	requirements.needsTargetLabels = false;
+	RelationshipAdjacencyCursor cursor(dm);
+
+	const auto batch = cursor.expand({source}, config, requirements);
+
+	ASSERT_EQ(batch.rows.size(), 2U);
+	std::set<int64_t> edgeIds;
+	std::set<int64_t> targetIds;
+	for (const auto &row : batch.rows) {
+		edgeIds.insert(row.edgeId);
+		targetIds.insert(row.targetId);
+		EXPECT_EQ(row.sourceId, source);
+	}
+	EXPECT_TRUE(edgeIds.contains(inboundEdge));
+	EXPECT_TRUE(edgeIds.contains(outboundEdge));
+	EXPECT_TRUE(targetIds.contains(inbound));
+	EXPECT_TRUE(targetIds.contains(outbound));
 }

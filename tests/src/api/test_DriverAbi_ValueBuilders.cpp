@@ -6,6 +6,7 @@
 
 #include <gtest/gtest.h>
 
+#include "api/driver_abi/DriverAbiInternal.hpp"
 #include "zyx/zyx_driver_abi.h"
 
 namespace fs = std::filesystem;
@@ -274,6 +275,20 @@ TEST_F(DriverAbiValueBuildersTest, MapBuilderValidatesKeysValuesAndTypeMismatche
     EXPECT_EQ(error, nullptr);
 }
 
+TEST_F(DriverAbiValueBuildersTest, MutableContainerHelpersRejectNullBackedHandles) {
+    zyx_driver_value_t nullList{std::shared_ptr<zyx::ValueList>{}};
+    zyx_driver_value_t nullMap{std::shared_ptr<zyx::ValueMap>{}};
+    zyx_driver_value_t scalar{int64_t{7}};
+
+    expectError(zyx_driver_value_list_append_null(&nullList, &error), ZYX_DRIVER_TYPE_MISMATCH);
+    expectError(zyx_driver_value_list_append_string(nullptr, "value", &error), ZYX_DRIVER_INVALID_ARGUMENT);
+    expectError(zyx_driver_value_list_append_string(&scalar, "value", &error), ZYX_DRIVER_TYPE_MISMATCH);
+    expectError(zyx_driver_value_map_set_null(&nullMap, "key", &error), ZYX_DRIVER_TYPE_MISMATCH);
+    expectError(zyx_driver_value_map_set_string(nullptr, "key", "value", &error), ZYX_DRIVER_INVALID_ARGUMENT);
+    expectError(zyx_driver_value_map_set_string(&scalar, "key", "value", &error), ZYX_DRIVER_TYPE_MISMATCH);
+    expectError(zyx_driver_value_map_set_value(nullptr, "key", &scalar, &error), ZYX_DRIVER_INVALID_ARGUMENT);
+}
+
 TEST_F(DriverAbiValueBuildersTest, ListBuilderReportsNullListAsInvalidArgument) {
     expectError(zyx_driver_value_list_append_null(nullptr, &error), ZYX_DRIVER_INVALID_ARGUMENT);
 
@@ -281,5 +296,20 @@ TEST_F(DriverAbiValueBuildersTest, ListBuilderReportsNullListAsInvalidArgument) 
     ASSERT_EQ(zyx_driver_value_int64_create(1, &nested, &error), ZYX_DRIVER_OK);
     expectError(zyx_driver_value_list_append_value(nullptr, nested, &error), ZYX_DRIVER_INVALID_ARGUMENT);
     zyx_driver_value_free(nested, &error);
+    EXPECT_EQ(error, nullptr);
+}
+
+TEST_F(DriverAbiValueBuildersTest, ParamsSetValueDeepCopiesDefensiveNullContainers) {
+    zyx_driver_params_t *params = nullptr;
+    ASSERT_EQ(zyx_driver_params_create(&params, &error), ZYX_DRIVER_OK);
+
+    zyx_driver_value_t nullList{std::shared_ptr<zyx::ValueList>{}};
+    zyx_driver_value_t nullMap{std::shared_ptr<zyx::ValueMap>{}};
+
+    EXPECT_EQ(zyx_driver_params_set_value(params, "nullList", &nullList, &error), ZYX_DRIVER_OK);
+    EXPECT_EQ(zyx_driver_params_set_value(params, "nullMap", &nullMap, &error), ZYX_DRIVER_OK);
+    EXPECT_EQ(error, nullptr);
+
+    zyx_driver_params_free(params, &error);
     EXPECT_EQ(error, nullptr);
 }

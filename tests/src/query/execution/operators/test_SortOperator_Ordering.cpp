@@ -24,7 +24,9 @@
 
 #include "graph/query/execution/operators/SortOperator.hpp"
 #include "graph/query/execution/Record.hpp"
+#include "graph/query/QueryContext.hpp"
 #include "graph/query/expressions/Expression.hpp"
+#include "graph/query/expressions/ParameterExpression.hpp"
 #include "graph/concurrent/ThreadPool.hpp"
 
 using namespace graph;
@@ -117,6 +119,12 @@ TEST_F(SortOperatorOrderingTest, ToStringWithMultipleSortItems) {
 	EXPECT_TRUE(str.find(", ") != std::string::npos);
 	EXPECT_TRUE(str.find("ASC") != std::string::npos);
 	EXPECT_TRUE(str.find("DESC") != std::string::npos);
+}
+
+TEST_F(SortOperatorOrderingTest, ToStringWithTopNOnly) {
+	auto op = std::make_unique<SortOperator>(nullptr, std::vector<SortItem>{}, 3);
+
+	EXPECT_EQ(op->toString(), "Sort(LIMIT 3)");
 }
 
 /**
@@ -287,7 +295,7 @@ TEST_F(SortOperatorOrderingTest, SortWithEqualValues) {
  */
 TEST_F(SortOperatorOrderingTest, ParallelSort_LargeDataset) {
 	// Build dataset above PARALLEL_SORT_THRESHOLD (8192)
-	constexpr size_t N = 10000;
+	constexpr size_t N = 10003;
 	RecordBatch batch;
 	batch.reserve(N);
 	for (size_t i = 0; i < N; ++i) {
@@ -306,7 +314,7 @@ TEST_F(SortOperatorOrderingTest, ParallelSort_LargeDataset) {
 		std::unique_ptr<PhysicalOperator>(mock), sortItems);
 
 	// Wire in a real thread pool with multiple threads
-	graph::concurrent::ThreadPool pool(4);
+	graph::concurrent::ThreadPool pool(3);
 	op->setThreadPool(&pool);
 
 	op->open();
@@ -404,5 +412,178 @@ TEST_F(SortOperatorOrderingTest, MultipleBatchesAccumulated) {
 	// Second call should return nullopt
 	EXPECT_FALSE(op->next().has_value());
 
+	op->close();
+}
+
+TEST_F(SortOperatorOrderingTest, TopNDescendingKeepsOnlyBestRows) {
+	RecordBatch batch1, batch2;
+	Record r1, r2, r3, r4, r5;
+	r1.setValue("x", PropertyValue(static_cast<int64_t>(1)));
+	r2.setValue("x", PropertyValue(static_cast<int64_t>(5)));
+	r3.setValue("x", PropertyValue(static_cast<int64_t>(3)));
+	r4.setValue("x", PropertyValue(static_cast<int64_t>(2)));
+	r5.setValue("x", PropertyValue(static_cast<int64_t>(4)));
+	batch1 = {r1, r2, r3};
+	batch2 = {r4, r5};
+
+	auto mock = new SortMockOperator({batch1, batch2});
+
+	auto expr = std::make_shared<graph::query::expressions::VariableReferenceExpression>("x");
+	SortItem item(expr, false);
+	std::vector<SortItem> sortItems = {item};
+
+	auto op = std::make_unique<SortOperator>(
+		std::unique_ptr<PhysicalOperator>(mock), sortItems, 2);
+
+	op->open();
+	auto result = op->next();
+	ASSERT_TRUE(result.has_value());
+	ASSERT_EQ(result->size(), 2UL);
+
+	auto first = (*result)[0].getValue("x");
+	auto second = (*result)[1].getValue("x");
+	ASSERT_TRUE(first.has_value());
+	ASSERT_TRUE(second.has_value());
+	EXPECT_EQ(std::get<int64_t>(first->getVariant()), 5);
+	EXPECT_EQ(std::get<int64_t>(second->getVariant()), 4);
+	EXPECT_FALSE(op->next().has_value());
+
+	op->close();
+}
+
+TEST_F(SortOperatorOrderingTest, TopNLimitZeroDoesNotConsumeChild) {
+	Record r1;
+	r1.setValue("x", PropertyValue(static_cast<int64_t>(1)));
+
+	auto mock = new SortMockOperator({{r1}});
+	auto *mockPtr = mock;
+
+	auto expr = std::make_shared<graph::query::expressions::VariableReferenceExpression>("x");
+	SortItem item(expr, true);
+	std::vector<SortItem> sortItems = {item};
+
+	auto op = std::make_unique<SortOperator>(
+		std::unique_ptr<PhysicalOperator>(mock), sortItems, 0);
+
+	op->open();
+	EXPECT_FALSE(op->next().has_value());
+	EXPECT_EQ(mockPtr->current_index, 0UL);
+
+	op->close();
+}
+
+TEST_F(SortOperatorOrderingTest, DirectAccessSortsNodesEdgesAndMapProperties) {
+	Record nodeWithProp;
+	Node nodeHigh(20, 1);
+	nodeHigh.addProperty("rank", PropertyValue(static_cast<int64_t>(2)));
+	nodeWithProp.setNode("n", nodeHigh);
+
+	Record nodeMissingProp;
+	nodeMissingProp.setNode("n", Node(10, 1));
+
+	auto nodeProp = std::make_shared<graph::query::expressions::VariableReferenceExpression>("n", "rank");
+	SortItem byNodeProp(nodeProp, true);
+	auto nodeOp = std::make_unique<SortOperator>(
+		std::make_unique<SortMockOperator>(std::vector<RecordBatch>{{nodeWithProp, nodeMissingProp}}),
+		std::vector<SortItem>{byNodeProp});
+	nodeOp->open();
+	auto nodeBatch = nodeOp->next();
+	ASSERT_TRUE(nodeBatch.has_value());
+	ASSERT_EQ(nodeBatch->size(), 2U);
+	EXPECT_EQ((*nodeBatch)[0].getNode("n")->getId(), 10);
+	EXPECT_EQ((*nodeBatch)[1].getNode("n")->getId(), 20);
+	nodeOp->close();
+
+	Record edgeWithProp;
+	Edge edgeHigh(30, 1, 2, 9);
+	edgeHigh.addProperty("rank", PropertyValue(static_cast<int64_t>(3)));
+	edgeWithProp.setEdge("e", edgeHigh);
+
+	Record edgeMissingProp;
+	edgeMissingProp.setEdge("e", Edge(25, 1, 2, 9));
+
+	auto edgeId = std::make_shared<graph::query::expressions::VariableReferenceExpression>("e");
+	auto edgeProp = std::make_shared<graph::query::expressions::VariableReferenceExpression>("e", "rank");
+	SortItem byEdgeId(edgeId, false);
+	SortItem byEdgeProp(edgeProp, true);
+	auto edgeOp = std::make_unique<SortOperator>(
+		std::make_unique<SortMockOperator>(std::vector<RecordBatch>{{edgeMissingProp, edgeWithProp}}),
+		std::vector<SortItem>{byEdgeId, byEdgeProp});
+	edgeOp->open();
+	auto edgeBatch = edgeOp->next();
+	ASSERT_TRUE(edgeBatch.has_value());
+	ASSERT_EQ(edgeBatch->size(), 2U);
+	EXPECT_EQ((*edgeBatch)[0].getEdge("e")->getId(), 30);
+	EXPECT_EQ((*edgeBatch)[1].getEdge("e")->getId(), 25);
+	edgeOp->close();
+
+	Record mapWithProp;
+	mapWithProp.setValue("m", PropertyValue(PropertyValue::MapType{{"rank", PropertyValue(static_cast<int64_t>(1))}}));
+	Record mapMissingProp;
+	mapMissingProp.setValue("m", PropertyValue(PropertyValue::MapType{}));
+	Record scalarValue;
+	scalarValue.setValue("m", PropertyValue(static_cast<int64_t>(99)));
+	auto mapProp = std::make_shared<graph::query::expressions::VariableReferenceExpression>("m", "rank");
+	SortItem byMapProp(mapProp, true);
+	auto mapOp = std::make_unique<SortOperator>(
+		std::make_unique<SortMockOperator>(std::vector<RecordBatch>{{mapWithProp, mapMissingProp, scalarValue}}),
+		std::vector<SortItem>{byMapProp});
+	mapOp->open();
+	auto mapBatch = mapOp->next();
+	ASSERT_TRUE(mapBatch.has_value());
+	ASSERT_EQ(mapBatch->size(), 3U);
+	size_t defaultKeyRows = 0;
+	for (size_t i = 0; i < 2; ++i) {
+		auto value = (*mapBatch)[i].getValue("m");
+		ASSERT_TRUE(value.has_value());
+		if (value->getType() == PropertyType::MAP) {
+			EXPECT_FALSE(value->getMap().contains("rank"));
+		} else {
+			EXPECT_EQ(value->getType(), PropertyType::INTEGER);
+		}
+		++defaultKeyRows;
+	}
+	EXPECT_EQ(defaultKeyRows, 2U);
+	EXPECT_TRUE((*mapBatch)[2].getValue("m")->getMap().contains("rank"));
+	mapOp->close();
+}
+
+TEST_F(SortOperatorOrderingTest, MissingDirectVariableSortsAsNull) {
+	Record r;
+	r.setValue("x", PropertyValue(static_cast<int64_t>(1)));
+
+	auto missingVariable = std::make_shared<graph::query::expressions::VariableReferenceExpression>("missing");
+	SortItem byMissing(missingVariable, true);
+	auto op = std::make_unique<SortOperator>(
+		std::make_unique<SortMockOperator>(std::vector<RecordBatch>{{r}}),
+		std::vector<SortItem>{byMissing});
+
+	op->open();
+	auto batch = op->next();
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(batch->size(), 1U);
+	op->close();
+}
+
+TEST_F(SortOperatorOrderingTest, ParameterExpressionUsesQueryContextDuringSort) {
+	Record low;
+	low.setValue("x", PropertyValue(static_cast<int64_t>(1)));
+	Record high;
+	high.setValue("x", PropertyValue(static_cast<int64_t>(2)));
+
+	auto parameter = std::make_shared<graph::query::expressions::ParameterExpression>("rank");
+	SortItem byParameter(parameter, true);
+	auto op = std::make_unique<SortOperator>(
+		std::make_unique<SortMockOperator>(std::vector<RecordBatch>{{high, low}}),
+		std::vector<SortItem>{byParameter});
+
+	graph::query::QueryContext context;
+	context.parameters.emplace("rank", PropertyValue(static_cast<int64_t>(1)));
+	op->setQueryContext(&context);
+
+	op->open();
+	auto batch = op->next();
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(batch->size(), 2U);
 	op->close();
 }

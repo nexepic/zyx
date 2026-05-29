@@ -198,8 +198,11 @@ def _function_marker_lines(source_path):
 
 
 def _normalize_metric(raw):
+    count = raw["count"]
+    covered = raw["covered"]
     metric = dict(raw)
-    metric.setdefault("notcovered", max(0, metric["count"] - metric["covered"]))
+    metric["percent"] = 100.0 if count == 0 else min(100.0, covered * 100.0 / count)
+    metric.setdefault("notcovered", max(0, count - covered))
     return metric
 
 

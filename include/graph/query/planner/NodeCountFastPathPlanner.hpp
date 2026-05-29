@@ -23,11 +23,26 @@ struct NodeCountFastPathPlan {
 	std::string outputAlias;
 };
 
+struct NodeDistinctCountFastPathPlan {
+	execution::NodeScanConfig config;
+	execution::NodeScanRequirements requirements;
+	std::vector<execution::VectorizedPropertyPredicate> predicates;
+	std::string distinctProperty;
+	std::string outputAlias;
+};
+
 [[nodiscard]] std::optional<NodeCountFastPathPlan>
 tryBuildNodeCountFastPathPlan(const logical::LogicalAggregate &aggregate);
 
 [[nodiscard]] std::optional<NodeCountFastPathPlan>
 tryBuildNodeCountFastPathPlan(const logical::LogicalAggregate &aggregate,
                               const std::shared_ptr<indexes::IndexManager> &indexManager);
+
+[[nodiscard]] std::optional<NodeDistinctCountFastPathPlan>
+tryBuildNodeDistinctCountFastPathPlan(const logical::LogicalAggregate &aggregate);
+
+[[nodiscard]] std::optional<NodeDistinctCountFastPathPlan>
+tryBuildNodeDistinctCountFastPathPlan(const logical::LogicalAggregate &aggregate,
+                                      const std::shared_ptr<indexes::IndexManager> &indexManager);
 
 } // namespace graph::query::planner

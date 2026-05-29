@@ -222,9 +222,8 @@ namespace graph::vector {
 		std::vector<int64_t> nodeIds;
 		nodeIds.reserve(keys.size());
 		for (const auto &k: keys) {
-			if (k.getType() == PropertyType::INTEGER) {
-				nodeIds.push_back(std::get<int64_t>(k.getVariant()));
-			}
+			// Vector mapping indexes are created with INTEGER keys; enforce that invariant at read time.
+			nodeIds.push_back(std::get<int64_t>(k.getVariant()));
 		}
 		return nodeIds;
 	}

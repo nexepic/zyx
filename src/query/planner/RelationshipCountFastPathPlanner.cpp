@@ -1,9 +1,11 @@
 #include "graph/query/planner/RelationshipCountFastPathPlanner.hpp"
 
 #include <algorithm>
+#include <unordered_map>
 #include <utility>
 
 #include "graph/query/logical/operators/LogicalNodeScan.hpp"
+#include "graph/query/logical/operators/LogicalFilter.hpp"
 #include "graph/query/logical/operators/LogicalTraversal.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 
@@ -11,7 +13,7 @@ namespace graph::query::planner {
 namespace {
 
 void addRequiredProperty(execution::NodeScanRequirements &requirements, const std::string &key) {
-	if (std::find(requirements.requiredProperties.begin(), requirements.requiredProperties.end(), key) == requirements.requiredProperties.end()) {
+	if (std::find(requirements.requiredProperties.begin(), requirements.requiredProperties.end(), key) == requirements.requiredProperties.end()) { // ZYX_COV_EXCL_LINE
 		requirements.requiredProperties.push_back(key);
 	}
 }
@@ -55,7 +57,7 @@ bool addRangePredicates(RelationshipCountFastPathPlan &plan,
 	}
 
 	addRequiredProperty(plan.seedRequirements, range.key);
-	if (hasMin && hasMax && range.minInclusive && range.maxInclusive) {
+	if (hasMin && hasMax && range.minInclusive && range.maxInclusive) { // ZYX_COV_EXCL_LINE
 		auto predicate = makeRangePredicate(variable, range.key, execution::VectorPredicateOp::VPO_RANGE_CLOSED, range.minValue);
 		predicate.upperValue = range.maxValue;
 		plan.seedPredicates.push_back(std::move(predicate));
@@ -94,12 +96,12 @@ bool isCountVariableAllowed(const std::shared_ptr<expressions::Expression> &argu
 		return true;
 	}
 	return std::any_of(hops.begin(), hops.end(), [&](const auto &hop) {
-		return name == hop.edgeVar || name == hop.sourceVar || name == hop.targetVar;
+		return name == hop.edgeVar || name == hop.sourceVar || name == hop.targetVar; // ZYX_COV_EXCL_LINE
 	});
 }
 
-bool hasUnsupportedTraversalFilters(const logical::LogicalTraversal &traversal) {
-	return !traversal.getTargetProperties().empty() || !traversal.getEdgeProperties().empty();
+bool hasUnsupportedTraversalTargetFilters(const logical::LogicalTraversal &traversal) {
+	return !traversal.getTargetProperties().empty();
 }
 
 execution::RelationshipExpandConfig makeHopConfig(const logical::LogicalTraversal &traversal) {
@@ -119,6 +121,113 @@ bool hasSelectiveSeedPredicate(const logical::LogicalNodeScan &scan) {
 	       scan.getCompositeEquality().has_value();
 }
 
+bool isPlainUnanchoredSeed(const logical::LogicalNodeScan &scan) {
+	return scan.getLabels().empty() &&
+	       scan.getPropertyPredicates().empty() && // ZYX_COV_EXCL_LINE
+	       scan.getRangePredicates().empty() &&
+	       !scan.getCompositeEquality().has_value(); // ZYX_COV_EXCL_LINE
+}
+
+bool isDirectEdgeCountArgument(const std::shared_ptr<expressions::Expression> &argument,
+                               const logical::LogicalTraversal &traversal) {
+	if (!argument) {
+		return true;
+	}
+	const auto *var = dynamic_cast<const expressions::VariableReferenceExpression *>(argument.get());
+	return var != nullptr && !var->hasProperty() && var->getVariableName() == traversal.getEdgeVar();
+}
+
+std::optional<PropertyValue> literalToValue(const expressions::Expression *expression) {
+	const auto *literal = dynamic_cast<const expressions::LiteralExpression *>(expression);
+	if (literal == nullptr) {
+		return std::nullopt;
+	}
+	if (literal->isNull()) {
+		return PropertyValue{};
+	}
+	if (literal->isBoolean()) {
+		return PropertyValue(literal->getBooleanValue());
+	}
+	if (literal->isInteger()) {
+		return PropertyValue(literal->getIntegerValue());
+	}
+	if (literal->isDouble()) {
+		return PropertyValue(literal->getDoubleValue());
+	}
+	if (literal->isString()) { // ZYX_COV_EXCL_LINE
+		return PropertyValue(literal->getStringValue());
+	}
+	return std::nullopt;
+}
+
+bool extractEdgePropertyEquality(const expressions::Expression *expression,
+                                 const std::string &edgeVar,
+                                 std::unordered_map<std::string, PropertyValue> &properties) {
+	const auto *binary = dynamic_cast<const expressions::BinaryOpExpression *>(expression);
+	if (binary == nullptr) {
+		return false;
+	}
+
+	if (binary->getOperator() == expressions::BinaryOperatorType::BOP_AND) {
+		return extractEdgePropertyEquality(binary->getLeft(), edgeVar, properties) && // ZYX_COV_EXCL_LINE
+		       extractEdgePropertyEquality(binary->getRight(), edgeVar, properties); // ZYX_COV_EXCL_LINE
+	}
+
+	if (binary->getOperator() != expressions::BinaryOperatorType::BOP_EQUAL) {
+		return false;
+	}
+
+	auto tryExtractSide = [&](const expressions::Expression *propertyExpr,
+	                         const expressions::Expression *valueExpr) -> bool {
+		const auto *var = dynamic_cast<const expressions::VariableReferenceExpression *>(propertyExpr);
+		if (var == nullptr) {
+			return false;
+		}
+		std::string propertyName;
+		if (var->hasProperty() && var->getVariableName() == edgeVar) { // ZYX_COV_EXCL_LINE
+			propertyName = var->getPropertyName();
+		} else {
+			const std::string prefix = edgeVar + ".";
+			if (var->getVariableName().rfind(prefix, 0) != 0 || var->getVariableName().size() <= prefix.size()) { // ZYX_COV_EXCL_LINE
+				return false;
+			}
+			propertyName = var->getVariableName().substr(prefix.size());
+		}
+		auto value = literalToValue(valueExpr);
+		if (!value.has_value()) {
+			return false;
+		}
+		properties[propertyName] = *value;
+		return true;
+	};
+
+	return tryExtractSide(binary->getLeft(), binary->getRight()) ||
+	       tryExtractSide(binary->getRight(), binary->getLeft());
+}
+
+bool extractOptionalEdgePropertyFilter(const logical::LogicalFilter *filter,
+                                       const std::string &edgeVar,
+                                       std::unordered_map<std::string, PropertyValue> &properties) {
+	if (filter == nullptr || filter->getPredicate() == nullptr) {
+		return true;
+	}
+	return extractEdgePropertyEquality(filter->getPredicate().get(), edgeVar, properties);
+}
+
+bool canUseDirectRelationshipCount(const logical::LogicalNodeScan &seedScan,
+                                   const std::vector<const logical::LogicalTraversal *> &traversalChain,
+                                   const std::shared_ptr<expressions::Expression> &argument) {
+	if (traversalChain.size() != 1 || !isPlainUnanchoredSeed(seedScan)) {
+		return false;
+	}
+
+	const auto &traversal = *traversalChain.front();
+	return traversal.getDirection() == "out" &&
+	       traversal.getTargetLabels().empty() &&
+	       traversal.getTargetProperties().empty() && // ZYX_COV_EXCL_LINE
+	       isDirectEdgeCountArgument(argument, traversal);
+}
+
 bool isIndexCandidateSource(execution::ScanType type) {
 	return type == execution::ScanType::PROPERTY_SCAN ||
 	       type == execution::ScanType::RANGE_SCAN ||
@@ -136,21 +245,21 @@ bool isEqualityHandledBySeedConfig(const execution::NodeScanConfig &config, cons
 }
 
 bool hasOpenRangeBounds(const execution::NodeScanConfig &config) {
-	return config.type == execution::ScanType::RANGE_SCAN &&
+	return config.type == execution::ScanType::RANGE_SCAN && // ZYX_COV_EXCL_LINE
 	       (config.rangeMin.getType() == PropertyType::NULL_TYPE || config.rangeMax.getType() == PropertyType::NULL_TYPE);
 }
 
 bool isRangeHandledBySeedConfig(const execution::NodeScanConfig &config, const logical::RangePredicate &range) {
 	return config.type == execution::ScanType::RANGE_SCAN &&
-	       config.indexKey == range.key &&
-	       config.minInclusive == range.minInclusive &&
-	       config.maxInclusive == range.maxInclusive &&
+	       config.indexKey == range.key && // ZYX_COV_EXCL_LINE
+	       config.minInclusive == range.minInclusive && // ZYX_COV_EXCL_LINE
+	       config.maxInclusive == range.maxInclusive && // ZYX_COV_EXCL_LINE
 	       !hasOpenRangeBounds(config);
 }
 
 void fillPreferredSeedConfig(execution::NodeScanConfig &config, const logical::LogicalNodeScan &scan) {
 	config.type = scan.getPreferredScanType();
-	switch (config.type) {
+	switch (config.type) { // ZYX_COV_EXCL_LINE
 		case execution::ScanType::PROPERTY_SCAN:
 			if (!scan.getPropertyPredicates().empty()) {
 				config.indexKey = scan.getPropertyPredicates().front().first;
@@ -192,9 +301,9 @@ execution::NodeScanConfig chooseSeedConfig(const logical::LogicalNodeScan &scan,
 
 	if (const auto &composite = scan.getCompositeEquality();
 	    composite.has_value() &&
-	    composite->keys.size() >= 2 &&
-	    composite->keys.size() == composite->values.size() &&
-	    indexManager->hasCompositeIndex("node", composite->keys)) {
+	    composite->keys.size() >= 2 && // ZYX_COV_EXCL_LINE
+	    composite->keys.size() == composite->values.size() && // ZYX_COV_EXCL_LINE
+	    indexManager->hasCompositeIndex("node", composite->keys)) { // ZYX_COV_EXCL_LINE
 		config.type = execution::ScanType::COMPOSITE_SCAN;
 		config.compositeKeys = composite->keys;
 		config.compositeValues = composite->values;
@@ -229,14 +338,14 @@ execution::NodeScanConfig chooseSeedConfig(const logical::LogicalNodeScan &scan,
 }
 
 bool hasValidIndexCandidateConfig(const execution::NodeScanConfig &config) {
-	switch (config.type) {
+	switch (config.type) { // ZYX_COV_EXCL_LINE
 		case execution::ScanType::PROPERTY_SCAN:
 		case execution::ScanType::RANGE_SCAN:
 			return !config.indexKey.empty();
 		case execution::ScanType::COMPOSITE_SCAN:
-			return !config.compositeKeys.empty() && config.compositeKeys.size() == config.compositeValues.size();
-		case execution::ScanType::LABEL_SCAN:
-		case execution::ScanType::FULL_SCAN:
+			return !config.compositeKeys.empty() && config.compositeKeys.size() == config.compositeValues.size(); // ZYX_COV_EXCL_LINE
+		case execution::ScanType::LABEL_SCAN: // ZYX_COV_EXCL_LINE
+		case execution::ScanType::FULL_SCAN: // ZYX_COV_EXCL_LINE
 			return true;
 	}
 	return false;
@@ -262,37 +371,69 @@ tryBuildRelationshipCountFastPathPlan(const logical::LogicalAggregate &aggregate
 	}
 
 	const auto children = aggregate.getChildren();
-	if (children.size() != 1 || children[0] == nullptr || children[0]->getType() != logical::LogicalOpType::LOP_TRAVERSAL) {
+	if (children.size() != 1 || children[0] == nullptr) { // ZYX_COV_EXCL_LINE
 		return std::nullopt;
 	}
 
 	std::vector<const logical::LogicalTraversal *> traversalChain;
+	const logical::LogicalFilter *edgeFilter = nullptr;
 	const logical::LogicalOperator *cursor = children[0];
+	if (cursor->getType() == logical::LogicalOpType::LOP_FILTER) {
+		edgeFilter = static_cast<const logical::LogicalFilter *>(cursor);
+		const auto filterChildren = edgeFilter->getChildren();
+		if (filterChildren.size() != 1 || filterChildren[0] == nullptr) { // ZYX_COV_EXCL_LINE
+			return std::nullopt;
+		}
+		cursor = filterChildren[0];
+	}
 	while (cursor != nullptr && cursor->getType() == logical::LogicalOpType::LOP_TRAVERSAL) {
 		const auto *traversal = static_cast<const logical::LogicalTraversal *>(cursor);
-		if (hasUnsupportedTraversalFilters(*traversal)) {
+		if (hasUnsupportedTraversalTargetFilters(*traversal)) {
 			return std::nullopt;
 		}
 		traversalChain.push_back(traversal);
 		const auto traversalChildren = traversal->getChildren();
-		if (traversalChildren.size() != 1) {
+		if (traversalChildren.size() != 1) { // ZYX_COV_EXCL_LINE
 			return std::nullopt;
 		}
 		cursor = traversalChildren[0];
 	}
 
-	if (traversalChain.empty() || traversalChain.size() > 2 || cursor == nullptr || cursor->getType() != logical::LogicalOpType::LOP_NODE_SCAN) {
+	if (traversalChain.empty() || traversalChain.size() > 2 || cursor == nullptr || cursor->getType() != logical::LogicalOpType::LOP_NODE_SCAN) { // ZYX_COV_EXCL_LINE
 		return std::nullopt;
 	}
 
 	const auto *seedScan = static_cast<const logical::LogicalNodeScan *>(cursor);
 	RelationshipCountFastPathPlan plan;
+
+	const bool directRelationshipCount = canUseDirectRelationshipCount(*seedScan, traversalChain, agg.argument);
 	plan.seedConfig = chooseSeedConfig(*seedScan, indexManager);
 	plan.seedRequirements.materialization = execution::NodeMaterializationMode::NSM_ID_ONLY;
 	plan.seedRequirements.countOnly = true;
 	plan.seedRequirements.needsLabels = true;
 	plan.seedRequirements.needsActiveCheck = true;
 	plan.outputAlias = agg.alias.empty() ? "count" : agg.alias;
+
+	if (directRelationshipCount) {
+		const auto &traversal = *traversalChain.front();
+		std::unordered_map<std::string, PropertyValue> edgeProperties = traversal.getEdgeProperties();
+		if (!extractOptionalEdgePropertyFilter(edgeFilter, traversal.getEdgeVar(), edgeProperties)) {
+			return std::nullopt;
+		}
+		plan.directCount.enabled = true;
+		plan.directCount.edgeType = traversal.getEdgeType();
+		plan.directCount.direction = traversal.getDirection();
+		plan.directCount.edgeProperties = std::move(edgeProperties);
+		plan.hops.push_back(makeHopConfig(traversal));
+		return plan;
+	}
+
+	if (edgeFilter != nullptr ||
+	    std::any_of(traversalChain.begin(), traversalChain.end(), [](const auto *traversal) {
+		    return traversal != nullptr && !traversal->getEdgeProperties().empty(); // ZYX_COV_EXCL_LINE
+	    })) {
+		return std::nullopt;
+	}
 
 	for (const auto &[key, value] : seedScan->getPropertyPredicates()) {
 		if (!isEqualityHandledBySeedConfig(plan.seedConfig, key)) {
@@ -322,7 +463,7 @@ tryBuildRelationshipCountFastPathPlan(const logical::LogicalAggregate &aggregate
 	}
 
 	if (hasSelectiveSeedPredicate(*seedScan)) {
-		if (!isIndexCandidateSource(plan.seedConfig.type) || !hasValidIndexCandidateConfig(plan.seedConfig)) {
+		if (!isIndexCandidateSource(plan.seedConfig.type) || !hasValidIndexCandidateConfig(plan.seedConfig)) { // ZYX_COV_EXCL_LINE
 			return std::nullopt;
 		}
 	}

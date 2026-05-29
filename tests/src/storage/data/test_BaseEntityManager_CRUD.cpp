@@ -14,7 +14,9 @@
 
 #include "DataManagerSharedTestFixture.hpp"
 #include "graph/storage/data/BlobManager.hpp"
+#include "graph/storage/data/EdgeManager.hpp"
 #include "graph/storage/data/IndexEntityManager.hpp"
+#include "graph/storage/data/NodeManager.hpp"
 #include "graph/storage/data/PropertyManager.hpp"
 #include "graph/storage/data/StateManager.hpp"
 
@@ -285,6 +287,14 @@ TEST_F(BaseEntityManagerCRUDTest, Blob_Remove_Inactive) {
 	EXPECT_NO_THROW(dataManager->deleteBlob(b));
 }
 
+TEST_F(BaseEntityManagerCRUDTest, Blob_Update_Inactive_Throws) {
+	Blob b = createTestBlob("inactive blob");
+	dataManager->addBlobEntity(b);
+
+	b.markInactive();
+	EXPECT_THROW(dataManager->updateBlobEntity(b), std::runtime_error);
+}
+
 // ============================================================================
 // Index entity: add, get, remove
 // Exercises BaseEntityManager<Index> template paths
@@ -313,6 +323,14 @@ TEST_F(BaseEntityManagerCRUDTest, Index_Update) {
 	Index idx = createTestIndex(Index::NodeType::LEAF, 3);
 	dataManager->addIndexEntity(idx);
 	EXPECT_NO_THROW(dataManager->updateIndexEntity(idx));
+}
+
+TEST_F(BaseEntityManagerCRUDTest, Index_Update_Inactive_Throws) {
+	Index idx = createTestIndex(Index::NodeType::LEAF, 4);
+	dataManager->addIndexEntity(idx);
+
+	idx.markInactive();
+	EXPECT_THROW(dataManager->updateIndexEntity(idx), std::runtime_error);
 }
 
 // ============================================================================
@@ -365,6 +383,214 @@ TEST_F(BaseEntityManagerCRUDTest, Property_Remove_Inactive) {
 	p.setId(42);
 	p.markInactive();
 	EXPECT_NO_THROW(dataManager->deleteProperty(p));
+}
+
+TEST_F(BaseEntityManagerCRUDTest, InternalManagersIgnoreZeroIdAndInactiveDeletes) {
+	Property property;
+	property.setId(0);
+	EXPECT_NO_THROW(dataManager->deleteProperty(property));
+
+	Blob blob;
+	blob.setId(0);
+	EXPECT_NO_THROW(dataManager->deleteBlob(blob));
+
+	Index index;
+	index.setId(0);
+	EXPECT_NO_THROW(dataManager->deleteIndex(index));
+
+	State state;
+	state.setId(0);
+	EXPECT_NO_THROW(dataManager->deleteState(state));
+
+	index.setId(424242);
+	index.markInactive();
+	EXPECT_NO_THROW(dataManager->deleteIndex(index));
+
+	state.setId(424243);
+	state.markInactive();
+	EXPECT_NO_THROW(dataManager->deleteState(state));
+}
+
+TEST_F(BaseEntityManagerCRUDTest, InternalEntityUpdatesAfterSaveUseModifiedDirtyState) {
+	Property property = createTestProperty(1, Node::typeId, {{"stored", PropertyValue(int64_t{1})}});
+	dataManager->addPropertyEntity(property);
+
+	Blob blob = createTestBlob("stored blob");
+	dataManager->addBlobEntity(blob);
+
+	Index index = createTestIndex(Index::NodeType::LEAF, 41);
+	dataManager->addIndexEntity(index);
+
+	State state = createTestState("internal_update_state");
+	dataManager->addStateEntity(state);
+
+	simulateSave();
+
+	property.setProperties({{"stored", PropertyValue(int64_t{2})}});
+	EXPECT_NO_THROW(dataManager->updatePropertyEntity(property));
+
+	blob.setData("updated blob");
+	EXPECT_NO_THROW(dataManager->updateBlobEntity(blob));
+
+	index.setLevel(2);
+	EXPECT_NO_THROW(dataManager->updateIndexEntity(index));
+
+	state.setData("updated state");
+	EXPECT_NO_THROW(dataManager->updateStateEntity(state));
+}
+
+TEST_F(BaseEntityManagerCRUDTest, InternalManagersReturnActiveEntitiesFromBatches) {
+	Property property = createTestProperty(1, Node::typeId, {{"batch", PropertyValue(int64_t{1})}});
+	dataManager->addPropertyEntity(property);
+	EXPECT_EQ(dataManager->getPropertyManager()->getBatch({property.getId()}).size(), 1u);
+
+	Blob blob = createTestBlob("batch blob");
+	dataManager->addBlobEntity(blob);
+	EXPECT_EQ(dataManager->getBlobManager()->getBatch({blob.getId()}).size(), 1u);
+
+	Index index = createTestIndex(Index::NodeType::LEAF, 42);
+	dataManager->addIndexEntity(index);
+	EXPECT_EQ(dataManager->getIndexEntityManager()->getBatch({index.getId()}).size(), 1u);
+
+	State state = createTestState("internal_batch_state");
+	dataManager->addStateEntity(state);
+	EXPECT_EQ(dataManager->getStateManager()->getBatch({state.getId()}).size(), 1u);
+}
+
+TEST_F(BaseEntityManagerCRUDTest, EntityBatchesSkipDeletedMembers) {
+	Node node = createTestNode(dataManager, "BatchDeletedNode");
+	dataManager->addNode(node);
+	dataManager->deleteNode(node);
+	EXPECT_TRUE(dataManager->getNodeBatch({node.getId()}).empty());
+
+	Node source = createTestNode(dataManager, "BatchDeletedSource");
+	Node target = createTestNode(dataManager, "BatchDeletedTarget");
+	dataManager->addNode(source);
+	dataManager->addNode(target);
+	Edge edge = createTestEdge(dataManager, source.getId(), target.getId(), "BatchDeletedRel");
+	dataManager->addEdge(edge);
+	dataManager->deleteEdge(edge);
+	EXPECT_TRUE(dataManager->getEdgeBatch({edge.getId()}).empty());
+
+	Property property = createTestProperty(1, Node::typeId, {{"deleted", PropertyValue(int64_t{1})}});
+	dataManager->addPropertyEntity(property);
+	dataManager->deleteProperty(property);
+	EXPECT_TRUE(dataManager->getPropertyManager()->getBatch({property.getId()}).empty());
+
+	Blob blob = createTestBlob("deleted batch blob");
+	dataManager->addBlobEntity(blob);
+	dataManager->deleteBlob(blob);
+	EXPECT_TRUE(dataManager->getBlobManager()->getBatch({blob.getId()}).empty());
+
+	Index index = createTestIndex(Index::NodeType::LEAF, 43);
+	dataManager->addIndexEntity(index);
+	dataManager->deleteIndex(index);
+	EXPECT_TRUE(dataManager->getIndexEntityManager()->getBatch({index.getId()}).empty());
+
+	State state = createTestState("deleted_batch_state");
+	dataManager->addStateEntity(state);
+	dataManager->deleteState(state);
+	EXPECT_TRUE(dataManager->getStateManager()->getBatch({state.getId()}).empty());
+}
+
+TEST_F(BaseEntityManagerCRUDTest, EntityBatchesSkipInactiveCachedMembers) {
+	Node node = createTestNode(dataManager, "InactiveCachedNode");
+	node.setId(951001);
+	node.markInactive();
+	dataManager->getNodeManager()->addToCache(node);
+	EXPECT_TRUE(dataManager->getNodeBatch({node.getId()}).empty());
+
+	Node source = createTestNode(dataManager, "InactiveCachedSource");
+	Node target = createTestNode(dataManager, "InactiveCachedTarget");
+	dataManager->addNode(source);
+	dataManager->addNode(target);
+	Edge edge = createTestEdge(dataManager, source.getId(), target.getId(), "InactiveCachedRel");
+	edge.setId(951002);
+	edge.markInactive();
+	dataManager->getEdgeManager()->addToCache(edge);
+	EXPECT_TRUE(dataManager->getEdgeBatch({edge.getId()}).empty());
+
+	Property property = createTestProperty(1, Node::typeId, {{"inactive", PropertyValue(int64_t{1})}});
+	property.setId(951003);
+	property.markInactive();
+	dataManager->getPropertyManager()->addToCache(property);
+	EXPECT_TRUE(dataManager->getPropertyManager()->getBatch({property.getId()}).empty());
+
+	Blob blob = createTestBlob("inactive cached blob");
+	blob.setId(951004);
+	blob.markInactive();
+	dataManager->getBlobManager()->addToCache(blob);
+	EXPECT_TRUE(dataManager->getBlobManager()->getBatch({blob.getId()}).empty());
+
+	Index index = createTestIndex(Index::NodeType::LEAF, 44);
+	index.setId(951005);
+	index.markInactive();
+	dataManager->getIndexEntityManager()->addToCache(index);
+	EXPECT_TRUE(dataManager->getIndexEntityManager()->getBatch({index.getId()}).empty());
+
+	State state = createTestState("inactive_cached_state");
+	state.setId(951006);
+	state.markInactive();
+	dataManager->getStateManager()->addToCache(state);
+	EXPECT_TRUE(dataManager->getStateManager()->getBatch({state.getId()}).empty());
+}
+
+TEST_F(BaseEntityManagerCRUDTest, ManagersIgnoreInactiveEntitiesWithAssignedIds) {
+	Node node = createTestNode(dataManager, "InactiveRemoveNode");
+	node.setId(952001);
+	node.markInactive();
+	EXPECT_NO_THROW(dataManager->getNodeManager()->remove(node));
+
+	Node source = createTestNode(dataManager, "InactiveRemoveSource");
+	Node target = createTestNode(dataManager, "InactiveRemoveTarget");
+	dataManager->addNode(source);
+	dataManager->addNode(target);
+	Edge edge = createTestEdge(dataManager, source.getId(), target.getId(), "InactiveRemoveRel");
+	edge.setId(952002);
+	edge.markInactive();
+	EXPECT_NO_THROW(dataManager->getEdgeManager()->remove(edge));
+}
+
+TEST_F(BaseEntityManagerCRUDTest, RepeatedUpdatesKeepModifiedDirtyState) {
+	Node node = createTestNode(dataManager, "RepeatedModifiedNode");
+	dataManager->addNode(node);
+	simulateSave();
+
+	node.addProperty("step", PropertyValue(int64_t{1}));
+	EXPECT_NO_THROW(dataManager->updateNode(node));
+	node.addProperty("step", PropertyValue(int64_t{2}));
+	EXPECT_NO_THROW(dataManager->updateNode(node));
+
+	Node source = createTestNode(dataManager, "RepeatedModifiedSource");
+	Node target = createTestNode(dataManager, "RepeatedModifiedTarget");
+	dataManager->addNode(source);
+	dataManager->addNode(target);
+	Edge edge = createTestEdge(dataManager, source.getId(), target.getId(), "RepeatedModifiedRel");
+	dataManager->addEdge(edge);
+	simulateSave();
+
+	edge.addProperty("step", PropertyValue(int64_t{1}));
+	EXPECT_NO_THROW(dataManager->updateEdge(edge));
+	edge.addProperty("step", PropertyValue(int64_t{2}));
+	EXPECT_NO_THROW(dataManager->updateEdge(edge));
+
+	Property property = createTestProperty(1, Node::typeId, {{"step", PropertyValue(int64_t{0})}});
+	dataManager->addPropertyEntity(property);
+	simulateSave();
+
+	property.setProperties({{"step", PropertyValue(int64_t{1})}});
+	EXPECT_NO_THROW(dataManager->updatePropertyEntity(property));
+	property.setProperties({{"step", PropertyValue(int64_t{2})}});
+	EXPECT_NO_THROW(dataManager->updatePropertyEntity(property));
+
+	Blob blob = createTestBlob("repeated blob");
+	dataManager->addBlobEntity(blob);
+	simulateSave();
+
+	blob.setData("repeated blob step 1");
+	EXPECT_NO_THROW(dataManager->updateBlobEntity(blob));
+	blob.setData("repeated blob step 2");
+	EXPECT_NO_THROW(dataManager->updateBlobEntity(blob));
 }
 
 // ============================================================================
@@ -575,4 +801,56 @@ TEST_F(BaseEntityManagerCRUDTest, AddBatch_Index) {
 	for (const auto &idx : indexes) {
 		EXPECT_NE(idx.getId(), 0);
 	}
+}
+
+TEST_F(BaseEntityManagerCRUDTest, AddBatchEmptyVectorsForInternalEntityTypes) {
+	std::vector<Property> properties;
+	std::vector<Blob> blobs;
+	std::vector<Index> indexes;
+	std::vector<State> states;
+
+	EXPECT_NO_THROW(dataManager->getPropertyManager()->addBatch(properties));
+	EXPECT_NO_THROW(dataManager->getBlobManager()->addBatch(blobs));
+	EXPECT_NO_THROW(dataManager->getIndexEntityManager()->addBatch(indexes));
+	EXPECT_NO_THROW(dataManager->getStateManager()->addBatch(states));
+}
+
+TEST_F(BaseEntityManagerCRUDTest, AddBatchPreAssignedIdsForInternalEntityTypes) {
+	std::vector<Property> properties = {
+		createTestProperty(1, Node::typeId, {{"p", PropertyValue(1)}}),
+		createTestProperty(2, Node::typeId, {{"p", PropertyValue(2)}}),
+	};
+	properties[0].setId(91001);
+	properties[1].setId(91002);
+
+	std::vector<Blob> blobs = {
+		createTestBlob("blob-a"),
+		createTestBlob("blob-b"),
+	};
+	blobs[0].setId(92001);
+	blobs[1].setId(92002);
+
+	std::vector<Index> indexes = {
+		createTestIndex(Index::NodeType::LEAF, 31),
+		createTestIndex(Index::NodeType::INTERNAL, 32),
+	};
+	indexes[0].setId(93001);
+	indexes[1].setId(93002);
+
+	std::vector<State> states = {
+		createTestState("state-a"),
+		createTestState("state-b"),
+	};
+	states[0].setId(94001);
+	states[1].setId(94002);
+
+	EXPECT_NO_THROW(dataManager->getPropertyManager()->addBatch(properties));
+	EXPECT_NO_THROW(dataManager->getBlobManager()->addBatch(blobs));
+	EXPECT_NO_THROW(dataManager->getIndexEntityManager()->addBatch(indexes));
+	EXPECT_NO_THROW(dataManager->getStateManager()->addBatch(states));
+
+	EXPECT_EQ(properties[0].getId(), 91001);
+	EXPECT_EQ(blobs[0].getId(), 92001);
+	EXPECT_EQ(indexes[0].getId(), 93001);
+	EXPECT_EQ(states[0].getId(), 94001);
 }

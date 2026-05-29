@@ -419,3 +419,28 @@ TEST_F(QueryPlannerScanFilteringTest, ResidualPropertyLambda_NodePresentProperty
 	EXPECT_EQ(count, 1) << "Matching node should pass the residual property filter";
 	op->close();
 }
+
+TEST_F(QueryPlannerScanFilteringTest, PlannerDetailPredicatesHandleMissingAndMatchingBindings) {
+	const auto labelA = dataManager->getOrCreateTokenId("DetailA");
+	const auto labelB = dataManager->getOrCreateTokenId("DetailB");
+
+	graph::Node node(0, labelA);
+	node.addLabelId(labelB);
+	node.addProperty("status", graph::PropertyValue(std::string("active")));
+
+	graph::query::execution::Record emptyRecord;
+	EXPECT_FALSE(graph::query::planner_detail::recordHasAllLabels(emptyRecord, "n", {labelA, labelB}));
+	EXPECT_FALSE(graph::query::planner_detail::recordHasPropertyValue(
+		emptyRecord, "n", "status", graph::PropertyValue(std::string("active"))));
+
+	graph::query::execution::Record record;
+	record.setNode("n", node);
+	EXPECT_TRUE(graph::query::planner_detail::recordHasAllLabels(record, "n", {labelA, labelB}));
+	EXPECT_FALSE(graph::query::planner_detail::recordHasAllLabels(record, "n", {labelA, labelB, 999999}));
+	EXPECT_TRUE(graph::query::planner_detail::recordHasPropertyValue(
+		record, "n", "status", graph::PropertyValue(std::string("active"))));
+	EXPECT_FALSE(graph::query::planner_detail::recordHasPropertyValue(
+		record, "n", "status", graph::PropertyValue(std::string("inactive"))));
+	EXPECT_FALSE(graph::query::planner_detail::recordHasPropertyValue(
+		record, "n", "missing", graph::PropertyValue(std::string("active"))));
+}

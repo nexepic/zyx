@@ -22,10 +22,13 @@
 #include <optional>
 #include <vector>
 
+#include "graph/concurrent/ThreadPool.hpp"
 #include "graph/query/execution/operators/FilterOperator.hpp"
 #include "graph/query/execution/operators/ProjectOperator.hpp"
 #include "graph/query/execution/Record.hpp"
+#include "graph/query/QueryContext.hpp"
 #include "graph/query/expressions/Expression.hpp"
+#include "graph/query/expressions/ParameterExpression.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/core/Edge.hpp"
 
@@ -809,6 +812,29 @@ TEST_F(ProjectOperatorTest, Project_NullExpression_Fallback) {
 	op->close();
 }
 
+TEST_F(ProjectOperatorTest, Project_ParameterExpressionUsesQueryContext) {
+	Record r1;
+	MockOperator *mock = new MockOperator({{r1}});
+	std::vector<ProjectItem> items = {
+		ProjectItem(std::make_shared<graph::query::expressions::ParameterExpression>("answer"), "value")
+	};
+	auto op = std::make_unique<ProjectOperator>(
+		std::unique_ptr<PhysicalOperator>(mock), items);
+
+	graph::query::QueryContext context;
+	context.parameters.emplace("answer", PropertyValue(int64_t{42}));
+	op->setQueryContext(&context);
+
+	op->open();
+	auto batch = op->next();
+	ASSERT_TRUE(batch.has_value());
+	ASSERT_EQ(batch->size(), 1UL);
+	auto value = (*batch)[0].getValue("value");
+	ASSERT_TRUE(value.has_value());
+	EXPECT_EQ(value.value(), PropertyValue(int64_t{42}));
+	op->close();
+}
+
 TEST_F(ProjectOperatorTest, Project_ToString_Distinct) {
 	// Cover: toString() with distinct_=true (line 120)
 	MockOperator *mock = new MockOperator({});
@@ -902,4 +928,31 @@ TEST_F(ProjectOperatorTest, Project_ToString_MultipleItems) {
 		if (c == ',') commaCount++;
 	}
 	EXPECT_EQ(commaCount, 2UL);
+}
+
+TEST_F(ProjectOperatorTest, Project_ToString_NullExpressionUsesAliasOnly) {
+	ProjectItem item;
+	item.expression = nullptr;
+	item.alias = "missing";
+	auto op = std::make_unique<ProjectOperator>(nullptr, std::vector<ProjectItem>{item});
+
+	EXPECT_EQ(op->toString(), "Project( AS missing)");
+}
+
+TEST_F(ProjectOperatorTest, Project_MultiThreadedSmallBatchUsesSequentialPath) {
+	Record r1;
+	r1.setValue("x", 1);
+	MockOperator *mock = new MockOperator({{r1}});
+	std::vector<ProjectItem> items = {makeProjectItem("x", "x")};
+	auto op = std::make_unique<ProjectOperator>(
+		std::unique_ptr<PhysicalOperator>(mock), items);
+
+	graph::concurrent::ThreadPool pool(2);
+	op->setThreadPool(&pool);
+
+	op->open();
+	auto batch = op->next();
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(batch->size(), 1UL);
+	op->close();
 }
