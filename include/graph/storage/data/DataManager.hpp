@@ -26,6 +26,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <utility>
 #include <unordered_map>
 #include <cstdint>
 #include <vector>
@@ -239,6 +240,12 @@ namespace graph::storage {
 			const std::unordered_map<std::string, PropertyValue> &expected,
 			concurrent::ThreadPool *pool,
 			PropertyEntityPredicateMatchOptions options) const;
+		// Count matching Property entity references without building row mappings.
+		// Duplicate ids are counted by input multiplicity for count-only scans.
+		size_t bulkCountPropertyEntityPredicates(
+			const std::vector<int64_t> &ids,
+			const std::unordered_map<std::string, PropertyValue> &expected,
+			concurrent::ThreadPool *pool = nullptr) const;
 		PropertyEntityPredicateMatchResult bulkMatchPropertyEntityPredicateSpecs(
 			const std::vector<int64_t> &ids,
 			const std::vector<size_t> &rows,
@@ -257,6 +264,16 @@ namespace graph::storage {
 		Edge getEdge(int64_t id) const;
 		std::vector<Edge> getEdgeBatch(const std::vector<int64_t> &ids) const;
 		std::vector<Edge> getEdgesInRange(int64_t startId, int64_t endId, size_t limit = 1000) const;
+		[[nodiscard]] std::optional<int64_t> getCachedActiveEdgeCountByType(int64_t typeId) const;
+		void cacheActiveEdgeCountByType(int64_t typeId, int64_t count) const;
+		[[nodiscard]] std::optional<int64_t> getCachedActiveEdgeCountByTypeAndProperties(
+			int64_t typeId,
+			const std::unordered_map<std::string, PropertyValue> &properties) const;
+		void cacheActiveEdgeCountByTypeAndProperties(
+			int64_t typeId,
+			const std::unordered_map<std::string, PropertyValue> &properties,
+			int64_t count) const;
+		void invalidateActiveEdgeCountCache() const;
 		void addEdgeProperties(int64_t edgeId, const std::unordered_map<std::string, PropertyValue> &properties) const;
 		void removeEdgeProperty(int64_t edgeId, const std::string &key) const;
 		std::unordered_map<std::string, PropertyValue> getEdgeProperties(int64_t edgeId) const;
@@ -499,6 +516,30 @@ namespace graph::storage {
 		std::unique_ptr<TokenRegistry> tokenRegistry_;
 
 		std::weak_ptr<state::SystemStateManager> systemStateManager_;
+
+		struct EdgePropertyCountCacheKey {
+			int64_t typeId = 0;
+			std::vector<std::pair<std::string, PropertyValue>> predicates;
+
+			bool operator==(const EdgePropertyCountCacheKey &other) const {
+				return typeId == other.typeId && predicates == other.predicates;
+			}
+		};
+
+		struct EdgePropertyCountCacheKeyHash {
+			size_t operator()(const EdgePropertyCountCacheKey &key) const;
+		};
+
+		[[nodiscard]] static EdgePropertyCountCacheKey makeEdgePropertyCountCacheKey(
+			int64_t typeId,
+			const std::unordered_map<std::string, PropertyValue> &properties);
+
+		// Exact count cache for clean, whole-graph relationship count-only scans.
+		// Mutations invalidate it; callers must not use it while dirty changes exist.
+		mutable std::mutex activeEdgeCountCacheMutex_;
+		mutable std::unordered_map<int64_t, int64_t> activeEdgeCountByTypeCache_;
+		mutable std::unordered_map<EdgePropertyCountCacheKey, int64_t, EdgePropertyCountCacheKeyHash>
+			activeEdgeCountByTypeAndPropertiesCache_;
 
 		// Initialization helpers
 		void initializeSegmentIndexes() const;
