@@ -333,11 +333,22 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataCandidateScanKeepsOn
 	EXPECT_EQ(candidates->propertyRows, (std::vector<size_t>{0}));
 	EXPECT_EQ(candidates->fallbackRows, (std::vector<size_t>{1}));
 
+	auto countCandidates = loader.collectPropertyCountCandidatesByType(1, 128, followsType);
+	ASSERT_TRUE(countCandidates.has_value());
+	EXPECT_EQ(countCandidates->matchedEdges, 3U);
+	EXPECT_EQ(countCandidates->propertyEntityIds, (std::vector<int64_t>{propertyBacked.getPropertyEntityId()}));
+	EXPECT_EQ(countCandidates->fallbackEdgeIds, (std::vector<int64_t>{blobBacked.getId()}));
+
 	auto noTypeMatches = loader.collectPropertyCandidatesByType(1, 128, followsType + 999);
 	ASSERT_TRUE(noTypeMatches.has_value());
 	EXPECT_TRUE(noTypeMatches->edgeIds.empty());
 	EXPECT_TRUE(noTypeMatches->propertyEntityIds.empty());
 	EXPECT_TRUE(noTypeMatches->fallbackRows.empty());
+	auto noTypeCountCandidates = loader.collectPropertyCountCandidatesByType(1, 128, followsType + 999);
+	ASSERT_TRUE(noTypeCountCandidates.has_value());
+	EXPECT_EQ(noTypeCountCandidates->matchedEdges, 0U);
+	EXPECT_TRUE(noTypeCountCandidates->propertyEntityIds.empty());
+	EXPECT_TRUE(noTypeCountCandidates->fallbackEdgeIds.empty());
 
 	auto allTypes = loader.collectPropertyCandidatesByType(1, 128, 0);
 	ASSERT_TRUE(allTypes.has_value());
@@ -350,6 +361,7 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderRejectsUnsafeO
 	EXPECT_FALSE(nullLoader.loadRange(1, 128).has_value());
 	EXPECT_FALSE(nullLoader.countActiveByType(1, 128, followsType).has_value());
 	EXPECT_FALSE(nullLoader.collectPropertyCandidatesByType(1, 128, followsType).has_value());
+	EXPECT_FALSE(nullLoader.collectPropertyCountCandidatesByType(1, 128, followsType).has_value());
 
 	RelationshipMetadataColumnLoader loader(dm);
 	EXPECT_FALSE(loader.loadRange(1, 128).has_value());
@@ -360,6 +372,7 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderRejectsUnsafeO
 	EXPECT_FALSE(loader.loadRange(edge.getId(), edge.getId()).has_value());
 	EXPECT_FALSE(loader.countActiveByType(edge.getId(), edge.getId(), followsType).has_value());
 	EXPECT_FALSE(loader.collectPropertyCandidatesByType(edge.getId(), edge.getId(), followsType).has_value());
+	EXPECT_FALSE(loader.collectPropertyCountCandidatesByType(edge.getId(), edge.getId(), followsType).has_value());
 	EXPECT_FALSE(loader.loadRange(edge.getId() + 1000, edge.getId() + 1127).has_value());
 }
 
@@ -506,6 +519,10 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderScansPartialSe
 	auto followsCandidates = loader.collectPropertyCandidatesByType(1, 256, followsType);
 	ASSERT_TRUE(followsCandidates.has_value());
 	EXPECT_FALSE(followsCandidates->edgeIds.empty());
+	auto followsCountCandidates = loader.collectPropertyCountCandidatesByType(1, 256, followsType);
+	ASSERT_TRUE(followsCountCandidates.has_value());
+	EXPECT_EQ(followsCountCandidates->propertyEntityIds.size() + followsCountCandidates->fallbackEdgeIds.size(),
+	          followsCandidates->propertyEntityIds.size() + followsCandidates->fallbackRows.size());
 	auto missingTypeCandidates = loader.collectPropertyCandidatesByType(1, 256, mentionsType);
 	ASSERT_TRUE(missingTypeCandidates.has_value());
 	EXPECT_TRUE(missingTypeCandidates->edgeIds.empty());

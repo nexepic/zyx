@@ -72,13 +72,9 @@ namespace graph::query::execution {
 			batch.active[row] = static_cast<uint8_t>(readSerializedActive(buf));
 		}
 
-		using SerializedEdgeVisitor = void (*)(void *context, int64_t edgeId, const char *serializedEdge);
-
-		bool scanSerializedEdges(const std::shared_ptr<storage::DataManager> &dm,
-		                         int64_t beginId,
-		                         int64_t endId,
-		                         SerializedEdgeVisitor visitor,
-		                         void *context) {
+		std::vector<size_t> collectEdgeWorkSegments(const std::shared_ptr<storage::DataManager> &dm,
+		                                            int64_t beginId,
+		                                            int64_t endId) {
 			const auto &segmentIndex = dm->getSegmentIndexManager()->getEdgeSegmentIndex();
 			std::vector<size_t> workSegmentIndices;
 			workSegmentIndices.reserve(segmentIndex.size());
@@ -88,105 +84,87 @@ namespace graph::query::execution {
 					workSegmentIndices.push_back(segment);
 				}
 			}
-				if (workSegmentIndices.empty()) { // ZYX_COV_EXCL_LINE
-					return false;
-				}
+			return workSegmentIndices;
+		}
 
-			auto groups = storage::buildCoalescedGroups(workSegmentIndices, segmentIndex);
+		struct EdgeSegmentScanWindow {
+			const char *data = nullptr;
+			int64_t first = 0;
+			int64_t last = -1;
+			int64_t segmentStartId = 0;
+		};
+
+		std::optional<EdgeSegmentScanWindow> edgeSegmentScanWindow(
+				const storage::SegmentIndexManager::SegmentIndex &entry,
+				const storage::SegmentHeader &header,
+				const char *segmentBuffer,
+				int64_t beginId,
+				int64_t endId) {
+			if (header.used == 0) { // ZYX_COV_EXCL_LINE
+				return std::nullopt;
+			}
+			EdgeSegmentScanWindow window;
+			window.data = segmentBuffer + sizeof(storage::SegmentHeader);
+			window.segmentStartId = header.start_id;
+			const int64_t headerLastId = header.start_id + static_cast<int64_t>(header.used) - 1;
+			window.first = std::max<int64_t>(beginId, std::max<int64_t>(entry.startId, header.start_id));
+			window.last = std::min<int64_t>(endId, std::min<int64_t>(entry.endId, headerLastId));
+			if (window.first > window.last) { // ZYX_COV_EXCL_LINE
+				return std::nullopt;
+			}
+			return window;
+		}
+
+		template<typename Visitor>
+		void scanEdgeWindow(const EdgeSegmentScanWindow &window, Visitor &&visitor) {
 			constexpr size_t entitySize = Edge::getTotalSize();
+			for (int64_t edgeId = window.first; edgeId <= window.last; ++edgeId) {
+				const auto slot = static_cast<uint32_t>(edgeId - window.segmentStartId);
+				const char *serializedEdge = window.data + slot * entitySize;
+				if (readSerializedEdgeId(serializedEdge) == edgeId) {
+					visitor(edgeId, serializedEdge);
+				}
+			}
+		}
 
+		template<typename Visitor>
+		bool scanSerializedEdges(const std::shared_ptr<storage::DataManager> &dm,
+		                         int64_t beginId,
+		                         int64_t endId,
+		                         Visitor &&visitor) {
+			const auto workSegmentIndices = collectEdgeWorkSegments(dm, beginId, endId);
+			if (workSegmentIndices.empty()) { // ZYX_COV_EXCL_LINE
+				return false;
+			}
+
+			const auto &segmentIndex = dm->getSegmentIndexManager()->getEdgeSegmentIndex();
+			auto groups = storage::buildCoalescedGroups(workSegmentIndices, segmentIndex);
 			for (const auto &group : groups) {
 				const size_t totalBytes = group.segCount * storage::TOTAL_SEGMENT_SIZE;
 				std::vector<char> groupBuffer(totalBytes);
 				const auto groupOffset = static_cast<int64_t>(group.startOffset);
 				const auto read = dm->preadBytes(groupBuffer.data(), totalBytes, groupOffset);
-					if (read < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
-						return false;
-					}
+				if (read < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
+					return false;
+				}
 
 				for (size_t member = 0; member < group.memberIndices.size(); ++member) {
 					const size_t segmentIndexInWork = group.memberIndices[member];
 					const size_t segment = workSegmentIndices[segmentIndexInWork];
 					const auto &entry = segmentIndex[segment];
 					const size_t bufferOffset = member * storage::TOTAL_SEGMENT_SIZE;
-
 					storage::SegmentHeader header{};
-					std::memcpy(&header, groupBuffer.data() + bufferOffset, sizeof(storage::SegmentHeader));
-						if (header.used == 0) { // ZYX_COV_EXCL_LINE
-							continue;
-						}
-
-					const char *data = groupBuffer.data() + bufferOffset + sizeof(storage::SegmentHeader);
-					const int64_t first = std::max<int64_t>(beginId, entry.startId);
-					const int64_t last = std::min<int64_t>(endId, entry.endId);
-					for (int64_t edgeId = first; edgeId <= last; ++edgeId) {
-						const auto slot = static_cast<uint32_t>(edgeId - header.start_id);
-							if (slot >= header.used) { // ZYX_COV_EXCL_LINE
-								continue;
-							}
-
-							const char *serializedEdge = data + slot * entitySize;
-							if (readSerializedEdgeId(serializedEdge) == edgeId) { // ZYX_COV_EXCL_LINE
-								visitor(context, edgeId, serializedEdge);
-							}
+					const char *segmentBuffer = groupBuffer.data() + bufferOffset;
+					std::memcpy(&header, segmentBuffer, sizeof(storage::SegmentHeader));
+					auto window = edgeSegmentScanWindow(entry, header, segmentBuffer, beginId, endId);
+					if (window.has_value()) {
+						scanEdgeWindow(*window, visitor);
 					}
 				}
 			}
 			return true;
 		}
 
-		struct LoadRangeContext {
-			RelationshipMetadataBatch *batch;
-		};
-
-		void appendMetadataRow(void *context, int64_t, const char *serializedEdge) {
-			auto *loadContext = static_cast<LoadRangeContext *>(context);
-			readMetadataIntoBatch(serializedEdge, *loadContext->batch);
-		}
-
-		struct CountByTypeContext {
-			int64_t typeId = 0;
-			int64_t count = 0;
-		};
-
-		void countMatchingEdge(void *context, int64_t, const char *serializedEdge) {
-			auto *countContext = static_cast<CountByTypeContext *>(context);
-				if (readSerializedActive(serializedEdge) &&
-				    (countContext->typeId == 0 || readSerializedTypeId(serializedEdge) == countContext->typeId)) {
-				++countContext->count;
-			}
-		}
-
-		struct PropertyCandidateContext {
-			int64_t typeId = 0;
-			RelationshipPropertyCandidateBatch *batch = nullptr;
-		};
-
-		void collectPropertyCandidate(void *context, int64_t edgeId, const char *serializedEdge) {
-			auto *candidateContext = static_cast<PropertyCandidateContext *>(context);
-				if (!readSerializedActive(serializedEdge) ||
-				    (candidateContext->typeId != 0 && readSerializedTypeId(serializedEdge) != candidateContext->typeId)) {
-				return;
-			}
-
-			const int64_t propertyEntityId = readSerializedPropertyEntityId(serializedEdge);
-				if (propertyEntityId == 0) {
-					return;
-				}
-
-			auto &batch = *candidateContext->batch;
-			const auto storageType = readSerializedPropertyStorageType(serializedEdge);
-				if (storageType == PropertyStorageType::PROPERTY_ENTITY) {
-					const size_t row = batch.edgeIds.size();
-				batch.edgeIds.push_back(edgeId);
-				batch.propertyEntityIds.push_back(propertyEntityId);
-				batch.propertyRows.push_back(row);
-				} else if (storageType == PropertyStorageType::BLOB_ENTITY) {
-					const size_t row = batch.edgeIds.size();
-				batch.edgeIds.push_back(edgeId);
-				batch.fallbackRows.push_back(row);
-			}
-		}
 	} // namespace
 
 	void RelationshipMetadataBatch::reserve(size_t rowCount) {
@@ -214,6 +192,11 @@ namespace graph::query::execution {
 		propertyEntityIds.reserve(rowCount);
 		propertyRows.reserve(rowCount);
 		fallbackRows.reserve(rowCount / 8);
+	}
+
+	void RelationshipPropertyCountCandidates::reserve(size_t rowCount) {
+		propertyEntityIds.reserve(rowCount);
+		fallbackEdgeIds.reserve(rowCount / 8);
 	}
 
 	void RelationshipMetadataBatch::setFromEdge(size_t row, const Edge &edge) {
@@ -270,8 +253,9 @@ namespace graph::query::execution {
 
 		RelationshipMetadataBatch batch;
 		batch.reserve(static_cast<size_t>(endId - beginId + 1));
-		LoadRangeContext context{&batch};
-		if (!scanSerializedEdges(dm_, beginId, endId, appendMetadataRow, &context)) {
+		if (!scanSerializedEdges(dm_, beginId, endId, [&](int64_t, const char *serializedEdge) {
+			readMetadataIntoBatch(serializedEdge, batch);
+		})) {
 			return std::nullopt;
 		}
 
@@ -291,15 +275,20 @@ namespace graph::query::execution {
 		const bool traceEnabled = debug::PerfTrace::isEnabled();
 		const auto start = traceEnabled ? Clock::now() : Clock::time_point{};
 
-		CountByTypeContext context{typeId, 0};
-		if (!scanSerializedEdges(dm_, beginId, endId, countMatchingEdge, &context)) {
+		int64_t count = 0;
+		if (!scanSerializedEdges(dm_, beginId, endId, [&](int64_t, const char *serializedEdge) {
+			if (readSerializedActive(serializedEdge) &&
+			    (typeId == 0 || readSerializedTypeId(serializedEdge) == typeId)) {
+				++count;
+			}
+		})) {
 			return std::nullopt;
 		}
 
 		if (traceEnabled) {
 			debug::PerfTrace::addDuration("relationship_count.load_edge_metadata", elapsedNs(start));
 		}
-		return context.count;
+		return count;
 	}
 
 	std::optional<RelationshipPropertyCandidateBatch>
@@ -315,8 +304,29 @@ namespace graph::query::execution {
 
 		RelationshipPropertyCandidateBatch batch;
 		batch.reserve(static_cast<size_t>(endId - beginId + 1));
-		PropertyCandidateContext context{typeId, &batch};
-		if (!scanSerializedEdges(dm_, beginId, endId, collectPropertyCandidate, &context)) {
+		if (!scanSerializedEdges(dm_, beginId, endId, [&](int64_t edgeId, const char *serializedEdge) {
+			if (!readSerializedActive(serializedEdge) ||
+			    (typeId != 0 && readSerializedTypeId(serializedEdge) != typeId)) {
+				return;
+			}
+
+			const int64_t propertyEntityId = readSerializedPropertyEntityId(serializedEdge);
+			if (propertyEntityId == 0) {
+				return;
+			}
+
+			const auto storageType = readSerializedPropertyStorageType(serializedEdge);
+			if (storageType == PropertyStorageType::PROPERTY_ENTITY) {
+				const size_t row = batch.edgeIds.size();
+				batch.edgeIds.push_back(edgeId);
+				batch.propertyEntityIds.push_back(propertyEntityId);
+				batch.propertyRows.push_back(row);
+			} else if (storageType == PropertyStorageType::BLOB_ENTITY) {
+				const size_t row = batch.edgeIds.size();
+				batch.edgeIds.push_back(edgeId);
+				batch.fallbackRows.push_back(row);
+			}
+		})) {
 			return std::nullopt;
 		}
 
@@ -324,6 +334,47 @@ namespace graph::query::execution {
 			debug::PerfTrace::addDuration("relationship_count.load_edge_metadata", elapsedNs(start));
 		}
 		return batch;
+	}
+
+	std::optional<RelationshipPropertyCountCandidates>
+	RelationshipMetadataColumnLoader::collectPropertyCountCandidatesByType(int64_t beginId,
+	                                                                       int64_t endId,
+	                                                                       int64_t typeId) const {
+		if (!canLoad(beginId, endId)) {
+			return std::nullopt;
+		}
+
+		const bool traceEnabled = debug::PerfTrace::isEnabled();
+		const auto start = traceEnabled ? Clock::now() : Clock::time_point{};
+
+		RelationshipPropertyCountCandidates candidates;
+		candidates.reserve(static_cast<size_t>(endId - beginId + 1));
+		if (!scanSerializedEdges(dm_, beginId, endId, [&](int64_t edgeId, const char *serializedEdge) {
+			if (!readSerializedActive(serializedEdge) ||
+			    (typeId != 0 && readSerializedTypeId(serializedEdge) != typeId)) {
+				return;
+			}
+
+			++candidates.matchedEdges;
+			const int64_t propertyEntityId = readSerializedPropertyEntityId(serializedEdge);
+			if (propertyEntityId == 0) {
+				return;
+			}
+
+			const auto storageType = readSerializedPropertyStorageType(serializedEdge);
+			if (storageType == PropertyStorageType::PROPERTY_ENTITY) {
+				candidates.propertyEntityIds.push_back(propertyEntityId);
+			} else if (storageType == PropertyStorageType::BLOB_ENTITY) {
+				candidates.fallbackEdgeIds.push_back(edgeId);
+			}
+		})) {
+			return std::nullopt;
+		}
+
+		if (traceEnabled) {
+			debug::PerfTrace::addDuration("relationship_count.load_edge_metadata", elapsedNs(start));
+		}
+		return candidates;
 	}
 
 } // namespace graph::query::execution

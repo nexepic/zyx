@@ -745,6 +745,7 @@ namespace graph::storage {
 	void DataManager::deleteNode(Node &node) const {
 		guardReadOnly();
 		txnContext_.recordDelete<Node>(node.getId(), [this](int64_t id) { return nodeManager_->get(id); });
+		invalidateActiveEdgeCountCache();
 		nodeManager_->remove(node);
 		observerManager_.notifyNodeDeleted(node);
 	}
@@ -852,7 +853,9 @@ namespace graph::storage {
 
 		// Sort IDs and group by segment for sequential I/O
 		std::vector<int64_t> sortedIds(ids);
-		std::sort(sortedIds.begin(), sortedIds.end());
+		if (!std::is_sorted(sortedIds.begin(), sortedIds.end())) {
+			std::sort(sortedIds.begin(), sortedIds.end());
+		}
 
 		const auto &segIndex = segmentIndexManager_->getPropertySegmentIndex();
 		constexpr size_t entitySize = Property::getTotalSize();
@@ -1529,6 +1532,181 @@ namespace graph::storage {
 		return result;
 	}
 
+	size_t DataManager::bulkCountPropertyEntityPredicates(
+		const std::vector<int64_t> &ids,
+		const std::unordered_map<std::string, PropertyValue> &expected,
+		concurrent::ThreadPool *pool) const {
+		if (ids.empty() || expected.empty() || !hasPreadSupport()) {
+			return 0;
+		}
+
+		std::vector<int64_t> sortedIds;
+		sortedIds.reserve(ids.size());
+		bool strictlyIncreasing = true;
+		bool hasPreviousId = false;
+		int64_t previousId = 0;
+		for (const int64_t id : ids) {
+			if (id != 0) {
+				if (hasPreviousId && id <= previousId) {
+					strictlyIncreasing = false;
+				}
+				sortedIds.push_back(id);
+				previousId = id;
+				hasPreviousId = true;
+			}
+		}
+		if (sortedIds.empty()) {
+			return 0;
+		}
+
+		std::vector<size_t> multiplicities;
+		if (!strictlyIncreasing) {
+			std::sort(sortedIds.begin(), sortedIds.end());
+			multiplicities.reserve(sortedIds.size());
+			size_t write = 0;
+			for (size_t read = 0; read < sortedIds.size();) {
+				const int64_t id = sortedIds[read];
+				size_t next = read + 1;
+				while (next < sortedIds.size() && sortedIds[next] == id) {
+					++next;
+				}
+				sortedIds[write++] = id;
+				multiplicities.push_back(next - read);
+				read = next;
+			}
+			sortedIds.resize(write);
+		}
+
+		std::vector<PredicateExpectation> predicateExpectations;
+		predicateExpectations.reserve(expected.size());
+		for (const auto &[key, value] : expected) {
+			predicateExpectations.push_back({&key, &value});
+		}
+		const bool useSinglePredicate = predicateExpectations.size() == 1;
+		const SinglePredicateExpectation singlePredicate = useSinglePredicate
+			? SinglePredicateExpectation{predicateExpectations.front().key, predicateExpectations.front().value}
+			: SinglePredicateExpectation{};
+
+		const auto &segIndex = segmentIndexManager_->getPropertySegmentIndex();
+		constexpr size_t entitySize = Property::getTotalSize();
+
+		struct SegWork {
+			size_t segIdx;
+			size_t idBegin;
+			size_t idEnd;
+		};
+		std::vector<SegWork> work;
+		for (size_t s = 0; s < segIndex.size(); ++s) {
+			auto lo = std::lower_bound(sortedIds.begin(), sortedIds.end(), segIndex[s].startId);
+			auto hi = std::upper_bound(lo, sortedIds.end(), segIndex[s].endId);
+			if (lo != hi) {
+				work.push_back({s,
+					static_cast<size_t>(lo - sortedIds.begin()),
+					static_cast<size_t>(hi - sortedIds.begin())});
+			}
+		}
+
+		if (work.empty()) {
+			return 0;
+		}
+
+		auto matchesPredicate = [&](const char *entityBuffer) {
+			return useSinglePredicate
+				? readPropertyEntitySinglePredicateMatch(entityBuffer, singlePredicate)
+				: readPropertyEntityPredicateMatch(entityBuffer, predicateExpectations);
+		};
+
+		size_t count = 0;
+		if (pool && !pool->isSingleThreaded() && work.size() > 1) { // ZYX_COV_EXCL_LINE
+			std::vector<size_t> workSegIndices;
+			workSegIndices.reserve(work.size());
+			for (const auto &w : work) {
+				workSegIndices.push_back(w.segIdx);
+			}
+
+			auto groups = buildCoalescedGroups(workSegIndices, segIndex);
+			std::vector<size_t> perWorkCounts(work.size(), 0);
+
+			pool->parallelFor(0, groups.size(), [&](size_t gi) {
+				const auto &group = groups[gi];
+				size_t totalBytes = group.segCount * TOTAL_SEGMENT_SIZE;
+				std::vector<char> groupBuf(totalBytes);
+				auto groupOffset = static_cast<int64_t>(group.startOffset);
+				ssize_t n = preadBytes(groupBuf.data(), totalBytes, groupOffset);
+				if (n < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
+					return;
+				}
+
+				for (size_t mi = 0; mi < group.memberIndices.size(); ++mi) {
+					size_t wi = group.memberIndices[mi];
+					const auto &w = work[wi];
+					size_t bufOffset = mi * TOTAL_SEGMENT_SIZE;
+
+					SegmentHeader header;
+					std::memcpy(&header, groupBuf.data() + bufOffset, sizeof(SegmentHeader));
+					if (header.used == 0) {
+						continue;
+					}
+
+					const char *dataBuf = groupBuf.data() + bufOffset + sizeof(SegmentHeader);
+					for (size_t i = w.idBegin; i < w.idEnd; ++i) {
+						int64_t id = sortedIds[i];
+						uint32_t slot = static_cast<uint32_t>(id - header.start_id);
+						if (slot >= header.used) {
+							continue;
+						}
+						const char *entityBuffer = dataBuf + slot * entitySize;
+						if (readSerializedPropertyId(entityBuffer) != id) {
+							continue;
+						}
+						const auto matches = matchesPredicate(entityBuffer);
+						if (matches.has_value() && matches.value()) {
+							perWorkCounts[wi] += multiplicities.empty() ? size_t{1} : multiplicities[i];
+						}
+					}
+				}
+			});
+
+			for (const size_t perWorkCount : perWorkCounts) {
+				count += perWorkCount;
+			}
+		} else {
+			for (const auto &w : work) {
+				const auto &seg = segIndex[w.segIdx];
+				SegmentHeader header = segmentTracker_->getSegmentHeaderCopy(seg.segmentOffset);
+				if (header.used == 0) {
+					continue;
+				}
+
+				size_t dataBytes = static_cast<size_t>(header.used) * entitySize;
+				std::vector<char> buf(dataBytes);
+				auto dataOffset = static_cast<int64_t>(seg.segmentOffset + sizeof(SegmentHeader));
+				ssize_t n = preadBytes(buf.data(), dataBytes, dataOffset);
+				if (n < static_cast<ssize_t>(dataBytes)) {
+					continue;
+				}
+
+				for (size_t i = w.idBegin; i < w.idEnd; ++i) {
+					int64_t id = sortedIds[i];
+					uint32_t slot = static_cast<uint32_t>(id - header.start_id);
+					if (slot >= header.used) {
+						continue;
+					}
+					const char *entityBuffer = buf.data() + slot * entitySize;
+					if (readSerializedPropertyId(entityBuffer) != id) {
+						continue;
+					}
+					const auto matches = matchesPredicate(entityBuffer);
+					if (matches.has_value() && matches.value()) {
+						count += multiplicities.empty() ? size_t{1} : multiplicities[i];
+					}
+				}
+			}
+		}
+
+		return count;
+	}
+
 
 	PropertyEntityPredicateMatchResult DataManager::bulkMatchPropertyEntityPredicateSpecs(
 		const std::vector<int64_t> &ids,
@@ -1743,6 +1921,7 @@ namespace graph::storage {
 		for (const auto &v : observerManager_.getValidators()) {
 			v->validateEdgeInsert(edge, edge.getProperties());
 		}
+		invalidateActiveEdgeCountCache();
 		edgeManager_->add(edge);
 		txnContext_.recordAdd(edge);
 		observerManager_.notifyEdgeAdded(edge);
@@ -1759,6 +1938,8 @@ namespace graph::storage {
 				v->validateEdgeInsert(edge, edge.getProperties());
 			}
 		}
+
+		invalidateActiveEdgeCountCache();
 
 		// 1. Assign IDs and initial persistence
 		edgeManager_->addBatch(edges);
@@ -1789,6 +1970,7 @@ namespace graph::storage {
 		guardReadOnly();
 		Edge oldEdge = edgeManager_->get(edge.getId());
 		txnContext_.recordUpdate<Edge>(edge, oldEdge);
+		invalidateActiveEdgeCountCache();
 		edgeManager_->update(edge);
 		observerManager_.notifyEdgeUpdated(oldEdge, edge);
 	}
@@ -1796,6 +1978,7 @@ namespace graph::storage {
 	void DataManager::deleteEdge(Edge &edge) const {
 		guardReadOnly();
 		txnContext_.recordDelete<Edge>(edge.getId(), [this](int64_t id) { return edgeManager_->get(id); });
+		invalidateActiveEdgeCountCache();
 		edgeManager_->remove(edge);
 		observerManager_.notifyEdgeDeleted(edge);
 	}
@@ -1810,6 +1993,85 @@ namespace graph::storage {
 		return edgeManager_->getInRange(startId, endId, limit);
 	}
 
+	size_t DataManager::EdgePropertyCountCacheKeyHash::operator()(
+			const EdgePropertyCountCacheKey &key) const {
+		size_t seed = std::hash<int64_t>{}(key.typeId);
+		PropertyValueHash valueHash;
+		for (const auto &[propertyKey, propertyValue] : key.predicates) {
+			seed ^= std::hash<std::string>{}(propertyKey) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+			seed ^= valueHash(propertyValue) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+		}
+		return seed;
+	}
+
+	DataManager::EdgePropertyCountCacheKey DataManager::makeEdgePropertyCountCacheKey(
+			int64_t typeId,
+			const std::unordered_map<std::string, PropertyValue> &properties) {
+		EdgePropertyCountCacheKey key;
+		key.typeId = typeId;
+		key.predicates.reserve(properties.size());
+		for (const auto &[propertyKey, propertyValue] : properties) {
+			key.predicates.emplace_back(propertyKey, propertyValue);
+		}
+		std::sort(key.predicates.begin(), key.predicates.end(), [](const auto &lhs, const auto &rhs) {
+			return lhs.first < rhs.first;
+		});
+		return key;
+	}
+
+	std::optional<int64_t> DataManager::getCachedActiveEdgeCountByType(int64_t typeId) const {
+		if (hasUnsavedChanges()) {
+			return std::nullopt;
+		}
+		std::lock_guard lock(activeEdgeCountCacheMutex_);
+		const auto it = activeEdgeCountByTypeCache_.find(typeId);
+		if (it == activeEdgeCountByTypeCache_.end()) {
+			return std::nullopt;
+		}
+		return it->second;
+	}
+
+	void DataManager::cacheActiveEdgeCountByType(int64_t typeId, int64_t count) const {
+		if (hasUnsavedChanges()) {
+			return;
+		}
+		std::lock_guard lock(activeEdgeCountCacheMutex_);
+		activeEdgeCountByTypeCache_[typeId] = count;
+	}
+
+	std::optional<int64_t> DataManager::getCachedActiveEdgeCountByTypeAndProperties(
+			int64_t typeId,
+			const std::unordered_map<std::string, PropertyValue> &properties) const {
+		if (properties.empty() || hasUnsavedChanges()) {
+			return std::nullopt;
+		}
+		auto key = makeEdgePropertyCountCacheKey(typeId, properties);
+		std::lock_guard lock(activeEdgeCountCacheMutex_);
+		const auto it = activeEdgeCountByTypeAndPropertiesCache_.find(key);
+		if (it == activeEdgeCountByTypeAndPropertiesCache_.end()) {
+			return std::nullopt;
+		}
+		return it->second;
+	}
+
+	void DataManager::cacheActiveEdgeCountByTypeAndProperties(
+			int64_t typeId,
+			const std::unordered_map<std::string, PropertyValue> &properties,
+			int64_t count) const {
+		if (properties.empty() || hasUnsavedChanges()) {
+			return;
+		}
+		auto key = makeEdgePropertyCountCacheKey(typeId, properties);
+		std::lock_guard lock(activeEdgeCountCacheMutex_);
+		activeEdgeCountByTypeAndPropertiesCache_[std::move(key)] = count;
+	}
+
+	void DataManager::invalidateActiveEdgeCountCache() const {
+		std::lock_guard lock(activeEdgeCountCacheMutex_);
+		activeEdgeCountByTypeCache_.clear();
+		activeEdgeCountByTypeAndPropertiesCache_.clear();
+	}
+
 	void DataManager::addEdgeProperties(int64_t edgeId,
 										const std::unordered_map<std::string, PropertyValue> &properties) const {
 		addEntityPropertiesImpl<Edge>(
@@ -1819,6 +2081,7 @@ namespace graph::storage {
 					v->validateEdgeUpdate(edge, oldProps, newProps);
 			},
 			[this](const Edge &o, const Edge &n) { observerManager_.notifyEdgeUpdated(o, n); });
+		invalidateActiveEdgeCountCache();
 	}
 
 	void DataManager::removeEdgeProperty(int64_t edgeId, const std::string &key) const {
@@ -1829,6 +2092,7 @@ namespace graph::storage {
 					v->validateEdgeUpdate(edge, oldProps, newProps);
 			},
 			[this](const Edge &o, const Edge &n) { observerManager_.notifyEdgeUpdated(o, n); });
+		invalidateActiveEdgeCountCache();
 	}
 
 	std::unordered_map<std::string, PropertyValue> DataManager::getEdgeProperties(int64_t edgeId) const {

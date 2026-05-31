@@ -37,6 +37,14 @@ namespace graph::query::execution {
 		void reserve(size_t rowCount);
 	};
 
+	struct RelationshipPropertyCountCandidates {
+		std::vector<int64_t> propertyEntityIds;
+		std::vector<int64_t> fallbackEdgeIds;
+		size_t matchedEdges = 0;
+
+		void reserve(size_t rowCount);
+	};
+
 	class RelationshipMetadataColumnLoader {
 	public:
 		explicit RelationshipMetadataColumnLoader(std::shared_ptr<storage::DataManager> dm);
@@ -45,6 +53,8 @@ namespace graph::query::execution {
 		[[nodiscard]] std::optional<int64_t> countActiveByType(int64_t beginId, int64_t endId, int64_t typeId) const;
 		[[nodiscard]] std::optional<RelationshipPropertyCandidateBatch>
 		collectPropertyCandidatesByType(int64_t beginId, int64_t endId, int64_t typeId) const;
+		[[nodiscard]] std::optional<RelationshipPropertyCountCandidates>
+		collectPropertyCountCandidatesByType(int64_t beginId, int64_t endId, int64_t typeId) const;
 
 	private:
 		[[nodiscard]] bool canLoad(int64_t beginId, int64_t endId) const;

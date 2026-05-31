@@ -627,6 +627,22 @@ TEST_F(DataManagerTest, BulkMatchPropertyEntityPredicatesReturnsLoadedAndMatched
 	EXPECT_TRUE(rowlessCountOnly.matchedRows.empty());
 	EXPECT_EQ(rowlessCountOnly.loadedCount, 2U);
 	EXPECT_EQ(rowlessCountOnly.matchedCount, 1U);
+
+	EXPECT_EQ(dataManager->bulkCountPropertyEntityPredicates(
+		          {firstPropertyId, secondPropertyId, firstPropertyId, 0},
+		          {{"keep", PropertyValue(int64_t(42))}},
+		          nullptr),
+	          2U);
+	EXPECT_EQ(dataManager->bulkCountPropertyEntityPredicates(
+		          {firstPropertyId, secondPropertyId},
+		          {{"keep", PropertyValue(int64_t(42))}, {"kind", PropertyValue("match")}},
+		          nullptr),
+	          1U);
+	EXPECT_EQ(dataManager->bulkCountPropertyEntityPredicates(
+		          {secondPropertyId},
+		          {{"keep", PropertyValue(int64_t(42))}},
+		          nullptr),
+	          0U);
 }
 
 TEST_F(DataManagerTest, BulkMatchPropertyEntityPredicatesParallelHandlesSegmentEdgeCases) {

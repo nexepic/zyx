@@ -8,6 +8,7 @@
 
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/execution/RelationshipCandidateSource.hpp"
+#include "graph/query/execution/RelationshipColumnarCountKernel.hpp"
 #include "graph/query/execution/VectorizedPredicate.hpp"
 #include "graph/storage/IDAllocator.hpp"
 
@@ -22,18 +23,6 @@ namespace {
 	void addProfile(const char *phase, Clock::time_point start) {
 		if (debug::PerfTrace::isEnabled()) {
 			debug::PerfTrace::addDuration(phase, elapsedNs(start));
-		}
-	}
-
-	void appendRowsMissingFromBulkLoad(const std::vector<size_t> &externalRows,
-	                                   std::vector<size_t> loadedRows,
-	                                   std::vector<size_t> &fallbackRows) {
-		std::sort(loadedRows.begin(), loadedRows.end());
-		loadedRows.erase(std::unique(loadedRows.begin(), loadedRows.end()), loadedRows.end());
-		for (const size_t row : externalRows) {
-			if (!std::binary_search(loadedRows.begin(), loadedRows.end(), row)) { // ZYX_COV_EXCL_LINE
-				fallbackRows.push_back(row);
-			}
 		}
 	}
 
@@ -211,55 +200,15 @@ namespace {
 		const bool usedDirectDiskLoad = !dm_->hasUnsavedChanges() && dm_->hasPreadSupport(); // ZYX_COV_EXCL_LINE
 
 		if (usedDirectDiskLoad) {
-			RelationshipMetadataColumnLoader metadataLoader(dm_);
-			if (directCount_.edgeProperties.empty()) {
-				if (auto directCount = metadataLoader.countActiveByType(1, maxId, edgeTypeId)) {
-					addProfile("relationship_count.direct_scan", scanStart);
-					return *directCount;
-				}
-			} else if (auto candidates = metadataLoader.collectPropertyCandidatesByType(1, maxId, edgeTypeId)) {
-				const auto propertyStart = Clock::now();
-				storage::PropertyEntityPredicateMatchOptions predicateOptions;
-				predicateOptions.collectLoadedRows = false;
-				predicateOptions.collectMatchedRows = false;
-				auto predicateResult = dm_->bulkMatchPropertyEntityPredicates(
-					candidates->propertyEntityIds,
-					candidates->propertyRows,
-					candidates->size(),
-					directCount_.edgeProperties,
-					threadPool_,
-					predicateOptions);
-				if (predicateResult.loadedCount != candidates->propertyRows.size()) {
-					predicateOptions.collectLoadedRows = true;
-					predicateResult = dm_->bulkMatchPropertyEntityPredicates(
-						candidates->propertyEntityIds,
-						candidates->propertyRows,
-						candidates->size(),
-						directCount_.edgeProperties,
-						threadPool_,
-						predicateOptions);
-				}
-				addProfile("relationship_count.property_predicate", propertyStart);
-				count += static_cast<int64_t>(predicateResult.matchedCount);
-
-				std::vector<size_t> fallbackRows = candidates->fallbackRows;
-				// The common clean-storage path loads every property entity, so avoid
-				// sorting all rows just to prove there is no fallback work.
-				if (predicateResult.loadedCount != candidates->propertyRows.size()) {
-					appendRowsMissingFromBulkLoad(candidates->propertyRows, std::move(predicateResult.loadedRows), fallbackRows);
-				}
-				if (!fallbackRows.empty()) {
-					std::sort(fallbackRows.begin(), fallbackRows.end());
-					fallbackRows.erase(std::unique(fallbackRows.begin(), fallbackRows.end()), fallbackRows.end());
-					for (const size_t row : fallbackRows) {
-						count += propertyMapMatches(dm_->getEdgeProperties(candidates->edgeIds[row]), directCount_.edgeProperties)
-							? int64_t{1}
-							: int64_t{0};
-					}
-				}
-
+			RelationshipColumnarCountKernel kernel(dm_, threadPool_);
+			RelationshipColumnarCountRequest request;
+			request.beginId = 1;
+			request.endId = maxId;
+			request.typeId = edgeTypeId;
+			request.propertyPredicates = directCount_.edgeProperties;
+			if (auto directCount = kernel.count(request)) {
 				addProfile("relationship_count.direct_scan", scanStart);
-				return count;
+				return directCount->count;
 			}
 		}
 
