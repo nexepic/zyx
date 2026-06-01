@@ -485,6 +485,66 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderCountsAndLoads
 	EXPECT_TRUE(trace.contains("relationship_count.load_edge_metadata"));
 }
 
+TEST_F(RelationshipPropertyColumnLoaderStorageTest, RelationshipTypeSegmentStatsCountAndInvalidateDirtySegments) {
+	const int64_t source = addUser();
+	const int64_t target = addUser();
+	const int64_t likesType = dm->getOrCreateTokenId("LIKES");
+	std::vector<int64_t> followsIds;
+	for (int i = 0; i < 260; ++i) {
+		Edge edge(0, source, target, (i % 2 == 0) ? followsType : likesType);
+		dm->addEdge(edge);
+		if (edge.getTypeId() == followsType) {
+			followsIds.push_back(edge.getId());
+		}
+	}
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+
+	auto followsCount = dm->countActiveEdgesByTypeFromSegmentStats(1, 260, followsType);
+	ASSERT_TRUE(followsCount.has_value());
+	EXPECT_EQ(*followsCount, 130);
+	auto allCount = dm->countActiveEdgesByTypeFromSegmentStats(1, 260, 0);
+	ASSERT_TRUE(allCount.has_value());
+	EXPECT_EQ(*allCount, 260);
+	auto partialCount = dm->countActiveEdgesByTypeFromSegmentStats(2, 129, followsType);
+	ASSERT_TRUE(partialCount.has_value());
+	EXPECT_EQ(*partialCount, 64);
+	auto missingTypeCount = dm->countActiveEdgesByTypeFromSegmentStats(1, 260, followsType + likesType + 1000);
+	ASSERT_TRUE(missingTypeCount.has_value());
+	EXPECT_EQ(*missingTypeCount, 0);
+	EXPECT_FALSE(dm->countActiveEdgesByTypeFromSegmentStats(0, 260, followsType).has_value());
+	EXPECT_FALSE(dm->countActiveEdgesByTypeFromSegmentStats(10, 1, followsType).has_value());
+
+	storage::CommittedSnapshot edgeOverlaySnapshot;
+	edgeOverlaySnapshot.edges.emplace(followsIds.front(),
+	                                  storage::DirtyEntityInfo<Edge>(storage::EntityChangeType::CHANGE_MODIFIED,
+	                                                                  dm->getEdge(followsIds.front())));
+	dm->setCurrentSnapshot(&edgeOverlaySnapshot);
+	EXPECT_FALSE(dm->countActiveEdgesByTypeFromSegmentStats(1, 260, followsType).has_value());
+	dm->clearCurrentSnapshot();
+	dm->clearRelationshipSegmentTypeStats();
+	followsCount = dm->countActiveEdgesByTypeFromSegmentStats(1, 260, followsType);
+	ASSERT_TRUE(followsCount.has_value());
+	EXPECT_EQ(*followsCount, 130);
+
+	Edge unsaved(0, source, target, followsType);
+	dm->addEdge(unsaved);
+	EXPECT_TRUE(dm->hasUnsavedChanges());
+	EXPECT_FALSE(dm->countActiveEdgesByTypeFromSegmentStats(1, unsaved.getId(), followsType).has_value());
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+
+	ASSERT_FALSE(followsIds.empty());
+	Edge deleted = dm->getEdge(followsIds.front());
+	dm->deleteEdge(deleted);
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+
+	auto countAfterInvalidation = dm->countActiveEdgesByTypeFromSegmentStats(1, 260, followsType);
+	ASSERT_TRUE(countAfterInvalidation.has_value());
+	EXPECT_EQ(*countAfterInvalidation, 129);
+}
+
 TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderScansPartialSegmentsAndFilteredRows) {
 	const int64_t source = addUser();
 	const int64_t target = addUser();
