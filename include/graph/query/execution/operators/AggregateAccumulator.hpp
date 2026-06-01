@@ -69,6 +69,13 @@ public:
 	virtual void update(const PropertyValue& value) = 0;
 
 	/**
+	 * @brief Updates the accumulator for COUNT(*)-style row counting.
+	 */
+	virtual void updateRow() {
+		update(PropertyValue(static_cast<int64_t>(1)));
+	}
+
+	/**
 	 * @brief Returns the final aggregated result.
 	 * @return The aggregated value
 	 */
@@ -93,9 +100,13 @@ class CountAccumulator : public AggregateAccumulator {
 public:
 	void update(const PropertyValue& value) override {
 		// COUNT counts all non-NULL values
-		if (!graph::query::expressions::EvaluationContext::isNull(value)) {
+		if (value.getType() != PropertyType::NULL_TYPE) {
 			count_++;
 		}
+	}
+
+	void updateRow() override {
+		count_++;
 	}
 
 	[[nodiscard]] PropertyValue getResult() const override {
@@ -124,7 +135,7 @@ class SumAccumulator : public AggregateAccumulator {
 public:
 	void update(const PropertyValue& value) override {
 		// Skip NULL values
-		if (graph::query::expressions::EvaluationContext::isNull(value)) {
+		if (value.getType() == PropertyType::NULL_TYPE) {
 			return;
 		}
 
@@ -178,7 +189,7 @@ class AvgAccumulator : public AggregateAccumulator {
 public:
 	void update(const PropertyValue& value) override {
 		// Skip NULL values
-		if (graph::query::expressions::EvaluationContext::isNull(value)) {
+		if (value.getType() == PropertyType::NULL_TYPE) {
 			return;
 		}
 
@@ -224,7 +235,7 @@ class MinAccumulator : public AggregateAccumulator {
 public:
 	void update(const PropertyValue& value) override {
 		// Skip NULL values
-		if (graph::query::expressions::EvaluationContext::isNull(value)) {
+		if (value.getType() == PropertyType::NULL_TYPE) {
 			return;
 		}
 
@@ -270,7 +281,7 @@ class MaxAccumulator : public AggregateAccumulator {
 public:
 	void update(const PropertyValue& value) override {
 		// Skip NULL values
-		if (graph::query::expressions::EvaluationContext::isNull(value)) {
+		if (value.getType() == PropertyType::NULL_TYPE) {
 			return;
 		}
 
@@ -345,7 +356,7 @@ private:
 class CountDistinctAccumulator : public AggregateAccumulator {
 public:
 	void update(const PropertyValue& value) override {
-		if (!graph::query::expressions::EvaluationContext::isNull(value)) {
+		if (value.getType() != PropertyType::NULL_TYPE) {
 			seen_.insert(value);
 		}
 	}
@@ -410,7 +421,7 @@ public:
 	explicit StDevAccumulator(bool population) : population_(population) {}
 
 	void update(const PropertyValue& value) override {
-		if (graph::query::expressions::EvaluationContext::isNull(value)) {
+		if (value.getType() == PropertyType::NULL_TYPE) {
 			return;
 		}
 		PropertyType type = value.getType();
@@ -468,7 +479,7 @@ public:
 	explicit PercentileDiscAccumulator(double percentile) : percentile_(percentile) {}
 
 	void update(const PropertyValue& value) override {
-		if (!graph::query::expressions::EvaluationContext::isNull(value)) {
+		if (value.getType() != PropertyType::NULL_TYPE) {
 			values_.push_back(value);
 		}
 	}
@@ -505,7 +516,7 @@ public:
 	explicit PercentileContAccumulator(double percentile) : percentile_(percentile) {}
 
 	void update(const PropertyValue& value) override {
-		if (graph::query::expressions::EvaluationContext::isNull(value)) {
+		if (value.getType() == PropertyType::NULL_TYPE) {
 			return;
 		}
 		PropertyType type = value.getType();

@@ -19,6 +19,7 @@ SCAN_WORKLOADS = [
     "two_hop_expand",
     "shortest_path_chain",
     "aggregation_group_by",
+    "aggregation_count_by_group",
     "topk_property_sort",
 ]
 
@@ -95,6 +96,9 @@ class BenchmarkAdapter:
         raise NotImplementedError
 
     def aggregation_group_by(self) -> int:
+        raise NotImplementedError
+
+    def aggregation_count_by_group(self) -> int:
         raise NotImplementedError
 
     def topk_property_sort(self) -> int:

@@ -75,6 +75,49 @@ TEST(NodeCountFastPathPlannerTest, RejectsGroupedAggregate) {
 	EXPECT_FALSE(tryBuildNodeCountFastPathPlan(aggregate).has_value());
 }
 
+TEST(NodeCountFastPathPlannerTest, AcceptsSinglePropertyGroupCountOverNodeScan) {
+	auto scan = makeScan("u");
+	std::vector<std::shared_ptr<expressions::Expression>> groups;
+	groups.push_back(std::make_shared<expressions::VariableReferenceExpression>("u", "country"));
+	LogicalAggregate aggregate(std::move(scan), std::move(groups), makeAggs("count", nullptr, false, "rows"), {"country"});
+
+	auto plan = tryBuildNodeGroupCountFastPathPlan(aggregate);
+
+	ASSERT_TRUE(plan.has_value());
+	EXPECT_EQ(plan->config.variable, "u");
+	EXPECT_EQ(plan->groupProperty, "country");
+	EXPECT_EQ(plan->groupAlias, "country");
+	EXPECT_EQ(plan->outputAlias, "rows");
+	EXPECT_EQ(plan->requirements.requiredProperties, (std::vector<std::string>{"country"}));
+	EXPECT_TRUE(plan->requirements.countOnly);
+}
+
+TEST(NodeCountFastPathPlannerTest, RejectsUnsupportedPropertyGroupCountShapes) {
+	{
+		auto scan = makeScan("u");
+		std::vector<std::shared_ptr<expressions::Expression>> groups;
+		groups.push_back(std::make_shared<expressions::VariableReferenceExpression>("other", "country"));
+		LogicalAggregate aggregate(std::move(scan), std::move(groups), makeAggs("count", nullptr));
+		EXPECT_FALSE(tryBuildNodeGroupCountFastPathPlan(aggregate).has_value());
+	}
+	{
+		auto scan = makeScan("u");
+		std::vector<std::shared_ptr<expressions::Expression>> groups;
+		groups.push_back(std::make_shared<expressions::VariableReferenceExpression>("u", "country"));
+		LogicalAggregate aggregate(std::move(scan), std::move(groups), makeAggs("sum", nullptr));
+		EXPECT_FALSE(tryBuildNodeGroupCountFastPathPlan(aggregate).has_value());
+	}
+	{
+		auto scan = makeScan("u");
+		std::vector<std::shared_ptr<expressions::Expression>> groups;
+		groups.push_back(std::make_shared<expressions::VariableReferenceExpression>("u", "country"));
+		LogicalAggregate aggregate(
+				std::move(scan), std::move(groups),
+				makeAggs("count", std::make_shared<expressions::VariableReferenceExpression>("other")));
+		EXPECT_FALSE(tryBuildNodeGroupCountFastPathPlan(aggregate).has_value());
+	}
+}
+
 TEST(NodeCountFastPathPlannerTest, RejectsDistinctCount) {
 	auto scan = makeScan();
 	LogicalAggregate aggregate(std::move(scan), {}, makeAggs("count", std::make_shared<expressions::VariableReferenceExpression>("n"), true));

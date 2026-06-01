@@ -51,6 +51,14 @@ TEST_F(CountAccumulatorTest, MixedNullAndNonNull) {
 	EXPECT_EQ(std::get<int64_t>(acc->getResult().getVariant()), 2);
 }
 
+TEST_F(CountAccumulatorTest, CountsRowsWithoutMaterializingInputValue) {
+	auto acc = createAccumulator(AggregateFunctionType::AGG_COUNT);
+	acc->updateRow();
+	acc->updateRow();
+	acc->update(PropertyValue());
+	EXPECT_EQ(std::get<int64_t>(acc->getResult().getVariant()), 2);
+}
+
 // Count with no updates at all
 TEST_F(CountAccumulatorTest, NoUpdates) {
 	auto acc = createAccumulator(AggregateFunctionType::AGG_COUNT);

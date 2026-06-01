@@ -90,6 +90,9 @@ The benchmark records one row per database/workload and labels how equivalent wo
 | `one_hop_expand` | Expand one outgoing `FOLLOWS` hop from a fixed user. |
 | `two_hop_expand` | Expand two outgoing `FOLLOWS` hops from a fixed user. |
 | `shortest_path_chain` | Check whether a bounded `FOLLOWS` path exists between fixed users. |
+| `aggregation_group_by` | Count distinct user countries. |
+| `aggregation_count_by_group` | Group users by country and count rows per group. |
+| `topk_property_sort` | Return top users by score with `ORDER BY ... LIMIT`. |
 
 `equivalent_mode` indicates the execution interface:
 

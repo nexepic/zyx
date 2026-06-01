@@ -38,6 +38,7 @@ def test_fake_adapter_runs_all_common_workloads(tmp_path: Path):
         "two_hop_expand",
         "shortest_path_chain",
         "aggregation_group_by",
+        "aggregation_count_by_group",
         "topk_property_sort",
     }
     for result in results:
@@ -64,9 +65,10 @@ def test_fake_adapter_uses_scan_profile_workloads(tmp_path: Path):
         "two_hop_expand",
         "shortest_path_chain",
         "aggregation_group_by",
+        "aggregation_count_by_group",
         "topk_property_sort",
     ]
-    assert [result.status for result in results] == ["ok"] * 11
+    assert [result.status for result in results] == ["ok"] * 12
 
 
 def test_fake_adapter_uses_indexed_profile_workloads(tmp_path: Path):
@@ -177,7 +179,7 @@ def test_run_all_preloads_query_adapter_before_timing(tmp_path: Path):
     adapter = ObservedFakeAdapter(database="fake", dataset_dir=dataset_dir, scale="smoke")
     results = adapter.run_all(warmup=0, iterations=1)
 
-    assert [result.status for result in results] == ["ok"] * 11
+    assert [result.status for result in results] == ["ok"] * 12
     assert ("label", True) in ObservedFakeAdapter.events
 
 
@@ -204,7 +206,7 @@ def test_run_benchmark_writes_raw_and_summary(tmp_path: Path):
     assert (output_root / "latest.txt").read_text().strip() == result_dir.name
 
     events = _read_jsonl(result_dir / "raw.jsonl")
-    assert sum(1 for event in events if event["event"] == "sample") == 11 * iterations
+    assert sum(1 for event in events if event["event"] == "sample") == 12 * iterations
     environment = events[0]
     assert environment["event"] == "environment"
     assert environment["seed"] == 42

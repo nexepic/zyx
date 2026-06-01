@@ -171,7 +171,7 @@ void AggregateOperator::updateAccumulators(const Record& record,
 
 		if (agg.functionType == AggregateFunctionType::AGG_COUNT) {
 			if (!agg.expression) {
-				accums[i]->update(PropertyValue(static_cast<int64_t>(1)));
+				accums[i]->updateRow();
 			} else {
 				PropertyValue value = evaluateAggregateValue(i, record);
 				accums[i]->update(value);
