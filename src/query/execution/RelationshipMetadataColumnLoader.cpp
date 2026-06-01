@@ -275,6 +275,13 @@ namespace graph::query::execution {
 		const bool traceEnabled = debug::PerfTrace::isEnabled();
 		const auto start = traceEnabled ? Clock::now() : Clock::time_point{};
 
+		if (auto count = dm_->countActiveEdgesByTypeFromSegmentStats(beginId, endId, typeId)) {
+			if (traceEnabled) {
+				debug::PerfTrace::addDuration("relationship_count.load_edge_metadata", elapsedNs(start));
+			}
+			return count;
+		}
+
 		int64_t count = 0;
 		if (!scanSerializedEdges(dm_, beginId, endId, [&](int64_t, const char *serializedEdge) {
 			if (readSerializedActive(serializedEdge) &&

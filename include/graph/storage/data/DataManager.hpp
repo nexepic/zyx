@@ -27,6 +27,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <shared_mutex>
 #include <span>
 #include <unordered_map>
 #include <utility>
@@ -112,6 +113,16 @@ namespace graph::storage {
 		PropertyEntityPredicateOp op = PropertyEntityPredicateOp::PEP_EQ;
 		PropertyValue value;
 		std::optional<PropertyValue> upperValue;
+	};
+
+	struct RelationshipTypeSegmentStats {
+		uint64_t segmentOffset = 0;
+		int64_t startId = 0;
+		int64_t endId = -1;
+		uint32_t used = 0;
+		uint32_t inactiveCount = 0;
+		int64_t activeCount = 0;
+		std::unordered_map<int64_t, int64_t> activeCountByType;
 	};
 
 	/**
@@ -354,6 +365,13 @@ namespace graph::storage {
 		// Page buffer pool access
 		[[nodiscard]] PageBufferPool &getPagePool() const { return *pagePool_; }
 
+		// Storage-owned relationship metadata cache. It stores per-segment type counts,
+		// not query results, and is invalidated alongside dirty storage pages.
+		[[nodiscard]] std::optional<int64_t>
+		countActiveEdgesByTypeFromSegmentStats(int64_t beginId, int64_t endId, int64_t typeId) const;
+		void invalidateRelationshipSegmentTypeStats(std::span<const uint64_t> segmentOffsets) const;
+		void clearRelationshipSegmentTypeStats() const;
+
 		// Helper method for DeletionManager to update entity status in memory without recursion
 		template<typename EntityType>
 		void markEntityDeleted(EntityType &entity);
@@ -451,6 +469,9 @@ namespace graph::storage {
 		// Unified page buffer pool (replaces 6 entity-level LRU caches)
 		std::unique_ptr<PageBufferPool> pagePool_;
 
+		mutable std::shared_mutex relationshipSegmentTypeStatsMutex_;
+		mutable std::unordered_map<uint64_t, RelationshipTypeSegmentStats> relationshipSegmentTypeStats_;
+
 		// Transaction bookkeeping (mutable: logically separate from entity state,
 		// needs to be modifiable from const entity mutation methods)
 		mutable TransactionContext txnContext_;
@@ -503,6 +524,14 @@ namespace graph::storage {
 		template<typename EntityType>
 		std::vector<EntityType> readEntitiesFromSegment(uint64_t segmentOffset, int64_t startId, int64_t endId,
 														size_t limit) const;
+
+		[[nodiscard]] std::optional<RelationshipTypeSegmentStats>
+		getRelationshipSegmentTypeStats(uint64_t segmentOffset, const SegmentHeader &header) const;
+		[[nodiscard]] std::optional<RelationshipTypeSegmentStats>
+		buildRelationshipSegmentTypeStats(uint64_t segmentOffset, const SegmentHeader &header) const;
+		[[nodiscard]] std::optional<int64_t> countActiveEdgesByTypeInSegmentWindow(
+				uint64_t segmentOffset, const SegmentHeader &header, int64_t firstId, int64_t lastId,
+				int64_t typeId) const;
 
 		// Entity property operations
 		template<typename EntityType>

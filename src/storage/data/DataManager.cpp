@@ -20,6 +20,7 @@
 
 #include "graph/storage/data/DataManager.hpp"
 #include <algorithm>
+#include <cstddef>
 #include <cstring>
 #include <map>
 #include <optional>
@@ -138,6 +139,24 @@ namespace graph::storage {
 			bool active = false;
 			uint32_t propertyCount = 0;
 		};
+
+		int64_t readSerializedRelationshipId(const char *buf) {
+			int64_t edgeId = 0;
+			std::memcpy(&edgeId, buf + offsetof(Edge::Metadata, id), sizeof(edgeId));
+			return edgeId;
+		}
+
+		int64_t readSerializedRelationshipTypeId(const char *buf) {
+			int64_t typeId = 0;
+			std::memcpy(&typeId, buf + offsetof(Edge::Metadata, typeId), sizeof(typeId));
+			return typeId;
+		}
+
+		bool readSerializedRelationshipActive(const char *buf) {
+			bool active = false;
+			std::memcpy(&active, buf + offsetof(Edge::Metadata, isActive), sizeof(active));
+			return active;
+		}
 
 		bool readPropertyRecordHeader(const char *&cursor, const char *end, PropertyRecordHeader &header) {
 			constexpr size_t headerBytes = sizeof(header.propertyId) + sizeof(header.entityId) +
@@ -2771,7 +2790,181 @@ namespace graph::storage {
 
 	// --- Cache and Transaction Management ---
 
-	void DataManager::clearCache() const { pagePool_->clear(); }
+	void DataManager::clearCache() const {
+		pagePool_->clear();
+		clearRelationshipSegmentTypeStats();
+	}
+
+	std::optional<RelationshipTypeSegmentStats>
+	DataManager::buildRelationshipSegmentTypeStats(uint64_t segmentOffset, const SegmentHeader &header) const {
+		if (!hasPreadSupport() || header.data_type != Edge::typeId || header.used == 0) {
+			return std::nullopt;
+		}
+
+		constexpr size_t entitySize = Edge::getTotalSize();
+		const size_t dataBytes = static_cast<size_t>(header.used) * entitySize;
+		std::vector<char> buf(dataBytes);
+		const auto dataOffset = static_cast<int64_t>(segmentOffset + sizeof(SegmentHeader));
+		const ssize_t read = preadBytes(buf.data(), dataBytes, dataOffset);
+		if (read < static_cast<ssize_t>(dataBytes)) {
+			return std::nullopt;
+		}
+
+		RelationshipTypeSegmentStats stats;
+		stats.segmentOffset = segmentOffset;
+		stats.startId = header.start_id;
+		stats.endId = header.start_id + static_cast<int64_t>(header.used) - 1;
+		stats.used = header.used;
+		stats.inactiveCount = header.inactive_count;
+		for (uint32_t slot = 0; slot < header.used; ++slot) {
+			const int64_t expectedId = header.start_id + static_cast<int64_t>(slot);
+			const char *edgeBuf = buf.data() + static_cast<size_t>(slot) * entitySize;
+			if (readSerializedRelationshipId(edgeBuf) != expectedId || !readSerializedRelationshipActive(edgeBuf)) {
+				continue;
+			}
+			++stats.activeCount;
+			++stats.activeCountByType[readSerializedRelationshipTypeId(edgeBuf)];
+		}
+		return stats;
+	}
+
+	std::optional<RelationshipTypeSegmentStats>
+	DataManager::getRelationshipSegmentTypeStats(uint64_t segmentOffset, const SegmentHeader &header) const {
+		const int64_t expectedEndId = header.used == 0
+			? header.start_id - 1
+			: header.start_id + static_cast<int64_t>(header.used) - 1;
+		{
+			std::shared_lock lock(relationshipSegmentTypeStatsMutex_);
+			auto it = relationshipSegmentTypeStats_.find(segmentOffset);
+			if (it != relationshipSegmentTypeStats_.end() &&
+			    it->second.startId == header.start_id &&
+			    it->second.endId == expectedEndId &&
+			    it->second.used == header.used &&
+			    it->second.inactiveCount == header.inactive_count) {
+				return it->second;
+			}
+		}
+
+		auto stats = buildRelationshipSegmentTypeStats(segmentOffset, header);
+		if (!stats.has_value()) {
+			return std::nullopt;
+		}
+
+		std::unique_lock lock(relationshipSegmentTypeStatsMutex_);
+		auto &cached = relationshipSegmentTypeStats_[segmentOffset];
+		cached = std::move(*stats);
+		return cached;
+	}
+
+	std::optional<int64_t> DataManager::countActiveEdgesByTypeInSegmentWindow(
+			uint64_t segmentOffset, const SegmentHeader &header, int64_t firstId, int64_t lastId,
+			int64_t typeId) const {
+		if (!hasPreadSupport() || header.data_type != Edge::typeId || header.used == 0 || firstId > lastId) {
+			return std::nullopt;
+		}
+
+		constexpr size_t entitySize = Edge::getTotalSize();
+		const auto firstSlot = static_cast<uint32_t>(firstId - header.start_id);
+		const auto lastSlot = static_cast<uint32_t>(lastId - header.start_id);
+		if (lastSlot >= header.used || firstSlot > lastSlot) {
+			return std::nullopt;
+		}
+
+		const size_t rowCount = static_cast<size_t>(lastSlot - firstSlot + 1);
+		const size_t dataBytes = rowCount * entitySize;
+		std::vector<char> buf(dataBytes);
+		const auto dataOffset = static_cast<int64_t>(
+				segmentOffset + sizeof(SegmentHeader) + static_cast<uint64_t>(firstSlot) * entitySize);
+		const ssize_t read = preadBytes(buf.data(), dataBytes, dataOffset);
+		if (read < static_cast<ssize_t>(dataBytes)) {
+			return std::nullopt;
+		}
+
+		int64_t count = 0;
+		for (uint32_t slot = firstSlot; slot <= lastSlot; ++slot) {
+			const int64_t expectedId = header.start_id + static_cast<int64_t>(slot);
+			const char *edgeBuf = buf.data() + static_cast<size_t>(slot - firstSlot) * entitySize;
+			if (readSerializedRelationshipId(edgeBuf) == expectedId &&
+			    readSerializedRelationshipActive(edgeBuf) &&
+			    (typeId == 0 || readSerializedRelationshipTypeId(edgeBuf) == typeId)) {
+				++count;
+			}
+		}
+		return count;
+	}
+
+	std::optional<int64_t>
+	DataManager::countActiveEdgesByTypeFromSegmentStats(int64_t beginId, int64_t endId, int64_t typeId) const {
+		if (!hasPreadSupport() || beginId <= 0 || endId < beginId || hasUnsavedChanges()) {
+			return std::nullopt;
+		}
+		const auto *snapshot = getCurrentSnapshot();
+		if (snapshot != nullptr && !snapshot->edges.empty()) {
+			return std::nullopt;
+		}
+
+		const auto &segmentIndex = segmentIndexManager_->getEdgeSegmentIndex();
+		int64_t total = 0;
+		for (const auto &entry: segmentIndex) {
+			if (entry.endId < beginId || entry.startId > endId) {
+				continue;
+			}
+
+			SegmentHeader header{};
+			const ssize_t headerRead = preadBytes(&header, sizeof(SegmentHeader), static_cast<int64_t>(entry.segmentOffset));
+			if (headerRead < static_cast<ssize_t>(sizeof(SegmentHeader)) || header.data_type != Edge::typeId) {
+				return std::nullopt;
+			}
+			header.file_offset = entry.segmentOffset;
+			if (header.used == 0) {
+				continue;
+			}
+
+			const int64_t segmentFirst = std::max<int64_t>(entry.startId, header.start_id);
+			const int64_t segmentLast = std::min<int64_t>(
+					entry.endId, header.start_id + static_cast<int64_t>(header.used) - 1);
+			const int64_t first = std::max<int64_t>(beginId, segmentFirst);
+			const int64_t last = std::min<int64_t>(endId, segmentLast);
+			if (first > last) {
+				continue;
+			}
+
+			if (first == segmentFirst && last == segmentLast) {
+				auto stats = getRelationshipSegmentTypeStats(entry.segmentOffset, header);
+				if (!stats.has_value()) {
+					return std::nullopt;
+				}
+				if (typeId == 0) {
+					total += stats->activeCount;
+				} else if (auto it = stats->activeCountByType.find(typeId); it != stats->activeCountByType.end()) {
+					total += it->second;
+				}
+				continue;
+			}
+
+			auto partial = countActiveEdgesByTypeInSegmentWindow(entry.segmentOffset, header, first, last, typeId);
+			if (!partial.has_value()) {
+				return std::nullopt;
+			}
+			total += *partial;
+		}
+		return total;
+	}
+
+	void DataManager::invalidateRelationshipSegmentTypeStats(std::span<const uint64_t> segmentOffsets) const {
+		if (segmentOffsets.empty()) {
+			return;
+		}
+		std::unique_lock lock(relationshipSegmentTypeStatsMutex_);
+		for (uint64_t segmentOffset: segmentOffsets) {
+			relationshipSegmentTypeStats_.erase(segmentOffset);
+		}
+	}
+
+	void DataManager::clearRelationshipSegmentTypeStats() const {
+		std::unique_lock lock(relationshipSegmentTypeStatsMutex_);
+		relationshipSegmentTypeStats_.clear();
+	}
 
 	void DataManager::invalidateDirtySegments(const FlushSnapshot &snapshot) const {
 		std::unordered_set<uint64_t> dirtySegments;
@@ -2795,6 +2988,8 @@ namespace graph::storage {
 		for (uint64_t seg: dirtySegments) {
 			pagePool_->invalidate(seg);
 		}
+		std::vector<uint64_t> dirtySegmentList(dirtySegments.begin(), dirtySegments.end());
+		invalidateRelationshipSegmentTypeStats(dirtySegmentList);
 	}
 
 	void DataManager::invalidateDirtySegments(const FlushSnapshotView &snapshot) const {
@@ -2822,6 +3017,8 @@ namespace graph::storage {
 		for (uint64_t seg: dirtySegments) {
 			pagePool_->invalidate(seg);
 		}
+		std::vector<uint64_t> dirtySegmentList(dirtySegments.begin(), dirtySegments.end());
+		invalidateRelationshipSegmentTypeStats(dirtySegmentList);
 	}
 
 	void DataManager::invalidateSegments(std::span<const uint64_t> segmentOffsets) const {
@@ -2830,6 +3027,7 @@ namespace graph::storage {
 				pagePool_->invalidate(segmentOffset);
 			}
 		}
+		invalidateRelationshipSegmentTypeStats(segmentOffsets);
 	}
 
 	template<typename EntityType>
