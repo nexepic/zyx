@@ -74,13 +74,21 @@ namespace graph::query::execution {
 
 		std::vector<size_t> collectEdgeWorkSegments(const std::shared_ptr<storage::DataManager> &dm,
 		                                            int64_t beginId,
-		                                            int64_t endId) {
+		                                            int64_t endId,
+		                                            int64_t typeId = 0,
+		                                            bool pruneWithCachedTypeStats = false) {
 			const auto &segmentIndex = dm->getSegmentIndexManager()->getEdgeSegmentIndex();
 			std::vector<size_t> workSegmentIndices;
 			workSegmentIndices.reserve(segmentIndex.size());
 			for (size_t segment = 0; segment < segmentIndex.size(); ++segment) {
 				const auto &entry = segmentIndex[segment];
 				if (entry.endId >= beginId && entry.startId <= endId) {
+					if (pruneWithCachedTypeStats && typeId != 0) {
+						auto stats = dm->cachedRelationshipTypeSegmentStats(entry.segmentOffset);
+						if (stats.has_value() && !stats->activeCountByType.contains(typeId)) {
+							continue;
+						}
+					}
 					workSegmentIndices.push_back(segment);
 				}
 			}
@@ -131,10 +139,13 @@ namespace graph::query::execution {
 		bool scanSerializedEdges(const std::shared_ptr<storage::DataManager> &dm,
 		                         int64_t beginId,
 		                         int64_t endId,
+		                         int64_t typeId,
+		                         bool pruneWithCachedTypeStats,
 		                         Visitor &&visitor) {
-			const auto workSegmentIndices = collectEdgeWorkSegments(dm, beginId, endId);
+			const auto workSegmentIndices =
+					collectEdgeWorkSegments(dm, beginId, endId, typeId, pruneWithCachedTypeStats);
 			if (workSegmentIndices.empty()) { // ZYX_COV_EXCL_LINE
-				return false;
+				return pruneWithCachedTypeStats;
 			}
 
 			const auto &segmentIndex = dm->getSegmentIndexManager()->getEdgeSegmentIndex();
@@ -163,6 +174,14 @@ namespace graph::query::execution {
 				}
 			}
 			return true;
+		}
+
+		template<typename Visitor>
+		bool scanSerializedEdges(const std::shared_ptr<storage::DataManager> &dm,
+		                         int64_t beginId,
+		                         int64_t endId,
+		                         Visitor &&visitor) {
+			return scanSerializedEdges(dm, beginId, endId, 0, false, std::forward<Visitor>(visitor));
 		}
 
 	} // namespace
@@ -325,7 +344,7 @@ namespace graph::query::execution {
 
 		RelationshipPropertyCandidateBatch batch;
 		batch.reserve(static_cast<size_t>(endId - beginId + 1));
-		if (!scanSerializedEdges(dm_, beginId, endId, [&](int64_t edgeId, const char *serializedEdge) {
+		if (!scanSerializedEdges(dm_, beginId, endId, typeId, true, [&](int64_t edgeId, const char *serializedEdge) {
 			if (!readSerializedActive(serializedEdge) ||
 			    (typeId != 0 && readSerializedTypeId(serializedEdge) != typeId)) {
 				return;
@@ -370,7 +389,7 @@ namespace graph::query::execution {
 
 		RelationshipPropertyCountCandidates candidates;
 		candidates.reserve(static_cast<size_t>(endId - beginId + 1));
-		if (!scanSerializedEdges(dm_, beginId, endId, [&](int64_t edgeId, const char *serializedEdge) {
+		if (!scanSerializedEdges(dm_, beginId, endId, typeId, true, [&](int64_t edgeId, const char *serializedEdge) {
 			if (!readSerializedActive(serializedEdge) ||
 			    (typeId != 0 && readSerializedTypeId(serializedEdge) != typeId)) {
 				return;

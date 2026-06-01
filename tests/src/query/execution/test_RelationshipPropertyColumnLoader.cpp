@@ -512,6 +512,12 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, RelationshipTypeSegmentStats
 	auto missingTypeCount = dm->countActiveEdgesByTypeFromSegmentStats(1, 260, followsType + likesType + 1000);
 	ASSERT_TRUE(missingTypeCount.has_value());
 	EXPECT_EQ(*missingTypeCount, 0);
+	const auto &edgeSegments = dm->getSegmentIndexManager()->getEdgeSegmentIndex();
+	ASSERT_FALSE(edgeSegments.empty());
+	auto cachedStats = dm->cachedRelationshipTypeSegmentStats(edgeSegments.front().segmentOffset);
+	ASSERT_TRUE(cachedStats.has_value());
+	EXPECT_EQ(cachedStats->segmentOffset, edgeSegments.front().segmentOffset);
+	EXPECT_GT(cachedStats->activeCount, 0);
 	EXPECT_FALSE(dm->countActiveEdgesByTypeFromSegmentStats(0, 260, followsType).has_value());
 	EXPECT_FALSE(dm->countActiveEdgesByTypeFromSegmentStats(10, 1, followsType).has_value());
 	RelationshipMetadataColumnLoader metadataLoader(dm);
@@ -531,6 +537,7 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, RelationshipTypeSegmentStats
 	EXPECT_EQ(*snapshotLoaderCount, 129);
 	dm->clearCurrentSnapshot();
 	dm->clearRelationshipSegmentTypeStats();
+	EXPECT_FALSE(dm->cachedRelationshipTypeSegmentStats(edgeSegments.front().segmentOffset).has_value());
 	followsCount = dm->countActiveEdgesByTypeFromSegmentStats(1, 260, followsType);
 	ASSERT_TRUE(followsCount.has_value());
 	EXPECT_EQ(*followsCount, 130);
