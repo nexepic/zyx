@@ -645,6 +645,41 @@ TEST_F(DataManagerTest, BulkMatchPropertyEntityPredicatesReturnsLoadedAndMatched
 	          0U);
 }
 
+TEST_F(DataManagerTest, BulkCountPropertyEntityPredicatesCountsAcrossAdjacentSegments) {
+	const int entityCount = static_cast<int>(PROPERTIES_PER_SEGMENT) + 8;
+	std::vector<int64_t> propertyIds;
+	propertyIds.reserve(entityCount);
+	size_t expectedMatches = 0;
+	for (int i = 0; i < entityCount; ++i) {
+		const bool shouldMatch = i % 3 == 0;
+		const int64_t propertyId = addNodeWithPropertyEntity(
+			dataManager,
+			"BulkPredicateAdjacentSegmentNode",
+			{{"keep", PropertyValue(int64_t(shouldMatch ? 42 : 7))}, {"ordinal", PropertyValue(int64_t(i))}});
+		ASSERT_NE(propertyId, 0);
+		propertyIds.push_back(propertyId);
+		if (shouldMatch) {
+			++expectedMatches;
+		}
+	}
+
+	simulateSave();
+	dataManager->clearCache();
+
+	const auto &segIndex = dataManager->getSegmentIndexManager()->getPropertySegmentIndex();
+	const auto *firstSeg = findSegmentForId(segIndex, propertyIds.front());
+	const auto *lastSeg = findSegmentForId(segIndex, propertyIds.back());
+	ASSERT_NE(firstSeg, nullptr);
+	ASSERT_NE(lastSeg, nullptr);
+	ASSERT_NE(firstSeg->segmentOffset, lastSeg->segmentOffset);
+
+	EXPECT_EQ(dataManager->bulkCountPropertyEntityPredicates(
+		          propertyIds,
+		          {{"keep", PropertyValue(int64_t(42))}},
+		          nullptr),
+	          expectedMatches);
+}
+
 TEST_F(DataManagerTest, BulkMatchPropertyEntityPredicatesParallelHandlesSegmentEdgeCases) {
 	const int entityCount = static_cast<int>(PROPERTIES_PER_SEGMENT) + 1;
 	std::vector<int64_t> propertyIds;
