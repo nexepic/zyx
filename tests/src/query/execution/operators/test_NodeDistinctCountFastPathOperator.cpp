@@ -101,6 +101,7 @@ TEST_F(NodeDistinctCountFastPathOperatorTest, CountsDistinctSelectedPropertyValu
 	const auto snapshot = debug::PerfTrace::snapshotAndReset();
 	EXPECT_TRUE(snapshot.contains("node_scan.distinct_count"));
 	EXPECT_TRUE(snapshot.contains("node_scan.load_node_metadata"));
+	EXPECT_FALSE(snapshot.contains("node_scan.load_properties"));
 	EXPECT_FALSE(snapshot.contains("node_scan.load_nodes"));
 }
 
@@ -166,6 +167,7 @@ TEST_F(NodeDistinctCountFastPathOperatorTest, RepeatsDistinctCountsWithoutResult
 	const auto snapshot = debug::PerfTrace::snapshotAndReset();
 	EXPECT_TRUE(snapshot.contains("node_scan.distinct_count"));
 	EXPECT_TRUE(snapshot.contains("node_scan.load_node_metadata"));
+	EXPECT_FALSE(snapshot.contains("node_scan.load_properties"));
 	EXPECT_FALSE(snapshot.contains("node_scan.distinct_count_cache"));
 }
 

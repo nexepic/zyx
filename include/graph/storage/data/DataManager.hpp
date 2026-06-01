@@ -106,6 +106,8 @@ namespace graph::storage {
 		bool collectMatchedRows = true;
 	};
 
+	using PropertyEntityValueVisitor = std::function<void(size_t row, const PropertyValue &value)>;
+
 	enum class PropertyEntityPredicateOp { PEP_EQ, PEP_NE, PEP_LT, PEP_LE, PEP_GT, PEP_GE, PEP_RANGE_CLOSED };
 
 	struct PropertyEntityPredicate {
@@ -207,6 +209,13 @@ namespace graph::storage {
 				const std::vector<std::string> &keys,
 				std::unordered_map<std::string, std::vector<std::optional<PropertyValue>>> &columns,
 				concurrent::ThreadPool *pool = nullptr) const;
+		// Visit one selected Property entity value without building row-aligned
+		// columns. The callback receives the caller-provided row id, preserving
+		// multiplicity for duplicate Property entity references.
+		size_t bulkVisitPropertyEntityValues(const std::vector<int64_t> &ids, const std::vector<size_t> &rows,
+											 size_t rowCount, const std::string &key,
+											 const PropertyEntityValueVisitor &visitor,
+											 concurrent::ThreadPool *pool = nullptr) const;
 		// Evaluate equality predicates directly while scanning Property entities.
 		// This avoids materializing row-aligned columns when the caller only needs
 		// rows matching a filter.
