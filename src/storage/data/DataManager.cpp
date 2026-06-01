@@ -158,6 +158,27 @@ namespace graph::storage {
 			return active;
 		}
 
+		template<typename EntityType>
+		std::vector<DirtyEntityInfo<EntityType>> filterDirtyInfosByType(
+				std::vector<DirtyEntityInfo<EntityType>> allInfos,
+				const std::vector<EntityChangeType> &types) {
+			if (types.size() == 3) {
+				return allInfos;
+			}
+
+			std::vector<DirtyEntityInfo<EntityType>> result;
+			result.reserve(allInfos.size());
+			for (const auto &info: allInfos) {
+				const bool typeMatch = std::any_of(types.begin(), types.end(), [&](EntityChangeType type) {
+					return info.changeType == type;
+				});
+				if (typeMatch) {
+					result.push_back(info);
+				}
+			}
+			return result;
+		}
+
 		bool readPropertyRecordHeader(const char *&cursor, const char *end, PropertyRecordHeader &header) {
 			constexpr size_t headerBytes = sizeof(header.propertyId) + sizeof(header.entityId) +
 										   sizeof(header.entityType) + sizeof(header.active) +
@@ -2384,31 +2405,13 @@ namespace graph::storage {
 	template<typename EntityType>
 	std::vector<DirtyEntityInfo<EntityType>>
 	DataManager::getDirtyEntityInfos(const std::vector<EntityChangeType> &types) {
-		// 1. Get all dirty entities from PersistenceManager (Active + Flushing)
-		auto allInfos = persistenceManager_->getAllDirtyInfos<EntityType>();
+		return filterDirtyInfosByType(persistenceManager_->getAllDirtyInfos<EntityType>(), types);
+	}
 
-		// 2. Filter by requested types
-		// Optimization: If types contains ALL types, return directly
-		if (types.size() == 3) { // Assuming ADDED, MODIFIED, DELETED are the only main ones
-			return allInfos;
-		}
-
-		std::vector<DirtyEntityInfo<EntityType>> result;
-		result.reserve(allInfos.size());
-
-		for (const auto &info: allInfos) {
-			bool typeMatch = false;
-			for (auto type: types) {
-				if (info.changeType == type) {
-					typeMatch = true;
-					break;
-				}
-			}
-			if (typeMatch) {
-				result.push_back(info);
-			}
-		}
-		return result;
+	template<typename EntityType>
+	std::vector<DirtyEntityInfo<EntityType>>
+	DataManager::getDirtyEntityInfos(const std::vector<EntityChangeType> &types) const {
+		return filterDirtyInfosByType(persistenceManager_->getAllDirtyInfos<EntityType>(), types);
 	}
 
 	template<typename T>
@@ -2893,15 +2896,89 @@ namespace graph::storage {
 		return count;
 	}
 
+	std::optional<bool> DataManager::persistedEdgeMatchesType(int64_t edgeId, int64_t typeId) const {
+		if (!hasPreadSupport() || edgeId <= 0) {
+			return std::nullopt;
+		}
+
+		const uint64_t segmentOffset = findSegmentForEntityId<Edge>(edgeId);
+		if (segmentOffset == 0) {
+			return false;
+		}
+
+		SegmentHeader header{};
+		const ssize_t headerRead = preadBytes(&header, sizeof(SegmentHeader), static_cast<int64_t>(segmentOffset));
+		if (headerRead < static_cast<ssize_t>(sizeof(SegmentHeader)) || header.data_type != Edge::typeId) {
+			return std::nullopt;
+		}
+
+		const int64_t slot = edgeId - header.start_id;
+		if (slot < 0 || slot >= static_cast<int64_t>(header.used)) {
+			return false;
+		}
+
+		constexpr size_t entitySize = Edge::getTotalSize();
+		std::vector<char> buf(entitySize);
+		const auto dataOffset = static_cast<int64_t>(
+				segmentOffset + sizeof(SegmentHeader) + static_cast<uint64_t>(slot) * entitySize);
+		const ssize_t read = preadBytes(buf.data(), entitySize, dataOffset);
+		if (read < static_cast<ssize_t>(entitySize)) {
+			return std::nullopt;
+		}
+
+		return readSerializedRelationshipId(buf.data()) == edgeId &&
+			   readSerializedRelationshipActive(buf.data()) &&
+			   (typeId == 0 || readSerializedRelationshipTypeId(buf.data()) == typeId);
+	}
+
+	std::optional<int64_t> DataManager::applyRelationshipTypeCountOverlay(
+			int64_t baseCount, int64_t beginId, int64_t endId, int64_t typeId,
+			std::span<const DirtyEntityInfo<Edge>> edgeOverlay) const {
+		int64_t total = baseCount;
+		for (const auto &info: edgeOverlay) {
+			if (!info.backup.has_value()) {
+				continue;
+			}
+			const Edge &edge = *info.backup;
+			const int64_t edgeId = edge.getId();
+			if (edgeId < beginId || edgeId > endId) {
+				continue;
+			}
+
+			if (info.changeType != EntityChangeType::CHANGE_ADDED) {
+				auto persistedMatch = persistedEdgeMatchesType(edgeId, typeId);
+				if (!persistedMatch.has_value()) {
+					return std::nullopt;
+				}
+				total -= *persistedMatch ? int64_t{1} : int64_t{0};
+			}
+
+			if (info.changeType != EntityChangeType::CHANGE_DELETED && edge.isActive() &&
+			    (typeId == 0 || edge.getTypeId() == typeId)) {
+				++total;
+			}
+		}
+		return total;
+	}
+
+	std::optional<int64_t> DataManager::applyRelationshipTypeCountSnapshotOverlay(
+			int64_t baseCount, int64_t beginId, int64_t endId, int64_t typeId,
+			const std::unordered_map<int64_t, DirtyEntityInfo<Edge>> &edgeOverlay) const {
+		std::vector<DirtyEntityInfo<Edge>> overlay;
+		overlay.reserve(edgeOverlay.size());
+		for (const auto &[edgeId, info]: edgeOverlay) {
+			(void) edgeId;
+			overlay.push_back(info);
+		}
+		return applyRelationshipTypeCountOverlay(baseCount, beginId, endId, typeId, overlay);
+	}
+
 	std::optional<int64_t>
 	DataManager::countActiveEdgesByTypeFromSegmentStats(int64_t beginId, int64_t endId, int64_t typeId) const {
-		if (!hasPreadSupport() || beginId <= 0 || endId < beginId || hasUnsavedChanges()) {
+		if (!hasPreadSupport() || beginId <= 0 || endId < beginId) {
 			return std::nullopt;
 		}
 		const auto *snapshot = getCurrentSnapshot();
-		if (snapshot != nullptr && !snapshot->edges.empty()) {
-			return std::nullopt;
-		}
 
 		const auto &segmentIndex = segmentIndexManager_->getEdgeSegmentIndex();
 		int64_t total = 0;
@@ -2948,7 +3025,12 @@ namespace graph::storage {
 			}
 			total += *partial;
 		}
-		return total;
+		if (snapshot != nullptr) {
+			return applyRelationshipTypeCountSnapshotOverlay(total, beginId, endId, typeId, snapshot->edges);
+		}
+		auto edgeOverlay = getDirtyEntityInfos<Edge>(
+				{EntityChangeType::CHANGE_ADDED, EntityChangeType::CHANGE_MODIFIED, EntityChangeType::CHANGE_DELETED});
+		return applyRelationshipTypeCountOverlay(total, beginId, endId, typeId, edgeOverlay);
 	}
 
 	void DataManager::invalidateRelationshipSegmentTypeStats(std::span<const uint64_t> segmentOffsets) const {
@@ -3078,6 +3160,8 @@ namespace graph::storage {
 	template std::vector<Node> DataManager::readEntitiesFromSegment<Node>(uint64_t, int64_t, int64_t, size_t) const;
 	template std::vector<DirtyEntityInfo<Node>>
 	DataManager::getDirtyEntityInfos<Node>(const std::vector<EntityChangeType> &);
+	template std::vector<DirtyEntityInfo<Node>>
+	DataManager::getDirtyEntityInfos<Node>(const std::vector<EntityChangeType> &) const;
 	template void DataManager::setEntityDirty<Node>(const DirtyEntityInfo<Node> &);
 
 	// Edge-specific instantiations
@@ -3096,6 +3180,8 @@ namespace graph::storage {
 	template std::vector<Edge> DataManager::readEntitiesFromSegment<Edge>(uint64_t, int64_t, int64_t, size_t) const;
 	template std::vector<DirtyEntityInfo<Edge>>
 	DataManager::getDirtyEntityInfos<Edge>(const std::vector<EntityChangeType> &);
+	template std::vector<DirtyEntityInfo<Edge>>
+	DataManager::getDirtyEntityInfos<Edge>(const std::vector<EntityChangeType> &) const;
 	template void DataManager::setEntityDirty<Edge>(const DirtyEntityInfo<Edge> &);
 
 	// Property-specific instantiations
@@ -3107,6 +3193,8 @@ namespace graph::storage {
 	template void DataManager::markEntityDeleted<Property>(Property &entity);
 	template std::vector<DirtyEntityInfo<Property>>
 	DataManager::getDirtyEntityInfos<Property>(const std::vector<EntityChangeType> &);
+	template std::vector<DirtyEntityInfo<Property>>
+	DataManager::getDirtyEntityInfos<Property>(const std::vector<EntityChangeType> &) const;
 	template void DataManager::setEntityDirty<Property>(const DirtyEntityInfo<Property> &);
 
 	// Blob-specific instantiations
@@ -3117,6 +3205,8 @@ namespace graph::storage {
 	template void DataManager::markEntityDeleted<Blob>(Blob &entity);
 	template std::vector<DirtyEntityInfo<Blob>>
 	DataManager::getDirtyEntityInfos<Blob>(const std::vector<EntityChangeType> &);
+	template std::vector<DirtyEntityInfo<Blob>>
+	DataManager::getDirtyEntityInfos<Blob>(const std::vector<EntityChangeType> &) const;
 	template void DataManager::setEntityDirty<Blob>(const DirtyEntityInfo<Blob> &);
 
 	// Index-specific instantiations
@@ -3127,6 +3217,8 @@ namespace graph::storage {
 	template void DataManager::markEntityDeleted<Index>(Index &entity);
 	template std::vector<DirtyEntityInfo<Index>>
 	DataManager::getDirtyEntityInfos<Index>(const std::vector<EntityChangeType> &);
+	template std::vector<DirtyEntityInfo<Index>>
+	DataManager::getDirtyEntityInfos<Index>(const std::vector<EntityChangeType> &) const;
 	template void DataManager::setEntityDirty<Index>(const DirtyEntityInfo<Index> &);
 
 	// State-specific instantiations
@@ -3137,5 +3229,7 @@ namespace graph::storage {
 	template void DataManager::markEntityDeleted<State>(State &entity);
 	template std::vector<DirtyEntityInfo<State>>
 	DataManager::getDirtyEntityInfos<State>(const std::vector<EntityChangeType> &);
+	template std::vector<DirtyEntityInfo<State>>
+	DataManager::getDirtyEntityInfos<State>(const std::vector<EntityChangeType> &) const;
 	template void DataManager::setEntityDirty<State>(const DirtyEntityInfo<State> &);
 } // namespace graph::storage

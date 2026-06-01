@@ -243,6 +243,12 @@ namespace graph::query::execution {
 		return snapshotSafe;
 	}
 
+	bool RelationshipMetadataColumnLoader::canCountActiveByType(int64_t beginId, int64_t endId) const {
+		static constexpr int64_t METADATA_LOAD_THRESHOLD = 128;
+		return dm_ && dm_->hasPreadSupport() && beginId > 0 && endId >= beginId &&
+			   endId - beginId + 1 >= METADATA_LOAD_THRESHOLD;
+	}
+
 	std::optional<RelationshipMetadataBatch> RelationshipMetadataColumnLoader::loadRange(int64_t beginId, int64_t endId) const {
 		if (!canLoad(beginId, endId)) {
 			return std::nullopt;
@@ -268,7 +274,7 @@ namespace graph::query::execution {
 	std::optional<int64_t> RelationshipMetadataColumnLoader::countActiveByType(int64_t beginId,
 	                                                                           int64_t endId,
 	                                                                           int64_t typeId) const {
-		if (!canLoad(beginId, endId)) {
+		if (!canCountActiveByType(beginId, endId)) {
 			return std::nullopt;
 		}
 
@@ -280,6 +286,14 @@ namespace graph::query::execution {
 				debug::PerfTrace::addDuration("relationship_count.load_edge_metadata", elapsedNs(start));
 			}
 			return count;
+		}
+
+		if (dm_->hasUnsavedChanges()) {
+			return std::nullopt;
+		}
+		const auto *snapshot = dm_->getCurrentSnapshot();
+		if (snapshot != nullptr && !snapshot->edges.empty()) {
+			return std::nullopt;
 		}
 
 		int64_t count = 0;

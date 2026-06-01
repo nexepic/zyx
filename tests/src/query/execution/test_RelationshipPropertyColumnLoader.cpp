@@ -514,13 +514,21 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, RelationshipTypeSegmentStats
 	EXPECT_EQ(*missingTypeCount, 0);
 	EXPECT_FALSE(dm->countActiveEdgesByTypeFromSegmentStats(0, 260, followsType).has_value());
 	EXPECT_FALSE(dm->countActiveEdgesByTypeFromSegmentStats(10, 1, followsType).has_value());
+	RelationshipMetadataColumnLoader metadataLoader(dm);
 
 	storage::CommittedSnapshot edgeOverlaySnapshot;
-	edgeOverlaySnapshot.edges.emplace(followsIds.front(),
-	                                  storage::DirtyEntityInfo<Edge>(storage::EntityChangeType::CHANGE_MODIFIED,
-	                                                                  dm->getEdge(followsIds.front())));
+	Edge snapshotDeleted = dm->getEdge(followsIds.front());
+	snapshotDeleted.markInactive();
+	edgeOverlaySnapshot.edges.emplace(
+			snapshotDeleted.getId(),
+			storage::DirtyEntityInfo<Edge>(storage::EntityChangeType::CHANGE_DELETED, snapshotDeleted));
 	dm->setCurrentSnapshot(&edgeOverlaySnapshot);
-	EXPECT_FALSE(dm->countActiveEdgesByTypeFromSegmentStats(1, 260, followsType).has_value());
+	auto snapshotOverlayCount = dm->countActiveEdgesByTypeFromSegmentStats(1, 260, followsType);
+	ASSERT_TRUE(snapshotOverlayCount.has_value());
+	EXPECT_EQ(*snapshotOverlayCount, 129);
+	auto snapshotLoaderCount = metadataLoader.countActiveByType(1, 260, followsType);
+	ASSERT_TRUE(snapshotLoaderCount.has_value());
+	EXPECT_EQ(*snapshotLoaderCount, 129);
 	dm->clearCurrentSnapshot();
 	dm->clearRelationshipSegmentTypeStats();
 	followsCount = dm->countActiveEdgesByTypeFromSegmentStats(1, 260, followsType);
@@ -530,13 +538,24 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, RelationshipTypeSegmentStats
 	Edge unsaved(0, source, target, followsType);
 	dm->addEdge(unsaved);
 	EXPECT_TRUE(dm->hasUnsavedChanges());
-	EXPECT_FALSE(dm->countActiveEdgesByTypeFromSegmentStats(1, unsaved.getId(), followsType).has_value());
+	auto unsavedAddCount = dm->countActiveEdgesByTypeFromSegmentStats(1, unsaved.getId(), followsType);
+	ASSERT_TRUE(unsavedAddCount.has_value());
+	EXPECT_EQ(*unsavedAddCount, 131);
+	auto unsavedAddLoaderCount = metadataLoader.countActiveByType(1, unsaved.getId(), followsType);
+	ASSERT_TRUE(unsavedAddLoaderCount.has_value());
+	EXPECT_EQ(*unsavedAddLoaderCount, 131);
 	db->getStorage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	ASSERT_FALSE(followsIds.empty());
 	Edge deleted = dm->getEdge(followsIds.front());
 	dm->deleteEdge(deleted);
+	auto unsavedDeleteCount = dm->countActiveEdgesByTypeFromSegmentStats(1, 260, followsType);
+	ASSERT_TRUE(unsavedDeleteCount.has_value());
+	EXPECT_EQ(*unsavedDeleteCount, 129);
+	auto unsavedDeleteLoaderCount = metadataLoader.countActiveByType(1, 260, followsType);
+	ASSERT_TRUE(unsavedDeleteLoaderCount.has_value());
+	EXPECT_EQ(*unsavedDeleteLoaderCount, 129);
 	db->getStorage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
