@@ -25,7 +25,9 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include "graph/query/execution/ExpressionValueReader.hpp"
 #include "../PhysicalOperator.hpp"
+#include "graph/query/execution/TypedValueKey.hpp"
 #include "graph/query/expressions/Expression.hpp"
 #include "AggregateAccumulator.hpp"
 
@@ -111,19 +113,17 @@ public:
 private:
 	struct GroupKey {
 		std::vector<PropertyValue> values;
+		std::vector<TypedEqualityKey> typedValues;
+		size_t hash = 0;
 
 		bool operator==(const GroupKey &other) const {
-			return values == other.values;
+			return typedValues == other.typedValues;
 		}
 	};
 
 	struct GroupKeyHash {
 		size_t operator()(const GroupKey &key) const {
-			size_t seed = key.values.size();
-			for (const auto &value : key.values) {
-				seed ^= PropertyValueHash{}(value) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-			}
-			return seed;
+			return key.hash;
 		}
 	};
 
@@ -135,10 +135,14 @@ private:
 	std::vector<AggregateItem> aggregates_;
 	std::vector<GroupByItem> groupByItems_;
 	storage::DataManager *dataManager_ = nullptr;
+	std::vector<ExpressionValueReader> aggregateReaders_;
+	std::vector<ExpressionValueReader> groupByReaders_;
 	std::vector<std::unique_ptr<AggregateAccumulator>> accumulators_;
 	std::unordered_map<GroupKey, GroupData, GroupKeyHash> groups_;
 	bool emitted_ = false;
 
+	[[nodiscard]] const std::unordered_map<std::string, PropertyValue> *parameters() const;
+	[[nodiscard]] PropertyValue evaluateAggregateValue(size_t index, const Record& record) const;
 	void updateAccumulators(const Record& record,
 	                       std::vector<std::unique_ptr<AggregateAccumulator>>& accums);
 	void updateAccumulators(const Record& record);

@@ -33,8 +33,17 @@ void AggregateOperator::open() {
 	emitted_ = false;
 
 	// Initialize accumulators for each aggregate (with distinct flag)
+	aggregateReaders_.clear();
+	aggregateReaders_.reserve(aggregates_.size());
 	for (const auto& agg : aggregates_) {
 		accumulators_.push_back(createAccumulator(agg.functionType, agg.distinct, agg.percentileArg));
+		aggregateReaders_.push_back(ExpressionValueReader::compile(agg.expression));
+	}
+
+	groupByReaders_.clear();
+	groupByReaders_.reserve(groupByItems_.size());
+	for (const auto& item : groupByItems_) {
+		groupByReaders_.push_back(ExpressionValueReader::compile(item.expression));
 	}
 }
 
@@ -102,6 +111,8 @@ void AggregateOperator::close() {
 	if (child_) {
 		child_->close();
 	}
+	aggregateReaders_.clear();
+	groupByReaders_.clear();
 	accumulators_.clear();
 	groups_.clear();
 }
@@ -137,6 +148,22 @@ std::string AggregateOperator::toString() const {
 	return s;
 }
 
+const std::unordered_map<std::string, PropertyValue> *AggregateOperator::parameters() const {
+	if (queryContext_ && !queryContext_->parameters.empty()) {
+		return &queryContext_->parameters;
+	}
+	return nullptr;
+}
+
+PropertyValue AggregateOperator::evaluateAggregateValue(size_t index, const Record& record) const {
+	if (index < aggregateReaders_.size()) {
+		return aggregateReaders_[index].evaluate(record, dataManager_, parameters());
+	}
+	const auto &agg = aggregates_[index];
+	return graph::query::expressions::ExpressionEvaluationHelper::evaluate(
+		agg.expression.get(), record, dataManager_, parameters());
+}
+
 void AggregateOperator::updateAccumulators(const Record& record,
                                            std::vector<std::unique_ptr<AggregateAccumulator>>& accums) {
 	for (size_t i = 0; i < aggregates_.size(); ++i) {
@@ -146,20 +173,12 @@ void AggregateOperator::updateAccumulators(const Record& record,
 			if (!agg.expression) {
 				accums[i]->update(PropertyValue(static_cast<int64_t>(1)));
 			} else {
-				const std::unordered_map<std::string, PropertyValue> *params = nullptr;
-				if (queryContext_ && !queryContext_->parameters.empty())
-					params = &queryContext_->parameters;
-				PropertyValue value = graph::query::expressions::ExpressionEvaluationHelper::evaluate(
-				    agg.expression.get(), record, dataManager_, params);
+				PropertyValue value = evaluateAggregateValue(i, record);
 				accums[i]->update(value);
 			}
 		} else {
 			if (agg.expression) {
-				const std::unordered_map<std::string, PropertyValue> *params = nullptr;
-				if (queryContext_ && !queryContext_->parameters.empty())
-					params = &queryContext_->parameters;
-				PropertyValue value = graph::query::expressions::ExpressionEvaluationHelper::evaluate(
-				    agg.expression.get(), record, dataManager_, params);
+				PropertyValue value = evaluateAggregateValue(i, record);
 				accums[i]->update(value);
 			}
 		}
@@ -173,16 +192,25 @@ void AggregateOperator::updateAccumulators(const Record& record) {
 AggregateOperator::GroupKey AggregateOperator::evaluateGroupKey(const Record& record) {
 	GroupKey key;
 	key.values.reserve(groupByItems_.size());
-	for (const auto& item : groupByItems_) {
+	key.typedValues.reserve(groupByItems_.size());
+	key.hash = groupByItems_.size();
+	for (size_t i = 0; i < groupByItems_.size(); ++i) {
+		const auto& item = groupByItems_[i];
 		if (item.expression) {
-			const std::unordered_map<std::string, PropertyValue> *params = nullptr;
-			if (queryContext_ && !queryContext_->parameters.empty())
-				params = &queryContext_->parameters;
-			PropertyValue val = graph::query::expressions::ExpressionEvaluationHelper::evaluate(
-			    item.expression.get(), record, dataManager_, params);
-			key.values.push_back(std::move(val));
+			PropertyValue value = i < groupByReaders_.size()
+				? groupByReaders_[i].evaluate(record, dataManager_, parameters())
+				: graph::query::expressions::ExpressionEvaluationHelper::evaluate(
+					item.expression.get(), record, dataManager_, parameters());
+			auto typedValue = TypedEqualityKey::from(value);
+			key.hash ^= typedValue.hash() + 0x9e3779b9 + (key.hash << 6) + (key.hash >> 2);
+			key.typedValues.push_back(std::move(typedValue));
+			key.values.push_back(std::move(value));
 		} else {
-			key.values.emplace_back(); // NULL
+			PropertyValue value;
+			auto typedValue = TypedEqualityKey::from(value);
+			key.hash ^= typedValue.hash() + 0x9e3779b9 + (key.hash << 6) + (key.hash >> 2);
+			key.typedValues.push_back(std::move(typedValue));
+			key.values.push_back(std::move(value));
 		}
 	}
 	return key;

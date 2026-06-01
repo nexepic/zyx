@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <string>
 
 #include "graph/core/PropertyTypes.hpp"
@@ -91,6 +92,102 @@ namespace graph::query::execution {
 		}
 
 		size_t variantIndex_ = 0;
+		bool boolValue_ = false;
+		int64_t intValue_ = 0;
+		double doubleValue_ = 0.0;
+		std::string stringValue_;
+		TemporalDuration durationValue_;
+		PropertyValue fallbackValue_;
+	};
+
+	class TypedEqualityKey {
+	public:
+		TypedEqualityKey() = default;
+
+		static TypedEqualityKey from(const PropertyValue &value) {
+			TypedEqualityKey key;
+			key.variantIndex_ = value.getVariant().index();
+			switch (value.getType()) {
+				case PropertyType::NULL_TYPE:
+					key.hash_ = combine(key.variantIndex_, size_t{0});
+					break;
+				case PropertyType::BOOLEAN:
+					key.boolValue_ = std::get<bool>(value.getVariant());
+					key.hash_ = combine(key.variantIndex_, std::hash<bool>{}(key.boolValue_));
+					break;
+				case PropertyType::INTEGER:
+					key.intValue_ = std::get<int64_t>(value.getVariant());
+					key.hash_ = combine(key.variantIndex_, std::hash<int64_t>{}(key.intValue_));
+					break;
+				case PropertyType::DOUBLE:
+					key.doubleValue_ = std::get<double>(value.getVariant());
+					key.hash_ = combine(key.variantIndex_, std::hash<double>{}(key.doubleValue_));
+					break;
+				case PropertyType::STRING:
+					key.stringValue_ = std::get<std::string>(value.getVariant());
+					key.hash_ = combine(key.variantIndex_, std::hash<std::string>{}(key.stringValue_));
+					break;
+				case PropertyType::DATE:
+					key.intValue_ = std::get<TemporalDate>(value.getVariant()).epochDays;
+					key.hash_ = combine(key.variantIndex_, std::hash<int64_t>{}(key.intValue_));
+					break;
+				case PropertyType::DATETIME:
+					key.intValue_ = std::get<TemporalDateTime>(value.getVariant()).epochMillis;
+					key.hash_ = combine(key.variantIndex_, std::hash<int64_t>{}(key.intValue_));
+					break;
+				case PropertyType::DURATION: {
+					key.durationValue_ = std::get<TemporalDuration>(value.getVariant());
+					size_t hash = std::hash<int64_t>{}(key.durationValue_.months);
+					hash = combine(hash, std::hash<int64_t>{}(key.durationValue_.days));
+					hash = combine(hash, std::hash<int64_t>{}(key.durationValue_.nanos));
+					key.hash_ = combine(key.variantIndex_, hash);
+					break;
+				}
+				case PropertyType::LIST:
+				case PropertyType::MAP:
+				case PropertyType::COMPOSITE:
+				case PropertyType::UNKNOWN:
+					key.fallbackValue_ = value;
+					key.hash_ = PropertyValueHash{}(value);
+					break;
+			}
+			return key;
+		}
+
+		[[nodiscard]] size_t hash() const { return hash_; }
+
+		[[nodiscard]] bool operator==(const TypedEqualityKey &other) const {
+			if (variantIndex_ != other.variantIndex_) {
+				return false;
+			}
+			switch (variantIndex_) {
+				case 0:
+					return true;
+				case 1:
+					return boolValue_ == other.boolValue_;
+				case 2:
+				case 7:
+				case 8:
+					return intValue_ == other.intValue_;
+				case 3:
+					return doubleValue_ == other.doubleValue_;
+				case 4:
+					return stringValue_ == other.stringValue_;
+				case 9:
+					return durationValue_ == other.durationValue_;
+				default:
+					return fallbackValue_ == other.fallbackValue_;
+			}
+		}
+
+	private:
+		static size_t combine(size_t seed, size_t valueHash) {
+			seed ^= valueHash + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+			return seed;
+		}
+
+		size_t variantIndex_ = 0;
+		size_t hash_ = combine(size_t{0}, size_t{0});
 		bool boolValue_ = false;
 		int64_t intValue_ = 0;
 		double doubleValue_ = 0.0;
