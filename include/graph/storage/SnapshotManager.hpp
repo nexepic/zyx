@@ -48,6 +48,10 @@ namespace graph::storage {
 			currentSnapshot_ = std::move(snap);
 		}
 
+		void publishCleanSnapshot() {
+			publishSnapshot(std::make_shared<CommittedSnapshot>());
+		}
+
 		/**
 		 * Called by readers at begin() — gets an immutable snapshot.
 		 * Multiple readers can call this concurrently.

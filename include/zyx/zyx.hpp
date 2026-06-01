@@ -20,6 +20,8 @@
 
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
@@ -100,8 +102,7 @@ namespace zyx {
 		Transaction &operator=(const Transaction &) = delete;
 
 		Result execute(const std::string &cypher) const;
-		Result execute(const std::string &cypher,
-		               const std::unordered_map<std::string, Value> &params) const;
+		Result execute(const std::string &cypher, const std::unordered_map<std::string, Value> &params) const;
 		void commit();
 		void rollback();
 		[[nodiscard]] bool isActive() const;
@@ -145,12 +146,13 @@ namespace zyx {
 		// Resize the thread pool at runtime (0=auto, 1=single-thread, >1=N threads)
 		void setThreadPoolSize(size_t poolSize) const;
 
+
 		// Execute raw Cypher query (auto-commit: wraps in implicit transaction)
 		[[nodiscard]] Result execute(const std::string &cypher) const;
 
 		// Execute parameterized Cypher query
 		[[nodiscard]] Result execute(const std::string &cypher,
-		                             const std::unordered_map<std::string, Value> &params) const;
+									 const std::unordered_map<std::string, Value> &params) const;
 
 		// High-performance direct insert APIs
 
@@ -172,8 +174,9 @@ namespace zyx {
 		 * @brief Create multiple nodes in one batch.
 		 * @return Vector of internal IDs for the created nodes.
 		 */
-		[[nodiscard]] std::vector<int64_t> createNodes(const std::string &label,
-						 const std::vector<std::unordered_map<std::string, Value>> &propsList) const;
+		[[nodiscard]] std::vector<int64_t>
+		createNodes(const std::string &label,
+					const std::vector<std::unordered_map<std::string, Value>> &propsList) const;
 
 		/**
 		 * @brief Create an edge between two known internal IDs and return the edge ID.
@@ -187,9 +190,10 @@ namespace zyx {
 		 * @brief Create multiple edges in one batch.
 		 * @return Vector of internal IDs for the created edges.
 		 */
-		[[nodiscard]] std::vector<int64_t> createEdges(
-				const std::string &edgeType,
-				const std::vector<std::tuple<int64_t, int64_t, std::unordered_map<std::string, Value>>> &edgesList) const;
+		[[nodiscard]] std::vector<int64_t>
+		createEdges(const std::string &edgeType,
+					const std::vector<std::tuple<int64_t, int64_t, std::unordered_map<std::string, Value>>> &edgesList)
+				const;
 
 		/**
 		 * @brief Finds the shortest path between two nodes.

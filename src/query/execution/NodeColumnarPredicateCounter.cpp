@@ -9,6 +9,7 @@
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/execution/NodeMetadataColumnLoader.hpp"
 #include "graph/query/execution/NodeScanRequirementUtils.hpp"
+#include "graph/query/execution/PropertyPredicateKernel.hpp"
 
 namespace graph::query::execution {
 namespace {
@@ -17,41 +18,6 @@ namespace {
 	uint64_t elapsedNs(Clock::time_point start) {
 		return static_cast<uint64_t>(
 			std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count());
-	}
-
-	storage::PropertyEntityPredicateOp toStoragePredicateOp(VectorPredicateOp op) {
-		switch (op) { // ZYX_COV_EXCL_LINE
-			case VectorPredicateOp::VPO_EQ:
-				return storage::PropertyEntityPredicateOp::PEP_EQ;
-			case VectorPredicateOp::VPO_NE:
-				return storage::PropertyEntityPredicateOp::PEP_NE;
-			case VectorPredicateOp::VPO_LT:
-				return storage::PropertyEntityPredicateOp::PEP_LT;
-			case VectorPredicateOp::VPO_LE:
-				return storage::PropertyEntityPredicateOp::PEP_LE;
-			case VectorPredicateOp::VPO_GT:
-				return storage::PropertyEntityPredicateOp::PEP_GT;
-			case VectorPredicateOp::VPO_GE:
-				return storage::PropertyEntityPredicateOp::PEP_GE;
-			case VectorPredicateOp::VPO_RANGE_CLOSED:
-				return storage::PropertyEntityPredicateOp::PEP_RANGE_CLOSED;
-		}
-		return storage::PropertyEntityPredicateOp::PEP_EQ; // ZYX_COV_EXCL_LINE
-	}
-
-	std::vector<storage::PropertyEntityPredicate> toStoragePredicates(
-			const std::vector<VectorizedPropertyPredicate> &predicates) {
-		std::vector<storage::PropertyEntityPredicate> storagePredicates;
-		storagePredicates.reserve(predicates.size());
-		for (const auto &predicate : predicates) {
-			storage::PropertyEntityPredicate storagePredicate;
-			storagePredicate.key = predicate.propertyKey;
-			storagePredicate.op = toStoragePredicateOp(predicate.op);
-			storagePredicate.value = predicate.value;
-			storagePredicate.upperValue = predicate.upperValue;
-			storagePredicates.push_back(std::move(storagePredicate));
-		}
-		return storagePredicates;
 	}
 
 	std::vector<int64_t> resolveLabelIds(const std::shared_ptr<storage::DataManager> &dm,
@@ -72,20 +38,6 @@ namespace {
 	bool rowMatchesLabels(const NodeMetadataBatch &batch, size_t row, const std::vector<int64_t> &labelIds) {
 		for (const int64_t labelId : labelIds) {
 			if (!batch.hasLabelId(row, labelId)) {
-				return false;
-			}
-		}
-		return true;
-	}
-
-	bool propertyMapMatches(const std::unordered_map<std::string, PropertyValue> &properties,
-	                        const std::vector<VectorizedPropertyPredicate> &predicates) {
-		for (const auto &predicate : predicates) {
-			const auto it = properties.find(predicate.propertyKey);
-			const std::optional<PropertyValue> actual = it == properties.end()
-				? std::nullopt
-				: std::optional<PropertyValue>(it->second);
-			if (!evaluatePredicateValue(actual, predicate)) {
 				return false;
 			}
 		}
@@ -125,7 +77,8 @@ namespace {
 
 		const bool traceEnabled = debug::PerfTrace::isEnabled();
 		const auto traceStart = traceEnabled ? Clock::now() : Clock::time_point{};
-		const auto storagePredicates = toStoragePredicates(predicates);
+		const PropertyPredicateKernel predicateKernel(predicates);
+		const auto storagePredicates = predicateKernel.toStoragePredicates();
 		const NodeScanRequirements requirements = relaxSatisfiedCandidateChecks(inputRequirements, candidateSet);
 		const auto labelIds = resolveLabelIds(dm_, config, requirements);
 		NodeMetadataColumnLoader metadataLoader(dm_);
@@ -177,7 +130,7 @@ namespace {
 				fallbackRows.erase(std::unique(fallbackRows.begin(), fallbackRows.end()), fallbackRows.end());
 				for (const size_t row : fallbackRows) {
 					Node node = metadata->toNode(row);
-					if (propertyMapMatches(dm_->getNodePropertiesDirect(node), predicates)) {
+					if (predicateKernel.matchesMap(dm_->getNodePropertiesDirect(node))) {
 						++result.count;
 					}
 				}

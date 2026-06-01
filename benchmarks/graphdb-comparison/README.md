@@ -44,6 +44,20 @@ PYTHONPATH=benchmarks/graphdb-comparison python3 -m runner.run \
   --iterations 1
 ```
 
+ZYX no longer has a query-result or derived-result cache path. Benchmark runs use the normal
+storage/page/index/plan caches only:
+
+```bash
+ZYX_COMPARE_BENCH=$PWD/buildDir/zyx-compare-bench \
+PYTHONPATH=benchmarks/graphdb-comparison python3 -m runner.run \
+  --database zyx \
+  --scale smoke \
+  --profile scan \
+  --output-root benchmarks/graphdb-comparison/results \
+  --warmup 0 \
+  --iterations 1
+```
+
 ## Datasets
 
 Datasets are deterministic CSV files generated per run under `<result>/dataset` using `--scale` and `--seed`.
@@ -88,8 +102,10 @@ Each run creates a timestamped result directory below `results/` or the configur
 
 - `raw.jsonl`: environment event plus successful sample and failure events.
 - `errors.jsonl`: one JSONL error event for each failed adapter or workload.
-- `summary.csv`: aggregate rows with sample count, average, p50, p95, p99, ops/sec, status, and `equivalent_mode`.
+- `summary.csv`: aggregate rows with sample count, first/min/average/p50/p95/p99/max latency, ops/sec, status, and `equivalent_mode`.
 - `summary.md`: Markdown summary table for quick inspection.
+- `comparison.csv`: per-workload p50 ranking, ZYX-vs-best ratios, first-sample ratio, and tail-volatility metrics.
+- `comparison.md`: Markdown comparison report with ZYX rank, p50 ratio, first/p50 ratio, and p95/p50 volatility.
 - `environment.json`: machine, Python, run configuration, and dataset manifest.
 - `run_status.json`: current failure count for the run.
 - `latest.txt`: written in the output root and points to the latest result directory name.
@@ -105,4 +121,5 @@ The runner continues after adapter or workload failures when it can. Failures ar
 - Docker Compose improves isolation, but host CPU, memory pressure, filesystem performance, Docker resource limits, and image versions still affect results.
 - The generated graph is deterministic and simple; it does not model every production graph shape or write-heavy workload.
 - Warmup and iteration counts should be increased beyond smoke settings before drawing performance conclusions.
+- Use low or zero warmup when comparing cold execution paths, and report warmup/iteration settings with the results.
 - Neo4j and Memgraph run as services; Kuzu and ZYX run embedded in the runner container, so process topology differs.

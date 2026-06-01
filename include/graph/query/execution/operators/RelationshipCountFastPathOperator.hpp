@@ -8,6 +8,7 @@
 #include "graph/query/execution/NodeBatchLoader.hpp"
 #include "graph/query/execution/NodeCandidateSource.hpp"
 #include "graph/query/execution/PhysicalOperator.hpp"
+#include "graph/query/execution/PropertyPredicateKernel.hpp"
 #include "graph/query/execution/RelationshipAdjacencyCursor.hpp"
 #include "graph/query/execution/RelationshipPropertyColumnLoader.hpp"
 #include "graph/query/execution/VectorizedPredicate.hpp"
@@ -54,7 +55,8 @@ namespace graph::query::execution::operators {
 		[[nodiscard]] std::optional<int64_t> countDirectRelationshipsFromIndexes(int64_t edgeTypeId) const;
 		[[nodiscard]] bool edgeMatchesPropertyColumns(
 				const std::unordered_map<std::string, std::vector<std::optional<PropertyValue>>> &columns,
-				size_t row) const;
+				size_t row,
+				const PropertyPredicateKernel &predicateKernel) const;
 
 		std::shared_ptr<storage::DataManager> dm_;
 		std::shared_ptr<indexes::IndexManager> im_;

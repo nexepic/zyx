@@ -263,12 +263,6 @@ TEST(RelationshipCountFastPathPlannerTest, RejectsUnsupportedDirectEdgeFilters) 
 		return LogicalAggregate(std::move(filter), {}, makeAggs(std::make_shared<expressions::VariableReferenceExpression>("r")));
 	};
 
-	auto nonEquality = std::make_shared<expressions::BinaryOpExpression>(
-			std::make_unique<expressions::VariableReferenceExpression>("r", "weight"),
-			expressions::BinaryOperatorType::BOP_GREATER,
-			std::make_unique<expressions::LiteralExpression>(int64_t{1}));
-	EXPECT_FALSE(tryBuildRelationshipCountFastPathPlan(makeAggregate(nonEquality)).has_value());
-
 	auto nonLiteral = std::make_shared<expressions::BinaryOpExpression>(
 			std::make_unique<expressions::VariableReferenceExpression>("r", "weight"),
 			expressions::BinaryOperatorType::BOP_EQUAL,
@@ -277,6 +271,35 @@ TEST(RelationshipCountFastPathPlannerTest, RejectsUnsupportedDirectEdgeFilters) 
 
 	auto plainExpression = std::make_shared<expressions::VariableReferenceExpression>("r", "weight");
 	EXPECT_FALSE(tryBuildRelationshipCountFastPathPlan(makeAggregate(plainExpression)).has_value());
+}
+
+TEST(RelationshipCountFastPathPlannerTest, ExtractsDirectEdgeComparisonPredicates) {
+	auto seed = std::make_unique<LogicalNodeScan>("u", std::vector<std::string>{});
+	auto hop = std::make_unique<LogicalTraversal>(std::move(seed), "u", "r", "v", "FOLLOWS", "out");
+	auto lower = std::make_unique<expressions::BinaryOpExpression>(
+			std::make_unique<expressions::VariableReferenceExpression>("r", "weight"),
+			expressions::BinaryOperatorType::BOP_GREATER_EQUAL,
+			std::make_unique<expressions::LiteralExpression>(int64_t{3}));
+	auto upper = std::make_unique<expressions::BinaryOpExpression>(
+			std::make_unique<expressions::LiteralExpression>(int64_t{9}),
+			expressions::BinaryOperatorType::BOP_GREATER,
+			std::make_unique<expressions::VariableReferenceExpression>("r.weight"));
+	auto predicate = std::make_unique<expressions::BinaryOpExpression>(
+			std::move(lower), expressions::BinaryOperatorType::BOP_AND, std::move(upper));
+	std::shared_ptr<expressions::Expression> sharedPredicate(std::move(predicate));
+	auto filter = std::make_unique<LogicalFilter>(std::move(hop), std::move(sharedPredicate));
+	LogicalAggregate aggregate(std::move(filter), {}, makeAggs(std::make_shared<expressions::VariableReferenceExpression>("r")));
+
+	auto plan = tryBuildRelationshipCountFastPathPlan(aggregate);
+
+	ASSERT_TRUE(plan.has_value());
+	EXPECT_TRUE(plan->directCount.enabled);
+	ASSERT_EQ(plan->directCount.edgePredicates.size(), 2U);
+	EXPECT_EQ(plan->directCount.edgePredicates[0].propertyKey, "weight");
+	EXPECT_EQ(plan->directCount.edgePredicates[0].op, execution::VectorPredicateOp::VPO_GE);
+	EXPECT_EQ(plan->directCount.edgePredicates[1].propertyKey, "weight");
+	EXPECT_EQ(plan->directCount.edgePredicates[1].op, execution::VectorPredicateOp::VPO_LT);
+	EXPECT_TRUE(plan->directCount.edgeProperties.empty());
 }
 
 TEST(RelationshipCountFastPathPlannerTest, AddsSeedRangePredicatesNotCoveredByCandidateSource) {

@@ -682,6 +682,36 @@ TEST_F(RelationshipCountFastPathOperatorTest, DirectPropertyFallbackRejectsMissi
 	EXPECT_EQ(readCount(mismatchOp.next()), 0);
 }
 
+TEST_F(RelationshipCountFastPathOperatorTest, DirectPropertyFallbackAppliesVectorComparisonPredicates) {
+	const int64_t source = addUser();
+	const int64_t first = addUser();
+	const int64_t second = addUser();
+	const int64_t third = addUser();
+	addFollows(source, first, 2);
+	addFollows(source, second, 5);
+	addFollows(source, third, 8);
+
+	VectorizedPropertyPredicate lower;
+	lower.propertyKey = "weight";
+	lower.op = VectorPredicateOp::VPO_GE;
+	lower.value = PropertyValue(int64_t{5});
+	VectorizedPropertyPredicate upper;
+	upper.propertyKey = "weight";
+	upper.op = VectorPredicateOp::VPO_LT;
+	upper.value = PropertyValue(int64_t{8});
+
+	NodeScanConfig seedConfig;
+	NodeScanRequirements seedRequirements;
+	DirectRelationshipCountConfig directCount;
+	directCount.enabled = true;
+	directCount.edgeType = "FOLLOWS";
+	directCount.edgePredicates = {lower, upper};
+
+	RelationshipCountFastPathOperator op(dm, im, seedConfig, seedRequirements, {}, {}, directCount, "count");
+	op.open();
+	EXPECT_EQ(readCount(op.next()), 1);
+}
+
 TEST_F(RelationshipCountFastPathOperatorTest, DirectCountUsesEdgeTypeIndexForTypeOnly) {
 	const int64_t source = addUser();
 	const int64_t first = addUser();
@@ -743,6 +773,35 @@ TEST_F(RelationshipCountFastPathOperatorTest, DirectCountUsesEdgePropertyIndexAn
 	EXPECT_TRUE(snapshot.contains("relationship_count.index_filter"));
 	EXPECT_FALSE(snapshot.contains("relationship_count.load_edge_metadata"));
 	EXPECT_FALSE(snapshot.contains("relationship_count.property_columns"));
+}
+
+TEST_F(RelationshipCountFastPathOperatorTest, DirectCountVerifiesVectorResidualPredicatesAfterIndexCandidate) {
+	const int64_t source = addUser();
+	const int64_t first = addUser();
+	const int64_t second = addUser();
+	addFollowsWithProperties(source, first, {{"weight", PropertyValue(int64_t{1})}});
+	addFollowsWithProperties(source, second, {{"weight", PropertyValue(int64_t{1})}});
+	ASSERT_TRUE(im->createIndex("edge_weight_vector_residual_idx", "edge", "FOLLOWS", "weight"));
+
+	VectorizedPropertyPredicate indexedEquality;
+	indexedEquality.propertyKey = "weight";
+	indexedEquality.op = VectorPredicateOp::VPO_EQ;
+	indexedEquality.value = PropertyValue(int64_t{1});
+	VectorizedPropertyPredicate residualRange;
+	residualRange.propertyKey = "weight";
+	residualRange.op = VectorPredicateOp::VPO_GT;
+	residualRange.value = PropertyValue(int64_t{1});
+
+	NodeScanConfig seedConfig;
+	NodeScanRequirements seedRequirements;
+	DirectRelationshipCountConfig directCount;
+	directCount.enabled = true;
+	directCount.edgeType = "FOLLOWS";
+	directCount.edgePredicates = {indexedEquality, residualRange};
+
+	RelationshipCountFastPathOperator op(dm, im, seedConfig, seedRequirements, {}, {}, directCount, "count");
+	op.open();
+	EXPECT_EQ(readCount(op.next()), 0);
 }
 
 TEST_F(RelationshipCountFastPathOperatorTest, CleanDirectRelationshipCountFallsBackForBlobProperties) {

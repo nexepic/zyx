@@ -5,9 +5,11 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/core/PropertyTypes.hpp"
+#include "graph/query/execution/PropertyPredicateKernel.hpp"
 #include "graph/storage/data/DataManager.hpp"
 
 namespace graph::query::execution {
@@ -17,6 +19,7 @@ namespace graph::query::execution {
 		int64_t endId = 0;
 		int64_t typeId = 0;
 		std::unordered_map<std::string, PropertyValue> propertyPredicates;
+		std::vector<VectorizedPropertyPredicate> vectorPredicates;
 	};
 
 	struct RelationshipColumnarCountResult {
@@ -37,7 +40,7 @@ namespace graph::query::execution {
 	private:
 		[[nodiscard]] bool propertyMapMatches(
 			const std::unordered_map<std::string, PropertyValue> &properties,
-			const std::unordered_map<std::string, PropertyValue> &expected) const;
+			const PropertyPredicateKernel &predicateKernel) const;
 
 		std::shared_ptr<storage::DataManager> dm_;
 		concurrent::ThreadPool *pool_ = nullptr;

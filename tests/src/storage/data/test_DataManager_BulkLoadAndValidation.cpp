@@ -1571,6 +1571,16 @@ TEST_F(DataManagerTest, BulkMatchPropertyEntityPredicateSpecsSupportsComparisonO
 	EXPECT_EQ(rangeMatch.loadedRows, (std::vector<size_t>{0U, 1U}));
 	EXPECT_EQ(rangeMatch.matchedRows, (std::vector<size_t>{0U, 1U}));
 
+	auto repeatedKeyRange = dataManager->bulkMatchPropertyEntityPredicateSpecs(
+		ids,
+		rows,
+		2,
+		{{"age", Op::PEP_GE, PropertyValue(int64_t(26)), std::nullopt},
+		 {"age", Op::PEP_LT, PropertyValue(int64_t(31)), std::nullopt}},
+		nullptr);
+	EXPECT_EQ(repeatedKeyRange.loadedRows, (std::vector<size_t>{0U, 1U}));
+	EXPECT_EQ(repeatedKeyRange.matchedRows, (std::vector<size_t>{0U}));
+
 	auto missingUpperBound = dataManager->bulkMatchPropertyEntityPredicateSpecs(
 		ids,
 		rows,

@@ -69,7 +69,14 @@ def _write_profile_events(result_dir: Path, events: Iterable[object]) -> None:
             _write_jsonl(handle, event)
 
 
-def _environment(databases: Iterable[str], scale: str, seed: int, warmup: int, iterations: int, profile: str) -> dict[str, object]:
+def _environment(
+    databases: Iterable[str],
+    scale: str,
+    seed: int,
+    warmup: int,
+    iterations: int,
+    profile: str,
+) -> dict[str, object]:
     return {
         "event": "environment",
         "created_at": datetime.now(timezone.utc).isoformat(),

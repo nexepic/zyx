@@ -28,6 +28,7 @@ def summarize_samples(samples: Iterable[Sample]) -> list[SummaryRow]:
     for key in sorted(groups):
         group = groups[key]
         latencies = [sample.latency_ms for sample in group]
+        first_latency_ms = min(group, key=lambda sample: sample.iteration).latency_ms
         sample_count = len(group)
         total_latency_ms = sum(latencies)
         ops_per_sec = 0.0 if total_latency_ms <= 0 else sample_count * 1000.0 / total_latency_ms
@@ -37,10 +38,13 @@ def summarize_samples(samples: Iterable[Sample]) -> list[SummaryRow]:
                 workload=key[1],
                 scale=key[2],
                 samples=sample_count,
+                first_ms=first_latency_ms,
+                min_ms=min(latencies),
                 avg_ms=total_latency_ms / sample_count,
                 p50_ms=percentile(latencies, 50),
                 p95_ms=percentile(latencies, 95),
                 p99_ms=percentile(latencies, 99),
+                max_ms=max(latencies),
                 ops_per_sec=ops_per_sec,
                 status=key[3],
                 equivalent_mode=key[4],

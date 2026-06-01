@@ -631,6 +631,20 @@ TEST_F(DataManagerTokenAndRangeTest, PrepareAndCommitFlushSnapshot) {
 	EXPECT_NO_THROW(dataManager->commitFlushSnapshot());
 }
 
+TEST_F(DataManagerTokenAndRangeTest, PrepareFlushSnapshotViewExposesFlushingMaps) {
+	Node n = createTestNode(dataManager, "SnapshotViewNode");
+	dataManager->addNode(n);
+
+	auto snapshot = dataManager->prepareFlushSnapshotView();
+	ASSERT_NE(snapshot.nodes, nullptr);
+	EXPECT_FALSE(snapshot.isEmpty());
+	EXPECT_TRUE(snapshot.nodes->contains(n.getId()));
+
+	EXPECT_NO_THROW(dataManager->invalidateDirtySegments(snapshot));
+	EXPECT_NO_THROW(dataManager->commitFlushSnapshot());
+	EXPECT_FALSE(dataManager->hasUnsavedChanges());
+}
+
 // ============================================================================
 // closeFileHandles is a no-op but should not throw
 // ============================================================================

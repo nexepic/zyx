@@ -44,7 +44,12 @@ def test_zyx_adapter_forwards_profile_to_subprocess(tmp_path: Path, monkeypatch)
         "    print(json.dumps({'event':'sample','database':'zyx','workload':workload,'scale':'smoke','iteration':0,'latency_ms':1.0,'status':'ok','equivalent_mode':'api'}))\n",
     )
     monkeypatch.setenv("ZYX_COMPARE_BENCH", str(binary))
-    adapter = ZyxAdapter(database="zyx", dataset_dir=tmp_path / "dataset", scale="smoke", profile="indexed")
+    adapter = ZyxAdapter(
+        database="zyx",
+        dataset_dir=tmp_path / "dataset",
+        scale="smoke",
+        profile="indexed",
+    )
 
     results = adapter.run_all(warmup=0, iterations=1)
 
@@ -59,6 +64,7 @@ def test_zyx_adapter_forwards_profile_to_subprocess(tmp_path: Path, monkeypatch)
     iterations_index = args.index("--iterations")
     emit_profile_index = args.index("--emit-profile")
     assert args[profile_index + 1] == "indexed"
+    assert "--result-cache" not in args
     assert args[iterations_index + 1] == "1"
     assert profile_index < iterations_index
     assert emit_profile_index == iterations_index + 2

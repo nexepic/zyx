@@ -50,6 +50,23 @@ namespace graph::storage {
 		}
 	};
 
+	// Non-owning snapshot used by the flush writer. The pointed maps live in
+	// DirtyEntityRegistry::flushingMap_ until commitSnapshot() is called.
+	struct FlushSnapshotView {
+		const DirtyEntityRegistry<Node>::DirtyMap *nodes = nullptr;
+		const DirtyEntityRegistry<Edge>::DirtyMap *edges = nullptr;
+		const DirtyEntityRegistry<Property>::DirtyMap *properties = nullptr;
+		const DirtyEntityRegistry<Blob>::DirtyMap *blobs = nullptr;
+		const DirtyEntityRegistry<Index>::DirtyMap *indexes = nullptr;
+		const DirtyEntityRegistry<State>::DirtyMap *states = nullptr;
+
+		[[nodiscard]] bool isEmpty() const {
+			return (!nodes || nodes->empty()) && (!edges || edges->empty()) &&
+				   (!properties || properties->empty()) && (!blobs || blobs->empty()) &&
+				   (!indexes || indexes->empty()) && (!states || states->empty());
+		}
+	};
+
 	class PersistenceManager {
 	public:
 		PersistenceManager();
@@ -76,6 +93,7 @@ namespace graph::storage {
 
 		// --- Transaction/Flush ---
 		FlushSnapshot createSnapshot() const;
+		FlushSnapshotView createSnapshotView() const;
 		void commitSnapshot() const;
 		[[nodiscard]] bool hasUnsavedChanges() const;
 		void clearAll() const;

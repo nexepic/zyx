@@ -185,6 +185,15 @@ namespace graph::storage {
 							 indexRegistry_->createFlushSnapshot(),	   stateRegistry_->createFlushSnapshot()};
 	}
 
+	FlushSnapshotView PersistenceManager::createSnapshotView() const {
+		return FlushSnapshotView{&nodeRegistry_->createFlushSnapshotView(),
+								 &edgeRegistry_->createFlushSnapshotView(),
+								 &propertyRegistry_->createFlushSnapshotView(),
+								 &blobRegistry_->createFlushSnapshotView(),
+								 &indexRegistry_->createFlushSnapshotView(),
+								 &stateRegistry_->createFlushSnapshotView()};
+	}
+
 	void PersistenceManager::commitSnapshot() const {
 		nodeRegistry_->commitFlush();
 		edgeRegistry_->commitFlush();

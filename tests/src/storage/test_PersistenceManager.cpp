@@ -98,6 +98,33 @@ TEST_F(PersistenceManagerTest, SnapshotCoordination) {
 	EXPECT_FALSE(manager->isDirty<Node>(1));
 }
 
+TEST_F(PersistenceManagerTest, SnapshotViewKeepsFlushingStateUntilCommit) {
+	addNode(1);
+
+	auto snapshot = manager->createSnapshotView();
+	ASSERT_NE(snapshot.nodes, nullptr);
+	EXPECT_FALSE(snapshot.isEmpty());
+	EXPECT_EQ(snapshot.nodes->size(), 1UL);
+	EXPECT_TRUE(snapshot.nodes->contains(1));
+
+	// The non-owning flush view must still protect flushing entities from
+	// being removed while the storage writer is using them.
+	manager->remove<Node>(1);
+	EXPECT_TRUE(manager->isDirty<Node>(1));
+
+	// A second snapshot while flushing is non-empty merges active changes into
+	// the same flushing layer instead of replacing it.
+	addNode(2);
+	auto merged = manager->createSnapshotView();
+	ASSERT_NE(merged.nodes, nullptr);
+	EXPECT_EQ(merged.nodes->size(), 2UL);
+	EXPECT_TRUE(merged.nodes->contains(1));
+	EXPECT_TRUE(merged.nodes->contains(2));
+
+	manager->commitSnapshot();
+	EXPECT_FALSE(manager->hasUnsavedChanges());
+}
+
 // 3. Auto-Flush Callback Logic
 TEST_F(PersistenceManagerTest, AutoFlushTrigger) {
 	int flushCount = 0;

@@ -21,14 +21,15 @@
 #pragma once
 
 #include <atomic>
+#include <cstdint>
 #include <fstream>
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <utility>
+#include <span>
 #include <unordered_map>
-#include <cstdint>
+#include <utility>
 #include <vector>
 
 // Platform-specific type definitions for Windows compatibility
@@ -52,8 +53,8 @@ using ssize_t = intptr_t;
 #include "graph/storage/IDAllocator.hpp"
 #include "graph/storage/PageBufferPool.hpp"
 #include "graph/storage/PersistenceManager.hpp"
-#include "graph/storage/StorageIO.hpp"
 #include "graph/storage/PwriteHelper.hpp"
+#include "graph/storage/StorageIO.hpp"
 #include "graph/storage/constraints/IEntityValidator.hpp"
 #include "graph/storage/indexes/IEntityObserver.hpp"
 
@@ -104,15 +105,7 @@ namespace graph::storage {
 		bool collectMatchedRows = true;
 	};
 
-	enum class PropertyEntityPredicateOp {
-		PEP_EQ,
-		PEP_NE,
-		PEP_LT,
-		PEP_LE,
-		PEP_GT,
-		PEP_GE,
-		PEP_RANGE_CLOSED
-	};
+	enum class PropertyEntityPredicateOp { PEP_EQ, PEP_NE, PEP_LT, PEP_LE, PEP_GT, PEP_GE, PEP_RANGE_CLOSED };
 
 	struct PropertyEntityPredicate {
 		std::string key;
@@ -186,76 +179,58 @@ namespace graph::storage {
 		std::unordered_map<std::string, PropertyValue> getNodePropertiesDirect(const Node &node);
 		// Resolve node properties using a pre-loaded property map (avoids per-entity pread).
 		// Falls back to getNodePropertiesDirect for blob-stored properties.
-		std::unordered_map<std::string, PropertyValue> getNodePropertiesFromMap(
-			const Node &node, const std::unordered_map<int64_t, Property> &propertyMap);
+		std::unordered_map<std::string, PropertyValue>
+		getNodePropertiesFromMap(const Node &node, const std::unordered_map<int64_t, Property> &propertyMap);
 		// Bulk-load Property entities by a set of IDs using parallel segment pread.
-		std::unordered_map<int64_t, Property> bulkLoadPropertyEntities(
-			const std::vector<int64_t> &ids, concurrent::ThreadPool *pool = nullptr) const;
+		std::unordered_map<int64_t, Property> bulkLoadPropertyEntities(const std::vector<int64_t> &ids,
+																	   concurrent::ThreadPool *pool = nullptr) const;
 		// Bulk-load only selected values from Property entities. This avoids full
 		// Property materialization for column-oriented scans.
-		std::unordered_map<int64_t, std::unordered_map<std::string, PropertyValue>> bulkLoadPropertyEntityValues(
-			const std::vector<int64_t> &ids,
-			const std::vector<std::string> &keys,
-			concurrent::ThreadPool *pool = nullptr) const;
+		std::unordered_map<int64_t, std::unordered_map<std::string, PropertyValue>>
+		bulkLoadPropertyEntityValues(const std::vector<int64_t> &ids, const std::vector<std::string> &keys,
+									 concurrent::ThreadPool *pool = nullptr) const;
 		// Bulk-load selected Property entity values directly into row-aligned columns.
 		// Returns rows whose backing Property entity was found and parsed successfully.
 		std::vector<size_t> bulkLoadPropertyEntityColumns(
-			const std::vector<int64_t> &ids,
-			const std::vector<size_t> &rows,
-			size_t rowCount,
-			const std::vector<std::string> &keys,
-			std::unordered_map<std::string, std::vector<std::optional<PropertyValue>>> &columns,
-			concurrent::ThreadPool *pool = nullptr) const;
+				const std::vector<int64_t> &ids, const std::vector<size_t> &rows, size_t rowCount,
+				const std::vector<std::string> &keys,
+				std::unordered_map<std::string, std::vector<std::optional<PropertyValue>>> &columns,
+				concurrent::ThreadPool *pool = nullptr) const;
 		// Evaluate equality predicates directly while scanning Property entities.
 		// This avoids materializing row-aligned columns when the caller only needs
 		// rows matching a filter.
-		PropertyEntityPredicateMatchResult bulkMatchPropertyEntityPredicates(
-			const std::vector<int64_t> &ids,
-			const std::vector<size_t> &rows,
-			size_t rowCount,
-			const std::unordered_map<std::string, PropertyValue> &expected,
-			concurrent::ThreadPool *pool = nullptr) const {
-			return bulkMatchPropertyEntityPredicates(
-				ids, rows, rowCount, expected, pool, PropertyEntityPredicateMatchOptions{});
+		PropertyEntityPredicateMatchResult
+		bulkMatchPropertyEntityPredicates(const std::vector<int64_t> &ids, const std::vector<size_t> &rows,
+										  size_t rowCount,
+										  const std::unordered_map<std::string, PropertyValue> &expected,
+										  concurrent::ThreadPool *pool = nullptr) const {
+			return bulkMatchPropertyEntityPredicates(ids, rows, rowCount, expected, pool,
+													 PropertyEntityPredicateMatchOptions{});
+		}
+		PropertyEntityPredicateMatchResult
+		bulkMatchPropertyEntityPredicates(const std::vector<int64_t> &ids, const std::vector<size_t> &rows,
+										  size_t rowCount,
+										  const std::unordered_map<std::string, PropertyValue> &expected,
+										  concurrent::ThreadPool *pool, bool collectMatchedRows) const {
+			return bulkMatchPropertyEntityPredicates(ids, rows, rowCount, expected, pool,
+													 PropertyEntityPredicateMatchOptions{true, collectMatchedRows});
 		}
 		PropertyEntityPredicateMatchResult bulkMatchPropertyEntityPredicates(
-			const std::vector<int64_t> &ids,
-			const std::vector<size_t> &rows,
-			size_t rowCount,
-			const std::unordered_map<std::string, PropertyValue> &expected,
-			concurrent::ThreadPool *pool,
-			bool collectMatchedRows) const {
-			return bulkMatchPropertyEntityPredicates(
-				ids,
-				rows,
-				rowCount,
-				expected,
-				pool,
-				PropertyEntityPredicateMatchOptions{true, collectMatchedRows});
-		}
-		PropertyEntityPredicateMatchResult bulkMatchPropertyEntityPredicates(
-			const std::vector<int64_t> &ids,
-			const std::vector<size_t> &rows,
-			size_t rowCount,
-			const std::unordered_map<std::string, PropertyValue> &expected,
-			concurrent::ThreadPool *pool,
-			PropertyEntityPredicateMatchOptions options) const;
+				const std::vector<int64_t> &ids, const std::vector<size_t> &rows, size_t rowCount,
+				const std::unordered_map<std::string, PropertyValue> &expected, concurrent::ThreadPool *pool,
+				PropertyEntityPredicateMatchOptions options) const;
 		// Count matching Property entity references without building row mappings.
 		// Duplicate ids are counted by input multiplicity for count-only scans.
-		size_t bulkCountPropertyEntityPredicates(
-			const std::vector<int64_t> &ids,
-			const std::unordered_map<std::string, PropertyValue> &expected,
-			concurrent::ThreadPool *pool = nullptr) const;
-		PropertyEntityPredicateMatchResult bulkMatchPropertyEntityPredicateSpecs(
-			const std::vector<int64_t> &ids,
-			const std::vector<size_t> &rows,
-			size_t rowCount,
-			const std::vector<PropertyEntityPredicate> &predicates,
-			concurrent::ThreadPool *pool = nullptr) const;
+		size_t bulkCountPropertyEntityPredicates(const std::vector<int64_t> &ids,
+												 const std::unordered_map<std::string, PropertyValue> &expected,
+												 concurrent::ThreadPool *pool = nullptr) const;
+		PropertyEntityPredicateMatchResult
+		bulkMatchPropertyEntityPredicateSpecs(const std::vector<int64_t> &ids, const std::vector<size_t> &rows,
+											  size_t rowCount, const std::vector<PropertyEntityPredicate> &predicates,
+											  concurrent::ThreadPool *pool = nullptr) const;
 		void addNodeProperties(int64_t nodeId, const std::unordered_map<std::string, PropertyValue> &properties) const;
 		void removeNodeProperty(int64_t nodeId, const std::string &key) const;
 		std::unordered_map<std::string, PropertyValue> getNodeProperties(int64_t nodeId) const;
-
 		// Edge-specific operations
 		void addEdge(Edge &edge) const;
 		void addEdges(std::vector<Edge> &edges) const;
@@ -264,16 +239,6 @@ namespace graph::storage {
 		Edge getEdge(int64_t id) const;
 		std::vector<Edge> getEdgeBatch(const std::vector<int64_t> &ids) const;
 		std::vector<Edge> getEdgesInRange(int64_t startId, int64_t endId, size_t limit = 1000) const;
-		[[nodiscard]] std::optional<int64_t> getCachedActiveEdgeCountByType(int64_t typeId) const;
-		void cacheActiveEdgeCountByType(int64_t typeId, int64_t count) const;
-		[[nodiscard]] std::optional<int64_t> getCachedActiveEdgeCountByTypeAndProperties(
-			int64_t typeId,
-			const std::unordered_map<std::string, PropertyValue> &properties) const;
-		void cacheActiveEdgeCountByTypeAndProperties(
-			int64_t typeId,
-			const std::unordered_map<std::string, PropertyValue> &properties,
-			int64_t count) const;
-		void invalidateActiveEdgeCountCache() const;
 		void addEdgeProperties(int64_t edgeId, const std::unordered_map<std::string, PropertyValue> &properties) const;
 		void removeEdgeProperty(int64_t edgeId, const std::string &key) const;
 		std::unordered_map<std::string, PropertyValue> getEdgeProperties(int64_t edgeId) const;
@@ -334,6 +299,8 @@ namespace graph::storage {
 		 * More efficient than clearCache() when only a few segments are dirty.
 		 */
 		void invalidateDirtySegments(const FlushSnapshot &snapshot) const;
+		void invalidateDirtySegments(const FlushSnapshotView &snapshot) const;
+		void invalidateSegments(std::span<const uint64_t> segmentOffsets) const;
 
 		/**
 		 * Eagerly closes file handles so the database file can be
@@ -370,8 +337,7 @@ namespace graph::storage {
 		// syscall count compared to per-entity reads. Returns entities with IDs in
 		// [filterStartId, filterEndId]. Pass 0,INT64_MAX to get all.
 		template<typename EntityType>
-		std::vector<EntityType> bulkLoadEntities(int64_t filterStartId = 0,
-												 int64_t filterEndId = INT64_MAX) const;
+		std::vector<EntityType> bulkLoadEntities(int64_t filterStartId = 0, int64_t filterEndId = INT64_MAX) const;
 
 		// Thread-safe read via pread (no locks needed)
 		[[nodiscard]] bool hasPreadSupport() const { return storageIO_ && storageIO_->hasPreadSupport(); }
@@ -414,9 +380,7 @@ namespace graph::storage {
 		[[nodiscard]] std::shared_ptr<IDAllocator> getIdAllocator(EntityType type) const {
 			return allocators_[static_cast<size_t>(type)];
 		}
-		[[nodiscard]] std::shared_ptr<IDAllocator> getIdAllocator(uint32_t typeId) const {
-			return allocators_[typeId];
-		}
+		[[nodiscard]] std::shared_ptr<IDAllocator> getIdAllocator(uint32_t typeId) const { return allocators_[typeId]; }
 		[[nodiscard]] std::shared_ptr<traversal::RelationshipTraversal> getRelationshipTraversal() const {
 			return relationshipTraversal_;
 		}
@@ -430,6 +394,7 @@ namespace graph::storage {
 		[[nodiscard]] std::shared_ptr<DeletionManager> getDeletionManager() const { return deletionManager_; }
 
 		FlushSnapshot prepareFlushSnapshot() const;
+		FlushSnapshotView prepareFlushSnapshotView() const;
 		void commitFlushSnapshot() const;
 		[[nodiscard]] bool hasUnsavedChanges() const;
 
@@ -517,30 +482,6 @@ namespace graph::storage {
 
 		std::weak_ptr<state::SystemStateManager> systemStateManager_;
 
-		struct EdgePropertyCountCacheKey {
-			int64_t typeId = 0;
-			std::vector<std::pair<std::string, PropertyValue>> predicates;
-
-			bool operator==(const EdgePropertyCountCacheKey &other) const {
-				return typeId == other.typeId && predicates == other.predicates;
-			}
-		};
-
-		struct EdgePropertyCountCacheKeyHash {
-			size_t operator()(const EdgePropertyCountCacheKey &key) const;
-		};
-
-		[[nodiscard]] static EdgePropertyCountCacheKey makeEdgePropertyCountCacheKey(
-			int64_t typeId,
-			const std::unordered_map<std::string, PropertyValue> &properties);
-
-		// Exact count cache for clean, whole-graph relationship count-only scans.
-		// Mutations invalidate it; callers must not use it while dirty changes exist.
-		mutable std::mutex activeEdgeCountCacheMutex_;
-		mutable std::unordered_map<int64_t, int64_t> activeEdgeCountByTypeCache_;
-		mutable std::unordered_map<EdgePropertyCountCacheKey, int64_t, EdgePropertyCountCacheKeyHash>
-			activeEdgeCountByTypeAndPropertiesCache_;
-
 		// Initialization helpers
 		void initializeSegmentIndexes() const;
 		void initializeManagers();
@@ -569,19 +510,21 @@ namespace graph::storage {
 
 		// Template helpers for property operations (Node/Edge deduplication)
 		template<typename EntityType, typename ManagerType>
-		void addEntityPropertiesImpl(int64_t entityId,
-									 const std::unordered_map<std::string, PropertyValue> &properties,
-									 ManagerType &manager,
-									 std::function<void(const EntityType &, const std::unordered_map<std::string, PropertyValue> &,
-														const std::unordered_map<std::string, PropertyValue> &)> validate,
-									 std::function<void(const EntityType &, const EntityType &)> notify) const;
+		void addEntityPropertiesImpl(
+				int64_t entityId, const std::unordered_map<std::string, PropertyValue> &properties,
+				ManagerType &manager,
+				std::function<void(const EntityType &, const std::unordered_map<std::string, PropertyValue> &,
+								   const std::unordered_map<std::string, PropertyValue> &)>
+						validate,
+				std::function<void(const EntityType &, const EntityType &)> notify) const;
 
 		template<typename EntityType, typename ManagerType>
-		void removeEntityPropertyImpl(int64_t entityId, const std::string &key,
-									  ManagerType &manager,
-									  std::function<void(const EntityType &, const std::unordered_map<std::string, PropertyValue> &,
-														 const std::unordered_map<std::string, PropertyValue> &)> validate,
-									  std::function<void(const EntityType &, const EntityType &)> notify) const;
+		void removeEntityPropertyImpl(
+				int64_t entityId, const std::string &key, ManagerType &manager,
+				std::function<void(const EntityType &, const std::unordered_map<std::string, PropertyValue> &,
+								   const std::unordered_map<std::string, PropertyValue> &)>
+						validate,
+				std::function<void(const EntityType &, const EntityType &)> notify) const;
 
 		// Template helpers for rollback dispatch (Node/Edge deduplication)
 		template<typename EntityType, typename ManagerType>

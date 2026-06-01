@@ -160,58 +160,101 @@ std::optional<PropertyValue> literalToValue(const expressions::Expression *expre
 	return std::nullopt;
 }
 
-bool extractEdgePropertyEquality(const expressions::Expression *expression,
-                                 const std::string &edgeVar,
-                                 std::unordered_map<std::string, PropertyValue> &properties) {
+std::optional<std::string> extractEdgePropertyName(const expressions::Expression *expression,
+                                                   const std::string &edgeVar) {
+	const auto *var = dynamic_cast<const expressions::VariableReferenceExpression *>(expression);
+	if (var == nullptr) {
+		return std::nullopt;
+	}
+	if (var->hasProperty() && var->getVariableName() == edgeVar) {
+		return var->getPropertyName();
+	}
+	const std::string prefix = edgeVar + ".";
+	if (var->getVariableName().rfind(prefix, 0) != 0 || var->getVariableName().size() <= prefix.size()) {
+		return std::nullopt;
+	}
+	return var->getVariableName().substr(prefix.size());
+}
+
+std::optional<execution::VectorPredicateOp> toVectorPredicateOp(expressions::BinaryOperatorType op,
+                                                                 bool propertyOnLeft) {
+	using BinaryOperatorType = expressions::BinaryOperatorType;
+	using VectorPredicateOp = execution::VectorPredicateOp;
+	switch (op) {
+		case BinaryOperatorType::BOP_EQUAL:
+			return VectorPredicateOp::VPO_EQ;
+		case BinaryOperatorType::BOP_NOT_EQUAL:
+			return VectorPredicateOp::VPO_NE;
+		case BinaryOperatorType::BOP_LESS:
+			return propertyOnLeft ? VectorPredicateOp::VPO_LT : VectorPredicateOp::VPO_GT;
+		case BinaryOperatorType::BOP_LESS_EQUAL:
+			return propertyOnLeft ? VectorPredicateOp::VPO_LE : VectorPredicateOp::VPO_GE;
+		case BinaryOperatorType::BOP_GREATER:
+			return propertyOnLeft ? VectorPredicateOp::VPO_GT : VectorPredicateOp::VPO_LT;
+		case BinaryOperatorType::BOP_GREATER_EQUAL:
+			return propertyOnLeft ? VectorPredicateOp::VPO_GE : VectorPredicateOp::VPO_LE;
+		default:
+			return std::nullopt;
+	}
+}
+
+bool appendEdgePredicate(const std::string &edgeVar,
+                         const std::string &propertyName,
+                         execution::VectorPredicateOp op,
+                         const PropertyValue &value,
+                         std::unordered_map<std::string, PropertyValue> &properties,
+                         std::vector<execution::VectorizedPropertyPredicate> &predicates) {
+	execution::VectorizedPropertyPredicate predicate;
+	predicate.variable = edgeVar;
+	predicate.propertyKey = propertyName;
+	predicate.op = op;
+	predicate.value = value;
+	predicates.push_back(std::move(predicate));
+	if (op == execution::VectorPredicateOp::VPO_EQ) {
+		properties[propertyName] = value;
+	}
+	return true;
+}
+
+bool extractEdgePropertyPredicate(const expressions::Expression *expression,
+                                  const std::string &edgeVar,
+                                  std::unordered_map<std::string, PropertyValue> &properties,
+                                  std::vector<execution::VectorizedPropertyPredicate> &predicates) {
 	const auto *binary = dynamic_cast<const expressions::BinaryOpExpression *>(expression);
 	if (binary == nullptr) {
 		return false;
 	}
 
 	if (binary->getOperator() == expressions::BinaryOperatorType::BOP_AND) {
-		return extractEdgePropertyEquality(binary->getLeft(), edgeVar, properties) && // ZYX_COV_EXCL_LINE
-		       extractEdgePropertyEquality(binary->getRight(), edgeVar, properties); // ZYX_COV_EXCL_LINE
+		return extractEdgePropertyPredicate(binary->getLeft(), edgeVar, properties, predicates) && // ZYX_COV_EXCL_LINE
+		       extractEdgePropertyPredicate(binary->getRight(), edgeVar, properties, predicates); // ZYX_COV_EXCL_LINE
 	}
 
-	if (binary->getOperator() != expressions::BinaryOperatorType::BOP_EQUAL) {
-		return false;
+	auto value = literalToValue(binary->getRight());
+	if (auto propertyName = extractEdgePropertyName(binary->getLeft(), edgeVar);
+	    propertyName.has_value() && value.has_value()) {
+		auto op = toVectorPredicateOp(binary->getOperator(), true);
+		return op.has_value() && appendEdgePredicate(edgeVar, *propertyName, *op, *value, properties, predicates);
 	}
 
-	auto tryExtractSide = [&](const expressions::Expression *propertyExpr,
-	                         const expressions::Expression *valueExpr) -> bool {
-		const auto *var = dynamic_cast<const expressions::VariableReferenceExpression *>(propertyExpr);
-		if (var == nullptr) {
-			return false;
-		}
-		std::string propertyName;
-		if (var->hasProperty() && var->getVariableName() == edgeVar) { // ZYX_COV_EXCL_LINE
-			propertyName = var->getPropertyName();
-		} else {
-			const std::string prefix = edgeVar + ".";
-			if (var->getVariableName().rfind(prefix, 0) != 0 || var->getVariableName().size() <= prefix.size()) { // ZYX_COV_EXCL_LINE
-				return false;
-			}
-			propertyName = var->getVariableName().substr(prefix.size());
-		}
-		auto value = literalToValue(valueExpr);
-		if (!value.has_value()) {
-			return false;
-		}
-		properties[propertyName] = *value;
-		return true;
-	};
+	value = literalToValue(binary->getLeft());
+	if (auto propertyName = extractEdgePropertyName(binary->getRight(), edgeVar);
+	    propertyName.has_value() && value.has_value()) {
+		auto op = toVectorPredicateOp(binary->getOperator(), false);
+		return op.has_value() && appendEdgePredicate(edgeVar, *propertyName, *op, *value, properties, predicates);
+	}
 
-	return tryExtractSide(binary->getLeft(), binary->getRight()) ||
-	       tryExtractSide(binary->getRight(), binary->getLeft());
+	return false;
 }
 
 bool extractOptionalEdgePropertyFilter(const logical::LogicalFilter *filter,
                                        const std::string &edgeVar,
-                                       std::unordered_map<std::string, PropertyValue> &properties) {
+                                       std::unordered_map<std::string, PropertyValue> &properties,
+                                       std::vector<execution::VectorizedPropertyPredicate> &predicates) {
 	if (filter == nullptr || filter->getPredicate() == nullptr) {
 		return true;
 	}
-	return extractEdgePropertyEquality(filter->getPredicate().get(), edgeVar, properties);
+	return extractEdgePropertyPredicate(filter->getPredicate().get(), edgeVar, properties, predicates);
 }
 
 bool canUseDirectRelationshipCount(const logical::LogicalNodeScan &seedScan,
@@ -417,13 +460,24 @@ tryBuildRelationshipCountFastPathPlan(const logical::LogicalAggregate &aggregate
 	if (directRelationshipCount) {
 		const auto &traversal = *traversalChain.front();
 		std::unordered_map<std::string, PropertyValue> edgeProperties = traversal.getEdgeProperties();
-		if (!extractOptionalEdgePropertyFilter(edgeFilter, traversal.getEdgeVar(), edgeProperties)) {
+		std::vector<execution::VectorizedPropertyPredicate> edgePredicates;
+		edgePredicates.reserve(edgeProperties.size());
+		for (const auto &[key, value] : edgeProperties) {
+			appendEdgePredicate(traversal.getEdgeVar(),
+			                    key,
+			                    execution::VectorPredicateOp::VPO_EQ,
+			                    value,
+			                    edgeProperties,
+			                    edgePredicates);
+		}
+		if (!extractOptionalEdgePropertyFilter(edgeFilter, traversal.getEdgeVar(), edgeProperties, edgePredicates)) {
 			return std::nullopt;
 		}
 		plan.directCount.enabled = true;
 		plan.directCount.edgeType = traversal.getEdgeType();
 		plan.directCount.direction = traversal.getDirection();
 		plan.directCount.edgeProperties = std::move(edgeProperties);
+		plan.directCount.edgePredicates = std::move(edgePredicates);
 		plan.hops.push_back(makeHopConfig(traversal));
 		return plan;
 	}

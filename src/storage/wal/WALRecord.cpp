@@ -23,8 +23,12 @@
 
 namespace graph::storage::wal {
 
+	uint32_t extendCRC32(uint32_t seed, const uint8_t *data, size_t size) {
+		return static_cast<uint32_t>(crc32(seed, data, static_cast<uInt>(size)));
+	}
+
 	uint32_t computeCRC32(const uint8_t *data, size_t size) {
-		return static_cast<uint32_t>(crc32(0L, data, static_cast<uInt>(size)));
+		return extendCRC32(0L, data, size);
 	}
 
 	std::vector<uint8_t> serializeRecordHeader(const WALRecordHeader &header) {

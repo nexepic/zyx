@@ -667,6 +667,16 @@ namespace graph::storage {
 		pendingCrcs_[segmentOffset] = crc;
 	}
 
+	void SegmentTracker::setPendingCrcs(const std::vector<std::pair<uint64_t, uint32_t>> &crcs) {
+		if (crcs.empty()) return;
+
+		std::unique_lock lock(mutex_);
+		pendingCrcs_.reserve(pendingCrcs_.size() + crcs.size());
+		for (const auto &[segmentOffset, crc] : crcs) {
+			pendingCrcs_[segmentOffset] = crc;
+		}
+	}
+
 	void SegmentTracker::calculateAndUpdateSegmentCrc(uint64_t segmentOffset) {
 		// Caller must hold unique lock and have flushed the file before calling.
 		uint64_t dataOffset = segmentOffset + sizeof(SegmentHeader);

@@ -11,7 +11,13 @@ from runner.models import ProfileEvent, Sample
 
 
 class ZyxAdapter(BenchmarkAdapter):
-    def __init__(self, database: str, dataset_dir: Path, scale: str, profile: str = DEFAULT_PROFILE):
+    def __init__(
+        self,
+        database: str,
+        dataset_dir: Path,
+        scale: str,
+        profile: str = DEFAULT_PROFILE,
+    ):
         super().__init__(database, dataset_dir, scale, profile)
         self.binary = Path(os.environ.get("ZYX_COMPARE_BENCH", "/usr/local/bin/zyx-compare-bench"))
         self.db_path = dataset_dir.parent / "zyx.db"

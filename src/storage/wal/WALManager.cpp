@@ -18,6 +18,7 @@
  **/
 
 #include "graph/storage/wal/WALManager.hpp"
+#include <array>
 #include <chrono>
 #include <cstring>
 #include <filesystem>
@@ -125,25 +126,62 @@ namespace graph::storage::wal {
 		if (!isOpen_)
 			throw std::runtime_error("WAL is not open");
 
+		std::lock_guard lock(commitMutex_);
+		appendRecordLocked(type, txnId, data, dataSize);
+	}
+
+	void WALManager::appendRecordLocked(WALRecordType type, uint64_t txnId, const uint8_t *data, uint32_t dataSize) {
 		WALRecordHeader recordHeader{};
 		recordHeader.recordSize = static_cast<uint32_t>(sizeof(WALRecordHeader) + dataSize);
 		recordHeader.txnId = txnId;
 		recordHeader.type = type;
 		recordHeader.checksum = (data && dataSize > 0) ? computeCRC32(data, dataSize) : 0;
 
-		auto headerBuf = serializeRecordHeader(recordHeader);
-
-		// Append to write buffer (under commitMutex_)
-		std::lock_guard lock(commitMutex_);
-		writeBuffer_.insert(writeBuffer_.end(), headerBuf.begin(), headerBuf.end());
-		if (data && dataSize > 0) {
-			writeBuffer_.insert(writeBuffer_.end(), data, data + dataSize);
-		}
+		appendBytesLocked(reinterpret_cast<const uint8_t *>(&recordHeader), sizeof(recordHeader));
+		appendBytesLocked(data, dataSize);
 
 		// If buffer is full, flush to file (no fsync)
 		if (writeBuffer_.size() >= walBufferSize_) {
 			flushBuffer();
 		}
+	}
+
+	void WALManager::appendEntityChangeRecordLocked(uint64_t txnId, uint8_t entityType, uint8_t changeType,
+													int64_t entityId, const uint8_t *data, uint32_t dataSize) {
+		WALEntityPayload payload{};
+		payload.entityType = entityType;
+		payload.changeType = changeType;
+		payload.entityId = entityId;
+		payload.dataSize = dataSize;
+
+		std::array<uint8_t, sizeof(WALEntityPayload)> payloadBytes{};
+		std::memcpy(payloadBytes.data(), &payload, sizeof(payload));
+
+		uint32_t checksum = extendCRC32(0L, payloadBytes.data(), payloadBytes.size());
+		if (data && dataSize > 0) {
+			checksum = extendCRC32(checksum, data, dataSize);
+		}
+
+		WALRecordHeader recordHeader{};
+		recordHeader.recordSize = static_cast<uint32_t>(sizeof(WALRecordHeader) + payloadBytes.size() + dataSize);
+		recordHeader.txnId = txnId;
+		recordHeader.type = WALRecordType::WAL_ENTITY_WRITE;
+		recordHeader.checksum = checksum;
+
+		appendBytesLocked(reinterpret_cast<const uint8_t *>(&recordHeader), sizeof(recordHeader));
+		appendBytesLocked(payloadBytes.data(), payloadBytes.size());
+		appendBytesLocked(data, dataSize);
+
+		if (writeBuffer_.size() >= walBufferSize_) {
+			flushBuffer();
+		}
+	}
+
+	void WALManager::appendBytesLocked(const uint8_t *data, size_t size) {
+		if (!data || size == 0) {
+			return;
+		}
+		writeBuffer_.insert(writeBuffer_.end(), data, data + size);
 	}
 
 	void WALManager::flushBuffer() {
@@ -171,20 +209,27 @@ namespace graph::storage::wal {
 
 	void WALManager::writeEntityChange(uint64_t txnId, uint8_t entityType, uint8_t changeType, int64_t entityId,
 									   const std::vector<uint8_t> &serializedData) {
-		WALEntityPayload payload{};
-		payload.entityType = entityType;
-		payload.changeType = changeType;
-		payload.entityId = entityId;
-		payload.dataSize = static_cast<uint32_t>(serializedData.size());
+		if (!isOpen_)
+			throw std::runtime_error("WAL is not open");
 
-		auto payloadHeader = serializeEntityPayload(payload);
+		std::lock_guard lock(commitMutex_);
+		appendEntityChangeRecordLocked(txnId, entityType, changeType, entityId, serializedData.data(),
+									   static_cast<uint32_t>(serializedData.size()));
+	}
 
-		std::vector<uint8_t> fullData;
-		fullData.reserve(payloadHeader.size() + serializedData.size());
-		fullData.insert(fullData.end(), payloadHeader.begin(), payloadHeader.end());
-		fullData.insert(fullData.end(), serializedData.begin(), serializedData.end());
+	void WALManager::writeEntityChanges(uint64_t txnId, const std::vector<WALEntityChange> &changes) {
+		if (!isOpen_)
+			throw std::runtime_error("WAL is not open");
+		if (changes.empty()) {
+			return;
+		}
 
-		writeRecord(WALRecordType::WAL_ENTITY_WRITE, txnId, fullData.data(), static_cast<uint32_t>(fullData.size()));
+		std::lock_guard lock(commitMutex_);
+		for (const auto &change : changes) {
+			appendEntityChangeRecordLocked(txnId, change.entityType, change.changeType, change.entityId,
+										   change.serializedData.data(),
+										   static_cast<uint32_t>(change.serializedData.size()));
+		}
 	}
 
 	void WALManager::writeCommit(uint64_t txnId) {

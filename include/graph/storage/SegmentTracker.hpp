@@ -25,6 +25,7 @@
 #include <shared_mutex>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "PwriteHelper.hpp"
@@ -116,6 +117,7 @@ namespace graph::storage {
 
 		/// Store a pre-computed CRC for a segment, avoiding 128KB read-back at flush time.
 		void setPendingCrc(uint64_t segmentOffset, uint32_t crc);
+		void setPendingCrcs(const std::vector<std::pair<uint64_t, uint32_t>> &crcs);
 
 	private:
 		std::shared_ptr<StorageIO> io_;

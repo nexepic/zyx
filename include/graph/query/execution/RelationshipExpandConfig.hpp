@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "graph/core/PropertyTypes.hpp"
+#include "graph/query/execution/VectorizedPredicate.hpp"
 
 namespace graph::query::execution {
 	enum class RelationshipMaterializationMode {
@@ -31,6 +32,7 @@ namespace graph::query::execution {
 		std::string edgeType;
 		std::string direction = "out";
 		std::unordered_map<std::string, PropertyValue> edgeProperties;
+		std::vector<VectorizedPropertyPredicate> edgePredicates;
 	};
 
 	struct RelationshipExpandRequirements {

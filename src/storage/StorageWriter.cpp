@@ -10,6 +10,8 @@
 
 #include "graph/storage/StorageWriter.hpp"
 #include <algorithm>
+#include <array>
+#include <cstddef>
 #include <cstring>
 #include <future>
 #include <sstream>
@@ -32,6 +34,153 @@
 #include "graph/utils/FixedSizeSerializer.hpp"
 
 namespace graph::storage {
+	namespace {
+		template<typename T>
+		void appendPod(char *&dest, const T &value) {
+			std::memcpy(dest, &value, sizeof(T));
+			dest += sizeof(T);
+		}
+
+		void serializeFixedEntityInto(char *dest, const Node &node, size_t fixedSize) {
+			if (fixedSize < Node::getTotalSize()) {
+				throw std::runtime_error("Node fixed-size buffer is too small");
+			}
+
+			std::memset(dest, 0, fixedSize);
+			char *out = dest;
+			const auto &metadata = node.getMetadata();
+			appendPod(out, metadata.id);
+			appendPod(out, metadata.firstOutEdgeId);
+			appendPod(out, metadata.firstInEdgeId);
+			appendPod(out, metadata.propertyEntityId);
+			for (uint8_t i = 0; i < Node::MAX_LABELS; ++i) {
+				appendPod(out, metadata.labelIds[i]);
+			}
+			appendPod(out, metadata.labelCount);
+			appendPod(out, metadata.propertyStorageType);
+			appendPod(out, metadata.isActive);
+		}
+
+		void serializeFixedEntityInto(char *dest, const Edge &edge, size_t fixedSize) {
+			if (fixedSize < Edge::getTotalSize()) {
+				throw std::runtime_error("Edge fixed-size buffer is too small");
+			}
+
+			std::memset(dest, 0, fixedSize);
+			char *out = dest;
+			const auto &metadata = edge.getMetadata();
+			appendPod(out, metadata.id);
+			appendPod(out, metadata.sourceNodeId);
+			appendPod(out, metadata.targetNodeId);
+			appendPod(out, metadata.nextOutEdgeId);
+			appendPod(out, metadata.prevOutEdgeId);
+			appendPod(out, metadata.nextInEdgeId);
+			appendPod(out, metadata.prevInEdgeId);
+			appendPod(out, metadata.propertyEntityId);
+			appendPod(out, metadata.typeId);
+			appendPod(out, metadata.propertyStorageType);
+			appendPod(out, metadata.isActive);
+		}
+
+		void serializeFixedEntityInto(char *dest, const Blob &blob, size_t fixedSize) {
+			if (fixedSize < Blob::getTotalSize()) {
+				throw std::runtime_error("Blob fixed-size buffer is too small");
+			}
+
+			std::memset(dest, 0, fixedSize);
+			char *out = dest;
+			const auto &metadata = blob.getMetadata();
+			appendPod(out, metadata.id);
+			appendPod(out, metadata.entityId);
+			appendPod(out, metadata.nextBlobId);
+			appendPod(out, metadata.prevBlobId);
+			appendPod(out, metadata.dataSize);
+			appendPod(out, metadata.entityType);
+			appendPod(out, metadata.originalSize);
+			appendPod(out, metadata.chainPosition);
+			appendPod(out, metadata.compressed);
+			appendPod(out, metadata.isActive);
+			std::memcpy(out, blob.getData(), Blob::CHUNK_SIZE);
+		}
+
+		void serializeFixedEntityInto(char *dest, const State &state, size_t fixedSize) {
+			if (fixedSize < State::getTotalSize()) {
+				throw std::runtime_error("State fixed-size buffer is too small");
+			}
+			if (state.getSize() > State::CHUNK_SIZE) {
+				throw std::runtime_error("State data exceeds fixed-size inline storage");
+			}
+
+			std::memset(dest, 0, fixedSize);
+			char *out = dest;
+			const auto &metadata = state.getMetadata();
+			appendPod(out, metadata.id);
+			appendPod(out, metadata.nextStateId);
+			appendPod(out, metadata.prevStateId);
+			appendPod(out, metadata.externalId);
+			appendPod(out, metadata.dataSize);
+			appendPod(out, metadata.chainPosition);
+			std::memcpy(out, metadata.key, State::MAX_KEY_LENGTH);
+			out += State::MAX_KEY_LENGTH;
+			appendPod(out, metadata.isActive);
+			if (metadata.dataSize > 0) {
+				std::memcpy(out, state.getData(), metadata.dataSize);
+			}
+		}
+
+		template<typename T>
+		void serializeFixedEntityInto(char *dest, const T &entity, size_t fixedSize) {
+			utils::FixedSizeSerializer::serializeInto(dest, entity, fixedSize);
+		}
+
+		template<typename T>
+		void orderEntityRefsById(std::vector<const T *> &entities) {
+			if (entities.size() < 2) {
+				return;
+			}
+
+			auto sortById = [](std::vector<const T *> &refs) {
+				std::sort(refs.begin(), refs.end(), [](const T *a, const T *b) { return a->getId() < b->getId(); });
+			};
+			auto [minIt, maxIt] = std::minmax_element(
+					entities.begin(), entities.end(), [](const T *a, const T *b) { return a->getId() < b->getId(); });
+			const int64_t minId = (*minIt)->getId();
+			const int64_t maxId = (*maxIt)->getId();
+			if (minId < 0 || maxId < minId) {
+				sortById(entities);
+				return;
+			}
+
+			const auto range = static_cast<uint64_t>(maxId - minId) + 1;
+			constexpr uint64_t kMaxDenseOrderingRange = 4 * 1024 * 1024;
+			if (range > kMaxDenseOrderingRange || range > entities.size() * 4ULL) {
+				sortById(entities);
+				return;
+			}
+
+			std::vector<const T *> buckets(static_cast<size_t>(range), nullptr);
+			size_t filled = 0;
+			for (const T *entity : entities) {
+				auto index = static_cast<size_t>(entity->getId() - minId);
+				if (buckets[index] == nullptr) {
+					++filled;
+				}
+				buckets[index] = entity;
+			}
+
+			if (filled != entities.size()) {
+				sortById(entities);
+				return;
+			}
+
+			entities.clear();
+			for (const T *entity : buckets) {
+				if (entity != nullptr) {
+					entities.push_back(entity);
+				}
+			}
+		}
+	} // namespace
 
 	StorageWriter::StorageWriter(std::shared_ptr<StorageIO> io,
 								 std::shared_ptr<SegmentTracker> tracker,
@@ -52,17 +201,18 @@ namespace graph::storage {
 	SaveBatch<EntityType> classifyEntities(
 			const std::unordered_map<int64_t, DirtyEntityInfo<EntityType>> &map) {
 		SaveBatch<EntityType> batch;
+		batch.added.reserve(map.size());
 		for (const auto &[id, info] : map) {
 			if (!info.backup.has_value()) continue;
 			switch (info.changeType) {
 				case EntityChangeType::CHANGE_ADDED:
-					batch.added.push_back(*info.backup);
+					batch.added.push_back(&*info.backup);
 					break;
 				case EntityChangeType::CHANGE_MODIFIED:
-					batch.modified.push_back(*info.backup);
+					batch.modified.push_back(&*info.backup);
 					break;
 				case EntityChangeType::CHANGE_DELETED:
-					batch.deleted.push_back(*info.backup);
+					batch.deleted.push_back(&*info.backup);
 					break;
 			}
 		}
@@ -80,18 +230,51 @@ namespace graph::storage {
 	// ── writeSnapshot ───────────────────────────────────────────────────────
 
 	void StorageWriter::writeSnapshot(FlushSnapshot &snapshot, concurrent::ThreadPool *threadPool) {
+		{
+			std::lock_guard lock(pendingSegmentStateMutex_);
+			touchedSegments_.clear();
+		}
+		writeSnapshotMaps(snapshot.nodes, snapshot.edges, snapshot.properties, snapshot.blobs, snapshot.indexes,
+						  snapshot.states, threadPool);
+	}
+
+	void StorageWriter::writeSnapshot(FlushSnapshotView &snapshot, concurrent::ThreadPool *threadPool) {
+		{
+			std::lock_guard lock(pendingSegmentStateMutex_);
+			touchedSegments_.clear();
+		}
+		if (snapshot.isEmpty()) {
+			return;
+		}
+		writeSnapshotMaps(*snapshot.nodes, *snapshot.edges, *snapshot.properties, *snapshot.blobs, *snapshot.indexes,
+						  *snapshot.states, threadPool);
+	}
+
+	std::vector<uint64_t> StorageWriter::takeTouchedSegments() {
+		std::lock_guard lock(pendingSegmentStateMutex_);
+		std::vector<uint64_t> segments(touchedSegments_.begin(), touchedSegments_.end());
+		std::ranges::sort(segments);
+		touchedSegments_.clear();
+		return segments;
+	}
+
+	template<typename NodeMap, typename EdgeMap, typename PropertyMap, typename BlobMap, typename IndexMap,
+			 typename StateMap>
+	void StorageWriter::writeSnapshotMaps(const NodeMap &nodes, const EdgeMap &edges, const PropertyMap &properties,
+										  const BlobMap &blobs, const IndexMap &indexes, const StateMap &states,
+										  concurrent::ThreadPool *threadPool) {
 		using Clock = std::chrono::steady_clock;
 
 		// Classify entities by change type for all entity types.
 		auto prepStart = Clock::now();
 
 		auto allBatches = std::make_tuple(
-				classifyEntities(snapshot.nodes),
-				classifyEntities(snapshot.edges),
-				classifyEntities(snapshot.properties),
-				classifyEntities(snapshot.blobs),
-				classifyEntities(snapshot.indexes),
-				classifyEntities(snapshot.states));
+				classifyEntities(nodes),
+				classifyEntities(edges),
+				classifyEntities(properties),
+				classifyEntities(blobs),
+				classifyEntities(indexes),
+				classifyEntities(states));
 
 		debug::PerfTrace::addDuration(
 				"save.prepare", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
@@ -99,7 +282,7 @@ namespace graph::storage {
 												   .count()));
 
 		// Step 1: Sequential — new entities (need segment allocation)
-		std::apply([this](auto &...batch) { (saveNewEntities(batch.added), ...); }, allBatches);
+		std::apply([this](auto &...batch) { (this->saveNewEntityRefs(batch.added), ...); }, allBatches);
 
 		// Step 2: Modified + deleted entities (known offsets, non-overlapping regions)
 		if (threadPool && !threadPool->isSingleThreaded()) {
@@ -109,7 +292,7 @@ namespace graph::storage {
 						auto submit = [this, &ioTasks, threadPool](auto &b) {
 							if (!b.modified.empty() || !b.deleted.empty()) {
 								ioTasks.push_back(threadPool->submit(
-										[this, &b] { saveModifiedAndDeleted(b.modified, b.deleted); }));
+										[this, &b] { saveModifiedAndDeletedRefs(b.modified, b.deleted); }));
 							}
 						};
 						(submit(batch), ...);
@@ -118,7 +301,7 @@ namespace graph::storage {
 			for (auto &f : ioTasks)
 				f.get();
 		} else {
-			std::apply([this](auto &...batch) { (saveModifiedAndDeleted(batch.modified, batch.deleted), ...); },
+			std::apply([this](auto &...batch) { (this->saveModifiedAndDeletedRefs(batch.modified, batch.deleted), ...); },
 					   allBatches);
 		}
 
@@ -129,11 +312,41 @@ namespace graph::storage {
 	// ── flushPendingCrcs ───────────────────────────────────────────────────
 
 	void StorageWriter::flushPendingCrcs() {
-		for (auto &[segmentOffset, buf] : pendingSegmentData_) {
-			uint32_t crc = utils::calculateCrc(buf.data(), SEGMENT_SIZE);
-			tracker_->setPendingCrc(segmentOffset, crc);
+		std::vector<std::pair<uint64_t, uint32_t>> crcs;
+		{
+			std::lock_guard lock(pendingSegmentStateMutex_);
+			crcs.reserve(pendingSegmentCrcs_.size());
+			for (const auto &[segmentOffset, crc] : pendingSegmentCrcs_) {
+				crcs.emplace_back(segmentOffset, crc);
+			}
+			pendingSegmentCrcs_.clear();
 		}
-		pendingSegmentData_.clear();
+		tracker_->setPendingCrcs(crcs);
+	}
+
+	std::vector<char> &StorageWriter::prepareSegmentBuffer(uint64_t segmentOffset, bool needsExistingData) {
+		if (segmentScratchBuffer_.size() != SEGMENT_SIZE) {
+			segmentScratchBuffer_.resize(SEGMENT_SIZE);
+		}
+		if (needsExistingData) {
+			const uint64_t dataOffset = segmentOffset + sizeof(SegmentHeader);
+			size_t bytesRead = io_->readAt(dataOffset, segmentScratchBuffer_.data(), SEGMENT_SIZE);
+			if (bytesRead < SEGMENT_SIZE) {
+				std::fill(segmentScratchBuffer_.begin() + static_cast<std::ptrdiff_t>(bytesRead),
+						  segmentScratchBuffer_.end(), 0);
+			}
+		}
+		return segmentScratchBuffer_;
+	}
+
+	void StorageWriter::setPendingSegmentCrc(uint64_t segmentOffset, uint32_t crc) {
+		std::lock_guard lock(pendingSegmentStateMutex_);
+		pendingSegmentCrcs_[segmentOffset] = crc;
+	}
+
+	void StorageWriter::invalidatePendingSegmentCrc(uint64_t segmentOffset) {
+		std::lock_guard lock(pendingSegmentStateMutex_);
+		pendingSegmentCrcs_.erase(segmentOffset);
 	}
 
 	// ── saveNewEntities ─────────────────────────────────────────────────────
@@ -141,9 +354,20 @@ namespace graph::storage {
 	template<typename T>
 	void StorageWriter::saveNewEntities(std::vector<T> &entities) {
 		if (entities.empty()) return;
+		std::vector<const T *> refs;
+		refs.reserve(entities.size());
+		for (const auto &entity : entities) {
+			refs.push_back(&entity);
+		}
+		saveNewEntityRefs(refs);
+	}
+
+	template<typename T>
+	void StorageWriter::saveNewEntityRefs(std::vector<const T *> &entities) {
+		if (entities.empty()) return;
 		uint64_t &segHead = getSegmentHead(fileHeader_, T::typeId);
 		constexpr uint32_t perSeg = storage::itemsPerSegment<T>();
-		saveData(entities, segHead, perSeg);
+		saveDataRefs(entities, segHead, perSeg);
 	}
 
 	// ── saveModifiedAndDeleted ──────────────────────────────────────────────
@@ -154,6 +378,13 @@ namespace graph::storage {
 		for (const auto &e : deleted) deleteEntityOnDisk(e);
 	}
 
+	template<typename T>
+	void StorageWriter::saveModifiedAndDeletedRefs(const std::vector<const T *> &modified,
+												   const std::vector<const T *> &deleted) {
+		for (const T *e : modified) updateEntityInPlace(*e);
+		for (const T *e : deleted) deleteEntityOnDisk(*e);
+	}
+
 	// ── saveData ────────────────────────────────────────────────────────────
 
 	template<typename T>
@@ -161,12 +392,31 @@ namespace graph::storage {
 		if (data.empty())
 			return;
 
-		// Group entities by whether they have pre-allocated slots or need new allocation
-		std::vector<T> entitiesForNewSlots;
-		std::unordered_map<uint64_t, std::vector<T>> entitiesBySegment;
-
+		std::vector<const T *> refs;
+		refs.reserve(data.size());
 		for (const auto &entity : data) {
-			uint64_t segmentOffset = dataManager_->findSegmentForEntityId<T>(entity.getId());
+			refs.push_back(&entity);
+		}
+		saveDataRefs(refs, segmentHead, itemsPerSegment);
+	}
+
+	template<typename T>
+	void StorageWriter::saveDataRefs(std::vector<const T *> &data, uint64_t &segmentHead, uint32_t itemsPerSegment) {
+		if (data.empty())
+			return;
+
+		if (segmentHead == 0) {
+			writeNewSlotEntityRefs(data, segmentHead, itemsPerSegment);
+			return;
+		}
+
+		// Group entities by whether they have pre-allocated slots or need new allocation
+		std::vector<const T *> entitiesForNewSlots;
+		std::unordered_map<uint64_t, std::vector<const T *>> entitiesBySegment;
+		entitiesForNewSlots.reserve(data.size());
+
+		for (const T *entity : data) {
+			uint64_t segmentOffset = dataManager_->findSegmentForEntityId<T>(entity->getId());
 
 			if (segmentOffset != 0) {
 				entitiesBySegment[segmentOffset].push_back(entity);
@@ -175,35 +425,35 @@ namespace graph::storage {
 			}
 		}
 
-		writePreAllocatedEntities(entitiesBySegment);
+		writePreAllocatedEntityRefs(entitiesBySegment);
 
 		if (!entitiesForNewSlots.empty()) {
-			writeNewSlotEntities(entitiesForNewSlots, segmentHead, itemsPerSegment);
+			writeNewSlotEntityRefs(entitiesForNewSlots, segmentHead, itemsPerSegment);
 		}
 	}
 
 	// ── writePreAllocatedEntities ────────────────────────────────────────────
 
 	template<typename T>
-	void StorageWriter::writePreAllocatedEntities(
-			const std::unordered_map<uint64_t, std::vector<T>> &entitiesBySegment) {
-		for (auto &[segmentOffset, entities] : entitiesBySegment) {
+	void StorageWriter::writePreAllocatedEntityRefs(
+			const std::unordered_map<uint64_t, std::vector<const T *>> &entitiesBySegment) {
+		for (const auto &[segmentOffset, entities] : entitiesBySegment) {
 			SegmentHeader header = readSegmentHeader(segmentOffset);
 			const size_t itemSize = T::getTotalSize();
 
 			auto sorted = entities;
-			std::sort(sorted.begin(), sorted.end(), [](const T &a, const T &b) { return a.getId() < b.getId(); });
+			std::sort(sorted.begin(), sorted.end(), [](const T *a, const T *b) { return a->getId() < b->getId(); });
 
 			// Group consecutive entities for batch I/O
 			std::vector<std::pair<uint32_t, bool>> bitmapUpdates;
 			size_t i = 0;
 			while (i < sorted.size()) {
 				size_t batchStart = i;
-				auto startIndex = static_cast<uint32_t>(sorted[i].getId() - header.start_id);
+				auto startIndex = static_cast<uint32_t>(sorted[i]->getId() - header.start_id);
 
 				// Find consecutive run
 				while (i + 1 < sorted.size() &&
-					   sorted[i + 1].getId() == sorted[i].getId() + 1) {
+					   sorted[i + 1]->getId() == sorted[i]->getId() + 1) {
 					i++;
 				}
 				i++;
@@ -212,13 +462,14 @@ namespace graph::storage {
 				// Serialize all into one buffer
 				std::vector<char> buf(batchSize * itemSize);
 				for (size_t j = 0; j < batchSize; j++) {
-					utils::FixedSizeSerializer::serializeInto(buf.data() + j * itemSize,
-															  sorted[batchStart + j], itemSize);
+					serializeFixedEntityInto(buf.data() + j * itemSize, *sorted[batchStart + j], itemSize);
 				}
 
 				// Single pwrite for the batch
 				uint64_t offset = segmentOffset + sizeof(SegmentHeader) + startIndex * itemSize;
 				io_->writeAt(offset, buf.data(), buf.size());
+				markTouchedSegment(segmentOffset);
+				invalidatePendingSegmentCrc(segmentOffset);
 
 				// Collect bitmap updates
 				for (size_t j = 0; j < batchSize; j++) {
@@ -234,10 +485,9 @@ namespace graph::storage {
 	// ── writeNewSlotEntities ─────────────────────────────────────────────────
 
 	template<typename T>
-	void StorageWriter::writeNewSlotEntities(std::vector<T> &entitiesForNewSlots,
-											  uint64_t &segmentHead, uint32_t itemsPerSegment) {
-		std::sort(entitiesForNewSlots.begin(), entitiesForNewSlots.end(),
-				  [](const T &a, const T &b) { return a.getId() < b.getId(); });
+	void StorageWriter::writeNewSlotEntityRefs(std::vector<const T *> &entitiesForNewSlots,
+											   uint64_t &segmentHead, uint32_t itemsPerSegment) {
+		orderEntityRefsById(entitiesForNewSlots);
 
 		uint64_t currentSegmentOffset = segmentHead;
 		SegmentHeader currentSegHeader;
@@ -269,7 +519,7 @@ namespace graph::storage {
 				remaining = currentSegHeader.capacity - currentSegHeader.used;
 
 				int64_t expectedNextId = currentSegHeader.start_id + currentSegHeader.used;
-				if (remaining == 0 || dataIt->getId() != expectedNextId) {
+				if (remaining == 0 || (*dataIt)->getId() != expectedNextId) {
 					needNewSegment = true;
 				}
 			}
@@ -284,9 +534,9 @@ namespace graph::storage {
 				}
 
 				SegmentHeader newSegHeader = readSegmentHeader(newOffset);
-				if (newSegHeader.start_id != dataIt->getId()) {
+				if (newSegHeader.start_id != (*dataIt)->getId()) {
 					tracker_->updateSegmentHeader(
-							newOffset, [dataIt](SegmentHeader &header) { header.start_id = dataIt->getId(); });
+							newOffset, [dataIt](SegmentHeader &header) { header.start_id = (*dataIt)->getId(); });
 				}
 
 				currentSegmentOffset = newOffset;
@@ -295,16 +545,15 @@ namespace graph::storage {
 			}
 
 			uint32_t maxCount = (std::min)(remaining, static_cast<uint32_t>(entitiesForNewSlots.end() - dataIt));
-			int64_t expectedId = dataIt->getId();
+			int64_t expectedId = (*dataIt)->getId();
 			uint32_t writeCount = 0;
 			for (auto it = dataIt; writeCount < maxCount; ++it, ++writeCount) {
-				if (it->getId() != expectedId) break;
+				if ((*it)->getId() != expectedId) break;
 				expectedId++;
 			}
 
-			std::vector<T> batch(dataIt, dataIt + writeCount);
-
-			writeSegmentData(currentSegmentOffset, batch, currentSegHeader.used);
+			writeSegmentDataRefs(currentSegmentOffset, std::span<const T *const>(&*dataIt, writeCount),
+								 currentSegHeader.used);
 
 			currentSegHeader = readSegmentHeader(currentSegmentOffset);
 
@@ -316,34 +565,56 @@ namespace graph::storage {
 
 	template<typename T>
 	void StorageWriter::writeSegmentData(uint64_t segmentOffset, const std::vector<T> &data, uint32_t baseUsed) {
+		writeSegmentDataSpan(segmentOffset, std::span<const T>(data.data(), data.size()), baseUsed);
+	}
+
+	template<typename T>
+	void StorageWriter::writeSegmentDataSpan(uint64_t segmentOffset, std::span<const T> data, uint32_t baseUsed) {
+		if (data.empty()) {
+			return;
+		}
+		writeSegmentDataWithAccessor<T>(
+				segmentOffset, data.size(), baseUsed, [&data](size_t index) -> const T & { return data[index]; });
+	}
+
+	template<typename T>
+	void StorageWriter::writeSegmentDataRefs(uint64_t segmentOffset, std::span<const T *const> data,
+											 uint32_t baseUsed) {
+		if (data.empty()) {
+			return;
+		}
+		writeSegmentDataWithAccessor<T>(
+				segmentOffset, data.size(), baseUsed, [&data](size_t index) -> const T & { return *data[index]; });
+	}
+
+	template<typename T, typename EntityAt>
+	void StorageWriter::writeSegmentDataWithAccessor(uint64_t segmentOffset, size_t count, uint32_t baseUsed,
+													 EntityAt entityAt) {
 		const size_t itemSize = T::getTotalSize();
 		uint64_t dataOffset = segmentOffset + sizeof(SegmentHeader) + baseUsed * itemSize;
 
-		size_t totalSize = data.size() * itemSize;
-		std::vector<char> buf(totalSize);
-		for (size_t i = 0; i < data.size(); i++) {
-			utils::FixedSizeSerializer::serializeInto(buf.data() + i * itemSize, data[i], itemSize);
+		size_t totalSize = count * itemSize;
+		auto &segBuf = prepareSegmentBuffer(segmentOffset, baseUsed > 0);
+		const size_t bufOffset = baseUsed * itemSize;
+		for (size_t i = 0; i < count; i++) {
+			serializeFixedEntityInto(segBuf.data() + bufOffset + i * itemSize, entityAt(i), itemSize);
 		}
-		io_->writeAt(dataOffset, buf.data(), totalSize);
-
-		// Accumulate into shadow buffer for write-time CRC computation
-		auto &segBuf = pendingSegmentData_[segmentOffset];
-		if (segBuf.empty()) {
-			segBuf.resize(SEGMENT_SIZE, 0);
+		const size_t writeEnd = bufOffset + totalSize;
+		if (writeEnd < SEGMENT_SIZE) {
+			std::fill(segBuf.begin() + static_cast<std::ptrdiff_t>(writeEnd), segBuf.end(), 0);
 		}
-		size_t bufOffset = baseUsed * itemSize;
-		std::memcpy(segBuf.data() + bufOffset, buf.data(), totalSize);
+		io_->writeAt(dataOffset, segBuf.data() + bufOffset, totalSize);
+		markTouchedSegment(segmentOffset);
+		setPendingSegmentCrc(segmentOffset, utils::calculateCrc(segBuf.data(), SEGMENT_SIZE));
 
 		tracker_->updateSegmentHeader(segmentOffset, [&](SegmentHeader &header) {
-			header.used = baseUsed + static_cast<uint32_t>(data.size());
-			if (baseUsed == 0 && !data.empty()) {
-				header.start_id = data.front().getId();
+			header.used = baseUsed + static_cast<uint32_t>(count);
+			if (baseUsed == 0) {
+				header.start_id = entityAt(0).getId();
 			}
 		});
 
-		if (!data.empty()) {
-			updateSegmentBitmap(segmentOffset, data.front().getId(), static_cast<uint32_t>(data.size()), true);
-		}
+		updateSegmentBitmap(segmentOffset, entityAt(0).getId(), static_cast<uint32_t>(count), true);
 	}
 
 	// ── updateEntityInPlace ─────────────────────────────────────────────────
@@ -376,8 +647,11 @@ namespace graph::storage {
 
 		uint64_t entityOffset = segmentOffset + sizeof(SegmentHeader) + entityIndex * T::getTotalSize();
 
-		auto buf = utils::FixedSizeSerializer::serializeToBuffer(entity, T::getTotalSize());
+		std::array<char, T::getTotalSize()> buf{};
+		serializeFixedEntityInto(buf.data(), entity, buf.size());
 		io_->writeAt(entityOffset, buf.data(), buf.size());
+		markTouchedSegment(segmentOffset);
+		invalidatePendingSegmentCrc(segmentOffset);
 
 		updateBitmapForEntity<T>(segmentOffset, id, entity.isActive());
 	}
@@ -438,6 +712,13 @@ namespace graph::storage {
 
 	SegmentHeader StorageWriter::readSegmentHeader(uint64_t segmentOffset) const {
 		return tracker_->getSegmentHeader(segmentOffset);
+	}
+
+	void StorageWriter::markTouchedSegment(uint64_t segmentOffset) {
+		if (segmentOffset != 0) {
+			std::lock_guard lock(pendingSegmentStateMutex_);
+			touchedSegments_.insert(segmentOffset);
+		}
 	}
 
 	// ── Template instantiations ─────────────────────────────────────────────

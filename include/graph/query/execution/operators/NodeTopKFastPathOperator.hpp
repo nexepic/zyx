@@ -23,15 +23,11 @@ namespace graph::query::execution::operators {
 
 	class NodeTopKFastPathOperator : public PhysicalOperator {
 	public:
-		NodeTopKFastPathOperator(std::shared_ptr<storage::DataManager> dm,
-		                         std::shared_ptr<indexes::IndexManager> im,
-		                         NodeScanConfig config,
-		                         NodeScanRequirements requirements,
-		                         std::vector<VectorizedPropertyPredicate> predicates,
-		                         std::vector<NodeTopKProjection> projections,
-		                         std::string sortProperty,
-		                         bool ascending,
-		                         int64_t limit);
+		NodeTopKFastPathOperator(std::shared_ptr<storage::DataManager> dm, std::shared_ptr<indexes::IndexManager> im,
+								 NodeScanConfig config, NodeScanRequirements requirements,
+								 std::vector<VectorizedPropertyPredicate> predicates,
+								 std::vector<NodeTopKProjection> projections, std::string sortProperty, bool ascending,
+								 int64_t limit);
 
 		void open() override;
 		std::optional<RecordBatch> next() override;

@@ -145,11 +145,7 @@ namespace graph {
 												 .count()));
 		}
 
-		// Capture dirty state into snapshot BEFORE save flushes and clears registries.
-		// Read-only transactions that start after this commit will use this snapshot
-		// to see the committed state even though data is now on disk.
 		auto dm = storage_->getDataManager();
-		auto newSnapshot = dm->getPersistenceManager()->captureCommittedSnapshot();
 
 		// Persist dirty data to main DB file
 		auto saveStart = Clock::now();
@@ -170,8 +166,11 @@ namespace graph {
 												 .count()));
 		}
 
-		// Publish the populated snapshot for future readers
-		snapshotManager_->publishSnapshot(std::move(newSnapshot));
+		// save() is synchronous and invalidates dirty page-cache entries before
+		// registries are cleared, so future readers can use the disk state
+		// directly. Publish an empty overlay snapshot instead of copying the
+		// committed dirty maps on every write transaction.
+		snapshotManager_->publishCleanSnapshot();
 
 		// Clear DataManager transaction context
 		dm->clearActiveTransaction();

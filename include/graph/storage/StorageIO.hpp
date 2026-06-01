@@ -57,6 +57,18 @@ namespace graph::storage {
 		uint64_t append(const void *buf, size_t size);
 
 		/**
+		 * @brief Reserve a logical append range without materializing zero bytes.
+		 *
+		 * Extends the file by writing a single zero byte at the end of the reserved
+		 * range. Unwritten bytes in the gap read back as zero on supported desktop
+		 * platforms, which matches the storage segment initialization contract.
+		 *
+		 * NOT thread-safe — caller must serialize append/reserve calls.
+		 * @return File offset where the reserved range starts.
+		 */
+		uint64_t reserveAppendSpace(size_t size);
+
+		/**
 		 * @brief Sync all pending writes to durable storage.
 		 */
 		void sync();

@@ -14,7 +14,10 @@
 
 #include <cstdint>
 #include <memory>
+#include <mutex>
+#include <span>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/storage/IDAllocator.hpp"
@@ -28,6 +31,7 @@ namespace graph::storage {
 	class SegmentAllocator;
 	class DataManager;
 	struct FlushSnapshot;
+	struct FlushSnapshotView;
 
 	template<typename EntityType>
 	struct DirtyEntityInfo;
@@ -35,7 +39,7 @@ namespace graph::storage {
 	// Classify entities from a dirty map into added/modified/deleted vectors
 	template<typename EntityType>
 	struct SaveBatch {
-		std::vector<EntityType> added, modified, deleted;
+		std::vector<const EntityType *> added, modified, deleted;
 	};
 
 	template<typename EntityType>
@@ -63,6 +67,8 @@ namespace graph::storage {
 		 * Called by FileStorage::save(). Replaces the inline classify+saveNew+saveMod logic.
 		 */
 		void writeSnapshot(FlushSnapshot &snapshot, concurrent::ThreadPool *threadPool);
+		void writeSnapshot(FlushSnapshotView &snapshot, concurrent::ThreadPool *threadPool);
+		std::vector<uint64_t> takeTouchedSegments();
 
 		/**
 		 * @brief Append new entities to a segment chain, allocating new segments as needed.
@@ -101,19 +107,54 @@ namespace graph::storage {
 		void saveModifiedAndDeleted(const std::vector<T> &modified, const std::vector<T> &deleted);
 
 	private:
+		template<typename NodeMap, typename EdgeMap, typename PropertyMap, typename BlobMap, typename IndexMap,
+				 typename StateMap>
+		void writeSnapshotMaps(const NodeMap &nodes, const EdgeMap &edges, const PropertyMap &properties,
+							   const BlobMap &blobs, const IndexMap &indexes, const StateMap &states,
+							   concurrent::ThreadPool *threadPool);
+
+		/**
+		 * @brief Save new entities referenced by a flush snapshot without copying entity payloads.
+		 */
+		template<typename T>
+		void saveNewEntityRefs(std::vector<const T *> &entities);
+
+		/**
+		 * @brief Append referenced entities to a segment chain, allocating new segments as needed.
+		 */
+		template<typename T>
+		void saveDataRefs(std::vector<const T *> &data, uint64_t &segmentHead, uint32_t maxSegmentSize);
+
+		/**
+		 * @brief Update/delete referenced snapshot entities without materializing copies.
+		 */
+		template<typename T>
+		void saveModifiedAndDeletedRefs(const std::vector<const T *> &modified,
+										const std::vector<const T *> &deleted);
+
 		/**
 		 * @brief Write entities that already have pre-allocated segment slots.
 		 */
 		template<typename T>
-		void writePreAllocatedEntities(
-				const std::unordered_map<uint64_t, std::vector<T>> &entitiesBySegment);
+		void writePreAllocatedEntityRefs(
+				const std::unordered_map<uint64_t, std::vector<const T *>> &entitiesBySegment);
 
 		/**
 		 * @brief Append entities that need new segment slot allocation.
 		 */
 		template<typename T>
-		void writeNewSlotEntities(std::vector<T> &entitiesForNewSlots,
-								  uint64_t &segmentHead, uint32_t itemsPerSegment);
+		void writeNewSlotEntityRefs(std::vector<const T *> &entitiesForNewSlots,
+									uint64_t &segmentHead, uint32_t itemsPerSegment);
+
+		template<typename T>
+		void writeSegmentDataSpan(uint64_t segmentOffset, std::span<const T> data, uint32_t baseUsed);
+
+		template<typename T>
+		void writeSegmentDataRefs(uint64_t segmentOffset, std::span<const T *const> data, uint32_t baseUsed);
+
+		template<typename T, typename EntityAt>
+		void writeSegmentDataWithAccessor(uint64_t segmentOffset, size_t count, uint32_t baseUsed,
+										  EntityAt entityAt);
 
 		template<typename EntityType>
 		void updateBitmapForEntity(uint64_t segmentOffset, uint64_t entityId, bool isActive);
@@ -121,9 +162,16 @@ namespace graph::storage {
 		void updateSegmentBitmap(uint64_t segmentOffset, uint64_t startId, uint32_t count, bool isActive) const;
 
 		SegmentHeader readSegmentHeader(uint64_t segmentOffset) const;
+		void markTouchedSegment(uint64_t segmentOffset);
 
 		/// Flush accumulated segment data as pre-computed CRCs to SegmentTracker.
 		void flushPendingCrcs();
+
+		/// Returns a reusable full-segment buffer, seeding from disk when appending
+		/// to an already-populated segment.
+		std::vector<char> &prepareSegmentBuffer(uint64_t segmentOffset, bool needsExistingData);
+		void setPendingSegmentCrc(uint64_t segmentOffset, uint32_t crc);
+		void invalidatePendingSegmentCrc(uint64_t segmentOffset);
 
 		std::shared_ptr<StorageIO> io_;
 		std::shared_ptr<SegmentTracker> tracker_;
@@ -132,9 +180,11 @@ namespace graph::storage {
 		IDAllocators allocators_;
 		FileHeader &fileHeader_;
 
-		/// Shadow buffers for segments written via writeSegmentData (new entities).
-		/// Used to compute CRC at write time, avoiding 128KB read-back at flush.
-		std::unordered_map<uint64_t, std::vector<char>> pendingSegmentData_;
+		/// Reusable full-segment scratch buffer for write-time CRC computation.
+		std::vector<char> segmentScratchBuffer_;
+		std::mutex pendingSegmentStateMutex_;
+		std::unordered_map<uint64_t, uint32_t> pendingSegmentCrcs_;
+		std::unordered_set<uint64_t> touchedSegments_;
 	};
 
 } // namespace graph::storage
