@@ -329,6 +329,9 @@ namespace graph::storage {
 		template<typename EntityType>
 		std::vector<DirtyEntityInfo<EntityType>> getDirtyEntityInfos(const std::vector<EntityChangeType> &types);
 
+		template<typename EntityType>
+		std::vector<DirtyEntityInfo<EntityType>> getDirtyEntityInfos(const std::vector<EntityChangeType> &types) const;
+
 		// Helper method to retrieve an entity from memory (dirty collections and cache) or disk
 		template<typename EntityType>
 		EntityType getEntityFromMemoryOrDisk(int64_t id);
@@ -532,6 +535,13 @@ namespace graph::storage {
 		[[nodiscard]] std::optional<int64_t> countActiveEdgesByTypeInSegmentWindow(
 				uint64_t segmentOffset, const SegmentHeader &header, int64_t firstId, int64_t lastId,
 				int64_t typeId) const;
+		[[nodiscard]] std::optional<bool> persistedEdgeMatchesType(int64_t edgeId, int64_t typeId) const;
+		[[nodiscard]] std::optional<int64_t> applyRelationshipTypeCountOverlay(
+				int64_t baseCount, int64_t beginId, int64_t endId, int64_t typeId,
+				std::span<const DirtyEntityInfo<Edge>> edgeOverlay) const;
+		[[nodiscard]] std::optional<int64_t> applyRelationshipTypeCountSnapshotOverlay(
+				int64_t baseCount, int64_t beginId, int64_t endId, int64_t typeId,
+				const std::unordered_map<int64_t, DirtyEntityInfo<Edge>> &edgeOverlay) const;
 
 		// Entity property operations
 		template<typename EntityType>

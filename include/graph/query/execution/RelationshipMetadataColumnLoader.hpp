@@ -58,6 +58,7 @@ namespace graph::query::execution {
 
 	private:
 		[[nodiscard]] bool canLoad(int64_t beginId, int64_t endId) const;
+		[[nodiscard]] bool canCountActiveByType(int64_t beginId, int64_t endId) const;
 
 		std::shared_ptr<storage::DataManager> dm_;
 	};

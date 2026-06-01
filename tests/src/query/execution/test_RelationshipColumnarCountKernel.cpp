@@ -81,7 +81,7 @@ protected:
 	int64_t targetId = 0;
 };
 
-TEST_F(RelationshipColumnarCountKernelTest, RejectsMissingUnsafeAndShortRanges) {
+TEST_F(RelationshipColumnarCountKernelTest, RejectsMissingAndShortRangesButCountsDirtyOverlay) {
 	RelationshipColumnarCountKernel missingStorage(nullptr);
 	EXPECT_FALSE(missingStorage.count(request(128, followsType)).has_value());
 
@@ -91,7 +91,9 @@ TEST_F(RelationshipColumnarCountKernelTest, RejectsMissingUnsafeAndShortRanges) 
 	for (int i = 0; i < 128; ++i) {
 		addRelationship(followsType);
 	}
-	EXPECT_FALSE(kernel.count(request(128, followsType)).has_value());
+	auto dirtyCount = kernel.count(request(128, followsType));
+	ASSERT_TRUE(dirtyCount.has_value());
+	EXPECT_EQ(dirtyCount->count, 128);
 }
 
 TEST_F(RelationshipColumnarCountKernelTest, CountsTypeOnlyRelationshipsFromMetadata) {
