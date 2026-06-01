@@ -251,7 +251,7 @@ namespace graph::storage {
 		auto totalStart = Clock::now();
 
 		// 1. ATOMIC SNAPSHOT: Freeze current dirty state into snapshot
-		auto snapshot = dataManager->prepareFlushSnapshot();
+		auto snapshot = dataManager->prepareFlushSnapshotView();
 
 		if (snapshot.isEmpty())
 			return;
@@ -259,28 +259,68 @@ namespace graph::storage {
 		// 2. I/O PHASE: Classify + write all entity types via StorageWriter
 		auto ioStart = Clock::now();
 
+		auto writeStart = Clock::now();
 		storageWriter_->writeSnapshot(snapshot, threadPool_);
+		auto touchedSegments = storageWriter_->takeTouchedSegments();
+		debug::PerfTrace::addDuration(
+				"save.write_snapshot",
+				static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - writeStart)
+											 .count()));
 
 		// 3. Persist segment headers (so pread-based reads see correct used/start_id)
+		auto headersStart = Clock::now();
 		persistSegmentHeaders();
+		debug::PerfTrace::addDuration(
+				"save.flush_segment_headers",
+				static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - headersStart)
+											 .count()));
 
 		// Update aggregated CRC from segment CRCs before flushing file header
+		auto crcStart = Clock::now();
 		auto segmentCrcs = segmentTracker->collectSegmentCrcs();
 		fileHeaderManager->updateAggregatedCrc(segmentCrcs);
+		debug::PerfTrace::addDuration(
+				"save.aggregate_crc",
+				static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - crcStart)
+											 .count()));
 
+		auto headerStart = Clock::now();
 		fileHeaderManager->flushFileHeader();
+		debug::PerfTrace::addDuration(
+				"save.flush_file_header",
+				static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - headerStart)
+											 .count()));
 
 		// 4. Single fsync to flush all writes (entity data + segment headers)
+		auto syncStart = Clock::now();
 		storageIO_->sync();
+		debug::PerfTrace::addDuration(
+				"save.sync",
+				static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - syncStart)
+											 .count()));
 
 		debug::PerfTrace::addDuration(
 				"save.io", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
 													ioStart)
 												.count()));
 
-		// 5. COMMIT: Clear the snapshot data and invalidate stale cached pages
+		// 5. Invalidate stale cached pages before commit clears the non-owning snapshot view.
+		auto invalidateStart = Clock::now();
+		if (touchedSegments.empty()) {
+			dataManager->invalidateDirtySegments(snapshot);
+		} else {
+			dataManager->invalidateSegments(touchedSegments);
+		}
+		debug::PerfTrace::addDuration(
+				"save.invalidate_cache",
+				static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - invalidateStart)
+											 .count()));
+		auto commitStart = Clock::now();
 		dataManager->commitFlushSnapshot();
-		dataManager->invalidateDirtySegments(snapshot);
+		debug::PerfTrace::addDuration(
+				"save.commit_snapshot",
+				static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - commitStart)
+											 .count()));
 		debug::PerfTrace::addDuration(
 				"save.total", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
 													  totalStart)

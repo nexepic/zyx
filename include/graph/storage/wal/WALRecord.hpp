@@ -75,6 +75,7 @@ namespace graph::storage::wal {
 		bool corrupted = false;
 	};
 
+	uint32_t extendCRC32(uint32_t seed, const uint8_t *data, size_t size);
 	uint32_t computeCRC32(const uint8_t *data, size_t size);
 
 	std::vector<uint8_t> serializeRecordHeader(const WALRecordHeader &header);

@@ -27,12 +27,13 @@
 #include "graph/core/Database.hpp"
 #include "graph/core/Transaction.hpp"
 #include "graph/log/Log.hpp"
+#include "graph/query/QueryContext.hpp"
+#include "graph/query/QueryPlan.hpp"
 #include "graph/query/algorithm/GraphAlgorithm.hpp"
 #include "graph/query/api/QueryBuilder.hpp"
 #include "graph/query/api/QueryEngine.hpp"
 #include "graph/query/api/QueryResult.hpp"
-#include "graph/query/QueryContext.hpp"
-#include "graph/query/QueryPlan.hpp"
+#include "graph/storage/data/DataManager.hpp"
 #include "zyx/zyx.hpp"
 
 namespace zyx {
@@ -52,7 +53,7 @@ namespace zyx {
 		std::string toUpperCopy(const std::string_view s) {
 			std::string out;
 			out.reserve(s.size());
-			for (char ch : s) {
+			for (char ch: s) {
 				out.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(ch))));
 			}
 			return out;
@@ -106,7 +107,7 @@ namespace zyx {
 
 		// RESOLVE: All label IDs -> Strings using DataManager
 		if (dm) {
-			for (int64_t lid : internalNode.getLabelIds()) {
+			for (int64_t lid: internalNode.getLabelIds()) {
 				if (lid != 0) {
 					pubNode->labels.push_back(dm->resolveTokenName(lid));
 				}
@@ -168,8 +169,8 @@ namespace zyx {
 						graph::PropertyValue pv(arg);
 						return pv.toString();
 					} else if constexpr (std::is_same_v<T, graph::TemporalDate> ||
-					                     std::is_same_v<T, graph::TemporalDateTime> ||
-					                     std::is_same_v<T, graph::TemporalDuration>) {
+										 std::is_same_v<T, graph::TemporalDateTime> ||
+										 std::is_same_v<T, graph::TemporalDuration>) {
 						return arg.toISO();
 					} else {
 						// Primitives (int, double, bool, string) map directly
@@ -199,8 +200,8 @@ namespace zyx {
 						}
 						return map;
 					} else if constexpr (std::is_same_v<T, graph::TemporalDate> ||
-					                     std::is_same_v<T, graph::TemporalDateTime> ||
-					                     std::is_same_v<T, graph::TemporalDuration>) {
+										 std::is_same_v<T, graph::TemporalDateTime> ||
+										 std::is_same_v<T, graph::TemporalDuration>) {
 						return arg.toISO();
 					} else {
 						return arg;
@@ -291,17 +292,19 @@ namespace zyx {
 						}
 						return graph::PropertyValue(vec);
 					} else if constexpr (std::is_same_v<T, std::shared_ptr<ValueList>>) {
-						if (!arg) return graph::PropertyValue();
+						if (!arg)
+							return graph::PropertyValue();
 						std::vector<graph::PropertyValue> vec;
 						vec.reserve(arg->elements.size());
-						for (const auto& elem : arg->elements) {
+						for (const auto &elem: arg->elements) {
 							vec.push_back(toInternal(elem));
 						}
 						return graph::PropertyValue(std::move(vec));
 					} else if constexpr (std::is_same_v<T, std::shared_ptr<ValueMap>>) {
-						if (!arg) return graph::PropertyValue();
+						if (!arg)
+							return graph::PropertyValue();
 						graph::PropertyValue::MapType map;
-						for (const auto& [k, v] : arg->entries) {
+						for (const auto &[k, v]: arg->entries) {
 							map.emplace(k, toInternal(v));
 						}
 						return graph::PropertyValue(std::move(map));
@@ -318,7 +321,7 @@ namespace zyx {
 	// Convert public Value params to internal PropertyValue params
 	graph::query::QueryContext toQueryContext(const std::unordered_map<std::string, Value> &params) {
 		graph::query::QueryContext ctx;
-		for (const auto &[key, val] : params) {
+		for (const auto &[key, val]: params) {
 			ctx.parameters.emplace(key, toInternal(val));
 		}
 		return ctx;
@@ -474,7 +477,7 @@ namespace zyx {
 	namespace detail {
 		Value getTypedResultValue(const Result &result, int index) {
 			if (!result.impl_ || !result.impl_->started_ || index < 0 ||
-			    index >= static_cast<int>(result.impl_->columnNames_.size())) {
+				index >= static_cast<int>(result.impl_->columnNames_.size())) {
 				return std::monostate{};
 			}
 
@@ -491,7 +494,7 @@ namespace zyx {
 			}
 			return toDriverAbiValue(it->second, result.impl_->dataManager_);
 		}
-	}
+	} // namespace detail
 
 	int Result::getColumnCount() const { return impl_ ? static_cast<int>(impl_->columnNames_.size()) : 0; }
 
@@ -550,12 +553,9 @@ namespace zyx {
 	Transaction::Transaction(Transaction &&) noexcept = default;
 	Transaction &Transaction::operator=(Transaction &&) noexcept = default;
 
-	Result Transaction::execute(const std::string &cypher) const {
-		return execute(cypher, {});
-	}
+	Result Transaction::execute(const std::string &cypher) const { return execute(cypher, {}); }
 
-	Result Transaction::execute(const std::string &cypher,
-	                             const std::unordered_map<std::string, Value> &params) const {
+	Result Transaction::execute(const std::string &cypher, const std::unordered_map<std::string, Value> &params) const {
 		if (!impl_ || !impl_->txn_.isActive()) {
 			Result res;
 			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult(), nullptr);
@@ -656,12 +656,9 @@ namespace zyx {
 
 	void Database::setThreadPoolSize(size_t poolSize) const { impl_->db_.setThreadPoolSize(poolSize); }
 
-	Result Database::execute(const std::string &cypher) const {
-		return execute(cypher, {});
-	}
+	Result Database::execute(const std::string &cypher) const { return execute(cypher, {}); }
 
-	Result Database::execute(const std::string &cypher,
-	                         const std::unordered_map<std::string, Value> &params) const {
+	Result Database::execute(const std::string &cypher, const std::unordered_map<std::string, Value> &params) const {
 		try {
 			impl_->ensureOpen();
 
@@ -674,10 +671,12 @@ namespace zyx {
 				switch (txnKind) {
 					case CypherTxnKind::TXN_BEGIN:
 						if (impl_->cypherTxn_.has_value()) {
-							throw std::runtime_error("Nested transactions are not supported: transaction already active");
+							throw std::runtime_error(
+									"Nested transactions are not supported: transaction already active");
 						}
 						impl_->cypherTxn_.emplace(impl_->db_.beginTransaction());
-						txnResult.addRow({{"result", graph::query::ResultValue(graph::PropertyValue("Transaction started"))}});
+						txnResult.addRow(
+								{{"result", graph::query::ResultValue(graph::PropertyValue("Transaction started"))}});
 						break;
 					case CypherTxnKind::TXN_COMMIT:
 						if (!impl_->cypherTxn_.has_value()) {
@@ -685,14 +684,16 @@ namespace zyx {
 						}
 						impl_->cypherTxn_->commit();
 						impl_->cypherTxn_.reset();
-						txnResult.addRow({{"result", graph::query::ResultValue(graph::PropertyValue("Transaction committed"))}});
+						txnResult.addRow(
+								{{"result", graph::query::ResultValue(graph::PropertyValue("Transaction committed"))}});
 						break;
 					case CypherTxnKind::TXN_ROLLBACK:
 						if (!impl_->cypherTxn_.has_value()) {
 							throw std::runtime_error("No active transaction to rollback");
 						}
 						impl_->cypherTxn_.reset(); // destructor auto-rolls back
-						txnResult.addRow({{"result", graph::query::ResultValue(graph::PropertyValue("Transaction rolled back"))}});
+						txnResult.addRow({{"result", graph::query::ResultValue(
+															 graph::PropertyValue("Transaction rolled back"))}});
 						break;
 					default: // ZYX_COV_EXCL_LINE: detectCypherTxnStatement returns only handled transaction kinds.
 						break;
@@ -798,7 +799,7 @@ namespace zyx {
 	}
 
 	int64_t Database::createNode(const std::vector<std::string> &labels,
-							  const std::unordered_map<std::string, Value> &props) const {
+								 const std::unordered_map<std::string, Value> &props) const {
 		impl_->ensureOpen();
 		std::optional<graph::Transaction> implicitTxn;
 		if (impl_->needsImplicitTransaction()) {
@@ -808,7 +809,7 @@ namespace zyx {
 		auto dm = impl_->db_.getStorage()->getDataManager();
 
 		std::vector<int64_t> labelIds;
-		for (const auto &lbl : labels) {
+		for (const auto &lbl: labels) {
 			labelIds.push_back(dm->getOrCreateTokenId(lbl));
 		}
 
@@ -822,7 +823,7 @@ namespace zyx {
 
 		if (!props.empty()) {
 			std::unordered_map<std::string, graph::PropertyValue> internalProps;
-			for (const auto &[k, v] : props)
+			for (const auto &[k, v]: props)
 				internalProps[k] = toInternal(v);
 			dm->addNodeProperties(newId, internalProps);
 		}
@@ -833,8 +834,9 @@ namespace zyx {
 		return newId;
 	}
 
-	std::vector<int64_t> Database::createNodes(const std::string &label,
-							   const std::vector<std::unordered_map<std::string, Value>> &propsList) const {
+	std::vector<int64_t>
+	Database::createNodes(const std::string &label,
+						  const std::vector<std::unordered_map<std::string, Value>> &propsList) const {
 		if (propsList.empty())
 			return {};
 
@@ -865,7 +867,7 @@ namespace zyx {
 
 		std::vector<int64_t> ids;
 		ids.reserve(nodes.size());
-		for (const auto &n : nodes) {
+		for (const auto &n: nodes) {
 			ids.push_back(n.getId());
 		}
 
@@ -876,7 +878,7 @@ namespace zyx {
 	}
 
 	int64_t Database::createEdge(int64_t sourceId, int64_t targetId, const std::string &edgeType,
-								  const std::unordered_map<std::string, Value> &props) const {
+								 const std::unordered_map<std::string, Value> &props) const {
 		impl_->ensureOpen();
 		std::optional<graph::Transaction> implicitTxn;
 		if (impl_->needsImplicitTransaction()) {
@@ -921,11 +923,11 @@ namespace zyx {
 		std::vector<graph::Edge> edges;
 		edges.reserve(edgesList.size());
 
-		for (const auto &[srcId, dstId, props] : edgesList) {
+		for (const auto &[srcId, dstId, props]: edgesList) {
 			graph::Edge e(0, srcId, dstId, typeId);
 			if (!props.empty()) {
 				std::unordered_map<std::string, graph::PropertyValue> internalProps;
-				for (const auto &[k, v] : props)
+				for (const auto &[k, v]: props)
 					internalProps[k] = toInternal(v);
 				e.setProperties(std::move(internalProps));
 			}
@@ -936,7 +938,7 @@ namespace zyx {
 
 		std::vector<int64_t> ids;
 		ids.reserve(edges.size());
-		for (const auto &e : edges) {
+		for (const auto &e: edges) {
 			ids.push_back(e.getId());
 		}
 

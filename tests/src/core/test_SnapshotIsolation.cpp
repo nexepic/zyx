@@ -54,7 +54,7 @@ protected:
 	std::unique_ptr<Database> db;
 };
 
-TEST_F(SnapshotIsolationTest, CommittedSnapshotContainsNodeData) {
+TEST_F(SnapshotIsolationTest, ReadOnlyTransactionReadsCommittedNodeFromDiskBackedSnapshot) {
 	// Add a node and commit
 	Node node(0, 42);
 	{
@@ -64,30 +64,23 @@ TEST_F(SnapshotIsolationTest, CommittedSnapshotContainsNodeData) {
 	}
 	ASSERT_GT(node.getId(), 0);
 
-	// The PersistenceManager's captureCommittedSnapshot was called during commit.
-	// Verify indirectly: start a read-only transaction and check the snapshot has data.
+	// Commits publish a clean overlay snapshot; committed data is durable on disk.
 	auto txn = db->beginReadOnlyTransaction();
 
-	// The snapshot should be non-null and populated
 	auto *dm = db->getStorage()->getDataManager().get();
 	const auto *snapshot = dm->getCurrentSnapshot();
 	ASSERT_NE(snapshot, nullptr);
+	EXPECT_TRUE(snapshot->nodes.empty());
 
-	// The snapshot should contain the committed node
-	EXPECT_FALSE(snapshot->nodes.empty()) << "Snapshot should contain committed node data";
-
-	auto it = snapshot->nodes.find(node.getId());
-	EXPECT_NE(it, snapshot->nodes.end()) << "Snapshot should have the added node";
-	if (it != snapshot->nodes.end()) {
-		EXPECT_EQ(it->second.changeType, EntityChangeType::CHANGE_ADDED);
-		EXPECT_TRUE(it->second.backup.has_value());
-		EXPECT_EQ(it->second.backup->getId(), node.getId());
-	}
+	Node readNode = dm->getNode(node.getId());
+	EXPECT_EQ(readNode.getId(), node.getId());
+	EXPECT_TRUE(readNode.isActive());
+	EXPECT_EQ(readNode.getLabelId(), 42);
 
 	txn.commit();
 }
 
-TEST_F(SnapshotIsolationTest, CommittedSnapshotContainsEdgeData) {
+TEST_F(SnapshotIsolationTest, ReadOnlyTransactionReadsCommittedEdgeFromDiskBackedSnapshot) {
 	// Create nodes and an edge
 	Node src(0, 0), tgt(0, 0);
 	{
@@ -110,16 +103,18 @@ TEST_F(SnapshotIsolationTest, CommittedSnapshotContainsEdgeData) {
 	auto *dm = db->getStorage()->getDataManager().get();
 	const auto *snapshot = dm->getCurrentSnapshot();
 	ASSERT_NE(snapshot, nullptr);
+	EXPECT_TRUE(snapshot->edges.empty());
 
-	// Snapshot should contain the edge
-	EXPECT_FALSE(snapshot->edges.empty()) << "Snapshot should contain committed edge data";
-	auto it = snapshot->edges.find(edge.getId());
-	EXPECT_NE(it, snapshot->edges.end()) << "Snapshot should have the added edge";
+	Edge readEdge = dm->getEdge(edge.getId());
+	EXPECT_EQ(readEdge.getId(), edge.getId());
+	EXPECT_TRUE(readEdge.isActive());
+	EXPECT_EQ(readEdge.getSourceNodeId(), src.getId());
+	EXPECT_EQ(readEdge.getTargetNodeId(), tgt.getId());
 
 	txn.commit();
 }
 
-TEST_F(SnapshotIsolationTest, SnapshotReflectsModifiedNode) {
+TEST_F(SnapshotIsolationTest, ReadOnlyTransactionReadsModifiedNodeFromDiskBackedSnapshot) {
 	// Create node with label 10
 	Node node(0, 10);
 	{
@@ -142,20 +137,17 @@ TEST_F(SnapshotIsolationTest, SnapshotReflectsModifiedNode) {
 	auto *dm = db->getStorage()->getDataManager().get();
 	const auto *snapshot = dm->getCurrentSnapshot();
 	ASSERT_NE(snapshot, nullptr);
+	EXPECT_TRUE(snapshot->nodes.empty());
 
-	// Snapshot should have the modified node
-	auto it = snapshot->nodes.find(node.getId());
-	EXPECT_NE(it, snapshot->nodes.end());
-	if (it != snapshot->nodes.end()) {
-		EXPECT_EQ(it->second.changeType, EntityChangeType::CHANGE_MODIFIED);
-		EXPECT_TRUE(it->second.backup.has_value());
-		EXPECT_EQ(it->second.backup->getLabelId(), 99);
-	}
+	Node readNode = dm->getNode(node.getId());
+	EXPECT_EQ(readNode.getId(), node.getId());
+	EXPECT_TRUE(readNode.isActive());
+	EXPECT_EQ(readNode.getLabelId(), 99);
 
 	txn.commit();
 }
 
-TEST_F(SnapshotIsolationTest, SnapshotReflectsDeletedNode) {
+TEST_F(SnapshotIsolationTest, ReadOnlyTransactionReadsDeletedNodeFromDiskBackedSnapshot) {
 	// Create and delete a node
 	Node node(0, 0);
 	{
@@ -176,18 +168,16 @@ TEST_F(SnapshotIsolationTest, SnapshotReflectsDeletedNode) {
 	auto *dm = db->getStorage()->getDataManager().get();
 	const auto *snapshot = dm->getCurrentSnapshot();
 	ASSERT_NE(snapshot, nullptr);
+	EXPECT_TRUE(snapshot->nodes.empty());
 
-	// Snapshot should mark the node as deleted
-	auto it = snapshot->nodes.find(node.getId());
-	EXPECT_NE(it, snapshot->nodes.end());
-	if (it != snapshot->nodes.end()) {
-		EXPECT_EQ(it->second.changeType, EntityChangeType::CHANGE_DELETED);
-	}
+	Node readNode = dm->getNode(node.getId());
+	EXPECT_EQ(readNode.getId(), 0);
+	EXPECT_FALSE(readNode.isActive());
 
 	txn.commit();
 }
 
-TEST_F(SnapshotIsolationTest, ReadOnlyTransactionReadsFromSnapshot) {
+TEST_F(SnapshotIsolationTest, ReadOnlyTransactionUsesCleanSnapshotOverlayAndDiskData) {
 	// Add a node
 	Node node(0, 77);
 	{

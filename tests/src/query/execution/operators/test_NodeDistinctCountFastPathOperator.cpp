@@ -3,6 +3,7 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
 #include <gtest/gtest.h>
+#include <optional>
 #include <string>
 #include <unordered_map>
 
@@ -24,7 +25,8 @@ protected:
 
 	void SetUp() override {
 		const auto uuid = boost::uuids::random_generator()();
-		testFilePath = fs::temp_directory_path() / ("test_node_distinct_count_fast_path_" + boost::uuids::to_string(uuid) + ".dat");
+		testFilePath = fs::temp_directory_path() /
+					   ("test_node_distinct_count_fast_path_" + boost::uuids::to_string(uuid) + ".dat");
 		db = std::make_unique<Database>(testFilePath.string());
 		db->open();
 		dm = db->getStorage()->getDataManager();
@@ -45,7 +47,7 @@ protected:
 	}
 
 	int64_t addLabeledNode(const std::vector<std::string> &labels,
-	                       const std::unordered_map<std::string, PropertyValue> &props = {}) {
+						   const std::unordered_map<std::string, PropertyValue> &props = {}) {
 		Node node(0, dm->getOrCreateTokenId(labels.front()));
 		for (size_t i = 1; i < labels.size(); ++i) {
 			node.addLabelId(dm->getOrCreateTokenId(labels[i]));
@@ -132,12 +134,44 @@ TEST_F(NodeDistinctCountFastPathOperatorTest, SkipsRedundantChecksForLabelIndexC
 	EXPECT_FALSE(snapshot.contains("node_scan.label_check"));
 }
 
+TEST_F(NodeDistinctCountFastPathOperatorTest, RepeatsDistinctCountsWithoutResultCache) {
+	for (int64_t i = 0; i < 300; ++i) {
+		addPerson({{"country", PropertyValue(i % 2 == 0 ? "CN" : "US")}});
+	}
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "n";
+	config.labels = {"Person"};
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+	requirements.requiredProperties = {"country"};
+	requirements.countOnly = true;
+
+	NodeDistinctCountFastPathOperator first(dm, im, config, requirements, {}, "country", "count");
+	first.open();
+	auto firstBatch = first.next();
+	ASSERT_TRUE(firstBatch.has_value());
+	EXPECT_EQ(readCount(*firstBatch), 2);
+
+	debug::PerfTrace::setEnabled(true);
+	debug::PerfTrace::reset();
+	NodeDistinctCountFastPathOperator second(dm, im, config, requirements, {}, "country", "count");
+	second.open();
+	auto secondBatch = second.next();
+	ASSERT_TRUE(secondBatch.has_value());
+	EXPECT_EQ(readCount(*secondBatch), 2);
+	const auto snapshot = debug::PerfTrace::snapshotAndReset();
+	EXPECT_TRUE(snapshot.contains("node_scan.distinct_count"));
+	EXPECT_TRUE(snapshot.contains("node_scan.load_node_metadata"));
+	EXPECT_FALSE(snapshot.contains("node_scan.distinct_count_cache"));
+}
+
 TEST_F(NodeDistinctCountFastPathOperatorTest, AppliesResidualPropertyPredicatesBeforeDistinctCount) {
 	for (int64_t i = 0; i < 300; ++i) {
-		addPerson({
-			{"country", PropertyValue(i % 3 == 0 ? "CN" : "US")},
-			{"age", PropertyValue(i)}
-		});
+		addPerson({{"country", PropertyValue(i % 3 == 0 ? "CN" : "US")}, {"age", PropertyValue(i)}});
 	}
 	db->getStorage()->flush();
 

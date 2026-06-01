@@ -65,6 +65,29 @@ namespace graph::storage {
 		return offset;
 	}
 
+	uint64_t StorageIO::reserveAppendSpace(size_t size) {
+		if (size == 0) {
+			throw std::invalid_argument("StorageIO::reserveAppendSpace called with zero size");
+		}
+
+		stream_->clear();
+		stream_->seekp(0, std::ios::end);
+		auto endPos = stream_->tellp();
+		if (endPos < 0) {
+			throw std::runtime_error("StorageIO::reserveAppendSpace failed to determine file end");
+		}
+
+		auto offset = static_cast<uint64_t>(endPos);
+		stream_->seekp(static_cast<std::streamoff>(offset + size - 1));
+		const char zero = 0;
+		stream_->write(&zero, 1);
+		if (!*stream_) {
+			throw std::runtime_error("StorageIO::reserveAppendSpace fstream write failed");
+		}
+		stream_->flush();
+		return offset;
+	}
+
 	void StorageIO::sync() {
 		if (writeFd_ != INVALID_FILE_HANDLE) {
 			portable_fsync(writeFd_);

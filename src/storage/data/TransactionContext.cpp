@@ -18,11 +18,20 @@
  **/
 
 #include "graph/storage/data/TransactionContext.hpp"
+#include <algorithm>
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/storage/wal/WALManager.hpp"
 
 namespace graph::storage {
+	namespace {
+		template<typename EntityType>
+		std::vector<uint8_t> serializeEntityBytes(const EntityType &entity) {
+			std::vector<uint8_t> bytes(EntityType::getTotalSize());
+			utils::FixedSizeSerializer::serializeInto(reinterpret_cast<char *>(bytes.data()), entity, bytes.size());
+			return bytes;
+		}
+	} // namespace
 
 	void TransactionContext::setActive(uint64_t txnId) {
 		transactionActive_ = true;
@@ -50,11 +59,47 @@ namespace graph::storage {
 		undoLog_.record({static_cast<uint8_t>(EntityType::typeId), entity.getId(),
 						 wal::UndoChangeType::UNDO_ADDED, {}});
 		if (walManager_) {
-			auto walBuf = utils::FixedSizeSerializer::serializeToBuffer(entity, EntityType::getTotalSize());
 			walManager_->writeEntityChange(activeTxnId_, static_cast<uint8_t>(EntityType::typeId),
 										   static_cast<uint8_t>(EntityChangeType::CHANGE_ADDED), entity.getId(),
-										   {walBuf.begin(), walBuf.end()});
+										   serializeEntityBytes(entity));
 		}
+	}
+
+	template<typename EntityType>
+	void TransactionContext::recordAdds(const std::vector<EntityType> &entities) {
+		if (!transactionActive_ || entities.empty()) return;
+
+		constexpr size_t kWalBatchSize = 4096;
+		txnOps_.reserve(txnOps_.size() + entities.size());
+
+		std::vector<wal::WALEntityChange> walChanges;
+		if (walManager_) {
+			walChanges.reserve((std::min)(entities.size(), kWalBatchSize));
+		}
+
+		auto flushWalChanges = [&]() {
+			if (walManager_ && !walChanges.empty()) {
+				walManager_->writeEntityChanges(activeTxnId_, walChanges);
+				walChanges.clear();
+			}
+		};
+
+		for (const auto &entity : entities) {
+			recordOp({Transaction::TxnOperation::OP_ADD,
+					  static_cast<uint8_t>(EntityType::typeId), entity.getId()});
+			undoLog_.record({static_cast<uint8_t>(EntityType::typeId), entity.getId(),
+							 wal::UndoChangeType::UNDO_ADDED, {}});
+			if (walManager_) {
+				walChanges.push_back({static_cast<uint8_t>(EntityType::typeId),
+									  static_cast<uint8_t>(EntityChangeType::CHANGE_ADDED),
+									  entity.getId(),
+									  serializeEntityBytes(entity)});
+				if (walChanges.size() >= kWalBatchSize) {
+					flushWalChanges();
+				}
+			}
+		}
+		flushWalChanges();
 	}
 
 	template<typename EntityType>
@@ -63,14 +108,12 @@ namespace graph::storage {
 
 		recordOp({Transaction::TxnOperation::OP_UPDATE,
 				  static_cast<uint8_t>(EntityType::typeId), newEntity.getId()});
-		auto buf = utils::FixedSizeSerializer::serializeToBuffer(oldEntity, EntityType::getTotalSize());
 		undoLog_.record({static_cast<uint8_t>(EntityType::typeId), newEntity.getId(),
-						 wal::UndoChangeType::UNDO_MODIFIED, {buf.begin(), buf.end()}});
+						 wal::UndoChangeType::UNDO_MODIFIED, serializeEntityBytes(oldEntity)});
 		if (walManager_) {
-			auto walBuf = utils::FixedSizeSerializer::serializeToBuffer(newEntity, EntityType::getTotalSize());
 			walManager_->writeEntityChange(activeTxnId_, static_cast<uint8_t>(EntityType::typeId),
 										   static_cast<uint8_t>(EntityChangeType::CHANGE_MODIFIED), newEntity.getId(),
-										   {walBuf.begin(), walBuf.end()});
+										   serializeEntityBytes(newEntity));
 		}
 	}
 
@@ -81,19 +124,21 @@ namespace graph::storage {
 		recordOp({Transaction::TxnOperation::OP_DELETE,
 				  static_cast<uint8_t>(EntityType::typeId), id});
 		EntityType oldEntity = getOld(id);
-		auto buf = utils::FixedSizeSerializer::serializeToBuffer(oldEntity, EntityType::getTotalSize());
+		auto buf = serializeEntityBytes(oldEntity);
 		undoLog_.record({static_cast<uint8_t>(EntityType::typeId), id,
-						 wal::UndoChangeType::UNDO_DELETED, {buf.begin(), buf.end()}});
+						 wal::UndoChangeType::UNDO_DELETED, buf});
 		if (walManager_) {
 			walManager_->writeEntityChange(activeTxnId_, static_cast<uint8_t>(EntityType::typeId),
 										   static_cast<uint8_t>(EntityChangeType::CHANGE_DELETED), id,
-										   {buf.begin(), buf.end()});
+										   buf);
 		}
 	}
 
 	// Explicit instantiations
 	template void TransactionContext::recordAdd<Node>(const Node &);
 	template void TransactionContext::recordAdd<Edge>(const Edge &);
+	template void TransactionContext::recordAdds<Node>(const std::vector<Node> &);
+	template void TransactionContext::recordAdds<Edge>(const std::vector<Edge> &);
 
 	template void TransactionContext::recordUpdate<Node>(const Node &, const Node &);
 	template void TransactionContext::recordUpdate<Edge>(const Edge &, const Edge &);

@@ -15,12 +15,9 @@ namespace graph::query::execution::operators {
 
 	class NodeCountFastPathOperator : public PhysicalOperator {
 	public:
-		NodeCountFastPathOperator(std::shared_ptr<storage::DataManager> dm,
-		                          std::shared_ptr<indexes::IndexManager> im,
-		                          NodeScanConfig config,
-		                          NodeScanRequirements requirements,
-		                          std::vector<VectorizedPropertyPredicate> predicates,
-		                          std::string outputAlias);
+		NodeCountFastPathOperator(std::shared_ptr<storage::DataManager> dm, std::shared_ptr<indexes::IndexManager> im,
+								  NodeScanConfig config, NodeScanRequirements requirements,
+								  std::vector<VectorizedPropertyPredicate> predicates, std::string outputAlias);
 
 		void open() override;
 		std::optional<RecordBatch> next() override;

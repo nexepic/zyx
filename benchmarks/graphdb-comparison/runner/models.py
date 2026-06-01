@@ -59,10 +59,13 @@ class SummaryRow:
     workload: str
     scale: str
     samples: int
+    first_ms: float
+    min_ms: float
     avg_ms: float
     p50_ms: float
     p95_ms: float
     p99_ms: float
+    max_ms: float
     ops_per_sec: float
     status: str = "ok"
     equivalent_mode: str = "cypher"

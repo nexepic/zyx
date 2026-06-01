@@ -21,6 +21,22 @@ namespace {
 		std::set_intersection(left.begin(), left.end(), right.begin(), right.end(), std::back_inserter(intersection));
 		left = std::move(intersection);
 	}
+
+	std::vector<VectorizedPropertyPredicate> effectiveEdgePredicates(const DirectRelationshipCountConfig &config) {
+		if (!config.edgePredicates.empty()) {
+			return config.edgePredicates;
+		}
+		std::vector<VectorizedPropertyPredicate> predicates;
+		predicates.reserve(config.edgeProperties.size());
+		for (const auto &[key, value] : config.edgeProperties) {
+			VectorizedPropertyPredicate predicate;
+			predicate.propertyKey = key;
+			predicate.op = VectorPredicateOp::VPO_EQ;
+			predicate.value = value;
+			predicates.push_back(std::move(predicate));
+		}
+		return predicates;
+	}
 } // namespace
 
 	RelationshipCandidateSource::RelationshipCandidateSource(std::shared_ptr<storage::DataManager> dm,
@@ -35,14 +51,15 @@ namespace {
 
 		std::optional<std::vector<int64_t>> propertyIds;
 		std::string propertyKey;
-		for (const auto &[key, value] : config.edgeProperties) {
-			if (!im_->hasPropertyIndex("edge", key)) {
+		for (const auto &predicate : effectiveEdgePredicates(config)) {
+			if (predicate.op != VectorPredicateOp::VPO_EQ ||
+			    !im_->hasPropertyIndex("edge", predicate.propertyKey)) {
 				continue;
 			}
-			auto ids = im_->findEdgeIdsByProperty(key, value);
+			auto ids = im_->findEdgeIdsByProperty(predicate.propertyKey, predicate.value);
 			normalizeIds(ids);
 			if (!propertyIds.has_value() || ids.size() < propertyIds->size()) {
-				propertyKey = key;
+				propertyKey = predicate.propertyKey;
 				propertyIds = std::move(ids);
 			}
 		}

@@ -59,10 +59,13 @@ def test_summarize_samples_computes_latency_and_throughput():
     assert first.workload == "point_lookup"
     assert first.scale == "smoke"
     assert first.samples == 1
+    assert first.first_ms == 30.0
+    assert first.min_ms == 30.0
     assert first.avg_ms == 30.0
     assert first.p50_ms == 30.0
     assert first.p95_ms == 30.0
     assert first.p99_ms == 30.0
+    assert first.max_ms == 30.0
     assert first.ops_per_sec == 1000.0 / 30.0
     assert first.status == "error"
     assert first.equivalent_mode == "strict"
@@ -70,8 +73,11 @@ def test_summarize_samples_computes_latency_and_throughput():
     second = rows[1]
     assert second.database == "zyx"
     assert second.samples == 2
+    assert second.first_ms == 10.0
+    assert second.min_ms == 10.0
     assert second.avg_ms == 15.0
     assert second.p50_ms == 10.0
     assert second.p95_ms == 20.0
     assert second.p99_ms == 20.0
+    assert second.max_ms == 20.0
     assert second.ops_per_sec == 1000.0 * 2 / 30.0

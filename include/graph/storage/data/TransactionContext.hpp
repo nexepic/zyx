@@ -67,6 +67,9 @@ namespace graph::storage {
 		void recordAdd(const EntityType &entity);
 
 		template<typename EntityType>
+		void recordAdds(const std::vector<EntityType> &entities);
+
+		template<typename EntityType>
 		void recordUpdate(const EntityType &newEntity, const EntityType &oldEntity);
 
 		template<typename EntityType>

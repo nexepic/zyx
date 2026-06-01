@@ -232,6 +232,7 @@ def test_run_benchmark_records_profile_and_uses_profile_workloads(tmp_path: Path
         if event.get("event") == "sample"
     ]
     assert environment["profile"] == "indexed"
+    assert "result_cache" not in environment
     assert sample_workloads == [
         "load_nodes_edges",
         "point_lookup_indexed",

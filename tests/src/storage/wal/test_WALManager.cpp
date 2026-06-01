@@ -21,6 +21,7 @@
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include <cstddef>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -124,6 +125,43 @@ TEST_F(WALManagerTest, WriteEntityChange) {
 
 	mgr.writeCommit(1);
 	mgr.sync();
+	mgr.close();
+}
+
+TEST_F(WALManagerTest, WriteEntityChangesBatchPreservesRecordOrderAndPayloads) {
+	WALManager mgr;
+	mgr.open(testDbPath.string());
+
+	mgr.writeBegin(7);
+	std::vector<WALEntityChange> changes = {
+			{1, 0, 10, {0x01, 0x02}},
+			{2, 1, 20, {0x03}},
+			{3, 2, 30, {}},
+	};
+	mgr.writeEntityChanges(7, changes);
+	mgr.writeCommit(7);
+	mgr.sync();
+
+	auto result = mgr.readRecords();
+	ASSERT_FALSE(result.corrupted);
+	ASSERT_EQ(result.records.size(), 5U);
+	EXPECT_EQ(result.records[0].header.type, WALRecordType::WAL_TXN_BEGIN);
+	EXPECT_EQ(result.records[4].header.type, WALRecordType::WAL_TXN_COMMIT);
+
+	for (size_t i = 0; i < changes.size(); ++i) {
+		const auto &record = result.records[i + 1];
+		EXPECT_EQ(record.header.type, WALRecordType::WAL_ENTITY_WRITE);
+		ASSERT_GE(record.data.size(), sizeof(WALEntityPayload));
+		const auto payload = deserializeEntityPayload(record.data.data());
+		EXPECT_EQ(payload.entityType, changes[i].entityType);
+		EXPECT_EQ(payload.changeType, changes[i].changeType);
+		EXPECT_EQ(payload.entityId, changes[i].entityId);
+		EXPECT_EQ(payload.dataSize, changes[i].serializedData.size());
+		std::vector<uint8_t> actual(record.data.begin() + static_cast<std::ptrdiff_t>(sizeof(WALEntityPayload)),
+									record.data.end());
+		EXPECT_EQ(actual, changes[i].serializedData);
+	}
+
 	mgr.close();
 }
 

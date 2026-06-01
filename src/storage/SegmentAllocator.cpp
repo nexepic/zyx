@@ -40,8 +40,7 @@ namespace graph::storage {
 			offset = freeSegments.front();
 			segmentTracker_->removeFromFreeList(offset);
 		} else {
-			std::vector<char> zeros(segmentSize, 0);
-			offset = io_->append(zeros.data(), segmentSize);
+			offset = io_->reserveAppendSpace(segmentSize);
 		}
 
 		SegmentHeader header;

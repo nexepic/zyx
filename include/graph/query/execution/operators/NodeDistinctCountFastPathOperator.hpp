@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -15,12 +16,10 @@ namespace graph::query::execution::operators {
 	class NodeDistinctCountFastPathOperator : public PhysicalOperator {
 	public:
 		NodeDistinctCountFastPathOperator(std::shared_ptr<storage::DataManager> dm,
-		                                  std::shared_ptr<indexes::IndexManager> im,
-		                                  NodeScanConfig config,
-		                                  NodeScanRequirements requirements,
-		                                  std::vector<VectorizedPropertyPredicate> predicates,
-		                                  std::string distinctProperty,
-		                                  std::string outputAlias);
+										  std::shared_ptr<indexes::IndexManager> im, NodeScanConfig config,
+										  NodeScanRequirements requirements,
+										  std::vector<VectorizedPropertyPredicate> predicates,
+										  std::string distinctProperty, std::string outputAlias);
 
 		void open() override;
 		std::optional<RecordBatch> next() override;

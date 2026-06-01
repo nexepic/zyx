@@ -27,19 +27,17 @@
 #include <type_traits>
 #include <unordered_set>
 #include "graph/concurrent/ThreadPool.hpp"
-#include "graph/storage/CommittedSnapshot.hpp"
 #include "graph/core/BlobChainManager.hpp"
 #include "graph/core/EntityPropertyTraits.hpp"
 #include "graph/core/StateChainManager.hpp"
 #include "graph/core/Types.hpp"
-#include "graph/storage/PreadHelper.hpp"
-#include "graph/storage/SegmentReadUtils.hpp"
-#include "graph/storage/wal/WALManager.hpp"
-#include "graph/utils/FixedSizeSerializer.hpp"
+#include "graph/storage/CommittedSnapshot.hpp"
 #include "graph/storage/DeletionManager.hpp"
 #include "graph/storage/EntityReferenceUpdater.hpp"
 #include "graph/storage/IDAllocator.hpp"
+#include "graph/storage/PreadHelper.hpp"
 #include "graph/storage/SegmentIndexManager.hpp"
+#include "graph/storage/SegmentReadUtils.hpp"
 #include "graph/storage/SegmentTracker.hpp"
 #include "graph/storage/data/BlobManager.hpp"
 #include "graph/storage/data/EdgeManager.hpp"
@@ -50,7 +48,9 @@
 #include "graph/storage/data/StateManager.hpp"
 #include "graph/storage/dictionaries/TokenRegistry.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
+#include "graph/storage/wal/WALManager.hpp"
 #include "graph/traversal/RelationshipTraversal.hpp"
+#include "graph/utils/FixedSizeSerializer.hpp"
 #include "graph/utils/Serializer.hpp"
 
 namespace graph::storage {
@@ -62,8 +62,7 @@ namespace graph::storage {
 	DataManager::DataManager(std::shared_ptr<std::fstream> file, size_t cacheSize, FileHeader &fileHeader,
 							 IDAllocators allocators, std::shared_ptr<SegmentTracker> segmentTracker,
 							 std::shared_ptr<StorageIO> storageIO) :
-		file_(std::move(file)), fileHeader_(fileHeader),
-		pagePool_(std::make_unique<PageBufferPool>(cacheSize)),
+		file_(std::move(file)), fileHeader_(fileHeader), pagePool_(std::make_unique<PageBufferPool>(cacheSize)),
 		allocators_(std::move(allocators)), segmentTracker_(std::move(segmentTracker)),
 		storageIO_(std::move(storageIO)) {
 
@@ -72,9 +71,7 @@ namespace graph::storage {
 		segmentTracker_->setSegmentIndexManager(std::weak_ptr(segmentIndexManager_));
 	}
 
-	DataManager::~DataManager() {
-		closeFileHandles();
-	}
+	DataManager::~DataManager() { closeFileHandles(); }
 
 	void DataManager::closeFileHandles() {
 		// readFd_ is now owned by StorageIO — nothing to close here.
@@ -92,14 +89,10 @@ namespace graph::storage {
 		class membuf : public std::streambuf {
 		public:
 			membuf(char *base, size_t size) { this->setg(base, base, base + size); }
-			[[nodiscard]] size_t consumed() const {
-				return static_cast<size_t>(this->gptr() - this->eback());
-			}
+			[[nodiscard]] size_t consumed() const { return static_cast<size_t>(this->gptr() - this->eback()); }
 		};
 
-		size_t remainingBytes(const char *cursor, const char *end) {
-			return static_cast<size_t>(end - cursor);
-		}
+		size_t remainingBytes(const char *cursor, const char *end) { return static_cast<size_t>(end - cursor); }
 
 		bool readRawBytes(const char *&cursor, const char *end, void *out, size_t size) {
 			if (remainingBytes(cursor, end) < size) { // ZYX_COV_EXCL_LINE
@@ -148,8 +141,8 @@ namespace graph::storage {
 
 		bool readPropertyRecordHeader(const char *&cursor, const char *end, PropertyRecordHeader &header) {
 			constexpr size_t headerBytes = sizeof(header.propertyId) + sizeof(header.entityId) +
-			                               sizeof(header.entityType) + sizeof(header.active) +
-			                               sizeof(header.propertyCount);
+										   sizeof(header.entityType) + sizeof(header.active) +
+										   sizeof(header.propertyCount);
 			if (remainingBytes(cursor, end) < headerBytes) { // ZYX_COV_EXCL_LINE
 				return false;
 			}
@@ -184,7 +177,7 @@ namespace graph::storage {
 
 		bool stringViewEquals(const SerializedStringView &view, const std::string &value) {
 			return view.size == value.size() &&
-			       (view.size == 0 || std::memcmp(view.data, value.data(), view.size) == 0); // ZYX_COV_EXCL_LINE
+				   (view.size == 0 || std::memcmp(view.data, value.data(), view.size) == 0); // ZYX_COV_EXCL_LINE
 		}
 
 		bool skipBytes(const char *&cursor, const char *end, size_t size) {
@@ -271,9 +264,8 @@ namespace graph::storage {
 			}
 		}
 
-		std::optional<std::unordered_map<std::string, PropertyValue>> readSelectedPropertyValues(
-				const char *buf,
-				const std::unordered_set<std::string> &requestedKeys) {
+		std::optional<std::unordered_map<std::string, PropertyValue>>
+		readSelectedPropertyValues(const char *buf, const std::unordered_set<std::string> &requestedKeys) {
 			const char *cursor = buf;
 			const char *end = buf + Property::TOTAL_PROPERTY_SIZE;
 
@@ -331,13 +323,11 @@ namespace graph::storage {
 			return id;
 		}
 
-		bool readSelectedPropertyColumns(
-				const char *buf,
-				const std::unordered_map<std::string, size_t> &requestedKeyIndices,
-				const std::vector<std::vector<std::optional<PropertyValue>> *> &columnTargets,
-				const std::vector<PropertyEntityRowRef> &refs,
-				size_t refBegin,
-				size_t refEnd) {
+		bool readSelectedPropertyColumns(const char *buf,
+										 const std::unordered_map<std::string, size_t> &requestedKeyIndices,
+										 const std::vector<std::vector<std::optional<PropertyValue>> *> &columnTargets,
+										 const std::vector<PropertyEntityRowRef> &refs, size_t refBegin,
+										 size_t refEnd) {
 			const char *cursor = buf;
 			const char *end = buf + Property::TOTAL_PROPERTY_SIZE;
 
@@ -377,9 +367,8 @@ namespace graph::storage {
 			return true;
 		}
 
-		std::optional<bool> serializedPropertyValueEquals(const char *&cursor,
-		                                                  const char *end,
-		                                                  const PropertyValue &expected) {
+		std::optional<bool> serializedPropertyValueEquals(const char *&cursor, const char *end,
+														  const PropertyValue &expected) {
 			const char *valueStart = cursor;
 			PropertyType type = PropertyType::UNKNOWN;
 			if (!readPod(cursor, end, type)) { // ZYX_COV_EXCL_LINE
@@ -437,7 +426,7 @@ namespace graph::storage {
 				case PropertyType::DURATION: {
 					TemporalDuration value;
 					if (!readPod(cursor, end, value.months) || !readPod(cursor, end, value.days) || // ZYX_COV_EXCL_LINE
-					    !readPod(cursor, end, value.nanos)) { // ZYX_COV_EXCL_LINE
+						!readPod(cursor, end, value.nanos)) { // ZYX_COV_EXCL_LINE
 						return std::nullopt;
 					}
 					return value == std::get<TemporalDuration>(expected.getVariant());
@@ -456,10 +445,9 @@ namespace graph::storage {
 			}
 		}
 
-		const PredicateExpectation *findPredicateExpectation(
-				const SerializedStringView &key,
-				const std::vector<PredicateExpectation> &expected) {
-			for (const auto &entry : expected) {
+		const PredicateExpectation *findPredicateExpectation(const SerializedStringView &key,
+															 const std::vector<PredicateExpectation> &expected) {
+			for (const auto &entry: expected) {
 				if (stringViewEquals(key, *entry.key)) {
 					return &entry;
 				}
@@ -467,9 +455,8 @@ namespace graph::storage {
 			return nullptr;
 		}
 
-		std::optional<bool> readPropertyEntityPredicateMatch(
-				const char *buf,
-				const std::vector<PredicateExpectation> &expected) {
+		std::optional<bool> readPropertyEntityPredicateMatch(const char *buf,
+															 const std::vector<PredicateExpectation> &expected) {
 			const char *cursor = buf;
 			const char *end = buf + Property::TOTAL_PROPERTY_SIZE;
 
@@ -505,9 +492,8 @@ namespace graph::storage {
 			return matchedKeys == expected.size();
 		}
 
-		std::optional<bool> readPropertyEntitySinglePredicateMatch(
-				const char *buf,
-				const SinglePredicateExpectation &expected) {
+		std::optional<bool> readPropertyEntitySinglePredicateMatch(const char *buf,
+																   const SinglePredicateExpectation &expected) {
 			const char *cursor = buf;
 			const char *end = buf + Property::TOTAL_PROPERTY_SIZE;
 
@@ -534,19 +520,7 @@ namespace graph::storage {
 			return false;
 		}
 
-		const PredicateSpecExpectation *findPredicateSpecExpectation(
-				const SerializedStringView &key,
-				const std::vector<PredicateSpecExpectation> &expected) {
-			for (const auto &entry : expected) {
-				if (stringViewEquals(key, *entry.key)) {
-					return &entry;
-				}
-			}
-			return nullptr;
-		}
-
-		bool propertyValueSatisfiesPredicate(const PropertyValue &actual,
-		                                     const PredicateSpecExpectation &expected) {
+		bool propertyValueSatisfiesPredicate(const PropertyValue &actual, const PredicateSpecExpectation &expected) {
 			switch (expected.op) {
 				case PropertyEntityPredicateOp::PEP_EQ:
 					return actual == *expected.value;
@@ -561,16 +535,14 @@ namespace graph::storage {
 				case PropertyEntityPredicateOp::PEP_GE:
 					return actual >= *expected.value;
 				case PropertyEntityPredicateOp::PEP_RANGE_CLOSED:
-					return expected.upperValue != nullptr &&
-					       actual >= *expected.value &&
-					       actual <= *expected.upperValue;
+					return expected.upperValue != nullptr && actual >= *expected.value &&
+						   actual <= *expected.upperValue;
 			}
 			return false;
 		}
 
-		std::optional<bool> readPropertyEntityPredicateMatch(
-				const char *buf,
-				const std::vector<PredicateSpecExpectation> &expected) {
+		std::optional<bool> readPropertyEntityPredicateMatch(const char *buf,
+															 const std::vector<PredicateSpecExpectation> &expected) {
 			const char *cursor = buf;
 			const char *end = buf + Property::TOTAL_PROPERTY_SIZE;
 
@@ -579,15 +551,21 @@ namespace graph::storage {
 				return std::nullopt;
 			}
 
-			size_t matchedKeys = 0;
+			size_t matchedPredicates = 0;
 			for (uint32_t i = 0; i < header->propertyCount; ++i) {
 				SerializedStringView key;
 				if (!readStringView(cursor, end, key)) { // ZYX_COV_EXCL_LINE
 					return std::nullopt;
 				}
 
-				const auto *expectedEntry = findPredicateSpecExpectation(key, expected);
-				if (expectedEntry == nullptr) {
+				bool keyIsRequired = false;
+				for (const auto &entry: expected) {
+					if (stringViewEquals(key, *entry.key)) {
+						keyIsRequired = true;
+						break;
+					}
+				}
+				if (!keyIsRequired) {
 					if (!skipPropertyValue(cursor, end)) { // ZYX_COV_EXCL_LINE
 						return std::nullopt;
 					}
@@ -598,13 +576,19 @@ namespace graph::storage {
 				if (!actual.has_value()) { // ZYX_COV_EXCL_LINE
 					return std::nullopt;
 				}
-				if (!propertyValueSatisfiesPredicate(*actual, *expectedEntry)) {
-					return false;
+				for (const auto &entry: expected) {
+					if (!stringViewEquals(key, *entry.key)) {
+						continue;
+					}
+					if (!propertyValueSatisfiesPredicate(*actual, entry)) {
+						return false;
+					}
+					++matchedPredicates;
 				}
-				++matchedKeys;
 			}
-			return matchedKeys == expected.size();
+			return matchedPredicates == expected.size();
 		}
+
 	} // namespace
 
 	void DataManager::initialize(bool skipSegmentIndexBuild) {
@@ -697,7 +681,7 @@ namespace graph::storage {
 
 	void DataManager::addNode(Node &node) const {
 		guardReadOnly();
-		for (const auto &v : observerManager_.getValidators()) {
+		for (const auto &v: observerManager_.getValidators()) {
 			v->validateNodeInsert(node, node.getProperties());
 		}
 		nodeManager_->add(node);
@@ -711,19 +695,18 @@ namespace graph::storage {
 			return;
 
 		// Phase 1: Validate all nodes before any writes (atomicity)
-		for (const auto &node : nodes) {
-			for (const auto &v : observerManager_.getValidators()) {
+		for (const auto &node: nodes) {
+			for (const auto &v: observerManager_.getValidators()) {
 				v->validateNodeInsert(node, node.getProperties());
 			}
 		}
+
 
 		// Phase 2: Write
 		nodeManager_->addBatch(nodes);
 		observerManager_.notifyNodesAdded(nodes);
 
-		for (const auto &node: nodes) {
-			txnContext_.recordAdd(node);
-		}
+		txnContext_.recordAdds(nodes);
 
 		for (auto &node: nodes) {
 			if (node.getProperties().empty())
@@ -745,7 +728,6 @@ namespace graph::storage {
 	void DataManager::deleteNode(Node &node) const {
 		guardReadOnly();
 		txnContext_.recordDelete<Node>(node.getId(), [this](int64_t id) { return nodeManager_->get(id); });
-		invalidateActiveEdgeCountCache();
 		nodeManager_->remove(node);
 		observerManager_.notifyNodeDeleted(node);
 	}
@@ -763,22 +745,22 @@ namespace graph::storage {
 	void DataManager::addNodeProperties(int64_t nodeId,
 										const std::unordered_map<std::string, PropertyValue> &properties) const {
 		addEntityPropertiesImpl<Node>(
-			nodeId, properties, *nodeManager_,
-			[this](const Node &node, const auto &oldProps, const auto &newProps) {
-				for (const auto &v : observerManager_.getValidators())
-					v->validateNodeUpdate(node, oldProps, newProps);
-			},
-			[this](const Node &o, const Node &n) { observerManager_.notifyNodeUpdated(o, n); });
+				nodeId, properties, *nodeManager_,
+				[this](const Node &node, const auto &oldProps, const auto &newProps) {
+					for (const auto &v: observerManager_.getValidators())
+						v->validateNodeUpdate(node, oldProps, newProps);
+				},
+				[this](const Node &o, const Node &n) { observerManager_.notifyNodeUpdated(o, n); });
 	}
 
 	void DataManager::removeNodeProperty(int64_t nodeId, const std::string &key) const {
 		removeEntityPropertyImpl<Node>(
-			nodeId, key, *nodeManager_,
-			[this](const Node &node, const auto &oldProps, const auto &newProps) {
-				for (const auto &v : observerManager_.getValidators())
-					v->validateNodeUpdate(node, oldProps, newProps);
-			},
-			[this](const Node &o, const Node &n) { observerManager_.notifyNodeUpdated(o, n); });
+				nodeId, key, *nodeManager_,
+				[this](const Node &node, const auto &oldProps, const auto &newProps) {
+					for (const auto &v: observerManager_.getValidators())
+						v->validateNodeUpdate(node, oldProps, newProps);
+				},
+				[this](const Node &o, const Node &n) { observerManager_.notifyNodeUpdated(o, n); });
 	}
 
 	std::unordered_map<std::string, PropertyValue> DataManager::getNodeProperties(int64_t nodeId) const {
@@ -800,14 +782,14 @@ namespace graph::storage {
 			if (storageType == PropertyStorageType::PROPERTY_ENTITY) {
 				Property property = loadEntityDirect<Property>(propertyEntityId);
 				if (property.getId() != 0) {
-					for (const auto &[key, value] : property.getPropertyValues()) {
+					for (const auto &[key, value]: property.getPropertyValues()) {
 						allProperties[key] = value;
 					}
 				}
 			} else if (storageType == PropertyStorageType::BLOB_ENTITY) {
 				// Blob chain reads are more complex; fall back to regular path
 				auto blobProperties = propertyManager_->getPropertiesFromBlob(propertyEntityId);
-				for (const auto &[key, value] : blobProperties) {
+				for (const auto &[key, value]: blobProperties) {
 					allProperties[key] = value;
 				}
 			}
@@ -816,8 +798,8 @@ namespace graph::storage {
 		return allProperties;
 	}
 
-	std::unordered_map<std::string, PropertyValue> DataManager::getNodePropertiesFromMap(
-		const Node &node, const std::unordered_map<int64_t, Property> &propertyMap) {
+	std::unordered_map<std::string, PropertyValue>
+	DataManager::getNodePropertiesFromMap(const Node &node, const std::unordered_map<int64_t, Property> &propertyMap) {
 		if (node.getId() == 0 || !node.isActive())
 			return {};
 
@@ -830,13 +812,13 @@ namespace graph::storage {
 			if (storageType == PropertyStorageType::PROPERTY_ENTITY) {
 				auto it = propertyMap.find(propertyEntityId);
 				if (it != propertyMap.end() && it->second.getId() != 0) {
-					for (const auto &[key, value] : it->second.getPropertyValues()) {
+					for (const auto &[key, value]: it->second.getPropertyValues()) {
 						allProperties[key] = value;
 					}
 				}
 			} else if (storageType == PropertyStorageType::BLOB_ENTITY) {
 				auto blobProperties = propertyManager_->getPropertiesFromBlob(propertyEntityId);
-				for (const auto &[key, value] : blobProperties) {
+				for (const auto &[key, value]: blobProperties) {
 					allProperties[key] = value;
 				}
 			}
@@ -845,8 +827,8 @@ namespace graph::storage {
 		return allProperties;
 	}
 
-	std::unordered_map<int64_t, Property> DataManager::bulkLoadPropertyEntities(
-		const std::vector<int64_t> &ids, concurrent::ThreadPool *pool) const {
+	std::unordered_map<int64_t, Property> DataManager::bulkLoadPropertyEntities(const std::vector<int64_t> &ids,
+																				concurrent::ThreadPool *pool) const {
 		std::unordered_map<int64_t, Property> result;
 		if (ids.empty() || !hasPreadSupport())
 			return result;
@@ -870,9 +852,8 @@ namespace graph::storage {
 			auto lo = std::lower_bound(sortedIds.begin(), sortedIds.end(), segIndex[s].startId);
 			auto hi = std::upper_bound(lo, sortedIds.end(), segIndex[s].endId);
 			if (lo != hi) {
-				work.push_back({s,
-					static_cast<size_t>(lo - sortedIds.begin()),
-					static_cast<size_t>(hi - sortedIds.begin())});
+				work.push_back(
+						{s, static_cast<size_t>(lo - sortedIds.begin()), static_cast<size_t>(hi - sortedIds.begin())});
 			}
 		}
 
@@ -884,7 +865,7 @@ namespace graph::storage {
 			// Build segment index list from work items
 			std::vector<size_t> workSegIndices;
 			workSegIndices.reserve(work.size());
-			for (const auto &w : work)
+			for (const auto &w: work)
 				workSegIndices.push_back(w.segIdx);
 
 			auto groups = buildCoalescedGroups(workSegIndices, segIndex);
@@ -917,8 +898,7 @@ namespace graph::storage {
 						uint32_t slot = static_cast<uint32_t>(id - header.start_id);
 						if (slot >= header.used)
 							continue;
-						Property prop = Property::deserializeFromBuffer(
-							dataBuf + slot * entitySize);
+						Property prop = Property::deserializeFromBuffer(dataBuf + slot * entitySize);
 						if (prop.isActive())
 							local.emplace_back(id, std::move(prop));
 					}
@@ -927,17 +907,17 @@ namespace graph::storage {
 
 			// Merge thread-local results
 			size_t totalCount = 0;
-			for (const auto &v : perSeg)
+			for (const auto &v: perSeg)
 				totalCount += v.size();
 			result.reserve(totalCount);
-			for (auto &v : perSeg) {
-				for (auto &[id, prop] : v)
+			for (auto &v: perSeg) {
+				for (auto &[id, prop]: v)
 					result[id] = std::move(prop);
 			}
 		} else {
 			// Sequential path
 			result.reserve(ids.size());
-			for (const auto &w : work) {
+			for (const auto &w: work) {
 				const auto &seg = segIndex[w.segIdx];
 				SegmentHeader header = segmentTracker_->getSegmentHeaderCopy(seg.segmentOffset);
 				if (header.used == 0)
@@ -955,8 +935,7 @@ namespace graph::storage {
 					uint32_t slot = static_cast<uint32_t>(id - header.start_id);
 					if (slot >= header.used)
 						continue;
-					Property prop = Property::deserializeFromBuffer(
-						buf.data() + slot * entitySize);
+					Property prop = Property::deserializeFromBuffer(buf.data() + slot * entitySize);
 					if (prop.isActive())
 						result[id] = std::move(prop);
 				}
@@ -967,10 +946,8 @@ namespace graph::storage {
 	}
 
 	std::unordered_map<int64_t, std::unordered_map<std::string, PropertyValue>>
-	DataManager::bulkLoadPropertyEntityValues(
-		const std::vector<int64_t> &ids,
-		const std::vector<std::string> &keys,
-		concurrent::ThreadPool *pool) const {
+	DataManager::bulkLoadPropertyEntityValues(const std::vector<int64_t> &ids, const std::vector<std::string> &keys,
+											  concurrent::ThreadPool *pool) const {
 		std::unordered_map<int64_t, std::unordered_map<std::string, PropertyValue>> result;
 		if (ids.empty() || keys.empty() || !hasPreadSupport()) {
 			return result;
@@ -982,7 +959,7 @@ namespace graph::storage {
 
 		std::unordered_set<std::string> requestedKeys;
 		requestedKeys.reserve(keys.size());
-		for (const auto &key : keys) {
+		for (const auto &key: keys) {
 			requestedKeys.insert(key);
 		}
 
@@ -999,9 +976,8 @@ namespace graph::storage {
 			auto lo = std::lower_bound(sortedIds.begin(), sortedIds.end(), segIndex[s].startId);
 			auto hi = std::upper_bound(lo, sortedIds.end(), segIndex[s].endId);
 			if (lo != hi) {
-				work.push_back({s,
-					static_cast<size_t>(lo - sortedIds.begin()),
-					static_cast<size_t>(hi - sortedIds.begin())});
+				work.push_back(
+						{s, static_cast<size_t>(lo - sortedIds.begin()), static_cast<size_t>(hi - sortedIds.begin())});
 			}
 		}
 
@@ -1009,20 +985,21 @@ namespace graph::storage {
 			return result;
 		}
 
-		auto readPropertyValues = [&](const char *entityBuffer)
-			-> std::optional<std::unordered_map<std::string, PropertyValue>> {
+		auto readPropertyValues =
+				[&](const char *entityBuffer) -> std::optional<std::unordered_map<std::string, PropertyValue>> {
 			return readSelectedPropertyValues(entityBuffer, requestedKeys);
 		};
 
 		if (pool && !pool->isSingleThreaded() && work.size() > 1) { // ZYX_COV_EXCL_LINE
 			std::vector<size_t> workSegIndices;
 			workSegIndices.reserve(work.size());
-			for (const auto &w : work) {
+			for (const auto &w: work) {
 				workSegIndices.push_back(w.segIdx);
 			}
 
 			auto groups = buildCoalescedGroups(workSegIndices, segIndex);
-			std::vector<std::vector<std::pair<int64_t, std::unordered_map<std::string, PropertyValue>>>> perWork(work.size());
+			std::vector<std::vector<std::pair<int64_t, std::unordered_map<std::string, PropertyValue>>>> perWork(
+					work.size());
 
 			pool->parallelFor(0, groups.size(), [&](size_t gi) {
 				const auto &group = groups[gi];
@@ -1062,18 +1039,18 @@ namespace graph::storage {
 			});
 
 			size_t totalCount = 0;
-			for (const auto &values : perWork) {
+			for (const auto &values: perWork) {
 				totalCount += values.size();
 			}
 			result.reserve(totalCount);
-			for (auto &values : perWork) {
-				for (auto &[id, propertyValues] : values) {
+			for (auto &values: perWork) {
+				for (auto &[id, propertyValues]: values) {
 					result.emplace(id, std::move(propertyValues));
 				}
 			}
 		} else {
 			result.reserve(sortedIds.size());
-			for (const auto &w : work) {
+			for (const auto &w: work) {
 				const auto &seg = segIndex[w.segIdx];
 				SegmentHeader header = segmentTracker_->getSegmentHeaderCopy(seg.segmentOffset);
 				if (header.used == 0) {
@@ -1106,12 +1083,10 @@ namespace graph::storage {
 	}
 
 	std::vector<size_t> DataManager::bulkLoadPropertyEntityColumns(
-		const std::vector<int64_t> &ids,
-		const std::vector<size_t> &rows,
-		size_t rowCount,
-		const std::vector<std::string> &keys,
-		std::unordered_map<std::string, std::vector<std::optional<PropertyValue>>> &columns,
-		concurrent::ThreadPool *pool) const {
+			const std::vector<int64_t> &ids, const std::vector<size_t> &rows, size_t rowCount,
+			const std::vector<std::string> &keys,
+			std::unordered_map<std::string, std::vector<std::optional<PropertyValue>>> &columns,
+			concurrent::ThreadPool *pool) const {
 		std::vector<size_t> loadedRows;
 		if (ids.empty() || rows.size() != ids.size() || keys.empty() || rowCount == 0 || !hasPreadSupport()) {
 			return loadedRows;
@@ -1121,7 +1096,7 @@ namespace graph::storage {
 		std::vector<std::vector<std::optional<PropertyValue>> *> columnTargets;
 		requestedKeyIndices.reserve(keys.size());
 		columnTargets.reserve(keys.size());
-		for (const auto &key : keys) {
+		for (const auto &key: keys) {
 			if (requestedKeyIndices.contains(key)) {
 				continue;
 			}
@@ -1187,9 +1162,8 @@ namespace graph::storage {
 			auto lo = std::lower_bound(sortedIds.begin(), sortedIds.end(), segIndex[s].startId);
 			auto hi = std::upper_bound(lo, sortedIds.end(), segIndex[s].endId);
 			if (lo != hi) {
-				work.push_back({s,
-					static_cast<size_t>(lo - sortedIds.begin()),
-					static_cast<size_t>(hi - sortedIds.begin())});
+				work.push_back(
+						{s, static_cast<size_t>(lo - sortedIds.begin()), static_cast<size_t>(hi - sortedIds.begin())});
 			}
 		}
 
@@ -1200,7 +1174,7 @@ namespace graph::storage {
 		if (pool && !pool->isSingleThreaded() && work.size() > 1) { // ZYX_COV_EXCL_LINE
 			std::vector<size_t> workSegIndices;
 			workSegIndices.reserve(work.size());
-			for (const auto &w : work) {
+			for (const auto &w: work) {
 				workSegIndices.push_back(w.segIdx);
 			}
 
@@ -1241,8 +1215,8 @@ namespace graph::storage {
 							continue;
 						}
 						const auto [refBegin, refEnd] = refRanges[i];
-						if (readSelectedPropertyColumns(
-								entityBuffer, requestedKeyIndices, columnTargets, refs, refBegin, refEnd)) {
+						if (readSelectedPropertyColumns(entityBuffer, requestedKeyIndices, columnTargets, refs,
+														refBegin, refEnd)) {
 							for (size_t ref = refBegin; ref < refEnd; ++ref) {
 								localLoadedRows.push_back(refs[ref].row);
 							}
@@ -1252,16 +1226,16 @@ namespace graph::storage {
 			});
 
 			size_t loadedCount = 0;
-			for (const auto &rowsForWork : perWorkLoadedRows) {
+			for (const auto &rowsForWork: perWorkLoadedRows) {
 				loadedCount += rowsForWork.size();
 			}
 			loadedRows.reserve(loadedCount);
-			for (auto &rowsForWork : perWorkLoadedRows) {
+			for (auto &rowsForWork: perWorkLoadedRows) {
 				loadedRows.insert(loadedRows.end(), rowsForWork.begin(), rowsForWork.end());
 			}
 		} else {
 			loadedRows.reserve(refs.size());
-			for (const auto &w : work) {
+			for (const auto &w: work) {
 				const auto &seg = segIndex[w.segIdx];
 				SegmentHeader header = segmentTracker_->getSegmentHeaderCopy(seg.segmentOffset);
 				if (header.used == 0) {
@@ -1287,8 +1261,8 @@ namespace graph::storage {
 						continue;
 					}
 					const auto [refBegin, refEnd] = refRanges[i];
-					if (readSelectedPropertyColumns(
-							entityBuffer, requestedKeyIndices, columnTargets, refs, refBegin, refEnd)) {
+					if (readSelectedPropertyColumns(entityBuffer, requestedKeyIndices, columnTargets, refs, refBegin,
+													refEnd)) {
 						for (size_t ref = refBegin; ref < refEnd; ++ref) {
 							loadedRows.push_back(refs[ref].row);
 						}
@@ -1301,12 +1275,9 @@ namespace graph::storage {
 	}
 
 	PropertyEntityPredicateMatchResult DataManager::bulkMatchPropertyEntityPredicates(
-		const std::vector<int64_t> &ids,
-		const std::vector<size_t> &rows,
-		size_t rowCount,
-		const std::unordered_map<std::string, PropertyValue> &expected,
-		concurrent::ThreadPool *pool,
-		PropertyEntityPredicateMatchOptions options) const {
+			const std::vector<int64_t> &ids, const std::vector<size_t> &rows, size_t rowCount,
+			const std::unordered_map<std::string, PropertyValue> &expected, concurrent::ThreadPool *pool,
+			PropertyEntityPredicateMatchOptions options) const {
 		PropertyEntityPredicateMatchResult result;
 		if (ids.empty() || rows.size() != ids.size() || rowCount == 0 || expected.empty() || !hasPreadSupport()) {
 			return result;
@@ -1327,13 +1298,14 @@ namespace graph::storage {
 
 		std::vector<PredicateExpectation> predicateExpectations;
 		predicateExpectations.reserve(expected.size());
-		for (const auto &[key, value] : expected) {
+		for (const auto &[key, value]: expected) {
 			predicateExpectations.push_back({&key, &value});
 		}
 		const bool useSinglePredicate = predicateExpectations.size() == 1;
-		const SinglePredicateExpectation singlePredicate = useSinglePredicate
-			? SinglePredicateExpectation{predicateExpectations.front().key, predicateExpectations.front().value}
-			: SinglePredicateExpectation{};
+		const SinglePredicateExpectation singlePredicate =
+				useSinglePredicate ? SinglePredicateExpectation{predicateExpectations.front().key,
+																predicateExpectations.front().value}
+								   : SinglePredicateExpectation{};
 
 		auto refLess = [](const PropertyEntityRowRef &lhs, const PropertyEntityRowRef &rhs) {
 			if (lhs.id != rhs.id) {
@@ -1372,9 +1344,8 @@ namespace graph::storage {
 			auto lo = std::lower_bound(sortedIds.begin(), sortedIds.end(), segIndex[s].startId);
 			auto hi = std::upper_bound(lo, sortedIds.end(), segIndex[s].endId);
 			if (lo != hi) {
-				work.push_back({s,
-					static_cast<size_t>(lo - sortedIds.begin()),
-					static_cast<size_t>(hi - sortedIds.begin())});
+				work.push_back(
+						{s, static_cast<size_t>(lo - sortedIds.begin()), static_cast<size_t>(hi - sortedIds.begin())});
 			}
 		}
 
@@ -1382,12 +1353,9 @@ namespace graph::storage {
 			return result;
 		}
 
-		auto appendPredicateResult = [&](std::vector<size_t> &loadedRows,
-		                                 std::vector<size_t> *matchedRows,
-		                                 size_t &loadedCount,
-		                                 size_t &matchedCount,
-		                                 size_t idIndex,
-		                                 std::optional<bool> matches) {
+		auto appendPredicateResult = [&](std::vector<size_t> &loadedRows, std::vector<size_t> *matchedRows,
+										 size_t &loadedCount, size_t &matchedCount, size_t idIndex,
+										 std::optional<bool> matches) {
 			if (!matches.has_value()) {
 				return;
 			}
@@ -1409,7 +1377,7 @@ namespace graph::storage {
 		if (pool && !pool->isSingleThreaded() && work.size() > 1) { // ZYX_COV_EXCL_LINE
 			std::vector<size_t> workSegIndices;
 			workSegIndices.reserve(work.size());
-			for (const auto &w : work) {
+			for (const auto &w: work) {
 				workSegIndices.push_back(w.segIdx);
 			}
 
@@ -1452,14 +1420,11 @@ namespace graph::storage {
 							continue;
 						}
 						appendPredicateResult(
-							perWorkLoadedRows[wi],
-							options.collectMatchedRows ? &perWorkMatchedRows[wi] : nullptr,
-							perWorkLoadedCounts[wi],
-							perWorkMatchedCounts[wi],
-							i,
-							useSinglePredicate
-								? readPropertyEntitySinglePredicateMatch(entityBuffer, singlePredicate)
-								: readPropertyEntityPredicateMatch(entityBuffer, predicateExpectations));
+								perWorkLoadedRows[wi], options.collectMatchedRows ? &perWorkMatchedRows[wi] : nullptr,
+								perWorkLoadedCounts[wi], perWorkMatchedCounts[wi], i,
+								useSinglePredicate
+										? readPropertyEntitySinglePredicateMatch(entityBuffer, singlePredicate)
+										: readPropertyEntityPredicateMatch(entityBuffer, predicateExpectations));
 					}
 				}
 			});
@@ -1478,10 +1443,12 @@ namespace graph::storage {
 			}
 			for (size_t i = 0; i < work.size(); ++i) {
 				if (options.collectLoadedRows) {
-					result.loadedRows.insert(result.loadedRows.end(), perWorkLoadedRows[i].begin(), perWorkLoadedRows[i].end());
+					result.loadedRows.insert(result.loadedRows.end(), perWorkLoadedRows[i].begin(),
+											 perWorkLoadedRows[i].end());
 				}
 				if (options.collectMatchedRows) {
-					result.matchedRows.insert(result.matchedRows.end(), perWorkMatchedRows[i].begin(), perWorkMatchedRows[i].end());
+					result.matchedRows.insert(result.matchedRows.end(), perWorkMatchedRows[i].begin(),
+											  perWorkMatchedRows[i].end());
 				}
 			}
 		} else {
@@ -1491,7 +1458,7 @@ namespace graph::storage {
 			if (options.collectMatchedRows) {
 				result.matchedRows.reserve(refs.size());
 			}
-			for (const auto &w : work) {
+			for (const auto &w: work) {
 				const auto &seg = segIndex[w.segIdx];
 				SegmentHeader header = segmentTracker_->getSegmentHeaderCopy(seg.segmentOffset);
 				if (header.used == 0) {
@@ -1517,14 +1484,10 @@ namespace graph::storage {
 						continue;
 					}
 					appendPredicateResult(
-						result.loadedRows,
-						options.collectMatchedRows ? &result.matchedRows : nullptr,
-						result.loadedCount,
-						result.matchedCount,
-						i,
-						useSinglePredicate
-							? readPropertyEntitySinglePredicateMatch(entityBuffer, singlePredicate)
-							: readPropertyEntityPredicateMatch(entityBuffer, predicateExpectations));
+							result.loadedRows, options.collectMatchedRows ? &result.matchedRows : nullptr,
+							result.loadedCount, result.matchedCount, i,
+							useSinglePredicate ? readPropertyEntitySinglePredicateMatch(entityBuffer, singlePredicate)
+											   : readPropertyEntityPredicateMatch(entityBuffer, predicateExpectations));
 				}
 			}
 		}
@@ -1532,10 +1495,10 @@ namespace graph::storage {
 		return result;
 	}
 
-	size_t DataManager::bulkCountPropertyEntityPredicates(
-		const std::vector<int64_t> &ids,
-		const std::unordered_map<std::string, PropertyValue> &expected,
-		concurrent::ThreadPool *pool) const {
+	size_t
+	DataManager::bulkCountPropertyEntityPredicates(const std::vector<int64_t> &ids,
+												   const std::unordered_map<std::string, PropertyValue> &expected,
+												   concurrent::ThreadPool *pool) const {
 		if (ids.empty() || expected.empty() || !hasPreadSupport()) {
 			return 0;
 		}
@@ -1545,7 +1508,7 @@ namespace graph::storage {
 		bool strictlyIncreasing = true;
 		bool hasPreviousId = false;
 		int64_t previousId = 0;
-		for (const int64_t id : ids) {
+		for (const int64_t id: ids) {
 			if (id != 0) {
 				if (hasPreviousId && id <= previousId) {
 					strictlyIncreasing = false;
@@ -1579,13 +1542,14 @@ namespace graph::storage {
 
 		std::vector<PredicateExpectation> predicateExpectations;
 		predicateExpectations.reserve(expected.size());
-		for (const auto &[key, value] : expected) {
+		for (const auto &[key, value]: expected) {
 			predicateExpectations.push_back({&key, &value});
 		}
 		const bool useSinglePredicate = predicateExpectations.size() == 1;
-		const SinglePredicateExpectation singlePredicate = useSinglePredicate
-			? SinglePredicateExpectation{predicateExpectations.front().key, predicateExpectations.front().value}
-			: SinglePredicateExpectation{};
+		const SinglePredicateExpectation singlePredicate =
+				useSinglePredicate ? SinglePredicateExpectation{predicateExpectations.front().key,
+																predicateExpectations.front().value}
+								   : SinglePredicateExpectation{};
 
 		const auto &segIndex = segmentIndexManager_->getPropertySegmentIndex();
 		constexpr size_t entitySize = Property::getTotalSize();
@@ -1600,9 +1564,8 @@ namespace graph::storage {
 			auto lo = std::lower_bound(sortedIds.begin(), sortedIds.end(), segIndex[s].startId);
 			auto hi = std::upper_bound(lo, sortedIds.end(), segIndex[s].endId);
 			if (lo != hi) {
-				work.push_back({s,
-					static_cast<size_t>(lo - sortedIds.begin()),
-					static_cast<size_t>(hi - sortedIds.begin())});
+				work.push_back(
+						{s, static_cast<size_t>(lo - sortedIds.begin()), static_cast<size_t>(hi - sortedIds.begin())});
 			}
 		}
 
@@ -1611,16 +1574,15 @@ namespace graph::storage {
 		}
 
 		auto matchesPredicate = [&](const char *entityBuffer) {
-			return useSinglePredicate
-				? readPropertyEntitySinglePredicateMatch(entityBuffer, singlePredicate)
-				: readPropertyEntityPredicateMatch(entityBuffer, predicateExpectations);
+			return useSinglePredicate ? readPropertyEntitySinglePredicateMatch(entityBuffer, singlePredicate)
+									  : readPropertyEntityPredicateMatch(entityBuffer, predicateExpectations);
 		};
 
 		size_t count = 0;
 		if (pool && !pool->isSingleThreaded() && work.size() > 1) { // ZYX_COV_EXCL_LINE
 			std::vector<size_t> workSegIndices;
 			workSegIndices.reserve(work.size());
-			for (const auto &w : work) {
+			for (const auto &w: work) {
 				workSegIndices.push_back(w.segIdx);
 			}
 
@@ -1667,11 +1629,11 @@ namespace graph::storage {
 				}
 			});
 
-			for (const size_t perWorkCount : perWorkCounts) {
+			for (const size_t perWorkCount: perWorkCounts) {
 				count += perWorkCount;
 			}
 		} else {
-			for (const auto &w : work) {
+			for (const auto &w: work) {
 				const auto &seg = segIndex[w.segIdx];
 				SegmentHeader header = segmentTracker_->getSegmentHeaderCopy(seg.segmentOffset);
 				if (header.used == 0) {
@@ -1709,11 +1671,8 @@ namespace graph::storage {
 
 
 	PropertyEntityPredicateMatchResult DataManager::bulkMatchPropertyEntityPredicateSpecs(
-		const std::vector<int64_t> &ids,
-		const std::vector<size_t> &rows,
-		size_t rowCount,
-		const std::vector<PropertyEntityPredicate> &predicates,
-		concurrent::ThreadPool *pool) const {
+			const std::vector<int64_t> &ids, const std::vector<size_t> &rows, size_t rowCount,
+			const std::vector<PropertyEntityPredicate> &predicates, concurrent::ThreadPool *pool) const {
 		PropertyEntityPredicateMatchResult result;
 		if (ids.empty() || rows.size() != ids.size() || rowCount == 0 || predicates.empty() || !hasPreadSupport()) {
 			return result;
@@ -1734,12 +1693,10 @@ namespace graph::storage {
 
 		std::vector<PredicateSpecExpectation> predicateExpectations;
 		predicateExpectations.reserve(predicates.size());
-		for (const auto &predicate : predicates) {
-			predicateExpectations.push_back({
-				&predicate.key,
-				&predicate.value,
-				predicate.upperValue.has_value() ? &*predicate.upperValue : nullptr,
-				predicate.op});
+		for (const auto &predicate: predicates) {
+			predicateExpectations.push_back({&predicate.key, &predicate.value,
+											 predicate.upperValue.has_value() ? &*predicate.upperValue : nullptr,
+											 predicate.op});
 		}
 
 		auto refLess = [](const PropertyEntityRowRef &lhs, const PropertyEntityRowRef &rhs) {
@@ -1779,9 +1736,8 @@ namespace graph::storage {
 			auto lo = std::lower_bound(sortedIds.begin(), sortedIds.end(), segIndex[s].startId);
 			auto hi = std::upper_bound(lo, sortedIds.end(), segIndex[s].endId);
 			if (lo != hi) {
-				work.push_back({s,
-					static_cast<size_t>(lo - sortedIds.begin()),
-					static_cast<size_t>(hi - sortedIds.begin())});
+				work.push_back(
+						{s, static_cast<size_t>(lo - sortedIds.begin()), static_cast<size_t>(hi - sortedIds.begin())});
 			}
 		}
 
@@ -1789,11 +1745,8 @@ namespace graph::storage {
 			return result;
 		}
 
-		auto appendPredicateResult = [&](std::vector<size_t> &loadedRows,
-		                                 std::vector<size_t> &matchedRows,
-		                                 size_t &matchedCount,
-		                                 size_t idIndex,
-		                                 std::optional<bool> matches) {
+		auto appendPredicateResult = [&](std::vector<size_t> &loadedRows, std::vector<size_t> &matchedRows,
+										 size_t &matchedCount, size_t idIndex, std::optional<bool> matches) {
 			if (!matches.has_value()) {
 				return;
 			}
@@ -1810,7 +1763,7 @@ namespace graph::storage {
 		if (pool && !pool->isSingleThreaded() && work.size() > 1) { // ZYX_COV_EXCL_LINE
 			std::vector<size_t> workSegIndices;
 			workSegIndices.reserve(work.size());
-			for (const auto &w : work) {
+			for (const auto &w: work) {
 				workSegIndices.push_back(w.segIdx);
 			}
 
@@ -1851,12 +1804,8 @@ namespace graph::storage {
 						if (readSerializedPropertyId(entityBuffer) != id) {
 							continue;
 						}
-						appendPredicateResult(
-							perWorkLoadedRows[wi],
-							perWorkMatchedRows[wi],
-							perWorkMatchedCounts[wi],
-							i,
-							readPropertyEntityPredicateMatch(entityBuffer, predicateExpectations));
+						appendPredicateResult(perWorkLoadedRows[wi], perWorkMatchedRows[wi], perWorkMatchedCounts[wi],
+											  i, readPropertyEntityPredicateMatch(entityBuffer, predicateExpectations));
 					}
 				}
 			});
@@ -1870,12 +1819,14 @@ namespace graph::storage {
 			result.loadedRows.reserve(loadedCount);
 			result.matchedRows.reserve(result.matchedCount);
 			for (size_t i = 0; i < work.size(); ++i) {
-				result.loadedRows.insert(result.loadedRows.end(), perWorkLoadedRows[i].begin(), perWorkLoadedRows[i].end());
-				result.matchedRows.insert(result.matchedRows.end(), perWorkMatchedRows[i].begin(), perWorkMatchedRows[i].end());
+				result.loadedRows.insert(result.loadedRows.end(), perWorkLoadedRows[i].begin(),
+										 perWorkLoadedRows[i].end());
+				result.matchedRows.insert(result.matchedRows.end(), perWorkMatchedRows[i].begin(),
+										  perWorkMatchedRows[i].end());
 			}
 		} else {
 			result.loadedRows.reserve(refs.size());
-			for (const auto &w : work) {
+			for (const auto &w: work) {
 				const auto &seg = segIndex[w.segIdx];
 				SegmentHeader header = segmentTracker_->getSegmentHeaderCopy(seg.segmentOffset);
 				if (header.used == 0) {
@@ -1900,12 +1851,8 @@ namespace graph::storage {
 					if (readSerializedPropertyId(entityBuffer) != id) {
 						continue;
 					}
-					appendPredicateResult(
-						result.loadedRows,
-						result.matchedRows,
-						result.matchedCount,
-						i,
-						readPropertyEntityPredicateMatch(entityBuffer, predicateExpectations));
+					appendPredicateResult(result.loadedRows, result.matchedRows, result.matchedCount, i,
+										  readPropertyEntityPredicateMatch(entityBuffer, predicateExpectations));
 				}
 			}
 			result.loadedCount = result.loadedRows.size();
@@ -1918,10 +1865,9 @@ namespace graph::storage {
 
 	void DataManager::addEdge(Edge &edge) const {
 		guardReadOnly();
-		for (const auto &v : observerManager_.getValidators()) {
+		for (const auto &v: observerManager_.getValidators()) {
 			v->validateEdgeInsert(edge, edge.getProperties());
 		}
-		invalidateActiveEdgeCountCache();
 		edgeManager_->add(edge);
 		txnContext_.recordAdd(edge);
 		observerManager_.notifyEdgeAdded(edge);
@@ -1933,13 +1879,12 @@ namespace graph::storage {
 			return;
 
 		// Phase 1: Validate all edges before any writes (atomicity)
-		for (const auto &edge : edges) {
-			for (const auto &v : observerManager_.getValidators()) {
+		for (const auto &edge: edges) {
+			for (const auto &v: observerManager_.getValidators()) {
 				v->validateEdgeInsert(edge, edge.getProperties());
 			}
 		}
 
-		invalidateActiveEdgeCountCache();
 
 		// 1. Assign IDs and initial persistence
 		edgeManager_->addBatch(edges);
@@ -1947,9 +1892,7 @@ namespace graph::storage {
 		// 2. Indexing (needs IDs + Props)
 		observerManager_.notifyEdgesAdded(edges);
 
-		for (const auto &edge: edges) {
-			txnContext_.recordAdd(edge);
-		}
+		txnContext_.recordAdds(edges);
 
 		// 3. Property Storage Handling
 		for (auto &edge: edges) {
@@ -1970,7 +1913,6 @@ namespace graph::storage {
 		guardReadOnly();
 		Edge oldEdge = edgeManager_->get(edge.getId());
 		txnContext_.recordUpdate<Edge>(edge, oldEdge);
-		invalidateActiveEdgeCountCache();
 		edgeManager_->update(edge);
 		observerManager_.notifyEdgeUpdated(oldEdge, edge);
 	}
@@ -1978,7 +1920,6 @@ namespace graph::storage {
 	void DataManager::deleteEdge(Edge &edge) const {
 		guardReadOnly();
 		txnContext_.recordDelete<Edge>(edge.getId(), [this](int64_t id) { return edgeManager_->get(id); });
-		invalidateActiveEdgeCountCache();
 		edgeManager_->remove(edge);
 		observerManager_.notifyEdgeDeleted(edge);
 	}
@@ -1993,106 +1934,25 @@ namespace graph::storage {
 		return edgeManager_->getInRange(startId, endId, limit);
 	}
 
-	size_t DataManager::EdgePropertyCountCacheKeyHash::operator()(
-			const EdgePropertyCountCacheKey &key) const {
-		size_t seed = std::hash<int64_t>{}(key.typeId);
-		PropertyValueHash valueHash;
-		for (const auto &[propertyKey, propertyValue] : key.predicates) {
-			seed ^= std::hash<std::string>{}(propertyKey) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-			seed ^= valueHash(propertyValue) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-		}
-		return seed;
-	}
-
-	DataManager::EdgePropertyCountCacheKey DataManager::makeEdgePropertyCountCacheKey(
-			int64_t typeId,
-			const std::unordered_map<std::string, PropertyValue> &properties) {
-		EdgePropertyCountCacheKey key;
-		key.typeId = typeId;
-		key.predicates.reserve(properties.size());
-		for (const auto &[propertyKey, propertyValue] : properties) {
-			key.predicates.emplace_back(propertyKey, propertyValue);
-		}
-		std::sort(key.predicates.begin(), key.predicates.end(), [](const auto &lhs, const auto &rhs) {
-			return lhs.first < rhs.first;
-		});
-		return key;
-	}
-
-	std::optional<int64_t> DataManager::getCachedActiveEdgeCountByType(int64_t typeId) const {
-		if (hasUnsavedChanges()) {
-			return std::nullopt;
-		}
-		std::lock_guard lock(activeEdgeCountCacheMutex_);
-		const auto it = activeEdgeCountByTypeCache_.find(typeId);
-		if (it == activeEdgeCountByTypeCache_.end()) {
-			return std::nullopt;
-		}
-		return it->second;
-	}
-
-	void DataManager::cacheActiveEdgeCountByType(int64_t typeId, int64_t count) const {
-		if (hasUnsavedChanges()) {
-			return;
-		}
-		std::lock_guard lock(activeEdgeCountCacheMutex_);
-		activeEdgeCountByTypeCache_[typeId] = count;
-	}
-
-	std::optional<int64_t> DataManager::getCachedActiveEdgeCountByTypeAndProperties(
-			int64_t typeId,
-			const std::unordered_map<std::string, PropertyValue> &properties) const {
-		if (properties.empty() || hasUnsavedChanges()) {
-			return std::nullopt;
-		}
-		auto key = makeEdgePropertyCountCacheKey(typeId, properties);
-		std::lock_guard lock(activeEdgeCountCacheMutex_);
-		const auto it = activeEdgeCountByTypeAndPropertiesCache_.find(key);
-		if (it == activeEdgeCountByTypeAndPropertiesCache_.end()) {
-			return std::nullopt;
-		}
-		return it->second;
-	}
-
-	void DataManager::cacheActiveEdgeCountByTypeAndProperties(
-			int64_t typeId,
-			const std::unordered_map<std::string, PropertyValue> &properties,
-			int64_t count) const {
-		if (properties.empty() || hasUnsavedChanges()) {
-			return;
-		}
-		auto key = makeEdgePropertyCountCacheKey(typeId, properties);
-		std::lock_guard lock(activeEdgeCountCacheMutex_);
-		activeEdgeCountByTypeAndPropertiesCache_[std::move(key)] = count;
-	}
-
-	void DataManager::invalidateActiveEdgeCountCache() const {
-		std::lock_guard lock(activeEdgeCountCacheMutex_);
-		activeEdgeCountByTypeCache_.clear();
-		activeEdgeCountByTypeAndPropertiesCache_.clear();
-	}
-
 	void DataManager::addEdgeProperties(int64_t edgeId,
 										const std::unordered_map<std::string, PropertyValue> &properties) const {
 		addEntityPropertiesImpl<Edge>(
-			edgeId, properties, *edgeManager_,
-			[this](const Edge &edge, const auto &oldProps, const auto &newProps) {
-				for (const auto &v : observerManager_.getValidators())
-					v->validateEdgeUpdate(edge, oldProps, newProps);
-			},
-			[this](const Edge &o, const Edge &n) { observerManager_.notifyEdgeUpdated(o, n); });
-		invalidateActiveEdgeCountCache();
+				edgeId, properties, *edgeManager_,
+				[this](const Edge &edge, const auto &oldProps, const auto &newProps) {
+					for (const auto &v: observerManager_.getValidators())
+						v->validateEdgeUpdate(edge, oldProps, newProps);
+				},
+				[this](const Edge &o, const Edge &n) { observerManager_.notifyEdgeUpdated(o, n); });
 	}
 
 	void DataManager::removeEdgeProperty(int64_t edgeId, const std::string &key) const {
 		removeEntityPropertyImpl<Edge>(
-			edgeId, key, *edgeManager_,
-			[this](const Edge &edge, const auto &oldProps, const auto &newProps) {
-				for (const auto &v : observerManager_.getValidators())
-					v->validateEdgeUpdate(edge, oldProps, newProps);
-			},
-			[this](const Edge &o, const Edge &n) { observerManager_.notifyEdgeUpdated(o, n); });
-		invalidateActiveEdgeCountCache();
+				edgeId, key, *edgeManager_,
+				[this](const Edge &edge, const auto &oldProps, const auto &newProps) {
+					for (const auto &v: observerManager_.getValidators())
+						v->validateEdgeUpdate(edge, oldProps, newProps);
+				},
+				[this](const Edge &o, const Edge &n) { observerManager_.notifyEdgeUpdated(o, n); });
 	}
 
 	std::unordered_map<std::string, PropertyValue> DataManager::getEdgeProperties(int64_t edgeId) const {
@@ -2113,19 +1973,18 @@ namespace graph::storage {
 
 	template<typename EntityType, typename ManagerType>
 	void DataManager::addEntityPropertiesImpl(
-		int64_t entityId,
-		const std::unordered_map<std::string, PropertyValue> &properties,
-		ManagerType &manager,
-		std::function<void(const EntityType &, const std::unordered_map<std::string, PropertyValue> &,
-						   const std::unordered_map<std::string, PropertyValue> &)> validate,
-		std::function<void(const EntityType &, const EntityType &)> notify) const {
+			int64_t entityId, const std::unordered_map<std::string, PropertyValue> &properties, ManagerType &manager,
+			std::function<void(const EntityType &, const std::unordered_map<std::string, PropertyValue> &,
+							   const std::unordered_map<std::string, PropertyValue> &)>
+					validate,
+			std::function<void(const EntityType &, const EntityType &)> notify) const {
 		guardReadOnly();
 		EntityType oldEntity = manager.get(entityId);
 		auto existingProps = manager.getProperties(entityId);
 		oldEntity.setProperties(existingProps);
 
 		auto mergedProps = existingProps;
-		for (const auto &[key, val] : properties) {
+		for (const auto &[key, val]: properties) {
 			mergedProps[key] = val;
 		}
 		validate(oldEntity, existingProps, mergedProps);
@@ -2142,11 +2001,11 @@ namespace graph::storage {
 
 	template<typename EntityType, typename ManagerType>
 	void DataManager::removeEntityPropertyImpl(
-		int64_t entityId, const std::string &key,
-		ManagerType &manager,
-		std::function<void(const EntityType &, const std::unordered_map<std::string, PropertyValue> &,
-						   const std::unordered_map<std::string, PropertyValue> &)> validate,
-		std::function<void(const EntityType &, const EntityType &)> notify) const {
+			int64_t entityId, const std::string &key, ManagerType &manager,
+			std::function<void(const EntityType &, const std::unordered_map<std::string, PropertyValue> &,
+							   const std::unordered_map<std::string, PropertyValue> &)>
+					validate,
+			std::function<void(const EntityType &, const EntityType &)> notify) const {
 		guardReadOnly();
 		EntityType oldEntity = manager.get(entityId);
 		auto existingProps = manager.getProperties(entityId);
@@ -2188,13 +2047,9 @@ namespace graph::storage {
 
 	// --- Index Operations ---
 
-	void DataManager::addIndexEntity(Index &index) const {
-		indexEntityManager_->add(index);
-	}
+	void DataManager::addIndexEntity(Index &index) const { indexEntityManager_->add(index); }
 
-	void DataManager::updateIndexEntity(const Index &index) const {
-		indexEntityManager_->update(index);
-	}
+	void DataManager::updateIndexEntity(const Index &index) const { indexEntityManager_->update(index); }
 
 	void DataManager::deleteIndex(Index &index) const { indexEntityManager_->remove(index); }
 
@@ -2265,7 +2120,7 @@ namespace graph::storage {
 		}
 
 		// Reserve memory to avoid reallocations.
-		result.reserve((std::min)(static_cast<size_t>(endId - startId + 1), limit));
+		result.reserve((std::min) (static_cast<size_t>(endId - startId + 1), limit));
 
 		// This set will keep track of IDs that have already been processed (from memory)
 		// to avoid adding them again from the disk-based load.
@@ -2285,7 +2140,9 @@ namespace graph::storage {
 			if (dirtyInfo.has_value()) {
 				processedIds.insert(currentId);
 
-				if (dirtyInfo->changeType != EntityChangeType::CHANGE_DELETED && dirtyInfo->backup.has_value()) { // ZYX_COV_EXCL_LINE: dirty registry always stores backups for non-delete range reads
+				if (dirtyInfo->changeType != EntityChangeType::CHANGE_DELETED &&
+					dirtyInfo->backup.has_value()) { // ZYX_COV_EXCL_LINE: dirty registry always stores backups for
+													 // non-delete range reads
 					result.push_back(*dirtyInfo->backup);
 				}
 			}
@@ -2309,8 +2166,8 @@ namespace graph::storage {
 			int64_t segmentStartId = header.start_id;
 			int64_t segmentEndId = header.start_id + header.used - 1;
 
-			int64_t intersectStart = (std::max)(startId, segmentStartId);
-			int64_t intersectEnd = (std::min)(endId, segmentEndId);
+			int64_t intersectStart = (std::max) (startId, segmentStartId);
+			int64_t intersectEnd = (std::min) (endId, segmentEndId);
 
 			if (intersectStart > intersectEnd) {
 				continue; // No overlap with this segment.
@@ -2323,7 +2180,8 @@ namespace graph::storage {
 
 			for (const EntityType &entity: segmentEntities) {
 				// IMPORTANT: Only add the entity if it was not already processed from memory.
-				if (!processedIds.contains(entity.getId())) { // ZYX_COV_EXCL_LINE: segment loader range is already filtered against dirty entries in tests
+				if (!processedIds.contains(entity.getId())) { // ZYX_COV_EXCL_LINE: segment loader range is already
+															  // filtered against dirty entries in tests
 					result.push_back(entity);
 
 					// Add the newly loaded entity to the cache for future queries.
@@ -2366,7 +2224,8 @@ namespace graph::storage {
 			constexpr size_t entitySize = EntityType::getTotalSize();
 			char buf[entitySize];
 			ssize_t n = preadBytes(buf, entitySize, fileOffset);
-			if (n < static_cast<ssize_t>(entitySize)) // ZYX_COV_EXCL_LINE: short pread requires corrupt/truncated segment file
+			if (n < static_cast<ssize_t>(
+							entitySize)) // ZYX_COV_EXCL_LINE: short pread requires corrupt/truncated segment file
 				return std::nullopt;
 			membuf mb(buf, entitySize);
 			std::istream stream(&mb);
@@ -2377,7 +2236,8 @@ namespace graph::storage {
 			entity = EntityType::deserialize(*file_);
 		}
 
-		if (!entity.isActive()) { // ZYX_COV_EXCL_LINE: inactive entities are filtered by segment metadata before direct reads
+		if (!entity.isActive()) { // ZYX_COV_EXCL_LINE: inactive entities are filtered by segment metadata before direct
+								  // reads
 			return std::nullopt;
 		}
 
@@ -2398,7 +2258,8 @@ namespace graph::storage {
 
 		// Calculate position of entity within segment
 		uint64_t relativePosition = id - header.start_id;
-		if (relativePosition >= header.used) { // ZYX_COV_EXCL_LINE: segment index lookup returns matching ranges for public reads
+		if (relativePosition >=
+			header.used) { // ZYX_COV_EXCL_LINE: segment index lookup returns matching ranges for public reads
 			return std::nullopt; // ID is out of range for this segment
 		}
 
@@ -2432,8 +2293,8 @@ namespace graph::storage {
 		SegmentHeader header = segmentTracker_->getSegmentHeader(segmentOffset);
 
 		// Calculate effective start and end positions
-		uint64_t effectiveStartId = (std::max)(startId, header.start_id);
-		uint64_t effectiveEndId = (std::min)(endId, header.start_id + header.used - 1);
+		uint64_t effectiveStartId = (std::max) (startId, header.start_id);
+		uint64_t effectiveEndId = (std::min) (endId, header.start_id + header.used - 1);
 
 		if (effectiveStartId > effectiveEndId) {
 			return result;
@@ -2441,7 +2302,7 @@ namespace graph::storage {
 
 		// Calculate offsets
 		uint64_t startOffset = effectiveStartId - header.start_id;
-		uint64_t count = (std::min)(effectiveEndId - effectiveStartId + 1, static_cast<uint64_t>(limit));
+		uint64_t count = (std::min) (effectiveEndId - effectiveStartId + 1, static_cast<uint64_t>(limit));
 
 		// Reserve space for the maximum possible entities
 		result.reserve(count);
@@ -2482,6 +2343,10 @@ namespace graph::storage {
 	bool DataManager::hasUnsavedChanges() const { return persistenceManager_->hasUnsavedChanges(); }
 
 	FlushSnapshot DataManager::prepareFlushSnapshot() const { return persistenceManager_->createSnapshot(); }
+
+	FlushSnapshotView DataManager::prepareFlushSnapshotView() const {
+		return persistenceManager_->createSnapshotView();
+	}
 
 	void DataManager::commitFlushSnapshot() const { persistenceManager_->commitSnapshot(); }
 
@@ -2589,12 +2454,11 @@ namespace graph::storage {
 				// Page pool miss — read full segment from disk, populate pool
 				if (hasPreadSupport()) {
 					std::vector<uint8_t> segData(TOTAL_SEGMENT_SIZE);
-					ssize_t n = preadBytes(segData.data(), TOTAL_SEGMENT_SIZE,
-														static_cast<int64_t>(segmentOffset));
+					ssize_t n = preadBytes(segData.data(), TOTAL_SEGMENT_SIZE, static_cast<int64_t>(segmentOffset));
 					if (n >= static_cast<ssize_t>(TOTAL_SEGMENT_SIZE)) {
 						pagePool_->putPage(segmentOffset, std::vector<uint8_t>(segData));
-						EntityType entity = deserializeEntityFromPage<EntityType>(
-								Page{segmentOffset, std::move(segData)}, id);
+						EntityType entity =
+								deserializeEntityFromPage<EntityType>(Page{segmentOffset, std::move(segData)}, id);
 						if (entity.getId() != 0 && entity.isActive()) {
 							return entity;
 						}
@@ -2621,27 +2485,39 @@ namespace graph::storage {
 
 		template<>
 		const std::unordered_map<int64_t, DirtyEntityInfo<Node>> &
-		getSnapshotMap<Node>(const CommittedSnapshot &snapshot) { return snapshot.nodes; }
+		getSnapshotMap<Node>(const CommittedSnapshot &snapshot) {
+			return snapshot.nodes;
+		}
 
 		template<>
 		const std::unordered_map<int64_t, DirtyEntityInfo<Edge>> &
-		getSnapshotMap<Edge>(const CommittedSnapshot &snapshot) { return snapshot.edges; }
+		getSnapshotMap<Edge>(const CommittedSnapshot &snapshot) {
+			return snapshot.edges;
+		}
 
 		template<>
 		const std::unordered_map<int64_t, DirtyEntityInfo<Property>> &
-		getSnapshotMap<Property>(const CommittedSnapshot &snapshot) { return snapshot.properties; }
+		getSnapshotMap<Property>(const CommittedSnapshot &snapshot) {
+			return snapshot.properties;
+		}
 
 		template<>
 		const std::unordered_map<int64_t, DirtyEntityInfo<Blob>> &
-		getSnapshotMap<Blob>(const CommittedSnapshot &snapshot) { return snapshot.blobs; }
+		getSnapshotMap<Blob>(const CommittedSnapshot &snapshot) {
+			return snapshot.blobs;
+		}
 
 		template<>
 		const std::unordered_map<int64_t, DirtyEntityInfo<Index>> &
-		getSnapshotMap<Index>(const CommittedSnapshot &snapshot) { return snapshot.indexes; }
+		getSnapshotMap<Index>(const CommittedSnapshot &snapshot) {
+			return snapshot.indexes;
+		}
 
 		template<>
 		const std::unordered_map<int64_t, DirtyEntityInfo<State>> &
-		getSnapshotMap<State>(const CommittedSnapshot &snapshot) { return snapshot.states; }
+		getSnapshotMap<State>(const CommittedSnapshot &snapshot) {
+			return snapshot.states;
+		}
 	} // namespace
 
 	template<typename EntityType>
@@ -2674,12 +2550,11 @@ namespace graph::storage {
 
 				if (hasPreadSupport()) {
 					std::vector<uint8_t> segData(TOTAL_SEGMENT_SIZE);
-					ssize_t n = preadBytes(segData.data(), TOTAL_SEGMENT_SIZE,
-														static_cast<int64_t>(segmentOffset));
+					ssize_t n = preadBytes(segData.data(), TOTAL_SEGMENT_SIZE, static_cast<int64_t>(segmentOffset));
 					if (n >= static_cast<ssize_t>(TOTAL_SEGMENT_SIZE)) {
 						pagePool_->putPage(segmentOffset, std::vector<uint8_t>(segData));
-						EntityType entity = deserializeEntityFromPage<EntityType>(
-								Page{segmentOffset, std::move(segData)}, id);
+						EntityType entity =
+								deserializeEntityFromPage<EntityType>(Page{segmentOffset, std::move(segData)}, id);
 						if (entity.getId() != 0 && entity.isActive()) {
 							return entity;
 						}
@@ -2740,7 +2615,7 @@ namespace graph::storage {
 		std::vector<EntityType> result;
 		result.reserve(segIndex.size() * 4); // Rough estimate
 
-		for (const auto &seg : segIndex) {
+		for (const auto &seg: segIndex) {
 			// Skip segments entirely outside the ID range
 			if (seg.endId < filterStartId || seg.startId > filterEndId)
 				continue;
@@ -2807,36 +2682,44 @@ namespace graph::storage {
 
 	template<typename EntityType, typename ManagerType>
 	void DataManager::rollbackAddedEntry(const wal::UndoEntry &entry, ManagerType &manager,
-										  std::function<void(const EntityType &)> notifyDeleted) const {
+										 std::function<void(const EntityType &)> notifyDeleted) const {
 		try {
 			EntityType entity = manager.get(entry.entityId);
 			notifyDeleted(entity);
-		} catch (...) {}
+		} catch (...) {
+		}
 	}
 
 	template<typename EntityType, typename ManagerType>
-	void DataManager::rollbackModifiedEntry(const wal::UndoEntry &entry, ManagerType &manager,
-											 std::function<void(const EntityType &, const EntityType &)> notifyUpdated) const {
-		if (entry.beforeImage.empty()) return;
+	void DataManager::rollbackModifiedEntry(
+			const wal::UndoEntry &entry, ManagerType &manager,
+			std::function<void(const EntityType &, const EntityType &)> notifyUpdated) const {
+		if (entry.beforeImage.empty())
+			return;
 		try {
 			std::string imgStr(entry.beforeImage.begin(), entry.beforeImage.end());
 			std::istringstream iss(imgStr, std::ios::binary);
-			EntityType oldEntity = utils::FixedSizeSerializer::deserializeWithFixedSize<EntityType>(iss, EntityType::getTotalSize());
+			EntityType oldEntity =
+					utils::FixedSizeSerializer::deserializeWithFixedSize<EntityType>(iss, EntityType::getTotalSize());
 			EntityType currentEntity = manager.get(entry.entityId);
 			notifyUpdated(currentEntity, oldEntity);
-		} catch (...) {}
+		} catch (...) {
+		}
 	}
 
 	template<typename EntityType>
 	void DataManager::rollbackDeletedEntry(const wal::UndoEntry &entry,
-											std::function<void(const EntityType &)> notifyAdded) const {
-		if (entry.beforeImage.empty()) return;
+										   std::function<void(const EntityType &)> notifyAdded) const {
+		if (entry.beforeImage.empty())
+			return;
 		try {
 			std::string imgStr(entry.beforeImage.begin(), entry.beforeImage.end());
 			std::istringstream iss(imgStr, std::ios::binary);
-			EntityType oldEntity = utils::FixedSizeSerializer::deserializeWithFixedSize<EntityType>(iss, EntityType::getTotalSize());
+			EntityType oldEntity =
+					utils::FixedSizeSerializer::deserializeWithFixedSize<EntityType>(iss, EntityType::getTotalSize());
 			notifyAdded(oldEntity);
-		} catch (...) {}
+		} catch (...) {
+		}
 	}
 
 	// --- Transaction Rollback ---
@@ -2854,28 +2737,28 @@ namespace graph::storage {
 				case wal::UndoChangeType::UNDO_ADDED:
 					if (isNode) {
 						rollbackAddedEntry<Node>(*it, *nodeManager_,
-							[this](const Node &n) { observerManager_.notifyNodeDeleted(n); });
+												 [this](const Node &n) { observerManager_.notifyNodeDeleted(n); });
 					} else if (isEdge) {
 						rollbackAddedEntry<Edge>(*it, *edgeManager_,
-							[this](const Edge &e) { observerManager_.notifyEdgeDeleted(e); });
+												 [this](const Edge &e) { observerManager_.notifyEdgeDeleted(e); });
 					}
 					break;
 				case wal::UndoChangeType::UNDO_MODIFIED:
 					if (isNode) {
-						rollbackModifiedEntry<Node>(*it, *nodeManager_,
-							[this](const Node &c, const Node &o) { observerManager_.notifyNodeUpdated(c, o); });
+						rollbackModifiedEntry<Node>(*it, *nodeManager_, [this](const Node &c, const Node &o) {
+							observerManager_.notifyNodeUpdated(c, o);
+						});
 					} else if (isEdge) {
-						rollbackModifiedEntry<Edge>(*it, *edgeManager_,
-							[this](const Edge &c, const Edge &o) { observerManager_.notifyEdgeUpdated(c, o); });
+						rollbackModifiedEntry<Edge>(*it, *edgeManager_, [this](const Edge &c, const Edge &o) {
+							observerManager_.notifyEdgeUpdated(c, o);
+						});
 					}
 					break;
 				case wal::UndoChangeType::UNDO_DELETED:
 					if (isNode) {
-						rollbackDeletedEntry<Node>(*it,
-							[this](const Node &n) { observerManager_.notifyNodeAdded(n); });
+						rollbackDeletedEntry<Node>(*it, [this](const Node &n) { observerManager_.notifyNodeAdded(n); });
 					} else if (isEdge) {
-						rollbackDeletedEntry<Edge>(*it,
-							[this](const Edge &e) { observerManager_.notifyEdgeAdded(e); });
+						rollbackDeletedEntry<Edge>(*it, [this](const Edge &e) { observerManager_.notifyEdgeAdded(e); });
 					}
 					break;
 			}
@@ -2888,15 +2771,13 @@ namespace graph::storage {
 
 	// --- Cache and Transaction Management ---
 
-	void DataManager::clearCache() const {
-		pagePool_->clear();
-	}
+	void DataManager::clearCache() const { pagePool_->clear(); }
 
 	void DataManager::invalidateDirtySegments(const FlushSnapshot &snapshot) const {
 		std::unordered_set<uint64_t> dirtySegments;
 
 		auto collect = [&](const auto &entityMap, auto findSeg) {
-			for (const auto &[id, info] : entityMap) {
+			for (const auto &[id, info]: entityMap) {
 				uint64_t seg = findSeg(id);
 				if (seg != 0) {
 					dirtySegments.insert(seg);
@@ -2911,8 +2792,43 @@ namespace graph::storage {
 		collect(snapshot.indexes, [&](int64_t id) { return findSegmentForEntityId<Index>(id); });
 		collect(snapshot.states, [&](int64_t id) { return findSegmentForEntityId<State>(id); });
 
-		for (uint64_t seg : dirtySegments) {
+		for (uint64_t seg: dirtySegments) {
 			pagePool_->invalidate(seg);
+		}
+	}
+
+	void DataManager::invalidateDirtySegments(const FlushSnapshotView &snapshot) const {
+		std::unordered_set<uint64_t> dirtySegments;
+
+		auto collect = [&](const auto *entityMap, auto findSeg) {
+			if (!entityMap) {
+				return;
+			}
+			for (const auto &[id, info]: *entityMap) {
+				uint64_t seg = findSeg(id);
+				if (seg != 0) {
+					dirtySegments.insert(seg);
+				}
+			}
+		};
+
+		collect(snapshot.nodes, [&](int64_t id) { return findSegmentForEntityId<Node>(id); });
+		collect(snapshot.edges, [&](int64_t id) { return findSegmentForEntityId<Edge>(id); });
+		collect(snapshot.properties, [&](int64_t id) { return findSegmentForEntityId<Property>(id); });
+		collect(snapshot.blobs, [&](int64_t id) { return findSegmentForEntityId<Blob>(id); });
+		collect(snapshot.indexes, [&](int64_t id) { return findSegmentForEntityId<Index>(id); });
+		collect(snapshot.states, [&](int64_t id) { return findSegmentForEntityId<State>(id); });
+
+		for (uint64_t seg: dirtySegments) {
+			pagePool_->invalidate(seg);
+		}
+	}
+
+	void DataManager::invalidateSegments(std::span<const uint64_t> segmentOffsets) const {
+		for (uint64_t segmentOffset: segmentOffsets) {
+			if (segmentOffset != 0) {
+				pagePool_->invalidate(segmentOffset);
+			}
 		}
 	}
 

@@ -151,6 +151,17 @@ namespace graph::storage {
 		 * active map for incoming updates.
 		 */
 		DirtyMap createFlushSnapshot() {
+			return createFlushSnapshotView();
+		}
+
+		/**
+		 * @brief Freezes the active map and returns a non-owning view of the
+		 * flushing map, avoiding a full map/entity copy on the write path.
+		 *
+		 * The returned reference remains valid until commitFlush(), which is
+		 * called only after the storage writer and cache invalidation finish.
+		 */
+		const DirtyMap &createFlushSnapshotView() {
 			std::unique_lock<std::shared_mutex> lock(mutex_);
 
 			// If previous flush wasn't committed, merge active into flushing (should not happen if logic is correct)

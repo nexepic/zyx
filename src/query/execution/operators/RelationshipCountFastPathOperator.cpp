@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/query/execution/PropertyPredicateKernel.hpp"
 #include "graph/query/execution/RelationshipCandidateSource.hpp"
 #include "graph/query/execution/RelationshipColumnarCountKernel.hpp"
 #include "graph/query/execution/VectorizedPredicate.hpp"
@@ -26,24 +27,33 @@ namespace {
 		}
 	}
 
-	bool propertyMapMatches(const std::unordered_map<std::string, PropertyValue> &properties,
-	                        const std::unordered_map<std::string, PropertyValue> &expected) {
-		for (const auto &[key, value] : expected) {
-			const auto it = properties.find(key);
-			if (it == properties.end() || it->second != value) { // ZYX_COV_EXCL_LINE
-				return false;
+	std::vector<VectorizedPropertyPredicate> effectiveEdgePredicates(const DirectRelationshipCountConfig &config) {
+		if (!config.edgePredicates.empty()) {
+			return config.edgePredicates;
+		}
+		return PropertyPredicateKernel::fromEqualityPredicates(config.edgeProperties).predicates();
+	}
+
+	std::vector<std::string> predicateKeys(const std::vector<VectorizedPropertyPredicate> &predicates) {
+		std::vector<std::string> keys;
+		keys.reserve(predicates.size());
+		for (const auto &predicate : predicates) {
+			if (std::find(keys.begin(), keys.end(), predicate.propertyKey) == keys.end()) {
+				keys.push_back(predicate.propertyKey);
 			}
 		}
-		return true;
+		return keys;
 	}
 
 	bool keysCoverAllPredicates(const std::vector<std::string> &coveredKeys,
-	                            const std::unordered_map<std::string, PropertyValue> &expected) {
-		if (coveredKeys.size() != expected.size()) {
+	                            const std::vector<VectorizedPropertyPredicate> &predicates) {
+		const auto keys = predicateKeys(predicates);
+		if (coveredKeys.size() != keys.size() || predicates.size() != keys.size()) {
 			return false;
 		}
-		for (const auto &key : coveredKeys) {
-			if (!expected.contains(key)) {
+		for (const auto &predicate : predicates) {
+			if (predicate.op != VectorPredicateOp::VPO_EQ ||
+			    std::find(coveredKeys.begin(), coveredKeys.end(), predicate.propertyKey) == coveredKeys.end()) {
 				return false;
 			}
 		}
@@ -206,6 +216,7 @@ namespace {
 			request.endId = maxId;
 			request.typeId = edgeTypeId;
 			request.propertyPredicates = directCount_.edgeProperties;
+			request.vectorPredicates = directCount_.edgePredicates;
 			if (auto directCount = kernel.count(request)) {
 				addProfile("relationship_count.direct_scan", scanStart);
 				return directCount->count;
@@ -233,7 +244,8 @@ namespace {
 		std::vector<uint8_t> selected;
 		std::vector<size_t> candidateRows;
 		candidateRows.reserve(edges.size());
-		if (!directCount_.edgeProperties.empty()) {
+		const auto edgePredicates = effectiveEdgePredicates(directCount_);
+		if (!edgePredicates.empty()) {
 			selected.assign(edges.size(), 0);
 		}
 
@@ -242,7 +254,7 @@ namespace {
 			if (edgeTypeId != 0 && edge.getTypeId() != edgeTypeId) {
 				continue;
 			}
-			if (directCount_.edgeProperties.empty()) {
+			if (edgePredicates.empty()) {
 				++count;
 				continue;
 			}
@@ -250,20 +262,17 @@ namespace {
 			candidateRows.push_back(row);
 		}
 
-		if (!directCount_.edgeProperties.empty() && !candidateRows.empty()) {
-			std::vector<std::string> propertyKeys;
-			propertyKeys.reserve(directCount_.edgeProperties.size());
-			for (const auto &entry : directCount_.edgeProperties) {
-				propertyKeys.push_back(entry.first);
-			}
+		if (!edgePredicates.empty() && !candidateRows.empty()) {
+			const auto propertyKeys = predicateKeys(edgePredicates);
 
 			const auto propertyStart = Clock::now();
 			RelationshipPropertyColumnLoader loader(dm_, threadPool_);
 			const auto columns = loader.loadColumns(edges, selected, propertyKeys);
 			addProfile("relationship_count.property_columns", propertyStart);
+			const PropertyPredicateKernel predicateKernel(edgePredicates);
 
 			for (const size_t row : candidateRows) {
-				if (edgeMatchesPropertyColumns(columns, row)) {
+				if (edgeMatchesPropertyColumns(columns, row, predicateKernel)) {
 					++count;
 				}
 			}
@@ -291,15 +300,17 @@ namespace {
 		}
 
 		const bool typeNeedsVerification = edgeTypeId != 0 && !candidates.typeSatisfied;
+		const auto edgePredicates = effectiveEdgePredicates(directCount_);
 		const bool propertiesNeedVerification =
-				!directCount_.edgeProperties.empty() &&
-				!keysCoverAllPredicates(candidates.propertyKeysSatisfied, directCount_.edgeProperties);
+				!edgePredicates.empty() &&
+				!keysCoverAllPredicates(candidates.propertyKeysSatisfied, edgePredicates);
 		if (!typeNeedsVerification && !propertiesNeedVerification) {
 			return static_cast<int64_t>(candidates.ids.size());
 		}
 
 		const auto filterStart = Clock::now();
 		int64_t count = 0;
+		const PropertyPredicateKernel predicateKernel(edgePredicates);
 		for (const int64_t edgeId : candidates.ids) {
 			if (typeNeedsVerification) {
 				const Edge edge = dm_->getEdge(edgeId);
@@ -308,7 +319,7 @@ namespace {
 				}
 			}
 			if (propertiesNeedVerification &&
-			    !propertyMapMatches(dm_->getEdgeProperties(edgeId), directCount_.edgeProperties)) {
+			    !predicateKernel.matchesMap(dm_->getEdgeProperties(edgeId))) {
 				continue;
 			}
 			++count;
@@ -319,12 +330,12 @@ namespace {
 
 	bool RelationshipCountFastPathOperator::edgeMatchesPropertyColumns(
 			const std::unordered_map<std::string, std::vector<std::optional<PropertyValue>>> &columns,
-			size_t row) const {
-		for (const auto &[key, value] : directCount_.edgeProperties) {
-			const auto columnIt = columns.find(key);
-			// RelationshipPropertyColumnLoader creates and sizes every requested column to the edge batch.
-			const auto &cell = columnIt->second[row];
-			if (!cell.has_value() || cell.value() != value) {
+			size_t row,
+			const PropertyPredicateKernel &predicateKernel) const {
+		for (const auto &predicate : predicateKernel.predicates()) {
+			const auto columnIt = columns.find(predicate.propertyKey);
+			if (columnIt == columns.end() || row >= columnIt->second.size() ||
+			    !predicateKernel.matchesValue(columnIt->second[row], predicate)) {
 				return false;
 			}
 		}

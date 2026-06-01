@@ -3,6 +3,7 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
 #include <gtest/gtest.h>
+#include <optional>
 #include <string>
 #include <unordered_map>
 
@@ -24,7 +25,8 @@ protected:
 
 	void SetUp() override {
 		const auto uuid = boost::uuids::random_generator()();
-		testFilePath = fs::temp_directory_path() / ("test_node_count_fast_path_" + boost::uuids::to_string(uuid) + ".dat");
+		testFilePath =
+				fs::temp_directory_path() / ("test_node_count_fast_path_" + boost::uuids::to_string(uuid) + ".dat");
 		db = std::make_unique<Database>(testFilePath.string());
 		db->open();
 		dm = db->getStorage()->getDataManager();
@@ -45,7 +47,7 @@ protected:
 	}
 
 	int64_t addLabeledNode(const std::vector<std::string> &labels,
-	                       const std::unordered_map<std::string, PropertyValue> &props = {}) {
+						   const std::unordered_map<std::string, PropertyValue> &props = {}) {
 		Node node(0, dm->getOrCreateTokenId(labels.front()));
 		for (size_t i = 1; i < labels.size(); ++i) {
 			node.addLabelId(dm->getOrCreateTokenId(labels[i]));
@@ -156,6 +158,49 @@ TEST_F(NodeCountFastPathOperatorTest, CountOnlyPropertyPredicateUsesMetadataBatc
 	ASSERT_TRUE(snapshot.contains("node_scan.load_node_metadata"));
 	EXPECT_FALSE(snapshot.contains("node_scan.load_nodes"));
 	EXPECT_FALSE(snapshot.contains("node_scan.bulk_load_nodes"));
+}
+
+TEST_F(NodeCountFastPathOperatorTest, RepeatsPropertyPredicateCountsWithoutResultCache) {
+	static constexpr size_t kNodeCount = 300;
+	for (size_t i = 0; i < kNodeCount; ++i) {
+		addPerson({{"age", PropertyValue(static_cast<int64_t>(i % 3))}});
+	}
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "n";
+	config.labels = {"Person"};
+
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+	requirements.requiredProperties = {"age"};
+	requirements.countOnly = true;
+
+	VectorizedPropertyPredicate predicate;
+	predicate.variable = "n";
+	predicate.propertyKey = "age";
+	predicate.op = VectorPredicateOp::VPO_EQ;
+	predicate.value = PropertyValue(int64_t{1});
+
+	NodeCountFastPathOperator first(dm, im, config, requirements, {predicate}, "count");
+	first.open();
+	auto firstBatch = first.next();
+	ASSERT_TRUE(firstBatch.has_value());
+	EXPECT_EQ(readCount(*firstBatch), 100);
+
+	debug::PerfTrace::setEnabled(true);
+	debug::PerfTrace::reset();
+	NodeCountFastPathOperator second(dm, im, config, requirements, {predicate}, "count");
+	second.open();
+	auto secondBatch = second.next();
+	ASSERT_TRUE(secondBatch.has_value());
+	EXPECT_EQ(readCount(*secondBatch), 100);
+	const auto snapshot = debug::PerfTrace::snapshotAndReset();
+	EXPECT_TRUE(snapshot.contains("node_scan.count"));
+	EXPECT_TRUE(snapshot.contains("node_scan.load_node_metadata"));
+	EXPECT_FALSE(snapshot.contains("node_scan.count_cache"));
 }
 
 TEST_F(NodeCountFastPathOperatorTest, SkipsRedundantChecksForLabelIndexCandidatesWithPredicates) {

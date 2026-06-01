@@ -298,9 +298,10 @@ TEST_F(StorageWriterTest, ClassifyEntitiesSplitsByChangeType) {
 	EXPECT_EQ(batch.added.size(), 1u);
 	EXPECT_EQ(batch.modified.size(), 1u);
 	EXPECT_EQ(batch.deleted.size(), 1u);
-	EXPECT_EQ(batch.added[0].getId(), 1);
-	EXPECT_EQ(batch.modified[0].getId(), 2);
-	EXPECT_EQ(batch.deleted[0].getId(), 3);
+	EXPECT_EQ(batch.added[0]->getId(), 1);
+	EXPECT_EQ(batch.modified[0]->getId(), 2);
+	EXPECT_EQ(batch.deleted[0]->getId(), 3);
+	EXPECT_EQ(batch.added[0], &map[1].backup.value());
 }
 
 // ============================================================================

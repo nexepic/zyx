@@ -7,6 +7,7 @@
  **/
 
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -134,6 +135,23 @@ TEST_F(StorageIOTest, AppendReturnsCorrectOffset) {
 	EXPECT_EQ(std::memcmp(data1, buffer, sizeof(data1)), 0);
 }
 
+TEST_F(StorageIOTest, ReserveAppendSpaceExtendsWithZeroReadableGap) {
+	auto io = createIO(false);
+
+	uint64_t offset = io->reserveAppendSpace(128);
+	EXPECT_EQ(offset, testSize_);
+	EXPECT_EQ(std::filesystem::file_size(testFile_), testSize_ + 128);
+
+	std::vector<char> buffer(128, 1);
+	size_t bytesRead = io->readAt(offset, buffer.data(), buffer.size());
+	EXPECT_EQ(bytesRead, buffer.size());
+	EXPECT_TRUE(std::all_of(buffer.begin(), buffer.end(), [](char c) { return c == 0; }));
+
+	const char data[] = "after reserve";
+	uint64_t appendOffset = io->append(data, sizeof(data));
+	EXPECT_EQ(appendOffset, testSize_ + 128);
+}
+
 // ============================================================================
 // writeAt with null buffer or zero size is a no-op
 // ============================================================================
@@ -164,6 +182,7 @@ TEST_F(StorageIOTest, AppendNullBufferThrows) {
 	auto io = createIO(false);
 	EXPECT_THROW(io->append(nullptr, 10), std::invalid_argument);
 	EXPECT_THROW(io->append("data", 0), std::invalid_argument);
+	EXPECT_THROW(io->reserveAppendSpace(0), std::invalid_argument);
 }
 
 // ============================================================================

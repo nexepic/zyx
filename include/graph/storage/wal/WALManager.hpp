@@ -33,6 +33,13 @@ namespace graph::storage {
 
 namespace graph::storage::wal {
 
+	struct WALEntityChange {
+		uint8_t entityType;
+		uint8_t changeType;
+		int64_t entityId;
+		std::vector<uint8_t> serializedData;
+	};
+
 	/**
 	 * Write-Ahead Log manager for transaction durability.
 	 *
@@ -51,6 +58,7 @@ namespace graph::storage::wal {
 		void writeBegin(uint64_t txnId);
 		void writeEntityChange(uint64_t txnId, uint8_t entityType, uint8_t changeType, int64_t entityId,
 							   const std::vector<uint8_t> &serializedData);
+		void writeEntityChanges(uint64_t txnId, const std::vector<WALEntityChange> &changes);
 		void writeCommit(uint64_t txnId);
 		void writeRollback(uint64_t txnId);
 		void sync();
@@ -93,6 +101,10 @@ namespace graph::storage::wal {
 		size_t autoCheckpointThreshold_ = 1048576;
 
 		void writeRecord(WALRecordType type, uint64_t txnId, const uint8_t *data = nullptr, uint32_t dataSize = 0);
+		void appendRecordLocked(WALRecordType type, uint64_t txnId, const uint8_t *data, uint32_t dataSize);
+		void appendEntityChangeRecordLocked(uint64_t txnId, uint8_t entityType, uint8_t changeType, int64_t entityId,
+											const uint8_t *data, uint32_t dataSize);
+		void appendBytesLocked(const uint8_t *data, size_t size);
 		void writeHeader();
 		[[nodiscard]] bool validateHeader();
 

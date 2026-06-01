@@ -24,7 +24,8 @@ protected:
 
 	void SetUp() override {
 		const auto uuid = boost::uuids::random_generator()();
-		testFilePath = fs::temp_directory_path() / ("test_node_topk_fast_path_" + boost::uuids::to_string(uuid) + ".dat");
+		testFilePath =
+				fs::temp_directory_path() / ("test_node_topk_fast_path_" + boost::uuids::to_string(uuid) + ".dat");
 		db = std::make_unique<Database>(testFilePath.string());
 		db->open();
 		dm = db->getStorage()->getDataManager();
@@ -45,7 +46,7 @@ protected:
 	}
 
 	int64_t addLabeledNode(const std::vector<std::string> &labels,
-	                       const std::unordered_map<std::string, PropertyValue> &props = {}) {
+						   const std::unordered_map<std::string, PropertyValue> &props = {}) {
 		Node node(0, dm->getOrCreateTokenId(labels.front()));
 		for (size_t i = 1; i < labels.size(); ++i) {
 			node.addLabelId(dm->getOrCreateTokenId(labels[i]));
@@ -71,7 +72,8 @@ protected:
 TEST_F(NodeTopKFastPathOperatorTest, ReturnsProjectedRowsInDescendingOrder) {
 	static constexpr size_t kNodeCount = 300;
 	for (size_t i = 0; i < kNodeCount; ++i) {
-		addPerson({{"id", PropertyValue("user-" + std::to_string(i))}, {"score", PropertyValue(static_cast<int64_t>(i))}});
+		addPerson({{"id", PropertyValue("user-" + std::to_string(i))},
+				   {"score", PropertyValue(static_cast<int64_t>(i))}});
 	}
 	addLabeledNode({"Animal"}, {{"id", PropertyValue("animal")}, {"score", PropertyValue(int64_t{1000})}});
 	db->getStorage()->flush();
@@ -86,8 +88,7 @@ TEST_F(NodeTopKFastPathOperatorTest, ReturnsProjectedRowsInDescendingOrder) {
 	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
 	requirements.requiredProperties = {"id", "score"};
 
-	NodeTopKFastPathOperator op(
-		dm, im, config, requirements, {}, {{"id", "id"}}, "score", false, 3);
+	NodeTopKFastPathOperator op(dm, im, config, requirements, {}, {{"id", "id"}}, "score", false, 3);
 	op.open();
 	auto batch = op.next();
 
@@ -121,8 +122,7 @@ TEST_F(NodeTopKFastPathOperatorTest, SkipsRedundantChecksForLabelIndexCandidates
 	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
 	requirements.requiredProperties = {"id", "score"};
 
-	NodeTopKFastPathOperator op(
-		dm, im, config, requirements, {}, {{"id", "id"}}, "score", false, 1);
+	NodeTopKFastPathOperator op(dm, im, config, requirements, {}, {{"id", "id"}}, "score", false, 1);
 	op.open();
 	auto batch = op.next();
 
@@ -136,11 +136,9 @@ TEST_F(NodeTopKFastPathOperatorTest, SkipsRedundantChecksForLabelIndexCandidates
 
 TEST_F(NodeTopKFastPathOperatorTest, AppliesResidualPredicateBeforeRanking) {
 	for (int64_t i = 0; i < 10; ++i) {
-		addPerson({
-			{"id", PropertyValue("user-" + std::to_string(i))},
-			{"score", PropertyValue(i)},
-			{"country", PropertyValue(i >= 5 ? "CN" : "US")}
-		});
+		addPerson({{"id", PropertyValue("user-" + std::to_string(i))},
+				   {"score", PropertyValue(i)},
+				   {"country", PropertyValue(i >= 5 ? "CN" : "US")}});
 	}
 
 	NodeScanConfig config;
@@ -157,8 +155,7 @@ TEST_F(NodeTopKFastPathOperatorTest, AppliesResidualPredicateBeforeRanking) {
 	predicate.op = VectorPredicateOp::VPO_EQ;
 	predicate.value = PropertyValue("US");
 
-	NodeTopKFastPathOperator op(
-		dm, im, config, requirements, {predicate}, {{"id", "id"}}, "score", false, 2);
+	NodeTopKFastPathOperator op(dm, im, config, requirements, {predicate}, {{"id", "id"}}, "score", false, 2);
 	op.open();
 	auto batch = op.next();
 
@@ -170,11 +167,9 @@ TEST_F(NodeTopKFastPathOperatorTest, AppliesResidualPredicateBeforeRanking) {
 
 TEST_F(NodeTopKFastPathOperatorTest, LoadsOnlyRetainedProjectionProperties) {
 	for (int64_t i = 0; i < 20; ++i) {
-		addPerson({
-			{"id", PropertyValue("user-" + std::to_string(i))},
-			{"score", PropertyValue(i)},
-			{"city", PropertyValue(i == 19 ? "Shanghai" : "Seattle")}
-		});
+		addPerson({{"id", PropertyValue("user-" + std::to_string(i))},
+				   {"score", PropertyValue(i)},
+				   {"city", PropertyValue(i == 19 ? "Shanghai" : "Seattle")}});
 	}
 
 	NodeScanConfig config;
@@ -185,16 +180,8 @@ TEST_F(NodeTopKFastPathOperatorTest, LoadsOnlyRetainedProjectionProperties) {
 	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
 	requirements.requiredProperties = {"id", "score", "city", "missing"};
 
-	NodeTopKFastPathOperator op(
-		dm,
-		im,
-		config,
-		requirements,
-		{},
-		{{"city", "city"}, {"score", "score"}, {"missing", "missing"}},
-		"score",
-		false,
-		1);
+	NodeTopKFastPathOperator op(dm, im, config, requirements, {},
+								{{"city", "city"}, {"score", "score"}, {"missing", "missing"}}, "score", false, 1);
 	op.open();
 	auto batch = op.next();
 
@@ -205,10 +192,47 @@ TEST_F(NodeTopKFastPathOperatorTest, LoadsOnlyRetainedProjectionProperties) {
 	EXPECT_EQ(readString((*batch)[0], "missing"), "null");
 }
 
+TEST_F(NodeTopKFastPathOperatorTest, RepeatsTopKWithoutResultCache) {
+	for (int64_t i = 0; i < 200; ++i) {
+		addPerson({{"id", PropertyValue("user-" + std::to_string(i))}, {"score", PropertyValue(i)}});
+	}
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "u";
+	config.labels = {"Person"};
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+	requirements.requiredProperties = {"id", "score"};
+
+	NodeTopKFastPathOperator first(dm, im, config, requirements, {}, {{"id", "id"}}, "score", false, 3);
+	first.open();
+	auto firstBatch = first.next();
+	ASSERT_TRUE(firstBatch.has_value());
+	ASSERT_EQ(firstBatch->size(), 3U);
+	EXPECT_EQ(readString((*firstBatch)[0], "id"), "user-199");
+
+	debug::PerfTrace::setEnabled(true);
+	debug::PerfTrace::reset();
+	NodeTopKFastPathOperator second(dm, im, config, requirements, {}, {{"id", "id"}}, "score", false, 3);
+	second.open();
+	auto secondBatch = second.next();
+	ASSERT_TRUE(secondBatch.has_value());
+	ASSERT_EQ(secondBatch->size(), 3U);
+	EXPECT_EQ(readString((*secondBatch)[0], "id"), "user-199");
+	const auto snapshot = debug::PerfTrace::snapshotAndReset();
+	EXPECT_TRUE(snapshot.contains("node_scan.topk"));
+	EXPECT_TRUE(snapshot.contains("node_scan.load_node_metadata"));
+	EXPECT_FALSE(snapshot.contains("node_scan.topk_cache"));
+}
+
 TEST_F(NodeTopKFastPathOperatorTest, ReturnsMultipleBatchesWhenLimitExceedsDefaultBatch) {
 	const size_t rowCount = PhysicalOperator::DEFAULT_BATCH_SIZE + 5;
 	for (size_t i = 0; i < rowCount; ++i) {
-		addPerson({{"id", PropertyValue("user-" + std::to_string(i))}, {"score", PropertyValue(static_cast<int64_t>(i))}});
+		addPerson({{"id", PropertyValue("user-" + std::to_string(i))},
+				   {"score", PropertyValue(static_cast<int64_t>(i))}});
 	}
 
 	NodeScanConfig config;
@@ -219,8 +243,8 @@ TEST_F(NodeTopKFastPathOperatorTest, ReturnsMultipleBatchesWhenLimitExceedsDefau
 	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
 	requirements.requiredProperties = {"id", "score"};
 
-	NodeTopKFastPathOperator op(
-		dm, im, config, requirements, {}, {{"score", "score"}}, "score", true, static_cast<int64_t>(rowCount));
+	NodeTopKFastPathOperator op(dm, im, config, requirements, {}, {{"score", "score"}}, "score", true,
+								static_cast<int64_t>(rowCount));
 	op.open();
 	auto first = op.next();
 	auto second = op.next();
@@ -246,8 +270,7 @@ TEST_F(NodeTopKFastPathOperatorTest, HandlesEmptyProjectionAndEmptyResult) {
 	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
 	requirements.requiredProperties = {"id", "score", "country"};
 
-	NodeTopKFastPathOperator noProjection(
-		dm, im, config, requirements, {}, {}, "score", false, 1);
+	NodeTopKFastPathOperator noProjection(dm, im, config, requirements, {}, {}, "score", false, 1);
 	debug::PerfTrace::setEnabled(true);
 	debug::PerfTrace::reset();
 	noProjection.open();
@@ -262,8 +285,7 @@ TEST_F(NodeTopKFastPathOperatorTest, HandlesEmptyProjectionAndEmptyResult) {
 	predicate.op = VectorPredicateOp::VPO_EQ;
 	predicate.value = PropertyValue("CN");
 
-	NodeTopKFastPathOperator noMatch(
-		dm, im, config, requirements, {predicate}, {{"id", "id"}}, "score", false, 1);
+	NodeTopKFastPathOperator noMatch(dm, im, config, requirements, {predicate}, {{"id", "id"}}, "score", false, 1);
 	noMatch.open();
 	EXPECT_FALSE(noMatch.next().has_value());
 }
@@ -279,8 +301,7 @@ TEST_F(NodeTopKFastPathOperatorTest, CloseOpenAllowsReExecution) {
 	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
 	requirements.requiredProperties = {"id", "score"};
 
-	NodeTopKFastPathOperator op(
-		dm, im, config, requirements, {}, {{"id", "id"}}, "score", false, 1);
+	NodeTopKFastPathOperator op(dm, im, config, requirements, {}, {{"id", "id"}}, "score", false, 1);
 	op.open();
 	ASSERT_TRUE(op.next().has_value());
 	op.close();
