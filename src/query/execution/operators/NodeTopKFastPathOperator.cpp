@@ -8,6 +8,8 @@
 
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/QueryContext.hpp"
+#include "graph/query/execution/NodeMetadataColumnLoader.hpp"
+#include "graph/query/execution/NodeMetadataFilter.hpp"
 #include "graph/query/execution/NodePropertyColumnLoader.hpp"
 #include "graph/query/execution/NodeScanRequirementUtils.hpp"
 
@@ -96,47 +98,39 @@ namespace graph::query::execution::operators {
 
 		std::vector<Row> heap;
 		heap.reserve(limit_);
-		auto heapComparator = [this](const Row &left, const Row &right) {
-			// comesBefore() is final output order; the heap root is the worst retained row.
-			return comesBefore(left.sortKey, right.sortKey);
-		};
 
-		NodeBatchLoader loader(dm_, threadPool_);
-		const auto requirements = relaxSatisfiedCandidateChecks(makeSelectionRequirements(), candidateSet_);
-		for (size_t begin = 0; begin < candidateSet_.ids.size();) {
-			if (queryContext_) {
-				queryContext_->checkGuard();
-			}
-			const size_t batchSize = chooseColumnarNodeBatchSize(candidateSet_.ids.size() - begin, threadPool_,
-																 PhysicalOperator::DEFAULT_BATCH_SIZE);
-			const size_t end = begin + batchSize;
-			auto batch = loader.load(candidateSet_.ids, begin, end, config_, requirements);
-			applyPredicates(batch, predicates_);
-			const auto &sortColumn = batch.propertyColumns.at(sortProperty_);
-
-			for (size_t row = 0; row < batch.nodeIds.size(); ++row) {
-				if (!batch.isSelected(row)) {
-					continue;
+		const bool usedMetadataPath = predicates_.empty() && tryBuildTopKFromMetadata(heap);
+		if (!usedMetadataPath) {
+			NodeBatchLoader loader(dm_, threadPool_);
+			const auto requirements = relaxSatisfiedCandidateChecks(makeSelectionRequirements(), candidateSet_);
+			for (size_t begin = 0; begin < candidateSet_.ids.size();) {
+				if (queryContext_) {
+					queryContext_->checkGuard();
 				}
+				const size_t batchSize = chooseColumnarNodeBatchSize(candidateSet_.ids.size() - begin, threadPool_,
+																	 PhysicalOperator::DEFAULT_BATCH_SIZE);
+				const size_t end = begin + batchSize;
+				auto batch = loader.load(candidateSet_.ids, begin, end, config_, requirements);
+				applyPredicates(batch, predicates_);
+				const auto &sortColumn = batch.propertyColumns.at(sortProperty_);
+
+				for (size_t row = 0; row < batch.nodeIds.size(); ++row) {
+					if (!batch.isSelected(row)) {
+						continue;
+					}
 
 				Row candidate;
 				candidate.nodeId = batch.nodeIds[row];
 				candidate.sortKey = sortColumn[row].value_or(PropertyValue());
-
-				if (heap.size() < limit_) {
-					heap.push_back(std::move(candidate));
-					std::push_heap(heap.begin(), heap.end(), heapComparator);
-				} else if (comesBefore(candidate.sortKey, heap.front().sortKey)) {
-					std::pop_heap(heap.begin(), heap.end(), heapComparator);
-					heap.back() = std::move(candidate);
-					std::push_heap(heap.begin(), heap.end(), heapComparator);
-				}
+				candidate.orderKey = TypedOrderKey::from(candidate.sortKey);
+				offerTopK(heap, std::move(candidate));
 			}
-			begin = end;
+				begin = end;
+			}
 		}
 
 		auto finalComparator = [this](const Row &left, const Row &right) {
-			return comesBefore(left.sortKey, right.sortKey);
+			return comesBefore(left.orderKey, right.orderKey);
 		};
 		std::sort(heap.begin(), heap.end(), finalComparator);
 		loadProjectionValues(heap);
@@ -151,6 +145,97 @@ namespace graph::query::execution::operators {
 		}
 	}
 
+	bool NodeTopKFastPathOperator::tryBuildTopKFromMetadata(std::vector<Row> &heap) const {
+		if (!dm_ || candidateSet_.ids.empty()) {
+			return true;
+		}
+
+		std::vector<Row> localHeap;
+		localHeap.reserve(limit_);
+		const auto requirements = relaxSatisfiedCandidateChecks(makeSelectionRequirements(), candidateSet_);
+		const NodeMetadataRowFilter rowFilter(dm_, config_, requirements);
+		NodeMetadataColumnLoader metadataLoader(dm_);
+
+		static constexpr size_t kMetadataTopKBatchSize = 65536;
+		static constexpr size_t kNoRow = static_cast<size_t>(-1);
+		for (size_t begin = 0; begin < candidateSet_.ids.size();) {
+			if (queryContext_) {
+				queryContext_->checkGuard();
+			}
+			const size_t end = std::min(candidateSet_.ids.size(), begin + kMetadataTopKBatchSize);
+			auto metadata = metadataLoader.loadBatch(candidateSet_.ids, begin, end);
+			if (!metadata.has_value()) {
+				return false;
+			}
+
+			std::vector<Row> batchRows;
+			std::vector<size_t> metadataRowToBatchRow(metadata->size(), kNoRow);
+			std::vector<int64_t> propertyEntityIds;
+			std::vector<size_t> propertyRows;
+			std::vector<size_t> fallbackRows;
+			batchRows.reserve(metadata->size());
+			propertyEntityIds.reserve(metadata->size());
+			propertyRows.reserve(metadata->size());
+
+			for (size_t row = 0; row < metadata->size(); ++row) {
+				if (!rowFilter.accepts(*metadata, row)) {
+					continue;
+				}
+
+				metadataRowToBatchRow[row] = batchRows.size();
+				Row candidate;
+				candidate.nodeId = metadata->nodeIds[row];
+				batchRows.push_back(std::move(candidate));
+
+				const int64_t propertyEntityId = metadata->propertyEntityIds[row];
+				const auto storageType = metadata->propertyStorageTypes[row];
+				if (storageType == PropertyStorageType::PROPERTY_ENTITY && propertyEntityId != 0) {
+					propertyEntityIds.push_back(propertyEntityId);
+					propertyRows.push_back(row);
+				} else if (storageType == PropertyStorageType::BLOB_ENTITY && propertyEntityId != 0) {
+					fallbackRows.push_back(row);
+				}
+			}
+
+			if (!propertyEntityIds.empty()) {
+				(void) dm_->bulkVisitPropertyEntityValues(
+						propertyEntityIds, propertyRows, metadata->size(), sortProperty_,
+						[&](size_t metadataRow, const PropertyValue &value) {
+							if (metadataRow >= metadataRowToBatchRow.size()) {
+								return;
+							}
+							const size_t batchRow = metadataRowToBatchRow[metadataRow];
+							if (batchRow != kNoRow) {
+								batchRows[batchRow].sortKey = value;
+								batchRows[batchRow].orderKey = TypedOrderKey::from(value);
+							}
+						},
+						threadPool_);
+			}
+
+			for (const size_t metadataRow : fallbackRows) {
+				const size_t batchRow = metadataRowToBatchRow[metadataRow];
+				if (batchRow == kNoRow) { // ZYX_COV_EXCL_LINE
+					continue;
+				}
+				Node node = metadata->toNode(metadataRow);
+				const auto properties = dm_->getNodePropertiesDirect(node);
+				if (auto it = properties.find(sortProperty_); it != properties.end()) {
+					batchRows[batchRow].sortKey = it->second;
+					batchRows[batchRow].orderKey = TypedOrderKey::from(it->second);
+				}
+			}
+
+			for (auto &candidate : batchRows) {
+				offerTopK(localHeap, std::move(candidate));
+			}
+			begin = end;
+		}
+
+		heap = std::move(localHeap);
+		return true;
+	}
+
 	NodeScanRequirements NodeTopKFastPathOperator::makeSelectionRequirements() const {
 		NodeScanRequirements requirements = requirements_;
 		requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
@@ -160,6 +245,22 @@ namespace graph::query::execution::operators {
 			addRequiredProperty(requirements.requiredProperties, predicate.propertyKey);
 		}
 		return requirements;
+	}
+
+	void NodeTopKFastPathOperator::offerTopK(std::vector<Row> &heap, Row candidate) const {
+		auto heapComparator = [this](const Row &left, const Row &right) {
+			// comesBefore() is final output order; the heap root is the worst retained row.
+			return comesBefore(left.orderKey, right.orderKey);
+		};
+
+		if (heap.size() < limit_) {
+			heap.push_back(std::move(candidate));
+			std::push_heap(heap.begin(), heap.end(), heapComparator);
+		} else if (comesBefore(candidate.orderKey, heap.front().orderKey)) {
+			std::pop_heap(heap.begin(), heap.end(), heapComparator);
+			heap.back() = std::move(candidate);
+			std::push_heap(heap.begin(), heap.end(), heapComparator);
+		}
 	}
 
 	void NodeTopKFastPathOperator::loadProjectionValues(std::vector<Row> &rows) const {
@@ -218,10 +319,15 @@ namespace graph::query::execution::operators {
 	}
 
 	bool NodeTopKFastPathOperator::comesBefore(const PropertyValue &left, const PropertyValue &right) const {
-		if (left == right) {
+		return comesBefore(TypedOrderKey::from(left), TypedOrderKey::from(right));
+	}
+
+	bool NodeTopKFastPathOperator::comesBefore(const TypedOrderKey &left, const TypedOrderKey &right) const {
+		const int comparison = left.compare(right);
+		if (comparison == 0) {
 			return false;
 		}
-		return ascending_ ? left < right : left > right;
+		return ascending_ ? comparison < 0 : comparison > 0;
 	}
 
 	Record NodeTopKFastPathOperator::makeRecord(const Row &row) const {
