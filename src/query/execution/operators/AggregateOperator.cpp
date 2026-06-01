@@ -52,16 +52,14 @@ std::optional<RecordBatch> AggregateOperator::next() {
 				updateAccumulators(record);
 			} else {
 				// Grouped aggregation
-				std::string groupKey = computeGroupKey(record);
-				auto it = groups_.find(groupKey);
-				if (it == groups_.end()) {
+				auto groupKey = evaluateGroupKey(record);
+				auto [it, inserted] = groups_.try_emplace(std::move(groupKey));
+				if (inserted) {
 					// First time seeing this group - create accumulators and store key values
-					GroupData data;
 					for (const auto& agg : aggregates_) {
-						data.accumulators.push_back(createAccumulator(agg.functionType, agg.distinct));
+						it->second.accumulators.push_back(
+								createAccumulator(agg.functionType, agg.distinct, agg.percentileArg));
 					}
-					data.keyValues = evaluateGroupKeyValues(record);
-					it = groups_.emplace(groupKey, std::move(data)).first;
 				}
 				updateAccumulators(record, it->second.accumulators);
 			}
@@ -84,8 +82,8 @@ std::optional<RecordBatch> AggregateOperator::next() {
 			Record outputRecord;
 			// Add group-by key values to the output record
 			for (size_t i = 0; i < groupByItems_.size(); ++i) {
-				if (i < groupData.keyValues.size()) {
-					outputRecord.setValue(groupByItems_[i].alias, groupData.keyValues[i]);
+				if (i < groupKey.values.size()) {
+					outputRecord.setValue(groupByItems_[i].alias, groupKey.values[i]);
 				}
 			}
 			// Add aggregate results
@@ -119,6 +117,10 @@ std::string AggregateOperator::toString() const {
 			case AggregateFunctionType::AGG_MIN: s += "min("; break;
 			case AggregateFunctionType::AGG_MAX: s += "max("; break;
 			case AggregateFunctionType::AGG_COLLECT: s += "collect("; break;
+			case AggregateFunctionType::AGG_STDEV: s += "stDev("; break;
+			case AggregateFunctionType::AGG_STDEVP: s += "stDevP("; break;
+			case AggregateFunctionType::AGG_PERCENTILE_DISC: s += "percentileDisc("; break;
+			case AggregateFunctionType::AGG_PERCENTILE_CONT: s += "percentileCont("; break;
 		}
 		if (agg.expression) {
 			s += agg.expression->toString();
@@ -168,8 +170,9 @@ void AggregateOperator::updateAccumulators(const Record& record) {
 	updateAccumulators(record, accumulators_);
 }
 
-std::string AggregateOperator::computeGroupKey(const Record& record) {
-	std::string key;
+AggregateOperator::GroupKey AggregateOperator::evaluateGroupKey(const Record& record) {
+	GroupKey key;
+	key.values.reserve(groupByItems_.size());
 	for (const auto& item : groupByItems_) {
 		if (item.expression) {
 			const std::unordered_map<std::string, PropertyValue> *params = nullptr;
@@ -177,27 +180,12 @@ std::string AggregateOperator::computeGroupKey(const Record& record) {
 				params = &queryContext_->parameters;
 			PropertyValue val = graph::query::expressions::ExpressionEvaluationHelper::evaluate(
 			    item.expression.get(), record, dataManager_, params);
-			key += val.toString() + "|";
+			key.values.push_back(std::move(val));
+		} else {
+			key.values.emplace_back(); // NULL
 		}
 	}
 	return key;
-}
-
-std::vector<PropertyValue> AggregateOperator::evaluateGroupKeyValues(const Record& record) {
-	std::vector<PropertyValue> values;
-	values.reserve(groupByItems_.size());
-	for (const auto& item : groupByItems_) {
-		if (item.expression) {
-			const std::unordered_map<std::string, PropertyValue> *params = nullptr;
-			if (queryContext_ && !queryContext_->parameters.empty())
-				params = &queryContext_->parameters;
-			values.push_back(graph::query::expressions::ExpressionEvaluationHelper::evaluate(
-			    item.expression.get(), record, nullptr, params));
-		} else {
-			values.emplace_back(); // NULL
-		}
-	}
-	return values;
 }
 
 } // namespace graph::query::execution::operators

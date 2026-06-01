@@ -277,6 +277,42 @@ TEST_F(AggregateOperatorTest, GroupedCount_ByValue) {
 	op->close();
 }
 
+TEST_F(AggregateOperatorTest, GroupedCount_DistinguishesTypedKeysWithoutStringifying) {
+	Record r1, r2;
+	r1.setValue("group", PropertyValue(int64_t{1}));
+	r2.setValue("group", PropertyValue(std::string("1")));
+
+	auto mock = std::make_unique<AggMockOperator>(std::vector<RecordBatch>{{r1, r2}});
+
+	std::vector<AggregateItem> aggs;
+	aggs.emplace_back(AggregateFunctionType::AGG_COUNT, nullptr, "cnt");
+
+	std::vector<GroupByItem> groupBy;
+	groupBy.emplace_back(std::make_shared<VariableReferenceExpression>("group"), "group");
+	auto op = std::make_unique<AggregateOperator>(std::move(mock), std::move(aggs), std::move(groupBy));
+	op->open();
+
+	auto batch = op->next();
+	ASSERT_TRUE(batch.has_value());
+	ASSERT_EQ(batch->size(), 2UL);
+
+	bool sawInteger = false;
+	bool sawString = false;
+	for (const auto &record : *batch) {
+		auto key = record.getValue("group");
+		auto count = record.getValue("cnt");
+		ASSERT_TRUE(key.has_value());
+		ASSERT_TRUE(count.has_value());
+		EXPECT_EQ(std::get<int64_t>(count->getVariant()), 1);
+		sawInteger = sawInteger || key->getType() == PropertyType::INTEGER;
+		sawString = sawString || key->getType() == PropertyType::STRING;
+	}
+	EXPECT_TRUE(sawInteger);
+	EXPECT_TRUE(sawString);
+
+	op->close();
+}
+
 TEST_F(AggregateOperatorTest, GroupedCount_ByNode) {
 	Record r1, r2;
 	Node node1(1, 1);
@@ -410,6 +446,23 @@ TEST_F(AggregateOperatorTest, ToString_MultipleAggregates) {
 	EXPECT_TRUE(str.find("min(") != std::string::npos);
 	EXPECT_TRUE(str.find("max(") != std::string::npos);
 	EXPECT_TRUE(str.find("collect(") != std::string::npos);
+}
+
+TEST_F(AggregateOperatorTest, ToString_StatisticalAggregates) {
+	auto mock = std::make_unique<AggMockOperator>();
+	auto expr = std::make_shared<VariableReferenceExpression>("x");
+	std::vector<AggregateItem> aggs;
+	aggs.emplace_back(AggregateFunctionType::AGG_STDEV, expr, "sd");
+	aggs.emplace_back(AggregateFunctionType::AGG_STDEVP, expr, "sdp");
+	aggs.emplace_back(AggregateFunctionType::AGG_PERCENTILE_DISC, expr, "pd");
+	aggs.emplace_back(AggregateFunctionType::AGG_PERCENTILE_CONT, expr, "pc");
+
+	auto op = std::make_unique<AggregateOperator>(std::move(mock), std::move(aggs));
+	std::string str = op->toString();
+	EXPECT_TRUE(str.find("stDev(") != std::string::npos);
+	EXPECT_TRUE(str.find("stDevP(") != std::string::npos);
+	EXPECT_TRUE(str.find("percentileDisc(") != std::string::npos);
+	EXPECT_TRUE(str.find("percentileCont(") != std::string::npos);
 }
 
 // ============================================================================

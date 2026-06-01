@@ -23,11 +23,11 @@
 #include "graph/core/PropertyTypes.hpp"
 #include "graph/query/expressions/Expression.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
+#include "graph/query/execution/TypedDistinctSet.hpp"
 #include <algorithm>
 #include <cmath>
 #include <memory>
 #include <string>
-#include <unordered_set>
 #include <variant>
 #include <vector>
 
@@ -346,7 +346,7 @@ class CountDistinctAccumulator : public AggregateAccumulator {
 public:
 	void update(const PropertyValue& value) override {
 		if (!graph::query::expressions::EvaluationContext::isNull(value)) {
-			seen_.insert(value.toString());
+			seen_.insert(value);
 		}
 	}
 
@@ -365,7 +365,7 @@ public:
 	}
 
 private:
-	std::unordered_set<std::string> seen_;
+	TypedDistinctSet seen_;
 };
 
 /**
@@ -375,9 +375,7 @@ private:
 class CollectDistinctAccumulator : public AggregateAccumulator {
 public:
 	void update(const PropertyValue& value) override {
-		std::string key = value.toString();
-		if (seen_.find(key) == seen_.end()) {
-			seen_.insert(key);
+		if (seen_.insert(value)) {
 			values_.push_back(value);
 		}
 	}
@@ -399,7 +397,7 @@ public:
 	}
 
 private:
-	std::unordered_set<std::string> seen_;
+	TypedDistinctSet seen_;
 	std::vector<PropertyValue> values_;
 };
 

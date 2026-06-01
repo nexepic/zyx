@@ -330,7 +330,8 @@ namespace graph {
 	 */
 	struct PropertyValueHash {
 		size_t operator()(const PropertyValue &value) const {
-			return std::visit(
+			size_t seed = value.getVariant().index();
+			const size_t valueHash = std::visit(
 				[](const auto &arg) -> size_t {
 					using T = std::decay_t<decltype(arg)>;
 					if constexpr (std::is_same_v<T, std::monostate>) {
@@ -356,11 +357,24 @@ namespace graph {
 							seed ^= std::hash<std::string>{}(k) ^ PropertyValueHash{}(v);
 						}
 						return seed;
+					} else if constexpr (std::is_same_v<T, TemporalDate>) {
+						return std::hash<int32_t>{}(arg.epochDays);
+					} else if constexpr (std::is_same_v<T, TemporalDateTime>) {
+						return std::hash<int64_t>{}(arg.epochMillis);
+					} else if constexpr (std::is_same_v<T, TemporalDuration>) {
+						size_t durationSeed = std::hash<int64_t>{}(arg.months);
+						durationSeed ^= std::hash<int64_t>{}(arg.days) + 0x9e3779b9 +
+						                (durationSeed << 6) + (durationSeed >> 2);
+						durationSeed ^= std::hash<int64_t>{}(arg.nanos) + 0x9e3779b9 +
+						                (durationSeed << 6) + (durationSeed >> 2);
+						return durationSeed;
 					} else {
 						return 0;
 					}
 				},
 				value.getVariant());
+			seed ^= valueHash + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+			return seed;
 		}
 	};
 

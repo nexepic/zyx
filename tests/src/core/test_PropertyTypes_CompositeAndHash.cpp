@@ -45,8 +45,15 @@ TEST(PropertyTypesHashTest, PropertyValueHashCoversBoolDoubleAndVector) {
 
 	EXPECT_EQ(hasher(PropertyValue(true)), hasher(PropertyValue(true)));
 	EXPECT_EQ(hasher(PropertyValue(3.5)), hasher(PropertyValue(3.5)));
+	EXPECT_NE(hasher(PropertyValue(int64_t{1})), hasher(PropertyValue(std::string("1"))));
 
 	std::vector<PropertyValue> v1{PropertyValue(true), PropertyValue(3.5), PropertyValue(int64_t(7))};
 	std::vector<PropertyValue> v2{PropertyValue(true), PropertyValue(3.5), PropertyValue(int64_t(7))};
 	EXPECT_EQ(hasher(PropertyValue(v1)), hasher(PropertyValue(v2)));
+
+	EXPECT_EQ(hasher(PropertyValue(graph::TemporalDate{10})), hasher(PropertyValue(graph::TemporalDate{10})));
+	EXPECT_EQ(hasher(PropertyValue(graph::TemporalDateTime{1000})),
+	          hasher(PropertyValue(graph::TemporalDateTime{1000})));
+	EXPECT_EQ(hasher(PropertyValue(graph::TemporalDuration{1, 2, 3})),
+	          hasher(PropertyValue(graph::TemporalDuration{1, 2, 3})));
 }

@@ -471,6 +471,14 @@ TEST_F(CountDistinctAccumulatorTest, NullUpdateSkipped) {
 	EXPECT_EQ(std::get<int64_t>(acc->getResult().getVariant()), 1);
 }
 
+TEST_F(CountDistinctAccumulatorTest, DistinguishesValuesWithoutStringifying) {
+	auto acc = createAccumulator(AggregateFunctionType::AGG_COUNT, true);
+	acc->update(PropertyValue(int64_t(1)));
+	acc->update(PropertyValue(std::string("1")));
+	acc->update(PropertyValue(int64_t(1)));
+	EXPECT_EQ(std::get<int64_t>(acc->getResult().getVariant()), 2);
+}
+
 // ============================================================================
 // CollectDistinctAccumulator: reset(), clone()
 // ============================================================================
@@ -494,6 +502,17 @@ TEST_F(CollectDistinctAccumulatorTest, ClonePreservesState) {
 	auto cloned = acc->clone();
 	auto list = std::get<std::vector<PropertyValue>>(cloned->getResult().getVariant());
 	EXPECT_EQ(list.size(), 2u);
+}
+
+TEST_F(CollectDistinctAccumulatorTest, KeepsTypedDistinctValuesWithSameText) {
+	auto acc = createAccumulator(AggregateFunctionType::AGG_COLLECT, true);
+	acc->update(PropertyValue(int64_t(10)));
+	acc->update(PropertyValue(std::string("10")));
+
+	auto list = std::get<std::vector<PropertyValue>>(acc->getResult().getVariant());
+	ASSERT_EQ(list.size(), 2u);
+	EXPECT_EQ(list[0].getType(), PropertyType::INTEGER);
+	EXPECT_EQ(list[1].getType(), PropertyType::STRING);
 }
 
 // ============================================================================
