@@ -198,6 +198,29 @@ TEST_F(NodeDistinctCountFastPathOperatorTest, AppliesResidualPropertyPredicatesB
 	EXPECT_EQ(readCount(*batch), 2);
 }
 
+TEST_F(NodeDistinctCountFastPathOperatorTest, DistinguishesTypedValuesWithoutStringifying) {
+	addPerson({{"code", PropertyValue(int64_t{1})}});
+	addPerson({{"code", PropertyValue(std::string("1"))}});
+	addPerson({{"code", PropertyValue(int64_t{1})}});
+	db->getStorage()->flush();
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "n";
+	config.labels = {"Person"};
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+	requirements.requiredProperties = {"code"};
+	requirements.countOnly = true;
+
+	NodeDistinctCountFastPathOperator op(dm, im, config, requirements, {}, "code", "count");
+	op.open();
+	auto batch = op.next();
+
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(readCount(*batch), 2);
+}
+
 TEST_F(NodeDistinctCountFastPathOperatorTest, CloseOpenAllowsReExecution) {
 	addPerson({{"country", PropertyValue("CN")}});
 	addPerson({{"country", PropertyValue("US")}});

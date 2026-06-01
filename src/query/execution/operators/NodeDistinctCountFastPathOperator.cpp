@@ -2,12 +2,12 @@
 
 #include <algorithm>
 #include <chrono>
-#include <unordered_set>
 #include <utility>
 
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/QueryContext.hpp"
 #include "graph/query/execution/NodeScanRequirementUtils.hpp"
+#include "graph/query/execution/TypedDistinctSet.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
 
 namespace graph::query::execution::operators {
@@ -44,7 +44,7 @@ namespace graph::query::execution::operators {
 
 		const auto start = Clock::now();
 
-		std::unordered_set<std::string> seen;
+		TypedDistinctSet seen;
 		NodeBatchLoader loader(dm_, threadPool_);
 		const auto requirements = relaxSatisfiedCandidateChecks(requirements_, candidateSet_);
 		for (size_t begin = 0; begin < candidateSet_.ids.size();) {
@@ -67,7 +67,7 @@ namespace graph::query::execution::operators {
 					!column[row].has_value() || expressions::EvaluationContext::isNull(*column[row])) {
 					continue;
 				}
-				seen.insert(column[row]->toString());
+				seen.insert(*column[row]);
 			}
 			begin = end;
 		}

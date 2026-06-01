@@ -109,9 +109,26 @@ public:
 	}
 
 private:
+	struct GroupKey {
+		std::vector<PropertyValue> values;
+
+		bool operator==(const GroupKey &other) const {
+			return values == other.values;
+		}
+	};
+
+	struct GroupKeyHash {
+		size_t operator()(const GroupKey &key) const {
+			size_t seed = key.values.size();
+			for (const auto &value : key.values) {
+				seed ^= PropertyValueHash{}(value) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+			}
+			return seed;
+		}
+	};
+
 	struct GroupData {
 		std::vector<std::unique_ptr<AggregateAccumulator>> accumulators;
-		std::vector<PropertyValue> keyValues; // Actual values for group-by keys
 	};
 
 	std::unique_ptr<PhysicalOperator> child_;
@@ -119,14 +136,13 @@ private:
 	std::vector<GroupByItem> groupByItems_;
 	storage::DataManager *dataManager_ = nullptr;
 	std::vector<std::unique_ptr<AggregateAccumulator>> accumulators_;
-	std::unordered_map<std::string, GroupData> groups_;
+	std::unordered_map<GroupKey, GroupData, GroupKeyHash> groups_;
 	bool emitted_ = false;
 
 	void updateAccumulators(const Record& record,
 	                       std::vector<std::unique_ptr<AggregateAccumulator>>& accums);
 	void updateAccumulators(const Record& record);
-	std::string computeGroupKey(const Record& record);
-	std::vector<PropertyValue> evaluateGroupKeyValues(const Record& record);
+	GroupKey evaluateGroupKey(const Record& record);
 };
 
 } // namespace graph::query::execution::operators
