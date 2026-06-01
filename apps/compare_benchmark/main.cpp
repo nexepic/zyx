@@ -557,6 +557,9 @@ namespace {
 			});
 			runMeasured(options, "aggregation_group_by",
 						[&]() { return scalarInt(db.execute("MATCH (u:User) RETURN count(DISTINCT u.country)")); });
+			runMeasured(options, "aggregation_count_by_group", [&]() {
+				return rowCount([&]() { return db.execute("MATCH (u:User) RETURN u.country, count(*)"); });
+			});
 			runMeasured(options, "topk_property_sort", [&]() {
 				return rowCount(
 						[&]() { return db.execute("MATCH (u:User) RETURN u.id ORDER BY u.score DESC LIMIT 100"); });

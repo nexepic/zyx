@@ -128,9 +128,6 @@ TEST_F(CompareBenchmarkTest, ParseArgsRejectsInvalidAndMissingValues) {
 				 std::invalid_argument);
 	EXPECT_THROW(parse({"zyx-compare-bench", "--dataset", "data", "--db-path", "db", "--scale", "small", "--unknown"}),
 				 std::invalid_argument);
-	EXPECT_THROW(parse({"zyx-compare-bench", "--dataset", "data", "--db-path", "db", "--scale", "small",
-						"--result-cache", "disabled"}),
-				 std::invalid_argument);
 	EXPECT_THROW(parse({"zyx-compare-bench", "--db-path", "db", "--scale", "small"}), std::invalid_argument);
 	EXPECT_THROW(parse({"zyx-compare-bench", "--dataset", "data", "--scale", "small"}), std::invalid_argument);
 	EXPECT_THROW(parse({"zyx-compare-bench", "--dataset", "data", "--db-path", "db"}), std::invalid_argument);

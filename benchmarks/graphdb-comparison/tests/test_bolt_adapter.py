@@ -271,6 +271,8 @@ def test_bolt_diagnostic_workload_methods_issue_expected_queries(tmp_path: Path)
     assert adapter.relationship_type_scan() == 7
     assert adapter.relationship_property_filter() == 7
     assert adapter.aggregation_group_by() == 7
+    driver.rows = [{"country": "CN", "count": 2}, {"country": "US", "count": 1}]
+    assert adapter.aggregation_count_by_group() == 2
 
     driver.rows = [{"id": "user-000001"}, {"id": "user-000002"}, {"id": "user-000003"}]
     assert adapter.topk_property_sort() == 3
@@ -282,6 +284,7 @@ def test_bolt_diagnostic_workload_methods_issue_expected_queries(tmp_path: Path)
     assert "MATCH ()-[r:FOLLOWS]->() RETURN count(r) AS count" in queries
     assert "MATCH ()-[r:FOLLOWS]->() WHERE r.weight = $weight RETURN count(r) AS count" in queries
     assert "MATCH (u:User) RETURN count(DISTINCT u.country) AS count" in queries
+    assert "MATCH (u:User) RETURN u.country AS country, count(*) AS count" in queries
     assert "MATCH (u:User) RETURN u.id AS id ORDER BY u.score DESC LIMIT 100" in queries
 
 

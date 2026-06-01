@@ -378,4 +378,83 @@ tryBuildNodeDistinctCountFastPathPlan(const logical::LogicalAggregate &aggregate
 	return plan;
 }
 
+std::optional<NodeGroupCountFastPathPlan>
+tryBuildNodeGroupCountFastPathPlan(const logical::LogicalAggregate &aggregate) {
+	return tryBuildNodeGroupCountFastPathPlan(aggregate, nullptr);
+}
+
+std::optional<NodeGroupCountFastPathPlan>
+tryBuildNodeGroupCountFastPathPlan(const logical::LogicalAggregate &aggregate,
+                                   const std::shared_ptr<indexes::IndexManager> &indexManager) {
+	if (aggregate.getGroupByExprs().size() != 1 || aggregate.getAggregations().size() != 1) {
+		return std::nullopt;
+	}
+
+	const auto &agg = aggregate.getAggregations()[0];
+	if (agg.functionName != "count" || agg.distinct) {
+		return std::nullopt;
+	}
+
+	const auto children = aggregate.getChildren();
+	if (children.size() != 1 || children[0] == nullptr ||
+	    children[0]->getType() != logical::LogicalOpType::LOP_NODE_SCAN) {
+		return std::nullopt;
+	}
+
+	const auto *scan = static_cast<const logical::LogicalNodeScan *>(children[0]);
+	if (!isVariableCountArgument(agg.argument, scan->getVariable())) {
+		return std::nullopt;
+	}
+
+	const auto *groupProperty = asPropertyAccess(aggregate.getGroupByExprs()[0], scan->getVariable());
+	if (groupProperty == nullptr) {
+		return std::nullopt;
+	}
+
+	NodeGroupCountFastPathPlan plan;
+	plan.config = chooseCountConfig(*scan, indexManager);
+	plan.groupProperty = groupProperty->getPropertyName();
+	const auto &aliases = aggregate.getGroupByAliases();
+	plan.groupAlias = !aliases.empty() && !aliases[0].empty() ? aliases[0] : aggregate.getGroupByExprs()[0]->toString();
+	plan.outputAlias = agg.alias.empty() ? "count" : agg.alias;
+	plan.requirements.materialization = execution::NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+	plan.requirements.countOnly = true;
+	plan.requirements.needsLabels = true;
+	plan.requirements.needsActiveCheck = true;
+	addRequiredProperty(plan.requirements, plan.groupProperty);
+
+	if (!hasValidIndexConfig(plan.config) || hasOpenRangeBounds(plan.config)) {
+		fallbackToLabelOrFull(plan.config);
+	}
+
+	for (const auto &[key, value] : scan->getPropertyPredicates()) {
+		if (!isEqualityHandledByConfig(plan.config, key)) {
+			addEqualityPredicate(plan, scan->getVariable(), key, value);
+		}
+	}
+
+	for (const auto &range : scan->getRangePredicates()) {
+		if (isRangeHandledByConfig(plan.config, range)) {
+			continue;
+		}
+		if (!addRangePredicates(plan, scan->getVariable(), range)) {
+			return std::nullopt;
+		}
+	}
+
+	if (scan->getCompositeEquality().has_value()) {
+		const auto &composite = scan->getCompositeEquality().value();
+		if (composite.keys.size() != composite.values.size()) {
+			return std::nullopt;
+		}
+		for (size_t i = 0; i < composite.keys.size(); ++i) {
+			if (!isEqualityHandledByConfig(plan.config, composite.keys[i])) {
+				addEqualityPredicate(plan, scan->getVariable(), composite.keys[i], composite.values[i]);
+			}
+		}
+	}
+
+	return plan;
+}
+
 } // namespace graph::query::planner

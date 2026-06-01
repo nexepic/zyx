@@ -117,6 +117,10 @@ class KuzuAdapter(BenchmarkAdapter):
         self._ensure_loaded()
         return self._scalar_int("MATCH (u:User) RETURN COUNT(DISTINCT u.country)")
 
+    def aggregation_count_by_group(self) -> int:
+        self._ensure_loaded()
+        return self._row_count("MATCH (u:User) RETURN u.country, COUNT(*)")
+
     def topk_property_sort(self) -> int:
         self._ensure_loaded()
         return self._row_count("MATCH (u:User) RETURN u.id ORDER BY u.score DESC LIMIT 100")

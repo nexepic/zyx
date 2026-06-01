@@ -185,6 +185,7 @@ def test_kuzu_diagnostic_workload_methods_issue_expected_queries(tmp_path: Path)
     assert adapter.relationship_type_scan() == 1
     assert adapter.relationship_property_filter() == 1
     assert adapter.aggregation_group_by() == 1
+    assert adapter.aggregation_count_by_group() == 1
     assert adapter.topk_property_sort() == 1
 
     assert "MATCH (n) WHERE n.score >= 900 RETURN COUNT(n)" in connection.queries
@@ -192,6 +193,7 @@ def test_kuzu_diagnostic_workload_methods_issue_expected_queries(tmp_path: Path)
     assert "MATCH ()-[r:FOLLOWS]->() RETURN COUNT(r)" in connection.queries
     assert "MATCH ()-[r:FOLLOWS]->() WHERE r.weight = 1 RETURN COUNT(r)" in connection.queries
     assert "MATCH (u:User) RETURN COUNT(DISTINCT u.country)" in connection.queries
+    assert "MATCH (u:User) RETURN u.country, COUNT(*)" in connection.queries
     assert "MATCH (u:User) RETURN u.id ORDER BY u.score DESC LIMIT 100" in connection.queries
 
 

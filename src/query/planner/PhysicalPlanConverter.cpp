@@ -25,6 +25,7 @@
 #include "graph/query/execution/operators/MergeNodeOperator.hpp"
 #include "graph/query/execution/operators/NodeCountFastPathOperator.hpp"
 #include "graph/query/execution/operators/NodeDistinctCountFastPathOperator.hpp"
+#include "graph/query/execution/operators/NodeGroupCountFastPathOperator.hpp"
 #include "graph/query/execution/operators/NodeScanOperator.hpp"
 #include "graph/query/execution/operators/NodeTopKFastPathOperator.hpp"
 #include "graph/query/execution/operators/OptionalMatchOperator.hpp"
@@ -396,6 +397,13 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertAggregate(
 			dm_, im_, std::move(fastPath->config), std::move(fastPath->requirements),
 			std::move(fastPath->predicates), std::move(fastPath->distinctProperty),
 			std::move(fastPath->outputAlias));
+	}
+
+	if (auto fastPath = planner::tryBuildNodeGroupCountFastPathPlan(*agg, im_)) {
+		return std::make_unique<NodeGroupCountFastPathOperator>(
+			dm_, im_, std::move(fastPath->config), std::move(fastPath->requirements),
+			std::move(fastPath->predicates), std::move(fastPath->groupProperty),
+			std::move(fastPath->groupAlias), std::move(fastPath->outputAlias));
 	}
 
 	if (auto fastPath = planner::tryBuildRelationshipCountFastPathPlan(*agg, im_)) {

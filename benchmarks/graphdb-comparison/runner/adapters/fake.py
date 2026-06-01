@@ -88,6 +88,10 @@ class FakeAdapter(BenchmarkAdapter):
         self._ensure_loaded()
         return len({row["country"] for row in self.users})
 
+    def aggregation_count_by_group(self) -> int:
+        self._ensure_loaded()
+        return len({row["country"] for row in self.users})
+
     def topk_property_sort(self) -> int:
         self._ensure_loaded()
         return min(100, len(self.users))
