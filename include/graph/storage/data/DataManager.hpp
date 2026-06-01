@@ -372,6 +372,8 @@ namespace graph::storage {
 		// not query results, and is invalidated alongside dirty storage pages.
 		[[nodiscard]] std::optional<int64_t>
 		countActiveEdgesByTypeFromSegmentStats(int64_t beginId, int64_t endId, int64_t typeId) const;
+		[[nodiscard]] std::optional<RelationshipTypeSegmentStats>
+		cachedRelationshipTypeSegmentStats(uint64_t segmentOffset) const;
 		void invalidateRelationshipSegmentTypeStats(std::span<const uint64_t> segmentOffsets) const;
 		void clearRelationshipSegmentTypeStats() const;
 
@@ -530,6 +532,8 @@ namespace graph::storage {
 
 		[[nodiscard]] std::optional<RelationshipTypeSegmentStats>
 		getRelationshipSegmentTypeStats(uint64_t segmentOffset, const SegmentHeader &header) const;
+		[[nodiscard]] std::optional<RelationshipTypeSegmentStats>
+		getCachedRelationshipSegmentTypeStats(uint64_t segmentOffset, const SegmentHeader &header) const;
 		[[nodiscard]] std::optional<RelationshipTypeSegmentStats>
 		buildRelationshipSegmentTypeStats(uint64_t segmentOffset, const SegmentHeader &header) const;
 		[[nodiscard]] std::optional<int64_t> countActiveEdgesByTypeInSegmentWindow(

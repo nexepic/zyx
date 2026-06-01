@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstring>
+#include <exception>
 #include <map>
 #include <optional>
 #include <sstream>
@@ -2833,19 +2834,8 @@ namespace graph::storage {
 
 	std::optional<RelationshipTypeSegmentStats>
 	DataManager::getRelationshipSegmentTypeStats(uint64_t segmentOffset, const SegmentHeader &header) const {
-		const int64_t expectedEndId = header.used == 0
-			? header.start_id - 1
-			: header.start_id + static_cast<int64_t>(header.used) - 1;
-		{
-			std::shared_lock lock(relationshipSegmentTypeStatsMutex_);
-			auto it = relationshipSegmentTypeStats_.find(segmentOffset);
-			if (it != relationshipSegmentTypeStats_.end() &&
-			    it->second.startId == header.start_id &&
-			    it->second.endId == expectedEndId &&
-			    it->second.used == header.used &&
-			    it->second.inactiveCount == header.inactive_count) {
-				return it->second;
-			}
+		if (auto cached = getCachedRelationshipSegmentTypeStats(segmentOffset, header)) {
+			return cached;
 		}
 
 		auto stats = buildRelationshipSegmentTypeStats(segmentOffset, header);
@@ -2857,6 +2847,40 @@ namespace graph::storage {
 		auto &cached = relationshipSegmentTypeStats_[segmentOffset];
 		cached = std::move(*stats);
 		return cached;
+	}
+
+	std::optional<RelationshipTypeSegmentStats>
+	DataManager::getCachedRelationshipSegmentTypeStats(uint64_t segmentOffset, const SegmentHeader &header) const {
+		const int64_t expectedEndId = header.used == 0
+			? header.start_id - 1
+			: header.start_id + static_cast<int64_t>(header.used) - 1;
+		std::shared_lock lock(relationshipSegmentTypeStatsMutex_);
+		auto it = relationshipSegmentTypeStats_.find(segmentOffset);
+		if (it != relationshipSegmentTypeStats_.end() &&
+		    it->second.startId == header.start_id &&
+		    it->second.endId == expectedEndId &&
+		    it->second.used == header.used &&
+		    it->second.inactiveCount == header.inactive_count) {
+			return it->second;
+		}
+		return std::nullopt;
+	}
+
+	std::optional<RelationshipTypeSegmentStats>
+	DataManager::cachedRelationshipTypeSegmentStats(uint64_t segmentOffset) const {
+		if (segmentOffset == 0) {
+			return std::nullopt;
+		}
+		SegmentHeader header{};
+		try {
+			header = segmentTracker_->getSegmentHeaderCopy(segmentOffset);
+		} catch (const std::exception &) {
+			return std::nullopt;
+		}
+		if (header.data_type != Edge::typeId) {
+			return std::nullopt;
+		}
+		return getCachedRelationshipSegmentTypeStats(segmentOffset, header);
 	}
 
 	std::optional<int64_t> DataManager::countActiveEdgesByTypeInSegmentWindow(

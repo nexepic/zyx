@@ -53,8 +53,9 @@ public:
     void OnTestPartResult(const ::testing::TestPartResult& result) override {
         if (result.failed()) {
             std::stringstream ss;
+            const char *file_name = result.file_name() != nullptr ? result.file_name() : "<unknown>";
             // Bold default color
-            ss << "\033[1m" << result.file_name() << ":" << result.line_number() << "\033[0m\n"
+            ss << "\033[1m" << file_name << ":" << result.line_number() << "\033[0m\n"
                << result.message() << "\n";
             current_test_failures_.push_back(ss.str());
         }
