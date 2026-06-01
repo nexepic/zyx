@@ -771,6 +771,46 @@ TEST_F(DataManagerTest, BulkMatchPropertyEntityPredicatesHandlesScalarTypesWitho
 	EXPECT_TRUE(typeMismatch.matchedRows.empty());
 }
 
+TEST_F(DataManagerTest, BulkVisitPropertyEntityValuesStreamsSelectedKeyWithoutColumnMaterialization) {
+	const int64_t cnPropertyId = addNodeWithPropertyEntity(
+		dataManager,
+		"BulkVisitNode",
+		{{"country", PropertyValue("CN")}, {"age", PropertyValue(int64_t{30})}});
+	const int64_t usPropertyId = addNodeWithPropertyEntity(
+		dataManager,
+		"BulkVisitNode",
+		{{"country", PropertyValue("US")}, {"age", PropertyValue(int64_t{31})}});
+	const int64_t missingPropertyId = addNodeWithPropertyEntity(
+		dataManager,
+		"BulkVisitNode",
+		{{"age", PropertyValue(int64_t{32})}});
+	ASSERT_NE(cnPropertyId, 0);
+	ASSERT_NE(usPropertyId, 0);
+	ASSERT_NE(missingPropertyId, 0);
+
+	simulateSave();
+	dataManager->clearCache();
+
+	std::map<size_t, std::string> valuesByRow;
+	const size_t visited = dataManager->bulkVisitPropertyEntityValues(
+		{usPropertyId, cnPropertyId, missingPropertyId, cnPropertyId, 0},
+		{2, 0, 1, 3, 4},
+		5,
+		"country",
+		[&](size_t row, const PropertyValue &value) {
+			valuesByRow[row] = std::get<std::string>(value.getVariant());
+		},
+		nullptr);
+
+	EXPECT_EQ(visited, 3U);
+	ASSERT_EQ(valuesByRow.size(), 3U);
+	EXPECT_EQ(valuesByRow[0], "CN");
+	EXPECT_EQ(valuesByRow[2], "US");
+	EXPECT_EQ(valuesByRow[3], "CN");
+	EXPECT_FALSE(valuesByRow.contains(1));
+	EXPECT_FALSE(valuesByRow.contains(4));
+}
+
 TEST_F(DataManagerTest, BulkMatchPropertyEntityPredicatesHandlesStructuredAndNullValues) {
 	std::vector<PropertyValue> expectedList{PropertyValue(int64_t(1)), PropertyValue("two")};
 	PropertyValue::MapType expectedMap;

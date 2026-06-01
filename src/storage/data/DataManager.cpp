@@ -442,6 +442,45 @@ namespace graph::storage {
 			return true;
 		}
 
+		std::optional<size_t> visitSelectedPropertyValue(const char *buf,
+														 const std::string &requestedKey,
+														 const std::vector<PropertyEntityRowRef> &refs,
+														 size_t refBegin,
+														 size_t refEnd,
+														 const PropertyEntityValueVisitor &visitor) {
+			const char *cursor = buf;
+			const char *end = buf + Property::TOTAL_PROPERTY_SIZE;
+
+			auto header = readActivePropertyRecordHeader(cursor, end);
+			if (!header.has_value()) {
+				return std::nullopt;
+			}
+
+			for (uint32_t i = 0; i < header->propertyCount; ++i) {
+				SerializedStringView key;
+				if (!readStringView(cursor, end, key)) { // ZYX_COV_EXCL_LINE
+					return std::nullopt;
+				}
+
+				if (!stringViewEquals(key, requestedKey)) {
+					if (!skipPropertyValue(cursor, end)) { // ZYX_COV_EXCL_LINE
+						return std::nullopt;
+					}
+					continue;
+				}
+
+				auto value = readSerializedPropertyValue(cursor, end);
+				if (!value.has_value()) { // ZYX_COV_EXCL_LINE
+					return std::nullopt;
+				}
+				for (size_t ref = refBegin; ref < refEnd; ++ref) {
+					visitor(refs[ref].row, *value);
+				}
+				return refEnd - refBegin;
+			}
+			return size_t{0};
+		}
+
 		std::optional<bool> serializedPropertyValueEquals(const char *&cursor, const char *end,
 														  const PropertyValue &expected) {
 			const char *valueStart = cursor;
@@ -1347,6 +1386,136 @@ namespace graph::storage {
 		}
 
 		return loadedRows;
+	}
+
+	size_t DataManager::bulkVisitPropertyEntityValues(const std::vector<int64_t> &ids,
+													  const std::vector<size_t> &rows,
+													  size_t rowCount,
+													  const std::string &key,
+													  const PropertyEntityValueVisitor &visitor,
+													  concurrent::ThreadPool *pool) const {
+		(void) pool;
+		if (ids.empty() || rows.size() != ids.size() || rowCount == 0 || key.empty() || !visitor ||
+			!hasPreadSupport()) {
+			return 0;
+		}
+
+		std::vector<PropertyEntityRowRef> refs;
+		refs.reserve(ids.size());
+		std::vector<uint8_t> rowSeen(rowCount, 0);
+		for (size_t i = 0; i < ids.size(); ++i) {
+			if (ids[i] != 0 && rows[i] < rowCount && rowSeen[rows[i]] == 0) {
+				rowSeen[rows[i]] = 1;
+				refs.push_back({ids[i], rows[i]});
+			}
+		}
+		if (refs.empty()) {
+			return 0;
+		}
+
+		auto refLess = [](const PropertyEntityRowRef &lhs, const PropertyEntityRowRef &rhs) {
+			if (lhs.id != rhs.id) {
+				return lhs.id < rhs.id;
+			}
+			return lhs.row < rhs.row;
+		};
+		if (!std::is_sorted(refs.begin(), refs.end(), refLess)) {
+			std::sort(refs.begin(), refs.end(), refLess);
+		}
+
+		std::vector<int64_t> sortedIds;
+		std::vector<std::pair<size_t, size_t>> refRanges;
+		sortedIds.reserve(refs.size());
+		refRanges.reserve(refs.size());
+		for (size_t begin = 0; begin < refs.size();) {
+			size_t end = begin + 1;
+			while (end < refs.size() && refs[end].id == refs[begin].id) {
+				++end;
+			}
+			sortedIds.push_back(refs[begin].id);
+			refRanges.emplace_back(begin, end);
+			begin = end;
+		}
+
+		const auto &segIndex = segmentIndexManager_->getPropertySegmentIndex();
+		constexpr size_t entitySize = Property::getTotalSize();
+		const auto work = collectPropertyEntitySegmentWork(sortedIds, segIndex);
+		if (work.empty()) {
+			return 0;
+		}
+
+		size_t visited = 0;
+		auto scanPropertyWork = [&](const PropertyEntitySegmentWork &w,
+									const SegmentHeader &header,
+									const char *dataBuf) {
+			for (size_t i = w.idBegin; i < w.idEnd; ++i) {
+				const int64_t id = sortedIds[i];
+				const auto slot = static_cast<uint32_t>(id - header.start_id);
+				if (slot >= header.used) {
+					continue;
+				}
+				const char *entityBuffer = dataBuf + slot * entitySize;
+				if (readSerializedPropertyId(entityBuffer) != id) {
+					continue;
+				}
+				const auto [refBegin, refEnd] = refRanges[i];
+				auto visitCount = visitSelectedPropertyValue(entityBuffer, key, refs, refBegin, refEnd, visitor);
+				if (visitCount.has_value()) {
+					visited += *visitCount;
+				}
+			}
+		};
+
+		const auto workSegIndices = collectPropertyEntityWorkSegmentIndices(work);
+		auto groups = buildCoalescedGroups(workSegIndices, segIndex);
+		for (const auto &group : groups) {
+			if (group.segCount == 1) {
+				const size_t wi = group.memberIndices.front();
+				const auto &w = work[wi];
+				const auto &seg = segIndex[w.segmentIndex];
+				SegmentHeader header = segmentTracker_->getSegmentHeaderCopy(seg.segmentOffset);
+				if (header.used == 0) {
+					continue;
+				}
+
+				const size_t dataBytes = static_cast<size_t>(header.used) * entitySize;
+				std::vector<char> buf(dataBytes);
+				const auto dataOffset = static_cast<int64_t>(seg.segmentOffset + sizeof(SegmentHeader));
+				const ssize_t n = preadBytes(buf.data(), dataBytes, dataOffset);
+				if (n < static_cast<ssize_t>(dataBytes)) {
+					continue;
+				}
+				scanPropertyWork(w, header, buf.data());
+				continue;
+			}
+
+			for (size_t chunkBegin = 0; chunkBegin < group.memberIndices.size();
+				 chunkBegin += kMaxCoalescedPropertyReadSegments) {
+				const size_t chunkSegments =
+						std::min(kMaxCoalescedPropertyReadSegments, group.memberIndices.size() - chunkBegin);
+				const size_t totalBytes = chunkSegments * TOTAL_SEGMENT_SIZE;
+				std::vector<char> groupBuf(totalBytes);
+				const auto groupOffset = static_cast<int64_t>(group.startOffset + chunkBegin * TOTAL_SEGMENT_SIZE);
+				const ssize_t n = preadBytes(groupBuf.data(), totalBytes, groupOffset);
+				if (n < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
+					continue;
+				}
+
+				for (size_t member = 0; member < chunkSegments; ++member) {
+					const size_t wi = group.memberIndices[chunkBegin + member];
+					const auto &w = work[wi];
+					const size_t bufferOffset = member * TOTAL_SEGMENT_SIZE;
+					SegmentHeader header;
+					std::memcpy(&header, groupBuf.data() + bufferOffset, sizeof(SegmentHeader));
+					if (header.used == 0) {
+						continue;
+					}
+					const char *dataBuf = groupBuf.data() + bufferOffset + sizeof(SegmentHeader);
+					scanPropertyWork(w, header, dataBuf);
+				}
+			}
+		}
+		return visited;
 	}
 
 	PropertyEntityPredicateMatchResult DataManager::bulkMatchPropertyEntityPredicates(
