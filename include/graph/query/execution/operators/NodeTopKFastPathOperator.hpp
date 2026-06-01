@@ -11,6 +11,7 @@
 #include "graph/query/execution/NodeBatchLoader.hpp"
 #include "graph/query/execution/NodeCandidateSource.hpp"
 #include "graph/query/execution/PhysicalOperator.hpp"
+#include "graph/query/execution/TypedValueKey.hpp"
 #include "graph/query/execution/VectorizedPredicate.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 
@@ -40,6 +41,7 @@ namespace graph::query::execution::operators {
 		struct Row {
 			int64_t nodeId = 0;
 			PropertyValue sortKey;
+			TypedOrderKey orderKey;
 			std::vector<PropertyValue> values;
 		};
 
@@ -58,9 +60,12 @@ namespace graph::query::execution::operators {
 		bool built_ = false;
 
 		void buildTopK();
+		[[nodiscard]] bool tryBuildTopKFromMetadata(std::vector<Row> &heap) const;
 		[[nodiscard]] NodeScanRequirements makeSelectionRequirements() const;
+		void offerTopK(std::vector<Row> &heap, Row candidate) const;
 		void loadProjectionValues(std::vector<Row> &rows) const;
 		[[nodiscard]] bool comesBefore(const PropertyValue &left, const PropertyValue &right) const;
+		[[nodiscard]] bool comesBefore(const TypedOrderKey &left, const TypedOrderKey &right) const;
 		[[nodiscard]] Record makeRecord(const Row &row) const;
 		[[nodiscard]] static size_t normalizeLimit(int64_t limit);
 	};

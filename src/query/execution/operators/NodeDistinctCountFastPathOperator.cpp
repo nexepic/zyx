@@ -7,6 +7,7 @@
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/QueryContext.hpp"
 #include "graph/query/execution/NodeMetadataColumnLoader.hpp"
+#include "graph/query/execution/NodeMetadataFilter.hpp"
 #include "graph/query/execution/NodeScanRequirementUtils.hpp"
 #include "graph/query/execution/TypedDistinctSet.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
@@ -21,30 +22,6 @@ namespace graph::query::execution::operators {
 					std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count());
 		}
 
-		std::vector<int64_t> resolveLabelIds(const std::shared_ptr<storage::DataManager> &dm,
-											 const NodeScanConfig &config,
-											 const NodeScanRequirements &requirements) {
-			std::vector<int64_t> labelIds;
-			if (!requirements.needsLabels) {
-				return labelIds;
-			}
-			labelIds.reserve(config.labels.size());
-			for (const auto &label : config.labels) {
-				const int64_t labelId = dm->resolveTokenId(label);
-				labelIds.push_back(labelId == 0 ? -1 : labelId);
-			}
-			return labelIds;
-		}
-
-		bool rowMatchesLabels(const NodeMetadataBatch &batch, size_t row, const std::vector<int64_t> &labelIds) {
-			for (const int64_t labelId : labelIds) {
-				if (!batch.hasLabelId(row, labelId)) {
-					return false;
-				}
-			}
-			return true;
-		}
-
 		std::optional<size_t> countDistinctFromMetadata(const std::shared_ptr<storage::DataManager> &dm,
 														const NodeCandidateSet &candidateSet,
 														const NodeScanConfig &config,
@@ -54,7 +31,7 @@ namespace graph::query::execution::operators {
 														concurrent::ThreadPool *threadPool,
 														const QueryContext *queryContext) {
 			const auto requirements = relaxSatisfiedCandidateChecks(inputRequirements, candidateSet);
-			const auto labelIds = resolveLabelIds(dm, config, requirements);
+			const NodeMetadataRowFilter rowFilter(dm, config, requirements);
 			NodeMetadataColumnLoader metadataLoader(dm);
 
 			static constexpr size_t kMetadataDistinctBatchSize = 65536;
@@ -75,13 +52,7 @@ namespace graph::query::execution::operators {
 				propertyRows.reserve(metadata->size());
 
 				for (size_t row = 0; row < metadata->size(); ++row) {
-					if (!metadata->isValid(row)) {
-						continue;
-					}
-					if (requirements.needsActiveCheck && metadata->active[row] == 0) { // ZYX_COV_EXCL_LINE
-						continue;
-					}
-					if (!labelIds.empty() && !rowMatchesLabels(*metadata, row, labelIds)) {
+					if (!rowFilter.accepts(*metadata, row)) {
 						continue;
 					}
 

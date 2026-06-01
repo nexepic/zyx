@@ -101,6 +101,7 @@ TEST_F(NodeTopKFastPathOperatorTest, ReturnsProjectedRowsInDescendingOrder) {
 	const auto snapshot = debug::PerfTrace::snapshotAndReset();
 	EXPECT_TRUE(snapshot.contains("node_scan.topk"));
 	EXPECT_TRUE(snapshot.contains("node_scan.load_node_metadata"));
+	EXPECT_FALSE(snapshot.contains("node_scan.load_properties"));
 	EXPECT_FALSE(snapshot.contains("node_scan.load_nodes"));
 }
 
@@ -225,7 +226,41 @@ TEST_F(NodeTopKFastPathOperatorTest, RepeatsTopKWithoutResultCache) {
 	const auto snapshot = debug::PerfTrace::snapshotAndReset();
 	EXPECT_TRUE(snapshot.contains("node_scan.topk"));
 	EXPECT_TRUE(snapshot.contains("node_scan.load_node_metadata"));
+	EXPECT_FALSE(snapshot.contains("node_scan.load_properties"));
 	EXPECT_FALSE(snapshot.contains("node_scan.topk_cache"));
+}
+
+TEST_F(NodeTopKFastPathOperatorTest, UsesMetadataSortKeyPathWithoutColumnMaterialization) {
+	for (int64_t i = 0; i < 200; ++i) {
+		addPerson({{"score", PropertyValue(i)}});
+	}
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+	debug::PerfTrace::setEnabled(true);
+	debug::PerfTrace::reset();
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "u";
+	config.labels = {"Person"};
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+	requirements.requiredProperties = {"score"};
+
+	NodeTopKFastPathOperator op(dm, im, config, requirements, {}, {{"score", "score"}}, "score", false, 2);
+	op.open();
+	auto batch = op.next();
+
+	ASSERT_TRUE(batch.has_value());
+	ASSERT_EQ(batch->size(), 2U);
+	EXPECT_EQ(readString((*batch)[0], "score"), "199");
+	EXPECT_EQ(readString((*batch)[1], "score"), "198");
+	const auto snapshot = debug::PerfTrace::snapshotAndReset();
+	EXPECT_TRUE(snapshot.contains("node_scan.topk"));
+	EXPECT_TRUE(snapshot.contains("node_scan.load_node_metadata"));
+	EXPECT_FALSE(snapshot.contains("node_scan.load_properties"));
+	EXPECT_FALSE(snapshot.contains("node_scan.load_property_entities"));
+	EXPECT_FALSE(snapshot.contains("node_scan.load_nodes"));
 }
 
 TEST_F(NodeTopKFastPathOperatorTest, ReturnsMultipleBatchesWhenLimitExceedsDefaultBatch) {
