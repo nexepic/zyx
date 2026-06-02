@@ -27,6 +27,61 @@ namespace graph::query::execution::operators {
 				properties.push_back(property);
 			}
 		}
+
+		TypedOrderKey orderKeyFromScalar(const storage::PropertyEntityScalarValue &value) {
+			switch (value.type) {
+				case PropertyType::NULL_TYPE:
+					return TypedOrderKey::fromNull();
+				case PropertyType::BOOLEAN:
+					return TypedOrderKey::fromBoolean(value.boolValue);
+				case PropertyType::INTEGER:
+					return TypedOrderKey::fromInteger(value.intValue);
+				case PropertyType::DOUBLE:
+					return TypedOrderKey::fromDouble(value.doubleValue);
+				case PropertyType::STRING:
+					return TypedOrderKey::fromString(value.stringValue);
+				case PropertyType::DATE:
+					return TypedOrderKey::fromDateEpochDays(value.intValue);
+				case PropertyType::DATETIME:
+					return TypedOrderKey::fromDateTimeEpochMillis(value.intValue);
+				case PropertyType::DURATION:
+					return TypedOrderKey::fromDuration(value.durationValue);
+				case PropertyType::LIST:
+				case PropertyType::MAP:
+				case PropertyType::COMPOSITE:
+				case PropertyType::UNKNOWN:
+				default:
+					return value.fallbackValue != nullptr ? TypedOrderKey::from(*value.fallbackValue)
+														  : TypedOrderKey::fromNull();
+			}
+		}
+
+		PropertyValue propertyValueFromScalar(const storage::PropertyEntityScalarValue &value) {
+			switch (value.type) {
+				case PropertyType::NULL_TYPE:
+					return PropertyValue();
+				case PropertyType::BOOLEAN:
+					return PropertyValue(value.boolValue);
+				case PropertyType::INTEGER:
+					return PropertyValue(value.intValue);
+				case PropertyType::DOUBLE:
+					return PropertyValue(value.doubleValue);
+				case PropertyType::STRING:
+					return PropertyValue(std::string(value.stringValue));
+				case PropertyType::DATE:
+					return PropertyValue(TemporalDate{static_cast<int32_t>(value.intValue)});
+				case PropertyType::DATETIME:
+					return PropertyValue(TemporalDateTime{value.intValue});
+				case PropertyType::DURATION:
+					return PropertyValue(value.durationValue);
+				case PropertyType::LIST:
+				case PropertyType::MAP:
+				case PropertyType::COMPOSITE:
+				case PropertyType::UNKNOWN:
+				default:
+					return value.fallbackValue != nullptr ? *value.fallbackValue : PropertyValue();
+			}
+		}
 	} // namespace
 
 	NodeTopKFastPathOperator::NodeTopKFastPathOperator(std::shared_ptr<storage::DataManager> dm,
@@ -119,12 +174,12 @@ namespace graph::query::execution::operators {
 						continue;
 					}
 
-				Row candidate;
-				candidate.nodeId = batch.nodeIds[row];
-				candidate.sortKey = sortColumn[row].value_or(PropertyValue());
-				candidate.orderKey = TypedOrderKey::from(candidate.sortKey);
-				offerTopK(heap, std::move(candidate));
-			}
+					Row candidate;
+					candidate.nodeId = batch.nodeIds[row];
+					candidate.sortKey = sortColumn[row].value_or(PropertyValue());
+					candidate.orderKey = TypedOrderKey::from(candidate.sortKey);
+					offerTopK(heap, std::move(candidate));
+				}
 				begin = end;
 			}
 		}
@@ -155,6 +210,9 @@ namespace graph::query::execution::operators {
 		const auto requirements = relaxSatisfiedCandidateChecks(makeSelectionRequirements(), candidateSet_);
 		const NodeMetadataRowFilter rowFilter(dm_, config_, requirements);
 		NodeMetadataColumnLoader metadataLoader(dm_);
+		const bool projectsSortProperty =
+				std::any_of(projections_.begin(), projections_.end(),
+							[&](const auto &projection) { return projection.property == sortProperty_; });
 
 		struct FallbackRow {
 			size_t acceptedRow = 0;
@@ -180,46 +238,48 @@ namespace graph::query::execution::operators {
 
 			const bool visited = metadataLoader.visitBatch(
 					candidateSet_.ids, begin, end, [&](size_t, const NodeMetadataRow &metadata) {
-				if (!rowFilter.accepts(metadata)) {
-					return true;
-				}
+						if (!rowFilter.accepts(metadata)) {
+							return true;
+						}
 
-				const size_t acceptedRow = acceptedNodeIds.size();
-				acceptedNodeIds.push_back(metadata.nodeId);
-				sortKeySeen.push_back(uint8_t{0});
+						const size_t acceptedRow = acceptedNodeIds.size();
+						acceptedNodeIds.push_back(metadata.nodeId);
+						sortKeySeen.push_back(uint8_t{0});
 
-				const int64_t propertyEntityId = metadata.propertyEntityId;
-				const auto storageType = metadata.propertyStorageType;
-				if (storageType == PropertyStorageType::PROPERTY_ENTITY && propertyEntityId != 0) {
-					propertyEntityIds.push_back(propertyEntityId);
-					propertyRows.push_back(acceptedRow);
-				} else if (storageType == PropertyStorageType::BLOB_ENTITY && propertyEntityId != 0) {
-					fallbackRows.push_back({acceptedRow, metadata});
-				}
-				return true;
-			});
+						const int64_t propertyEntityId = metadata.propertyEntityId;
+						const auto storageType = metadata.propertyStorageType;
+						if (storageType == PropertyStorageType::PROPERTY_ENTITY && propertyEntityId != 0) {
+							propertyEntityIds.push_back(propertyEntityId);
+							propertyRows.push_back(acceptedRow);
+						} else if (storageType == PropertyStorageType::BLOB_ENTITY && propertyEntityId != 0) {
+							fallbackRows.push_back({acceptedRow, metadata});
+						}
+						return true;
+					});
 			if (!visited) {
 				return false;
 			}
 
 			if (!propertyEntityIds.empty()) {
-				(void) dm_->bulkVisitPropertyEntityValues(
+				(void) dm_->bulkVisitPropertyEntityScalarValues(
 						propertyEntityIds, propertyRows, acceptedNodeIds.size(), sortProperty_,
-						[&](size_t acceptedRow, const PropertyValue &value) {
+						[&](size_t acceptedRow, const storage::PropertyEntityScalarValue &value) {
 							if (acceptedRow >= acceptedNodeIds.size()) {
 								return;
 							}
 							Row candidate;
 							candidate.nodeId = acceptedNodeIds[acceptedRow];
-							candidate.sortKey = value;
-							candidate.orderKey = TypedOrderKey::from(value);
+							if (projectsSortProperty) {
+								candidate.sortKey = propertyValueFromScalar(value);
+							}
+							candidate.orderKey = orderKeyFromScalar(value);
 							sortKeySeen[acceptedRow] = 1;
 							offerTopK(localHeap, std::move(candidate));
 						},
 						threadPool_);
 			}
 
-			for (const auto &fallback : fallbackRows) {
+			for (const auto &fallback: fallbackRows) {
 				Node node = fallback.metadata.toNode();
 				const auto properties = dm_->getNodePropertiesDirect(node);
 				if (auto it = properties.find(sortProperty_); it != properties.end()) {

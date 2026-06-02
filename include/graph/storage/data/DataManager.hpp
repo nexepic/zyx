@@ -30,6 +30,7 @@
 #include <optional>
 #include <shared_mutex>
 #include <span>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -112,7 +113,18 @@ namespace graph::storage {
 		bool collectMatchedRows = true;
 	};
 
+	struct PropertyEntityScalarValue {
+		PropertyType type = PropertyType::UNKNOWN;
+		bool boolValue = false;
+		int64_t intValue = 0;
+		double doubleValue = 0.0;
+		std::string_view stringValue;
+		TemporalDuration durationValue;
+		const PropertyValue *fallbackValue = nullptr;
+	};
+
 	using PropertyEntityValueVisitor = std::function<void(size_t row, const PropertyValue &value)>;
+	using PropertyEntityScalarValueVisitor = std::function<void(size_t row, const PropertyEntityScalarValue &value)>;
 
 	enum class PropertyEntityPredicateOp { PEP_EQ, PEP_NE, PEP_LT, PEP_LE, PEP_GT, PEP_GE, PEP_RANGE_CLOSED };
 
@@ -131,6 +143,17 @@ namespace graph::storage {
 		uint32_t inactiveCount = 0;
 		int64_t activeCount = 0;
 		std::unordered_map<int64_t, int64_t> activeCountByType;
+		bool hasPropertyCandidates = false;
+		std::vector<int64_t> activePropertyEntityIds;
+		std::vector<int64_t> activeBlobEdgeIds;
+		std::unordered_map<int64_t, std::vector<int64_t>> activePropertyEntityIdsByType;
+		std::unordered_map<int64_t, std::vector<int64_t>> activeBlobEdgeIdsByType;
+	};
+
+	struct RelationshipPropertyCandidateStats {
+		std::vector<int64_t> propertyEntityIds;
+		std::vector<int64_t> fallbackEdgeIds;
+		size_t matchedEdges = 0;
 	};
 
 	struct RelationshipTypeTotalStats {
@@ -230,6 +253,10 @@ namespace graph::storage {
 											 size_t rowCount, const std::string &key,
 											 const PropertyEntityValueVisitor &visitor,
 											 concurrent::ThreadPool *pool = nullptr) const;
+		size_t bulkVisitPropertyEntityScalarValues(const std::vector<int64_t> &ids, const std::vector<size_t> &rows,
+												   size_t rowCount, const std::string &key,
+												   const PropertyEntityScalarValueVisitor &visitor,
+												   concurrent::ThreadPool *pool = nullptr) const;
 		// Evaluate equality predicates directly while scanning Property entities.
 		// This avoids materializing row-aligned columns when the caller only needs
 		// rows matching a filter.
@@ -383,11 +410,9 @@ namespace graph::storage {
 		// Thread-safe read via pread (no locks needed)
 		[[nodiscard]] bool hasPreadSupport() const { return storageIO_ && storageIO_->hasPreadSupport(); }
 		[[nodiscard]] ssize_t preadBytes(void *buf, size_t count, int64_t offset) const;
-		[[nodiscard]] ssize_t preadSegments(
-				void *buf,
-				size_t segmentCount,
-				uint64_t startSegmentOffset,
-				SegmentReadCachePolicy cachePolicy = SegmentReadCachePolicy::SRCP_BYPASS) const;
+		[[nodiscard]] ssize_t
+		preadSegments(void *buf, size_t segmentCount, uint64_t startSegmentOffset,
+					  SegmentReadCachePolicy cachePolicy = SegmentReadCachePolicy::SRCP_BYPASS) const;
 
 		// Loading entities from disk
 		[[nodiscard]] Node loadNodeFromDisk(int64_t id) const;
@@ -402,10 +427,12 @@ namespace graph::storage {
 
 		// Storage-owned relationship metadata cache. It stores per-segment type counts,
 		// not query results, and is invalidated alongside dirty storage pages.
-		[[nodiscard]] std::optional<int64_t>
-		countActiveEdgesByTypeFromSegmentStats(int64_t beginId, int64_t endId, int64_t typeId) const;
+		[[nodiscard]] std::optional<int64_t> countActiveEdgesByTypeFromSegmentStats(int64_t beginId, int64_t endId,
+																					int64_t typeId) const;
 		[[nodiscard]] std::optional<RelationshipTypeSegmentStats>
 		cachedRelationshipTypeSegmentStats(uint64_t segmentOffset) const;
+		[[nodiscard]] std::optional<RelationshipPropertyCandidateStats>
+		collectRelationshipPropertyCandidatesFromSegmentStats(int64_t beginId, int64_t endId, int64_t typeId) const;
 		void invalidateRelationshipSegmentTypeStats(std::span<const uint64_t> segmentOffsets) const;
 		void clearRelationshipSegmentTypeStats() const;
 
@@ -564,23 +591,27 @@ namespace graph::storage {
 														size_t limit) const;
 
 		[[nodiscard]] std::optional<RelationshipTypeSegmentStats>
-		getRelationshipSegmentTypeStats(uint64_t segmentOffset, const SegmentHeader &header) const;
+		getRelationshipSegmentTypeStats(uint64_t segmentOffset, const SegmentHeader &header,
+										bool includePropertyCandidates = false) const;
 		[[nodiscard]] std::optional<RelationshipTypeSegmentStats>
-		getCachedRelationshipSegmentTypeStats(uint64_t segmentOffset, const SegmentHeader &header) const;
+		getCachedRelationshipSegmentTypeStats(uint64_t segmentOffset, const SegmentHeader &header,
+											  bool requirePropertyCandidates = false) const;
 		[[nodiscard]] std::optional<RelationshipTypeSegmentStats>
-		buildRelationshipSegmentTypeStats(uint64_t segmentOffset, const SegmentHeader &header) const;
+		buildRelationshipSegmentTypeStats(uint64_t segmentOffset, const SegmentHeader &header,
+										  bool includePropertyCandidates = false) const;
 		[[nodiscard]] std::optional<RelationshipTypeTotalStats> getRelationshipTypeTotalStats() const;
 		[[nodiscard]] std::optional<RelationshipTypeTotalStats> getCachedRelationshipTypeTotalStats() const;
 		[[nodiscard]] std::optional<RelationshipTypeTotalStats> buildRelationshipTypeTotalStats() const;
-		[[nodiscard]] std::optional<int64_t>
-		countActiveEdgesByTypeFromTotalStats(int64_t beginId, int64_t endId, int64_t typeId) const;
-		[[nodiscard]] std::optional<int64_t> countActiveEdgesByTypeInSegmentWindow(
-				uint64_t segmentOffset, const SegmentHeader &header, int64_t firstId, int64_t lastId,
-				int64_t typeId) const;
+		[[nodiscard]] std::optional<int64_t> countActiveEdgesByTypeFromTotalStats(int64_t beginId, int64_t endId,
+																				  int64_t typeId) const;
+		[[nodiscard]] std::optional<int64_t> countActiveEdgesByTypeInSegmentWindow(uint64_t segmentOffset,
+																				   const SegmentHeader &header,
+																				   int64_t firstId, int64_t lastId,
+																				   int64_t typeId) const;
 		[[nodiscard]] std::optional<bool> persistedEdgeMatchesType(int64_t edgeId, int64_t typeId) const;
-		[[nodiscard]] std::optional<int64_t> applyRelationshipTypeCountOverlay(
-				int64_t baseCount, int64_t beginId, int64_t endId, int64_t typeId,
-				std::span<const DirtyEntityInfo<Edge>> edgeOverlay) const;
+		[[nodiscard]] std::optional<int64_t>
+		applyRelationshipTypeCountOverlay(int64_t baseCount, int64_t beginId, int64_t endId, int64_t typeId,
+										  std::span<const DirtyEntityInfo<Edge>> edgeOverlay) const;
 		[[nodiscard]] std::optional<int64_t> applyRelationshipTypeCountSnapshotOverlay(
 				int64_t baseCount, int64_t beginId, int64_t endId, int64_t typeId,
 				const std::unordered_map<int64_t, DirtyEntityInfo<Edge>> &edgeOverlay) const;

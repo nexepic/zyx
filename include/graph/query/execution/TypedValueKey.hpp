@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <string_view>
 
 #include "graph/core/PropertyTypes.hpp"
 
@@ -46,6 +47,57 @@ namespace graph::query::execution {
 					key.fallbackValue_ = value;
 					break;
 			}
+			return key;
+		}
+
+		static TypedOrderKey fromNull() { return TypedOrderKey{}; }
+
+		static TypedOrderKey fromBoolean(bool value) {
+			TypedOrderKey key;
+			key.variantIndex_ = 1;
+			key.boolValue_ = value;
+			return key;
+		}
+
+		static TypedOrderKey fromInteger(int64_t value) {
+			TypedOrderKey key;
+			key.variantIndex_ = 2;
+			key.intValue_ = value;
+			return key;
+		}
+
+		static TypedOrderKey fromDouble(double value) {
+			TypedOrderKey key;
+			key.variantIndex_ = 3;
+			key.doubleValue_ = value;
+			return key;
+		}
+
+		static TypedOrderKey fromString(std::string_view value) {
+			TypedOrderKey key;
+			key.variantIndex_ = 4;
+			key.stringValue_.assign(value.data(), value.size());
+			return key;
+		}
+
+		static TypedOrderKey fromDateEpochDays(int64_t epochDays) {
+			TypedOrderKey key;
+			key.variantIndex_ = 7;
+			key.intValue_ = epochDays;
+			return key;
+		}
+
+		static TypedOrderKey fromDateTimeEpochMillis(int64_t epochMillis) {
+			TypedOrderKey key;
+			key.variantIndex_ = 8;
+			key.intValue_ = epochMillis;
+			return key;
+		}
+
+		static TypedOrderKey fromDuration(const TemporalDuration &value) {
+			TypedOrderKey key;
+			key.variantIndex_ = 9;
+			key.durationValue_ = value;
 			return key;
 		}
 
