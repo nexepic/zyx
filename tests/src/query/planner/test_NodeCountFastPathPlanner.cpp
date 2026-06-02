@@ -759,6 +759,144 @@ TEST(NodeCountFastPathPlannerTest, OpenRangeWithOnlyUpperBoundFallsBackBeforeApp
 	EXPECT_EQ(plan->predicates[0].op, execution::VectorPredicateOp::VPO_LE);
 }
 
+TEST(NodeCountFastPathPlannerTest, DistinctCountFallsBackFromOpenPreferredRangeAndAddsResidualPredicate) {
+	auto scan = makeScan("n");
+	scan->setPreferredScanType(execution::ScanType::RANGE_SCAN);
+	RangePredicate range;
+	range.key = "age";
+	range.minValue = PropertyValue(int64_t{18});
+	range.minInclusive = false;
+	scan->setRangePredicates({range});
+	LogicalAggregate aggregate(
+			std::move(scan),
+			{},
+			makeAggs("count", std::make_shared<expressions::VariableReferenceExpression>("n", "country"), true));
+
+	auto plan = tryBuildNodeDistinctCountFastPathPlan(aggregate);
+
+	ASSERT_TRUE(plan.has_value());
+	EXPECT_EQ(plan->config.type, execution::ScanType::LABEL_SCAN);
+	ASSERT_EQ(plan->predicates.size(), 1U);
+	EXPECT_EQ(plan->predicates[0].op, execution::VectorPredicateOp::VPO_GT);
+	EXPECT_EQ(plan->requirements.requiredProperties, (std::vector<std::string>{"country", "age"}));
+}
+
+TEST(NodeCountFastPathPlannerTest, DistinctCountAddsCompositeResidualPredicatesWhenNotHandledByIndex) {
+	auto scan = makeScan("n");
+	CompositeEqualityPredicate composite;
+	composite.keys = {"country", "age"};
+	composite.values = {PropertyValue("CN"), PropertyValue(int64_t{30})};
+	scan->setCompositeEquality(std::move(composite));
+	LogicalAggregate aggregate(
+			std::move(scan),
+			{},
+			makeAggs("count", std::make_shared<expressions::VariableReferenceExpression>("n", "city"), true));
+
+	auto plan = tryBuildNodeDistinctCountFastPathPlan(aggregate);
+
+	ASSERT_TRUE(plan.has_value());
+	EXPECT_EQ(plan->config.type, execution::ScanType::FULL_SCAN);
+	EXPECT_EQ(plan->requirements.requiredProperties, (std::vector<std::string>{"city", "country", "age"}));
+	ASSERT_EQ(plan->predicates.size(), 2U);
+	EXPECT_EQ(plan->predicates[0].propertyKey, "country");
+	EXPECT_EQ(plan->predicates[1].propertyKey, "age");
+}
+
+TEST(NodeCountFastPathPlannerTest, GroupCountHandlesFallbackRangesAndCompositePredicates) {
+	std::vector<std::shared_ptr<expressions::Expression>> groups;
+	groups.push_back(std::make_shared<expressions::VariableReferenceExpression>("u", "country"));
+	auto scan = std::make_unique<LogicalNodeScan>(
+			"u", std::vector<std::string>{"User"},
+			std::vector<std::pair<std::string, PropertyValue>>{{"status", PropertyValue("active")}});
+	RangePredicate range;
+	range.key = "age";
+	range.minValue = PropertyValue(int64_t{18});
+	range.maxValue = PropertyValue(int64_t{65});
+	range.minInclusive = true;
+	range.maxInclusive = true;
+	scan->setRangePredicates({range});
+	CompositeEqualityPredicate composite;
+	composite.keys = {"region", "tier"};
+	composite.values = {PropertyValue("APAC"), PropertyValue(int64_t{2})};
+	scan->setCompositeEquality(std::move(composite));
+	LogicalAggregate aggregate(std::move(scan), std::move(groups), makeAggs("count", nullptr, false, "rows"));
+
+	auto plan = tryBuildNodeGroupCountFastPathPlan(aggregate);
+
+	ASSERT_TRUE(plan.has_value());
+	EXPECT_EQ(plan->config.type, execution::ScanType::FULL_SCAN);
+	EXPECT_EQ(plan->requirements.requiredProperties,
+	          (std::vector<std::string>{"country", "status", "age", "region", "tier"}));
+	ASSERT_EQ(plan->predicates.size(), 4U);
+	EXPECT_EQ(plan->predicates[1].op, execution::VectorPredicateOp::VPO_RANGE_CLOSED);
+}
+
+TEST(NodeCountFastPathPlannerTest, GroupCountRejectsMalformedFilterPredicates) {
+	{
+		std::vector<std::shared_ptr<expressions::Expression>> groups;
+		groups.push_back(std::make_shared<expressions::VariableReferenceExpression>("n", "country"));
+		auto scan = makeScan("n");
+		RangePredicate range;
+		range.key = "age";
+		scan->setRangePredicates({range});
+		LogicalAggregate aggregate(std::move(scan), std::move(groups), makeAggs("count", nullptr));
+		EXPECT_FALSE(tryBuildNodeGroupCountFastPathPlan(aggregate).has_value());
+	}
+	{
+		std::vector<std::shared_ptr<expressions::Expression>> groups;
+		groups.push_back(std::make_shared<expressions::VariableReferenceExpression>("n", "country"));
+		auto scan = makeScan("n");
+		CompositeEqualityPredicate composite;
+		composite.keys = {"country", "age"};
+		composite.values = {PropertyValue("CN")};
+		scan->setCompositeEquality(std::move(composite));
+		LogicalAggregate aggregate(std::move(scan), std::move(groups), makeAggs("count", nullptr));
+		EXPECT_FALSE(tryBuildNodeGroupCountFastPathPlan(aggregate).has_value());
+	}
+}
+
+TEST(NodeCountFastPathPlannerTest, GroupCountChoosesAvailableIndexesAndAbsorbsHandledPredicates) {
+	const auto dbPath = fs::temp_directory_path() /
+	                    ("test_group_count_planner_indexes_" + boost::uuids::to_string(boost::uuids::random_generator()()) + ".zyx");
+	Database db(dbPath.string());
+	db.open();
+	auto indexManager = db.getQueryEngine()->getIndexManager();
+	ASSERT_TRUE(indexManager->createIndex("idx_group_status", "node", "User", "status"));
+	ASSERT_TRUE(indexManager->createIndex("idx_group_age", "node", "User", "age"));
+	ASSERT_TRUE(indexManager->createCompositeIndex("idx_group_status_age", "node", "User", {"status", "age"}));
+
+	std::vector<std::shared_ptr<expressions::Expression>> groups;
+	groups.push_back(std::make_shared<expressions::VariableReferenceExpression>("u", "country"));
+	auto propertyScan = std::make_unique<LogicalNodeScan>(
+			"u", std::vector<std::string>{"User"},
+			std::vector<std::pair<std::string, PropertyValue>>{{"status", PropertyValue("active")}});
+	LogicalAggregate propertyAggregate(std::move(propertyScan), groups, makeAggs("count", nullptr, false, "rows"));
+	auto propertyPlan = tryBuildNodeGroupCountFastPathPlan(propertyAggregate, indexManager);
+	ASSERT_TRUE(propertyPlan.has_value());
+	EXPECT_EQ(propertyPlan->config.type, execution::ScanType::PROPERTY_SCAN);
+	EXPECT_TRUE(propertyPlan->predicates.empty());
+
+	auto rangeScan = std::make_unique<LogicalNodeScan>("u", std::vector<std::string>{"User"});
+	rangeScan->setRangePredicates({RangePredicate{"age", PropertyValue(int64_t{18}), PropertyValue(int64_t{65}), true, false}});
+	LogicalAggregate rangeAggregate(std::move(rangeScan), groups, makeAggs("count", nullptr, false, "rows"));
+	auto rangePlan = tryBuildNodeGroupCountFastPathPlan(rangeAggregate, indexManager);
+	ASSERT_TRUE(rangePlan.has_value());
+	EXPECT_EQ(rangePlan->config.type, execution::ScanType::RANGE_SCAN);
+	EXPECT_TRUE(rangePlan->predicates.empty());
+
+	auto compositeScan = std::make_unique<LogicalNodeScan>("u", std::vector<std::string>{"User"});
+	compositeScan->setCompositeEquality({{"status", "age"}, {PropertyValue("active"), PropertyValue(int64_t{30})}});
+	LogicalAggregate compositeAggregate(std::move(compositeScan), groups, makeAggs("count", nullptr, false, "rows"));
+	auto compositePlan = tryBuildNodeGroupCountFastPathPlan(compositeAggregate, indexManager);
+	ASSERT_TRUE(compositePlan.has_value());
+	EXPECT_EQ(compositePlan->config.type, execution::ScanType::COMPOSITE_SCAN);
+	EXPECT_TRUE(compositePlan->predicates.empty());
+
+	db.close();
+	std::error_code ec;
+	fs::remove_all(dbPath, ec);
+}
+
 TEST(NodeCountFastPathPlannerTest, PhysicalPlanConverterUsesFastPathForRecognizedAggregate) {
 	auto scan = makeScan();
 	LogicalAggregate aggregate(std::move(scan), {}, makeAggs());

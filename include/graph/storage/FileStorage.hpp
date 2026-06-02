@@ -153,7 +153,6 @@ namespace graph::storage {
 		std::mutex listenerMutex_;
 
 		std::mutex flushMutex;
-		std::atomic<bool> flushInProgress{false};
 		std::atomic<bool> deleteOperationPerformed{false};
 
 		std::atomic<bool> compactionEnabled_{false};

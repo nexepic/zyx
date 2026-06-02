@@ -21,6 +21,13 @@
 #include <gtest/gtest.h>
 #include <sstream>
 #include <string>
+#include <vector>
+#include "graph/core/Blob.hpp"
+#include "graph/core/Edge.hpp"
+#include "graph/core/Index.hpp"
+#include "graph/core/Node.hpp"
+#include "graph/core/Property.hpp"
+#include "graph/core/State.hpp"
 #include "graph/utils/FixedSizeSerializer.hpp"
 
 namespace graph::utils::test {
@@ -90,6 +97,21 @@ namespace graph::utils::test {
 			obj.data_ = std::move(data);
 			return obj;
 		}
+	};
+
+
+	class PutSerializable {
+	public:
+		explicit PutSerializable(std::string value) : value_(std::move(value)) {}
+
+		void serialize(std::ostream &os) const {
+			for (char ch : value_) {
+				os.put(ch);
+			}
+		}
+
+	private:
+		std::string value_;
 	};
 
 	class FixedSizeSerializerTest : public ::testing::Test {
@@ -265,6 +287,83 @@ namespace graph::utils::test {
 
 		// Verify object
 		EXPECT_EQ(obj, result);
+	}
+
+
+	TEST_F(FixedSizeSerializerTest, SerializeIntoPadsAndThrowsOnOverflow) {
+		TestSerializable obj(7, "xy");
+		const size_t actualSize = getSerializedSize(obj);
+		std::vector<char> padded(actualSize + 4, '?');
+		FixedSizeSerializer::serializeInto(padded.data(), obj, padded.size());
+		EXPECT_TRUE(std::all_of(padded.begin() + static_cast<std::ptrdiff_t>(actualSize), padded.end(),
+		                        [](char ch) { return ch == '\0'; }));
+
+		std::vector<char> exact(actualSize, '?');
+		FixedSizeSerializer::serializeInto(exact.data(), obj, exact.size());
+		std::istringstream input(std::string(exact.begin(), exact.end()));
+		EXPECT_EQ(obj, FixedSizeSerializer::deserializeWithFixedSize<TestSerializable>(input, exact.size()));
+
+		std::vector<char> tooSmall(actualSize - 1, '?');
+		EXPECT_THROW(FixedSizeSerializer::serializeInto(tooSmall.data(), obj, tooSmall.size()), std::runtime_error);
+	}
+
+	TEST_F(FixedSizeSerializerTest, SerializeIntoSupportsSingleCharacterOverflowPath) {
+		std::vector<char> exact(3, '?');
+		FixedSizeSerializer::serializeInto(exact.data(), PutSerializable("abc"), exact.size());
+		EXPECT_EQ(std::string(exact.begin(), exact.end()), "abc");
+
+		std::vector<char> tooSmall(2, '?');
+		EXPECT_THROW(FixedSizeSerializer::serializeInto(tooSmall.data(), PutSerializable("abc"), tooSmall.size()),
+		             std::runtime_error);
+	}
+
+	TEST_F(FixedSizeSerializerTest, FixedBufferStreamBufHandlesZeroWritesAndEofOverflow) {
+		class ExposedBuffer final : public detail::FixedBufferStreamBuf {
+		public:
+			using detail::FixedBufferStreamBuf::FixedBufferStreamBuf;
+			using detail::FixedBufferStreamBuf::overflow;
+		};
+
+		std::vector<char> buffer(4, '?');
+		ExposedBuffer streamBuffer(buffer.data(), buffer.size());
+		std::ostream output(&streamBuffer);
+		output.write("", 0);
+		EXPECT_TRUE(output.good());
+		EXPECT_EQ(streamBuffer.bytesWritten(), 0U);
+		EXPECT_NE(streamBuffer.overflow(std::char_traits<char>::eof()), std::char_traits<char>::eof());
+	}
+
+	TEST_F(FixedSizeSerializerTest, SerializeIntoCoversCoreEntityExactPaddingAndOverflowPaths) {
+		std::vector<graph::Node> nodes{graph::Node(1, 2)};
+		std::vector<graph::Edge> edges{graph::Edge(1, 2, 3, 4)};
+		graph::Property property;
+		property.setId(1);
+		property.setProperties({{"k", graph::PropertyValue(int64_t{7})}});
+		std::vector<graph::Property> properties{property};
+		std::vector<graph::Blob> blobs{graph::Blob(1, "payload")};
+		std::vector<graph::State> states{graph::State(1, "key", "value")};
+		std::vector<graph::Index> indexes{graph::Index(1, graph::Index::NodeType::LEAF, 2)};
+
+		auto exerciseEntity = [&](const auto &entity) {
+			const size_t actualSize = getSerializedSize(entity);
+			std::vector<char> exact(actualSize, '?');
+			FixedSizeSerializer::serializeInto(exact.data(), entity, exact.size());
+
+			std::vector<char> padded(actualSize + 8, '?');
+			FixedSizeSerializer::serializeInto(padded.data(), entity, padded.size());
+			EXPECT_TRUE(std::all_of(padded.begin() + static_cast<std::ptrdiff_t>(actualSize), padded.end(),
+			                        [](char ch) { return ch == '\0'; }));
+
+			std::vector<char> tooSmall(actualSize - 1, '?');
+			EXPECT_THROW(FixedSizeSerializer::serializeInto(tooSmall.data(), entity, tooSmall.size()),
+			             std::runtime_error);
+		};
+		for (const auto &entity : nodes) exerciseEntity(entity);
+		for (const auto &entity : edges) exerciseEntity(entity);
+		for (const auto &entity : properties) exerciseEntity(entity);
+		for (const auto &entity : blobs) exerciseEntity(entity);
+		for (const auto &entity : states) exerciseEntity(entity);
+		for (const auto &entity : indexes) exerciseEntity(entity);
 	}
 
 } // namespace graph::utils::test

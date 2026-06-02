@@ -29,6 +29,38 @@
 
 namespace graph::utils {
 
+	namespace detail {
+		class FixedBufferStreamBuf : public std::streambuf {
+		public:
+			FixedBufferStreamBuf(char *buffer, size_t size) { setp(buffer, buffer + size); }
+
+			[[nodiscard]] size_t bytesWritten() const { return static_cast<size_t>(pptr() - pbase()); }
+
+		protected:
+			std::streamsize xsputn(const char *s, std::streamsize count) override {
+				const auto available = static_cast<std::streamsize>(epptr() - pptr());
+				const auto toWrite = (std::min)(available, count);
+				if (toWrite > 0) {
+					std::memcpy(pptr(), s, static_cast<size_t>(toWrite));
+					pbump(static_cast<int>(toWrite));
+				}
+				return toWrite;
+			}
+
+			int_type overflow(int_type ch) override {
+				if (traits_type::eq_int_type(ch, traits_type::eof())) {
+					return traits_type::not_eof(ch);
+				}
+				if (pptr() == epptr()) {
+					return traits_type::eof();
+				}
+				*pptr() = traits_type::to_char_type(ch);
+				pbump(1);
+				return ch;
+			}
+		};
+	} // namespace detail
+
 	class FixedSizeSerializer {
 	public:
 		template<typename T>
@@ -67,46 +99,12 @@ namespace graph::utils {
 		 *
 		 * Eliminates the intermediate ostringstream/string/vector copies of serializeToBuffer.
 		 * The destination must have at least fixedSize bytes available.
-		 */
-		template<typename T>
-		static void serializeInto(char *dest, const T &obj, size_t fixedSize) {
-			class FixedBufferStreamBuf : public std::streambuf {
-			public:
-				FixedBufferStreamBuf(char *buffer, size_t size) {
-					setp(buffer, buffer + size);
-				}
-
-				[[nodiscard]] size_t bytesWritten() const {
-					return static_cast<size_t>(pptr() - pbase());
-				}
-
-			protected:
-				std::streamsize xsputn(const char *s, std::streamsize count) override {
-					const auto available = static_cast<std::streamsize>(epptr() - pptr());
-					const auto toWrite = (std::min)(available, count);
-					if (toWrite > 0) {
-						std::memcpy(pptr(), s, static_cast<size_t>(toWrite));
-						pbump(static_cast<int>(toWrite));
-					}
-					return toWrite;
-				}
-
-				int_type overflow(int_type ch) override {
-					if (traits_type::eq_int_type(ch, traits_type::eof())) {
-						return traits_type::not_eof(ch);
-					}
-					if (pptr() == epptr()) {
-						return traits_type::eof();
-					}
-					*pptr() = traits_type::to_char_type(ch);
-					pbump(1);
-					return ch;
-				}
-			};
-
-			FixedBufferStreamBuf buffer(dest, fixedSize);
-			std::ostream os(&buffer);
-			obj.serialize(os);
+			 */
+			template<typename T>
+			static void serializeInto(char *dest, const T &obj, size_t fixedSize) {
+				detail::FixedBufferStreamBuf buffer(dest, fixedSize);
+				std::ostream os(&buffer);
+				obj.serialize(os);
 
 			if (!os) {
 				throw std::runtime_error("Object serialized size exceeds allocated fixed size (" +

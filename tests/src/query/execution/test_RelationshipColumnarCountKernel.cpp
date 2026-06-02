@@ -341,3 +341,36 @@ TEST_F(RelationshipColumnarCountKernelTest, CountsGroupedVectorPredicatesByKey) 
 	EXPECT_EQ(stringRange->count, 3);
 	EXPECT_EQ(stringRange->propertyCandidates, 4U);
 }
+
+TEST_F(RelationshipColumnarCountKernelTest, CountsVectorEqualityPredicatesViaEqualityMapFastPath) {
+	int64_t maxEdgeId = 0;
+	maxEdgeId = addRelationshipWithProperties(followsType,
+	                                         {{"weight", PropertyValue(int64_t{7})}, {"kind", PropertyValue("fast")}})
+	                    .getId();
+	maxEdgeId = addRelationshipWithProperties(followsType,
+	                                         {{"weight", PropertyValue(int64_t{7})}, {"kind", PropertyValue("slow")}})
+	                    .getId();
+	for (int i = 0; i < 128; ++i) {
+		maxEdgeId = addRelationship(i % 2 == 0 ? followsType : likesType).getId();
+	}
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+
+	VectorizedPropertyPredicate weight;
+	weight.propertyKey = "weight";
+	weight.op = VectorPredicateOp::VPO_EQ;
+	weight.value = PropertyValue(int64_t{7});
+	VectorizedPropertyPredicate kind;
+	kind.propertyKey = "kind";
+	kind.op = VectorPredicateOp::VPO_EQ;
+	kind.value = PropertyValue("fast");
+
+	RelationshipColumnarCountRequest countRequest = request(maxEdgeId, followsType);
+	countRequest.vectorPredicates = {weight, kind};
+	RelationshipColumnarCountKernel kernel(dm);
+	const auto result = kernel.count(countRequest);
+
+	ASSERT_TRUE(result.has_value());
+	EXPECT_EQ(result->count, 1);
+	EXPECT_EQ(result->propertyCandidates, 2U);
+}

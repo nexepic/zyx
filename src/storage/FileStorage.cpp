@@ -383,10 +383,11 @@ namespace graph::storage {
 		// Acquire lock to ensure atomic operation
 		std::unique_lock<std::mutex> lock(flushMutex, std::try_to_lock);
 
-		// If we couldn't acquire the lock or a flush is already in progress, return
-		if (!lock.owns_lock() || flushInProgress.exchange(true)) {
-			return;
-		}
+			// The mutex is the single reentrancy guard; a reentrant/concurrent flush
+			// returns instead of queueing nested persistence work.
+			if (!lock.owns_lock()) {
+				return;
+			}
 
 		try {
 			// --- NOTIFY LISTENERS ---
@@ -441,9 +442,7 @@ namespace graph::storage {
 			std::cerr << "Unknown exception during flush operation" << std::endl;
 		}
 
-		// Mark flush as complete
-		flushInProgress.store(false);
-	}
+		}
 
 	void FileStorage::clearCache() const { dataManager->clearCache(); }
 

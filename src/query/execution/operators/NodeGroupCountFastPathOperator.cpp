@@ -66,12 +66,15 @@ namespace graph::query::execution::operators {
 					const size_t selectedRow = selectedCount;
 					++selectedCount;
 
-					const auto storageType = metadata.propertyStorageType;
 					const int64_t propertyEntityId = metadata.propertyEntityId;
-					if (storageType == PropertyStorageType::PROPERTY_ENTITY && propertyEntityId != 0) {
+					if (propertyEntityId == 0) {
+						return true;
+					}
+					const auto storageType = metadata.propertyStorageType;
+					if (storageType == PropertyStorageType::PROPERTY_ENTITY) {
 						propertyEntityIds.push_back(propertyEntityId);
 						propertyRows.push_back(selectedRow);
-					} else if (storageType == PropertyStorageType::BLOB_ENTITY && propertyEntityId != 0) {
+					} else if (storageType == PropertyStorageType::BLOB_ENTITY) {
 						fallbackRows.push_back({metadata});
 					}
 					return true;
@@ -81,7 +84,7 @@ namespace graph::query::execution::operators {
 				}
 
 				size_t rowsWithGroupValue = 0;
-				if (dm && !propertyEntityIds.empty()) {
+				if (!propertyEntityIds.empty()) {
 					const auto loadStart = Clock::now();
 					(void) dm->bulkVisitPropertyEntityValues(
 							propertyEntityIds,
@@ -98,7 +101,7 @@ namespace graph::query::execution::operators {
 					addProfile("node_scan.load_property_entities", loadStart);
 				}
 
-				if (dm && !fallbackRows.empty()) {
+				if (!fallbackRows.empty()) {
 					const auto fallbackStart = Clock::now();
 					for (const auto &fallback : fallbackRows) {
 						Node node = fallback.metadata.toNode();
@@ -172,8 +175,9 @@ namespace graph::query::execution::operators {
 
 				auto columnIt = batch.propertyColumns.find(groupProperty_);
 				const auto *column = columnIt == batch.propertyColumns.end() ? nullptr : &columnIt->second;
-				for (size_t row = 0; row < batch.nodeIds.size(); ++row) {
-					if (row >= batch.selected.size() || batch.selected[row] == 0) {
+				const size_t rowCount = std::min(batch.nodeIds.size(), batch.selected.size());
+				for (size_t row = 0; row < rowCount; ++row) {
+					if (batch.selected[row] == 0) {
 						continue;
 					}
 					PropertyValue value;

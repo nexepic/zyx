@@ -86,7 +86,10 @@ namespace graph {
 			return static_cast<PropertyStorageType>(metadata.propertyStorageType);
 		}
 		[[nodiscard]] bool hasPropertyEntity() const {
-			return getPropertyStorageType() != PropertyStorageType::NONE && metadata.propertyEntityId != 0;
+			if (getPropertyStorageType() == PropertyStorageType::NONE) {
+				return false;
+			}
+			return metadata.propertyEntityId != 0;
 		}
 
 		[[nodiscard]] bool isActive() const { return metadata.isActive; }

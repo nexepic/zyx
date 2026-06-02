@@ -500,3 +500,55 @@ TEST(FlushSnapshotTest, NonEmptyStates) {
 	snapshot.states.emplace(1, DirtyEntityInfo<State>(EntityChangeType::CHANGE_ADDED, s));
 	EXPECT_FALSE(snapshot.isEmpty());
 }
+
+TEST(FlushSnapshotViewTest, NullPointersAreEmpty) {
+	FlushSnapshotView view;
+	EXPECT_TRUE(view.isEmpty());
+}
+
+TEST(FlushSnapshotViewTest, EmptyMapsAreEmpty) {
+	DirtyEntityRegistry<Node>::DirtyMap nodes;
+	DirtyEntityRegistry<Edge>::DirtyMap edges;
+	DirtyEntityRegistry<Property>::DirtyMap properties;
+	DirtyEntityRegistry<Blob>::DirtyMap blobs;
+	DirtyEntityRegistry<Index>::DirtyMap indexes;
+	DirtyEntityRegistry<State>::DirtyMap states;
+
+	FlushSnapshotView view{&nodes, &edges, &properties, &blobs, &indexes, &states};
+	EXPECT_TRUE(view.isEmpty());
+}
+
+TEST(FlushSnapshotViewTest, EachEntityMapMakesViewNonEmpty) {
+	Node node;
+	node.setId(1);
+	Edge edge;
+	edge.setId(2);
+	Property property;
+	property.setId(3);
+	Blob blob;
+	blob.setId(4);
+	Index index;
+	index.setId(5);
+	State state;
+	state.setId(6);
+
+	DirtyEntityRegistry<Node>::DirtyMap nodes;
+	nodes.emplace(node.getId(), DirtyEntityInfo<Node>(EntityChangeType::CHANGE_ADDED, node));
+	DirtyEntityRegistry<Edge>::DirtyMap edges;
+	edges.emplace(edge.getId(), DirtyEntityInfo<Edge>(EntityChangeType::CHANGE_ADDED, edge));
+	DirtyEntityRegistry<Property>::DirtyMap properties;
+	properties.emplace(property.getId(), DirtyEntityInfo<Property>(EntityChangeType::CHANGE_ADDED, property));
+	DirtyEntityRegistry<Blob>::DirtyMap blobs;
+	blobs.emplace(blob.getId(), DirtyEntityInfo<Blob>(EntityChangeType::CHANGE_ADDED, blob));
+	DirtyEntityRegistry<Index>::DirtyMap indexes;
+	indexes.emplace(index.getId(), DirtyEntityInfo<Index>(EntityChangeType::CHANGE_ADDED, index));
+	DirtyEntityRegistry<State>::DirtyMap states;
+	states.emplace(state.getId(), DirtyEntityInfo<State>(EntityChangeType::CHANGE_ADDED, state));
+
+	EXPECT_FALSE((FlushSnapshotView{&nodes, nullptr, nullptr, nullptr, nullptr, nullptr}).isEmpty());
+	EXPECT_FALSE((FlushSnapshotView{nullptr, &edges, nullptr, nullptr, nullptr, nullptr}).isEmpty());
+	EXPECT_FALSE((FlushSnapshotView{nullptr, nullptr, &properties, nullptr, nullptr, nullptr}).isEmpty());
+	EXPECT_FALSE((FlushSnapshotView{nullptr, nullptr, nullptr, &blobs, nullptr, nullptr}).isEmpty());
+	EXPECT_FALSE((FlushSnapshotView{nullptr, nullptr, nullptr, nullptr, &indexes, nullptr}).isEmpty());
+	EXPECT_FALSE((FlushSnapshotView{nullptr, nullptr, nullptr, nullptr, nullptr, &states}).isEmpty());
+}

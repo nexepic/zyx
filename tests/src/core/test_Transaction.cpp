@@ -198,6 +198,17 @@ TEST_F(TransactionTest, TransactionContextRecordOperations) {
 	txn.rollback();
 }
 
+TEST_F(TransactionTest, TransactionContextIgnoresEmptyBulkRecords) {
+	graph::storage::TransactionContext ctx;
+	ctx.setActive(42);
+
+	ctx.recordAdds<graph::Node>({});
+	ctx.recordAdds<graph::Edge>({});
+
+	EXPECT_TRUE(ctx.getOps().empty());
+	EXPECT_EQ(ctx.undoLog().size(), 0u);
+}
+
 TEST_F(TransactionTest, HasActiveTransaction) {
 	graph::Database db(testDbPath.string());
 	db.open();

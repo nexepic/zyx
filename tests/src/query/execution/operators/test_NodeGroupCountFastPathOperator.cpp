@@ -119,6 +119,58 @@ TEST_F(NodeGroupCountFastPathOperatorTest, CountsRowsByPropertyFromMetadataValue
 	EXPECT_FALSE(snapshot.contains("node_scan.load_nodes"));
 }
 
+TEST_F(NodeGroupCountFastPathOperatorTest, MetadataPathGroupsRowsWithoutPropertyEntitiesAsNull) {
+	for (int64_t i = 0; i < 4; ++i) {
+		addPerson();
+	}
+	db->getStorage()->flush();
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "n";
+	config.labels = {"Person"};
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+	requirements.requiredProperties = {"country"};
+	requirements.countOnly = true;
+
+	NodeGroupCountFastPathOperator op(dm, im, config, requirements, {}, "country", "country", "count");
+	op.open();
+	auto batch = op.next();
+
+	ASSERT_TRUE(batch.has_value());
+	auto groups = readStringGroups(*batch);
+	EXPECT_EQ(groups.size(), 1U);
+	EXPECT_EQ(groups["<null>"], 4);
+}
+
+TEST_F(NodeGroupCountFastPathOperatorTest, MetadataPathWithAllValuesAvoidsNullBucket) {
+	for (int64_t i = 0; i < 160; ++i) {
+		addPerson({{"country", PropertyValue(i % 2 == 0 ? "CN" : "US")}});
+	}
+	db->getStorage()->flush();
+	debug::PerfTrace::setEnabled(false);
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "n";
+	config.labels = {"Person"};
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+	requirements.requiredProperties = {"country"};
+	requirements.countOnly = true;
+
+	NodeGroupCountFastPathOperator op(dm, im, config, requirements, {}, "country", "country", "count");
+	op.open();
+	auto batch = op.next();
+
+	ASSERT_TRUE(batch.has_value());
+	auto groups = readStringGroups(*batch);
+	EXPECT_EQ(groups.size(), 2U);
+	EXPECT_EQ(groups["CN"], 80);
+	EXPECT_EQ(groups["US"], 80);
+}
+
 TEST_F(NodeGroupCountFastPathOperatorTest, AppliesFallbackPredicatesWhenNeeded) {
 	addPerson({{"country", PropertyValue("CN")}, {"age", PropertyValue(int64_t{40})}});
 	addPerson({{"country", PropertyValue("CN")}, {"age", PropertyValue(int64_t{20})}});
@@ -149,4 +201,80 @@ TEST_F(NodeGroupCountFastPathOperatorTest, AppliesFallbackPredicatesWhenNeeded) 
 	EXPECT_EQ(groups.size(), 2U);
 	EXPECT_EQ(groups["CN"], 1);
 	EXPECT_EQ(groups["US"], 1);
+}
+
+TEST_F(NodeGroupCountFastPathOperatorTest, FallbackPredicateGroupsMissingPropertyAsNull) {
+	for (int64_t i = 0; i < 300; ++i) {
+		addPerson({{"age", PropertyValue(i)}});
+	}
+	db->getStorage()->flush();
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "n";
+	config.labels = {"Person"};
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+	requirements.requiredProperties = {"age"};
+	requirements.countOnly = true;
+
+	VectorizedPropertyPredicate predicate;
+	predicate.variable = "n";
+	predicate.propertyKey = "age";
+	predicate.op = VectorPredicateOp::VPO_GE;
+	predicate.value = PropertyValue(int64_t{0});
+
+	NodeGroupCountFastPathOperator op(dm, im, config, requirements, {predicate}, "missing", "country", "count");
+	op.open();
+	auto batch = op.next();
+
+	ASSERT_TRUE(batch.has_value());
+	auto groups = readStringGroups(*batch);
+	EXPECT_EQ(groups.size(), 1U);
+	EXPECT_EQ(groups["<null>"], 300);
+}
+
+TEST_F(NodeGroupCountFastPathOperatorTest, CountsBlobBackedAndMissingGroupsFromMetadataFallback) {
+	const std::string cn(600, 'c');
+	const std::string us(600, 'u');
+	for (int64_t i = 0; i < 160; ++i) {
+		if (i == 159) {
+			addPerson();
+		} else {
+			addPerson({{"payload", PropertyValue(i % 2 == 0 ? cn : us)}});
+		}
+	}
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+	debug::PerfTrace::setEnabled(true);
+	debug::PerfTrace::reset();
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "n";
+	config.labels = {"Person"};
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+	requirements.requiredProperties = {"payload"};
+	requirements.countOnly = true;
+
+	NodeGroupCountFastPathOperator op(dm, im, config, requirements, {}, "payload", "country", "count");
+	op.open();
+	auto batch = op.next();
+	const auto snapshot = debug::PerfTrace::snapshotAndReset();
+
+	ASSERT_TRUE(batch.has_value());
+	std::unordered_map<std::string, int64_t> groups;
+	for (const auto &record : *batch) {
+		auto value = record.getValue("country");
+		auto count = record.getValue("count");
+		ASSERT_TRUE(value.has_value());
+		ASSERT_TRUE(count.has_value());
+		groups[value->getType() == PropertyType::NULL_TYPE ? "<null>" : std::get<std::string>(value->getVariant())] =
+				std::get<int64_t>(count->getVariant());
+	}
+	EXPECT_EQ(groups[cn], 80);
+	EXPECT_EQ(groups[us], 79);
+	EXPECT_EQ(groups["<null>"], 1);
+	EXPECT_TRUE(snapshot.contains("node_scan.load_properties"));
 }

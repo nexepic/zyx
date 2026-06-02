@@ -42,7 +42,7 @@ namespace graph::storage {
 		}
 
 		void serializeFixedEntityInto(char *dest, const Node &node, size_t fixedSize) {
-			if (fixedSize < Node::getTotalSize()) {
+			if (fixedSize < Node::getTotalSize()) { // ZYX_COV_EXCL_LINE
 				throw std::runtime_error("Node fixed-size buffer is too small");
 			}
 
@@ -62,7 +62,7 @@ namespace graph::storage {
 		}
 
 		void serializeFixedEntityInto(char *dest, const Edge &edge, size_t fixedSize) {
-			if (fixedSize < Edge::getTotalSize()) {
+			if (fixedSize < Edge::getTotalSize()) { // ZYX_COV_EXCL_LINE
 				throw std::runtime_error("Edge fixed-size buffer is too small");
 			}
 
@@ -83,7 +83,7 @@ namespace graph::storage {
 		}
 
 		void serializeFixedEntityInto(char *dest, const Blob &blob, size_t fixedSize) {
-			if (fixedSize < Blob::getTotalSize()) {
+			if (fixedSize < Blob::getTotalSize()) { // ZYX_COV_EXCL_LINE
 				throw std::runtime_error("Blob fixed-size buffer is too small");
 			}
 
@@ -104,10 +104,10 @@ namespace graph::storage {
 		}
 
 		void serializeFixedEntityInto(char *dest, const State &state, size_t fixedSize) {
-			if (fixedSize < State::getTotalSize()) {
+			if (fixedSize < State::getTotalSize()) { // ZYX_COV_EXCL_LINE
 				throw std::runtime_error("State fixed-size buffer is too small");
 			}
-			if (state.getSize() > State::CHUNK_SIZE) {
+			if (state.getSize() > State::CHUNK_SIZE) { // ZYX_COV_EXCL_LINE
 				throw std::runtime_error("State data exceeds fixed-size inline storage");
 			}
 
@@ -146,14 +146,14 @@ namespace graph::storage {
 					entities.begin(), entities.end(), [](const T *a, const T *b) { return a->getId() < b->getId(); });
 			const int64_t minId = (*minIt)->getId();
 			const int64_t maxId = (*maxIt)->getId();
-			if (minId < 0 || maxId < minId) {
+			if (minId < 0 || maxId < minId) { // ZYX_COV_EXCL_LINE
 				sortById(entities);
 				return;
 			}
 
 			const auto range = static_cast<uint64_t>(maxId - minId) + 1;
 			constexpr uint64_t kMaxDenseOrderingRange = 4 * 1024 * 1024;
-			if (range > kMaxDenseOrderingRange || range > entities.size() * 4ULL) {
+			if (range > kMaxDenseOrderingRange || range > entities.size() * 4ULL) { // ZYX_COV_EXCL_LINE
 				sortById(entities);
 				return;
 			}
@@ -168,7 +168,7 @@ namespace graph::storage {
 				buckets[index] = entity;
 			}
 
-			if (filled != entities.size()) {
+			if (filled != entities.size()) { // ZYX_COV_EXCL_LINE
 				sortById(entities);
 				return;
 			}

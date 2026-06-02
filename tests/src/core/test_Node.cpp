@@ -284,3 +284,20 @@ TEST_F(NodeTest, HasPropertyEntityWithNonNoneStorageTypeButZeroId) {
 	EXPECT_NE(node.getPropertyStorageType(), graph::PropertyStorageType::NONE);
 	EXPECT_EQ(node.getPropertyEntityId(), 0);
 }
+
+TEST_F(NodeTest, HasPropertyEntityRequiresStorageTypeAndEntityId) {
+	graph::Node node;
+	auto &meta = node.getMutableMetadata();
+
+	meta.propertyStorageType = static_cast<uint32_t>(graph::PropertyStorageType::NONE);
+	meta.propertyEntityId = 77;
+	EXPECT_FALSE(node.hasPropertyEntity());
+
+	meta.propertyStorageType = static_cast<uint32_t>(graph::PropertyStorageType::PROPERTY_ENTITY);
+	meta.propertyEntityId = 77;
+	EXPECT_TRUE(node.hasPropertyEntity());
+
+	meta.propertyStorageType = static_cast<uint32_t>(graph::PropertyStorageType::NONE);
+	meta.propertyEntityId = 0;
+	EXPECT_FALSE(node.hasPropertyEntity());
+}

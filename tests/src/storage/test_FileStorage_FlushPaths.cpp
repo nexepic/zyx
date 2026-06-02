@@ -75,6 +75,34 @@ TEST_F(FileStorageFlushTest, FlushRemovesExpiredListeners) {
 	db.close();
 }
 
+TEST_F(FileStorageFlushTest, FlushIgnoresReentrantListenerFlush) {
+	Database db(testFilePath.string());
+	db.open();
+	auto storage = db.getStorage();
+	auto dm = storage->getDataManager();
+
+	class ReentrantFlushListener : public IStorageEventListener {
+	public:
+		explicit ReentrantFlushListener(std::shared_ptr<FileStorage> storage) : storage_(std::move(storage)) {}
+		void onStorageFlush() override {
+			++flushCount;
+			storage_->flush();
+		}
+		int flushCount = 0;
+	private:
+		std::shared_ptr<FileStorage> storage_;
+	};
+
+	auto listener = std::make_shared<ReentrantFlushListener>(storage);
+	storage->registerEventListener(listener);
+
+	Node n(0, 0);
+	dm->addNode(n);
+	EXPECT_NO_THROW(storage->flush());
+	EXPECT_EQ(listener->flushCount, 1);
+	db.close();
+}
+
 TEST_F(FileStorageFlushTest, FlushWithCompactionAfterDelete) {
 	Database db(testFilePath.string());
 	db.open();
