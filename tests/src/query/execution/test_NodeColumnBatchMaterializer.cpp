@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "graph/core/Database.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/query/execution/NodeColumnBatch.hpp"
 #include "graph/query/execution/NodeColumnBatchMaterializer.hpp"
 #include "graph/query/execution/NodeScanRequirements.hpp"
@@ -179,4 +180,22 @@ TEST_F(NodeColumnBatchMaterializerTest, PropertyMaterializationIgnoresMissingCol
 	EXPECT_EQ(records[0].getNode("n")->getProperty("age"), PropertyValue(int64_t{101}));
 	EXPECT_FALSE(records[1].getNode("n")->hasProperty("age"));
 	EXPECT_FALSE(records[2].getNode("n")->hasProperty("age"));
+}
+
+TEST_F(NodeColumnBatchMaterializerTest, RecordsPerfTraceWhenEnabled) {
+	const int64_t first = addPerson();
+	NodeColumnBatch batch;
+	batch.nodeIds = {first};
+	batch.selected = {1};
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_ID_ONLY;
+
+	graph::debug::PerfTrace::setEnabled(true);
+	graph::debug::PerfTrace::reset();
+	const auto records = materializeNodeRecords(batch, "n", *dm, requirements);
+	const auto snapshot = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setEnabled(false);
+
+	ASSERT_EQ(records.size(), 1U);
+	EXPECT_TRUE(snapshot.contains("node_scan.materialize"));
 }

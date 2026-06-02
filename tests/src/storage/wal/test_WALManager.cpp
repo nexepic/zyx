@@ -223,6 +223,18 @@ TEST_F(WALManagerTest, WriteRecordWhenNotOpenThrows) {
 	EXPECT_THROW(mgr.writeBegin(1), std::runtime_error);
 }
 
+TEST_F(WALManagerTest, EntityChangeWritesRequireOpenWalAndIgnoreEmptyBatch) {
+	WALManager mgr;
+	const std::vector<uint8_t> payload{0x01, 0x02};
+	EXPECT_THROW(mgr.writeEntityChange(1, 1, 1, 42, payload), std::runtime_error);
+	EXPECT_THROW(mgr.writeEntityChanges(1, {WALEntityChange{1, 1, 42, payload}}), std::runtime_error);
+
+	mgr.open(testDbPath.string());
+	EXPECT_NO_THROW(mgr.writeEntityChanges(1, {}));
+	EXPECT_FALSE(mgr.needsRecovery());
+	mgr.close();
+}
+
 TEST_F(WALManagerTest, GetWALPath) {
 	WALManager mgr;
 	mgr.open(testDbPath.string());

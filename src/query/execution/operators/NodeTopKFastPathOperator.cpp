@@ -246,15 +246,18 @@ namespace graph::query::execution::operators {
 						acceptedNodeIds.push_back(metadata.nodeId);
 						sortKeySeen.push_back(uint8_t{0});
 
-						const int64_t propertyEntityId = metadata.propertyEntityId;
-						const auto storageType = metadata.propertyStorageType;
-						if (storageType == PropertyStorageType::PROPERTY_ENTITY && propertyEntityId != 0) {
-							propertyEntityIds.push_back(propertyEntityId);
-							propertyRows.push_back(acceptedRow);
-						} else if (storageType == PropertyStorageType::BLOB_ENTITY && propertyEntityId != 0) {
-							fallbackRows.push_back({acceptedRow, metadata});
-						}
-						return true;
+							const int64_t propertyEntityId = metadata.propertyEntityId;
+							if (propertyEntityId == 0) {
+								return true;
+							}
+							const auto storageType = metadata.propertyStorageType;
+							if (storageType == PropertyStorageType::PROPERTY_ENTITY) {
+								propertyEntityIds.push_back(propertyEntityId);
+								propertyRows.push_back(acceptedRow);
+							} else if (storageType == PropertyStorageType::BLOB_ENTITY) {
+								fallbackRows.push_back({acceptedRow, metadata});
+							}
+							return true;
 					});
 			if (!visited) {
 				return false;

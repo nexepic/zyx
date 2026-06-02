@@ -9,6 +9,7 @@
 #include "graph/core/Database.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/execution/NodeMetadataColumnLoader.hpp"
+#include "graph/query/execution/NodeMetadataFilter.hpp"
 #include "graph/storage/CommittedSnapshot.hpp"
 #include "graph/storage/data/DirtyEntityInfo.hpp"
 
@@ -260,4 +261,59 @@ TEST_F(NodeMetadataColumnLoaderStorageTest, LoadsInactiveRowsAndRecordsTrace) {
 	EXPECT_EQ(batch->toNode(1).isActive(), false);
 	const auto snapshot = graph::debug::PerfTrace::snapshotAndReset();
 	EXPECT_TRUE(snapshot.contains("node_scan.load_node_metadata"));
+}
+
+TEST_F(NodeMetadataColumnLoaderStorageTest, RowFilterAppliesLabelsActiveAndValidity) {
+	NodeScanConfig config;
+	config.labels = {"User"};
+	NodeScanRequirements requirements;
+	requirements.needsLabels = true;
+	requirements.needsActiveCheck = true;
+	NodeMetadataRowFilter filter(dm, config, requirements);
+
+	NodeMetadataBatch batch;
+	batch.appendDefault();
+	batch.nodeIds[0] = 1;
+	batch.active[0] = 1;
+	batch.labelCounts[0] = 1;
+	batch.labelIds[0][0] = userLabel;
+	EXPECT_TRUE(filter.accepts(batch, 0));
+	EXPECT_FALSE(filter.accepts(batch, 1));
+
+	batch.labelCounts[0] = 1;
+	EXPECT_TRUE(filter.accepts(batch, 0));
+	NodeScanConfig missingConfig;
+	missingConfig.labels = {"Missing"};
+	NodeMetadataRowFilter missingFilter(dm, missingConfig, requirements);
+	EXPECT_FALSE(missingFilter.accepts(batch, 0));
+	batch.active[0] = 0;
+	EXPECT_FALSE(filter.accepts(batch, 0));
+
+	NodeMetadataRow row;
+	row.nodeId = 7;
+	row.active = 1;
+	row.labelCount = 1;
+	row.labelIds[0] = userLabel;
+	EXPECT_TRUE(filter.accepts(row));
+	EXPECT_FALSE(missingFilter.accepts(row));
+	row.active = 0;
+	EXPECT_FALSE(filter.accepts(row));
+	row.active = 1;
+	row.labelIds[0] = 0;
+	EXPECT_FALSE(filter.accepts(row));
+
+	NodeScanRequirements noLabelsOrActive;
+	noLabelsOrActive.needsLabels = false;
+	noLabelsOrActive.needsActiveCheck = false;
+	NodeMetadataRowFilter permissive(nullptr, config, noLabelsOrActive);
+	row.nodeId = 8;
+	row.active = 0;
+	row.labelCount = 0;
+	EXPECT_TRUE(permissive.accepts(row));
+	batch.nodeIds[0] = 2;
+	batch.active[0] = 0;
+	batch.labelCounts[0] = 0;
+	EXPECT_TRUE(permissive.accepts(batch, 0));
+	row.nodeId = 0;
+	EXPECT_FALSE(permissive.accepts(row));
 }

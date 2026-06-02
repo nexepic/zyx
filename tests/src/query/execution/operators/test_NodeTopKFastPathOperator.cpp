@@ -351,3 +351,158 @@ TEST_F(NodeTopKFastPathOperatorTest, CloseOpenAllowsReExecution) {
 	EXPECT_EQ(op.getOutputVariables(), (std::vector<std::string>{"id"}));
 	EXPECT_NE(op.toString().find("NodeTopKFastPath"), std::string::npos);
 }
+
+TEST_F(NodeTopKFastPathOperatorTest, MetadataSortPathHandlesTemporalBooleanAndFallbackScalars) {
+	for (int64_t i = 0; i < 160; ++i) {
+		std::vector<PropertyValue> rankList{PropertyValue(i)};
+		addPerson({{"flag", PropertyValue(i % 2 == 0)},
+		           {"eventDate", PropertyValue(TemporalDate{static_cast<int32_t>(i)})},
+		           {"eventTime", PropertyValue(TemporalDateTime{i})},
+		           {"duration", PropertyValue(TemporalDuration{0, static_cast<int32_t>(i), 0})},
+		           {"rankList", PropertyValue(rankList)}});
+	}
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "u";
+	config.labels = {"Person"};
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+
+	auto runTopOne = [&](const std::string &property, bool ascending) {
+		NodeTopKFastPathOperator op(dm, im, config, requirements, {}, {{property, property}}, property, ascending, 1);
+		op.open();
+		auto batch = op.next();
+		EXPECT_FALSE(op.next().has_value());
+		return batch;
+	};
+
+	auto trueBatch = runTopOne("flag", false);
+	ASSERT_TRUE(trueBatch.has_value());
+	ASSERT_EQ(trueBatch->size(), 1U);
+	EXPECT_EQ((*trueBatch)[0].getValue("flag"), std::optional<PropertyValue>(PropertyValue(true)));
+
+	auto dateBatch = runTopOne("eventDate", false);
+	ASSERT_TRUE(dateBatch.has_value());
+	EXPECT_EQ((*dateBatch)[0].getValue("eventDate"),
+	          std::optional<PropertyValue>(PropertyValue(TemporalDate{159})));
+
+	auto dateTimeBatch = runTopOne("eventTime", false);
+	ASSERT_TRUE(dateTimeBatch.has_value());
+	EXPECT_EQ((*dateTimeBatch)[0].getValue("eventTime"),
+	          std::optional<PropertyValue>(PropertyValue(TemporalDateTime{159})));
+
+	auto durationBatch = runTopOne("duration", false);
+	ASSERT_TRUE(durationBatch.has_value());
+	EXPECT_EQ((*durationBatch)[0].getValue("duration"),
+	          std::optional<PropertyValue>(PropertyValue(TemporalDuration{0, 159, 0})));
+
+	auto listBatch = runTopOne("rankList", false);
+	ASSERT_TRUE(listBatch.has_value());
+	std::vector<PropertyValue> expectedList{PropertyValue(int64_t{159})};
+	EXPECT_EQ((*listBatch)[0].getValue("rankList"), std::optional<PropertyValue>(PropertyValue(expectedList)));
+}
+
+TEST_F(NodeTopKFastPathOperatorTest, MetadataSortPathHandlesDoubleStringNullMissingAndBlobValues) {
+	for (int64_t i = 0; i < 160; ++i) {
+		std::string blobKey(600, static_cast<char>('a' + (i % 26)));
+		addPerson({{"ratio", PropertyValue(static_cast<double>(i) + 0.5)},
+		           {"name", PropertyValue("name-" + std::to_string(i))},
+		           {"nothing", PropertyValue(std::monostate{})},
+		           {"blobKey", PropertyValue(blobKey)}});
+	}
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "u";
+	config.labels = {"Person"};
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+
+	auto runTopOne = [&](const std::string &property, bool ascending) {
+		NodeTopKFastPathOperator op(dm, im, config, requirements, {}, {{property, property}}, property, ascending, 1);
+		op.open();
+		return op.next();
+	};
+
+	auto ratioBatch = runTopOne("ratio", false);
+	ASSERT_TRUE(ratioBatch.has_value());
+	EXPECT_EQ((*ratioBatch)[0].getValue("ratio"), std::optional<PropertyValue>(PropertyValue(159.5)));
+
+	auto nameBatch = runTopOne("name", false);
+	ASSERT_TRUE(nameBatch.has_value());
+	ASSERT_TRUE((*nameBatch)[0].getValue("name").has_value());
+	EXPECT_NE((*nameBatch)[0].getValue("name")->toString().find("name-"), std::string::npos);
+
+	auto nullBatch = runTopOne("nothing", false);
+	ASSERT_TRUE(nullBatch.has_value());
+	EXPECT_EQ((*nullBatch)[0].getValue("nothing"), std::optional<PropertyValue>(PropertyValue()));
+
+	auto missingBatch = runTopOne("missingSort", false);
+	ASSERT_TRUE(missingBatch.has_value());
+	EXPECT_EQ((*missingBatch)[0].getValue("missingSort"), std::optional<PropertyValue>(PropertyValue()));
+
+	auto blobBatch = runTopOne("blobKey", false);
+	ASSERT_TRUE(blobBatch.has_value());
+	ASSERT_TRUE((*blobBatch)[0].getValue("blobKey").has_value());
+	EXPECT_EQ(std::get<std::string>((*blobBatch)[0].getValue("blobKey")->getVariant()).front(), 'z');
+}
+
+TEST_F(NodeTopKFastPathOperatorTest, MetadataSortPathHandlesInlineDoubleStringNullAndMissingStorage) {
+	for (int64_t i = 0; i < 160; ++i) {
+		addPerson({{"ratio", PropertyValue(static_cast<double>(i) + 0.5)},
+		           {"name", PropertyValue("name-" + std::to_string(i))},
+		           {"nothing", PropertyValue(std::monostate{})}});
+	}
+	for (int64_t i = 0; i < 5; ++i) {
+		addPerson();
+	}
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "u";
+	config.labels = {"Person"};
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+
+	auto runTopOne = [&](const std::string &property, bool ascending) {
+		NodeTopKFastPathOperator op(dm, im, config, requirements, {}, {{property, property}}, property, ascending, 1);
+		op.open();
+		return op.next();
+	};
+
+	auto ratioBatch = runTopOne("ratio", false);
+	ASSERT_TRUE(ratioBatch.has_value());
+	EXPECT_EQ((*ratioBatch)[0].getValue("ratio"), std::optional<PropertyValue>(PropertyValue(159.5)));
+
+	auto nameBatch = runTopOne("name", false);
+	ASSERT_TRUE(nameBatch.has_value());
+	ASSERT_TRUE((*nameBatch)[0].getValue("name").has_value());
+	EXPECT_NE((*nameBatch)[0].getValue("name")->toString().find("name-"), std::string::npos);
+
+	auto nullBatch = runTopOne("nothing", false);
+	ASSERT_TRUE(nullBatch.has_value());
+	EXPECT_EQ((*nullBatch)[0].getValue("nothing"), std::optional<PropertyValue>(PropertyValue()));
+
+	auto missingBatch = runTopOne("missingSort", false);
+	ASSERT_TRUE(missingBatch.has_value());
+	EXPECT_EQ((*missingBatch)[0].getValue("missingSort"), std::optional<PropertyValue>(PropertyValue()));
+}
+
+TEST_F(NodeTopKFastPathOperatorTest, EmptyCandidateSetUsesMetadataPathAndReturnsNoRows) {
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "u";
+	config.labels = {"Person"};
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+	NodeTopKFastPathOperator op(dm, im, config, requirements, {}, {{"score", "score"}}, "score", false, 5);
+	op.open();
+	EXPECT_FALSE(op.next().has_value());
+}

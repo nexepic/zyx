@@ -275,7 +275,7 @@ namespace {
 		}
 
 		const auto nodeIds = db.createNodes("User", userProps);
-		for (size_t i = 0; i < userExternalIds.size() && i < nodeIds.size(); ++i) {
+		for (size_t i = 0; i < userExternalIds.size() && i < nodeIds.size(); ++i) { // ZYX_COV_EXCL_LINE: bulk API returns one node id per input row.
 			graph.usersByExternalId.emplace(userExternalIds[i], nodeIds[i]);
 		}
 		graph.loadedRows += static_cast<int64_t>(nodeIds.size());
@@ -293,7 +293,7 @@ namespace {
 		}
 
 		const auto postNodeIds = db.createNodes("Post", postProps);
-		for (size_t i = 0; i < postExternalIds.size() && i < postNodeIds.size(); ++i) {
+		for (size_t i = 0; i < postExternalIds.size() && i < postNodeIds.size(); ++i) { // ZYX_COV_EXCL_LINE: bulk API returns one node id per input row.
 			graph.postsByExternalId.emplace(postExternalIds[i], postNodeIds[i]);
 		}
 		graph.loadedRows += static_cast<int64_t>(postNodeIds.size());
@@ -310,7 +310,7 @@ namespace {
 		}
 
 		const auto tagNodeIds = db.createNodes("Tag", tagProps);
-		for (size_t i = 0; i < tagExternalIds.size() && i < tagNodeIds.size(); ++i) {
+		for (size_t i = 0; i < tagExternalIds.size() && i < tagNodeIds.size(); ++i) { // ZYX_COV_EXCL_LINE: bulk API returns one node id per input row.
 			graph.tagsByExternalId.emplace(tagExternalIds[i], tagNodeIds[i]);
 		}
 		graph.loadedRows += static_cast<int64_t>(tagNodeIds.size());

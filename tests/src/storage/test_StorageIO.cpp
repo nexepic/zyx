@@ -185,6 +185,18 @@ TEST_F(StorageIOTest, AppendNullBufferThrows) {
 	EXPECT_THROW(io->reserveAppendSpace(0), std::invalid_argument);
 }
 
+TEST_F(StorageIOTest, AppendAndReserveReportClosedStreamWriteFailures) {
+	auto stream = std::make_shared<std::fstream>(testFile_, std::ios::binary | std::ios::in | std::ios::out);
+	ASSERT_TRUE(stream->is_open());
+	auto io = std::make_shared<StorageIO>(stream, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+	stream->close();
+
+	const char data[] = "closed";
+	EXPECT_THROW(io->append(data, sizeof(data)), std::runtime_error);
+	stream->clear();
+	EXPECT_THROW(io->reserveAppendSpace(8), std::runtime_error);
+}
+
 // ============================================================================
 // sync does not throw
 // ============================================================================

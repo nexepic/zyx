@@ -168,6 +168,7 @@ TEST_F(CompareBenchmarkTest, ScalarHelpersHandleResultTypesAndFailures) {
 	EXPECT_EQ(scalarInt(db.execute("RETURN 3.5")), 3);
 	EXPECT_EQ(scalarInt(db.execute("RETURN true")), 1);
 	EXPECT_EQ(scalarInt(db.execute("RETURN false")), 0);
+	EXPECT_EQ(scalarInt(db.execute("RETURN 'value'")), 0);
 	EXPECT_EQ(scalarInt(db.execute("MATCH (n:Missing) RETURN n")), 0);
 	EXPECT_THROW((void) scalarInt(db.execute("THIS IS NOT CYPHER")), std::runtime_error);
 
@@ -193,6 +194,12 @@ TEST_F(CompareBenchmarkTest, RowCountAndValidationHelpersHandleAlternatePaths) {
 	EXPECT_EQ(rowCount([]() { return FakeRows{}; }), 3);
 	EXPECT_NO_THROW(requireNonNegative("ok", 0));
 	EXPECT_THROW(requireNonNegative("bad", -1), std::runtime_error);
+
+	zyx::Database db((tempRoot / "execute_ok.db").string());
+	db.open();
+	EXPECT_NO_THROW(executeOk(db, "RETURN 1"));
+	EXPECT_THROW(executeOk(db, "THIS IS NOT CYPHER"), std::runtime_error);
+	db.close();
 
 	Options options;
 	options.scale = "tiny";
@@ -256,6 +263,22 @@ TEST_F(CompareBenchmarkTest, LoadGraphCommitsDatasetInSingleWriteTransaction) {
 	EXPECT_EQ(trace.at("wal.commit_sync").calls, 1U);
 	EXPECT_EQ(scalarInt(db.execute("MATCH (u:User) RETURN count(u)")), 3);
 
+	db.close();
+}
+
+TEST_F(CompareBenchmarkTest, LoadGraphUsesExistingWriteTransactionWhenPresent) {
+	const auto dataset = writeSmallDataset();
+	zyx::Database db((tempRoot / "external_txn_load.db").string());
+	db.open();
+	auto txn = db.beginTransaction();
+
+	const auto loaded = loadGraph(db, dataset);
+
+	EXPECT_EQ(loaded.loadedRows, 9);
+	EXPECT_TRUE(db.hasActiveTransaction());
+	txn.commit();
+	EXPECT_FALSE(db.hasActiveTransaction());
+	EXPECT_EQ(scalarInt(db.execute("MATCH (u:User) RETURN count(u)")), 3);
 	db.close();
 }
 

@@ -76,6 +76,7 @@ TEST_F(NodeDistinctCountFastPathOperatorTest, CountsDistinctSelectedPropertyValu
 	for (size_t i = 0; i < kNodeCount; ++i) {
 		addPerson({{"country", PropertyValue(i % 2 == 0 ? "CN" : "US")}});
 	}
+	addPerson({{"country", PropertyValue(std::monostate{})}});
 	addPerson();
 	addLabeledNode({"Animal"}, {{"country", PropertyValue("CN")}});
 	db->getStorage()->flush();
@@ -175,6 +176,8 @@ TEST_F(NodeDistinctCountFastPathOperatorTest, AppliesResidualPropertyPredicatesB
 	for (int64_t i = 0; i < 300; ++i) {
 		addPerson({{"country", PropertyValue(i % 3 == 0 ? "CN" : "US")}, {"age", PropertyValue(i)}});
 	}
+	addPerson({{"country", PropertyValue(std::monostate{})}, {"age", PropertyValue(int64_t{1})}});
+	addPerson({{"age", PropertyValue(int64_t{2})}});
 	db->getStorage()->flush();
 
 	NodeScanConfig config;
@@ -198,6 +201,35 @@ TEST_F(NodeDistinctCountFastPathOperatorTest, AppliesResidualPropertyPredicatesB
 
 	ASSERT_TRUE(batch.has_value());
 	EXPECT_EQ(readCount(*batch), 2);
+}
+
+TEST_F(NodeDistinctCountFastPathOperatorTest, ResidualPredicateFallbackHandlesMissingDistinctColumn) {
+	for (int64_t i = 0; i < 300; ++i) {
+		addPerson({{"age", PropertyValue(i)}});
+	}
+	db->getStorage()->flush();
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "n";
+	config.labels = {"Person"};
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+	requirements.requiredProperties = {"age"};
+	requirements.countOnly = true;
+
+	VectorizedPropertyPredicate predicate;
+	predicate.variable = "n";
+	predicate.propertyKey = "age";
+	predicate.op = VectorPredicateOp::VPO_GE;
+	predicate.value = PropertyValue(int64_t{0});
+
+	NodeDistinctCountFastPathOperator op(dm, im, config, requirements, {predicate}, "missing", "count");
+	op.open();
+	auto batch = op.next();
+
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(readCount(*batch), 0);
 }
 
 TEST_F(NodeDistinctCountFastPathOperatorTest, DistinguishesTypedValuesWithoutStringifying) {
@@ -249,4 +281,35 @@ TEST_F(NodeDistinctCountFastPathOperatorTest, CloseOpenAllowsReExecution) {
 	EXPECT_EQ(readCount(*batch), 3);
 	EXPECT_EQ(op.getOutputVariables(), (std::vector<std::string>{"count"}));
 	EXPECT_NE(op.toString().find("NodeDistinctCountFastPath"), std::string::npos);
+}
+
+TEST_F(NodeDistinctCountFastPathOperatorTest, CountsBlobBackedDistinctValuesFromMetadataFallback) {
+	const std::string cn(600, 'c');
+	const std::string us(600, 'u');
+	for (int64_t i = 0; i < 160; ++i) {
+		addPerson({{"payload", PropertyValue(i % 2 == 0 ? cn : us)}});
+	}
+	addPerson();
+	addPerson({{"payload", PropertyValue(std::monostate{})}});
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+	debug::PerfTrace::setEnabled(true);
+	debug::PerfTrace::reset();
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "n";
+	config.labels = {"Person"};
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+	requirements.requiredProperties = {"payload"};
+	requirements.countOnly = true;
+
+	NodeDistinctCountFastPathOperator op(dm, im, config, requirements, {}, "payload", "count");
+	op.open();
+	auto batch = op.next();
+	const auto snapshot = debug::PerfTrace::snapshotAndReset();
+
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(readCount(*batch), 2);
 }

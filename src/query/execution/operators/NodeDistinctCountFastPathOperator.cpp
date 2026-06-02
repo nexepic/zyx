@@ -57,12 +57,15 @@ namespace graph::query::execution::operators {
 					}
 
 					const int64_t propertyEntityId = metadata.propertyEntityId;
+					if (propertyEntityId == 0) {
+						return true;
+					}
 					const auto storageType = metadata.propertyStorageType;
-					if (storageType == PropertyStorageType::PROPERTY_ENTITY && propertyEntityId != 0) {
+					if (storageType == PropertyStorageType::PROPERTY_ENTITY) {
 						const size_t propertyRow = propertyEntityIds.size();
 						propertyEntityIds.push_back(propertyEntityId);
 						propertyRows.push_back(propertyRow);
-					} else if (storageType == PropertyStorageType::BLOB_ENTITY && propertyEntityId != 0) {
+					} else if (storageType == PropertyStorageType::BLOB_ENTITY) {
 						fallbackRows.push_back({metadata});
 					}
 					return true;
@@ -71,7 +74,7 @@ namespace graph::query::execution::operators {
 					return std::nullopt;
 				}
 
-				if (!propertyEntityIds.empty()) {
+					if (!propertyEntityIds.empty()) {
 					(void) dm->bulkVisitPropertyEntityValues(
 							propertyEntityIds, propertyRows, propertyEntityIds.size(), distinctProperty,
 							[&](size_t, const PropertyValue &value) {
@@ -145,12 +148,14 @@ namespace graph::query::execution::operators {
 
 				auto columnIt = batch.propertyColumns.find(distinctProperty_);
 				if (columnIt == batch.propertyColumns.end()) {
+					begin = end;
 					continue;
 				}
 				const auto &column = columnIt->second;
-				for (size_t row = 0; row < batch.nodeIds.size(); ++row) {
-					if (row >= batch.selected.size() || batch.selected[row] == 0 || row >= column.size() ||
-						!column[row].has_value() || expressions::EvaluationContext::isNull(*column[row])) {
+				const size_t rowCount = std::min({batch.nodeIds.size(), batch.selected.size(), column.size()});
+				for (size_t row = 0; row < rowCount; ++row) {
+					if (batch.selected[row] == 0 || !column[row].has_value() ||
+						expressions::EvaluationContext::isNull(*column[row])) {
 						continue;
 					}
 					seen.insert(*column[row]);

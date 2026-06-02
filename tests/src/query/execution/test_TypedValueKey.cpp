@@ -2,6 +2,7 @@
 
 #include <unordered_map>
 
+#include "graph/query/execution/TypedDistinctSet.hpp"
 #include "graph/query/execution/TypedGroupCounter.hpp"
 #include "graph/query/execution/TypedValueKey.hpp"
 
@@ -10,6 +11,7 @@ using graph::TemporalDate;
 using graph::TemporalDateTime;
 using graph::TemporalDuration;
 using graph::PropertyValueHash;
+using graph::query::execution::TypedDistinctSet;
 using graph::query::execution::TypedEqualityKey;
 using graph::query::execution::TypedGroupCounter;
 using graph::query::execution::TypedOrderKey;
@@ -155,4 +157,87 @@ TEST(TypedGroupCounterTest, CountsFallbackGroupsByTypedEquality) {
 		fallbackRows += group.count;
 	}
 	EXPECT_EQ(fallbackRows, 11);
+}
+
+
+TEST(TypedOrderKeyTest, FactoryMethodsCompareAllTypedBranches) {
+	EXPECT_EQ(TypedOrderKey::fromNull().compare(TypedOrderKey::fromNull()), 0);
+	EXPECT_LT(TypedOrderKey::fromBoolean(false).compare(TypedOrderKey::fromBoolean(true)), 0);
+	EXPECT_GT(TypedOrderKey::fromInteger(10).compare(TypedOrderKey::fromInteger(5)), 0);
+	EXPECT_EQ(TypedOrderKey::fromDouble(1.5).compare(TypedOrderKey::fromDouble(1.5)), 0);
+	EXPECT_LT(TypedOrderKey::fromString("aa").compare(TypedOrderKey::fromString("ab")), 0);
+	EXPECT_EQ(TypedOrderKey::fromDateEpochDays(42).compare(TypedOrderKey::from(PropertyValue(TemporalDate{42}))), 0);
+	EXPECT_EQ(TypedOrderKey::fromDateTimeEpochMillis(84).compare(TypedOrderKey::from(PropertyValue(TemporalDateTime{84}))), 0);
+	EXPECT_GT(TypedOrderKey::fromDuration(TemporalDuration{0, 2, 0}).compare(
+				 TypedOrderKey::fromDuration(TemporalDuration{0, 1, 0})),
+			  0);
+	std::vector<PropertyValue> list{PropertyValue(int64_t{1})};
+	EXPECT_EQ(TypedOrderKey::from(PropertyValue(list)).compare(TypedOrderKey::from(PropertyValue(list))), 0);
+}
+
+TEST(TypedEqualityKeyTest, ComparesEverySpecializedStorageType) {
+	EXPECT_EQ(TypedEqualityKey::from(PropertyValue()), TypedEqualityKey::from(PropertyValue()));
+	EXPECT_FALSE(TypedEqualityKey::from(PropertyValue(false)) == TypedEqualityKey::from(PropertyValue(true)));
+	EXPECT_EQ(TypedEqualityKey::from(PropertyValue(1.25)), TypedEqualityKey::from(PropertyValue(1.25)));
+	EXPECT_FALSE(TypedEqualityKey::from(PropertyValue(1.25)) == TypedEqualityKey::from(PropertyValue(2.5)));
+	EXPECT_EQ(TypedEqualityKey::from(PropertyValue("x")), TypedEqualityKey::from(PropertyValue("x")));
+	EXPECT_FALSE(TypedEqualityKey::from(PropertyValue("x")) == TypedEqualityKey::from(PropertyValue("y")));
+	EXPECT_EQ(TypedEqualityKey::from(PropertyValue(TemporalDuration{1, 2, 3})),
+			  TypedEqualityKey::from(PropertyValue(TemporalDuration{1, 2, 3})));
+	EXPECT_FALSE(TypedEqualityKey::from(PropertyValue(TemporalDuration{1, 2, 3})) ==
+				 TypedEqualityKey::from(PropertyValue(TemporalDuration{1, 2, 4})));
+}
+
+TEST(TypedDistinctSetTest, TracksAllFastScalarKindsAndFallbackKinds) {
+	TypedDistinctSet set;
+	EXPECT_TRUE(set.insert(PropertyValue()));
+	EXPECT_FALSE(set.insert(PropertyValue()));
+	EXPECT_TRUE(set.insert(PropertyValue(false)));
+	EXPECT_FALSE(set.insert(PropertyValue(false)));
+	EXPECT_TRUE(set.insert(PropertyValue(true)));
+	EXPECT_TRUE(set.insert(PropertyValue(int64_t{7})));
+	EXPECT_FALSE(set.insert(PropertyValue(int64_t{7})));
+	EXPECT_TRUE(set.insert(PropertyValue(2.5)));
+	EXPECT_FALSE(set.insert(PropertyValue(2.5)));
+	EXPECT_TRUE(set.insert(PropertyValue("CN")));
+	EXPECT_FALSE(set.insert(PropertyValue("CN")));
+	EXPECT_TRUE(set.insert(PropertyValue(TemporalDate{10})));
+	EXPECT_FALSE(set.insert(PropertyValue(TemporalDate{10})));
+	EXPECT_TRUE(set.insert(PropertyValue(TemporalDateTime{20})));
+	EXPECT_FALSE(set.insert(PropertyValue(TemporalDateTime{20})));
+	EXPECT_TRUE(set.insert(PropertyValue(TemporalDuration{0, 1, 0})));
+	EXPECT_FALSE(set.insert(PropertyValue(TemporalDuration{0, 1, 0})));
+	std::vector<PropertyValue> list{PropertyValue(int64_t{1})};
+	EXPECT_TRUE(set.insert(PropertyValue(list)));
+	EXPECT_FALSE(set.insert(PropertyValue(list)));
+	PropertyValue::MapType map{{"k", PropertyValue(int64_t{1})}};
+	EXPECT_TRUE(set.insert(PropertyValue(map)));
+	EXPECT_FALSE(set.insert(PropertyValue(map)));
+	EXPECT_EQ(set.size(), 11U);
+
+	set.clear();
+	EXPECT_EQ(set.size(), 0U);
+	EXPECT_TRUE(set.insert(PropertyValue("after-clear")));
+	EXPECT_EQ(set.size(), 1U);
+}
+
+TEST(TypedGroupCounterTest, ClearAndIgnoreNonPositiveCounts) {
+	TypedGroupCounter counter;
+	counter.add(PropertyValue("ignored"), 0);
+	counter.add(PropertyValue("ignored"), -3);
+	EXPECT_EQ(counter.size(), 0U);
+
+	counter.add(PropertyValue(3.25), 2);
+	counter.add(PropertyValue(TemporalDuration{0, 1, 0}), 5);
+	EXPECT_EQ(counter.size(), 2U);
+	counter.clear();
+	EXPECT_EQ(counter.size(), 0U);
+	EXPECT_TRUE(counter.toVector().empty());
+}
+
+TEST(TypedOrderKeyTest, FallbackListValuesUsePropertyValueOrdering) {
+	std::vector<PropertyValue> left{PropertyValue(int64_t{1})};
+	std::vector<PropertyValue> right{PropertyValue(int64_t{2})};
+	EXPECT_LT(TypedOrderKey::from(PropertyValue(left)).compare(TypedOrderKey::from(PropertyValue(right))), 0);
+	EXPECT_GT(TypedOrderKey::from(PropertyValue(right)).compare(TypedOrderKey::from(PropertyValue(left))), 0);
 }

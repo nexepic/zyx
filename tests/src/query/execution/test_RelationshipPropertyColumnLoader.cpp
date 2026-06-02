@@ -501,6 +501,38 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderCountsAndLoads
 	EXPECT_TRUE(trace.contains("relationship_count.load_edge_metadata"));
 }
 
+TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderSkipsEmptyOrNonOverlappingSegmentWindows) {
+	const int64_t source = addUser();
+	const int64_t target = addUser();
+	for (int i = 0; i < 128; ++i) {
+		Edge edge(0, source, target, followsType);
+		dm->addEdge(edge);
+	}
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+
+	const auto originalIndex = dm->getSegmentIndexManager()->getEdgeSegmentIndex();
+	ASSERT_FALSE(originalIndex.empty());
+	RelationshipMetadataColumnLoader loader(dm);
+
+	auto shiftedIndex = originalIndex;
+	shiftedIndex.front().startId = 1000;
+	shiftedIndex.front().endId = 1127;
+	dm->getSegmentIndexManager()->setSegmentIndex(Edge::typeId, shiftedIndex);
+	auto nonOverlapping = loader.loadRange(1000, 1127);
+	ASSERT_TRUE(nonOverlapping.has_value());
+	EXPECT_EQ(nonOverlapping->size(), 0U);
+
+	auto emptyHeaderIndex = originalIndex;
+	dm->getSegmentIndexManager()->setSegmentIndex(Edge::typeId, emptyHeaderIndex);
+	storage::SegmentHeader header = dm->getSegmentTracker()->getSegmentHeaderCopy(originalIndex.front().segmentOffset);
+	header.used = 0;
+	dm->getSegmentTracker()->writeSegmentHeader(originalIndex.front().segmentOffset, header);
+	auto emptyHeader = loader.loadRange(1, 128);
+	ASSERT_TRUE(emptyHeader.has_value());
+	EXPECT_EQ(emptyHeader->size(), 0U);
+}
+
 TEST_F(RelationshipPropertyColumnLoaderStorageTest, RelationshipTypeSegmentStatsCountAndInvalidateDirtySegments) {
 	const int64_t source = addUser();
 	const int64_t target = addUser();
@@ -704,4 +736,51 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, BlobBackedPropertiesFallback
 	ASSERT_TRUE(columns["weight"][0].has_value());
 	EXPECT_EQ(columns["payload"][0].value(), PropertyValue(largeValue));
 	EXPECT_EQ(columns["weight"][0].value(), PropertyValue(int64_t{3}));
+}
+
+TEST(RelationshipMetadataBatchTest, CandidateBatchHelpersReserveAndReportSizes) {
+	RelationshipPropertyCandidateBatch candidates;
+	EXPECT_EQ(candidates.size(), 0U);
+	candidates.reserve(16);
+	candidates.edgeIds.push_back(10);
+	candidates.propertyEntityIds.push_back(20);
+	candidates.propertyRows.push_back(0);
+	candidates.fallbackRows.push_back(1);
+	EXPECT_EQ(candidates.size(), 1U);
+
+	RelationshipPropertyCountCandidates countCandidates;
+	EXPECT_EQ(countCandidates.matchedEdges, 0U);
+	countCandidates.reserve(16);
+	countCandidates.propertyEntityIds.push_back(20);
+	countCandidates.fallbackEdgeIds.push_back(30);
+	countCandidates.matchedEdges = 2;
+	EXPECT_EQ(countCandidates.propertyEntityIds.size(), 1U);
+	EXPECT_EQ(countCandidates.fallbackEdgeIds.size(), 1U);
+	EXPECT_EQ(countCandidates.matchedEdges, 2U);
+}
+
+TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataCandidateCountFallbackScansPartialRanges) {
+	Edge propertyBacked = addFollowsWithProperties({{"weight", PropertyValue(int64_t{5})}});
+	std::string largeValue(512, 'x');
+	Edge blobBacked = addFollowsWithProperties({{"weight", PropertyValue(int64_t{7})}, {"payload", PropertyValue(largeValue)}});
+	for (int i = 0; i < 130; ++i) {
+		addFollowsWithoutProperties();
+	}
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+	ASSERT_EQ(propertyBacked.getId(), 1);
+	ASSERT_EQ(blobBacked.getId(), 2);
+
+	RelationshipMetadataColumnLoader loader(dm);
+	graph::debug::PerfTrace::setEnabled(true);
+	graph::debug::PerfTrace::reset();
+	auto candidates = loader.collectPropertyCountCandidatesByType(2, 129, followsType);
+	const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setEnabled(false);
+
+	ASSERT_TRUE(candidates.has_value());
+	EXPECT_EQ(candidates->matchedEdges, 128U);
+	EXPECT_TRUE(candidates->propertyEntityIds.empty());
+	EXPECT_EQ(candidates->fallbackEdgeIds, (std::vector<int64_t>{blobBacked.getId()}));
+	EXPECT_TRUE(trace.contains("relationship_count.load_edge_metadata"));
 }

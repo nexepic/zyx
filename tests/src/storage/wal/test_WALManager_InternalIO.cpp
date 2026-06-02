@@ -71,6 +71,15 @@ TEST_F(WALManagerInternalIOTest, WriteRecordWithNonNullZeroLengthCoversShortCirc
 	mgr.close();
 }
 
+TEST_F(WALManagerInternalIOTest, WriteRecordWithNullPositiveLengthCoversChecksumFalsePath) {
+	WALManager mgr;
+	mgr.open(testDbPath.string());
+
+	EXPECT_NO_THROW(mgr.writeRecord(WALRecordType::WAL_TXN_BEGIN, 1, nullptr, 4));
+
+	mgr.close();
+}
+
 TEST_F(WALManagerInternalIOTest, ValidateHeaderReturnsFalseWhenFdIsInvalidEvenIfOpenFlagIsTrue) {
 	WALFileHeader hdr;
 	writeRaw(walPath, serializeFileHeader(hdr));

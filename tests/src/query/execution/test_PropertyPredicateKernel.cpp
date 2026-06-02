@@ -10,6 +10,7 @@
 namespace {
 
 using graph::PropertyValue;
+using graph::TemporalDate;
 using graph::query::execution::NodeColumnBatch;
 using graph::query::execution::PropertyPredicateKernel;
 using graph::query::execution::VectorPredicateOp;
@@ -190,4 +191,68 @@ TEST(PropertyPredicateKernelTest, ConvertsPredicatesForSerializedPropertyEntityS
 	EXPECT_EQ(*storagePredicates[1].upperValue, PropertyValue(int64_t{9}));
 }
 
+
+TEST(PropertyPredicateKernelTest, CoversIntegerRangeAndPublicSinglePredicateHelper) {
+	auto range = predicate("value", VectorPredicateOp::VPO_RANGE_CLOSED, PropertyValue(int64_t{10}));
+	range.upperValue = PropertyValue(int64_t{20});
+	EXPECT_TRUE(graph::query::execution::evaluatePredicateWithKernel(PropertyValue(int64_t{15}), range));
+	EXPECT_FALSE(graph::query::execution::evaluatePredicateWithKernel(PropertyValue(int64_t{25}), range));
+
+	auto missingUpper = predicate("value", VectorPredicateOp::VPO_RANGE_CLOSED, PropertyValue(int64_t{10}));
+	EXPECT_FALSE(graph::query::execution::evaluatePredicateWithKernel(PropertyValue(int64_t{15}), missingUpper));
+	EXPECT_FALSE(graph::query::execution::evaluatePredicateWithKernel(std::optional<PropertyValue>{}, range));
+}
+
+TEST(PropertyPredicateKernelTest, ConvertsEveryStoragePredicateOperator) {
+	PropertyPredicateKernel kernel({
+		predicate("eq", VectorPredicateOp::VPO_EQ, PropertyValue(int64_t{1})),
+		predicate("ne", VectorPredicateOp::VPO_NE, PropertyValue(int64_t{1})),
+		predicate("lt", VectorPredicateOp::VPO_LT, PropertyValue(int64_t{1})),
+		predicate("le", VectorPredicateOp::VPO_LE, PropertyValue(int64_t{1})),
+		predicate("gt", VectorPredicateOp::VPO_GT, PropertyValue(int64_t{1})),
+		predicate("ge", VectorPredicateOp::VPO_GE, PropertyValue(int64_t{1})),
+	});
+	const auto storagePredicates = kernel.toStoragePredicates();
+	ASSERT_EQ(storagePredicates.size(), 6U);
+	EXPECT_EQ(storagePredicates[0].op, PropertyEntityPredicateOp::PEP_EQ);
+	EXPECT_EQ(storagePredicates[1].op, PropertyEntityPredicateOp::PEP_NE);
+	EXPECT_EQ(storagePredicates[2].op, PropertyEntityPredicateOp::PEP_LT);
+	EXPECT_EQ(storagePredicates[3].op, PropertyEntityPredicateOp::PEP_LE);
+	EXPECT_EQ(storagePredicates[4].op, PropertyEntityPredicateOp::PEP_GT);
+	EXPECT_EQ(storagePredicates[5].op, PropertyEntityPredicateOp::PEP_GE);
+}
+
+TEST(PropertyPredicateKernelTest, MissingColumnClearsSelectionVector) {
+	PropertyPredicateKernel kernel({predicate("missing", VectorPredicateOp::VPO_EQ, PropertyValue(int64_t{1}))});
+	NodeColumnBatch batch;
+	batch.nodeIds = {1, 2, 3};
+	batch.selected = {1, 1, 0};
+	batch.propertyColumns["other"] = {PropertyValue(int64_t{1}), PropertyValue(int64_t{1}), PropertyValue(int64_t{1})};
+	kernel.apply(batch);
+	EXPECT_EQ(batch.selected, (std::vector<uint8_t>{0, 0, 0}));
+}
+
+} // namespace
+
+namespace {
+TEST(PropertyPredicateKernelAdditionalTest, GenericFallbackCoversTemporalAndStructuredComparisons) {
+	auto expect = [](const PropertyValue &actual, VectorPredicateOp op, const PropertyValue &bound, bool expected) {
+		PropertyPredicateKernel kernel({predicate("value", op, bound)});
+		EXPECT_EQ(kernel.matchesMap({{"value", actual}}), expected);
+	};
+
+	expect(PropertyValue(TemporalDate{5}), VectorPredicateOp::VPO_NE, PropertyValue(TemporalDate{6}), true);
+	expect(PropertyValue(TemporalDate{5}), VectorPredicateOp::VPO_LE, PropertyValue(TemporalDate{5}), true);
+	expect(PropertyValue(TemporalDate{5}), VectorPredicateOp::VPO_GE, PropertyValue(TemporalDate{5}), true);
+
+	auto range = predicate("value", VectorPredicateOp::VPO_RANGE_CLOSED, PropertyValue(TemporalDate{3}));
+	range.upperValue = PropertyValue(TemporalDate{7});
+	PropertyPredicateKernel rangeKernel({range});
+	EXPECT_TRUE(rangeKernel.matchesMap({{"value", PropertyValue(TemporalDate{5})}}));
+
+	std::vector<PropertyValue> left{PropertyValue(int64_t{1})};
+	std::vector<PropertyValue> right{PropertyValue(int64_t{2})};
+	expect(PropertyValue(left), VectorPredicateOp::VPO_NE, PropertyValue(right), true);
+	expect(PropertyValue(left), VectorPredicateOp::VPO_LT, PropertyValue(right), true);
+}
 } // namespace
