@@ -1664,4 +1664,28 @@ TEST_F(DataManagerTest, BulkMatchPropertyEntityPredicateSpecsSupportsComparisonO
 		nullptr);
 	EXPECT_EQ(missingUpperBound.loadedRows, (std::vector<size_t>{0U, 1U}));
 	EXPECT_TRUE(missingUpperBound.matchedRows.empty());
+
+	EXPECT_EQ(dataManager->bulkCountPropertyEntityPredicateSpecs(
+				  {firstPropertyId, secondPropertyId, firstPropertyId, 0},
+				  {{"age", Op::PEP_GT, PropertyValue(int64_t(29)), std::nullopt},
+				   {"score", Op::PEP_LE, PropertyValue(int64_t(900)), std::nullopt},
+				   {"country", Op::PEP_NE, PropertyValue("US"), std::nullopt}},
+				  nullptr),
+			  2U);
+	EXPECT_EQ(dataManager->bulkCountPropertyEntityPredicateSpecs(
+				  ids,
+				  {{"age", Op::PEP_LT, PropertyValue(int64_t(30)), std::nullopt},
+				   {"score", Op::PEP_GE, PropertyValue(int64_t(100)), std::nullopt}},
+				  nullptr),
+			  1U);
+	EXPECT_EQ(dataManager->bulkCountPropertyEntityPredicateSpecs(
+				  ids,
+				  {{"country", Op::PEP_RANGE_CLOSED, PropertyValue("CA"), PropertyValue("NZ")}},
+				  nullptr),
+			  1U);
+	EXPECT_EQ(dataManager->bulkCountPropertyEntityPredicateSpecs(
+				  ids,
+				  {{"age", Op::PEP_RANGE_CLOSED, PropertyValue(int64_t(25)), std::nullopt}},
+				  nullptr),
+			  0U);
 }

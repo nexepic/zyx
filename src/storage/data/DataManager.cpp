@@ -655,6 +655,137 @@ namespace graph::storage {
 			return false;
 		}
 
+		template<typename T>
+		bool typedValueSatisfiesPredicate(const T &actual, const PredicateSpecExpectation &expected) {
+			const auto *expectedValue = std::get_if<T>(&expected.value->getVariant());
+			if (expectedValue == nullptr) {
+				return propertyValueSatisfiesPredicate(PropertyValue(actual), expected);
+			}
+
+			switch (expected.op) {
+				case PropertyEntityPredicateOp::PEP_EQ:
+					return actual == *expectedValue;
+				case PropertyEntityPredicateOp::PEP_NE:
+					return actual != *expectedValue;
+				case PropertyEntityPredicateOp::PEP_LT:
+					return actual < *expectedValue;
+				case PropertyEntityPredicateOp::PEP_LE:
+					return actual <= *expectedValue;
+				case PropertyEntityPredicateOp::PEP_GT:
+					return actual > *expectedValue;
+				case PropertyEntityPredicateOp::PEP_GE:
+					return actual >= *expectedValue;
+				case PropertyEntityPredicateOp::PEP_RANGE_CLOSED: {
+					if (expected.upperValue == nullptr) {
+						return false;
+					}
+					const auto *upperValue = std::get_if<T>(&expected.upperValue->getVariant());
+					return upperValue != nullptr && actual >= *expectedValue && actual <= *upperValue;
+				}
+			}
+			return false;
+		}
+
+		int compareStringView(const SerializedStringView &view, const std::string &value) {
+			const size_t commonSize = std::min<size_t>(view.size, value.size());
+			const int commonCompare =
+					commonSize == 0 ? 0 : std::memcmp(view.data, value.data(), commonSize); // ZYX_COV_EXCL_LINE
+			if (commonCompare != 0) {
+				return commonCompare;
+			}
+			if (view.size == value.size()) {
+				return 0;
+			}
+			return view.size < value.size() ? -1 : 1;
+		}
+
+		bool stringViewSatisfiesPredicate(const SerializedStringView &actual,
+										  const PredicateSpecExpectation &expected) {
+			const auto *expectedValue = std::get_if<std::string>(&expected.value->getVariant());
+			if (expectedValue == nullptr) {
+				return propertyValueSatisfiesPredicate(PropertyValue(std::string(actual.data, actual.size)), expected);
+			}
+			const int comparison = compareStringView(actual, *expectedValue);
+			switch (expected.op) {
+				case PropertyEntityPredicateOp::PEP_EQ:
+					return comparison == 0;
+				case PropertyEntityPredicateOp::PEP_NE:
+					return comparison != 0;
+				case PropertyEntityPredicateOp::PEP_LT:
+					return comparison < 0;
+				case PropertyEntityPredicateOp::PEP_LE:
+					return comparison <= 0;
+				case PropertyEntityPredicateOp::PEP_GT:
+					return comparison > 0;
+				case PropertyEntityPredicateOp::PEP_GE:
+					return comparison >= 0;
+				case PropertyEntityPredicateOp::PEP_RANGE_CLOSED: {
+					if (expected.upperValue == nullptr) {
+						return false;
+					}
+					const auto *upperValue = std::get_if<std::string>(&expected.upperValue->getVariant());
+					return upperValue != nullptr && comparison >= 0 && compareStringView(actual, *upperValue) <= 0;
+				}
+			}
+			return false;
+		}
+
+		std::optional<bool> readSerializedPropertyValueSatisfiesPredicate(const char *&cursor, const char *end,
+																		  const PredicateSpecExpectation &expected) {
+			const char *valueStart = cursor;
+			PropertyType type = PropertyType::UNKNOWN;
+			if (!readPod(cursor, end, type)) { // ZYX_COV_EXCL_LINE
+				return std::nullopt;
+			}
+
+			if (type != expected.value->getType()) {
+				cursor = valueStart;
+				auto actual = readSerializedPropertyValue(cursor, end);
+				if (!actual.has_value()) { // ZYX_COV_EXCL_LINE
+					return std::nullopt;
+				}
+				return propertyValueSatisfiesPredicate(*actual, expected);
+			}
+
+			switch (type) {
+				case PropertyType::BOOLEAN: {
+					bool value = false;
+					if (!readPod(cursor, end, value)) { // ZYX_COV_EXCL_LINE
+						return std::nullopt;
+					}
+					return typedValueSatisfiesPredicate(value, expected);
+				}
+				case PropertyType::INTEGER: {
+					int64_t value = 0;
+					if (!readPod(cursor, end, value)) { // ZYX_COV_EXCL_LINE
+						return std::nullopt;
+					}
+					return typedValueSatisfiesPredicate(value, expected);
+				}
+				case PropertyType::DOUBLE: {
+					double value = 0.0;
+					if (!readPod(cursor, end, value)) { // ZYX_COV_EXCL_LINE
+						return std::nullopt;
+					}
+					return typedValueSatisfiesPredicate(value, expected);
+				}
+				case PropertyType::STRING: {
+					SerializedStringView value;
+					if (!readStringView(cursor, end, value)) { // ZYX_COV_EXCL_LINE
+						return std::nullopt;
+					}
+					return stringViewSatisfiesPredicate(value, expected);
+				}
+				default:
+					cursor = valueStart;
+					auto actual = readSerializedPropertyValue(cursor, end);
+					if (!actual.has_value()) { // ZYX_COV_EXCL_LINE
+						return std::nullopt;
+					}
+					return propertyValueSatisfiesPredicate(*actual, expected);
+			}
+		}
+
 		std::optional<bool> readPropertyEntityPredicateMatch(const char *buf,
 															 const std::vector<PredicateSpecExpectation> &expected) {
 			const char *cursor = buf;
@@ -686,21 +817,191 @@ namespace graph::storage {
 					continue;
 				}
 
-				auto actual = readSerializedPropertyValue(cursor, end);
-				if (!actual.has_value()) { // ZYX_COV_EXCL_LINE
-					return std::nullopt;
-				}
 				for (const auto &entry: expected) {
 					if (!stringViewEquals(key, *entry.key)) {
 						continue;
 					}
-					if (!propertyValueSatisfiesPredicate(*actual, entry)) {
+					const char *valueCursor = cursor;
+					auto matches = readSerializedPropertyValueSatisfiesPredicate(valueCursor, end, entry);
+					if (!matches.has_value()) { // ZYX_COV_EXCL_LINE
+						return std::nullopt;
+					}
+					if (!matches.value()) {
 						return false;
 					}
 					++matchedPredicates;
 				}
+				if (!skipPropertyValue(cursor, end)) { // ZYX_COV_EXCL_LINE
+					return std::nullopt;
+				}
 			}
 			return matchedPredicates == expected.size();
+		}
+
+
+		template<typename Matcher>
+		size_t countPropertyEntityMatches(const DataManager &dm,
+										 const std::vector<int64_t> &ids,
+										 concurrent::ThreadPool *pool,
+										 Matcher &&matchesPredicate) {
+			if (ids.empty() || !dm.hasPreadSupport()) {
+				return 0;
+			}
+
+			std::vector<int64_t> sortedIds;
+			sortedIds.reserve(ids.size());
+			bool strictlyIncreasing = true;
+			bool hasPreviousId = false;
+			int64_t previousId = 0;
+			for (const int64_t id: ids) {
+				if (id == 0) {
+					continue;
+				}
+				if (hasPreviousId && id <= previousId) {
+					strictlyIncreasing = false;
+				}
+				sortedIds.push_back(id);
+				previousId = id;
+				hasPreviousId = true;
+			}
+			if (sortedIds.empty()) {
+				return 0;
+			}
+
+			std::vector<size_t> multiplicities;
+			if (!strictlyIncreasing) {
+				std::sort(sortedIds.begin(), sortedIds.end());
+				multiplicities.reserve(sortedIds.size());
+				size_t write = 0;
+				for (size_t read = 0; read < sortedIds.size();) {
+					const int64_t id = sortedIds[read];
+					size_t next = read + 1;
+					while (next < sortedIds.size() && sortedIds[next] == id) {
+						++next;
+					}
+					sortedIds[write++] = id;
+					multiplicities.push_back(next - read);
+					read = next;
+				}
+				sortedIds.resize(write);
+			}
+
+			const auto segmentIndexManager = dm.getSegmentIndexManager();
+			const auto segmentTracker = dm.getSegmentTracker();
+			if (!segmentIndexManager || !segmentTracker) { // ZYX_COV_EXCL_LINE
+				return 0;
+			}
+			const auto &segIndex = segmentIndexManager->getPropertySegmentIndex();
+			const auto work = collectPropertyEntitySegmentWork(sortedIds, segIndex);
+			if (work.empty()) {
+				return 0;
+			}
+
+			constexpr size_t entitySize = Property::getTotalSize();
+			auto scanPropertyWork = [&](const PropertyEntitySegmentWork &w,
+										  const SegmentHeader &header,
+										  const char *dataBuf,
+										  size_t &targetCount) {
+				for (size_t i = w.idBegin; i < w.idEnd; ++i) {
+					const int64_t id = sortedIds[i];
+					const auto slot = static_cast<uint32_t>(id - header.start_id);
+					if (slot >= header.used) {
+						continue;
+					}
+					const char *entityBuffer = dataBuf + static_cast<size_t>(slot) * entitySize;
+					if (readSerializedPropertyId(entityBuffer) != id) {
+						continue;
+					}
+					const auto matches = matchesPredicate(entityBuffer);
+					if (matches.has_value() && matches.value()) {
+						targetCount += multiplicities.empty() ? size_t{1} : multiplicities[i];
+					}
+				}
+			};
+
+			const auto workSegIndices = collectPropertyEntityWorkSegmentIndices(work);
+			auto groups = buildCoalescedGroups(workSegIndices, segIndex);
+			size_t count = 0;
+			if (pool && !pool->isSingleThreaded() && work.size() > 1) { // ZYX_COV_EXCL_LINE
+				std::vector<size_t> perWorkCounts(work.size(), 0);
+				pool->parallelFor(0, groups.size(), [&](size_t gi) {
+					const auto &group = groups[gi];
+					const size_t totalBytes = group.segCount * TOTAL_SEGMENT_SIZE;
+					std::vector<char> groupBuf(totalBytes);
+					const auto groupOffset = static_cast<int64_t>(group.startOffset);
+					const ssize_t n = dm.preadBytes(groupBuf.data(), totalBytes, groupOffset);
+					if (n < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
+						return;
+					}
+
+					for (size_t mi = 0; mi < group.memberIndices.size(); ++mi) {
+						const size_t wi = group.memberIndices[mi];
+						const auto &w = work[wi];
+						const size_t bufferOffset = mi * TOTAL_SEGMENT_SIZE;
+						SegmentHeader header;
+						std::memcpy(&header, groupBuf.data() + bufferOffset, sizeof(SegmentHeader));
+						if (header.used == 0) {
+							continue;
+						}
+						scanPropertyWork(w, header, groupBuf.data() + bufferOffset + sizeof(SegmentHeader),
+										 perWorkCounts[wi]);
+					}
+				});
+
+				for (const size_t perWorkCount: perWorkCounts) {
+					count += perWorkCount;
+				}
+				return count;
+			}
+
+			for (const auto &group: groups) {
+				if (group.segCount == 1) {
+					const size_t wi = group.memberIndices.front();
+					const auto &w = work[wi];
+					const auto &seg = segIndex[w.segmentIndex];
+					SegmentHeader header = segmentTracker->getSegmentHeaderCopy(seg.segmentOffset);
+					if (header.used == 0) {
+						continue;
+					}
+					const size_t dataBytes = static_cast<size_t>(header.used) * entitySize;
+					std::vector<char> buf(dataBytes);
+					const auto dataOffset = static_cast<int64_t>(seg.segmentOffset + sizeof(SegmentHeader));
+					const ssize_t n = dm.preadBytes(buf.data(), dataBytes, dataOffset);
+					if (n < static_cast<ssize_t>(dataBytes)) {
+						continue;
+					}
+					scanPropertyWork(w, header, buf.data(), count);
+					continue;
+				}
+
+				for (size_t chunkBegin = 0; chunkBegin < group.memberIndices.size();
+					 chunkBegin += kMaxCoalescedPropertyReadSegments) {
+					const size_t chunkSegments =
+							std::min(kMaxCoalescedPropertyReadSegments, group.memberIndices.size() - chunkBegin);
+					const size_t totalBytes = chunkSegments * TOTAL_SEGMENT_SIZE;
+					std::vector<char> groupBuf(totalBytes);
+					const auto groupOffset = static_cast<int64_t>(
+							group.startOffset + chunkBegin * TOTAL_SEGMENT_SIZE);
+					const ssize_t n = dm.preadBytes(groupBuf.data(), totalBytes, groupOffset);
+					if (n < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
+						continue;
+					}
+
+					for (size_t mi = 0; mi < chunkSegments; ++mi) {
+						const size_t wi = group.memberIndices[chunkBegin + mi];
+						const auto &w = work[wi];
+						const size_t bufferOffset = mi * TOTAL_SEGMENT_SIZE;
+						SegmentHeader header;
+						std::memcpy(&header, groupBuf.data() + bufferOffset, sizeof(SegmentHeader));
+						if (header.used == 0) {
+							continue;
+						}
+						scanPropertyWork(w, header, groupBuf.data() + bufferOffset + sizeof(SegmentHeader), count);
+					}
+				}
+			}
+
+			return count;
 		}
 
 	} // namespace
@@ -1741,47 +2042,10 @@ namespace graph::storage {
 
 	size_t
 	DataManager::bulkCountPropertyEntityPredicates(const std::vector<int64_t> &ids,
-												   const std::unordered_map<std::string, PropertyValue> &expected,
-												   concurrent::ThreadPool *pool) const {
-		if (ids.empty() || expected.empty() || !hasPreadSupport()) {
+											   const std::unordered_map<std::string, PropertyValue> &expected,
+											   concurrent::ThreadPool *pool) const {
+		if (expected.empty()) {
 			return 0;
-		}
-
-		std::vector<int64_t> sortedIds;
-		sortedIds.reserve(ids.size());
-		bool strictlyIncreasing = true;
-		bool hasPreviousId = false;
-		int64_t previousId = 0;
-		for (const int64_t id: ids) {
-			if (id != 0) {
-				if (hasPreviousId && id <= previousId) {
-					strictlyIncreasing = false;
-				}
-				sortedIds.push_back(id);
-				previousId = id;
-				hasPreviousId = true;
-			}
-		}
-		if (sortedIds.empty()) {
-			return 0;
-		}
-
-		std::vector<size_t> multiplicities;
-		if (!strictlyIncreasing) {
-			std::sort(sortedIds.begin(), sortedIds.end());
-			multiplicities.reserve(sortedIds.size());
-			size_t write = 0;
-			for (size_t read = 0; read < sortedIds.size();) {
-				const int64_t id = sortedIds[read];
-				size_t next = read + 1;
-				while (next < sortedIds.size() && sortedIds[next] == id) {
-					++next;
-				}
-				sortedIds[write++] = id;
-				multiplicities.push_back(next - read);
-				read = next;
-			}
-			sortedIds.resize(write);
 		}
 
 		std::vector<PredicateExpectation> predicateExpectations;
@@ -1792,135 +2056,32 @@ namespace graph::storage {
 		const bool useSinglePredicate = predicateExpectations.size() == 1;
 		const SinglePredicateExpectation singlePredicate =
 				useSinglePredicate ? SinglePredicateExpectation{predicateExpectations.front().key,
-																predicateExpectations.front().value}
-								   : SinglePredicateExpectation{};
+														predicateExpectations.front().value}
+							   : SinglePredicateExpectation{};
+		return countPropertyEntityMatches(*this, ids, pool, [&](const char *entityBuffer) {
+			return useSinglePredicate ? readPropertyEntitySinglePredicateMatch(entityBuffer, singlePredicate)
+								  : readPropertyEntityPredicateMatch(entityBuffer, predicateExpectations);
+		});
+	}
 
-		const auto &segIndex = segmentIndexManager_->getPropertySegmentIndex();
-		constexpr size_t entitySize = Property::getTotalSize();
-
-		const auto work = collectPropertyEntitySegmentWork(sortedIds, segIndex);
-
-		if (work.empty()) {
+	size_t
+	DataManager::bulkCountPropertyEntityPredicateSpecs(const std::vector<int64_t> &ids,
+													 const std::vector<PropertyEntityPredicate> &predicates,
+													 concurrent::ThreadPool *pool) const {
+		if (predicates.empty()) {
 			return 0;
 		}
 
-		auto matchesPredicate = [&](const char *entityBuffer) {
-			return useSinglePredicate ? readPropertyEntitySinglePredicateMatch(entityBuffer, singlePredicate)
-									  : readPropertyEntityPredicateMatch(entityBuffer, predicateExpectations);
-		};
-		auto scanPropertyWork = [&](const PropertyEntitySegmentWork &w,
-		                            const SegmentHeader &header,
-		                            const char *dataBuf,
-		                            size_t &targetCount) {
-			for (size_t i = w.idBegin; i < w.idEnd; ++i) {
-				int64_t id = sortedIds[i];
-				uint32_t slot = static_cast<uint32_t>(id - header.start_id);
-				if (slot >= header.used) {
-					continue;
-				}
-				const char *entityBuffer = dataBuf + slot * entitySize;
-				if (readSerializedPropertyId(entityBuffer) != id) {
-					continue;
-				}
-				const auto matches = matchesPredicate(entityBuffer);
-				if (matches.has_value() && matches.value()) {
-					targetCount += multiplicities.empty() ? size_t{1} : multiplicities[i];
-				}
-			}
-		};
-
-		size_t count = 0;
-		if (pool && !pool->isSingleThreaded() && work.size() > 1) { // ZYX_COV_EXCL_LINE
-			const auto workSegIndices = collectPropertyEntityWorkSegmentIndices(work);
-			auto groups = buildCoalescedGroups(workSegIndices, segIndex);
-			std::vector<size_t> perWorkCounts(work.size(), 0);
-
-			pool->parallelFor(0, groups.size(), [&](size_t gi) {
-				const auto &group = groups[gi];
-				size_t totalBytes = group.segCount * TOTAL_SEGMENT_SIZE;
-				std::vector<char> groupBuf(totalBytes);
-				auto groupOffset = static_cast<int64_t>(group.startOffset);
-				ssize_t n = preadBytes(groupBuf.data(), totalBytes, groupOffset);
-				if (n < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
-					return;
-				}
-
-				for (size_t mi = 0; mi < group.memberIndices.size(); ++mi) {
-					size_t wi = group.memberIndices[mi];
-					const auto &w = work[wi];
-					size_t bufOffset = mi * TOTAL_SEGMENT_SIZE;
-
-					SegmentHeader header;
-					std::memcpy(&header, groupBuf.data() + bufOffset, sizeof(SegmentHeader));
-					if (header.used == 0) {
-						continue;
-					}
-
-					const char *dataBuf = groupBuf.data() + bufOffset + sizeof(SegmentHeader);
-					scanPropertyWork(w, header, dataBuf, perWorkCounts[wi]);
-				}
-			});
-
-			for (const size_t perWorkCount: perWorkCounts) {
-				count += perWorkCount;
-			}
-		} else {
-			const auto workSegIndices = collectPropertyEntityWorkSegmentIndices(work);
-			auto groups = buildCoalescedGroups(workSegIndices, segIndex);
-			for (const auto &group : groups) {
-				if (group.segCount == 1) {
-					const size_t wi = group.memberIndices.front();
-					const auto &w = work[wi];
-					const auto &seg = segIndex[w.segmentIndex];
-					SegmentHeader header = segmentTracker_->getSegmentHeaderCopy(seg.segmentOffset);
-					if (header.used == 0) {
-						continue;
-					}
-
-					const size_t dataBytes = static_cast<size_t>(header.used) * entitySize;
-					std::vector<char> buf(dataBytes);
-					auto dataOffset = static_cast<int64_t>(seg.segmentOffset + sizeof(SegmentHeader));
-					ssize_t n = preadBytes(buf.data(), dataBytes, dataOffset);
-					if (n < static_cast<ssize_t>(dataBytes)) {
-						continue;
-					}
-
-					scanPropertyWork(w, header, buf.data(), count);
-					continue;
-				}
-
-				for (size_t chunkBegin = 0; chunkBegin < group.memberIndices.size();
-				     chunkBegin += kMaxCoalescedPropertyReadSegments) {
-					const size_t chunkSegments =
-							std::min(kMaxCoalescedPropertyReadSegments, group.memberIndices.size() - chunkBegin);
-					const size_t totalBytes = chunkSegments * TOTAL_SEGMENT_SIZE;
-					std::vector<char> groupBuf(totalBytes);
-					const auto groupOffset = static_cast<int64_t>(
-							group.startOffset + chunkBegin * TOTAL_SEGMENT_SIZE);
-					ssize_t n = preadBytes(groupBuf.data(), totalBytes, groupOffset);
-					if (n < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
-						continue;
-					}
-
-					for (size_t mi = 0; mi < chunkSegments; ++mi) {
-						const size_t wi = group.memberIndices[chunkBegin + mi];
-						const auto &w = work[wi];
-						const size_t bufOffset = mi * TOTAL_SEGMENT_SIZE;
-
-						SegmentHeader header;
-						std::memcpy(&header, groupBuf.data() + bufOffset, sizeof(SegmentHeader));
-						if (header.used == 0) {
-							continue;
-						}
-
-						const char *dataBuf = groupBuf.data() + bufOffset + sizeof(SegmentHeader);
-						scanPropertyWork(w, header, dataBuf, count);
-					}
-				}
-			}
+		std::vector<PredicateSpecExpectation> predicateExpectations;
+		predicateExpectations.reserve(predicates.size());
+		for (const auto &predicate: predicates) {
+			predicateExpectations.push_back({&predicate.key, &predicate.value,
+										 predicate.upperValue.has_value() ? &*predicate.upperValue : nullptr,
+										 predicate.op});
 		}
-
-		return count;
+		return countPropertyEntityMatches(*this, ids, pool, [&](const char *entityBuffer) {
+			return readPropertyEntityPredicateMatch(entityBuffer, predicateExpectations);
+		});
 	}
 
 

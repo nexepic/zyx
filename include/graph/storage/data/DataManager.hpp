@@ -244,6 +244,9 @@ namespace graph::storage {
 		size_t bulkCountPropertyEntityPredicates(const std::vector<int64_t> &ids,
 												 const std::unordered_map<std::string, PropertyValue> &expected,
 												 concurrent::ThreadPool *pool = nullptr) const;
+		size_t bulkCountPropertyEntityPredicateSpecs(const std::vector<int64_t> &ids,
+													 const std::vector<PropertyEntityPredicate> &predicates,
+													 concurrent::ThreadPool *pool = nullptr) const;
 		PropertyEntityPredicateMatchResult
 		bulkMatchPropertyEntityPredicateSpecs(const std::vector<int64_t> &ids, const std::vector<size_t> &rows,
 											  size_t rowCount, const std::vector<PropertyEntityPredicate> &predicates,
