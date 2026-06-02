@@ -811,6 +811,52 @@ TEST_F(DataManagerTest, BulkVisitPropertyEntityValuesStreamsSelectedKeyWithoutCo
 	EXPECT_FALSE(valuesByRow.contains(4));
 }
 
+TEST_F(DataManagerTest, BulkVisitPropertyEntityValuesStreamsScalarAndTemporalValues) {
+	const auto expectedDate = TemporalDate::fromYMD(2026, 6, 2);
+	const auto expectedDateTime = TemporalDateTime::fromComponents(2026, 6, 2, 12, 34, 56, 789);
+	const auto expectedDuration = TemporalDuration::fromComponents(0, 1, 0, 2, 3, 4, 5);
+	const int64_t propertyId = addNodeWithPropertyEntity(
+		dataManager,
+		"BulkVisitScalarNode",
+		{{"active", PropertyValue(true)},
+		 {"name", PropertyValue("alice")},
+		 {"age", PropertyValue(int64_t{42})},
+		 {"score", PropertyValue(9.5)},
+		 {"date", PropertyValue(expectedDate)},
+		 {"datetime", PropertyValue(expectedDateTime)},
+		 {"duration", PropertyValue(expectedDuration)}});
+	ASSERT_NE(propertyId, 0);
+
+	simulateSave();
+	dataManager->clearCache();
+
+	std::unordered_map<std::string, PropertyValue> values;
+	auto visitKey = [&](const std::string &key) {
+		return dataManager->bulkVisitPropertyEntityValues(
+			{propertyId},
+			{0},
+			1,
+			key,
+			[&](size_t, const PropertyValue &value) { values[key] = value; },
+			nullptr);
+	};
+
+	EXPECT_EQ(visitKey("active"), 1U);
+	EXPECT_EQ(visitKey("name"), 1U);
+	EXPECT_EQ(visitKey("age"), 1U);
+	EXPECT_EQ(visitKey("score"), 1U);
+	EXPECT_EQ(visitKey("date"), 1U);
+	EXPECT_EQ(visitKey("datetime"), 1U);
+	EXPECT_EQ(visitKey("duration"), 1U);
+	EXPECT_EQ(values.at("active"), PropertyValue(true));
+	EXPECT_EQ(values.at("name"), PropertyValue("alice"));
+	EXPECT_EQ(values.at("age"), PropertyValue(int64_t{42}));
+	EXPECT_EQ(values.at("score"), PropertyValue(9.5));
+	EXPECT_EQ(values.at("date"), PropertyValue(expectedDate));
+	EXPECT_EQ(values.at("datetime"), PropertyValue(expectedDateTime));
+	EXPECT_EQ(values.at("duration"), PropertyValue(expectedDuration));
+}
+
 TEST_F(DataManagerTest, BulkMatchPropertyEntityPredicatesHandlesStructuredAndNullValues) {
 	std::vector<PropertyValue> expectedList{PropertyValue(int64_t(1)), PropertyValue("two")};
 	PropertyValue::MapType expectedMap;

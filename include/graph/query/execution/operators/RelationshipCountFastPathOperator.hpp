@@ -52,6 +52,8 @@ namespace graph::query::execution::operators {
 		[[nodiscard]] std::vector<int64_t> collectSeedIds() const;
 		[[nodiscard]] int64_t countExpandedPaths(const std::vector<int64_t> &seedIds) const;
 		[[nodiscard]] int64_t countDirectRelationships() const;
+		[[nodiscard]] std::optional<int64_t> countDirectRelationshipsWithColumnarKernel(
+				int64_t edgeTypeId, int64_t maxId) const;
 		[[nodiscard]] std::optional<int64_t> countDirectRelationshipsFromIndexes(int64_t edgeTypeId) const;
 		[[nodiscard]] bool edgeMatchesPropertyColumns(
 				const std::unordered_map<std::string, std::vector<std::optional<PropertyValue>>> &columns,

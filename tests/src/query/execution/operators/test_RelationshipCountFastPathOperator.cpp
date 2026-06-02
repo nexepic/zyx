@@ -452,6 +452,7 @@ TEST_F(RelationshipCountFastPathOperatorTest, CleanDirectRelationshipCountWithou
 	addLikes(source, first);
 	db->getStorage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
+	ASSERT_TRUE(im->createIndex("edge_type_metadata_preferred_idx", "edge", "", ""));
 
 	NodeScanConfig seedConfig;
 	NodeScanRequirements seedRequirements;
@@ -472,6 +473,7 @@ TEST_F(RelationshipCountFastPathOperatorTest, CleanDirectRelationshipCountWithou
 	EXPECT_EQ(value.value(), PropertyValue(int64_t{128}));
 	const auto snapshot = debug::PerfTrace::snapshotAndReset();
 	EXPECT_TRUE(snapshot.contains("relationship_count.load_edge_metadata"));
+	EXPECT_FALSE(snapshot.contains("relationship_count.index_candidates"));
 	EXPECT_FALSE(snapshot.contains("relationship_count.property_predicate"));
 	EXPECT_FALSE(snapshot.contains("relationship_count.property_columns"));
 }
