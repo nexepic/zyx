@@ -2,16 +2,14 @@
 
 #include <algorithm>
 #include <chrono>
-#include <unordered_map>
 #include <utility>
 
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/QueryContext.hpp"
 #include "graph/query/execution/NodeMetadataColumnLoader.hpp"
 #include "graph/query/execution/NodeMetadataFilter.hpp"
-#include "graph/query/execution/NodePropertyColumnLoader.hpp"
 #include "graph/query/execution/NodeScanRequirementUtils.hpp"
-#include "graph/query/execution/TypedValueKey.hpp"
+#include "graph/query/execution/TypedGroupCounter.hpp"
 
 namespace graph::query::execution::operators {
 
@@ -23,27 +21,13 @@ namespace graph::query::execution::operators {
 					std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count());
 		}
 
-		struct GroupCount {
-			PropertyValue value;
-			int64_t count = 0;
-		};
-
-		struct GroupHash {
-			size_t operator()(const TypedEqualityKey &key) const { return key.hash(); }
-		};
-
-		using GroupCounts = std::unordered_map<TypedEqualityKey, GroupCount, GroupHash>;
-
-		void addGroupValue(GroupCounts &groups, PropertyValue value) {
-			auto key = TypedEqualityKey::from(value);
-			auto [it, inserted] = groups.emplace(std::move(key), GroupCount{value, 0});
-			if (!inserted && it->second.value.getType() == PropertyType::NULL_TYPE && value.getType() != PropertyType::NULL_TYPE) {
-				it->second.value = std::move(value);
+		void addProfile(const char *phase, Clock::time_point start) {
+			if (debug::PerfTrace::isEnabled()) {
+				debug::PerfTrace::addDuration(phase, elapsedNs(start));
 			}
-			++it->second.count;
 		}
 
-		std::optional<GroupCounts> countGroupsFromMetadata(
+		std::optional<TypedGroupCounter> countGroupsFromMetadata(
 				const std::shared_ptr<storage::DataManager> &dm,
 				const NodeCandidateSet &candidateSet,
 				const NodeScanConfig &config,
@@ -54,8 +38,7 @@ namespace graph::query::execution::operators {
 			const auto requirements = relaxSatisfiedCandidateChecks(inputRequirements, candidateSet);
 			const NodeMetadataRowFilter rowFilter(dm, config, requirements);
 			NodeMetadataColumnLoader metadataLoader(dm);
-			NodePropertyColumnLoader propertyLoader(dm, threadPool);
-			GroupCounts groups;
+			TypedGroupCounter groups;
 
 			static constexpr size_t kMetadataGroupBatchSize = 65536;
 			for (size_t begin = 0; begin < candidateSet.ids.size();) {
@@ -68,23 +51,63 @@ namespace graph::query::execution::operators {
 					return std::nullopt;
 				}
 
-				std::vector<uint8_t> selected(metadata->size(), 0);
-				for (size_t row = 0; row < metadata->size(); ++row) {
-					selected[row] = rowFilter.accepts(*metadata, row) ? 1U : 0U;
-				}
+				std::vector<int64_t> propertyEntityIds;
+				std::vector<size_t> propertyRows;
+				std::vector<size_t> fallbackRows;
+				propertyEntityIds.reserve(metadata->size());
+				propertyRows.reserve(metadata->size());
+				fallbackRows.reserve(metadata->size() / 8);
 
-				auto columns = propertyLoader.loadColumns(*metadata, selected, {groupProperty});
-				auto columnIt = columns.find(groupProperty);
-				const auto *column = columnIt == columns.end() ? nullptr : &columnIt->second;
+				size_t selectedCount = 0;
 				for (size_t row = 0; row < metadata->size(); ++row) {
-					if (selected[row] == 0) {
+					if (!rowFilter.accepts(*metadata, row)) {
 						continue;
 					}
-					PropertyValue value;
-					if (column && row < column->size() && (*column)[row].has_value()) {
-						value = *(*column)[row];
+					++selectedCount;
+
+					const auto storageType = metadata->propertyStorageTypes[row];
+					const int64_t propertyEntityId = metadata->propertyEntityIds[row];
+					if (storageType == PropertyStorageType::PROPERTY_ENTITY && propertyEntityId != 0) {
+						propertyEntityIds.push_back(propertyEntityId);
+						propertyRows.push_back(row);
+					} else if (storageType == PropertyStorageType::BLOB_ENTITY && propertyEntityId != 0) {
+						fallbackRows.push_back(row);
 					}
-					addGroupValue(groups, std::move(value));
+				}
+
+				size_t rowsWithGroupValue = 0;
+				if (dm && !propertyEntityIds.empty()) {
+					const auto loadStart = Clock::now();
+					(void) dm->bulkVisitPropertyEntityValues(
+							propertyEntityIds,
+							propertyRows,
+							metadata->size(),
+							groupProperty,
+							[&](size_t row, const PropertyValue &value) {
+								if (row < metadata->size()) {
+									groups.add(value);
+									++rowsWithGroupValue;
+								}
+							},
+							threadPool);
+					addProfile("node_scan.load_property_entities", loadStart);
+				}
+
+				if (dm && !fallbackRows.empty()) {
+					const auto fallbackStart = Clock::now();
+					for (const size_t row : fallbackRows) {
+						Node node = metadata->toNode(row);
+						const auto properties = dm->getNodePropertiesDirect(node);
+						if (auto valueIt = properties.find(groupProperty); valueIt != properties.end()) {
+							groups.add(valueIt->second);
+							++rowsWithGroupValue;
+						}
+					}
+					addProfile("node_scan.load_properties", fallbackStart);
+				}
+
+				if (selectedCount > rowsWithGroupValue) {
+					groups.add(PropertyValue(), static_cast<int64_t>(selectedCount - rowsWithGroupValue));
 				}
 				begin = end;
 			}
@@ -118,7 +141,7 @@ namespace graph::query::execution::operators {
 		emitted_ = true;
 
 		const auto start = Clock::now();
-		GroupCounts groups;
+		TypedGroupCounter groups;
 		bool countedFromMetadata = false;
 		if (predicates_.empty()) {
 			auto metadataGroups = countGroupsFromMetadata(
@@ -152,7 +175,7 @@ namespace graph::query::execution::operators {
 					if (column && row < column->size() && (*column)[row].has_value()) {
 						value = *(*column)[row];
 					}
-					addGroupValue(groups, std::move(value));
+					groups.add(value);
 				}
 				begin = end;
 			}
@@ -163,8 +186,9 @@ namespace graph::query::execution::operators {
 		}
 
 		RecordBatch output;
-		output.reserve(groups.size());
-		for (const auto &[_, group] : groups) {
+		const auto groupCounts = groups.toVector();
+		output.reserve(groupCounts.size());
+		for (const auto &group : groupCounts) {
 			Record record;
 			record.setValue(groupAlias_, group.value);
 			record.setValue(outputAlias_, PropertyValue(group.count));

@@ -80,7 +80,7 @@ protected:
 	}
 };
 
-TEST_F(NodeGroupCountFastPathOperatorTest, CountsRowsByPropertyFromMetadataColumns) {
+TEST_F(NodeGroupCountFastPathOperatorTest, CountsRowsByPropertyFromMetadataValueStream) {
 	for (int64_t i = 0; i < 300; ++i) {
 		addPerson({{"country", PropertyValue(i % 2 == 0 ? "CN" : "US")}});
 	}
@@ -113,6 +113,8 @@ TEST_F(NodeGroupCountFastPathOperatorTest, CountsRowsByPropertyFromMetadataColum
 	const auto snapshot = debug::PerfTrace::snapshotAndReset();
 	EXPECT_TRUE(snapshot.contains("node_scan.group_count"));
 	EXPECT_TRUE(snapshot.contains("node_scan.load_node_metadata"));
+	EXPECT_TRUE(snapshot.contains("node_scan.load_property_entities"));
+	EXPECT_FALSE(snapshot.contains("node_scan.extract_property_columns"));
 	EXPECT_FALSE(snapshot.contains("node_scan.load_properties"));
 	EXPECT_FALSE(snapshot.contains("node_scan.load_nodes"));
 }

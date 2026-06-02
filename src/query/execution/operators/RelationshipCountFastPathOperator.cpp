@@ -200,26 +200,29 @@ namespace {
 		if (!directCount_.edgeType.empty() && edgeTypeId == 0) {
 			return 0;
 		}
+
+		const int64_t maxId = dm_->getIdAllocator(EntityType::Edge)->getCurrentMaxId();
+		const bool hasPropertyFilters = !directCount_.edgeProperties.empty() || !directCount_.edgePredicates.empty();
+		if (!hasPropertyFilters) {
+			const auto metadataStart = Clock::now();
+			if (auto metadataCount = countDirectRelationshipsWithColumnarKernel(edgeTypeId, maxId)) {
+				addProfile("relationship_count.direct_scan", metadataStart);
+				return *metadataCount;
+			}
+		}
+
 		if (auto indexedCount = countDirectRelationshipsFromIndexes(edgeTypeId)) {
 			return *indexedCount;
 		}
 
 		const auto scanStart = Clock::now();
 		int64_t count = 0;
-		const int64_t maxId = dm_->getIdAllocator(EntityType::Edge)->getCurrentMaxId();
 		const bool usedDirectDiskLoad = !dm_->hasUnsavedChanges() && dm_->hasPreadSupport(); // ZYX_COV_EXCL_LINE
 
 		if (usedDirectDiskLoad) {
-			RelationshipColumnarCountKernel kernel(dm_, threadPool_);
-			RelationshipColumnarCountRequest request;
-			request.beginId = 1;
-			request.endId = maxId;
-			request.typeId = edgeTypeId;
-			request.propertyPredicates = directCount_.edgeProperties;
-			request.vectorPredicates = directCount_.edgePredicates;
-			if (auto directCount = kernel.count(request)) {
+			if (auto directCount = countDirectRelationshipsWithColumnarKernel(edgeTypeId, maxId)) {
 				addProfile("relationship_count.direct_scan", scanStart);
-				return directCount->count;
+				return *directCount;
 			}
 		}
 
@@ -279,6 +282,28 @@ namespace {
 		}
 		addProfile("relationship_count.direct_scan", scanStart);
 		return count;
+	}
+
+	std::optional<int64_t> RelationshipCountFastPathOperator::countDirectRelationshipsWithColumnarKernel(
+			int64_t edgeTypeId, int64_t maxId) const {
+		if (!dm_) {
+			return std::nullopt;
+		}
+		if (maxId <= 0) {
+			return int64_t{0};
+		}
+
+		RelationshipColumnarCountKernel kernel(dm_, threadPool_);
+		RelationshipColumnarCountRequest request;
+		request.beginId = 1;
+		request.endId = maxId;
+		request.typeId = edgeTypeId;
+		request.propertyPredicates = directCount_.edgeProperties;
+		request.vectorPredicates = directCount_.edgePredicates;
+		if (auto directCount = kernel.count(request)) {
+			return directCount->count;
+		}
+		return std::nullopt;
 	}
 
 	std::optional<int64_t> RelationshipCountFastPathOperator::countDirectRelationshipsFromIndexes(

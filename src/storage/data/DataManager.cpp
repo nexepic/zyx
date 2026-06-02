@@ -288,7 +288,7 @@ namespace graph::storage {
 			}
 		}
 
-		std::optional<PropertyValue> readSerializedPropertyValue(const char *&cursor, const char *end) {
+		std::optional<PropertyValue> readSerializedPropertyValueFallback(const char *&cursor, const char *end) {
 			if (cursor > end) { // ZYX_COV_EXCL_LINE
 				return std::nullopt;
 			}
@@ -304,6 +304,76 @@ namespace graph::storage {
 				return value;
 			} catch (...) {
 				return std::nullopt;
+			}
+		}
+
+		std::optional<PropertyValue> readSerializedPropertyValue(const char *&cursor, const char *end) {
+			const char *valueStart = cursor;
+			PropertyType type = PropertyType::UNKNOWN;
+			if (!readPod(cursor, end, type)) { // ZYX_COV_EXCL_LINE
+				return std::nullopt;
+			}
+
+			switch (type) {
+				case PropertyType::NULL_TYPE:
+					return PropertyValue();
+				case PropertyType::BOOLEAN: {
+					bool value = false;
+					if (!readPod(cursor, end, value)) { // ZYX_COV_EXCL_LINE
+						return std::nullopt;
+					}
+					return PropertyValue(value);
+				}
+				case PropertyType::INTEGER: {
+					int64_t value = 0;
+					if (!readPod(cursor, end, value)) { // ZYX_COV_EXCL_LINE
+						return std::nullopt;
+					}
+					return PropertyValue(value);
+				}
+				case PropertyType::DOUBLE: {
+					double value = 0.0;
+					if (!readPod(cursor, end, value)) { // ZYX_COV_EXCL_LINE
+						return std::nullopt;
+					}
+					return PropertyValue(value);
+				}
+				case PropertyType::STRING: {
+					std::string value;
+					if (!readString(cursor, end, value)) { // ZYX_COV_EXCL_LINE
+						return std::nullopt;
+					}
+					return PropertyValue(std::move(value));
+				}
+				case PropertyType::DATE: {
+					TemporalDate value;
+					if (!readPod(cursor, end, value.epochDays)) { // ZYX_COV_EXCL_LINE
+						return std::nullopt;
+					}
+					return PropertyValue(value);
+				}
+				case PropertyType::DATETIME: {
+					TemporalDateTime value;
+					if (!readPod(cursor, end, value.epochMillis)) { // ZYX_COV_EXCL_LINE
+						return std::nullopt;
+					}
+					return PropertyValue(value);
+				}
+				case PropertyType::DURATION: {
+					TemporalDuration value;
+					if (!readPod(cursor, end, value.months) || !readPod(cursor, end, value.days) || // ZYX_COV_EXCL_LINE
+						!readPod(cursor, end, value.nanos)) { // ZYX_COV_EXCL_LINE
+						return std::nullopt;
+					}
+					return PropertyValue(value);
+				}
+				case PropertyType::LIST:
+				case PropertyType::MAP:
+				case PropertyType::COMPOSITE:
+				case PropertyType::UNKNOWN:
+				default:
+					cursor = valueStart;
+					return readSerializedPropertyValueFallback(cursor, end);
 			}
 		}
 
