@@ -25,6 +25,8 @@ namespace {
 	constexpr std::string_view kEquivalentMode = "api";
 	constexpr std::string_view kProfileScan = "scan";
 	constexpr std::string_view kProfileIndexed = "indexed";
+	constexpr std::string_view kExecutionModeWarm = "warm";
+	constexpr std::string_view kExecutionModeColdish = "cold-ish";
 
 	struct Options {
 		std::filesystem::path dataset;
@@ -32,6 +34,7 @@ namespace {
 		std::string scale;
 		std::string profile = std::string(kProfileScan);
 		bool emitProfile = false;
+		std::string executionMode = std::string(kExecutionModeWarm);
 		int warmup = 0;
 		int iterations = 1;
 	};
@@ -453,6 +456,49 @@ namespace {
 	}
 
 	template<typename Fn>
+	void runMeasuredColdish(const Options &options, const std::string &workload, Fn &&operation,
+						  bool validateResult = true) {
+		auto runOnce = [&]() {
+			zyx::Database db(options.dbPath.string());
+			db.open();
+			try {
+				const int64_t value = operation(db);
+				db.close();
+				return value;
+			} catch (...) {
+				db.close();
+				throw;
+			}
+		};
+
+		for (int i = 0; i < options.warmup; ++i) {
+			const int64_t value = runOnce();
+			if (validateResult) {
+				requireNonNegative(workload, value);
+			}
+		}
+		for (int i = 0; i < options.iterations; ++i) {
+			(void) measureOperation(
+					options, workload, i, runOnce,
+					[&](const int64_t value) {
+						if (validateResult) {
+							requireNonNegative(workload, value);
+						}
+					});
+		}
+	}
+
+	template<typename Fn>
+	void runQueryWorkload(const Options &options, zyx::Database &db, const std::string &workload, Fn &&operation,
+					  bool validateResult = true) {
+		if (options.executionMode == kExecutionModeColdish) {
+			runMeasuredColdish(options, workload, std::forward<Fn>(operation), validateResult);
+		} else {
+			runMeasured(options, workload, [&]() { return operation(db); }, validateResult);
+		}
+	}
+
+	template<typename Fn>
 	int64_t rowCount(Fn &&operation) {
 		auto result = operation();
 		if constexpr (std::is_convertible_v<decltype(result), zyx::Result>) {
@@ -493,6 +539,11 @@ namespace {
 				}
 			} else if (arg == "--emit-profile") {
 				options.emitProfile = true;
+			} else if (arg == "--execution-mode") {
+				options.executionMode = requireValue(arg);
+				if (options.executionMode != kExecutionModeWarm && options.executionMode != kExecutionModeColdish) {
+					throw std::invalid_argument("--execution-mode must be warm or cold-ish");
+				}
 			} else if (arg == "--warmup") {
 				options.warmup = std::stoi(requireValue(arg));
 			} else if (arg == "--iterations") {
@@ -513,6 +564,9 @@ namespace {
 		if (options.profile != kProfileScan && options.profile != kProfileIndexed) {
 			throw std::invalid_argument("--profile must be scan or indexed");
 		}
+		if (options.executionMode != kExecutionModeWarm && options.executionMode != kExecutionModeColdish) {
+			throw std::invalid_argument("--execution-mode must be warm or cold-ish");
+		}
 		if (options.warmup < 0) {
 			throw std::invalid_argument("--warmup must be >= 0");
 		}
@@ -526,56 +580,63 @@ namespace {
 		LoadedGraph loaded = measureLoadWorkload(options);
 
 		zyx::Database db(options.dbPath.string());
-		db.open();
+		if (options.executionMode == kExecutionModeWarm) {
+			db.open();
+		}
 
 		if (options.profile == kProfileScan) {
-			runMeasured(options, "label_scan_filter", [&]() {
-				return scalarInt(db.execute("MATCH (u:User) WHERE u.country = 'CN' RETURN count(u)"));
+			runQueryWorkload(options, db, "label_scan_filter", [](zyx::Database &queryDb) {
+				return scalarInt(queryDb.execute("MATCH (u:User) WHERE u.country = 'CN' RETURN count(u)"));
 			});
-			runMeasured(options, "all_nodes_property_filter",
-						[&]() { return scalarInt(db.execute("MATCH (n) WHERE n.score >= 900.0 RETURN count(n)")); });
-			runMeasured(options, "label_multi_property_filter", [&]() {
-				return scalarInt(db.execute("MATCH (u:User) WHERE u.country = 'CN' AND u.age >= 30 RETURN count(u)"));
+			runQueryWorkload(options, db, "all_nodes_property_filter", [](zyx::Database &queryDb) {
+				return scalarInt(queryDb.execute("MATCH (n) WHERE n.score >= 900.0 RETURN count(n)"));
 			});
-			runMeasured(options, "relationship_type_scan",
-						[&]() { return scalarInt(db.execute("MATCH ()-[r:FOLLOWS]->() RETURN count(r)")); });
-			runMeasured(options, "relationship_property_filter", [&]() {
-				return scalarInt(db.execute("MATCH ()-[r:FOLLOWS]->() WHERE r.weight = 1 RETURN count(r)"));
+			runQueryWorkload(options, db, "label_multi_property_filter", [](zyx::Database &queryDb) {
+				return scalarInt(queryDb.execute("MATCH (u:User) WHERE u.country = 'CN' AND u.age >= 30 RETURN count(u)"));
 			});
-			runMeasured(options, "one_hop_expand", [&]() {
-				return scalarInt(db.execute("MATCH (:User {id: 'user-000001'})-[:FOLLOWS]->(v:User) RETURN count(v)"));
+			runQueryWorkload(options, db, "relationship_type_scan", [](zyx::Database &queryDb) {
+				return scalarInt(queryDb.execute("MATCH ()-[r:FOLLOWS]->() RETURN count(r)"));
 			});
-			runMeasured(options, "two_hop_expand", [&]() {
-				return scalarInt(db.execute(
+			runQueryWorkload(options, db, "relationship_property_filter", [](zyx::Database &queryDb) {
+				return scalarInt(queryDb.execute("MATCH ()-[r:FOLLOWS]->() WHERE r.weight = 1 RETURN count(r)"));
+			});
+			runQueryWorkload(options, db, "one_hop_expand", [](zyx::Database &queryDb) {
+				return scalarInt(queryDb.execute("MATCH (:User {id: 'user-000001'})-[:FOLLOWS]->(v:User) RETURN count(v)"));
+			});
+			runQueryWorkload(options, db, "two_hop_expand", [](zyx::Database &queryDb) {
+				return scalarInt(queryDb.execute(
 						"MATCH (:User {id: 'user-000001'})-[:FOLLOWS]->(:User)-[:FOLLOWS]->(v:User) RETURN count(v)"));
 			});
-			runMeasured(options, "shortest_path_chain", [&]() {
-				return scalarTruthy(db.execute("MATCH (src:User {id: 'user-000001'}), (dst:User {id: 'user-000006'}) "
-											   "RETURN shortestPath((src)-[:FOLLOWS*1..6]->(dst))"))
+			runQueryWorkload(options, db, "shortest_path_chain", [](zyx::Database &queryDb) {
+				return scalarTruthy(queryDb.execute("MATCH (src:User {id: 'user-000001'}), (dst:User {id: 'user-000006'}) "
+											        "RETURN shortestPath((src)-[:FOLLOWS*1..6]->(dst))"))
 							   ? int64_t{1}
 							   : int64_t{0};
 			});
-			runMeasured(options, "aggregation_group_by",
-						[&]() { return scalarInt(db.execute("MATCH (u:User) RETURN count(DISTINCT u.country)")); });
-			runMeasured(options, "aggregation_count_by_group", [&]() {
-				return rowCount([&]() { return db.execute("MATCH (u:User) RETURN u.country, count(*)"); });
+			runQueryWorkload(options, db, "aggregation_group_by", [](zyx::Database &queryDb) {
+				return scalarInt(queryDb.execute("MATCH (u:User) RETURN count(DISTINCT u.country)"));
 			});
-			runMeasured(options, "topk_property_sort", [&]() {
-				return rowCount(
-						[&]() { return db.execute("MATCH (u:User) RETURN u.id ORDER BY u.score DESC LIMIT 100"); });
+			runQueryWorkload(options, db, "aggregation_count_by_group", [](zyx::Database &queryDb) {
+				return rowCount([&]() { return queryDb.execute("MATCH (u:User) RETURN u.country, count(*)"); });
+			});
+			runQueryWorkload(options, db, "topk_property_sort", [](zyx::Database &queryDb) {
+				return rowCount([&]() { return queryDb.execute("MATCH (u:User) RETURN u.id ORDER BY u.score DESC LIMIT 100"); });
 			});
 		} else {
-			runMeasured(options, "point_lookup_indexed",
-						[&]() { return scalarInt(db.execute("MATCH (u:User {id: 'user-000001'}) RETURN count(u)")); });
-			runMeasured(options, "property_equality_indexed", [&]() {
-				return scalarInt(db.execute("MATCH (u:User) WHERE u.country = 'CN' RETURN count(u)"));
+			runQueryWorkload(options, db, "point_lookup_indexed", [](zyx::Database &queryDb) {
+				return scalarInt(queryDb.execute("MATCH (u:User {id: 'user-000001'}) RETURN count(u)"));
 			});
-			runMeasured(options, "property_range_indexed", [&]() {
-				return scalarInt(db.execute("MATCH (u:User) WHERE u.age >= 30 AND u.age < 40 RETURN count(u)"));
+			runQueryWorkload(options, db, "property_equality_indexed", [](zyx::Database &queryDb) {
+				return scalarInt(queryDb.execute("MATCH (u:User) WHERE u.country = 'CN' RETURN count(u)"));
+			});
+			runQueryWorkload(options, db, "property_range_indexed", [](zyx::Database &queryDb) {
+				return scalarInt(queryDb.execute("MATCH (u:User) WHERE u.age >= 30 AND u.age < 40 RETURN count(u)"));
 			});
 		}
 
-		db.close();
+		if (options.executionMode == kExecutionModeWarm) {
+			db.close();
+		}
 		return 0;
 	}
 

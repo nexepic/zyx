@@ -32,28 +32,57 @@ namespace graph::query::execution {
 			return nodeId;
 		}
 
-		void readMetadataIntoBatch(const char *buf, NodeMetadataBatch &batch, size_t row) {
+		NodeMetadataRow readMetadataRow(const char *buf) {
+			NodeMetadataRow row;
 			size_t off = sizeof(int64_t);
-			std::memcpy(&batch.firstOutEdgeIds[row], buf + off, sizeof(int64_t));
+			row.nodeId = readSerializedNodeId(buf);
+			std::memcpy(&row.firstOutEdgeId, buf + off, sizeof(int64_t));
 			off += sizeof(int64_t);
-			std::memcpy(&batch.firstInEdgeIds[row], buf + off, sizeof(int64_t));
+			std::memcpy(&row.firstInEdgeId, buf + off, sizeof(int64_t));
 			off += sizeof(int64_t);
-			std::memcpy(&batch.propertyEntityIds[row], buf + off, sizeof(int64_t));
+			std::memcpy(&row.propertyEntityId, buf + off, sizeof(int64_t));
 			off += sizeof(int64_t);
-			std::memcpy(batch.labelIds[row].data(), buf + off, sizeof(int64_t) * Node::MAX_LABELS);
+			std::memcpy(row.labelIds.data(), buf + off, sizeof(int64_t) * Node::MAX_LABELS);
 			off += sizeof(int64_t) * Node::MAX_LABELS;
-			std::memcpy(&batch.labelCounts[row], buf + off, sizeof(uint8_t));
+			std::memcpy(&row.labelCount, buf + off, sizeof(uint8_t));
 			off += sizeof(uint8_t);
 			uint32_t storageType = 0;
 			std::memcpy(&storageType, buf + off, sizeof(uint32_t));
-			batch.propertyStorageTypes[row] = static_cast<PropertyStorageType>(storageType);
+			row.propertyStorageType = static_cast<PropertyStorageType>(storageType);
 			off += sizeof(uint32_t);
 			bool active = false;
 			std::memcpy(&active, buf + off, sizeof(bool));
-			batch.nodeIds[row] = readSerializedNodeId(buf);
-			batch.active[row] = static_cast<uint8_t>(active);
+			row.active = static_cast<uint8_t>(active);
+			return row;
 		}
 	} // namespace
+
+	bool NodeMetadataRow::hasLabelId(int64_t labelId) const {
+		if (labelId <= 0) {
+			return false;
+		}
+		const uint8_t count = std::min<uint8_t>(labelCount, Node::MAX_LABELS);
+		for (uint8_t index = 0; index < count; ++index) {
+			if (labelIds[index] == labelId) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	Node NodeMetadataRow::toNode() const {
+		Node node;
+		auto &metadata = node.getMutableMetadata();
+		metadata.id = nodeId;
+		metadata.firstOutEdgeId = firstOutEdgeId;
+		metadata.firstInEdgeId = firstInEdgeId;
+		metadata.propertyEntityId = propertyEntityId;
+		metadata.propertyStorageType = static_cast<uint32_t>(propertyStorageType);
+		metadata.labelCount = std::min<uint8_t>(labelCount, Node::MAX_LABELS);
+		std::copy(labelIds.begin(), labelIds.end(), std::begin(metadata.labelIds));
+		metadata.isActive = active != 0;
+		return node;
+	}
 
 	void NodeMetadataBatch::reserve(size_t rowCount) {
 		nodeIds.reserve(rowCount);
@@ -90,6 +119,20 @@ namespace graph::query::execution {
 		std::copy(std::begin(metadata.labelIds), std::end(metadata.labelIds), labelIds[row].begin());
 		propertyEntityIds[row] = metadata.propertyEntityId;
 		propertyStorageTypes[row] = node.getPropertyStorageType();
+	}
+
+	void NodeMetadataBatch::setFromMetadataRow(size_t row, const NodeMetadataRow &metadata) {
+		if (row >= size()) {
+			return;
+		}
+		nodeIds[row] = metadata.nodeId;
+		firstOutEdgeIds[row] = metadata.firstOutEdgeId;
+		firstInEdgeIds[row] = metadata.firstInEdgeId;
+		active[row] = metadata.active;
+		labelCounts[row] = metadata.labelCount;
+		std::copy(metadata.labelIds.begin(), metadata.labelIds.end(), labelIds[row].begin());
+		propertyEntityIds[row] = metadata.propertyEntityId;
+		propertyStorageTypes[row] = metadata.propertyStorageType;
 	}
 
 	bool NodeMetadataBatch::hasLabelId(size_t row, int64_t labelId) const {
@@ -148,6 +191,37 @@ namespace graph::query::execution {
 			return std::nullopt;
 		}
 
+		NodeMetadataBatch batch;
+		batch.reserve(clampedEnd - begin);
+		for (size_t index = begin; index < clampedEnd; ++index) {
+			(void) index;
+			batch.appendDefault();
+		}
+		const bool visited = visitBatchChecked(candidateIds, begin, clampedEnd, [&](size_t row, const NodeMetadataRow &metadata) {
+			batch.setFromMetadataRow(row - begin, metadata);
+			return true;
+		});
+		if (!visited) {
+			return std::nullopt;
+		}
+		return batch;
+	}
+
+	bool NodeMetadataColumnLoader::visitBatch(const std::vector<int64_t> &candidateIds,
+	                                         size_t begin,
+	                                         size_t end,
+	                                         const MetadataVisitor &visitor) const {
+		const size_t clampedEnd = std::min(end, candidateIds.size());
+		if (!visitor || !canLoad(candidateIds, begin, clampedEnd)) {
+			return false;
+		}
+		return visitBatchChecked(candidateIds, begin, clampedEnd, visitor);
+	}
+
+	bool NodeMetadataColumnLoader::visitBatchChecked(const std::vector<int64_t> &candidateIds,
+	                                                size_t begin,
+	                                                size_t clampedEnd,
+	                                                const MetadataVisitor &visitor) const {
 		const bool traceEnabled = debug::PerfTrace::isEnabled();
 		const auto start = traceEnabled ? Clock::now() : Clock::time_point{};
 
@@ -174,25 +248,18 @@ namespace graph::query::execution {
 		}
 
 		if (work.empty()) { // ZYX_COV_EXCL_LINE
-			return std::nullopt;
+			return false;
 		}
 
-		NodeMetadataBatch batch;
-		batch.reserve(clampedEnd - begin);
-		for (size_t index = begin; index < clampedEnd; ++index) {
-			(void) index;
-			batch.appendDefault();
-		}
 		auto groups = storage::buildCoalescedGroups(workSegmentIndices, segmentIndex);
 		constexpr size_t entitySize = Node::getTotalSize();
 
 		for (const auto &group : groups) {
 			const size_t totalBytes = group.segCount * storage::TOTAL_SEGMENT_SIZE;
 			std::vector<char> groupBuffer(totalBytes);
-			const auto groupOffset = static_cast<int64_t>(group.startOffset);
-			const auto read = dm_->preadBytes(groupBuffer.data(), totalBytes, groupOffset);
+			const auto read = dm_->preadSegments(groupBuffer.data(), group.segCount, group.startOffset);
 			if (read < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
-				return std::nullopt;
+				return false;
 			}
 
 			for (size_t member = 0; member < group.memberIndices.size(); ++member) {
@@ -216,7 +283,12 @@ namespace graph::query::execution {
 
 					const char *serializedNode = data + slot * entitySize;
 					if (readSerializedNodeId(serializedNode) == nodeId) { // ZYX_COV_EXCL_LINE
-						readMetadataIntoBatch(serializedNode, batch, index - begin);
+						if (!visitor(index, readMetadataRow(serializedNode))) {
+							if (traceEnabled) {
+								debug::PerfTrace::addDuration("node_scan.load_node_metadata", elapsedNs(start));
+							}
+							return true;
+						}
 					}
 				}
 			}
@@ -225,7 +297,7 @@ namespace graph::query::execution {
 		if (traceEnabled) {
 			debug::PerfTrace::addDuration("node_scan.load_node_metadata", elapsedNs(start));
 		}
-		return batch;
+		return true;
 	}
 
 	std::optional<std::vector<Node>> NodeMetadataColumnLoader::load(const std::vector<int64_t> &candidateIds,

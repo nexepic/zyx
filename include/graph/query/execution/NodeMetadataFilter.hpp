@@ -43,6 +43,21 @@ namespace graph::query::execution {
 			return true;
 		}
 
+		[[nodiscard]] bool accepts(const NodeMetadataRow &row) const {
+			if (!row.isValid()) {
+				return false;
+			}
+			if (requirements_.needsActiveCheck && row.active == 0) {
+				return false;
+			}
+			for (const int64_t labelId : labelIds_) {
+				if (!row.hasLabelId(labelId)) {
+					return false;
+				}
+			}
+			return true;
+		}
+
 	private:
 		NodeScanRequirements requirements_;
 		std::vector<int64_t> labelIds_;

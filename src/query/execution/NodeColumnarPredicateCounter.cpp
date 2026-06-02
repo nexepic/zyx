@@ -8,6 +8,7 @@
 
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/execution/NodeMetadataColumnLoader.hpp"
+#include "graph/query/execution/NodeMetadataFilter.hpp"
 #include "graph/query/execution/NodeScanRequirementUtils.hpp"
 #include "graph/query/execution/PropertyPredicateKernel.hpp"
 
@@ -18,30 +19,6 @@ namespace {
 	uint64_t elapsedNs(Clock::time_point start) {
 		return static_cast<uint64_t>(
 			std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count());
-	}
-
-	std::vector<int64_t> resolveLabelIds(const std::shared_ptr<storage::DataManager> &dm,
-	                                    const NodeScanConfig &config,
-	                                    const NodeScanRequirements &requirements) {
-		std::vector<int64_t> labelIds;
-		if (!requirements.needsLabels) {
-			return labelIds;
-		}
-		labelIds.reserve(config.labels.size());
-		for (const auto &label : config.labels) {
-			const int64_t labelId = dm->resolveTokenId(label);
-			labelIds.push_back(labelId == 0 ? -1 : labelId);
-		}
-		return labelIds;
-	}
-
-	bool rowMatchesLabels(const NodeMetadataBatch &batch, size_t row, const std::vector<int64_t> &labelIds) {
-		for (const int64_t labelId : labelIds) {
-			if (!batch.hasLabelId(row, labelId)) {
-				return false;
-			}
-		}
-		return true;
 	}
 
 	void appendRowsMissingFromBulkMatch(const std::vector<size_t> &externalRows,
@@ -80,56 +57,72 @@ namespace {
 		const PropertyPredicateKernel predicateKernel(predicates);
 		const auto storagePredicates = predicateKernel.toStoragePredicates();
 		const NodeScanRequirements requirements = relaxSatisfiedCandidateChecks(inputRequirements, candidateSet);
-		const auto labelIds = resolveLabelIds(dm_, config, requirements);
+		const NodeMetadataRowFilter rowFilter(dm_, config, requirements);
 		NodeMetadataColumnLoader metadataLoader(dm_);
 
 		static constexpr size_t kColumnarCountBatchSize = 65536;
 		for (size_t begin = 0; begin < candidateIds.size();) {
 			const size_t end = std::min(candidateIds.size(), begin + kColumnarCountBatchSize);
-			auto metadata = metadataLoader.loadBatch(candidateIds, begin, end);
-			if (!metadata.has_value()) {
-				return NodeColumnarPredicateCountResult{};
-			}
 
 			std::vector<int64_t> propertyEntityIds;
 			std::vector<size_t> propertyRows;
-			std::vector<size_t> fallbackRows;
-			propertyEntityIds.reserve(metadata->size());
-			propertyRows.reserve(metadata->size());
+			std::vector<NodeMetadataRow> propertyRowMetadata;
+			std::vector<size_t> propertyFallbackRows;
+			std::vector<NodeMetadataRow> fallbackRows;
+			propertyEntityIds.reserve(end - begin);
+			propertyRows.reserve(end - begin);
+			propertyRowMetadata.reserve(end - begin);
 
-			for (size_t row = 0; row < metadata->size(); ++row) {
-				if (!metadata->isValid(row)) {
-					continue;
-				}
-				if (requirements.needsActiveCheck && metadata->active[row] == 0) { // ZYX_COV_EXCL_LINE
-					continue;
-				}
-				if (!labelIds.empty() && !rowMatchesLabels(*metadata, row, labelIds)) {
-					continue;
+			const bool visited = metadataLoader.visitBatch(candidateIds, begin, end, [&](size_t, const NodeMetadataRow &metadata) {
+				if (!rowFilter.accepts(metadata)) {
+					return true;
 				}
 
-				const int64_t propertyEntityId = metadata->propertyEntityIds[row];
-				const auto storageType = metadata->propertyStorageTypes[row];
+				const int64_t propertyEntityId = metadata.propertyEntityId;
+				const auto storageType = metadata.propertyStorageType;
 				if (storageType == PropertyStorageType::PROPERTY_ENTITY && propertyEntityId != 0) {
+					const size_t propertyRow = propertyRowMetadata.size();
 					propertyEntityIds.push_back(propertyEntityId);
-					propertyRows.push_back(row);
+					propertyRows.push_back(propertyRow);
+					propertyRowMetadata.push_back(metadata);
 				} else if (storageType == PropertyStorageType::BLOB_ENTITY && propertyEntityId != 0) {
-					fallbackRows.push_back(row);
+					fallbackRows.push_back(metadata);
 				}
+				return true;
+			});
+			if (!visited) {
+				return NodeColumnarPredicateCountResult{};
 			}
 
 			if (!propertyEntityIds.empty()) {
+				storage::PropertyEntityPredicateMatchOptions matchOptions;
+				matchOptions.collectLoadedRows = true;
+				matchOptions.collectMatchedRows = false;
 				auto predicateResult = dm_->bulkMatchPropertyEntityPredicateSpecs(
-					propertyEntityIds, propertyRows, metadata->size(), storagePredicates, threadPool_);
-				result.count += static_cast<int64_t>(predicateResult.matchedRows.size());
-				appendRowsMissingFromBulkMatch(propertyRows, std::move(predicateResult.loadedRows), fallbackRows);
+					propertyEntityIds, propertyRows, propertyRowMetadata.size(), storagePredicates, threadPool_, matchOptions);
+				result.count += static_cast<int64_t>(predicateResult.matchedCount);
+				appendRowsMissingFromBulkMatch(
+					propertyRows, std::move(predicateResult.loadedRows), propertyFallbackRows);
+			}
+
+			if (!propertyFallbackRows.empty()) {
+				std::sort(propertyFallbackRows.begin(), propertyFallbackRows.end());
+				propertyFallbackRows.erase(std::unique(propertyFallbackRows.begin(), propertyFallbackRows.end()),
+				                           propertyFallbackRows.end());
+				for (const size_t row : propertyFallbackRows) {
+					if (row >= propertyRowMetadata.size()) { // ZYX_COV_EXCL_LINE
+						continue;
+					}
+					Node node = propertyRowMetadata[row].toNode();
+					if (predicateKernel.matchesMap(dm_->getNodePropertiesDirect(node))) {
+						++result.count;
+					}
+				}
 			}
 
 			if (!fallbackRows.empty()) {
-				std::sort(fallbackRows.begin(), fallbackRows.end());
-				fallbackRows.erase(std::unique(fallbackRows.begin(), fallbackRows.end()), fallbackRows.end());
-				for (const size_t row : fallbackRows) {
-					Node node = metadata->toNode(row);
+				for (const auto &fallback : fallbackRows) {
+					Node node = fallback.toNode();
 					if (predicateKernel.matchesMap(dm_->getNodePropertiesDirect(node))) {
 						++result.count;
 					}

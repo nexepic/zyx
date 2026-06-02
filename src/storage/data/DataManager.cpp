@@ -85,6 +85,33 @@ namespace graph::storage {
 		return static_cast<ssize_t>(storageIO_->readAt(static_cast<uint64_t>(offset), buf, count));
 	}
 
+	ssize_t DataManager::preadSegments(void *buf,
+	                                   size_t segmentCount,
+	                                   uint64_t startSegmentOffset,
+	                                   SegmentReadCachePolicy cachePolicy) const {
+		if (buf == nullptr) {
+			return -1;
+		}
+		if (segmentCount == 0) {
+			return 0;
+		}
+
+		const size_t totalBytes = segmentCount * TOTAL_SEGMENT_SIZE;
+		auto *out = static_cast<uint8_t *>(buf);
+		const bool readThrough = cachePolicy == SegmentReadCachePolicy::SRCP_READ_THROUGH;
+		if (readThrough && pagePool_ && pagePool_->capacity() > 0) {
+			if (pagePool_->copyContiguousPages(startSegmentOffset, segmentCount, out, TOTAL_SEGMENT_SIZE)) {
+				return static_cast<ssize_t>(totalBytes);
+			}
+		}
+
+		const ssize_t read = preadBytes(buf, totalBytes, static_cast<int64_t>(startSegmentOffset));
+		if (readThrough && read >= static_cast<ssize_t>(totalBytes) && pagePool_ && pagePool_->capacity() > 0) {
+			pagePool_->putContiguousPages(startSegmentOffset, segmentCount, out, TOTAL_SEGMENT_SIZE);
+		}
+		return read;
+	}
+
 	// Helper streambuf that wraps an existing memory buffer for zero-copy deserialization.
 	// This lets us pread() into a stack buffer, then deserialize via the existing istream API.
 	namespace {
@@ -443,7 +470,7 @@ namespace graph::storage {
 		}
 
 		std::vector<PropertyEntitySegmentWork> collectPropertyEntitySegmentWork(
-				const std::vector<int64_t> &sortedIds,
+				std::span<const int64_t> sortedIds,
 				const std::vector<SegmentIndexManager::SegmentIndex> &segmentIndex) {
 			std::vector<PropertyEntitySegmentWork> work;
 			for (size_t segment = 0; segment < segmentIndex.size(); ++segment) {
@@ -918,42 +945,51 @@ namespace graph::storage {
 				return 0;
 			}
 
-			std::vector<int64_t> sortedIds;
-			sortedIds.reserve(ids.size());
-			bool strictlyIncreasing = true;
+			bool useInputOrder = true;
 			bool hasPreviousId = false;
 			int64_t previousId = 0;
 			for (const int64_t id: ids) {
 				if (id == 0) {
+					useInputOrder = false;
 					continue;
 				}
 				if (hasPreviousId && id <= previousId) {
-					strictlyIncreasing = false;
+					useInputOrder = false;
 				}
-				sortedIds.push_back(id);
 				previousId = id;
 				hasPreviousId = true;
 			}
-			if (sortedIds.empty()) {
+			if (!hasPreviousId) {
 				return 0;
 			}
 
+			std::span<const int64_t> sortedIds;
+			std::vector<int64_t> sortedStorage;
 			std::vector<size_t> multiplicities;
-			if (!strictlyIncreasing) {
-				std::sort(sortedIds.begin(), sortedIds.end());
-				multiplicities.reserve(sortedIds.size());
+			if (useInputOrder) {
+				sortedIds = std::span<const int64_t>(ids.data(), ids.size());
+			} else {
+				sortedStorage.reserve(ids.size());
+				for (const int64_t id: ids) {
+					if (id != 0) {
+						sortedStorage.push_back(id);
+					}
+				}
+				std::sort(sortedStorage.begin(), sortedStorage.end());
+				multiplicities.reserve(sortedStorage.size());
 				size_t write = 0;
-				for (size_t read = 0; read < sortedIds.size();) {
-					const int64_t id = sortedIds[read];
+				for (size_t read = 0; read < sortedStorage.size();) {
+					const int64_t id = sortedStorage[read];
 					size_t next = read + 1;
-					while (next < sortedIds.size() && sortedIds[next] == id) {
+					while (next < sortedStorage.size() && sortedStorage[next] == id) {
 						++next;
 					}
-					sortedIds[write++] = id;
+					sortedStorage[write++] = id;
 					multiplicities.push_back(next - read);
 					read = next;
 				}
-				sortedIds.resize(write);
+				sortedStorage.resize(write);
+				sortedIds = std::span<const int64_t>(sortedStorage.data(), sortedStorage.size());
 			}
 
 			const auto segmentIndexManager = dm.getSegmentIndexManager();
@@ -998,8 +1034,7 @@ namespace graph::storage {
 					const auto &group = groups[gi];
 					const size_t totalBytes = group.segCount * TOTAL_SEGMENT_SIZE;
 					std::vector<char> groupBuf(totalBytes);
-					const auto groupOffset = static_cast<int64_t>(group.startOffset);
-					const ssize_t n = dm.preadBytes(groupBuf.data(), totalBytes, groupOffset);
+					const ssize_t n = dm.preadSegments(groupBuf.data(), group.segCount, group.startOffset);
 					if (n < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
 						return;
 					}
@@ -1050,9 +1085,8 @@ namespace graph::storage {
 							std::min(kMaxCoalescedPropertyReadSegments, group.memberIndices.size() - chunkBegin);
 					const size_t totalBytes = chunkSegments * TOTAL_SEGMENT_SIZE;
 					std::vector<char> groupBuf(totalBytes);
-					const auto groupOffset = static_cast<int64_t>(
-							group.startOffset + chunkBegin * TOTAL_SEGMENT_SIZE);
-					const ssize_t n = dm.preadBytes(groupBuf.data(), totalBytes, groupOffset);
+					const uint64_t groupOffset = group.startOffset + chunkBegin * TOTAL_SEGMENT_SIZE;
+					const ssize_t n = dm.preadSegments(groupBuf.data(), chunkSegments, groupOffset);
 					if (n < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
 						continue;
 					}
@@ -1361,8 +1395,7 @@ namespace graph::storage {
 				// Single pread for the entire coalesced group
 				size_t totalBytes = group.segCount * TOTAL_SEGMENT_SIZE;
 				std::vector<char> groupBuf(totalBytes);
-				auto groupOffset = static_cast<int64_t>(group.startOffset);
-				ssize_t n = preadBytes(groupBuf.data(), totalBytes, groupOffset);
+				ssize_t n = preadSegments(groupBuf.data(), group.segCount, group.startOffset);
 				if (n < static_cast<ssize_t>(totalBytes))
 					return;
 
@@ -1490,8 +1523,7 @@ namespace graph::storage {
 				const auto &group = groups[gi];
 				size_t totalBytes = group.segCount * TOTAL_SEGMENT_SIZE;
 				std::vector<char> groupBuf(totalBytes);
-				auto groupOffset = static_cast<int64_t>(group.startOffset);
-				ssize_t n = preadBytes(groupBuf.data(), totalBytes, groupOffset);
+				ssize_t n = preadSegments(groupBuf.data(), group.segCount, group.startOffset);
 				if (n < static_cast<ssize_t>(totalBytes)) {
 					return;
 				}
@@ -1670,8 +1702,7 @@ namespace graph::storage {
 				const auto &group = groups[gi];
 				size_t totalBytes = group.segCount * TOTAL_SEGMENT_SIZE;
 				std::vector<char> groupBuf(totalBytes);
-				auto groupOffset = static_cast<int64_t>(group.startOffset);
-				ssize_t n = preadBytes(groupBuf.data(), totalBytes, groupOffset);
+				ssize_t n = preadSegments(groupBuf.data(), group.segCount, group.startOffset);
 				if (n < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
 					return;
 				}
@@ -1866,8 +1897,8 @@ namespace graph::storage {
 						std::min(kMaxCoalescedPropertyReadSegments, group.memberIndices.size() - chunkBegin);
 				const size_t totalBytes = chunkSegments * TOTAL_SEGMENT_SIZE;
 				std::vector<char> groupBuf(totalBytes);
-				const auto groupOffset = static_cast<int64_t>(group.startOffset + chunkBegin * TOTAL_SEGMENT_SIZE);
-				const ssize_t n = preadBytes(groupBuf.data(), totalBytes, groupOffset);
+				const uint64_t groupOffset = group.startOffset + chunkBegin * TOTAL_SEGMENT_SIZE;
+				const ssize_t n = preadSegments(groupBuf.data(), chunkSegments, groupOffset);
 				if (n < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
 					continue;
 				}
@@ -2006,8 +2037,7 @@ namespace graph::storage {
 				const auto &group = groups[gi];
 				size_t totalBytes = group.segCount * TOTAL_SEGMENT_SIZE;
 				std::vector<char> groupBuf(totalBytes);
-				auto groupOffset = static_cast<int64_t>(group.startOffset);
-				ssize_t n = preadBytes(groupBuf.data(), totalBytes, groupOffset);
+				ssize_t n = preadSegments(groupBuf.data(), group.segCount, group.startOffset);
 				if (n < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
 					return;
 				}
@@ -2157,7 +2187,8 @@ namespace graph::storage {
 
 	PropertyEntityPredicateMatchResult DataManager::bulkMatchPropertyEntityPredicateSpecs(
 			const std::vector<int64_t> &ids, const std::vector<size_t> &rows, size_t rowCount,
-			const std::vector<PropertyEntityPredicate> &predicates, concurrent::ThreadPool *pool) const {
+			const std::vector<PropertyEntityPredicate> &predicates, concurrent::ThreadPool *pool,
+			PropertyEntityPredicateMatchOptions options) const {
 		PropertyEntityPredicateMatchResult result;
 		if (ids.empty() || rows.size() != ids.size() || rowCount == 0 || predicates.empty() || !hasPreadSupport()) {
 			return result;
@@ -2230,17 +2261,23 @@ namespace graph::storage {
 			return result;
 		}
 
-		auto appendPredicateResult = [&](std::vector<size_t> &loadedRows, std::vector<size_t> &matchedRows,
-										 size_t &matchedCount, size_t idIndex, std::optional<bool> matches) {
+		auto appendPredicateResult = [&](std::vector<size_t> &loadedRows, std::vector<size_t> *matchedRows,
+										 size_t &loadedCount, size_t &matchedCount, size_t idIndex,
+										 std::optional<bool> matches) {
 			if (!matches.has_value()) {
 				return;
 			}
 			const auto [refBegin, refEnd] = refRanges[idIndex];
 			for (size_t ref = refBegin; ref < refEnd; ++ref) {
-				loadedRows.push_back(refs[ref].row);
+				++loadedCount;
+				if (options.collectLoadedRows) {
+					loadedRows.push_back(refs[ref].row);
+				}
 				if (matches.value()) {
 					++matchedCount;
-					matchedRows.push_back(refs[ref].row);
+					if (matchedRows != nullptr) {
+						matchedRows->push_back(refs[ref].row);
+					}
 				}
 			}
 		};
@@ -2254,15 +2291,15 @@ namespace graph::storage {
 
 			auto groups = buildCoalescedGroups(workSegIndices, segIndex);
 			std::vector<std::vector<size_t>> perWorkLoadedRows(work.size());
-			std::vector<std::vector<size_t>> perWorkMatchedRows(work.size());
+			std::vector<std::vector<size_t>> perWorkMatchedRows(options.collectMatchedRows ? work.size() : 0);
+			std::vector<size_t> perWorkLoadedCounts(work.size(), 0);
 			std::vector<size_t> perWorkMatchedCounts(work.size(), 0);
 
 			pool->parallelFor(0, groups.size(), [&](size_t gi) {
 				const auto &group = groups[gi];
 				size_t totalBytes = group.segCount * TOTAL_SEGMENT_SIZE;
 				std::vector<char> groupBuf(totalBytes);
-				auto groupOffset = static_cast<int64_t>(group.startOffset);
-				ssize_t n = preadBytes(groupBuf.data(), totalBytes, groupOffset);
+				ssize_t n = preadSegments(groupBuf.data(), group.segCount, group.startOffset);
 				if (n < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
 					return;
 				}
@@ -2289,28 +2326,43 @@ namespace graph::storage {
 						if (readSerializedPropertyId(entityBuffer) != id) {
 							continue;
 						}
-						appendPredicateResult(perWorkLoadedRows[wi], perWorkMatchedRows[wi], perWorkMatchedCounts[wi],
-											  i, readPropertyEntityPredicateMatch(entityBuffer, predicateExpectations));
+						appendPredicateResult(
+								perWorkLoadedRows[wi],
+								options.collectMatchedRows ? &perWorkMatchedRows[wi] : nullptr,
+								perWorkLoadedCounts[wi],
+								perWorkMatchedCounts[wi],
+								i,
+								readPropertyEntityPredicateMatch(entityBuffer, predicateExpectations));
 					}
 				}
 			});
 
 			size_t loadedCount = 0;
 			for (size_t i = 0; i < work.size(); ++i) {
-				loadedCount += perWorkLoadedRows[i].size();
+				loadedCount += perWorkLoadedCounts[i];
 				result.matchedCount += perWorkMatchedCounts[i];
 			}
 			result.loadedCount = loadedCount;
-			result.loadedRows.reserve(loadedCount);
-			result.matchedRows.reserve(result.matchedCount);
+			if (options.collectLoadedRows) {
+				result.loadedRows.reserve(loadedCount);
+			}
+			if (options.collectMatchedRows) {
+				result.matchedRows.reserve(result.matchedCount);
+			}
 			for (size_t i = 0; i < work.size(); ++i) {
-				result.loadedRows.insert(result.loadedRows.end(), perWorkLoadedRows[i].begin(),
-										 perWorkLoadedRows[i].end());
-				result.matchedRows.insert(result.matchedRows.end(), perWorkMatchedRows[i].begin(),
-										  perWorkMatchedRows[i].end());
+				if (options.collectLoadedRows) {
+					result.loadedRows.insert(result.loadedRows.end(), perWorkLoadedRows[i].begin(),
+											 perWorkLoadedRows[i].end());
+				}
+				if (options.collectMatchedRows) {
+					result.matchedRows.insert(result.matchedRows.end(), perWorkMatchedRows[i].begin(),
+											  perWorkMatchedRows[i].end());
+				}
 			}
 		} else {
-			result.loadedRows.reserve(refs.size());
+			if (options.collectLoadedRows) {
+				result.loadedRows.reserve(refs.size());
+			}
 			for (const auto &w: work) {
 				const auto &seg = segIndex[w.segIdx];
 				SegmentHeader header = segmentTracker_->getSegmentHeaderCopy(seg.segmentOffset);
@@ -2336,11 +2388,15 @@ namespace graph::storage {
 					if (readSerializedPropertyId(entityBuffer) != id) {
 						continue;
 					}
-					appendPredicateResult(result.loadedRows, result.matchedRows, result.matchedCount, i,
-										  readPropertyEntityPredicateMatch(entityBuffer, predicateExpectations));
+					appendPredicateResult(
+							result.loadedRows,
+							options.collectMatchedRows ? &result.matchedRows : nullptr,
+							result.loadedCount,
+							result.matchedCount,
+							i,
+							readPropertyEntityPredicateMatch(entityBuffer, predicateExpectations));
 				}
 			}
-			result.loadedCount = result.loadedRows.size();
 		}
 
 		return result;
@@ -3327,6 +3383,105 @@ namespace graph::storage {
 		return getCachedRelationshipSegmentTypeStats(segmentOffset, header);
 	}
 
+	std::optional<RelationshipTypeTotalStats> DataManager::getRelationshipTypeTotalStats() const {
+		if (!hasPreadSupport()) {
+			return std::nullopt;
+		}
+
+		if (auto cached = getCachedRelationshipTypeTotalStats()) {
+			return cached;
+		}
+
+		auto stats = buildRelationshipTypeTotalStats();
+		if (!stats.has_value()) {
+			return std::nullopt;
+		}
+
+		std::unique_lock lock(relationshipSegmentTypeStatsMutex_);
+		relationshipTypeTotalStats_ = std::move(*stats);
+		return relationshipTypeTotalStats_;
+	}
+
+	std::optional<RelationshipTypeTotalStats> DataManager::getCachedRelationshipTypeTotalStats() const {
+		const auto &segmentIndex = segmentIndexManager_->getEdgeSegmentIndex();
+		const int64_t firstId = segmentIndex.empty() ? int64_t{0} : segmentIndex.front().startId;
+		const int64_t lastId = segmentIndex.empty() ? int64_t{-1} : segmentIndex.back().endId;
+		std::shared_lock lock(relationshipSegmentTypeStatsMutex_);
+		if (relationshipTypeTotalStats_.has_value() &&
+		    relationshipTypeTotalStats_->segmentCount == segmentIndex.size() &&
+		    relationshipTypeTotalStats_->firstId == firstId &&
+		    relationshipTypeTotalStats_->lastId == lastId) {
+			return relationshipTypeTotalStats_;
+		}
+		return std::nullopt;
+	}
+
+	std::optional<RelationshipTypeTotalStats> DataManager::buildRelationshipTypeTotalStats() const {
+		const auto &segmentIndex = segmentIndexManager_->getEdgeSegmentIndex();
+		RelationshipTypeTotalStats total;
+		total.segmentCount = segmentIndex.size();
+		if (segmentIndex.empty()) {
+			return total;
+		}
+		total.firstId = segmentIndex.front().startId;
+		total.lastId = segmentIndex.back().endId;
+
+		for (const auto &entry: segmentIndex) {
+			SegmentHeader header{};
+			const ssize_t headerRead =
+					preadBytes(&header, sizeof(SegmentHeader), static_cast<int64_t>(entry.segmentOffset));
+			if (headerRead < static_cast<ssize_t>(sizeof(SegmentHeader)) || header.data_type != Edge::typeId) {
+				return std::nullopt;
+			}
+			header.file_offset = entry.segmentOffset;
+			if (header.used == 0) {
+				continue;
+			}
+
+			auto stats = getRelationshipSegmentTypeStats(entry.segmentOffset, header);
+			if (!stats.has_value()) {
+				return std::nullopt;
+			}
+			total.activeCount += stats->activeCount;
+			for (const auto &[typeId, count]: stats->activeCountByType) {
+				total.activeCountByType[typeId] += count;
+			}
+		}
+		return total;
+	}
+
+	std::optional<int64_t>
+	DataManager::countActiveEdgesByTypeFromTotalStats(int64_t beginId, int64_t endId, int64_t typeId) const {
+		const auto &segmentIndex = segmentIndexManager_->getEdgeSegmentIndex();
+		if (!segmentIndex.empty() && (beginId > segmentIndex.front().startId || endId < segmentIndex.back().endId)) {
+			return std::nullopt;
+		}
+
+		auto totalStats = getRelationshipTypeTotalStats();
+		if (!totalStats.has_value()) {
+			return std::nullopt;
+		}
+		if (totalStats->segmentCount > 0 && (beginId > totalStats->firstId || endId < totalStats->lastId)) {
+			return std::nullopt;
+		}
+
+		int64_t baseCount = totalStats->activeCount;
+		if (typeId != 0) {
+			baseCount = 0;
+			if (auto it = totalStats->activeCountByType.find(typeId); it != totalStats->activeCountByType.end()) {
+				baseCount = it->second;
+			}
+		}
+
+		const auto *snapshot = getCurrentSnapshot();
+		if (snapshot != nullptr) {
+			return applyRelationshipTypeCountSnapshotOverlay(baseCount, beginId, endId, typeId, snapshot->edges);
+		}
+		auto edgeOverlay = getDirtyEntityInfos<Edge>(
+				{EntityChangeType::CHANGE_ADDED, EntityChangeType::CHANGE_MODIFIED, EntityChangeType::CHANGE_DELETED});
+		return applyRelationshipTypeCountOverlay(baseCount, beginId, endId, typeId, edgeOverlay);
+	}
+
 	std::optional<int64_t> DataManager::countActiveEdgesByTypeInSegmentWindow(
 			uint64_t segmentOffset, const SegmentHeader &header, int64_t firstId, int64_t lastId,
 			int64_t typeId) const {
@@ -3446,6 +3601,9 @@ namespace graph::storage {
 		if (!hasPreadSupport() || beginId <= 0 || endId < beginId) {
 			return std::nullopt;
 		}
+		if (auto count = countActiveEdgesByTypeFromTotalStats(beginId, endId, typeId)) {
+			return count;
+		}
 		const auto *snapshot = getCurrentSnapshot();
 
 		const auto &segmentIndex = segmentIndexManager_->getEdgeSegmentIndex();
@@ -3506,6 +3664,7 @@ namespace graph::storage {
 			return;
 		}
 		std::unique_lock lock(relationshipSegmentTypeStatsMutex_);
+		relationshipTypeTotalStats_.reset();
 		for (uint64_t segmentOffset: segmentOffsets) {
 			relationshipSegmentTypeStats_.erase(segmentOffset);
 		}
@@ -3514,6 +3673,7 @@ namespace graph::storage {
 	void DataManager::clearRelationshipSegmentTypeStats() const {
 		std::unique_lock lock(relationshipSegmentTypeStatsMutex_);
 		relationshipSegmentTypeStats_.clear();
+		relationshipTypeTotalStats_.reset();
 	}
 
 	void DataManager::invalidateDirtySegments(const FlushSnapshot &snapshot) const {

@@ -151,13 +151,12 @@ namespace graph::query::execution {
 			const auto &segmentIndex = dm->getSegmentIndexManager()->getEdgeSegmentIndex();
 			auto groups = storage::buildCoalescedGroups(workSegmentIndices, segmentIndex);
 			for (const auto &group : groups) {
-				const size_t totalBytes = group.segCount * storage::TOTAL_SEGMENT_SIZE;
-				std::vector<char> groupBuffer(totalBytes);
-				const auto groupOffset = static_cast<int64_t>(group.startOffset);
-				const auto read = dm->preadBytes(groupBuffer.data(), totalBytes, groupOffset);
-				if (read < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
-					return false;
-				}
+			const size_t totalBytes = group.segCount * storage::TOTAL_SEGMENT_SIZE;
+			std::vector<char> groupBuffer(totalBytes);
+			const auto read = dm->preadSegments(groupBuffer.data(), group.segCount, group.startOffset);
+			if (read < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
+				return false;
+			}
 
 				for (size_t member = 0; member < group.memberIndices.size(); ++member) {
 					const size_t segmentIndexInWork = group.memberIndices[member];

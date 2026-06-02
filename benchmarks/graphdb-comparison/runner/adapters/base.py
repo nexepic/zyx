@@ -36,6 +36,9 @@ PROFILE_WORKLOADS = {
 }
 
 DEFAULT_PROFILE = "scan"
+WARM_EXECUTION_MODE = "warm"
+COLDISH_EXECUTION_MODE = "cold-ish"
+EXECUTION_MODES = (WARM_EXECUTION_MODE, COLDISH_EXECUTION_MODE)
 WORKLOADS = SCAN_WORKLOADS
 
 
@@ -120,6 +123,7 @@ class BenchmarkAdapter:
         warmup: int,
         iterations: int,
         adapter_factory: Callable[[], "BenchmarkAdapter"] | None = None,
+        execution_mode: str = WARM_EXECUTION_MODE,
     ) -> WorkloadResult:
         operation: Callable[[], int | None] = getattr(self, workload)
         try:
@@ -127,9 +131,15 @@ class BenchmarkAdapter:
                 raise ValueError("warmup must be >= 0")
             if iterations <= 0:
                 raise ValueError("iterations must be > 0")
+            if execution_mode not in EXECUTION_MODES:
+                raise ValueError(f"execution mode must be one of: {', '.join(EXECUTION_MODES)}")
 
             if workload == "load_nodes_edges" and adapter_factory is not None:
                 samples = self._run_load_workload(warmup, iterations, adapter_factory)
+                return WorkloadResult(self.database, workload, self.scale, "ok", samples=samples)
+
+            if execution_mode == COLDISH_EXECUTION_MODE and workload != "load_nodes_edges" and adapter_factory is not None:
+                samples = self._run_coldish_query_workload(workload, warmup, iterations, adapter_factory)
                 return WorkloadResult(self.database, workload, self.scale, "ok", samples=samples)
 
             if workload != "load_nodes_edges":
@@ -168,6 +178,46 @@ class BenchmarkAdapter:
             samples.append(self._sample("load_nodes_edges", iteration, latency_ms))
         return samples
 
+
+    def _run_coldish_query_workload(
+        self,
+        workload: str,
+        warmup: int,
+        iterations: int,
+        adapter_factory: Callable[[], "BenchmarkAdapter"],
+    ) -> list[Sample]:
+        for _ in range(warmup):
+            self._run_isolated_query(workload, adapter_factory)
+
+        samples: list[Sample] = []
+        for iteration in range(iterations):
+            latency_ms = self._run_isolated_query(workload, adapter_factory)
+            samples.append(self._sample(workload, iteration, latency_ms))
+        return samples
+
+    def _run_isolated_query(
+        self,
+        workload: str,
+        adapter_factory: Callable[[], "BenchmarkAdapter"],
+    ) -> float:
+        adapter = adapter_factory()
+        adapter.setup()
+        try:
+            loaded = adapter.load_nodes_edges()
+            if loaded is None:
+                raise ValueError("load_nodes_edges returned None")
+            adapter.validate("load_nodes_edges", int(loaded))
+            operation: Callable[[], int | None] = getattr(adapter, workload)
+            start = time.perf_counter()
+            actual = operation()
+            latency_ms = (time.perf_counter() - start) * 1000.0
+            if actual is None:
+                raise ValueError(f"{workload} returned None")
+            adapter.validate(workload, int(actual))
+            return latency_ms
+        finally:
+            adapter.teardown()
+
     def _run_isolated_load(self, adapter_factory: Callable[[], "BenchmarkAdapter"]) -> None:
         adapter = adapter_factory()
         adapter.setup()
@@ -190,9 +240,34 @@ class BenchmarkAdapter:
             equivalent_mode="cypher",
         )
 
-    def run_all(self, warmup: int, iterations: int) -> list[WorkloadResult]:
+    def run_all(
+        self,
+        warmup: int,
+        iterations: int,
+        execution_mode: str = WARM_EXECUTION_MODE,
+    ) -> list[WorkloadResult]:
+        if execution_mode not in EXECUTION_MODES:
+            return [
+                WorkloadResult(
+                    self.database,
+                    "run_all",
+                    self.scale,
+                    "failed",
+                    error=f"execution mode must be one of: {', '.join(EXECUTION_MODES)}",
+                )
+            ]
+
         workloads = PROFILE_WORKLOADS[self.profile]
         load_result = self.run_workload("load_nodes_edges", warmup, iterations, adapter_factory=self._new_adapter)
+        if execution_mode == COLDISH_EXECUTION_MODE:
+            query_results = [
+                self.run_workload(
+                    workload, warmup, iterations, adapter_factory=self._new_adapter, execution_mode=execution_mode
+                )
+                for workload in workloads[1:]
+            ]
+            return [load_result] + query_results
+
         self.setup()
         try:
             actual = self.load_nodes_edges()

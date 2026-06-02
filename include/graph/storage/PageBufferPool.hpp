@@ -20,6 +20,7 @@
 #pragma once
 
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <list>
 #include <shared_mutex>
@@ -38,8 +39,11 @@ namespace graph::storage {
 		explicit PageBufferPool(size_t capacityPages);
 
 		const Page *getPage(uint64_t segmentOffset) const;
+		bool copyPage(uint64_t segmentOffset, void *dest, size_t size) const;
+		bool copyContiguousPages(uint64_t startSegmentOffset, size_t pageCount, void *dest, size_t pageSize) const;
 
 		void putPage(uint64_t segmentOffset, std::vector<uint8_t> &&data);
+		void putContiguousPages(uint64_t startSegmentOffset, size_t pageCount, const void *src, size_t pageSize);
 
 		void invalidate(uint64_t segmentOffset);
 
@@ -63,6 +67,8 @@ namespace graph::storage {
 		mutable std::shared_mutex mutex_;
 		mutable std::atomic<uint64_t> hits_{0};
 		mutable std::atomic<uint64_t> misses_{0};
+
+		void putPageLocked(uint64_t segmentOffset, std::vector<uint8_t> &&data);
 	};
 
 } // namespace graph::storage

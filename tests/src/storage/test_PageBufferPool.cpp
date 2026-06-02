@@ -206,3 +206,84 @@ TEST(PageBufferPoolTest, StatsAndCapacityAccessors) {
 	EXPECT_EQ(pool.hits(), 0u);
 	EXPECT_EQ(pool.misses(), 0u);
 }
+
+TEST(PageBufferPoolTest, CopyPageValidatesDestinationAndSize) {
+	PageBufferPool pool(2);
+	pool.putPage(100, std::vector<uint8_t>(4, 0x1A));
+
+	EXPECT_FALSE(pool.copyPage(100, nullptr, 4));
+
+	std::vector<uint8_t> out(8, 0);
+	EXPECT_FALSE(pool.copyPage(100, out.data(), 8));
+	EXPECT_EQ(pool.misses(), 1u);
+
+	EXPECT_TRUE(pool.copyPage(100, out.data(), 4));
+	EXPECT_EQ(out[0], 0x1A);
+	EXPECT_EQ(out[3], 0x1A);
+	EXPECT_EQ(pool.hits(), 1u);
+}
+
+TEST(PageBufferPoolTest, CopyContiguousPagesHandlesEmptyAndMisses) {
+	PageBufferPool pool(4);
+	std::vector<uint8_t> out(8, 0xCC);
+
+	EXPECT_TRUE(pool.copyContiguousPages(100, 0, out.data(), 4));
+	EXPECT_FALSE(pool.copyContiguousPages(100, 1, nullptr, 4));
+	EXPECT_FALSE(pool.copyContiguousPages(100, 2, out.data(), 4));
+	EXPECT_EQ(pool.misses(), 1u);
+
+	pool.putPage(100, std::vector<uint8_t>(4, 0x01));
+	EXPECT_FALSE(pool.copyContiguousPages(100, 2, out.data(), 4));
+	EXPECT_EQ(pool.misses(), 2u);
+	EXPECT_EQ(out[0], 0xCC) << "copyContiguousPages should not partially copy on a miss";
+}
+
+TEST(PageBufferPoolTest, CopyContiguousPagesCopiesAndPromotesPages) {
+	PageBufferPool pool(3);
+	pool.putPage(100, std::vector<uint8_t>(4, 0x01));
+	pool.putPage(104, std::vector<uint8_t>(4, 0x02));
+
+	std::vector<uint8_t> out(8, 0);
+	ASSERT_TRUE(pool.copyContiguousPages(100, 2, out.data(), 4));
+	EXPECT_EQ(std::vector<uint8_t>(out.begin(), out.begin() + 4), std::vector<uint8_t>(4, 0x01));
+	EXPECT_EQ(std::vector<uint8_t>(out.begin() + 4, out.end()), std::vector<uint8_t>(4, 0x02));
+	EXPECT_EQ(pool.hits(), 2u);
+
+	pool.putPage(108, std::vector<uint8_t>(4, 0x03));
+	pool.putPage(112, std::vector<uint8_t>(4, 0x04));
+	EXPECT_EQ(pool.getPage(100), nullptr);
+	EXPECT_NE(pool.getPage(104), nullptr);
+}
+
+TEST(PageBufferPoolTest, PutContiguousPagesHandlesNoopCases) {
+	PageBufferPool pool(2);
+	std::vector<uint8_t> in(8, 0x7F);
+
+	pool.putContiguousPages(100, 0, in.data(), 4);
+	pool.putContiguousPages(100, 2, nullptr, 4);
+	EXPECT_EQ(pool.size(), 0u);
+
+	PageBufferPool zeroCapacity(0);
+	zeroCapacity.putContiguousPages(100, 2, in.data(), 4);
+	EXPECT_EQ(zeroCapacity.size(), 0u);
+}
+
+TEST(PageBufferPoolTest, PutContiguousPagesUpdatesAndEvicts) {
+	PageBufferPool pool(2);
+	std::vector<uint8_t> first = {1, 1, 1, 1, 2, 2, 2, 2};
+	pool.putContiguousPages(100, 2, first.data(), 4);
+	EXPECT_EQ(pool.size(), 2u);
+
+	std::vector<uint8_t> update = {3, 3, 3, 3};
+	pool.putContiguousPages(100, 1, update.data(), 4);
+	auto *updated = pool.getPage(100);
+	ASSERT_NE(updated, nullptr);
+	EXPECT_EQ(updated->data, std::vector<uint8_t>(4, 0x03));
+
+	std::vector<uint8_t> next = {4, 4, 4, 4};
+	pool.putContiguousPages(108, 1, next.data(), 4);
+	EXPECT_EQ(pool.size(), 2u);
+	EXPECT_NE(pool.getPage(100), nullptr);
+	EXPECT_EQ(pool.getPage(104), nullptr);
+	EXPECT_NE(pool.getPage(108), nullptr);
+}

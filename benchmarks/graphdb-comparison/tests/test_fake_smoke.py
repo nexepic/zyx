@@ -160,6 +160,45 @@ def test_load_workload_uses_fresh_adapter_for_each_sample(tmp_path: Path):
     assert all(adapter.users == [] for adapter in created)
 
 
+
+def test_coldish_execution_mode_uses_fresh_loaded_adapter_for_queries(tmp_path: Path):
+    dataset_dir = tmp_path / "dataset"
+    graph = generate_graph(SCALES["smoke"], seed=42)
+    write_dataset(graph, dataset_dir)
+
+    class ObservedFakeAdapter(FakeAdapter):
+        setup_count = 0
+        teardown_count = 0
+        query_loaded_flags: list[bool] = []
+
+        def setup(self) -> None:
+            type(self).setup_count += 1
+            super().setup()
+
+        def teardown(self) -> None:
+            type(self).teardown_count += 1
+            super().teardown()
+
+        def label_scan_filter(self) -> int:
+            type(self).query_loaded_flags.append(bool(self.users))
+            return super().label_scan_filter()
+
+    adapter = ObservedFakeAdapter(database="fake", dataset_dir=dataset_dir, scale="smoke")
+
+    result = adapter.run_workload(
+        "label_scan_filter",
+        warmup=1,
+        iterations=2,
+        adapter_factory=lambda: ObservedFakeAdapter(database="fake", dataset_dir=dataset_dir, scale="smoke"),
+        execution_mode="cold-ish",
+    )
+
+    assert result.status == "ok"
+    assert len(result.samples) == 2
+    assert ObservedFakeAdapter.setup_count == 3
+    assert ObservedFakeAdapter.teardown_count == 3
+    assert ObservedFakeAdapter.query_loaded_flags == [True, True, True]
+
 def test_run_all_preloads_query_adapter_before_timing(tmp_path: Path):
     dataset_dir = tmp_path / "dataset"
     graph = generate_graph(SCALES["smoke"], seed=42)
@@ -197,6 +236,7 @@ def test_run_benchmark_writes_raw_and_summary(tmp_path: Path):
         output_root=output_root,
         warmup=1,
         iterations=iterations,
+        execution_mode="cold-ish",
     )
 
     assert (result_dir / "raw.jsonl").exists()
@@ -211,6 +251,7 @@ def test_run_benchmark_writes_raw_and_summary(tmp_path: Path):
     assert environment["event"] == "environment"
     assert environment["seed"] == 42
     assert environment["scale"] == "smoke"
+    assert environment["execution_mode"] == "cold-ish"
     assert "label_scan_filter" in (result_dir / "summary.csv").read_text()
 
 
@@ -264,7 +305,7 @@ def test_run_benchmark_writes_zyx_profiles_jsonl(tmp_path: Path, monkeypatch):
                 )
             ]
 
-        def run_all(self, warmup: int, iterations: int) -> list[WorkloadResult]:
+        def run_all(self, warmup: int, iterations: int, execution_mode: str = "warm") -> list[WorkloadResult]:
             return [
                 WorkloadResult(
                     database="zyx",
