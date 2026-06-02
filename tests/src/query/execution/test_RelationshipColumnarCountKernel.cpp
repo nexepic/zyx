@@ -209,6 +209,47 @@ TEST_F(RelationshipColumnarCountKernelTest, CountsPropertyPredicatesWithoutMater
 	EXPECT_FALSE(snapshot.contains("relationship_count.property_cache"));
 }
 
+TEST_F(RelationshipColumnarCountKernelTest, CountsScalarEqualityPredicatesWithTypedStorageComparisons) {
+	const TemporalDate date{12345};
+	const TemporalDateTime dateTime{987654321};
+	const TemporalDuration duration{2, 3, 4000};
+	const auto stored = addRelationshipWithProperties(followsType, {{"active", PropertyValue(true)},
+																	{"score", PropertyValue(1.5)},
+																	{"kind", PropertyValue("fast")},
+																	{"date", PropertyValue(date)},
+																	{"date_time", PropertyValue(dateTime)},
+																	{"duration", PropertyValue(duration)}});
+	addRelationshipWithProperties(followsType, {{"active", PropertyValue(false)},
+												{"score", PropertyValue(2.5)},
+												{"kind", PropertyValue("slow")},
+												{"date", PropertyValue(TemporalDate{12346})},
+												{"date_time", PropertyValue(TemporalDateTime{987654322})},
+												{"duration", PropertyValue(TemporalDuration{2, 4, 4000})}});
+	for (int i = 0; i < 128; ++i) {
+		addRelationship(i % 2 == 0 ? followsType : likesType);
+	}
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+
+	RelationshipColumnarCountKernel kernel(dm);
+	auto expectCount = [&](const std::string &key, const PropertyValue &value, int64_t expectedCount) {
+		auto countRequest = request(stored.getId() + 129, followsType);
+		countRequest.propertyPredicates = {{key, value}};
+		const auto result = kernel.count(countRequest);
+		ASSERT_TRUE(result.has_value());
+		EXPECT_EQ(result->count, expectedCount) << key;
+	};
+
+	expectCount("active", PropertyValue(true), 1);
+	expectCount("score", PropertyValue(1.5), 1);
+	expectCount("kind", PropertyValue("fast"), 1);
+	expectCount("date", PropertyValue(date), 1);
+	expectCount("date_time", PropertyValue(dateTime), 1);
+	expectCount("duration", PropertyValue(duration), 1);
+	expectCount("score", PropertyValue(int64_t{1}), 0);
+	expectCount("missing", PropertyValue("fast"), 0);
+}
+
 TEST_F(RelationshipColumnarCountKernelTest, CountsVectorComparisonPredicatesWithColumnarFallback) {
 	int64_t maxEdgeId = 0;
 	maxEdgeId = addRelationshipWithProperties(followsType, {{"weight", PropertyValue(int64_t{2})}}).getId();
@@ -239,4 +280,64 @@ TEST_F(RelationshipColumnarCountKernelTest, CountsVectorComparisonPredicatesWith
 	ASSERT_TRUE(result.has_value());
 	EXPECT_EQ(result->count, 2);
 	EXPECT_EQ(result->propertyCandidates, 4U);
+}
+
+TEST_F(RelationshipColumnarCountKernelTest, CountsGroupedVectorPredicatesByKey) {
+	int64_t maxEdgeId = 0;
+	maxEdgeId = addRelationshipWithProperties(followsType,
+											  {{"weight", PropertyValue(int64_t{5})}, {"kind", PropertyValue("b")}})
+						.getId();
+	maxEdgeId = addRelationshipWithProperties(followsType,
+											  {{"weight", PropertyValue(int64_t{8})}, {"kind", PropertyValue("c")}})
+						.getId();
+	maxEdgeId = addRelationshipWithProperties(followsType,
+											  {{"weight", PropertyValue(int64_t{11})}, {"kind", PropertyValue("d")}})
+						.getId();
+	maxEdgeId =
+			addRelationshipWithProperties(followsType, {{"weight", PropertyValue("8")}, {"kind", PropertyValue("c")}})
+					.getId();
+	for (int i = 0; i < 128; ++i) {
+		maxEdgeId = addRelationship(i % 2 == 0 ? followsType : likesType).getId();
+	}
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+
+	VectorizedPropertyPredicate lower;
+	lower.propertyKey = "weight";
+	lower.op = VectorPredicateOp::VPO_GE;
+	lower.value = PropertyValue(int64_t{5});
+	VectorizedPropertyPredicate upper;
+	upper.propertyKey = "weight";
+	upper.op = VectorPredicateOp::VPO_LE;
+	upper.value = PropertyValue(int64_t{8});
+	VectorizedPropertyPredicate missing;
+	missing.propertyKey = "score";
+	missing.op = VectorPredicateOp::VPO_EQ;
+	missing.value = PropertyValue(int64_t{1});
+	VectorizedPropertyPredicate kindLower;
+	kindLower.propertyKey = "kind";
+	kindLower.op = VectorPredicateOp::VPO_GE;
+	kindLower.value = PropertyValue("b");
+	VectorizedPropertyPredicate kindUpper;
+	kindUpper.propertyKey = "kind";
+	kindUpper.op = VectorPredicateOp::VPO_LE;
+	kindUpper.value = PropertyValue("c");
+
+	RelationshipColumnarCountKernel kernel(dm);
+	auto countRequest = request(maxEdgeId, followsType);
+	countRequest.vectorPredicates = {lower, upper};
+	auto numericRange = kernel.count(countRequest);
+	ASSERT_TRUE(numericRange.has_value());
+	EXPECT_EQ(numericRange->count, 2);
+
+	countRequest.vectorPredicates = {lower, upper, missing};
+	auto missingKey = kernel.count(countRequest);
+	ASSERT_TRUE(missingKey.has_value());
+	EXPECT_EQ(missingKey->count, 0);
+
+	countRequest.vectorPredicates = {kindLower, kindUpper};
+	auto stringRange = kernel.count(countRequest);
+	ASSERT_TRUE(stringRange.has_value());
+	EXPECT_EQ(stringRange->count, 3);
+	EXPECT_EQ(stringRange->propertyCandidates, 4U);
 }

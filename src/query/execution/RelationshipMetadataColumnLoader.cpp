@@ -17,7 +17,8 @@ namespace graph::query::execution {
 		using Clock = std::chrono::steady_clock;
 
 		uint64_t elapsedNs(Clock::time_point start) {
-			return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count());
+			return static_cast<uint64_t>(
+					std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count());
 		}
 
 		constexpr size_t kEdgeIdOffset = 0;
@@ -72,11 +73,9 @@ namespace graph::query::execution {
 			batch.active[row] = static_cast<uint8_t>(readSerializedActive(buf));
 		}
 
-		std::vector<size_t> collectEdgeWorkSegments(const std::shared_ptr<storage::DataManager> &dm,
-		                                            int64_t beginId,
-		                                            int64_t endId,
-		                                            int64_t typeId = 0,
-		                                            bool pruneWithCachedTypeStats = false) {
+		std::vector<size_t> collectEdgeWorkSegments(const std::shared_ptr<storage::DataManager> &dm, int64_t beginId,
+													int64_t endId, int64_t typeId = 0,
+													bool pruneWithCachedTypeStats = false) {
 			const auto &segmentIndex = dm->getSegmentIndexManager()->getEdgeSegmentIndex();
 			std::vector<size_t> workSegmentIndices;
 			workSegmentIndices.reserve(segmentIndex.size());
@@ -102,12 +101,10 @@ namespace graph::query::execution {
 			int64_t segmentStartId = 0;
 		};
 
-		std::optional<EdgeSegmentScanWindow> edgeSegmentScanWindow(
-				const storage::SegmentIndexManager::SegmentIndex &entry,
-				const storage::SegmentHeader &header,
-				const char *segmentBuffer,
-				int64_t beginId,
-				int64_t endId) {
+		std::optional<EdgeSegmentScanWindow>
+		edgeSegmentScanWindow(const storage::SegmentIndexManager::SegmentIndex &entry,
+							  const storage::SegmentHeader &header, const char *segmentBuffer, int64_t beginId,
+							  int64_t endId) {
 			if (header.used == 0) { // ZYX_COV_EXCL_LINE
 				return std::nullopt;
 			}
@@ -136,12 +133,8 @@ namespace graph::query::execution {
 		}
 
 		template<typename Visitor>
-		bool scanSerializedEdges(const std::shared_ptr<storage::DataManager> &dm,
-		                         int64_t beginId,
-		                         int64_t endId,
-		                         int64_t typeId,
-		                         bool pruneWithCachedTypeStats,
-		                         Visitor &&visitor) {
+		bool scanSerializedEdges(const std::shared_ptr<storage::DataManager> &dm, int64_t beginId, int64_t endId,
+								 int64_t typeId, bool pruneWithCachedTypeStats, Visitor &&visitor) {
 			const auto workSegmentIndices =
 					collectEdgeWorkSegments(dm, beginId, endId, typeId, pruneWithCachedTypeStats);
 			if (workSegmentIndices.empty()) { // ZYX_COV_EXCL_LINE
@@ -150,13 +143,13 @@ namespace graph::query::execution {
 
 			const auto &segmentIndex = dm->getSegmentIndexManager()->getEdgeSegmentIndex();
 			auto groups = storage::buildCoalescedGroups(workSegmentIndices, segmentIndex);
-			for (const auto &group : groups) {
-			const size_t totalBytes = group.segCount * storage::TOTAL_SEGMENT_SIZE;
-			std::vector<char> groupBuffer(totalBytes);
-			const auto read = dm->preadSegments(groupBuffer.data(), group.segCount, group.startOffset);
-			if (read < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
-				return false;
-			}
+			for (const auto &group: groups) {
+				const size_t totalBytes = group.segCount * storage::TOTAL_SEGMENT_SIZE;
+				std::vector<char> groupBuffer(totalBytes);
+				const auto read = dm->preadSegments(groupBuffer.data(), group.segCount, group.startOffset);
+				if (read < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
+					return false;
+				}
 
 				for (size_t member = 0; member < group.memberIndices.size(); ++member) {
 					const size_t segmentIndexInWork = group.memberIndices[member];
@@ -176,10 +169,8 @@ namespace graph::query::execution {
 		}
 
 		template<typename Visitor>
-		bool scanSerializedEdges(const std::shared_ptr<storage::DataManager> &dm,
-		                         int64_t beginId,
-		                         int64_t endId,
-		                         Visitor &&visitor) {
+		bool scanSerializedEdges(const std::shared_ptr<storage::DataManager> &dm, int64_t beginId, int64_t endId,
+								 Visitor &&visitor) {
 			return scanSerializedEdges(dm, beginId, endId, 0, false, std::forward<Visitor>(visitor));
 		}
 
@@ -246,18 +237,19 @@ namespace graph::query::execution {
 		return edge;
 	}
 
-	RelationshipMetadataColumnLoader::RelationshipMetadataColumnLoader(std::shared_ptr<storage::DataManager> dm)
-		: dm_(std::move(dm)) {}
+	RelationshipMetadataColumnLoader::RelationshipMetadataColumnLoader(std::shared_ptr<storage::DataManager> dm) :
+		dm_(std::move(dm)) {}
 
 	bool RelationshipMetadataColumnLoader::canLoad(int64_t beginId, int64_t endId) const {
 		static constexpr int64_t METADATA_LOAD_THRESHOLD = 128;
 		if (!dm_ || !dm_->hasPreadSupport() || dm_->hasUnsavedChanges() || beginId <= 0 || endId < beginId ||
-		    endId - beginId + 1 < METADATA_LOAD_THRESHOLD) {
+			endId - beginId + 1 < METADATA_LOAD_THRESHOLD) {
 			return false;
 		}
 		const auto *snapshot = dm_->getCurrentSnapshot();
 		const bool snapshotSafe = snapshot == nullptr || // ZYX_COV_EXCL_LINE
-		                          (snapshot->edges.empty() && snapshot->properties.empty() && snapshot->blobs.empty()); // ZYX_COV_EXCL_LINE
+								  (snapshot->edges.empty() && snapshot->properties.empty() &&
+								   snapshot->blobs.empty()); // ZYX_COV_EXCL_LINE
 		return snapshotSafe;
 	}
 
@@ -267,7 +259,8 @@ namespace graph::query::execution {
 			   endId - beginId + 1 >= METADATA_LOAD_THRESHOLD;
 	}
 
-	std::optional<RelationshipMetadataBatch> RelationshipMetadataColumnLoader::loadRange(int64_t beginId, int64_t endId) const {
+	std::optional<RelationshipMetadataBatch> RelationshipMetadataColumnLoader::loadRange(int64_t beginId,
+																						 int64_t endId) const {
 		if (!canLoad(beginId, endId)) {
 			return std::nullopt;
 		}
@@ -278,8 +271,8 @@ namespace graph::query::execution {
 		RelationshipMetadataBatch batch;
 		batch.reserve(static_cast<size_t>(endId - beginId + 1));
 		if (!scanSerializedEdges(dm_, beginId, endId, [&](int64_t, const char *serializedEdge) {
-			readMetadataIntoBatch(serializedEdge, batch);
-		})) {
+				readMetadataIntoBatch(serializedEdge, batch);
+			})) {
 			return std::nullopt;
 		}
 
@@ -289,9 +282,8 @@ namespace graph::query::execution {
 		return batch;
 	}
 
-	std::optional<int64_t> RelationshipMetadataColumnLoader::countActiveByType(int64_t beginId,
-	                                                                           int64_t endId,
-	                                                                           int64_t typeId) const {
+	std::optional<int64_t> RelationshipMetadataColumnLoader::countActiveByType(int64_t beginId, int64_t endId,
+																			   int64_t typeId) const {
 		if (!canCountActiveByType(beginId, endId)) {
 			return std::nullopt;
 		}
@@ -316,11 +308,11 @@ namespace graph::query::execution {
 
 		int64_t count = 0;
 		if (!scanSerializedEdges(dm_, beginId, endId, [&](int64_t, const char *serializedEdge) {
-			if (readSerializedActive(serializedEdge) &&
-			    (typeId == 0 || readSerializedTypeId(serializedEdge) == typeId)) {
-				++count;
-			}
-		})) {
+				if (readSerializedActive(serializedEdge) &&
+					(typeId == 0 || readSerializedTypeId(serializedEdge) == typeId)) {
+					++count;
+				}
+			})) {
 			return std::nullopt;
 		}
 
@@ -331,9 +323,8 @@ namespace graph::query::execution {
 	}
 
 	std::optional<RelationshipPropertyCandidateBatch>
-	RelationshipMetadataColumnLoader::collectPropertyCandidatesByType(int64_t beginId,
-	                                                                  int64_t endId,
-	                                                                  int64_t typeId) const {
+	RelationshipMetadataColumnLoader::collectPropertyCandidatesByType(int64_t beginId, int64_t endId,
+																	  int64_t typeId) const {
 		if (!canLoad(beginId, endId)) {
 			return std::nullopt;
 		}
@@ -344,28 +335,28 @@ namespace graph::query::execution {
 		RelationshipPropertyCandidateBatch batch;
 		batch.reserve(static_cast<size_t>(endId - beginId + 1));
 		if (!scanSerializedEdges(dm_, beginId, endId, typeId, true, [&](int64_t edgeId, const char *serializedEdge) {
-			if (!readSerializedActive(serializedEdge) ||
-			    (typeId != 0 && readSerializedTypeId(serializedEdge) != typeId)) {
-				return;
-			}
+				if (!readSerializedActive(serializedEdge) ||
+					(typeId != 0 && readSerializedTypeId(serializedEdge) != typeId)) {
+					return;
+				}
 
-			const int64_t propertyEntityId = readSerializedPropertyEntityId(serializedEdge);
-			if (propertyEntityId == 0) {
-				return;
-			}
+				const int64_t propertyEntityId = readSerializedPropertyEntityId(serializedEdge);
+				if (propertyEntityId == 0) {
+					return;
+				}
 
-			const auto storageType = readSerializedPropertyStorageType(serializedEdge);
-			if (storageType == PropertyStorageType::PROPERTY_ENTITY) {
-				const size_t row = batch.edgeIds.size();
-				batch.edgeIds.push_back(edgeId);
-				batch.propertyEntityIds.push_back(propertyEntityId);
-				batch.propertyRows.push_back(row);
-			} else if (storageType == PropertyStorageType::BLOB_ENTITY) {
-				const size_t row = batch.edgeIds.size();
-				batch.edgeIds.push_back(edgeId);
-				batch.fallbackRows.push_back(row);
-			}
-		})) {
+				const auto storageType = readSerializedPropertyStorageType(serializedEdge);
+				if (storageType == PropertyStorageType::PROPERTY_ENTITY) {
+					const size_t row = batch.edgeIds.size();
+					batch.edgeIds.push_back(edgeId);
+					batch.propertyEntityIds.push_back(propertyEntityId);
+					batch.propertyRows.push_back(row);
+				} else if (storageType == PropertyStorageType::BLOB_ENTITY) {
+					const size_t row = batch.edgeIds.size();
+					batch.edgeIds.push_back(edgeId);
+					batch.fallbackRows.push_back(row);
+				}
+			})) {
 			return std::nullopt;
 		}
 
@@ -376,9 +367,8 @@ namespace graph::query::execution {
 	}
 
 	std::optional<RelationshipPropertyCountCandidates>
-	RelationshipMetadataColumnLoader::collectPropertyCountCandidatesByType(int64_t beginId,
-	                                                                       int64_t endId,
-	                                                                       int64_t typeId) const {
+	RelationshipMetadataColumnLoader::collectPropertyCountCandidatesByType(int64_t beginId, int64_t endId,
+																		   int64_t typeId) const {
 		if (!canLoad(beginId, endId)) {
 			return std::nullopt;
 		}
@@ -386,27 +376,38 @@ namespace graph::query::execution {
 		const bool traceEnabled = debug::PerfTrace::isEnabled();
 		const auto start = traceEnabled ? Clock::now() : Clock::time_point{};
 
+		if (auto cached = dm_->collectRelationshipPropertyCandidatesFromSegmentStats(beginId, endId, typeId)) {
+			RelationshipPropertyCountCandidates candidates;
+			candidates.propertyEntityIds = std::move(cached->propertyEntityIds);
+			candidates.fallbackEdgeIds = std::move(cached->fallbackEdgeIds);
+			candidates.matchedEdges = cached->matchedEdges;
+			if (traceEnabled) {
+				debug::PerfTrace::addDuration("relationship_count.load_edge_metadata", elapsedNs(start));
+			}
+			return candidates;
+		}
+
 		RelationshipPropertyCountCandidates candidates;
 		candidates.reserve(static_cast<size_t>(endId - beginId + 1));
 		if (!scanSerializedEdges(dm_, beginId, endId, typeId, true, [&](int64_t edgeId, const char *serializedEdge) {
-			if (!readSerializedActive(serializedEdge) ||
-			    (typeId != 0 && readSerializedTypeId(serializedEdge) != typeId)) {
-				return;
-			}
+				if (!readSerializedActive(serializedEdge) ||
+					(typeId != 0 && readSerializedTypeId(serializedEdge) != typeId)) {
+					return;
+				}
 
-			++candidates.matchedEdges;
-			const int64_t propertyEntityId = readSerializedPropertyEntityId(serializedEdge);
-			if (propertyEntityId == 0) {
-				return;
-			}
+				++candidates.matchedEdges;
+				const int64_t propertyEntityId = readSerializedPropertyEntityId(serializedEdge);
+				if (propertyEntityId == 0) {
+					return;
+				}
 
-			const auto storageType = readSerializedPropertyStorageType(serializedEdge);
-			if (storageType == PropertyStorageType::PROPERTY_ENTITY) {
-				candidates.propertyEntityIds.push_back(propertyEntityId);
-			} else if (storageType == PropertyStorageType::BLOB_ENTITY) {
-				candidates.fallbackEdgeIds.push_back(edgeId);
-			}
-		})) {
+				const auto storageType = readSerializedPropertyStorageType(serializedEdge);
+				if (storageType == PropertyStorageType::PROPERTY_ENTITY) {
+					candidates.propertyEntityIds.push_back(propertyEntityId);
+				} else if (storageType == PropertyStorageType::BLOB_ENTITY) {
+					candidates.fallbackEdgeIds.push_back(edgeId);
+				}
+			})) {
 			return std::nullopt;
 		}
 

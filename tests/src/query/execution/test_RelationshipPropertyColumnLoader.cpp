@@ -23,10 +23,10 @@ using namespace graph::query::execution;
 
 namespace {
 
-Edge makeEdge(int64_t id) {
-	Edge edge(id, 1, 2, 3);
-	return edge;
-}
+	Edge makeEdge(int64_t id) {
+		Edge edge(id, 1, 2, 3);
+		return edge;
+	}
 
 } // namespace
 
@@ -133,7 +133,7 @@ TEST(RelationshipPropertyColumnLoaderTest, MetadataRowsSkipInvalidInactiveAndMis
 
 	ASSERT_TRUE(columns.contains("weight"));
 	ASSERT_EQ(columns["weight"].size(), metadata.size());
-	for (const auto &value : columns["weight"]) {
+	for (const auto &value: columns["weight"]) {
 		EXPECT_FALSE(value.has_value());
 	}
 }
@@ -172,7 +172,8 @@ class RelationshipPropertyColumnLoaderStorageTest : public ::testing::Test {
 protected:
 	void SetUp() override {
 		const auto uuid = boost::uuids::random_generator()();
-		testDbPath = fs::temp_directory_path() / ("test_relationship_property_column_loader_" + boost::uuids::to_string(uuid) + ".zyx");
+		testDbPath = fs::temp_directory_path() /
+					 ("test_relationship_property_column_loader_" + boost::uuids::to_string(uuid) + ".zyx");
 		if (fs::exists(testDbPath)) {
 			fs::remove_all(testDbPath);
 		}
@@ -268,9 +269,10 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataBatchExternalPropert
 TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataBatchHandlesSelectionAndBlobFallback) {
 	Edge selected = addFollowsWithProperties({{"weight", PropertyValue(int64_t{5})}});
 	std::string largeValue(512, 'z');
-	Edge blobBacked = addFollowsWithProperties({{"payload", PropertyValue(largeValue)}, {"weight", PropertyValue(int64_t{9})}});
+	Edge blobBacked =
+			addFollowsWithProperties({{"payload", PropertyValue(largeValue)}, {"weight", PropertyValue(int64_t{9})}});
 	Edge unselected = addFollowsWithProperties({{"weight", PropertyValue(int64_t{11})}});
-	(void)unselected;
+	(void) unselected;
 	db->getStorage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
@@ -310,13 +312,15 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataBatchHandlesSelectio
 TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataCandidateScanKeepsOnlyEdgesWithStoredProperties) {
 	Edge propertyBacked = addFollowsWithProperties({{"weight", PropertyValue(int64_t{5})}});
 	std::string largeValue(512, 'x');
-	Edge blobBacked = addFollowsWithProperties({{"payload", PropertyValue(largeValue)}, {"weight", PropertyValue(int64_t{7})}});
+	Edge blobBacked =
+			addFollowsWithProperties({{"payload", PropertyValue(largeValue)}, {"weight", PropertyValue(int64_t{7})}});
 	Edge withoutProperties = addFollowsWithoutProperties();
 	const int64_t source = addUser();
 	const int64_t target = addUser();
 	Edge otherType(0, source, target, dm->getOrCreateTokenId("LIKES"));
 	dm->addEdge(otherType);
 	dm->addEdgeProperties(otherType.getId(), {{"weight", PropertyValue(int64_t{11})}});
+	otherType = dm->getEdge(otherType.getId());
 	ASSERT_EQ(propertyBacked.getPropertyStorageType(), PropertyStorageType::PROPERTY_ENTITY);
 	ASSERT_EQ(blobBacked.getPropertyStorageType(), PropertyStorageType::BLOB_ENTITY);
 	ASSERT_EQ(withoutProperties.getPropertyStorageType(), PropertyStorageType::NONE);
@@ -338,6 +342,12 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataCandidateScanKeepsOn
 	EXPECT_EQ(countCandidates->matchedEdges, 3U);
 	EXPECT_EQ(countCandidates->propertyEntityIds, (std::vector<int64_t>{propertyBacked.getPropertyEntityId()}));
 	EXPECT_EQ(countCandidates->fallbackEdgeIds, (std::vector<int64_t>{blobBacked.getId()}));
+	auto cachedCountCandidates = dm->collectRelationshipPropertyCandidatesFromSegmentStats(1, 128, followsType);
+	ASSERT_TRUE(cachedCountCandidates.has_value());
+	EXPECT_EQ(cachedCountCandidates->matchedEdges, 3U);
+	EXPECT_EQ(cachedCountCandidates->propertyEntityIds, countCandidates->propertyEntityIds);
+	EXPECT_EQ(cachedCountCandidates->fallbackEdgeIds, countCandidates->fallbackEdgeIds);
+	EXPECT_FALSE(dm->collectRelationshipPropertyCandidatesFromSegmentStats(2, 128, followsType).has_value());
 
 	auto noTypeMatches = loader.collectPropertyCandidatesByType(1, 128, followsType + 999);
 	ASSERT_TRUE(noTypeMatches.has_value());
@@ -353,6 +363,12 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataCandidateScanKeepsOn
 	auto allTypes = loader.collectPropertyCandidatesByType(1, 128, 0);
 	ASSERT_TRUE(allTypes.has_value());
 	EXPECT_EQ(allTypes->edgeIds, (std::vector<int64_t>{propertyBacked.getId(), blobBacked.getId(), otherType.getId()}));
+	auto cachedAllTypes = dm->collectRelationshipPropertyCandidatesFromSegmentStats(1, 128, 0);
+	ASSERT_TRUE(cachedAllTypes.has_value());
+	EXPECT_EQ(cachedAllTypes->matchedEdges, 4U);
+	EXPECT_EQ(cachedAllTypes->propertyEntityIds,
+			  (std::vector<int64_t>{propertyBacked.getPropertyEntityId(), otherType.getPropertyEntityId()}));
+	EXPECT_EQ(cachedAllTypes->fallbackEdgeIds, (std::vector<int64_t>{blobBacked.getId()}));
 }
 
 TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderRejectsUnsafeOrShortRanges) {
@@ -395,6 +411,8 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderStopsWhenSegme
 	EXPECT_FALSE(loader.loadRange(1, 128).has_value());
 	EXPECT_FALSE(loader.countActiveByType(1, 128, followsType).has_value());
 	EXPECT_FALSE(loader.collectPropertyCandidatesByType(1, 128, followsType).has_value());
+	EXPECT_FALSE(loader.collectPropertyCountCandidatesByType(1, 128, followsType).has_value());
+	EXPECT_FALSE(dm->collectRelationshipPropertyCandidatesFromSegmentStats(1, 128, followsType).has_value());
 }
 
 TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderRejectsReadOnlySnapshotsWithEdgeOverlays) {
@@ -411,9 +429,9 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderRejectsReadOnl
 	EXPECT_TRUE(loader.loadRange(1, 128).has_value());
 
 	storage::CommittedSnapshot edgeOverlaySnapshot;
-	edgeOverlaySnapshot.edges.emplace(edge.getId(),
-	                                  storage::DirtyEntityInfo<Edge>(storage::EntityChangeType::CHANGE_MODIFIED,
-	                                                                 dm->getEdge(edge.getId())));
+	edgeOverlaySnapshot.edges.emplace(
+			edge.getId(),
+			storage::DirtyEntityInfo<Edge>(storage::EntityChangeType::CHANGE_MODIFIED, dm->getEdge(edge.getId())));
 	dm->setCurrentSnapshot(&edgeOverlaySnapshot);
 	EXPECT_FALSE(loader.loadRange(1, 128).has_value());
 	dm->clearCurrentSnapshot();
@@ -432,17 +450,15 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderRejectsReadOnl
 	Property property;
 	property.setId(1);
 	propertyOverlaySnapshot.properties.emplace(
-			property.getId(),
-			storage::DirtyEntityInfo<Property>(storage::EntityChangeType::CHANGE_MODIFIED, property));
+			property.getId(), storage::DirtyEntityInfo<Property>(storage::EntityChangeType::CHANGE_MODIFIED, property));
 	dm->setCurrentSnapshot(&propertyOverlaySnapshot);
 	EXPECT_FALSE(loader.loadRange(1, 128).has_value());
 
 	storage::CommittedSnapshot blobOverlaySnapshot;
 	Blob blob;
 	blob.setId(1);
-	blobOverlaySnapshot.blobs.emplace(
-			blob.getId(),
-			storage::DirtyEntityInfo<Blob>(storage::EntityChangeType::CHANGE_MODIFIED, blob));
+	blobOverlaySnapshot.blobs.emplace(blob.getId(),
+									  storage::DirtyEntityInfo<Blob>(storage::EntityChangeType::CHANGE_MODIFIED, blob));
 	dm->setCurrentSnapshot(&blobOverlaySnapshot);
 	EXPECT_FALSE(loader.loadRange(1, 128).has_value());
 	dm->clearCurrentSnapshot();
@@ -641,7 +657,7 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderScansPartialSe
 	auto followsCountCandidates = loader.collectPropertyCountCandidatesByType(1, 256, followsType);
 	ASSERT_TRUE(followsCountCandidates.has_value());
 	EXPECT_EQ(followsCountCandidates->propertyEntityIds.size() + followsCountCandidates->fallbackEdgeIds.size(),
-	          followsCandidates->propertyEntityIds.size() + followsCandidates->fallbackRows.size());
+			  followsCandidates->propertyEntityIds.size() + followsCandidates->fallbackRows.size());
 	auto missingTypeCandidates = loader.collectPropertyCandidatesByType(1, 256, mentionsType);
 	ASSERT_TRUE(missingTypeCandidates.has_value());
 	EXPECT_TRUE(missingTypeCandidates->edgeIds.empty());
@@ -675,7 +691,8 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderReadsInactiveR
 
 TEST_F(RelationshipPropertyColumnLoaderStorageTest, BlobBackedPropertiesFallbackToDirectLoading) {
 	std::string largeValue(512, 'x');
-	Edge stored = addFollowsWithProperties({{"payload", PropertyValue(largeValue)}, {"weight", PropertyValue(int64_t{3})}});
+	Edge stored =
+			addFollowsWithProperties({{"payload", PropertyValue(largeValue)}, {"weight", PropertyValue(int64_t{3})}});
 	ASSERT_TRUE(stored.hasPropertyEntity());
 	ASSERT_EQ(stored.getPropertyStorageType(), PropertyStorageType::BLOB_ENTITY);
 	RelationshipPropertyColumnLoader loader(dm);
