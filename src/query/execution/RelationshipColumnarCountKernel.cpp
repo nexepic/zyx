@@ -49,27 +49,22 @@ namespace graph::query::execution {
 
 		size_t countPropertyEntityPredicates(const std::shared_ptr<storage::DataManager> &dm,
 		                                    const std::vector<int64_t> &propertyEntityIds,
+		                                    const RelationshipColumnarCountRequest &request,
 		                                    const PropertyPredicateKernel &predicateKernel,
 		                                    concurrent::ThreadPool *pool) {
 			const auto &predicates = predicateKernel.predicates();
 			if (predicates.empty()) {
 				return 0;
 			}
+			if (request.vectorPredicates.empty() && !request.propertyPredicates.empty()) {
+				return dm->bulkCountPropertyEntityPredicates(propertyEntityIds, request.propertyPredicates, pool);
+			}
 			if (areEqualityPredicates(predicates)) {
 				return dm->bulkCountPropertyEntityPredicates(propertyEntityIds, toEqualityMap(predicates), pool);
 			}
 
-			std::vector<size_t> rows;
-			rows.reserve(propertyEntityIds.size());
-			for (size_t row = 0; row < propertyEntityIds.size(); ++row) {
-				rows.push_back(row);
-			}
-			return dm->bulkMatchPropertyEntityPredicateSpecs(
-					propertyEntityIds,
-					rows,
-					propertyEntityIds.size(),
-					predicateKernel.toStoragePredicates(),
-					pool).matchedCount;
+			return dm->bulkCountPropertyEntityPredicateSpecs(
+					propertyEntityIds, predicateKernel.toStoragePredicates(), pool);
 		}
 	} // namespace
 
@@ -106,7 +101,7 @@ namespace graph::query::execution {
 
 		const auto propertyStart = Clock::now();
 		result.count += static_cast<int64_t>(
-				countPropertyEntityPredicates(dm_, candidates->propertyEntityIds, predicateKernel, pool_));
+				countPropertyEntityPredicates(dm_, candidates->propertyEntityIds, request, predicateKernel, pool_));
 		addProfile("relationship_count.property_predicate", propertyStart);
 
 		if (!candidates->fallbackEdgeIds.empty()) {
