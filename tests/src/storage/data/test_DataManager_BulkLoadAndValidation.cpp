@@ -1673,6 +1673,23 @@ TEST_F(DataManagerTest, BulkMatchPropertyEntityPredicateSpecsSupportsComparisonO
 	EXPECT_EQ(firstOnly.loadedRows, (std::vector<size_t>{0U, 1U}));
 	EXPECT_EQ(firstOnly.matchedRows, (std::vector<size_t>{0U}));
 
+	PropertyEntityPredicateMatchOptions countOnlyOptions;
+	countOnlyOptions.collectLoadedRows = false;
+	countOnlyOptions.collectMatchedRows = false;
+	auto firstOnlyCounts = dataManager->bulkMatchPropertyEntityPredicateSpecs(
+		ids,
+		rows,
+		2,
+		{{"age", Op::PEP_GT, PropertyValue(int64_t(29)), std::nullopt},
+		 {"score", Op::PEP_LE, PropertyValue(int64_t(900)), std::nullopt},
+		 {"country", Op::PEP_NE, PropertyValue("US"), std::nullopt}},
+		nullptr,
+		countOnlyOptions);
+	EXPECT_TRUE(firstOnlyCounts.loadedRows.empty());
+	EXPECT_TRUE(firstOnlyCounts.matchedRows.empty());
+	EXPECT_EQ(firstOnlyCounts.loadedCount, 2U);
+	EXPECT_EQ(firstOnlyCounts.matchedCount, 1U);
+
 	auto secondOnly = dataManager->bulkMatchPropertyEntityPredicateSpecs(
 		ids,
 		rows,

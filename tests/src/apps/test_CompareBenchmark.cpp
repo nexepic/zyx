@@ -87,6 +87,8 @@ TEST_F(CompareBenchmarkTest, ParseArgsAcceptsCompleteScanAndIndexedOptions) {
 									 "--profile",
 									 "indexed",
 									 "--emit-profile",
+									 "--execution-mode",
+									 "cold-ish",
 									 "--warmup",
 									 "2",
 									 "--iterations",
@@ -103,6 +105,7 @@ TEST_F(CompareBenchmarkTest, ParseArgsAcceptsCompleteScanAndIndexedOptions) {
 	EXPECT_EQ(options.scale, "small");
 	EXPECT_EQ(options.profile, std::string(kProfileIndexed));
 	EXPECT_TRUE(options.emitProfile);
+	EXPECT_EQ(options.executionMode, std::string(kExecutionModeColdish));
 	EXPECT_EQ(options.warmup, 2);
 	EXPECT_EQ(options.iterations, 3);
 }
@@ -120,6 +123,10 @@ TEST_F(CompareBenchmarkTest, ParseArgsRejectsInvalidAndMissingValues) {
 	EXPECT_THROW(parse({"zyx-compare-bench", "--dataset", "data", "--db-path", "db", "--scale", "small", "--profile",
 						"bad"}),
 				 std::invalid_argument);
+	EXPECT_THROW(
+			parse({"zyx-compare-bench", "--dataset", "data", "--db-path", "db", "--scale", "small", "--execution-mode",
+				   "bad"}),
+			std::invalid_argument);
 	EXPECT_THROW(
 			parse({"zyx-compare-bench", "--dataset", "data", "--db-path", "db", "--scale", "small", "--warmup", "-1"}),
 			std::invalid_argument);
@@ -264,6 +271,11 @@ TEST_F(CompareBenchmarkTest, RunExecutesSmallScanAndIndexedProfiles) {
 	scan.iterations = 1;
 
 	EXPECT_EQ(run(scan), 0);
+
+	Options coldish = scan;
+	coldish.dbPath = tempRoot / "coldish.db";
+	coldish.executionMode = std::string(kExecutionModeColdish);
+	EXPECT_EQ(run(coldish), 0);
 
 	Options indexed;
 	indexed.dataset = dataset;

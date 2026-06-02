@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Iterable, TextIO
 
 from dataset.generate import SCALES, generate_graph, write_dataset
-from runner.adapters.base import BenchmarkAdapter, DEFAULT_PROFILE, PROFILE_WORKLOADS
+from runner.adapters.base import BenchmarkAdapter, DEFAULT_PROFILE, EXECUTION_MODES, PROFILE_WORKLOADS, WARM_EXECUTION_MODE
 from runner.adapters.fake import FakeAdapter
 from runner.models import FailureEvent
 from runner.summarize import write_summary_outputs
@@ -76,6 +76,7 @@ def _environment(
     warmup: int,
     iterations: int,
     profile: str,
+    execution_mode: str,
 ) -> dict[str, object]:
     return {
         "event": "environment",
@@ -86,6 +87,7 @@ def _environment(
         "seed": seed,
         "warmup": warmup,
         "iterations": iterations,
+        "execution_mode": execution_mode,
         "machine": platform.machine(),
         "platform": platform.platform(),
         "python": platform.python_version(),
@@ -123,6 +125,7 @@ def run_benchmark(
     warmup: int,
     iterations: int,
     profile: str = DEFAULT_PROFILE,
+    execution_mode: str = WARM_EXECUTION_MODE,
 ) -> Path:
     if scale not in SCALES:
         raise ValueError(f"unsupported scale: {scale}")
@@ -132,13 +135,15 @@ def run_benchmark(
         raise ValueError("warmup must be >= 0")
     if iterations <= 0:
         raise ValueError("iterations must be > 0")
+    if execution_mode not in EXECUTION_MODES:
+        raise ValueError(f"execution mode must be one of: {', '.join(EXECUTION_MODES)}")
 
     result_dir = _create_result_dir(output_root, databases, scale, profile)
     dataset_dir = result_dir / "dataset"
 
     graph = generate_graph(SCALES[scale], seed=seed)
     manifest = write_dataset(graph, dataset_dir)
-    environment = _environment(databases, scale, seed, warmup, iterations, profile)
+    environment = _environment(databases, scale, seed, warmup, iterations, profile, execution_mode)
     environment["dataset_manifest"] = manifest
 
     raw_path = result_dir / "raw.jsonl"
@@ -162,7 +167,7 @@ def run_benchmark(
                 continue
 
             try:
-                results = adapter.run_all(warmup=warmup, iterations=iterations)
+                results = adapter.run_all(warmup=warmup, iterations=iterations, execution_mode=execution_mode)
                 _write_profile_events(result_dir, getattr(adapter, "profile_events", []))
             except Exception as exc:
                 failure = FailureEvent(
@@ -208,6 +213,7 @@ def main() -> int:
     parser.add_argument("--profile", choices=sorted(PROFILE_WORKLOADS), default=DEFAULT_PROFILE)
     parser.add_argument("--warmup", type=int, default=DEFAULT_WARMUP)
     parser.add_argument("--iterations", type=int, default=DEFAULT_ITERATIONS)
+    parser.add_argument("--execution-mode", choices=EXECUTION_MODES, default=WARM_EXECUTION_MODE)
     args = parser.parse_args()
 
     databases = args.databases if args.databases else DEFAULT_DATABASES
@@ -219,6 +225,7 @@ def main() -> int:
         warmup=args.warmup,
         iterations=args.iterations,
         profile=args.profile,
+        execution_mode=args.execution_mode,
     )
     print(result_dir)
     status_path = result_dir / "run_status.json"

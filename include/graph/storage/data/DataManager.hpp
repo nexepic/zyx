@@ -21,6 +21,7 @@
 #pragma once
 
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <fstream>
 #include <functional>
@@ -94,6 +95,11 @@ namespace graph::storage {
 	class StateManager;
 	class PropertyManager;
 
+	enum class SegmentReadCachePolicy {
+		SRCP_BYPASS,
+		SRCP_READ_THROUGH,
+	};
+
 	struct PropertyEntityPredicateMatchResult {
 		std::vector<size_t> loadedRows;
 		std::vector<size_t> matchedRows;
@@ -123,6 +129,14 @@ namespace graph::storage {
 		int64_t endId = -1;
 		uint32_t used = 0;
 		uint32_t inactiveCount = 0;
+		int64_t activeCount = 0;
+		std::unordered_map<int64_t, int64_t> activeCountByType;
+	};
+
+	struct RelationshipTypeTotalStats {
+		int64_t firstId = 0;
+		int64_t lastId = -1;
+		size_t segmentCount = 0;
 		int64_t activeCount = 0;
 		std::unordered_map<int64_t, int64_t> activeCountByType;
 	};
@@ -250,7 +264,8 @@ namespace graph::storage {
 		PropertyEntityPredicateMatchResult
 		bulkMatchPropertyEntityPredicateSpecs(const std::vector<int64_t> &ids, const std::vector<size_t> &rows,
 											  size_t rowCount, const std::vector<PropertyEntityPredicate> &predicates,
-											  concurrent::ThreadPool *pool = nullptr) const;
+											  concurrent::ThreadPool *pool = nullptr,
+											  PropertyEntityPredicateMatchOptions options = {}) const;
 		void addNodeProperties(int64_t nodeId, const std::unordered_map<std::string, PropertyValue> &properties) const;
 		void removeNodeProperty(int64_t nodeId, const std::string &key) const;
 		std::unordered_map<std::string, PropertyValue> getNodeProperties(int64_t nodeId) const;
@@ -368,6 +383,11 @@ namespace graph::storage {
 		// Thread-safe read via pread (no locks needed)
 		[[nodiscard]] bool hasPreadSupport() const { return storageIO_ && storageIO_->hasPreadSupport(); }
 		[[nodiscard]] ssize_t preadBytes(void *buf, size_t count, int64_t offset) const;
+		[[nodiscard]] ssize_t preadSegments(
+				void *buf,
+				size_t segmentCount,
+				uint64_t startSegmentOffset,
+				SegmentReadCachePolicy cachePolicy = SegmentReadCachePolicy::SRCP_BYPASS) const;
 
 		// Loading entities from disk
 		[[nodiscard]] Node loadNodeFromDisk(int64_t id) const;
@@ -488,6 +508,7 @@ namespace graph::storage {
 
 		mutable std::shared_mutex relationshipSegmentTypeStatsMutex_;
 		mutable std::unordered_map<uint64_t, RelationshipTypeSegmentStats> relationshipSegmentTypeStats_;
+		mutable std::optional<RelationshipTypeTotalStats> relationshipTypeTotalStats_;
 
 		// Transaction bookkeeping (mutable: logically separate from entity state,
 		// needs to be modifiable from const entity mutation methods)
@@ -548,6 +569,11 @@ namespace graph::storage {
 		getCachedRelationshipSegmentTypeStats(uint64_t segmentOffset, const SegmentHeader &header) const;
 		[[nodiscard]] std::optional<RelationshipTypeSegmentStats>
 		buildRelationshipSegmentTypeStats(uint64_t segmentOffset, const SegmentHeader &header) const;
+		[[nodiscard]] std::optional<RelationshipTypeTotalStats> getRelationshipTypeTotalStats() const;
+		[[nodiscard]] std::optional<RelationshipTypeTotalStats> getCachedRelationshipTypeTotalStats() const;
+		[[nodiscard]] std::optional<RelationshipTypeTotalStats> buildRelationshipTypeTotalStats() const;
+		[[nodiscard]] std::optional<int64_t>
+		countActiveEdgesByTypeFromTotalStats(int64_t beginId, int64_t endId, int64_t typeId) const;
 		[[nodiscard]] std::optional<int64_t> countActiveEdgesByTypeInSegmentWindow(
 				uint64_t segmentOffset, const SegmentHeader &header, int64_t firstId, int64_t lastId,
 				int64_t typeId) const;

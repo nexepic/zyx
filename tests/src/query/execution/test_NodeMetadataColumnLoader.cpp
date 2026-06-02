@@ -64,6 +64,11 @@ protected:
 } // namespace
 
 TEST(NodeMetadataBatchTest, HandlesInvalidRowsAndLabelLookups) {
+	NodeMetadataRow row;
+	EXPECT_FALSE(row.isValid());
+	EXPECT_FALSE(row.hasLabelId(11));
+	EXPECT_EQ(row.toNode().getId(), 0);
+
 	NodeMetadataBatch batch;
 	EXPECT_EQ(batch.size(), 0U);
 	EXPECT_FALSE(batch.isValid(0));
@@ -80,6 +85,14 @@ TEST(NodeMetadataBatchTest, HandlesInvalidRowsAndLabelLookups) {
 	batch.setFromNode(1, node);
 	EXPECT_FALSE(batch.isValid(0));
 	batch.setFromNode(0, node);
+	row.nodeId = 7;
+	row.firstOutEdgeId = 3;
+	row.firstInEdgeId = 4;
+	row.propertyEntityId = 5;
+	row.propertyStorageType = PropertyStorageType::PROPERTY_ENTITY;
+	row.active = 1;
+	row.labelCount = 1;
+	row.labelIds[0] = 11;
 
 	EXPECT_TRUE(batch.isValid(0));
 	EXPECT_TRUE(batch.hasLabelId(0, 11));
@@ -91,6 +104,17 @@ TEST(NodeMetadataBatchTest, HandlesInvalidRowsAndLabelLookups) {
 	EXPECT_EQ(restored.getFirstInEdgeId(), 4);
 	EXPECT_EQ(restored.getPropertyEntityId(), 5);
 	EXPECT_EQ(restored.getPropertyStorageType(), PropertyStorageType::PROPERTY_ENTITY);
+	EXPECT_TRUE(row.isValid());
+	EXPECT_TRUE(row.hasLabelId(11));
+	EXPECT_FALSE(row.hasLabelId(12));
+	Node restoredFromRow = row.toNode();
+	EXPECT_EQ(restoredFromRow.getId(), 7);
+	EXPECT_EQ(restoredFromRow.getFirstOutEdgeId(), 3);
+	EXPECT_EQ(restoredFromRow.getFirstInEdgeId(), 4);
+	EXPECT_EQ(restoredFromRow.getPropertyEntityId(), 5);
+	EXPECT_EQ(restoredFromRow.getPropertyStorageType(), PropertyStorageType::PROPERTY_ENTITY);
+	batch.setFromMetadataRow(0, row);
+	EXPECT_EQ(batch.nodeIds[0], row.nodeId);
 }
 
 TEST_F(NodeMetadataColumnLoaderStorageTest, RejectsUnsafeOrUnhelpfulLoads) {
@@ -117,6 +141,9 @@ TEST_F(NodeMetadataColumnLoaderStorageTest, RejectsUnsafeOrUnhelpfulLoads) {
 		outOfRangeIds.push_back(id);
 	}
 	EXPECT_FALSE(loader.loadBatch(outOfRangeIds, 0, outOfRangeIds.size()).has_value());
+	EXPECT_FALSE(loader.visitBatch(outOfRangeIds, 0, outOfRangeIds.size(),
+	                               [](size_t, const NodeMetadataRow &) { return true; }));
+	EXPECT_FALSE(loader.visitBatch(ids, 0, ids.size(), {}));
 }
 
 TEST_F(NodeMetadataColumnLoaderStorageTest, RejectsReadOnlySnapshotsWithNodeOverlays) {
@@ -186,6 +213,32 @@ TEST_F(NodeMetadataColumnLoaderStorageTest, LoadsSortedMetadataBatchAndNodesFrom
 	ASSERT_EQ(nodes->size(), ids.size());
 	EXPECT_EQ(nodes->front().getId(), ids.front());
 	EXPECT_TRUE(nodes->front().hasLabelId(userLabel));
+}
+
+TEST_F(NodeMetadataColumnLoaderStorageTest, VisitsSortedMetadataRowsFromDisk) {
+	auto ids = addUsers(130);
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+
+	NodeMetadataColumnLoader loader(dm);
+	std::vector<int64_t> visitedIds;
+	visitedIds.reserve(ids.size());
+	size_t propertyRows = 0;
+	const bool visited = loader.visitBatch(ids, 0, ids.size(), [&](size_t row, const NodeMetadataRow &metadata) {
+		EXPECT_LT(row, ids.size());
+		EXPECT_EQ(metadata.nodeId, ids[row]);
+		EXPECT_TRUE(metadata.isValid());
+		EXPECT_TRUE(metadata.hasLabelId(userLabel));
+		if (metadata.propertyStorageType == PropertyStorageType::PROPERTY_ENTITY) {
+			++propertyRows;
+		}
+		visitedIds.push_back(metadata.nodeId);
+		return true;
+	});
+
+	ASSERT_TRUE(visited);
+	EXPECT_EQ(visitedIds, ids);
+	EXPECT_EQ(propertyRows, 1U);
 }
 
 TEST_F(NodeMetadataColumnLoaderStorageTest, LoadsInactiveRowsAndRecordsTrace) {

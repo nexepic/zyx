@@ -121,6 +121,8 @@ TEST(LRUCacheStatsTest, EvictionDoesNotAffectCounters) {
 #include <filesystem>
 
 #include "graph/core/Database.hpp"
+#include "graph/storage/SegmentIndexManager.hpp"
+#include "graph/storage/StorageHeaders.hpp"
 
 namespace fs = std::filesystem;
 using namespace graph;
@@ -185,6 +187,33 @@ TEST_F(PageBufferPoolStatsTest, OperationsGenerateStats) {
 	// Just verify the counters are accessible and non-negative (no crash).
 	(void) pool.hits();
 	(void) pool.misses();
+}
+
+TEST_F(PageBufferPoolStatsTest, SegmentReadsPopulateAndHitPagePool) {
+	auto dm = db->getStorage()->getDataManager();
+	auto &pool = dm->getPagePool();
+
+	auto qe = db->getQueryEngine();
+	(void) qe->execute("CREATE (:SegmentCacheNode {value: 1})");
+	db->getStorage()->flush();
+
+	const auto &segments = dm->getSegmentIndexManager()->getNodeSegmentIndex();
+	ASSERT_FALSE(segments.empty());
+
+	std::vector<uint8_t> buffer(graph::storage::TOTAL_SEGMENT_SIZE);
+	pool.clear();
+	pool.resetStats();
+
+	const uint64_t segmentOffset = segments.front().segmentOffset;
+	ASSERT_EQ(dm->preadSegments(buffer.data(), 1, segmentOffset, graph::storage::SegmentReadCachePolicy::SRCP_READ_THROUGH),
+	          static_cast<ssize_t>(graph::storage::TOTAL_SEGMENT_SIZE));
+	EXPECT_EQ(pool.size(), 1U);
+	EXPECT_EQ(pool.hits(), 0UL);
+	EXPECT_EQ(pool.misses(), 1UL);
+
+	ASSERT_EQ(dm->preadSegments(buffer.data(), 1, segmentOffset, graph::storage::SegmentReadCachePolicy::SRCP_READ_THROUGH),
+	          static_cast<ssize_t>(graph::storage::TOTAL_SEGMENT_SIZE));
+	EXPECT_EQ(pool.hits(), 1UL);
 }
 
 TEST_F(PageBufferPoolStatsTest, ShowStatsViaCypher) {

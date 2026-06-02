@@ -156,77 +156,88 @@ namespace graph::query::execution::operators {
 		const NodeMetadataRowFilter rowFilter(dm_, config_, requirements);
 		NodeMetadataColumnLoader metadataLoader(dm_);
 
+		struct FallbackRow {
+			size_t acceptedRow = 0;
+			NodeMetadataRow metadata;
+		};
+
 		static constexpr size_t kMetadataTopKBatchSize = 65536;
-		static constexpr size_t kNoRow = static_cast<size_t>(-1);
 		for (size_t begin = 0; begin < candidateSet_.ids.size();) {
 			if (queryContext_) {
 				queryContext_->checkGuard();
 			}
 			const size_t end = std::min(candidateSet_.ids.size(), begin + kMetadataTopKBatchSize);
-			auto metadata = metadataLoader.loadBatch(candidateSet_.ids, begin, end);
-			if (!metadata.has_value()) {
-				return false;
-			}
 
-			std::vector<Row> batchRows;
-			std::vector<size_t> metadataRowToBatchRow(metadata->size(), kNoRow);
+			std::vector<int64_t> acceptedNodeIds;
+			std::vector<uint8_t> sortKeySeen;
 			std::vector<int64_t> propertyEntityIds;
 			std::vector<size_t> propertyRows;
-			std::vector<size_t> fallbackRows;
-			batchRows.reserve(metadata->size());
-			propertyEntityIds.reserve(metadata->size());
-			propertyRows.reserve(metadata->size());
+			std::vector<FallbackRow> fallbackRows;
+			acceptedNodeIds.reserve(end - begin);
+			sortKeySeen.reserve(end - begin);
+			propertyEntityIds.reserve(end - begin);
+			propertyRows.reserve(end - begin);
 
-			for (size_t row = 0; row < metadata->size(); ++row) {
-				if (!rowFilter.accepts(*metadata, row)) {
-					continue;
+			const bool visited = metadataLoader.visitBatch(
+					candidateSet_.ids, begin, end, [&](size_t, const NodeMetadataRow &metadata) {
+				if (!rowFilter.accepts(metadata)) {
+					return true;
 				}
 
-				metadataRowToBatchRow[row] = batchRows.size();
-				Row candidate;
-				candidate.nodeId = metadata->nodeIds[row];
-				batchRows.push_back(std::move(candidate));
+				const size_t acceptedRow = acceptedNodeIds.size();
+				acceptedNodeIds.push_back(metadata.nodeId);
+				sortKeySeen.push_back(uint8_t{0});
 
-				const int64_t propertyEntityId = metadata->propertyEntityIds[row];
-				const auto storageType = metadata->propertyStorageTypes[row];
+				const int64_t propertyEntityId = metadata.propertyEntityId;
+				const auto storageType = metadata.propertyStorageType;
 				if (storageType == PropertyStorageType::PROPERTY_ENTITY && propertyEntityId != 0) {
 					propertyEntityIds.push_back(propertyEntityId);
-					propertyRows.push_back(row);
+					propertyRows.push_back(acceptedRow);
 				} else if (storageType == PropertyStorageType::BLOB_ENTITY && propertyEntityId != 0) {
-					fallbackRows.push_back(row);
+					fallbackRows.push_back({acceptedRow, metadata});
 				}
+				return true;
+			});
+			if (!visited) {
+				return false;
 			}
 
 			if (!propertyEntityIds.empty()) {
 				(void) dm_->bulkVisitPropertyEntityValues(
-						propertyEntityIds, propertyRows, metadata->size(), sortProperty_,
-						[&](size_t metadataRow, const PropertyValue &value) {
-							if (metadataRow >= metadataRowToBatchRow.size()) {
+						propertyEntityIds, propertyRows, acceptedNodeIds.size(), sortProperty_,
+						[&](size_t acceptedRow, const PropertyValue &value) {
+							if (acceptedRow >= acceptedNodeIds.size()) {
 								return;
 							}
-							const size_t batchRow = metadataRowToBatchRow[metadataRow];
-							if (batchRow != kNoRow) {
-								batchRows[batchRow].sortKey = value;
-								batchRows[batchRow].orderKey = TypedOrderKey::from(value);
-							}
+							Row candidate;
+							candidate.nodeId = acceptedNodeIds[acceptedRow];
+							candidate.sortKey = value;
+							candidate.orderKey = TypedOrderKey::from(value);
+							sortKeySeen[acceptedRow] = 1;
+							offerTopK(localHeap, std::move(candidate));
 						},
 						threadPool_);
 			}
 
-			for (const size_t metadataRow : fallbackRows) {
-				const size_t batchRow = metadataRowToBatchRow[metadataRow];
-				if (batchRow == kNoRow) { // ZYX_COV_EXCL_LINE
-					continue;
-				}
-				Node node = metadata->toNode(metadataRow);
+			for (const auto &fallback : fallbackRows) {
+				Node node = fallback.metadata.toNode();
 				const auto properties = dm_->getNodePropertiesDirect(node);
 				if (auto it = properties.find(sortProperty_); it != properties.end()) {
-					batchRows[batchRow].sortKey = it->second;
-					batchRows[batchRow].orderKey = TypedOrderKey::from(it->second);
+					Row candidate;
+					candidate.nodeId = acceptedNodeIds[fallback.acceptedRow];
+					candidate.sortKey = it->second;
+					candidate.orderKey = TypedOrderKey::from(it->second);
+					sortKeySeen[fallback.acceptedRow] = 1;
+					offerTopK(localHeap, std::move(candidate));
 				}
 			}
 
-			for (auto &candidate : batchRows) {
+			for (size_t row = 0; row < acceptedNodeIds.size(); ++row) {
+				if (sortKeySeen[row] != 0) {
+					continue;
+				}
+				Row candidate;
+				candidate.nodeId = acceptedNodeIds[row];
 				offerTopK(localHeap, std::move(candidate));
 			}
 			begin = end;

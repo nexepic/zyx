@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from runner.adapters.base import BenchmarkAdapter, DEFAULT_PROFILE, PROFILE_WORKLOADS, WorkloadResult
+from runner.adapters.base import BenchmarkAdapter, DEFAULT_PROFILE, EXECUTION_MODES, PROFILE_WORKLOADS, WorkloadResult
 from runner.models import ProfileEvent, Sample
 
 
@@ -24,13 +24,15 @@ class ZyxAdapter(BenchmarkAdapter):
         self.timeout_seconds = float(os.environ.get("ZYX_COMPARE_TIMEOUT_SECONDS", "600"))
         self.profile_events: list[ProfileEvent] = []
 
-    def run_all(self, warmup: int, iterations: int) -> list[WorkloadResult]:
+    def run_all(self, warmup: int, iterations: int, execution_mode: str = "warm") -> list[WorkloadResult]:
         self.profile_events = []
 
         if warmup < 0:
             return [self._failed_result("run_all", "warmup must be >= 0")]
         if iterations <= 0:
             return [self._failed_result("run_all", "iterations must be > 0")]
+        if execution_mode not in EXECUTION_MODES:
+            return [self._failed_result("run_all", f"execution mode must be one of: {', '.join(EXECUTION_MODES)}")]
 
         command = [
             str(self.binary),
@@ -46,6 +48,8 @@ class ZyxAdapter(BenchmarkAdapter):
             str(warmup),
             "--iterations",
             str(iterations),
+            "--execution-mode",
+            execution_mode,
             "--emit-profile",
         ]
         try:

@@ -35,6 +35,10 @@ namespace graph::query::execution::operators {
 				const std::string &groupProperty,
 				concurrent::ThreadPool *threadPool,
 				const QueryContext *queryContext) {
+			struct FallbackRow {
+				NodeMetadataRow metadata;
+			};
+
 			const auto requirements = relaxSatisfiedCandidateChecks(inputRequirements, candidateSet);
 			const NodeMetadataRowFilter rowFilter(dm, config, requirements);
 			NodeMetadataColumnLoader metadataLoader(dm);
@@ -46,33 +50,34 @@ namespace graph::query::execution::operators {
 					queryContext->checkGuard();
 				}
 				const size_t end = std::min(candidateSet.ids.size(), begin + kMetadataGroupBatchSize);
-				auto metadata = metadataLoader.loadBatch(candidateSet.ids, begin, end);
-				if (!metadata.has_value()) {
-					return std::nullopt;
-				}
 
 				std::vector<int64_t> propertyEntityIds;
 				std::vector<size_t> propertyRows;
-				std::vector<size_t> fallbackRows;
-				propertyEntityIds.reserve(metadata->size());
-				propertyRows.reserve(metadata->size());
-				fallbackRows.reserve(metadata->size() / 8);
+				std::vector<FallbackRow> fallbackRows;
+				propertyEntityIds.reserve(end - begin);
+				propertyRows.reserve(end - begin);
+				fallbackRows.reserve((end - begin) / 8);
 
 				size_t selectedCount = 0;
-				for (size_t row = 0; row < metadata->size(); ++row) {
-					if (!rowFilter.accepts(*metadata, row)) {
-						continue;
+				const bool visited = metadataLoader.visitBatch(candidateSet.ids, begin, end, [&](size_t, const NodeMetadataRow &metadata) {
+					if (!rowFilter.accepts(metadata)) {
+						return true;
 					}
+					const size_t selectedRow = selectedCount;
 					++selectedCount;
 
-					const auto storageType = metadata->propertyStorageTypes[row];
-					const int64_t propertyEntityId = metadata->propertyEntityIds[row];
+					const auto storageType = metadata.propertyStorageType;
+					const int64_t propertyEntityId = metadata.propertyEntityId;
 					if (storageType == PropertyStorageType::PROPERTY_ENTITY && propertyEntityId != 0) {
 						propertyEntityIds.push_back(propertyEntityId);
-						propertyRows.push_back(row);
+						propertyRows.push_back(selectedRow);
 					} else if (storageType == PropertyStorageType::BLOB_ENTITY && propertyEntityId != 0) {
-						fallbackRows.push_back(row);
+						fallbackRows.push_back({metadata});
 					}
+					return true;
+				});
+				if (!visited) {
+					return std::nullopt;
 				}
 
 				size_t rowsWithGroupValue = 0;
@@ -81,10 +86,10 @@ namespace graph::query::execution::operators {
 					(void) dm->bulkVisitPropertyEntityValues(
 							propertyEntityIds,
 							propertyRows,
-							metadata->size(),
+							selectedCount,
 							groupProperty,
 							[&](size_t row, const PropertyValue &value) {
-								if (row < metadata->size()) {
+								if (row < selectedCount) {
 									groups.add(value);
 									++rowsWithGroupValue;
 								}
@@ -95,8 +100,8 @@ namespace graph::query::execution::operators {
 
 				if (dm && !fallbackRows.empty()) {
 					const auto fallbackStart = Clock::now();
-					for (const size_t row : fallbackRows) {
-						Node node = metadata->toNode(row);
+					for (const auto &fallback : fallbackRows) {
+						Node node = fallback.metadata.toNode();
 						const auto properties = dm->getNodePropertiesDirect(node);
 						if (auto valueIt = properties.find(groupProperty); valueIt != properties.end()) {
 							groups.add(valueIt->second);

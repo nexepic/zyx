@@ -223,7 +223,7 @@ def write_comparison_markdown(rows: Iterable[dict[str, object]], path: Path) -> 
             "- `zyx_vs_best` is 1 when ZYX is the fastest row for the workload; > 1 means ZYX is slower than the best row.",
             "- `zyx_vs_fastest_non_zyx` compares ZYX with the fastest other database; < 1 means ZYX is faster than every non-ZYX competitor.",
             "- `zyx_p95/p50` highlights tail-latency volatility for ZYX within this run.",
-            "- `zyx_first/p50` highlights first measured iteration cost versus repeated-query p50 when warmup is 0.",
+            "- `zyx_first/p50` highlights first measured iteration cost; use `execution_mode=cold-ish` for less cache-amortized query samples.",
             "- The comparison uses p50 latency and only includes successful rows with at least one sample.",
         ]
     )

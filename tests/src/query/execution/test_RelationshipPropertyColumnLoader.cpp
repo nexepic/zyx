@@ -571,6 +571,39 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, RelationshipTypeSegmentStats
 	EXPECT_EQ(*countAfterInvalidation, 129);
 }
 
+TEST_F(RelationshipPropertyColumnLoaderStorageTest, RelationshipTypeTotalStatsCountsFullRangeAndOverlays) {
+	auto emptyCount = dm->countActiveEdgesByTypeFromSegmentStats(1, 128, followsType);
+	ASSERT_TRUE(emptyCount.has_value());
+	EXPECT_EQ(*emptyCount, 0);
+
+	const int64_t source = addUser();
+	const int64_t target = addUser();
+	const int64_t likesType = dm->getOrCreateTokenId("LIKES");
+	for (int i = 0; i < 300; ++i) {
+		Edge edge(0, source, target, (i % 3 == 0) ? followsType : likesType);
+		dm->addEdge(edge);
+	}
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+
+	auto followsFullRange = dm->countActiveEdgesByTypeFromSegmentStats(1, 4096, followsType);
+	ASSERT_TRUE(followsFullRange.has_value());
+	EXPECT_EQ(*followsFullRange, 100);
+	auto allTypesFullRange = dm->countActiveEdgesByTypeFromSegmentStats(1, 4096, 0);
+	ASSERT_TRUE(allTypesFullRange.has_value());
+	EXPECT_EQ(*allTypesFullRange, 300);
+
+	auto followsPartialRange = dm->countActiveEdgesByTypeFromSegmentStats(2, 129, followsType);
+	ASSERT_TRUE(followsPartialRange.has_value());
+	EXPECT_EQ(*followsPartialRange, 42);
+
+	Edge unsaved(0, source, target, followsType);
+	dm->addEdge(unsaved);
+	auto withUnsavedOverlay = dm->countActiveEdgesByTypeFromSegmentStats(1, unsaved.getId(), followsType);
+	ASSERT_TRUE(withUnsavedOverlay.has_value());
+	EXPECT_EQ(*withUnsavedOverlay, 101);
+}
+
 TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderScansPartialSegmentsAndFilteredRows) {
 	const int64_t source = addUser();
 	const int64_t target = addUser();

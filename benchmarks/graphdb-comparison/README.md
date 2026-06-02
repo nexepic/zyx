@@ -54,9 +54,16 @@ PYTHONPATH=benchmarks/graphdb-comparison python3 -m runner.run \
   --scale smoke \
   --profile scan \
   --output-root benchmarks/graphdb-comparison/results \
+  --execution-mode warm \
   --warmup 0 \
   --iterations 1
 ```
+
+Use `--execution-mode warm` for steady-state latency after the configured warmup. Use
+`--execution-mode cold-ish` to run each measured query from a freshly prepared adapter/database
+handle while excluding data load time from the measured query latency. `cold-ish` is not an OS page
+cache flush; it is a repeatable first-query-after-open/setup path for comparing optimistic warm-cache
+results against a less cache-amortized path.
 
 ## Datasets
 
@@ -124,5 +131,5 @@ The runner continues after adapter or workload failures when it can. Failures ar
 - Docker Compose improves isolation, but host CPU, memory pressure, filesystem performance, Docker resource limits, and image versions still affect results.
 - The generated graph is deterministic and simple; it does not model every production graph shape or write-heavy workload.
 - Warmup and iteration counts should be increased beyond smoke settings before drawing performance conclusions.
-- Use low or zero warmup when comparing cold execution paths, and report warmup/iteration settings with the results.
+- Report `execution_mode`, warmup, and iteration settings with results. `cold-ish` avoids repeated-query optimism but does not clear OS or database service page caches.
 - Neo4j and Memgraph run as services; Kuzu and ZYX run embedded in the runner container, so process topology differs.

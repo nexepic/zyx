@@ -62,13 +62,36 @@ def test_zyx_adapter_forwards_profile_to_subprocess(tmp_path: Path, monkeypatch)
     args = args_path.read_text().splitlines()
     profile_index = args.index("--profile")
     iterations_index = args.index("--iterations")
+    execution_mode_index = args.index("--execution-mode")
     emit_profile_index = args.index("--emit-profile")
     assert args[profile_index + 1] == "indexed"
     assert "--result-cache" not in args
     assert args[iterations_index + 1] == "1"
-    assert profile_index < iterations_index
-    assert emit_profile_index == iterations_index + 2
+    assert args[execution_mode_index + 1] == "warm"
+    assert profile_index < iterations_index < execution_mode_index
+    assert emit_profile_index == execution_mode_index + 2
 
+
+
+def test_zyx_adapter_forwards_coldish_execution_mode_to_subprocess(tmp_path: Path, monkeypatch):
+    binary = tmp_path / "zyx-bench-coldish.py"
+    args_path = tmp_path / "args.txt"
+    _write_executable(
+        binary,
+        f"#!{sys.executable}\n"
+        "import json, sys\n"
+        f"from pathlib import Path\nPath({str(args_path)!r}).write_text('\\n'.join(sys.argv[1:]))\n"
+        "for workload in ['load_nodes_edges', 'point_lookup_indexed', 'property_equality_indexed', 'property_range_indexed']:\n"
+        "    print(json.dumps({'event':'sample','database':'zyx','workload':workload,'scale':'smoke','iteration':0,'latency_ms':1.0,'status':'ok','equivalent_mode':'api'}))\n",
+    )
+    monkeypatch.setenv("ZYX_COMPARE_BENCH", str(binary))
+    adapter = ZyxAdapter(database="zyx", dataset_dir=tmp_path / "dataset", scale="smoke", profile="indexed")
+
+    results = adapter.run_all(warmup=0, iterations=1, execution_mode="cold-ish")
+
+    assert [result.status for result in results] == ["ok"] * 4
+    args = args_path.read_text().splitlines()
+    assert args[args.index("--execution-mode") + 1] == "cold-ish"
 
 def test_zyx_adapter_fails_incomplete_indexed_workload_samples(tmp_path: Path, monkeypatch):
     binary = tmp_path / "zyx-bench-incomplete.py"
