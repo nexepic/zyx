@@ -4,7 +4,7 @@ version = "0.1.25"
 edition = "2021"
 description = "Raw Driver ABI bindings for the ZYX embedded graph database"
 license = "Apache-2.0"
-repository = "https://github.com/try-zyx/zyx"
+repository = "https://github.com/nexepic/zyx"
 homepage = "https://try-zyx.github.io/zyx"
 documentation = "https://try-zyx.github.io/zyx/en/docs/zyx/api"
 readme = "README.md"
@@ -14,7 +14,8 @@ links = "zyx"
 build = "build.rs"
 
 [features]
-default = ["system"]
+default = ["bundled"]
+bundled = ["dep:zyx-src"]
 system = []
 
 [lib]
@@ -22,3 +23,6 @@ name = "zyxdb_sys"
 path = "src/lib.rs"
 
 [dependencies]
+
+[build-dependencies]
+zyx-src = { path = "../../..", version = "0.1.24", optional = true }

@@ -4,7 +4,7 @@ version = "0.1.25"
 edition = "2021"
 description = "Rust bindings for the ZYX embedded graph database"
 license = "Apache-2.0"
-repository = "https://github.com/try-zyx/zyx"
+repository = "https://github.com/nexepic/zyx"
 homepage = "https://try-zyx.github.io/zyx"
 documentation = "https://try-zyx.github.io/zyx/en/docs/zyx/api"
 readme = "README.md"
@@ -12,7 +12,8 @@ keywords = ["graph", "database", "cypher", "embedded"]
 categories = ["database"]
 
 [features]
-default = ["system"]
+default = ["bundled"]
+bundled = ["zyxdb-sys/bundled"]
 system = ["zyxdb-sys/system"]
 
 [dependencies]
