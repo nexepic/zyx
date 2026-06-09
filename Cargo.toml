@@ -1,0 +1,24 @@
+[package]
+name = "zyx-src"
+version = "0.1.24"
+edition = "2021"
+description = "Vendored native source for the ZYX embedded graph database"
+license = "Apache-2.0"
+repository = "https://github.com/nexepic/zyx"
+homepage = "https://try-zyx.github.io/zyx"
+documentation = "https://try-zyx.github.io/zyx/en/docs/zyx/api"
+include = [
+    "/Cargo.toml",
+    "/README.md",
+    "/CMakeLists.txt",
+    "/conanfile.py",
+    "/cmake/**",
+    "/include/**",
+    "/src/**",
+    "/lib/inputxx/include/**",
+    "/lib/inputxx/src/**",
+    "/bindings/rust/zyx-src/lib.rs",
+]
+
+[lib]
+path = "bindings/rust/zyx-src/lib.rs"

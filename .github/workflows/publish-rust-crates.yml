@@ -1,0 +1,168 @@
+name: Publish Rust crates
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, for example v0.1.25"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-rust-crates-${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    environment: crates-io
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout release ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag || github.ref }}
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install native build tools
+        run: pip install conan ninja
+
+      - name: Install system deps (Linux)
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          sudo apt-add-repository "deb http://apt.llvm.org/$(lsb_release -sc)/ llvm-toolchain-$(lsb_release -sc)-20 main"
+          sudo apt update
+          sudo apt install -y clang-20 llvm-20 libc++-20-dev libc++abi-20-dev
+
+      - name: Authenticate with crates.io
+        id: auth
+        uses: rust-lang/crates-io-auth-action@v1
+
+      - name: Verify release version
+        shell: bash
+        run: |
+          TAG="${{ github.event.release.tag_name || inputs.tag || github.ref_name }}"
+          VERSION="${TAG#v}"
+          CMAKE_VERSION="$(python3 scripts/read_project_version.py)"
+
+          if [ "$VERSION" != "$CMAKE_VERSION" ]; then
+            echo "::error::Tag version ($VERSION) does not match CMake project version ($CMAKE_VERSION)"
+            exit 1
+          fi
+
+          grep -q "version = \"$VERSION\"" Cargo.toml
+          grep -q "version = \"$VERSION\"" bindings/rust/zyxdb-sys/Cargo.toml
+          grep -q "version = \"$VERSION\"" bindings/rust/zyxdb/Cargo.toml
+
+      - name: Publish zyx-src
+        shell: bash
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.release.tag_name || inputs.tag || github.ref_name }}"
+          VERSION="${TAG#v}"
+
+          if curl -fsSL "https://crates.io/api/v1/crates/zyx-src/$VERSION" >/dev/null 2>&1; then
+            echo "zyx-src $VERSION already exists on crates.io; skipping."
+          else
+            cargo publish --manifest-path Cargo.toml --token "$CARGO_REGISTRY_TOKEN"
+          fi
+
+      - name: Wait for zyx-src index
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.release.tag_name || inputs.tag || github.ref_name }}"
+          VERSION="${TAG#v}"
+          for _ in {1..30}; do
+            if curl -fsSL "https://crates.io/api/v1/crates/zyx-src/$VERSION" >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::zyx-src $VERSION did not appear on crates.io in time"
+          exit 1
+
+      - name: Dry-run zyxdb-sys bundled build
+        shell: bash
+        env:
+          CC: clang-20
+          CXX: clang++-20
+          ZYXDB_SYS_USE_CONAN: '1'
+        run: cargo publish --manifest-path bindings/rust/Cargo.toml -p zyxdb-sys --dry-run
+
+      - name: Publish zyxdb-sys
+        shell: bash
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+          CC: clang-20
+          CXX: clang++-20
+          ZYXDB_SYS_USE_CONAN: '1'
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.release.tag_name || inputs.tag || github.ref_name }}"
+          VERSION="${TAG#v}"
+
+          if curl -fsSL "https://crates.io/api/v1/crates/zyxdb-sys/$VERSION" >/dev/null 2>&1; then
+            echo "zyxdb-sys $VERSION already exists on crates.io; skipping."
+          else
+            cargo publish --manifest-path bindings/rust/Cargo.toml -p zyxdb-sys --token "$CARGO_REGISTRY_TOKEN"
+          fi
+
+      - name: Wait for zyxdb-sys index
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.release.tag_name || inputs.tag || github.ref_name }}"
+          VERSION="${TAG#v}"
+          for _ in {1..30}; do
+            if curl -fsSL "https://crates.io/api/v1/crates/zyxdb-sys/$VERSION" >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::zyxdb-sys $VERSION did not appear on crates.io in time"
+          exit 1
+
+      - name: Dry-run zyxdb bundled build
+        shell: bash
+        env:
+          CC: clang-20
+          CXX: clang++-20
+          ZYXDB_SYS_USE_CONAN: '1'
+        run: cargo publish --manifest-path bindings/rust/Cargo.toml -p zyxdb --dry-run
+
+      - name: Publish zyxdb
+        shell: bash
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+          CC: clang-20
+          CXX: clang++-20
+          ZYXDB_SYS_USE_CONAN: '1'
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.release.tag_name || inputs.tag || github.ref_name }}"
+          VERSION="${TAG#v}"
+
+          if curl -fsSL "https://crates.io/api/v1/crates/zyxdb/$VERSION" >/dev/null 2>&1; then
+            echo "zyxdb $VERSION already exists on crates.io; skipping."
+          else
+            cargo publish --manifest-path bindings/rust/Cargo.toml -p zyxdb --token "$CARGO_REGISTRY_TOKEN"
+          fi

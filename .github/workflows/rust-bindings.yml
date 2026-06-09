@@ -115,7 +115,7 @@ jobs:
         shell: pwsh
 
       - name: Run Rust tests
-        run: cargo test --manifest-path bindings/rust/Cargo.toml
+        run: cargo test --manifest-path bindings/rust/Cargo.toml --workspace --no-default-features --features system
         env:
           ZYX_LIB_DIR: ${{ github.workspace }}/buildDir
 
@@ -131,8 +131,11 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Package native source crate
+        run: cargo package --manifest-path Cargo.toml
+
       - name: Package and verify sys crate
-        run: cargo package --manifest-path bindings/rust/Cargo.toml -p zyxdb-sys
+        run: cargo package --manifest-path bindings/rust/Cargo.toml -p zyxdb-sys --no-default-features --features system
         env:
           ZYX_LIB_DIR: ${{ github.workspace }}/buildDir
 
@@ -142,6 +145,7 @@ jobs:
       - name: Collect crate packages
         run: |
           mkdir -p dist
+          cp target/package/*.crate dist/
           cp bindings/rust/target/package/*.crate dist/
 
       - name: Upload crate artifacts

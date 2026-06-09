@@ -59,6 +59,7 @@ benchmarks/graphdb-comparison/results/*
 !benchmarks/graphdb-comparison/results/.gitkeep
 
 # Rust build artifacts
+target/
 bindings/rust/target/
 
 # Claude Code

@@ -45,7 +45,7 @@ file(GLOB_RECURSE ZYX_CORE_SOURCES_RAW CONFIGURE_DEPENDS
 )
 set(ZYX_CORE_SOURCES ${ZYX_CORE_SOURCES_RAW})
 zyx_filter_out_regex(ZYX_CORE_SOURCES "/src/query/parser/")
-if(ZYX_WASM)
+if(ZYX_WASM OR NOT ZYX_BUILD_APPS)
     zyx_filter_out_regex(ZYX_CORE_SOURCES "/src/cli/")
 endif()
 zyx_normalize_source_list(ZYX_CORE_SOURCES ${ZYX_CORE_SOURCES})

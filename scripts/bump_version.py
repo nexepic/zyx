@@ -29,6 +29,7 @@ PACKAGE_JSONS = [
 ]
 
 RUST_MANIFESTS = [
+    ROOT / "Cargo.toml",
     ROOT / "bindings" / "rust" / "zyxdb" / "Cargo.toml",
     ROOT / "bindings" / "rust" / "zyxdb-sys" / "Cargo.toml",
 ]
@@ -96,6 +97,12 @@ def update_cargo_toml(path: Path, version: str) -> None:
         new_text,
         count=1,
     )
+    new_text = re.sub(
+        r'(zyx-src\s*=\s*\{[^}]*version\s*=\s*)"[^"]+"',
+        rf'\1"{version}"',
+        new_text,
+        count=1,
+    )
     path.write_text(new_text, encoding="utf-8")
 
 
@@ -103,7 +110,7 @@ def update_cargo_lock(version: str) -> None:
     if not RUST_LOCKFILE.exists():
         return
     text = RUST_LOCKFILE.read_text(encoding="utf-8")
-    for package in ("zyxdb", "zyxdb-sys"):
+    for package in ("zyx-src", "zyxdb", "zyxdb-sys"):
         pattern = re.compile(
             rf'(\[\[package\]\]\nname = "{re.escape(package)}"\nversion = )"[^"]+"',
             re.MULTILINE,

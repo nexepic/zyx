@@ -11,6 +11,8 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 option(ZYX_BUILD_TESTS "Build ZYX tests" ON)
 option(ZYX_BUILD_APPS "Build ZYX CLI and benchmark apps" ON)
 option(ZYX_BUILD_PYTHON "Build Python bindings" OFF)
+option(ZYX_BUILD_SHARED_LIBRARY "Build the public shared ZYX library" ON)
+option(ZYX_BUILD_STATIC_LIBRARY "Build the public static ZYX library" OFF)
 option(ZYX_ENABLE_COVERAGE "Enable LLVM coverage instrumentation" OFF)
 option(ZYX_WASM "Configure for Emscripten/WASM build" OFF)
 option(ZYX_INSTALL_PKGCONFIG "Install pkg-config metadata" ON)
@@ -83,9 +85,8 @@ target_link_libraries(zyx_core
 )
 add_library(zyx::core ALIAS zyx_core)
 
-if(NOT ZYX_WASM)
-    add_library(zyx SHARED ${ZYX_CORE_SOURCES})
-    target_include_directories(zyx
+function(zyx_configure_public_library target)
+    target_include_directories(${target}
         PUBLIC
             "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
             "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src>"
@@ -93,12 +94,11 @@ if(NOT ZYX_WASM)
             "$<BUILD_INTERFACE:${PROJECT_BINARY_DIR}>"
             "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
     )
-    target_compile_features(zyx PUBLIC cxx_std_20)
-    target_compile_definitions(zyx PRIVATE ZYX_DRIVER_ABI_EXPORTS)
+    target_compile_features(${target} PUBLIC cxx_std_20)
     if(WIN32)
-        target_compile_definitions(zyx PUBLIC NOMINMAX NOGDI WIN32_LEAN_AND_MEAN)
+        target_compile_definitions(${target} PUBLIC NOMINMAX NOGDI WIN32_LEAN_AND_MEAN)
     endif()
-    target_link_libraries(zyx
+    target_link_libraries(${target}
         PRIVATE
             zyx_project_options
             zyx::zlib
@@ -108,6 +108,12 @@ if(NOT ZYX_WASM)
             zyx::cypher_parser
             zyx::inputxx
     )
+endfunction()
+
+if(NOT ZYX_WASM AND ZYX_BUILD_SHARED_LIBRARY)
+    add_library(zyx SHARED ${ZYX_CORE_SOURCES})
+    target_compile_definitions(zyx PRIVATE ZYX_DRIVER_ABI_EXPORTS)
+    zyx_configure_public_library(zyx)
     set_target_properties(zyx PROPERTIES
         VERSION "${PROJECT_VERSION}"
         SOVERSION "${PROJECT_VERSION_MAJOR}"
@@ -116,6 +122,13 @@ if(NOT ZYX_WASM)
         INSTALL_NAME_DIR "@rpath"
     )
     add_library(zyx::zyx ALIAS zyx)
+endif()
+
+if(NOT ZYX_WASM AND ZYX_BUILD_STATIC_LIBRARY)
+    add_library(zyx_static STATIC ${ZYX_CORE_SOURCES})
+    zyx_configure_public_library(zyx_static)
+    set_target_properties(zyx_static PROPERTIES OUTPUT_NAME zyx)
+    add_library(zyx::zyx_static ALIAS zyx_static)
 endif()
 
 if(ZYX_BUILD_APPS AND NOT ZYX_WASM)
