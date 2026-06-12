@@ -57,6 +57,7 @@ __pycache__/
 # Graph database benchmark results
 benchmarks/graphdb-comparison/results/*
 !benchmarks/graphdb-comparison/results/.gitkeep
+benchmarks/graphdb-comparison/results-*/
 
 # Rust build artifacts
 target/
