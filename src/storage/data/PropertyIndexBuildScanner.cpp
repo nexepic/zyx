@@ -12,9 +12,12 @@
 #include <iterator>
 #include <optional>
 #include <span>
+#include <unordered_set>
+#include <variant>
 #include <vector>
 
-#include "DataManagerPropertyEntityScanDetail.hpp"
+#include "PropertyEntityScanPrimitives.hpp"
+#include "PropertySerializedValueReader.hpp"
 #include "graph/concurrent/ParallelScanExecutor.hpp"
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/storage/SegmentReadUtils.hpp"
@@ -26,6 +29,37 @@ namespace {
 		std::vector<char> readBuffer;
 		std::vector<PropertyEntityOwnerScalarKeyValue> values;
 	};
+
+	bool isSupportedOwnerType(EntityType ownerType) {
+		return ownerType == EntityType::Node || ownerType == EntityType::Edge;
+	}
+
+	std::optional<PropertyEntityOwnerScalarKeyValue> makeScalarOwnerValue(
+			int64_t ownerId,
+			const std::string &key,
+			const PropertyValue &propertyValue) {
+		PropertyEntityOwnerScalarKeyValue value;
+		value.ownerId = ownerId;
+		value.key = key;
+		value.type = propertyValue.getType();
+
+		switch (value.type) {
+			case PropertyType::BOOLEAN:
+				value.boolValue = std::get<bool>(propertyValue.getVariant());
+				return value;
+			case PropertyType::INTEGER:
+				value.intValue = std::get<int64_t>(propertyValue.getVariant());
+				return value;
+			case PropertyType::DOUBLE:
+				value.doubleValue = std::get<double>(propertyValue.getVariant());
+				return value;
+			case PropertyType::STRING:
+				value.stringValue = std::get<std::string>(propertyValue.getVariant());
+				return value;
+			default:
+				return std::nullopt;
+		}
+	}
 
 	std::optional<PropertyEntityOwnerScalarKeyValue> readIndexableScalarOwnerValue(
 			const char *&cursor,
@@ -73,6 +107,103 @@ namespace {
 					return std::nullopt; // ZYX_COV_EXCL_LINE
 				}
 				return std::nullopt;
+		}
+	}
+
+	void readIndexableOwnerValuesFromProperty(
+			const Property &property,
+			EntityType ownerType,
+			std::span<const std::string> requestedKeys,
+			std::span<const int64_t> sortedOwnerIds,
+			std::vector<PropertyEntityOwnerScalarKeyValue> &out) {
+		if (!property.isActive() ||
+			property.getMetadata().entityType != toUnderlying(ownerType) ||
+			!ownerFilterContains(sortedOwnerIds, property.getMetadata().entityId) ||
+			requestedKeys.empty()) {
+			return;
+		}
+
+		if (!property.hasSerializedPropertyPayload()) {
+			const auto &values = property.getPropertyValues();
+			for (const auto &requestedKey: requestedKeys) {
+				auto it = values.find(requestedKey);
+				if (it == values.end()) {
+					continue;
+				}
+				if (auto scalar = makeScalarOwnerValue(property.getMetadata().entityId, requestedKey, it->second)) {
+					out.push_back(std::move(*scalar));
+				}
+			}
+			return;
+		}
+
+		const auto &payload = property.getSerializedPropertyPayload();
+		const char *cursor = payload.data();
+		const char *end = cursor + payload.size();
+		uint32_t propertyCount = 0;
+		if (!readPod(cursor, end, propertyCount)) { // ZYX_COV_EXCL_LINE
+			return; // ZYX_COV_EXCL_LINE
+		}
+		for (uint32_t i = 0; i < propertyCount; ++i) {
+			SerializedStringView keyView;
+			if (!readStringView(cursor, end, keyView)) { // ZYX_COV_EXCL_LINE
+				return; // ZYX_COV_EXCL_LINE
+			}
+
+			const std::string *matchedKey = nullptr;
+			for (const auto &requestedKey: requestedKeys) {
+				if (stringViewEquals(keyView, requestedKey)) {
+					matchedKey = &requestedKey;
+					break;
+				}
+			}
+
+			if (matchedKey == nullptr) {
+				if (!skipPropertyValue(cursor, end)) { // ZYX_COV_EXCL_LINE
+					return; // ZYX_COV_EXCL_LINE
+				}
+				continue;
+			}
+
+			auto value = readIndexableScalarOwnerValue(
+					cursor, end, property.getMetadata().entityId, *matchedKey);
+			if (value.has_value()) {
+				out.push_back(std::move(*value));
+			}
+		}
+	}
+
+	std::vector<DirtyEntityInfo<Property>> dirtyPropertyInfos(const DataManager &dataManager) {
+		const auto persistence = dataManager.getPersistenceManager();
+		if (!persistence) { // ZYX_COV_EXCL_LINE
+			return {}; // ZYX_COV_EXCL_LINE
+		}
+		return persistence->getAllDirtyInfos<Property>();
+	}
+
+	std::unordered_set<int64_t> collectDirtyPropertyIds(
+			const std::vector<DirtyEntityInfo<Property>> &dirtyInfos) {
+		std::unordered_set<int64_t> ids;
+		ids.reserve(dirtyInfos.size());
+		for (const auto &info: dirtyInfos) {
+			if (info.backup.has_value() && info.backup->getId() > 0) {
+				ids.insert(info.backup->getId());
+			}
+		}
+		return ids;
+	}
+
+	void appendDirtyOwnerValues(
+			const std::vector<DirtyEntityInfo<Property>> &dirtyInfos,
+			EntityType ownerType,
+			std::span<const std::string> requestedKeys,
+			std::span<const int64_t> sortedOwnerIds,
+			std::vector<PropertyEntityOwnerScalarKeyValue> &out) {
+		for (const auto &info: dirtyInfos) {
+			if (info.changeType == EntityChangeType::CHANGE_DELETED || !info.backup.has_value()) {
+				continue;
+			}
+			readIndexableOwnerValuesFromProperty(*info.backup, ownerType, requestedKeys, sortedOwnerIds, out);
 		}
 	}
 
@@ -131,15 +262,24 @@ namespace {
 	PropertyIndexBuildScanner::PropertyIndexBuildScanner(const DataManager &dataManager) :
 		dataManager_(dataManager) {}
 
+	bool PropertyIndexBuildScanner::canCollect(EntityType ownerType) const {
+		if (!isSupportedOwnerType(ownerType)) {
+			return false;
+		}
+		const auto segmentIndexManager = dataManager_.getSegmentIndexManager();
+		const bool canReadPersistedProperties =
+				dataManager_.hasPreadSupport() && segmentIndexManager &&
+				!segmentIndexManager->getPropertySegmentIndex().empty();
+		return canReadPersistedProperties || dataManager_.hasUnsavedChanges();
+	}
+
 	std::vector<PropertyEntityOwnerScalarKeyValue> PropertyIndexBuildScanner::collect(
 			EntityType ownerType,
 			const std::vector<std::string> &keys,
 			std::span<const int64_t> sortedOwnerIds,
 			concurrent::ThreadPool *pool) const {
 		std::vector<PropertyEntityOwnerScalarKeyValue> values;
-		if ((ownerType != EntityType::Node && ownerType != EntityType::Edge) ||
-			keys.empty() ||
-			!dataManager_.canCountPropertyEntityPredicatesByOwnerType(ownerType)) {
+		if (!canCollect(ownerType) || keys.empty()) {
 			return values;
 		}
 
@@ -155,14 +295,22 @@ namespace {
 			return values;
 		}
 
+		const auto dirtyInfos = dirtyPropertyInfos(dataManager_);
+		const auto dirtyPropertyIds = collectDirtyPropertyIds(dirtyInfos);
 		const auto segmentIndexManager = dataManager_.getSegmentIndexManager();
-		if (!segmentIndexManager) { // ZYX_COV_EXCL_LINE
-			return values; // ZYX_COV_EXCL_LINE
-		}
-		const auto &segIndex = segmentIndexManager->getPropertySegmentIndex();
-		if (segIndex.empty()) {
+		const bool canReadPersistedProperties =
+				dataManager_.hasPreadSupport() && segmentIndexManager &&
+				!segmentIndexManager->getPropertySegmentIndex().empty();
+		if (!canReadPersistedProperties) {
+			appendDirtyOwnerValues(
+					dirtyInfos,
+					ownerType,
+					std::span<const std::string>(requestedKeys.data(), requestedKeys.size()),
+					sortedOwnerIds,
+					values);
 			return values;
 		}
+		const auto &segIndex = segmentIndexManager->getPropertySegmentIndex();
 
 		std::vector<size_t> segmentIndices;
 		segmentIndices.reserve(segIndex.size());
@@ -177,12 +325,15 @@ namespace {
 			if (header.data_type != Property::typeId || header.used == 0) {
 				return;
 			}
-			for (uint32_t slot = 0; slot < header.used; ++slot) {
-				const char *entityBuffer = dataBuf + static_cast<size_t>(slot) * entitySize;
-				const int64_t expectedId = header.start_id + static_cast<int64_t>(slot);
-				if (readSerializedPropertyId(entityBuffer) != expectedId) {
-					continue; // ZYX_COV_EXCL_LINE
-				}
+				for (uint32_t slot = 0; slot < header.used; ++slot) {
+					const char *entityBuffer = dataBuf + static_cast<size_t>(slot) * entitySize;
+					const int64_t expectedId = header.start_id + static_cast<int64_t>(slot);
+					if (dirtyPropertyIds.contains(expectedId)) {
+						continue;
+					}
+					if (readSerializedPropertyId(entityBuffer) != expectedId) {
+						continue; // ZYX_COV_EXCL_LINE
+					}
 				readIndexableOwnerValues(
 						entityBuffer,
 						ownerType,
@@ -228,13 +379,19 @@ namespace {
 						}
 						std::vector<char>().swap(state.readBuffer);
 					},
-					[&](size_t, PropertyIndexBuildScanState &state) {
-						values.insert(values.end(),
-									  std::make_move_iterator(state.values.begin()),
-									  std::make_move_iterator(state.values.end()));
-					});
-			return values;
-		}
+						[&](size_t, PropertyIndexBuildScanState &state) {
+							values.insert(values.end(),
+										  std::make_move_iterator(state.values.begin()),
+										  std::make_move_iterator(state.values.end()));
+						});
+				appendDirtyOwnerValues(
+						dirtyInfos,
+						ownerType,
+						std::span<const std::string>(requestedKeys.data(), requestedKeys.size()),
+						sortedOwnerIds,
+						values);
+				return values;
+			}
 
 		auto &readBuffer = propertyEntityScanScratchBuffer(0);
 		for (const auto &group: groups) {
@@ -254,10 +411,16 @@ namespace {
 					SegmentHeader header;
 					std::memcpy(&header, readBuffer.data() + bufferOffset, sizeof(SegmentHeader));
 					scanSegmentInto(header, readBuffer.data() + bufferOffset + sizeof(SegmentHeader), values);
+					}
 				}
 			}
+			appendDirtyOwnerValues(
+					dirtyInfos,
+					ownerType,
+					std::span<const std::string>(requestedKeys.data(), requestedKeys.size()),
+					sortedOwnerIds,
+					values);
+			return values;
 		}
-		return values;
-	}
 
 } // namespace graph::storage

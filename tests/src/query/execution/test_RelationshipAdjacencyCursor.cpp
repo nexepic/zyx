@@ -221,6 +221,29 @@ TEST_F(RelationshipAdjacencyCursorTest, CountAndStreamingUseCursorWithoutBuildin
 	EXPECT_TRUE(streamedTargets[0] == first || streamedTargets[0] == second);
 }
 
+TEST_F(RelationshipAdjacencyCursorTest, CountOnlyCanSkipTargetLoadsWhenNoTargetPredicateIsRequired) {
+	const int64_t source = addNode();
+	const int64_t activeTarget = addNode();
+	const int64_t deletedTarget = addNode();
+	(void)addEdge(source, activeTarget, "FOLLOWS");
+	(void)addEdge(source, deletedTarget, "FOLLOWS");
+
+	Node target = dm->getNode(deletedTarget);
+	dm->deleteNode(target);
+
+	RelationshipExpandConfig config;
+	config.direction = "out";
+	config.edgeTypeId = followsType;
+	RelationshipExpandRequirements requirements;
+	requirements.needsTargetActiveCheck = false;
+	requirements.needsTargetLabels = false;
+	RelationshipAdjacencyCursor cursor(dm);
+
+	// Node deletion cascades to its connected edge, so active relationship
+	// filtering is enough for count-only traversal.
+	EXPECT_EQ(cursor.count({source}, config, requirements), 1);
+}
+
 TEST_F(RelationshipAdjacencyCursorTest, WildcardTypeCanSkipRuntimeActiveChecks) {
 	const int64_t source = addNode();
 	const int64_t inbound = addNode();

@@ -406,131 +406,158 @@ namespace {
 		}
 	}
 
+	void reserveColumnValues(std::vector<zyx::PropertyColumn> &columns, size_t count) {
+		for (auto &column: columns) {
+			column.values.reserve(count);
+		}
+	}
+
 	LoadedGraph loadGraph(zyx::Database &db, const std::filesystem::path &dataset) {
 		std::optional<zyx::Transaction> loadTxn;
 		if (!db.hasActiveTransaction()) {
-			loadTxn.emplace(db.beginTransaction());
+			loadTxn.emplace(db.beginBulkTransaction());
 		}
 
 		LoadedGraph graph;
-		std::vector<std::unordered_map<std::string, zyx::Value>> userProps;
+		std::vector<zyx::PropertyColumn> userColumns{{"id", {}}, {"age", {}}, {"country", {}}, {"score", {}}};
 		std::vector<std::string> userExternalIds;
 		const auto userRows = tracePhase("load.users.csv_read", [&]() { return readCsv(dataset / "users.csv"); });
 		tracePhase("load.users.prepare", [&]() {
+			reserveColumnValues(userColumns, userRows.size());
+			userExternalIds.reserve(userRows.size());
 			for (const auto &row: userRows) {
 				const std::string id = field(row, "id");
 				userExternalIds.push_back(id);
-				userProps.push_back({
-						{"id", id},
-						{"age", toInt64(field(row, "age"))},
-						{"country", field(row, "country")},
-						{"score", toDouble(field(row, "score"))},
-				});
+				userColumns[0].values.emplace_back(id);
+				userColumns[1].values.emplace_back(toInt64(field(row, "age")));
+				userColumns[2].values.emplace_back(field(row, "country"));
+				userColumns[3].values.emplace_back(toDouble(field(row, "score")));
 			}
 		});
 
 		const auto nodeIds =
-				tracePhase("load.users.create_nodes", [&]() { return db.createNodes("User", userProps); });
+				tracePhase("load.users.create_nodes",
+						   [&]() { return db.createNodesColumnar("User", userRows.size(), userColumns); });
 		for (size_t i = 0; i < userExternalIds.size() && i < nodeIds.size(); ++i) { // ZYX_COV_EXCL_LINE: bulk API returns one node id per input row.
 			graph.usersByExternalId.emplace(userExternalIds[i], nodeIds[i]);
 		}
 		graph.loadedRows += static_cast<int64_t>(nodeIds.size());
 
-		std::vector<std::unordered_map<std::string, zyx::Value>> postProps;
+		std::vector<zyx::PropertyColumn> postColumns{{"id", {}}, {"created_at", {}}, {"score", {}}};
 		std::vector<std::string> postExternalIds;
 		const auto postRows = tracePhase("load.posts.csv_read", [&]() { return readCsv(dataset / "posts.csv"); });
 		tracePhase("load.posts.prepare", [&]() {
+			reserveColumnValues(postColumns, postRows.size());
+			postExternalIds.reserve(postRows.size());
 			for (const auto &row: postRows) {
 				const std::string id = field(row, "id");
 				postExternalIds.push_back(id);
-				postProps.push_back({
-						{"id", id},
-						{"created_at", toInt64(field(row, "created_at"))},
-						{"score", toDouble(field(row, "score"))},
-				});
+				postColumns[0].values.emplace_back(id);
+				postColumns[1].values.emplace_back(toInt64(field(row, "created_at")));
+				postColumns[2].values.emplace_back(toDouble(field(row, "score")));
 			}
 		});
 
 		const auto postNodeIds =
-				tracePhase("load.posts.create_nodes", [&]() { return db.createNodes("Post", postProps); });
+				tracePhase("load.posts.create_nodes",
+						   [&]() { return db.createNodesColumnar("Post", postRows.size(), postColumns); });
 		for (size_t i = 0; i < postExternalIds.size() && i < postNodeIds.size(); ++i) { // ZYX_COV_EXCL_LINE: bulk API returns one node id per input row.
 			graph.postsByExternalId.emplace(postExternalIds[i], postNodeIds[i]);
 		}
 		graph.loadedRows += static_cast<int64_t>(postNodeIds.size());
 
-		std::vector<std::unordered_map<std::string, zyx::Value>> tagProps;
+		std::vector<zyx::PropertyColumn> tagColumns{{"id", {}}, {"rank", {}}};
 		std::vector<std::string> tagExternalIds;
 		const auto tagRows = tracePhase("load.tags.csv_read", [&]() { return readCsv(dataset / "tags.csv"); });
 		tracePhase("load.tags.prepare", [&]() {
+			reserveColumnValues(tagColumns, tagRows.size());
+			tagExternalIds.reserve(tagRows.size());
 			for (const auto &row: tagRows) {
 				const std::string id = field(row, "id");
 				tagExternalIds.push_back(id);
-				tagProps.push_back({
-						{"id", id},
-						{"rank", toInt64(field(row, "rank"))},
-				});
+				tagColumns[0].values.emplace_back(id);
+				tagColumns[1].values.emplace_back(toInt64(field(row, "rank")));
 			}
 		});
 
 		const auto tagNodeIds =
-				tracePhase("load.tags.create_nodes", [&]() { return db.createNodes("Tag", tagProps); });
+				tracePhase("load.tags.create_nodes",
+						   [&]() { return db.createNodesColumnar("Tag", tagRows.size(), tagColumns); });
 		for (size_t i = 0; i < tagExternalIds.size() && i < tagNodeIds.size(); ++i) { // ZYX_COV_EXCL_LINE: bulk API returns one node id per input row.
 			graph.tagsByExternalId.emplace(tagExternalIds[i], tagNodeIds[i]);
 		}
 		graph.loadedRows += static_cast<int64_t>(tagNodeIds.size());
 
-		std::vector<EdgeInput> edges;
+		std::vector<int64_t> followSources;
+		std::vector<int64_t> followTargets;
+		std::vector<zyx::PropertyColumn> followColumns{{"weight", {}}};
 		const auto followsRows = tracePhase("load.follows.csv_read", [&]() { return readCsv(dataset / "follows.csv"); });
 		tracePhase("load.follows.prepare", [&]() {
+			followSources.reserve(followsRows.size());
+			followTargets.reserve(followsRows.size());
+			reserveColumnValues(followColumns, followsRows.size());
 			for (const auto &row: followsRows) {
 				auto src = graph.usersByExternalId.find(field(row, "src"));
 				auto dst = graph.usersByExternalId.find(field(row, "dst"));
 				if (src == graph.usersByExternalId.end() || dst == graph.usersByExternalId.end()) {
 					throw std::runtime_error("follows.csv references unknown user");
 				}
-				edges.emplace_back(
-						src->second, dst->second,
-						std::unordered_map<std::string, zyx::Value>{{"weight", toInt64(field(row, "weight"))}});
+				followSources.push_back(src->second);
+				followTargets.push_back(dst->second);
+				followColumns[0].values.emplace_back(toInt64(field(row, "weight")));
 			}
 		});
 		const auto followEdgeIds =
-				tracePhase("load.follows.create_edges", [&]() { return db.createEdges("FOLLOWS", edges); });
+				tracePhase("load.follows.create_edges",
+						   [&]() { return db.createEdgesColumnar("FOLLOWS", followSources, followTargets, followColumns); });
 		graph.loadedRows += static_cast<int64_t>(followEdgeIds.size());
 
-		std::vector<EdgeInput> authoredEdges;
+		std::vector<int64_t> authoredSources;
+		std::vector<int64_t> authoredTargets;
+		std::vector<zyx::PropertyColumn> authoredColumns{{"weight", {}}};
 		const auto authoredRows = tracePhase("load.authored.csv_read", [&]() { return readCsv(dataset / "authored.csv"); });
 		tracePhase("load.authored.prepare", [&]() {
+			authoredSources.reserve(authoredRows.size());
+			authoredTargets.reserve(authoredRows.size());
+			reserveColumnValues(authoredColumns, authoredRows.size());
 			for (const auto &row: authoredRows) {
 				auto src = graph.usersByExternalId.find(field(row, "src"));
 				auto dst = graph.postsByExternalId.find(field(row, "dst"));
 				if (src == graph.usersByExternalId.end() || dst == graph.postsByExternalId.end()) {
 					throw std::runtime_error("authored.csv references unknown user or post");
 				}
-				authoredEdges.emplace_back(
-						src->second, dst->second,
-						std::unordered_map<std::string, zyx::Value>{{"weight", toInt64(field(row, "weight"))}});
+				authoredSources.push_back(src->second);
+				authoredTargets.push_back(dst->second);
+				authoredColumns[0].values.emplace_back(toInt64(field(row, "weight")));
 			}
 		});
 		const auto authoredEdgeIds =
-				tracePhase("load.authored.create_edges", [&]() { return db.createEdges("AUTHORED", authoredEdges); });
+				tracePhase("load.authored.create_edges",
+						   [&]() { return db.createEdgesColumnar("AUTHORED", authoredSources, authoredTargets, authoredColumns); });
 		graph.loadedRows += static_cast<int64_t>(authoredEdgeIds.size());
 
-		std::vector<EdgeInput> hasTagEdges;
+		std::vector<int64_t> hasTagSources;
+		std::vector<int64_t> hasTagTargets;
+		std::vector<zyx::PropertyColumn> hasTagColumns{{"weight", {}}};
 		const auto hasTagRows = tracePhase("load.has_tag.csv_read", [&]() { return readCsv(dataset / "has_tag.csv"); });
 		tracePhase("load.has_tag.prepare", [&]() {
+			hasTagSources.reserve(hasTagRows.size());
+			hasTagTargets.reserve(hasTagRows.size());
+			reserveColumnValues(hasTagColumns, hasTagRows.size());
 			for (const auto &row: hasTagRows) {
 				auto src = graph.postsByExternalId.find(field(row, "src"));
 				auto dst = graph.tagsByExternalId.find(field(row, "dst"));
 				if (src == graph.postsByExternalId.end() || dst == graph.tagsByExternalId.end()) {
 					throw std::runtime_error("has_tag.csv references unknown post or tag");
 				}
-				hasTagEdges.emplace_back(
-						src->second, dst->second,
-						std::unordered_map<std::string, zyx::Value>{{"weight", toInt64(field(row, "weight"))}});
+				hasTagSources.push_back(src->second);
+				hasTagTargets.push_back(dst->second);
+				hasTagColumns[0].values.emplace_back(toInt64(field(row, "weight")));
 			}
 		});
 		const auto hasTagEdgeIds =
-				tracePhase("load.has_tag.create_edges", [&]() { return db.createEdges("HAS_TAG", hasTagEdges); });
+				tracePhase("load.has_tag.create_edges",
+						   [&]() { return db.createEdgesColumnar("HAS_TAG", hasTagSources, hasTagTargets, hasTagColumns); });
 		graph.loadedRows += static_cast<int64_t>(hasTagEdgeIds.size());
 
 		if (loadTxn) {
@@ -557,8 +584,14 @@ namespace {
 		return std::filesystem::path(base.string() + suffix);
 	}
 
+	void removeDatabaseArtifacts(const std::filesystem::path &dbPath) {
+		std::error_code ignored;
+		std::filesystem::remove_all(dbPath, ignored);
+		std::filesystem::remove_all(std::filesystem::path(dbPath.string() + "-wal"), ignored);
+	}
+
 	LoadedGraph loadDatabase(const Options &options, const std::filesystem::path &dbPath) {
-		tracePhase("load.remove_existing_db", [&]() { std::filesystem::remove_all(dbPath); });
+		tracePhase("load.remove_existing_db", [&]() { removeDatabaseArtifacts(dbPath); });
 		zyx::Database db(dbPath.string());
 		configureThreadPool(db, options);
 		tracePhase("load.db_open", [&]() { db.open(); });
@@ -606,7 +639,7 @@ namespace {
 			const auto warmupPath = suffixedDbPath(options.dbPath, ".load-warmup-" + std::to_string(i));
 			const LoadedGraph loaded = loadDatabase(options, warmupPath);
 			requireNonNegative("load_nodes_edges", loaded.loadedRows);
-			std::filesystem::remove_all(warmupPath);
+			removeDatabaseArtifacts(warmupPath);
 		}
 
 		for (int i = 0; i < options.iterations; ++i) {
@@ -616,7 +649,7 @@ namespace {
 					[](const LoadedGraph &loadedGraph) {
 						requireNonNegative("load_nodes_edges", loadedGraph.loadedRows);
 					});
-			std::filesystem::remove_all(iterationPath);
+			removeDatabaseArtifacts(iterationPath);
 		}
 
 		return loadDatabase(options, options.dbPath);
@@ -725,12 +758,12 @@ namespace {
 			if (opened) {
 				isolatedDb.close();
 			}
-			std::filesystem::remove_all(isolatedPath);
+			removeDatabaseArtifacts(isolatedPath);
 		} catch (...) {
 			if (opened) {
 				isolatedDb.close();
 			}
-			std::filesystem::remove_all(isolatedPath);
+			removeDatabaseArtifacts(isolatedPath);
 			throw;
 		}
 	}
@@ -771,13 +804,13 @@ namespace {
 					isolatedDb.close();
 					opened = false;
 				}
-				std::filesystem::remove_all(isolatedPath);
+				removeDatabaseArtifacts(isolatedPath);
 			} catch (...) {
 				if (opened) {
 					graph::debug::ScopedPerfTimer timer("coldish.db_close");
 					isolatedDb.close();
 				}
-				std::filesystem::remove_all(isolatedPath);
+				removeDatabaseArtifacts(isolatedPath);
 				throw;
 			}
 		};

@@ -183,6 +183,10 @@ namespace {
 					? RelationshipMaterializationMode::RMM_ID_ONLY
 					: RelationshipMaterializationMode::RMM_EDGE_AND_TARGET;
 			requirements.needsTargetLabels = !hop.targetLabelIds.empty();
+			// Relationship adjacency lists are maintained transactionally: deleting a node
+			// marks connected relationships inactive. Count-only traversal can therefore
+			// avoid loading target nodes unless a target label predicate needs them.
+			requirements.needsTargetActiveCheck = requirements.needsTargetLabels;
 
 			const auto edgeStart = Clock::now();
 			if (finalHop) {

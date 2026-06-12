@@ -24,6 +24,8 @@ namespace graph::storage {
 	public:
 		explicit PropertyIndexBuildScanner(const DataManager &dataManager);
 
+		[[nodiscard]] bool canCollect(EntityType ownerType) const;
+
 		[[nodiscard]] std::vector<PropertyEntityOwnerScalarKeyValue> collect(
 				EntityType ownerType,
 				const std::vector<std::string> &keys,

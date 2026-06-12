@@ -216,18 +216,33 @@ namespace graph::query::execution::operators {
 					relevantSegIdxs.push_back(s);
 			}
 
-			if (relevantSegIdxs.empty()) {
-				if (currentIdx_ >= candidateIds_.size()) // ZYX_COV_EXCL_LINE
-					return std::nullopt;
-				return RecordBatch{};
-			}
-
 			// For non-FULL_SCAN, build a set for fast membership testing
 			std::unordered_set<int64_t> candidateSet;
 			if (config_.type != ScanType::FULL_SCAN) {
 				candidateSet.insert(
 					candidateIds_.begin() + batchStart,
 					candidateIds_.begin() + batchEnd);
+			}
+
+			std::vector<int64_t> dirtyCandidateIds;
+			std::unordered_set<int64_t> dirtyCandidateSet;
+			if (dm_->hasUnsavedChanges()) {
+				const size_t localCandidateCount = batchEnd - batchStart;
+				dirtyCandidateIds.reserve(localCandidateCount);
+				dirtyCandidateSet.reserve(localCandidateCount);
+				for (size_t idx = batchStart; idx < batchEnd; ++idx) {
+					const int64_t id = candidateIds_[idx];
+					if (dm_->getDirtyInfo<Node>(id).has_value()) {
+						dirtyCandidateIds.push_back(id);
+						dirtyCandidateSet.insert(id);
+					}
+				}
+			}
+
+			if (relevantSegIdxs.empty() && dirtyCandidateIds.empty()) {
+				if (currentIdx_ >= candidateIds_.size()) // ZYX_COV_EXCL_LINE
+					return std::nullopt;
+				return RecordBatch{};
 			}
 
 			// ── Phase 1: Parallel bulk-read Node segments + collect property IDs ──
@@ -278,6 +293,8 @@ namespace graph::query::execution::operators {
 						if (entityId < startId || entityId > endId)
 							continue;
 						if (!candidateSet.empty() && !candidateSet.count(entityId)) // ZYX_COV_EXCL_LINE
+							continue;
+						if (!dirtyCandidateSet.empty() && dirtyCandidateSet.count(entityId))
 							continue;
 
 						Node node = Node::deserializeFromBuffer(dataBuf + i * entitySize);
@@ -380,6 +397,42 @@ namespace graph::query::execution::operators {
 			for (auto &tb : threadBatches) {
 				for (auto &r : tb)
 					batch.push_back(std::move(r));
+			}
+
+			if (!dirtyCandidateIds.empty()) {
+				for (const int64_t id: dirtyCandidateIds) {
+					Node node = dm_->getNode(id);
+					if (node.getId() == 0 || !node.isActive()) {
+						continue;
+					}
+					if (!targetLabelIds_.empty()) {
+						bool allMatch = true;
+						for (int64_t tid: targetLabelIds_) {
+							if (!node.hasLabelId(tid)) {
+								allMatch = false;
+								break;
+							}
+						}
+						if (!allMatch) {
+							continue;
+						}
+					}
+
+					auto props = dm_->getNodeProperties(id);
+					node.setProperties(std::move(props));
+
+					Record r;
+					r.setNode(config_.variable, std::move(node));
+					batch.push_back(std::move(r));
+				}
+				std::ranges::sort(batch, [this](const Record &lhs, const Record &rhs) {
+					const auto leftNode = lhs.getNodeRef(config_.variable);
+					const auto rightNode = rhs.getNodeRef(config_.variable);
+					if (!leftNode.has_value() || !rightNode.has_value()) {
+						return false;
+					}
+					return leftNode->get().getId() < rightNode->get().getId();
+				});
 			}
 
 			if (batch.empty() && currentIdx_ >= candidateIds_.size()) // ZYX_COV_EXCL_LINE

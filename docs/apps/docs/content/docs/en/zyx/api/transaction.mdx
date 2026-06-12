@@ -41,6 +41,33 @@ The `Transaction` object is **move-only**. If it is destroyed while still active
 }
 ```
 
+### Bulk Write Transaction
+
+Use `beginBulkTransaction()` for large direct API imports that batch many `createNodes()` / `createEdges()` calls.
+It has the same write lock and rollback behavior as a normal write transaction. The difference is checkpoint policy:
+`commit()` is still WAL-durable, but the main database-file checkpoint may be deferred until `save()` or clean `close()`.
+
+```cpp
+auto tx = db.beginBulkTransaction();
+db.createNodes("Person", {{{"name", std::string("Ada")}}});
+tx.commit();
+```
+
+For import-style workloads, pair it with the columnar bulk insert APIs to avoid building row-wise property maps:
+
+```cpp
+auto tx = db.beginBulkTransaction();
+auto ids = db.createNodesColumnar(
+    "Person",
+    2,
+    {{"name", {std::string("Ada"), std::string("Grace")}},
+     {"age", {int64_t(37), int64_t(45)}}});
+tx.commit();
+```
+
+If the next step is to build schema indexes, the index builder scans the logical storage view, including any committed
+bulk overlay that has not been checkpointed yet.
+
 ### Read-Only Transaction
 
 ```cpp

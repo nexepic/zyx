@@ -92,6 +92,17 @@ TEST_F(WALManagerTest, CloseWhenNotOpenIsNoop) {
 	EXPECT_NO_THROW(mgr.close());
 }
 
+TEST_F(WALManagerTest, CloseRemoveFileCanUseFlushOnlyAfterCheckpoint) {
+	WALManager mgr;
+	mgr.open(testDbPath.string());
+	mgr.writeBegin(1);
+
+	EXPECT_NO_THROW(mgr.close(WALManager::CloseMode::WCM_REMOVE_FILE,
+							  WALManager::CloseSyncMode::WSM_FLUSH_ONLY));
+	EXPECT_FALSE(mgr.isOpen());
+	EXPECT_FALSE(fs::exists(walPath));
+}
+
 TEST_F(WALManagerTest, WriteBeginAndCommit) {
 	WALManager mgr;
 	mgr.open(testDbPath.string());

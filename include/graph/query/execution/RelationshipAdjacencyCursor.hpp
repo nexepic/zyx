@@ -10,6 +10,7 @@
 #include "graph/core/Node.hpp"
 #include "graph/query/execution/RelationshipExpandConfig.hpp"
 #include "graph/storage/data/DataManager.hpp"
+#include "graph/traversal/RelationshipTraversal.hpp"
 
 namespace graph::query::execution {
 
@@ -39,8 +40,19 @@ namespace graph::query::execution {
 				int64_t sourceId,
 				const RelationshipExpandConfig &config,
 				const RelationshipExpandRequirements &requirements) const;
+		[[nodiscard]] std::optional<int64_t> acceptedTargetForEdgeRef(
+				const traversal::RelationshipEdgeRef &edgeRef,
+				int64_t sourceId,
+				const RelationshipExpandConfig &config,
+				const RelationshipExpandRequirements &requirements) const;
 		[[nodiscard]] bool matchesTargetLabels(const Node &node, const RelationshipExpandConfig &config) const;
 		[[nodiscard]] int64_t targetForSource(const Edge &edge, int64_t sourceId, const std::string &direction) const;
+		[[nodiscard]] int64_t targetForSource(const traversal::RelationshipEdgeRef &edgeRef,
+		                                      int64_t sourceId,
+		                                      const std::string &direction) const;
+		[[nodiscard]] traversal::RelationshipTraversalOptions traversalOptions(
+				const RelationshipExpandConfig &config,
+				const RelationshipExpandRequirements &requirements) const;
 
 		std::shared_ptr<storage::DataManager> dm_;
 	};

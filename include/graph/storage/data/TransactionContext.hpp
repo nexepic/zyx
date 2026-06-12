@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -56,6 +57,8 @@ namespace graph::storage {
 		};
 
 		using PendingWalChangeMap = std::unordered_map<uint64_t, PendingWalChange>;
+		using PendingWalAddBuckets = std::array<std::vector<int64_t>, getMaxEntityType() + 1>;
+		using PendingWalAddCancelFlags = std::array<bool, getMaxEntityType() + 1>;
 
 		void setActive(uint64_t txnId);
 		void clear();
@@ -101,12 +104,18 @@ namespace graph::storage {
 		void flushWalChangeViews(std::span<const wal::WALEntityChangeView> changes) const;
 		void flushSerializedWalChange(const PendingWalChange &change) const;
 		[[nodiscard]] const PendingWalChangeMap &pendingWalChanges() const { return pendingWalChanges_; }
+		[[nodiscard]] const PendingWalAddBuckets &pendingWalAddsByType() const { return pendingWalAddsByType_; }
+		[[nodiscard]] bool hasCanceledPendingWalAdds(uint8_t entityType) const;
+		[[nodiscard]] bool hasPendingWalRecords() const;
 		[[nodiscard]] bool wasEntityAddedInActiveTransaction(uint8_t entityType, int64_t entityId) const;
 
 	private:
 		[[nodiscard]] static uint64_t makeEntityKey(uint8_t entityType, int64_t entityId);
-		void rememberAddedEntity(uint8_t entityType, int64_t entityId);
+		bool rememberAddedEntity(uint8_t entityType, int64_t entityId);
 		void forgetAddedEntity(uint8_t entityType, int64_t entityId);
+		void reserveAddedEntityRecords(uint8_t entityType, size_t additionalCapacity);
+		void stageWalAdd(uint8_t entityType, int64_t entityId);
+		void markWalAddCanceled(uint8_t entityType);
 		void stageWalChange(uint8_t entityType, EntityChangeType changeType, int64_t entityId);
 		void stageWalChange(uint8_t entityType, EntityChangeType changeType, int64_t entityId,
 							std::vector<uint8_t> serializedData);
@@ -116,6 +125,8 @@ namespace graph::storage {
 		uint64_t activeTxnId_ = 0;
 		std::vector<Transaction::TxnOperation> txnOps_;
 		std::unordered_set<uint64_t> addedEntityKeys_;
+		PendingWalAddBuckets pendingWalAddsByType_;
+		PendingWalAddCancelFlags pendingWalAddCanceledByType_{};
 		PendingWalChangeMap pendingWalChanges_;
 		wal::WALManager *walManager_ = nullptr;
 		wal::UndoLog undoLog_;

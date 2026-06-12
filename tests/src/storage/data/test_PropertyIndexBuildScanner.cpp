@@ -125,13 +125,15 @@ TEST_F(DataManagerTest, PropertyIndexBuildScannerCollectsEdgeScalars) {
 	EXPECT_TRUE(hasStringValue(values, edge.getId(), "kind", "strong"));
 }
 
-TEST_F(DataManagerTest, PropertyIndexBuildScannerRejectsDirtyInvalidOrEmptyRequests) {
+TEST_F(DataManagerTest, PropertyIndexBuildScannerCollectsDirtyOverlayAndRejectsInvalidRequests) {
 	Node dirty = createTestNode(dataManager, "DirtyScannerUser");
 	dataManager->addNode(dirty);
 	dataManager->addNodeProperties(dirty.getId(), {{"id", PropertyValue("dirty-1")}});
 
 	const graph::storage::PropertyIndexBuildScanner scanner(*dataManager);
-	EXPECT_TRUE(scanner.collect(EntityType::Node, std::vector<std::string>{"id"}).empty());
+	EXPECT_TRUE(scanner.canCollect(EntityType::Node));
+	EXPECT_TRUE(hasStringValue(scanner.collect(EntityType::Node, std::vector<std::string>{"id"}),
+							   dirty.getId(), "id", "dirty-1"));
 	EXPECT_TRUE(scanner.collect(EntityType::Blob, std::vector<std::string>{"id"}).empty());
 	EXPECT_TRUE(scanner.collect(EntityType::Node, std::vector<std::string>{}).empty());
 }

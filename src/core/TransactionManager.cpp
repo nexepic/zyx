@@ -39,8 +39,32 @@ namespace graph {
 
 	Transaction TransactionManager::begin() { return begin(std::chrono::duration_cast<std::chrono::milliseconds>(kDefaultTxnTimeout)); }
 
+	Transaction TransactionManager::beginBulk() {
+		return beginBulk(std::chrono::duration_cast<std::chrono::milliseconds>(kDefaultTxnTimeout));
+	}
+
 	Transaction TransactionManager::beginReadOnly() {
 		return beginReadOnly(std::chrono::duration_cast<std::chrono::milliseconds>(kDefaultTxnTimeout));
+	}
+
+	void TransactionManager::ensureReadSnapshotCurrent() {
+		if (!dirtySnapshotPending_.load(std::memory_order_acquire)) {
+			return;
+		}
+
+		std::lock_guard lock(snapshotPublishMutex_);
+		if (!dirtySnapshotPending_.load(std::memory_order_relaxed)) {
+			return;
+		}
+
+		auto dm = storage_->getDataManager();
+		if (dm->hasUnsavedChanges()) {
+			debug::ScopedPerfTimer timer("txn.snapshot_materialize");
+			snapshotManager_->publishSnapshot(dm->captureCommittedSnapshot());
+		} else {
+			snapshotManager_->publishCleanSnapshot();
+		}
+		dirtySnapshotPending_.store(false, std::memory_order_release);
 	}
 
 	Transaction TransactionManager::beginReadOnly(std::chrono::milliseconds timeout) {
@@ -61,6 +85,8 @@ namespace graph {
 
 		uint64_t txnId = nextTxnId_.fetch_add(1);
 
+		ensureReadSnapshotCurrent();
+
 		// Acquire an immutable snapshot of committed state
 		auto snapshot = snapshotManager_->acquireSnapshot();
 
@@ -79,6 +105,15 @@ namespace graph {
 	}
 
 	Transaction TransactionManager::begin(std::chrono::milliseconds timeout) {
+		return beginWithPolicy(timeout, Transaction::CheckpointPolicy::TCP_AUTO);
+	}
+
+	Transaction TransactionManager::beginBulk(std::chrono::milliseconds timeout) {
+		return beginWithPolicy(timeout, Transaction::CheckpointPolicy::TCP_DEFER_CHECKPOINT);
+	}
+
+	Transaction TransactionManager::beginWithPolicy(std::chrono::milliseconds timeout,
+													Transaction::CheckpointPolicy policy) {
 		// Acquire exclusive lock — blocks until all readers and writers finish
 #ifdef __EMSCRIPTEN__
 		(void)timeout;
@@ -113,6 +148,7 @@ namespace graph {
 		activeWriteTxn_ = true;
 
 		Transaction txn(txnId, *this, storage_);
+		txn.checkpointPolicy_ = policy;
 		txn.writeLock_ = std::move(lock);
 		return txn;
 	}
@@ -141,7 +177,9 @@ namespace graph {
 		// Once writeCommit() fsyncs, recovery can replay these final states even
 		// if the main DB checkpoint is deferred.
 		const bool walOpen = walManager_ && walManager_->isOpen();
-		if (walOpen) {
+		const bool hasWalRecords = dm->hasTransactionWALRecordsToFlush();
+		const bool mustCommitWal = hasWalRecords || dm->hasUnsavedChanges();
+		if (walOpen && mustCommitWal) {
 			dm->flushTransactionWALRecords();
 			auto walStart = Clock::now();
 			walManager_->writeCommit(txn.getId());
@@ -165,7 +203,8 @@ namespace graph {
 															Clock::now() - saveStart)
 															.count()));
 			checkpointed = true;
-		} else if (walManager_->shouldCheckpoint()) {
+		} else if (txn.getCheckpointPolicy() == Transaction::CheckpointPolicy::TCP_AUTO &&
+				   walManager_->shouldCheckpoint()) {
 			auto checkpointStart = Clock::now();
 			auto saveStart = Clock::now();
 			storage_->save();
@@ -185,10 +224,13 @@ namespace graph {
 		if (checkpointed || !dm->hasUnsavedChanges()) {
 			// Main DB state is current; readers can rely on disk plus an empty overlay.
 			snapshotManager_->publishCleanSnapshot();
+			dirtySnapshotPending_.store(false, std::memory_order_release);
 		} else {
-			// Publish the committed dirty overlay for read-only transactions while
-			// the main DB file intentionally lags behind the WAL.
-			snapshotManager_->publishSnapshot(dm->captureCommittedSnapshot());
+			// The committed overlay may be large during bulk loads. Defer the
+			// immutable snapshot copy until a read-only transaction actually
+			// needs it; schema builds and explicit checkpoints can then proceed
+			// without paying an avoidable full dirty-map copy.
+			dirtySnapshotPending_.store(true, std::memory_order_release);
 		}
 
 		// Clear DataManager transaction context
@@ -247,6 +289,20 @@ namespace graph {
 
 	void TransactionManager::setWALManager(std::shared_ptr<storage::wal::WALManager> walManager) {
 		walManager_ = std::move(walManager);
+	}
+
+	void TransactionManager::markStorageCheckpointed() {
+		if (!storage_ || !storage_->isOpen()) {
+			return;
+		}
+		auto dm = storage_->getDataManager();
+		if (!dm || dm->hasUnsavedChanges()) {
+			return;
+		}
+
+		std::lock_guard lock(snapshotPublishMutex_);
+		snapshotManager_->publishCleanSnapshot();
+		dirtySnapshotPending_.store(false, std::memory_order_release);
 	}
 
 } // namespace graph

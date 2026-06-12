@@ -27,6 +27,7 @@
 #include <vector>
 #include "graph/core/PropertyTypes.hpp"
 #include "graph/storage/data/BaseEntityManager.hpp"
+#include "graph/storage/data/ColumnarBulkInput.hpp"
 
 namespace graph::storage {
 
@@ -53,6 +54,11 @@ namespace graph::storage {
 
 		template<typename EntityType>
 		std::vector<size_t> storePropertiesBatch(std::vector<EntityType> &entities);
+
+		template<typename EntityType>
+		std::vector<size_t> storePropertiesColumnarBatch(
+				std::vector<EntityType> &entities,
+				const std::vector<BulkPropertyColumn> &columns);
 
 		template<typename EntityType>
 		void cleanupExternalProperties(EntityType &entity);

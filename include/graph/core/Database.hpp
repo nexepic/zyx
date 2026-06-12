@@ -50,6 +50,9 @@ namespace graph {
 		[[nodiscard]] bool isOpen() const;
 
 		Transaction beginTransaction();
+		// WAL-durable write transaction that defers the main database-file checkpoint
+		// until an explicit flush or clean close.
+		Transaction beginBulkTransaction();
 		Transaction beginReadOnlyTransaction();
 
 		// Query engine access (lazy-initialized on first call)

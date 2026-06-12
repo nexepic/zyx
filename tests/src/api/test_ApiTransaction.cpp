@@ -44,6 +44,202 @@ TEST_F(CppApiTest, TransactionBeginCommit) {
 	EXPECT_EQ(std::get<std::string>(nameVal), "committed");
 }
 
+TEST_F(CppApiTest, BulkTransactionSupportsDirectBatchWrites) {
+	auto txn = db->beginBulkTransaction();
+	EXPECT_TRUE(txn.isActive());
+	EXPECT_FALSE(txn.isReadOnly());
+
+	auto ids = db->createNodes("BulkApiUser",
+							   {{{"id", std::string("u1")}, {"score", int64_t{1}}},
+								{{"id", std::string("u2")}, {"score", int64_t{2}}}});
+	ASSERT_EQ(ids.size(), 2U);
+	auto edgeIds = db->createEdges("FOLLOWS", {{ids[0], ids[1], {{"weight", int64_t{7}}}}});
+	ASSERT_EQ(edgeIds.size(), 1U);
+
+	txn.commit();
+	EXPECT_FALSE(txn.isActive());
+
+	auto result = db->execute("MATCH (:BulkApiUser {id: 'u1'})-[r:FOLLOWS]->(:BulkApiUser {id: 'u2'}) RETURN r.weight");
+	ASSERT_TRUE(result.isSuccess());
+	ASSERT_TRUE(result.hasNext());
+	result.next();
+	auto weight = result.get("r.weight");
+	ASSERT_TRUE(std::holds_alternative<int64_t>(weight));
+	EXPECT_EQ(std::get<int64_t>(weight), 7);
+}
+
+TEST_F(CppApiTest, RowWiseBatchInsertHandlesHomogeneousAndSparseProperties) {
+	auto homogeneousIds = db->createNodes("RowWiseHomogeneousUser",
+										  {{{"id", std::string("h1")}, {"score", int64_t{10}}},
+										   {{"id", std::string("h2")}, {"score", int64_t{20}}}});
+	ASSERT_EQ(homogeneousIds.size(), 2U);
+
+	auto sparseIds = db->createNodes("RowWiseSparseUser",
+									 {{{"id", std::string("s1")}, {"score", int64_t{30}}},
+									  {{"id", std::string("s2")}}});
+	ASSERT_EQ(sparseIds.size(), 2U);
+
+	auto homogeneousEdges = db->createEdges(
+			"ROW_WISE_HOMOGENEOUS_EDGE",
+			{{homogeneousIds[0], homogeneousIds[1], {{"weight", int64_t{1}}, {"rank", int64_t{2}}}},
+			 {homogeneousIds[1], homogeneousIds[0], {{"weight", int64_t{3}}, {"rank", int64_t{4}}}}});
+	ASSERT_EQ(homogeneousEdges.size(), 2U);
+
+	auto sparseEdges = db->createEdges("ROW_WISE_SPARSE_EDGE",
+									   {{sparseIds[0], sparseIds[1], {{"weight", int64_t{5}}}},
+										{sparseIds[1], sparseIds[0], {}}});
+	ASSERT_EQ(sparseEdges.size(), 2U);
+
+	auto homogeneousResult = db->execute(
+			"MATCH (:RowWiseHomogeneousUser {id: 'h1'})-[r:ROW_WISE_HOMOGENEOUS_EDGE]->"
+			"(n:RowWiseHomogeneousUser {id: 'h2'}) RETURN r.rank, n.score");
+	ASSERT_TRUE(homogeneousResult.isSuccess());
+	ASSERT_TRUE(homogeneousResult.hasNext());
+	homogeneousResult.next();
+	auto rank = homogeneousResult.get("r.rank");
+	auto score = homogeneousResult.get("n.score");
+	ASSERT_TRUE(std::holds_alternative<int64_t>(rank));
+	ASSERT_TRUE(std::holds_alternative<int64_t>(score));
+	EXPECT_EQ(std::get<int64_t>(rank), 2);
+	EXPECT_EQ(std::get<int64_t>(score), 20);
+
+	auto sparseResult = db->execute("MATCH (n:RowWiseSparseUser {id: 's2'}) RETURN n.id");
+	ASSERT_TRUE(sparseResult.isSuccess());
+	ASSERT_TRUE(sparseResult.hasNext());
+	sparseResult.next();
+	auto id = sparseResult.get("n.id");
+	ASSERT_TRUE(std::holds_alternative<std::string>(id));
+	EXPECT_EQ(std::get<std::string>(id), "s2");
+}
+
+TEST_F(CppApiTest, ColumnarBulkInsertCreatesNodesAndEdges) {
+	auto txn = db->beginBulkTransaction();
+
+	const std::vector<zyx::PropertyColumn> nodeColumns{
+			{"id", {std::string("c1"), std::string("c2"), std::string("c3")}},
+			{"score", {int64_t{10}, int64_t{20}, int64_t{30}}},
+			{"active", {true, false, true}},
+	};
+	const auto ids = db->createNodesColumnar("ColumnarUser", 3, nodeColumns);
+	ASSERT_EQ(ids.size(), 3U);
+
+	const std::vector<zyx::PropertyColumn> edgeColumns{
+			{"weight", {int64_t{4}, int64_t{8}}},
+	};
+	const auto edgeIds = db->createEdgesColumnar(
+			"COLUMNAR_FOLLOWS", {ids[0], ids[1]}, {ids[1], ids[2]}, edgeColumns);
+	ASSERT_EQ(edgeIds.size(), 2U);
+
+	txn.commit();
+
+	auto result = db->execute(
+			"MATCH (:ColumnarUser {id: 'c1'})-[r:COLUMNAR_FOLLOWS]->(n:ColumnarUser {id: 'c2'}) "
+			"RETURN r.weight, n.score");
+	ASSERT_TRUE(result.isSuccess());
+	ASSERT_TRUE(result.hasNext());
+	result.next();
+	auto weight = result.get("r.weight");
+	auto score = result.get("n.score");
+	ASSERT_TRUE(std::holds_alternative<int64_t>(weight));
+	ASSERT_TRUE(std::holds_alternative<int64_t>(score));
+	EXPECT_EQ(std::get<int64_t>(weight), 4);
+	EXPECT_EQ(std::get<int64_t>(score), 20);
+}
+
+TEST_F(CppApiTest, ColumnarBulkInsertMaintainsPreexistingPropertyIndexes) {
+	ASSERT_TRUE(db->createNodePropertyIndexes("ColumnarIndexedUser", {"id", "score"}));
+
+	auto txn = db->beginBulkTransaction();
+	const std::vector<zyx::PropertyColumn> nodeColumns{
+			{"id", {std::string("idx-c1"), std::string("idx-c2"), std::string("idx-c3")}},
+			{"score", {int64_t{101}, int64_t{202}, int64_t{303}}},
+	};
+	const auto ids = db->createNodesColumnar("ColumnarIndexedUser", 3, nodeColumns);
+	ASSERT_EQ(ids.size(), 3U);
+	txn.commit();
+
+	auto result = db->execute("MATCH (n:ColumnarIndexedUser {id: 'idx-c2'}) RETURN n.score");
+	ASSERT_TRUE(result.isSuccess());
+	ASSERT_TRUE(result.hasNext());
+	result.next();
+	auto score = result.get("n.score");
+	ASSERT_TRUE(std::holds_alternative<int64_t>(score));
+	EXPECT_EQ(std::get<int64_t>(score), 202);
+}
+
+TEST_F(CppApiTest, ColumnarBulkInsertValidatesShape) {
+	EXPECT_THROW(
+			{ (void) db->createNodesColumnar("BadColumn", 2, {zyx::PropertyColumn{"id", {std::string("one")}}}); },
+			std::invalid_argument);
+	EXPECT_THROW(
+			{
+					(void) db->createNodesColumnar(
+						"BadColumn", 1,
+						{zyx::PropertyColumn{"id", {std::string("one")}},
+						 zyx::PropertyColumn{"id", {std::string("duplicate")}}});
+			},
+			std::invalid_argument);
+	EXPECT_THROW(
+			{ (void) db->createNodesColumnar("BadColumn", 1, {zyx::PropertyColumn{"", {int64_t{1}}}}); },
+			std::invalid_argument);
+	EXPECT_THROW(
+			{ (void) db->createEdgesColumnar("BAD_EDGE", {1, 2}, {2}, {}); },
+			std::invalid_argument);
+
+	auto emptyIds = db->createNodesColumnar("EmptyColumnar", 2, {});
+	EXPECT_EQ(emptyIds.size(), 2U);
+	auto emptyEdges = db->createEdgesColumnar("EMPTY_PROPS", {emptyIds[0]}, {emptyIds[1]}, {});
+	EXPECT_EQ(emptyEdges.size(), 1U);
+}
+
+TEST_F(CppApiTest, BulkTransactionCanBeFollowedByPropertyIndexBuild) {
+	auto txn = db->beginBulkTransaction();
+	auto ids = db->createNodes("BulkIndexedUser",
+							   {{{"id", std::string("bulk-index-1")}, {"score", int64_t{11}}},
+								{{"id", std::string("bulk-index-2")}, {"score", int64_t{22}}}});
+	ASSERT_EQ(ids.size(), 2U);
+	txn.commit();
+
+	ASSERT_TRUE(db->createNodePropertyIndexes("BulkIndexedUser", {"id", "score"}));
+
+	auto result = db->execute("MATCH (n:BulkIndexedUser {id: 'bulk-index-2'}) RETURN n.score");
+	ASSERT_TRUE(result.isSuccess());
+	ASSERT_TRUE(result.hasNext());
+	result.next();
+	auto score = result.get("n.score");
+	ASSERT_TRUE(std::holds_alternative<int64_t>(score));
+	EXPECT_EQ(std::get<int64_t>(score), 22);
+}
+
+TEST_F(CppApiTest, BulkTransactionIndexBuildIncludesPreexistingNodes) {
+	(void) db->createNode("MixedBulkIndexUser", {{"id", std::string("before")}, {"score", int64_t{3}}});
+	db->save();
+
+	auto txn = db->beginBulkTransaction();
+	auto ids = db->createNodes("MixedBulkIndexUser",
+							   {{{"id", std::string("after")}, {"score", int64_t{5}}}});
+	ASSERT_EQ(ids.size(), 1U);
+	txn.commit();
+
+	ASSERT_TRUE(db->createNodePropertyIndexes("MixedBulkIndexUser", {"id"}));
+
+	auto before = db->execute("MATCH (n:MixedBulkIndexUser {id: 'before'}) RETURN n.score");
+	ASSERT_TRUE(before.isSuccess());
+	ASSERT_TRUE(before.hasNext());
+	before.next();
+	auto beforeScore = before.get("n.score");
+	ASSERT_TRUE(std::holds_alternative<int64_t>(beforeScore));
+	EXPECT_EQ(std::get<int64_t>(beforeScore), 3);
+
+	auto after = db->execute("MATCH (n:MixedBulkIndexUser {id: 'after'}) RETURN n.score");
+	ASSERT_TRUE(after.isSuccess());
+	ASSERT_TRUE(after.hasNext());
+	after.next();
+	auto afterScore = after.get("n.score");
+	ASSERT_TRUE(std::holds_alternative<int64_t>(afterScore));
+	EXPECT_EQ(std::get<int64_t>(afterScore), 5);
+}
+
 TEST_F(CppApiTest, TransactionRollback) {
 	db->createNode("Existing", {{"id", (int64_t) 1}});
 	db->save();

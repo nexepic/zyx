@@ -25,7 +25,6 @@
 #include <memory>
 #include <string>
 #include <thread>
-#include <unordered_set>
 #include <vector>
 
 namespace graph::storage {
@@ -139,7 +138,6 @@ namespace graph::query::indexes {
 												 bool buildGlobalProperty) const;
 		bool buildEdgePropertyIndexFromOwnerScan(const std::shared_ptr<PropertyIndex> &propertyIndex,
 												 const std::string &propertyKey) const;
-		std::unordered_set<int64_t> collectNodeIdsWithLabel(int64_t labelId) const;
 
 		// --- Member Variables ---
 		std::shared_ptr<IndexManager> indexManager_;

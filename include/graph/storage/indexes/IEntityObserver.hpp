@@ -25,6 +25,7 @@
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/core/State.hpp"
+#include "graph/storage/data/ColumnarBulkInput.hpp"
 
 namespace graph {
 
@@ -52,6 +53,10 @@ namespace graph {
 				onNodeAdded(node);
 			}
 		}
+
+		virtual void onNodesAddedColumnar(
+				const std::vector<Node> &nodes,
+				const std::vector<storage::BulkPropertyColumn> &columns);
 		/**
 		 * @brief Called after a node has been updated.
 		 * @param oldNode The state of the node before the update.
@@ -79,6 +84,10 @@ namespace graph {
 				onEdgeAdded(edge);
 			}
 		}
+
+		virtual void onEdgesAddedColumnar(
+				const std::vector<Edge> &edges,
+				const std::vector<storage::BulkPropertyColumn> &columns);
 
 		/**
 		 * @brief Called after an edge has been updated.

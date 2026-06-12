@@ -21,6 +21,7 @@
 #include "graph/storage/indexes/EntityTypeIndexManager.hpp"
 #include "graph/log/Log.hpp"
 #include <type_traits>
+#include <unordered_map>
 
 namespace graph::query::indexes {
 
@@ -251,6 +252,82 @@ namespace graph::query::indexes {
 	}
 
 	template<typename T>
+	void EntityTypeIndexManager::onEntitiesAddedColumnar(
+			const std::vector<T> &entities,
+			const std::vector<storage::BulkPropertyColumn> &columns) const {
+		if (entities.empty()) {
+			return;
+		}
+
+		const bool hasLabelIndex = !labelIndex_->isEmpty();
+		const auto indexedKeys = propertyIndex_->getIndexedKeysSnapshot();
+		if (!hasLabelIndex && indexedKeys.empty()) {
+			return;
+		}
+
+		std::unordered_map<int64_t, std::vector<int64_t>> entitiesByLabelId;
+		if (hasLabelIndex) {
+			for (const auto &entity: entities) {
+				if constexpr (std::is_same_v<T, Node>) {
+					for (const int64_t labelId: entity.getLabelIds()) {
+						if (labelId != 0) {
+							entitiesByLabelId[labelId].push_back(entity.getId());
+						}
+					}
+				} else {
+					if (entity.getTypeId() != 0) {
+						entitiesByLabelId[entity.getTypeId()].push_back(entity.getId());
+					}
+				}
+			}
+		}
+
+		std::unordered_map<std::string, const storage::BulkPropertyColumn *> columnsByKey;
+		columnsByKey.reserve(columns.size());
+		for (const auto &column: columns) {
+			columnsByKey.emplace(column.key, &column);
+		}
+
+		std::vector<std::tuple<int64_t, std::string, PropertyValue>> propBatch;
+		propBatch.reserve(entities.size() * indexedKeys.size());
+		for (const auto &key: indexedKeys) {
+			const auto columnIt = columnsByKey.find(key);
+			if (columnIt == columnsByKey.end()) {
+				continue;
+			}
+			const auto &values = columnIt->second->values;
+			const size_t rowCount = std::min(entities.size(), values.size());
+			for (size_t row = 0; row < rowCount; ++row) {
+				propBatch.emplace_back(entities[row].getId(), key, values[row]);
+			}
+		}
+
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+		bool changed = false;
+		if (!entitiesByLabelId.empty() && !labelIndex_->isEmpty()) {
+			std::unordered_map<std::string, std::vector<int64_t>> entitiesByLabel;
+			entitiesByLabel.reserve(entitiesByLabelId.size());
+			for (auto &[labelId, ids]: entitiesByLabelId) {
+				std::string label = dataManager_->resolveTokenName(labelId);
+				if (!label.empty()) {
+					entitiesByLabel[label] = std::move(ids);
+				}
+			}
+			if (!entitiesByLabel.empty()) {
+				labelIndex_->addNodesBatch(entitiesByLabel);
+				changed = true;
+			}
+		}
+		if (!propBatch.empty() && !propertyIndex_->isEmpty()) {
+			propertyIndex_->addPropertiesBatch(propBatch);
+			changed = true;
+		}
+		if (changed) {
+			persistState();
+		}
+	}
+
+	template<typename T>
 	void EntityTypeIndexManager::onEntityUpdated(const T &oldEntity, const T &newEntity) const {
 		// Update Label Index
 		if constexpr (std::is_same_v<T, Node>) {
@@ -330,5 +407,9 @@ namespace graph::query::indexes {
 
 	template void EntityTypeIndexManager::onEntitiesAdded<Node>(const std::vector<Node> &) const;
 	template void EntityTypeIndexManager::onEntitiesAdded<Edge>(const std::vector<Edge> &) const;
+	template void EntityTypeIndexManager::onEntitiesAddedColumnar<Node>(
+			const std::vector<Node> &, const std::vector<storage::BulkPropertyColumn> &) const;
+	template void EntityTypeIndexManager::onEntitiesAddedColumnar<Edge>(
+			const std::vector<Edge> &, const std::vector<storage::BulkPropertyColumn> &) const;
 
 } // namespace graph::query::indexes

@@ -78,10 +78,11 @@ namespace graph::storage {
 		return (static_cast<uint64_t>(entityType) << 56U) | (static_cast<uint64_t>(entityId) & 0x00FFFFFFFFFFFFFFULL);
 	}
 
-	void TransactionContext::rememberAddedEntity(uint8_t entityType, int64_t entityId) {
-		if (entityId > 0) {
-			addedEntityKeys_.insert(makeEntityKey(entityType, entityId));
+	bool TransactionContext::rememberAddedEntity(uint8_t entityType, int64_t entityId) {
+		if (entityId <= 0) {
+			return false;
 		}
+		return addedEntityKeys_.insert(makeEntityKey(entityType, entityId)).second;
 	}
 
 	void TransactionContext::forgetAddedEntity(uint8_t entityType, int64_t entityId) {
@@ -92,6 +93,27 @@ namespace graph::storage {
 
 	bool TransactionContext::wasEntityAddedInActiveTransaction(uint8_t entityType, int64_t entityId) const {
 		return entityId > 0 && addedEntityKeys_.contains(makeEntityKey(entityType, entityId));
+	}
+
+	void TransactionContext::reserveAddedEntityRecords(uint8_t entityType, size_t additionalCapacity) {
+		if (entityType >= pendingWalAddsByType_.size() || additionalCapacity == 0) {
+			return;
+		}
+		auto &bucket = pendingWalAddsByType_[entityType];
+		bucket.reserve(bucket.size() + additionalCapacity);
+	}
+
+	void TransactionContext::stageWalAdd(uint8_t entityType, int64_t entityId) {
+		if (entityId <= 0 || entityType >= pendingWalAddsByType_.size()) {
+			return;
+		}
+		pendingWalAddsByType_[entityType].push_back(entityId);
+	}
+
+	void TransactionContext::markWalAddCanceled(uint8_t entityType) {
+		if (entityType < pendingWalAddCanceledByType_.size()) {
+			pendingWalAddCanceledByType_[entityType] = true;
+		}
 	}
 
 	void TransactionContext::stageWalChange(uint8_t entityType, EntityChangeType changeType, int64_t entityId) {
@@ -123,6 +145,10 @@ namespace graph::storage {
 		activeTxnId_ = txnId;
 		txnOps_.clear();
 		addedEntityKeys_.clear();
+		for (auto &bucket: pendingWalAddsByType_) {
+			bucket.clear();
+		}
+		pendingWalAddCanceledByType_.fill(false);
 		pendingWalChanges_.clear();
 	}
 
@@ -131,6 +157,10 @@ namespace graph::storage {
 		activeTxnId_ = 0;
 		txnOps_.clear();
 		addedEntityKeys_.clear();
+		for (auto &bucket: pendingWalAddsByType_) {
+			bucket.clear();
+		}
+		pendingWalAddCanceledByType_.fill(false);
 		pendingWalChanges_.clear();
 		undoLog_.clear();
 		rollbackBase_.reset();
@@ -151,10 +181,12 @@ namespace graph::storage {
 		const auto entityType = static_cast<uint8_t>(EntityType::typeId);
 		recordOp({Transaction::TxnOperation::OP_ADD,
 				  entityType, entity.getId()});
-		rememberAddedEntity(entityType, entity.getId());
+		const bool firstAdd = rememberAddedEntity(entityType, entity.getId());
 		undoLog_.record({entityType, entity.getId(),
 						 wal::UndoChangeType::UNDO_ADDED, {}});
-		stageWalChange(entityType, EntityChangeType::CHANGE_ADDED, entity.getId());
+		if (firstAdd) {
+			stageWalAdd(entityType, entity.getId());
+		}
 	}
 
 	template<typename EntityType>
@@ -162,15 +194,21 @@ namespace graph::storage {
 		if (!transactionActive_ || entities.empty()) return;
 
 		txnOps_.reserve(txnOps_.size() + entities.size());
+		addedEntityKeys_.reserve(addedEntityKeys_.size() + entities.size());
+		reserveAddedEntityRecords(static_cast<uint8_t>(EntityType::typeId), entities.size());
+		undoLog_.reserve(undoLog_.size() + entities.size());
 		const auto entityType = static_cast<uint8_t>(EntityType::typeId);
 
-		for (const auto &entity : entities) {
+		for (size_t index = 0; index < entities.size(); ++index) {
+			const auto &entity = entities[index];
 			recordOp({Transaction::TxnOperation::OP_ADD,
 					  entityType, entity.getId()});
-			rememberAddedEntity(entityType, entity.getId());
+			const bool firstAdd = rememberAddedEntity(entityType, entity.getId());
 			undoLog_.record({entityType, entity.getId(),
 							 wal::UndoChangeType::UNDO_ADDED, {}});
-			stageWalChange(entityType, EntityChangeType::CHANGE_ADDED, entity.getId());
+			if (firstAdd) {
+				stageWalAdd(entityType, entity.getId());
+			}
 		}
 	}
 
@@ -180,13 +218,14 @@ namespace graph::storage {
 
 		const auto entityType = static_cast<uint8_t>(EntityType::typeId);
 		const bool addedInTxn = wasEntityAddedInActiveTransaction(entityType, newEntity.getId());
-		if (!addedInTxn) {
-			recordOp({Transaction::TxnOperation::OP_UPDATE, entityType, newEntity.getId()});
-			undoLog_.record({entityType, newEntity.getId(),
-							 wal::UndoChangeType::UNDO_MODIFIED, serializeEntityBytes(oldEntity)});
+		if (addedInTxn) {
+			return;
 		}
-		stageWalChange(entityType, addedInTxn ? EntityChangeType::CHANGE_ADDED : EntityChangeType::CHANGE_MODIFIED,
-					   newEntity.getId());
+
+		recordOp({Transaction::TxnOperation::OP_UPDATE, entityType, newEntity.getId()});
+		undoLog_.record({entityType, newEntity.getId(),
+						 wal::UndoChangeType::UNDO_MODIFIED, serializeEntityBytes(oldEntity)});
+		stageWalChange(entityType, EntityChangeType::CHANGE_MODIFIED, newEntity.getId());
 	}
 
 	template<typename EntityType>
@@ -199,19 +238,22 @@ namespace graph::storage {
 		}
 
 		txnOps_.reserve(txnOps_.size() + newEntities.size());
+		pendingWalChanges_.reserve(pendingWalChanges_.size() + newEntities.size());
+		undoLog_.reserve(undoLog_.size() + newEntities.size());
 		const auto entityType = static_cast<uint8_t>(EntityType::typeId);
 
 		for (size_t index = 0; index < newEntities.size(); ++index) {
 			const auto &newEntity = newEntities[index];
 			const auto &oldEntity = oldEntities[index];
 			const bool addedInTxn = wasEntityAddedInActiveTransaction(entityType, newEntity.getId());
-			if (!addedInTxn) {
-				recordOp({Transaction::TxnOperation::OP_UPDATE, entityType, newEntity.getId()});
-				undoLog_.record({entityType, newEntity.getId(),
-								 wal::UndoChangeType::UNDO_MODIFIED, serializeEntityBytes(oldEntity)});
+			if (addedInTxn) {
+				continue;
 			}
-			stageWalChange(entityType, addedInTxn ? EntityChangeType::CHANGE_ADDED : EntityChangeType::CHANGE_MODIFIED,
-						   newEntity.getId());
+
+			recordOp({Transaction::TxnOperation::OP_UPDATE, entityType, newEntity.getId()});
+			undoLog_.record({entityType, newEntity.getId(),
+							 wal::UndoChangeType::UNDO_MODIFIED, serializeEntityBytes(oldEntity)});
+			stageWalChange(entityType, EntityChangeType::CHANGE_MODIFIED, newEntity.getId());
 		}
 	}
 
@@ -221,8 +263,9 @@ namespace graph::storage {
 
 		const auto entityType = static_cast<uint8_t>(EntityType::typeId);
 		if (wasEntityAddedInActiveTransaction(entityType, id)) {
-			eraseStagedWalChange(entityType, id);
 			forgetAddedEntity(entityType, id);
+			markWalAddCanceled(entityType);
+			eraseStagedWalChange(entityType, id);
 			return;
 		}
 
@@ -256,6 +299,22 @@ namespace graph::storage {
 		}
 		walManager_->writeEntityChange(activeTxnId_, change.entityType, static_cast<uint8_t>(change.changeType),
 									   change.entityId, change.serializedData);
+	}
+
+	bool TransactionContext::hasPendingWalRecords() const {
+		if (!pendingWalChanges_.empty()) {
+			return true;
+		}
+		for (const auto &bucket: pendingWalAddsByType_) {
+			if (!bucket.empty()) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	bool TransactionContext::hasCanceledPendingWalAdds(uint8_t entityType) const {
+		return entityType < pendingWalAddCanceledByType_.size() && pendingWalAddCanceledByType_[entityType];
 	}
 
 	// Explicit instantiations

@@ -23,6 +23,7 @@
 #include <optional>
 #include <sstream>
 #include <string_view>
+#include <unordered_map>
 #include <unordered_set>
 #include "graph/log/Log.hpp"
 #include "graph/storage/FileStorage.hpp"
@@ -58,6 +59,36 @@ namespace {
 			   oldEdge.isActive() != newEdge.isActive() ||
 			   oldEdge.getTypeId() != newEdge.getTypeId() ||
 			   oldEdge.getProperties() != newEdge.getProperties();
+	}
+
+	std::unordered_map<std::string, const storage::BulkPropertyColumn *>
+	mapColumnsByKey(const std::vector<storage::BulkPropertyColumn> &columns) {
+		std::unordered_map<std::string, const storage::BulkPropertyColumn *> byKey;
+		byKey.reserve(columns.size());
+		for (const auto &column: columns) {
+			byKey.emplace(column.key, &column);
+		}
+		return byKey;
+	}
+
+	std::vector<Node> materializeNodesForVectorIndexes(
+			const std::vector<Node> &nodes,
+			const std::vector<storage::BulkPropertyColumn> &columns) {
+		if (nodes.empty() || columns.empty()) {
+			return nodes;
+		}
+		std::vector<Node> materialized = nodes;
+		for (size_t row = 0; row < materialized.size(); ++row) {
+			std::unordered_map<std::string, PropertyValue> props;
+			props.reserve(columns.size());
+			for (const auto &column: columns) {
+				if (row < column.values.size()) {
+					props.emplace(column.key, column.values[row]);
+				}
+			}
+			materialized[row].setProperties(std::move(props));
+		}
+		return materialized;
 	}
 } // namespace
 
@@ -161,11 +192,9 @@ namespace {
 	}
 
 	bool IndexManager::executeBuildTask(const std::function<bool()> &buildFunc) const {
-		// Index rebuilds need committed segment metadata for range scans, but
-		// they should not notify storage listeners mid-DDL. Listener flushes
-		// persist index roots/config and can otherwise create an extra durable
-		// save before the rebuilt index state exists.
-		storage_->save();
+		// Build against the logical storage view. Public schema APIs may choose
+		// to checkpoint before starting a schema transaction for performance, but
+		// the low-level builder must not hide synchronous I/O in every build task.
 		return buildFunc();
 	}
 
@@ -500,6 +529,36 @@ namespace {
 		}
 	}
 
+	void IndexManager::onNodesAddedColumnar(
+			const std::vector<Node> &nodes,
+			const std::vector<storage::BulkPropertyColumn> &columns) {
+		nodeIndexManager_->onEntitiesAddedColumnar(nodes, columns);
+		updateScopedPropertyIndexesForNodesColumnar(nodes, columns);
+		updateCompositeIndexesForNodesColumnar(nodes, columns);
+
+		if (vectorIndexManager_ && !nodes.empty() && !columns.empty()) {
+			const auto materialized = materializeNodesForVectorIndexes(nodes, columns);
+			std::unordered_map<std::string,
+							   std::vector<std::pair<Node, std::unordered_map<std::string, PropertyValue>>>>
+					byLabel;
+			for (const auto &node: materialized) {
+				if (node.getProperties().empty()) {
+					continue;
+				}
+				std::string labelStr;
+				if (node.getLabelId() != 0) {
+					labelStr = dataManager_->resolveTokenName(node.getLabelId());
+				}
+				if (!labelStr.empty()) {
+					byLabel[labelStr].push_back({node, node.getProperties()});
+				}
+			}
+			for (auto &[label, batch]: byLabel) {
+				vectorIndexManager_->updateIndexBatch(batch, label);
+			}
+		}
+	}
+
 	void IndexManager::onNodeUpdated(const Node &oldNode, const Node &newNode) {
 		if (!nodeIndexRelevantFieldsChanged(oldNode, newNode)) {
 			return;
@@ -544,6 +603,12 @@ namespace {
 	void IndexManager::onEdgeAdded(const Edge &edge) { edgeIndexManager_->onEntityAdded(edge); }
 
 	void IndexManager::onEdgesAdded(const std::vector<Edge> &edges) { edgeIndexManager_->onEntitiesAdded(edges); }
+
+	void IndexManager::onEdgesAddedColumnar(
+			const std::vector<Edge> &edges,
+			const std::vector<storage::BulkPropertyColumn> &columns) {
+		edgeIndexManager_->onEntitiesAddedColumnar(edges, columns);
+	}
 
 	void IndexManager::onEdgeUpdated(const Edge &oldEdge, const Edge &newEdge) {
 		if (!edgeIndexRelevantFieldsChanged(oldEdge, newEdge)) {
@@ -886,6 +951,71 @@ namespace {
 		propIndex->addCompositeEntriesBatch(entries);
 	}
 
+	void IndexManager::updateCompositeIndexesForNodesColumnar(
+			const std::vector<Node> &nodes,
+			const std::vector<storage::BulkPropertyColumn> &columns) {
+		auto *propIndex = nodeIndexManager_->getPropertyIndex().get();
+		if (!propIndex || nodes.empty() || columns.empty()) {
+			return;
+		}
+
+		struct CompositeIndexSpec {
+			std::vector<std::string> keys;
+		};
+
+		std::vector<CompositeIndexSpec> specs;
+		auto sysState = storage_->getSystemStateManager();
+		auto allIndexes = sysState->getMap<std::string>(storage::state::keys::SYS_INDEXES);
+		for (const auto &[name, rawMeta]: allIndexes) {
+			IndexMetadata meta = IndexMetadata::fromString(name, rawMeta);
+			if (meta.indexType != "composite") {
+				continue;
+			}
+			CompositeIndexSpec spec;
+			std::stringstream ss(meta.property);
+			std::string segment;
+			while (std::getline(ss, segment, ',')) {
+				if (!segment.empty()) {
+					spec.keys.push_back(segment);
+				}
+			}
+			if (!spec.keys.empty()) {
+				specs.push_back(std::move(spec));
+			}
+		}
+		if (specs.empty()) {
+			return;
+		}
+
+		const auto columnsByKey = mapColumnsByKey(columns);
+		std::vector<PropertyIndex::CompositeEntry> entries;
+		entries.reserve(nodes.size() * specs.size());
+		for (size_t row = 0; row < nodes.size(); ++row) {
+			const auto &node = nodes[row];
+			if (node.getId() == 0 || !node.isActive()) {
+				continue;
+			}
+			for (const auto &spec: specs) {
+				std::vector<PropertyValue> values;
+				values.reserve(spec.keys.size());
+				bool allPresent = true;
+				for (const auto &key: spec.keys) {
+					const auto columnIt = columnsByKey.find(key);
+					if (columnIt == columnsByKey.end() || row >= columnIt->second->values.size() ||
+						columnIt->second->values[row].getType() == PropertyType::NULL_TYPE) {
+						allPresent = false;
+						break;
+					}
+					values.push_back(columnIt->second->values[row]);
+				}
+				if (allPresent) {
+					entries.push_back(PropertyIndex::CompositeEntry{node.getId(), spec.keys, std::move(values)});
+				}
+			}
+		}
+		propIndex->addCompositeEntriesBatch(entries);
+	}
+
 	void IndexManager::removeCompositeIndexForNode(const Node &node) {
 		auto *propIndex = nodeIndexManager_->getPropertyIndex().get();
 		if (!propIndex) return;
@@ -993,6 +1123,67 @@ namespace {
 					continue;
 				}
 				scopedEntries.emplace_back(node.getId(), spec.physicalKey, propIt->second);
+			}
+		}
+		if (!scopedEntries.empty()) {
+			propIndex->addPropertiesBatch(scopedEntries);
+		}
+	}
+
+	void IndexManager::updateScopedPropertyIndexesForNodesColumnar(
+			const std::vector<Node> &nodes,
+			const std::vector<storage::BulkPropertyColumn> &columns) {
+		auto *propIndex = nodeIndexManager_->getPropertyIndex().get();
+		if (!propIndex || nodes.empty() || columns.empty()) {
+			return;
+		}
+
+		struct ScopedIndexSpec {
+			std::string physicalKey;
+			int64_t labelId = 0;
+			std::string property;
+		};
+
+		std::vector<ScopedIndexSpec> specs;
+		const auto indexedKeys = propIndex->getIndexedKeysSnapshot();
+		specs.reserve(indexedKeys.size());
+		for (const auto &physicalKey: indexedKeys) {
+			const auto scoped = decodeScopedNodePropertyKey(physicalKey);
+			if (!scoped.has_value()) {
+				continue;
+			}
+			const auto &[label, property] = *scoped;
+			const int64_t labelId = dataManager_->resolveTokenId(label);
+			if (labelId == 0) {
+				continue;
+			}
+			specs.push_back(ScopedIndexSpec{physicalKey, labelId, property});
+		}
+		if (specs.empty()) {
+			return;
+		}
+
+		const auto columnsByKey = mapColumnsByKey(columns);
+		std::vector<std::tuple<int64_t, std::string, PropertyValue>> scopedEntries;
+		scopedEntries.reserve(nodes.size());
+		for (size_t row = 0; row < nodes.size(); ++row) {
+			const auto &node = nodes[row];
+			if (node.getId() == 0 || !node.isActive()) {
+				continue;
+			}
+			for (const auto &spec: specs) {
+				if (!node.hasLabelId(spec.labelId)) {
+					continue;
+				}
+				const auto columnIt = columnsByKey.find(spec.property);
+				if (columnIt == columnsByKey.end() || row >= columnIt->second->values.size()) {
+					continue;
+				}
+				const auto &value = columnIt->second->values[row];
+				if (value.getType() == PropertyType::NULL_TYPE) {
+					continue;
+				}
+				scopedEntries.emplace_back(node.getId(), spec.physicalKey, value);
 			}
 		}
 		if (!scopedEntries.empty()) {

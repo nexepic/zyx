@@ -127,10 +127,16 @@ namespace graph::query::indexes {
 		// --- Entity Event Handlers (Implementing IEntityObserver) ---
 		void onNodeAdded(const Node &node) override;
 		void onNodesAdded(const std::vector<Node> &nodes) override;
+		void onNodesAddedColumnar(
+				const std::vector<Node> &nodes,
+				const std::vector<storage::BulkPropertyColumn> &columns) override;
 		void onNodeUpdated(const Node &oldNode, const Node &newNode) override;
 		void onNodeDeleted(const Node &node) override;
 		void onEdgeAdded(const Edge &edge) override;
 		void onEdgesAdded(const std::vector<Edge> &edges) override;
+		void onEdgesAddedColumnar(
+				const std::vector<Edge> &edges,
+				const std::vector<storage::BulkPropertyColumn> &columns) override;
 		void onEdgeUpdated(const Edge &oldEdge, const Edge &newEdge) override;
 		void onEdgeDeleted(const Edge &edge) override;
 
@@ -239,9 +245,15 @@ namespace graph::query::indexes {
 		// Composite index maintenance helpers
 		void updateCompositeIndexForNode(const Node &node);
 		void updateCompositeIndexesForNodes(const std::vector<Node> &nodes);
+		void updateCompositeIndexesForNodesColumnar(
+				const std::vector<Node> &nodes,
+				const std::vector<storage::BulkPropertyColumn> &columns);
 		void removeCompositeIndexForNode(const Node &node);
 		void updateScopedPropertyIndexesForNode(const Node &oldNode, const Node &newNode);
 		void updateScopedPropertyIndexesForNodes(const std::vector<Node> &nodes);
+		void updateScopedPropertyIndexesForNodesColumnar(
+				const std::vector<Node> &nodes,
+				const std::vector<storage::BulkPropertyColumn> &columns);
 		void removeScopedPropertyIndexesForNode(const Node &node);
 
 		mutable std::atomic<uint64_t> lookups_{0};

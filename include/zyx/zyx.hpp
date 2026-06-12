@@ -44,6 +44,18 @@ namespace zyx {
 	class TransactionImpl;
 
 	/**
+	 * @brief One property column for columnar bulk inserts.
+	 *
+	 * All columns passed to a bulk columnar insert must have the same number of
+	 * values as the requested row count. This shape avoids building a
+	 * vector<unordered_map<...>> at the call site for large imports.
+	 */
+	struct PropertyColumn {
+		std::string name;
+		std::vector<Value> values;
+	};
+
+	/**
 	 * @class Result
 	 * @brief Represents the output of a query execution.
 	 */
@@ -141,6 +153,9 @@ namespace zyx {
 
 		// Transaction support
 		[[nodiscard]] Transaction beginTransaction();
+		// For large direct API imports: commit is WAL-durable, while the main
+		// database-file checkpoint may be deferred to save() or clean close().
+		[[nodiscard]] Transaction beginBulkTransaction();
 		[[nodiscard]] Transaction beginReadOnlyTransaction();
 		[[nodiscard]] bool hasActiveTransaction() const;
 
@@ -180,6 +195,15 @@ namespace zyx {
 					const std::vector<std::unordered_map<std::string, Value>> &propsList) const;
 
 		/**
+		 * @brief Create multiple nodes from property columns.
+		 * @return Vector of internal IDs for the created nodes.
+		 */
+		[[nodiscard]] std::vector<int64_t>
+		createNodesColumnar(const std::string &label,
+							size_t count,
+							const std::vector<PropertyColumn> &columns) const;
+
+		/**
 		 * @brief Create an edge between two known internal IDs and return the edge ID.
 		 * @throws std::runtime_error If sourceId or targetId does not exist.
 		 * @return The internal ID (int64_t) of the created edge.
@@ -195,6 +219,16 @@ namespace zyx {
 		createEdges(const std::string &edgeType,
 					const std::vector<std::tuple<int64_t, int64_t, std::unordered_map<std::string, Value>>> &edgesList)
 				const;
+
+		/**
+		 * @brief Create multiple edges from source/target ID columns and property columns.
+		 * @return Vector of internal IDs for the created edges.
+		 */
+		[[nodiscard]] std::vector<int64_t>
+		createEdgesColumnar(const std::string &edgeType,
+							const std::vector<int64_t> &sourceIds,
+							const std::vector<int64_t> &targetIds,
+							const std::vector<PropertyColumn> &columns = {}) const;
 
 		/**
 		 * @brief Create multiple node property indexes with one coordinated build.

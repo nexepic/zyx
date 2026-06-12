@@ -22,6 +22,7 @@
 
 #include <functional>
 #include <memory>
+#include <string>
 #include <vector>
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
@@ -33,6 +34,36 @@ namespace graph::storage {
 namespace graph::traversal {
 
 	using EdgeVisitor = std::function<bool(const Edge &)>;
+
+	enum class RelationshipDirectionKind {
+		RDK_OUT,
+		RDK_IN,
+		RDK_BOTH,
+	};
+
+	enum class RelationshipTraversalIntegrity {
+		RTI_DETECT_CYCLES,
+		RTI_BOUND_BY_EDGE_COUNT,
+	};
+
+	struct RelationshipTraversalOptions {
+		RelationshipDirectionKind direction = RelationshipDirectionKind::RDK_BOTH;
+		RelationshipTraversalIntegrity integrity = RelationshipTraversalIntegrity::RTI_DETECT_CYCLES;
+		bool activeOnly = true;
+		int64_t typeId = 0;
+	};
+
+	struct RelationshipEdgeRef {
+		int64_t edgeId = 0;
+		int64_t sourceNodeId = 0;
+		int64_t targetNodeId = 0;
+		int64_t nextOutEdgeId = 0;
+		int64_t nextInEdgeId = 0;
+		int64_t typeId = 0;
+		bool active = false;
+	};
+
+	using RelationshipEdgeRefVisitor = std::function<bool(const RelationshipEdgeRef &)>;
 
 	struct RelationshipBatchLinkUpdates {
 		std::vector<Node> nodes;
@@ -79,6 +110,19 @@ namespace graph::traversal {
 		 */
 		std::vector<Edge> getAllConnectedEdges(int64_t nodeId) const;
 		size_t visitAllConnectedEdges(int64_t nodeId, const EdgeVisitor &visitor) const;
+
+		/**
+		 * Streams lightweight relationship metadata for adjacency-driven query execution.
+		 *
+		 * This path is intentionally generic: callers describe direction, type, and
+		 * integrity policy, while storage traversal owns linked-list navigation.
+		 */
+		size_t visitAdjacentEdgeRefs(int64_t nodeId,
+		                             const RelationshipTraversalOptions &options,
+		                             const RelationshipEdgeRefVisitor &visitor) const;
+		size_t countAdjacentEdgeRefs(int64_t nodeId, const RelationshipTraversalOptions &options) const;
+
+		static RelationshipDirectionKind directionFromString(const std::string &direction);
 
 		/**
 		 * Gets all nodes connected to the specified node via outgoing edges

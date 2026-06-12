@@ -37,6 +37,7 @@ namespace graph {
 	class Transaction {
 	public:
 		enum class TxnState { TXN_ACTIVE, TXN_COMMITTED, TXN_ROLLED_BACK };
+		enum class CheckpointPolicy { TCP_AUTO, TCP_DEFER_CHECKPOINT };
 
 		struct TxnOperation {
 			enum OpType : uint8_t { OP_ADD, OP_UPDATE, OP_DELETE };
@@ -60,6 +61,7 @@ namespace graph {
 		[[nodiscard]] TxnState getState() const { return state_; }
 		[[nodiscard]] bool isActive() const { return state_ == TxnState::TXN_ACTIVE; }
 		[[nodiscard]] bool isReadOnly() const { return readOnly_; }
+		[[nodiscard]] CheckpointPolicy getCheckpointPolicy() const { return checkpointPolicy_; }
 
 		[[nodiscard]] const storage::CommittedSnapshot *getSnapshot() const { return snapshot_.get(); }
 
@@ -70,6 +72,7 @@ namespace graph {
 		uint64_t txnId_ = 0;
 		TxnState state_ = TxnState::TXN_ACTIVE;
 		bool readOnly_ = false;
+		CheckpointPolicy checkpointPolicy_ = CheckpointPolicy::TCP_AUTO;
 		TransactionManager *manager_ = nullptr; // Non-owning
 		std::shared_ptr<storage::FileStorage> storage_;
 

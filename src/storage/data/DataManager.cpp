@@ -20,6 +20,7 @@
 
 #include "graph/storage/data/DataManager.hpp"
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstring>
 #include <exception>
@@ -393,7 +394,51 @@ namespace graph::storage {
 	Node DataManager::getNode(int64_t id) const { return nodeManager_->get(id); }
 
 	std::vector<Node> DataManager::getNodeBatch(const std::vector<int64_t> &ids) const {
-		return nodeManager_->getBatch(ids);
+		if (ids.empty()) {
+			return {};
+		}
+
+		if (currentSnapshot_ != nullptr) {
+			return nodeManager_->getBatch(ids);
+		}
+
+		std::vector<std::optional<Node>> rows(ids.size());
+		std::vector<size_t> diskRows;
+		std::vector<int64_t> diskIds;
+		diskRows.reserve(ids.size());
+		diskIds.reserve(ids.size());
+
+		size_t row = 0;
+		persistenceManager_->visitDirtyInfos<Node>(
+				ids,
+				[&](int64_t id, const DirtyEntityInfo<Node> *dirtyInfo) {
+					if (dirtyInfo != nullptr) {
+						if (dirtyInfo->changeType != EntityChangeType::CHANGE_DELETED &&
+							dirtyInfo->backup.has_value()) {
+							rows[row] = *dirtyInfo->backup;
+						}
+					} else {
+						diskRows.push_back(row);
+						diskIds.push_back(id);
+					}
+					++row;
+				});
+
+		for (size_t i = 0; i < diskIds.size(); ++i) {
+			Node node = nodeManager_->get(diskIds[i]);
+			if (node.getId() != 0 && node.isActive()) {
+				rows[diskRows[i]] = std::move(node);
+			}
+		}
+
+		std::vector<Node> result;
+		result.reserve(ids.size());
+		for (auto &node: rows) {
+			if (node.has_value()) {
+				result.push_back(std::move(*node));
+			}
+		}
+		return result;
 	}
 
 	std::vector<Node> DataManager::getNodesInRange(int64_t startId, int64_t endId, size_t limit) const {
@@ -1089,27 +1134,103 @@ namespace graph::storage {
 		}
 	}
 
+	bool DataManager::hasTransactionWALRecordsToFlush() const {
+		if (!txnContext_.isActive() || !txnContext_.hasPendingWalRecords()) {
+			return false;
+		}
+		if (!txnContext_.pendingWalChanges().empty()) {
+			return true;
+		}
+
+		auto hasEffectiveAdds = [this]<typename EntityType>(std::span<const int64_t> entityIds) {
+			if (entityIds.empty()) {
+				return false;
+			}
+			bool found = false;
+			persistenceManager_->visitDirtyInfos<EntityType>(
+					entityIds,
+					[&](int64_t, const DirtyEntityInfo<EntityType> *dirtyInfo) {
+						if (found || !dirtyInfo || dirtyInfo->changeType == EntityChangeType::CHANGE_DELETED ||
+							!dirtyInfo->backup.has_value()) {
+							return;
+						}
+						found = true;
+					});
+			return found;
+		};
+
+		const auto &added = txnContext_.pendingWalAddsByType();
+		return hasEffectiveAdds.template operator()<Node>(added[Node::typeId]) ||
+			   hasEffectiveAdds.template operator()<Edge>(added[Edge::typeId]) ||
+			   hasEffectiveAdds.template operator()<Property>(added[Property::typeId]) ||
+			   hasEffectiveAdds.template operator()<Blob>(added[Blob::typeId]) ||
+			   hasEffectiveAdds.template operator()<Index>(added[Index::typeId]) ||
+			   hasEffectiveAdds.template operator()<State>(added[State::typeId]);
+	}
+
 	void DataManager::flushTransactionWALRecords() const {
 		if (!txnContext_.isActive()) {
 			return;
 		}
 		auto *wal = txnContext_.getWALManager();
-		if (!wal || !wal->isOpen() || txnContext_.pendingWalChanges().empty()) {
+		if (!wal || !wal->isOpen() || !txnContext_.hasPendingWalRecords()) {
 			return;
 		}
 
 		debug::ScopedPerfTimer timer("wal.entity_flush");
+		const auto &added = txnContext_.pendingWalAddsByType();
+		flushPendingWALAddRecordsForType<Node>(added[Node::typeId]);
+		flushPendingWALAddRecordsForType<Edge>(added[Edge::typeId]);
+		flushPendingWALAddRecordsForType<Property>(added[Property::typeId]);
+		flushPendingWALAddRecordsForType<Blob>(added[Blob::typeId]);
+		flushPendingWALAddRecordsForType<Index>(added[Index::typeId]);
+		flushPendingWALAddRecordsForType<State>(added[State::typeId]);
+
 		const auto &changes = txnContext_.pendingWalChanges();
-		flushPendingWALRecordsForType<Node>(changes);
-		flushPendingWALRecordsForType<Edge>(changes);
-		flushPendingWALRecordsForType<Property>(changes);
-		flushPendingWALRecordsForType<Blob>(changes);
-		flushPendingWALRecordsForType<Index>(changes);
-		flushPendingWALRecordsForType<State>(changes);
+		std::array<std::vector<const TransactionContext::PendingWalChange *>, getMaxEntityType() + 1> changesByType;
+		for (auto &[key, change]: changes) {
+			(void) key;
+			if (change.entityType < changesByType.size()) {
+				changesByType[change.entityType].push_back(&change);
+			}
+		}
+
+		flushPendingWALRecordsForType<Node>(changesByType[Node::typeId]);
+		flushPendingWALRecordsForType<Edge>(changesByType[Edge::typeId]);
+		flushPendingWALRecordsForType<Property>(changesByType[Property::typeId]);
+		flushPendingWALRecordsForType<Blob>(changesByType[Blob::typeId]);
+		flushPendingWALRecordsForType<Index>(changesByType[Index::typeId]);
+		flushPendingWALRecordsForType<State>(changesByType[State::typeId]);
 	}
 
 	template<typename EntityType>
-	void DataManager::flushPendingWALRecordsForType(const TransactionContext::PendingWalChangeMap &changes) const {
+	void DataManager::flushPendingWALAddRecordsForType(std::span<const int64_t> entityIds) const {
+		if (entityIds.empty()) {
+			return;
+		}
+
+		WalEntityViewBatchWriter<EntityType> writer(
+				txnContext_, EntityChangeType::CHANGE_ADDED, entityIds.size());
+		const auto entityType = static_cast<uint8_t>(EntityType::typeId);
+		const bool hasCanceledAdds = txnContext_.hasCanceledPendingWalAdds(entityType);
+		persistenceManager_->visitDirtyInfos<EntityType>(
+				entityIds,
+				[&](int64_t entityId, const DirtyEntityInfo<EntityType> *dirtyInfo) {
+					if (hasCanceledAdds && !txnContext_.wasEntityAddedInActiveTransaction(entityType, entityId)) {
+						return;
+					}
+					if (!dirtyInfo || dirtyInfo->changeType == EntityChangeType::CHANGE_DELETED ||
+						!dirtyInfo->backup.has_value()) {
+						return;
+					}
+					writer.add(*dirtyInfo->backup);
+				});
+		writer.flush();
+	}
+
+	template<typename EntityType>
+	void DataManager::flushPendingWALRecordsForType(
+			std::span<const TransactionContext::PendingWalChange *const> changes) const {
 		const auto entityType = static_cast<uint8_t>(EntityType::typeId);
 		std::vector<int64_t> ids;
 		std::vector<const TransactionContext::PendingWalChange *> typedChanges;
@@ -1119,14 +1240,13 @@ namespace graph::storage {
 		size_t modifiedCount = 0;
 		size_t deletedCount = 0;
 
-		for (const auto &[key, change]: changes) {
-			(void) key;
-			if (change.entityType != entityType) {
+		for (const auto *changePtr: changes) {
+			if (!changePtr || changePtr->entityType != entityType) {
 				continue;
 			}
-			ids.push_back(change.entityId);
-			typedChanges.push_back(&change);
-			switch (change.changeType) {
+			ids.push_back(changePtr->entityId);
+			typedChanges.push_back(changePtr);
+			switch (changePtr->changeType) {
 				case EntityChangeType::CHANGE_ADDED:
 					++addedCount;
 					break;
@@ -1143,14 +1263,37 @@ namespace graph::storage {
 			return;
 		}
 
+		std::vector<wal::WALEntityChangeView> stagedViews;
+		std::vector<int64_t> materializedIds;
+		std::vector<const TransactionContext::PendingWalChange *> materializedChanges;
+		stagedViews.reserve(typedChanges.size());
+		materializedIds.reserve(ids.size());
+		materializedChanges.reserve(typedChanges.size());
+		for (const auto *changePtr: typedChanges) {
+			if (changePtr->serializedData.empty()) {
+				materializedIds.push_back(changePtr->entityId);
+				materializedChanges.push_back(changePtr);
+				continue;
+			}
+			stagedViews.push_back({changePtr->entityType,
+								   static_cast<uint8_t>(changePtr->changeType),
+								   changePtr->entityId,
+								   changePtr->serializedData.data(),
+								   static_cast<uint32_t>(changePtr->serializedData.size())});
+		}
+		txnContext_.flushWalChangeViews(stagedViews);
+		if (materializedIds.empty()) {
+			return;
+		}
+
 		WalEntityViewBatchWriter<EntityType> added(txnContext_, EntityChangeType::CHANGE_ADDED, addedCount);
 		WalEntityViewBatchWriter<EntityType> modified(txnContext_, EntityChangeType::CHANGE_MODIFIED, modifiedCount);
 		WalEntityViewBatchWriter<EntityType> deleted(txnContext_, EntityChangeType::CHANGE_DELETED, deletedCount);
 		size_t changeIndex = 0;
 
 		persistenceManager_->visitDirtyInfos<EntityType>(
-				ids, [&](int64_t, const DirtyEntityInfo<EntityType> *dirtyInfo) {
-					const auto &change = *typedChanges[changeIndex++];
+				materializedIds, [&](int64_t, const DirtyEntityInfo<EntityType> *dirtyInfo) {
+					const auto &change = *materializedChanges[changeIndex++];
 					if (!dirtyInfo || !dirtyInfo->backup.has_value()) {
 						if (change.changeType == EntityChangeType::CHANGE_DELETED) {
 							txnContext_.flushSerializedWalChange(change);
@@ -1403,6 +1546,60 @@ namespace graph::storage {
 	template Blob DataManager::loadEntityDirect<Blob>(int64_t);
 	template Index DataManager::loadEntityDirect<Index>(int64_t);
 	template State DataManager::loadEntityDirect<State>(int64_t);
+
+	Edge DataManager::getEdgeForAdjacency(int64_t id) const {
+		if (id <= 0) {
+			return make_inactive<Edge>();
+		}
+
+		if (const auto *snapshot = currentSnapshot_; snapshot != nullptr) {
+			const auto &edges = getSnapshotMap<Edge>(*snapshot);
+			if (const auto it = edges.find(id); it != edges.end() && it->second.backup.has_value()) {
+				return *it->second.backup;
+			}
+		}
+
+		if (auto dirtyInfo = persistenceManager_->getDirtyInfo<Edge>(id);
+			dirtyInfo.has_value() && dirtyInfo->backup.has_value()) {
+			return *dirtyInfo->backup;
+		}
+
+		const uint64_t segmentOffset = findSegmentForEntityId<Edge>(id);
+		if (segmentOffset == 0) {
+			return make_inactive<Edge>();
+		}
+
+		if (const Page *page = pagePool_->getPage(segmentOffset); page != nullptr) {
+			return deserializeEntityFromPage<Edge>(*page, id);
+		}
+
+		const SegmentHeader header = segmentTracker_->getSegmentHeader(segmentOffset);
+		const auto relativePosition = static_cast<uint64_t>(id - header.start_id);
+		if (relativePosition >= header.used) {
+			return make_inactive<Edge>();
+		}
+
+		const auto entityOffset = static_cast<int64_t>(
+				segmentOffset + sizeof(SegmentHeader) + relativePosition * Edge::getTotalSize());
+		char buf[Edge::getTotalSize()];
+		if (hasPreadSupport()) {
+			const ssize_t n = preadBytes(buf, sizeof(buf), entityOffset);
+			if (n < static_cast<ssize_t>(sizeof(buf))) {
+				return make_inactive<Edge>();
+			}
+		} else {
+			file_->seekg(entityOffset);
+			file_->read(buf, static_cast<std::streamsize>(sizeof(buf)));
+			if (file_->fail() || file_->gcount() < static_cast<std::streamsize>(sizeof(buf))) {
+				return make_inactive<Edge>();
+			}
+		}
+
+		membuf mb(buf, sizeof(buf));
+		std::istream stream(&mb);
+		Edge edge = Edge::deserialize(stream);
+		return edge.getId() == id ? edge : make_inactive<Edge>();
+	}
 
 	template<typename EntityType>
 	std::vector<EntityType> DataManager::bulkLoadEntities(int64_t filterStartId, int64_t filterEndId) const {

@@ -20,6 +20,8 @@
 
 #include "graph/core/Property.hpp"
 #include <cstring>
+#include <istream>
+#include <streambuf>
 #include "graph/storage/IDAllocator.hpp"
 #include "graph/utils/Serializer.hpp"
 
@@ -32,9 +34,65 @@ namespace graph {
 		metadata.isActive = true;
 	}
 
-	bool Property::hasPropertyValue(const std::string &key) const { return values.contains(key); }
+	namespace {
+		class FixedMemoryInputBuffer : public std::streambuf {
+		public:
+			FixedMemoryInputBuffer(const char *data, size_t size) {
+				char *begin = const_cast<char *>(data);
+				setg(begin, begin, begin + size);
+			}
+		};
+	} // namespace
 
-	const std::unordered_map<std::string, PropertyValue> &Property::getPropertyValues() const { return values; }
+	void Property::ensureValuesDecoded() const {
+		if (serializedPayloadDecoded) {
+			return;
+		}
+
+		values.clear();
+		if (!serializedPropertyPayload.empty()) {
+			FixedMemoryInputBuffer buffer(serializedPropertyPayload.data(), serializedPropertyPayload.size());
+			std::istream stream(&buffer);
+			const auto propertyCount = utils::Serializer::readPOD<uint32_t>(stream);
+			for (uint32_t i = 0; i < propertyCount; ++i) {
+				std::string key = utils::Serializer::deserialize<std::string>(stream);
+				PropertyValue value = utils::Serializer::deserialize<PropertyValue>(stream);
+				values.emplace(std::move(key), std::move(value));
+			}
+		}
+		serializedPayloadDecoded = true;
+	}
+
+	void Property::clearSerializedPropertyPayload() {
+		serializedPropertyPayload.clear();
+		serializedPayloadDecoded = true;
+	}
+
+	void Property::setProperties(const std::unordered_map<std::string, PropertyValue> &newValues) {
+		values = newValues;
+		clearSerializedPropertyPayload();
+	}
+
+	void Property::setProperties(std::unordered_map<std::string, PropertyValue> &&newValues) {
+		values = std::move(newValues);
+		clearSerializedPropertyPayload();
+	}
+
+	void Property::setSerializedPropertyPayload(std::vector<char> payload) {
+		values.clear();
+		serializedPropertyPayload = std::move(payload);
+		serializedPayloadDecoded = false;
+	}
+
+	bool Property::hasPropertyValue(const std::string &key) const {
+		ensureValuesDecoded();
+		return values.contains(key);
+	}
+
+	const std::unordered_map<std::string, PropertyValue> &Property::getPropertyValues() const {
+		ensureValuesDecoded();
+		return values;
+	}
 
 	void Property::serialize(std::ostream &os) const {
 		// Write metadata fields individually
@@ -42,6 +100,11 @@ namespace graph {
 		utils::Serializer::writePOD(os, metadata.entityId);
 		utils::Serializer::writePOD(os, metadata.entityType);
 		utils::Serializer::writePOD(os, metadata.isActive);
+
+		if (!serializedPropertyPayload.empty()) {
+			os.write(serializedPropertyPayload.data(), static_cast<std::streamsize>(serializedPropertyPayload.size()));
+			return;
+		}
 
 		// Write property values
 		utils::Serializer::writePOD(os, static_cast<uint32_t>(values.size()));
@@ -109,6 +172,10 @@ namespace graph {
 		size += sizeof(metadata.entityType); // uint32_t
 		size += sizeof(metadata.isActive); // bool
 
+		if (!serializedPropertyPayload.empty()) {
+			return size + serializedPropertyPayload.size();
+		}
+
 		// Size for property count
 		size += sizeof(uint32_t); // For property count
 
@@ -119,7 +186,7 @@ namespace graph {
 			size += key.size(); // Key string content
 
 			// Property value
-			size += property_utils::getPropertyValueSize(value);
+			size += utils::getSerializedSize(value);
 		}
 
 		return size;
