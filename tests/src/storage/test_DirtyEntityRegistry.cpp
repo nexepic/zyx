@@ -19,6 +19,8 @@
  **/
 
 #include <gtest/gtest.h>
+#include <array>
+#include <span>
 #include <thread>
 #include <vector>
 #include "graph/core/Node.hpp"
@@ -59,6 +61,28 @@ TEST_F(DirtyEntityRegistryTest, BasicUpsertAndGet) {
 
 	ASSERT_TRUE(dirtyInfo->backup.has_value());
 	EXPECT_EQ(dirtyInfo->backup->getLabelId(), 10);
+}
+
+TEST_F(DirtyEntityRegistryTest, BatchUpsertReplacesActiveEntriesOnce) {
+	std::vector<Node> nodes;
+	nodes.push_back(createNode(1, 10));
+	nodes.push_back(createNode(2, 20));
+	registry.upsertBatch(nodes, EntityChangeType::CHANGE_ADDED);
+
+	EXPECT_EQ(registry.size(), 2UL);
+	EXPECT_TRUE(registry.contains(1));
+	EXPECT_TRUE(registry.contains(2));
+
+	std::vector<Node> replacements;
+	replacements.push_back(createNode(2, 30));
+	registry.upsertBatch(replacements, EntityChangeType::CHANGE_MODIFIED);
+
+	EXPECT_EQ(registry.size(), 2UL);
+	auto dirtyInfo = registry.getInfo(2);
+	ASSERT_TRUE(dirtyInfo.has_value());
+	ASSERT_TRUE(dirtyInfo->backup.has_value());
+	EXPECT_EQ(dirtyInfo->changeType, EntityChangeType::CHANGE_MODIFIED);
+	EXPECT_EQ(dirtyInfo->backup->getLabelId(), 30);
 }
 
 // 2. Snapshot Creation (Moving Active to Flushing)
@@ -143,6 +167,27 @@ TEST_F(DirtyEntityRegistryTest, GetAllDirtyInfosMerge) {
 		}
 	}
 	EXPECT_TRUE(found1 && found2 && found3);
+}
+
+TEST_F(DirtyEntityRegistryTest, DetectsDirtyChangeTypesWithoutMaterializingInfos) {
+	constexpr std::array addOnly{EntityChangeType::CHANGE_ADDED};
+	constexpr std::array modifiedOnly{EntityChangeType::CHANGE_MODIFIED};
+	constexpr std::array deletedOnly{EntityChangeType::CHANGE_DELETED};
+
+	EXPECT_FALSE(registry.hasDirtyInfoOfTypes(addOnly));
+
+	registry.upsert(createInfo(1, EntityChangeType::CHANGE_ADDED, 10));
+	EXPECT_TRUE(registry.hasDirtyInfoOfTypes(addOnly));
+	EXPECT_FALSE(registry.hasDirtyInfoOfTypes(modifiedOnly));
+
+	registry.createFlushSnapshot();
+	registry.upsert(createInfo(1, EntityChangeType::CHANGE_MODIFIED, 20));
+	EXPECT_TRUE(registry.hasDirtyInfoOfTypes(modifiedOnly));
+	EXPECT_FALSE(registry.hasDirtyInfoOfTypes(deletedOnly));
+
+	registry.upsert(createInfo(2, EntityChangeType::CHANGE_DELETED, 30));
+	EXPECT_TRUE(registry.hasDirtyInfoOfTypes(deletedOnly));
+	EXPECT_TRUE(registry.hasDirtyInfoOfTypes(std::span<const EntityChangeType>{}));
 }
 
 // 6. Delete Logic
@@ -819,4 +864,30 @@ TYPED_TEST(DirtyEntityRegistryTypedTest, ActiveOverridesFlushing) {
 	auto info = this->registry.getInfo(1);
 	ASSERT_TRUE(info.has_value());
 	EXPECT_EQ(info->changeType, EntityChangeType::CHANGE_DELETED);
+}
+
+TYPED_TEST(DirtyEntityRegistryTypedTest, VisitInfosPreservesOrderAcrossActiveFlushingAndMissing) {
+	this->registry.upsert(this->makeInfo(1, EntityChangeType::CHANGE_ADDED));
+	this->registry.createFlushSnapshot();
+	this->registry.upsert(this->makeInfo(1, EntityChangeType::CHANGE_MODIFIED));
+	this->registry.upsert(this->makeInfo(2, EntityChangeType::CHANGE_ADDED));
+
+	const std::array<int64_t, 3> ids{1, 2, 99};
+	std::vector<int64_t> visitedIds;
+	std::vector<bool> found;
+	std::vector<EntityChangeType> changeTypes;
+
+	this->registry.visitInfos(std::span<const int64_t>(ids), [&](int64_t id, const DirtyEntityInfo<TypeParam> *info) {
+		visitedIds.push_back(id);
+		found.push_back(info != nullptr);
+		if (info) {
+			changeTypes.push_back(info->changeType);
+		}
+	});
+
+	EXPECT_EQ(visitedIds, (std::vector<int64_t>{1, 2, 99}));
+	EXPECT_EQ(found, (std::vector<bool>{true, true, false}));
+	ASSERT_EQ(changeTypes.size(), 2UL);
+	EXPECT_EQ(changeTypes[0], EntityChangeType::CHANGE_MODIFIED);
+	EXPECT_EQ(changeTypes[1], EntityChangeType::CHANGE_ADDED);
 }

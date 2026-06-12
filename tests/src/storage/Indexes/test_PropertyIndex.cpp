@@ -1815,26 +1815,28 @@ TEST_F(PropertyIndexTest, SaveState_EmptyIndexNoop) {
 // =========================================================================
 
 /**
- * @brief Test addProperty with UNKNOWN valueType (e.g., LIST type).
- * Covers: addProperty line 200 - valueType == UNKNOWN early return.
- * A LIST PropertyValue has type LIST which maps to UNKNOWN in getPropertyType.
+ * @brief Test addProperty with a non-scalar LIST value.
+ * Non-scalar values are not supported by scalar property indexes, so the
+ * property is skipped without changing the registered key type.
  */
-TEST_F(PropertyIndexTest, AddProperty_ListTypeThrows) {
-	// LIST type is not indexable - getRootMapForType throws for LIST
+TEST_F(PropertyIndexTest, AddProperty_ListTypeSkipsWithoutChangingType) {
+	propertyIndex->createIndex("list_key");
+
 	std::vector<graph::PropertyValue> listVal;
 	listVal.push_back(graph::PropertyValue(int64_t(1)));
 	listVal.push_back(graph::PropertyValue(int64_t(2)));
 	graph::PropertyValue listProp(listVal);
 
-	// Adding a LIST type throws because there is no tree manager for LIST
-	EXPECT_THROW(propertyIndex->addProperty(1, "list_key", listProp), std::invalid_argument);
+	EXPECT_NO_THROW(propertyIndex->addProperty(1, "list_key", listProp));
+	EXPECT_EQ(propertyIndex->getIndexedKeyType("list_key"), graph::PropertyType::UNKNOWN);
 }
 
 /**
- * @brief Test addPropertiesBatch with MAP type values (which also have no tree manager).
- * Covers: addPropertiesBatch - MAP/LIST types cause issues in batch too.
+ * @brief Test addPropertiesBatch with MAP type values.
+ * MAP values are not supported by scalar property indexes and should be skipped
+ * without transitioning an empty index definition to MAP.
  */
-TEST_F(PropertyIndexTest, AddPropertiesBatch_MapTypeThrows) {
+TEST_F(PropertyIndexTest, AddPropertiesBatch_MapTypeSkipsWithoutChangingType) {
 	propertyIndex->createIndex("map_batch");
 
 	graph::PropertyValue::MapType mapVal;
@@ -1843,8 +1845,8 @@ TEST_F(PropertyIndexTest, AddPropertiesBatch_MapTypeThrows) {
 	std::vector<std::tuple<int64_t, std::string, graph::PropertyValue>> batch;
 	batch.emplace_back(1, "map_batch", graph::PropertyValue(mapVal));
 
-	// MAP type has no tree manager, should throw
-	EXPECT_THROW(propertyIndex->addPropertiesBatch(batch), std::invalid_argument);
+	EXPECT_NO_THROW(propertyIndex->addPropertiesBatch(batch));
+	EXPECT_EQ(propertyIndex->getIndexedKeyType("map_batch"), graph::PropertyType::UNKNOWN);
 }
 
 /**
@@ -1918,22 +1920,15 @@ TEST_F(PropertyIndexTest, FindRange_BooleanTypeReturnsEmpty) {
 	EXPECT_TRUE(results.empty());
 }
 
-// =========================================================================
-// Branch Coverage: Batch with LIST type triggering null treeManager
-// =========================================================================
-
 /**
- * @brief Test addPropertiesBatch where a LIST-typed value gets through classification.
- * Covers: PropertyIndex.cpp line 275 (getTreeManagerForType for non-standard type)
- * and line 276 (getRootMapForType for LIST throws before treeManager null check).
- *
- * Note: getRootMapForType throws for LIST before the !treeManager null check
- * can be reached, so line 278 is unreachable dead code.
+ * @brief Test addPropertiesBatch where a LIST-typed value is skipped.
+ * LIST values are unsupported by scalar property indexes, so the key should
+ * remain UNKNOWN and no root map should be touched.
  */
-TEST_F(PropertyIndexTest, AddPropertiesBatch_ListTypeThrowsFromRootMap) {
+TEST_F(PropertyIndexTest, AddPropertiesBatch_ListTypeSkipsWithoutChangingType) {
 	const std::string key = "list_batch_key";
 
-	// Register the key as UNKNOWN so it can transition to LIST type
+	// Register the key as UNKNOWN; unsupported values must not specialize it.
 	propertyIndex->createIndex(key);
 	EXPECT_EQ(propertyIndex->getIndexedKeyType(key), graph::PropertyType::UNKNOWN);
 
@@ -1945,9 +1940,8 @@ TEST_F(PropertyIndexTest, AddPropertiesBatch_ListTypeThrowsFromRootMap) {
 	std::vector<std::tuple<int64_t, std::string, graph::PropertyValue>> batch;
 	batch.emplace_back(1, key, graph::PropertyValue(listVal));
 
-	// LIST type transitions from UNKNOWN in classification phase,
-	// but getRootMapForType(LIST) throws in insertion phase.
-	EXPECT_THROW(propertyIndex->addPropertiesBatch(batch), std::invalid_argument);
+	EXPECT_NO_THROW(propertyIndex->addPropertiesBatch(batch));
+	EXPECT_EQ(propertyIndex->getIndexedKeyType(key), graph::PropertyType::UNKNOWN);
 }
 
 /**

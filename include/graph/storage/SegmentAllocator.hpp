@@ -26,6 +26,7 @@ namespace graph::storage {
 
 		static uint64_t findMaxId(uint32_t type, const std::shared_ptr<SegmentTracker> &tracker);
 		uint64_t allocateSegment(uint32_t type, uint32_t capacity) const;
+		uint64_t allocateSegmentWithStartId(uint32_t type, uint32_t capacity, int64_t startId) const;
 		void deallocateSegment(uint64_t offset) const;
 
 		void updateFileHeaderChainHeads() const;

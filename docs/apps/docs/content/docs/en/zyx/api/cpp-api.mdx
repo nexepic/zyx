@@ -51,7 +51,7 @@ params["age"] = int64_t(30);
 zyx::Result result = db.execute(
     "CREATE (n:Person {name: $name, age: $age})", params);
 
-// Read query (uses read-only fast path)
+// Read query (uses the read-only execution path)
 zyx::Result result = db.execute("MATCH (n:Person) RETURN n.name, n.age");
 while (result.hasNext()) {
     auto name = result.get("n.name");
@@ -124,6 +124,22 @@ auto edgeIds = db.createEdges({
 | `createNodes` | `vector<int64_t> createNodes(const string& label, const vector<unordered_map<string, Value>>& propsList) const` | Batch-create nodes with the same label. Returns list of IDs. |
 | `createEdge` | `int64_t createEdge(int64_t sourceId, int64_t targetId, const string& edgeType, const unordered_map<string, Value>& props = {}) const` | Create an edge by node IDs. Returns edge ID. |
 | `createEdges` | `vector<int64_t> createEdges(const vector<tuple<int64_t, int64_t, string, unordered_map<string, Value>>>& edges) const` | Batch-create edges. Returns list of edge IDs. |
+
+### Schema APIs
+
+Use the schema APIs when an embedding application already knows the indexes it needs and wants to avoid issuing
+one Cypher DDL statement per property.
+
+```cpp
+bool ok = db.createNodePropertyIndexes("User", {"id", "country", "age"});
+if (!ok) {
+    throw std::runtime_error("failed to create User indexes");
+}
+```
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `createNodePropertyIndexes` | `bool createNodePropertyIndexes(const string& label, const vector<string>& properties) const` | Create multiple node property indexes for one label with one coordinated schema operation. Returns `true` only when every requested index is created. |
 
 ### Graph Algorithms
 

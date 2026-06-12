@@ -588,6 +588,32 @@ TEST(PropertyEntityScanDetailTest, PredicateSpecsCoverTypedAndFallbackOperators)
 			view, predicateSpec(key, before, PropertyEntityPredicateOp::PEP_RANGE_CLOSED, &upperInt)));
 	EXPECT_FALSE(stringViewSatisfiesPredicate(
 			view, predicateSpec(key, upperInt, PropertyEntityPredicateOp::PEP_EQ)));
+
+	const PropertyValue earlierDate(TemporalDate{10});
+	const PropertyValue laterDate(TemporalDate{30});
+	EXPECT_TRUE(typedValueSatisfiesPredicate(TemporalDate{20},
+											 predicateSpec(key, earlierDate, PropertyEntityPredicateOp::PEP_GE)));
+	EXPECT_TRUE(typedValueSatisfiesPredicate(TemporalDate{20},
+											 predicateSpec(key, earlierDate, PropertyEntityPredicateOp::PEP_RANGE_CLOSED,
+														   &laterDate)));
+
+	const PropertyValue earlierDateTime(TemporalDateTime{100});
+	const PropertyValue currentDateTime(TemporalDateTime{200});
+	const PropertyValue laterDateTime(TemporalDateTime{300});
+	EXPECT_TRUE(typedValueSatisfiesPredicate(
+			TemporalDateTime{200}, predicateSpec(key, currentDateTime, PropertyEntityPredicateOp::PEP_EQ)));
+	EXPECT_TRUE(typedValueSatisfiesPredicate(
+			TemporalDateTime{200},
+			predicateSpec(key, earlierDateTime, PropertyEntityPredicateOp::PEP_RANGE_CLOSED, &laterDateTime)));
+
+	const PropertyValue shorterDuration(TemporalDuration{0, 1, 0});
+	const PropertyValue currentDuration(TemporalDuration{0, 2, 0});
+	const PropertyValue longerDuration(TemporalDuration{0, 3, 0});
+	EXPECT_TRUE(typedValueSatisfiesPredicate(
+			TemporalDuration{0, 2, 0}, predicateSpec(key, currentDuration, PropertyEntityPredicateOp::PEP_EQ)));
+	EXPECT_TRUE(typedValueSatisfiesPredicate(
+			TemporalDuration{0, 2, 0},
+			predicateSpec(key, shorterDuration, PropertyEntityPredicateOp::PEP_RANGE_CLOSED, &longerDuration)));
 }
 
 TEST(PropertyEntityScanDetailTest, RejectsTruncatedScalarAndContainerHelpers) {
@@ -680,11 +706,21 @@ TEST(PropertyEntityScanDetailTest, PredicateReadersHandleMissingKeysAndMismatche
 			predicateSpec(rankKey, upper, PropertyEntityPredicateOp::PEP_LE)};
 	auto matchingGroups = groupPredicateSpecExpectations(matchingSpecs);
 	EXPECT_TRUE(readPropertyEntityPredicateMatch(raw, matchingGroups, matchingSpecs.size()).value());
+	EXPECT_TRUE(readPropertyEntitySinglePredicateSpecMatch(
+						raw, predicateSpec(rankKey, lower, PropertyEntityPredicateOp::PEP_GE))
+						.value());
+	EXPECT_TRUE(readPropertyEntitySinglePredicateSpecMatch(
+						raw, predicateSpec(rankKey, lower, PropertyEntityPredicateOp::PEP_RANGE_CLOSED, &upper))
+						.value());
+	EXPECT_FALSE(readPropertyEntitySinglePredicateSpecMatch(
+						 raw, predicateSpec(missingKey, lower, PropertyEntityPredicateOp::PEP_GE))
+						 .value());
 
 	std::vector<PredicateSpecExpectation> failingSpecs{
 			predicateSpec(rankKey, tooLow, PropertyEntityPredicateOp::PEP_GT)};
 	auto failingGroups = groupPredicateSpecExpectations(failingSpecs);
 	EXPECT_FALSE(readPropertyEntityPredicateMatch(raw, failingGroups, failingSpecs.size()).value());
+	EXPECT_FALSE(readPropertyEntitySinglePredicateSpecMatch(raw, failingSpecs.front()).value());
 
 	const std::string boolBytes = serializePropertyValueBytes(PropertyValue(true));
 	const char *boolCursor = boolBytes.data();
@@ -693,6 +729,67 @@ TEST(PropertyEntityScanDetailTest, PredicateReadersHandleMissingKeysAndMismatche
 															   predicateSpec(rankKey, rankValue,
 																			 PropertyEntityPredicateOp::PEP_EQ))
 						 .value());
+
+	const PropertyValue dateLower(TemporalDate{40});
+	const PropertyValue dateUpper(TemporalDate{50});
+	const std::string dateBytes = serializePropertyValueBytes(PropertyValue(TemporalDate{42}));
+	const char *dateCursor = dateBytes.data();
+	const char *dateEnd = dateCursor + dateBytes.size();
+	EXPECT_TRUE(readSerializedPropertyValueSatisfiesPredicate(
+						dateCursor, dateEnd,
+						predicateSpec(rankKey, dateLower, PropertyEntityPredicateOp::PEP_RANGE_CLOSED, &dateUpper))
+						.value());
+	EXPECT_EQ(dateCursor, dateEnd);
+
+	const PropertyValue dateTimeLower(TemporalDateTime{40});
+	const std::string dateTimeBytes = serializePropertyValueBytes(PropertyValue(TemporalDateTime{42}));
+	const char *dateTimeCursor = dateTimeBytes.data();
+	const char *dateTimeEnd = dateTimeCursor + dateTimeBytes.size();
+	EXPECT_TRUE(readSerializedPropertyValueSatisfiesPredicate(
+						dateTimeCursor, dateTimeEnd,
+						predicateSpec(rankKey, dateTimeLower, PropertyEntityPredicateOp::PEP_GE))
+						.value());
+	EXPECT_EQ(dateTimeCursor, dateTimeEnd);
+
+	const PropertyValue durationLower(TemporalDuration{0, 1, 0});
+	const PropertyValue durationUpper(TemporalDuration{0, 3, 0});
+	const std::string durationBytes = serializePropertyValueBytes(PropertyValue(TemporalDuration{0, 2, 0}));
+	const char *durationCursor = durationBytes.data();
+	const char *durationEnd = durationCursor + durationBytes.size();
+	EXPECT_TRUE(readSerializedPropertyValueSatisfiesPredicate(
+						durationCursor, durationEnd,
+						predicateSpec(rankKey, durationLower, PropertyEntityPredicateOp::PEP_RANGE_CLOSED,
+									  &durationUpper))
+						.value());
+	EXPECT_EQ(durationCursor, durationEnd);
+}
+
+TEST(PropertyEntityScanDetailTest, PredicateReadersStopAfterAllRequestedPredicatesMatch) {
+	const std::string rankKey = "rank";
+	const std::string nameKey = "name";
+	const std::string brokenKey = "broken";
+	const PropertyValue rankValue(int64_t{42});
+	const PropertyValue nameValue("milo");
+	const auto raw = makeRawPropertyRecord({
+			{rankKey, serializePropertyValueBytes(rankValue)},
+			{nameKey, serializePropertyValueBytes(nameValue)},
+			{brokenKey, malformedStringValueBytes()},
+	});
+
+	std::vector<PredicateExpectation> equalityPredicates{
+			PredicateExpectation{&rankKey, compilePropertyValue(rankValue)},
+			PredicateExpectation{&nameKey, compilePropertyValue(nameValue)},
+	};
+	EXPECT_TRUE(readPropertyEntityPredicateMatch(raw.data(), equalityPredicates).value());
+
+	const PropertyValue rankLower(int64_t{40});
+	const PropertyValue nameUpper("z");
+	std::vector<PredicateSpecExpectation> specPredicates{
+			predicateSpec(rankKey, rankLower, PropertyEntityPredicateOp::PEP_GE),
+			predicateSpec(nameKey, nameUpper, PropertyEntityPredicateOp::PEP_LE),
+	};
+	const auto groups = groupPredicateSpecExpectations(specPredicates);
+	EXPECT_TRUE(readPropertyEntityPredicateMatch(raw.data(), groups, specPredicates.size()).value());
 }
 
 } // namespace graph::storage

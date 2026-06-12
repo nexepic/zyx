@@ -20,7 +20,9 @@
 #pragma once
 
 #include <condition_variable>
+#include <cstdint>
 #include <mutex>
+#include <span>
 #include <string>
 #include <vector>
 #include "WALRecord.hpp"
@@ -40,6 +42,14 @@ namespace graph::storage::wal {
 		std::vector<uint8_t> serializedData;
 	};
 
+	struct WALEntityChangeView {
+		uint8_t entityType;
+		uint8_t changeType;
+		int64_t entityId;
+		const uint8_t *serializedData = nullptr;
+		uint32_t serializedSize = 0;
+	};
+
 	/**
 	 * Write-Ahead Log manager for transaction durability.
 	 *
@@ -49,16 +59,22 @@ namespace graph::storage::wal {
 	 */
 	class WALManager {
 	public:
+		enum class CloseMode {
+			WCM_KEEP_FILE,
+			WCM_REMOVE_FILE,
+		};
+
 		WALManager() = default;
 		~WALManager();
 
 		void open(const std::string &dbPath);
-		void close();
+		void close(CloseMode mode = CloseMode::WCM_KEEP_FILE);
 
 		void writeBegin(uint64_t txnId);
 		void writeEntityChange(uint64_t txnId, uint8_t entityType, uint8_t changeType, int64_t entityId,
 							   const std::vector<uint8_t> &serializedData);
 		void writeEntityChanges(uint64_t txnId, const std::vector<WALEntityChange> &changes);
+		void writeEntityChangeViews(uint64_t txnId, std::span<const WALEntityChangeView> changes);
 		void writeCommit(uint64_t txnId);
 		void writeRollback(uint64_t txnId);
 		void sync();
@@ -70,6 +86,7 @@ namespace graph::storage::wal {
 		[[nodiscard]] std::string getWALPath() const { return walPath_; }
 
 		void setGroupCommitDelayUs(uint32_t delayUs) { groupCommitDelayUs_ = delayUs; }
+		[[nodiscard]] uint32_t getGroupCommitDelayUs() const { return groupCommitDelayUs_; }
 		void setBufferSize(size_t size) { walBufferSize_ = size; }
 		void setAutoCheckpointThreshold(size_t bytes) { autoCheckpointThreshold_ = bytes; }
 		[[nodiscard]] size_t getAutoCheckpointThreshold() const { return autoCheckpointThreshold_; }
@@ -85,7 +102,7 @@ namespace graph::storage::wal {
 
 		// Write buffer
 		std::vector<uint8_t> writeBuffer_;
-		size_t walBufferSize_ = 65536; // 64KB default
+		size_t walBufferSize_ = 1024 * 1024; // 1 MiB default; keeps bulk WAL appends coalesced.
 
 		// Group commit coordination
 		std::mutex commitMutex_;
@@ -95,7 +112,7 @@ namespace graph::storage::wal {
 		bool commitInProgress_ = false;
 
 		// Group commit timing
-		uint32_t groupCommitDelayUs_ = 1000; // 1ms max wait
+		uint32_t groupCommitDelayUs_ = 0; // opt-in: TransactionManager serializes writers by default
 
 		// Auto-checkpoint threshold (default 1MB)
 		size_t autoCheckpointThreshold_ = 1048576;
@@ -104,6 +121,7 @@ namespace graph::storage::wal {
 		void appendRecordLocked(WALRecordType type, uint64_t txnId, const uint8_t *data, uint32_t dataSize);
 		void appendEntityChangeRecordLocked(uint64_t txnId, uint8_t entityType, uint8_t changeType, int64_t entityId,
 											const uint8_t *data, uint32_t dataSize);
+		void ensureAppendCapacityLocked(size_t appendSize);
 		void appendBytesLocked(const uint8_t *data, size_t size);
 		void writeHeader();
 		[[nodiscard]] bool validateHeader();

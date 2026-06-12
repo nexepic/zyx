@@ -19,19 +19,52 @@
  **/
 
 #include "graph/traversal/RelationshipTraversal.hpp"
+#include <limits>
+#include <optional>
+#include <unordered_map>
 #include <unordered_set>
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/data/DataManager.hpp"
+#include "graph/storage/data/EdgeManager.hpp"
 
 namespace graph::traversal {
+	namespace {
+		constexpr size_t kNoBatchEdgeIndex = std::numeric_limits<size_t>::max();
+
+		struct LinkListBuildState {
+			int64_t currentHeadId = 0;
+			size_t currentHeadIndex = kNoBatchEdgeIndex;
+			bool nodeLoaded = false;
+		};
+
+		struct NodeLinkUpdate {
+			Node before;
+			Node after;
+		};
+
+		struct EdgeLinkUpdate {
+			Edge before;
+			Edge after;
+		};
+	} // namespace
 
 	RelationshipTraversal::RelationshipTraversal(const std::shared_ptr<storage::DataManager> &dataManager) :
 		dataManager_(dataManager) {}
 
 	std::vector<Edge> RelationshipTraversal::getOutgoingEdges(int64_t nodeId) const {
 		std::vector<Edge> outEdges;
+		visitOutgoingEdges(nodeId, [&](const Edge &edge) {
+			outEdges.push_back(edge);
+			return true;
+		});
+		return outEdges;
+	}
+
+	size_t RelationshipTraversal::visitOutgoingEdges(int64_t nodeId, const EdgeVisitor &visitor) const {
+		size_t visitedCount = 0;
 		const auto dataManager = dataManager_.lock();
-		if (!dataManager) {
-			return outEdges;
+		if (!dataManager || !visitor) {
+			return visitedCount;
 		}
 
 		const Node node = dataManager->getNode(nodeId);
@@ -49,19 +82,32 @@ namespace graph::traversal {
 			visitedEdgeIds.insert(currentEdgeId);
 
 			Edge edge = dataManager->getEdge(currentEdgeId);
+			const int64_t nextEdgeId = edge.getNextOutEdgeId();
 			if (edge.isActive()) {
-				outEdges.push_back(edge);
+				++visitedCount;
+				if (!visitor(edge)) {
+					break;
+				}
 			}
-			currentEdgeId = edge.getNextOutEdgeId();
+			currentEdgeId = nextEdgeId;
 		}
-		return outEdges;
+		return visitedCount;
 	}
 
 	std::vector<Edge> RelationshipTraversal::getIncomingEdges(int64_t nodeId) const {
 		std::vector<Edge> inEdges;
+		visitIncomingEdges(nodeId, [&](const Edge &edge) {
+			inEdges.push_back(edge);
+			return true;
+		});
+		return inEdges;
+	}
+
+	size_t RelationshipTraversal::visitIncomingEdges(int64_t nodeId, const EdgeVisitor &visitor) const {
+		size_t visitedCount = 0;
 		const auto dataManager = dataManager_.lock();
-		if (!dataManager) {
-			return inEdges;
+		if (!dataManager || !visitor) {
+			return visitedCount;
 		}
 
 		const Node node = dataManager->getNode(nodeId);
@@ -79,12 +125,16 @@ namespace graph::traversal {
 			visitedEdgeIds.insert(currentEdgeId);
 
 			Edge edge = dataManager->getEdge(currentEdgeId);
+			const int64_t nextEdgeId = edge.getNextInEdgeId();
 			if (edge.isActive()) {
-				inEdges.push_back(edge);
+				++visitedCount;
+				if (!visitor(edge)) {
+					break;
+				}
 			}
-			currentEdgeId = edge.getNextInEdgeId();
+			currentEdgeId = nextEdgeId;
 		}
-		return inEdges;
+		return visitedCount;
 	}
 
 	std::vector<Edge> RelationshipTraversal::getAllConnectedEdges(int64_t nodeId) const {
@@ -94,6 +144,21 @@ namespace graph::traversal {
 		// Combine the two vectors
 		outEdges.insert(outEdges.end(), inEdges.begin(), inEdges.end());
 		return outEdges;
+	}
+
+	size_t RelationshipTraversal::visitAllConnectedEdges(int64_t nodeId, const EdgeVisitor &visitor) const {
+		if (!visitor) {
+			return 0;
+		}
+		bool keepGoing = true;
+		size_t visitedCount = visitOutgoingEdges(nodeId, [&](const Edge &edge) {
+			keepGoing = visitor(edge);
+			return keepGoing;
+		});
+		if (keepGoing) {
+			visitedCount += visitIncomingEdges(nodeId, visitor);
+		}
+		return visitedCount;
 	}
 
 	std::vector<Node> RelationshipTraversal::getConnectedTargetNodes(int64_t nodeId) const {
@@ -198,6 +263,177 @@ namespace graph::traversal {
 		}
 
 		dataManager->updateEdge(edge);
+	}
+
+	RelationshipBatchLinkUpdates RelationshipTraversal::buildBatchLinks(std::vector<Edge> &edges) const {
+		RelationshipBatchLinkUpdates updates;
+		if (edges.empty()) {
+			return updates;
+		}
+
+		auto dataManager = dataManager_.lock();
+		if (!dataManager) {
+			return updates;
+		}
+
+		std::unordered_map<int64_t, LinkListBuildState> outStates;
+		std::unordered_map<int64_t, LinkListBuildState> inStates;
+		std::unordered_map<int64_t, NodeLinkUpdate> nodeUpdates;
+		std::unordered_map<int64_t, EdgeLinkUpdate> oldHeadUpdates;
+		outStates.reserve(edges.size());
+		inStates.reserve(edges.size());
+
+		auto getNodeForUpdate = [&](int64_t nodeId) -> std::optional<std::reference_wrapper<Node>> {
+			auto [it, inserted] = nodeUpdates.try_emplace(nodeId);
+			if (inserted) {
+				it->second.before = dataManager->getNode(nodeId);
+				if (it->second.before.getId() == 0) {
+					nodeUpdates.erase(it);
+					return std::nullopt;
+				}
+				it->second.after = it->second.before;
+			}
+			return it->second.after;
+		};
+
+		auto getOldHeadForUpdate = [&](int64_t edgeId) -> std::optional<std::reference_wrapper<Edge>> {
+			if (edgeId == 0) {
+				return std::nullopt;
+			}
+			auto [it, inserted] = oldHeadUpdates.try_emplace(edgeId);
+			if (inserted) {
+				it->second.before = dataManager->getEdge(edgeId);
+				if (it->second.before.getId() == 0) {
+					oldHeadUpdates.erase(it);
+					return std::nullopt;
+				}
+				it->second.after = it->second.before;
+			}
+			return it->second.after;
+		};
+
+		auto appendToOutgoingList = [&](size_t index) {
+			Edge &edge = edges[index];
+			auto nodeRef = getNodeForUpdate(edge.getSourceNodeId());
+			LinkListBuildState &state = outStates[edge.getSourceNodeId()];
+			if (!state.nodeLoaded) {
+				state.currentHeadId = nodeRef.has_value() ? nodeRef->get().getFirstOutEdgeId() : int64_t{0};
+				state.currentHeadIndex = kNoBatchEdgeIndex;
+				state.nodeLoaded = true;
+			}
+
+			edge.setPrevOutEdgeId(0);
+			edge.setNextOutEdgeId(state.currentHeadId);
+			if (state.currentHeadIndex != kNoBatchEdgeIndex) {
+				edges[state.currentHeadIndex].setPrevOutEdgeId(edge.getId());
+			} else if (auto oldHead = getOldHeadForUpdate(state.currentHeadId)) {
+				oldHead->get().setPrevOutEdgeId(edge.getId());
+			}
+
+			state.currentHeadId = edge.getId();
+			state.currentHeadIndex = index;
+		};
+
+		auto appendToIncomingList = [&](size_t index) {
+			Edge &edge = edges[index];
+			auto nodeRef = getNodeForUpdate(edge.getTargetNodeId());
+			LinkListBuildState &state = inStates[edge.getTargetNodeId()];
+			if (!state.nodeLoaded) {
+				state.currentHeadId = nodeRef.has_value() ? nodeRef->get().getFirstInEdgeId() : int64_t{0};
+				state.currentHeadIndex = kNoBatchEdgeIndex;
+				state.nodeLoaded = true;
+			}
+
+			edge.setPrevInEdgeId(0);
+			edge.setNextInEdgeId(state.currentHeadId);
+			if (state.currentHeadIndex != kNoBatchEdgeIndex) {
+				edges[state.currentHeadIndex].setPrevInEdgeId(edge.getId());
+			} else if (auto oldHead = getOldHeadForUpdate(state.currentHeadId)) {
+				oldHead->get().setPrevInEdgeId(edge.getId());
+			}
+
+			state.currentHeadId = edge.getId();
+			state.currentHeadIndex = index;
+		};
+
+		{
+			debug::ScopedPerfTimer timer("relationship_traversal.link_edges_batch.prepare");
+			for (size_t index = 0; index < edges.size(); ++index) {
+				if (edges[index].getId() == 0) {
+					continue;
+				}
+				appendToOutgoingList(index);
+				appendToIncomingList(index);
+			}
+
+			for (const auto &[nodeId, state]: outStates) {
+				if (auto node = getNodeForUpdate(nodeId)) {
+					node->get().setFirstOutEdgeId(state.currentHeadId);
+				}
+			}
+			for (const auto &[nodeId, state]: inStates) {
+				if (auto node = getNodeForUpdate(nodeId)) {
+					node->get().setFirstInEdgeId(state.currentHeadId);
+				}
+			}
+
+			updates.nodes.reserve(nodeUpdates.size());
+			updates.oldNodes.reserve(nodeUpdates.size());
+			for (auto &[nodeId, update]: nodeUpdates) {
+				(void) nodeId;
+				updates.oldNodes.push_back(std::move(update.before));
+				updates.nodes.push_back(std::move(update.after));
+			}
+			updates.oldHeadEdges.reserve(oldHeadUpdates.size());
+			updates.oldHeadEdgesBefore.reserve(oldHeadUpdates.size());
+			for (auto &[edgeId, update]: oldHeadUpdates) {
+				(void) edgeId;
+				updates.oldHeadEdgesBefore.push_back(std::move(update.before));
+				updates.oldHeadEdges.push_back(std::move(update.after));
+			}
+		}
+
+		return updates;
+	}
+
+	void RelationshipTraversal::applyBatchLinkUpdates(const RelationshipBatchLinkUpdates &updates) const {
+		if (updates.empty()) {
+			return;
+		}
+
+		auto dataManager = dataManager_.lock();
+		if (!dataManager) {
+			return;
+		}
+
+		{
+			debug::ScopedPerfTimer timer("relationship_traversal.link_edges_batch.update_nodes");
+			dataManager->updateNodesWithBeforeImages(updates.nodes, updates.oldNodes);
+		}
+
+		{
+			debug::ScopedPerfTimer timer("relationship_traversal.link_edges_batch.update_old_heads");
+			dataManager->updateEdgesWithBeforeImages(updates.oldHeadEdges, updates.oldHeadEdgesBefore);
+		}
+	}
+
+	void RelationshipTraversal::linkEdgesBatch(std::vector<Edge> &edges) const {
+		if (edges.empty()) {
+			return;
+		}
+
+		auto dataManager = dataManager_.lock();
+		if (!dataManager) {
+			return;
+		}
+
+		debug::ScopedPerfTimer totalTimer("relationship_traversal.link_edges_batch");
+		const auto updates = buildBatchLinks(edges);
+		applyBatchLinkUpdates(updates);
+		{
+			debug::ScopedPerfTimer timer("relationship_traversal.link_edges_batch.update_new_edges");
+			dataManager->getEdgeManager()->updateBatch(edges);
+		}
 	}
 
 	void RelationshipTraversal::unlinkEdge(Edge &edge) const {

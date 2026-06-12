@@ -178,6 +178,33 @@ TEST_F(SegmentAllocatorTest, AllocateSegment_SequentialFileOffsets) {
 	EXPECT_EQ(off3, sizeof(FileHeader) + 2 * TOTAL_SEGMENT_SIZE);
 }
 
+TEST_F(SegmentAllocatorTest, AllocateSegmentWithStartId_UsesCallerProvidedRangeStart) {
+	auto type = toUnderlying(EntityType::Node);
+
+	uint64_t off1 = allocator->allocateSegmentWithStartId(type, 10, 101);
+	uint64_t off2 = allocator->allocateSegmentWithStartId(type, 10, 1001);
+
+	verifyChainLinks(type, {off1, off2});
+	EXPECT_EQ(segmentTracker->getSegmentHeader(off1).start_id, 101);
+	EXPECT_EQ(segmentTracker->getSegmentHeader(off2).start_id, 1001);
+	EXPECT_EQ(segmentTracker->getChainTail(type), off2);
+}
+
+TEST_F(SegmentAllocatorTest, AllocateSegmentWithStartId_ReusesFreeSegmentWithNewRangeStart) {
+	auto type = toUnderlying(EntityType::Edge);
+
+	uint64_t off1 = allocator->allocateSegmentWithStartId(type, 10, 41);
+	uint64_t off2 = allocator->allocateSegmentWithStartId(type, 10, 81);
+	allocator->deallocateSegment(off1);
+
+	uint64_t reused = allocator->allocateSegmentWithStartId(type, 10, 121);
+
+	EXPECT_EQ(reused, off1);
+	verifyChainLinks(type, {off2, reused});
+	EXPECT_EQ(segmentTracker->getSegmentHeader(reused).start_id, 121);
+	EXPECT_EQ(segmentTracker->getSegmentHeader(reused).used, 0u);
+}
+
 // =========================================================================
 // GROUP 2: Segment Deallocation and Chain Repair
 // =========================================================================
@@ -246,6 +273,7 @@ TEST_F(SegmentAllocatorTest, AllocateSegment_ReusesFreeSegment) {
 
 	uint64_t off1 = allocator->allocateSegment(type, 10);
 	uint64_t off2 = allocator->allocateSegment(type, 10);
+	(void)off2;
 
 	// Deallocate the first segment to put it on the free list
 	allocator->deallocateSegment(off1);
@@ -369,6 +397,11 @@ TEST_F(SegmentAllocatorTest, AllocateSegment_InvalidTypeLargeValueThrows) {
 	// A much larger invalid type value
 	uint32_t invalidType = getMaxEntityType() + 100;
 	EXPECT_THROW(allocator->allocateSegment(invalidType, 10), std::invalid_argument);
+}
+
+TEST_F(SegmentAllocatorTest, AllocateSegmentWithStartId_InvalidTypeThrows) {
+	uint32_t invalidType = getMaxEntityType() + 1;
+	EXPECT_THROW(allocator->allocateSegmentWithStartId(invalidType, 10, 1), std::invalid_argument);
 }
 
 TEST_F(SegmentAllocatorTest, AllocateSegment_TailZeroFallback) {

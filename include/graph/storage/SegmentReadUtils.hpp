@@ -34,6 +34,14 @@ namespace graph::storage {
 		std::vector<size_t> memberIndices;   // Original indices into the input segIndices vector
 	};
 
+	struct CoalescedReadTask {
+		size_t groupIndex = 0;
+		size_t memberBegin = 0;
+		size_t memberCount = 0;
+		uint64_t startOffset = 0;
+		size_t segCount = 0;
+	};
+
 	/**
 	 * @brief Build groups of consecutive segments that can be read in a single pread call.
 	 *
@@ -86,6 +94,40 @@ namespace graph::storage {
 		}
 		groups.push_back(std::move(current));
 		return groups;
+	}
+
+	inline size_t totalCoalescedSegments(const std::vector<CoalescedGroup> &groups) {
+		size_t total = 0;
+		for (const auto &group: groups) {
+			total += group.segCount;
+		}
+		return total;
+	}
+
+	inline std::vector<CoalescedReadTask> buildCoalescedReadTasks(
+			const std::vector<CoalescedGroup> &groups,
+			size_t maxSegmentsPerTask) {
+		std::vector<CoalescedReadTask> tasks;
+		if (groups.empty() || maxSegmentsPerTask == 0) {
+			return tasks;
+		}
+
+		for (size_t groupIndex = 0; groupIndex < groups.size(); ++groupIndex) {
+			const auto &group = groups[groupIndex];
+			for (size_t memberBegin = 0; memberBegin < group.memberIndices.size();
+				 memberBegin += maxSegmentsPerTask) {
+				const size_t memberCount =
+						std::min(maxSegmentsPerTask, group.memberIndices.size() - memberBegin);
+				tasks.push_back({
+						groupIndex,
+						memberBegin,
+						memberCount,
+						group.startOffset + memberBegin * TOTAL_SEGMENT_SIZE,
+						memberCount,
+				});
+			}
+		}
+		return tasks;
 	}
 
 } // namespace graph::storage

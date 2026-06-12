@@ -11,6 +11,8 @@ namespace {
 
 using graph::PropertyValue;
 using graph::TemporalDate;
+using graph::TemporalDateTime;
+using graph::TemporalDuration;
 using graph::query::execution::NodeColumnBatch;
 using graph::query::execution::PropertyPredicateKernel;
 using graph::query::execution::VectorPredicateOp;
@@ -107,6 +109,27 @@ TEST(PropertyPredicateKernelTest, EqualityMapFactoryBuildsReusableKernel) {
 
 	EXPECT_TRUE(kernel.matchesMap({{"kind", PropertyValue("person")}, {"active", PropertyValue(true)}}));
 	EXPECT_FALSE(kernel.matchesMap({{"kind", PropertyValue("person")}, {"active", PropertyValue(false)}}));
+}
+
+TEST(PropertyPredicateKernelTest, ExposesEqualityPredicateMapForStorageMatchers) {
+	PropertyPredicateKernel emptyKernel({});
+	EXPECT_FALSE(emptyKernel.containsOnlyEqualityPredicates());
+
+	PropertyPredicateKernel equalityKernel({
+		predicate("kind", VectorPredicateOp::VPO_EQ, PropertyValue("person")),
+		predicate("active", VectorPredicateOp::VPO_EQ, PropertyValue(true)),
+	});
+
+	EXPECT_TRUE(equalityKernel.containsOnlyEqualityPredicates());
+	const auto equality = equalityKernel.toEqualityPredicates();
+	ASSERT_EQ(equality.size(), 2U);
+	EXPECT_EQ(equality.at("kind"), PropertyValue("person"));
+	EXPECT_EQ(equality.at("active"), PropertyValue(true));
+
+	PropertyPredicateKernel rangeKernel({
+		predicate("age", VectorPredicateOp::VPO_GE, PropertyValue(int64_t{30})),
+	});
+	EXPECT_FALSE(rangeKernel.containsOnlyEqualityPredicates());
 }
 
 TEST(PropertyPredicateKernelTest, AppliesClosedRangeAndSelectionVectorInOnePass) {
@@ -235,7 +258,7 @@ TEST(PropertyPredicateKernelTest, MissingColumnClearsSelectionVector) {
 } // namespace
 
 namespace {
-TEST(PropertyPredicateKernelAdditionalTest, GenericFallbackCoversTemporalAndStructuredComparisons) {
+TEST(PropertyPredicateKernelAdditionalTest, TypedTemporalAndStructuredComparisonsPreserveSemantics) {
 	auto expect = [](const PropertyValue &actual, VectorPredicateOp op, const PropertyValue &bound, bool expected) {
 		PropertyPredicateKernel kernel({predicate("value", op, bound)});
 		EXPECT_EQ(kernel.matchesMap({{"value", actual}}), expected);
@@ -250,9 +273,93 @@ TEST(PropertyPredicateKernelAdditionalTest, GenericFallbackCoversTemporalAndStru
 	PropertyPredicateKernel rangeKernel({range});
 	EXPECT_TRUE(rangeKernel.matchesMap({{"value", PropertyValue(TemporalDate{5})}}));
 
+	expect(PropertyValue(TemporalDateTime{50}), VectorPredicateOp::VPO_GT, PropertyValue(TemporalDateTime{40}), true);
+	expect(PropertyValue(TemporalDuration{0, 2, 0}), VectorPredicateOp::VPO_LT,
+		   PropertyValue(TemporalDuration{0, 3, 0}), true);
+
+	auto durationRange = predicate("value", VectorPredicateOp::VPO_RANGE_CLOSED,
+								   PropertyValue(TemporalDuration{0, 1, 0}));
+	durationRange.upperValue = PropertyValue(TemporalDuration{0, 3, 0});
+	PropertyPredicateKernel durationRangeKernel({durationRange});
+	EXPECT_TRUE(durationRangeKernel.matchesMap({{"value", PropertyValue(TemporalDuration{0, 2, 0})}}));
+
 	std::vector<PropertyValue> left{PropertyValue(int64_t{1})};
 	std::vector<PropertyValue> right{PropertyValue(int64_t{2})};
 	expect(PropertyValue(left), VectorPredicateOp::VPO_NE, PropertyValue(right), true);
 	expect(PropertyValue(left), VectorPredicateOp::VPO_LT, PropertyValue(right), true);
+}
+
+TEST(PropertyPredicateKernelAdditionalTest, CoversIntegerTemporalDateTimeAndDurationRangeEdges) {
+	auto expect = [](const PropertyValue &actual, VectorPredicateOp op, const PropertyValue &bound, bool expected) {
+		PropertyPredicateKernel kernel({predicate("value", op, bound)});
+		EXPECT_EQ(kernel.matchesMap({{"value", actual}}), expected);
+	};
+
+	expect(PropertyValue(int64_t{5}), VectorPredicateOp::VPO_EQ, PropertyValue(int64_t{5}), true);
+	expect(PropertyValue(int64_t{5}), VectorPredicateOp::VPO_NE, PropertyValue(int64_t{7}), true);
+	expect(PropertyValue(int64_t{5}), VectorPredicateOp::VPO_LT, PropertyValue(int64_t{7}), true);
+	expect(PropertyValue(int64_t{5}), VectorPredicateOp::VPO_LE, PropertyValue(int64_t{5}), true);
+	expect(PropertyValue(int64_t{5}), VectorPredicateOp::VPO_GT, PropertyValue(int64_t{3}), true);
+	expect(PropertyValue(int64_t{5}), VectorPredicateOp::VPO_GE, PropertyValue(int64_t{5}), true);
+
+	auto dateTimeRange = predicate("value", VectorPredicateOp::VPO_RANGE_CLOSED, PropertyValue(TemporalDateTime{10}));
+	dateTimeRange.upperValue = PropertyValue(TemporalDateTime{20});
+	PropertyPredicateKernel dateTimeKernel({dateTimeRange});
+	EXPECT_TRUE(dateTimeKernel.matchesMap({{"value", PropertyValue(TemporalDateTime{15})}}));
+	EXPECT_FALSE(dateTimeKernel.matchesMap({{"value", PropertyValue(TemporalDateTime{25})}}));
+
+	auto durationRange = predicate("value", VectorPredicateOp::VPO_RANGE_CLOSED,
+								   PropertyValue(TemporalDuration{0, 1, 0}));
+	durationRange.upperValue = PropertyValue(TemporalDuration{0, 3, 0});
+	PropertyPredicateKernel durationKernel({durationRange});
+	EXPECT_TRUE(durationKernel.matchesMap({{"value", PropertyValue(TemporalDuration{0, 2, 0})}}));
+	EXPECT_FALSE(durationKernel.matchesMap({{"value", PropertyValue(TemporalDuration{0, 4, 0})}}));
+
+}
+
+TEST(PropertyPredicateKernelAdditionalTest, CoversTemporalComparisonOperatorsAndMismatchedRangeBounds) {
+	auto expect = [](const PropertyValue &actual, VectorPredicateOp op, const PropertyValue &bound, bool expected) {
+		PropertyPredicateKernel kernel({predicate("value", op, bound)});
+		EXPECT_EQ(kernel.matchesMap({{"value", actual}}), expected);
+	};
+
+	expect(PropertyValue(TemporalDate{5}), VectorPredicateOp::VPO_EQ, PropertyValue(TemporalDate{5}), true);
+	expect(PropertyValue(TemporalDate{5}), VectorPredicateOp::VPO_LT, PropertyValue(TemporalDate{6}), true);
+	expect(PropertyValue(TemporalDate{5}), VectorPredicateOp::VPO_GT, PropertyValue(TemporalDate{4}), true);
+	expect(PropertyValue(TemporalDate{5}), VectorPredicateOp::VPO_EQ, PropertyValue(TemporalDate{6}), false);
+
+	expect(PropertyValue(TemporalDateTime{50}), VectorPredicateOp::VPO_EQ, PropertyValue(TemporalDateTime{50}), true);
+	expect(PropertyValue(TemporalDateTime{50}), VectorPredicateOp::VPO_NE, PropertyValue(TemporalDateTime{60}), true);
+	expect(PropertyValue(TemporalDateTime{50}), VectorPredicateOp::VPO_LT, PropertyValue(TemporalDateTime{60}), true);
+	expect(PropertyValue(TemporalDateTime{50}), VectorPredicateOp::VPO_LE, PropertyValue(TemporalDateTime{50}), true);
+	expect(PropertyValue(TemporalDateTime{50}), VectorPredicateOp::VPO_GE, PropertyValue(TemporalDateTime{50}), true);
+
+	expect(PropertyValue(TemporalDuration{0, 2, 0}), VectorPredicateOp::VPO_EQ,
+		   PropertyValue(TemporalDuration{0, 2, 0}), true);
+	expect(PropertyValue(TemporalDuration{0, 2, 0}), VectorPredicateOp::VPO_NE,
+		   PropertyValue(TemporalDuration{0, 3, 0}), true);
+	expect(PropertyValue(TemporalDuration{0, 2, 0}), VectorPredicateOp::VPO_LE,
+		   PropertyValue(TemporalDuration{0, 2, 0}), true);
+	expect(PropertyValue(TemporalDuration{0, 2, 0}), VectorPredicateOp::VPO_GT,
+		   PropertyValue(TemporalDuration{0, 1, 0}), true);
+	expect(PropertyValue(TemporalDuration{0, 2, 0}), VectorPredicateOp::VPO_GE,
+		   PropertyValue(TemporalDuration{0, 2, 0}), true);
+
+	auto mismatchedUpper = predicate("value", VectorPredicateOp::VPO_RANGE_CLOSED, PropertyValue(int64_t{1}));
+	mismatchedUpper.upperValue = PropertyValue("not-an-integer-bound");
+	EXPECT_TRUE(graph::query::execution::evaluatePredicateWithKernel(PropertyValue(int64_t{2}), mismatchedUpper));
+
+	auto genericRange = predicate("value", VectorPredicateOp::VPO_RANGE_CLOSED,
+								  PropertyValue(std::vector<PropertyValue>{PropertyValue(int64_t{1})}));
+	genericRange.upperValue = PropertyValue(std::vector<PropertyValue>{PropertyValue(int64_t{3})});
+	EXPECT_TRUE(graph::query::execution::evaluatePredicateWithKernel(
+			PropertyValue(std::vector<PropertyValue>{PropertyValue(int64_t{2})}), genericRange));
+	EXPECT_FALSE(graph::query::execution::evaluatePredicateWithKernel(
+			PropertyValue(std::vector<PropertyValue>{PropertyValue(int64_t{4})}), genericRange));
+
+	PropertyPredicateKernel genericLe({predicate("value", VectorPredicateOp::VPO_LE, genericRange.value)});
+	EXPECT_TRUE(genericLe.matchesMap({{"value", genericRange.value}}));
+	PropertyPredicateKernel genericGe({predicate("value", VectorPredicateOp::VPO_GE, genericRange.value)});
+	EXPECT_TRUE(genericGe.matchesMap({{"value", genericRange.value}}));
 }
 } // namespace

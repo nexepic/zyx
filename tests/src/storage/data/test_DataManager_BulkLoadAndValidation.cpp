@@ -16,205 +16,223 @@
 #include <unordered_map>
 #include <vector>
 
+#include "graph/concurrent/ParallelExecutionPolicy.hpp"
 #include "graph/concurrent/ThreadPool.hpp"
-#include "graph/storage/constraints/IEntityValidator.hpp"
 #include "graph/storage/SegmentIndexManager.hpp"
+#include "graph/storage/constraints/IEntityValidator.hpp"
 
 namespace {
 
-class CountingValidator final : public graph::storage::constraints::IEntityValidator {
-public:
-	void validateEdgeInsert(const Edge &,
-	                        const std::unordered_map<std::string, PropertyValue> &) override {
-		++edgeInsertCalls;
+	class CountingValidator final : public graph::storage::constraints::IEntityValidator {
+	public:
+		void validateEdgeInsert(const Edge &, const std::unordered_map<std::string, PropertyValue> &) override {
+			++edgeInsertCalls;
+		}
+
+		int edgeInsertCalls = 0;
+	};
+
+	bool containsId(const std::vector<Node> &nodes, int64_t id) {
+		return std::any_of(nodes.begin(), nodes.end(), [id](const Node &n) { return n.getId() == id; });
 	}
 
-	int edgeInsertCalls = 0;
-};
-
-bool containsId(const std::vector<Node> &nodes, int64_t id) {
-	return std::any_of(nodes.begin(), nodes.end(), [id](const Node &n) { return n.getId() == id; });
-}
-
-bool containsId(const std::vector<Edge> &edges, int64_t id) {
-	return std::any_of(edges.begin(), edges.end(), [id](const Edge &e) { return e.getId() == id; });
-}
-
-Node makeNodeWithLabel(const std::shared_ptr<DataManager> &dataManager, const std::string &label) {
-	Node node;
-	node.setLabelId(dataManager->getOrCreateTokenId(label));
-	return node;
-}
-
-int64_t addNodeWithSinglePropertyEntity(const std::shared_ptr<DataManager> &dataManager,
-										const std::string &label, int64_t value) {
-	Node node = makeNodeWithLabel(dataManager, label);
-	dataManager->addNode(node);
-	dataManager->addNodeProperties(node.getId(), {{"k", PropertyValue(value)}});
-
-	const Node stored = dataManager->getNode(node.getId());
-	if (!stored.hasPropertyEntity()) {
-		return 0;
-	}
-	return stored.getPropertyEntityId();
-}
-
-int64_t addNodeWithPropertyEntity(
-		const std::shared_ptr<DataManager> &dataManager,
-		const std::string &label,
-		const std::unordered_map<std::string, PropertyValue> &properties) {
-	Node node = makeNodeWithLabel(dataManager, label);
-	dataManager->addNode(node);
-	dataManager->addNodeProperties(node.getId(), properties);
-
-	const Node stored = dataManager->getNode(node.getId());
-	if (!stored.hasPropertyEntity()) {
-		return 0;
-	}
-	return stored.getPropertyEntityId();
-}
-
-const SegmentIndexManager::SegmentIndex *findSegmentForId(
-	const std::vector<SegmentIndexManager::SegmentIndex> &segIndex, int64_t id) {
-	auto it = std::find_if(segIndex.begin(), segIndex.end(),
-						   [id](const SegmentIndexManager::SegmentIndex &seg) {
-							   return id >= seg.startId && id <= seg.endId;
-						   });
-	if (it == segIndex.end()) {
-		return nullptr;
-	}
-	return &(*it);
-}
-
-void writeSegmentHeaderUsedOnDisk(const std::filesystem::path &dbPath, uint64_t segmentOffset, uint32_t used) {
-	std::fstream io(dbPath, std::ios::binary | std::ios::in | std::ios::out);
-	if (!io.is_open()) {
-		throw std::runtime_error("Failed to open db file for header mutation");
+	bool containsId(const std::vector<Edge> &edges, int64_t id) {
+		return std::any_of(edges.begin(), edges.end(), [id](const Edge &e) { return e.getId() == id; });
 	}
 
-	SegmentHeader header{};
-	io.seekg(static_cast<std::streamoff>(segmentOffset));
-	io.read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader));
-	if (!io.good()) {
-		throw std::runtime_error("Failed to read segment header from db file");
+	Node makeNodeWithLabel(const std::shared_ptr<DataManager> &dataManager, const std::string &label) {
+		Node node;
+		node.setLabelId(dataManager->getOrCreateTokenId(label));
+		return node;
 	}
 
-	header.used = used;
-	io.seekp(static_cast<std::streamoff>(segmentOffset));
-	io.write(reinterpret_cast<const char *>(&header), sizeof(SegmentHeader));
-	io.flush();
-}
+	int64_t addNodeWithSinglePropertyEntity(const std::shared_ptr<DataManager> &dataManager, const std::string &label,
+											int64_t value) {
+		Node node = makeNodeWithLabel(dataManager, label);
+		dataManager->addNode(node);
+		dataManager->addNodeProperties(node.getId(), {{"k", PropertyValue(value)}});
 
-void writePropertyActiveFlagOnDisk(const std::filesystem::path &dbPath, uint64_t segmentOffset, int64_t segmentStartId,
-								   int64_t propertyId, bool active) {
-	constexpr std::streamoff kIsActiveOffset =
-		static_cast<std::streamoff>(sizeof(int64_t) + sizeof(int64_t) + sizeof(uint32_t));
-
-	const std::streamoff slot = static_cast<std::streamoff>(propertyId - segmentStartId);
-	const std::streamoff entityOffset = static_cast<std::streamoff>(segmentOffset + sizeof(SegmentHeader)) +
-										slot * static_cast<std::streamoff>(Property::getTotalSize());
-	const std::streamoff flagOffset = entityOffset + kIsActiveOffset;
-
-	std::fstream io(dbPath, std::ios::binary | std::ios::in | std::ios::out);
-	if (!io.is_open()) {
-		throw std::runtime_error("Failed to open db file for property mutation");
+		const Node stored = dataManager->getNode(node.getId());
+		if (!stored.hasPropertyEntity()) {
+			return 0;
+		}
+		return stored.getPropertyEntityId();
 	}
 
-	const char flag = active ? 1 : 0;
-	io.seekp(flagOffset);
-	io.write(&flag, sizeof(flag));
-	io.flush();
-}
+	int64_t addNodeWithPropertyEntity(const std::shared_ptr<DataManager> &dataManager, const std::string &label,
+									  const std::unordered_map<std::string, PropertyValue> &properties) {
+		Node node = makeNodeWithLabel(dataManager, label);
+		dataManager->addNode(node);
+		dataManager->addNodeProperties(node.getId(), properties);
 
-template<typename EntityType>
-void writeSerializedEntityOnDisk(const std::filesystem::path &dbPath,
-								 uint64_t segmentOffset,
-								 int64_t segmentStartId,
-								 int64_t entityId,
-								 const EntityType &entity) {
-	const std::streamoff slot = static_cast<std::streamoff>(entityId - segmentStartId);
-	const std::streamoff entityOffset = static_cast<std::streamoff>(segmentOffset + sizeof(SegmentHeader)) +
-										slot * static_cast<std::streamoff>(EntityType::getTotalSize());
-	std::ostringstream serialized(std::ios::binary);
-	entity.serialize(serialized);
-	const std::string bytes = serialized.str();
-
-	std::fstream io(dbPath, std::ios::binary | std::ios::in | std::ios::out);
-	if (!io.is_open()) {
-		throw std::runtime_error("Failed to open db file for entity mutation");
+		const Node stored = dataManager->getNode(node.getId());
+		if (!stored.hasPropertyEntity()) {
+			return 0;
+		}
+		return stored.getPropertyEntityId();
 	}
 
-	io.seekp(entityOffset);
-	io.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
-	io.flush();
-}
+	std::vector<int64_t> addDirectPropertyEntitiesForParallelScan(const std::shared_ptr<DataManager> &dataManager,
+																  const std::string &label, size_t entityCount) {
+		Node owner = makeNodeWithLabel(dataManager, label);
+		dataManager->addNode(owner);
 
-template<typename EntityType>
-void writeEntityIdOnDisk(const std::filesystem::path &dbPath,
-						 uint64_t segmentOffset,
-						 int64_t segmentStartId,
-						 int64_t entityId,
-						 int64_t replacementId) {
-	const std::streamoff slot = static_cast<std::streamoff>(entityId - segmentStartId);
-	const std::streamoff entityOffset = static_cast<std::streamoff>(segmentOffset + sizeof(SegmentHeader)) +
-										slot * static_cast<std::streamoff>(EntityType::getTotalSize());
-
-	std::fstream io(dbPath, std::ios::binary | std::ios::in | std::ios::out);
-	if (!io.is_open()) {
-		throw std::runtime_error("Failed to open db file for entity id mutation");
+		std::vector<int64_t> propertyIds;
+		propertyIds.reserve(entityCount);
+		for (size_t i = 0; i < entityCount; ++i) {
+			Property property;
+			property.getMutableMetadata().entityId = owner.getId();
+			property.getMutableMetadata().entityType = Node::typeId;
+			property.getMutableMetadata().isActive = true;
+			property.setProperties({{"k", PropertyValue(static_cast<int64_t>(i + 1))}});
+			dataManager->addPropertyEntity(property);
+			propertyIds.push_back(property.getId());
+		}
+		return propertyIds;
 	}
 
-	io.seekp(entityOffset);
-	io.write(reinterpret_cast<const char *>(&replacementId), sizeof(replacementId));
-	io.flush();
-}
-
-void writePropertyKeyLengthOnDisk(const std::filesystem::path &dbPath,
-								  uint64_t segmentOffset,
-								  int64_t segmentStartId,
-								  int64_t propertyId,
-								  uint32_t keyLength) {
-	constexpr std::streamoff kPropertyCountOffset =
-		static_cast<std::streamoff>(sizeof(int64_t) + sizeof(int64_t) + sizeof(uint32_t) + sizeof(bool));
-	constexpr std::streamoff kFirstKeyLengthOffset = kPropertyCountOffset + static_cast<std::streamoff>(sizeof(uint32_t));
-	const std::streamoff slot = static_cast<std::streamoff>(propertyId - segmentStartId);
-	const std::streamoff entityOffset = static_cast<std::streamoff>(segmentOffset + sizeof(SegmentHeader)) +
-										slot * static_cast<std::streamoff>(Property::getTotalSize());
-
-	std::fstream io(dbPath, std::ios::binary | std::ios::in | std::ios::out);
-	if (!io.is_open()) {
-		throw std::runtime_error("Failed to open db file for property key mutation");
+	const SegmentIndexManager::SegmentIndex *
+	findSegmentForId(const std::vector<SegmentIndexManager::SegmentIndex> &segIndex, int64_t id) {
+		auto it = std::find_if(segIndex.begin(), segIndex.end(), [id](const SegmentIndexManager::SegmentIndex &seg) {
+			return id >= seg.startId && id <= seg.endId;
+		});
+		if (it == segIndex.end()) {
+			return nullptr;
+		}
+		return &(*it);
 	}
 
-	io.seekp(entityOffset + kFirstKeyLengthOffset);
-	io.write(reinterpret_cast<const char *>(&keyLength), sizeof(keyLength));
-	io.flush();
-}
-
-void writeFirstPropertyValueTypeOnDisk(const std::filesystem::path &dbPath,
-									   uint64_t segmentOffset,
-									   int64_t segmentStartId,
-									   int64_t propertyId,
-									   const std::string &key,
-									   PropertyType type) {
-	constexpr std::streamoff kPropertyCountOffset =
-		static_cast<std::streamoff>(sizeof(int64_t) + sizeof(int64_t) + sizeof(uint32_t) + sizeof(bool));
-	const std::streamoff firstValueTypeOffset = kPropertyCountOffset + static_cast<std::streamoff>(sizeof(uint32_t)) +
-												static_cast<std::streamoff>(sizeof(uint32_t)) +
-												static_cast<std::streamoff>(key.size());
-	const std::streamoff slot = static_cast<std::streamoff>(propertyId - segmentStartId);
-	const std::streamoff entityOffset = static_cast<std::streamoff>(segmentOffset + sizeof(SegmentHeader)) +
-										slot * static_cast<std::streamoff>(Property::getTotalSize());
-
-	std::fstream io(dbPath, std::ios::binary | std::ios::in | std::ios::out);
-	if (!io.is_open()) {
-		throw std::runtime_error("Failed to open db file for property value mutation");
+	std::vector<int64_t>
+	representativePropertyIdsForSegments(const std::vector<SegmentIndexManager::SegmentIndex> &segIndex) {
+		std::vector<int64_t> ids;
+		ids.reserve(segIndex.size());
+		for (const auto &segment: segIndex) {
+			ids.push_back(segment.startId);
+		}
+		return ids;
 	}
 
-	io.seekp(entityOffset + firstValueTypeOffset);
-	io.write(reinterpret_cast<const char *>(&type), sizeof(type));
-	io.flush();
-}
+	constexpr size_t kParallelPropertySegmentsForBranchTests =
+			(graph::concurrent::kDefaultMemoryScanBytesPerWorker / TOTAL_SEGMENT_SIZE) + 1;
+
+	void writeSegmentHeaderUsedOnDisk(const std::filesystem::path &dbPath, uint64_t segmentOffset, uint32_t used) {
+		std::fstream io(dbPath, std::ios::binary | std::ios::in | std::ios::out);
+		if (!io.is_open()) {
+			throw std::runtime_error("Failed to open db file for header mutation");
+		}
+
+		SegmentHeader header{};
+		io.seekg(static_cast<std::streamoff>(segmentOffset));
+		io.read(reinterpret_cast<char *>(&header), sizeof(SegmentHeader));
+		if (!io.good()) {
+			throw std::runtime_error("Failed to read segment header from db file");
+		}
+
+		header.used = used;
+		io.seekp(static_cast<std::streamoff>(segmentOffset));
+		io.write(reinterpret_cast<const char *>(&header), sizeof(SegmentHeader));
+		io.flush();
+	}
+
+	void writePropertyActiveFlagOnDisk(const std::filesystem::path &dbPath, uint64_t segmentOffset,
+									   int64_t segmentStartId, int64_t propertyId, bool active) {
+		constexpr std::streamoff kIsActiveOffset =
+				static_cast<std::streamoff>(sizeof(int64_t) + sizeof(int64_t) + sizeof(uint32_t));
+
+		const std::streamoff slot = static_cast<std::streamoff>(propertyId - segmentStartId);
+		const std::streamoff entityOffset = static_cast<std::streamoff>(segmentOffset + sizeof(SegmentHeader)) +
+											slot * static_cast<std::streamoff>(Property::getTotalSize());
+		const std::streamoff flagOffset = entityOffset + kIsActiveOffset;
+
+		std::fstream io(dbPath, std::ios::binary | std::ios::in | std::ios::out);
+		if (!io.is_open()) {
+			throw std::runtime_error("Failed to open db file for property mutation");
+		}
+
+		const char flag = active ? 1 : 0;
+		io.seekp(flagOffset);
+		io.write(&flag, sizeof(flag));
+		io.flush();
+	}
+
+	template<typename EntityType>
+	void writeSerializedEntityOnDisk(const std::filesystem::path &dbPath, uint64_t segmentOffset,
+									 int64_t segmentStartId, int64_t entityId, const EntityType &entity) {
+		const std::streamoff slot = static_cast<std::streamoff>(entityId - segmentStartId);
+		const std::streamoff entityOffset = static_cast<std::streamoff>(segmentOffset + sizeof(SegmentHeader)) +
+											slot * static_cast<std::streamoff>(EntityType::getTotalSize());
+		std::ostringstream serialized(std::ios::binary);
+		entity.serialize(serialized);
+		const std::string bytes = serialized.str();
+
+		std::fstream io(dbPath, std::ios::binary | std::ios::in | std::ios::out);
+		if (!io.is_open()) {
+			throw std::runtime_error("Failed to open db file for entity mutation");
+		}
+
+		io.seekp(entityOffset);
+		io.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+		io.flush();
+	}
+
+	template<typename EntityType>
+	void writeEntityIdOnDisk(const std::filesystem::path &dbPath, uint64_t segmentOffset, int64_t segmentStartId,
+							 int64_t entityId, int64_t replacementId) {
+		const std::streamoff slot = static_cast<std::streamoff>(entityId - segmentStartId);
+		const std::streamoff entityOffset = static_cast<std::streamoff>(segmentOffset + sizeof(SegmentHeader)) +
+											slot * static_cast<std::streamoff>(EntityType::getTotalSize());
+
+		std::fstream io(dbPath, std::ios::binary | std::ios::in | std::ios::out);
+		if (!io.is_open()) {
+			throw std::runtime_error("Failed to open db file for entity id mutation");
+		}
+
+		io.seekp(entityOffset);
+		io.write(reinterpret_cast<const char *>(&replacementId), sizeof(replacementId));
+		io.flush();
+	}
+
+	void writePropertyKeyLengthOnDisk(const std::filesystem::path &dbPath, uint64_t segmentOffset,
+									  int64_t segmentStartId, int64_t propertyId, uint32_t keyLength) {
+		constexpr std::streamoff kPropertyCountOffset =
+				static_cast<std::streamoff>(sizeof(int64_t) + sizeof(int64_t) + sizeof(uint32_t) + sizeof(bool));
+		constexpr std::streamoff kFirstKeyLengthOffset =
+				kPropertyCountOffset + static_cast<std::streamoff>(sizeof(uint32_t));
+		const std::streamoff slot = static_cast<std::streamoff>(propertyId - segmentStartId);
+		const std::streamoff entityOffset = static_cast<std::streamoff>(segmentOffset + sizeof(SegmentHeader)) +
+											slot * static_cast<std::streamoff>(Property::getTotalSize());
+
+		std::fstream io(dbPath, std::ios::binary | std::ios::in | std::ios::out);
+		if (!io.is_open()) {
+			throw std::runtime_error("Failed to open db file for property key mutation");
+		}
+
+		io.seekp(entityOffset + kFirstKeyLengthOffset);
+		io.write(reinterpret_cast<const char *>(&keyLength), sizeof(keyLength));
+		io.flush();
+	}
+
+	void writeFirstPropertyValueTypeOnDisk(const std::filesystem::path &dbPath, uint64_t segmentOffset,
+										   int64_t segmentStartId, int64_t propertyId, const std::string &key,
+										   PropertyType type) {
+		constexpr std::streamoff kPropertyCountOffset =
+				static_cast<std::streamoff>(sizeof(int64_t) + sizeof(int64_t) + sizeof(uint32_t) + sizeof(bool));
+		const std::streamoff firstValueTypeOffset =
+				kPropertyCountOffset + static_cast<std::streamoff>(sizeof(uint32_t)) +
+				static_cast<std::streamoff>(sizeof(uint32_t)) + static_cast<std::streamoff>(key.size());
+		const std::streamoff slot = static_cast<std::streamoff>(propertyId - segmentStartId);
+		const std::streamoff entityOffset = static_cast<std::streamoff>(segmentOffset + sizeof(SegmentHeader)) +
+											slot * static_cast<std::streamoff>(Property::getTotalSize());
+
+		std::fstream io(dbPath, std::ios::binary | std::ios::in | std::ios::out);
+		if (!io.is_open()) {
+			throw std::runtime_error("Failed to open db file for property value mutation");
+		}
+
+		io.seekp(entityOffset + firstValueTypeOffset);
+		io.write(reinterpret_cast<const char *>(&type), sizeof(type));
+		io.flush();
+	}
 
 } // namespace
 
@@ -337,28 +355,25 @@ TEST_F(DataManagerTest, BulkLoadPropertyEntityValuesLoadsOnlyRequestedKeys) {
 	PropertyValue::MapType mapValue;
 	mapValue.emplace("inner", PropertyValue(int64_t(7)));
 	std::vector<PropertyValue> ignoredList{PropertyValue(int64_t(1)), PropertyValue(int64_t(2))};
-	const int64_t propertyId = addNodeWithPropertyEntity(
-		dataManager,
-		"BulkSelectedPropertyNode",
-		{{"keep", PropertyValue(int64_t(42))},
-		 {"map", PropertyValue(std::move(mapValue))},
-		 {"ignored", PropertyValue("skip-me")},
-		 {"ignoredList", PropertyValue(std::move(ignoredList))}});
+	const int64_t propertyId = addNodeWithPropertyEntity(dataManager, "BulkSelectedPropertyNode",
+														 {{"keep", PropertyValue(int64_t(42))},
+														  {"map", PropertyValue(std::move(mapValue))},
+														  {"ignored", PropertyValue("skip-me")},
+														  {"ignoredList", PropertyValue(std::move(ignoredList))}});
 	ASSERT_NE(propertyId, 0);
 
 	PropertyValue::MapType ignoredMap;
 	ignoredMap.emplace("x", PropertyValue(int64_t(1)));
-	const int64_t mixedTypePropertyId = addNodeWithPropertyEntity(
-		dataManager,
-		"BulkSelectedPropertyMixedTypeNode",
-		{{"keep", PropertyValue(int64_t(11))},
-		 {"skipBool", PropertyValue(true)},
-		 {"skipDouble", PropertyValue(1.5)},
-		 {"skipDate", PropertyValue(TemporalDate{1})},
-		 {"skipDateTime", PropertyValue(TemporalDateTime{2})},
-		 {"skipDuration", PropertyValue(TemporalDuration{3, 4, 5})},
-		 {"skipNull", PropertyValue(std::monostate{})},
-		 {"skipMap", PropertyValue(std::move(ignoredMap))}});
+	const int64_t mixedTypePropertyId =
+			addNodeWithPropertyEntity(dataManager, "BulkSelectedPropertyMixedTypeNode",
+									  {{"keep", PropertyValue(int64_t(11))},
+									   {"skipBool", PropertyValue(true)},
+									   {"skipDouble", PropertyValue(1.5)},
+									   {"skipDate", PropertyValue(TemporalDate{1})},
+									   {"skipDateTime", PropertyValue(TemporalDateTime{2})},
+									   {"skipDuration", PropertyValue(TemporalDuration{3, 4, 5})},
+									   {"skipNull", PropertyValue(std::monostate{})},
+									   {"skipMap", PropertyValue(std::move(ignoredMap))}});
 	ASSERT_NE(mixedTypePropertyId, 0);
 
 	simulateSave();
@@ -369,8 +384,8 @@ TEST_F(DataManagerTest, BulkLoadPropertyEntityValuesLoadsOnlyRequestedKeys) {
 	const auto emptyIds = dataManager->bulkLoadPropertyEntityValues({}, {"keep"}, nullptr);
 	EXPECT_TRUE(emptyIds.empty());
 
-	const auto loaded = dataManager->bulkLoadPropertyEntityValues(
-		{propertyId, propertyId, mixedTypePropertyId}, {"keep", "map", "missing"}, nullptr);
+	const auto loaded = dataManager->bulkLoadPropertyEntityValues({propertyId, propertyId, mixedTypePropertyId},
+																  {"keep", "map", "missing"}, nullptr);
 
 	ASSERT_TRUE(loaded.contains(propertyId));
 	const auto &values = loaded.at(propertyId);
@@ -389,10 +404,8 @@ TEST_F(DataManagerTest, BulkLoadPropertyEntityValuesLoadsOnlyRequestedKeys) {
 }
 
 TEST_F(DataManagerTest, BulkLoadPropertyEntityValuesSequentialHandlesMissingAndCorruptSegmentMetadata) {
-	const int64_t propertyId = addNodeWithPropertyEntity(
-		dataManager,
-		"BulkSelectedPropertyCorruptSegmentNode",
-		{{"keep", PropertyValue(int64_t(42))}});
+	const int64_t propertyId = addNodeWithPropertyEntity(dataManager, "BulkSelectedPropertyCorruptSegmentNode",
+														 {{"keep", PropertyValue(int64_t(42))}});
 	ASSERT_NE(propertyId, 0);
 
 	simulateSave();
@@ -434,15 +447,13 @@ TEST_F(DataManagerTest, BulkLoadPropertyEntityValuesSequentialHandlesMissingAndC
 }
 
 TEST_F(DataManagerTest, BulkLoadPropertyEntityColumnsFillsRequestedRowsDirectly) {
-	const int64_t firstPropertyId = addNodeWithPropertyEntity(
-		dataManager,
-		"BulkColumnPropertyNode",
-		{{"keep", PropertyValue(int64_t(42))}, {"ignored", PropertyValue("skip-me")}});
+	const int64_t firstPropertyId =
+			addNodeWithPropertyEntity(dataManager, "BulkColumnPropertyNode",
+									  {{"keep", PropertyValue(int64_t(42))}, {"ignored", PropertyValue("skip-me")}});
 	ASSERT_NE(firstPropertyId, 0);
 	const int64_t secondPropertyId = addNodeWithPropertyEntity(
-		dataManager,
-		"BulkColumnPropertyNode",
-		{{"keep", PropertyValue(int64_t(11))}, {"ignored", PropertyValue("skip-me-too")}});
+			dataManager, "BulkColumnPropertyNode",
+			{{"keep", PropertyValue(int64_t(11))}, {"ignored", PropertyValue("skip-me-too")}});
 	ASSERT_NE(secondPropertyId, 0);
 
 	simulateSave();
@@ -452,13 +463,9 @@ TEST_F(DataManagerTest, BulkLoadPropertyEntityColumnsFillsRequestedRowsDirectly)
 	columns.emplace("keep", std::vector<std::optional<PropertyValue>>(4, std::nullopt));
 	columns.emplace("missing", std::vector<std::optional<PropertyValue>>(4, std::nullopt));
 
-	auto loadedRows = dataManager->bulkLoadPropertyEntityColumns(
-		{firstPropertyId, secondPropertyId, firstPropertyId, 0},
-		{0, 1, 2, 3},
-		4,
-		{"keep", "missing"},
-		columns,
-		nullptr);
+	auto loadedRows =
+			dataManager->bulkLoadPropertyEntityColumns({firstPropertyId, secondPropertyId, firstPropertyId, 0},
+													   {0, 1, 2, 3}, 4, {"keep", "missing"}, columns, nullptr);
 
 	std::sort(loadedRows.begin(), loadedRows.end());
 	EXPECT_EQ(loadedRows, (std::vector<size_t>{0U, 1U, 2U}));
@@ -472,22 +479,15 @@ TEST_F(DataManagerTest, BulkLoadPropertyEntityColumnsFillsRequestedRowsDirectly)
 
 	std::unordered_map<std::string, std::vector<std::optional<PropertyValue>>> duplicateColumns;
 	duplicateColumns.emplace("keep", std::vector<std::optional<PropertyValue>>(2, std::nullopt));
-	auto duplicateRows = dataManager->bulkLoadPropertyEntityColumns(
-		{firstPropertyId, firstPropertyId, 0},
-		{0, 0, 1},
-		2,
-		{"keep", "keep"},
-		duplicateColumns,
-		nullptr);
+	auto duplicateRows = dataManager->bulkLoadPropertyEntityColumns({firstPropertyId, firstPropertyId, 0}, {0, 0, 1}, 2,
+																	{"keep", "keep"}, duplicateColumns, nullptr);
 	EXPECT_EQ(duplicateRows, (std::vector<size_t>{0U}));
 	EXPECT_EQ(duplicateColumns.at("keep")[0], std::optional<PropertyValue>(PropertyValue(int64_t(42))));
 }
 
 TEST_F(DataManagerTest, BulkLoadPropertyEntityColumnsSequentialHandlesOutOfSlotInactiveAndShortReads) {
-	const int64_t propertyId = addNodeWithPropertyEntity(
-		dataManager,
-		"BulkColumnCorruptSegmentNode",
-		{{"keep", PropertyValue(int64_t(42))}});
+	const int64_t propertyId = addNodeWithPropertyEntity(dataManager, "BulkColumnCorruptSegmentNode",
+														 {{"keep", PropertyValue(int64_t(42))}});
 	ASSERT_NE(propertyId, 0);
 
 	simulateSave();
@@ -529,10 +529,8 @@ TEST_F(DataManagerTest, BulkLoadPropertyEntityColumnsSequentialHandlesOutOfSlotI
 }
 
 TEST_F(DataManagerTest, BulkLoadPropertyEntityColumnsHandlesInvalidInputsAndMissingWork) {
-	const int64_t propertyId = addNodeWithPropertyEntity(
-		dataManager,
-		"BulkColumnInvalidNode",
-		{{"keep", PropertyValue(int64_t(42))}});
+	const int64_t propertyId =
+			addNodeWithPropertyEntity(dataManager, "BulkColumnInvalidNode", {{"keep", PropertyValue(int64_t(42))}});
 	ASSERT_NE(propertyId, 0);
 
 	simulateSave();
@@ -545,14 +543,16 @@ TEST_F(DataManagerTest, BulkLoadPropertyEntityColumnsHandlesInvalidInputsAndMiss
 	EXPECT_TRUE(dataManager->bulkLoadPropertyEntityColumns({propertyId}, {}, 1, {"keep"}, columns, nullptr).empty());
 	EXPECT_TRUE(dataManager->bulkLoadPropertyEntityColumns({propertyId}, {0}, 1, {}, columns, nullptr).empty());
 	EXPECT_TRUE(dataManager->bulkLoadPropertyEntityColumns({propertyId}, {0}, 0, {"keep"}, columns, nullptr).empty());
-	EXPECT_TRUE(dataManager->bulkLoadPropertyEntityColumns({propertyId}, {0}, 1, {"missing"}, columns, nullptr).empty());
+	EXPECT_TRUE(
+			dataManager->bulkLoadPropertyEntityColumns({propertyId}, {0}, 1, {"missing"}, columns, nullptr).empty());
 
 	std::unordered_map<std::string, std::vector<std::optional<PropertyValue>>> undersizedColumns;
 	undersizedColumns.emplace("keep", std::vector<std::optional<PropertyValue>>{});
-	EXPECT_TRUE(dataManager->bulkLoadPropertyEntityColumns(
-		{propertyId}, {0}, 1, {"keep"}, undersizedColumns, nullptr).empty());
+	EXPECT_TRUE(dataManager->bulkLoadPropertyEntityColumns({propertyId}, {0}, 1, {"keep"}, undersizedColumns, nullptr)
+						.empty());
 
-	EXPECT_TRUE(dataManager->bulkLoadPropertyEntityColumns({0, propertyId}, {0, 9}, 1, {"keep"}, columns, nullptr).empty());
+	EXPECT_TRUE(
+			dataManager->bulkLoadPropertyEntityColumns({0, propertyId}, {0, 9}, 1, {"keep"}, columns, nullptr).empty());
 
 	const auto &segIndex = dataManager->getSegmentIndexManager()->getPropertySegmentIndex();
 	ASSERT_FALSE(segIndex.empty());
@@ -563,25 +563,18 @@ TEST_F(DataManagerTest, BulkLoadPropertyEntityColumnsHandlesInvalidInputsAndMiss
 
 TEST_F(DataManagerTest, BulkMatchPropertyEntityPredicatesReturnsLoadedAndMatchedRows) {
 	const int64_t firstPropertyId = addNodeWithPropertyEntity(
-		dataManager,
-		"BulkPredicateNode",
-		{{"keep", PropertyValue(int64_t(42))}, {"kind", PropertyValue("match")}});
+			dataManager, "BulkPredicateNode", {{"keep", PropertyValue(int64_t(42))}, {"kind", PropertyValue("match")}});
 	ASSERT_NE(firstPropertyId, 0);
 	const int64_t secondPropertyId = addNodeWithPropertyEntity(
-		dataManager,
-		"BulkPredicateNode",
-		{{"keep", PropertyValue(int64_t(11))}, {"kind", PropertyValue("miss")}});
+			dataManager, "BulkPredicateNode", {{"keep", PropertyValue(int64_t(11))}, {"kind", PropertyValue("miss")}});
 	ASSERT_NE(secondPropertyId, 0);
 
 	simulateSave();
 	dataManager->clearCache();
 
 	auto result = dataManager->bulkMatchPropertyEntityPredicates(
-		{firstPropertyId, secondPropertyId, firstPropertyId, 0},
-		{0, 1, 2, 3},
-		4,
-		{{"keep", PropertyValue(int64_t(42))}, {"kind", PropertyValue("match")}},
-		nullptr);
+			{firstPropertyId, secondPropertyId, firstPropertyId, 0}, {0, 1, 2, 3}, 4,
+			{{"keep", PropertyValue(int64_t(42))}, {"kind", PropertyValue("match")}}, nullptr);
 
 	std::sort(result.loadedRows.begin(), result.loadedRows.end());
 	std::sort(result.matchedRows.begin(), result.matchedRows.end());
@@ -591,23 +584,14 @@ TEST_F(DataManagerTest, BulkMatchPropertyEntityPredicatesReturnsLoadedAndMatched
 	EXPECT_EQ(result.matchedCount, 2U);
 
 	auto duplicateRows = dataManager->bulkMatchPropertyEntityPredicates(
-		{firstPropertyId, firstPropertyId, 0},
-		{0, 0, 1},
-		2,
-		{{"keep", PropertyValue(int64_t(42))}},
-		nullptr);
+			{firstPropertyId, firstPropertyId, 0}, {0, 0, 1}, 2, {{"keep", PropertyValue(int64_t(42))}}, nullptr);
 	EXPECT_EQ(duplicateRows.loadedRows, (std::vector<size_t>{0U}));
 	EXPECT_EQ(duplicateRows.matchedRows, (std::vector<size_t>{0U}));
 	EXPECT_EQ(duplicateRows.loadedCount, 1U);
 	EXPECT_EQ(duplicateRows.matchedCount, 1U);
 
 	auto countOnly = dataManager->bulkMatchPropertyEntityPredicates(
-		{firstPropertyId, secondPropertyId},
-		{0, 1},
-		2,
-		{{"keep", PropertyValue(int64_t(42))}},
-		nullptr,
-		false);
+			{firstPropertyId, secondPropertyId}, {0, 1}, 2, {{"keep", PropertyValue(int64_t(42))}}, nullptr, false);
 	EXPECT_EQ(countOnly.loadedRows, (std::vector<size_t>{0U, 1U}));
 	EXPECT_TRUE(countOnly.matchedRows.empty());
 	EXPECT_EQ(countOnly.loadedCount, 2U);
@@ -616,33 +600,24 @@ TEST_F(DataManagerTest, BulkMatchPropertyEntityPredicatesReturnsLoadedAndMatched
 	PropertyEntityPredicateMatchOptions countOnlyWithoutRows;
 	countOnlyWithoutRows.collectLoadedRows = false;
 	countOnlyWithoutRows.collectMatchedRows = false;
-	auto rowlessCountOnly = dataManager->bulkMatchPropertyEntityPredicates(
-		{firstPropertyId, secondPropertyId},
-		{0, 1},
-		2,
-		{{"keep", PropertyValue(int64_t(42))}},
-		nullptr,
-		countOnlyWithoutRows);
+	auto rowlessCountOnly = dataManager->bulkMatchPropertyEntityPredicates({firstPropertyId, secondPropertyId}, {0, 1},
+																		   2, {{"keep", PropertyValue(int64_t(42))}},
+																		   nullptr, countOnlyWithoutRows);
 	EXPECT_TRUE(rowlessCountOnly.loadedRows.empty());
 	EXPECT_TRUE(rowlessCountOnly.matchedRows.empty());
 	EXPECT_EQ(rowlessCountOnly.loadedCount, 2U);
 	EXPECT_EQ(rowlessCountOnly.matchedCount, 1U);
 
+	EXPECT_EQ(dataManager->bulkCountPropertyEntityPredicates({firstPropertyId, secondPropertyId, firstPropertyId, 0},
+															 {{"keep", PropertyValue(int64_t(42))}}, nullptr),
+			  2U);
 	EXPECT_EQ(dataManager->bulkCountPropertyEntityPredicates(
-		          {firstPropertyId, secondPropertyId, firstPropertyId, 0},
-		          {{"keep", PropertyValue(int64_t(42))}},
-		          nullptr),
-	          2U);
-	EXPECT_EQ(dataManager->bulkCountPropertyEntityPredicates(
-		          {firstPropertyId, secondPropertyId},
-		          {{"keep", PropertyValue(int64_t(42))}, {"kind", PropertyValue("match")}},
-		          nullptr),
-	          1U);
-	EXPECT_EQ(dataManager->bulkCountPropertyEntityPredicates(
-		          {secondPropertyId},
-		          {{"keep", PropertyValue(int64_t(42))}},
-		          nullptr),
-	          0U);
+					  {firstPropertyId, secondPropertyId},
+					  {{"keep", PropertyValue(int64_t(42))}, {"kind", PropertyValue("match")}}, nullptr),
+			  1U);
+	EXPECT_EQ(dataManager->bulkCountPropertyEntityPredicates({secondPropertyId}, {{"keep", PropertyValue(int64_t(42))}},
+															 nullptr),
+			  0U);
 }
 
 TEST_F(DataManagerTest, BulkCountPropertyEntityPredicatesCountsAcrossAdjacentSegments) {
@@ -653,9 +628,8 @@ TEST_F(DataManagerTest, BulkCountPropertyEntityPredicatesCountsAcrossAdjacentSeg
 	for (int i = 0; i < entityCount; ++i) {
 		const bool shouldMatch = i % 3 == 0;
 		const int64_t propertyId = addNodeWithPropertyEntity(
-			dataManager,
-			"BulkPredicateAdjacentSegmentNode",
-			{{"keep", PropertyValue(int64_t(shouldMatch ? 42 : 7))}, {"ordinal", PropertyValue(int64_t(i))}});
+				dataManager, "BulkPredicateAdjacentSegmentNode",
+				{{"keep", PropertyValue(int64_t(shouldMatch ? 42 : 7))}, {"ordinal", PropertyValue(int64_t(i))}});
 		ASSERT_NE(propertyId, 0);
 		propertyIds.push_back(propertyId);
 		if (shouldMatch) {
@@ -673,11 +647,50 @@ TEST_F(DataManagerTest, BulkCountPropertyEntityPredicatesCountsAcrossAdjacentSeg
 	ASSERT_NE(lastSeg, nullptr);
 	ASSERT_NE(firstSeg->segmentOffset, lastSeg->segmentOffset);
 
-	EXPECT_EQ(dataManager->bulkCountPropertyEntityPredicates(
-		          propertyIds,
-		          {{"keep", PropertyValue(int64_t(42))}},
-		          nullptr),
-	          expectedMatches);
+	EXPECT_EQ(dataManager->bulkCountPropertyEntityPredicates(propertyIds, {{"keep", PropertyValue(int64_t(42))}},
+															 nullptr),
+			  expectedMatches);
+}
+
+TEST_F(DataManagerTest, BulkMatchPropertyEntityPredicatesSequentialScansCoalescedSegments) {
+	const int entityCount = static_cast<int>(PROPERTIES_PER_SEGMENT) + 6;
+	std::vector<int64_t> propertyIds;
+	std::vector<size_t> rows;
+	std::vector<size_t> expectedMatchedRows;
+	propertyIds.reserve(entityCount);
+	rows.reserve(entityCount);
+	for (int i = 0; i < entityCount; ++i) {
+		const bool shouldMatch = i % 4 == 1;
+		const int64_t propertyId = addNodeWithPropertyEntity(
+				dataManager, "BulkPredicateSequentialMatchNode",
+				{{"keep", PropertyValue(int64_t(shouldMatch ? 42 : 7))}, {"ordinal", PropertyValue(int64_t(i))}});
+		ASSERT_NE(propertyId, 0);
+		propertyIds.push_back(propertyId);
+		rows.push_back(static_cast<size_t>(i));
+		if (shouldMatch) {
+			expectedMatchedRows.push_back(static_cast<size_t>(i));
+		}
+	}
+
+	simulateSave();
+	dataManager->clearCache();
+
+	const auto &segIndex = dataManager->getSegmentIndexManager()->getPropertySegmentIndex();
+	const auto *firstSeg = findSegmentForId(segIndex, propertyIds.front());
+	const auto *lastSeg = findSegmentForId(segIndex, propertyIds.back());
+	ASSERT_NE(firstSeg, nullptr);
+	ASSERT_NE(lastSeg, nullptr);
+	ASSERT_NE(firstSeg->segmentOffset, lastSeg->segmentOffset);
+
+	auto result = dataManager->bulkMatchPropertyEntityPredicates(propertyIds, rows, rows.size(),
+																 {{"keep", PropertyValue(int64_t(42))}}, nullptr);
+	std::sort(result.loadedRows.begin(), result.loadedRows.end());
+	std::sort(result.matchedRows.begin(), result.matchedRows.end());
+
+	EXPECT_EQ(result.loadedCount, propertyIds.size());
+	EXPECT_EQ(result.loadedRows, rows);
+	EXPECT_EQ(result.matchedCount, expectedMatchedRows.size());
+	EXPECT_EQ(result.matchedRows, expectedMatchedRows);
 }
 
 TEST_F(DataManagerTest, BulkMatchPropertyEntityPredicatesParallelHandlesSegmentEdgeCases) {
@@ -686,9 +699,8 @@ TEST_F(DataManagerTest, BulkMatchPropertyEntityPredicatesParallelHandlesSegmentE
 	propertyIds.reserve(entityCount);
 	for (int i = 0; i < entityCount; ++i) {
 		const int64_t id = addNodeWithPropertyEntity(
-			dataManager,
-			"BulkPredicateParallelNode",
-			{{"keep", PropertyValue(int64_t(i + 1))}, {"skip", PropertyValue("not-requested")}});
+				dataManager, "BulkPredicateParallelNode",
+				{{"keep", PropertyValue(int64_t(i + 1))}, {"skip", PropertyValue("not-requested")}});
 		ASSERT_NE(id, 0);
 		propertyIds.push_back(id);
 	}
@@ -708,9 +720,9 @@ TEST_F(DataManagerTest, BulkMatchPropertyEntityPredicatesParallelHandlesSegmentE
 
 	auto patchedIndex = segIndex;
 	auto firstIt = std::find_if(patchedIndex.begin(), patchedIndex.end(),
-	                            [firstSeg](const SegmentIndexManager::SegmentIndex &entry) {
-		                            return entry.segmentOffset == firstSeg->segmentOffset;
-	                            });
+								[firstSeg](const SegmentIndexManager::SegmentIndex &entry) {
+									return entry.segmentOffset == firstSeg->segmentOffset;
+								});
 	ASSERT_NE(firstIt, patchedIndex.end());
 	const SegmentHeader firstHeader = dataManager->getSegmentTracker()->getSegmentHeaderCopy(firstSeg->segmentOffset);
 	const int64_t outOfSlotId = firstIt->startId + static_cast<int64_t>(firstHeader.used) + 1;
@@ -719,11 +731,8 @@ TEST_F(DataManagerTest, BulkMatchPropertyEntityPredicatesParallelHandlesSegmentE
 
 	concurrent::ThreadPool pool(2);
 	const auto result = dataManager->bulkMatchPropertyEntityPredicates(
-		{propertyIds.front(), propertyIds[1], outOfSlotId, propertyIds.back()},
-		{0, 1, 2, 3},
-		4,
-		{{"keep", PropertyValue(int64_t(2))}},
-		&pool);
+			{propertyIds.front(), propertyIds[1], outOfSlotId, propertyIds.back()}, {0, 1, 2, 3}, 4,
+			{{"keep", PropertyValue(int64_t(2))}}, &pool);
 
 	EXPECT_EQ(result.loadedRows, (std::vector<size_t>{1U}));
 	EXPECT_EQ(result.matchedRows, (std::vector<size_t>{1U}));
@@ -733,57 +742,42 @@ TEST_F(DataManagerTest, BulkMatchPropertyEntityPredicatesHandlesScalarTypesWitho
 	const auto expectedDate = TemporalDate{12345};
 	const auto expectedDateTime = TemporalDateTime{9876543210};
 	const auto expectedDuration = TemporalDuration{2, 3, 4000};
-	const int64_t propertyId = addNodeWithPropertyEntity(
-		dataManager,
-		"BulkPredicateScalarNode",
-		{{"flag", PropertyValue(true)},
-		 {"ratio", PropertyValue(3.5)},
-		 {"name", PropertyValue("match")},
-		 {"date", PropertyValue(expectedDate)},
-		 {"datetime", PropertyValue(expectedDateTime)},
-		 {"duration", PropertyValue(expectedDuration)}});
+	const int64_t propertyId = addNodeWithPropertyEntity(dataManager, "BulkPredicateScalarNode",
+														 {{"flag", PropertyValue(true)},
+														  {"ratio", PropertyValue(3.5)},
+														  {"name", PropertyValue("match")},
+														  {"date", PropertyValue(expectedDate)},
+														  {"datetime", PropertyValue(expectedDateTime)},
+														  {"duration", PropertyValue(expectedDuration)}});
 	ASSERT_NE(propertyId, 0);
 
 	simulateSave();
 	dataManager->clearCache();
 
-	auto match = dataManager->bulkMatchPropertyEntityPredicates(
-		{propertyId},
-		{0},
-		1,
-		{{"flag", PropertyValue(true)},
-		 {"ratio", PropertyValue(3.5)},
-		 {"name", PropertyValue("match")},
-		 {"date", PropertyValue(expectedDate)},
-		 {"datetime", PropertyValue(expectedDateTime)},
-		 {"duration", PropertyValue(expectedDuration)}},
-		nullptr);
+	auto match = dataManager->bulkMatchPropertyEntityPredicates({propertyId}, {0}, 1,
+																{{"flag", PropertyValue(true)},
+																 {"ratio", PropertyValue(3.5)},
+																 {"name", PropertyValue("match")},
+																 {"date", PropertyValue(expectedDate)},
+																 {"datetime", PropertyValue(expectedDateTime)},
+																 {"duration", PropertyValue(expectedDuration)}},
+																nullptr);
 	EXPECT_EQ(match.loadedRows, (std::vector<size_t>{0U}));
 	EXPECT_EQ(match.matchedRows, (std::vector<size_t>{0U}));
 
-	auto typeMismatch = dataManager->bulkMatchPropertyEntityPredicates(
-		{propertyId},
-		{0},
-		1,
-		{{"ratio", PropertyValue(int64_t(3))}},
-		nullptr);
+	auto typeMismatch = dataManager->bulkMatchPropertyEntityPredicates({propertyId}, {0}, 1,
+																	   {{"ratio", PropertyValue(int64_t(3))}}, nullptr);
 	EXPECT_EQ(typeMismatch.loadedRows, (std::vector<size_t>{0U}));
 	EXPECT_TRUE(typeMismatch.matchedRows.empty());
 }
 
 TEST_F(DataManagerTest, BulkVisitPropertyEntityValuesStreamsSelectedKeyWithoutColumnMaterialization) {
 	const int64_t cnPropertyId = addNodeWithPropertyEntity(
-		dataManager,
-		"BulkVisitNode",
-		{{"country", PropertyValue("CN")}, {"age", PropertyValue(int64_t{30})}});
+			dataManager, "BulkVisitNode", {{"country", PropertyValue("CN")}, {"age", PropertyValue(int64_t{30})}});
 	const int64_t usPropertyId = addNodeWithPropertyEntity(
-		dataManager,
-		"BulkVisitNode",
-		{{"country", PropertyValue("US")}, {"age", PropertyValue(int64_t{31})}});
-	const int64_t missingPropertyId = addNodeWithPropertyEntity(
-		dataManager,
-		"BulkVisitNode",
-		{{"age", PropertyValue(int64_t{32})}});
+			dataManager, "BulkVisitNode", {{"country", PropertyValue("US")}, {"age", PropertyValue(int64_t{31})}});
+	const int64_t missingPropertyId =
+			addNodeWithPropertyEntity(dataManager, "BulkVisitNode", {{"age", PropertyValue(int64_t{32})}});
 	ASSERT_NE(cnPropertyId, 0);
 	ASSERT_NE(usPropertyId, 0);
 	ASSERT_NE(missingPropertyId, 0);
@@ -793,14 +787,11 @@ TEST_F(DataManagerTest, BulkVisitPropertyEntityValuesStreamsSelectedKeyWithoutCo
 
 	std::map<size_t, std::string> valuesByRow;
 	const size_t visited = dataManager->bulkVisitPropertyEntityValues(
-		{usPropertyId, cnPropertyId, missingPropertyId, cnPropertyId, 0},
-		{2, 0, 1, 3, 4},
-		5,
-		"country",
-		[&](size_t row, const PropertyValue &value) {
-			valuesByRow[row] = std::get<std::string>(value.getVariant());
-		},
-		nullptr);
+			{usPropertyId, cnPropertyId, missingPropertyId, cnPropertyId, 0}, {2, 0, 1, 3, 4}, 5, "country",
+			[&](size_t row, const PropertyValue &value) {
+				valuesByRow[row] = std::get<std::string>(value.getVariant());
+			},
+			nullptr);
 
 	EXPECT_EQ(visited, 3U);
 	ASSERT_EQ(valuesByRow.size(), 3U);
@@ -815,16 +806,14 @@ TEST_F(DataManagerTest, BulkVisitPropertyEntityValuesStreamsScalarAndTemporalVal
 	const auto expectedDate = TemporalDate::fromYMD(2026, 6, 2);
 	const auto expectedDateTime = TemporalDateTime::fromComponents(2026, 6, 2, 12, 34, 56, 789);
 	const auto expectedDuration = TemporalDuration::fromComponents(0, 1, 0, 2, 3, 4, 5);
-	const int64_t propertyId = addNodeWithPropertyEntity(
-		dataManager,
-		"BulkVisitScalarNode",
-		{{"active", PropertyValue(true)},
-		 {"name", PropertyValue("alice")},
-		 {"age", PropertyValue(int64_t{42})},
-		 {"score", PropertyValue(9.5)},
-		 {"date", PropertyValue(expectedDate)},
-		 {"datetime", PropertyValue(expectedDateTime)},
-		 {"duration", PropertyValue(expectedDuration)}});
+	const int64_t propertyId = addNodeWithPropertyEntity(dataManager, "BulkVisitScalarNode",
+														 {{"active", PropertyValue(true)},
+														  {"name", PropertyValue("alice")},
+														  {"age", PropertyValue(int64_t{42})},
+														  {"score", PropertyValue(9.5)},
+														  {"date", PropertyValue(expectedDate)},
+														  {"datetime", PropertyValue(expectedDateTime)},
+														  {"duration", PropertyValue(expectedDuration)}});
 	ASSERT_NE(propertyId, 0);
 
 	simulateSave();
@@ -833,12 +822,7 @@ TEST_F(DataManagerTest, BulkVisitPropertyEntityValuesStreamsScalarAndTemporalVal
 	std::unordered_map<std::string, PropertyValue> values;
 	auto visitKey = [&](const std::string &key) {
 		return dataManager->bulkVisitPropertyEntityValues(
-			{propertyId},
-			{0},
-			1,
-			key,
-			[&](size_t, const PropertyValue &value) { values[key] = value; },
-			nullptr);
+				{propertyId}, {0}, 1, key, [&](size_t, const PropertyValue &value) { values[key] = value; }, nullptr);
 	};
 
 	EXPECT_EQ(visitKey("active"), 1U);
@@ -862,67 +846,68 @@ TEST_F(DataManagerTest, BulkMatchPropertyEntityPredicatesHandlesStructuredAndNul
 	PropertyValue::MapType expectedMap;
 	expectedMap.emplace("inner", PropertyValue(int64_t(9)));
 
-	const int64_t propertyId = addNodeWithPropertyEntity(
-		dataManager,
-		"BulkPredicateStructuredNode",
-		{{"nothing", PropertyValue(std::monostate{})},
-		 {"items", PropertyValue(expectedList)},
-		 {"meta", PropertyValue(expectedMap)},
-		 {"skip", PropertyValue("ignored")}});
+	const int64_t propertyId = addNodeWithPropertyEntity(dataManager, "BulkPredicateStructuredNode",
+														 {{"nothing", PropertyValue(std::monostate{})},
+														  {"items", PropertyValue(expectedList)},
+														  {"meta", PropertyValue(expectedMap)},
+														  {"skip", PropertyValue("ignored")}});
 	ASSERT_NE(propertyId, 0);
 
 	simulateSave();
 	dataManager->clearCache();
 
-	auto match = dataManager->bulkMatchPropertyEntityPredicates(
-		{propertyId},
-		{0},
-		1,
-		{{"nothing", PropertyValue(std::monostate{})},
-		 {"items", PropertyValue(expectedList)},
-		 {"meta", PropertyValue(expectedMap)}},
-		nullptr);
+	auto match = dataManager->bulkMatchPropertyEntityPredicates({propertyId}, {0}, 1,
+																{{"nothing", PropertyValue(std::monostate{})},
+																 {"items", PropertyValue(expectedList)},
+																 {"meta", PropertyValue(expectedMap)}},
+																nullptr);
 	EXPECT_EQ(match.loadedRows, (std::vector<size_t>{0U}));
 	EXPECT_EQ(match.matchedRows, (std::vector<size_t>{0U}));
 
 	std::vector<PropertyValue> differentList{PropertyValue(int64_t(1)), PropertyValue("other")};
-	auto mismatch = dataManager->bulkMatchPropertyEntityPredicates(
-		{propertyId},
-		{0},
-		1,
-		{{"items", PropertyValue(differentList)}},
-		nullptr);
+	auto mismatch = dataManager->bulkMatchPropertyEntityPredicates({propertyId}, {0}, 1,
+																   {{"items", PropertyValue(differentList)}}, nullptr);
 	EXPECT_EQ(mismatch.loadedRows, (std::vector<size_t>{0U}));
 	EXPECT_TRUE(mismatch.matchedRows.empty());
 }
 
 TEST_F(DataManagerTest, BulkMatchPropertyEntityPredicatesHandlesInvalidInputsAndMissingRows) {
-	const int64_t propertyId = addNodeWithPropertyEntity(
-		dataManager,
-		"BulkPredicateInvalidNode",
-		{{"keep", PropertyValue(int64_t(42))}});
+	const int64_t propertyId =
+			addNodeWithPropertyEntity(dataManager, "BulkPredicateInvalidNode", {{"keep", PropertyValue(int64_t(42))}});
 	ASSERT_NE(propertyId, 0);
 
 	simulateSave();
 	dataManager->clearCache();
 
-	EXPECT_TRUE(dataManager->bulkMatchPropertyEntityPredicates({}, {}, 1, {{"keep", PropertyValue(int64_t(42))}}, nullptr).loadedRows.empty());
-	EXPECT_TRUE(dataManager->bulkMatchPropertyEntityPredicates({propertyId}, {}, 1, {{"keep", PropertyValue(int64_t(42))}}, nullptr).loadedRows.empty());
-	EXPECT_TRUE(dataManager->bulkMatchPropertyEntityPredicates({propertyId}, {0}, 0, {{"keep", PropertyValue(int64_t(42))}}, nullptr).loadedRows.empty());
+	EXPECT_TRUE(
+			dataManager->bulkMatchPropertyEntityPredicates({}, {}, 1, {{"keep", PropertyValue(int64_t(42))}}, nullptr)
+					.loadedRows.empty());
+	EXPECT_TRUE(dataManager
+						->bulkMatchPropertyEntityPredicates({propertyId}, {}, 1, {{"keep", PropertyValue(int64_t(42))}},
+															nullptr)
+						.loadedRows.empty());
+	EXPECT_TRUE(dataManager
+						->bulkMatchPropertyEntityPredicates({propertyId}, {0}, 0,
+															{{"keep", PropertyValue(int64_t(42))}}, nullptr)
+						.loadedRows.empty());
 	EXPECT_TRUE(dataManager->bulkMatchPropertyEntityPredicates({propertyId}, {0}, 1, {}, nullptr).loadedRows.empty());
-	EXPECT_TRUE(dataManager->bulkMatchPropertyEntityPredicates({0, propertyId}, {0, 9}, 1, {{"keep", PropertyValue(int64_t(42))}}, nullptr).loadedRows.empty());
+	EXPECT_TRUE(dataManager
+						->bulkMatchPropertyEntityPredicates({0, propertyId}, {0, 9}, 1,
+															{{"keep", PropertyValue(int64_t(42))}}, nullptr)
+						.loadedRows.empty());
 
 	const auto &segIndex = dataManager->getSegmentIndexManager()->getPropertySegmentIndex();
 	ASSERT_FALSE(segIndex.empty());
 	const int64_t missingId = segIndex.back().endId + 1024;
-	EXPECT_TRUE(dataManager->bulkMatchPropertyEntityPredicates({missingId}, {0}, 1, {{"keep", PropertyValue(int64_t(42))}}, nullptr).loadedRows.empty());
+	EXPECT_TRUE(dataManager
+						->bulkMatchPropertyEntityPredicates({missingId}, {0}, 1, {{"keep", PropertyValue(int64_t(42))}},
+															nullptr)
+						.loadedRows.empty());
 }
 
 TEST_F(DataManagerTest, BulkMatchPropertyEntityPredicatesSequentialHandlesCorruptSegmentMetadata) {
-	const int64_t propertyId = addNodeWithPropertyEntity(
-		dataManager,
-		"BulkPredicateCorruptSegmentNode",
-		{{"keep", PropertyValue(int64_t(42))}});
+	const int64_t propertyId = addNodeWithPropertyEntity(dataManager, "BulkPredicateCorruptSegmentNode",
+														 {{"keep", PropertyValue(int64_t(42))}});
 	ASSERT_NE(propertyId, 0);
 
 	simulateSave();
@@ -942,26 +927,34 @@ TEST_F(DataManagerTest, BulkMatchPropertyEntityPredicatesSequentialHandlesCorrup
 	const int64_t outOfSlotId = patchedEntry.startId + static_cast<int64_t>(header.used) + 1;
 	patchedEntry.endId = std::max(patchedEntry.endId, outOfSlotId);
 	dataManager->getSegmentIndexManager()->setSegmentIndex(Property::typeId, patchedIndex);
-	EXPECT_TRUE(dataManager->bulkMatchPropertyEntityPredicates(
-		{outOfSlotId}, {0}, 1, {{"keep", PropertyValue(int64_t(42))}}, nullptr).loadedRows.empty());
+	EXPECT_TRUE(dataManager
+						->bulkMatchPropertyEntityPredicates({outOfSlotId}, {0}, 1,
+															{{"keep", PropertyValue(int64_t(42))}}, nullptr)
+						.loadedRows.empty());
 
 	writePropertyActiveFlagOnDisk(testFilePath, segmentOffset, segmentStartId, propertyId, false);
-	EXPECT_TRUE(dataManager->bulkMatchPropertyEntityPredicates(
-		{propertyId}, {0}, 1, {{"keep", PropertyValue(int64_t(42))}}, nullptr).loadedRows.empty());
+	EXPECT_TRUE(dataManager
+						->bulkMatchPropertyEntityPredicates({propertyId}, {0}, 1,
+															{{"keep", PropertyValue(int64_t(42))}}, nullptr)
+						.loadedRows.empty());
 
 	dataManager->getSegmentTracker()->updateSegmentHeader(segmentOffset, [](SegmentHeader &trackedHeader) {
 		trackedHeader.used = 0;
 		trackedHeader.inactive_count = 0;
 	});
-	EXPECT_TRUE(dataManager->bulkMatchPropertyEntityPredicates(
-		{propertyId}, {0}, 1, {{"keep", PropertyValue(int64_t(42))}}, nullptr).loadedRows.empty());
+	EXPECT_TRUE(dataManager
+						->bulkMatchPropertyEntityPredicates({propertyId}, {0}, 1,
+															{{"keep", PropertyValue(int64_t(42))}}, nullptr)
+						.loadedRows.empty());
 
 	dataManager->getSegmentTracker()->updateSegmentHeader(segmentOffset, [](SegmentHeader &trackedHeader) {
 		trackedHeader.used = PROPERTIES_PER_SEGMENT * 100;
 		trackedHeader.inactive_count = 0;
 	});
-	EXPECT_TRUE(dataManager->bulkMatchPropertyEntityPredicates(
-		{propertyId}, {0}, 1, {{"keep", PropertyValue(int64_t(42))}}, nullptr).loadedRows.empty());
+	EXPECT_TRUE(dataManager
+						->bulkMatchPropertyEntityPredicates({propertyId}, {0}, 1,
+															{{"keep", PropertyValue(int64_t(42))}}, nullptr)
+						.loadedRows.empty());
 }
 
 TEST_F(DataManagerTest, BulkLoadPropertyEntityColumnsParallelSkipsInactiveAndMissingRows) {
@@ -970,9 +963,8 @@ TEST_F(DataManagerTest, BulkLoadPropertyEntityColumnsParallelSkipsInactiveAndMis
 	propertyIds.reserve(entityCount);
 	for (int i = 0; i < entityCount; ++i) {
 		const int64_t id = addNodeWithPropertyEntity(
-			dataManager,
-			"BulkColumnParallelNode",
-			{{"keep", PropertyValue(int64_t(i + 1))}, {"skip", PropertyValue("not-requested")}});
+				dataManager, "BulkColumnParallelNode",
+				{{"keep", PropertyValue(int64_t(i + 1))}, {"skip", PropertyValue("not-requested")}});
 		ASSERT_NE(id, 0);
 		propertyIds.push_back(id);
 	}
@@ -991,13 +983,8 @@ TEST_F(DataManagerTest, BulkLoadPropertyEntityColumnsParallelSkipsInactiveAndMis
 	concurrent::ThreadPool pool(2);
 	const int64_t missingId = segIndex.back().endId + 1024;
 
-	auto loadedRows = dataManager->bulkLoadPropertyEntityColumns(
-		{propertyIds.front(), propertyIds.back(), missingId},
-		{0, 1, 2},
-		3,
-		{"keep"},
-		columns,
-		&pool);
+	auto loadedRows = dataManager->bulkLoadPropertyEntityColumns({propertyIds.front(), propertyIds.back(), missingId},
+																 {0, 1, 2}, 3, {"keep"}, columns, &pool);
 
 	std::sort(loadedRows.begin(), loadedRows.end());
 	EXPECT_EQ(loadedRows, (std::vector<size_t>{1U}));
@@ -1012,10 +999,8 @@ TEST_F(DataManagerTest, ParallelColumnAndPredicateScansSkipMismatchedIdsAndZeroU
 	std::vector<int64_t> propertyIds;
 	propertyIds.reserve(entityCount);
 	for (int i = 0; i < entityCount; ++i) {
-		const int64_t id = addNodeWithPropertyEntity(
-			dataManager,
-			"BulkParallelMismatchedIdNode",
-			{{"keep", PropertyValue(int64_t(i + 1))}});
+		const int64_t id = addNodeWithPropertyEntity(dataManager, "BulkParallelMismatchedIdNode",
+													 {{"keep", PropertyValue(int64_t(i + 1))}});
 		ASSERT_NE(id, 0);
 		propertyIds.push_back(id);
 	}
@@ -1029,20 +1014,15 @@ TEST_F(DataManagerTest, ParallelColumnAndPredicateScansSkipMismatchedIdsAndZeroU
 	const auto *secondSeg = findSegmentForId(segIndex, propertyIds.back());
 	ASSERT_NE(firstSeg, nullptr);
 	ASSERT_NE(secondSeg, nullptr);
-	writeEntityIdOnDisk<Property>(
-		testFilePath, firstSeg->segmentOffset, firstSeg->startId, propertyIds.front(), propertyIds.front() + 10'000);
+	writeEntityIdOnDisk<Property>(testFilePath, firstSeg->segmentOffset, firstSeg->startId, propertyIds.front(),
+								  propertyIds.front() + 10'000);
 	writeSegmentHeaderUsedOnDisk(testFilePath, secondSeg->segmentOffset, 0);
 
 	std::unordered_map<std::string, std::vector<std::optional<PropertyValue>>> columns;
 	columns.emplace("keep", std::vector<std::optional<PropertyValue>>(3, std::nullopt));
 	concurrent::ThreadPool pool(2);
 	auto loadedRows = dataManager->bulkLoadPropertyEntityColumns(
-		{propertyIds.front(), propertyIds[1], propertyIds.back()},
-		{0, 1, 2},
-		3,
-		{"keep"},
-		columns,
-		&pool);
+			{propertyIds.front(), propertyIds[1], propertyIds.back()}, {0, 1, 2}, 3, {"keep"}, columns, &pool);
 	std::sort(loadedRows.begin(), loadedRows.end());
 	EXPECT_EQ(loadedRows, (std::vector<size_t>{1U}));
 	EXPECT_FALSE(columns.at("keep")[0].has_value());
@@ -1050,12 +1030,9 @@ TEST_F(DataManagerTest, ParallelColumnAndPredicateScansSkipMismatchedIdsAndZeroU
 	EXPECT_EQ(columns.at("keep")[1].value(), PropertyValue(int64_t(2)));
 	EXPECT_FALSE(columns.at("keep")[2].has_value());
 
-	auto matches = dataManager->bulkMatchPropertyEntityPredicates(
-		{propertyIds.front(), propertyIds[1], propertyIds.back()},
-		{0, 1, 2},
-		3,
-		{{"keep", PropertyValue(int64_t(2))}},
-		&pool);
+	auto matches =
+			dataManager->bulkMatchPropertyEntityPredicates({propertyIds.front(), propertyIds[1], propertyIds.back()},
+														   {0, 1, 2}, 3, {{"keep", PropertyValue(int64_t(2))}}, &pool);
 	std::sort(matches.loadedRows.begin(), matches.loadedRows.end());
 	std::sort(matches.matchedRows.begin(), matches.matchedRows.end());
 	EXPECT_EQ(matches.loadedRows, (std::vector<size_t>{1U}));
@@ -1068,9 +1045,8 @@ TEST_F(DataManagerTest, BulkLoadPropertyEntityValuesParallelSkipsInactiveAndMiss
 	propertyIds.reserve(entityCount);
 	for (int i = 0; i < entityCount; ++i) {
 		const int64_t id = addNodeWithPropertyEntity(
-			dataManager,
-			"BulkSelectedPropertyParallelNode",
-			{{"k", PropertyValue(int64_t(i + 1))}, {"skip", PropertyValue("not-requested")}});
+				dataManager, "BulkSelectedPropertyParallelNode",
+				{{"k", PropertyValue(int64_t(i + 1))}, {"skip", PropertyValue("not-requested")}});
 		ASSERT_NE(id, 0);
 		propertyIds.push_back(id);
 	}
@@ -1086,8 +1062,8 @@ TEST_F(DataManagerTest, BulkLoadPropertyEntityValuesParallelSkipsInactiveAndMiss
 
 	concurrent::ThreadPool pool(2);
 	const int64_t missingId = segIndex.back().endId + 1024;
-	const auto loaded = dataManager->bulkLoadPropertyEntityValues(
-		{propertyIds.front(), propertyIds.back(), missingId}, {"k"}, &pool);
+	const auto loaded = dataManager->bulkLoadPropertyEntityValues({propertyIds.front(), propertyIds.back(), missingId},
+																  {"k"}, &pool);
 
 	EXPECT_FALSE(loaded.contains(propertyIds.front()));
 	ASSERT_TRUE(loaded.contains(propertyIds.back()));
@@ -1096,17 +1072,10 @@ TEST_F(DataManagerTest, BulkLoadPropertyEntityValuesParallelSkipsInactiveAndMiss
 }
 
 TEST_F(DataManagerTest, BulkLoadPropertyEntityValuesParallelHandlesSegmentEdgeCases) {
-	const int entityCount = static_cast<int>(PROPERTIES_PER_SEGMENT) + 1;
-	std::vector<int64_t> propertyIds;
-	propertyIds.reserve(entityCount);
-	for (int i = 0; i < entityCount; ++i) {
-		const int64_t id = addNodeWithPropertyEntity(
-			dataManager,
-			"BulkSelectedPropertyParallelEdgeCaseNode",
-			{{"k", PropertyValue(int64_t(i + 1))}});
-		ASSERT_NE(id, 0);
-		propertyIds.push_back(id);
-	}
+	const size_t entityCount = static_cast<size_t>(PROPERTIES_PER_SEGMENT) * kParallelPropertySegmentsForBranchTests;
+	const auto propertyIds = addDirectPropertyEntitiesForParallelScan(
+			dataManager, "BulkSelectedPropertyParallelEdgeCaseNode", entityCount);
+	ASSERT_EQ(propertyIds.size(), entityCount);
 
 	simulateSave();
 	dataManager->clearCache();
@@ -1120,14 +1089,14 @@ TEST_F(DataManagerTest, BulkLoadPropertyEntityValuesParallelHandlesSegmentEdgeCa
 	writeSegmentHeaderUsedOnDisk(testFilePath, secondSeg->segmentOffset, 0);
 
 	auto patchedIndex = segIndex;
-	auto firstIt = std::find_if(patchedIndex.begin(), patchedIndex.end(),
-								[firstSeg](const SegmentIndexManager::SegmentIndex &entry) {
-									return entry.segmentOffset == firstSeg->segmentOffset;
-								});
-	ASSERT_NE(firstIt, patchedIndex.end());
-	const SegmentHeader firstHeader = dataManager->getSegmentTracker()->getSegmentHeaderCopy(firstSeg->segmentOffset);
-	const int64_t outOfSlotId = firstIt->startId + static_cast<int64_t>(firstHeader.used) + 1;
-	firstIt->endId = std::max(firstIt->endId, outOfSlotId);
+	auto secondIt = std::find_if(patchedIndex.begin(), patchedIndex.end(),
+								 [secondSeg](const SegmentIndexManager::SegmentIndex &entry) {
+									 return entry.segmentOffset == secondSeg->segmentOffset;
+								 });
+	ASSERT_NE(secondIt, patchedIndex.end());
+	const SegmentHeader secondHeader = dataManager->getSegmentTracker()->getSegmentHeaderCopy(secondSeg->segmentOffset);
+	const int64_t outOfSlotId = secondIt->startId + static_cast<int64_t>(secondHeader.used) + 1;
+	secondIt->endId = std::max(secondIt->endId, outOfSlotId);
 	SegmentIndexManager::SegmentIndex fakeSeg{};
 	fakeSeg.startId = segIndex.back().endId + 100;
 	fakeSeg.endId = fakeSeg.startId;
@@ -1136,8 +1105,9 @@ TEST_F(DataManagerTest, BulkLoadPropertyEntityValuesParallelHandlesSegmentEdgeCa
 	dataManager->getSegmentIndexManager()->setSegmentIndex(Property::typeId, std::move(patchedIndex));
 
 	concurrent::ThreadPool pool(2);
-	const auto loaded = dataManager->bulkLoadPropertyEntityValues(
-		{propertyIds[1], outOfSlotId, propertyIds.back(), fakeSeg.startId}, {"k"}, &pool);
+	auto selectedIds = representativePropertyIdsForSegments(segIndex);
+	selectedIds.insert(selectedIds.end(), {propertyIds[1], outOfSlotId, propertyIds.back(), fakeSeg.startId});
+	const auto loaded = dataManager->bulkLoadPropertyEntityValues(selectedIds, {"k"}, &pool);
 
 	ASSERT_TRUE(loaded.contains(propertyIds[1]));
 	EXPECT_EQ(loaded.at(propertyIds[1]).at("k"), PropertyValue(int64_t(2)));
@@ -1147,10 +1117,8 @@ TEST_F(DataManagerTest, BulkLoadPropertyEntityValuesParallelHandlesSegmentEdgeCa
 }
 
 TEST_F(DataManagerTest, BulkLoadPropertyEntityValuesIgnoreZeroSerializedId) {
-	const int64_t propertyId = addNodeWithPropertyEntity(
-		dataManager,
-		"BulkSelectedPropertyZeroIdNode",
-		{{"keep", PropertyValue(int64_t(42))}});
+	const int64_t propertyId = addNodeWithPropertyEntity(dataManager, "BulkSelectedPropertyZeroIdNode",
+														 {{"keep", PropertyValue(int64_t(42))}});
 	ASSERT_NE(propertyId, 0);
 
 	simulateSave();
@@ -1166,10 +1134,8 @@ TEST_F(DataManagerTest, BulkLoadPropertyEntityValuesIgnoreZeroSerializedId) {
 }
 
 TEST_F(DataManagerTest, PropertyReadersRejectInvalidKeyLength) {
-	const int64_t propertyId = addNodeWithPropertyEntity(
-		dataManager,
-		"BulkInvalidKeyLengthNode",
-		{{"keep", PropertyValue(int64_t(42))}});
+	const int64_t propertyId =
+			addNodeWithPropertyEntity(dataManager, "BulkInvalidKeyLengthNode", {{"keep", PropertyValue(int64_t(42))}});
 	ASSERT_NE(propertyId, 0);
 
 	simulateSave();
@@ -1187,17 +1153,15 @@ TEST_F(DataManagerTest, PropertyReadersRejectInvalidKeyLength) {
 	EXPECT_TRUE(dataManager->bulkLoadPropertyEntityColumns({propertyId}, {0}, 1, {"keep"}, columns, nullptr).empty());
 	EXPECT_FALSE(columns.at("keep")[0].has_value());
 
-	auto matches = dataManager->bulkMatchPropertyEntityPredicates(
-		{propertyId}, {0}, 1, {{"keep", PropertyValue(int64_t(42))}}, nullptr);
+	auto matches = dataManager->bulkMatchPropertyEntityPredicates({propertyId}, {0}, 1,
+																  {{"keep", PropertyValue(int64_t(42))}}, nullptr);
 	EXPECT_TRUE(matches.loadedRows.empty());
 	EXPECT_TRUE(matches.matchedRows.empty());
 }
 
 TEST_F(DataManagerTest, PropertyReadersRejectUnknownSkippedValueType) {
-	const int64_t propertyId = addNodeWithPropertyEntity(
-		dataManager,
-		"BulkUnknownSkippedValueNode",
-		{{"skip", PropertyValue(int64_t(42))}});
+	const int64_t propertyId = addNodeWithPropertyEntity(dataManager, "BulkUnknownSkippedValueNode",
+														 {{"skip", PropertyValue(int64_t(42))}});
 	ASSERT_NE(propertyId, 0);
 
 	simulateSave();
@@ -1206,7 +1170,8 @@ TEST_F(DataManagerTest, PropertyReadersRejectUnknownSkippedValueType) {
 	const auto &segIndex = dataManager->getSegmentIndexManager()->getPropertySegmentIndex();
 	const auto *seg = findSegmentForId(segIndex, propertyId);
 	ASSERT_NE(seg, nullptr);
-	writeFirstPropertyValueTypeOnDisk(testFilePath, seg->segmentOffset, seg->startId, propertyId, "skip", PropertyType::UNKNOWN);
+	writeFirstPropertyValueTypeOnDisk(testFilePath, seg->segmentOffset, seg->startId, propertyId, "skip",
+									  PropertyType::UNKNOWN);
 
 	EXPECT_TRUE(dataManager->bulkLoadPropertyEntityValues({propertyId}, {"keep"}, nullptr).empty());
 
@@ -1215,8 +1180,8 @@ TEST_F(DataManagerTest, PropertyReadersRejectUnknownSkippedValueType) {
 	EXPECT_TRUE(dataManager->bulkLoadPropertyEntityColumns({propertyId}, {0}, 1, {"keep"}, columns, nullptr).empty());
 	EXPECT_FALSE(columns.at("keep")[0].has_value());
 
-	auto matches = dataManager->bulkMatchPropertyEntityPredicates(
-		{propertyId}, {0}, 1, {{"keep", PropertyValue(int64_t(42))}}, nullptr);
+	auto matches = dataManager->bulkMatchPropertyEntityPredicates({propertyId}, {0}, 1,
+																  {{"keep", PropertyValue(int64_t(42))}}, nullptr);
 	EXPECT_TRUE(matches.loadedRows.empty());
 	EXPECT_TRUE(matches.matchedRows.empty());
 }
@@ -1236,6 +1201,67 @@ TEST_F(DataManagerTest, AddEdgesInvokesRegisteredValidatorsPath) {
 	dataManager->addEdges(edges);
 
 	EXPECT_EQ(validator->edgeInsertCalls, 2);
+}
+
+TEST_F(DataManagerTest, AddNodesBatchStoresExternalPropertiesAndPersistsOwnerLinks) {
+	std::vector<Node> nodes;
+	nodes.push_back(createTestNode(dataManager, "BulkPropertyNode"));
+	nodes.back().setProperties({{"name", PropertyValue(std::string("alice"))}, {"score", PropertyValue(int64_t{7})}});
+	nodes.push_back(createTestNode(dataManager, "BulkPropertyNode"));
+	nodes.back().setProperties({{"name", PropertyValue(std::string("bob"))}, {"score", PropertyValue(int64_t{9})}});
+	nodes.push_back(createTestNode(dataManager, "BulkPropertyNode"));
+
+	dataManager->addNodes(nodes);
+
+	ASSERT_NE(nodes[0].getId(), 0);
+	ASSERT_NE(nodes[1].getId(), 0);
+	EXPECT_TRUE(nodes[0].hasPropertyEntity());
+	EXPECT_TRUE(nodes[1].hasPropertyEntity());
+	EXPECT_FALSE(nodes[2].hasPropertyEntity());
+
+	auto firstProps = dataManager->getNodeProperties(nodes[0].getId());
+	EXPECT_EQ(firstProps.at("name"), PropertyValue(std::string("alice")));
+	EXPECT_EQ(firstProps.at("score"), PropertyValue(int64_t{7}));
+
+	simulateSave();
+	dataManager->clearCache();
+
+	const Node reloaded = dataManager->getNode(nodes[1].getId());
+	EXPECT_TRUE(reloaded.hasPropertyEntity());
+	auto secondProps = dataManager->getNodeProperties(nodes[1].getId());
+	EXPECT_EQ(secondProps.at("name"), PropertyValue(std::string("bob")));
+	EXPECT_EQ(secondProps.at("score"), PropertyValue(int64_t{9}));
+}
+
+TEST_F(DataManagerTest, AddEdgesBatchStoresExternalPropertiesAndPersistsOwnerLinks) {
+	auto src = createTestNode(dataManager, "BulkEdgePropertyNode");
+	auto dst = createTestNode(dataManager, "BulkEdgePropertyNode");
+	std::vector<Node> endpoints{src, dst};
+	dataManager->addNodes(endpoints);
+
+	std::vector<Edge> edges;
+	edges.push_back(createTestEdge(dataManager, endpoints[0].getId(), endpoints[1].getId(), "BULK_PROPERTY_EDGE"));
+	edges.back().setProperties({{"weight", PropertyValue(int64_t{3})}});
+	edges.push_back(createTestEdge(dataManager, endpoints[1].getId(), endpoints[0].getId(), "BULK_PROPERTY_EDGE"));
+	edges.back().setProperties({{"weight", PropertyValue(int64_t{5})}});
+
+	dataManager->addEdges(edges);
+
+	ASSERT_NE(edges[0].getId(), 0);
+	ASSERT_NE(edges[1].getId(), 0);
+	EXPECT_TRUE(edges[0].hasPropertyEntity());
+	EXPECT_TRUE(edges[1].hasPropertyEntity());
+
+	auto firstProps = dataManager->getEdgeProperties(edges[0].getId());
+	EXPECT_EQ(firstProps.at("weight"), PropertyValue(int64_t{3}));
+
+	simulateSave();
+	dataManager->clearCache();
+
+	const Edge reloaded = dataManager->getEdge(edges[1].getId());
+	EXPECT_TRUE(reloaded.hasPropertyEntity());
+	auto secondProps = dataManager->getEdgeProperties(edges[1].getId());
+	EXPECT_EQ(secondProps.at("weight"), PropertyValue(int64_t{5}));
 }
 
 TEST_F(DataManagerTest, BulkLoadPropertyEntitiesSequentialSkipsInactiveAndOutOfUsedSlotIds) {
@@ -1285,15 +1311,9 @@ TEST_F(DataManagerTest, BulkLoadPropertyEntitiesSequentialSkipsZeroUsedSegment) 
 }
 
 TEST_F(DataManagerTest, BulkLoadPropertyEntitiesParallelHandlesShortReadGroup) {
-	// Create enough entities to guarantee at least 2 property segments
-	const int entityCount = static_cast<int>(PROPERTIES_PER_SEGMENT) + 1;
-	std::vector<int64_t> propertyIds;
-	propertyIds.reserve(entityCount);
-	for (int i = 0; i < entityCount; ++i) {
-		const int64_t id = addNodeWithSinglePropertyEntity(dataManager, "BulkParShortReadNode", i + 1);
-		ASSERT_NE(id, 0);
-		propertyIds.push_back(id);
-	}
+	const size_t entityCount = static_cast<size_t>(PROPERTIES_PER_SEGMENT) * kParallelPropertySegmentsForBranchTests;
+	const auto propertyIds = addDirectPropertyEntitiesForParallelScan(dataManager, "BulkParShortReadNode", entityCount);
+	ASSERT_EQ(propertyIds.size(), entityCount);
 
 	simulateSave();
 	dataManager->clearCache();
@@ -1313,7 +1333,9 @@ TEST_F(DataManagerTest, BulkLoadPropertyEntitiesParallelHandlesShortReadGroup) {
 	const int64_t realIdB = propertyIds.back();
 	concurrent::ThreadPool pool(2);
 
-	const auto loaded = dataManager->bulkLoadPropertyEntities({realIdA, realIdB, fakeSeg.startId}, &pool);
+	auto selectedIds = representativePropertyIdsForSegments(segIndex);
+	selectedIds.insert(selectedIds.end(), {realIdA, realIdB, fakeSeg.startId});
+	const auto loaded = dataManager->bulkLoadPropertyEntities(selectedIds, &pool);
 
 	EXPECT_TRUE(loaded.contains(realIdA));
 	EXPECT_TRUE(loaded.contains(realIdB));
@@ -1321,15 +1343,9 @@ TEST_F(DataManagerTest, BulkLoadPropertyEntitiesParallelHandlesShortReadGroup) {
 }
 
 TEST_F(DataManagerTest, BulkLoadPropertyEntitiesParallelCoversZeroUsedInactiveAndOutOfSlot) {
-	// Create enough entities to guarantee at least 2 property segments
-	const int entityCount = static_cast<int>(PROPERTIES_PER_SEGMENT) + 1;
-	std::vector<int64_t> propertyIds;
-	propertyIds.reserve(entityCount);
-	for (int i = 0; i < entityCount; ++i) {
-		const int64_t id = addNodeWithSinglePropertyEntity(dataManager, "BulkParBranchNode", i + 10);
-		ASSERT_NE(id, 0);
-		propertyIds.push_back(id);
-	}
+	const size_t entityCount = static_cast<size_t>(PROPERTIES_PER_SEGMENT) * kParallelPropertySegmentsForBranchTests;
+	const auto propertyIds = addDirectPropertyEntitiesForParallelScan(dataManager, "BulkParBranchNode", entityCount);
+	ASSERT_EQ(propertyIds.size(), entityCount);
 
 	simulateSave();
 	dataManager->clearCache();
@@ -1345,7 +1361,7 @@ TEST_F(DataManagerTest, BulkLoadPropertyEntitiesParallelCoversZeroUsedInactiveAn
 
 	const int64_t inactiveId = propertyIds.front();
 	int64_t activeIdInFirstSeg = 0;
-	for (int64_t id : propertyIds) {
+	for (int64_t id: propertyIds) {
 		if (id >= firstSeg->startId && id <= firstSeg->endId && id != inactiveId) {
 			activeIdInFirstSeg = id;
 			break;
@@ -1357,22 +1373,23 @@ TEST_F(DataManagerTest, BulkLoadPropertyEntitiesParallelCoversZeroUsedInactiveAn
 	writeSegmentHeaderUsedOnDisk(testFilePath, secondSeg->segmentOffset, 0);
 
 	auto patchedIndex = segIndex;
-	auto firstIt = std::find_if(patchedIndex.begin(), patchedIndex.end(),
-								[firstSeg](const SegmentIndexManager::SegmentIndex &seg) {
-									return seg.segmentOffset == firstSeg->segmentOffset;
-								});
-	ASSERT_NE(firstIt, patchedIndex.end());
-	// Place outOfSlotId beyond the actual used count so slot >= header.used
-	const SegmentHeader firstHeader = dataManager->getSegmentTracker()->getSegmentHeaderCopy(firstSeg->segmentOffset);
-	const int64_t outOfSlotId = firstIt->startId + static_cast<int64_t>(firstHeader.used) + 1;
-	firstIt->endId = std::max(firstIt->endId, outOfSlotId);
+	auto secondIt = std::find_if(patchedIndex.begin(), patchedIndex.end(),
+								 [secondSeg](const SegmentIndexManager::SegmentIndex &seg) {
+									 return seg.segmentOffset == secondSeg->segmentOffset;
+								 });
+	ASSERT_NE(secondIt, patchedIndex.end());
+	// Place outOfSlotId beyond the actual used count of the last segment so it cannot overlap a real segment.
+	const SegmentHeader secondHeader = dataManager->getSegmentTracker()->getSegmentHeaderCopy(secondSeg->segmentOffset);
+	const int64_t outOfSlotId = secondIt->startId + static_cast<int64_t>(secondHeader.used) + 1;
+	secondIt->endId = std::max(secondIt->endId, outOfSlotId);
 	dataManager->getSegmentIndexManager()->setSegmentIndex(Property::typeId, std::move(patchedIndex));
 
 	const int64_t secondSegId = propertyIds.back();
 
 	concurrent::ThreadPool pool(2);
-	const auto loaded = dataManager->bulkLoadPropertyEntities(
-		{inactiveId, activeIdInFirstSeg, outOfSlotId, secondSegId}, &pool);
+	auto selectedIds = representativePropertyIdsForSegments(segIndex);
+	selectedIds.insert(selectedIds.end(), {inactiveId, activeIdInFirstSeg, outOfSlotId, secondSegId});
+	const auto loaded = dataManager->bulkLoadPropertyEntities(selectedIds, &pool);
 
 	EXPECT_FALSE(loaded.contains(inactiveId));
 	EXPECT_TRUE(loaded.contains(activeIdInFirstSeg));
@@ -1393,8 +1410,8 @@ TEST_F(DataManagerTest, BulkLoadPropertyEntitiesWithSingleThreadPoolFallsBackToS
 	dataManager->clearCache();
 
 	concurrent::ThreadPool singleThreadPool(1);
-	const auto loaded = dataManager->bulkLoadPropertyEntities({propertyIds.front(), propertyIds.back()},
-															  &singleThreadPool);
+	const auto loaded =
+			dataManager->bulkLoadPropertyEntities({propertyIds.front(), propertyIds.back()}, &singleThreadPool);
 
 	EXPECT_TRUE(loaded.contains(propertyIds.front()));
 	EXPECT_TRUE(loaded.contains(propertyIds.back()));
@@ -1466,9 +1483,11 @@ TEST_F(DataManagerTest, BulkLoadEntitiesSkipSegmentsWhenReadsAreShort) {
 	simulateSave();
 	dataManager->clearCache();
 
-	const auto *nodeSeg = findSegmentForId(dataManager->getSegmentIndexManager()->getNodeSegmentIndex(), source.getId());
+	const auto *nodeSeg =
+			findSegmentForId(dataManager->getSegmentIndexManager()->getNodeSegmentIndex(), source.getId());
 	const auto *edgeSeg = findSegmentForId(dataManager->getSegmentIndexManager()->getEdgeSegmentIndex(), edge.getId());
-	const auto *propertySeg = findSegmentForId(dataManager->getSegmentIndexManager()->getPropertySegmentIndex(), propertyId);
+	const auto *propertySeg =
+			findSegmentForId(dataManager->getSegmentIndexManager()->getPropertySegmentIndex(), propertyId);
 	ASSERT_NE(nodeSeg, nullptr);
 	ASSERT_NE(edgeSeg, nullptr);
 	ASSERT_NE(propertySeg, nullptr);
@@ -1525,12 +1544,16 @@ TEST_F(DataManagerTest, DirectDiskLoadsTreatInactivePersistedEntitiesAsMissing) 
 	simulateSave();
 	dataManager->clearCache();
 
-	const auto *nodeSeg = findSegmentForId(dataManager->getSegmentIndexManager()->getNodeSegmentIndex(), source.getId());
+	const auto *nodeSeg =
+			findSegmentForId(dataManager->getSegmentIndexManager()->getNodeSegmentIndex(), source.getId());
 	const auto *edgeSeg = findSegmentForId(dataManager->getSegmentIndexManager()->getEdgeSegmentIndex(), edge.getId());
-	const auto *propertySeg = findSegmentForId(dataManager->getSegmentIndexManager()->getPropertySegmentIndex(), propertyId);
+	const auto *propertySeg =
+			findSegmentForId(dataManager->getSegmentIndexManager()->getPropertySegmentIndex(), propertyId);
 	const auto *blobSeg = findSegmentForId(dataManager->getSegmentIndexManager()->getBlobSegmentIndex(), blob.getId());
-	const auto *indexSeg = findSegmentForId(dataManager->getSegmentIndexManager()->getIndexSegmentIndex(), index.getId());
-	const auto *stateSeg = findSegmentForId(dataManager->getSegmentIndexManager()->getStateSegmentIndex(), state.getId());
+	const auto *indexSeg =
+			findSegmentForId(dataManager->getSegmentIndexManager()->getIndexSegmentIndex(), index.getId());
+	const auto *stateSeg =
+			findSegmentForId(dataManager->getSegmentIndexManager()->getStateSegmentIndex(), state.getId());
 	ASSERT_NE(nodeSeg, nullptr);
 	ASSERT_NE(edgeSeg, nullptr);
 	ASSERT_NE(propertySeg, nullptr);
@@ -1551,13 +1574,18 @@ TEST_F(DataManagerTest, DirectDiskLoadsTreatInactivePersistedEntitiesAsMissing) 
 	State inactiveState = state;
 	inactiveState.markInactive();
 
-	writeSerializedEntityOnDisk<Node>(testFilePath, nodeSeg->segmentOffset, nodeSeg->startId, source.getId(), inactiveNode);
-	writeSerializedEntityOnDisk<Edge>(testFilePath, edgeSeg->segmentOffset, edgeSeg->startId, edge.getId(), inactiveEdge);
-	writeSerializedEntityOnDisk<Property>(
-		testFilePath, propertySeg->segmentOffset, propertySeg->startId, propertyId, inactiveProperty);
-	writeSerializedEntityOnDisk<Blob>(testFilePath, blobSeg->segmentOffset, blobSeg->startId, blob.getId(), inactiveBlob);
-	writeSerializedEntityOnDisk<Index>(testFilePath, indexSeg->segmentOffset, indexSeg->startId, index.getId(), inactiveIndex);
-	writeSerializedEntityOnDisk<State>(testFilePath, stateSeg->segmentOffset, stateSeg->startId, state.getId(), inactiveState);
+	writeSerializedEntityOnDisk<Node>(testFilePath, nodeSeg->segmentOffset, nodeSeg->startId, source.getId(),
+									  inactiveNode);
+	writeSerializedEntityOnDisk<Edge>(testFilePath, edgeSeg->segmentOffset, edgeSeg->startId, edge.getId(),
+									  inactiveEdge);
+	writeSerializedEntityOnDisk<Property>(testFilePath, propertySeg->segmentOffset, propertySeg->startId, propertyId,
+										  inactiveProperty);
+	writeSerializedEntityOnDisk<Blob>(testFilePath, blobSeg->segmentOffset, blobSeg->startId, blob.getId(),
+									  inactiveBlob);
+	writeSerializedEntityOnDisk<Index>(testFilePath, indexSeg->segmentOffset, indexSeg->startId, index.getId(),
+									   inactiveIndex);
+	writeSerializedEntityOnDisk<State>(testFilePath, stateSeg->segmentOffset, stateSeg->startId, state.getId(),
+									   inactiveState);
 	dataManager->clearCache();
 
 	EXPECT_EQ(dataManager->loadNodeFromDisk(source.getId()).getId(), 0);
@@ -1569,10 +1597,8 @@ TEST_F(DataManagerTest, DirectDiskLoadsTreatInactivePersistedEntitiesAsMissing) 
 }
 
 TEST_F(DataManagerTest, PropertyColumnAndPredicateScansSkipMismatchedSerializedIds) {
-	const int64_t propertyId = addNodeWithPropertyEntity(
-		dataManager,
-		"MismatchedPropertyIdNode",
-		{{"keep", PropertyValue(int64_t(42))}});
+	const int64_t propertyId =
+			addNodeWithPropertyEntity(dataManager, "MismatchedPropertyIdNode", {{"keep", PropertyValue(int64_t(42))}});
 	ASSERT_NE(propertyId, 0);
 
 	simulateSave();
@@ -1588,8 +1614,8 @@ TEST_F(DataManagerTest, PropertyColumnAndPredicateScansSkipMismatchedSerializedI
 	EXPECT_TRUE(dataManager->bulkLoadPropertyEntityColumns({propertyId}, {0}, 1, {"keep"}, columns, nullptr).empty());
 	EXPECT_FALSE(columns.at("keep")[0].has_value());
 
-	auto matches = dataManager->bulkMatchPropertyEntityPredicates(
-		{propertyId}, {0}, 1, {{"keep", PropertyValue(int64_t(42))}}, nullptr);
+	auto matches = dataManager->bulkMatchPropertyEntityPredicates({propertyId}, {0}, 1,
+																  {{"keep", PropertyValue(int64_t(42))}}, nullptr);
 	EXPECT_TRUE(matches.loadedRows.empty());
 	EXPECT_TRUE(matches.matchedRows.empty());
 }
@@ -1644,14 +1670,14 @@ TEST_F(DataManagerTest, DirtyEntriesWithDefaultEntityIdsAreIgnoredForAllEntityKi
 }
 
 TEST_F(DataManagerTest, BulkMatchPropertyEntityPredicateSpecsSupportsComparisonOps) {
-	const int64_t firstPropertyId = addNodeWithPropertyEntity(
-		dataManager,
-		"BulkPredicateSpecNode",
-		{{"age", PropertyValue(int64_t(30))}, {"score", PropertyValue(int64_t(900))}, {"country", PropertyValue("CN")}});
-	const int64_t secondPropertyId = addNodeWithPropertyEntity(
-		dataManager,
-		"BulkPredicateSpecNode",
-		{{"age", PropertyValue(int64_t(25))}, {"score", PropertyValue(int64_t(100))}, {"country", PropertyValue("US")}});
+	const int64_t firstPropertyId = addNodeWithPropertyEntity(dataManager, "BulkPredicateSpecNode",
+															  {{"age", PropertyValue(int64_t(30))},
+															   {"score", PropertyValue(int64_t(900))},
+															   {"country", PropertyValue("CN")}});
+	const int64_t secondPropertyId = addNodeWithPropertyEntity(dataManager, "BulkPredicateSpecNode",
+															   {{"age", PropertyValue(int64_t(25))},
+																{"score", PropertyValue(int64_t(100))},
+																{"country", PropertyValue("US")}});
 	ASSERT_NE(firstPropertyId, 0);
 	ASSERT_NE(secondPropertyId, 0);
 
@@ -1663,13 +1689,11 @@ TEST_F(DataManagerTest, BulkMatchPropertyEntityPredicateSpecsSupportsComparisonO
 	const std::vector<size_t> rows{0, 1};
 
 	auto firstOnly = dataManager->bulkMatchPropertyEntityPredicateSpecs(
-		ids,
-		rows,
-		2,
-		{{"age", Op::PEP_GT, PropertyValue(int64_t(29)), std::nullopt},
-		 {"score", Op::PEP_LE, PropertyValue(int64_t(900)), std::nullopt},
-		 {"country", Op::PEP_NE, PropertyValue("US"), std::nullopt}},
-		nullptr);
+			ids, rows, 2,
+			{{"age", Op::PEP_GT, PropertyValue(int64_t(29)), std::nullopt},
+			 {"score", Op::PEP_LE, PropertyValue(int64_t(900)), std::nullopt},
+			 {"country", Op::PEP_NE, PropertyValue("US"), std::nullopt}},
+			nullptr);
 	EXPECT_EQ(firstOnly.loadedRows, (std::vector<size_t>{0U, 1U}));
 	EXPECT_EQ(firstOnly.matchedRows, (std::vector<size_t>{0U}));
 
@@ -1677,78 +1701,60 @@ TEST_F(DataManagerTest, BulkMatchPropertyEntityPredicateSpecsSupportsComparisonO
 	countOnlyOptions.collectLoadedRows = false;
 	countOnlyOptions.collectMatchedRows = false;
 	auto firstOnlyCounts = dataManager->bulkMatchPropertyEntityPredicateSpecs(
-		ids,
-		rows,
-		2,
-		{{"age", Op::PEP_GT, PropertyValue(int64_t(29)), std::nullopt},
-		 {"score", Op::PEP_LE, PropertyValue(int64_t(900)), std::nullopt},
-		 {"country", Op::PEP_NE, PropertyValue("US"), std::nullopt}},
-		nullptr,
-		countOnlyOptions);
+			ids, rows, 2,
+			{{"age", Op::PEP_GT, PropertyValue(int64_t(29)), std::nullopt},
+			 {"score", Op::PEP_LE, PropertyValue(int64_t(900)), std::nullopt},
+			 {"country", Op::PEP_NE, PropertyValue("US"), std::nullopt}},
+			nullptr, countOnlyOptions);
 	EXPECT_TRUE(firstOnlyCounts.loadedRows.empty());
 	EXPECT_TRUE(firstOnlyCounts.matchedRows.empty());
 	EXPECT_EQ(firstOnlyCounts.loadedCount, 2U);
 	EXPECT_EQ(firstOnlyCounts.matchedCount, 1U);
 
 	auto secondOnly = dataManager->bulkMatchPropertyEntityPredicateSpecs(
-		ids,
-		rows,
-		2,
-		{{"age", Op::PEP_LT, PropertyValue(int64_t(30)), std::nullopt},
-		 {"score", Op::PEP_GE, PropertyValue(int64_t(100)), std::nullopt}},
-		nullptr);
+			ids, rows, 2,
+			{{"age", Op::PEP_LT, PropertyValue(int64_t(30)), std::nullopt},
+			 {"score", Op::PEP_GE, PropertyValue(int64_t(100)), std::nullopt}},
+			nullptr);
 	EXPECT_EQ(secondOnly.loadedRows, (std::vector<size_t>{0U, 1U}));
 	EXPECT_EQ(secondOnly.matchedRows, (std::vector<size_t>{1U}));
 
 	auto rangeMatch = dataManager->bulkMatchPropertyEntityPredicateSpecs(
-		ids,
-		rows,
-		2,
-		{{"age", Op::PEP_RANGE_CLOSED, PropertyValue(int64_t(25)), PropertyValue(int64_t(30))}},
-		nullptr);
+			ids, rows, 2, {{"age", Op::PEP_RANGE_CLOSED, PropertyValue(int64_t(25)), PropertyValue(int64_t(30))}},
+			nullptr);
 	EXPECT_EQ(rangeMatch.loadedRows, (std::vector<size_t>{0U, 1U}));
 	EXPECT_EQ(rangeMatch.matchedRows, (std::vector<size_t>{0U, 1U}));
 
 	auto repeatedKeyRange = dataManager->bulkMatchPropertyEntityPredicateSpecs(
-		ids,
-		rows,
-		2,
-		{{"age", Op::PEP_GE, PropertyValue(int64_t(26)), std::nullopt},
-		 {"age", Op::PEP_LT, PropertyValue(int64_t(31)), std::nullopt}},
-		nullptr);
+			ids, rows, 2,
+			{{"age", Op::PEP_GE, PropertyValue(int64_t(26)), std::nullopt},
+			 {"age", Op::PEP_LT, PropertyValue(int64_t(31)), std::nullopt}},
+			nullptr);
 	EXPECT_EQ(repeatedKeyRange.loadedRows, (std::vector<size_t>{0U, 1U}));
 	EXPECT_EQ(repeatedKeyRange.matchedRows, (std::vector<size_t>{0U}));
 
 	auto missingUpperBound = dataManager->bulkMatchPropertyEntityPredicateSpecs(
-		ids,
-		rows,
-		2,
-		{{"age", Op::PEP_RANGE_CLOSED, PropertyValue(int64_t(25)), std::nullopt}},
-		nullptr);
+			ids, rows, 2, {{"age", Op::PEP_RANGE_CLOSED, PropertyValue(int64_t(25)), std::nullopt}}, nullptr);
 	EXPECT_EQ(missingUpperBound.loadedRows, (std::vector<size_t>{0U, 1U}));
 	EXPECT_TRUE(missingUpperBound.matchedRows.empty());
 
 	EXPECT_EQ(dataManager->bulkCountPropertyEntityPredicateSpecs(
-				  {firstPropertyId, secondPropertyId, firstPropertyId, 0},
-				  {{"age", Op::PEP_GT, PropertyValue(int64_t(29)), std::nullopt},
-				   {"score", Op::PEP_LE, PropertyValue(int64_t(900)), std::nullopt},
-				   {"country", Op::PEP_NE, PropertyValue("US"), std::nullopt}},
-				  nullptr),
+					  {firstPropertyId, secondPropertyId, firstPropertyId, 0},
+					  {{"age", Op::PEP_GT, PropertyValue(int64_t(29)), std::nullopt},
+					   {"score", Op::PEP_LE, PropertyValue(int64_t(900)), std::nullopt},
+					   {"country", Op::PEP_NE, PropertyValue("US"), std::nullopt}},
+					  nullptr),
 			  2U);
 	EXPECT_EQ(dataManager->bulkCountPropertyEntityPredicateSpecs(
-				  ids,
-				  {{"age", Op::PEP_LT, PropertyValue(int64_t(30)), std::nullopt},
-				   {"score", Op::PEP_GE, PropertyValue(int64_t(100)), std::nullopt}},
-				  nullptr),
+					  ids,
+					  {{"age", Op::PEP_LT, PropertyValue(int64_t(30)), std::nullopt},
+					   {"score", Op::PEP_GE, PropertyValue(int64_t(100)), std::nullopt}},
+					  nullptr),
 			  1U);
 	EXPECT_EQ(dataManager->bulkCountPropertyEntityPredicateSpecs(
-				  ids,
-				  {{"country", Op::PEP_RANGE_CLOSED, PropertyValue("CA"), PropertyValue("NZ")}},
-				  nullptr),
+					  ids, {{"country", Op::PEP_RANGE_CLOSED, PropertyValue("CA"), PropertyValue("NZ")}}, nullptr),
 			  1U);
 	EXPECT_EQ(dataManager->bulkCountPropertyEntityPredicateSpecs(
-				  ids,
-				  {{"age", Op::PEP_RANGE_CLOSED, PropertyValue(int64_t(25)), std::nullopt}},
-				  nullptr),
+					  ids, {{"age", Op::PEP_RANGE_CLOSED, PropertyValue(int64_t(25)), std::nullopt}}, nullptr),
 			  0U);
 }

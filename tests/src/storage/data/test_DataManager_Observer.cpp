@@ -176,7 +176,7 @@ TEST_F(DataManagerTest, NotifyEdgeDeletedWithMultipleObservers) {
 }
 
 TEST_F(DataManagerTest, NotifyNodesAddedBatch) {
-	// Exercises the observer loop in notifyNodesAdded (L129-132)
+	// Batch dispatch falls back to per-node callbacks for observers that only implement onNodeAdded.
 	auto observer2 = std::make_shared<TestEntityObserver>();
 	dataManager->registerObserver(observer2);
 
@@ -185,13 +185,13 @@ TEST_F(DataManagerTest, NotifyNodesAddedBatch) {
 	nodes.push_back(createTestNode(dataManager, "Batch2"));
 	dataManager->addNodes(nodes);
 
-	// onNodesAdded is called, but TestEntityObserver doesn't override it (uses default no-op)
-	// The loop body is still executed for both observers
 	EXPECT_EQ(2UL, nodes.size());
+	EXPECT_EQ(2UL, observer->addedNodes.size());
+	EXPECT_EQ(2UL, observer2->addedNodes.size());
 }
 
 TEST_F(DataManagerTest, NotifyEdgesAddedBatch) {
-	// Exercises the observer loop in notifyEdgesAdded (L158-162)
+	// Batch dispatch falls back to per-edge callbacks for observers that only implement onEdgeAdded.
 	auto observer2 = std::make_shared<TestEntityObserver>();
 	dataManager->registerObserver(observer2);
 
@@ -205,7 +205,6 @@ TEST_F(DataManagerTest, NotifyEdgesAddedBatch) {
 	edges.push_back(createTestEdge(dataManager, n2.getId(), n1.getId(), "BE2"));
 	dataManager->addEdges(edges);
 
-	// notifyEdgesAdded calls onEdgeAdded for each edge per observer
 	EXPECT_EQ(2UL, observer->addedEdges.size());
 	EXPECT_EQ(2UL, observer2->addedEdges.size());
 }
@@ -268,4 +267,3 @@ TEST_F(DataManagerTest, RemoveEdgePropertyWithNotification) {
 	EXPECT_TRUE(props.find("label") != props.end())
 		<< "Property 'label' should still exist";
 }
-

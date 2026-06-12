@@ -26,6 +26,45 @@ namespace graph::query::execution {
 		return edge.getTargetNodeId();
 	}
 
+	bool RelationshipAdjacencyCursor::acceptsTarget(int64_t targetId,
+	                                                const RelationshipExpandConfig &config,
+	                                                const RelationshipExpandRequirements &requirements) const {
+		if (!requirements.needsTargetActiveCheck && !requirements.needsTargetLabels) {
+			return true;
+		}
+		if (requirements.needsTargetLabels) {
+			for (const int64_t labelId : config.targetLabelIds) {
+				if (labelId <= 0) {
+					return false;
+				}
+			}
+		}
+		Node target = dm_->getNode(targetId);
+		if (requirements.needsTargetActiveCheck && !target.isActive()) {
+			return false;
+		}
+		return !requirements.needsTargetLabels || matchesTargetLabels(target, config);
+	}
+
+	std::optional<int64_t> RelationshipAdjacencyCursor::acceptedTargetForEdge(
+			const Edge &edge,
+			int64_t sourceId,
+			const RelationshipExpandConfig &config,
+			const RelationshipExpandRequirements &requirements) const {
+		if (requirements.needsEdgeActiveCheck && !edge.isActive()) {
+			return std::nullopt;
+		}
+		if (config.edgeTypeId != 0 && edge.getTypeId() != config.edgeTypeId) {
+			return std::nullopt;
+		}
+
+		const int64_t targetId = targetForSource(edge, sourceId, config.direction);
+		if (!acceptsTarget(targetId, config, requirements)) {
+			return std::nullopt;
+		}
+		return targetId;
+	}
+
 	RelationshipExpandBatch RelationshipAdjacencyCursor::expand(const std::vector<int64_t> &sourceIds,
 	                                                          const RelationshipExpandConfig &config,
 	                                                          const RelationshipExpandRequirements &requirements) const {
@@ -34,30 +73,65 @@ namespace graph::query::execution {
 			return batch;
 		}
 
-		for (const int64_t sourceId : sourceIds) {
-			const auto edges = dm_->findEdgesByNode(sourceId, config.direction);
-			for (const auto &edge : edges) {
-				if (requirements.needsEdgeActiveCheck && !edge.isActive()) {
-					continue;
-				}
-				if (config.edgeTypeId != 0 && edge.getTypeId() != config.edgeTypeId) {
-					continue;
-				}
-
-				const int64_t targetId = targetForSource(edge, sourceId, config.direction);
-				Node target = dm_->getNode(targetId);
-				if (requirements.needsTargetActiveCheck && !target.isActive()) {
-					continue;
-				}
-				if (requirements.needsTargetLabels && !matchesTargetLabels(target, config)) {
-					continue;
-				}
-
-				batch.rows.push_back(RelationshipExpandRow{sourceId, edge.getId(), targetId});
-				batch.selected.push_back(1);
-			}
-		}
+		(void) forEach(sourceIds, config, requirements, [&](const RelationshipExpandRow &row) {
+			batch.rows.push_back(row);
+			batch.selected.push_back(1);
+			return true;
+		});
 		return batch;
+	}
+
+	int64_t RelationshipAdjacencyCursor::count(const std::vector<int64_t> &sourceIds,
+	                                           const RelationshipExpandConfig &config,
+	                                           const RelationshipExpandRequirements &requirements) const {
+		int64_t total = 0;
+		if (!dm_ || config.edgeTypeId < 0) {
+			return total;
+		}
+
+		for (const int64_t sourceId : sourceIds) {
+			dm_->visitEdgesByNode(
+					sourceId,
+					[&](const Edge &edge) {
+						if (acceptedTargetForEdge(edge, sourceId, config, requirements).has_value()) {
+							++total;
+						}
+						return true;
+					},
+					config.direction);
+		}
+		return total;
+	}
+
+	size_t RelationshipAdjacencyCursor::forEach(const std::vector<int64_t> &sourceIds,
+	                                            const RelationshipExpandConfig &config,
+	                                            const RelationshipExpandRequirements &requirements,
+	                                            const RelationshipExpandVisitor &visitor) const {
+		if (!dm_ || !visitor || config.edgeTypeId < 0) {
+			return 0;
+		}
+
+		size_t emitted = 0;
+		bool keepGoing = true;
+		for (const int64_t sourceId : sourceIds) {
+			if (!keepGoing) {
+				break;
+			}
+			dm_->visitEdgesByNode(
+					sourceId,
+					[&](const Edge &edge) {
+						const auto targetId = acceptedTargetForEdge(edge, sourceId, config, requirements);
+						if (!targetId.has_value()) {
+							return true;
+						}
+
+						++emitted;
+						keepGoing = visitor(RelationshipExpandRow{sourceId, edge.getId(), *targetId});
+						return keepGoing;
+					},
+					config.direction);
+		}
+		return emitted;
 	}
 
 } // namespace graph::query::execution

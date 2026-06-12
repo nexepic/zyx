@@ -1,12 +1,15 @@
 #include "graph/query/execution/NodeMetadataColumnLoader.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <cstring>
 #include <utility>
 
+#include "graph/concurrent/ParallelExecutionPolicy.hpp"
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/query/execution/NodeMetadataFilter.hpp"
 #include "graph/storage/CommittedSnapshot.hpp"
 #include "graph/storage/SegmentReadUtils.hpp"
 #include "graph/storage/StorageHeaders.hpp"
@@ -26,25 +29,62 @@ namespace graph::query::execution {
 			size_t idEnd = 0;
 		};
 
+		struct NodeMetadataScanPlan {
+			std::vector<SegmentCandidateRange> work;
+			std::vector<size_t> workSegmentIndices;
+		};
+
 		int64_t readSerializedNodeId(const char *buf) {
 			int64_t nodeId = 0;
 			std::memcpy(&nodeId, buf, sizeof(int64_t));
 			return nodeId;
 		}
 
-		NodeMetadataRow readMetadataRow(const char *buf) {
+		std::vector<char> &nodeMetadataScanBuffer() {
+			thread_local std::vector<char> buffer;
+			return buffer;
+		}
+
+		constexpr size_t kMaxCoalescedNodeMetadataReadSegments = 16;
+		constexpr size_t kMinParallelNodeMetadataReadTasks = 2;
+		constexpr size_t kMinParallelNodeMetadataReadSegments = 32;
+
+		concurrent::ParallelExecutionDecision decideNodeMetadataScan(
+				concurrent::ThreadPool *threadPool,
+				size_t taskCount,
+				size_t segmentCount) {
+			return concurrent::decideParallelExecution(
+					threadPool,
+					{.workloadKind = concurrent::ParallelWorkloadKind::PWK_MEMORY_SCAN,
+					 .partitions = taskCount,
+					 .estimatedItems = segmentCount,
+					 .estimatedBytes = segmentCount * storage::TOTAL_SEGMENT_SIZE,
+					 .minPartitions = kMinParallelNodeMetadataReadTasks,
+					 .minItems = kMinParallelNodeMetadataReadSegments});
+		}
+
+		NodeMetadataRow readMetadataRow(const char *buf, NodeMetadataProjection projection = {}) {
 			NodeMetadataRow row;
 			size_t off = sizeof(int64_t);
 			row.nodeId = readSerializedNodeId(buf);
-			std::memcpy(&row.firstOutEdgeId, buf + off, sizeof(int64_t));
+			if (projection.loadEdgeRefs) {
+				std::memcpy(&row.firstOutEdgeId, buf + off, sizeof(int64_t));
+			}
 			off += sizeof(int64_t);
-			std::memcpy(&row.firstInEdgeId, buf + off, sizeof(int64_t));
+			if (projection.loadEdgeRefs) {
+				std::memcpy(&row.firstInEdgeId, buf + off, sizeof(int64_t));
+			}
 			off += sizeof(int64_t);
 			std::memcpy(&row.propertyEntityId, buf + off, sizeof(int64_t));
 			off += sizeof(int64_t);
-			std::memcpy(row.labelIds.data(), buf + off, sizeof(int64_t) * Node::MAX_LABELS);
+			if (projection.loadLabels) {
+				std::memcpy(row.labelIds.data(), buf + off, sizeof(int64_t) * Node::MAX_LABELS);
+			}
 			off += sizeof(int64_t) * Node::MAX_LABELS;
 			std::memcpy(&row.labelCount, buf + off, sizeof(uint8_t));
+			if (!projection.loadLabels) {
+				row.labelCount = 0;
+			}
 			off += sizeof(uint8_t);
 			uint32_t storageType = 0;
 			std::memcpy(&storageType, buf + off, sizeof(uint32_t));
@@ -54,6 +94,361 @@ namespace graph::query::execution {
 			std::memcpy(&active, buf + off, sizeof(bool));
 			row.active = static_cast<uint8_t>(active);
 			return row;
+		}
+
+		NodeMetadataScanPlan collectNodeMetadataScanPlan(
+				const std::vector<storage::SegmentIndexManager::SegmentIndex> &segmentIndex,
+				const std::vector<int64_t> &candidateIds,
+				size_t begin,
+				size_t clampedEnd) {
+			NodeMetadataScanPlan plan;
+			plan.work.reserve(segmentIndex.size());
+			plan.workSegmentIndices.reserve(segmentIndex.size());
+
+			auto rangeBegin = candidateIds.begin() + static_cast<std::ptrdiff_t>(begin);
+			auto rangeEnd = candidateIds.begin() + static_cast<std::ptrdiff_t>(clampedEnd);
+			for (size_t segment = 0; segment < segmentIndex.size(); ++segment) {
+				const auto &entry = segmentIndex[segment];
+				auto lo = std::lower_bound(rangeBegin, rangeEnd, entry.startId);
+				auto hi = std::upper_bound(lo, rangeEnd, entry.endId);
+				if (lo == hi) { // ZYX_COV_EXCL_LINE
+					continue;
+				}
+				plan.work.push_back({segment,
+									  static_cast<size_t>(lo - candidateIds.begin()),
+									  static_cast<size_t>(hi - candidateIds.begin())});
+				plan.workSegmentIndices.push_back(segment);
+			}
+			return plan;
+		}
+
+		template<typename Visitor>
+		bool scanSerializedNodeMetadata(const std::shared_ptr<storage::DataManager> &dm,
+										const std::vector<int64_t> &candidateIds,
+										size_t begin,
+										size_t clampedEnd,
+										Visitor &&visitor) {
+			const auto &segmentIndex = dm->getSegmentIndexManager()->getNodeSegmentIndex();
+			auto plan = collectNodeMetadataScanPlan(segmentIndex, candidateIds, begin, clampedEnd);
+			if (plan.work.empty()) { // ZYX_COV_EXCL_LINE
+				return false;
+			}
+
+			auto groups = storage::buildCoalescedGroups(plan.workSegmentIndices, segmentIndex);
+			constexpr size_t entitySize = Node::getTotalSize();
+			auto &groupBuffer = nodeMetadataScanBuffer();
+
+			for (const auto &group : groups) {
+				const size_t totalBytes = group.segCount * storage::TOTAL_SEGMENT_SIZE;
+				groupBuffer.resize(totalBytes);
+				const auto read = dm->preadSegments(groupBuffer.data(), group.segCount, group.startOffset);
+				if (read < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
+					return false;
+				}
+
+				for (size_t member = 0; member < group.memberIndices.size(); ++member) {
+					const size_t workIndex = group.memberIndices[member];
+					const auto &range = plan.work[workIndex];
+					const size_t bufferOffset = member * storage::TOTAL_SEGMENT_SIZE;
+
+					storage::SegmentHeader header{};
+					std::memcpy(&header, groupBuffer.data() + bufferOffset, sizeof(storage::SegmentHeader));
+					if (header.used == 0) { // ZYX_COV_EXCL_LINE
+						continue;
+					}
+
+					const char *data = groupBuffer.data() + bufferOffset + sizeof(storage::SegmentHeader);
+					for (size_t index = range.idBegin; index < range.idEnd; ++index) {
+						const int64_t nodeId = candidateIds[index];
+						const auto slot = static_cast<uint32_t>(nodeId - header.start_id);
+						if (slot >= header.used) { // ZYX_COV_EXCL_LINE
+							continue;
+						}
+
+						const char *serializedNode = data + slot * entitySize;
+						if (readSerializedNodeId(serializedNode) == nodeId) { // ZYX_COV_EXCL_LINE
+							if (!visitor(index, serializedNode)) {
+								return true;
+							}
+						}
+					}
+				}
+			}
+			return true;
+		}
+
+		template<typename PartitionVisitor>
+		bool scanSerializedNodeMetadataPartitioned(const std::shared_ptr<storage::DataManager> &dm,
+		                                           const std::vector<int64_t> &candidateIds,
+		                                           size_t begin,
+		                                           size_t clampedEnd,
+		                                           concurrent::ThreadPool *threadPool,
+		                                           PartitionVisitor &&visitor) {
+			const auto &segmentIndex = dm->getSegmentIndexManager()->getNodeSegmentIndex();
+			auto plan = collectNodeMetadataScanPlan(segmentIndex, candidateIds, begin, clampedEnd);
+			if (plan.work.empty()) {
+				return false;
+			}
+
+			auto groups = storage::buildCoalescedGroups(plan.workSegmentIndices, segmentIndex);
+			auto tasks = storage::buildCoalescedReadTasks(groups, kMaxCoalescedNodeMetadataReadSegments);
+			const auto decision = decideNodeMetadataScan(
+					threadPool, tasks.size(), storage::totalCoalescedSegments(groups));
+			if (!decision.useParallel) {
+				return scanSerializedNodeMetadata(dm, candidateIds, begin, clampedEnd,
+						[&](size_t row, const char *serializedNode) {
+							return visitor(0, row, serializedNode);
+						});
+			}
+
+			constexpr size_t entitySize = Node::getTotalSize();
+			std::atomic<bool> cancelled{false};
+			std::atomic<bool> failed{false};
+			threadPool->parallelFor(0, tasks.size(), decision.workerCount, [&](size_t taskIndex) {
+				if (cancelled.load(std::memory_order_relaxed)) {
+					return;
+				}
+
+				const auto &task = tasks[taskIndex];
+				const auto &group = groups[task.groupIndex];
+				const size_t totalBytes = task.segCount * storage::TOTAL_SEGMENT_SIZE;
+				std::vector<char> groupBuffer(totalBytes);
+				const auto read = dm->preadSegments(groupBuffer.data(), task.segCount, task.startOffset);
+				if (read < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
+					failed.store(true, std::memory_order_relaxed); // ZYX_COV_EXCL_LINE
+					cancelled.store(true, std::memory_order_relaxed); // ZYX_COV_EXCL_LINE
+					return; // ZYX_COV_EXCL_LINE
+				}
+
+				for (size_t member = 0; member < task.memberCount; ++member) {
+					if (cancelled.load(std::memory_order_relaxed)) {
+						return;
+					}
+					const size_t workIndex = group.memberIndices[task.memberBegin + member];
+					const auto &range = plan.work[workIndex];
+					const size_t bufferOffset = member * storage::TOTAL_SEGMENT_SIZE;
+
+					storage::SegmentHeader header{};
+					std::memcpy(&header, groupBuffer.data() + bufferOffset, sizeof(storage::SegmentHeader));
+					if (header.used == 0) { // ZYX_COV_EXCL_LINE
+						continue;
+					}
+
+					const char *data = groupBuffer.data() + bufferOffset + sizeof(storage::SegmentHeader);
+					for (size_t index = range.idBegin; index < range.idEnd; ++index) {
+						if (cancelled.load(std::memory_order_relaxed)) {
+							return;
+						}
+						const int64_t nodeId = candidateIds[index];
+						const auto slot = static_cast<uint32_t>(nodeId - header.start_id);
+						if (slot >= header.used) { // ZYX_COV_EXCL_LINE
+							continue;
+						}
+
+						const char *serializedNode = data + slot * entitySize;
+						if (readSerializedNodeId(serializedNode) == nodeId) { // ZYX_COV_EXCL_LINE
+							if (!visitor(taskIndex, index, serializedNode)) {
+								cancelled.store(true, std::memory_order_relaxed);
+								return;
+							}
+						}
+					}
+				}
+			});
+			return !failed.load(std::memory_order_relaxed);
+		}
+
+		template<typename Visitor>
+		bool scanAllSerializedNodeMetadata(const std::shared_ptr<storage::DataManager> &dm,
+		                                   Visitor &&visitor) {
+			const auto &segmentIndex = dm->getSegmentIndexManager()->getNodeSegmentIndex();
+			if (segmentIndex.empty()) {
+				return true;
+			}
+
+			std::vector<size_t> segmentIndices;
+			segmentIndices.reserve(segmentIndex.size());
+			for (size_t index = 0; index < segmentIndex.size(); ++index) {
+				segmentIndices.push_back(index);
+			}
+
+			auto groups = storage::buildCoalescedGroups(segmentIndices, segmentIndex);
+			constexpr size_t entitySize = Node::getTotalSize();
+			auto &groupBuffer = nodeMetadataScanBuffer();
+
+			for (const auto &group : groups) {
+				for (size_t chunkBegin = 0; chunkBegin < group.memberIndices.size();
+					 chunkBegin += kMaxCoalescedNodeMetadataReadSegments) {
+					const size_t chunkSegments =
+							std::min(kMaxCoalescedNodeMetadataReadSegments,
+									 group.memberIndices.size() - chunkBegin);
+					const size_t totalBytes = chunkSegments * storage::TOTAL_SEGMENT_SIZE;
+					groupBuffer.resize(totalBytes);
+					const uint64_t groupOffset = group.startOffset + chunkBegin * storage::TOTAL_SEGMENT_SIZE;
+					const auto read = dm->preadSegments(groupBuffer.data(), chunkSegments, groupOffset);
+					if (read < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
+						return false; // ZYX_COV_EXCL_LINE
+					}
+
+					for (size_t member = 0; member < chunkSegments; ++member) {
+						const size_t bufferOffset = member * storage::TOTAL_SEGMENT_SIZE;
+						storage::SegmentHeader header{};
+						std::memcpy(&header, groupBuffer.data() + bufferOffset, sizeof(storage::SegmentHeader));
+						if (header.used == 0 || header.data_type != Node::typeId) {
+							continue;
+						}
+
+						const char *data = groupBuffer.data() + bufferOffset + sizeof(storage::SegmentHeader);
+						for (uint32_t slot = 0; slot < header.used; ++slot) {
+							const int64_t expectedId = header.start_id + static_cast<int64_t>(slot);
+							const char *serializedNode = data + static_cast<size_t>(slot) * entitySize;
+							if (readSerializedNodeId(serializedNode) != expectedId) {
+								continue;
+							}
+							if (!visitor(serializedNode)) {
+								return true;
+							}
+						}
+					}
+				}
+			}
+			return true;
+		}
+
+		template<typename PartitionVisitor>
+		bool scanAllSerializedNodeMetadataPartitioned(const std::shared_ptr<storage::DataManager> &dm,
+		                                              concurrent::ThreadPool *threadPool,
+		                                              PartitionVisitor &&visitor) {
+			const auto &segmentIndex = dm->getSegmentIndexManager()->getNodeSegmentIndex();
+			if (segmentIndex.empty()) {
+				return true;
+			}
+
+			std::vector<size_t> segmentIndices;
+			segmentIndices.reserve(segmentIndex.size());
+			for (size_t index = 0; index < segmentIndex.size(); ++index) {
+				segmentIndices.push_back(index);
+			}
+
+			auto groups = storage::buildCoalescedGroups(segmentIndices, segmentIndex);
+			auto tasks = storage::buildCoalescedReadTasks(groups, kMaxCoalescedNodeMetadataReadSegments);
+			const auto decision = decideNodeMetadataScan(
+					threadPool, tasks.size(), storage::totalCoalescedSegments(groups));
+			if (!decision.useParallel) {
+				return scanAllSerializedNodeMetadata(dm, [&](const char *serializedNode) {
+					return visitor(0, serializedNode);
+				});
+			}
+
+			constexpr size_t entitySize = Node::getTotalSize();
+			std::atomic<bool> cancelled{false};
+			std::atomic<bool> failed{false};
+			threadPool->parallelFor(0, tasks.size(), decision.workerCount, [&](size_t taskIndex) {
+				if (cancelled.load(std::memory_order_relaxed)) {
+					return;
+				}
+
+				const auto &task = tasks[taskIndex];
+				const size_t totalBytes = task.segCount * storage::TOTAL_SEGMENT_SIZE;
+				std::vector<char> groupBuffer(totalBytes);
+				const ssize_t read = dm->preadSegments(groupBuffer.data(), task.segCount, task.startOffset);
+				if (read < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
+					failed.store(true, std::memory_order_relaxed); // ZYX_COV_EXCL_LINE
+					cancelled.store(true, std::memory_order_relaxed); // ZYX_COV_EXCL_LINE
+					return; // ZYX_COV_EXCL_LINE
+				}
+
+				for (size_t member = 0; member < task.memberCount; ++member) {
+					if (cancelled.load(std::memory_order_relaxed)) {
+						return;
+					}
+
+					const size_t bufferOffset = member * storage::TOTAL_SEGMENT_SIZE;
+					storage::SegmentHeader header{};
+					std::memcpy(&header, groupBuffer.data() + bufferOffset, sizeof(storage::SegmentHeader));
+					if (header.used == 0 || header.data_type != Node::typeId) {
+						continue;
+					}
+
+					const char *data = groupBuffer.data() + bufferOffset + sizeof(storage::SegmentHeader);
+					for (uint32_t slot = 0; slot < header.used; ++slot) {
+						if (cancelled.load(std::memory_order_relaxed)) {
+							return;
+						}
+						const int64_t expectedId = header.start_id + static_cast<int64_t>(slot);
+						const char *serializedNode = data + static_cast<size_t>(slot) * entitySize;
+						if (readSerializedNodeId(serializedNode) != expectedId) {
+							continue;
+						}
+						if (!visitor(taskIndex, serializedNode)) {
+							cancelled.store(true, std::memory_order_relaxed);
+							return;
+						}
+					}
+				}
+			});
+			return !failed.load(std::memory_order_relaxed);
+		}
+
+		void appendPropertyCountCandidate(NodePropertyCountCandidates &candidates,
+		                                  const NodeMetadataRow &metadata,
+		                                  const NodePropertyCountCandidateOptions &options) {
+			++candidates.acceptedRowCount;
+			if (metadata.propertyEntityId == 0) {
+				return;
+			}
+			if (metadata.propertyStorageType == PropertyStorageType::PROPERTY_ENTITY) {
+				candidates.propertyEntityIds.push_back(metadata.propertyEntityId);
+				if (options.collectFallbackRefs) {
+					const size_t row = candidates.propertyEntityIds.size() - 1;
+					candidates.propertyNodeIds.push_back(metadata.nodeId);
+					candidates.propertyRows.push_back(row);
+				}
+			} else if (metadata.propertyStorageType == PropertyStorageType::BLOB_ENTITY) {
+				candidates.blobRefs.push_back({metadata.nodeId, metadata.propertyEntityId,
+											   metadata.propertyStorageType});
+			}
+		}
+
+		NodePropertyCountCandidates mergePropertyCountCandidatePartitions(
+				const std::vector<NodePropertyCountCandidates> &partitions,
+				const NodePropertyCountCandidateOptions &options) {
+			NodePropertyCountCandidates merged;
+			size_t acceptedRows = 0;
+			size_t propertyRows = 0;
+			size_t blobRows = 0;
+			for (const auto &partition : partitions) {
+				acceptedRows += partition.acceptedRowCount;
+				propertyRows += partition.propertyEntityIds.size();
+				blobRows += partition.blobRefs.size();
+			}
+
+			merged.acceptedRowCount = acceptedRows;
+			merged.propertyEntityIds.reserve(propertyRows);
+			merged.blobRefs.reserve(blobRows);
+			if (options.collectFallbackRefs) {
+				merged.propertyNodeIds.reserve(propertyRows);
+				merged.propertyRows.reserve(propertyRows);
+			}
+
+			for (const auto &partition : partitions) {
+				const size_t rowOffset = merged.propertyEntityIds.size();
+				merged.propertyEntityIds.insert(merged.propertyEntityIds.end(),
+												partition.propertyEntityIds.begin(),
+												partition.propertyEntityIds.end());
+				if (options.collectFallbackRefs) {
+					merged.propertyNodeIds.insert(merged.propertyNodeIds.end(),
+												  partition.propertyNodeIds.begin(),
+												  partition.propertyNodeIds.end());
+					for (const size_t row : partition.propertyRows) {
+						merged.propertyRows.push_back(rowOffset + row);
+					}
+				}
+				merged.blobRefs.insert(merged.blobRefs.end(),
+									   partition.blobRefs.begin(),
+									   partition.blobRefs.end());
+			}
+			return merged;
 		}
 	} // namespace
 
@@ -82,6 +477,23 @@ namespace graph::query::execution {
 		std::copy(labelIds.begin(), labelIds.end(), std::begin(metadata.labelIds));
 		metadata.isActive = active != 0;
 		return node;
+	}
+
+	Node NodePropertyCandidateRef::toNode() const {
+		Node node;
+		auto &metadata = node.getMutableMetadata();
+		metadata.id = nodeId;
+		metadata.propertyEntityId = propertyEntityId;
+		metadata.propertyStorageType = static_cast<uint32_t>(propertyStorageType);
+		metadata.isActive = true;
+		return node;
+	}
+
+	void NodePropertyCountCandidates::reserve(size_t rowCount) {
+		propertyEntityIds.reserve(rowCount);
+		propertyNodeIds.reserve(rowCount);
+		propertyRows.reserve(rowCount);
+		blobRefs.reserve(rowCount / 8);
 	}
 
 	void NodeMetadataBatch::reserve(size_t rowCount) {
@@ -200,7 +612,7 @@ namespace graph::query::execution {
 		const bool visited = visitBatchChecked(candidateIds, begin, clampedEnd, [&](size_t row, const NodeMetadataRow &metadata) {
 			batch.setFromMetadataRow(row - begin, metadata);
 			return true;
-		});
+		}, {});
 		if (!visited) {
 			return std::nullopt;
 		}
@@ -210,94 +622,209 @@ namespace graph::query::execution {
 	bool NodeMetadataColumnLoader::visitBatch(const std::vector<int64_t> &candidateIds,
 	                                         size_t begin,
 	                                         size_t end,
-	                                         const MetadataVisitor &visitor) const {
+	                                         const MetadataVisitor &visitor,
+	                                         NodeMetadataProjection projection) const {
 		const size_t clampedEnd = std::min(end, candidateIds.size());
 		if (!visitor || !canLoad(candidateIds, begin, clampedEnd)) {
 			return false;
 		}
-		return visitBatchChecked(candidateIds, begin, clampedEnd, visitor);
+		return visitBatchChecked(candidateIds, begin, clampedEnd, visitor, projection);
+	}
+
+	bool NodeMetadataColumnLoader::visitBatchPartitioned(const std::vector<int64_t> &candidateIds,
+	                                                    size_t begin,
+	                                                    size_t end,
+	                                                    const MetadataPartitionInitializer &initializer,
+	                                                    const MetadataPartitionVisitor &visitor,
+	                                                    concurrent::ThreadPool *threadPool,
+	                                                    NodeMetadataProjection projection) const {
+		const size_t clampedEnd = std::min(end, candidateIds.size());
+		if (!visitor || !canLoad(candidateIds, begin, clampedEnd)) {
+			return false;
+		}
+
+		const bool traceEnabled = debug::PerfTrace::isEnabled();
+		const auto start = traceEnabled ? Clock::now() : Clock::time_point{};
+		bool initialized = false;
+		auto ensureInitialized = [&](size_t partitionCount) {
+			if (!initialized && initializer) {
+				initializer(partitionCount);
+			}
+			initialized = true;
+		};
+
+		const auto &segmentIndex = dm_->getSegmentIndexManager()->getNodeSegmentIndex();
+		auto plan = collectNodeMetadataScanPlan(segmentIndex, candidateIds, begin, clampedEnd);
+		if (plan.work.empty()) {
+			if (traceEnabled) {
+				debug::PerfTrace::addDuration("node_scan.load_node_metadata", elapsedNs(start));
+			}
+			return false;
+		}
+		auto groups = storage::buildCoalescedGroups(plan.workSegmentIndices, segmentIndex);
+		auto tasks = storage::buildCoalescedReadTasks(groups, kMaxCoalescedNodeMetadataReadSegments);
+		const auto decision = decideNodeMetadataScan(
+				threadPool, tasks.size(), storage::totalCoalescedSegments(groups));
+		ensureInitialized(decision.useParallel ? tasks.size() : 1);
+
+		const bool scanned = decision.useParallel ?
+			scanSerializedNodeMetadataPartitioned(dm_, candidateIds, begin, clampedEnd, threadPool,
+					[&](size_t partition, size_t row, const char *serializedNode) {
+						return visitor(partition, row, readMetadataRow(serializedNode, projection));
+					}) :
+			scanSerializedNodeMetadata(dm_, candidateIds, begin, clampedEnd,
+					[&](size_t row, const char *serializedNode) {
+						return visitor(0, row, readMetadataRow(serializedNode, projection));
+					});
+
+		if (traceEnabled) {
+			debug::PerfTrace::addDuration("node_scan.load_node_metadata", elapsedNs(start));
+		}
+		return scanned;
 	}
 
 	bool NodeMetadataColumnLoader::visitBatchChecked(const std::vector<int64_t> &candidateIds,
 	                                                size_t begin,
 	                                                size_t clampedEnd,
-	                                                const MetadataVisitor &visitor) const {
+	                                                const MetadataVisitor &visitor,
+	                                                NodeMetadataProjection projection) const {
 		const bool traceEnabled = debug::PerfTrace::isEnabled();
 		const auto start = traceEnabled ? Clock::now() : Clock::time_point{};
 
-		const auto &segmentIndex = dm_->getSegmentIndexManager()->getNodeSegmentIndex();
-
-		std::vector<SegmentCandidateRange> work;
-		std::vector<size_t> workSegmentIndices;
-		work.reserve(segmentIndex.size());
-		workSegmentIndices.reserve(segmentIndex.size());
-
-		auto rangeBegin = candidateIds.begin() + static_cast<std::ptrdiff_t>(begin);
-		auto rangeEnd = candidateIds.begin() + static_cast<std::ptrdiff_t>(clampedEnd);
-		for (size_t segment = 0; segment < segmentIndex.size(); ++segment) {
-			const auto &entry = segmentIndex[segment];
-			auto lo = std::lower_bound(rangeBegin, rangeEnd, entry.startId);
-			auto hi = std::upper_bound(lo, rangeEnd, entry.endId);
-			if (lo == hi) { // ZYX_COV_EXCL_LINE
-				continue;
-			}
-			work.push_back({segment,
-			                static_cast<size_t>(lo - candidateIds.begin()),
-			                static_cast<size_t>(hi - candidateIds.begin())});
-			workSegmentIndices.push_back(segment);
-		}
-
-		if (work.empty()) { // ZYX_COV_EXCL_LINE
-			return false;
-		}
-
-		auto groups = storage::buildCoalescedGroups(workSegmentIndices, segmentIndex);
-		constexpr size_t entitySize = Node::getTotalSize();
-
-		for (const auto &group : groups) {
-			const size_t totalBytes = group.segCount * storage::TOTAL_SEGMENT_SIZE;
-			std::vector<char> groupBuffer(totalBytes);
-			const auto read = dm_->preadSegments(groupBuffer.data(), group.segCount, group.startOffset);
-			if (read < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
-				return false;
-			}
-
-			for (size_t member = 0; member < group.memberIndices.size(); ++member) {
-				const size_t workIndex = group.memberIndices[member];
-				const auto &range = work[workIndex];
-				const size_t bufferOffset = member * storage::TOTAL_SEGMENT_SIZE;
-
-				storage::SegmentHeader header{};
-				std::memcpy(&header, groupBuffer.data() + bufferOffset, sizeof(storage::SegmentHeader));
-				if (header.used == 0) { // ZYX_COV_EXCL_LINE
-					continue;
-				}
-
-				const char *data = groupBuffer.data() + bufferOffset + sizeof(storage::SegmentHeader);
-				for (size_t index = range.idBegin; index < range.idEnd; ++index) {
-					const int64_t nodeId = candidateIds[index];
-					const auto slot = static_cast<uint32_t>(nodeId - header.start_id);
-					if (slot >= header.used) { // ZYX_COV_EXCL_LINE
-						continue;
-					}
-
-					const char *serializedNode = data + slot * entitySize;
-					if (readSerializedNodeId(serializedNode) == nodeId) { // ZYX_COV_EXCL_LINE
-						if (!visitor(index, readMetadataRow(serializedNode))) {
-							if (traceEnabled) {
-								debug::PerfTrace::addDuration("node_scan.load_node_metadata", elapsedNs(start));
-							}
-							return true;
-						}
-					}
-				}
-			}
-		}
+		const bool scanned = scanSerializedNodeMetadata(dm_, candidateIds, begin, clampedEnd,
+				[&](size_t index, const char *serializedNode) {
+					return visitor(index, readMetadataRow(serializedNode, projection));
+				});
 
 		if (traceEnabled) {
 			debug::PerfTrace::addDuration("node_scan.load_node_metadata", elapsedNs(start));
 		}
-		return true;
+		return scanned;
+	}
+
+	std::optional<NodePropertyCountCandidates> NodeMetadataColumnLoader::collectPropertyCountCandidates(
+			const std::vector<int64_t> &candidateIds,
+			size_t begin,
+			size_t end,
+			const NodeScanConfig &config,
+			const NodeScanRequirements &requirements,
+			NodePropertyCountCandidateOptions options) const {
+		return collectPropertyCountCandidates(candidateIds, begin, end, config, requirements, nullptr, options);
+	}
+
+	std::optional<NodePropertyCountCandidates> NodeMetadataColumnLoader::collectPropertyCountCandidates(
+			const std::vector<int64_t> &candidateIds,
+			size_t begin,
+			size_t end,
+			const NodeScanConfig &config,
+			const NodeScanRequirements &requirements,
+			concurrent::ThreadPool *threadPool,
+			NodePropertyCountCandidateOptions options) const {
+		const size_t clampedEnd = std::min(end, candidateIds.size());
+		if (!canLoad(candidateIds, begin, clampedEnd)) {
+			return std::nullopt;
+		}
+
+		const NodeMetadataRowFilter rowFilter(dm_, config, requirements);
+		NodeMetadataProjection projection;
+		projection.loadEdgeRefs = false;
+		projection.loadLabels = requirements.needsLabels;
+
+		std::vector<NodePropertyCountCandidates> partitions;
+		const bool scanned = visitBatchPartitioned(
+				candidateIds, begin, clampedEnd,
+				[&](size_t partitionCount) {
+					partitions.resize(partitionCount);
+					const size_t rowsPerPartition = std::max<size_t>(1, (clampedEnd - begin) / partitionCount);
+					for (auto &partition : partitions) {
+						partition.reserve(rowsPerPartition);
+					}
+				},
+				[&](size_t partition, size_t, const NodeMetadataRow &metadata) {
+					if (!rowFilter.accepts(metadata)) {
+						return true;
+					}
+					if (partition < partitions.size()) {
+						appendPropertyCountCandidate(partitions[partition], metadata, options);
+					}
+					return true;
+				},
+				threadPool,
+				projection);
+
+		if (!scanned) {
+			return std::nullopt;
+		}
+		return mergePropertyCountCandidatePartitions(partitions, options);
+	}
+
+	std::optional<NodePropertyCountCandidates> NodeMetadataColumnLoader::collectFullScanPropertyCountCandidates(
+			const NodeScanConfig &config,
+			const NodeScanRequirements &requirements,
+			NodePropertyCountCandidateOptions options) const {
+		return collectFullScanPropertyCountCandidates(config, requirements, nullptr, options);
+	}
+
+	std::optional<NodePropertyCountCandidates> NodeMetadataColumnLoader::collectFullScanPropertyCountCandidates(
+			const NodeScanConfig &config,
+			const NodeScanRequirements &requirements,
+			concurrent::ThreadPool *threadPool,
+			NodePropertyCountCandidateOptions options) const {
+		if (!dm_ || !dm_->hasPreadSupport() || dm_->hasUnsavedChanges() ||
+			config.type != ScanType::FULL_SCAN || !config.labels.empty() || requirements.needsLabels) {
+			return std::nullopt;
+		}
+		const auto *snapshot = dm_->getCurrentSnapshot();
+		if (snapshot != nullptr &&
+			(!snapshot->nodes.empty() || !snapshot->properties.empty() || !snapshot->blobs.empty())) { // ZYX_COV_EXCL_LINE
+			return std::nullopt; // ZYX_COV_EXCL_LINE
+		}
+
+		const bool traceEnabled = debug::PerfTrace::isEnabled();
+		const auto start = traceEnabled ? Clock::now() : Clock::time_point{};
+
+		NodeMetadataProjection projection;
+		projection.loadEdgeRefs = false;
+		projection.loadLabels = false;
+
+		const auto &segmentIndex = dm_->getSegmentIndexManager()->getNodeSegmentIndex();
+		std::vector<size_t> segmentIndices;
+		segmentIndices.reserve(segmentIndex.size());
+		for (size_t index = 0; index < segmentIndex.size(); ++index) {
+			segmentIndices.push_back(index);
+		}
+		auto groups = storage::buildCoalescedGroups(segmentIndices, segmentIndex);
+		auto tasks = storage::buildCoalescedReadTasks(groups, kMaxCoalescedNodeMetadataReadSegments);
+		const auto decision = decideNodeMetadataScan(
+				threadPool, tasks.size(), storage::totalCoalescedSegments(groups));
+		std::vector<NodePropertyCountCandidates> partitions(decision.useParallel ? tasks.size() : 1);
+		for (auto &partition : partitions) {
+			partition.reserve(1024);
+		}
+
+		const bool scanned = scanAllSerializedNodeMetadataPartitioned(dm_, threadPool, [&](size_t partition,
+		                                                                                  const char *serializedNode) {
+			const NodeMetadataRow metadata = readMetadataRow(serializedNode, projection);
+			if (!metadata.isValid()) {
+				return true;
+			}
+			if (requirements.needsActiveCheck && metadata.active == 0) {
+				return true;
+			}
+
+			if (partition < partitions.size()) {
+				appendPropertyCountCandidate(partitions[partition], metadata, options);
+			}
+			return true;
+		});
+
+		if (traceEnabled) {
+			debug::PerfTrace::addDuration("node_scan.load_node_metadata", elapsedNs(start));
+		}
+		if (!scanned) {
+			return std::nullopt;
+		}
+		return mergePropertyCountCandidatePartitions(partitions, options);
 	}
 
 	std::optional<std::vector<Node>> NodeMetadataColumnLoader::load(const std::vector<int64_t> &candidateIds,

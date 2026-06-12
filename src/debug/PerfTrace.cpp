@@ -20,19 +20,41 @@
 
 #include "graph/debug/PerfTrace.hpp"
 
+#include <array>
 #include <atomic>
+#include <functional>
 #include <mutex>
+#include <thread>
 #include <utility>
 
 namespace graph::debug {
 	namespace {
-		struct Collector {
-			std::atomic<bool> enabled{false};
+		constexpr size_t kShardCount = 64;
+
+		struct Shard {
 			std::mutex mutex;
 			PerfTrace::Snapshot data;
 		};
 
+		struct Collector {
+			std::atomic<bool> enabled{false};
+			std::array<Shard, kShardCount> shards;
+		};
+
 		Collector gCollector;
+
+		Shard &currentThreadShard() {
+			const auto hash = std::hash<std::thread::id>{}(std::this_thread::get_id());
+			return gCollector.shards[hash % gCollector.shards.size()];
+		}
+
+		void mergeInto(PerfTrace::Snapshot &target, const PerfTrace::Snapshot &source) {
+			for (const auto &[key, sourceEntry]: source) {
+				auto &targetEntry = target[key];
+				targetEntry.totalNs += sourceEntry.totalNs;
+				targetEntry.calls += sourceEntry.calls;
+			}
+		}
 	}
 
 	void PerfTrace::setEnabled(bool enabled) {
@@ -48,23 +70,28 @@ namespace graph::debug {
 			return;
 		}
 
-		std::lock_guard<std::mutex> lock(gCollector.mutex);
-		auto &entry = gCollector.data[std::string(key)];
+		auto &shard = currentThreadShard();
+		std::lock_guard<std::mutex> lock(shard.mutex);
+		auto &entry = shard.data[std::string(key)];
 		entry.totalNs += durationNs;
 		entry.calls += 1;
 	}
 
 	void PerfTrace::reset() {
-		std::lock_guard<std::mutex> lock(gCollector.mutex);
-		gCollector.data.clear();
+		for (auto &shard: gCollector.shards) {
+			std::lock_guard<std::mutex> lock(shard.mutex);
+			shard.data.clear();
+		}
 	}
 
 	PerfTrace::Snapshot PerfTrace::snapshotAndReset() {
-		std::lock_guard<std::mutex> lock(gCollector.mutex);
-		auto snapshot = std::move(gCollector.data);
-		gCollector.data.clear();
+		Snapshot snapshot;
+		for (auto &shard: gCollector.shards) {
+			std::lock_guard<std::mutex> lock(shard.mutex);
+			mergeInto(snapshot, shard.data);
+			shard.data.clear();
+		}
 		return snapshot;
 	}
 
 } // namespace graph::debug
-

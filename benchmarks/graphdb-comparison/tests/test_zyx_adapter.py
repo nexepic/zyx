@@ -72,6 +72,113 @@ def test_zyx_adapter_forwards_profile_to_subprocess(tmp_path: Path, monkeypatch)
     assert emit_profile_index == execution_mode_index + 2
 
 
+def test_zyx_adapter_forwards_threads_to_subprocess(tmp_path: Path, monkeypatch):
+    binary = tmp_path / "zyx-bench-threads.py"
+    args_path = tmp_path / "args.txt"
+    _write_executable(
+        binary,
+        f"#!{sys.executable}\n"
+        "import json, sys\n"
+        f"from pathlib import Path\nPath({str(args_path)!r}).write_text('\\n'.join(sys.argv[1:]))\n"
+        "for workload in ['load_nodes_edges', 'point_lookup_indexed', 'property_equality_indexed', 'property_range_indexed']:\n"
+        "    print(json.dumps({'event':'sample','database':'zyx','workload':workload,'scale':'smoke','iteration':0,'latency_ms':1.0,'status':'ok','equivalent_mode':'api'}))\n",
+    )
+    monkeypatch.setenv("ZYX_COMPARE_BENCH", str(binary))
+    adapter = ZyxAdapter(database="zyx", dataset_dir=tmp_path / "dataset", scale="smoke", profile="indexed", threads=8)
+
+    results = adapter.run_all(warmup=0, iterations=1)
+
+    assert [result.status for result in results] == ["ok"] * 4
+    args = args_path.read_text().splitlines()
+    assert args[args.index("--threads") + 1] == "8"
+    assert args.index("--threads") < args.index("--emit-profile")
+
+
+def test_zyx_adapter_accepts_write_profile_workloads(tmp_path: Path, monkeypatch):
+    binary = tmp_path / "zyx-bench-write.py"
+    _write_executable(
+        binary,
+        f"#!{sys.executable}\n"
+        "import json\n"
+        "workloads = ['load_nodes_edges', 'point_create_node', 'point_create_edge', 'point_update_node_property', 'point_update_edge_property', 'point_create_delete_edge', 'write_then_read_edge']\n"
+        "for workload in workloads:\n"
+        "    print(json.dumps({'event':'sample','database':'zyx','workload':workload,'scale':'smoke','iteration':0,'latency_ms':1.0,'status':'ok','equivalent_mode':'api'}))\n",
+    )
+    monkeypatch.setenv("ZYX_COMPARE_BENCH", str(binary))
+    adapter = ZyxAdapter(database="zyx", dataset_dir=tmp_path / "dataset", scale="smoke", profile="write")
+
+    results = adapter.run_all(warmup=0, iterations=1)
+
+    assert [result.workload for result in results] == [
+        "load_nodes_edges",
+        "point_create_node",
+        "point_create_edge",
+        "point_update_node_property",
+        "point_update_edge_property",
+        "point_create_delete_edge",
+        "write_then_read_edge",
+    ]
+    assert [result.status for result in results] == ["ok"] * 7
+
+
+def test_zyx_adapter_accepts_write_durable_profile_workloads(tmp_path: Path, monkeypatch):
+    binary = tmp_path / "zyx-bench-write-durable.py"
+    _write_executable(
+        binary,
+        f"#!{sys.executable}\n"
+        "import json\n"
+        "workloads = ['load_nodes_edges', 'point_create_node_durable', 'point_create_edge_durable', 'point_update_node_property_durable', 'point_update_edge_property_durable', 'point_create_delete_edge_durable', 'write_then_read_edge_durable']\n"
+        "for workload in workloads:\n"
+        "    print(json.dumps({'event':'sample','database':'zyx','workload':workload,'scale':'smoke','iteration':0,'latency_ms':1.0,'status':'ok','equivalent_mode':'api'}))\n",
+    )
+    monkeypatch.setenv("ZYX_COMPARE_BENCH", str(binary))
+    adapter = ZyxAdapter(database="zyx", dataset_dir=tmp_path / "dataset", scale="smoke", profile="write_durable")
+
+    results = adapter.run_all(warmup=0, iterations=1)
+
+    assert [result.workload for result in results] == [
+        "load_nodes_edges",
+        "point_create_node_durable",
+        "point_create_edge_durable",
+        "point_update_node_property_durable",
+        "point_update_edge_property_durable",
+        "point_create_delete_edge_durable",
+        "write_then_read_edge_durable",
+    ]
+    assert [result.status for result in results] == ["ok"] * 7
+
+
+
+def test_zyx_adapter_accepts_operational_dynamic_profile_workloads(tmp_path: Path, monkeypatch):
+    binary = tmp_path / "zyx-bench-operational_dynamic.py"
+    _write_executable(
+        binary,
+        f"#!{sys.executable}\n"
+        "import json\n"
+        "workloads = ['load_nodes_edges', 'index_seek_then_one_hop_expand', 'index_seek_then_two_hop_expand', 'post_persist_create_node', 'post_persist_create_edge', 'write_then_one_hop_expand', 'batch_create_edges_100', 'batch_create_edges_1000', 'batch_create_edges_10000', 'batch_create_edges_100_then_one_hop_expand', 'batch_create_edges_10000_then_one_hop_expand']\n"
+        "for workload in workloads:\n"
+        "    print(json.dumps({'event':'sample','database':'zyx','workload':workload,'scale':'smoke','iteration':0,'latency_ms':1.0,'status':'ok','equivalent_mode':'api'}))\n",
+    )
+    monkeypatch.setenv("ZYX_COMPARE_BENCH", str(binary))
+    adapter = ZyxAdapter(database="zyx", dataset_dir=tmp_path / "dataset", scale="smoke", profile="operational_dynamic")
+
+    results = adapter.run_all(warmup=0, iterations=1)
+
+    assert [result.workload for result in results] == [
+        "load_nodes_edges",
+        "index_seek_then_one_hop_expand",
+        "index_seek_then_two_hop_expand",
+        "post_persist_create_node",
+        "post_persist_create_edge",
+        "write_then_one_hop_expand",
+        "batch_create_edges_100",
+        "batch_create_edges_1000",
+        "batch_create_edges_10000",
+        "batch_create_edges_100_then_one_hop_expand",
+        "batch_create_edges_10000_then_one_hop_expand",
+    ]
+    assert [result.status for result in results] == ["ok"] * 11
+
 
 def test_zyx_adapter_forwards_coldish_execution_mode_to_subprocess(tmp_path: Path, monkeypatch):
     binary = tmp_path / "zyx-bench-coldish.py"
@@ -92,6 +199,28 @@ def test_zyx_adapter_forwards_coldish_execution_mode_to_subprocess(tmp_path: Pat
     assert [result.status for result in results] == ["ok"] * 4
     args = args_path.read_text().splitlines()
     assert args[args.index("--execution-mode") + 1] == "cold-ish"
+
+
+def test_zyx_adapter_forwards_opened_execution_mode_to_subprocess(tmp_path: Path, monkeypatch):
+    binary = tmp_path / "zyx-bench-opened.py"
+    args_path = tmp_path / "args.txt"
+    _write_executable(
+        binary,
+        f"#!{sys.executable}\n"
+        "import json, sys\n"
+        f"from pathlib import Path\nPath({str(args_path)!r}).write_text('\\n'.join(sys.argv[1:]))\n"
+        "for workload in ['load_nodes_edges', 'point_lookup_indexed', 'property_equality_indexed', 'property_range_indexed']:\n"
+        "    print(json.dumps({'event':'sample','database':'zyx','workload':workload,'scale':'smoke','iteration':0,'latency_ms':1.0,'status':'ok','equivalent_mode':'api'}))\n",
+    )
+    monkeypatch.setenv("ZYX_COMPARE_BENCH", str(binary))
+    adapter = ZyxAdapter(database="zyx", dataset_dir=tmp_path / "dataset", scale="smoke", profile="indexed")
+
+    results = adapter.run_all(warmup=2, iterations=1, execution_mode="opened")
+
+    assert [result.status for result in results] == ["ok"] * 4
+    args = args_path.read_text().splitlines()
+    assert args[args.index("--execution-mode") + 1] == "opened"
+
 
 def test_zyx_adapter_fails_incomplete_indexed_workload_samples(tmp_path: Path, monkeypatch):
     binary = tmp_path / "zyx-bench-incomplete.py"
@@ -246,6 +375,29 @@ def test_zyx_adapter_defaults_binary_path(tmp_path: Path, monkeypatch):
     assert adapter.binary == Path("/usr/local/bin/zyx-compare-bench")
     assert adapter.db_path == tmp_path / "zyx.db"
     assert adapter.timeout_seconds == 600
+
+
+def test_zyx_adapter_cleans_database_artifact_family(tmp_path: Path):
+    dataset_dir = tmp_path / "dataset"
+    dataset_dir.mkdir()
+    adapter = ZyxAdapter(database="zyx", dataset_dir=dataset_dir, scale="smoke")
+    db_path = tmp_path / "zyx.db"
+    wal_path = tmp_path / "zyx.db-wal"
+    load_path = tmp_path / "zyx.db.load-iteration-0"
+    unrelated = tmp_path / "zyx-not-a-db"
+    db_path.write_text("db")
+    wal_path.write_text("wal")
+    load_path.mkdir()
+    (load_path / "part").write_text("temporary")
+    unrelated.write_text("keep")
+
+    removed = adapter.cleanup_artifacts()
+
+    assert removed == [db_path, wal_path, load_path]
+    assert not db_path.exists()
+    assert not wal_path.exists()
+    assert not load_path.exists()
+    assert unrelated.read_text() == "keep"
 
 
 def test_zyx_adapter_returns_failed_result_on_timeout(tmp_path: Path, monkeypatch):

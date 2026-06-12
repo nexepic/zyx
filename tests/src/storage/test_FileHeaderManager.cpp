@@ -24,6 +24,7 @@
 #include <gtest/gtest.h>
 #include <memory>
 #include <vector>
+#include "graph/core/Node.hpp"
 #include "graph/storage/FileHeaderManager.hpp"
 #include "graph/storage/PwriteHelper.hpp"
 #include "graph/storage/SegmentTracker.hpp"
@@ -523,6 +524,90 @@ namespace graph::storage::test {
 		EXPECT_EQ(header.max_blob_id, 4);
 		EXPECT_EQ(header.max_index_id, 5);
 		EXPECT_EQ(header.max_state_id, 6);
+	}
+
+	TEST_F(FileHeaderManagerTest, TracksPendingHeaderChanges) {
+		auto file = std::make_shared<std::fstream>(testFilePath,
+												   std::ios::binary | std::ios::in | std::ios::out | std::ios::trunc);
+		FileHeader header;
+		FileHeaderManager manager(file, header);
+		manager.initializeFileHeader();
+
+		EXPECT_FALSE(manager.hasPendingChanges());
+
+		manager.getMaxNodeIdRef() = 42;
+		EXPECT_TRUE(manager.hasPendingChanges());
+
+		manager.flushFileHeader();
+		EXPECT_FALSE(manager.hasPendingChanges());
+
+		manager.updateAggregatedCrc({0xABCD1234});
+		EXPECT_TRUE(manager.hasPendingChanges());
+	}
+
+	TEST_F(FileHeaderManagerTest, PendingChangesCompareEveryDurableHeaderField) {
+		auto file = std::make_shared<std::fstream>(testFilePath,
+												   std::ios::binary | std::ios::in | std::ios::out | std::ios::trunc);
+		FileHeader header;
+		FileHeaderManager manager(file, header);
+		manager.initializeFileHeader();
+		ASSERT_FALSE(manager.hasPendingChanges());
+
+		auto expectPendingFor = [&](auto mutate) {
+			FileHeader baseline = header;
+			mutate(header);
+			EXPECT_TRUE(manager.hasPendingChanges());
+			header = baseline;
+			manager.extractFileHeaderInfo();
+			ASSERT_FALSE(manager.hasPendingChanges());
+		};
+
+		expectPendingFor([](FileHeader &h) { h.magic[0] ^= 0x1; });
+		expectPendingFor([](FileHeader &h) { h.edge_segment_head = 11; });
+		expectPendingFor([](FileHeader &h) { h.property_segment_head = 22; });
+		expectPendingFor([](FileHeader &h) { h.state_segment_head = 33; });
+		manager.getMaxPropIdRef() = 44;
+		EXPECT_TRUE(manager.hasPendingChanges());
+		manager.getMaxPropIdRef() = 0;
+		manager.extractFileHeaderInfo();
+		ASSERT_FALSE(manager.hasPendingChanges());
+
+		manager.getMaxStateIdRef() = 55;
+		EXPECT_TRUE(manager.hasPendingChanges());
+		manager.getMaxStateIdRef() = 0;
+		manager.extractFileHeaderInfo();
+		ASSERT_FALSE(manager.hasPendingChanges());
+		expectPendingFor([](FileHeader &h) { h.version = 0x00000004; });
+	}
+
+	TEST_F(FileHeaderManagerTest, UpdateFileHeaderMaxIdsWalksSegmentChains) {
+		auto file = std::make_shared<std::fstream>(testFilePath,
+												   std::ios::binary | std::ios::in | std::ios::out | std::ios::trunc);
+		FileHeader header;
+		FileHeaderManager manager(file, header);
+		manager.initializeFileHeader();
+		auto storageIO = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		auto tracker = std::make_shared<SegmentTracker>(storageIO, header);
+
+		SegmentHeader first{};
+		first.file_offset = FILE_HEADER_SIZE;
+		first.data_type = Node::typeId;
+		first.start_id = 1;
+		first.used = 3;
+		first.next_segment_offset = FILE_HEADER_SIZE + TOTAL_SEGMENT_SIZE;
+		SegmentHeader second{};
+		second.file_offset = first.next_segment_offset;
+		second.data_type = Node::typeId;
+		second.start_id = 10;
+		second.used = 5;
+		tracker->registerSegment(first);
+		tracker->registerSegment(second);
+		tracker->updateChainHead(Node::typeId, first.file_offset);
+
+		manager.updateFileHeaderMaxIds(tracker);
+
+		EXPECT_EQ(manager.getMaxNodeIdRef(), 14);
+		EXPECT_EQ(manager.getMaxEdgeIdRef(), 0);
 	}
 
 	/**

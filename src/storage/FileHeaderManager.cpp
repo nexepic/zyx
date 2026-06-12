@@ -35,13 +35,41 @@ namespace graph::storage {
 
 	FileHeaderManager::~FileHeaderManager() = default;
 
+	FileHeader FileHeaderManager::currentHeaderSnapshot() const {
+		FileHeader snapshot = fileHeader_;
+		snapshot.max_node_id = maxNodeId;
+		snapshot.max_edge_id = maxEdgeId;
+		snapshot.max_prop_id = maxPropId;
+		snapshot.max_blob_id = maxBlobId;
+		snapshot.max_index_id = maxIndexId;
+		snapshot.max_state_id = maxStateId;
+		return snapshot;
+	}
+
+	bool FileHeaderManager::sameHeader(const FileHeader &lhs, const FileHeader &rhs) {
+		return std::memcmp(lhs.magic, rhs.magic, sizeof(lhs.magic)) == 0
+			&& lhs.node_segment_head == rhs.node_segment_head
+			&& lhs.edge_segment_head == rhs.edge_segment_head
+			&& lhs.property_segment_head == rhs.property_segment_head
+			&& lhs.blob_segment_head == rhs.blob_segment_head
+			&& lhs.index_segment_head == rhs.index_segment_head
+			&& lhs.state_segment_head == rhs.state_segment_head
+			&& lhs.max_node_id == rhs.max_node_id
+			&& lhs.max_edge_id == rhs.max_edge_id
+			&& lhs.max_prop_id == rhs.max_prop_id
+			&& lhs.max_blob_id == rhs.max_blob_id
+			&& lhs.max_index_id == rhs.max_index_id
+			&& lhs.max_state_id == rhs.max_state_id
+			&& lhs.version == rhs.version
+			&& lhs.data_crc == rhs.data_crc;
+	}
+
+	bool FileHeaderManager::hasPendingChanges() const {
+		return !sameHeader(currentHeaderSnapshot(), lastFlushedHeader_);
+	}
+
 	void FileHeaderManager::flushFileHeader() const {
-		fileHeader_.max_node_id = maxNodeId;
-		fileHeader_.max_edge_id = maxEdgeId;
-		fileHeader_.max_prop_id = maxPropId;
-		fileHeader_.max_blob_id = maxBlobId;
-		fileHeader_.max_index_id = maxIndexId;
-		fileHeader_.max_state_id = maxStateId;
+		fileHeader_ = currentHeaderSnapshot();
 
 		file_->clear();
 
@@ -53,6 +81,7 @@ namespace graph::storage {
 		}
 
 		file_->flush();
+		lastFlushedHeader_ = fileHeader_;
 	}
 
 	FileHeader FileHeaderManager::readFileHeader() const {
@@ -105,6 +134,7 @@ namespace graph::storage {
 		fileHeader_.data_crc = 0;
 		file_->write(reinterpret_cast<const char *>(&fileHeader_), sizeof(FileHeader));
 		file_->flush();
+		lastFlushedHeader_ = fileHeader_;
 	}
 
 	void FileHeaderManager::validateAndReadHeader() const {
@@ -132,6 +162,7 @@ namespace graph::storage {
 			throw std::runtime_error("Unsupported file format version: " + std::to_string(fileHeader_.version)
 				+ " (expected " + std::to_string(0x00000003) + ")");
 		}
+		lastFlushedHeader_ = fileHeader_;
 	}
 
 	void FileHeaderManager::extractFileHeaderInfo() {
@@ -141,6 +172,7 @@ namespace graph::storage {
 		maxBlobId = fileHeader_.max_blob_id;
 		maxIndexId = fileHeader_.max_index_id;
 		maxStateId = fileHeader_.max_state_id;
+		lastFlushedHeader_ = currentHeaderSnapshot();
 	}
 
 	void FileHeaderManager::updateAggregatedCrc(const std::vector<uint32_t> &segmentCrcs) {

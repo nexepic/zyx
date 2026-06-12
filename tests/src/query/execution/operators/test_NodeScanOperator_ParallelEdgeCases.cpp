@@ -120,16 +120,17 @@ TEST_F(NodeScanOperatorParallelEdgeCasesTest, ParallelLabelMismatch) {
 
 // Parallel scan with candidateSet (non-FULL_SCAN path) — exercises candidateSet filtering
 TEST_F(NodeScanOperatorParallelEdgeCasesTest, ParallelWithCandidateSet) {
-	// Create 8000 nodes but only index 5000 of them (enough for parallel threshold)
-	static constexpr size_t kTotalNodes = 8000;
-	static constexpr size_t kIndexedNodes = 5000;
+	// Create enough candidates to cross NodeScanOperator's parallel threshold.
+	static constexpr size_t kTotalNodes = 4200;
+	static constexpr size_t kIndexedNodes = 4096;
 	auto nodes = addNodes("Item", kTotalNodes);
 
-	// Create a property index and add properties to only the first 5000 nodes
-	ASSERT_TRUE(im->createIndex("idx_item_val", "node", "Item", "val"));
 	for (size_t i = 0; i < kIndexedNodes; ++i) {
 		dm->addNodeProperties(nodes[i].getId(), {{"val", PropertyValue(int64_t(i))}});
 	}
+	// A global property index is enough here: the test is about the parallel
+	// candidate-set scan path, not label-scoped index selection semantics.
+	ASSERT_TRUE(im->createIndex("idx_item_val", "node", "", "val"));
 
 	db->getStorage()->flush();
 	dm->clearCache();

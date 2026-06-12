@@ -30,12 +30,22 @@
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/storage/FileStorage.hpp"
+#include "graph/storage/IStorageEventListener.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/indexes/EntityTypeIndexManager.hpp"
 #include "graph/storage/indexes/IndexBuilder.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 
 namespace fs = std::filesystem;
+
+namespace {
+class CountingStorageFlushListener final : public graph::storage::IStorageEventListener {
+public:
+	void onStorageFlush() override { ++flushCount; }
+
+	int flushCount = 0;
+};
+} // namespace
 
 class IndexBuilderTest : public ::testing::Test {
 protected:
@@ -200,9 +210,22 @@ TEST_F(IndexBuilderTest, Manager_CreateIndex_TriggersBuilder) {
 	bool success = indexManager->createIndex("age_idx", "node", "Person", "age");
 	EXPECT_TRUE(success);
 
-	auto res = indexManager->findNodeIdsByProperty("age", (int64_t) 25);
+	auto res = indexManager->findNodeIdsByLabelAndProperty("Person", "age", (int64_t) 25);
 	ASSERT_EQ(res.size(), 1UL);
 	EXPECT_EQ(res[0], 2);
+}
+
+TEST_F(IndexBuilderTest, Manager_CreateIndex_PreparesSegmentsWithoutListenerFlush) {
+	populateDatabase();
+	const auto listener = std::make_shared<CountingStorageFlushListener>();
+	fileStorage->registerEventListener(listener);
+
+	ASSERT_TRUE(indexManager->createIndex("name_idx", "node", "Person", "name"));
+
+	EXPECT_EQ(listener->flushCount, 0);
+	auto res = indexManager->findNodeIdsByLabelAndProperty("Person", "name", std::string("Alice"));
+	ASSERT_EQ(res.size(), 1UL);
+	EXPECT_EQ(res[0], 1);
 }
 
 TEST_F(IndexBuilderTest, SegmentRanges) {
@@ -341,6 +364,74 @@ TEST_F(IndexBuilderTest, BuildNodePropertyIndex_LargeBatch) {
 
 	auto resLast = indexManager->findNodeIdsByProperty("bulk_prop", 1000);
 	EXPECT_EQ(resLast.size(), 1UL);
+}
+
+TEST_F(IndexBuilderTest, BuildNodePropertyIndexWithLabelBuildsScopedEntries) {
+	graph::Node fastNode(0, dataManager->getOrCreateTokenId("FastScoped"));
+	dataManager->addNode(fastNode);
+	dataManager->addNodeProperties(fastNode.getId(), {{"code", graph::PropertyValue(int64_t{7})}});
+
+	graph::Node otherNode(0, dataManager->getOrCreateTokenId("OtherScoped"));
+	dataManager->addNode(otherNode);
+	dataManager->addNodeProperties(otherNode.getId(), {{"code", graph::PropertyValue(int64_t{7})}});
+
+	fileStorage->flush();
+	dataManager->clearCache();
+
+	auto labelIndex = indexManager->getNodeIndexManager()->getLabelIndex();
+	labelIndex->createIndex();
+	ASSERT_TRUE(indexBuilder->buildNodeLabelIndex());
+
+	ASSERT_TRUE(indexManager->createIndex("", "node", "FastScoped", "code"));
+
+	auto globalResults = indexManager->findNodeIdsByProperty("code", int64_t{7});
+	EXPECT_TRUE(globalResults.empty());
+	EXPECT_FALSE(indexManager->hasPropertyIndex("node", "code"));
+	EXPECT_TRUE(indexManager->hasNodePropertyIndexForLabel("FastScoped", "code"));
+
+	auto scopedResults = indexManager->findNodeIdsByLabelAndProperty("FastScoped", "code", int64_t{7});
+	ASSERT_EQ(scopedResults.size(), 1UL);
+	EXPECT_EQ(scopedResults.front(), fastNode.getId());
+}
+
+TEST_F(IndexBuilderTest, BuildNodePropertyIndexWithLabelUsesOwnerScanWithoutLabelIndex) {
+	graph::Node scopedNode(0, dataManager->getOrCreateTokenId("OwnerScanScoped"));
+	dataManager->addNode(scopedNode);
+	dataManager->addNodeProperties(scopedNode.getId(), {{"code", graph::PropertyValue(int64_t{9})}});
+
+	graph::Node otherNode(0, dataManager->getOrCreateTokenId("OwnerScanOther"));
+	dataManager->addNode(otherNode);
+	dataManager->addNodeProperties(otherNode.getId(), {{"code", graph::PropertyValue(int64_t{9})}});
+
+	fileStorage->flush();
+	dataManager->clearCache();
+
+	ASSERT_TRUE(indexManager->createIndex("idx_owner_scan_scoped", "node", "OwnerScanScoped", "code"));
+
+	EXPECT_FALSE(indexManager->hasPropertyIndex("node", "code"));
+	EXPECT_TRUE(indexManager->hasNodePropertyIndexForLabel("OwnerScanScoped", "code"));
+
+	auto scopedResults = indexManager->findNodeIdsByLabelAndProperty("OwnerScanScoped", "code", int64_t{9});
+	ASSERT_EQ(scopedResults.size(), 1UL);
+	EXPECT_EQ(scopedResults.front(), scopedNode.getId());
+
+	auto otherResults = indexManager->findNodeIdsByLabelAndProperty("OwnerScanOther", "code", int64_t{9});
+	EXPECT_TRUE(otherResults.empty());
+}
+
+TEST_F(IndexBuilderTest, BuildNodePropertyIndexWithMissingLabelKeepsScopedIndexEmpty) {
+	graph::Node node(0, dataManager->getOrCreateTokenId("ExistingLabel"));
+	dataManager->addNode(node);
+	dataManager->addNodeProperties(node.getId(), {{"code", graph::PropertyValue(int64_t{11})}});
+
+	fileStorage->flush();
+	dataManager->clearCache();
+
+	ASSERT_TRUE(indexManager->createIndex("idx_missing_label_code", "node", "MissingLabel", "code"));
+
+	EXPECT_TRUE(indexManager->hasNodePropertyIndexForLabel("MissingLabel", "code"));
+	EXPECT_TRUE(indexManager->findNodeIdsByLabelAndProperty("MissingLabel", "code", int64_t{11}).empty());
+	EXPECT_TRUE(indexManager->findNodeIdsByProperty("code", int64_t{11}).empty());
 }
 
 TEST_F(IndexBuilderTest, ProcessBatch_SkipInactive) {

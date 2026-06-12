@@ -26,6 +26,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <vector>
 #include "value.hpp"
 
 namespace zyx {
@@ -194,6 +195,13 @@ namespace zyx {
 		createEdges(const std::string &edgeType,
 					const std::vector<std::tuple<int64_t, int64_t, std::unordered_map<std::string, Value>>> &edgesList)
 				const;
+
+		/**
+		 * @brief Create multiple node property indexes with one coordinated build.
+		 * @return true when every requested index was created.
+		 */
+		[[nodiscard]] bool createNodePropertyIndexes(const std::string &label,
+													 const std::vector<std::string> &properties) const;
 
 		/**
 		 * @brief Finds the shortest path between two nodes.

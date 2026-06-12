@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -45,5 +46,35 @@ namespace graph::debug {
 		[[nodiscard]] static Snapshot snapshotAndReset();
 	};
 
-} // namespace graph::debug
+	class ScopedPerfTimer {
+	public:
+		explicit ScopedPerfTimer(std::string_view key) :
+			active_(PerfTrace::isEnabled() && !key.empty()) {
+			if (active_) {
+				key_.assign(key);
+				start_ = Clock::now();
+			}
+		}
 
+		ScopedPerfTimer(const ScopedPerfTimer &) = delete;
+		ScopedPerfTimer &operator=(const ScopedPerfTimer &) = delete;
+
+		~ScopedPerfTimer() {
+			if (!active_) {
+				return;
+			}
+			PerfTrace::addDuration(
+				key_,
+					static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start_)
+												 .count()));
+		}
+
+	private:
+		using Clock = std::chrono::steady_clock;
+
+		std::string key_;
+		Clock::time_point start_{};
+		bool active_ = false;
+	};
+
+} // namespace graph::debug

@@ -22,6 +22,7 @@
 
 #include "graph/core/Node.hpp"
 #include "graph/core/Edge.hpp"
+#include "graph/core/Property.hpp"
 #include "graph/storage/FileHeaderManager.hpp"
 #include "graph/storage/IDAllocator.hpp"
 #include "graph/storage/SegmentAllocator.hpp"
@@ -125,6 +126,16 @@ protected:
 		std::istringstream iss(str, std::ios::binary);
 		return utils::FixedSizeSerializer::deserializeWithFixedSize<Node>(iss, Node::getTotalSize());
 	}
+
+	Property readPropertyFromDisk(uint64_t segOff, uint32_t slotIndex) {
+		uint64_t entityOffset = segOff + sizeof(SegmentHeader) + slotIndex * Property::getTotalSize();
+		std::vector<char> buf(Property::getTotalSize());
+		storageIO->readAt(entityOffset, buf.data(), buf.size());
+
+		std::string str(buf.begin(), buf.end());
+		std::istringstream iss(str, std::ios::binary);
+		return utils::FixedSizeSerializer::deserializeWithFixedSize<Property>(iss, Property::getTotalSize());
+	}
 };
 
 // ============================================================================
@@ -171,6 +182,34 @@ TEST_F(StorageWriterTest, WriteSegmentDataAppendToExisting) {
 	for (uint32_t i = 0; i < 4; ++i) {
 		EXPECT_TRUE(segmentTracker->getBitmapBit(segOff, i));
 	}
+}
+
+TEST_F(StorageWriterTest, WriteSegmentDataPropertyRoundtripUsesFixedLayout) {
+	constexpr uint32_t capacity = itemsPerSegment<Property>();
+	uint64_t segOff = allocator->allocateSegment(Property::typeId, capacity);
+	ASSERT_NE(segOff, 0u);
+
+	Property property(1, 42, Node::typeId);
+	property.setProperties({
+			{"active", PropertyValue(true)},
+			{"age", PropertyValue(int64_t(29))},
+			{"score", PropertyValue(98.5)},
+			{"name", PropertyValue(std::string("Ada"))},
+			{"tags", PropertyValue(std::vector<PropertyValue>{PropertyValue("graph"), PropertyValue(int64_t(7))})},
+			{"meta", PropertyValue(PropertyValue::MapType{{"rank", PropertyValue(int64_t(1))}})},
+			{"date", PropertyValue(TemporalDate{123})},
+			{"datetime", PropertyValue(TemporalDateTime{456})},
+			{"duration", PropertyValue(TemporalDuration{1, 2, 3})},
+	});
+	std::vector<Property> properties = {property};
+
+	writer->writeSegmentData(segOff, properties, 0);
+
+	Property readBack = readPropertyFromDisk(segOff, 0);
+	EXPECT_EQ(readBack.getId(), property.getId());
+	EXPECT_EQ(readBack.getMetadata().entityId, 42);
+	EXPECT_EQ(readBack.getMetadata().entityType, Node::typeId);
+	EXPECT_EQ(readBack.getPropertyValues(), property.getPropertyValues());
 }
 
 // ============================================================================

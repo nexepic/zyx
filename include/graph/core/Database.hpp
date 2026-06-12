@@ -22,6 +22,7 @@
 
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 
 #include "graph/concurrent/ThreadPool.hpp"
@@ -42,6 +43,7 @@ namespace graph {
 
 		void open();
 		[[nodiscard]] bool openIfExists();
+		void flush() const;
 		void close() const;
 
 		[[nodiscard]] bool exists() const;
@@ -77,6 +79,7 @@ namespace graph {
 		std::shared_ptr<storage::wal::WALManager> walManager_;
 		std::unique_ptr<TransactionManager> transactionManager_;
 		std::shared_ptr<concurrent::ThreadPool> threadPool_;
+		std::optional<size_t> configuredThreadPoolSize_;
 
 		// Lazy initialization flags
 		mutable std::once_flag threadPoolInitFlag_;

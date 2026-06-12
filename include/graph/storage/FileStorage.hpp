@@ -23,11 +23,6 @@
 #include <string>
 #include <tuple>
 #include <unordered_map>
-#include "graph/concurrent/ThreadPool.hpp"
-#include "graph/storage/PwriteHelper.hpp"
-#include "graph/storage/IntegrityChecker.hpp"
-#include "graph/storage/StorageIO.hpp"
-#include "graph/storage/StorageWriter.hpp"
 #include "DatabaseInspector.hpp"
 #include "DeletionManager.hpp"
 #include "FileHeaderManager.hpp"
@@ -39,8 +34,13 @@
 #include "StorageHeaders.hpp"
 #include "StorageTypes.hpp"
 #include "data/DataManager.hpp"
+#include "graph/concurrent/ThreadPool.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
+#include "graph/storage/IntegrityChecker.hpp"
+#include "graph/storage/PwriteHelper.hpp"
+#include "graph/storage/StorageIO.hpp"
+#include "graph/storage/StorageWriter.hpp"
 #include "state/SystemStateManager.hpp"
 
 namespace graph::storage {
@@ -54,6 +54,7 @@ namespace graph::storage {
 		void save();
 		void close();
 		void flush();
+		void flushOrThrow();
 
 		void initializeComponents();
 
@@ -114,6 +115,7 @@ namespace graph::storage {
 		bool isCompactionEnabled() const { return compactionEnabled_.load(); }
 
 		void setThreadPool(concurrent::ThreadPool *pool) { threadPool_ = pool; }
+		[[nodiscard]] concurrent::ThreadPool *getThreadPool() const { return threadPool_; }
 
 		using SegmentVerifyResult = IntegrityChecker::SegmentVerifyResult;
 		using IntegrityResult = IntegrityChecker::IntegrityResult;
@@ -121,6 +123,9 @@ namespace graph::storage {
 		[[nodiscard]] IntegrityResult verifyIntegrity() const;
 
 	private:
+		void ensureWriteHandle();
+		void flushImpl();
+
 		std::string dbFilePath;
 
 		FileHeader fileHeader;
@@ -159,7 +164,7 @@ namespace graph::storage {
 		concurrent::ThreadPool *threadPool_ = nullptr;
 
 		// Native file handle for pwrite-based parallel writes and truncation.
-		// Opened alongside fstream in open(), closed in close().
+		// Opened lazily on first write to keep read-mostly cold-ish opens lean.
 		file_handle_t writeFd_ = INVALID_FILE_HANDLE;
 
 		// Native file handle for pread-based parallel reads.

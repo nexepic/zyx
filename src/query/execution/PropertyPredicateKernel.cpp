@@ -112,6 +112,15 @@ namespace {
 			if (auto result = tryTypedRange<std::string>(actual, predicate)) {
 				return result;
 			}
+			if (auto result = tryTypedRange<TemporalDate>(actual, predicate)) {
+				return result;
+			}
+			if (auto result = tryTypedRange<TemporalDateTime>(actual, predicate)) {
+				return result;
+			}
+			if (auto result = tryTypedRange<TemporalDuration>(actual, predicate)) {
+				return result;
+			}
 			return std::nullopt;
 		}
 
@@ -125,6 +134,15 @@ namespace {
 			return result;
 		}
 		if (auto result = tryTypedComparison<std::string>(actual, predicate)) {
+			return result;
+		}
+		if (auto result = tryTypedComparison<TemporalDate>(actual, predicate)) {
+			return result;
+		}
+		if (auto result = tryTypedComparison<TemporalDateTime>(actual, predicate)) {
+			return result;
+		}
+		if (auto result = tryTypedComparison<TemporalDuration>(actual, predicate)) {
 			return result;
 		}
 		return std::nullopt;
@@ -147,6 +165,21 @@ namespace {
 			vectorPredicates.push_back(std::move(predicate));
 		}
 		return PropertyPredicateKernel(std::move(vectorPredicates));
+	}
+
+	bool PropertyPredicateKernel::containsOnlyEqualityPredicates() const {
+		return !predicates_.empty() && std::all_of(predicates_.begin(), predicates_.end(), [](const auto &predicate) {
+			return predicate.op == VectorPredicateOp::VPO_EQ;
+		});
+	}
+
+	std::unordered_map<std::string, PropertyValue> PropertyPredicateKernel::toEqualityPredicates() const {
+		std::unordered_map<std::string, PropertyValue> equality;
+		equality.reserve(predicates_.size());
+		for (const auto &predicate : predicates_) {
+			equality[predicate.propertyKey] = predicate.value;
+		}
+		return equality;
 	}
 
 	bool PropertyPredicateKernel::matchesValue(const std::optional<PropertyValue> &actual,

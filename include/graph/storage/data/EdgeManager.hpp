@@ -22,6 +22,7 @@
 
 #include "BaseEntityManager.hpp"
 #include "graph/core/Edge.hpp"
+#include "graph/traversal/RelationshipTraversal.hpp"
 
 namespace graph::storage {
 
@@ -31,6 +32,11 @@ namespace graph::storage {
 
 		// Override add to handle special edge creation logic (linking)
 		void add(Edge &edge) override;
+		void addBatch(std::vector<Edge> &edges) override;
+		[[nodiscard]] traversal::RelationshipBatchLinkUpdates prepareAddBatch(std::vector<Edge> &edges);
+		void persistPreparedAddBatch(
+				const std::vector<Edge> &edges,
+				const traversal::RelationshipBatchLinkUpdates &linkUpdates);
 
 		// Edge-specific methods
 		[[nodiscard]] std::vector<Edge> findByNode(int64_t nodeId, const std::string &direction = "both") const;

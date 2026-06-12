@@ -54,7 +54,7 @@ protected:
 	std::unique_ptr<Database> db;
 };
 
-TEST_F(SnapshotIsolationTest, ReadOnlyTransactionReadsCommittedNodeFromDiskBackedSnapshot) {
+TEST_F(SnapshotIsolationTest, ReadOnlyTransactionReadsCommittedNodeFromDeferredOverlay) {
 	// Add a node and commit
 	Node node(0, 42);
 	{
@@ -64,13 +64,13 @@ TEST_F(SnapshotIsolationTest, ReadOnlyTransactionReadsCommittedNodeFromDiskBacke
 	}
 	ASSERT_GT(node.getId(), 0);
 
-	// Commits publish a clean overlay snapshot; committed data is durable on disk.
+	// WAL-first commits publish a committed dirty overlay until checkpoint.
 	auto txn = db->beginReadOnlyTransaction();
 
 	auto *dm = db->getStorage()->getDataManager().get();
 	const auto *snapshot = dm->getCurrentSnapshot();
 	ASSERT_NE(snapshot, nullptr);
-	EXPECT_TRUE(snapshot->nodes.empty());
+	EXPECT_TRUE(snapshot->nodes.contains(node.getId()));
 
 	Node readNode = dm->getNode(node.getId());
 	EXPECT_EQ(readNode.getId(), node.getId());
@@ -80,7 +80,7 @@ TEST_F(SnapshotIsolationTest, ReadOnlyTransactionReadsCommittedNodeFromDiskBacke
 	txn.commit();
 }
 
-TEST_F(SnapshotIsolationTest, ReadOnlyTransactionReadsCommittedEdgeFromDiskBackedSnapshot) {
+TEST_F(SnapshotIsolationTest, ReadOnlyTransactionReadsCommittedEdgeFromDeferredOverlay) {
 	// Create nodes and an edge
 	Node src(0, 0), tgt(0, 0);
 	{
@@ -103,7 +103,7 @@ TEST_F(SnapshotIsolationTest, ReadOnlyTransactionReadsCommittedEdgeFromDiskBacke
 	auto *dm = db->getStorage()->getDataManager().get();
 	const auto *snapshot = dm->getCurrentSnapshot();
 	ASSERT_NE(snapshot, nullptr);
-	EXPECT_TRUE(snapshot->edges.empty());
+	EXPECT_TRUE(snapshot->edges.contains(edge.getId()));
 
 	Edge readEdge = dm->getEdge(edge.getId());
 	EXPECT_EQ(readEdge.getId(), edge.getId());
@@ -114,7 +114,7 @@ TEST_F(SnapshotIsolationTest, ReadOnlyTransactionReadsCommittedEdgeFromDiskBacke
 	txn.commit();
 }
 
-TEST_F(SnapshotIsolationTest, ReadOnlyTransactionReadsModifiedNodeFromDiskBackedSnapshot) {
+TEST_F(SnapshotIsolationTest, ReadOnlyTransactionReadsModifiedNodeFromDeferredOverlay) {
 	// Create node with label 10
 	Node node(0, 10);
 	{
@@ -137,7 +137,7 @@ TEST_F(SnapshotIsolationTest, ReadOnlyTransactionReadsModifiedNodeFromDiskBacked
 	auto *dm = db->getStorage()->getDataManager().get();
 	const auto *snapshot = dm->getCurrentSnapshot();
 	ASSERT_NE(snapshot, nullptr);
-	EXPECT_TRUE(snapshot->nodes.empty());
+	EXPECT_TRUE(snapshot->nodes.contains(node.getId()));
 
 	Node readNode = dm->getNode(node.getId());
 	EXPECT_EQ(readNode.getId(), node.getId());
@@ -147,7 +147,7 @@ TEST_F(SnapshotIsolationTest, ReadOnlyTransactionReadsModifiedNodeFromDiskBacked
 	txn.commit();
 }
 
-TEST_F(SnapshotIsolationTest, ReadOnlyTransactionReadsDeletedNodeFromDiskBackedSnapshot) {
+TEST_F(SnapshotIsolationTest, ReadOnlyTransactionReadsDeletedNodeFromDeferredOverlay) {
 	// Create and delete a node
 	Node node(0, 0);
 	{

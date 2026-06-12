@@ -10,6 +10,7 @@
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/core/PropertyTypes.hpp"
 #include "graph/query/execution/PropertyPredicateKernel.hpp"
+#include "graph/query/execution/PropertyPredicateScanKernel.hpp"
 #include "graph/storage/data/DataManager.hpp"
 
 namespace graph::query::execution {
@@ -40,7 +41,7 @@ namespace graph::query::execution {
 	private:
 		[[nodiscard]] bool propertyMapMatches(
 			const std::unordered_map<std::string, PropertyValue> &properties,
-			const PropertyPredicateKernel &predicateKernel) const;
+			const PropertyPredicateScanKernel &scanKernel) const;
 
 		std::shared_ptr<storage::DataManager> dm_;
 		concurrent::ThreadPool *pool_ = nullptr;

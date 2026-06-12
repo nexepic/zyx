@@ -22,6 +22,8 @@ namespace graph::query::execution {
 
 		[[nodiscard]] bool empty() const noexcept { return predicates_.empty(); }
 		[[nodiscard]] const std::vector<VectorizedPropertyPredicate> &predicates() const noexcept { return predicates_; }
+		[[nodiscard]] bool containsOnlyEqualityPredicates() const;
+		[[nodiscard]] std::unordered_map<std::string, PropertyValue> toEqualityPredicates() const;
 
 		[[nodiscard]] bool matchesValue(const std::optional<PropertyValue> &actual,
 		                               const VectorizedPropertyPredicate &predicate) const;

@@ -19,7 +19,10 @@
  **/
 
 #include <gtest/gtest.h>
+#include <array>
 #include <memory>
+#include <span>
+#include <vector>
 #include "graph/core/Blob.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Index.hpp"
@@ -67,6 +70,25 @@ TEST_F(PersistenceManagerTest, TypeRouting) {
 	ASSERT_TRUE(nodeInfo.has_value());
 	ASSERT_TRUE(nodeInfo->backup.has_value());
 	EXPECT_EQ(nodeInfo->backup->getId(), 100);
+}
+
+TEST_F(PersistenceManagerTest, VisitDirtyInfosRoutesToTypedRegistry) {
+	addNode(100);
+	addNode(101);
+	const std::array<int64_t, 3> ids{100, 999, 101};
+	std::vector<int64_t> visitedIds;
+	std::vector<int64_t> foundIds;
+
+	manager->visitDirtyInfos<Node>(
+			std::span<const int64_t>(ids), [&](int64_t id, const DirtyEntityInfo<Node> *info) {
+				visitedIds.push_back(id);
+				if (info && info->backup.has_value()) {
+					foundIds.push_back(info->backup->getId());
+				}
+			});
+
+	EXPECT_EQ(visitedIds, (std::vector<int64_t>{100, 999, 101}));
+	EXPECT_EQ(foundIds, (std::vector<int64_t>{100, 101}));
 }
 
 // 2. Snapshot Coordination
@@ -258,6 +280,172 @@ TEST_F(PersistenceManagerTest, UpsertBatch_AllEntityTypes) {
 	manager->upsertBatch(emptyNodes, EntityChangeType::CHANGE_ADDED);
 	// Should verify dirty count didn't change (still 0 nodes)
 	EXPECT_EQ(manager->getAllDirtyInfos<Node>().size(), 0UL);
+}
+
+TEST_F(PersistenceManagerTest, UpsertBatchEmptyInputsAreIgnoredForAllEntityTypes) {
+	std::vector<Node> nodes;
+	std::vector<Edge> edges;
+	std::vector<Property> properties;
+	std::vector<Blob> blobs;
+	std::vector<Index> indexes;
+	std::vector<State> states;
+
+	manager->upsertBatch(nodes, EntityChangeType::CHANGE_ADDED);
+	manager->upsertBatch(edges, EntityChangeType::CHANGE_ADDED);
+	manager->upsertBatch(properties, EntityChangeType::CHANGE_ADDED);
+	manager->upsertBatch(blobs, EntityChangeType::CHANGE_ADDED);
+	manager->upsertBatch(indexes, EntityChangeType::CHANGE_ADDED);
+	manager->upsertBatch(states, EntityChangeType::CHANGE_ADDED);
+
+	EXPECT_FALSE(manager->hasUnsavedChanges());
+}
+
+TEST_F(PersistenceManagerTest, UpsertBatchSelectedEmptyInputsAreIgnoredForAllEntityTypes) {
+	std::vector<Node> nodes;
+	std::vector<Edge> edges;
+	std::vector<Property> properties;
+	std::vector<Blob> blobs;
+	std::vector<Index> indexes;
+	std::vector<State> states;
+
+	manager->upsertBatchSelected(nodes, {0}, EntityChangeType::CHANGE_ADDED);
+	manager->upsertBatchSelected(edges, {0}, EntityChangeType::CHANGE_ADDED);
+	manager->upsertBatchSelected(properties, {0}, EntityChangeType::CHANGE_ADDED);
+	manager->upsertBatchSelected(blobs, {0}, EntityChangeType::CHANGE_ADDED);
+	manager->upsertBatchSelected(indexes, {0}, EntityChangeType::CHANGE_ADDED);
+	manager->upsertBatchSelected(states, {0}, EntityChangeType::CHANGE_ADDED);
+
+	nodes.emplace_back();
+	edges.emplace_back();
+	properties.emplace_back();
+	blobs.emplace_back();
+	indexes.emplace_back();
+	states.emplace_back();
+
+	manager->upsertBatchSelected(nodes, {}, EntityChangeType::CHANGE_ADDED);
+	manager->upsertBatchSelected(edges, {}, EntityChangeType::CHANGE_ADDED);
+	manager->upsertBatchSelected(properties, {}, EntityChangeType::CHANGE_ADDED);
+	manager->upsertBatchSelected(blobs, {}, EntityChangeType::CHANGE_ADDED);
+	manager->upsertBatchSelected(indexes, {}, EntityChangeType::CHANGE_ADDED);
+	manager->upsertBatchSelected(states, {}, EntityChangeType::CHANGE_ADDED);
+
+	EXPECT_FALSE(manager->hasUnsavedChanges());
+}
+
+TEST_F(PersistenceManagerTest, TransactionalBatchUpsertsDeferAutoFlushForAllEntityTypes) {
+	int flushCount = 0;
+	manager->setMaxDirtyEntities(1);
+	manager->setAutoFlushCallback([&flushCount]() { ++flushCount; });
+	manager->setTransactionActive(true);
+
+	std::vector<Node> nodes(1);
+	nodes[0].setId(1);
+	std::vector<Edge> edges(1);
+	edges[0].setId(2);
+	std::vector<Property> properties(1);
+	properties[0].setId(3);
+	std::vector<Blob> blobs(1);
+	blobs[0].setId(4);
+	std::vector<Index> indexes(1);
+	indexes[0].setId(5);
+	std::vector<State> states(1);
+	states[0].setId(6);
+
+	manager->upsertBatch(nodes, EntityChangeType::CHANGE_ADDED);
+	manager->upsertBatch(edges, EntityChangeType::CHANGE_ADDED);
+	manager->upsertBatch(properties, EntityChangeType::CHANGE_ADDED);
+	manager->upsertBatch(blobs, EntityChangeType::CHANGE_ADDED);
+	manager->upsertBatch(indexes, EntityChangeType::CHANGE_ADDED);
+	manager->upsertBatch(states, EntityChangeType::CHANGE_ADDED);
+
+	EXPECT_EQ(flushCount, 0);
+	EXPECT_TRUE(manager->isDirty<Node>(1));
+	EXPECT_TRUE(manager->isDirty<Edge>(2));
+	EXPECT_TRUE(manager->isDirty<Property>(3));
+	EXPECT_TRUE(manager->isDirty<Blob>(4));
+	EXPECT_TRUE(manager->isDirty<Index>(5));
+	EXPECT_TRUE(manager->isDirty<State>(6));
+}
+
+TEST_F(PersistenceManagerTest, TransactionalSelectedBatchUpsertsDeferAutoFlushForAllEntityTypes) {
+	int flushCount = 0;
+	manager->setMaxDirtyEntities(1);
+	manager->setAutoFlushCallback([&flushCount]() { ++flushCount; });
+	manager->setTransactionActive(true);
+
+	std::vector<Node> nodes(1);
+	nodes[0].setId(11);
+	std::vector<Edge> edges(1);
+	edges[0].setId(12);
+	std::vector<Property> properties(1);
+	properties[0].setId(13);
+	std::vector<Blob> blobs(1);
+	blobs[0].setId(14);
+	std::vector<Index> indexes(1);
+	indexes[0].setId(15);
+	std::vector<State> states(1);
+	states[0].setId(16);
+
+	manager->upsertBatchSelected(nodes, {0}, EntityChangeType::CHANGE_ADDED);
+	manager->upsertBatchSelected(edges, {0}, EntityChangeType::CHANGE_ADDED);
+	manager->upsertBatchSelected(properties, {0}, EntityChangeType::CHANGE_ADDED);
+	manager->upsertBatchSelected(blobs, {0}, EntityChangeType::CHANGE_ADDED);
+	manager->upsertBatchSelected(indexes, {0}, EntityChangeType::CHANGE_ADDED);
+	manager->upsertBatchSelected(states, {0}, EntityChangeType::CHANGE_ADDED);
+
+	EXPECT_EQ(flushCount, 0);
+	EXPECT_TRUE(manager->isDirty<Node>(11));
+	EXPECT_TRUE(manager->isDirty<Edge>(12));
+	EXPECT_TRUE(manager->isDirty<Property>(13));
+	EXPECT_TRUE(manager->isDirty<Blob>(14));
+	EXPECT_TRUE(manager->isDirty<Index>(15));
+	EXPECT_TRUE(manager->isDirty<State>(16));
+}
+
+TEST_F(PersistenceManagerTest, HasDirtyInfoOfTypesRoutesAllEntityTypes) {
+	Node node;
+	node.setId(1);
+	Edge edge;
+	edge.setId(2);
+	Property property;
+	property.setId(3);
+	Blob blob;
+	blob.setId(4);
+	Index index;
+	index.setId(5);
+	State state;
+	state.setId(6);
+
+	const std::vector<EntityChangeType> added = {EntityChangeType::CHANGE_ADDED};
+	const std::vector<EntityChangeType> deleted = {EntityChangeType::CHANGE_DELETED};
+
+	EXPECT_FALSE(manager->hasDirtyInfoOfTypes<Node>(added));
+	EXPECT_FALSE(manager->hasDirtyInfoOfTypes<Edge>(added));
+	EXPECT_FALSE(manager->hasDirtyInfoOfTypes<Property>(added));
+	EXPECT_FALSE(manager->hasDirtyInfoOfTypes<Blob>(added));
+	EXPECT_FALSE(manager->hasDirtyInfoOfTypes<Index>(added));
+	EXPECT_FALSE(manager->hasDirtyInfoOfTypes<State>(added));
+
+	manager->upsert(DirtyEntityInfo<Node>(EntityChangeType::CHANGE_ADDED, node));
+	manager->upsert(DirtyEntityInfo<Edge>(EntityChangeType::CHANGE_ADDED, edge));
+	manager->upsert(DirtyEntityInfo<Property>(EntityChangeType::CHANGE_ADDED, property));
+	manager->upsert(DirtyEntityInfo<Blob>(EntityChangeType::CHANGE_ADDED, blob));
+	manager->upsert(DirtyEntityInfo<Index>(EntityChangeType::CHANGE_ADDED, index));
+	manager->upsert(DirtyEntityInfo<State>(EntityChangeType::CHANGE_ADDED, state));
+
+	EXPECT_TRUE(manager->hasDirtyInfoOfTypes<Node>(added));
+	EXPECT_TRUE(manager->hasDirtyInfoOfTypes<Edge>(added));
+	EXPECT_TRUE(manager->hasDirtyInfoOfTypes<Property>(added));
+	EXPECT_TRUE(manager->hasDirtyInfoOfTypes<Blob>(added));
+	EXPECT_TRUE(manager->hasDirtyInfoOfTypes<Index>(added));
+	EXPECT_TRUE(manager->hasDirtyInfoOfTypes<State>(added));
+
+	EXPECT_FALSE(manager->hasDirtyInfoOfTypes<Node>(deleted));
+	EXPECT_FALSE(manager->hasDirtyInfoOfTypes<Edge>(deleted));
+	EXPECT_FALSE(manager->hasDirtyInfoOfTypes<Property>(deleted));
+	EXPECT_FALSE(manager->hasDirtyInfoOfTypes<Blob>(deleted));
+	EXPECT_FALSE(manager->hasDirtyInfoOfTypes<Index>(deleted));
+	EXPECT_FALSE(manager->hasDirtyInfoOfTypes<State>(deleted));
 }
 
 TEST_F(PersistenceManagerTest, Accessors_AllEntityTypes) {

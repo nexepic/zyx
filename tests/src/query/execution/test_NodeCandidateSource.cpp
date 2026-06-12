@@ -124,7 +124,7 @@ TEST_F(NodeCandidateSourceTest, MissingLabelScanReturnsEmpty) {
 }
 
 TEST_F(NodeCandidateSourceTest, PropertyScanReturnsMatchingIds) {
-	EXPECT_TRUE(indexManager->createIndex("idx_person_name", "node", "Person", "name"));
+	EXPECT_TRUE(indexManager->createIndex("idx_node_name", "node", "", "name"));
 	const int64_t personLabel = dataManager->getOrCreateTokenId("Person");
 	Node alice(1, personLabel);
 	Node bob(2, personLabel);
@@ -338,7 +338,7 @@ TEST_F(NodeCandidateSourceTest, MultiLabelScanWithoutLabelIndexLeavesLabelsUnsat
 }
 
 TEST_F(NodeCandidateSourceTest, RangeScanHonorsExclusiveBounds) {
-	EXPECT_TRUE(indexManager->createIndex("idx_person_age", "node", "Person", "age"));
+	EXPECT_TRUE(indexManager->createIndex("idx_node_age", "node", "", "age"));
 	const int64_t personLabel = dataManager->getOrCreateTokenId("Person");
 	for (int64_t id = 1; id <= 4; ++id) {
 		Node node(id, personLabel);

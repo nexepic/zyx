@@ -333,8 +333,7 @@ TEST_F(FileStorageParallelTest, Flush_WithThreadPool_AndCompaction) {
 // ============================================================================
 
 TEST_F(FileStorageParallelTest, WriteSegmentData_PwritePath) {
-	// The pwrite path is exercised by saveData when writeFd_ is valid
-	// (which it always is after open())
+	EXPECT_FALSE(fileStorage->getStorageIO()->hasPwriteSupport());
 	auto dm = fileStorage->getDataManager();
 
 	std::vector<graph::Node> data;
@@ -345,6 +344,7 @@ TEST_F(FileStorageParallelTest, WriteSegmentData_PwritePath) {
 	fileStorage->saveData(data, segHead, 100);
 
 	EXPECT_NE(segHead, 0u);
+	EXPECT_TRUE(fileStorage->getStorageIO()->hasPwriteSupport());
 
 	// Verify written data
 	auto tracker = fileStorage->getSegmentTracker();

@@ -19,20 +19,45 @@
  **/
 
 #include "graph/storage/indexes/IndexManager.hpp"
+#include <algorithm>
+#include <optional>
 #include <sstream>
+#include <string_view>
+#include <unordered_set>
 #include "graph/log/Log.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/indexes/EntityTypeIndexManager.hpp"
 #include "graph/storage/indexes/IndexBuilder.hpp"
 #include "graph/storage/indexes/IndexMeta.hpp"
 #include "graph/storage/indexes/PropertyIndex.hpp"
+#include "graph/storage/indexes/ScopedNodePropertyKey.hpp"
 #include "graph/storage/indexes/VectorIndexManager.hpp"
 #include "graph/storage/state/SystemStateKeys.hpp"
 
 namespace graph::query::indexes {
 namespace {
-	std::string scopedNodePropertyKey(const std::string &label, const std::string &property) {
-		return "__zyx_scoped_node_property__" + label + "__" + property;
+	template<typename T>
+	bool unorderedValuesEqual(std::vector<T> lhs, std::vector<T> rhs) {
+		if (lhs.size() != rhs.size()) {
+			return false;
+		}
+		std::sort(lhs.begin(), lhs.end());
+		std::sort(rhs.begin(), rhs.end());
+		return lhs == rhs;
+	}
+
+	bool nodeIndexRelevantFieldsChanged(const Node &oldNode, const Node &newNode) {
+		return oldNode.getId() != newNode.getId() ||
+			   oldNode.isActive() != newNode.isActive() ||
+			   !unorderedValuesEqual(oldNode.getLabelIds(), newNode.getLabelIds()) ||
+			   oldNode.getProperties() != newNode.getProperties();
+	}
+
+	bool edgeIndexRelevantFieldsChanged(const Edge &oldEdge, const Edge &newEdge) {
+		return oldEdge.getId() != newEdge.getId() ||
+			   oldEdge.isActive() != newEdge.isActive() ||
+			   oldEdge.getTypeId() != newEdge.getTypeId() ||
+			   oldEdge.getProperties() != newEdge.getProperties();
 	}
 } // namespace
 
@@ -136,73 +161,168 @@ namespace {
 	}
 
 	bool IndexManager::executeBuildTask(const std::function<bool()> &buildFunc) const {
-		storage_->flush();
+		// Index rebuilds need committed segment metadata for range scans, but
+		// they should not notify storage listeners mid-DDL. Listener flushes
+		// persist index roots/config and can otherwise create an extra durable
+		// save before the rebuilt index state exists.
+		storage_->save();
 		return buildFunc();
 	}
 
 	bool IndexManager::createIndex(const std::string &indexName, const std::string &entityType,
 								   const std::string &label, const std::string &property) const {
+		auto results = createIndexes({IndexCreateRequest{indexName, entityType, label, property}});
+		return !results.empty() && results.front().success;
+	}
+
+	std::vector<IndexManager::IndexCreateResult>
+	IndexManager::createIndexes(const std::vector<IndexCreateRequest> &requests) const {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
-		// 1. Generate Name if empty
-		// Format: index_node_User_name or index_node_User_LABEL
-		std::string name = indexName;
-		if (name.empty()) {
-			name = "index_" + entityType + "_" + label + "_" + (property.empty() ? "LABEL" : property);
+		std::vector<IndexCreateResult> results;
+		results.reserve(requests.size());
+		if (requests.empty()) {
+			return results;
 		}
 
-		// 2. Check Metadata (Prevent duplicate names)
-		// We use SystemStateManager to load the "sys.indexes" map to check existence.
+		struct PreparedRequest {
+			size_t resultIndex = 0;
+			std::string name;
+			std::string entityType;
+			std::string indexType;
+			std::string label;
+			std::string property;
+			std::string physicalProperty;
+		};
+
+		auto defaultIndexName = [](const IndexCreateRequest &request) {
+			return "index_" + request.entityType + "_" + request.label + "_" +
+				   (request.property.empty() ? "LABEL" : request.property);
+		};
+
 		auto sysState = storage_->getSystemStateManager();
 		auto allIndexes = sysState->getMap<std::string>(storage::state::keys::SYS_INDEXES);
+		std::unordered_set<std::string> plannedNames;
+		std::unordered_set<std::string> plannedPhysicalProperties;
+		std::vector<PreparedRequest> nodeLabelRequests;
+		std::vector<PreparedRequest> edgeLabelRequests;
+		std::vector<PreparedRequest> nodePropertyRequests;
+		std::vector<PreparedRequest> edgePropertyRequests;
 
-		if (allIndexes.contains(name)) {
-			// Index name already exists, return false to indicate failure/no-op
-			return false;
-		}
+		for (const auto &request: requests) {
+			IndexCreateResult result{request, false, ""};
+			const size_t resultIndex = results.size();
+			std::string name = request.indexName.empty() ? defaultIndexName(request) : request.indexName;
 
-		// 3. Determine Index Type & Execute Physical Build
-		bool success = false;
-		std::string indexType;
-
-		if (property.empty()) {
-			// --- Label Index ---
-			indexType = "label";
-			if (entityType == "node") {
-				success = nodeIndexManager_->createLabelIndex(
-						[&]() { return executeBuildTask([&]() { return indexBuilder_->buildNodeLabelIndex(); }); });
-			} else if (entityType == "edge") {
-				// Edge type index
-				success = edgeIndexManager_->createLabelIndex(
-						[&]() { return executeBuildTask([&]() { return indexBuilder_->buildEdgeTypeIndex(); }); });
+			if (allIndexes.contains(name) || plannedNames.contains(name)) {
+				result.reason = "index name already exists";
+				results.push_back(std::move(result));
+				continue;
 			}
-		} else {
-			// --- Property Index ---
-			indexType = "property";
-			if (entityType == "node") {
-				// Create property index for nodes
-				// Note: We use the new createPropertyIndex method which handles 'hasKeyIndexed' check internally.
-				success = nodeIndexManager_->createPropertyIndex(property, [&]() {
-					return executeBuildTask([&]() { return indexBuilder_->buildNodePropertyIndex(property, label); });
-				});
-			} else if (entityType == "edge") {
-				// Create property index for edges
-				success = edgeIndexManager_->createPropertyIndex(property, [&]() {
-					return executeBuildTask([&]() { return indexBuilder_->buildEdgePropertyIndex(property); });
-				});
+
+			PreparedRequest prepared{resultIndex, name, request.entityType,
+									request.property.empty() ? "label" : "property",
+									request.label, request.property, ""};
+
+			if (request.property.empty()) {
+				if (request.entityType == "node") {
+					nodeLabelRequests.push_back(prepared);
+				} else if (request.entityType == "edge") {
+					edgeLabelRequests.push_back(prepared);
+				} else {
+					result.reason = "unsupported entity type";
+					results.push_back(std::move(result));
+					continue;
+				}
+			} else if (request.entityType == "node") {
+				prepared.physicalProperty =
+						request.label.empty() ? request.property : makeScopedNodePropertyKey(request.label, request.property);
+				const std::string physicalKey = "node:" + prepared.physicalProperty;
+				if (nodeIndexManager_->getPropertyIndex()->hasKeyIndexed(prepared.physicalProperty) ||
+					plannedPhysicalProperties.contains(physicalKey)) {
+					result.reason = "property index already exists";
+					results.push_back(std::move(result));
+					continue;
+				}
+				plannedPhysicalProperties.insert(physicalKey);
+				nodePropertyRequests.push_back(std::move(prepared));
+			} else if (request.entityType == "edge") {
+				prepared.physicalProperty = request.property;
+				const std::string physicalKey = "edge:" + prepared.physicalProperty;
+				if (edgeIndexManager_->getPropertyIndex()->hasKeyIndexed(prepared.physicalProperty) ||
+					plannedPhysicalProperties.contains(physicalKey)) {
+					result.reason = "property index already exists";
+					results.push_back(std::move(result));
+					continue;
+				}
+				plannedPhysicalProperties.insert(physicalKey);
+				edgePropertyRequests.push_back(std::move(prepared));
+			} else {
+				result.reason = "unsupported entity type";
+				results.push_back(std::move(result));
+				continue;
+			}
+
+			plannedNames.insert(name);
+			results.push_back(std::move(result));
+		}
+
+		auto persistSuccessfulMetadata = [&](const std::vector<PreparedRequest> &preparedRequests) {
+			for (const auto &prepared: preparedRequests) {
+				IndexMetadata meta{prepared.name, prepared.entityType, prepared.indexType,
+								   prepared.label, prepared.property};
+				sysState->set(storage::state::keys::SYS_INDEXES, prepared.name, meta.toString());
+				results[prepared.resultIndex].success = true;
+				results[prepared.resultIndex].reason = "created";
+			}
+		};
+
+		if (!nodeLabelRequests.empty()) {
+			const bool success = nodeIndexManager_->createLabelIndex(
+					[&]() { return executeBuildTask([&]() { return indexBuilder_->buildNodeLabelIndex(); }); });
+			if (success) {
+				persistSuccessfulMetadata(nodeLabelRequests);
 			}
 		}
 
-		// 4. Persist Metadata if physical build succeeded
-		// We store the definition string so we can look it up later by name or definition.
-		if (success) {
-			IndexMetadata meta{name, entityType, indexType, label, property};
-
-			// Use 'set' (which performs a Merge in SystemStateManager) to save this new index metadata
-			sysState->set(storage::state::keys::SYS_INDEXES, name, meta.toString());
+		if (!edgeLabelRequests.empty()) {
+			const bool success = edgeIndexManager_->createLabelIndex(
+					[&]() { return executeBuildTask([&]() { return indexBuilder_->buildEdgeTypeIndex(); }); });
+			if (success) {
+				persistSuccessfulMetadata(edgeLabelRequests);
+			}
 		}
 
-		return success;
+		if (!nodePropertyRequests.empty()) {
+			std::vector<IndexBuilder::NodePropertyIndexBuildSpec> specs;
+			specs.reserve(nodePropertyRequests.size());
+			for (const auto &request: nodePropertyRequests) {
+				specs.push_back({request.property, request.label});
+			}
+			const bool success = executeBuildTask([&]() { return indexBuilder_->buildNodePropertyIndexes(specs); });
+			if (success) {
+				persistSuccessfulMetadata(nodePropertyRequests);
+			}
+		}
+
+		if (!edgePropertyRequests.empty()) {
+			std::vector<std::string> keys;
+			keys.reserve(edgePropertyRequests.size());
+			for (const auto &request: edgePropertyRequests) {
+				keys.push_back(request.property);
+			}
+			const bool success = executeBuildTask([&]() { return indexBuilder_->buildEdgePropertyIndexes(keys); });
+			if (success) {
+				persistSuccessfulMetadata(edgePropertyRequests);
+			}
+		}
+
+		for (auto &result: results) {
+			if (result.reason.empty()) {
+				result.reason = result.success ? "created" : "build failed";
+			}
+		}
+		return results;
 	}
 
 	// ------------------------------------------------------------------------
@@ -225,10 +345,11 @@ namespace {
 		// 2. Drop Physical Index
 		bool physicalDropSuccess = false;
 		if (meta.entityType == "node") {
-			physicalDropSuccess = nodeIndexManager_->dropIndex(meta.indexType, meta.property);
-			if (physicalDropSuccess && meta.indexType == "property" && !meta.label.empty() && !meta.property.empty()) {
-				nodeIndexManager_->getPropertyIndex()->dropKey(scopedNodePropertyKey(meta.label, meta.property));
-			}
+			const std::string physicalProperty =
+					meta.indexType == "property" && !meta.label.empty() && !meta.property.empty()
+							? makeScopedNodePropertyKey(meta.label, meta.property)
+							: meta.property;
+			physicalDropSuccess = nodeIndexManager_->dropIndex(meta.indexType, physicalProperty);
 		} else {
 			physicalDropSuccess = edgeIndexManager_->dropIndex(meta.indexType, meta.property);
 		}
@@ -355,9 +476,8 @@ namespace {
 	void IndexManager::onNodesAdded(const std::vector<Node> &nodes) {
 		// 1. Standard Indexes
 		nodeIndexManager_->onEntitiesAdded(nodes);
-		for (const auto &node : nodes) {
-			updateScopedPropertyIndexesForNode(Node{}, node);
-		}
+		updateScopedPropertyIndexesForNodes(nodes);
+		updateCompositeIndexesForNodes(nodes);
 
 		// 2. Vector Indexes (Batch) — use batch API for graph construction efficiency
 		if (vectorIndexManager_ && !nodes.empty()) {
@@ -381,6 +501,9 @@ namespace {
 	}
 
 	void IndexManager::onNodeUpdated(const Node &oldNode, const Node &newNode) {
+		if (!nodeIndexRelevantFieldsChanged(oldNode, newNode)) {
+			return;
+		}
 		nodeIndexManager_->onEntityUpdated(oldNode, newNode);
 		updateScopedPropertyIndexesForNode(oldNode, newNode);
 
@@ -423,6 +546,9 @@ namespace {
 	void IndexManager::onEdgesAdded(const std::vector<Edge> &edges) { edgeIndexManager_->onEntitiesAdded(edges); }
 
 	void IndexManager::onEdgeUpdated(const Edge &oldEdge, const Edge &newEdge) {
+		if (!edgeIndexRelevantFieldsChanged(oldEdge, newEdge)) {
+			return;
+		}
 		edgeIndexManager_->onEntityUpdated(oldEdge, newEdge);
 	}
 
@@ -435,6 +561,10 @@ namespace {
 		auto result = nodeIndexManager_->getLabelIndex()->findNodes(label);
 		if (!result.empty()) indexHits_.fetch_add(1, std::memory_order_relaxed);
 		return result;
+	}
+
+	size_t IndexManager::estimateNodeIdsByLabel(const std::string &label) const {
+		return nodeIndexManager_->getLabelIndex()->countNodes(label);
 	}
 
 	std::vector<int64_t> IndexManager::findNodeIdsByProperty(const std::string &key, const PropertyValue &value) const {
@@ -461,7 +591,7 @@ namespace {
 		if (label.empty() || key.empty()) {
 			return false;
 		}
-		return nodeIndexManager_->getPropertyIndex()->hasKeyIndexed(scopedNodePropertyKey(label, key));
+		return nodeIndexManager_->getPropertyIndex()->hasKeyIndexed(makeScopedNodePropertyKey(label, key));
 	}
 
 	std::vector<int64_t> IndexManager::findNodeIdsByLabelAndProperty(
@@ -470,7 +600,7 @@ namespace {
 	    const PropertyValue &value) const {
 		log::Log::debug("IndexManager::findNodeIdsByLabelAndProperty - label: {}, key: {}", label, key);
 		lookups_.fetch_add(1, std::memory_order_relaxed);
-		auto result = nodeIndexManager_->getPropertyIndex()->findExactMatch(scopedNodePropertyKey(label, key), value);
+		auto result = nodeIndexManager_->getPropertyIndex()->findExactMatch(makeScopedNodePropertyKey(label, key), value);
 		if (!result.empty()) indexHits_.fetch_add(1, std::memory_order_relaxed);
 		return result;
 	}
@@ -485,7 +615,7 @@ namespace {
 		log::Log::debug("IndexManager::findNodeIdsByLabelAndPropertyRange - label: {}, key: {}", label, key);
 		lookups_.fetch_add(1, std::memory_order_relaxed);
 		auto result = nodeIndexManager_->getPropertyIndex()->findRange(
-			scopedNodePropertyKey(label, key), minValue, maxValue, minInclusive, maxInclusive);
+			makeScopedNodePropertyKey(label, key), minValue, maxValue, minInclusive, maxInclusive);
 		if (!result.empty()) indexHits_.fetch_add(1, std::memory_order_relaxed);
 		return result;
 	}
@@ -493,9 +623,13 @@ namespace {
 	size_t IndexManager::countNodeIdsByProperty(const std::string &key, const PropertyValue &value) const {
 		log::Log::debug("IndexManager::countNodeIdsByProperty - key: {}", key);
 		lookups_.fetch_add(1, std::memory_order_relaxed);
-		auto result = nodeIndexManager_->getPropertyIndex()->countExactMatch(key, value);
+		auto result = estimateNodeIdsByProperty(key, value);
 		if (result != 0) indexHits_.fetch_add(1, std::memory_order_relaxed);
 		return result;
+	}
+
+	size_t IndexManager::estimateNodeIdsByProperty(const std::string &key, const PropertyValue &value) const {
+		return nodeIndexManager_->getPropertyIndex()->countExactMatch(key, value);
 	}
 
 	size_t IndexManager::countNodeIdsByPropertyRange(const std::string &key,
@@ -505,9 +639,17 @@ namespace {
 	                                                 bool maxInclusive) const {
 		log::Log::debug("IndexManager::countNodeIdsByPropertyRange - key: {}", key);
 		lookups_.fetch_add(1, std::memory_order_relaxed);
-		auto result = nodeIndexManager_->getPropertyIndex()->countRange(key, minValue, maxValue, minInclusive, maxInclusive);
+		auto result = estimateNodeIdsByPropertyRange(key, minValue, maxValue, minInclusive, maxInclusive);
 		if (result != 0) indexHits_.fetch_add(1, std::memory_order_relaxed);
 		return result;
+	}
+
+	size_t IndexManager::estimateNodeIdsByPropertyRange(const std::string &key,
+	                                                    const PropertyValue &minValue,
+	                                                    const PropertyValue &maxValue,
+	                                                    bool minInclusive,
+	                                                    bool maxInclusive) const {
+		return nodeIndexManager_->getPropertyIndex()->countRange(key, minValue, maxValue, minInclusive, maxInclusive);
 	}
 
 	size_t IndexManager::countNodeIdsByLabelAndProperty(
@@ -516,9 +658,16 @@ namespace {
 	    const PropertyValue &value) const {
 		log::Log::debug("IndexManager::countNodeIdsByLabelAndProperty - label: {}, key: {}", label, key);
 		lookups_.fetch_add(1, std::memory_order_relaxed);
-		auto result = nodeIndexManager_->getPropertyIndex()->countExactMatch(scopedNodePropertyKey(label, key), value);
+		auto result = estimateNodeIdsByLabelAndProperty(label, key, value);
 		if (result != 0) indexHits_.fetch_add(1, std::memory_order_relaxed);
 		return result;
+	}
+
+	size_t IndexManager::estimateNodeIdsByLabelAndProperty(
+	    const std::string &label,
+	    const std::string &key,
+	    const PropertyValue &value) const {
+		return nodeIndexManager_->getPropertyIndex()->countExactMatch(makeScopedNodePropertyKey(label, key), value);
 	}
 
 	size_t IndexManager::countNodeIdsByLabelAndPropertyRange(
@@ -530,10 +679,21 @@ namespace {
 	    bool maxInclusive) const {
 		log::Log::debug("IndexManager::countNodeIdsByLabelAndPropertyRange - label: {}, key: {}", label, key);
 		lookups_.fetch_add(1, std::memory_order_relaxed);
-		auto result = nodeIndexManager_->getPropertyIndex()->countRange(
-			scopedNodePropertyKey(label, key), minValue, maxValue, minInclusive, maxInclusive);
+		auto result = estimateNodeIdsByLabelAndPropertyRange(
+			label, key, minValue, maxValue, minInclusive, maxInclusive);
 		if (result != 0) indexHits_.fetch_add(1, std::memory_order_relaxed);
 		return result;
+	}
+
+	size_t IndexManager::estimateNodeIdsByLabelAndPropertyRange(
+	    const std::string &label,
+	    const std::string &key,
+	    const PropertyValue &minValue,
+	    const PropertyValue &maxValue,
+	    bool minInclusive,
+	    bool maxInclusive) const {
+		return nodeIndexManager_->getPropertyIndex()->countRange(
+			makeScopedNodePropertyKey(label, key), minValue, maxValue, minInclusive, maxInclusive);
 	}
 
 	// --- Composite Index API ---
@@ -595,6 +755,12 @@ namespace {
 		return result;
 	}
 
+	size_t IndexManager::estimateNodeIdsByCompositeIndex(
+	    const std::vector<std::string> &keys,
+	    const std::vector<PropertyValue> &values) const {
+		return nodeIndexManager_->getPropertyIndex()->countCompositeExact(keys, values);
+	}
+
 	std::vector<int64_t> IndexManager::findEdgeIdsByType(const std::string &type) const {
 		log::Log::debug("IndexManager::findEdgeIdsByType - type: {}", type);
 		lookups_.fetch_add(1, std::memory_order_relaxed);
@@ -609,6 +775,14 @@ namespace {
 		auto result = edgeIndexManager_->getPropertyIndex()->findExactMatch(key, value);
 		if (!result.empty()) indexHits_.fetch_add(1, std::memory_order_relaxed);
 		return result;
+	}
+
+	size_t IndexManager::estimateEdgeIdsByType(const std::string &type) const {
+		return edgeIndexManager_->getLabelIndex()->countNodes(type);
+	}
+
+	size_t IndexManager::estimateEdgeIdsByProperty(const std::string &key, const PropertyValue &value) const {
+		return edgeIndexManager_->getPropertyIndex()->countExactMatch(key, value);
 	}
 
 	// --- Composite Index Maintenance Helpers ---
@@ -656,6 +830,62 @@ namespace {
 		}
 	}
 
+	void IndexManager::updateCompositeIndexesForNodes(const std::vector<Node> &nodes) {
+		auto *propIndex = nodeIndexManager_->getPropertyIndex().get();
+		if (!propIndex || nodes.empty()) return;
+
+		struct CompositeIndexSpec {
+			std::vector<std::string> keys;
+		};
+
+		std::vector<CompositeIndexSpec> specs;
+		auto sysState = storage_->getSystemStateManager();
+		auto allIndexes = sysState->getMap<std::string>(storage::state::keys::SYS_INDEXES);
+		for (const auto &[name, rawMeta] : allIndexes) {
+			IndexMetadata meta = IndexMetadata::fromString(name, rawMeta);
+			if (meta.indexType != "composite") continue;
+
+			CompositeIndexSpec spec;
+			std::stringstream ss(meta.property);
+			std::string segment;
+			while (std::getline(ss, segment, ',')) {
+				if (!segment.empty()) {
+					spec.keys.push_back(segment);
+				}
+			}
+			if (!spec.keys.empty()) {
+				specs.push_back(std::move(spec));
+			}
+		}
+		if (specs.empty()) return;
+
+		std::vector<PropertyIndex::CompositeEntry> entries;
+		entries.reserve(nodes.size() * specs.size());
+		for (const auto &node : nodes) {
+			const auto &props = node.getProperties();
+			if (node.getId() == 0 || !node.isActive() || props.empty()) continue;
+
+			for (const auto &spec : specs) {
+				std::vector<PropertyValue> values;
+				values.reserve(spec.keys.size());
+				bool allPresent = true;
+				for (const auto &key : spec.keys) {
+					auto it = props.find(key);
+					if (it == props.end() || it->second.getType() == PropertyType::NULL_TYPE) {
+						allPresent = false;
+						break;
+					}
+					values.push_back(it->second);
+				}
+
+				if (allPresent) {
+					entries.push_back(PropertyIndex::CompositeEntry{node.getId(), spec.keys, std::move(values)});
+				}
+			}
+		}
+		propIndex->addCompositeEntriesBatch(entries);
+	}
+
 	void IndexManager::removeCompositeIndexForNode(const Node &node) {
 		auto *propIndex = nodeIndexManager_->getPropertyIndex().get();
 		if (!propIndex) return;
@@ -700,26 +930,70 @@ namespace {
 		auto *propIndex = nodeIndexManager_->getPropertyIndex().get();
 		if (!propIndex || newNode.getId() == 0 || !newNode.isActive()) return;
 
-		auto sysState = storage_->getSystemStateManager();
-		auto allIndexes = sysState->getMap<std::string>(storage::state::keys::SYS_INDEXES);
 		const auto &props = newNode.getProperties();
 		if (props.empty()) return;
 
 		std::vector<std::tuple<int64_t, std::string, PropertyValue>> scopedEntries;
-		for (const auto &[name, rawMeta] : allIndexes) {
-			IndexMetadata meta = IndexMetadata::fromString(name, rawMeta);
-			if (meta.entityType != "node" || meta.indexType != "property" || meta.label.empty() || meta.property.empty()) {
-				continue;
-			}
-			const int64_t labelId = dataManager_->resolveTokenId(meta.label);
+		const auto indexedKeys = propIndex->getIndexedKeysSnapshot();
+		for (const auto &physicalKey : indexedKeys) {
+			const auto scoped = decodeScopedNodePropertyKey(physicalKey);
+			if (!scoped.has_value()) continue;
+			const auto &[label, property] = *scoped;
+			const int64_t labelId = dataManager_->resolveTokenId(label);
 			if (labelId == 0 || !newNode.hasLabelId(labelId)) {
 				continue;
 			}
-			auto propIt = props.find(meta.property);
+			auto propIt = props.find(property);
 			if (propIt == props.end() || propIt->second.getType() == PropertyType::NULL_TYPE) {
 				continue;
 			}
-			scopedEntries.emplace_back(newNode.getId(), scopedNodePropertyKey(meta.label, meta.property), propIt->second);
+			scopedEntries.emplace_back(newNode.getId(), physicalKey, propIt->second);
+		}
+		if (!scopedEntries.empty()) {
+			propIndex->addPropertiesBatch(scopedEntries);
+		}
+	}
+
+	void IndexManager::updateScopedPropertyIndexesForNodes(const std::vector<Node> &nodes) {
+		auto *propIndex = nodeIndexManager_->getPropertyIndex().get();
+		if (!propIndex || nodes.empty()) return;
+
+		struct ScopedIndexSpec {
+			std::string physicalKey;
+			int64_t labelId = 0;
+			std::string property;
+		};
+
+		std::vector<ScopedIndexSpec> specs;
+		const auto indexedKeys = propIndex->getIndexedKeysSnapshot();
+		specs.reserve(indexedKeys.size());
+		for (const auto &physicalKey : indexedKeys) {
+			const auto scoped = decodeScopedNodePropertyKey(physicalKey);
+			if (!scoped.has_value()) continue;
+			const auto &[label, property] = *scoped;
+			const int64_t labelId = dataManager_->resolveTokenId(label);
+			if (labelId == 0) continue;
+			specs.push_back(ScopedIndexSpec{physicalKey, labelId, property});
+		}
+		if (specs.empty()) return;
+
+		std::vector<std::tuple<int64_t, std::string, PropertyValue>> scopedEntries;
+		scopedEntries.reserve(nodes.size());
+		for (const auto &node : nodes) {
+			if (node.getId() == 0 || !node.isActive()) continue;
+			const auto &props = node.getProperties();
+			if (props.empty()) continue;
+
+			for (const auto &spec : specs) {
+				if (!node.hasLabelId(spec.labelId)) {
+					continue;
+				}
+				auto propIt = props.find(spec.property);
+				if (propIt == props.end() || propIt->second.getType() == PropertyType::NULL_TYPE) {
+					continue;
+				}
+				scopedEntries.emplace_back(node.getId(), spec.physicalKey, propIt->second);
+			}
 		}
 		if (!scopedEntries.empty()) {
 			propIndex->addPropertiesBatch(scopedEntries);
@@ -730,25 +1004,23 @@ namespace {
 		auto *propIndex = nodeIndexManager_->getPropertyIndex().get();
 		if (!propIndex || node.getId() == 0) return;
 
-		auto sysState = storage_->getSystemStateManager();
-		auto allIndexes = sysState->getMap<std::string>(storage::state::keys::SYS_INDEXES);
 		const auto &props = node.getProperties();
 		if (props.empty()) return;
 
-		for (const auto &[name, rawMeta] : allIndexes) {
-			IndexMetadata meta = IndexMetadata::fromString(name, rawMeta);
-			if (meta.entityType != "node" || meta.indexType != "property" || meta.label.empty() || meta.property.empty()) {
-				continue;
-			}
-			const int64_t labelId = dataManager_->resolveTokenId(meta.label);
+		const auto indexedKeys = propIndex->getIndexedKeysSnapshot();
+		for (const auto &physicalKey : indexedKeys) {
+			const auto scoped = decodeScopedNodePropertyKey(physicalKey);
+			if (!scoped.has_value()) continue;
+			const auto &[label, property] = *scoped;
+			const int64_t labelId = dataManager_->resolveTokenId(label);
 			if (labelId == 0 || !node.hasLabelId(labelId)) {
 				continue;
 			}
-			auto propIt = props.find(meta.property);
+			auto propIt = props.find(property);
 			if (propIt == props.end() || propIt->second.getType() == PropertyType::NULL_TYPE) {
 				continue;
 			}
-			propIndex->removeProperty(node.getId(), scopedNodePropertyKey(meta.label, meta.property), propIt->second);
+			propIndex->removeProperty(node.getId(), physicalKey, propIt->second);
 		}
 	}
 

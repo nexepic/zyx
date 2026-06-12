@@ -57,11 +57,6 @@ namespace graph::query::indexes {
 	void LabelIndex::createIndex() {
 		std::unique_lock lock(mutex_);
 		enabled_ = true;
-
-		// Persist the "Enabled" config immediately.
-		// This ensures that upon next restart, initialize() reads 'true'.
-		std::string configKey = stateKey_ + storage::state::keys::SUFFIX_CONFIG;
-		systemStateManager_->set<bool>(configKey, storage::state::keys::Fields::ENABLED, true);
 	}
 
 	bool LabelIndex::isEmpty() const {
@@ -182,6 +177,16 @@ namespace graph::query::indexes {
 		}
 
 		return treeManager_->find(rootId_, label);
+	}
+
+	size_t LabelIndex::countNodes(const std::string &label) const {
+		std::shared_lock lock(mutex_);
+
+		if (rootId_ == 0) {
+			return 0;
+		}
+
+		return treeManager_->count(rootId_, label);
 	}
 
 	bool LabelIndex::hasLabel(int64_t entityId, const std::string &label) const {

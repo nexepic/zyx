@@ -28,6 +28,9 @@ permissions:
   contents: write
   id-token: write
 
+env:
+  CIBUILDWHEEL_VERSION: "2.23.4"
+
 jobs:
   test:
     name: Test on ${{ matrix.os }} / Python ${{ matrix.python }}
@@ -112,7 +115,9 @@ jobs:
           python-version: '3.12'
 
       - name: Install cibuildwheel
-        run: pip install cibuildwheel
+        # Keep the wheel builder pinned so Python patch installers do not change
+        # underneath release jobs before CPython's Windows NuGet package is live.
+        run: pip install "cibuildwheel==${{ env.CIBUILDWHEEL_VERSION }}"
 
       - name: Build wheels
         run: python -m cibuildwheel --output-dir wheelhouse bindings/python

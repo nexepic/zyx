@@ -189,6 +189,64 @@ TEST_F(ExpressionEvaluatorDMTest, Exists_TargetLabelFilter) {
 	EXPECT_FALSE(std::get<bool>(result2.getVariant()));
 }
 
+TEST_F(ExpressionEvaluatorDMTest, Exists_WhereClauseFiltersCandidateEdges) {
+	auto nId = createNode("Person");
+	auto firstId = createNode("Person");
+	auto secondId = createNode("Person");
+	createEdge(nId, firstId, "KNOWS");
+	createEdge(nId, secondId, "KNOWS");
+
+	Record record;
+	Node n(nId, dm->getOrCreateTokenId("Person"));
+	record.setNode("n", n);
+
+	EvaluationContext ctx(record, dm.get());
+	ExpressionEvaluator evaluator(ctx);
+
+	auto whereExpr = std::make_unique<BinaryOpExpression>(
+		std::make_unique<VariableReferenceExpression>("m"),
+		BinaryOperatorType::BOP_GREATER,
+		std::make_unique<LiteralExpression>(firstId));
+	ExistsExpression expr(
+		"(n)-[:KNOWS]->(m)",
+		"n",
+		"KNOWS",
+		"",
+		PatternDirection::PAT_OUTGOING,
+		std::move(whereExpr),
+		"m");
+
+	auto result = evaluator.evaluate(&expr);
+	EXPECT_EQ(result.getType(), PropertyType::BOOLEAN);
+	EXPECT_TRUE(std::get<bool>(result.getVariant()));
+}
+
+TEST_F(ExpressionEvaluatorDMTest, Exists_WhereClauseCanRejectAllCandidates) {
+	auto nId = createNode("Person");
+	auto mId = createNode("Person");
+	createEdge(nId, mId, "KNOWS");
+
+	Record record;
+	Node n(nId, dm->getOrCreateTokenId("Person"));
+	record.setNode("n", n);
+
+	EvaluationContext ctx(record, dm.get());
+	ExpressionEvaluator evaluator(ctx);
+
+	ExistsExpression expr(
+		"(n)-[:KNOWS]->(m)",
+		"n",
+		"KNOWS",
+		"",
+		PatternDirection::PAT_OUTGOING,
+		std::make_unique<LiteralExpression>(false),
+		"m");
+
+	auto result = evaluator.evaluate(&expr);
+	EXPECT_EQ(result.getType(), PropertyType::BOOLEAN);
+	EXPECT_FALSE(std::get<bool>(result.getVariant()));
+}
+
 TEST_F(ExpressionEvaluatorDMTest, Exists_SourceNodeNotInRecord_ReturnsFalse) {
 	Record record;
 	// Don't put any node in the record
@@ -355,6 +413,67 @@ TEST_F(ExpressionEvaluatorDMTest, PatternComprehension_NoTargetVar) {
 		"(n)-[:KNOWS]->()", "n", "", "KNOWS", "", PatternDirection::PAT_OUTGOING, nullptr);
 	auto result = evaluator.evaluate(&expr);
 	EXPECT_EQ(result.getType(), PropertyType::LIST);
+}
+
+TEST_F(ExpressionEvaluatorDMTest, PatternComprehension_WhereClauseFiltersTargetIds) {
+	auto nId = createNode("Person");
+	auto firstId = createNode("Person");
+	auto secondId = createNode("Person");
+	createEdge(nId, firstId, "KNOWS");
+	createEdge(nId, secondId, "KNOWS");
+
+	Record record;
+	Node n(nId, dm->getOrCreateTokenId("Person"));
+	record.setNode("n", n);
+
+	EvaluationContext ctx(record, dm.get());
+	ExpressionEvaluator evaluator(ctx);
+
+	auto whereExpr = std::make_unique<BinaryOpExpression>(
+		std::make_unique<VariableReferenceExpression>("m"),
+		BinaryOperatorType::BOP_GREATER,
+		std::make_unique<LiteralExpression>(firstId));
+	PatternComprehensionExpression expr(
+		"(n)-[:KNOWS]->(m)",
+		"n",
+		"m",
+		"KNOWS",
+		"",
+		PatternDirection::PAT_OUTGOING,
+		nullptr,
+		std::move(whereExpr));
+
+	auto result = evaluator.evaluate(&expr);
+	ASSERT_EQ(result.getType(), PropertyType::LIST);
+	ASSERT_EQ(result.getList().size(), 1u);
+	EXPECT_EQ(std::get<int64_t>(result.getList()[0].getVariant()), secondId);
+}
+
+TEST_F(ExpressionEvaluatorDMTest, PatternComprehension_NonBooleanWhereRejectsCandidate) {
+	auto nId = createNode("Person");
+	auto mId = createNode("Person");
+	createEdge(nId, mId, "KNOWS");
+
+	Record record;
+	Node n(nId, dm->getOrCreateTokenId("Person"));
+	record.setNode("n", n);
+
+	EvaluationContext ctx(record, dm.get());
+	ExpressionEvaluator evaluator(ctx);
+
+	PatternComprehensionExpression expr(
+		"(n)-[:KNOWS]->(m)",
+		"n",
+		"m",
+		"KNOWS",
+		"",
+		PatternDirection::PAT_OUTGOING,
+		nullptr,
+		std::make_unique<LiteralExpression>(int64_t(1)));
+
+	auto result = evaluator.evaluate(&expr);
+	ASSERT_EQ(result.getType(), PropertyType::LIST);
+	EXPECT_TRUE(result.getList().empty());
 }
 
 // ============================================================================
@@ -579,6 +698,21 @@ TEST_F(ExpressionEvaluatorDMTest, MapProjection_AllProperties_NoDataManager) {
 	// Should not crash, just return empty map
 	auto result = evaluator.evaluate(&expr);
 	EXPECT_EQ(result.getType(), PropertyType::MAP);
+}
+
+TEST_F(ExpressionEvaluatorDMTest, MapProjection_AllProperties_MissingRecordNode) {
+	Record record;
+
+	EvaluationContext ctx(record, dm.get());
+	ExpressionEvaluator evaluator(ctx);
+
+	std::vector<MapProjectionItem> items;
+	items.emplace_back(MapProjectionItemType::MPROP_ALL_PROPERTIES, "");
+	MapProjectionExpression expr("n", std::move(items));
+
+	auto result = evaluator.evaluate(&expr);
+	EXPECT_EQ(result.getType(), PropertyType::MAP);
+	EXPECT_TRUE(result.getMap().empty());
 }
 
 // ============================================================================

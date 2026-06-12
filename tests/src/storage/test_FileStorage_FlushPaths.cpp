@@ -11,6 +11,7 @@
 #include <thread>
 #include <gtest/gtest.h>
 #include "graph/core/Database.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/FileStorage.hpp"
 
 namespace fs = std::filesystem;
@@ -27,6 +28,8 @@ protected:
 	}
 
 	void TearDown() override {
+		graph::debug::PerfTrace::reset();
+		graph::debug::PerfTrace::setEnabled(false);
 		std::error_code ec;
 		fs::remove(testFilePath, ec);
 	}
@@ -148,6 +151,30 @@ TEST_F(FileStorageFlushTest, CloseFlushesFileHeader) {
 	Node loaded = dm2->getNode(1);
 	EXPECT_TRUE(loaded.isActive());
 	db2.close();
+}
+
+TEST_F(FileStorageFlushTest, ReadOnlyCloseSkipsHeaderRewriteAndTruncation) {
+	{
+		Database db(testFilePath.string());
+		db.open();
+		auto dm = db.getStorage()->getDataManager();
+		Node n(0, 0);
+		dm->addNode(n);
+		db.close();
+	}
+
+	graph::debug::PerfTrace::setEnabled(true);
+	graph::debug::PerfTrace::reset();
+	{
+		Database db(testFilePath.string());
+		db.open();
+		EXPECT_FALSE(db.getStorage()->getStorageIO()->hasPwriteSupport());
+		db.close();
+	}
+
+	auto snapshot = graph::debug::PerfTrace::snapshotAndReset();
+	EXPECT_FALSE(snapshot.contains("storage.close.flush_header"));
+	EXPECT_FALSE(snapshot.contains("storage.close.truncate"));
 }
 
 TEST_F(FileStorageFlushTest, VerifyIntegrity) {

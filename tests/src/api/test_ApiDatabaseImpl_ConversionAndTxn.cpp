@@ -200,6 +200,45 @@ TEST_F(CppApiTest, UtilityMethodsSaveThreadPoolAndTokenBoundaryQuery) {
 	EXPECT_TRUE(schemaRes.isSuccess()) << schemaRes.getError();
 }
 
+TEST_F(CppApiTest, CreateNodePropertyIndexesBuildsMultipleIndexes) {
+	const auto ids = db->createNodes(
+			"User",
+			{{{"id", std::string("user-1")}, {"country", std::string("CN")}, {"age", int64_t{31}}},
+			 {{"id", std::string("user-2")}, {"country", std::string("US")}, {"age", int64_t{42}}}});
+	ASSERT_EQ(ids.size(), 2U);
+
+	EXPECT_TRUE(db->createNodePropertyIndexes("User", {"id", "country", "age"}));
+
+	auto showRes = db->execute("SHOW INDEXES");
+	ASSERT_TRUE(showRes.isSuccess()) << showRes.getError();
+	size_t userPropertyIndexes = 0;
+	while (showRes.hasNext()) {
+		showRes.next();
+		if (std::get<std::string>(showRes.get("label")) == "User") {
+			++userPropertyIndexes;
+		}
+	}
+	EXPECT_EQ(userPropertyIndexes, 3U);
+
+	auto idRes = db->execute("MATCH (u:User {id: 'user-1'}) RETURN count(u)");
+	ASSERT_TRUE(idRes.isSuccess()) << idRes.getError();
+	ASSERT_TRUE(idRes.hasNext());
+	idRes.next();
+	EXPECT_EQ(std::get<int64_t>(idRes.get("count(u)")), 1);
+
+	auto countryRes = db->execute("MATCH (u:User {country: 'CN'}) RETURN count(u)");
+	ASSERT_TRUE(countryRes.isSuccess()) << countryRes.getError();
+	ASSERT_TRUE(countryRes.hasNext());
+	countryRes.next();
+	EXPECT_EQ(std::get<int64_t>(countryRes.get("count(u)")), 1);
+
+	auto ageRes = db->execute("MATCH (u:User) WHERE u.age >= 40 RETURN count(u)");
+	ASSERT_TRUE(ageRes.isSuccess()) << ageRes.getError();
+	ASSERT_TRUE(ageRes.hasNext());
+	ageRes.next();
+	EXPECT_EQ(std::get<int64_t>(ageRes.get("count(u)")), 1);
+}
+
 TEST_F(CppApiTest, ExecuteLogsWhenSlowLogThresholdIsZero) {
 	auto enableRes = db->execute("CALL dbms.setConfig('query.slow_log.enabled', true)");
 	ASSERT_TRUE(enableRes.isSuccess()) << enableRes.getError();
@@ -357,8 +396,17 @@ TEST_F(CppApiTest, CreateEdgesShortestPathAndBfsUseImplicitTransactions) {
 
 	auto edgeRes = db->execute("MATCH ()-[e:GRAPH_API_LINK]->() RETURN e.order");
 	ASSERT_TRUE(edgeRes.isSuccess()) << edgeRes.getError();
+	auto traversalRes = db->execute("MATCH (:GraphApiNode {name: 'first'})-[:GRAPH_API_LINK]->(n) RETURN count(n)");
+	ASSERT_TRUE(traversalRes.isSuccess()) << traversalRes.getError();
+	ASSERT_TRUE(traversalRes.hasNext());
+	traversalRes.next();
+	const auto traversalCount = traversalRes.get("count(n)");
+	ASSERT_TRUE(std::holds_alternative<int64_t>(traversalCount));
+	EXPECT_EQ(std::get<int64_t>(traversalCount), 1);
 
-	EXPECT_NO_THROW((void)db->getShortestPath(first, last, 4));
+	std::vector<zyx::Node> path;
+	EXPECT_NO_THROW(path = db->getShortestPath(first, last, 4));
+	EXPECT_EQ(path.size(), 3UL);
 
 	std::vector<int64_t> visited;
 	EXPECT_NO_THROW(db->bfs(first, [&](const zyx::Node &node) {
@@ -366,6 +414,7 @@ TEST_F(CppApiTest, CreateEdgesShortestPathAndBfsUseImplicitTransactions) {
 		return visited.size() < 3;
 	}));
 	EXPECT_NE(std::find(visited.begin(), visited.end(), first), visited.end());
+	EXPECT_NE(std::find(visited.begin(), visited.end(), last), visited.end());
 }
 
 // ============================================================================

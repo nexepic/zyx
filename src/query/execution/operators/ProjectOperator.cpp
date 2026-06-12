@@ -19,8 +19,10 @@
  **/
 
 #include "graph/query/execution/operators/ProjectOperator.hpp"
+#include <algorithm>
 #include <sstream>
 #include <utility>
+#include "graph/concurrent/ParallelExecutionPolicy.hpp"
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/query/expressions/ExpressionEvaluationHelper.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
@@ -94,17 +96,33 @@ std::optional<RecordBatch> ProjectOperator::next() {
 
 	RecordBatch &inputBatch = *batchOpt;
 
-	// Parallel path for non-DISTINCT projections on large batches
-	if (!distinct_ && threadPool_ && !threadPool_->isSingleThreaded()
-		&& inputBatch.size() >= PARALLEL_PROJECT_THRESHOLD) {
+	// Parallel path for non-DISTINCT projections on large batches.
+	if (!distinct_) {
+		const graph::concurrent::ParallelWorkEstimate estimate{
+				.workloadKind = graph::concurrent::ParallelWorkloadKind::PWK_CPU_BOUND,
+				.partitions = inputBatch.size(),
+				.estimatedItems = inputBatch.size(),
+				.minPartitions = 2,
+				.minItems = PARALLEL_PROJECT_THRESHOLD,
+				.minItemsPerWorker = std::max<size_t>(1, PARALLEL_PROJECT_THRESHOLD / 4)};
+		const auto parallelDecision = graph::concurrent::decideParallelExecution(threadPool_, estimate);
+		graph::concurrent::ScopedParallelExecutionTelemetry telemetry(threadPool_, estimate, parallelDecision);
 		RecordBatch outputBatch(inputBatch.size());
-		threadPool_->parallelFor(0, inputBatch.size(), [&](size_t i) {
-			outputBatch[i] = projectRecord(inputBatch[i]);
-		});
+		if (parallelDecision.useParallel) {
+			threadPool_->parallelFor(0, inputBatch.size(), parallelDecision.workerCount, [&](size_t i) {
+				outputBatch[i] = projectRecord(inputBatch[i]);
+			});
+		} else {
+			for (size_t i = 0; i < inputBatch.size(); ++i) {
+				outputBatch[i] = projectRecord(inputBatch[i]);
+			}
+		}
+		telemetry.markCompleted();
 		return outputBatch;
 	}
 
-	// Sequential path
+	// DISTINCT keeps its ordered de-duplication state in the operator, so it is
+	// intentionally left sequential.
 	RecordBatch outputBatch;
 	outputBatch.reserve(inputBatch.size());
 

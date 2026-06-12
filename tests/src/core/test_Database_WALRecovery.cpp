@@ -25,6 +25,7 @@
 #include <filesystem>
 #include <fstream>
 #include "graph/core/Database.hpp"
+#include "graph/core/Node.hpp"
 #include "graph/storage/wal/WALRecord.hpp"
 
 namespace fs = std::filesystem;
@@ -146,5 +147,48 @@ TEST_F(DatabaseWALRecoveryTest, WALRecoveryThenWriteReusesWALManager) {
 		txn.commit();
 
 		db->close();
+	}
+}
+
+TEST_F(DatabaseWALRecoveryTest, DeferredCommitIsVisibleAndCleanCloseRemovesWAL) {
+	const std::string walPath = testDbPath.string() + "-wal";
+	int64_t nodeId = 0;
+
+	{
+		Database db(testDbPath.string());
+		db.open();
+		auto dm = db.getStorage()->getDataManager();
+		{
+			auto txn = db.beginTransaction();
+			Node node(0, dm->getOrCreateTokenId("DeferredCommitNode"));
+			dm->addNode(node);
+			nodeId = node.getId();
+			txn.commit();
+		}
+
+		ASSERT_GT(nodeId, 0);
+		EXPECT_TRUE(fs::exists(walPath));
+		EXPECT_TRUE(dm->hasUnsavedChanges());
+
+		{
+			auto readTxn = db.beginReadOnlyTransaction();
+			const auto loaded = dm->getNode(nodeId);
+			EXPECT_EQ(loaded.getId(), nodeId);
+			EXPECT_TRUE(loaded.isActive());
+			readTxn.commit();
+		}
+
+		db.close();
+	}
+
+	EXPECT_FALSE(fs::exists(walPath));
+
+	{
+		Database reopened(testDbPath.string());
+		reopened.open();
+		const auto loaded = reopened.getStorage()->getDataManager()->getNode(nodeId);
+		EXPECT_EQ(loaded.getId(), nodeId);
+		EXPECT_TRUE(loaded.isActive());
+		reopened.close();
 	}
 }

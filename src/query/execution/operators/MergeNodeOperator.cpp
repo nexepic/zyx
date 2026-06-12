@@ -88,6 +88,16 @@ void MergeNodeOperator::processMerge(Record &record) {
 
 	// Try to find a property to index scan
 	for (const auto &[key, val]: matchProps_) {
+		for (const auto &label: labels_) {
+			if (im_->hasNodePropertyIndexForLabel(label, key)) {
+				candidates = im_->findNodeIdsByLabelAndProperty(label, key, val);
+				indexUsed = true;
+				break;
+			}
+		}
+		if (indexUsed) {
+			break;
+		}
 		if (im_->hasPropertyIndex("node", key)) {
 			candidates = im_->findNodeIdsByProperty(key, val);
 			indexUsed = true;

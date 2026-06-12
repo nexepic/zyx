@@ -581,6 +581,17 @@ TEST_F(DatabaseTest, SetThreadPoolSize_WithoutQueryEngine) {
 	EXPECT_NO_THROW(db->setThreadPoolSize(2));
 }
 
+TEST_F(DatabaseTest, SetThreadPoolSizeBeforeLazyInitializationIsHonored) {
+	auto db = std::make_unique<Database>(testDbPath.string());
+	db->open();
+
+	db->setThreadPoolSize(3);
+	auto tp = db->getThreadPool();
+
+	ASSERT_NE(tp, nullptr);
+	EXPECT_EQ(tp->getThreadCount(), 3UL);
+}
+
 TEST_F(DatabaseTest, GetThreadPool_BeforeOpen) {
 	auto db = std::make_unique<Database>(testDbPath.string());
 	EXPECT_FALSE(db->isOpen());
@@ -595,6 +606,21 @@ TEST_F(DatabaseTest, GetThreadPool_AfterOpen) {
 
 	auto tp = db->getThreadPool();
 	EXPECT_NE(tp, nullptr);
+}
+
+TEST_F(DatabaseTest, DefaultThreadPoolUsesAutoDetectedConfiguration) {
+	auto db = std::make_unique<Database>(testDbPath.string());
+	db->open();
+
+	auto tp = db->getThreadPool();
+	ASSERT_NE(tp, nullptr);
+	const auto &hardwareInfo = tp->getHardwareInfo();
+	EXPECT_EQ(hardwareInfo.requestedThreadCount, 0UL);
+	EXPECT_GE(hardwareInfo.resolvedThreadCount, 1UL);
+#ifndef __EMSCRIPTEN__
+	EXPECT_NE(hardwareInfo.source, graph::concurrent::ThreadPoolSizeSource::TPSS_MANUAL);
+	EXPECT_NE(hardwareInfo.source, graph::concurrent::ThreadPoolSizeSource::TPSS_FORCED_SINGLE_THREADED);
+#endif
 }
 
 // ============================================================================

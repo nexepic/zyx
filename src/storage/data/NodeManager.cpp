@@ -28,6 +28,14 @@ namespace graph::storage {
 							 std::shared_ptr<DeletionManager> deletionManager) :
 		BaseEntityManager(dataManager, std::move(deletionManager)) {}
 
+	void NodeManager::prepareAddBatch(std::vector<Node> &nodes) {
+		assignMissingIds(nodes);
+	}
+
+	void NodeManager::persistPreparedAddBatch(const std::vector<Node> &nodes) {
+		persistAddedBatch(nodes);
+	}
+
 	void NodeManager::doRemove(Node &node) { deletionManager_->deleteNode(node); }
 
 	int64_t NodeManager::doAllocateId() {

@@ -250,12 +250,165 @@ TEST_F(RelationshipColumnarCountKernelTest, CountsScalarEqualityPredicatesWithTy
 	expectCount("missing", PropertyValue("fast"), 0);
 }
 
+TEST_F(RelationshipColumnarCountKernelTest, CountsLargeTypedPropertyPredicatesWithRelationshipCandidates) {
+	int64_t maxEdgeId = 0;
+	int64_t expectedFollows = 0;
+	int64_t expectedFollowsCandidates = 0;
+	int64_t expectedAllTypes = 0;
+	for (int i = 0; i < 1300; ++i) {
+		const bool follows = i % 2 == 0;
+		const bool matches = i % 7 == 0;
+		maxEdgeId = addRelationshipWithProperties(
+							follows ? followsType : likesType,
+							{{"weight", PropertyValue(matches ? int64_t{7} : int64_t{3})}})
+							.getId();
+		if (follows) {
+			++expectedFollowsCandidates;
+		}
+		if (matches) {
+			++expectedAllTypes;
+			if (follows) {
+				++expectedFollows;
+			}
+		}
+	}
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+
+	RelationshipColumnarCountKernel kernel(dm);
+	auto countRequest = request(maxEdgeId, followsType);
+	countRequest.propertyPredicates = {{"weight", PropertyValue(int64_t{7})}};
+
+	graph::debug::PerfTrace::setEnabled(true);
+	graph::debug::PerfTrace::reset();
+	auto followsMatches = kernel.count(countRequest);
+	auto snapshot = graph::debug::PerfTrace::snapshotAndReset();
+	ASSERT_TRUE(followsMatches.has_value());
+	EXPECT_EQ(followsMatches->count, expectedFollows);
+	EXPECT_EQ(followsMatches->propertyCandidates, static_cast<size_t>(expectedFollowsCandidates));
+	EXPECT_TRUE(snapshot.contains("relationship_count.load_edge_metadata"));
+	EXPECT_TRUE(snapshot.contains("relationship_count.property_predicate"));
+	EXPECT_FALSE(snapshot.contains("relationship_count.property_owner_type_filter"));
+
+	countRequest.typeId = 0;
+	graph::debug::PerfTrace::reset();
+	auto allTypeMatches = kernel.count(countRequest);
+	snapshot = graph::debug::PerfTrace::snapshotAndReset();
+	ASSERT_TRUE(allTypeMatches.has_value());
+	EXPECT_EQ(allTypeMatches->count, expectedAllTypes);
+	EXPECT_TRUE(snapshot.contains("relationship_count.property_owner_scan"));
+	EXPECT_FALSE(snapshot.contains("relationship_count.property_owner_type_filter"));
+	EXPECT_FALSE(snapshot.contains("relationship_count.load_edge_metadata"));
+}
+
+TEST_F(RelationshipColumnarCountKernelTest, TypedOwnerScanFiltersLargeFallbackCandidatesByRelationshipType) {
+	int64_t maxEdgeId = 0;
+	int64_t expectedFollows = 0;
+	Edge firstMatchingFollows;
+	for (int i = 0; i < 1300; ++i) {
+		const bool follows = i % 2 == 0;
+		const bool matches = i % 7 == 0;
+		Edge edge = addRelationshipWithProperties(
+				follows ? followsType : likesType,
+				{{"weight", PropertyValue(matches ? int64_t{7} : int64_t{3})}});
+		maxEdgeId = edge.getId();
+		if (matches && follows) {
+			++expectedFollows;
+			if (firstMatchingFollows.getId() == 0) {
+				firstMatchingFollows = edge;
+			}
+		}
+	}
+
+	ASSERT_NE(firstMatchingFollows.getId(), 0);
+	firstMatchingFollows.setPropertyEntityId(
+			firstMatchingFollows.getPropertyEntityId() + 1000000, PropertyStorageType::PROPERTY_ENTITY);
+	dm->updateEdge(firstMatchingFollows);
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+
+	RelationshipColumnarCountKernel kernel(dm);
+	auto countRequest = request(maxEdgeId, followsType);
+	countRequest.propertyPredicates = {{"weight", PropertyValue(int64_t{7})}};
+
+	graph::debug::PerfTrace::setEnabled(true);
+	graph::debug::PerfTrace::reset();
+	auto followsMatches = kernel.count(countRequest);
+	auto snapshot = graph::debug::PerfTrace::snapshotAndReset();
+
+	ASSERT_TRUE(followsMatches.has_value());
+	EXPECT_EQ(followsMatches->count, expectedFollows);
+	EXPECT_TRUE(snapshot.contains("relationship_count.property_owner_scan"));
+	EXPECT_TRUE(snapshot.contains("relationship_count.property_owner_type_filter"));
+}
+
+TEST_F(RelationshipColumnarCountKernelTest, PropertyPredicateRejectsInvalidOwnerRange) {
+	auto edge = addRelationshipWithProperties(followsType, {{"weight", PropertyValue(int64_t{7})}});
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+
+	RelationshipColumnarCountKernel kernel(dm);
+	auto invalidRange = request(edge.getId(), 0);
+	invalidRange.beginId = edge.getId() + 1;
+	invalidRange.endId = edge.getId();
+	invalidRange.propertyPredicates = {{"weight", PropertyValue(int64_t{7})}};
+
+	EXPECT_FALSE(kernel.count(invalidRange).has_value());
+}
+
+TEST_F(RelationshipColumnarCountKernelTest, CountsAllTypesWithBlobFallbackAfterMetadataCandidateScan) {
+	int64_t maxEdgeId = 0;
+	maxEdgeId = addRelationshipWithProperties(followsType, {{"weight", PropertyValue(int64_t{7})}}).getId();
+	const std::string matchingPayload(512, 'm');
+	maxEdgeId = addRelationshipWithProperties(
+			likesType, {{"weight", PropertyValue(int64_t{7})}, {"payload", PropertyValue(matchingPayload)}})
+					.getId();
+	const std::string nonMatchingPayload(512, 'n');
+	maxEdgeId = addRelationshipWithProperties(
+			likesType, {{"weight", PropertyValue(int64_t{3})}, {"payload", PropertyValue(nonMatchingPayload)}})
+					.getId();
+	for (int i = 0; i < 125; ++i) {
+		maxEdgeId = addRelationship(i % 2 == 0 ? followsType : likesType).getId();
+	}
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+
+	RelationshipColumnarCountKernel kernel(dm);
+	auto countRequest = request(maxEdgeId, 0);
+	countRequest.propertyPredicates = {{"weight", PropertyValue(int64_t{7})}};
+
+	const auto result = kernel.count(countRequest);
+	ASSERT_TRUE(result.has_value());
+	EXPECT_EQ(result->count, 2);
+	EXPECT_EQ(result->propertyCandidates, 1U);
+	EXPECT_EQ(result->fallbackEdges, 2U);
+}
+
+TEST_F(RelationshipColumnarCountKernelTest, ReturnsNulloptWhenLargeDirtyPropertyOwnerScanIsUnsafe) {
+	int64_t maxEdgeId = 0;
+	for (int i = 0; i < 1024; ++i) {
+		maxEdgeId = addRelationshipWithProperties(followsType, {{"weight", PropertyValue(int64_t{7})}}).getId();
+	}
+	ASSERT_TRUE(dm->hasUnsavedChanges());
+
+	RelationshipColumnarCountKernel kernel(dm);
+	auto dirtyRequest = request(maxEdgeId, 0);
+	dirtyRequest.propertyPredicates = {{"weight", PropertyValue(int64_t{7})}};
+
+	EXPECT_FALSE(kernel.count(dirtyRequest).has_value());
+}
+
 TEST_F(RelationshipColumnarCountKernelTest, CountsVectorComparisonPredicatesWithColumnarFallback) {
 	int64_t maxEdgeId = 0;
 	maxEdgeId = addRelationshipWithProperties(followsType, {{"weight", PropertyValue(int64_t{2})}}).getId();
 	maxEdgeId = addRelationshipWithProperties(followsType, {{"weight", PropertyValue(int64_t{5})}}).getId();
 	maxEdgeId = addRelationshipWithProperties(followsType, {{"weight", PropertyValue(int64_t{8})}}).getId();
 	maxEdgeId = addRelationshipWithProperties(followsType, {{"weight", PropertyValue(int64_t{11})}}).getId();
+	maxEdgeId = addRelationshipWithProperties(followsType, {{"created", PropertyValue(TemporalDate{20})}}).getId();
+	maxEdgeId = addRelationshipWithProperties(followsType, {{"created", PropertyValue(TemporalDate{30})}}).getId();
+	maxEdgeId =
+			addRelationshipWithProperties(followsType, {{"elapsed", PropertyValue(TemporalDuration{0, 2, 0})}})
+					.getId();
 	addRelationshipWithProperties(likesType, {{"weight", PropertyValue(int64_t{5})}});
 	for (int i = 0; i < 128; ++i) {
 		maxEdgeId = addRelationship(i % 2 == 0 ? followsType : likesType).getId();
@@ -279,7 +432,26 @@ TEST_F(RelationshipColumnarCountKernelTest, CountsVectorComparisonPredicatesWith
 
 	ASSERT_TRUE(result.has_value());
 	EXPECT_EQ(result->count, 2);
-	EXPECT_EQ(result->propertyCandidates, 4U);
+	EXPECT_EQ(result->propertyCandidates, 7U);
+
+	VectorizedPropertyPredicate createdLower;
+	createdLower.propertyKey = "created";
+	createdLower.op = VectorPredicateOp::VPO_RANGE_CLOSED;
+	createdLower.value = PropertyValue(TemporalDate{10});
+	createdLower.upperValue = PropertyValue(TemporalDate{25});
+	countRequest.vectorPredicates = {createdLower};
+	const auto dateResult = kernel.count(countRequest);
+	ASSERT_TRUE(dateResult.has_value());
+	EXPECT_EQ(dateResult->count, 1);
+
+	VectorizedPropertyPredicate durationLower;
+	durationLower.propertyKey = "elapsed";
+	durationLower.op = VectorPredicateOp::VPO_GE;
+	durationLower.value = PropertyValue(TemporalDuration{0, 1, 0});
+	countRequest.vectorPredicates = {durationLower};
+	const auto durationResult = kernel.count(countRequest);
+	ASSERT_TRUE(durationResult.has_value());
+	EXPECT_EQ(durationResult->count, 1);
 }
 
 TEST_F(RelationshipColumnarCountKernelTest, CountsGroupedVectorPredicatesByKey) {
@@ -342,7 +514,7 @@ TEST_F(RelationshipColumnarCountKernelTest, CountsGroupedVectorPredicatesByKey) 
 	EXPECT_EQ(stringRange->propertyCandidates, 4U);
 }
 
-TEST_F(RelationshipColumnarCountKernelTest, CountsVectorEqualityPredicatesViaEqualityMapFastPath) {
+TEST_F(RelationshipColumnarCountKernelTest, CountsVectorEqualityPredicatesViaEqualityMap) {
 	int64_t maxEdgeId = 0;
 	maxEdgeId = addRelationshipWithProperties(followsType,
 	                                         {{"weight", PropertyValue(int64_t{7})}, {"kind", PropertyValue("fast")}})

@@ -38,6 +38,7 @@
 #include "../NodeScanRequirements.hpp"
 #include "../PhysicalOperator.hpp"
 #include "../ScanConfigs.hpp"
+#include "graph/concurrent/ParallelExecutionPolicy.hpp"
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/IDAllocator.hpp"
@@ -195,6 +196,9 @@ namespace graph::query::execution::operators {
 		bool labelsSatisfied_ = false;
 		bool activeSatisfied_ = false;
 
+		static constexpr size_t kParallelNodeScanMinSegments = 32;
+		static constexpr size_t kParallelNodeScanMinTasks = 2;
+
 		std::optional<RecordBatch> parallelLoadBatch(size_t batchStart, size_t batchEnd) {
 			using Clock = std::chrono::steady_clock;
 			const bool profileEnabled = debug::PerfTrace::isEnabled();
@@ -233,8 +237,16 @@ namespace graph::query::execution::operators {
 			std::vector<std::vector<Node>> segNodes(numSegs);
 			std::vector<std::vector<int64_t>> segPropIds(numSegs);
 
-			const auto phase1Start = profileEnabled ? Clock::now() : Clock::time_point{};
-			threadPool_->parallelFor(0, groups.size(), [&](size_t gi) {
+			const auto phase1Start = Clock::now();
+			const graph::concurrent::ParallelWorkEstimate readEstimate{
+					.workloadKind = graph::concurrent::ParallelWorkloadKind::PWK_MEMORY_SCAN,
+					.partitions = groups.size(),
+					.estimatedItems = numSegs,
+					.estimatedBytes = numSegs * storage::TOTAL_SEGMENT_SIZE,
+					.minPartitions = kParallelNodeScanMinTasks,
+					.minItems = kParallelNodeScanMinSegments};
+			const auto readDecision = graph::concurrent::decideParallelExecution(threadPool_, readEstimate);
+			auto readGroup = [&](size_t gi) {
 				const auto &group = groups[gi];
 				// Single pread for the entire coalesced group
 				size_t totalBytes = group.segCount * storage::TOTAL_SEGMENT_SIZE;
@@ -288,13 +300,19 @@ namespace graph::query::execution::operators {
 						localNodes.push_back(std::move(node));
 					}
 				}
-			});
+			};
+			if (readDecision.useParallel) {
+				threadPool_->parallelFor(0, groups.size(), readDecision.workerCount, readGroup);
+			} else {
+				for (size_t gi = 0; gi < groups.size(); ++gi) {
+					readGroup(gi);
+				}
+			}
+			const uint64_t phase1Ns = static_cast<uint64_t>(
+					std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - phase1Start).count());
+			graph::concurrent::recordParallelExecution(threadPool_, readEstimate, readDecision, phase1Ns);
 			if (profileEnabled) {
-				debug::PerfTrace::addDuration(
-						"scan.parallel.phase1",
-						static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
-														phase1Start)
-												 .count()));
+				debug::PerfTrace::addDuration("scan.parallel.phase1", phase1Ns);
 			}
 
 			// ── Phase 2: Bulk-load all needed Property entities (segment-sequential) ──
@@ -315,8 +333,17 @@ namespace graph::query::execution::operators {
 			// ── Phase 3: Parallel property assignment + Record creation ──
 			std::vector<RecordBatch> threadBatches(numSegs);
 
-			const auto phase3Start = profileEnabled ? Clock::now() : Clock::time_point{};
-			threadPool_->parallelFor(0, numSegs, [&](size_t si) {
+			const auto phase3Start = Clock::now();
+			const graph::concurrent::ParallelWorkEstimate materializeEstimate{
+					.workloadKind = graph::concurrent::ParallelWorkloadKind::PWK_MEMORY_SCAN,
+					.partitions = numSegs,
+					.estimatedItems = numSegs,
+					.estimatedBytes = numSegs * storage::TOTAL_SEGMENT_SIZE,
+					.minPartitions = kParallelNodeScanMinTasks,
+					.minItems = kParallelNodeScanMinSegments};
+			const auto materializeDecision = graph::concurrent::decideParallelExecution(
+					threadPool_, materializeEstimate);
+			auto materializeSegment = [&](size_t si) {
 				RecordBatch &localBatch = threadBatches[si];
 				localBatch.reserve(segNodes[si].size());
 
@@ -328,13 +355,19 @@ namespace graph::query::execution::operators {
 					r.setNode(config_.variable, std::move(node));
 					localBatch.push_back(std::move(r));
 				}
-			});
+			};
+			if (materializeDecision.useParallel) {
+				threadPool_->parallelFor(0, numSegs, materializeDecision.workerCount, materializeSegment);
+			} else {
+				for (size_t si = 0; si < numSegs; ++si) {
+					materializeSegment(si);
+				}
+			}
+			const uint64_t phase3Ns = static_cast<uint64_t>(
+					std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - phase3Start).count());
+			graph::concurrent::recordParallelExecution(threadPool_, materializeEstimate, materializeDecision, phase3Ns);
 			if (profileEnabled) {
-				debug::PerfTrace::addDuration(
-						"scan.parallel.phase3",
-						static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
-														phase3Start)
-												 .count()));
+				debug::PerfTrace::addDuration("scan.parallel.phase3", phase3Ns);
 			}
 
 			// Merge thread-local batches

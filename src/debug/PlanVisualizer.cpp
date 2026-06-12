@@ -50,6 +50,9 @@ namespace graph::debug {
 
 		// Print operator description
 		oss << op->toString() << "\n";
+		for (const auto &[key, value] : op->explainAttributes()) {
+			oss << prefix << "@ " << key << "=" << value << "\n";
+		}
 
 		// 2. Process children
 		auto children = op->getChildren();

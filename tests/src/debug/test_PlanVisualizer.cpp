@@ -18,9 +18,16 @@
  **/
 
 #include <gtest/gtest.h>
+
+#include <optional>
+#include <string>
+#include <vector>
+
 #include "debug/PlanVisualizer.hpp"
 
 using namespace graph::debug;
+using graph::query::execution::PhysicalOperator;
+using graph::query::execution::RecordBatch;
 
 // ============================================================================
 // Test visualize(nullptr) branch
@@ -30,4 +37,30 @@ using namespace graph::debug;
 TEST(PlanVisualizerTest, VisualizeNullRootReturnsNullPlan) {
 	std::string result = PlanVisualizer::visualize(nullptr);
 	EXPECT_EQ(result, "Null Plan");
+}
+
+namespace {
+
+class StubPhysicalOperator : public PhysicalOperator {
+public:
+	void open() override {}
+	std::optional<RecordBatch> next() override { return std::nullopt; }
+	void close() override {}
+	[[nodiscard]] std::vector<std::string> getOutputVariables() const override { return {}; }
+	[[nodiscard]] std::string toString() const override { return "Stub"; }
+	[[nodiscard]] std::vector<ExplainAttribute> explainAttributes() const override {
+		return {{"access_path.kind", "property_index"}, {"access_path.estimated_cardinality", "1"}};
+	}
+};
+
+} // namespace
+
+TEST(PlanVisualizerTest, VisualizeIncludesExplainAttributes) {
+	StubPhysicalOperator root;
+
+	const std::string result = PlanVisualizer::visualize(&root);
+
+	EXPECT_NE(result.find("Stub"), std::string::npos);
+	EXPECT_NE(result.find("@ access_path.kind=property_index"), std::string::npos);
+	EXPECT_NE(result.find("@ access_path.estimated_cardinality=1"), std::string::npos);
 }

@@ -260,3 +260,12 @@ TEST_F(SystemConfigManagerTest, NegativeThreadPoolSizeIsClampedToOne) {
 	stateManager->set<int64_t>(keys::SYS_CONFIG, keys::Config::THREAD_POOL_SIZE, -8);
 	EXPECT_EQ(configManager->getThreadPoolSize(), 1UL);
 }
+
+TEST_F(SystemConfigManagerTest, DefaultThreadPoolSizeUsesAutoDetection) {
+	EXPECT_EQ(configManager->getThreadPoolSize(), 0UL);
+}
+
+TEST_F(SystemConfigManagerTest, ExplicitThreadPoolSizeIsHonored) {
+	stateManager->set<int64_t>(keys::SYS_CONFIG, keys::Config::THREAD_POOL_SIZE, 6);
+	EXPECT_EQ(configManager->getThreadPoolSize(), 6UL);
+}

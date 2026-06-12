@@ -19,6 +19,8 @@
 
 #include "DataManagerTestFixture.hpp"
 
+#include <stdexcept>
+
 TEST_F(DataManagerTest, Initialization) {
 	ASSERT_NE(nullptr, dataManager);
 	EXPECT_NE(nullptr, dataManager->getNodeManager());
@@ -233,6 +235,61 @@ TEST_F(DataManagerTest, BatchOperations) {
 
 	rangeNodes = dataManager->getNodesInRange(nodeIds.front(), nodeIds.back(), 20);
 	EXPECT_EQ(10UL, rangeNodes.size());
+}
+
+TEST_F(DataManagerTest, UpdateNodesWithBeforeImagesPersistsAndNotifies) {
+	auto node = createTestNode(dataManager, "BeforeImageNode");
+	dataManager->addNode(node);
+	observer->reset();
+
+	Node oldNode = node;
+	Node updatedNode = node;
+	updatedNode.setLabelId(dataManager->getOrCreateTokenId("BeforeImageNodeUpdated"));
+
+	dataManager->updateNodesWithBeforeImages({updatedNode}, {oldNode});
+
+	const Node storedNode = dataManager->getNode(node.getId());
+	EXPECT_EQ("BeforeImageNodeUpdated", dataManager->resolveTokenName(storedNode.getLabelId()));
+	ASSERT_EQ(1UL, observer->updatedNodes.size());
+	EXPECT_EQ(oldNode.getLabelId(), observer->updatedNodes[0].first.getLabelId());
+	EXPECT_EQ(updatedNode.getLabelId(), observer->updatedNodes[0].second.getLabelId());
+}
+
+TEST_F(DataManagerTest, UpdateEdgesWithBeforeImagesPersistsAndNotifies) {
+	auto source = createTestNode(dataManager, "BeforeImageEdgeSource");
+	auto target = createTestNode(dataManager, "BeforeImageEdgeTarget");
+	dataManager->addNode(source);
+	dataManager->addNode(target);
+	auto edge = createTestEdge(dataManager, source.getId(), target.getId(), "BEFORE_IMAGE_EDGE");
+	dataManager->addEdge(edge);
+	observer->reset();
+
+	Edge oldEdge = edge;
+	Edge updatedEdge = edge;
+	updatedEdge.setTypeId(dataManager->getOrCreateTokenId("BEFORE_IMAGE_EDGE_UPDATED"));
+
+	dataManager->updateEdgesWithBeforeImages({updatedEdge}, {oldEdge});
+
+	const Edge storedEdge = dataManager->getEdge(edge.getId());
+	EXPECT_EQ("BEFORE_IMAGE_EDGE_UPDATED", dataManager->resolveTokenName(storedEdge.getTypeId()));
+	ASSERT_EQ(1UL, observer->updatedEdges.size());
+	EXPECT_EQ(oldEdge.getTypeId(), observer->updatedEdges[0].first.getTypeId());
+	EXPECT_EQ(updatedEdge.getTypeId(), observer->updatedEdges[0].second.getTypeId());
+}
+
+TEST_F(DataManagerTest, UpdateWithBeforeImagesValidatesInputShape) {
+	EXPECT_NO_THROW(dataManager->updateNodesWithBeforeImages({}, {}));
+	EXPECT_NO_THROW(dataManager->updateEdgesWithBeforeImages({}, {}));
+
+	auto node = createTestNode(dataManager, "BeforeImageMismatchNode");
+	dataManager->addNode(node);
+	EXPECT_THROW(dataManager->updateNodesWithBeforeImages({node}, {}), std::invalid_argument);
+
+	auto target = createTestNode(dataManager, "BeforeImageMismatchTarget");
+	dataManager->addNode(target);
+	auto edge = createTestEdge(dataManager, node.getId(), target.getId(), "BEFORE_IMAGE_MISMATCH_EDGE");
+	dataManager->addEdge(edge);
+	EXPECT_THROW(dataManager->updateEdgesWithBeforeImages({edge}, {}), std::invalid_argument);
 }
 
 TEST_F(DataManagerTest, CacheManagement) {
@@ -783,6 +840,34 @@ TEST_F(DataManagerTest, FindEdgesByNodeBothDirection) {
 	EXPECT_GE(allEdges.size(), 1UL) << "Should find edges in both directions";
 }
 
+TEST_F(DataManagerTest, VisitEdgesByNodeStreamsAndCanStopEarly) {
+	auto node1 = createTestNode(dataManager, "A");
+	dataManager->addNode(node1);
+	auto node2 = createTestNode(dataManager, "B");
+	dataManager->addNode(node2);
+	auto node3 = createTestNode(dataManager, "C");
+	dataManager->addNode(node3);
+
+	auto first = createTestEdge(dataManager, node1.getId(), node2.getId(), "KNOWS");
+	dataManager->addEdge(first);
+	auto second = createTestEdge(dataManager, node1.getId(), node3.getId(), "KNOWS");
+	dataManager->addEdge(second);
+
+	size_t callbackCount = 0;
+	const size_t visited = dataManager->visitEdgesByNode(
+			node1.getId(),
+			[&](const Edge &edge) {
+				EXPECT_EQ(edge.getSourceNodeId(), node1.getId());
+				++callbackCount;
+				return false;
+			},
+			"out");
+
+	EXPECT_EQ(visited, 1UL);
+	EXPECT_EQ(callbackCount, 1UL);
+	EXPECT_EQ(dataManager->visitEdgesByNode(node1.getId(), {}, "out"), 0UL);
+}
+
 TEST_F(DataManagerTest, AddNodesEmptyVector) {
 	// Covers L268-269: nodes.empty() returns early
 	std::vector<Node> emptyNodes;
@@ -1036,4 +1121,3 @@ TEST_F(DataManagerTest, RemoveEntityPropertyEdgeViaPublicAPI) {
 	EXPECT_TRUE(propsAfter.find("since") == propsAfter.end())
 		<< "Property 'since' should have been removed";
 }
-

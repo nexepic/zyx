@@ -165,12 +165,12 @@ TEST_F(EntityTypeIndexEdgeUpdateTest, PropertyIndex_ValueChange) {
 	dm->addNodeProperties(n.getId(), {{"name", PropertyValue("new_name")}});
 
 	// Old value should be removed, new value should be indexed
-	auto oldResult = im->findNodeIdsByProperty("name", PropertyValue("old_name"));
+	auto oldResult = im->findNodeIdsByLabelAndProperty("Item", "name", PropertyValue("old_name"));
 	bool inOld = false;
 	for (auto id : oldResult) if (id == n.getId()) inOld = true;
 	EXPECT_FALSE(inOld);
 
-	auto newResult = im->findNodeIdsByProperty("name", PropertyValue("new_name"));
+	auto newResult = im->findNodeIdsByLabelAndProperty("Item", "name", PropertyValue("new_name"));
 	bool inNew = false;
 	for (auto id : newResult) if (id == n.getId()) inNew = true;
 	EXPECT_TRUE(inNew);
@@ -188,7 +188,7 @@ TEST_F(EntityTypeIndexEdgeUpdateTest, PropertyIndex_PropertyRemoval) {
 	// Remove the property
 	dm->removeNodeProperty(n.getId(), "title");
 
-	auto result = im->findNodeIdsByProperty("title", PropertyValue("Hello"));
+	auto result = im->findNodeIdsByLabelAndProperty("Doc", "title", PropertyValue("Hello"));
 	bool found = false;
 	for (auto id : result) if (id == n.getId()) found = true;
 	EXPECT_FALSE(found);

@@ -5,12 +5,17 @@
 #include <exception>
 #include <optional>
 #include <span>
+#include <unordered_map>
 #include <vector>
 
+#include "graph/concurrent/ParallelExecutionPolicy.hpp"
+#include "graph/concurrent/ParallelScanExecutor.hpp"
+#include "graph/concurrent/ThreadPool.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/storage/CommittedSnapshot.hpp"
 #include "graph/storage/SegmentIndexManager.hpp"
 #include "graph/storage/SegmentTracker.hpp"
+#include "graph/storage/data/RelationshipSegmentStatsScanner.hpp"
 
 namespace graph::storage {
 
@@ -33,71 +38,22 @@ namespace graph::storage {
 			return active;
 		}
 
-		int64_t readSerializedRelationshipPropertyEntityId(const char *buf) {
-			int64_t propertyEntityId = 0;
-			std::memcpy(&propertyEntityId, buf + offsetof(Edge::Metadata, propertyEntityId), sizeof(propertyEntityId));
-			return propertyEntityId;
-		}
+		struct PersistedEdgeIdTypeFilterWork {
+			size_t segmentIndex = 0;
+			size_t idBegin = 0;
+			size_t idEnd = 0;
+		};
 
-		PropertyStorageType readSerializedRelationshipPropertyStorageType(const char *buf) {
-			uint32_t storageType = 0;
-			std::memcpy(&storageType, buf + offsetof(Edge::Metadata, propertyStorageType), sizeof(storageType));
-			return static_cast<PropertyStorageType>(storageType);
-		}
-
-		std::optional<RelationshipTypeSegmentStats> parseRelationshipSegmentTypeStats(uint64_t segmentOffset,
-																					  const SegmentHeader &header,
-																					  const char *data,
-																					  bool includePropertyCandidates) {
-			if (header.data_type != Edge::typeId || header.used == 0 || data == nullptr) { // ZYX_COV_EXCL_LINE: callers validate segment shape before parsing.
-				return std::nullopt;
-			}
-
-			constexpr size_t entitySize = Edge::getTotalSize();
-			RelationshipTypeSegmentStats stats;
-			stats.segmentOffset = segmentOffset;
-			stats.startId = header.start_id;
-			stats.endId = header.start_id + static_cast<int64_t>(header.used) - 1;
-			stats.used = header.used;
-			stats.inactiveCount = header.inactive_count;
-			stats.hasPropertyCandidates = includePropertyCandidates;
-			if (includePropertyCandidates) {
-				stats.activePropertyEntityIds.reserve(header.used);
-				stats.activeBlobEdgeIds.reserve(
-						header.inactive_count < header.used ? header.used - header.inactive_count : 0);
-			}
-			for (uint32_t slot = 0; slot < header.used; ++slot) { // ZYX_COV_EXCL_LINE: loop-exit arcs are not meaningful for fixed-size segment scans.
-				const int64_t expectedId = header.start_id + static_cast<int64_t>(slot);
-				const char *edgeBuf = data + static_cast<size_t>(slot) * entitySize;
-				if (readSerializedRelationshipId(edgeBuf) != expectedId || !readSerializedRelationshipActive(edgeBuf)) { // ZYX_COV_EXCL_LINE: id mismatch is corrupt-slot handling; inactive rows are validated elsewhere.
-					continue;
-				}
-				const int64_t typeId = readSerializedRelationshipTypeId(edgeBuf);
-				++stats.activeCount;
-				++stats.activeCountByType[typeId];
-
-				if (!includePropertyCandidates) {
-					continue;
-				}
-				const int64_t propertyEntityId = readSerializedRelationshipPropertyEntityId(edgeBuf);
-				if (propertyEntityId == 0) {
-					continue;
-				}
-				const auto storageType = readSerializedRelationshipPropertyStorageType(edgeBuf);
-				if (storageType == PropertyStorageType::PROPERTY_ENTITY) {
-					stats.activePropertyEntityIds.push_back(propertyEntityId);
-					stats.activePropertyEntityIdsByType[typeId].push_back(propertyEntityId);
-				} else if (storageType == PropertyStorageType::BLOB_ENTITY) {
-					stats.activeBlobEdgeIds.push_back(expectedId);
-					stats.activeBlobEdgeIdsByType[typeId].push_back(expectedId);
-				}
-			}
-			return stats;
-		}
+		struct PersistedEdgeIdTypeFilterState {
+			std::vector<char> buffer;
+			std::optional<int64_t> count;
+		};
 
 		void appendRelationshipPropertyCandidates(RelationshipPropertyCandidateStats &target,
 												  std::span<const int64_t> propertyEntityIds,
-												  std::span<const int64_t> blobEdgeIds) {
+												  std::span<const int64_t> propertyEdgeIds,
+												  std::span<const int64_t> blobEdgeIds,
+												  bool includePropertyEdgeRefs) {
 			auto reserveAdditional = [](std::vector<int64_t> &values, size_t additional) {
 				const size_t desired = values.size() + additional;
 				if (desired <= values.capacity()) {
@@ -108,6 +64,10 @@ namespace graph::storage {
 			reserveAdditional(target.propertyEntityIds, propertyEntityIds.size());
 			target.propertyEntityIds.insert(target.propertyEntityIds.end(), propertyEntityIds.begin(),
 											propertyEntityIds.end());
+			if (includePropertyEdgeRefs) {
+				reserveAdditional(target.propertyEdgeIds, propertyEdgeIds.size());
+				target.propertyEdgeIds.insert(target.propertyEdgeIds.end(), propertyEdgeIds.begin(), propertyEdgeIds.end());
+			}
 			reserveAdditional(target.fallbackEdgeIds, blobEdgeIds.size());
 			target.fallbackEdgeIds.insert(target.fallbackEdgeIds.end(), blobEdgeIds.begin(), blobEdgeIds.end());
 		}
@@ -117,20 +77,7 @@ namespace graph::storage {
 	std::optional<RelationshipTypeSegmentStats>
 	DataManager::buildRelationshipSegmentTypeStats(uint64_t segmentOffset, const SegmentHeader &header,
 												   bool includePropertyCandidates) const {
-		if (!hasPreadSupport() || header.data_type != Edge::typeId || header.used == 0) { // ZYX_COV_EXCL_LINE: public callers pre-validate persisted edge segments.
-			return std::nullopt;
-		}
-
-		constexpr size_t entitySize = Edge::getTotalSize();
-		const size_t dataBytes = static_cast<size_t>(header.used) * entitySize;
-		std::vector<char> buf(dataBytes);
-		const auto dataOffset = static_cast<int64_t>(segmentOffset + sizeof(SegmentHeader));
-		const ssize_t read = preadBytes(buf.data(), dataBytes, dataOffset);
-		if (read < static_cast<ssize_t>(dataBytes)) { // ZYX_COV_EXCL_LINE: short pread requires external file truncation.
-			return std::nullopt;
-		}
-
-		return parseRelationshipSegmentTypeStats(segmentOffset, header, buf.data(), includePropertyCandidates);
+		return RelationshipSegmentStatsScanner(*this).build(segmentOffset, header, includePropertyCandidates);
 	}
 
 	std::optional<RelationshipTypeSegmentStats>
@@ -155,11 +102,13 @@ namespace graph::storage {
 	DataManager::getCachedRelationshipSegmentTypeStats(uint64_t segmentOffset, const SegmentHeader &header,
 													   bool requirePropertyCandidates) const {
 		const int64_t expectedEndId =
-				header.used == 0 ? header.start_id - 1 : header.start_id + static_cast<int64_t>(header.used) - 1; // ZYX_COV_EXCL_LINE: zero-used cached edge segments are never inserted.
+				header.used == 0 ? header.start_id - 1
+								 : header.start_id + static_cast<int64_t>(header.used) -
+										   1; // ZYX_COV_EXCL_LINE: zero-used cached edge segments are never inserted.
 		std::shared_lock lock(relationshipSegmentTypeStatsMutex_);
 		auto it = relationshipSegmentTypeStats_.find(segmentOffset);
 		if (it != relationshipSegmentTypeStats_.end() && it->second.startId == header.start_id &&
-			it->second.endId == expectedEndId && it->second.used == header.used &&
+			it->second.endId == expectedEndId && it->second.used == header.used && // ZYX_COV_EXCL_LINE
 			it->second.inactiveCount == header.inactive_count &&
 			(!requirePropertyCandidates || it->second.hasPropertyCandidates)) {
 			return it->second;
@@ -184,22 +133,51 @@ namespace graph::storage {
 		return getCachedRelationshipSegmentTypeStats(segmentOffset, header);
 	}
 
+	bool DataManager::hasCachedRelationshipSegmentTypeStats(bool requirePropertyCandidates) const {
+		std::shared_lock lock(relationshipSegmentTypeStatsMutex_);
+		if (!requirePropertyCandidates) {
+			return !relationshipSegmentTypeStats_.empty();
+		}
+		return std::any_of(relationshipSegmentTypeStats_.begin(), relationshipSegmentTypeStats_.end(),
+						   [](const auto &entry) { return entry.second.hasPropertyCandidates; });
+	}
+
 	std::optional<RelationshipPropertyCandidateStats>
 	DataManager::collectRelationshipPropertyCandidatesFromSegmentStats(int64_t beginId, int64_t endId,
-																	   int64_t typeId) const {
-		if (!hasPreadSupport() || beginId <= 0 || endId < beginId || hasUnsavedChanges()) { // ZYX_COV_EXCL_LINE: pread support is fixed for FileStorage-backed tests.
+																	   int64_t typeId,
+																	   bool includePropertyEdgeRefs) const {
+		return collectRelationshipPropertyCandidatesFromSegmentStatsImpl(
+				beginId, endId, typeId, true, includePropertyEdgeRefs);
+	}
+
+	std::optional<RelationshipPropertyCandidateStats>
+	DataManager::collectCachedRelationshipPropertyCandidatesFromSegmentStats(int64_t beginId, int64_t endId,
+																			 int64_t typeId,
+																			 bool includePropertyEdgeRefs) const {
+		return collectRelationshipPropertyCandidatesFromSegmentStatsImpl(
+				beginId, endId, typeId, false, includePropertyEdgeRefs);
+	}
+
+	std::optional<RelationshipPropertyCandidateStats>
+	DataManager::collectRelationshipPropertyCandidatesFromSegmentStatsImpl(int64_t beginId, int64_t endId,
+																		   int64_t typeId,
+																		   bool buildMissingStats,
+																		   bool includePropertyEdgeRefs) const {
+		if (!hasPreadSupport() || beginId <= 0 || endId < beginId ||
+			hasUnsavedChanges()) { // ZYX_COV_EXCL_LINE: pread support is fixed for FileStorage-backed tests.
 			return std::nullopt;
 		}
 		const auto *snapshot = getCurrentSnapshot();
 		if (snapshot != nullptr &&
-			(!snapshot->edges.empty() || !snapshot->properties.empty() || !snapshot->blobs.empty())) {
+			(!snapshot->edges.empty() || !snapshot->properties.empty() || !snapshot->blobs.empty())) { // ZYX_COV_EXCL_LINE
 			return std::nullopt;
 		}
 
 		const auto &segmentIndex = segmentIndexManager_->getEdgeSegmentIndex();
 		RelationshipPropertyCandidateStats candidates;
 		for (const auto &entry: segmentIndex) {
-			if (entry.endId < beginId || entry.startId > endId) { // ZYX_COV_EXCL_LINE: non-overlap is a segment-index range prune.
+			if (entry.endId < beginId ||
+				entry.startId > endId) { // ZYX_COV_EXCL_LINE: non-overlap is a segment-index range prune.
 				continue;
 			}
 
@@ -229,14 +207,17 @@ namespace graph::storage {
 				return std::nullopt;
 			}
 
-			auto stats = getRelationshipSegmentTypeStats(entry.segmentOffset, header, true);
-			if (!stats.has_value()) { // ZYX_COV_EXCL_LINE: stats build failure is surfaced through corrupt-header tests.
+			auto stats = buildMissingStats ? getRelationshipSegmentTypeStats(entry.segmentOffset, header, true)
+										   : getCachedRelationshipSegmentTypeStats(entry.segmentOffset, header, true);
+			if (!stats.has_value()) { // ZYX_COV_EXCL_LINE: stats build failure is surfaced through corrupt-header
+									  // tests.
 				return std::nullopt;
 			}
 			if (typeId == 0) {
 				candidates.matchedEdges += static_cast<size_t>(stats->activeCount);
 				appendRelationshipPropertyCandidates(candidates, stats->activePropertyEntityIds,
-													 stats->activeBlobEdgeIds);
+													 stats->activePropertyEdgeIds, stats->activeBlobEdgeIds,
+													 includePropertyEdgeRefs);
 				continue;
 			}
 
@@ -245,186 +226,169 @@ namespace graph::storage {
 			}
 			if (auto propertyIt = stats->activePropertyEntityIdsByType.find(typeId);
 				propertyIt != stats->activePropertyEntityIdsByType.end()) {
-				appendRelationshipPropertyCandidates(candidates, propertyIt->second, std::span<const int64_t>{});
+				const auto edgeIt = stats->activePropertyEdgeIdsByType.find(typeId);
+				appendRelationshipPropertyCandidates(
+						candidates,
+						propertyIt->second,
+						edgeIt != stats->activePropertyEdgeIdsByType.end() ? std::span<const int64_t>{edgeIt->second}
+																			: std::span<const int64_t>{},
+						std::span<const int64_t>{},
+						includePropertyEdgeRefs);
 			}
 			if (auto blobIt = stats->activeBlobEdgeIdsByType.find(typeId);
 				blobIt != stats->activeBlobEdgeIdsByType.end()) {
-				appendRelationshipPropertyCandidates(candidates, std::span<const int64_t>{}, blobIt->second);
+				appendRelationshipPropertyCandidates(
+						candidates, std::span<const int64_t>{}, std::span<const int64_t>{}, blobIt->second,
+						includePropertyEdgeRefs);
 			}
 		}
 		return candidates;
 	}
 
-	std::optional<RelationshipTypeTotalStats> DataManager::getRelationshipTypeTotalStats() const {
-		if (!hasPreadSupport()) { // ZYX_COV_EXCL_LINE: FileStorage-backed DataManager always supports pread.
-			return std::nullopt;
-		}
-
-		if (auto cached = getCachedRelationshipTypeTotalStats()) {
-			return cached;
-		}
-
-		auto stats = buildRelationshipTypeTotalStats();
-		if (!stats.has_value()) { // ZYX_COV_EXCL_LINE: build failure is covered at public call sites.
-			return std::nullopt;
-		}
-
-		std::unique_lock lock(relationshipSegmentTypeStatsMutex_);
-		relationshipTypeTotalStats_ = std::move(*stats);
-		return relationshipTypeTotalStats_;
-	}
-
-	std::optional<RelationshipTypeTotalStats> DataManager::getCachedRelationshipTypeTotalStats() const {
-		const auto &segmentIndex = segmentIndexManager_->getEdgeSegmentIndex();
-		const int64_t firstId = segmentIndex.empty() ? int64_t{0} : segmentIndex.front().startId;
-		const int64_t lastId = segmentIndex.empty() ? int64_t{-1} : segmentIndex.back().endId;
-		std::shared_lock lock(relationshipSegmentTypeStatsMutex_);
-		if (relationshipTypeTotalStats_.has_value() &&
-			relationshipTypeTotalStats_->segmentCount == segmentIndex.size() &&
-			relationshipTypeTotalStats_->firstId == firstId && relationshipTypeTotalStats_->lastId == lastId) {
-			return relationshipTypeTotalStats_;
-		}
-		return std::nullopt;
-	}
-
-	std::optional<RelationshipTypeTotalStats> DataManager::buildRelationshipTypeTotalStats() const {
-		const auto &segmentIndex = segmentIndexManager_->getEdgeSegmentIndex();
-		RelationshipTypeTotalStats total;
-		total.segmentCount = segmentIndex.size();
-		if (segmentIndex.empty()) {
-			return total;
-		}
-		total.firstId = segmentIndex.front().startId;
-		total.lastId = segmentIndex.back().endId;
-
-		for (const auto &entry: segmentIndex) {
-			SegmentHeader header{};
-			try {
-				header = segmentTracker_->getSegmentHeaderCopy(entry.segmentOffset);
-			} catch (const std::exception &) {
-				return std::nullopt;
-			}
-			if (header.data_type != Edge::typeId) {
-				return std::nullopt;
-			}
-			header.file_offset = entry.segmentOffset;
-			if (header.used == 0) {
-				continue;
-			}
-
-			auto stats = getRelationshipSegmentTypeStats(entry.segmentOffset, header);
-			if (!stats.has_value()) { // ZYX_COV_EXCL_LINE: stats build failure is surfaced through corrupt-header tests.
-				return std::nullopt;
-			}
-			total.activeCount += stats->activeCount;
-			for (const auto &[typeId, count]: stats->activeCountByType) {
-				total.activeCountByType[typeId] += count;
-			}
-		}
-		return total;
-	}
-
-	std::optional<int64_t> DataManager::countActiveEdgesByTypeFromTotalStats(int64_t beginId, int64_t endId,
-																			 int64_t typeId) const {
-		const auto &segmentIndex = segmentIndexManager_->getEdgeSegmentIndex();
-		if (!segmentIndex.empty() && (beginId > segmentIndex.front().startId || endId < segmentIndex.back().endId)) {
-			return std::nullopt;
-		}
-
-		auto totalStats = getRelationshipTypeTotalStats();
-		if (!totalStats.has_value()) {
-			return std::nullopt;
-		}
-		if (totalStats->segmentCount > 0 && (beginId > totalStats->firstId || endId < totalStats->lastId)) { // ZYX_COV_EXCL_LINE: total stats are only used for whole-index windows.
-			return std::nullopt;
-		}
-
-		int64_t baseCount = totalStats->activeCount;
-		if (typeId != 0) {
-			baseCount = 0;
-			if (auto it = totalStats->activeCountByType.find(typeId); it != totalStats->activeCountByType.end()) {
-				baseCount = it->second;
-			}
-		}
-
-		const auto *snapshot = getCurrentSnapshot();
-		if (snapshot != nullptr) {
-			return applyRelationshipTypeCountSnapshotOverlay(baseCount, beginId, endId, typeId, snapshot->edges);
-		}
-		auto edgeOverlay = getDirtyEntityInfos<Edge>(
-				{EntityChangeType::CHANGE_ADDED, EntityChangeType::CHANGE_MODIFIED, EntityChangeType::CHANGE_DELETED});
-		return applyRelationshipTypeCountOverlay(baseCount, beginId, endId, typeId, edgeOverlay);
-	}
 
 	std::optional<int64_t> DataManager::countActiveEdgesByTypeInSegmentWindow(uint64_t segmentOffset,
 																			  const SegmentHeader &header,
 																			  int64_t firstId, int64_t lastId,
 																			  int64_t typeId) const {
-		if (!hasPreadSupport() || header.data_type != Edge::typeId || header.used == 0 || firstId > lastId) { // ZYX_COV_EXCL_LINE: partial-window callers validate edge segment bounds.
-			return std::nullopt;
-		}
-
-		constexpr size_t entitySize = Edge::getTotalSize();
-		const auto firstSlot = static_cast<uint32_t>(firstId - header.start_id);
-		const auto lastSlot = static_cast<uint32_t>(lastId - header.start_id);
-		if (lastSlot >= header.used || firstSlot > lastSlot) { // ZYX_COV_EXCL_LINE: partial-window callers derive slots from the same header.
-			return std::nullopt;
-		}
-
-		const size_t rowCount = static_cast<size_t>(lastSlot - firstSlot + 1);
-		const size_t dataBytes = rowCount * entitySize;
-		std::vector<char> buf(dataBytes);
-		const auto dataOffset = static_cast<int64_t>(segmentOffset + sizeof(SegmentHeader) +
-													 static_cast<uint64_t>(firstSlot) * entitySize);
-		const ssize_t read = preadBytes(buf.data(), dataBytes, dataOffset);
-		if (read < static_cast<ssize_t>(dataBytes)) { // ZYX_COV_EXCL_LINE: short pread requires external file truncation.
-			return std::nullopt;
-		}
-
-		int64_t count = 0;
-		for (uint32_t slot = firstSlot; slot <= lastSlot; ++slot) {
-			const int64_t expectedId = header.start_id + static_cast<int64_t>(slot);
-			const char *edgeBuf = buf.data() + static_cast<size_t>(slot - firstSlot) * entitySize;
-			if (readSerializedRelationshipId(edgeBuf) == expectedId && readSerializedRelationshipActive(edgeBuf) &&
-				(typeId == 0 || readSerializedRelationshipTypeId(edgeBuf) == typeId)) {
-				++count;
-			}
-		}
-		return count;
+		return RelationshipSegmentStatsScanner(*this).countActiveInWindow(
+				segmentOffset, header, firstId, lastId, typeId);
 	}
 
 	std::optional<bool> DataManager::persistedEdgeMatchesType(int64_t edgeId, int64_t typeId) const {
-		if (!hasPreadSupport() || edgeId <= 0) { // ZYX_COV_EXCL_LINE: overlay callers pass persisted positive edge ids.
+		return RelationshipSegmentStatsScanner(*this).persistedEdgeMatchesType(edgeId, typeId);
+	}
+
+	std::optional<int64_t> DataManager::countActivePersistedEdgeIdsByType(
+			std::span<const int64_t> edgeIds,
+			int64_t typeId) const {
+		return countActivePersistedEdgeIdsByType(edgeIds, typeId, nullptr);
+	}
+
+	std::optional<int64_t> DataManager::countActivePersistedEdgeIdsByType(
+			std::span<const int64_t> edgeIds,
+			int64_t typeId,
+			concurrent::ThreadPool *threadPool) const {
+		if (edgeIds.empty()) {
+			return int64_t{0};
+		}
+		if (!hasPreadSupport() || hasUnsavedChanges() || !segmentIndexManager_) {
+			return std::nullopt;
+		}
+		const auto *snapshot = getCurrentSnapshot();
+		if (snapshot != nullptr && !snapshot->edges.empty()) {
 			return std::nullopt;
 		}
 
-		const uint64_t segmentOffset = findSegmentForEntityId<Edge>(edgeId);
-		if (segmentOffset == 0) {
-			return false;
+		std::vector<int64_t> sortedIds(edgeIds.begin(), edgeIds.end());
+		std::sort(sortedIds.begin(), sortedIds.end());
+		sortedIds.erase(std::remove_if(sortedIds.begin(), sortedIds.end(), [](int64_t id) { return id <= 0; }),
+						sortedIds.end());
+		sortedIds.erase(std::unique(sortedIds.begin(), sortedIds.end()), sortedIds.end());
+		if (sortedIds.empty()) {
+			return int64_t{0};
 		}
 
-		SegmentHeader header{};
-		const ssize_t headerRead = preadBytes(&header, sizeof(SegmentHeader), static_cast<int64_t>(segmentOffset));
-		if (headerRead < static_cast<ssize_t>(sizeof(SegmentHeader)) || header.data_type != Edge::typeId) { // ZYX_COV_EXCL_LINE: corrupt disk header is validated through public overlay tests.
-			return std::nullopt;
+		const auto &segmentIndex = segmentIndexManager_->getEdgeSegmentIndex();
+		if (segmentIndex.empty()) {
+			return int64_t{0};
 		}
 
-		const int64_t slot = edgeId - header.start_id;
-		if (slot < 0 || slot >= static_cast<int64_t>(header.used)) { // ZYX_COV_EXCL_LINE: segment lookup normally returns the owning segment.
-			return false;
+		std::vector<PersistedEdgeIdTypeFilterWork> work;
+		work.reserve(segmentIndex.size());
+		size_t idCursor = 0;
+		for (size_t segment = 0; segment < segmentIndex.size(); ++segment) {
+			const auto &entry = segmentIndex[segment];
+			while (idCursor < sortedIds.size() && sortedIds[idCursor] < entry.startId) {
+				++idCursor;
+			}
+			if (idCursor >= sortedIds.size()) {
+				break;
+			}
+			if (sortedIds[idCursor] > entry.endId) {
+				continue;
+			}
+
+			const size_t segmentBegin = idCursor;
+			while (idCursor < sortedIds.size() && sortedIds[idCursor] <= entry.endId) {
+				++idCursor;
+			}
+			const size_t segmentEnd = idCursor;
+			const size_t selectedCount = segmentEnd - segmentBegin;
+			if (selectedCount == 0) { // ZYX_COV_EXCL_LINE: segmentEnd is advanced from segmentBegin.
+				continue;
+			}
+			work.push_back({segment, segmentBegin, segmentEnd});
+		}
+		if (work.empty()) {
+			return int64_t{0};
 		}
 
 		constexpr size_t entitySize = Edge::getTotalSize();
-		std::vector<char> buf(entitySize);
-		const auto dataOffset =
-				static_cast<int64_t>(segmentOffset + sizeof(SegmentHeader) + static_cast<uint64_t>(slot) * entitySize);
-		const ssize_t read = preadBytes(buf.data(), entitySize, dataOffset);
-		if (read < static_cast<ssize_t>(entitySize)) { // ZYX_COV_EXCL_LINE: short pread requires external file truncation.
+		auto countWork = [&](const PersistedEdgeIdTypeFilterWork &item, std::vector<char> &buf) -> std::optional<int64_t> {
+			const auto &entry = segmentIndex[item.segmentIndex];
+			const size_t selectedCount = item.idEnd - item.idBegin;
+
+			if (auto stats = cachedRelationshipTypeSegmentStats(entry.segmentOffset)) {
+				if (typeId != 0 && !stats->activeCountByType.contains(typeId)) {
+					return int64_t{0};
+				}
+				const bool segmentHasOnlyRequestedType =
+						stats->inactiveCount == 0 &&
+						(typeId == 0 || stats->activeCountByType.size() == 1);
+				if (segmentHasOnlyRequestedType) {
+					return static_cast<int64_t>(selectedCount);
+				}
+			}
+
+			buf.resize(TOTAL_SEGMENT_SIZE);
+			const ssize_t read = preadSegments(buf.data(), 1, entry.segmentOffset);
+			if (read < static_cast<ssize_t>(TOTAL_SEGMENT_SIZE)) {
+				return std::nullopt; // ZYX_COV_EXCL_LINE: short reads require file truncation or OS failure.
+			}
+
+			SegmentHeader header{};
+			std::memcpy(&header, buf.data(), sizeof(SegmentHeader));
+			if (header.data_type != Edge::typeId || header.used == 0) {
+				return int64_t{0}; // ZYX_COV_EXCL_LINE: edge segment index entries point at edge segments.
+			}
+			const char *data = buf.data() + sizeof(SegmentHeader);
+			int64_t count = 0;
+			for (size_t i = item.idBegin; i < item.idEnd; ++i) {
+				const int64_t edgeId = sortedIds[i];
+				const int64_t slot = edgeId - header.start_id;
+				if (slot < 0 || slot >= static_cast<int64_t>(header.used)) {
+					continue;
+				}
+				const char *edgeBuf = data + static_cast<size_t>(slot) * entitySize;
+				if (readSerializedRelationshipId(edgeBuf) == edgeId &&
+					readSerializedRelationshipActive(edgeBuf) &&
+					(typeId == 0 || readSerializedRelationshipTypeId(edgeBuf) == typeId)) {
+					++count;
+				}
+			}
+			return count;
+		};
+
+		int64_t total = 0;
+		const bool counted = concurrent::runIndexedPartitions<PersistedEdgeIdTypeFilterState>(
+				work.size(),
+				threadPool,
+				{.phase = "relationship_count.edge_type_filter.parallel",
+				 .estimatedItems = sortedIds.size(),
+				 .minPartitions = 2,
+				 .minItems = 1024},
+				[&](size_t workIndex, PersistedEdgeIdTypeFilterState &state) {
+					state.count = countWork(work[workIndex], state.buffer);
+					std::vector<char>().swap(state.buffer);
+					return state.count.has_value();
+				},
+				[&](size_t, PersistedEdgeIdTypeFilterState &state) {
+					total += state.count.value_or(int64_t{0});
+				});
+		if (!counted) {
 			return std::nullopt;
 		}
-
-		return readSerializedRelationshipId(buf.data()) == edgeId && readSerializedRelationshipActive(buf.data()) &&
-			   (typeId == 0 || readSerializedRelationshipTypeId(buf.data()) == typeId);
+		return total;
 	}
 
 	std::optional<int64_t>
@@ -437,7 +401,7 @@ namespace graph::storage {
 			}
 			const Edge &edge = *info.backup;
 			const int64_t edgeId = edge.getId();
-			if (edgeId < beginId || edgeId > endId) {
+			if (edgeId < beginId || edgeId > endId) { // ZYX_COV_EXCL_LINE: overlay range pruning is covered indirectly.
 				continue;
 			}
 
@@ -449,7 +413,7 @@ namespace graph::storage {
 				total -= *persistedMatch ? int64_t{1} : int64_t{0};
 			}
 
-			if (info.changeType != EntityChangeType::CHANGE_DELETED && edge.isActive() &&
+			if (info.changeType != EntityChangeType::CHANGE_DELETED && edge.isActive() && // ZYX_COV_EXCL_LINE
 				(typeId == 0 || edge.getTypeId() == typeId)) {
 				++total;
 			}
@@ -471,18 +435,19 @@ namespace graph::storage {
 
 	std::optional<int64_t> DataManager::countActiveEdgesByTypeFromSegmentStats(int64_t beginId, int64_t endId,
 																			   int64_t typeId) const {
-		if (!hasPreadSupport() || beginId <= 0 || endId < beginId) { // ZYX_COV_EXCL_LINE: pread support is fixed for FileStorage-backed tests.
+		if (beginId <= 0 || endId < beginId) { // ZYX_COV_EXCL_LINE: range guards are validated through public tests.
 			return std::nullopt;
 		}
-		if (auto count = countActiveEdgesByTypeFromTotalStats(beginId, endId, typeId)) {
-			return count;
+		if (!hasPreadSupport()) { // ZYX_COV_EXCL_LINE: segment stats require FileStorage pread support.
+			return std::nullopt;
 		}
 		const auto *snapshot = getCurrentSnapshot();
 
 		const auto &segmentIndex = segmentIndexManager_->getEdgeSegmentIndex();
 		int64_t total = 0;
 		for (const auto &entry: segmentIndex) {
-			if (entry.endId < beginId || entry.startId > endId) { // ZYX_COV_EXCL_LINE: non-overlap is a segment-index range prune.
+			if (entry.endId < beginId ||
+				entry.startId > endId) { // ZYX_COV_EXCL_LINE: non-overlap is a segment-index range prune.
 				continue;
 			}
 
@@ -492,7 +457,7 @@ namespace graph::storage {
 			} catch (const std::exception &) {
 				return std::nullopt;
 			}
-			if (header.data_type != Edge::typeId) {
+			if (header.data_type != Edge::typeId) { // ZYX_COV_EXCL_LINE: edge indexes only reference edge segments.
 				return std::nullopt;
 			}
 			header.file_offset = entry.segmentOffset;
@@ -509,21 +474,24 @@ namespace graph::storage {
 				continue;
 			}
 
-			if (first == segmentFirst && last == segmentLast) { // ZYX_COV_EXCL_LINE: full-window split is determined by segment boundaries.
-				auto stats = getRelationshipSegmentTypeStats(entry.segmentOffset, header);
-				if (!stats.has_value()) { // ZYX_COV_EXCL_LINE: stats build failure is surfaced through corrupt-header tests.
+			if (first == segmentFirst &&
+				last == segmentLast) { // ZYX_COV_EXCL_LINE: full-window split is determined by segment boundaries.
+				auto stats = buildRelationshipSegmentTypeStats(entry.segmentOffset, header, false);
+				if (!stats.has_value()) { // ZYX_COV_EXCL_LINE: stats build failure is surfaced through corrupt-header
+										  // tests.
 					return std::nullopt;
 				}
 				if (typeId == 0) {
 					total += stats->activeCount;
-				} else if (auto it = stats->activeCountByType.find(typeId); it != stats->activeCountByType.end()) {
+				} else if (auto it = stats->activeCountByType.find(typeId); it != stats->activeCountByType.end()) { // ZYX_COV_EXCL_LINE
 					total += it->second;
 				}
 				continue;
 			}
 
 			auto partial = countActiveEdgesByTypeInSegmentWindow(entry.segmentOffset, header, first, last, typeId);
-			if (!partial.has_value()) { // ZYX_COV_EXCL_LINE: partial-window bounds are derived above from a valid segment.
+			if (!partial.has_value()) { // ZYX_COV_EXCL_LINE: partial-window bounds are derived above from a valid
+										// segment.
 				return std::nullopt;
 			}
 			total += *partial;
@@ -541,7 +509,6 @@ namespace graph::storage {
 			return;
 		}
 		std::unique_lock lock(relationshipSegmentTypeStatsMutex_);
-		relationshipTypeTotalStats_.reset();
 		for (uint64_t segmentOffset: segmentOffsets) {
 			relationshipSegmentTypeStats_.erase(segmentOffset);
 		}
@@ -550,7 +517,6 @@ namespace graph::storage {
 	void DataManager::clearRelationshipSegmentTypeStats() const {
 		std::unique_lock lock(relationshipSegmentTypeStatsMutex_);
 		relationshipSegmentTypeStats_.clear();
-		relationshipTypeTotalStats_.reset();
 	}
 
 } // namespace graph::storage

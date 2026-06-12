@@ -76,7 +76,7 @@ def excluded_source_lines(source_path):
         if EXCLUDED_FUNCTION_MARKER in line:
             excluded.update(_function_lines(lines, line_number))
         if EXCLUDED_LINE_MARKER in line:
-            excluded.add(line_number)
+            excluded.update(_logical_statement_prefix_lines(lines, line_number))
             if "catch" in line:
                 excluded.update(_catch_block_lines(lines, line_number))
         if EXCLUDED_START_MARKER in line:
@@ -89,6 +89,49 @@ def excluded_source_lines(source_path):
             excluded.add(line_number)
             exclude_next = False
     return excluded
+
+
+def _logical_statement_prefix_lines(lines, marker_line):
+    """Exclude a marker line and the immediately preceding continuation lines.
+
+    LLVM often attributes branch arcs to the first line of a multi-line C++
+    condition even when the exclusion marker is placed on the continued line
+    that explains the guard.  Treat the marker as applying to that logical
+    statement prefix so exclusions remain stable without duplicating comments on
+    every branch-producing line.
+    """
+
+    excluded = {marker_line}
+    current = marker_line
+    for previous in range(marker_line - 1, 0, -1):
+        previous_text = lines[previous - 1].strip()
+        current_text = lines[current - 1].strip()
+        if not previous_text:
+            break
+        if not (_continues_to_next_line(previous_text) or _looks_like_continuation(current_text) or
+                _opens_multiline_control_header(previous_text)):
+            break
+        excluded.add(previous)
+        current = previous
+    return excluded
+
+
+def _continues_to_next_line(text):
+    return (
+        text.endswith(("||", "&&", ",", "?", ":", "(", "[", "+", "-", "*", "/", "%", "^", "|", "&", "==", "!=",
+                       "<", ">", "<=", ">=", "="))
+        or not text.endswith((";", "{", "}"))
+    )
+
+
+def _looks_like_continuation(text):
+    return text.startswith((".", ")", "&&", "||", "?", ":", ",", "++", "--"))
+
+
+def _opens_multiline_control_header(text):
+    if not text.startswith(("if ", "if(", "for ", "for(", "while ", "while(", "return ")):
+        return False
+    return text.count("(") > text.count(")") or "{" not in text
 
 
 def _function_lines(lines, start_line):
@@ -162,15 +205,26 @@ def _adjust_regions(segments, raw, excluded_lines):
 def _adjust_branches(branches, raw, excluded_lines):
     removed_count = 0
     removed_covered = 0
-    for line_start, _col_start, _line_end, _col_end, true_count, false_count, *_rest in branches:
-        if line_start not in excluded_lines:
+    for line_start, _col_start, line_end, _col_end, true_count, false_count, *_rest in branches:
+        if not _branch_intersects_excluded_lines(line_start, line_end, excluded_lines):
             continue
         removed_count += 2
         if true_count > 0:
             removed_covered += 1
         if false_count > 0:
             removed_covered += 1
-    return _metric_with_notcovered(raw["count"] - removed_count, raw["notcovered"] - (removed_count - removed_covered))
+    adjusted_count = max(0, raw["count"] - removed_count)
+    adjusted_notcovered = max(0, raw["notcovered"] - (removed_count - removed_covered))
+    adjusted_notcovered = min(adjusted_notcovered, adjusted_count)
+    return _metric_with_notcovered(adjusted_count, adjusted_notcovered)
+
+
+def _branch_intersects_excluded_lines(line_start, line_end, excluded_lines):
+    if not excluded_lines:
+        return False
+    if line_end < line_start:
+        line_end = line_start
+    return any(line in excluded_lines for line in range(line_start, line_end + 1))
 
 
 def _adjust_functions(segments, raw, source_path):

@@ -20,6 +20,8 @@
 
 #include "graph/storage/data/BaseEntityManager.hpp"
 
+#include <stdexcept>
+
 #include "graph/core/EntityPropertyTraits.hpp"
 #include "graph/log/Log.hpp"
 #include "graph/storage/IDAllocator.hpp"
@@ -52,27 +54,7 @@ namespace graph::storage {
 
 		auto *dataManager = getDataManagerPtr();
 
-		// 1. Identify entities needing new IDs
-		// We collect pointers to avoid copying large objects
-		std::vector<EntityType *> newEntities;
-		newEntities.reserve(entities.size());
-
-		for (auto &entity: entities) {
-			if (entity.getId() == 0) {
-				newEntities.push_back(&entity);
-			}
-		}
-
-		// 2. Batch ID Allocation (Critical Optimization)
-		// One mutex lock for N entities.
-		if (!newEntities.empty()) {
-			int64_t startId = dataManager->getIdAllocator(EntityType::typeId)->allocateBatch(newEntities.size());
-
-			// Assign sequential IDs
-			for (size_t i = 0; i < newEntities.size(); ++i) {
-				newEntities[i]->setId(startId + static_cast<int64_t>(i));
-			}
-		}
+		assignMissingIds(entities);
 
 		// 3. Batch Cache Update
 		// Efficiently add to LRU cache
@@ -82,7 +64,39 @@ namespace graph::storage {
 
 		// 4. Batch Persistence (Dirty Map)
 		// Updates dirty registry and triggers auto-flush check only once
-		dataManager->getPersistenceManager()->upsertBatch(entities, EntityChangeType::CHANGE_ADDED);
+		persistAddedBatch(entities);
+	}
+
+	template<typename EntityType>
+	void BaseEntityManager<EntityType>::assignMissingIds(std::vector<EntityType> &entities) {
+		if (entities.empty()) {
+			return;
+		}
+
+		std::vector<EntityType *> newEntities;
+		newEntities.reserve(entities.size());
+		for (auto &entity: entities) {
+			if (entity.getId() == 0) {
+				newEntities.push_back(&entity);
+			}
+		}
+		if (newEntities.empty()) {
+			return;
+		}
+
+		auto *dataManager = getDataManagerPtr();
+		const int64_t startId = dataManager->getIdAllocator(EntityType::typeId)->allocateBatch(newEntities.size());
+		for (size_t i = 0; i < newEntities.size(); ++i) {
+			newEntities[i]->setId(startId + static_cast<int64_t>(i));
+		}
+	}
+
+	template<typename EntityType>
+	void BaseEntityManager<EntityType>::persistAddedBatch(const std::vector<EntityType> &entities) {
+		if (entities.empty()) {
+			return;
+		}
+		getDataManagerPtr()->getPersistenceManager()->upsertBatch(entities, EntityChangeType::CHANGE_ADDED);
 	}
 
 	template<typename EntityType>
@@ -109,6 +123,89 @@ namespace graph::storage {
 												 DirtyEntityInfo<EntityType>(EntityChangeType::CHANGE_MODIFIED, entity));
 		}
 
+		dataManager->checkAndTriggerAutoFlush();
+	}
+
+	template<typename EntityType>
+	void BaseEntityManager<EntityType>::updateBatch(const std::vector<EntityType> &entities) {
+		if (entities.empty()) {
+			return;
+		}
+
+		auto *dataManager = getDataManagerPtr();
+		std::vector<EntityType> added;
+		std::vector<EntityType> modified;
+		added.reserve(entities.size());
+		modified.reserve(entities.size());
+
+		for (const auto &entity: entities) {
+			if (entity.getId() == 0) {
+				continue;
+			}
+			if (!entity.isActive()) {
+				throw std::runtime_error("Update inactive entity");
+			}
+
+			EntityTraits<EntityType>::addToCache(dataManager, entity);
+			auto dirtyInfo = EntityTraits<EntityType>::getDirtyInfo(dataManager, entity.getId());
+			if (dirtyInfo.has_value() && dirtyInfo->changeType == EntityChangeType::CHANGE_ADDED) {
+				added.push_back(entity);
+			} else {
+				modified.push_back(entity);
+			}
+		}
+
+		auto persistence = dataManager->getPersistenceManager();
+		if (!added.empty()) {
+			persistence->upsertBatch(added, EntityChangeType::CHANGE_ADDED);
+		}
+		if (!modified.empty()) {
+			persistence->upsertBatch(modified, EntityChangeType::CHANGE_MODIFIED);
+		}
+		dataManager->checkAndTriggerAutoFlush();
+	}
+
+	template<typename EntityType>
+	void BaseEntityManager<EntityType>::updateBatch(const std::vector<EntityType> &entities,
+													const std::vector<size_t> &indices) {
+		if (entities.empty() || indices.empty()) {
+			return;
+		}
+
+		auto *dataManager = getDataManagerPtr();
+		std::vector<size_t> addedIndices;
+		std::vector<size_t> modifiedIndices;
+		addedIndices.reserve(indices.size());
+		modifiedIndices.reserve(indices.size());
+
+		for (const size_t index: indices) {
+			if (index >= entities.size()) {
+				continue;
+			}
+			const auto &entity = entities[index];
+			if (entity.getId() == 0) {
+				continue;
+			}
+			if (!entity.isActive()) {
+				throw std::runtime_error("Update inactive entity");
+			}
+
+			EntityTraits<EntityType>::addToCache(dataManager, entity);
+			auto dirtyInfo = EntityTraits<EntityType>::getDirtyInfo(dataManager, entity.getId());
+			if (dirtyInfo.has_value() && dirtyInfo->changeType == EntityChangeType::CHANGE_ADDED) {
+				addedIndices.push_back(index);
+			} else {
+				modifiedIndices.push_back(index);
+			}
+		}
+
+		auto persistence = dataManager->getPersistenceManager();
+		if (!addedIndices.empty()) {
+			persistence->upsertBatchSelected(entities, addedIndices, EntityChangeType::CHANGE_ADDED);
+		}
+		if (!modifiedIndices.empty()) {
+			persistence->upsertBatchSelected(entities, modifiedIndices, EntityChangeType::CHANGE_MODIFIED);
+		}
 		dataManager->checkAndTriggerAutoFlush();
 	}
 

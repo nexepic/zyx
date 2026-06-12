@@ -20,12 +20,26 @@
 
 #include "graph/storage/indexes/PropertyIndex.hpp"
 #include <cmath>
+#include <optional>
 #include <ranges>
 #include <sstream>
 #include "graph/storage/IDAllocator.hpp"
 #include "graph/storage/state/SystemStateKeys.hpp"
 
 namespace graph::query::indexes {
+	namespace {
+		bool isScalarIndexablePropertyType(PropertyType type) {
+			switch (type) {
+				case PropertyType::BOOLEAN:
+				case PropertyType::INTEGER:
+				case PropertyType::DOUBLE:
+				case PropertyType::STRING:
+					return true;
+				default:
+					return false;
+			}
+		}
+	} // namespace
 
 	PropertyIndex::PropertyIndex(std::shared_ptr<storage::DataManager> dataManager,
 								 std::shared_ptr<storage::state::SystemStateManager> systemStateManager,
@@ -202,7 +216,7 @@ namespace graph::query::indexes {
 		std::unique_lock lock(mutex_);
 
 		PropertyType valueType = getPropertyType(value);
-		if (valueType == PropertyType::UNKNOWN || valueType == PropertyType::NULL_TYPE) {
+		if (!isScalarIndexablePropertyType(valueType)) {
 			return;
 		}
 
@@ -229,6 +243,36 @@ namespace graph::query::indexes {
 		rootMap[key] = treeManager->insert(rootMap[key], value, entityId);
 	}
 
+	void PropertyIndex::insertGroupedPropertiesBatch(PropertyEntryGroup &groupedBatch) {
+		for (auto &[type, keyMap]: groupedBatch) {
+			// Retrieve the correct tree manager and root map for this type
+			auto treeManager = getTreeManagerForType(type);
+			if (!treeManager)
+				continue;
+			auto &rootMap = getRootMapForType(type);
+
+			for (auto &[key, entries]: keyMap) {
+				if (entries.empty())
+					continue;
+
+				// Ensure root node exists
+				if (!rootMap.contains(key)) {
+					rootMap[key] = treeManager->initialize();
+				}
+
+				int64_t currentRootId = rootMap[key];
+
+				// Execute the optimized batch insert on the specific B+ Tree
+				int64_t newRootId = treeManager->insertBatch(currentRootId, entries);
+
+				// Update root ID if the tree grew (root split)
+				if (newRootId != currentRootId) {
+					rootMap[key] = newRootId;
+				}
+			}
+		}
+	}
+
 	void
 	PropertyIndex::addPropertiesBatch(const std::vector<std::tuple<int64_t, std::string, PropertyValue>> &properties) {
 		if (properties.empty()) {
@@ -239,13 +283,13 @@ namespace graph::query::indexes {
 
 		// Structure: Type -> Key -> List of {Value, EntityID} pairs
 		// We use this to group data for specific B+ Trees.
-		std::map<PropertyType, std::map<std::string, std::vector<std::pair<PropertyValue, int64_t>>>> groupedBatch;
+		PropertyEntryGroup groupedBatch;
 
 		// 1. Classification & Filtering Phase
 		for (const auto &[entityId, key, value]: properties) {
 			// Determine the type of the value
 			PropertyType valueType = getPropertyType(value);
-			if (valueType == PropertyType::UNKNOWN || valueType == PropertyType::NULL_TYPE) {
+			if (!isScalarIndexablePropertyType(valueType)) {
 				continue;
 			}
 
@@ -276,34 +320,65 @@ namespace graph::query::indexes {
 		}
 
 		// 2. Batch Insertion Phase
-		for (auto &[type, keyMap]: groupedBatch) {
-			// Retrieve the correct tree manager and root map for this type
-			auto treeManager = getTreeManagerForType(type);
-			auto &rootMap = getRootMapForType(type);
+		insertGroupedPropertiesBatch(groupedBatch);
+	}
 
-			if (!treeManager)
-				continue;
-
-			for (auto &[key, entries]: keyMap) {
-				if (entries.empty())
-					continue;
-
-				// Ensure root node exists
-				if (!rootMap.contains(key)) {
-					rootMap[key] = treeManager->initialize();
-				}
-
-				int64_t currentRootId = rootMap[key];
-
-				// Execute the optimized batch insert on the specific B+ Tree
-				int64_t newRootId = treeManager->insertBatch(currentRootId, entries);
-
-				// Update root ID if the tree grew (root split)
-				if (newRootId != currentRootId) {
-					rootMap[key] = newRootId;
-				}
+	namespace {
+		std::optional<PropertyValue> toPropertyValue(PropertyIndex::TypedPropertyEntry &&entry) {
+			switch (entry.type) {
+				case PropertyType::BOOLEAN:
+					return PropertyValue(entry.boolValue);
+				case PropertyType::INTEGER:
+					return PropertyValue(entry.intValue);
+				case PropertyType::DOUBLE:
+					return PropertyValue(entry.doubleValue);
+				case PropertyType::STRING:
+					return PropertyValue(std::move(entry.stringValue));
+				default:
+					return std::nullopt;
 			}
 		}
+	} // namespace
+
+	void PropertyIndex::addTypedPropertiesBatch(std::vector<TypedPropertyEntry> properties) {
+		if (properties.empty()) {
+			return;
+		}
+
+		std::unique_lock lock(mutex_);
+		PropertyEntryGroup groupedBatch;
+
+		for (auto &property: properties) {
+			if (!isScalarIndexablePropertyType(property.type) || property.key.empty()) {
+				continue;
+			}
+
+			auto treeManager = getTreeManagerForType(property.type);
+			if (!treeManager) {
+				continue;
+			}
+
+			auto it = indexedKeyTypes_.find(property.key);
+			if (it == indexedKeyTypes_.end()) {
+				continue;
+			}
+
+			PropertyType registeredType = it->second;
+			if (registeredType == PropertyType::UNKNOWN) {
+				indexedKeyTypes_[property.key] = property.type;
+				registeredType = property.type;
+			} else if (registeredType != property.type) {
+				continue;
+			}
+
+			auto value = toPropertyValue(std::move(property));
+			if (!value.has_value()) {
+				continue;
+			}
+			groupedBatch[registeredType][property.key].emplace_back(std::move(*value), property.entityId);
+		}
+
+		insertGroupedPropertiesBatch(groupedBatch);
 	}
 
 	void PropertyIndex::removeProperty(int64_t entityId, const std::string &key, const PropertyValue &value) {
@@ -557,6 +632,11 @@ namespace graph::query::indexes {
 		return indexedKeysList_;
 	}
 
+	std::vector<std::string> PropertyIndex::getIndexedKeysSnapshot() const {
+		std::shared_lock lock(mutex_);
+		return indexedKeysList_;
+	}
+
 	PropertyType PropertyIndex::getIndexedKeyType(const std::string &key) const {
 		std::shared_lock lock(mutex_);
 		if (auto it = indexedKeyTypes_.find(key); it != indexedKeyTypes_.end()) {
@@ -640,6 +720,44 @@ namespace graph::query::indexes {
 		compositeRootIds_[keyStr] = compositeTreeManager_->insert(rootIt->second, encodedKey, entityId);
 	}
 
+	void PropertyIndex::addCompositeEntriesBatch(const std::vector<CompositeEntry> &entries) {
+		if (entries.empty()) {
+			return;
+		}
+		std::unique_lock lock(mutex_);
+		if (!compositeTreeManager_) {
+			return;
+		}
+
+		std::unordered_map<std::string, std::vector<std::pair<PropertyValue, int64_t>>> groupedEntries;
+		groupedEntries.reserve(entries.size());
+		for (const auto &entry : entries) {
+			if (entry.entityId == 0 || entry.keys.empty() || entry.values.empty()) {
+				continue;
+			}
+			const std::string keyStr = compositeKeyString(entry.keys);
+			if (!compositeRootIds_.contains(keyStr)) {
+				continue;
+			}
+			groupedEntries[keyStr].emplace_back(encodeCompositeKey(entry.values), entry.entityId);
+		}
+
+		for (auto &[keyStr, batch] : groupedEntries) {
+			if (batch.empty()) {
+				continue;
+			}
+			const auto rootIt = compositeRootIds_.find(keyStr);
+			if (rootIt == compositeRootIds_.end()) {
+				continue;
+			}
+			const int64_t currentRootId = rootIt->second;
+			const int64_t newRootId = compositeTreeManager_->insertBatch(currentRootId, batch);
+			if (newRootId != currentRootId) {
+				compositeRootIds_[keyStr] = newRootId;
+			}
+		}
+	}
+
 	void PropertyIndex::removeCompositeEntry(int64_t entityId,
 	                                          const std::vector<std::string> &keys,
 	                                          const std::vector<PropertyValue> &values) {
@@ -666,6 +784,20 @@ namespace graph::query::indexes {
 
 		PropertyValue encodedKey = encodeCompositeKey(values);
 		return compositeTreeManager_->find(rootIt->second, encodedKey);
+	}
+
+	size_t PropertyIndex::countCompositeExact(
+	    const std::vector<std::string> &keys,
+	    const std::vector<PropertyValue> &values) const {
+		std::shared_lock lock(mutex_);
+
+		std::string keyStr = compositeKeyString(keys);
+		auto rootIt = compositeRootIds_.find(keyStr);
+		if (rootIt == compositeRootIds_.end() || !compositeTreeManager_)
+			return 0;
+
+		PropertyValue encodedKey = encodeCompositeKey(values);
+		return compositeTreeManager_->count(rootIt->second, encodedKey);
 	}
 
 	std::vector<int64_t> PropertyIndex::findCompositePrefix(

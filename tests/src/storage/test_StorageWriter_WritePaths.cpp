@@ -18,6 +18,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "graph/core/Node.hpp"
@@ -242,6 +243,25 @@ TEST_F(StorageWriterWritePathsTest, SaveData_PreAllocatedEntities) {
 	writer->saveData(updated, segHead, itemsPerSegment<Node>());
 }
 
+TEST_F(StorageWriterWritePathsTest, SaveData_MixesExistingSlotsWithContiguousAppendSuffix) {
+	std::vector<Node> nodes = {makeNode(1), makeNode(2), makeNode(3)};
+	uint64_t segHead = 0;
+	writer->saveData(nodes, segHead, itemsPerSegment<Node>());
+	ASSERT_NE(segHead, 0u);
+
+	header.node_segment_head = segHead;
+	dataManager->getSegmentIndexManager()->buildSegmentIndexes();
+
+	std::vector<Node> mixed = {makeNode(5), makeNode(2), makeNode(4)};
+	mixed[1].addLabelId(77);
+	writer->saveData(mixed, segHead, itemsPerSegment<Node>());
+
+	const SegmentHeader hdr = segmentTracker->getSegmentHeader(segHead);
+	EXPECT_EQ(hdr.used, 5u);
+	EXPECT_TRUE(segmentTracker->getBitmapBit(segHead, 3));
+	EXPECT_TRUE(segmentTracker->getBitmapBit(segHead, 4));
+}
+
 // ============================================================================
 // writeSnapshot with null thread pool (sequential path)
 // ============================================================================
@@ -310,6 +330,48 @@ TEST_F(StorageWriterWritePathsTest, WriteSegmentData_EmptyData) {
 
 	SegmentHeader hdr = segmentTracker->getSegmentHeader(segOff);
 	EXPECT_EQ(hdr.used, 0u);
+}
+
+TEST_F(StorageWriterWritePathsTest, WriteSegmentData_FullSegmentForFixedSizeEntities) {
+	auto writeFullBlobSegment = [&] {
+		constexpr uint32_t capacity = itemsPerSegment<Blob>();
+		uint64_t segOff = allocator->allocateSegment(Blob::typeId, capacity);
+		std::vector<Blob> blobs;
+		blobs.reserve(capacity);
+		for (uint32_t i = 0; i < capacity; ++i) {
+			blobs.emplace_back(static_cast<int64_t>(i + 1), "blob");
+		}
+		writer->writeSegmentData(segOff, blobs, 0);
+		EXPECT_EQ(segmentTracker->getSegmentHeader(segOff).used, capacity);
+	};
+
+	auto writeFullIndexSegment = [&] {
+		constexpr uint32_t capacity = itemsPerSegment<Index>();
+		uint64_t segOff = allocator->allocateSegment(Index::typeId, capacity);
+		std::vector<Index> indexes;
+		indexes.reserve(capacity);
+		for (uint32_t i = 0; i < capacity; ++i) {
+			indexes.emplace_back(static_cast<int64_t>(i + 1), Index::NodeType::LEAF, 1);
+		}
+		writer->writeSegmentData(segOff, indexes, 0);
+		EXPECT_EQ(segmentTracker->getSegmentHeader(segOff).used, capacity);
+	};
+
+	auto writeFullStateSegment = [&] {
+		constexpr uint32_t capacity = itemsPerSegment<State>();
+		uint64_t segOff = allocator->allocateSegment(State::typeId, capacity);
+		std::vector<State> states;
+		states.reserve(capacity);
+		for (uint32_t i = 0; i < capacity; ++i) {
+			states.emplace_back(static_cast<int64_t>(i + 1), "key" + std::to_string(i), "state");
+		}
+		writer->writeSegmentData(segOff, states, 0);
+		EXPECT_EQ(segmentTracker->getSegmentHeader(segOff).used, capacity);
+	};
+
+	writeFullBlobSegment();
+	writeFullIndexSegment();
+	writeFullStateSegment();
 }
 
 // ============================================================================

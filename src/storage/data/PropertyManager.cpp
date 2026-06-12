@@ -27,6 +27,7 @@
 #include "graph/core/Node.hpp"
 #include "graph/core/Property.hpp"
 #include "graph/core/State.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/IDAllocator.hpp"
 #include "graph/storage/data/BlobManager.hpp"
 #include "graph/storage/data/DataManager.hpp"
@@ -126,6 +127,80 @@ namespace graph::storage {
 			}
 		}
 		// If external properties are not supported, they remain inline, and no further action is needed.
+	}
+
+	template<typename EntityType>
+	std::vector<size_t> PropertyManager::storePropertiesBatch(std::vector<EntityType> &entities) {
+		graph::debug::ScopedPerfTimer timer("property.store_batch.total");
+		if constexpr (!EntityPropertyTraits<EntityType>::supportsProperties ||
+					  !EntityPropertyTraits<EntityType>::supportsExternalProperties) {
+			return {};
+		} else {
+			if (entities.empty()) {
+				return {};
+			}
+
+			struct PendingPropertyEntity {
+				size_t entityIndex = 0;
+				std::unordered_map<std::string, PropertyValue> properties;
+			};
+
+			constexpr size_t PROPERTY_ENTITY_PAYLOAD_SIZE = Property::TOTAL_PROPERTY_SIZE - Property::METADATA_SIZE;
+			std::vector<PendingPropertyEntity> pendingPropertyEntities;
+			pendingPropertyEntities.reserve(entities.size());
+			std::vector<size_t> changedEntityIndices;
+			changedEntityIndices.reserve(entities.size());
+
+			for (size_t index = 0; index < entities.size(); ++index) {
+				auto &entity = entities[index];
+				const bool hadExternalProperties = EntityPropertyTraits<EntityType>::hasPropertyEntity(entity);
+				cleanupExternalProperties(entity);
+				EntityPropertyTraits<EntityType>::setPropertyEntityId(entity, 0, PropertyStorageType::NONE);
+
+				auto properties = EntityPropertyTraits<EntityType>::takeProperties(entity);
+				if (properties.empty()) {
+					if (hadExternalProperties) {
+						changedEntityIndices.push_back(index);
+					}
+					continue;
+				}
+
+				const uint32_t dataSize = calculateSerializedSize(properties);
+				if (dataSize > PROPERTY_ENTITY_PAYLOAD_SIZE) {
+					graph::debug::ScopedPerfTimer blobTimer("property.store_batch.blobs");
+					storePropertiesInBlob(entity, properties);
+					changedEntityIndices.push_back(index);
+					continue;
+				}
+
+				pendingPropertyEntities.push_back({index, std::move(properties)});
+			}
+
+			if (!pendingPropertyEntities.empty()) {
+				graph::debug::ScopedPerfTimer entityTimer("property.store_batch.property_entities");
+				std::vector<Property> propertyEntities;
+				propertyEntities.reserve(pendingPropertyEntities.size());
+				for (auto &pending: pendingPropertyEntities) {
+					auto &owner = entities[pending.entityIndex];
+					Property property;
+					property.setProperties(std::move(pending.properties));
+					property.setEntityInfo(owner.getId(), EntityType::typeId);
+					propertyEntities.push_back(std::move(property));
+				}
+
+				getDataManagerPtr()->addPropertyEntities(propertyEntities);
+
+				for (size_t i = 0; i < pendingPropertyEntities.size(); ++i) {
+					auto &owner = entities[pendingPropertyEntities[i].entityIndex];
+					EntityPropertyTraits<EntityType>::setPropertyEntityId(
+							owner, propertyEntities[i].getId(), PropertyStorageType::PROPERTY_ENTITY);
+					EntityPropertyTraits<EntityType>::clearProperties(owner);
+					changedEntityIndices.push_back(pendingPropertyEntities[i].entityIndex);
+				}
+			}
+
+			return changedEntityIndices;
+		}
 	}
 
 	template<typename EntityType>
@@ -504,6 +579,10 @@ namespace graph::storage {
 	// storeProperties instantiations
 	template void PropertyManager::storeProperties<Node>(Node &entity);
 	template void PropertyManager::storeProperties<Edge>(Edge &entity);
+
+	// storePropertiesBatch instantiations
+	template std::vector<size_t> PropertyManager::storePropertiesBatch<Node>(std::vector<Node> &entities);
+	template std::vector<size_t> PropertyManager::storePropertiesBatch<Edge>(std::vector<Edge> &entities);
 
 	// cleanupExternalProperties instantiations
 	template void PropertyManager::cleanupExternalProperties<Node>(Node &entity);

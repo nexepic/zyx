@@ -178,6 +178,38 @@ TEST_F(PhysicalPlanConverterLabelAndPropertyTest, ResidualPropertyFilter_KeyNotF
 	EXPECT_EQ(count, 0) << "Missing property key should filter out the node";
 }
 
+TEST_F(PhysicalPlanConverterLabelAndPropertyTest, CostedPropertyScanKeepsEarlierResidualPredicate) {
+	const auto labelId = dataManager->getOrCreateTokenId("CostedThing");
+	for (int64_t i = 1; i <= 10; ++i) {
+		graph::Node node(0, labelId);
+		dataManager->addNode(node);
+		dataManager->addNodeProperties(node.getId(), {
+			{"bucket", graph::PropertyValue(int64_t{1})},
+			{"code", graph::PropertyValue(i == 7 ? "needle" : "common")}
+		});
+	}
+	graph::Node residualReject(0, labelId);
+	dataManager->addNode(residualReject);
+	dataManager->addNodeProperties(residualReject.getId(), {
+		{"bucket", graph::PropertyValue(int64_t{2})},
+		{"code", graph::PropertyValue("needle")}
+	});
+
+	ASSERT_TRUE(indexManager->createIndex("idx_costed_bucket", "node", "CostedThing", "bucket"));
+	ASSERT_TRUE(indexManager->createIndex("idx_costed_code", "node", "CostedThing", "code"));
+
+	auto scan = std::make_unique<LogicalNodeScan>(
+		"n", std::vector<std::string>{"CostedThing"},
+		std::vector<std::pair<std::string, graph::PropertyValue>>{
+			{"bucket", graph::PropertyValue(int64_t{1})},
+			{"code", graph::PropertyValue("needle")}
+		});
+	auto phys = converter->convert(scan.get());
+	ASSERT_NE(phys, nullptr);
+
+	EXPECT_EQ(drainCount(phys.get()), 1);
+}
+
 // ============================================================================
 // Traversal target-label filter: execute with data to hit L416 true/false
 // ============================================================================

@@ -82,7 +82,7 @@ graph LR
     A[Hot Vector] --> B[Cold Intervals]
     B --> C[Volatile Intervals]
 
-    A -->|Fast path| D[O-1 allocation]
+    A -->|热点分配路径| D[O-1 allocation]
     B -->|Refill hot| A
     C -->|Reclaim freed| B
 ```

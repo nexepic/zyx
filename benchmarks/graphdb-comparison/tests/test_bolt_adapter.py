@@ -250,6 +250,7 @@ def test_workload_methods_return_scalar_counts_without_live_database(tmp_path: P
     assert adapter.one_hop_expand() == 7
     assert adapter.two_hop_expand() == 7
     assert adapter.shortest_path_chain() == 7
+    assert adapter.reachable_within_30() == 1
 
     queries = [query for query, _ in driver.queries]
     assert "MATCH (u:User {id: $id}) RETURN count(u) AS count" in queries
@@ -257,6 +258,8 @@ def test_workload_methods_return_scalar_counts_without_live_database(tmp_path: P
     assert any("[:FOLLOWS]->(v:User)" in query for query in queries)
     assert any("[:FOLLOWS]->(:User)-[:FOLLOWS]->(v:User)" in query for query in queries)
     assert any("[:FOLLOWS*1..6]" in query for query in queries)
+    assert any("[:FOLLOWS*1..30]" in query and "LIMIT 1" in query for query in queries)
+    assert any(params.get("dst") == "user-000091" for _, params in driver.queries)
 
 
 def test_bolt_diagnostic_workload_methods_issue_expected_queries(tmp_path: Path):
@@ -301,6 +304,50 @@ def test_bolt_indexed_workload_methods_issue_expected_queries(tmp_path: Path):
     queries = [query for query, _ in driver.queries]
     assert "MATCH (u:User {country: $country}) RETURN count(u) AS count" in queries
     assert "MATCH (u:User) WHERE u.age >= $min_age AND u.age < $max_age RETURN count(u) AS count" in queries
+
+
+def test_bolt_write_profile_methods_issue_expected_queries(tmp_path: Path):
+    adapter = BoltCypherAdapter(database="bolt", dataset_dir=tmp_path / "dataset", scale="smoke", profile="write")
+    driver = FakeDriver()
+    driver.scalar = 1
+    adapter._driver = driver
+    adapter._loaded_rows = 1
+
+    assert adapter.point_create_node() == 1
+    assert adapter.point_create_edge() == 1
+    assert adapter.point_update_node_property() == 1
+    assert adapter.point_update_edge_property() == 1
+    assert adapter.point_create_delete_edge() == 1
+    assert adapter.write_then_read_edge() == 1
+
+    queries = [query for query, _ in driver.queries]
+    params = [parameters for _, parameters in driver.queries]
+    assert any(query.startswith("CREATE (:User") and "RETURN 1 AS ok" in query for query in queries)
+    assert any("CREATE (src)-[:FOLLOWS {weight: $weight}]->(dst)" in query for query in queries)
+    assert any("SET u.score = $score RETURN count(u) AS count" in query for query in queries)
+    assert any("SET r.weight = $weight RETURN count(r) AS count" in query for query in queries)
+    assert any("DELETE r RETURN 1 AS ok" in query for query in queries)
+    assert any(parameters.get("dst") == "user-000004" for parameters in params)
+    assert any(parameters.get("weight", 0) < -1_000_000 for parameters in params)
+
+
+def test_bolt_write_durable_profile_uses_autocommit_barrier(tmp_path: Path):
+    adapter = BoltCypherAdapter(database="bolt", dataset_dir=tmp_path / "dataset", scale="smoke", profile="write_durable")
+    driver = FakeDriver()
+    driver.scalar = 1
+    adapter._driver = driver
+    adapter._loaded_rows = 1
+
+    assert adapter.point_create_node_durable() == 1
+    assert adapter.point_create_edge_durable() == 1
+    assert adapter.point_update_node_property_durable() == 1
+    assert adapter.point_update_edge_property_durable() == 1
+    assert adapter.point_create_delete_edge_durable() == 1
+    assert adapter.write_then_read_edge_durable() == 1
+
+    queries = [query for query, _ in driver.queries]
+    assert any(query.startswith("CREATE (:User") for query in queries)
+    assert not any(query == "CHECKPOINT" for query in queries)
 
 
 def test_neo4j_indexed_profile_adds_property_indexes(tmp_path: Path, monkeypatch: Any):

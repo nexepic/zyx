@@ -117,3 +117,35 @@ TEST_F(SegmentReadUtilsTest, SubsetOfSegments) {
 	EXPECT_EQ(groups[0].segCount, 1u);
 	EXPECT_EQ(groups[1].segCount, 1u);
 }
+
+TEST_F(SegmentReadUtilsTest, BuildReadTasksSplitsLargeCoalescedGroup) {
+	uint64_t base = FILE_HEADER_SIZE;
+	std::vector<SegIndex> segIndex = {
+			makeSeg(1, 10, base),
+			makeSeg(11, 20, base + TOTAL_SEGMENT_SIZE),
+			makeSeg(21, 30, base + 2 * TOTAL_SEGMENT_SIZE),
+			makeSeg(31, 40, base + 3 * TOTAL_SEGMENT_SIZE),
+			makeSeg(41, 50, base + 4 * TOTAL_SEGMENT_SIZE),
+	};
+	std::vector<size_t> segIndices = {0, 1, 2, 3, 4};
+	auto groups = buildCoalescedGroups(segIndices, segIndex);
+	auto tasks = buildCoalescedReadTasks(groups, 2);
+
+	ASSERT_EQ(groups.size(), 1u);
+	EXPECT_EQ(totalCoalescedSegments(groups), 5u);
+	ASSERT_EQ(tasks.size(), 3u);
+	EXPECT_EQ(tasks[0].groupIndex, 0u);
+	EXPECT_EQ(tasks[0].memberBegin, 0u);
+	EXPECT_EQ(tasks[0].memberCount, 2u);
+	EXPECT_EQ(tasks[0].startOffset, base);
+	EXPECT_EQ(tasks[0].segCount, 2u);
+	EXPECT_EQ(tasks[1].memberBegin, 2u);
+	EXPECT_EQ(tasks[1].startOffset, base + 2 * TOTAL_SEGMENT_SIZE);
+	EXPECT_EQ(tasks[2].memberBegin, 4u);
+	EXPECT_EQ(tasks[2].memberCount, 1u);
+}
+
+TEST_F(SegmentReadUtilsTest, BuildReadTasksRejectsZeroChunkSize) {
+	std::vector<CoalescedGroup> groups = {{FILE_HEADER_SIZE, 1, {0}}};
+	EXPECT_TRUE(buildCoalescedReadTasks(groups, 0).empty());
+}

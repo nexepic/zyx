@@ -194,6 +194,33 @@ TEST_F(RelationshipAdjacencyCursorTest, ExpandsBothDirectionsAndCanSkipTargetChe
 	EXPECT_TRUE(batch.rows[1].edgeId == inboundEdge || batch.rows[1].edgeId == outboundEdge);
 }
 
+TEST_F(RelationshipAdjacencyCursorTest, CountAndStreamingUseCursorWithoutBuildingBatch) {
+	const int64_t source = addNode();
+	const int64_t first = addNode();
+	const int64_t second = addNode();
+	(void)addEdge(source, first, "FOLLOWS");
+	(void)addEdge(source, second, "FOLLOWS");
+
+	RelationshipExpandConfig config;
+	config.direction = "out";
+	config.edgeTypeId = followsType;
+	config.targetLabelIds = {userLabel};
+	RelationshipExpandRequirements requirements;
+	RelationshipAdjacencyCursor cursor(dm);
+
+	EXPECT_EQ(cursor.count({source}, config, requirements), 2);
+
+	std::vector<int64_t> streamedTargets;
+	const size_t visited = cursor.forEach({source}, config, requirements, [&](const RelationshipExpandRow &row) {
+		streamedTargets.push_back(row.targetId);
+		return streamedTargets.size() < 1;
+	});
+
+	EXPECT_EQ(visited, 1U);
+	ASSERT_EQ(streamedTargets.size(), 1U);
+	EXPECT_TRUE(streamedTargets[0] == first || streamedTargets[0] == second);
+}
+
 TEST_F(RelationshipAdjacencyCursorTest, WildcardTypeCanSkipRuntimeActiveChecks) {
 	const int64_t source = addNode();
 	const int64_t inbound = addNode();

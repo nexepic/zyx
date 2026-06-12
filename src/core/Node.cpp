@@ -43,6 +43,8 @@ namespace graph {
 
 	void Node::setProperties(std::unordered_map<std::string, PropertyValue> props) { properties = std::move(props); }
 
+	std::unordered_map<std::string, PropertyValue> Node::takeProperties() { return std::move(properties); }
+
 	void Node::addProperty(const std::string &key, const PropertyValue &value) { properties[key] = value; }
 
 	bool Node::hasProperty(const std::string &key) const { return properties.contains(key); }

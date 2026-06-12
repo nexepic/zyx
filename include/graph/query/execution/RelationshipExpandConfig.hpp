@@ -27,12 +27,25 @@ namespace graph::query::execution {
 		std::vector<int64_t> targetLabelIds;
 	};
 
+	enum class DirectRelationshipCandidateSourceType {
+		DRCS_AUTO,
+		DRCS_TYPE_INDEX,
+		DRCS_PROPERTY_INDEX,
+		DRCS_TYPE_PROPERTY_INTERSECTION
+	};
+
+	struct DirectRelationshipCandidateSourceConfig {
+		DirectRelationshipCandidateSourceType type = DirectRelationshipCandidateSourceType::DRCS_AUTO;
+		std::vector<std::string> propertyKeys;
+	};
+
 	struct DirectRelationshipCountConfig {
 		bool enabled = false;
 		std::string edgeType;
 		std::string direction = "out";
 		std::unordered_map<std::string, PropertyValue> edgeProperties;
 		std::vector<VectorizedPropertyPredicate> edgePredicates;
+		DirectRelationshipCandidateSourceConfig candidateSource;
 	};
 
 	struct RelationshipExpandRequirements {

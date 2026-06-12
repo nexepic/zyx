@@ -20,6 +20,8 @@
 
 #pragma once
 
+#include <vector>
+
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/core/State.hpp"
@@ -45,7 +47,11 @@ namespace graph {
 		 */
 		virtual void onNodeAdded([[maybe_unused]] const Node &node) {};
 
-		virtual void onNodesAdded([[maybe_unused]] const std::vector<Node> &nodes) {}
+		virtual void onNodesAdded(const std::vector<Node> &nodes) {
+			for (const auto &node : nodes) {
+				onNodeAdded(node);
+			}
+		}
 		/**
 		 * @brief Called after a node has been updated.
 		 * @param oldNode The state of the node before the update.
@@ -68,7 +74,11 @@ namespace graph {
 		 */
 		virtual void onEdgeAdded([[maybe_unused]] const Edge &edge) {};
 
-		virtual void onEdgesAdded([[maybe_unused]] const std::vector<Edge> &edges) {}
+		virtual void onEdgesAdded(const std::vector<Edge> &edges) {
+			for (const auto &edge : edges) {
+				onEdgeAdded(edge);
+			}
+		}
 
 		/**
 		 * @brief Called after an edge has been updated.

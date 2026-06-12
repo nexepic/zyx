@@ -25,6 +25,7 @@
 #include <gtest/gtest.h>
 #include <random>
 #include "graph/core/Database.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/DeletionManager.hpp"
@@ -84,6 +85,145 @@ TEST_F(RelationshipTraversalTest, GetOutgoingAndIncomingEdgesForSingleEdge) {
 	auto inEdges = traversal->getIncomingEdges(node2.getId());
 	ASSERT_EQ(inEdges.size(), 1UL) << "Node2 should have one incoming edge.";
 	EXPECT_EQ(inEdges[0].getId(), edge.getId());
+}
+
+TEST_F(RelationshipTraversalTest, AddEdgesBatchPreservesLinkedListOrderAndProfilesPhases) {
+	const int64_t typeId = dataManager->getOrCreateTokenId("BATCH_RELATED_TO");
+	std::vector<graph::Edge> edges;
+	edges.emplace_back(0, node1.getId(), node2.getId(), typeId);
+	edges.emplace_back(0, node1.getId(), node2.getId(), typeId);
+	edges.emplace_back(0, node1.getId(), node2.getId(), typeId);
+
+	graph::debug::PerfTrace::setEnabled(true);
+	graph::debug::PerfTrace::reset();
+	dataManager->addEdges(edges);
+	const auto snapshot = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setEnabled(false);
+
+	ASSERT_EQ(edges.size(), 3U);
+	for (const auto &batchEdge: edges) {
+		ASSERT_NE(batchEdge.getId(), 0);
+	}
+
+	auto outgoing = traversal->getOutgoingEdges(node1.getId());
+	ASSERT_EQ(outgoing.size(), 4U);
+	EXPECT_EQ(outgoing[0].getId(), edges[2].getId());
+	EXPECT_EQ(outgoing[1].getId(), edges[1].getId());
+	EXPECT_EQ(outgoing[2].getId(), edges[0].getId());
+	EXPECT_EQ(outgoing[3].getId(), edge.getId());
+
+	auto incoming = traversal->getIncomingEdges(node2.getId());
+	ASSERT_EQ(incoming.size(), 4U);
+	EXPECT_EQ(incoming[0].getId(), edges[2].getId());
+	EXPECT_EQ(incoming[1].getId(), edges[1].getId());
+	EXPECT_EQ(incoming[2].getId(), edges[0].getId());
+	EXPECT_EQ(incoming[3].getId(), edge.getId());
+
+	const auto firstNew = dataManager->getEdge(edges[0].getId());
+	const auto middleNew = dataManager->getEdge(edges[1].getId());
+	const auto lastNew = dataManager->getEdge(edges[2].getId());
+	const auto oldHead = dataManager->getEdge(edge.getId());
+	EXPECT_EQ(firstNew.getNextOutEdgeId(), edge.getId());
+	EXPECT_EQ(firstNew.getPrevOutEdgeId(), edges[1].getId());
+	EXPECT_EQ(middleNew.getNextOutEdgeId(), edges[0].getId());
+	EXPECT_EQ(middleNew.getPrevOutEdgeId(), edges[2].getId());
+	EXPECT_EQ(lastNew.getNextOutEdgeId(), edges[1].getId());
+	EXPECT_EQ(lastNew.getPrevOutEdgeId(), 0);
+	EXPECT_EQ(oldHead.getPrevOutEdgeId(), edges[0].getId());
+	EXPECT_EQ(oldHead.getPrevInEdgeId(), edges[0].getId());
+	EXPECT_EQ(dataManager->getNode(node1.getId()).getFirstOutEdgeId(), edges[2].getId());
+	EXPECT_EQ(dataManager->getNode(node2.getId()).getFirstInEdgeId(), edges[2].getId());
+
+	EXPECT_TRUE(snapshot.contains("relationship_traversal.link_edges_batch"));
+	EXPECT_TRUE(snapshot.contains("relationship_traversal.link_edges_batch.prepare"));
+	EXPECT_TRUE(snapshot.contains("relationship_traversal.link_edges_batch.update_nodes"));
+	EXPECT_TRUE(snapshot.contains("relationship_traversal.link_edges_batch.update_old_heads"));
+	EXPECT_TRUE(snapshot.contains("relationship_traversal.link_edges_batch.upsert_new_edges"));
+}
+
+TEST_F(RelationshipTraversalTest, BatchLinkOperationsTreatEmptyInputAsNoOp) {
+	std::vector<graph::Edge> edges;
+	auto updates = traversal->buildBatchLinks(edges);
+	EXPECT_TRUE(updates.empty());
+	EXPECT_NO_THROW(traversal->applyBatchLinkUpdates(updates));
+	EXPECT_NO_THROW(traversal->linkEdgesBatch(edges));
+}
+
+TEST_F(RelationshipTraversalTest, BatchLinkPlannerSkipsIdlessEdgesAndMissingEndpoints) {
+	const int64_t typeId = dataManager->getOrCreateTokenId("PARTIAL_BATCH");
+	std::vector<graph::Edge> edges;
+	edges.emplace_back(0, node1.getId(), node2.getId(), typeId);
+	edges.emplace_back(200, 999999, node2.getId(), typeId);
+	edges.emplace_back(201, node1.getId(), 999998, typeId);
+
+	auto updates = traversal->buildBatchLinks(edges);
+
+	EXPECT_EQ(edges[0].getNextOutEdgeId(), 0);
+	EXPECT_EQ(edges[0].getNextInEdgeId(), 0);
+	EXPECT_EQ(edges[1].getNextOutEdgeId(), 0);
+	EXPECT_EQ(edges[1].getNextInEdgeId(), edge.getId());
+	EXPECT_EQ(edges[2].getNextOutEdgeId(), edge.getId());
+	EXPECT_EQ(edges[2].getNextInEdgeId(), 0);
+
+	ASSERT_EQ(updates.nodes.size(), 2U);
+	bool updatedSource = false;
+	bool updatedTarget = false;
+	for (const auto &node: updates.nodes) {
+		if (node.getId() == node1.getId()) {
+			updatedSource = true;
+			EXPECT_EQ(node.getFirstOutEdgeId(), edges[2].getId());
+		}
+		if (node.getId() == node2.getId()) {
+			updatedTarget = true;
+			EXPECT_EQ(node.getFirstInEdgeId(), edges[1].getId());
+		}
+	}
+	EXPECT_TRUE(updatedSource);
+	EXPECT_TRUE(updatedTarget);
+	ASSERT_EQ(updates.oldHeadEdges.size(), 1U);
+	EXPECT_EQ(updates.oldHeadEdges[0].getId(), edge.getId());
+	EXPECT_EQ(updates.oldHeadEdges[0].getPrevOutEdgeId(), edges[2].getId());
+	EXPECT_EQ(updates.oldHeadEdges[0].getPrevInEdgeId(), edges[1].getId());
+}
+
+TEST_F(RelationshipTraversalTest, BatchLinkPlannerToleratesDanglingHeadPointers) {
+	auto source = dataManager->getNode(node1.getId());
+	auto target = dataManager->getNode(node2.getId());
+	source.setFirstOutEdgeId(777777);
+	target.setFirstInEdgeId(777778);
+	dataManager->updateNode(source);
+	dataManager->updateNode(target);
+
+	const int64_t typeId = dataManager->getOrCreateTokenId("DANGLING_HEAD_BATCH");
+	std::vector<graph::Edge> edges;
+	edges.emplace_back(300, node1.getId(), node2.getId(), typeId);
+
+	auto updates = traversal->buildBatchLinks(edges);
+	EXPECT_EQ(edges[0].getNextOutEdgeId(), 777777);
+	EXPECT_EQ(edges[0].getNextInEdgeId(), 777778);
+	EXPECT_TRUE(updates.oldHeadEdges.empty());
+	ASSERT_EQ(updates.nodes.size(), 2U);
+}
+
+TEST_F(RelationshipTraversalTest, DirectBatchLinkingMaterializesPreparedEdges) {
+	graph::Node source(30, dataManager->getOrCreateTokenId("DirectBatchSource"));
+	graph::Node target(31, dataManager->getOrCreateTokenId("DirectBatchTarget"));
+	dataManager->addNode(source);
+	dataManager->addNode(target);
+
+	const int64_t typeId = dataManager->getOrCreateTokenId("DIRECT_BATCH_LINK");
+	const int64_t edgeId = dataManager->getIdAllocator(graph::EntityType::Edge)->allocate();
+	std::vector<graph::Edge> edges;
+	edges.emplace_back(edgeId, source.getId(), target.getId(), typeId);
+
+	traversal->linkEdgesBatch(edges);
+
+	auto outgoing = traversal->getOutgoingEdges(source.getId());
+	ASSERT_EQ(outgoing.size(), 1U);
+	EXPECT_EQ(outgoing[0].getId(), edgeId);
+	auto incoming = traversal->getIncomingEdges(target.getId());
+	ASSERT_EQ(incoming.size(), 1U);
+	EXPECT_EQ(incoming[0].getId(), edgeId);
 }
 
 TEST_F(RelationshipTraversalTest, GetAllConnectedEdgesForSingleEdge) {
@@ -418,6 +558,22 @@ TEST(RelationshipTraversalLifetimeTest, ExpiredDataManager_UnlinkEdge) {
 
 	graph::Edge edge(1, 1, 2, 1);
 	EXPECT_NO_THROW(traversal.unlinkEdge(edge));
+}
+
+TEST(RelationshipTraversalLifetimeTest, BatchLinkOperationsHandleExpiredManager) {
+	std::shared_ptr<graph::storage::DataManager> nullDm;
+	graph::traversal::RelationshipTraversal traversal(nullDm);
+
+	std::vector<graph::Edge> edges;
+	edges.emplace_back(100, 1, 2, 3);
+	auto updates = traversal.buildBatchLinks(edges);
+	EXPECT_TRUE(updates.empty());
+
+	graph::traversal::RelationshipBatchLinkUpdates nonEmptyUpdates;
+	graph::Node node(1, 1);
+	nonEmptyUpdates.nodes.push_back(node);
+	EXPECT_NO_THROW(traversal.applyBatchLinkUpdates(nonEmptyUpdates));
+	EXPECT_NO_THROW(traversal.linkEdgesBatch(edges));
 }
 
 // ============================================================================
@@ -901,4 +1057,3 @@ TEST_F(RelationshipTraversalTest, GetIncomingEdges_InactiveEdgeInChainSkipped) {
 	ASSERT_EQ(inAfter.size(), 1UL);
 	EXPECT_EQ(inAfter[0].getId(), edge.getId());
 }
-

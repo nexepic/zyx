@@ -20,7 +20,7 @@
 #include "graph/query/execution/operators/TraversalOperator.hpp"
 #include "graph/query/execution/operators/VarLengthTraversalOperator.hpp"
 #include "graph/query/execution/operators/NodeScanOperator.hpp"
-#include "graph/query/execution/operators/NodeTopKFastPathOperator.hpp"
+#include "graph/query/execution/operators/NodeTopKScanOperator.hpp"
 #include "graph/query/execution/operators/ForeachOperator.hpp"
 #include "graph/query/execution/operators/CallSubqueryOperator.hpp"
 #include "graph/query/execution/operators/LoadCsvOperator.hpp"
@@ -356,7 +356,7 @@ TEST_F(PhysicalPlanConverterTraversalTest, LimitOverSortUsesBoundedSort) {
 	EXPECT_NE(sortPhys->toString().find("LIMIT 3"), std::string::npos);
 }
 
-TEST_F(PhysicalPlanConverterTraversalTest, ProjectLimitSortNodeScanUsesTopKFastPath) {
+TEST_F(PhysicalPlanConverterTraversalTest, ProjectLimitSortNodeScanUsesTopKScanPath) {
 	const auto userLabel = dataManager->getOrCreateTokenId("User");
 	graph::Node low(1, userLabel);
 	graph::Node high(2, userLabel);
@@ -390,7 +390,7 @@ TEST_F(PhysicalPlanConverterTraversalTest, ProjectLimitSortNodeScanUsesTopKFastP
 	auto project = std::make_unique<LogicalProject>(std::move(limit), std::move(projectItems));
 
 	auto phys = converter->convert(project.get());
-	auto *topKPhys = dynamic_cast<NodeTopKFastPathOperator *>(phys.get());
+	auto *topKPhys = dynamic_cast<NodeTopKScanOperator *>(phys.get());
 	ASSERT_NE(topKPhys, nullptr);
 
 	phys->open();

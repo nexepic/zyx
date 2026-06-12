@@ -65,7 +65,9 @@ void NodeKeyConstraint::checkCompositeUniqueness(int64_t entityId,
 		auto it = props.find(prop);
 		if (it == props.end()) return; // Missing property, can't match
 
-		auto matches = indexManager_->findNodeIdsByProperty(prop, it->second);
+		auto matches = label_.empty()
+			? indexManager_->findNodeIdsByProperty(prop, it->second)
+			: indexManager_->findNodeIdsByLabelAndProperty(label_, prop, it->second);
 		if (first) {
 			candidates = std::move(matches);
 			first = false;

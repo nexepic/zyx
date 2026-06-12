@@ -4,6 +4,7 @@
 #include <optional>
 #include <vector>
 
+#include "graph/concurrent/ThreadPool.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/PropertyTypes.hpp"
 #include "graph/storage/data/DataManager.hpp"
@@ -39,10 +40,15 @@ namespace graph::query::execution {
 
 	struct RelationshipPropertyCountCandidates {
 		std::vector<int64_t> propertyEntityIds;
+		std::vector<int64_t> propertyEdgeIds;
 		std::vector<int64_t> fallbackEdgeIds;
 		size_t matchedEdges = 0;
 
 		void reserve(size_t rowCount);
+	};
+
+	struct RelationshipPropertyCountCandidateOptions {
+		bool collectPropertyEdgeRefs = true;
 	};
 
 	class RelationshipMetadataColumnLoader {
@@ -51,10 +57,21 @@ namespace graph::query::execution {
 
 		[[nodiscard]] std::optional<RelationshipMetadataBatch> loadRange(int64_t beginId, int64_t endId) const;
 		[[nodiscard]] std::optional<int64_t> countActiveByType(int64_t beginId, int64_t endId, int64_t typeId) const;
+		[[nodiscard]] std::optional<int64_t> countActiveByType(int64_t beginId,
+		                                                       int64_t endId,
+		                                                       int64_t typeId,
+		                                                       concurrent::ThreadPool *threadPool) const;
 		[[nodiscard]] std::optional<RelationshipPropertyCandidateBatch>
 		collectPropertyCandidatesByType(int64_t beginId, int64_t endId, int64_t typeId) const;
 		[[nodiscard]] std::optional<RelationshipPropertyCountCandidates>
-		collectPropertyCountCandidatesByType(int64_t beginId, int64_t endId, int64_t typeId) const;
+		collectPropertyCountCandidatesByType(int64_t beginId, int64_t endId, int64_t typeId,
+											 RelationshipPropertyCountCandidateOptions options = {}) const;
+		[[nodiscard]] std::optional<RelationshipPropertyCountCandidates>
+		collectPropertyCountCandidatesByType(int64_t beginId,
+		                                     int64_t endId,
+		                                     int64_t typeId,
+		                                     concurrent::ThreadPool *threadPool,
+		                                     RelationshipPropertyCountCandidateOptions options = {}) const;
 
 	private:
 		[[nodiscard]] bool canLoad(int64_t beginId, int64_t endId) const;

@@ -20,6 +20,8 @@
 #include <unordered_set>
 #include <vector>
 #include "graph/concurrent/ThreadPool.hpp"
+#include "graph/core/State.hpp"
+#include "graph/storage/DirtyEntityRegistry.hpp"
 #include "graph/storage/IDAllocator.hpp"
 #include "graph/storage/StorageHeaders.hpp"
 
@@ -169,8 +171,8 @@ namespace graph::storage {
 
 		/// Returns a reusable full-segment buffer, seeding from disk when appending
 		/// to an already-populated segment.
-		std::vector<char> &prepareSegmentBuffer(uint64_t segmentOffset, bool needsExistingData);
-		void setPendingSegmentCrc(uint64_t segmentOffset, uint32_t crc);
+		std::vector<char> &prepareSegmentBuffer(uint64_t segmentOffset, size_t preservedBytes);
+		void markTouchedSegmentWithCrc(uint64_t segmentOffset, uint32_t crc);
 		void invalidatePendingSegmentCrc(uint64_t segmentOffset);
 
 		std::shared_ptr<StorageIO> io_;

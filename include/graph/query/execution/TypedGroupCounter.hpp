@@ -2,12 +2,15 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include "graph/core/PropertyTypes.hpp"
+#include "graph/query/execution/TypedScalarValue.hpp"
 #include "graph/query/execution/TypedValueKey.hpp"
 
 namespace graph::query::execution {
@@ -17,8 +20,220 @@ namespace graph::query::execution {
 		int64_t count = 0;
 	};
 
+	template<typename Key, typename Hash = std::hash<Key>, typename Equal = std::equal_to<Key>>
+	class CompactGroupMap {
+	public:
+		void add(Key value, int64_t count) {
+			if (count <= 0) {
+				return;
+			}
+			if (promoted_) {
+				large_[std::move(value)] += count;
+				return;
+			}
+			for (auto &[existing, existingCount] : small_) {
+				if (equal_(existing, value)) {
+					existingCount += count;
+					return;
+				}
+			}
+			if (small_.size() < kInlineLimit) {
+				small_.emplace_back(std::move(value), count);
+				return;
+			}
+			promote();
+			large_[std::move(value)] += count;
+		}
+
+		[[nodiscard]] size_t size() const {
+			return promoted_ ? large_.size() : small_.size();
+		}
+
+		template<typename Visitor>
+		void forEach(Visitor &&visitor) const {
+			if (promoted_) {
+				for (const auto &[value, count] : large_) {
+					visitor(value, count);
+				}
+				return;
+			}
+			for (const auto &[value, count] : small_) {
+				visitor(value, count);
+			}
+		}
+
+		void clear() {
+			small_.clear();
+			large_.clear();
+			promoted_ = false;
+		}
+
+	private:
+		static constexpr size_t kInlineLimit = 16;
+
+		void promote() {
+			large_.reserve(kInlineLimit * 2);
+			for (auto &[value, count] : small_) {
+				large_.emplace(std::move(value), count);
+			}
+			small_.clear();
+			promoted_ = true;
+		}
+
+		bool promoted_ = false;
+		Equal equal_{};
+		std::vector<std::pair<Key, int64_t>> small_;
+		std::unordered_map<Key, int64_t, Hash, Equal> large_;
+	};
+
+	class StringCompactGroupMap {
+	public:
+		void add(std::string_view value, int64_t count) {
+			if (count <= 0) {
+				return;
+			}
+			if (promoted_) {
+				large_[std::string(value)] += count;
+				return;
+			}
+			for (auto &[existing, existingCount] : small_) {
+				if (std::string_view(existing.data(), existing.size()) == value) {
+					existingCount += count;
+					return;
+				}
+			}
+			if (small_.size() < kInlineLimit) {
+				small_.emplace_back(std::string(value), count);
+				return;
+			}
+			promote();
+			large_[std::string(value)] += count;
+		}
+
+		[[nodiscard]] size_t size() const {
+			return promoted_ ? large_.size() : small_.size();
+		}
+
+		template<typename Visitor>
+		void forEach(Visitor &&visitor) const {
+			if (promoted_) {
+				for (const auto &[value, count] : large_) {
+					visitor(value, count);
+				}
+				return;
+			}
+			for (const auto &[value, count] : small_) {
+				visitor(value, count);
+			}
+		}
+
+		void clear() {
+			small_.clear();
+			large_.clear();
+			promoted_ = false;
+		}
+
+	private:
+		static constexpr size_t kInlineLimit = 16;
+
+		void promote() {
+			large_.reserve(kInlineLimit * 2);
+			for (auto &[value, count] : small_) {
+				large_.emplace(std::move(value), count);
+			}
+			small_.clear();
+			promoted_ = true;
+		}
+
+		bool promoted_ = false;
+		std::vector<std::pair<std::string, int64_t>> small_;
+		std::unordered_map<std::string, int64_t> large_;
+	};
+
 	class TypedGroupCounter {
 	public:
+		void addNull(int64_t count = 1) {
+			if (count > 0) {
+				nullCount_ += count;
+			}
+		}
+
+		void addBoolean(bool value, int64_t count = 1) {
+			if (count > 0) {
+				boolCounts_[value ? 1U : 0U] += count;
+			}
+		}
+
+		void addInteger(int64_t value, int64_t count = 1) {
+			if (count > 0) {
+				integerCounts_.add(value, count);
+			}
+		}
+
+		void addDouble(double value, int64_t count = 1) {
+			if (count > 0) {
+				doubleCounts_.add(value, count);
+			}
+		}
+
+		void addString(std::string_view value, int64_t count = 1) {
+			if (count > 0) {
+				stringCounts_.add(value, count);
+			}
+		}
+
+		void addDateEpochDays(int32_t epochDays, int64_t count = 1) {
+			if (count > 0) {
+				dateCounts_.add(epochDays, count);
+			}
+		}
+
+		void addDateTimeEpochMillis(int64_t epochMillis, int64_t count = 1) {
+			if (count > 0) {
+				dateTimeCounts_.add(epochMillis, count);
+			}
+		}
+
+		void addScalar(const TypedScalarValue &value, int64_t count = 1) {
+			if (count <= 0) {
+				return;
+			}
+
+			switch (value.type) {
+				case PropertyType::NULL_TYPE:
+					addNull(count);
+					break;
+				case PropertyType::BOOLEAN:
+					addBoolean(value.boolValue, count);
+					break;
+				case PropertyType::INTEGER:
+					addInteger(value.intValue, count);
+					break;
+				case PropertyType::DOUBLE:
+					addDouble(value.doubleValue, count);
+					break;
+				case PropertyType::STRING:
+					addString(value.stringValue, count);
+					break;
+				case PropertyType::DATE:
+					addDateEpochDays(static_cast<int32_t>(value.intValue), count);
+					break;
+				case PropertyType::DATETIME:
+					addDateTimeEpochMillis(value.intValue, count);
+					break;
+				case PropertyType::DURATION:
+					add(PropertyValue(value.durationValue), count);
+					break;
+				case PropertyType::LIST:
+				case PropertyType::MAP:
+				case PropertyType::COMPOSITE:
+				case PropertyType::UNKNOWN:
+				default:
+					add(value.fallbackValue != nullptr ? *value.fallbackValue : PropertyValue(), count);
+					break;
+			}
+		}
+
 		void add(const PropertyValue &value, int64_t count = 1) {
 			if (count <= 0) {
 				return;
@@ -26,25 +241,25 @@ namespace graph::query::execution {
 
 			switch (value.getType()) {
 				case PropertyType::NULL_TYPE:
-					nullCount_ += count;
+					addNull(count);
 					break;
 				case PropertyType::BOOLEAN:
-					boolCounts_[std::get<bool>(value.getVariant()) ? 1U : 0U] += count;
+					addBoolean(std::get<bool>(value.getVariant()), count);
 					break;
 				case PropertyType::INTEGER:
-					integerCounts_[std::get<int64_t>(value.getVariant())] += count;
+					addInteger(std::get<int64_t>(value.getVariant()), count);
 					break;
 				case PropertyType::DOUBLE:
-					doubleCounts_[std::get<double>(value.getVariant())] += count;
+					addDouble(std::get<double>(value.getVariant()), count);
 					break;
 				case PropertyType::STRING:
-					stringCounts_[std::get<std::string>(value.getVariant())] += count;
+					addString(std::get<std::string>(value.getVariant()), count);
 					break;
 				case PropertyType::DATE:
-					dateCounts_[std::get<TemporalDate>(value.getVariant()).epochDays] += count;
+					addDateEpochDays(std::get<TemporalDate>(value.getVariant()).epochDays, count);
 					break;
 				case PropertyType::DATETIME:
-					dateTimeCounts_[std::get<TemporalDateTime>(value.getVariant()).epochMillis] += count;
+					addDateTimeEpochMillis(std::get<TemporalDateTime>(value.getVariant()).epochMillis, count);
 					break;
 				case PropertyType::DURATION:
 				case PropertyType::LIST:
@@ -53,6 +268,30 @@ namespace graph::query::execution {
 				case PropertyType::UNKNOWN:
 					addFallback(value, count);
 					break;
+			}
+		}
+
+		void mergeFrom(const TypedGroupCounter &other) {
+			addNull(other.nullCount_);
+			addBoolean(false, other.boolCounts_[0]);
+			addBoolean(true, other.boolCounts_[1]);
+			other.integerCounts_.forEach([&](const auto &value, int64_t count) {
+				addInteger(value, count);
+			});
+			other.doubleCounts_.forEach([&](const auto &value, int64_t count) {
+				addDouble(value, count);
+			});
+			other.stringCounts_.forEach([&](const auto &value, int64_t count) {
+				addString(value, count);
+			});
+			other.dateCounts_.forEach([&](const auto &value, int64_t count) {
+				addDateEpochDays(value, count);
+			});
+			other.dateTimeCounts_.forEach([&](const auto &value, int64_t count) {
+				addDateTimeEpochMillis(value, count);
+			});
+			for (const auto &[_, group] : other.fallbackCounts_) {
+				add(group.value, group.count);
 			}
 		}
 
@@ -76,21 +315,21 @@ namespace graph::query::execution {
 			if (boolCounts_[1] > 0) {
 				groups.push_back({PropertyValue(true), boolCounts_[1]});
 			}
-			for (const auto &[value, count] : integerCounts_) {
+			integerCounts_.forEach([&](const auto &value, int64_t count) {
 				groups.push_back({PropertyValue(value), count});
-			}
-			for (const auto &[value, count] : doubleCounts_) {
+			});
+			doubleCounts_.forEach([&](const auto &value, int64_t count) {
 				groups.push_back({PropertyValue(value), count});
-			}
-			for (const auto &[value, count] : stringCounts_) {
+			});
+			stringCounts_.forEach([&](const auto &value, int64_t count) {
 				groups.push_back({PropertyValue(value), count});
-			}
-			for (const auto &[value, count] : dateCounts_) {
+			});
+			dateCounts_.forEach([&](const auto &value, int64_t count) {
 				groups.push_back({PropertyValue(TemporalDate{value}), count});
-			}
-			for (const auto &[value, count] : dateTimeCounts_) {
+			});
+			dateTimeCounts_.forEach([&](const auto &value, int64_t count) {
 				groups.push_back({PropertyValue(TemporalDateTime{value}), count});
-			}
+			});
 			for (const auto &[_, group] : fallbackCounts_) {
 				groups.push_back(group);
 			}
@@ -121,11 +360,11 @@ namespace graph::query::execution {
 
 		int64_t nullCount_ = 0;
 		std::array<int64_t, 2> boolCounts_{0, 0};
-		std::unordered_map<int64_t, int64_t> integerCounts_;
-		std::unordered_map<double, int64_t> doubleCounts_;
-		std::unordered_map<std::string, int64_t> stringCounts_;
-		std::unordered_map<int32_t, int64_t> dateCounts_;
-		std::unordered_map<int64_t, int64_t> dateTimeCounts_;
+		CompactGroupMap<int64_t> integerCounts_;
+		CompactGroupMap<double> doubleCounts_;
+		StringCompactGroupMap stringCounts_;
+		CompactGroupMap<int32_t> dateCounts_;
+		CompactGroupMap<int64_t> dateTimeCounts_;
 		std::unordered_map<TypedEqualityKey, TypedGroupCount, GroupHash> fallbackCounts_;
 	};
 

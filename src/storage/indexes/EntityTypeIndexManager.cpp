@@ -115,7 +115,8 @@ namespace graph::query::indexes {
 	void EntityTypeIndexManager::updatePropertyIndexes(
 			int64_t entityId, const std::unordered_map<std::string, PropertyValue> &oldProps,
 			const std::unordered_map<std::string, PropertyValue> &newProps) const {
-		if (propertyIndex_->isEmpty())
+		auto indexedKeys = propertyIndex_->getIndexedKeysSnapshot();
+		if (indexedKeys.empty())
 			return;
 
 		// OPTIMIZATION STRATEGY:
@@ -123,11 +124,6 @@ namespace graph::query::indexes {
 		// we should iterate the Index Keys and check if the Entity has them (Iterate Index -> Check Props).
 		// This is better IF (Number of Indexes << Number of Entity Properties).
 		// usually, a graph has few indexes compared to raw data.
-
-		const auto &indexedKeys = propertyIndex_->getIndexedKeys(); // Need a lightweight getter for this
-
-		if (indexedKeys.empty())
-			return;
 
 		std::vector<std::tuple<int64_t, std::string, PropertyValue>> addBatch;
 		// Reserve assuming worst case: all indexed keys are present
@@ -178,35 +174,44 @@ namespace graph::query::indexes {
 		if (entities.empty())
 			return;
 
+		const bool hasLabelIndex = !labelIndex_->isEmpty();
+		const auto indexedKeys = propertyIndex_->getIndexedKeysSnapshot();
+		if (!hasLabelIndex && indexedKeys.empty()) {
+			return;
+		}
+
 		// --- 1. Prepare Label Index Batch ---
 		// Optimization: Group by LabelID first to minimize string resolution lookups
 		std::unordered_map<int64_t, std::vector<int64_t>> nodesByLabelId;
 
 		// --- 2. Prepare Property Index Batch ---
 		std::vector<std::tuple<int64_t, std::string, PropertyValue>> propBatch;
-		propBatch.reserve(entities.size() * 3);
+		propBatch.reserve(entities.size() * indexedKeys.size());
 
 		for (const auto &entity: entities) {
 			// A. Label (Group by Integer ID first)
-			if constexpr (std::is_same_v<T, Node>) {
-				// Multi-label: register under ALL labels
-				for (int64_t lid : entity.getLabelIds()) {
-					if (lid != 0) {
-						nodesByLabelId[lid].push_back(entity.getId());
+			if (hasLabelIndex) {
+				if constexpr (std::is_same_v<T, Node>) {
+					// Multi-label: register under ALL labels
+					for (int64_t lid : entity.getLabelIds()) {
+						if (lid != 0) {
+							nodesByLabelId[lid].push_back(entity.getId());
+						}
 					}
-				}
-			} else {
-				if (entity.getTypeId() != 0) {
-					nodesByLabelId[entity.getTypeId()].push_back(entity.getId());
+				} else {
+					if (entity.getTypeId() != 0) {
+						nodesByLabelId[entity.getTypeId()].push_back(entity.getId());
+					}
 				}
 			}
 
-			// B. Properties (Unchanged logic)
+			// B. Properties: iterate registered index keys once instead of
+			// locking the property index for every entity property.
 			const auto &props = entity.getProperties();
-			if (!props.empty()) {
-				for (const auto &[key, value]: props) {
-					if (propertyIndex_->hasKeyIndexed(key)) {
-						propBatch.emplace_back(entity.getId(), key, value);
+			if (!props.empty() && !indexedKeys.empty()) {
+				for (const auto &key: indexedKeys) {
+					if (auto it = props.find(key); it != props.end()) {
+						propBatch.emplace_back(entity.getId(), key, it->second);
 					}
 				}
 			}
@@ -217,6 +222,7 @@ namespace graph::query::indexes {
 			std::lock_guard<std::recursive_mutex> lock(mutex_);
 
 			// Process Label Index: Convert ID groups to String groups
+			bool changed = false;
 			if (!nodesByLabelId.empty() && !labelIndex_->isEmpty()) {
 				std::unordered_map<std::string, std::vector<int64_t>> nodesByLabelStr;
 
@@ -229,14 +235,18 @@ namespace graph::query::indexes {
 
 				if (!nodesByLabelStr.empty()) {
 					labelIndex_->addNodesBatch(nodesByLabelStr);
+					changed = true;
 				}
 			}
 
 			if (!propBatch.empty() && !propertyIndex_->isEmpty()) {
 				propertyIndex_->addPropertiesBatch(propBatch);
+				changed = true;
 			}
 
-			persistState();
+			if (changed) {
+				persistState();
+			}
 		}
 	}
 

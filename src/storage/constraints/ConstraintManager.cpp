@@ -31,6 +31,17 @@
 #include "graph/storage/state/SystemStateManager.hpp"
 
 namespace graph::storage::constraints {
+namespace {
+	bool hasMatchingPropertyIndex(const std::shared_ptr<query::indexes::IndexManager> &indexManager,
+	                              const std::string &entityType,
+	                              const std::string &label,
+	                              const std::string &property) {
+		if (entityType == "node" && !label.empty()) {
+			return indexManager->hasNodePropertyIndexForLabel(label, property);
+		}
+		return indexManager->hasPropertyIndex(entityType, property);
+	}
+} // namespace
 
 ConstraintManager::ConstraintManager(std::shared_ptr<FileStorage> storage,
 									 std::shared_ptr<query::indexes::IndexManager> indexManager)
@@ -61,7 +72,7 @@ void ConstraintManager::createConstraint(const std::string &name, const std::str
 
 	// For UNIQUE constraints, ensure a property index exists
 	if (constraintType == "unique" && !properties.empty()) {
-		if (!indexManager_->hasPropertyIndex(entityType, properties[0])) {
+		if (!hasMatchingPropertyIndex(indexManager_, entityType, label, properties[0])) {
 			std::string indexName = name + "_idx";
 			indexManager_->createIndex(indexName, entityType, label, properties[0]);
 		}
@@ -70,7 +81,7 @@ void ConstraintManager::createConstraint(const std::string &name, const std::str
 	// For NODE KEY constraints, ensure property indexes exist for each property
 	if (constraintType == "node_key" && !properties.empty()) {
 		for (const auto &prop : properties) {
-			if (!indexManager_->hasPropertyIndex(entityType, prop)) {
+			if (!hasMatchingPropertyIndex(indexManager_, entityType, label, prop)) {
 				std::string indexName = name + "_" + prop + "_idx";
 				indexManager_->createIndex(indexName, entityType, label, prop);
 			}
@@ -146,7 +157,7 @@ void ConstraintManager::validateNodeInsert(const Node &node,
 	const std::unordered_map<std::string, PropertyValue> &props) {
 	std::lock_guard<std::recursive_mutex> lock(mutex_);
 	auto it = nodeConstraints_.find(node.getLabelId());
-	if (it == nodeConstraints_.end()) return; // Fast path
+	if (it == nodeConstraints_.end()) return; // Hot path
 	for (const auto &c : it->second) {
 		c->validateInsert(node.getId(), props);
 	}

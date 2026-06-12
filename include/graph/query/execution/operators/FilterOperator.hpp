@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <functional>
@@ -29,6 +30,7 @@
 #include <utility>
 #include <vector>
 #include "../PhysicalOperator.hpp"
+#include "graph/concurrent/ParallelExecutionPolicy.hpp"
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/QueryContext.hpp"
@@ -80,10 +82,18 @@ namespace graph::query::execution::operators {
 
 				RecordBatch outputBatch;
 
-				if (threadPool_ && !threadPool_->isSingleThreaded()
-					&& inputBatch.size() >= PARALLEL_FILTER_THRESHOLD) {
+				const graph::concurrent::ParallelWorkEstimate estimate{
+						.workloadKind = graph::concurrent::ParallelWorkloadKind::PWK_CPU_BOUND,
+						.partitions = inputBatch.size(),
+						.estimatedItems = inputBatch.size(),
+						.minPartitions = 2,
+						.minItems = PARALLEL_FILTER_THRESHOLD,
+						.minItemsPerWorker = std::max<size_t>(1, PARALLEL_FILTER_THRESHOLD / 4)};
+				const auto parallelDecision = graph::concurrent::decideParallelExecution(threadPool_, estimate);
+				graph::concurrent::ScopedParallelExecutionTelemetry telemetry(threadPool_, estimate, parallelDecision);
+				if (parallelDecision.useParallel) {
 					std::vector<uint8_t> keep(inputBatch.size());
-					threadPool_->parallelFor(0, inputBatch.size(), [&](size_t i) {
+					threadPool_->parallelFor(0, inputBatch.size(), parallelDecision.workerCount, [&](size_t i) {
 						keep[i] = evaluateRecord(inputBatch[i]) ? 1 : 0;
 					});
 					outputBatch.reserve(inputBatch.size());
@@ -98,6 +108,7 @@ namespace graph::query::execution::operators {
 							outputBatch.push_back(std::move(record));
 					}
 				}
+				telemetry.markCompleted();
 
 				debug::PerfTrace::addDuration(
 						"filter",

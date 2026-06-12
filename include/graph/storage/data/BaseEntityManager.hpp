@@ -52,6 +52,8 @@ namespace graph::storage {
 		void add(EntityType &entity) override;
 		virtual void addBatch(std::vector<EntityType> &entities);
 		void update(const EntityType &entity) override;
+		virtual void updateBatch(const std::vector<EntityType> &entities);
+		virtual void updateBatch(const std::vector<EntityType> &entities, const std::vector<size_t> &indices);
 		void remove(EntityType &entity) override;
 		EntityType get(int64_t id) override;
 		std::vector<EntityType> getBatch(const std::vector<int64_t> &ids) override;
@@ -82,6 +84,9 @@ namespace graph::storage {
 		[[nodiscard]] DataManager* getDataManagerPtr() const {
 			return dataManager_;
 		}
+
+		void assignMissingIds(std::vector<EntityType> &entities);
+		void persistAddedBatch(const std::vector<EntityType> &entities);
 
 		// Abstract method for allocating an ID that can be overridden by subclasses
 		virtual int64_t doAllocateId() = 0;

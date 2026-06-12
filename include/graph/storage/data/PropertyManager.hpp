@@ -24,6 +24,7 @@
 #include <sstream>
 #include <string>
 #include <unordered_map>
+#include <vector>
 #include "graph/core/PropertyTypes.hpp"
 #include "graph/storage/data/BaseEntityManager.hpp"
 
@@ -49,6 +50,9 @@ namespace graph::storage {
 		// Property storage strategies
 		template<typename EntityType>
 		void storeProperties(EntityType &entity);
+
+		template<typename EntityType>
+		std::vector<size_t> storePropertiesBatch(std::vector<EntityType> &entities);
 
 		template<typename EntityType>
 		void cleanupExternalProperties(EntityType &entity);

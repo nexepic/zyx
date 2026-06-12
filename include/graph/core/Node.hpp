@@ -71,6 +71,7 @@ namespace graph {
 
 		// Property methods
 		void setProperties(std::unordered_map<std::string, PropertyValue> props);
+		std::unordered_map<std::string, PropertyValue> takeProperties();
 		void addProperty(const std::string &key, const PropertyValue &value);
 		[[nodiscard]] bool hasProperty(const std::string &key) const;
 		[[nodiscard]] PropertyValue getProperty(const std::string &key) const;
