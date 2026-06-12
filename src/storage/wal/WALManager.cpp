@@ -23,12 +23,20 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <stdexcept>
 #include <thread>
 
 namespace graph::storage::wal {
 
-	WALManager::~WALManager() { close(); }
+	WALManager::~WALManager() {
+		try {
+			close();
+		} catch (...) {
+			// Destructors must not throw. Keeping the WAL is safer than losing
+			// recovery records when a best-effort close fails.
+		}
+	}
 
 	void WALManager::open(const std::string &dbPath) {
 		if (isOpen_)
@@ -65,11 +73,12 @@ namespace graph::storage::wal {
 			currentWriteOffset_ = fileSize;
 		}
 
+		writeBuffer_.reserve(walBufferSize_);
 		lastSyncedOffset_ = currentWriteOffset_;
 		isOpen_ = true;
 	}
 
-	void WALManager::close() {
+	void WALManager::close(CloseMode mode) {
 		if (isOpen_) {
 			{
 				std::lock_guard lock(commitMutex_);
@@ -82,15 +91,14 @@ namespace graph::storage::wal {
 				walFd_ = INVALID_FILE_HANDLE;
 			}
 			isOpen_ = false;
+		}
 
-			// Remove WAL file — all committed data was already persisted to the
-			// main DB file by save() during each commitTransaction().  Leaving
-			// the WAL around would trigger an unnecessary (but idempotent)
-			// recovery pass on the next open.
+		if (mode == CloseMode::WCM_REMOVE_FILE && !walPath_.empty()) {
 			try {
 				std::filesystem::remove(walPath_);
 			} catch (...) {
-				// Non-fatal: next open will run idempotent recovery
+				// Non-fatal: callers only request removal after a successful
+				// checkpoint, so a leftover empty WAL can be handled on next open.
 			}
 		}
 	}
@@ -137,8 +145,15 @@ namespace graph::storage::wal {
 		recordHeader.type = type;
 		recordHeader.checksum = (data && dataSize > 0) ? computeCRC32(data, dataSize) : 0;
 
-		appendBytesLocked(reinterpret_cast<const uint8_t *>(&recordHeader), sizeof(recordHeader));
-		appendBytesLocked(data, dataSize);
+		const size_t recordSize = sizeof(recordHeader) + dataSize;
+		ensureAppendCapacityLocked(recordSize);
+		const size_t offset = writeBuffer_.size();
+		writeBuffer_.resize(offset + recordSize);
+		auto *dest = writeBuffer_.data() + offset;
+		std::memcpy(dest, &recordHeader, sizeof(recordHeader));
+		if (data && dataSize > 0) {
+			std::memcpy(dest + sizeof(recordHeader), data, dataSize);
+		}
 
 		// If buffer is full, flush to file (no fsync)
 		if (writeBuffer_.size() >= walBufferSize_) {
@@ -168,13 +183,41 @@ namespace graph::storage::wal {
 		recordHeader.type = WALRecordType::WAL_ENTITY_WRITE;
 		recordHeader.checksum = checksum;
 
-		appendBytesLocked(reinterpret_cast<const uint8_t *>(&recordHeader), sizeof(recordHeader));
-		appendBytesLocked(payloadBytes.data(), payloadBytes.size());
-		appendBytesLocked(data, dataSize);
+		const size_t recordSize = sizeof(recordHeader) + payloadBytes.size() + dataSize;
+		ensureAppendCapacityLocked(recordSize);
+		const size_t offset = writeBuffer_.size();
+		writeBuffer_.resize(offset + recordSize);
+		auto *dest = writeBuffer_.data() + offset;
+		std::memcpy(dest, &recordHeader, sizeof(recordHeader));
+		dest += sizeof(recordHeader);
+		std::memcpy(dest, payloadBytes.data(), payloadBytes.size());
+		if (data && dataSize > 0) {
+			std::memcpy(dest + payloadBytes.size(), data, dataSize);
+		}
 
 		if (writeBuffer_.size() >= walBufferSize_) {
 			flushBuffer();
 		}
+	}
+
+	void WALManager::ensureAppendCapacityLocked(size_t appendSize) {
+		const size_t required = writeBuffer_.size() + appendSize;
+		if (required <= writeBuffer_.capacity()) {
+			return;
+		}
+
+		size_t target = writeBuffer_.capacity();
+		if (target == 0) {
+			target = walBufferSize_ == 0 ? appendSize : walBufferSize_;
+		}
+		while (target < required) {
+			if (target > std::numeric_limits<size_t>::max() / 2) {
+				target = required;
+				break;
+			}
+			target *= 2;
+		}
+		writeBuffer_.reserve(target);
 	}
 
 	void WALManager::appendBytesLocked(const uint8_t *data, size_t size) {
@@ -201,6 +244,9 @@ namespace graph::storage::wal {
 	void WALManager::flushAndSync() {
 		// Must be called with commitMutex_ held
 		flushBuffer();
+		if (lastSyncedOffset_ >= currentWriteOffset_) {
+			return;
+		}
 		portable_fsync(walFd_);
 		lastSyncedOffset_ = currentWriteOffset_;
 	}
@@ -229,6 +275,20 @@ namespace graph::storage::wal {
 			appendEntityChangeRecordLocked(txnId, change.entityType, change.changeType, change.entityId,
 										   change.serializedData.data(),
 										   static_cast<uint32_t>(change.serializedData.size()));
+		}
+	}
+
+	void WALManager::writeEntityChangeViews(uint64_t txnId, std::span<const WALEntityChangeView> changes) {
+		if (!isOpen_)
+			throw std::runtime_error("WAL is not open");
+		if (changes.empty()) {
+			return;
+		}
+
+		std::lock_guard lock(commitMutex_);
+		for (const auto &change : changes) {
+			appendEntityChangeRecordLocked(txnId, change.entityType, change.changeType, change.entityId,
+										   change.serializedData, change.serializedSize);
 		}
 	}
 

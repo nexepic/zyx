@@ -79,10 +79,10 @@ namespace graph::storage {
 			targetRegistry = stateRegistry_.get();
 		}
 
-		// --- Streaming Batch Processing ---
-		// We process entities one by one and check the dirty count threshold continuously.
-		// This prevents "Memory Explosion" (OOM) if the input vector is massive (e.g., 10M entities)
-		// and exceeds the configured 'maxDirtyEntities_' limit.
+		if (transactionActive_.load(std::memory_order_acquire)) {
+			targetRegistry->upsertBatch(entities, changeType);
+			return;
+		}
 
 		for (const auto &entity: entities) {
 			// 1. Insert or Update the entity in the dirty registry.
@@ -105,6 +105,35 @@ namespace graph::storage {
 
 		// 3. Final Check (Optional but recommended).
 		// Ensures that if the batch ended exactly at the threshold, we flush now rather than later.
+		if (!transactionActive_.load(std::memory_order_acquire)) {
+			checkAndTriggerAutoFlush();
+		}
+	}
+
+	template<typename EntityType>
+	void PersistenceManager::upsertBatchSelected(const std::vector<EntityType> &entities,
+												 const std::vector<size_t> &indices,
+												 EntityChangeType changeType) {
+		if (entities.empty() || indices.empty()) {
+			return;
+		}
+
+		DirtyEntityRegistry<EntityType> *targetRegistry = nullptr;
+		if constexpr (std::is_same_v<EntityType, Node>) {
+			targetRegistry = nodeRegistry_.get();
+		} else if constexpr (std::is_same_v<EntityType, Edge>) {
+			targetRegistry = edgeRegistry_.get();
+		} else if constexpr (std::is_same_v<EntityType, Property>) {
+			targetRegistry = propertyRegistry_.get();
+		} else if constexpr (std::is_same_v<EntityType, Blob>) {
+			targetRegistry = blobRegistry_.get();
+		} else if constexpr (std::is_same_v<EntityType, Index>) {
+			targetRegistry = indexRegistry_.get();
+		} else if constexpr (std::is_same_v<EntityType, State>) {
+			targetRegistry = stateRegistry_.get();
+		}
+
+		targetRegistry->upsertBatchSelected(entities, indices, changeType);
 		if (!transactionActive_.load(std::memory_order_acquire)) {
 			checkAndTriggerAutoFlush();
 		}
@@ -163,6 +192,23 @@ namespace graph::storage {
 	}
 
 	template<typename EntityType>
+	bool PersistenceManager::hasDirtyInfoOfTypes(std::span<const EntityChangeType> types) const {
+		if constexpr (std::is_same_v<EntityType, Node>)
+			return nodeRegistry_->hasDirtyInfoOfTypes(types);
+		if constexpr (std::is_same_v<EntityType, Edge>)
+			return edgeRegistry_->hasDirtyInfoOfTypes(types);
+		if constexpr (std::is_same_v<EntityType, Property>)
+			return propertyRegistry_->hasDirtyInfoOfTypes(types);
+		if constexpr (std::is_same_v<EntityType, Blob>)
+			return blobRegistry_->hasDirtyInfoOfTypes(types);
+		if constexpr (std::is_same_v<EntityType, Index>)
+			return indexRegistry_->hasDirtyInfoOfTypes(types);
+		if constexpr (std::is_same_v<EntityType, State>)
+			return stateRegistry_->hasDirtyInfoOfTypes(types);
+		return false;
+	}
+
+	template<typename EntityType>
 	bool PersistenceManager::isDirty(int64_t id) const {
 		if constexpr (std::is_same_v<EntityType, Node>)
 			return nodeRegistry_->contains(id);
@@ -215,6 +261,15 @@ namespace graph::storage {
 		blobRegistry_->clear();
 		indexRegistry_->clear();
 		stateRegistry_->clear();
+	}
+
+	void PersistenceManager::restoreCommittedSnapshot(const CommittedSnapshot &snapshot) const {
+		nodeRegistry_->replaceWith(snapshot.nodes);
+		edgeRegistry_->replaceWith(snapshot.edges);
+		propertyRegistry_->replaceWith(snapshot.properties);
+		blobRegistry_->replaceWith(snapshot.blobs);
+		indexRegistry_->replaceWith(snapshot.indexes);
+		stateRegistry_->replaceWith(snapshot.states);
 	}
 
 	void PersistenceManager::checkAndTriggerAutoFlush() const {
@@ -280,10 +335,30 @@ namespace graph::storage {
 	template std::vector<DirtyEntityInfo<Index>> PersistenceManager::getAllDirtyInfos<Index>() const;
 	template std::vector<DirtyEntityInfo<State>> PersistenceManager::getAllDirtyInfos<State>() const;
 
+	template bool PersistenceManager::hasDirtyInfoOfTypes<Node>(std::span<const EntityChangeType>) const;
+	template bool PersistenceManager::hasDirtyInfoOfTypes<Edge>(std::span<const EntityChangeType>) const;
+	template bool PersistenceManager::hasDirtyInfoOfTypes<Property>(std::span<const EntityChangeType>) const;
+	template bool PersistenceManager::hasDirtyInfoOfTypes<Blob>(std::span<const EntityChangeType>) const;
+	template bool PersistenceManager::hasDirtyInfoOfTypes<Index>(std::span<const EntityChangeType>) const;
+	template bool PersistenceManager::hasDirtyInfoOfTypes<State>(std::span<const EntityChangeType>) const;
+
 	template void PersistenceManager::upsertBatch<Node>(const std::vector<Node> &, EntityChangeType);
 	template void PersistenceManager::upsertBatch<Edge>(const std::vector<Edge> &, EntityChangeType);
 	template void PersistenceManager::upsertBatch<Property>(const std::vector<Property> &, EntityChangeType);
 	template void PersistenceManager::upsertBatch<Blob>(const std::vector<Blob> &, EntityChangeType);
 	template void PersistenceManager::upsertBatch<Index>(const std::vector<Index> &, EntityChangeType);
 	template void PersistenceManager::upsertBatch<State>(const std::vector<State> &, EntityChangeType);
+
+	template void PersistenceManager::upsertBatchSelected<Node>(
+			const std::vector<Node> &, const std::vector<size_t> &, EntityChangeType);
+	template void PersistenceManager::upsertBatchSelected<Edge>(
+			const std::vector<Edge> &, const std::vector<size_t> &, EntityChangeType);
+	template void PersistenceManager::upsertBatchSelected<Property>(
+			const std::vector<Property> &, const std::vector<size_t> &, EntityChangeType);
+	template void PersistenceManager::upsertBatchSelected<Blob>(
+			const std::vector<Blob> &, const std::vector<size_t> &, EntityChangeType);
+	template void PersistenceManager::upsertBatchSelected<Index>(
+			const std::vector<Index> &, const std::vector<size_t> &, EntityChangeType);
+	template void PersistenceManager::upsertBatchSelected<State>(
+			const std::vector<State> &, const std::vector<size_t> &, EntityChangeType);
 } // namespace graph::storage

@@ -23,6 +23,9 @@
 #include <atomic>
 #include <functional>
 #include <memory>
+#include <span>
+#include <type_traits>
+#include <utility>
 #include "DirtyEntityRegistry.hpp"
 #include "graph/core/Blob.hpp"
 #include "graph/core/Edge.hpp"
@@ -80,13 +83,37 @@ namespace graph::storage {
 		void upsertBatch(const std::vector<EntityType> &entities, EntityChangeType changeType);
 
 		template<typename EntityType>
+		void upsertBatchSelected(const std::vector<EntityType> &entities, const std::vector<size_t> &indices,
+								 EntityChangeType changeType);
+
+		template<typename EntityType>
 		void remove(int64_t id);
 
 		template<typename EntityType>
 		std::optional<DirtyEntityInfo<EntityType>> getDirtyInfo(int64_t id) const;
 
+		template<typename EntityType, typename Visitor>
+		void visitDirtyInfos(std::span<const int64_t> ids, Visitor &&visitor) const {
+			if constexpr (std::is_same_v<EntityType, Node>) {
+				nodeRegistry_->visitInfos(ids, std::forward<Visitor>(visitor));
+			} else if constexpr (std::is_same_v<EntityType, Edge>) {
+				edgeRegistry_->visitInfos(ids, std::forward<Visitor>(visitor));
+			} else if constexpr (std::is_same_v<EntityType, Property>) {
+				propertyRegistry_->visitInfos(ids, std::forward<Visitor>(visitor));
+			} else if constexpr (std::is_same_v<EntityType, Blob>) {
+				blobRegistry_->visitInfos(ids, std::forward<Visitor>(visitor));
+			} else if constexpr (std::is_same_v<EntityType, Index>) {
+				indexRegistry_->visitInfos(ids, std::forward<Visitor>(visitor));
+			} else if constexpr (std::is_same_v<EntityType, State>) {
+				stateRegistry_->visitInfos(ids, std::forward<Visitor>(visitor));
+			}
+		}
+
 		template<typename EntityType>
 		std::vector<DirtyEntityInfo<EntityType>> getAllDirtyInfos() const;
+
+		template<typename EntityType>
+		bool hasDirtyInfoOfTypes(std::span<const EntityChangeType> types) const;
 
 		template<typename EntityType>
 		bool isDirty(int64_t id) const;
@@ -97,6 +124,7 @@ namespace graph::storage {
 		void commitSnapshot() const;
 		[[nodiscard]] bool hasUnsavedChanges() const;
 		void clearAll() const;
+		void restoreCommittedSnapshot(const CommittedSnapshot &snapshot) const;
 
 		/**
 		 * @brief Captures current dirty state as a CommittedSnapshot for read isolation.

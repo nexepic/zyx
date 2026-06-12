@@ -21,6 +21,7 @@
 #include "graph/core/Database.hpp"
 #include <filesystem>
 #include "graph/concurrent/ThreadPool.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/query/api/QueryEngine.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 #include "graph/storage/indexes/VectorIndexManager.hpp"
@@ -33,7 +34,14 @@ namespace graph {
 		storage = std::make_shared<storage::FileStorage>(dbPath, cacheSize, mode);
 	}
 
-	Database::~Database() { close(); }
+	Database::~Database() {
+		try {
+			close();
+		} catch (...) {
+			// Destructors must not throw. If the final checkpoint fails, close()
+			// leaves the WAL on disk so the next open can recover safely.
+		}
+	}
 
 	bool Database::isOpen() const {
 		// The database is open if the storage is initialized and its file is open.
@@ -45,11 +53,18 @@ namespace graph {
 			return;
 		}
 
+		debug::ScopedPerfTimer totalTimer("db.open.total");
 		// Essential initialization — always needed at open()
-		storage->open();
-		configManager_ = std::make_shared<config::SystemConfigManager>(storage->getSystemStateManager(), storage);
-		configManager_->loadAndApplyAll();
-		storage->getDataManager()->registerObserver(configManager_);
+		{
+			debug::ScopedPerfTimer storageTimer("db.open.storage");
+			storage->open();
+		}
+		{
+			debug::ScopedPerfTimer configTimer("db.open.config");
+			configManager_ = std::make_shared<config::SystemConfigManager>(storage->getSystemStateManager(), storage);
+			configManager_->loadAndApplyAll();
+			storage->getDataManager()->registerObserver(configManager_);
+		}
 
 		// ThreadPool, QueryEngine, WALManager, TransactionManager are deferred
 		// to first use via ensure*() methods with std::call_once.
@@ -69,17 +84,41 @@ namespace graph {
 		}
 	}
 
+	void Database::flush() const {
+		if (!isOpen()) {
+			return;
+		}
+
+		{
+			debug::ScopedPerfTimer storageTimer("db.flush.storage");
+			storage->flushOrThrow();
+		}
+
+		if (walManager_ && walManager_->isOpen()) {
+			debug::ScopedPerfTimer walTimer("db.flush.wal_checkpoint");
+			walManager_->checkpoint();
+		}
+	}
+
 	void Database::close() const {
 		if (!isOpen()) {
 			return;
 		}
 
-		// Close WAL manager (only if it was initialized)
+		debug::ScopedPerfTimer totalTimer("db.close.total");
+		// A clean close is also the final checkpoint boundary: make the main DB
+		// file current before deleting the WAL. If this throws, the WAL stays on
+		// disk for recovery instead of being silently discarded.
 		if (walManager_) {
-			walManager_->close();
+			flush();
+			debug::ScopedPerfTimer walTimer("db.close.wal");
+			walManager_->close(storage::wal::WALManager::CloseMode::WCM_REMOVE_FILE);
 		}
 
-		storage->close();
+		{
+			debug::ScopedPerfTimer storageTimer("db.close.storage");
+			storage->close();
+		}
 	}
 
 	bool Database::exists() const { return std::filesystem::exists(dbPath); }
@@ -117,6 +156,14 @@ namespace graph {
 	}
 
 	void Database::setThreadPoolSize(size_t poolSize) {
+		configuredThreadPoolSize_ = poolSize;
+
+		// If the pool has not been lazily initialized yet, defer construction so
+		// ensureThreadPool() can wire the explicitly configured size exactly once.
+		if (!threadPool_) {
+			return;
+		}
+
 		threadPool_ = std::make_shared<concurrent::ThreadPool>(poolSize);
 
 		// Re-wire the new pool to all subsystems
@@ -134,14 +181,22 @@ namespace graph {
 
 	void Database::ensureThreadPool() {
 		std::call_once(threadPoolInitFlag_, [this]() {
-			size_t poolSize = configManager_->getThreadPoolSize();
+			debug::ScopedPerfTimer timer("db.ensure_thread_pool");
+			size_t poolSize = configuredThreadPoolSize_.value_or(configManager_->getThreadPoolSize());
 			threadPool_ = std::make_shared<concurrent::ThreadPool>(poolSize);
 			storage->setThreadPool(threadPool_.get());
+			if (queryEngine) {
+				queryEngine->setThreadPool(threadPool_.get());
+				auto vim = queryEngine->getIndexManager()->getVectorIndexManager();
+				if (vim)
+					vim->setThreadPool(threadPool_.get());
+			}
 		});
 	}
 
 	void Database::ensureQueryEngine() {
 		std::call_once(queryEngineInitFlag_, [this]() {
+			debug::ScopedPerfTimer timer("db.ensure_query_engine");
 			ensureThreadPool();
 			queryEngine = std::make_shared<query::QueryEngine>(storage);
 			queryEngine->setThreadPool(threadPool_.get());
@@ -156,6 +211,7 @@ namespace graph {
 
 	void Database::ensureWALAndTransactionManager() {
 		std::call_once(walInitFlag_, [this]() {
+			debug::ScopedPerfTimer timer("db.ensure_wal_txn_manager");
 			ensureThreadPool();
 
 			// Only open WAL if a WAL file already exists on disk (crash recovery).

@@ -21,6 +21,10 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
+#include <span>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include "graph/core/Transaction.hpp"
 #include "graph/core/Types.hpp"
@@ -29,9 +33,11 @@
 #include "graph/utils/FixedSizeSerializer.hpp"
 
 namespace graph::storage {
+	struct CommittedSnapshot;
 
 	namespace wal {
 		class WALManager;
+		struct WALEntityChangeView;
 	}
 
 	/**
@@ -42,8 +48,19 @@ namespace graph::storage {
 	 */
 	class TransactionContext {
 	public:
+		struct PendingWalChange {
+			uint8_t entityType = 0;
+			EntityChangeType changeType = EntityChangeType::CHANGE_MODIFIED;
+			int64_t entityId = 0;
+			std::vector<uint8_t> serializedData;
+		};
+
+		using PendingWalChangeMap = std::unordered_map<uint64_t, PendingWalChange>;
+
 		void setActive(uint64_t txnId);
 		void clear();
+		void setRollbackBase(std::shared_ptr<CommittedSnapshot> snapshot);
+		[[nodiscard]] const std::shared_ptr<CommittedSnapshot> &rollbackBase() const { return rollbackBase_; }
 
 		[[nodiscard]] bool isActive() const { return transactionActive_; }
 		[[nodiscard]] uint64_t activeTxnId() const { return activeTxnId_; }
@@ -73,14 +90,36 @@ namespace graph::storage {
 		void recordUpdate(const EntityType &newEntity, const EntityType &oldEntity);
 
 		template<typename EntityType>
+		void recordUpdates(const std::vector<EntityType> &newEntities, const std::vector<EntityType> &oldEntities);
+
+		template<typename EntityType>
 		void recordDelete(int64_t id, std::function<EntityType(int64_t)> getOld);
 
+		template<typename EntityType>
+		void flushWalEntities(EntityChangeType changeType, const std::vector<EntityType> &entities) const;
+
+		void flushWalChangeViews(std::span<const wal::WALEntityChangeView> changes) const;
+		void flushSerializedWalChange(const PendingWalChange &change) const;
+		[[nodiscard]] const PendingWalChangeMap &pendingWalChanges() const { return pendingWalChanges_; }
+		[[nodiscard]] bool wasEntityAddedInActiveTransaction(uint8_t entityType, int64_t entityId) const;
+
 	private:
+		[[nodiscard]] static uint64_t makeEntityKey(uint8_t entityType, int64_t entityId);
+		void rememberAddedEntity(uint8_t entityType, int64_t entityId);
+		void forgetAddedEntity(uint8_t entityType, int64_t entityId);
+		void stageWalChange(uint8_t entityType, EntityChangeType changeType, int64_t entityId);
+		void stageWalChange(uint8_t entityType, EntityChangeType changeType, int64_t entityId,
+							std::vector<uint8_t> serializedData);
+		void eraseStagedWalChange(uint8_t entityType, int64_t entityId);
+
 		bool transactionActive_ = false;
 		uint64_t activeTxnId_ = 0;
 		std::vector<Transaction::TxnOperation> txnOps_;
+		std::unordered_set<uint64_t> addedEntityKeys_;
+		PendingWalChangeMap pendingWalChanges_;
 		wal::WALManager *walManager_ = nullptr;
 		wal::UndoLog undoLog_;
+		std::shared_ptr<CommittedSnapshot> rollbackBase_;
 	};
 
 } // namespace graph::storage

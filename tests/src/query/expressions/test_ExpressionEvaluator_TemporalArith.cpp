@@ -17,6 +17,9 @@ protected:
 		record_.setValue("dur1", PropertyValue(TemporalDuration{2, 10, 5000000000LL})); // 2 months, 10 days, 5s
 		record_.setValue("dur2", PropertyValue(TemporalDuration{1, 3, 2000000000LL}));  // 1 month, 3 days, 2s
 		record_.setValue("durNeg", PropertyValue(TemporalDuration{-15, 0, 0})); // negative months for m<=0 branch
+		record_.setValue("dEraStart", PropertyValue(TemporalDate::fromYMD(0, 1, 10)));
+		record_.setValue("dtEraStart", PropertyValue(TemporalDateTime::fromComponents(0, 1, 10, 8, 15, 20)));
+		record_.setValue("durBeforeEraStart", PropertyValue(TemporalDuration{-1, 0, 0}));
 		context_ = std::make_unique<EvaluationContext>(record_);
 	}
 
@@ -110,6 +113,24 @@ TEST_F(TemporalArithmeticTest, DateTimePlusDuration_NegativeMonthAdjust) {
 	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_ADD, std::move(right));
 	auto result = eval(&expr);
 	EXPECT_EQ(result.getType(), PropertyType::DATETIME);
+}
+
+TEST_F(TemporalArithmeticTest, DatePlusDuration_AdjustsNegativeMonthRemainder) {
+	auto left = std::make_unique<VariableReferenceExpression>("dEraStart");
+	auto right = std::make_unique<VariableReferenceExpression>("durBeforeEraStart");
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_ADD, std::move(right));
+	auto result = eval(&expr);
+	EXPECT_EQ(result.getType(), PropertyType::DATE);
+	EXPECT_EQ(std::get<TemporalDate>(result.getVariant()).month(), 12);
+}
+
+TEST_F(TemporalArithmeticTest, DateTimePlusDuration_AdjustsNegativeMonthRemainder) {
+	auto left = std::make_unique<VariableReferenceExpression>("dtEraStart");
+	auto right = std::make_unique<VariableReferenceExpression>("durBeforeEraStart");
+	BinaryOpExpression expr(std::move(left), BinaryOperatorType::BOP_ADD, std::move(right));
+	auto result = eval(&expr);
+	EXPECT_EQ(result.getType(), PropertyType::DATETIME);
+	EXPECT_EQ(std::get<TemporalDateTime>(result.getVariant()).month(), 12);
 }
 
 // Temporal component access: datetime month, day, second

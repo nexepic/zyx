@@ -6,7 +6,14 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from runner.adapters.base import BenchmarkAdapter, DEFAULT_PROFILE, EXECUTION_MODES, PROFILE_WORKLOADS, WorkloadResult
+from runner.adapters.base import (
+    BenchmarkAdapter,
+    DEFAULT_PROFILE,
+    EXECUTION_MODES,
+    PROFILE_WORKLOADS,
+    WorkloadResult,
+    remove_artifact_family,
+)
 from runner.models import ProfileEvent, Sample
 
 
@@ -17,8 +24,9 @@ class ZyxAdapter(BenchmarkAdapter):
         dataset_dir: Path,
         scale: str,
         profile: str = DEFAULT_PROFILE,
+        threads: int | None = None,
     ):
-        super().__init__(database, dataset_dir, scale, profile)
+        super().__init__(database, dataset_dir, scale, profile, threads)
         self.binary = Path(os.environ.get("ZYX_COMPARE_BENCH", "/usr/local/bin/zyx-compare-bench"))
         self.db_path = dataset_dir.parent / "zyx.db"
         self.timeout_seconds = float(os.environ.get("ZYX_COMPARE_TIMEOUT_SECONDS", "600"))
@@ -50,8 +58,10 @@ class ZyxAdapter(BenchmarkAdapter):
             str(iterations),
             "--execution-mode",
             execution_mode,
-            "--emit-profile",
         ]
+        if self.threads is not None:
+            command.extend(["--threads", str(self.threads)])
+        command.append("--emit-profile")
         try:
             completed = subprocess.run(
                 command, check=False, capture_output=True, text=True, timeout=self.timeout_seconds
@@ -97,6 +107,9 @@ class ZyxAdapter(BenchmarkAdapter):
         if incomplete:
             return ok_results + [self._failed_result("run_all", "missing/incomplete samples for: " + "; ".join(incomplete))]
         return [results[workload] for workload in workloads]
+
+    def cleanup_artifacts(self) -> list[Path]:
+        return remove_artifact_family(self.db_path)
 
     def _incomplete_workloads(
         self, results: dict[str, WorkloadResult], workloads: list[str], iterations: int

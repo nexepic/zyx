@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "graph/core/Database.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/query/execution/NodeColumnarPredicateCounter.hpp"
 
 namespace fs = std::filesystem;
@@ -33,6 +34,8 @@ protected:
 	}
 
 	void TearDown() override {
+		graph::debug::PerfTrace::reset();
+		graph::debug::PerfTrace::setEnabled(false);
 		dm_.reset();
 		if (db_) {
 			db_->close();
@@ -53,6 +56,18 @@ protected:
 				{"age", PropertyValue(static_cast<int64_t>(20 + (i % 50)))},
 				{"score", PropertyValue(static_cast<int64_t>(i * 10))}
 			});
+			ids.push_back(node.getId());
+		}
+		return ids;
+	}
+
+	std::vector<int64_t> addScoreOnlyNodes(size_t count) {
+		std::vector<int64_t> ids;
+		ids.reserve(count);
+		for (size_t i = 0; i < count; ++i) {
+			Node node(0, userLabel_);
+			dm_->addNode(node);
+			dm_->addNodeProperties(node.getId(), {{"score", PropertyValue(static_cast<int64_t>(i * 10))}});
 			ids.push_back(node.getId());
 		}
 		return ids;
@@ -108,6 +123,49 @@ TEST_F(NodeColumnarPredicateCounterTest, CountsRangePredicateWithoutMaterializin
 
 	EXPECT_TRUE(result.available);
 	EXPECT_EQ(result.count, 70);
+}
+
+TEST_F(NodeColumnarPredicateCounterTest, FullScanOwnerShortcutRequiresCompleteCandidateSet) {
+	auto ids = addNodes(160);
+	db_->getStorage()->flush();
+	dm_->clearCache();
+
+	std::vector<int64_t> subset(ids.begin(), ids.begin() + 130);
+	NodeColumnarPredicateCounter counter(dm_);
+	NodeScanConfig config;
+	const auto result = counter.count(
+		subset,
+		candidateSet(subset),
+		config,
+		countRequirements(false),
+		{predicate("score", VectorPredicateOp::VPO_GE, PropertyValue(static_cast<int64_t>(0)))});
+
+	EXPECT_TRUE(result.available);
+	EXPECT_EQ(result.count, 130);
+}
+
+TEST_F(NodeColumnarPredicateCounterTest, FullScanUsesCompleteOwnerPropertyShortcutForScalarProperties) {
+	auto ids = addScoreOnlyNodes(160);
+	db_->getStorage()->flush();
+	dm_->clearCache();
+
+	graph::debug::PerfTrace::setEnabled(true);
+	graph::debug::PerfTrace::reset();
+
+	NodeColumnarPredicateCounter counter(dm_);
+	NodeScanConfig config;
+	const auto result = counter.count(
+		ids,
+		candidateSet(ids),
+		config,
+		countRequirements(false),
+		{predicate("score", VectorPredicateOp::VPO_GE, PropertyValue(static_cast<int64_t>(1000)))});
+
+	const auto snapshot = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setEnabled(false);
+	EXPECT_TRUE(result.available);
+	EXPECT_EQ(result.count, 60);
+	EXPECT_TRUE(snapshot.contains("node_scan.predicate_count"));
 }
 
 TEST_F(NodeColumnarPredicateCounterTest, AppliesLabelAndMultiplePredicates) {
@@ -285,6 +343,57 @@ TEST_F(NodeColumnarPredicateCounterTest, FallsBackWhenPropertyEntityCannotBeBulk
 
 	EXPECT_TRUE(result.available);
 	EXPECT_EQ(result.count, 159);
+}
+
+TEST_F(NodeColumnarPredicateCounterTest, FallsBackFromChunkedPropertyEntityScanWhenBulkMatchIsSparse) {
+	auto ids = addNodes(160);
+	Node corrupted = dm_->getNode(ids[0]);
+	corrupted.setPropertyEntityId(corrupted.getPropertyEntityId() + 1000000, PropertyStorageType::PROPERTY_ENTITY);
+	dm_->updateNode(corrupted);
+	db_->getStorage()->flush();
+	dm_->clearCache();
+
+	NodeScanConfig config;
+	config.labels = {"User"};
+	NodeColumnarPredicateCounter counter(dm_);
+	const auto result = counter.count(
+		ids,
+		candidateSet(ids),
+		config,
+		countRequirements(true),
+		{predicate("score", VectorPredicateOp::VPO_GE, PropertyValue(static_cast<int64_t>(0)))});
+
+	EXPECT_TRUE(result.available);
+	EXPECT_EQ(result.count, 79);
+}
+
+TEST_F(NodeColumnarPredicateCounterTest, FallsBackFromChunkedMetadataScanForBlobStoredProperties) {
+	std::vector<int64_t> ids;
+	ids.reserve(130);
+	const std::string matchingPayload(5000, 'm');
+	const std::string otherPayload(5000, 'x');
+	for (size_t i = 0; i < 130; ++i) {
+		Node node(0, userLabel_);
+		dm_->addNode(node);
+		const std::string &payload = (i == 0) ? matchingPayload : otherPayload;
+		dm_->addNodeProperties(node.getId(), {{"payload", PropertyValue(payload)}});
+		ids.push_back(node.getId());
+	}
+	db_->getStorage()->flush();
+	dm_->clearCache();
+
+	NodeScanConfig config;
+	config.labels = {"User"};
+	NodeColumnarPredicateCounter counter(dm_);
+	const auto result = counter.count(
+		ids,
+		candidateSet(ids),
+		config,
+		countRequirements(true),
+		{predicate("payload", VectorPredicateOp::VPO_EQ, PropertyValue(matchingPayload))});
+
+	EXPECT_TRUE(result.available);
+	EXPECT_EQ(result.count, 1);
 }
 
 TEST_F(NodeColumnarPredicateCounterTest, MissingPropertyReturnsZeroMatches) {

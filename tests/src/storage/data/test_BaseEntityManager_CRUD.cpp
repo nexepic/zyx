@@ -13,6 +13,10 @@
  **/
 
 #include "DataManagerSharedTestFixture.hpp"
+
+#include <stdexcept>
+#include <utility>
+
 #include "graph/storage/data/BlobManager.hpp"
 #include "graph/storage/data/EdgeManager.hpp"
 #include "graph/storage/data/IndexEntityManager.hpp"
@@ -20,7 +24,145 @@
 #include "graph/storage/data/PropertyManager.hpp"
 #include "graph/storage/data/StateManager.hpp"
 
-class BaseEntityManagerCRUDTest : public DataManagerSharedTest {};
+template<typename ManagedEntity>
+class ExposedBatchEntityManager final : public BaseEntityManager<ManagedEntity> {
+public:
+	ExposedBatchEntityManager(DataManager* dataManager, std::shared_ptr<DeletionManager> deletionManager) :
+		BaseEntityManager<ManagedEntity>(dataManager, std::move(deletionManager)) {}
+
+	void assignIds(std::vector<ManagedEntity> &entities) { this->assignMissingIds(entities); }
+
+	void persistAdded(const std::vector<ManagedEntity> &entities) { this->persistAddedBatch(entities); }
+
+protected:
+	int64_t doAllocateId() override {
+		return this->getDataManagerPtr()->getIdAllocator(ManagedEntity::typeId)->allocate();
+	}
+
+	void doRemove(ManagedEntity &) override {}
+};
+
+class BaseEntityManagerCRUDTest : public DataManagerSharedTest {
+protected:
+	template<typename EntityType>
+	void expectDirtyState(int64_t id, EntityChangeType expectedChangeType) {
+		auto dirtyInfo = dataManager->getDirtyInfo<EntityType>(id);
+		ASSERT_TRUE(dirtyInfo.has_value());
+		EXPECT_EQ(dirtyInfo->changeType, expectedChangeType);
+		ASSERT_TRUE(dirtyInfo->backup.has_value());
+		EXPECT_EQ(dirtyInfo->backup->getId(), id);
+	}
+
+	template<typename EntityType, typename ManagerType, typename MutateAdded, typename MutateModified>
+	void exerciseFullBatchUpdate(const std::shared_ptr<ManagerType> &manager,
+								 EntityType addedEntity,
+								 EntityType persistedEntity,
+								 MutateAdded mutateAdded,
+								 MutateModified mutateModified) {
+		std::vector<EntityType> persisted = {persistedEntity};
+		manager->addBatch(persisted);
+		simulateSave();
+
+		mutateModified(persisted[0]);
+
+		std::vector<EntityType> added = {addedEntity};
+		manager->addBatch(added);
+		mutateAdded(added[0]);
+
+		std::vector<EntityType> updates = {added[0], persisted[0], EntityType{}};
+		manager->updateBatch(updates);
+
+		expectDirtyState<EntityType>(added[0].getId(), EntityChangeType::CHANGE_ADDED);
+		expectDirtyState<EntityType>(persisted[0].getId(), EntityChangeType::CHANGE_MODIFIED);
+	}
+
+	template<typename EntityType, typename ManagerType, typename MutateAdded, typename MutateModified>
+	void exerciseSelectedBatchUpdate(const std::shared_ptr<ManagerType> &manager,
+									 EntityType addedEntity,
+									 EntityType persistedEntity,
+									 MutateAdded mutateAdded,
+									 MutateModified mutateModified) {
+		std::vector<EntityType> persisted = {persistedEntity};
+		manager->addBatch(persisted);
+		simulateSave();
+
+		mutateModified(persisted[0]);
+
+		std::vector<EntityType> added = {addedEntity};
+		manager->addBatch(added);
+		mutateAdded(added[0]);
+
+		std::vector<EntityType> updates = {added[0], persisted[0], EntityType{}};
+		manager->updateBatch(updates, {0, 1, 2, 99});
+
+		expectDirtyState<EntityType>(added[0].getId(), EntityChangeType::CHANGE_ADDED);
+		expectDirtyState<EntityType>(persisted[0].getId(), EntityChangeType::CHANGE_MODIFIED);
+	}
+
+	template<typename EntityType, typename ManagerType>
+	void expectFullBatchRejectsInactive(const std::shared_ptr<ManagerType> &manager, EntityType entity) {
+		std::vector<EntityType> entities = {entity};
+		manager->addBatch(entities);
+		entities[0].markInactive();
+		EXPECT_THROW(manager->updateBatch(entities), std::runtime_error);
+	}
+
+	template<typename EntityType, typename ManagerType>
+	void expectSelectedBatchRejectsInactive(const std::shared_ptr<ManagerType> &manager, EntityType entity) {
+		std::vector<EntityType> entities = {entity};
+		manager->addBatch(entities);
+		entities[0].markInactive();
+		EXPECT_THROW(manager->updateBatch(entities, {0}), std::runtime_error);
+	}
+};
+
+TEST_F(BaseEntityManagerCRUDTest, ReusableBatchHelpersHandleNoOpAndPresetInputs) {
+	auto exercise = [this]<typename ManagedEntity>(ManagedEntity entity) {
+		ExposedBatchEntityManager<ManagedEntity> manager(dataManager.get(), dataManager->getDeletionManager());
+
+		std::vector<ManagedEntity> empty;
+		EXPECT_NO_THROW(manager.assignIds(empty));
+		EXPECT_NO_THROW(manager.persistAdded(empty));
+		EXPECT_TRUE(empty.empty());
+
+		const int64_t presetId = 900000 + static_cast<int64_t>(ManagedEntity::typeId);
+		entity.setId(presetId);
+		std::vector<ManagedEntity> preset = {entity};
+		manager.assignIds(preset);
+		EXPECT_EQ(preset[0].getId(), presetId);
+	};
+
+	exercise(Node{});
+	exercise(Edge{});
+	exercise(Property{});
+	exercise(Blob{});
+	exercise(Index{});
+	exercise(State{});
+}
+
+TEST_F(BaseEntityManagerCRUDTest, ReusableEdgeBatchAddUsesBasePersistenceContract) {
+	ExposedBatchEntityManager<Edge> manager(dataManager.get(), dataManager->getDeletionManager());
+
+	std::vector<Edge> emptyEdges;
+	EXPECT_NO_THROW(manager.addBatch(emptyEdges));
+
+	Node source = createTestNode(dataManager, "BaseEdgeBatchSource");
+	Node target = createTestNode(dataManager, "BaseEdgeBatchTarget");
+	dataManager->addNode(source);
+	dataManager->addNode(target);
+
+	std::vector<Edge> edges;
+	edges.push_back(createTestEdge(dataManager, source.getId(), target.getId(), "BaseEdgeBatch"));
+	manager.addBatch(edges);
+
+	ASSERT_EQ(edges.size(), 1U);
+	EXPECT_NE(edges[0].getId(), 0);
+	auto dirtyInfo = dataManager->getDirtyInfo<Edge>(edges[0].getId());
+	ASSERT_TRUE(dirtyInfo.has_value());
+	EXPECT_EQ(dirtyInfo->changeType, EntityChangeType::CHANGE_ADDED);
+	ASSERT_TRUE(dirtyInfo->backup.has_value());
+	EXPECT_EQ(dirtyInfo->backup->getId(), edges[0].getId());
+}
 
 // ============================================================================
 // update zero-id (returns early, no-op)
@@ -853,4 +995,190 @@ TEST_F(BaseEntityManagerCRUDTest, AddBatchPreAssignedIdsForInternalEntityTypes) 
 	EXPECT_EQ(blobs[0].getId(), 92001);
 	EXPECT_EQ(indexes[0].getId(), 93001);
 	EXPECT_EQ(states[0].getId(), 94001);
+}
+
+TEST_F(BaseEntityManagerCRUDTest, UpdateBatchPreservesAddedAndModifiedStateForAllEntityTypes) {
+	exerciseFullBatchUpdate<Node>(
+			dataManager->getNodeManager(),
+			createTestNode(dataManager, "FullBatchAddedNode"),
+			createTestNode(dataManager, "FullBatchPersistedNode"),
+			[](Node &node) { node.addProperty("batch_state", PropertyValue(std::string("added"))); },
+			[](Node &node) { node.addProperty("batch_state", PropertyValue(std::string("modified"))); });
+
+	Node source = createTestNode(dataManager, "FullBatchEdgeSource");
+	Node target = createTestNode(dataManager, "FullBatchEdgeTarget");
+	dataManager->addNode(source);
+	dataManager->addNode(target);
+	exerciseFullBatchUpdate<Edge>(
+			dataManager->getEdgeManager(),
+			createTestEdge(dataManager, source.getId(), target.getId(), "FullBatchAddedRel"),
+			createTestEdge(dataManager, source.getId(), target.getId(), "FullBatchPersistedRel"),
+			[](Edge &edge) { edge.addProperty("batch_state", PropertyValue(std::string("added"))); },
+			[](Edge &edge) { edge.addProperty("batch_state", PropertyValue(std::string("modified"))); });
+
+	exerciseFullBatchUpdate<Property>(
+			dataManager->getPropertyManager(),
+			createTestProperty(101, Node::typeId, {{"batch_state", PropertyValue(int64_t{1})}}),
+			createTestProperty(102, Node::typeId, {{"batch_state", PropertyValue(int64_t{2})}}),
+			[](Property &property) { property.setProperties({{"batch_state", PropertyValue(int64_t{3})}}); },
+			[](Property &property) { property.setProperties({{"batch_state", PropertyValue(int64_t{4})}}); });
+
+	exerciseFullBatchUpdate<Blob>(
+			dataManager->getBlobManager(),
+			createTestBlob("full-batch-added-blob"),
+			createTestBlob("full-batch-persisted-blob"),
+			[](Blob &blob) { blob.setData("full-batch-added-blob-updated"); },
+			[](Blob &blob) { blob.setData("full-batch-persisted-blob-updated"); });
+
+	exerciseFullBatchUpdate<Index>(
+			dataManager->getIndexEntityManager(),
+			createTestIndex(Index::NodeType::LEAF, 101),
+			createTestIndex(Index::NodeType::INTERNAL, 102),
+			[](Index &index) { index.setLevel(1); },
+			[](Index &index) { index.setLevel(2); });
+
+	exerciseFullBatchUpdate<State>(
+			dataManager->getStateManager(),
+			createTestState("full_batch_added_state"),
+			createTestState("full_batch_persisted_state"),
+			[](State &state) { state.setData("full-batch-added-state-updated"); },
+			[](State &state) { state.setData("full-batch-persisted-state-updated"); });
+
+	simulateSave();
+}
+
+TEST_F(BaseEntityManagerCRUDTest, UpdateBatchSelectedPreservesAddedAndModifiedStateForAllEntityTypes) {
+	exerciseSelectedBatchUpdate<Node>(
+			dataManager->getNodeManager(),
+			createTestNode(dataManager, "SelectedBatchAddedNode"),
+			createTestNode(dataManager, "SelectedBatchPersistedNode"),
+			[](Node &node) { node.addProperty("selected_state", PropertyValue(std::string("added"))); },
+			[](Node &node) { node.addProperty("selected_state", PropertyValue(std::string("modified"))); });
+
+	Node source = createTestNode(dataManager, "SelectedBatchEdgeSource");
+	Node target = createTestNode(dataManager, "SelectedBatchEdgeTarget");
+	dataManager->addNode(source);
+	dataManager->addNode(target);
+	exerciseSelectedBatchUpdate<Edge>(
+			dataManager->getEdgeManager(),
+			createTestEdge(dataManager, source.getId(), target.getId(), "SelectedBatchAddedRel"),
+			createTestEdge(dataManager, source.getId(), target.getId(), "SelectedBatchPersistedRel"),
+			[](Edge &edge) { edge.addProperty("selected_state", PropertyValue(std::string("added"))); },
+			[](Edge &edge) { edge.addProperty("selected_state", PropertyValue(std::string("modified"))); });
+
+	exerciseSelectedBatchUpdate<Property>(
+			dataManager->getPropertyManager(),
+			createTestProperty(201, Node::typeId, {{"selected_state", PropertyValue(int64_t{1})}}),
+			createTestProperty(202, Node::typeId, {{"selected_state", PropertyValue(int64_t{2})}}),
+			[](Property &property) { property.setProperties({{"selected_state", PropertyValue(int64_t{3})}}); },
+			[](Property &property) { property.setProperties({{"selected_state", PropertyValue(int64_t{4})}}); });
+
+	exerciseSelectedBatchUpdate<Blob>(
+			dataManager->getBlobManager(),
+			createTestBlob("selected-batch-added-blob"),
+			createTestBlob("selected-batch-persisted-blob"),
+			[](Blob &blob) { blob.setData("selected-batch-added-blob-updated"); },
+			[](Blob &blob) { blob.setData("selected-batch-persisted-blob-updated"); });
+
+	exerciseSelectedBatchUpdate<Index>(
+			dataManager->getIndexEntityManager(),
+			createTestIndex(Index::NodeType::LEAF, 201),
+			createTestIndex(Index::NodeType::INTERNAL, 202),
+			[](Index &index) { index.setLevel(1); },
+			[](Index &index) { index.setLevel(2); });
+
+	exerciseSelectedBatchUpdate<State>(
+			dataManager->getStateManager(),
+			createTestState("selected_batch_added_state"),
+			createTestState("selected_batch_persisted_state"),
+			[](State &state) { state.setData("selected-batch-added-state-updated"); },
+			[](State &state) { state.setData("selected-batch-persisted-state-updated"); });
+
+	simulateSave();
+}
+
+TEST_F(BaseEntityManagerCRUDTest, UpdateBatchNoOpInputsAreIgnoredForAllEntityTypes) {
+	std::vector<Node> nodes;
+	EXPECT_NO_THROW(dataManager->getNodeManager()->updateBatch(nodes));
+	EXPECT_NO_THROW(dataManager->getNodeManager()->updateBatch(nodes, {0}));
+	nodes.emplace_back();
+	EXPECT_NO_THROW(dataManager->getNodeManager()->updateBatch(nodes));
+	EXPECT_NO_THROW(dataManager->getNodeManager()->updateBatch(nodes, {}));
+
+	std::vector<Edge> edges;
+	EXPECT_NO_THROW(dataManager->getEdgeManager()->updateBatch(edges));
+	EXPECT_NO_THROW(dataManager->getEdgeManager()->updateBatch(edges, {0}));
+	edges.emplace_back();
+	EXPECT_NO_THROW(dataManager->getEdgeManager()->updateBatch(edges));
+	EXPECT_NO_THROW(dataManager->getEdgeManager()->updateBatch(edges, {}));
+
+	std::vector<Property> properties;
+	EXPECT_NO_THROW(dataManager->getPropertyManager()->updateBatch(properties));
+	EXPECT_NO_THROW(dataManager->getPropertyManager()->updateBatch(properties, {0}));
+	properties.emplace_back();
+	EXPECT_NO_THROW(dataManager->getPropertyManager()->updateBatch(properties));
+	EXPECT_NO_THROW(dataManager->getPropertyManager()->updateBatch(properties, {}));
+
+	std::vector<Blob> blobs;
+	EXPECT_NO_THROW(dataManager->getBlobManager()->updateBatch(blobs));
+	EXPECT_NO_THROW(dataManager->getBlobManager()->updateBatch(blobs, {0}));
+	blobs.emplace_back();
+	EXPECT_NO_THROW(dataManager->getBlobManager()->updateBatch(blobs));
+	EXPECT_NO_THROW(dataManager->getBlobManager()->updateBatch(blobs, {}));
+
+	std::vector<Index> indexes;
+	EXPECT_NO_THROW(dataManager->getIndexEntityManager()->updateBatch(indexes));
+	EXPECT_NO_THROW(dataManager->getIndexEntityManager()->updateBatch(indexes, {0}));
+	indexes.emplace_back();
+	EXPECT_NO_THROW(dataManager->getIndexEntityManager()->updateBatch(indexes));
+	EXPECT_NO_THROW(dataManager->getIndexEntityManager()->updateBatch(indexes, {}));
+
+	std::vector<State> states;
+	EXPECT_NO_THROW(dataManager->getStateManager()->updateBatch(states));
+	EXPECT_NO_THROW(dataManager->getStateManager()->updateBatch(states, {0}));
+	states.emplace_back();
+	EXPECT_NO_THROW(dataManager->getStateManager()->updateBatch(states));
+	EXPECT_NO_THROW(dataManager->getStateManager()->updateBatch(states, {}));
+}
+
+TEST_F(BaseEntityManagerCRUDTest, UpdateBatchRejectsInactiveMembersForAllEntityTypes) {
+	expectFullBatchRejectsInactive<Node>(
+			dataManager->getNodeManager(), createTestNode(dataManager, "InactiveFullBatchNode"));
+	expectSelectedBatchRejectsInactive<Node>(
+			dataManager->getNodeManager(), createTestNode(dataManager, "InactiveSelectedBatchNode"));
+
+	Node source = createTestNode(dataManager, "InactiveBatchEdgeSource");
+	Node target = createTestNode(dataManager, "InactiveBatchEdgeTarget");
+	dataManager->addNode(source);
+	dataManager->addNode(target);
+	expectFullBatchRejectsInactive<Edge>(
+			dataManager->getEdgeManager(),
+			createTestEdge(dataManager, source.getId(), target.getId(), "InactiveFullBatchRel"));
+	expectSelectedBatchRejectsInactive<Edge>(
+			dataManager->getEdgeManager(),
+			createTestEdge(dataManager, source.getId(), target.getId(), "InactiveSelectedBatchRel"));
+
+	expectFullBatchRejectsInactive<Property>(
+			dataManager->getPropertyManager(),
+			createTestProperty(301, Node::typeId, {{"inactive_state", PropertyValue(int64_t{1})}}));
+	expectSelectedBatchRejectsInactive<Property>(
+			dataManager->getPropertyManager(),
+			createTestProperty(302, Node::typeId, {{"inactive_state", PropertyValue(int64_t{2})}}));
+
+	expectFullBatchRejectsInactive<Blob>(
+			dataManager->getBlobManager(), createTestBlob("inactive-full-batch-blob"));
+	expectSelectedBatchRejectsInactive<Blob>(
+			dataManager->getBlobManager(), createTestBlob("inactive-selected-batch-blob"));
+
+	expectFullBatchRejectsInactive<Index>(
+			dataManager->getIndexEntityManager(), createTestIndex(Index::NodeType::LEAF, 301));
+	expectSelectedBatchRejectsInactive<Index>(
+			dataManager->getIndexEntityManager(), createTestIndex(Index::NodeType::INTERNAL, 302));
+
+	expectFullBatchRejectsInactive<State>(
+			dataManager->getStateManager(), createTestState("inactive_full_batch_state"));
+	expectSelectedBatchRejectsInactive<State>(
+			dataManager->getStateManager(), createTestState("inactive_selected_batch_state"));
+
+	simulateSave();
 }

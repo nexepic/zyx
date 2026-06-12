@@ -220,6 +220,72 @@ TEST_F(SegmentTrackerTest, UpdateUsageUpdatesIndex) {
 	EXPECT_EQ(foundOffset, offset);
 }
 
+TEST_F(SegmentTrackerTest, AppendEntityRangeUpdatesUsageBitmapAndIndex) {
+	uint64_t offset = getSegmentOffset(0);
+	auto type = static_cast<uint32_t>(EntityType::Node);
+	(void) createAndRegisterSegment(offset, type, 8, 0);
+
+	tracker->appendEntityRange(offset, 100, 0, 3);
+
+	const SegmentHeader &updatedHeader = tracker->getSegmentHeader(offset);
+	EXPECT_EQ(updatedHeader.start_id, 100);
+	EXPECT_EQ(updatedHeader.used, 3U);
+	EXPECT_EQ(updatedHeader.inactive_count, 0U);
+	EXPECT_EQ(updatedHeader.is_dirty, 1U);
+	EXPECT_TRUE(tracker->getBitmapBit(offset, 0));
+	EXPECT_TRUE(tracker->getBitmapBit(offset, 1));
+	EXPECT_TRUE(tracker->getBitmapBit(offset, 2));
+	EXPECT_EQ(indexManager->findSegmentForId(type, 102), offset);
+	EXPECT_EQ(indexManager->findSegmentForId(type, 108), 0ULL);
+}
+
+TEST_F(SegmentTrackerTest, AppendEntityRangePreservesExistingInactiveCount) {
+	uint64_t offset = getSegmentOffset(0);
+	(void) createAndRegisterSegment(offset, static_cast<uint32_t>(EntityType::Node), 8, 100);
+
+	tracker->appendEntityRange(offset, 100, 0, 4);
+	tracker->setEntityActive(offset, 1, false);
+	ASSERT_EQ(tracker->getSegmentHeader(offset).inactive_count, 1U);
+
+	tracker->appendEntityRange(offset, 104, 4, 2);
+
+	const SegmentHeader &updatedHeader = tracker->getSegmentHeader(offset);
+	EXPECT_EQ(updatedHeader.start_id, 100);
+	EXPECT_EQ(updatedHeader.used, 6U);
+	EXPECT_EQ(updatedHeader.inactive_count, 1U);
+	EXPECT_TRUE(tracker->getBitmapBit(offset, 4));
+	EXPECT_TRUE(tracker->getBitmapBit(offset, 5));
+}
+
+TEST_F(SegmentTrackerTest, AppendEntityRangeRejectsOutOfBoundsRange) {
+	uint64_t offset = getSegmentOffset(0);
+	(void) createAndRegisterSegment(offset, static_cast<uint32_t>(EntityType::Node), 4, 100);
+
+	EXPECT_THROW(tracker->appendEntityRange(offset, 100, 1, 1), std::runtime_error);
+	EXPECT_NO_THROW(tracker->appendEntityRange(offset, 100, 0, 0));
+	EXPECT_NO_THROW(tracker->appendEntityRange(offset, 100, 0, 4));
+	EXPECT_THROW(tracker->appendEntityRange(offset, 104, 4, 1), std::runtime_error);
+
+	uint64_t secondOffset = getSegmentOffset(1);
+	(void) createAndRegisterSegment(secondOffset, static_cast<uint32_t>(EntityType::Node), 8, 100);
+	tracker->appendEntityRange(secondOffset, 100, 0, 4);
+	EXPECT_THROW(tracker->appendEntityRange(secondOffset, 99, 4, 1), std::runtime_error);
+	EXPECT_THROW(tracker->appendEntityRange(secondOffset, 107, 4, 2), std::runtime_error);
+}
+
+TEST_F(SegmentTrackerTest, AppendEntityRangeWorksWithoutIndexManager) {
+	tracker->setSegmentIndexManager(std::weak_ptr<SegmentIndexManager>());
+	indexManager.reset();
+
+	uint64_t offset = getSegmentOffset(0);
+	(void) createAndRegisterSegment(offset, static_cast<uint32_t>(EntityType::Node), 8, 10);
+
+	EXPECT_NO_THROW(tracker->appendEntityRange(offset, 10, 0, 2));
+	const SegmentHeader &updatedHeader = tracker->getSegmentHeader(offset);
+	EXPECT_EQ(updatedHeader.used, 2U);
+	EXPECT_TRUE(tracker->getBitmapBit(offset, 0));
+}
+
 TEST_F(SegmentTrackerTest, MarkForCompaction) {
 	uint64_t offset = getSegmentOffset(0);
 	(void) createAndRegisterSegment(offset, static_cast<uint32_t>(EntityType::Node), 100);
@@ -326,6 +392,33 @@ TEST_F(SegmentTrackerTest, BulkBitmapUpdate) {
 	EXPECT_FALSE(tracker->isEntityActive(offset, 1));
 }
 
+TEST_F(SegmentTrackerTest, SetEntityActiveRangeSaturatesInactiveCount) {
+	uint64_t offset = getSegmentOffset(0);
+	(void) createAndRegisterSegment(offset, static_cast<uint32_t>(EntityType::Node), 8);
+	tracker->updateSegmentUsage(offset, 4, 0);
+
+	tracker->setEntityActiveRange(offset, 0, 4, true);
+
+	const SegmentHeader &header = tracker->getSegmentHeader(offset);
+	EXPECT_EQ(header.inactive_count, 0U);
+	EXPECT_EQ(header.used, 4U);
+	EXPECT_TRUE(tracker->getBitmapBit(offset, 0));
+	EXPECT_TRUE(tracker->getBitmapBit(offset, 3));
+}
+
+TEST_F(SegmentTrackerTest, BatchSetEntityActiveSaturatesInactiveCount) {
+	uint64_t offset = getSegmentOffset(0);
+	(void) createAndRegisterSegment(offset, static_cast<uint32_t>(EntityType::Node), 8);
+	tracker->updateSegmentUsage(offset, 4, 0);
+
+	tracker->batchSetEntityActive(offset, {{0, true}, {1, true}, {2, true}});
+
+	const SegmentHeader &header = tracker->getSegmentHeader(offset);
+	EXPECT_EQ(header.inactive_count, 0U);
+	EXPECT_TRUE(tracker->getBitmapBit(offset, 0));
+	EXPECT_TRUE(tracker->getBitmapBit(offset, 2));
+}
+
 // ============================================================================
 // 7. Free List Management
 // ============================================================================
@@ -363,7 +456,7 @@ TEST_F(SegmentTrackerTest, MarkFreeAlignCheck) {
 // 8. ID Lookup Strategy (Fast vs Slow Path)
 // ============================================================================
 
-TEST_F(SegmentTrackerTest, LookupFastPathViaIndex) {
+TEST_F(SegmentTrackerTest, LookupUsesIndexBeforeLinearScan) {
 	uint64_t offset = getSegmentOffset(0);
 	(void) createAndRegisterSegment(offset, static_cast<uint32_t>(EntityType::Node), 100, 500);
 
@@ -471,6 +564,8 @@ TEST_F(SegmentTrackerTest, WriteAndReadEntity) {
 		Node result = tracker->readEntity<Node>(segOffset, 0, nodeSize);
 		EXPECT_EQ(result.getId(), 123);
 		EXPECT_EQ(result.getLabelId(), 555);
+		Node secondRead = tracker->readEntity<Node>(segOffset, 0, nodeSize);
+		EXPECT_EQ(secondRead.getId(), 123);
 	} catch (const std::exception &e) {
 		FAIL() << "Entity I/O failed: " << e.what();
 	}
@@ -1214,8 +1309,8 @@ TEST_F(SegmentTrackerTest, MarkSegmentFree_NotInSegmentsMap) {
 	EXPECT_EQ(freeList[0], offset);
 }
 
-TEST_F(SegmentTrackerTest, GetSegmentOffsetForEntityId_FastPath_IndexReturnsZero) {
-	// Tests the fast path returning 0 (index miss), falling through to slow path (line 387-389)
+TEST_F(SegmentTrackerTest, GetSegmentOffsetForEntityIdIndexMissFallsBack) {
+	// Tests the hot path returning 0 (index miss), falling through to slow path (line 387-389)
 	uint64_t offset = getSegmentOffset(0);
 	auto type = static_cast<uint32_t>(EntityType::Node);
 
@@ -1545,7 +1640,7 @@ TEST(SegmentTypeRegistryTest, ClearMakesAllTypesUnregistered) {
 // The SegmentTracker constructor loads all known segments into the in-memory
 // cache. If we re-initialize the tracker from a fresh FileHeader (no known
 // segments) but then write a segment header directly to the file and call
-// getSegmentHeaderCopy, the fast path (shared_lock find) will miss and the
+// getSegmentHeaderCopy, the hot path (shared_lock find) will miss and the
 // slow path will read from disk.
 // ============================================================================
 
@@ -1578,4 +1673,3 @@ TEST_F(SegmentTrackerTest, GetSegmentHeaderCopy_CacheMiss_ReadsFromDisk) {
 	EXPECT_EQ(read.used, 3u);
 	EXPECT_EQ(read.start_id, 42);
 }
-

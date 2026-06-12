@@ -139,7 +139,7 @@ TEST_F(SegmentTrackerCrcTest, GetSegmentHeaderCopy_CachedPath) {
 	createTrackerWithChain();
 	uint64_t seg0 = getSegOff(0);
 
-	// First call is cached (fast path)
+	// First call is cached (hot path)
 	SegmentHeader copy = tracker->getSegmentHeaderCopy(seg0);
 	EXPECT_EQ(copy.data_type, Node::typeId);
 	EXPECT_EQ(copy.used, 5u);

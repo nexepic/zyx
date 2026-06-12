@@ -25,6 +25,7 @@
 #include <cstdint>
 #include <fstream>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -59,6 +60,7 @@ using ssize_t = intptr_t;
 #include "graph/storage/PwriteHelper.hpp"
 #include "graph/storage/StorageIO.hpp"
 #include "graph/storage/constraints/IEntityValidator.hpp"
+#include "graph/storage/data/RelationshipSegmentStatsScanner.hpp"
 #include "graph/storage/indexes/IEntityObserver.hpp"
 
 namespace graph {
@@ -108,6 +110,11 @@ namespace graph::storage {
 		size_t matchedCount = 0;
 	};
 
+	struct PropertyEntityPredicateCountResult {
+		size_t loadedCount = 0;
+		size_t matchedCount = 0;
+	};
+
 	struct PropertyEntityPredicateMatchOptions {
 		bool collectLoadedRows = true;
 		bool collectMatchedRows = true;
@@ -123,8 +130,38 @@ namespace graph::storage {
 		const PropertyValue *fallbackValue = nullptr;
 	};
 
+	struct PropertyEntityOwnerValue {
+		int64_t ownerId = 0;
+		PropertyValue value;
+	};
+
+	struct PropertyEntityOwnerKeyValue {
+		int64_t ownerId = 0;
+		std::string key;
+		PropertyValue value;
+	};
+
+	struct PropertyEntityOwnerScalarKeyValue {
+		int64_t ownerId = 0;
+		std::string key;
+		PropertyType type = PropertyType::UNKNOWN;
+		bool boolValue = false;
+		int64_t intValue = 0;
+		double doubleValue = 0.0;
+		std::string stringValue;
+	};
+
+	struct PropertyEntityOwnerPredicateScanOptions {
+		int64_t beginOwnerId = 1;
+		int64_t endOwnerId = std::numeric_limits<int64_t>::max();
+		bool deduplicateOwnerIds = true;
+	};
+
 	using PropertyEntityValueVisitor = std::function<void(size_t row, const PropertyValue &value)>;
 	using PropertyEntityScalarValueVisitor = std::function<void(size_t row, const PropertyEntityScalarValue &value)>;
+	using PropertyEntityScalarPartitionInitializer = std::function<void(size_t partitionCount)>;
+	using PropertyEntityScalarPartitionVisitor =
+			std::function<void(size_t partition, size_t row, const PropertyEntityScalarValue &value)>;
 
 	enum class PropertyEntityPredicateOp { PEP_EQ, PEP_NE, PEP_LT, PEP_LE, PEP_GT, PEP_GE, PEP_RANGE_CLOSED };
 
@@ -133,35 +170,6 @@ namespace graph::storage {
 		PropertyEntityPredicateOp op = PropertyEntityPredicateOp::PEP_EQ;
 		PropertyValue value;
 		std::optional<PropertyValue> upperValue;
-	};
-
-	struct RelationshipTypeSegmentStats {
-		uint64_t segmentOffset = 0;
-		int64_t startId = 0;
-		int64_t endId = -1;
-		uint32_t used = 0;
-		uint32_t inactiveCount = 0;
-		int64_t activeCount = 0;
-		std::unordered_map<int64_t, int64_t> activeCountByType;
-		bool hasPropertyCandidates = false;
-		std::vector<int64_t> activePropertyEntityIds;
-		std::vector<int64_t> activeBlobEdgeIds;
-		std::unordered_map<int64_t, std::vector<int64_t>> activePropertyEntityIdsByType;
-		std::unordered_map<int64_t, std::vector<int64_t>> activeBlobEdgeIdsByType;
-	};
-
-	struct RelationshipPropertyCandidateStats {
-		std::vector<int64_t> propertyEntityIds;
-		std::vector<int64_t> fallbackEdgeIds;
-		size_t matchedEdges = 0;
-	};
-
-	struct RelationshipTypeTotalStats {
-		int64_t firstId = 0;
-		int64_t lastId = -1;
-		size_t segmentCount = 0;
-		int64_t activeCount = 0;
-		std::unordered_map<int64_t, int64_t> activeCountByType;
 	};
 
 	/**
@@ -220,6 +228,8 @@ namespace graph::storage {
 		void addNode(Node &node) const;
 		void addNodes(std::vector<Node> &nodes) const;
 		void updateNode(const Node &node);
+		void updateNodes(const std::vector<Node> &nodes);
+		void updateNodesWithBeforeImages(const std::vector<Node> &nodes, const std::vector<Node> &oldNodes);
 		void deleteNode(Node &node) const;
 		Node getNode(int64_t id) const;
 		std::vector<Node> getNodeBatch(const std::vector<int64_t> &ids) const;
@@ -257,6 +267,16 @@ namespace graph::storage {
 												   size_t rowCount, const std::string &key,
 												   const PropertyEntityScalarValueVisitor &visitor,
 												   concurrent::ThreadPool *pool = nullptr) const;
+		// Visit scalar values using independent scan partitions. The initializer is
+		// called before any values are emitted; callbacks for different partitions may
+		// run concurrently, while callbacks for the same partition are serialized.
+		// stringValue/fallbackValue references are valid only for the callback duration.
+		size_t bulkVisitPropertyEntityScalarValuesPartitioned(
+				const std::vector<int64_t> &ids, const std::vector<size_t> &rows,
+				size_t rowCount, const std::string &key,
+				const PropertyEntityScalarPartitionInitializer &initializer,
+				const PropertyEntityScalarPartitionVisitor &visitor,
+				concurrent::ThreadPool *pool = nullptr) const;
 		// Evaluate equality predicates directly while scanning Property entities.
 		// This avoids materializing row-aligned columns when the caller only needs
 		// rows matching a filter.
@@ -285,9 +305,54 @@ namespace graph::storage {
 		size_t bulkCountPropertyEntityPredicates(const std::vector<int64_t> &ids,
 												 const std::unordered_map<std::string, PropertyValue> &expected,
 												 concurrent::ThreadPool *pool = nullptr) const;
+		PropertyEntityPredicateCountResult bulkCountPropertyEntityPredicateMatches(
+				const std::vector<int64_t> &ids,
+				const std::unordered_map<std::string, PropertyValue> &expected,
+				concurrent::ThreadPool *pool = nullptr) const;
 		size_t bulkCountPropertyEntityPredicateSpecs(const std::vector<int64_t> &ids,
 													 const std::vector<PropertyEntityPredicate> &predicates,
 													 concurrent::ThreadPool *pool = nullptr) const;
+		PropertyEntityPredicateCountResult bulkCountPropertyEntityPredicateSpecMatches(
+				const std::vector<int64_t> &ids,
+				const std::vector<PropertyEntityPredicate> &predicates,
+				concurrent::ThreadPool *pool = nullptr) const;
+		[[nodiscard]] bool canCountPropertyEntityPredicatesByOwnerType(EntityType ownerType) const;
+		PropertyEntityPredicateCountResult bulkCountPropertyEntityPredicateSpecsByOwnerType(
+				EntityType ownerType,
+				const std::vector<PropertyEntityPredicate> &predicates,
+				concurrent::ThreadPool *pool = nullptr) const;
+		[[nodiscard]] bool canCountAllPropertyPredicatesByOwnerType(EntityType ownerType) const;
+		PropertyEntityPredicateCountResult bulkCountAllPropertyPredicateSpecsByOwnerType(
+				EntityType ownerType,
+				const std::vector<PropertyEntityPredicate> &predicates,
+				concurrent::ThreadPool *pool = nullptr) const;
+		std::vector<PropertyEntityOwnerValue> bulkCollectPropertyValuesByOwnerType(
+				EntityType ownerType,
+				const std::string &key,
+				concurrent::ThreadPool *pool = nullptr) const;
+		std::vector<PropertyEntityOwnerKeyValue> bulkCollectPropertyValuesByOwnerType(
+				EntityType ownerType,
+				const std::vector<std::string> &keys,
+				concurrent::ThreadPool *pool = nullptr) const;
+		std::vector<PropertyEntityOwnerValue> bulkCollectPropertyValuesByOwnerType(
+				EntityType ownerType,
+				const std::string &key,
+				const std::vector<int64_t> &ownerIds,
+				concurrent::ThreadPool *pool = nullptr) const;
+		std::vector<int64_t> bulkCollectPropertyPredicateOwnerIdsByOwnerType(
+				EntityType ownerType,
+				const std::vector<PropertyEntityPredicate> &predicates,
+				concurrent::ThreadPool *pool = nullptr) const;
+		std::vector<int64_t> bulkCollectPropertyPredicateOwnerIdsByOwnerType(
+				EntityType ownerType,
+				const std::vector<PropertyEntityPredicate> &predicates,
+				const PropertyEntityOwnerPredicateScanOptions &options,
+				concurrent::ThreadPool *pool = nullptr) const;
+		std::vector<int64_t> bulkCollectAllPropertyPredicateOwnerIdsByOwnerType(
+				EntityType ownerType,
+				const std::vector<PropertyEntityPredicate> &predicates,
+				const PropertyEntityOwnerPredicateScanOptions &options = {},
+				concurrent::ThreadPool *pool = nullptr) const;
 		PropertyEntityPredicateMatchResult
 		bulkMatchPropertyEntityPredicateSpecs(const std::vector<int64_t> &ids, const std::vector<size_t> &rows,
 											  size_t rowCount, const std::vector<PropertyEntityPredicate> &predicates,
@@ -300,17 +365,24 @@ namespace graph::storage {
 		void addEdge(Edge &edge) const;
 		void addEdges(std::vector<Edge> &edges) const;
 		void updateEdge(const Edge &edge);
+		void updateEdges(const std::vector<Edge> &edges);
+		void updateEdgesWithBeforeImages(const std::vector<Edge> &edges, const std::vector<Edge> &oldEdges);
 		void deleteEdge(Edge &edge) const;
 		Edge getEdge(int64_t id) const;
 		std::vector<Edge> getEdgeBatch(const std::vector<int64_t> &ids) const;
 		std::vector<Edge> getEdgesInRange(int64_t startId, int64_t endId, size_t limit = 1000) const;
-		void addEdgeProperties(int64_t edgeId, const std::unordered_map<std::string, PropertyValue> &properties) const;
-		void removeEdgeProperty(int64_t edgeId, const std::string &key) const;
-		std::unordered_map<std::string, PropertyValue> getEdgeProperties(int64_t edgeId) const;
-		std::vector<Edge> findEdgesByNode(int64_t nodeId, const std::string &direction = "both") const;
+			void addEdgeProperties(int64_t edgeId, const std::unordered_map<std::string, PropertyValue> &properties) const;
+			void removeEdgeProperty(int64_t edgeId, const std::string &key) const;
+			std::unordered_map<std::string, PropertyValue> getEdgeProperties(int64_t edgeId) const;
+			std::vector<Edge> findEdgesByNode(int64_t nodeId, const std::string &direction = "both") const;
+			size_t visitEdgesByNode(
+					int64_t nodeId,
+					const std::function<bool(const Edge &)> &visitor,
+					const std::string &direction = "both") const;
 
 		// Property entity operations
 		void addPropertyEntity(Property &property) const;
+		void addPropertyEntities(std::vector<Property> &properties) const;
 		void updatePropertyEntity(const Property &property) const;
 		void deleteProperty(Property &property) const;
 		Property getProperty(int64_t id) const;
@@ -386,6 +458,9 @@ namespace graph::storage {
 		template<typename EntityType>
 		std::vector<DirtyEntityInfo<EntityType>> getDirtyEntityInfos(const std::vector<EntityChangeType> &types) const;
 
+		template<typename EntityType>
+		bool hasDirtyEntityInfos(std::span<const EntityChangeType> types) const;
+
 		// Helper method to retrieve an entity from memory (dirty collections and cache) or disk
 		template<typename EntityType>
 		EntityType getEntityFromMemoryOrDisk(int64_t id);
@@ -425,14 +500,27 @@ namespace graph::storage {
 		// Page buffer pool access
 		[[nodiscard]] PageBufferPool &getPagePool() const { return *pagePool_; }
 
-		// Storage-owned relationship metadata cache. It stores per-segment type counts,
-		// not query results, and is invalidated alongside dirty storage pages.
+		// Storage-owned relationship segment cache. It stores transient per-segment
+		// scan summaries, not persisted metadata or query results, and is invalidated
+		// alongside dirty storage pages.
 		[[nodiscard]] std::optional<int64_t> countActiveEdgesByTypeFromSegmentStats(int64_t beginId, int64_t endId,
 																					int64_t typeId) const;
+		[[nodiscard]] std::optional<int64_t>
+		countActivePersistedEdgeIdsByType(std::span<const int64_t> edgeIds, int64_t typeId) const;
+		[[nodiscard]] std::optional<int64_t>
+		countActivePersistedEdgeIdsByType(std::span<const int64_t> edgeIds,
+		                                  int64_t typeId,
+		                                  concurrent::ThreadPool *threadPool) const;
+		[[nodiscard]] bool hasCachedRelationshipSegmentTypeStats(bool requirePropertyCandidates = false) const;
 		[[nodiscard]] std::optional<RelationshipTypeSegmentStats>
 		cachedRelationshipTypeSegmentStats(uint64_t segmentOffset) const;
 		[[nodiscard]] std::optional<RelationshipPropertyCandidateStats>
-		collectRelationshipPropertyCandidatesFromSegmentStats(int64_t beginId, int64_t endId, int64_t typeId) const;
+		collectRelationshipPropertyCandidatesFromSegmentStats(int64_t beginId, int64_t endId, int64_t typeId,
+															  bool includePropertyEdgeRefs = true) const;
+		[[nodiscard]] std::optional<RelationshipPropertyCandidateStats>
+		collectCachedRelationshipPropertyCandidatesFromSegmentStats(int64_t beginId, int64_t endId,
+																	 int64_t typeId,
+																	 bool includePropertyEdgeRefs = true) const;
 		void invalidateRelationshipSegmentTypeStats(std::span<const uint64_t> segmentOffsets) const;
 		void clearRelationshipSegmentTypeStats() const;
 
@@ -479,6 +567,7 @@ namespace graph::storage {
 		FlushSnapshotView prepareFlushSnapshotView() const;
 		void commitFlushSnapshot() const;
 		[[nodiscard]] bool hasUnsavedChanges() const;
+		[[nodiscard]] std::shared_ptr<CommittedSnapshot> captureCommittedSnapshot() const;
 
 		template<typename EntityType>
 		std::optional<DirtyEntityInfo<EntityType>> getDirtyInfo(int64_t id);
@@ -506,7 +595,7 @@ namespace graph::storage {
 		[[nodiscard]] static bool isReadOnlyMode() { return readOnlyMode_; }
 
 		// Transaction context management
-		void setActiveTransaction(uint64_t txnId) { txnContext_.setActive(txnId); }
+		void setActiveTransaction(uint64_t txnId);
 		void clearActiveTransaction() { txnContext_.clear(); }
 		[[nodiscard]] bool hasActiveTransaction() const { return txnContext_.isActive(); }
 		[[nodiscard]] uint64_t getActiveTxnId() const { return txnContext_.activeTxnId(); }
@@ -517,6 +606,7 @@ namespace graph::storage {
 		void setWALManager(wal::WALManager *wal) { txnContext_.setWALManager(wal); }
 		[[nodiscard]] TransactionContext &getTransactionContext() { return txnContext_; }
 
+		void flushTransactionWALRecords() const;
 		void rollbackActiveTransaction();
 
 	private:
@@ -535,7 +625,6 @@ namespace graph::storage {
 
 		mutable std::shared_mutex relationshipSegmentTypeStatsMutex_;
 		mutable std::unordered_map<uint64_t, RelationshipTypeSegmentStats> relationshipSegmentTypeStats_;
-		mutable std::optional<RelationshipTypeTotalStats> relationshipTypeTotalStats_;
 
 		// Transaction bookkeeping (mutable: logically separate from entity state,
 		// needs to be modifiable from const entity mutation methods)
@@ -599,15 +688,14 @@ namespace graph::storage {
 		[[nodiscard]] std::optional<RelationshipTypeSegmentStats>
 		buildRelationshipSegmentTypeStats(uint64_t segmentOffset, const SegmentHeader &header,
 										  bool includePropertyCandidates = false) const;
-		[[nodiscard]] std::optional<RelationshipTypeTotalStats> getRelationshipTypeTotalStats() const;
-		[[nodiscard]] std::optional<RelationshipTypeTotalStats> getCachedRelationshipTypeTotalStats() const;
-		[[nodiscard]] std::optional<RelationshipTypeTotalStats> buildRelationshipTypeTotalStats() const;
-		[[nodiscard]] std::optional<int64_t> countActiveEdgesByTypeFromTotalStats(int64_t beginId, int64_t endId,
-																				  int64_t typeId) const;
 		[[nodiscard]] std::optional<int64_t> countActiveEdgesByTypeInSegmentWindow(uint64_t segmentOffset,
 																				   const SegmentHeader &header,
 																				   int64_t firstId, int64_t lastId,
 																				   int64_t typeId) const;
+		[[nodiscard]] std::optional<RelationshipPropertyCandidateStats>
+		collectRelationshipPropertyCandidatesFromSegmentStatsImpl(int64_t beginId, int64_t endId, int64_t typeId,
+																  bool buildMissingStats,
+																  bool includePropertyEdgeRefs) const;
 		[[nodiscard]] std::optional<bool> persistedEdgeMatchesType(int64_t edgeId, int64_t typeId) const;
 		[[nodiscard]] std::optional<int64_t>
 		applyRelationshipTypeCountOverlay(int64_t baseCount, int64_t beginId, int64_t endId, int64_t typeId,
@@ -650,6 +738,9 @@ namespace graph::storage {
 		template<typename EntityType>
 		void rollbackDeletedEntry(const wal::UndoEntry &entry,
 								  std::function<void(const EntityType &)> notifyAdded) const;
+
+		template<typename EntityType>
+		void flushPendingWALRecordsForType(const TransactionContext::PendingWalChangeMap &changes) const;
 
 		EntityObserverManager observerManager_;
 

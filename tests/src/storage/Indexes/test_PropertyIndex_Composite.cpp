@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <gtest/gtest.h>
 #include <memory>
+#include <vector>
 
 #include "graph/core/Database.hpp"
 #include "graph/storage/FileStorage.hpp"
@@ -103,6 +104,33 @@ TEST_F(PropertyIndexCompositeTest, AddAndFindCompositeEntry) {
 		{PropertyValue(std::string("Alice")), PropertyValue(static_cast<int64_t>(30))});
 	ASSERT_EQ(results.size(), 1u);
 	EXPECT_EQ(results[0], 1);
+}
+
+TEST_F(PropertyIndexCompositeTest, AddCompositeEntriesBatchAddsOnlyExistingDefinitions) {
+	propertyIndex->createCompositeIndex({"name", "age"});
+
+	const std::vector<graph::query::indexes::PropertyIndex::CompositeEntry> entries = {
+		{1, {"name", "age"}, {PropertyValue(std::string("Alice")), PropertyValue(static_cast<int64_t>(30))}},
+		{2, {"missing", "keys"}, {PropertyValue(std::string("Skip")), PropertyValue(static_cast<int64_t>(99))}},
+		{3, {"name", "age"}, {PropertyValue(std::string("Bob")), PropertyValue(static_cast<int64_t>(31))}},
+	};
+	propertyIndex->addCompositeEntriesBatch(entries);
+
+	auto aliceResults = propertyIndex->findCompositeExact(
+		{"name", "age"},
+		{PropertyValue(std::string("Alice")), PropertyValue(static_cast<int64_t>(30))});
+	auto bobResults = propertyIndex->findCompositeExact(
+		{"name", "age"},
+		{PropertyValue(std::string("Bob")), PropertyValue(static_cast<int64_t>(31))});
+	auto skippedResults = propertyIndex->findCompositeExact(
+		{"missing", "keys"},
+		{PropertyValue(std::string("Skip")), PropertyValue(static_cast<int64_t>(99))});
+
+	ASSERT_EQ(aliceResults.size(), 1u);
+	ASSERT_EQ(bobResults.size(), 1u);
+	EXPECT_EQ(aliceResults[0], 1);
+	EXPECT_EQ(bobResults[0], 3);
+	EXPECT_TRUE(skippedResults.empty());
 }
 
 TEST_F(PropertyIndexCompositeTest, AddCompositeEntry_NoIndex_Noop) {

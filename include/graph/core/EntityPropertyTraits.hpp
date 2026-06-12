@@ -70,6 +70,10 @@ namespace graph::storage {
 		static std::unordered_map<std::string, PropertyValue> getProperties(const Node &entity) {
 			return entity.getProperties();
 		}
+
+		static std::unordered_map<std::string, PropertyValue> takeProperties(Node &entity) {
+			return entity.takeProperties();
+		}
 	};
 
 	// Specialization for Edge - similar to Node
@@ -102,6 +106,10 @@ namespace graph::storage {
 
 		static std::unordered_map<std::string, PropertyValue> getProperties(const Edge &entity) {
 			return entity.getProperties();
+		}
+
+		static std::unordered_map<std::string, PropertyValue> takeProperties(Edge &entity) {
+			return entity.takeProperties();
 		}
 	};
 

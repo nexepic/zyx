@@ -98,7 +98,8 @@ namespace graph {
 		uint64_t txnId = nextTxnId_.fetch_add(1);
 
 		// Write WAL begin record
-		if (walManager_ && walManager_->isOpen()) {
+		const bool walOpen = walManager_ && walManager_->isOpen();
+		if (walOpen) {
 			walManager_->writeBegin(txnId);
 		}
 
@@ -134,8 +135,14 @@ namespace graph {
 			return;
 		}
 
-		// Write WAL commit record (writeCommit internally flushes buffer + fsync via group commit)
-		if (walManager_ && walManager_->isOpen()) {
+		auto dm = storage_->getDataManager();
+
+		// Flush all transaction-local entity records before the commit marker.
+		// Once writeCommit() fsyncs, recovery can replay these final states even
+		// if the main DB checkpoint is deferred.
+		const bool walOpen = walManager_ && walManager_->isOpen();
+		if (walOpen) {
+			dm->flushTransactionWALRecords();
 			auto walStart = Clock::now();
 			walManager_->writeCommit(txn.getId());
 			debug::PerfTrace::addDuration(
@@ -145,32 +152,44 @@ namespace graph {
 												 .count()));
 		}
 
-		auto dm = storage_->getDataManager();
+		bool checkpointed = false;
 
-		// Persist dirty data to main DB file
-		auto saveStart = Clock::now();
-		storage_->save();
-		debug::PerfTrace::addDuration(
-				"txn.save", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
-												 saveStart)
-											  .count()));
-
-		// Checkpoint WAL if size exceeds threshold (data is now in main DB)
-		if (walManager_ && walManager_->isOpen() && walManager_->shouldCheckpoint()) {
+		// Checkpoint only when the WAL crosses its size threshold. Small write
+		// commits stay WAL-first and are materialized by a later checkpoint or
+		// clean close, avoiding a main DB fsync per transaction.
+		if (!walOpen) {
+			auto saveStart = Clock::now();
+			storage_->save();
+			debug::PerfTrace::addDuration(
+					"txn.save", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+															Clock::now() - saveStart)
+															.count()));
+			checkpointed = true;
+		} else if (walManager_->shouldCheckpoint()) {
 			auto checkpointStart = Clock::now();
+			auto saveStart = Clock::now();
+			storage_->save();
+			debug::PerfTrace::addDuration(
+					"txn.save", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+															Clock::now() - saveStart)
+															.count()));
 			walManager_->checkpoint();
 			debug::PerfTrace::addDuration(
 					"checkpoint",
 					static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
 												 checkpointStart)
 												 .count()));
+			checkpointed = true;
 		}
 
-		// save() is synchronous and invalidates dirty page-cache entries before
-		// registries are cleared, so future readers can use the disk state
-		// directly. Publish an empty overlay snapshot instead of copying the
-		// committed dirty maps on every write transaction.
-		snapshotManager_->publishCleanSnapshot();
+		if (checkpointed || !dm->hasUnsavedChanges()) {
+			// Main DB state is current; readers can rely on disk plus an empty overlay.
+			snapshotManager_->publishCleanSnapshot();
+		} else {
+			// Publish the committed dirty overlay for read-only transactions while
+			// the main DB file intentionally lags behind the WAL.
+			snapshotManager_->publishSnapshot(dm->captureCommittedSnapshot());
+		}
 
 		// Clear DataManager transaction context
 		dm->clearActiveTransaction();

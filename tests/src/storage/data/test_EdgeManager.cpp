@@ -195,6 +195,26 @@ TEST_F(EdgeManagerTest, FindEdgesByNode) {
 	EXPECT_EQ(incomingEdges[0].getSourceNodeId(), sourceNode.getId());
 }
 
+TEST_F(EdgeManagerTest, AddBatchLinksTraversalLists) {
+	int64_t targetLabelId = dataManager->getOrCreateTokenId("BatchTarget");
+	graph::Node target2(0, targetLabelId);
+	nodeManager->add(target2);
+
+	int64_t typeId = dataManager->getOrCreateTokenId("BATCH_CONNECTS_TO");
+	std::vector<graph::Edge> edges;
+	edges.emplace_back(0, sourceNode.getId(), targetNode.getId(), typeId);
+	edges.emplace_back(0, sourceNode.getId(), target2.getId(), typeId);
+
+	edgeManager->addBatch(edges);
+
+	const auto outgoingEdges = edgeManager->findByNode(sourceNode.getId(), "out");
+	EXPECT_EQ(outgoingEdges.size(), 2UL);
+
+	const auto incomingEdges = edgeManager->findByNode(targetNode.getId(), "in");
+	ASSERT_EQ(incomingEdges.size(), 1UL);
+	EXPECT_EQ(incomingEdges[0].getSourceNodeId(), sourceNode.getId());
+}
+
 // Test edge updating
 TEST_F(EdgeManagerTest, UpdateEdge) {
 	int64_t initLabel = dataManager->getOrCreateTokenId("INITIAL_LABEL");
@@ -539,4 +559,3 @@ TEST_F(EdgeManagerTest, OperationsWithExpiredDataManager) {
 	// In production code, this scenario should never occur as DataManager owns EdgeManager.
 	// The defensive checks are in place for extra safety.
 }
-

@@ -22,8 +22,11 @@
 
 #include <memory>
 #include <mutex>
+#include <map>
 #include <shared_mutex>
 #include <string>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 #include "graph/core/IndexTreeManager.hpp"
 #include "graph/core/PropertyTypes.hpp"
@@ -66,6 +69,18 @@ namespace graph::query::indexes {
 
 		void addPropertiesBatch(const std::vector<std::tuple<int64_t, std::string, PropertyValue>> &properties);
 
+		struct TypedPropertyEntry {
+			int64_t entityId = 0;
+			std::string key;
+			PropertyType type = PropertyType::UNKNOWN;
+			bool boolValue = false;
+			int64_t intValue = 0;
+			double doubleValue = 0.0;
+			std::string stringValue;
+		};
+
+		void addTypedPropertiesBatch(std::vector<TypedPropertyEntry> properties);
+
 		void removeProperty(int64_t entityId, const std::string &key, const PropertyValue &value);
 
 		// Find nodes with exact property match
@@ -86,6 +101,7 @@ namespace graph::query::indexes {
 		                  bool maxInclusive = true) const;
 
 		const std::vector<std::string> &getIndexedKeys() const;
+		std::vector<std::string> getIndexedKeysSnapshot() const;
 
 		bool isEmpty() const;
 
@@ -97,6 +113,11 @@ namespace graph::query::indexes {
 		PropertyType getIndexedKeyType(const std::string &key) const;
 
 		// --- Composite Index API ---
+		struct CompositeEntry {
+			int64_t entityId = 0;
+			std::vector<std::string> keys;
+			std::vector<PropertyValue> values;
+		};
 
 		void createCompositeIndex(const std::vector<std::string> &keys);
 		void removeCompositeIndex(const std::vector<std::string> &keys);
@@ -105,11 +126,16 @@ namespace graph::query::indexes {
 		void addCompositeEntry(int64_t entityId,
 		                       const std::vector<std::string> &keys,
 		                       const std::vector<PropertyValue> &values);
+		void addCompositeEntriesBatch(const std::vector<CompositeEntry> &entries);
 		void removeCompositeEntry(int64_t entityId,
 		                          const std::vector<std::string> &keys,
 		                          const std::vector<PropertyValue> &values);
 
 		std::vector<int64_t> findCompositeExact(
+		    const std::vector<std::string> &keys,
+		    const std::vector<PropertyValue> &values) const;
+
+		size_t countCompositeExact(
 		    const std::vector<std::string> &keys,
 		    const std::vector<PropertyValue> &values) const;
 
@@ -146,6 +172,10 @@ namespace graph::query::indexes {
 		std::shared_ptr<IndexTreeManager> getTreeManagerForType(PropertyType type) const;
 		std::unordered_map<std::string, int64_t> &getRootMapForType(PropertyType type);
 		const std::unordered_map<std::string, int64_t> &getRootMapForType(PropertyType type) const;
+
+		using PropertyEntryGroup =
+				std::map<PropertyType, std::map<std::string, std::vector<std::pair<PropertyValue, int64_t>>>>;
+		void insertGroupedPropertiesBatch(PropertyEntryGroup &groupedBatch);
 
 		void serializeRootMap() const;
 		void deserializeRootMap();

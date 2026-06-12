@@ -22,6 +22,9 @@ TEST(WALManagerAccessorTest, AutoCheckpointAndWalSizeAccessors) {
 	const fs::path walPath = dbPath.string() + "-wal";
 
 	WALManager mgr;
+	EXPECT_EQ(mgr.getGroupCommitDelayUs(), 0U);
+	mgr.setGroupCommitDelayUs(250);
+	EXPECT_EQ(mgr.getGroupCommitDelayUs(), 250U);
 	mgr.open(dbPath.string());
 	ASSERT_TRUE(mgr.isOpen());
 

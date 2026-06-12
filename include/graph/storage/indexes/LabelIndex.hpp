@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
@@ -75,6 +76,11 @@ namespace graph::query::indexes {
 		 * @return Vector of node IDs with the label
 		 */
 		std::vector<int64_t> findNodes(const std::string &label) const;
+
+		/**
+		 * Counts nodes associated with a label without materializing IDs.
+		 */
+		size_t countNodes(const std::string &label) const;
 
 		/**
 		 * Checks if a node has a specific label

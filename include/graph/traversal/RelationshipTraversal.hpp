@@ -32,6 +32,19 @@ namespace graph::storage {
 
 namespace graph::traversal {
 
+	using EdgeVisitor = std::function<bool(const Edge &)>;
+
+	struct RelationshipBatchLinkUpdates {
+		std::vector<Node> nodes;
+		std::vector<Node> oldNodes;
+		std::vector<Edge> oldHeadEdges;
+		std::vector<Edge> oldHeadEdgesBefore;
+
+		[[nodiscard]] bool empty() const {
+			return nodes.empty() && oldHeadEdges.empty();
+		}
+	};
+
 	/**
 	 * Provides methods for traversing relationships between nodes in the graph.
 	 * Uses the linked-list approach for efficiently finding connected nodes and edges.
@@ -47,6 +60,7 @@ namespace graph::traversal {
 		 * @return A vector of all outgoing edges
 		 */
 		std::vector<Edge> getOutgoingEdges(int64_t nodeId) const;
+		size_t visitOutgoingEdges(int64_t nodeId, const EdgeVisitor &visitor) const;
 
 		/**
 		 * Gets all incoming edges to a node
@@ -55,6 +69,7 @@ namespace graph::traversal {
 		 * @return A vector of all incoming edges
 		 */
 		std::vector<Edge> getIncomingEdges(int64_t nodeId) const;
+		size_t visitIncomingEdges(int64_t nodeId, const EdgeVisitor &visitor) const;
 
 		/**
 		 * Gets all edges connected to a node (both incoming and outgoing)
@@ -63,6 +78,7 @@ namespace graph::traversal {
 		 * @return A vector of all connected edges
 		 */
 		std::vector<Edge> getAllConnectedEdges(int64_t nodeId) const;
+		size_t visitAllConnectedEdges(int64_t nodeId, const EdgeVisitor &visitor) const;
 
 		/**
 		 * Gets all nodes connected to the specified node via outgoing edges
@@ -94,6 +110,27 @@ namespace graph::traversal {
 		 * @param edge The edge to be linked
 		 */
 		void linkEdge(Edge &edge) const;
+
+		/**
+		 * Mutates newly-created edges with batch prev/next pointers and returns
+		 * the existing nodes / head edges that must be persisted afterward.
+		 */
+		[[nodiscard]] RelationshipBatchLinkUpdates buildBatchLinks(std::vector<Edge> &edges) const;
+
+		/**
+		 * Persists node head-pointer and existing-head-edge updates produced by
+		 * buildBatchLinks().
+		 */
+		void applyBatchLinkUpdates(const RelationshipBatchLinkUpdates &updates) const;
+
+		/**
+		 * Links a batch of newly-created edges into the relationship lists.
+		 *
+		 * The batch form preserves the same prepend order as repeated linkEdge()
+		 * calls, but loads and updates each affected node / existing head edge at
+		 * most once. The input edges must already have stable IDs.
+		 */
+		void linkEdgesBatch(std::vector<Edge> &edges) const;
 
 		/**
 		 * Unlinks an edge from the linked lists

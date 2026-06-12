@@ -20,7 +20,7 @@
 
 #include "graph/storage/data/EdgeManager.hpp"
 #include <utility>
-#include "graph/storage/IDAllocator.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/traversal/RelationshipTraversal.hpp"
 
 namespace graph::storage {
@@ -40,6 +40,41 @@ namespace graph::storage {
 
 		// Edge-specific: Link the edge in the relationship traversal
 		getDataManagerPtr()->getRelationshipTraversal()->linkEdge(edge);
+	}
+
+	void EdgeManager::addBatch(std::vector<Edge> &edges) {
+		auto linkUpdates = prepareAddBatch(edges);
+		persistPreparedAddBatch(edges, linkUpdates);
+	}
+
+	traversal::RelationshipBatchLinkUpdates EdgeManager::prepareAddBatch(std::vector<Edge> &edges) {
+		if (edges.empty()) {
+			return {};
+		}
+
+		auto *dataManager = getDataManagerPtr();
+		debug::ScopedPerfTimer timer("relationship_traversal.link_edges_batch.prepare_add");
+
+		assignMissingIds(edges);
+
+		auto traversal = dataManager->getRelationshipTraversal();
+		return traversal->buildBatchLinks(edges);
+	}
+
+	void EdgeManager::persistPreparedAddBatch(
+			const std::vector<Edge> &edges,
+			const traversal::RelationshipBatchLinkUpdates &linkUpdates) {
+		if (edges.empty()) {
+			return;
+		}
+
+		auto *dataManager = getDataManagerPtr();
+		debug::ScopedPerfTimer timer("relationship_traversal.link_edges_batch");
+		{
+			debug::ScopedPerfTimer upsertTimer("relationship_traversal.link_edges_batch.upsert_new_edges");
+			persistAddedBatch(edges);
+		}
+		dataManager->getRelationshipTraversal()->applyBatchLinkUpdates(linkUpdates);
 	}
 
 	std::vector<Edge> EdgeManager::findByNode(int64_t nodeId, const std::string &direction) const {

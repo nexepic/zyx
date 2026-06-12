@@ -45,6 +45,7 @@
 #include "graph/query/execution/operators/UnwindOperator.hpp"
 #include "graph/query/execution/operators/VarLengthTraversalOperator.hpp"
 #include "graph/query/optimizer/Optimizer.hpp"
+#include "graph/query/planner/NodeAccessPathPlanner.hpp"
 #include "graph/query/planner/ProcedureRegistry.hpp"
 #include "graph/query/algorithm/GraphProjectionManager.hpp"
 
@@ -99,8 +100,17 @@ namespace graph::query {
 																	  const std::string &key,
 																	  const PropertyValue &value) const {
 
-		// 1. Consult the Optimizer
-		auto config = optimizer_->optimizeNodeScan(variable, labels, key, value);
+		// 1. Consult the shared access-path planner used by the logical IR pipeline.
+		std::vector<std::pair<std::string, PropertyValue>> predicates;
+		if (!key.empty()) {
+			predicates.emplace_back(key, value);
+		}
+		logical::LogicalNodeScan scan(variable, labels, std::move(predicates));
+		auto accessPath = planner::chooseNodeAccessPathDecision(scan, im_);
+		auto config = accessPath.config();
+		if (accessPath.selectedRequiresConservativeFallback()) {
+			planner::fallbackToLabelOrFullScan(config);
+		}
 
 		// 2. Build the Scan Operator
 		// The Scan Operator purely executes the config (fetching IDs).
@@ -128,7 +138,7 @@ namespace graph::query {
 		}
 
 		if (!key.empty()) {
-			if (config.type != execution::ScanType::PROPERTY_SCAN) {
+			if (config.type != execution::ScanType::PROPERTY_SCAN || config.indexKey != key) {
 				// Case: Index NOT used. Add explicit Filter.
 					auto predicate = [variable, key, value](const execution::Record &r) {
 						return planner_detail::recordHasPropertyValue(r, variable, key, value);

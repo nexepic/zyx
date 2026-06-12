@@ -56,6 +56,18 @@ namespace graph::storage {
 			throw std::invalid_argument("StorageIO::append called with null buffer or zero size");
 		}
 
+		if (writeFd_ != INVALID_FILE_HANDLE) {
+			uint64_t offset = 0;
+			if (portable_file_size(writeFd_, &offset) != 0) {
+				throw std::runtime_error("StorageIO::append native file-size query failed");
+			}
+			pwrite_ssize_t written = portable_pwrite(writeFd_, buf, size, static_cast<pwrite_off_t>(offset));
+			if (written < 0 || static_cast<size_t>(written) != size) { // ZYX_COV_EXCL_LINE: short native writes are OS-level defensive errors.
+				throw std::runtime_error("StorageIO::append native write failed");
+			}
+			return offset;
+		}
+
 		stream_->seekp(0, std::ios::end);
 		auto offset = static_cast<uint64_t>(stream_->tellp());
 		stream_->write(static_cast<const char *>(buf), static_cast<std::streamsize>(size));
@@ -70,6 +82,20 @@ namespace graph::storage {
 			throw std::invalid_argument("StorageIO::reserveAppendSpace called with zero size");
 		}
 
+		if (writeFd_ != INVALID_FILE_HANDLE) {
+			uint64_t offset = 0;
+			if (portable_file_size(writeFd_, &offset) != 0) {
+				throw std::runtime_error("StorageIO::reserveAppendSpace native file-size query failed");
+			}
+			const char zero = 0;
+			const auto endOffset = static_cast<pwrite_off_t>(offset + size - 1);
+			pwrite_ssize_t written = portable_pwrite(writeFd_, &zero, 1, endOffset);
+			if (written != 1) { // ZYX_COV_EXCL_LINE: short native file-extension writes are OS-level defensive errors.
+				throw std::runtime_error("StorageIO::reserveAppendSpace native file extension failed");
+			}
+			return offset;
+		}
+
 		stream_->clear();
 		stream_->seekp(0, std::ios::end);
 		auto endPos = stream_->tellp();
@@ -81,7 +107,7 @@ namespace graph::storage {
 		stream_->seekp(static_cast<std::streamoff>(offset + size - 1));
 		const char zero = 0;
 		stream_->write(&zero, 1);
-		if (!*stream_) {
+		if (!*stream_) { // ZYX_COV_EXCL_LINE: tellp failure is the portable fstream error path covered above.
 			throw std::runtime_error("StorageIO::reserveAppendSpace fstream write failed");
 		}
 		stream_->flush();

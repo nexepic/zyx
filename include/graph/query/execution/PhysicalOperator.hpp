@@ -22,6 +22,7 @@
 
 #include <memory>
 #include <optional>
+#include <utility>
 #include <string>
 #include <vector>
 #include "Record.hpp"
@@ -38,6 +39,8 @@ namespace graph::query::execution {
 
 	class PhysicalOperator {
 	public:
+		using ExplainAttribute = std::pair<std::string, std::string>;
+
 		virtual ~PhysicalOperator() = default;
 
 		static constexpr size_t DEFAULT_BATCH_SIZE = 1000;
@@ -70,6 +73,11 @@ namespace graph::query::execution {
 		 * e.g., "NodeScan(n:User)" or "Filter(age > 10)"
 		 */
 		[[nodiscard]] virtual std::string toString() const = 0;
+
+		/**
+		 * @brief Returns stable key/value details for explain/profile tooling.
+		 */
+		[[nodiscard]] virtual std::vector<ExplainAttribute> explainAttributes() const { return {}; }
 
 		/**
 		 * @brief Returns raw pointers to children operators.

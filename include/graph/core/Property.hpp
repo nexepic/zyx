@@ -22,6 +22,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include "PropertyTypes.hpp"
 #include "Types.hpp"
 #include "graph/core/Entity.hpp"
@@ -63,6 +64,7 @@ namespace graph {
 
 		// Property map management
 		void setProperties(const std::unordered_map<std::string, PropertyValue> &newValues) { values = newValues; }
+		void setProperties(std::unordered_map<std::string, PropertyValue> &&newValues) { values = std::move(newValues); }
 
 		// Serialization methods
 		void serialize(std::ostream &os) const;

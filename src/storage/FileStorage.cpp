@@ -19,26 +19,29 @@
  **/
 
 #include "graph/storage/FileStorage.hpp"
+#include <array>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <future>
+#include <optional>
+#include <span>
 #include <tuple>
 #include <utility>
-#include "graph/storage/IntegrityChecker.hpp"
-#include "graph/storage/PreadHelper.hpp"
-#include "graph/storage/PwriteHelper.hpp"
-#include "graph/storage/StorageBootstrap.hpp"
 #include "graph/core/Blob.hpp"
 #include "graph/core/Database.hpp"
-#include "graph/utils/ChecksumUtils.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Index.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/core/Property.hpp"
 #include "graph/core/State.hpp"
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/storage/IntegrityChecker.hpp"
+#include "graph/storage/PreadHelper.hpp"
+#include "graph/storage/PwriteHelper.hpp"
+#include "graph/storage/StorageBootstrap.hpp"
 #include "graph/storage/data/EntityTraits.hpp"
+#include "graph/utils/ChecksumUtils.hpp"
 #include "graph/utils/FixedSizeSerializer.hpp"
 
 namespace graph::storage {
@@ -52,6 +55,7 @@ namespace graph::storage {
 		if (isFileOpen)
 			return;
 
+		debug::ScopedPerfTimer totalTimer("storage.open.total");
 		bool fileExists = std::filesystem::exists(dbFilePath);
 
 		// --- Strict Mode Validation ---
@@ -63,52 +67,74 @@ namespace graph::storage {
 		}
 		// ------------------------------------
 
-		// Logic for creating NEW database
-		if (openMode_ == OpenMode::OPEN_CREATE_NEW_FILE || (openMode_ == OpenMode::OPEN_CREATE_OR_OPEN_FILE && !fileExists)) {
-			// Create and open for Read/Write + Truncate (Wipe previous)
-			fileStream = std::make_shared<std::fstream>(dbFilePath, std::ios::binary | std::ios::in | std::ios::out |
-																			std::ios::trunc);
+		{
+			debug::ScopedPerfTimer fileTimer("storage.open.file");
+			// Logic for creating NEW database
+			if (openMode_ == OpenMode::OPEN_CREATE_NEW_FILE ||
+				(openMode_ == OpenMode::OPEN_CREATE_OR_OPEN_FILE && !fileExists)) {
+				// Create and open for Read/Write + Truncate (Wipe previous)
+				fileStream = std::make_shared<std::fstream>(dbFilePath, std::ios::binary | std::ios::in |
+																				std::ios::out | std::ios::trunc);
 
-			if (!*fileStream) {
-				throw std::runtime_error("Cannot create database file: " + dbFilePath);
+				if (!*fileStream) {
+					throw std::runtime_error("Cannot create database file: " + dbFilePath);
+				}
+
+				fileHeaderManager = std::make_shared<FileHeaderManager>(fileStream, fileHeader);
+				// This physically writes the header bytes, creating the "empty" DB file.
+				fileHeaderManager->initializeFileHeader();
 			}
+			// Logic for OPENING existing database
+			else {
+				fileStream =
+						std::make_shared<std::fstream>(dbFilePath, std::ios::binary | std::ios::in | std::ios::out);
 
-			fileHeaderManager = std::make_shared<FileHeaderManager>(fileStream, fileHeader);
-			// This physically writes the header bytes, creating the "empty" DB file.
-			fileHeaderManager->initializeFileHeader();
-		}
-		// Logic for OPENING existing database
-		else {
-			fileStream = std::make_shared<std::fstream>(dbFilePath, std::ios::binary | std::ios::in | std::ios::out);
+				if (!*fileStream) {
+					throw std::runtime_error("Cannot open database file: " + dbFilePath);
+				}
 
-			if (!*fileStream) {
-				throw std::runtime_error("Cannot open database file: " + dbFilePath);
+				fileHeaderManager = std::make_shared<FileHeaderManager>(fileStream, fileHeader);
+				fileHeaderManager->validateAndReadHeader();
 			}
-
-			fileHeaderManager = std::make_shared<FileHeaderManager>(fileStream, fileHeader);
-			fileHeaderManager->validateAndReadHeader();
 		}
 
-		// Open native file handles for pwrite/pread-based parallel I/O
-		writeFd_ = portable_open_rw(dbFilePath.c_str());
-		if (writeFd_ == INVALID_FILE_HANDLE) {
-			throw std::runtime_error("Cannot open native write handle for parallel writes: " + dbFilePath);
-		}
-
-		readFd_ = portable_open(dbFilePath.c_str(), O_RDONLY);
-		if (readFd_ == INVALID_FILE_HANDLE) {
-			throw std::runtime_error("Cannot open native read handle for parallel reads: " + dbFilePath);
+		{
+			debug::ScopedPerfTimer nativeTimer("storage.open.native_handles");
+			// Open the native read handle eagerly for columnar/pread scans. The
+			// native write handle is opened lazily on the first write path.
+			readFd_ = portable_open(dbFilePath.c_str(), O_RDONLY);
+			if (readFd_ == INVALID_FILE_HANDLE) {
+				throw std::runtime_error("Cannot open native read handle for parallel reads: " + dbFilePath);
+			}
 		}
 
 		// Create unified I/O abstraction (before components that depend on it)
 		storageIO_ = std::make_shared<StorageIO>(fileStream, writeFd_, readFd_);
 
-		initializeComponents();
+		{
+			debug::ScopedPerfTimer initTimer("storage.open.initialize_components");
+			initializeComponents();
+		}
 
 		isFileOpen = true;
 	}
 
+	void FileStorage::ensureWriteHandle() {
+		if (writeFd_ != INVALID_FILE_HANDLE) {
+			return;
+		}
+		debug::ScopedPerfTimer timer("storage.open.write_handle");
+		writeFd_ = portable_open_rw(dbFilePath.c_str());
+		if (writeFd_ == INVALID_FILE_HANDLE) {
+			throw std::runtime_error("Cannot open native write handle for parallel writes: " + dbFilePath);
+		}
+		if (storageIO_) {
+			storageIO_->setWriteFd(writeFd_);
+		}
+	}
+
 	void FileStorage::initializeComponents() {
+		debug::ScopedPerfTimer totalTimer("storage.initialize_components.total");
 		fileHeaderManager->extractFileHeaderInfo();
 
 		segmentTracker = std::make_shared<SegmentTracker>(storageIO_, fileHeader);
@@ -122,19 +148,17 @@ namespace graph::storage {
 				{EntityType::Index, &fileHeaderManager->getMaxIndexIdRef()},
 				{EntityType::State, &fileHeaderManager->getMaxStateIdRef()},
 		};
-		for (auto &[type, maxIdPtr] : typeMaxPairs) {
+		for (auto &[type, maxIdPtr]: typeMaxPairs) {
 			auto alloc = std::make_shared<IDAllocator>(type, segmentTracker, *maxIdPtr);
 			alloc->clearPersistedCaches();
 			idAllocators_[static_cast<size_t>(type)] = std::move(alloc);
 		}
 
 		// Then create the space management components
-		segmentAllocator =
-				std::make_shared<SegmentAllocator>(storageIO_, segmentTracker, fileHeaderManager);
+		segmentAllocator = std::make_shared<SegmentAllocator>(storageIO_, segmentTracker, fileHeaderManager);
 		auto segmentCompactor =
 				std::make_shared<SegmentCompactor>(storageIO_, segmentTracker, segmentAllocator, fileHeaderManager);
-		fileTruncator =
-				std::make_shared<FileTruncator>(storageIO_, dbFilePath, segmentTracker);
+		fileTruncator = std::make_shared<FileTruncator>(storageIO_, dbFilePath, segmentTracker);
 		spaceManager =
 				std::make_shared<SpaceManager>(segmentAllocator, segmentCompactor, fileTruncator, segmentTracker);
 
@@ -158,22 +182,25 @@ namespace graph::storage {
 			uint32_t entityType;
 		};
 		const ChainInfo chains[] = {
-			{fileHeader.node_segment_head,     Node::typeId},
-			{fileHeader.edge_segment_head,     Edge::typeId},
-			{fileHeader.property_segment_head, Property::typeId},
-			{fileHeader.blob_segment_head,     Blob::typeId},
-			{fileHeader.index_segment_head,    Index::typeId},
-			{fileHeader.state_segment_head,    State::typeId},
+				{fileHeader.node_segment_head, Node::typeId},		  {fileHeader.edge_segment_head, Edge::typeId},
+				{fileHeader.property_segment_head, Property::typeId}, {fileHeader.blob_segment_head, Blob::typeId},
+				{fileHeader.index_segment_head, Index::typeId},		  {fileHeader.state_segment_head, State::typeId},
 		};
 
-		for (const auto &chain : chains) {
-			auto result = bootstrap.scanChain(chain.head);
-			idAllocators_[chain.entityType]->initializeFromScan(result.physicalMaxId);
-			segmentIndexManager->setSegmentIndex(chain.entityType, std::move(result.segmentIndexEntries));
+		{
+			debug::ScopedPerfTimer bootstrapTimer("storage.initialize_components.bootstrap_scan");
+			for (const auto &chain: chains) {
+				auto result = bootstrap.scanChain(chain.head);
+				idAllocators_[chain.entityType]->initializeFromScan(result.physicalMaxId);
+				segmentIndexManager->setSegmentIndex(chain.entityType, std::move(result.segmentIndexEntries));
+			}
 		}
 
 		// Initialize DataManager components (skip segment index build — already done above)
-		dataManager->initialize(/*skipSegmentIndexBuild=*/true);
+		{
+			debug::ScopedPerfTimer dataManagerTimer("storage.initialize_components.data_manager");
+			dataManager->initialize(/*skipSegmentIndexBuild=*/true);
+		}
 		dataManager->setDeletionFlagReference(&deleteOperationPerformed);
 
 		// Wire up EntityReferenceUpdater to the SegmentCompactor
@@ -196,30 +223,47 @@ namespace graph::storage {
 
 	void FileStorage::close() {
 		if (isFileOpen) {
-			flush(); // Ensure any pending changes are written
+			debug::ScopedPerfTimer totalTimer("storage.close.total");
+			const bool mayHaveTruncatableSegments = deleteOperationPerformed.load();
 
-			// Always flush file header on close, even when no dirty entities exist.
-			// allocateId() increments max ID counters in memory without marking
-			// entities dirty. If save() skipped flushFileHeader() (no dirty data),
-			// those counter advances would be lost on restart.
-			fileHeaderManager->flushFileHeader();
+			{
+				debug::ScopedPerfTimer flushTimer("storage.close.flush");
+				flush(); // Ensure any pending changes are written
+			}
 
-			dataManager->clearCache();
+			// Flush header-only changes such as ID allocations without forcing
+			// a redundant write on read-only open/query/close cycles.
+			if (fileHeaderManager->hasPendingChanges()) {
+				debug::ScopedPerfTimer headerTimer("storage.close.flush_header");
+				fileHeaderManager->flushFileHeader();
+			}
+
+			{
+				debug::ScopedPerfTimer cacheTimer("storage.close.clear_cache");
+				dataManager->clearCache();
+			}
 			dataManager->closeFileHandles();
 
 			// Truncate free trailing segments while all handles are still open.
 			// Pass the native fd so truncation uses portable_ftruncate()
 			// instead of the close-reopen pattern (which leaves a leaked handle
 			// on Windows and causes "file in use" errors on deletion).
-			(void) fileTruncator->truncateFile(writeFd_);
+			if (mayHaveTruncatableSegments) {
+				debug::ScopedPerfTimer truncateTimer("storage.close.truncate");
+				(void) fileTruncator->truncateFile(writeFd_);
+			}
 
-			// Close the native pwrite handle
-			portable_close_rw(writeFd_);
-			writeFd_ = INVALID_FILE_HANDLE;
+			// Close the native pwrite handle if a write path opened it.
+			if (writeFd_ != INVALID_FILE_HANDLE) {
+				portable_close_rw(writeFd_);
+				writeFd_ = INVALID_FILE_HANDLE;
+			}
 
-			// Close the native pread handle
-			portable_close(readFd_);
-			readFd_ = INVALID_FILE_HANDLE;
+			// Close the native pread handle if a read path opened it.
+			if (readFd_ != INVALID_FILE_HANDLE) { // ZYX_COV_EXCL_LINE: open() marks the file open only after this handle succeeds.
+				portable_close(readFd_);
+				readFd_ = INVALID_FILE_HANDLE;
+			}
 
 			// Release StorageWriter before its dependencies
 			storageWriter_.reset();
@@ -250,85 +294,92 @@ namespace graph::storage {
 
 		auto totalStart = Clock::now();
 
-		// 1. ATOMIC SNAPSHOT: Freeze current dirty state into snapshot
-		auto snapshot = dataManager->prepareFlushSnapshotView();
+		while (dataManager->hasUnsavedChanges()) {
+			// 1. ATOMIC SNAPSHOT: Freeze current dirty state into snapshot
+			auto snapshot = dataManager->prepareFlushSnapshotView();
 
-		if (snapshot.isEmpty())
-			return;
+			if (snapshot.isEmpty())
+				break;
 
-		// 2. I/O PHASE: Classify + write all entity types via StorageWriter
-		auto ioStart = Clock::now();
+			ensureWriteHandle();
 
-		auto writeStart = Clock::now();
-		storageWriter_->writeSnapshot(snapshot, threadPool_);
-		auto touchedSegments = storageWriter_->takeTouchedSegments();
-		debug::PerfTrace::addDuration(
-				"save.write_snapshot",
-				static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - writeStart)
-											 .count()));
+			// 2. I/O PHASE: Classify + write all entity types via StorageWriter
+			auto ioStart = Clock::now();
 
-		// 3. Persist segment headers (so pread-based reads see correct used/start_id)
-		auto headersStart = Clock::now();
-		persistSegmentHeaders();
-		debug::PerfTrace::addDuration(
-				"save.flush_segment_headers",
-				static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - headersStart)
-											 .count()));
+			auto writeStart = Clock::now();
+			storageWriter_->writeSnapshot(snapshot, threadPool_);
+			debug::PerfTrace::addDuration(
+					"save.write_snapshot",
+					static_cast<uint64_t>(
+							std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - writeStart).count()));
 
-		// Update aggregated CRC from segment CRCs before flushing file header
-		auto crcStart = Clock::now();
-		auto segmentCrcs = segmentTracker->collectSegmentCrcs();
-		fileHeaderManager->updateAggregatedCrc(segmentCrcs);
-		debug::PerfTrace::addDuration(
-				"save.aggregate_crc",
-				static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - crcStart)
-											 .count()));
+			// 3. Persist segment headers (so pread-based reads see correct used/start_id)
+			auto headersStart = Clock::now();
+			persistSegmentHeaders();
+			debug::PerfTrace::addDuration(
+					"save.flush_segment_headers",
+					static_cast<uint64_t>(
+							std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - headersStart).count()));
 
-		auto headerStart = Clock::now();
-		fileHeaderManager->flushFileHeader();
-		debug::PerfTrace::addDuration(
-				"save.flush_file_header",
-				static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - headerStart)
-											 .count()));
+			auto touchedSegments = storageWriter_->takeTouchedSegments();
 
-		// 4. Single fsync to flush all writes (entity data + segment headers)
-		auto syncStart = Clock::now();
-		storageIO_->sync();
-		debug::PerfTrace::addDuration(
-				"save.sync",
-				static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - syncStart)
-											 .count()));
+			// Update aggregated CRC from segment CRCs before flushing file header
+			auto crcStart = Clock::now();
+			auto segmentCrcs = segmentTracker->collectSegmentCrcs();
+			fileHeaderManager->updateAggregatedCrc(segmentCrcs);
+			debug::PerfTrace::addDuration(
+					"save.aggregate_crc",
+					static_cast<uint64_t>(
+							std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - crcStart).count()));
 
-		debug::PerfTrace::addDuration(
-				"save.io", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
-													ioStart)
-												.count()));
+			auto headerStart = Clock::now();
+			fileHeaderManager->flushFileHeader();
+			debug::PerfTrace::addDuration(
+					"save.flush_file_header",
+					static_cast<uint64_t>(
+							std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - headerStart).count()));
 
-		// 5. Invalidate stale cached pages before commit clears the non-owning snapshot view.
-		auto invalidateStart = Clock::now();
-		if (touchedSegments.empty()) {
-			dataManager->invalidateDirtySegments(snapshot);
-		} else {
-			dataManager->invalidateSegments(touchedSegments);
+			// 4. Single fsync to flush all writes (entity data + segment headers)
+			auto syncStart = Clock::now();
+			storageIO_->sync();
+			debug::PerfTrace::addDuration(
+					"save.sync",
+					static_cast<uint64_t>(
+							std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - syncStart).count()));
+
+			debug::PerfTrace::addDuration(
+					"save.io",
+					static_cast<uint64_t>(
+							std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - ioStart).count()));
+
+			// 5. Invalidate stale cached pages before commit clears the non-owning snapshot view.
+			auto invalidateStart = Clock::now();
+			if (touchedSegments.empty()) {
+				dataManager->invalidateDirtySegments(snapshot);
+			} else {
+				dataManager->invalidateSegments(touchedSegments);
+			}
+			debug::PerfTrace::addDuration("save.invalidate_cache",
+										  static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+																		Clock::now() - invalidateStart)
+																		.count()));
+			auto commitStart = Clock::now();
+			dataManager->commitFlushSnapshot();
+			debug::PerfTrace::addDuration(
+					"save.commit_snapshot",
+					static_cast<uint64_t>(
+							std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - commitStart).count()));
+
 		}
 		debug::PerfTrace::addDuration(
-				"save.invalidate_cache",
-				static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - invalidateStart)
-											 .count()));
-		auto commitStart = Clock::now();
-		dataManager->commitFlushSnapshot();
-		debug::PerfTrace::addDuration(
-				"save.commit_snapshot",
-				static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - commitStart)
-											 .count()));
-		debug::PerfTrace::addDuration(
-				"save.total", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
-													  totalStart)
-													.count()));
+				"save.total",
+				static_cast<uint64_t>(
+						std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - totalStart).count()));
 	}
 
 	template<typename T>
 	void FileStorage::saveData(std::vector<T> &data, uint64_t &segmentHead, uint32_t maxSegmentSize) {
+		ensureWriteHandle();
 		storageWriter_->saveData(data, segmentHead, maxSegmentSize);
 	}
 
@@ -338,11 +389,13 @@ namespace graph::storage {
 
 	template<typename T>
 	void FileStorage::updateEntityInPlace(const T &entity, uint64_t knownSegmentOffset) {
+		ensureWriteHandle();
 		storageWriter_->updateEntityInPlace(entity, knownSegmentOffset);
 	}
 
 	template<typename T>
 	void FileStorage::deleteEntityOnDisk(const T &entity) {
+		ensureWriteHandle();
 		storageWriter_->deleteEntityOnDisk(entity);
 	}
 
@@ -379,61 +432,68 @@ namespace graph::storage {
 	}
 
 	// TODO: Subsequent flush operations should be executed in a queue
-	void FileStorage::flush() {
+	void FileStorage::flushImpl() {
 		// Acquire lock to ensure atomic operation
 		std::unique_lock<std::mutex> lock(flushMutex, std::try_to_lock);
 
-			// The mutex is the single reentrancy guard; a reentrant/concurrent flush
-			// returns instead of queueing nested persistence work.
-			if (!lock.owns_lock()) {
-				return;
-			}
+		// The mutex is the single reentrancy guard; a reentrant/concurrent flush
+		// returns instead of queueing nested persistence work.
+		if (!lock.owns_lock()) {
+			return;
+		}
 
+		// --- NOTIFY LISTENERS ---
+		{
+			std::lock_guard<std::mutex> listenerLock(listenerMutex_);
+			// Iterate and notify valid listeners
+			auto it = eventListeners_.begin();
+			while (it != eventListeners_.end()) {
+				if (auto listener = it->lock()) {
+					// Notify IndexManager or others to persist their state
+					listener->onStorageFlush();
+					++it;
+				} else {
+					// Remove expired listeners (e.g., if IndexManager was destroyed)
+					it = eventListeners_.erase(it);
+				}
+			}
+		}
+
+		// Ensure all pending changes are written
+		save();
+
+		// Only check for compaction if delete operations occurred
+		if (deleteOperationPerformed.load() && compactionEnabled_.load()) {
+			if (spaceManager->shouldCompact()) {
+				// Use the thread-safe compaction method
+
+				// Only perform post-compaction operations if compaction was successful
+				if (spaceManager->safeCompactSegments()) {
+					dataManager->clearCache();
+
+					// Just clear all allocator caches. They will lazy-load on next insert.
+					for (auto &alloc: idAllocators_)
+						alloc->resetAfterCompaction();
+
+					dataManager->getSegmentIndexManager()->buildSegmentIndexes();
+
+					// Re-persist headers after compaction modified segments
+					persistSegmentHeaders();
+					auto compactSegCrcs = segmentTracker->collectSegmentCrcs();
+					fileHeaderManager->updateAggregatedCrc(compactSegCrcs);
+					fileHeaderManager->flushFileHeader();
+				}
+			}
+			// Reset the flag after handling potential compaction
+			deleteOperationPerformed.store(false);
+		}
+	}
+
+	void FileStorage::flushOrThrow() { flushImpl(); }
+
+	void FileStorage::flush() {
 		try {
-			// --- NOTIFY LISTENERS ---
-			{
-				std::lock_guard<std::mutex> listenerLock(listenerMutex_);
-				// Iterate and notify valid listeners
-				auto it = eventListeners_.begin();
-				while (it != eventListeners_.end()) {
-					if (auto listener = it->lock()) {
-						// Notify IndexManager or others to persist their state
-						listener->onStorageFlush();
-						++it;
-					} else {
-						// Remove expired listeners (e.g., if IndexManager was destroyed)
-						it = eventListeners_.erase(it);
-					}
-				}
-			}
-
-			// Ensure all pending changes are written
-			save();
-
-			// Only check for compaction if delete operations occurred
-			if (deleteOperationPerformed.load() && compactionEnabled_.load()) {
-				if (spaceManager->shouldCompact()) {
-					// Use the thread-safe compaction method
-
-					// Only perform post-compaction operations if compaction was successful
-					if (spaceManager->safeCompactSegments()) {
-						dataManager->clearCache();
-
-						// Just clear all allocator caches. They will lazy-load on next insert.
-						for (auto &alloc : idAllocators_) alloc->resetAfterCompaction();
-
-						dataManager->getSegmentIndexManager()->buildSegmentIndexes();
-
-						// Re-persist headers after compaction modified segments
-						persistSegmentHeaders();
-						auto compactSegCrcs = segmentTracker->collectSegmentCrcs();
-						fileHeaderManager->updateAggregatedCrc(compactSegCrcs);
-						fileHeaderManager->flushFileHeader();
-					}
-				}
-				// Reset the flag after handling potential compaction
-				deleteOperationPerformed.store(false);
-			}
+			flushImpl();
 		} catch (const std::exception &e) {
 			// Log the error
 			std::cerr << "Exception during flush operation: " << e.what() << std::endl;
@@ -441,13 +501,10 @@ namespace graph::storage {
 			// Log unknown errors
 			std::cerr << "Unknown exception during flush operation" << std::endl;
 		}
-
-		}
+	}
 
 	void FileStorage::clearCache() const { dataManager->clearCache(); }
 
-	FileStorage::IntegrityResult FileStorage::verifyIntegrity() const {
-		return integrityChecker_->verifyIntegrity();
-	}
+	FileStorage::IntegrityResult FileStorage::verifyIntegrity() const { return integrityChecker_->verifyIntegrity(); }
 
 } // namespace graph::storage

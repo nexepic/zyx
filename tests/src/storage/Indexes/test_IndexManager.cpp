@@ -23,6 +23,7 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <memory>
 #include <tuple>
 #include <vector>
@@ -109,7 +110,7 @@ TEST_F(IndexManagerTest, CreateAndDropNamedIndex) {
 	EXPECT_TRUE(created);
 
 	// 2. Verify Physical Existence
-	EXPECT_TRUE(indexManager->hasPropertyIndex("node", "age"));
+	EXPECT_FALSE(indexManager->hasPropertyIndex("node", "age"));
 	EXPECT_TRUE(indexManager->hasNodePropertyIndexForLabel("User", "age"));
 
 	// 3. Verify Metadata Existence
@@ -171,6 +172,39 @@ TEST_F(IndexManagerTest, DropIndexByDefinition) {
 	EXPECT_FALSE(found);
 }
 
+TEST_F(IndexManagerTest, DropScopedNodePropertyIndexKeepsGlobalPropertyIndex) {
+	const int64_t userLabel = dataManager->getOrCreateTokenId("User");
+	const int64_t serviceLabel = dataManager->getOrCreateTokenId("Service");
+
+	ASSERT_TRUE(indexManager->createIndex("idx_global_id", "node", "", "id"));
+	ASSERT_TRUE(indexManager->createIndex("idx_user_id", "node", "User", "id"));
+
+	graph::Node user(1, userLabel);
+	graph::Node service(2, serviceLabel);
+	dataManager->addNode(user);
+	dataManager->addNode(service);
+	dataManager->addNodeProperties(1, {{"id", static_cast<int64_t>(7)}});
+	dataManager->addNodeProperties(2, {{"id", static_cast<int64_t>(7)}});
+
+	auto globalBefore = indexManager->findNodeIdsByProperty("id", static_cast<int64_t>(7));
+	std::sort(globalBefore.begin(), globalBefore.end());
+	ASSERT_EQ(globalBefore, std::vector<int64_t>({1, 2}));
+	ASSERT_TRUE(indexManager->hasPropertyIndex("node", "id"));
+	ASSERT_TRUE(indexManager->hasNodePropertyIndexForLabel("User", "id"));
+
+	EXPECT_TRUE(indexManager->dropIndexByName("idx_user_id"));
+
+	EXPECT_TRUE(indexManager->hasPropertyIndex("node", "id"));
+	EXPECT_FALSE(indexManager->hasNodePropertyIndexForLabel("User", "id"));
+	EXPECT_FALSE(hasIndexWithName("idx_user_id"));
+	EXPECT_TRUE(hasIndexWithName("idx_global_id"));
+
+	auto globalAfter = indexManager->findNodeIdsByProperty("id", static_cast<int64_t>(7));
+	std::sort(globalAfter.begin(), globalAfter.end());
+	EXPECT_EQ(globalAfter, std::vector<int64_t>({1, 2}));
+	EXPECT_TRUE(indexManager->findNodeIdsByLabelAndProperty("User", "id", static_cast<int64_t>(7)).empty());
+}
+
 TEST_F(IndexManagerTest, DuplicateIndexCreation) {
 	// 1. Create first time
 	EXPECT_TRUE(indexManager->createIndex("idx_dup", "node", "A", "p"));
@@ -219,7 +253,7 @@ TEST_F(IndexManagerTest, LivePropertyUpdate) {
 	dataManager->addNodeProperties(1, {{propKey, std::string("TODO")}});
 
 	// Verify Index contains "TO-DO"
-	auto res1 = indexManager->findNodeIdsByProperty(propKey, std::string("TODO"));
+	auto res1 = indexManager->findNodeIdsByLabelAndProperty("Task", propKey, std::string("TODO"));
 	ASSERT_EQ(res1.size(), 1UL);
 	EXPECT_EQ(res1[0], 1);
 
@@ -228,10 +262,10 @@ TEST_F(IndexManagerTest, LivePropertyUpdate) {
 	dataManager->addNodeProperties(1, {{propKey, std::string("DONE")}});
 
 	// Verify Index updated
-	auto resOld = indexManager->findNodeIdsByProperty(propKey, std::string("TODO"));
+	auto resOld = indexManager->findNodeIdsByLabelAndProperty("Task", propKey, std::string("TODO"));
 	EXPECT_TRUE(resOld.empty());
 
-	auto resNew = indexManager->findNodeIdsByProperty(propKey, std::string("DONE"));
+	auto resNew = indexManager->findNodeIdsByLabelAndProperty("Task", propKey, std::string("DONE"));
 	ASSERT_EQ(resNew.size(), 1UL);
 	EXPECT_EQ(resNew[0], 1);
 }
@@ -246,7 +280,7 @@ TEST_F(IndexManagerTest, LiveDeletion) {
 	dataManager->addNode(node);
 	dataManager->addNodeProperties(1, {{"id", static_cast<int64_t>(100)}});
 
-	EXPECT_EQ(indexManager->findNodeIdsByProperty("id", 100).size(), 1UL);
+	EXPECT_EQ(indexManager->findNodeIdsByLabelAndProperty("User", "id", 100).size(), 1UL);
 
 	// 2. Delete Node
 	graph::Node n = dataManager->getNode(1);
@@ -258,7 +292,7 @@ TEST_F(IndexManagerTest, LiveDeletion) {
 	dataManager->deleteNode(n);
 
 	// 3. Verify Index is empty
-	EXPECT_TRUE(indexManager->findNodeIdsByProperty("id", (int64_t) 100).empty());
+	EXPECT_TRUE(indexManager->findNodeIdsByLabelAndProperty("User", "id", (int64_t) 100).empty());
 }
 
 TEST_F(IndexManagerTest, LiveLabelChange) {
@@ -300,7 +334,7 @@ TEST_F(IndexManagerTest, LivePropertyTypeChange) {
 	n1.addProperty(propKey, std::string("100"));
 	indexManager->onNodeAdded(n1);
 
-	ASSERT_EQ(indexManager->findNodeIdsByProperty(propKey, std::string("100")).size(), 1UL);
+	ASSERT_EQ(indexManager->findNodeIdsByLabelAndProperty("Mix", propKey, std::string("100")).size(), 1UL);
 
 	// 2. Change to Int
 	graph::Node n2(200, dataManager->getOrCreateTokenId("Mix"));
@@ -309,10 +343,10 @@ TEST_F(IndexManagerTest, LivePropertyTypeChange) {
 	indexManager->onNodeUpdated(n1, n2);
 
 	// 3. Verify String entry gone
-	EXPECT_TRUE(indexManager->findNodeIdsByProperty(propKey, std::string("100")).empty());
+	EXPECT_TRUE(indexManager->findNodeIdsByLabelAndProperty("Mix", propKey, std::string("100")).empty());
 
 	// 4. Verify Int entry
-	auto resInt = indexManager->findNodeIdsByProperty(propKey, 100);
+	auto resInt = indexManager->findNodeIdsByLabelAndProperty("Mix", propKey, 100);
 	EXPECT_EQ(resInt.size(), 0UL);
 }
 
@@ -337,11 +371,11 @@ TEST_F(IndexManagerTest, NodeEdgeIsolation) {
 	dataManager->addEdgeProperties(100, {{"weight", static_cast<int64_t>(20)}});
 
 	// Verify Node Index only finds Node
-	auto nodeRes = indexManager->findNodeIdsByProperty("weight", 10);
-	EXPECT_EQ(nodeRes.size(), 1UL);
+	auto nodeRes = indexManager->findNodeIdsByLabelAndProperty("N", "weight", 10);
+	ASSERT_EQ(nodeRes.size(), 1UL);
 	EXPECT_EQ(nodeRes[0], 1);
 
-	auto nodeResEmpty = indexManager->findNodeIdsByProperty("weight", 20);
+	auto nodeResEmpty = indexManager->findNodeIdsByLabelAndProperty("N", "weight", 20);
 	EXPECT_TRUE(nodeResEmpty.empty());
 
 	// Verify Edge Index only finds Edge
@@ -387,7 +421,7 @@ TEST_F(IndexManagerTest, PersistenceAfterRestart) {
 	EXPECT_TRUE(found);
 
 	// 5. Verify Data Searchable
-	auto res = newIndexMgr->findNodeIdsByProperty("val", std::string("test"));
+	auto res = newIndexMgr->findNodeIdsByLabelAndProperty("SaveMe", "val", std::string("test"));
 	ASSERT_EQ(res.size(), 1UL);
 	EXPECT_EQ(res[0], 1);
 }

@@ -30,6 +30,7 @@
 #endif
 
 using graph::concurrent::ThreadPool;
+using graph::concurrent::ThreadPoolSizeSource;
 
 // =============================================================================
 // parallelFor exception propagation — fut.get() rethrows from worker
@@ -37,32 +38,32 @@ using graph::concurrent::ThreadPool;
 
 TEST(ThreadPoolSubmitAndParallelForTest, ParallelForExceptionFromWorkerPropagates) {
 	ThreadPool pool(4);
-	EXPECT_THROW(
-		pool.parallelFor(0, 100, [](size_t i) {
-			if (i == 50)
-				throw std::runtime_error("parallel-boom");
-		}),
-		std::runtime_error);
+	EXPECT_THROW(pool.parallelFor(0, 100,
+								  [](size_t i) {
+									  if (i == 50)
+										  throw std::runtime_error("parallel-boom");
+								  }),
+				 std::runtime_error);
 }
 
 TEST(ThreadPoolSubmitAndParallelForTest, ParallelForExceptionInFirstElement) {
 	ThreadPool pool(2);
-	EXPECT_THROW(
-		pool.parallelFor(0, 10, [](size_t i) {
-			if (i == 0)
-				throw std::logic_error("first-element");
-		}),
-		std::logic_error);
+	EXPECT_THROW(pool.parallelFor(0, 10,
+								  [](size_t i) {
+									  if (i == 0)
+										  throw std::logic_error("first-element");
+								  }),
+				 std::logic_error);
 }
 
 TEST(ThreadPoolSubmitAndParallelForTest, ParallelForExceptionInLastElement) {
 	ThreadPool pool(3);
-	EXPECT_THROW(
-		pool.parallelFor(0, 9, [](size_t i) {
-			if (i == 8)
-				throw std::runtime_error("last-element");
-		}),
-		std::runtime_error);
+	EXPECT_THROW(pool.parallelFor(0, 9,
+								  [](size_t i) {
+									  if (i == 8)
+										  throw std::runtime_error("last-element");
+								  }),
+				 std::runtime_error);
 }
 
 // =============================================================================
@@ -83,9 +84,9 @@ TEST(ThreadPoolSubmitAndParallelForTest, MultiThreadSubmitStringArg) {
 
 TEST(ThreadPoolSubmitAndParallelForTest, MultiThreadSubmitThreeArgs) {
 	ThreadPool pool(2);
-	auto future = pool.submit([](int a, double b, std::string c) {
-		return c + std::to_string(a) + std::to_string(static_cast<int>(b));
-	}, 1, 2.0, std::string("val"));
+	auto future = pool.submit(
+			[](int a, double b, std::string c) { return c + std::to_string(a) + std::to_string(static_cast<int>(b)); },
+			1, 2.0, std::string("val"));
 	EXPECT_EQ(future.get(), "val12");
 }
 
@@ -109,17 +110,13 @@ TEST(ThreadPoolSubmitAndParallelForTest, SingleThreadSubmitVoidWithArg) {
 
 TEST(ThreadPoolSubmitAndParallelForTest, MultiThreadSubmitNonVoidExceptionPropagates) {
 	ThreadPool pool(2);
-	auto future = pool.submit([]() -> int {
-		throw std::runtime_error("mt-nonvoid-boom");
-	});
-	EXPECT_THROW((void)future.get(), std::runtime_error);
+	auto future = pool.submit([]() -> int { throw std::runtime_error("mt-nonvoid-boom"); });
+	EXPECT_THROW((void) future.get(), std::runtime_error);
 }
 
 TEST(ThreadPoolSubmitAndParallelForTest, MultiThreadSubmitVoidExceptionPropagates) {
 	ThreadPool pool(2);
-	auto future = pool.submit([]() -> void {
-		throw std::logic_error("mt-void-boom");
-	});
+	auto future = pool.submit([]() -> void { throw std::logic_error("mt-void-boom"); });
 	EXPECT_THROW(future.get(), std::logic_error);
 }
 
@@ -162,24 +159,68 @@ TEST(ThreadPoolSubmitAndParallelForTest, ParallelForTotalEqualsThreadCount) {
 TEST(ThreadPoolSubmitAndParallelForTest, ParallelForNonZeroBeginCorrectIndices) {
 	ThreadPool pool(3);
 	std::vector<std::atomic<bool>> visited(20);
-	for (auto &v : visited) v.store(false);
+	for (auto &v: visited)
+		v.store(false);
 
-	pool.parallelFor(5, 15, [&visited](size_t i) {
-		visited[i].store(true);
-	});
+	pool.parallelFor(5, 15, [&visited](size_t i) { visited[i].store(true); });
 
-	for (size_t i = 0; i < 5; ++i) EXPECT_FALSE(visited[i].load());
-	for (size_t i = 5; i < 15; ++i) EXPECT_TRUE(visited[i].load());
-	for (size_t i = 15; i < 20; ++i) EXPECT_FALSE(visited[i].load());
+	for (size_t i = 0; i < 5; ++i)
+		EXPECT_FALSE(visited[i].load());
+	for (size_t i = 5; i < 15; ++i)
+		EXPECT_TRUE(visited[i].load());
+	for (size_t i = 15; i < 20; ++i)
+		EXPECT_FALSE(visited[i].load());
 }
 
 TEST(ThreadPoolSubmitAndParallelForTest, ParallelForLargeRangeCorrectness) {
 	ThreadPool pool(4);
 	std::atomic<size_t> sum{0};
-	pool.parallelFor(0, 1000, [&sum](size_t i) {
-		sum.fetch_add(i, std::memory_order_relaxed);
-	});
+	pool.parallelFor(0, 1000, [&sum](size_t i) { sum.fetch_add(i, std::memory_order_relaxed); });
 	EXPECT_EQ(sum.load(std::memory_order_relaxed), 499500UL);
+}
+
+TEST(ThreadPoolSubmitAndParallelForTest, ParallelForRunsOneChunkOnCallerThread) {
+	ThreadPool pool(4);
+	const auto callerThread = std::this_thread::get_id();
+	std::atomic<bool> callerHandledTail{false};
+
+	pool.parallelFor(0, 8, [&](size_t i) {
+		if (i >= 6 && std::this_thread::get_id() == callerThread) {
+			callerHandledTail.store(true, std::memory_order_relaxed);
+		}
+	});
+
+	EXPECT_TRUE(callerHandledTail.load(std::memory_order_relaxed));
+}
+
+TEST(ThreadPoolSubmitAndParallelForTest, ParallelForMaxWorkersOneRunsSequentially) {
+	ThreadPool pool(4);
+	const auto callerThread = std::this_thread::get_id();
+	std::atomic<size_t> hits{0};
+	std::atomic<bool> workerThreadObserved{false};
+
+	pool.parallelFor(0, 16, 1, [&](size_t) {
+		hits.fetch_add(1, std::memory_order_relaxed);
+		if (std::this_thread::get_id() != callerThread) {
+			workerThreadObserved.store(true, std::memory_order_relaxed);
+		}
+	});
+
+	EXPECT_EQ(hits.load(std::memory_order_relaxed), 16UL);
+	EXPECT_FALSE(workerThreadObserved.load(std::memory_order_relaxed));
+}
+
+TEST(ThreadPoolSubmitAndParallelForTest, ParallelForMaxWorkersCapStillVisitsEveryIndex) {
+	ThreadPool pool(8);
+	std::vector<std::atomic<bool>> visited(32);
+	for (auto &v: visited)
+		v.store(false);
+
+	pool.parallelFor(0, visited.size(), 2, [&visited](size_t i) { visited[i].store(true, std::memory_order_relaxed); });
+
+	for (const auto &v: visited) {
+		EXPECT_TRUE(v.load(std::memory_order_relaxed));
+	}
 }
 
 // =============================================================================
@@ -214,12 +255,11 @@ TEST(ThreadPoolSubmitAndParallelForTest, DestructorJoinsAfterHeavyLoad) {
 
 	std::vector<std::future<void>> futures;
 	for (int i = 0; i < 50; ++i) {
-		futures.push_back(pool->submit([&completed]() {
-			completed.fetch_add(1);
-		}));
+		futures.push_back(pool->submit([&completed]() { completed.fetch_add(1); }));
 	}
 
-	for (auto &f : futures) f.get();
+	for (auto &f: futures)
+		f.get();
 	EXPECT_EQ(completed.load(), 50);
 
 	pool.reset(); // destructor — all workers should be joinable and join cleanly
@@ -236,12 +276,11 @@ TEST(ThreadPoolSubmitAndParallelForTest, ManySubmitsQueueContention) {
 	std::vector<std::future<void>> futures;
 	futures.reserve(200);
 	for (int i = 0; i < 200; ++i) {
-		futures.push_back(pool.submit([&total]() {
-			total.fetch_add(1, std::memory_order_relaxed);
-		}));
+		futures.push_back(pool.submit([&total]() { total.fetch_add(1, std::memory_order_relaxed); }));
 	}
 
-	for (auto &f : futures) f.get();
+	for (auto &f: futures)
+		f.get();
 	EXPECT_EQ(total.load(std::memory_order_relaxed), 200);
 }
 
@@ -296,6 +335,16 @@ TEST(ThreadPoolSubmitAndParallelForTest, ResolveThreadCountAllBranches) {
 	EXPECT_EQ(ThreadPool::resolveThreadCount(6, 8), 6UL);
 	// requestedThreadCount == 0, hardware == 1 → returns 1
 	EXPECT_EQ(ThreadPool::resolveThreadCount(0, 1), 1UL);
+
+	const auto autoInfo = ThreadPool::resolveThreadPoolHardwareInfo(0, 16);
+	EXPECT_EQ(autoInfo.requestedThreadCount, 0UL);
+	EXPECT_EQ(autoInfo.hardwareThreadCount, 16U);
+	EXPECT_EQ(autoInfo.resolvedThreadCount, 16UL);
+	EXPECT_EQ(autoInfo.source, ThreadPoolSizeSource::TPSS_AUTO_DETECTED);
+
+	const auto fallbackInfo = ThreadPool::resolveThreadPoolHardwareInfo(0, 0);
+	EXPECT_EQ(fallbackInfo.resolvedThreadCount, 2UL);
+	EXPECT_EQ(fallbackInfo.source, ThreadPoolSizeSource::TPSS_AUTO_FALLBACK);
 }
 #endif
 
@@ -304,7 +353,19 @@ TEST(ThreadPoolSubmitAndParallelForTest, ResolveThreadCountAllBranches) {
 // =============================================================================
 
 TEST(ThreadPoolSubmitAndParallelForTest, GetThreadCountVarious) {
-	{ ThreadPool p(1); EXPECT_EQ(p.getThreadCount(), 1UL); EXPECT_TRUE(p.isSingleThreaded()); }
-	{ ThreadPool p(2); EXPECT_EQ(p.getThreadCount(), 2UL); EXPECT_FALSE(p.isSingleThreaded()); }
-	{ ThreadPool p(8); EXPECT_EQ(p.getThreadCount(), 8UL); EXPECT_FALSE(p.isSingleThreaded()); }
+	{
+		ThreadPool p(1);
+		EXPECT_EQ(p.getThreadCount(), 1UL);
+		EXPECT_TRUE(p.isSingleThreaded());
+	}
+	{
+		ThreadPool p(2);
+		EXPECT_EQ(p.getThreadCount(), 2UL);
+		EXPECT_FALSE(p.isSingleThreaded());
+	}
+	{
+		ThreadPool p(8);
+		EXPECT_EQ(p.getThreadCount(), 8UL);
+		EXPECT_FALSE(p.isSingleThreaded());
+	}
 }

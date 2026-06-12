@@ -2,6 +2,7 @@
 
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include <algorithm>
 #include <filesystem>
 #include <memory>
 #include <optional>
@@ -9,6 +10,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "graph/concurrent/ThreadPool.hpp"
 #include "graph/core/Database.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/execution/RelationshipMetadataColumnLoader.hpp"
@@ -341,12 +343,27 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataCandidateScanKeepsOn
 	ASSERT_TRUE(countCandidates.has_value());
 	EXPECT_EQ(countCandidates->matchedEdges, 3U);
 	EXPECT_EQ(countCandidates->propertyEntityIds, (std::vector<int64_t>{propertyBacked.getPropertyEntityId()}));
+	EXPECT_EQ(countCandidates->propertyEdgeIds, (std::vector<int64_t>{propertyBacked.getId()}));
 	EXPECT_EQ(countCandidates->fallbackEdgeIds, (std::vector<int64_t>{blobBacked.getId()}));
+	RelationshipPropertyCountCandidateOptions countOnlyOptions;
+	countOnlyOptions.collectPropertyEdgeRefs = false;
+	auto countOnlyCandidates = loader.collectPropertyCountCandidatesByType(1, 128, followsType, countOnlyOptions);
+	ASSERT_TRUE(countOnlyCandidates.has_value());
+	EXPECT_EQ(countOnlyCandidates->matchedEdges, 3U);
+	EXPECT_EQ(countOnlyCandidates->propertyEntityIds, countCandidates->propertyEntityIds);
+	EXPECT_TRUE(countOnlyCandidates->propertyEdgeIds.empty());
+	EXPECT_EQ(countOnlyCandidates->fallbackEdgeIds, countCandidates->fallbackEdgeIds);
 	auto cachedCountCandidates = dm->collectRelationshipPropertyCandidatesFromSegmentStats(1, 128, followsType);
 	ASSERT_TRUE(cachedCountCandidates.has_value());
 	EXPECT_EQ(cachedCountCandidates->matchedEdges, 3U);
 	EXPECT_EQ(cachedCountCandidates->propertyEntityIds, countCandidates->propertyEntityIds);
+	EXPECT_EQ(cachedCountCandidates->propertyEdgeIds, countCandidates->propertyEdgeIds);
 	EXPECT_EQ(cachedCountCandidates->fallbackEdgeIds, countCandidates->fallbackEdgeIds);
+	auto cachedCountOnlyCandidates = dm->collectRelationshipPropertyCandidatesFromSegmentStats(1, 128, followsType, false);
+	ASSERT_TRUE(cachedCountOnlyCandidates.has_value());
+	EXPECT_EQ(cachedCountOnlyCandidates->propertyEntityIds, countCandidates->propertyEntityIds);
+	EXPECT_TRUE(cachedCountOnlyCandidates->propertyEdgeIds.empty());
+	EXPECT_EQ(cachedCountOnlyCandidates->fallbackEdgeIds, countCandidates->fallbackEdgeIds);
 	EXPECT_FALSE(dm->collectRelationshipPropertyCandidatesFromSegmentStats(2, 128, followsType).has_value());
 
 	auto noTypeMatches = loader.collectPropertyCandidatesByType(1, 128, followsType + 999);
@@ -358,6 +375,7 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataCandidateScanKeepsOn
 	ASSERT_TRUE(noTypeCountCandidates.has_value());
 	EXPECT_EQ(noTypeCountCandidates->matchedEdges, 0U);
 	EXPECT_TRUE(noTypeCountCandidates->propertyEntityIds.empty());
+	EXPECT_TRUE(noTypeCountCandidates->propertyEdgeIds.empty());
 	EXPECT_TRUE(noTypeCountCandidates->fallbackEdgeIds.empty());
 
 	auto allTypes = loader.collectPropertyCandidatesByType(1, 128, 0);
@@ -368,6 +386,8 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataCandidateScanKeepsOn
 	EXPECT_EQ(cachedAllTypes->matchedEdges, 4U);
 	EXPECT_EQ(cachedAllTypes->propertyEntityIds,
 			  (std::vector<int64_t>{propertyBacked.getPropertyEntityId(), otherType.getPropertyEntityId()}));
+	EXPECT_EQ(cachedAllTypes->propertyEdgeIds,
+			  (std::vector<int64_t>{propertyBacked.getId(), otherType.getId()}));
 	EXPECT_EQ(cachedAllTypes->fallbackEdgeIds, (std::vector<int64_t>{blobBacked.getId()}));
 }
 
@@ -385,6 +405,8 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderRejectsUnsafeO
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	EXPECT_FALSE(loader.loadRange(0, 128).has_value());
+	EXPECT_FALSE(loader.countActiveByType(0, 128, followsType).has_value());
+	EXPECT_FALSE(loader.countActiveByType(2, 1, followsType).has_value());
 	EXPECT_FALSE(loader.loadRange(edge.getId(), edge.getId()).has_value());
 	EXPECT_FALSE(loader.countActiveByType(edge.getId(), edge.getId(), followsType).has_value());
 	EXPECT_FALSE(loader.collectPropertyCandidatesByType(edge.getId(), edge.getId(), followsType).has_value());
@@ -501,6 +523,65 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderCountsAndLoads
 	EXPECT_TRUE(trace.contains("relationship_count.load_edge_metadata"));
 }
 
+TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderCountsAndCollectsWithParallelPartitions) {
+	const int64_t source = addUser();
+	const int64_t target = addUser();
+	const int64_t likesType = dm->getOrCreateTokenId("LIKES");
+	std::vector<int64_t> edgeIds;
+	edgeIds.reserve(17000);
+	for (int i = 0; i < 17000; ++i) {
+		Edge edge(0, source, target, (i % 2 == 0) ? followsType : likesType);
+		dm->addEdge(edge);
+		edgeIds.push_back(edge.getId());
+		if (i == 1024 || i == 2048) {
+			dm->addEdgeProperties(edge.getId(), {{"weight", PropertyValue(int64_t{i})}});
+		}
+		if (i == 4096) {
+			const std::string largePayload(5000, 'r');
+			dm->addEdgeProperties(edge.getId(), {{"payload", PropertyValue(largePayload)}});
+		}
+		if (i == 8192) {
+			dm->deleteEdge(edge);
+		}
+	}
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+
+	graph::concurrent::ThreadPool pool(4);
+	RelationshipMetadataColumnLoader loader(dm);
+	const int64_t beginId = edgeIds.front();
+	const int64_t endId = edgeIds.back();
+
+	auto serialFollows = loader.countActiveByType(beginId, endId, followsType);
+	auto parallelFollows = loader.countActiveByType(beginId, endId, followsType, &pool);
+	ASSERT_TRUE(serialFollows.has_value());
+	ASSERT_TRUE(parallelFollows.has_value());
+	EXPECT_EQ(*parallelFollows, *serialFollows);
+	EXPECT_EQ(*parallelFollows, 8499);
+
+	auto serialAll = loader.countActiveByType(beginId, endId, 0);
+	auto parallelAll = loader.countActiveByType(beginId, endId, 0, &pool);
+	ASSERT_TRUE(serialAll.has_value());
+	ASSERT_TRUE(parallelAll.has_value());
+	EXPECT_EQ(*parallelAll, *serialAll);
+	EXPECT_EQ(*parallelAll, 16999);
+
+	auto serialCandidates = loader.collectPropertyCountCandidatesByType(beginId, endId, followsType);
+	auto parallelCandidates = loader.collectPropertyCountCandidatesByType(beginId, endId, followsType, &pool);
+	ASSERT_TRUE(serialCandidates.has_value());
+	ASSERT_TRUE(parallelCandidates.has_value());
+	EXPECT_EQ(parallelCandidates->matchedEdges, serialCandidates->matchedEdges);
+	EXPECT_EQ(parallelCandidates->propertyEntityIds.size(), serialCandidates->propertyEntityIds.size());
+	EXPECT_EQ(parallelCandidates->propertyEdgeIds.size(), serialCandidates->propertyEdgeIds.size());
+	EXPECT_EQ(parallelCandidates->fallbackEdgeIds.size(), serialCandidates->fallbackEdgeIds.size());
+
+	auto serialEdgeIds = serialCandidates->propertyEdgeIds;
+	auto parallelEdgeIds = parallelCandidates->propertyEdgeIds;
+	std::sort(serialEdgeIds.begin(), serialEdgeIds.end());
+	std::sort(parallelEdgeIds.begin(), parallelEdgeIds.end());
+	EXPECT_EQ(parallelEdgeIds, serialEdgeIds);
+}
+
 TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderSkipsEmptyOrNonOverlappingSegmentWindows) {
 	const int64_t source = addUser();
 	const int64_t target = addUser();
@@ -548,20 +629,26 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, RelationshipTypeSegmentStats
 	db->getStorage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
+	EXPECT_FALSE(dm->hasCachedRelationshipSegmentTypeStats());
 	auto followsCount = dm->countActiveEdgesByTypeFromSegmentStats(1, 260, followsType);
 	ASSERT_TRUE(followsCount.has_value());
 	EXPECT_EQ(*followsCount, 130);
+	EXPECT_FALSE(dm->hasCachedRelationshipSegmentTypeStats());
 	auto allCount = dm->countActiveEdgesByTypeFromSegmentStats(1, 260, 0);
 	ASSERT_TRUE(allCount.has_value());
 	EXPECT_EQ(*allCount, 260);
 	auto partialCount = dm->countActiveEdgesByTypeFromSegmentStats(2, 129, followsType);
 	ASSERT_TRUE(partialCount.has_value());
 	EXPECT_EQ(*partialCount, 64);
+	EXPECT_FALSE(dm->hasCachedRelationshipSegmentTypeStats());
 	auto missingTypeCount = dm->countActiveEdgesByTypeFromSegmentStats(1, 260, followsType + likesType + 1000);
 	ASSERT_TRUE(missingTypeCount.has_value());
 	EXPECT_EQ(*missingTypeCount, 0);
 	const auto &edgeSegments = dm->getSegmentIndexManager()->getEdgeSegmentIndex();
 	ASSERT_FALSE(edgeSegments.empty());
+	auto segmentCandidates = dm->collectRelationshipPropertyCandidatesFromSegmentStats(1, 260, followsType);
+	ASSERT_TRUE(segmentCandidates.has_value());
+	EXPECT_TRUE(dm->hasCachedRelationshipSegmentTypeStats(true));
 	auto cachedStats = dm->cachedRelationshipTypeSegmentStats(edgeSegments.front().segmentOffset);
 	ASSERT_TRUE(cachedStats.has_value());
 	EXPECT_EQ(cachedStats->segmentOffset, edgeSegments.front().segmentOffset);
@@ -580,11 +667,11 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, RelationshipTypeSegmentStats
 	auto snapshotOverlayCount = dm->countActiveEdgesByTypeFromSegmentStats(1, 260, followsType);
 	ASSERT_TRUE(snapshotOverlayCount.has_value());
 	EXPECT_EQ(*snapshotOverlayCount, 129);
-	auto snapshotLoaderCount = metadataLoader.countActiveByType(1, 260, followsType);
-	ASSERT_TRUE(snapshotLoaderCount.has_value());
-	EXPECT_EQ(*snapshotLoaderCount, 129);
+		auto snapshotLoaderCount = metadataLoader.countActiveByType(1, 260, followsType);
+		EXPECT_FALSE(snapshotLoaderCount.has_value());
 	dm->clearCurrentSnapshot();
 	dm->clearRelationshipSegmentTypeStats();
+	EXPECT_FALSE(dm->hasCachedRelationshipSegmentTypeStats());
 	EXPECT_FALSE(dm->cachedRelationshipTypeSegmentStats(edgeSegments.front().segmentOffset).has_value());
 	followsCount = dm->countActiveEdgesByTypeFromSegmentStats(1, 260, followsType);
 	ASSERT_TRUE(followsCount.has_value());
@@ -596,9 +683,8 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, RelationshipTypeSegmentStats
 	auto unsavedAddCount = dm->countActiveEdgesByTypeFromSegmentStats(1, unsaved.getId(), followsType);
 	ASSERT_TRUE(unsavedAddCount.has_value());
 	EXPECT_EQ(*unsavedAddCount, 131);
-	auto unsavedAddLoaderCount = metadataLoader.countActiveByType(1, unsaved.getId(), followsType);
-	ASSERT_TRUE(unsavedAddLoaderCount.has_value());
-	EXPECT_EQ(*unsavedAddLoaderCount, 131);
+		auto unsavedAddLoaderCount = metadataLoader.countActiveByType(1, unsaved.getId(), followsType);
+		EXPECT_FALSE(unsavedAddLoaderCount.has_value());
 	db->getStorage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
@@ -608,9 +694,8 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, RelationshipTypeSegmentStats
 	auto unsavedDeleteCount = dm->countActiveEdgesByTypeFromSegmentStats(1, 260, followsType);
 	ASSERT_TRUE(unsavedDeleteCount.has_value());
 	EXPECT_EQ(*unsavedDeleteCount, 129);
-	auto unsavedDeleteLoaderCount = metadataLoader.countActiveByType(1, 260, followsType);
-	ASSERT_TRUE(unsavedDeleteLoaderCount.has_value());
-	EXPECT_EQ(*unsavedDeleteLoaderCount, 129);
+		auto unsavedDeleteLoaderCount = metadataLoader.countActiveByType(1, 260, followsType);
+		EXPECT_FALSE(unsavedDeleteLoaderCount.has_value());
 	db->getStorage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
@@ -619,7 +704,7 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, RelationshipTypeSegmentStats
 	EXPECT_EQ(*countAfterInvalidation, 129);
 }
 
-TEST_F(RelationshipPropertyColumnLoaderStorageTest, RelationshipTypeTotalStatsCountsFullRangeAndOverlays) {
+TEST_F(RelationshipPropertyColumnLoaderStorageTest, RelationshipTypeSegmentScanCountsFullRangeAndOverlays) {
 	auto emptyCount = dm->countActiveEdgesByTypeFromSegmentStats(1, 128, followsType);
 	ASSERT_TRUE(emptyCount.has_value());
 	EXPECT_EQ(*emptyCount, 0);
@@ -690,6 +775,7 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderScansPartialSe
 	ASSERT_TRUE(followsCountCandidates.has_value());
 	EXPECT_EQ(followsCountCandidates->propertyEntityIds.size() + followsCountCandidates->fallbackEdgeIds.size(),
 			  followsCandidates->propertyEntityIds.size() + followsCandidates->fallbackRows.size());
+	EXPECT_EQ(followsCountCandidates->propertyEdgeIds.size(), followsCountCandidates->propertyEntityIds.size());
 	auto missingTypeCandidates = loader.collectPropertyCandidatesByType(1, 256, mentionsType);
 	ASSERT_TRUE(missingTypeCandidates.has_value());
 	EXPECT_TRUE(missingTypeCandidates->edgeIds.empty());
@@ -752,9 +838,11 @@ TEST(RelationshipMetadataBatchTest, CandidateBatchHelpersReserveAndReportSizes) 
 	EXPECT_EQ(countCandidates.matchedEdges, 0U);
 	countCandidates.reserve(16);
 	countCandidates.propertyEntityIds.push_back(20);
+	countCandidates.propertyEdgeIds.push_back(10);
 	countCandidates.fallbackEdgeIds.push_back(30);
 	countCandidates.matchedEdges = 2;
 	EXPECT_EQ(countCandidates.propertyEntityIds.size(), 1U);
+	EXPECT_EQ(countCandidates.propertyEdgeIds.size(), 1U);
 	EXPECT_EQ(countCandidates.fallbackEdgeIds.size(), 1U);
 	EXPECT_EQ(countCandidates.matchedEdges, 2U);
 }
@@ -781,6 +869,7 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataCandidateCountFallba
 	ASSERT_TRUE(candidates.has_value());
 	EXPECT_EQ(candidates->matchedEdges, 128U);
 	EXPECT_TRUE(candidates->propertyEntityIds.empty());
+	EXPECT_TRUE(candidates->propertyEdgeIds.empty());
 	EXPECT_EQ(candidates->fallbackEdgeIds, (std::vector<int64_t>{blobBacked.getId()}));
 	EXPECT_TRUE(trace.contains("relationship_count.load_edge_metadata"));
 }

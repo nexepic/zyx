@@ -88,14 +88,14 @@ This is convenient for CLI and scripting use cases. Nested transactions are not 
 
 When no explicit transaction is active, `Database::execute()` handles transactions automatically:
 
-- **Read queries** — Execute via a read-only fast path (no write lock, no WAL overhead).
+- **Read queries** — Execute via a read-only execution path (no write lock, no WAL overhead).
 - **Write queries** — Auto-wrapped in a single-statement transaction that commits immediately.
 
 ```cpp
 // This auto-commmits — no explicit beginTransaction() needed
 db.execute("CREATE (n:Person {name: 'Alice'})");
 
-// This uses the read-only fast path
+// This uses the read-only execution path
 auto result = db.execute("MATCH (n:Person) RETURN n.name");
 ```
 

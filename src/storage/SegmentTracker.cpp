@@ -152,7 +152,7 @@ namespace graph::storage {
 	}
 
 	SegmentHeader SegmentTracker::getSegmentHeaderCopy(uint64_t offset) const {
-		// Fast path: shared_lock allows concurrent readers
+		// Hot path: shared_lock allows concurrent readers
 		{
 			std::shared_lock lock(mutex_);
 			auto it = segments_.find(offset);
@@ -339,6 +339,48 @@ namespace graph::storage {
 		}
 	}
 
+	void SegmentTracker::appendEntityRange(uint64_t offset, int64_t firstEntityId, uint32_t baseUsed, uint32_t count) {
+		if (count == 0) {
+			return;
+		}
+
+		std::unique_lock lock(mutex_);
+		ensureSegmentCached_locked(offset);
+
+		SegmentHeader &header = segments_[offset];
+		if (baseUsed != header.used) {
+			throw std::runtime_error("Segment append base does not match current usage");
+		}
+		if (baseUsed + count > header.capacity) {
+			throw std::runtime_error("Entity range out of bounds for segment append");
+		}
+
+		const int64_t oldStartId = header.start_id;
+		if (baseUsed == 0) {
+			header.start_id = firstEntityId;
+		}
+
+		const int64_t startIndexSigned = firstEntityId - header.start_id;
+		if (startIndexSigned < 0 ||
+			static_cast<uint64_t>(startIndexSigned) + count > static_cast<uint64_t>(header.capacity)) {
+			throw std::runtime_error("Entity range out of bounds for segment bitmap batch update");
+		}
+
+		const uint32_t startIndex = static_cast<uint32_t>(startIndexSigned);
+		for (uint32_t i = 0; i < count; ++i) {
+			const uint32_t idx = startIndex + i;
+			bitmap::setBit(header.activity_bitmap, idx, true);
+		}
+
+		header.used = baseUsed + count;
+		header.is_dirty = 1;
+		markSegmentDirty(offset);
+
+		if (auto indexMgr = segmentIndexManager_.lock()) {
+			indexMgr->updateSegmentIndex(header, oldStartId);
+		}
+	}
+
 	void SegmentTracker::setBitmapBit(uint64_t offset, uint32_t index, bool value) {
 		std::unique_lock lock(mutex_);
 		ensureSegmentCached_locked(offset);
@@ -483,7 +525,7 @@ namespace graph::storage {
 	// OPTIMIZED LOOKUP: Uses SegmentIndexManager for O(log N) performance
 	// =========================================================================
 	uint64_t SegmentTracker::getSegmentOffsetForEntityId(EntityType type, int64_t entityId) {
-		// 1. Fast Path: Use Index Manager (its own shared_lock protects the index)
+		// 1. Hot path: Use Index Manager (its own shared_lock protects the index)
 		if (auto indexMgr = segmentIndexManager_.lock()) {
 			uint64_t offset = indexMgr->findSegmentForId(static_cast<uint32_t>(type), entityId);
 			if (offset != 0) {

@@ -129,8 +129,29 @@ TEST_F(PwriteHelperTest, InvalidFd) {
 	auto result = portable_pwrite(INVALID_FILE_HANDLE, "data", 4, 0);
 	EXPECT_EQ(result, -1);
 
+	uint64_t size = 123;
+	EXPECT_EQ(portable_file_size(INVALID_FILE_HANDLE, &size), -1);
+	EXPECT_EQ(portable_file_size(INVALID_FILE_HANDLE, nullptr), -1);
+
 	EXPECT_EQ(portable_fsync(INVALID_FILE_HANDLE), -1);
 	EXPECT_EQ(portable_close_rw(INVALID_FILE_HANDLE), -1);
+}
+
+TEST_F(PwriteHelperTest, FileSizeReportsCurrentNativeSize) {
+	file_handle_t fd = portable_open_rw(testFile_.c_str());
+	ASSERT_NE(fd, INVALID_FILE_HANDLE);
+
+	uint64_t size = 0;
+	ASSERT_EQ(portable_file_size(fd, &size), 0);
+	EXPECT_EQ(size, testSize_);
+
+	const char data[] = "extend";
+	ASSERT_EQ(portable_pwrite(fd, data, sizeof(data), static_cast<pwrite_off_t>(testSize_ + 16)),
+			  static_cast<pwrite_ssize_t>(sizeof(data)));
+	ASSERT_EQ(portable_file_size(fd, &size), 0);
+	EXPECT_EQ(size, testSize_ + 16 + sizeof(data));
+
+	portable_close_rw(fd);
 }
 
 TEST_F(PwriteHelperTest, TruncateFile) {

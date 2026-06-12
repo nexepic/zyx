@@ -50,7 +50,9 @@ void UniqueConstraint::validateUpdate(int64_t entityId,
 }
 
 void UniqueConstraint::checkUniqueness(int64_t entityId, const PropertyValue &value) const {
-	auto matches = indexManager_->findNodeIdsByProperty(property_, value);
+	auto matches = label_.empty()
+		? indexManager_->findNodeIdsByProperty(property_, value)
+		: indexManager_->findNodeIdsByLabelAndProperty(label_, property_, value);
 	for (int64_t matchId : matches) {
 		if (matchId != entityId) {
 			throw std::runtime_error(

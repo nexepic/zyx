@@ -26,13 +26,16 @@
 #include <map>
 #include <optional>
 #include <sstream>
+#include <stdexcept>
 #include <type_traits>
 #include <unordered_set>
+#include <vector>
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/core/BlobChainManager.hpp"
 #include "graph/core/EntityPropertyTraits.hpp"
 #include "graph/core/StateChainManager.hpp"
 #include "graph/core/Types.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/CommittedSnapshot.hpp"
 #include "graph/storage/DeletionManager.hpp"
 #include "graph/storage/EntityReferenceUpdater.hpp"
@@ -60,6 +63,62 @@ namespace graph::storage {
 	// Thread-local snapshot pointer for read-only transactions
 	thread_local const CommittedSnapshot *DataManager::currentSnapshot_ = nullptr;
 	thread_local bool DataManager::readOnlyMode_ = false;
+
+	namespace {
+		template<typename EntityType>
+		class WalEntityViewBatchWriter {
+		public:
+			WalEntityViewBatchWriter(const TransactionContext &txnContext, EntityChangeType changeType, size_t expectedCount) :
+				txnContext_(txnContext), changeType_(static_cast<uint8_t>(changeType)) {
+				reserveFor((std::min)(expectedCount, kWalBatchSize));
+			}
+
+			void add(const EntityType &entity) {
+				if (views_.size() >= kWalBatchSize) {
+					flush();
+				}
+				if (views_.capacity() == 0) {
+					reserveFor(1);
+				}
+
+				const size_t offset = serialized_.size();
+				serialized_.resize(offset + kEntitySize);
+				auto *dest = serialized_.data() + offset;
+				utils::FixedSizeSerializer::serializeInto(reinterpret_cast<char *>(dest), entity, kEntitySize);
+				views_.push_back({static_cast<uint8_t>(EntityType::typeId),
+								  changeType_,
+								  entity.getId(),
+								  dest,
+								  static_cast<uint32_t>(kEntitySize)});
+			}
+
+			void flush() {
+				if (views_.empty()) {
+					return;
+				}
+				txnContext_.flushWalChangeViews(views_);
+				views_.clear();
+				serialized_.clear();
+			}
+
+		private:
+			static constexpr size_t kWalBatchSize = 4096;
+			static constexpr size_t kEntitySize = EntityType::getTotalSize();
+
+			void reserveFor(size_t count) {
+				if (count == 0) {
+					return;
+				}
+				serialized_.reserve(count * kEntitySize);
+				views_.reserve(count);
+			}
+
+			const TransactionContext &txnContext_;
+			uint8_t changeType_;
+			std::vector<uint8_t> serialized_;
+			std::vector<wal::WALEntityChangeView> views_;
+		};
+	} // namespace
 
 	DataManager::DataManager(std::shared_ptr<std::fstream> file, size_t cacheSize, FileHeader &fileHeader,
 							 IDAllocators allocators, std::shared_ptr<SegmentTracker> segmentTracker,
@@ -246,25 +305,39 @@ namespace graph::storage {
 			return;
 
 		// Phase 1: Validate all nodes before any writes (atomicity)
-		for (const auto &node: nodes) {
-			for (const auto &v: observerManager_.getValidators()) {
-				v->validateNodeInsert(node, node.getProperties());
+		{
+			debug::ScopedPerfTimer timer("datamanager.add_nodes.validate");
+			for (const auto &node: nodes) {
+				for (const auto &v: observerManager_.getValidators()) {
+					v->validateNodeInsert(node, node.getProperties());
+				}
 			}
 		}
 
 
 		// Phase 2: Write
-		nodeManager_->addBatch(nodes);
-		observerManager_.notifyNodesAdded(nodes);
+		{
+			debug::ScopedPerfTimer timer("datamanager.add_nodes.prepare_ids");
+			nodeManager_->prepareAddBatch(nodes);
+		}
+		{
+			debug::ScopedPerfTimer timer("datamanager.add_nodes.notify_indexes");
+			observerManager_.notifyNodesAdded(nodes);
+		}
 
-		txnContext_.recordAdds(nodes);
+		{
+			debug::ScopedPerfTimer timer("datamanager.add_nodes.store_properties");
+			(void) propertyManager_->storePropertiesBatch(nodes);
+		}
 
-		for (auto &node: nodes) {
-			if (node.getProperties().empty())
-				continue;
+		{
+			debug::ScopedPerfTimer timer("datamanager.add_nodes.entity_write");
+			nodeManager_->persistPreparedAddBatch(nodes);
+		}
 
-			propertyManager_->storeProperties(node);
-			nodeManager_->update(node);
+		{
+			debug::ScopedPerfTimer timer("datamanager.add_nodes.txn_record");
+			txnContext_.recordAdds(nodes);
 		}
 	}
 
@@ -276,9 +349,43 @@ namespace graph::storage {
 		observerManager_.notifyNodeUpdated(oldNode, node);
 	}
 
+	void DataManager::updateNodes(const std::vector<Node> &nodes) {
+		guardReadOnly();
+		if (nodes.empty()) {
+			return;
+		}
+
+		std::vector<Node> oldNodes;
+		oldNodes.reserve(nodes.size());
+		for (const auto &node: nodes) {
+			oldNodes.push_back(nodeManager_->get(node.getId()));
+		}
+
+		txnContext_.recordUpdates<Node>(nodes, oldNodes);
+		nodeManager_->updateBatch(nodes);
+		for (size_t index = 0; index < nodes.size(); ++index) {
+			observerManager_.notifyNodeUpdated(oldNodes[index], nodes[index]);
+		}
+	}
+
+	void DataManager::updateNodesWithBeforeImages(const std::vector<Node> &nodes, const std::vector<Node> &oldNodes) {
+		guardReadOnly();
+		if (nodes.empty()) {
+			return;
+		}
+		if (nodes.size() != oldNodes.size()) {
+			throw std::invalid_argument("updateNodesWithBeforeImages requires matching new/old node counts");
+		}
+
+		txnContext_.recordUpdates<Node>(nodes, oldNodes);
+		nodeManager_->updateBatch(nodes);
+		for (size_t index = 0; index < nodes.size(); ++index) {
+			observerManager_.notifyNodeUpdated(oldNodes[index], nodes[index]);
+		}
+	}
+
 	void DataManager::deleteNode(Node &node) const {
 		guardReadOnly();
-		txnContext_.recordDelete<Node>(node.getId(), [this](int64_t id) { return nodeManager_->get(id); });
 		nodeManager_->remove(node);
 		observerManager_.notifyNodeDeleted(node);
 	}
@@ -395,33 +502,43 @@ namespace graph::storage {
 			return;
 
 		// Phase 1: Validate all edges before any writes (atomicity)
-		for (const auto &edge: edges) {
-			for (const auto &v: observerManager_.getValidators()) {
-				v->validateEdgeInsert(edge, edge.getProperties());
+		{
+			debug::ScopedPerfTimer timer("datamanager.add_edges.validate");
+			for (const auto &edge: edges) {
+				for (const auto &v: observerManager_.getValidators()) {
+					v->validateEdgeInsert(edge, edge.getProperties());
+				}
 			}
 		}
 
 
 		// 1. Assign IDs and initial persistence
-		edgeManager_->addBatch(edges);
+		traversal::RelationshipBatchLinkUpdates linkUpdates;
+		{
+			debug::ScopedPerfTimer timer("datamanager.add_edges.prepare_links");
+			linkUpdates = edgeManager_->prepareAddBatch(edges);
+		}
 
 		// 2. Indexing (needs IDs + Props)
-		observerManager_.notifyEdgesAdded(edges);
-
-		txnContext_.recordAdds(edges);
+		{
+			debug::ScopedPerfTimer timer("datamanager.add_edges.notify_indexes");
+			observerManager_.notifyEdgesAdded(edges);
+		}
 
 		// 3. Property Storage Handling
-		for (auto &edge: edges) {
-			if (edge.getProperties().empty())
-				continue;
+		{
+			debug::ScopedPerfTimer timer("datamanager.add_edges.store_properties");
+			(void) propertyManager_->storePropertiesBatch(edges);
+		}
 
-			// Links external properties using the ID assigned in Step 1
-			propertyManager_->storeProperties(edge);
+		{
+			debug::ScopedPerfTimer timer("datamanager.add_edges.entity_write");
+			edgeManager_->persistPreparedAddBatch(edges, linkUpdates);
+		}
 
-			if (EntityPropertyTraits<Edge>::hasPropertyEntity(edge)) { // ZYX_COV_EXCL_LINE
-				// Persist the modification (link to external prop)
-				edgeManager_->update(edge);
-			}
+		{
+			debug::ScopedPerfTimer timer("datamanager.add_edges.txn_record");
+			txnContext_.recordAdds(edges);
 		}
 	}
 
@@ -433,9 +550,43 @@ namespace graph::storage {
 		observerManager_.notifyEdgeUpdated(oldEdge, edge);
 	}
 
+	void DataManager::updateEdges(const std::vector<Edge> &edges) {
+		guardReadOnly();
+		if (edges.empty()) {
+			return;
+		}
+
+		std::vector<Edge> oldEdges;
+		oldEdges.reserve(edges.size());
+		for (const auto &edge: edges) {
+			oldEdges.push_back(edgeManager_->get(edge.getId()));
+		}
+
+		txnContext_.recordUpdates<Edge>(edges, oldEdges);
+		edgeManager_->updateBatch(edges);
+		for (size_t index = 0; index < edges.size(); ++index) {
+			observerManager_.notifyEdgeUpdated(oldEdges[index], edges[index]);
+		}
+	}
+
+	void DataManager::updateEdgesWithBeforeImages(const std::vector<Edge> &edges, const std::vector<Edge> &oldEdges) {
+		guardReadOnly();
+		if (edges.empty()) {
+			return;
+		}
+		if (edges.size() != oldEdges.size()) {
+			throw std::invalid_argument("updateEdgesWithBeforeImages requires matching new/old edge counts");
+		}
+
+		txnContext_.recordUpdates<Edge>(edges, oldEdges);
+		edgeManager_->updateBatch(edges);
+		for (size_t index = 0; index < edges.size(); ++index) {
+			observerManager_.notifyEdgeUpdated(oldEdges[index], edges[index]);
+		}
+	}
+
 	void DataManager::deleteEdge(Edge &edge) const {
 		guardReadOnly();
-		txnContext_.recordDelete<Edge>(edge.getId(), [this](int64_t id) { return edgeManager_->get(id); });
 		edgeManager_->remove(edge);
 		observerManager_.notifyEdgeDeleted(edge);
 	}
@@ -483,6 +634,22 @@ namespace graph::storage {
 		} else { // "both" is the default
 			return relationshipTraversal_->getAllConnectedEdges(nodeId);
 		}
+	}
+
+	size_t DataManager::visitEdgesByNode(
+			int64_t nodeId,
+			const std::function<bool(const Edge &)> &visitor,
+			const std::string &direction) const {
+		if (!visitor) {
+			return 0;
+		}
+		if (direction == "out") {
+			return relationshipTraversal_->visitOutgoingEdges(nodeId, visitor);
+		}
+		if (direction == "in") {
+			return relationshipTraversal_->visitIncomingEdges(nodeId, visitor);
+		}
+		return relationshipTraversal_->visitAllConnectedEdges(nodeId, visitor);
 	}
 
 	// --- Property Operation Templates ---
@@ -543,9 +710,21 @@ namespace graph::storage {
 
 	// --- Property Entity Operations ---
 
-	void DataManager::addPropertyEntity(Property &property) const { propertyManager_->add(property); }
+	void DataManager::addPropertyEntity(Property &property) const {
+		propertyManager_->add(property);
+		txnContext_.recordAdd(property);
+	}
 
-	void DataManager::updatePropertyEntity(const Property &property) const { propertyManager_->update(property); }
+	void DataManager::addPropertyEntities(std::vector<Property> &properties) const {
+		propertyManager_->addBatch(properties);
+		txnContext_.recordAdds(properties);
+	}
+
+	void DataManager::updatePropertyEntity(const Property &property) const {
+		Property oldProperty = propertyManager_->get(property.getId());
+		txnContext_.recordUpdate<Property>(property, oldProperty);
+		propertyManager_->update(property);
+	}
 
 	void DataManager::deleteProperty(Property &property) const { propertyManager_->remove(property); }
 
@@ -553,9 +732,16 @@ namespace graph::storage {
 
 	// --- Blob Operations ---
 
-	void DataManager::addBlobEntity(Blob &blob) const { blobManager_->add(blob); }
+	void DataManager::addBlobEntity(Blob &blob) const {
+		blobManager_->add(blob);
+		txnContext_.recordAdd(blob);
+	}
 
-	void DataManager::updateBlobEntity(const Blob &blob) const { blobManager_->update(blob); }
+	void DataManager::updateBlobEntity(const Blob &blob) const {
+		Blob oldBlob = blobManager_->get(blob.getId());
+		txnContext_.recordUpdate<Blob>(blob, oldBlob);
+		blobManager_->update(blob);
+	}
 
 	void DataManager::deleteBlob(Blob &blob) const { blobManager_->remove(blob); }
 
@@ -563,9 +749,16 @@ namespace graph::storage {
 
 	// --- Index Operations ---
 
-	void DataManager::addIndexEntity(Index &index) const { indexEntityManager_->add(index); }
+	void DataManager::addIndexEntity(Index &index) const {
+		indexEntityManager_->add(index);
+		txnContext_.recordAdd(index);
+	}
 
-	void DataManager::updateIndexEntity(const Index &index) const { indexEntityManager_->update(index); }
+	void DataManager::updateIndexEntity(const Index &index) const {
+		Index oldIndex = indexEntityManager_->get(index.getId());
+		txnContext_.recordUpdate<Index>(index, oldIndex);
+		indexEntityManager_->update(index);
+	}
 
 	void DataManager::deleteIndex(Index &index) const { indexEntityManager_->remove(index); }
 
@@ -573,9 +766,16 @@ namespace graph::storage {
 
 	// --- State Operations ---
 
-	void DataManager::addStateEntity(State &state) const { stateManager_->add(state); }
+	void DataManager::addStateEntity(State &state) const {
+		stateManager_->add(state);
+		txnContext_.recordAdd(state);
+	}
 
-	void DataManager::updateStateEntity(const State &state) const { stateManager_->update(state); }
+	void DataManager::updateStateEntity(const State &state) const {
+		State oldState = stateManager_->get(state.getId());
+		txnContext_.recordUpdate<State>(state, oldState);
+		stateManager_->update(state);
+	}
 
 	void DataManager::deleteState(State &state) const { stateManager_->remove(state); }
 
@@ -858,6 +1058,10 @@ namespace graph::storage {
 
 	bool DataManager::hasUnsavedChanges() const { return persistenceManager_->hasUnsavedChanges(); }
 
+	std::shared_ptr<CommittedSnapshot> DataManager::captureCommittedSnapshot() const {
+		return persistenceManager_->captureCommittedSnapshot();
+	}
+
 	FlushSnapshot DataManager::prepareFlushSnapshot() const { return persistenceManager_->createSnapshot(); }
 
 	FlushSnapshotView DataManager::prepareFlushSnapshotView() const {
@@ -878,6 +1082,100 @@ namespace graph::storage {
 		persistenceManager_->checkAndTriggerAutoFlush();
 	}
 
+	void DataManager::setActiveTransaction(uint64_t txnId) {
+		txnContext_.setActive(txnId);
+		if (hasUnsavedChanges()) {
+			txnContext_.setRollbackBase(captureCommittedSnapshot());
+		}
+	}
+
+	void DataManager::flushTransactionWALRecords() const {
+		if (!txnContext_.isActive()) {
+			return;
+		}
+		auto *wal = txnContext_.getWALManager();
+		if (!wal || !wal->isOpen() || txnContext_.pendingWalChanges().empty()) {
+			return;
+		}
+
+		debug::ScopedPerfTimer timer("wal.entity_flush");
+		const auto &changes = txnContext_.pendingWalChanges();
+		flushPendingWALRecordsForType<Node>(changes);
+		flushPendingWALRecordsForType<Edge>(changes);
+		flushPendingWALRecordsForType<Property>(changes);
+		flushPendingWALRecordsForType<Blob>(changes);
+		flushPendingWALRecordsForType<Index>(changes);
+		flushPendingWALRecordsForType<State>(changes);
+	}
+
+	template<typename EntityType>
+	void DataManager::flushPendingWALRecordsForType(const TransactionContext::PendingWalChangeMap &changes) const {
+		const auto entityType = static_cast<uint8_t>(EntityType::typeId);
+		std::vector<int64_t> ids;
+		std::vector<const TransactionContext::PendingWalChange *> typedChanges;
+		ids.reserve(changes.size());
+		typedChanges.reserve(changes.size());
+		size_t addedCount = 0;
+		size_t modifiedCount = 0;
+		size_t deletedCount = 0;
+
+		for (const auto &[key, change]: changes) {
+			(void) key;
+			if (change.entityType != entityType) {
+				continue;
+			}
+			ids.push_back(change.entityId);
+			typedChanges.push_back(&change);
+			switch (change.changeType) {
+				case EntityChangeType::CHANGE_ADDED:
+					++addedCount;
+					break;
+				case EntityChangeType::CHANGE_MODIFIED:
+					++modifiedCount;
+					break;
+				case EntityChangeType::CHANGE_DELETED:
+					++deletedCount;
+					break;
+			}
+		}
+
+		if (ids.empty()) {
+			return;
+		}
+
+		WalEntityViewBatchWriter<EntityType> added(txnContext_, EntityChangeType::CHANGE_ADDED, addedCount);
+		WalEntityViewBatchWriter<EntityType> modified(txnContext_, EntityChangeType::CHANGE_MODIFIED, modifiedCount);
+		WalEntityViewBatchWriter<EntityType> deleted(txnContext_, EntityChangeType::CHANGE_DELETED, deletedCount);
+		size_t changeIndex = 0;
+
+		persistenceManager_->visitDirtyInfos<EntityType>(
+				ids, [&](int64_t, const DirtyEntityInfo<EntityType> *dirtyInfo) {
+					const auto &change = *typedChanges[changeIndex++];
+					if (!dirtyInfo || !dirtyInfo->backup.has_value()) {
+						if (change.changeType == EntityChangeType::CHANGE_DELETED) {
+							txnContext_.flushSerializedWalChange(change);
+						}
+						return;
+					}
+
+					switch (change.changeType) {
+						case EntityChangeType::CHANGE_ADDED:
+							added.add(*dirtyInfo->backup);
+							break;
+						case EntityChangeType::CHANGE_MODIFIED:
+							modified.add(*dirtyInfo->backup);
+							break;
+						case EntityChangeType::CHANGE_DELETED:
+							deleted.add(*dirtyInfo->backup);
+							break;
+					}
+				});
+
+		added.flush();
+		modified.flush();
+		deleted.flush();
+	}
+
 	template<typename EntityType>
 	std::vector<DirtyEntityInfo<EntityType>>
 	DataManager::getDirtyEntityInfos(const std::vector<EntityChangeType> &types) {
@@ -888,6 +1186,11 @@ namespace graph::storage {
 	std::vector<DirtyEntityInfo<EntityType>>
 	DataManager::getDirtyEntityInfos(const std::vector<EntityChangeType> &types) const {
 		return filterDirtyInfosByType(persistenceManager_->getAllDirtyInfos<EntityType>(), types);
+	}
+
+	template<typename EntityType>
+	bool DataManager::hasDirtyEntityInfos(std::span<const EntityChangeType> types) const {
+		return persistenceManager_->hasDirtyInfoOfTypes<EntityType>(types);
 	}
 
 	template<typename T>
@@ -1262,7 +1565,11 @@ namespace graph::storage {
 			}
 		}
 
-		persistenceManager_->clearAll();
+		if (const auto &rollbackBase = txnContext_.rollbackBase()) {
+			persistenceManager_->restoreCommittedSnapshot(*rollbackBase);
+		} else {
+			persistenceManager_->clearAll();
+		}
 		persistenceManager_->setTransactionActive(false);
 		clearCache();
 	}
@@ -1341,18 +1648,14 @@ namespace graph::storage {
 
 	template<typename EntityType>
 	void DataManager::markEntityDeleted(EntityType &entity) {
+		txnContext_.recordDelete<EntityType>(entity.getId(), [&entity](int64_t) { return entity; });
+
 		auto dirtyInfo = persistenceManager_->getDirtyInfo<EntityType>(entity.getId());
 
 		if (dirtyInfo.has_value() && dirtyInfo->changeType == EntityChangeType::CHANGE_ADDED) {
-			// Revert ADD by overwriting with explicit DELETED (or just removing, but DELETED is safer for log)
-			// Actually, if it was just added in memory and never saved, we can technically ignore it,
-			// BUT to be safe in the registry logic, we mark it DELETED.
-			// Better yet, update registry to remove it?
-			// Simpler: Mark DELETED.
-			// persistenceManager_->upsert(DirtyEntityInfo<EntityType>(EntityChangeType::CHANGE_DELETED, entity));
-
-			// Remove from persistence manager completely (Undoes the ADD).
-			// This prevents an unnecessary DELETE record from being written to the WAL/Disk.
+			// Dirty ADD has no disk slot yet. Removing it keeps the checkpoint
+			// overlay compact; if it was committed by an earlier transaction,
+			// recordDelete() has already staged a WAL tombstone for recovery.
 			const int64_t id = entity.getId();
 			persistenceManager_->remove<EntityType>(id);
 		} else {
@@ -1389,6 +1692,7 @@ namespace graph::storage {
 	DataManager::getDirtyEntityInfos<Node>(const std::vector<EntityChangeType> &);
 	template std::vector<DirtyEntityInfo<Node>>
 	DataManager::getDirtyEntityInfos<Node>(const std::vector<EntityChangeType> &) const;
+	template bool DataManager::hasDirtyEntityInfos<Node>(std::span<const EntityChangeType>) const;
 	template void DataManager::setEntityDirty<Node>(const DirtyEntityInfo<Node> &);
 
 	// Edge-specific instantiations
@@ -1409,6 +1713,7 @@ namespace graph::storage {
 	DataManager::getDirtyEntityInfos<Edge>(const std::vector<EntityChangeType> &);
 	template std::vector<DirtyEntityInfo<Edge>>
 	DataManager::getDirtyEntityInfos<Edge>(const std::vector<EntityChangeType> &) const;
+	template bool DataManager::hasDirtyEntityInfos<Edge>(std::span<const EntityChangeType>) const;
 	template void DataManager::setEntityDirty<Edge>(const DirtyEntityInfo<Edge> &);
 
 	// Property-specific instantiations
@@ -1422,6 +1727,7 @@ namespace graph::storage {
 	DataManager::getDirtyEntityInfos<Property>(const std::vector<EntityChangeType> &);
 	template std::vector<DirtyEntityInfo<Property>>
 	DataManager::getDirtyEntityInfos<Property>(const std::vector<EntityChangeType> &) const;
+	template bool DataManager::hasDirtyEntityInfos<Property>(std::span<const EntityChangeType>) const;
 	template void DataManager::setEntityDirty<Property>(const DirtyEntityInfo<Property> &);
 
 	// Blob-specific instantiations
@@ -1434,6 +1740,7 @@ namespace graph::storage {
 	DataManager::getDirtyEntityInfos<Blob>(const std::vector<EntityChangeType> &);
 	template std::vector<DirtyEntityInfo<Blob>>
 	DataManager::getDirtyEntityInfos<Blob>(const std::vector<EntityChangeType> &) const;
+	template bool DataManager::hasDirtyEntityInfos<Blob>(std::span<const EntityChangeType>) const;
 	template void DataManager::setEntityDirty<Blob>(const DirtyEntityInfo<Blob> &);
 
 	// Index-specific instantiations
@@ -1446,6 +1753,7 @@ namespace graph::storage {
 	DataManager::getDirtyEntityInfos<Index>(const std::vector<EntityChangeType> &);
 	template std::vector<DirtyEntityInfo<Index>>
 	DataManager::getDirtyEntityInfos<Index>(const std::vector<EntityChangeType> &) const;
+	template bool DataManager::hasDirtyEntityInfos<Index>(std::span<const EntityChangeType>) const;
 	template void DataManager::setEntityDirty<Index>(const DirtyEntityInfo<Index> &);
 
 	// State-specific instantiations
@@ -1458,5 +1766,6 @@ namespace graph::storage {
 	DataManager::getDirtyEntityInfos<State>(const std::vector<EntityChangeType> &);
 	template std::vector<DirtyEntityInfo<State>>
 	DataManager::getDirtyEntityInfos<State>(const std::vector<EntityChangeType> &) const;
+	template bool DataManager::hasDirtyEntityInfos<State>(std::span<const EntityChangeType>) const;
 	template void DataManager::setEntityDirty<State>(const DirtyEntityInfo<State> &);
 } // namespace graph::storage

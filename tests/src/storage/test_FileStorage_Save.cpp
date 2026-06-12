@@ -258,6 +258,20 @@ TEST_F(FileStorageTest, Save_EmptySnapshot) {
 	EXPECT_NO_THROW(fileStorage->save());
 }
 
+TEST_F(FileStorageTest, Save_DeletedEntityOutsideKnownSegmentsStillCommitsSnapshot) {
+	auto dm = fileStorage->getDataManager();
+
+	graph::Node tombstone(987654, 0);
+	tombstone.markInactive();
+	dm->setEntityDirty<graph::Node>(
+			graph::storage::DirtyEntityInfo<graph::Node>(
+					graph::storage::EntityChangeType::CHANGE_DELETED, tombstone));
+
+	EXPECT_TRUE(dm->hasUnsavedChanges());
+	EXPECT_NO_THROW(fileStorage->save());
+	EXPECT_FALSE(dm->hasUnsavedChanges());
+}
+
 TEST_F(FileStorageTest, SaveData_PreAllocatedSlotReuse_Batch) {
 	// Test saveData when entities go into pre-allocated slots via batch operations
 	auto dm = fileStorage->getDataManager();

@@ -39,6 +39,26 @@ class ProfileEvent:
 
 
 @dataclass(frozen=True)
+class ProfileSummaryRow:
+    database: str
+    workload: str
+    scale: str
+    profile: str
+    phase: str
+    samples: int
+    total_calls: int
+    avg_calls: float
+    first_ms: float
+    min_ms: float
+    avg_ms: float
+    p50_ms: float
+    p95_ms: float
+    p99_ms: float
+    max_ms: float
+    equivalent_mode: str = "api"
+
+
+@dataclass(frozen=True)
 class FailureEvent:
     database: str
     workload: str

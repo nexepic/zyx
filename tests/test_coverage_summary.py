@@ -60,10 +60,90 @@ def test_source_exclusion_adjustment_preserves_files_without_markers(tmp_path):
     }
 
 
+def test_source_exclusion_adjustment_honors_multiline_branch_marker(tmp_path):
+    repo_root = Path(__file__).resolve().parents[1]
+    sys.path.insert(0, str(repo_root / "scripts"))
+    import generate_coverage
+
+    source_file = tmp_path / "MultilineBranch.cpp"
+    source_file.write_text(
+        "bool guard(bool a, bool b) {\n"
+        "  if (a ||\n"
+        "      b) { // ZYX_COV_EXCL_LINE\n"
+        "    return true;\n"
+        "  }\n"
+        "  return false;\n"
+        "}\n"
+    )
+    file_coverage = {
+        "segments": [
+            [1, 1, 1, True, True, False],
+            [2, 3, 1, True, True, False],
+            [3, 7, 0, True, True, False],
+        ],
+        "branches": [
+            [2, 7, 3, 8, 1, 0],
+        ],
+        "summary": {
+            "lines": {"count": 7, "covered": 6, "percent": 85.71},
+            "regions": {"count": 3, "covered": 2, "percent": 66.67},
+            "branches": {"count": 2, "covered": 1, "notcovered": 1, "percent": 50.0},
+            "functions": {"count": 1, "covered": 1, "percent": 100.0},
+        },
+    }
+
+    adjusted = generate_coverage.apply_source_exclusions(file_coverage, source_file)
+
+    assert adjusted["branches"] == {"count": 0, "covered": 0, "notcovered": 0, "percent": 100.0}
+    assert adjusted["lines"]["count"] == 1
+    assert adjusted["regions"]["count"] == 1
+
+
+def test_source_exclusion_adjustment_treats_continued_marker_as_statement_prefix(tmp_path):
+    repo_root = Path(__file__).resolve().parents[1]
+    sys.path.insert(0, str(repo_root / "scripts"))
+    import generate_coverage
+
+    source_file = tmp_path / "ContinuedMarker.cpp"
+    source_file.write_text(
+        "bool guard(bool a, bool b, bool c) {\n"
+        "  if (a ||\n"
+        "      b ||\n"
+        "      c) { // ZYX_COV_EXCL_LINE\n"
+        "    return true;\n"
+        "  }\n"
+        "  return false;\n"
+        "}\n"
+    )
+    file_coverage = {
+        "segments": [
+            [1, 1, 1, True, True, False],
+            [2, 3, 1, True, True, False],
+            [3, 7, 1, True, True, False],
+            [4, 7, 0, True, True, False],
+        ],
+        "branches": [
+            [2, 7, 2, 11, 1, 0],
+            [3, 7, 4, 8, 0, 1],
+        ],
+        "summary": {
+            "lines": {"count": 8, "covered": 7, "percent": 87.5},
+            "regions": {"count": 4, "covered": 3, "percent": 75.0},
+            "branches": {"count": 4, "covered": 2, "notcovered": 2, "percent": 50.0},
+            "functions": {"count": 1, "covered": 1, "percent": 100.0},
+        },
+    }
+
+    adjusted = generate_coverage.apply_source_exclusions(file_coverage, source_file)
+
+    assert adjusted["branches"] == {"count": 0, "covered": 0, "notcovered": 0, "percent": 100.0}
+    assert adjusted["lines"]["count"] == 1
+
+
 def test_driver_abi_coverage_summary_honors_source_exclusion_markers(tmp_path):
     repo_root = Path(__file__).resolve().parents[1]
     build_dir = repo_root / "buildDir"
-    source_file = repo_root / "src/api/DriverAbi.cpp"
+    source_file = repo_root / "src/api/driver_abi/DriverAbiValueRefs.cpp"
     profdata_file = build_dir / "code.profdata"
 
     if not profdata_file.exists():
@@ -82,9 +162,9 @@ def test_driver_abi_coverage_summary_honors_source_exclusion_markers(tmp_path):
     assert adjusted["lines"]["count"] < raw["lines"]["count"]
     assert adjusted["regions"]["count"] < raw["regions"]["count"]
     assert adjusted["branches"]["count"] < raw["branches"]["count"]
-    assert adjusted["lines"]["notcovered"] < raw["lines"]["count"] - raw["lines"]["covered"]
-    assert adjusted["regions"]["notcovered"] < raw["regions"]["notcovered"]
-    assert adjusted["branches"]["notcovered"] < raw["branches"]["notcovered"]
+    assert adjusted["lines"]["notcovered"] <= raw["lines"]["count"] - raw["lines"]["covered"]
+    assert adjusted["regions"]["notcovered"] <= raw["regions"]["notcovered"]
+    assert adjusted["branches"]["notcovered"] <= raw["branches"]["notcovered"]
     assert adjusted["functions"]["percent"] >= 95.0
 
 

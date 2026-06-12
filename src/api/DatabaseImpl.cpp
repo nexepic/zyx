@@ -22,10 +22,13 @@
 #include <array>
 #include <cctype>
 #include <chrono>
+#include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string_view>
 #include "graph/core/Database.hpp"
 #include "graph/core/Transaction.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/log/Log.hpp"
 #include "graph/query/QueryContext.hpp"
 #include "graph/query/QueryPlan.hpp"
@@ -34,6 +37,7 @@
 #include "graph/query/api/QueryEngine.hpp"
 #include "graph/query/api/QueryResult.hpp"
 #include "graph/storage/data/DataManager.hpp"
+#include "graph/storage/indexes/IndexManager.hpp"
 #include "zyx/zyx.hpp"
 
 namespace zyx {
@@ -621,10 +625,7 @@ namespace zyx {
 	void Database::open() const { impl_->db_.open(); }
 	bool Database::openIfExists() const { return impl_->db_.openIfExists(); }
 	void Database::close() const { impl_->db_.close(); }
-	void Database::save() const {
-		if (auto s = impl_->db_.getStorage())
-			s->flush();
-	}
+	void Database::save() const { impl_->db_.flush(); }
 
 	Transaction Database::beginTransaction() {
 		if (!impl_->db_.isOpen()) {
@@ -660,10 +661,17 @@ namespace zyx {
 
 	Result Database::execute(const std::string &cypher, const std::unordered_map<std::string, Value> &params) const {
 		try {
-			impl_->ensureOpen();
+			{
+				graph::debug::ScopedPerfTimer timer("api.ensure_open");
+				impl_->ensureOpen();
+			}
 
 			// Intercept transaction control statements (BEGIN/COMMIT/ROLLBACK)
-			auto txnKind = detectCypherTxnStatement(cypher);
+			auto txnKind = CypherTxnKind::NONE;
+			{
+				graph::debug::ScopedPerfTimer timer("api.detect_txn_statement");
+				txnKind = detectCypherTxnStatement(cypher);
+			}
 			if (txnKind != CypherTxnKind::NONE) {
 				graph::query::QueryResult txnResult;
 				auto start = std::chrono::high_resolution_clock::now();
@@ -709,8 +717,15 @@ namespace zyx {
 			}
 
 			// Build the plan first to determine if the query mutates data
-			auto queryEngine = impl_->db_.getQueryEngine();
-			auto plan = queryEngine->buildPlan(cypher);
+			std::shared_ptr<graph::query::QueryEngine> queryEngine;
+			{
+				graph::debug::ScopedPerfTimer timer("api.get_query_engine");
+				queryEngine = impl_->db_.getQueryEngine();
+			}
+			auto plan = [&]() {
+				graph::debug::ScopedPerfTimer timer("api.build_plan");
+				return queryEngine->buildPlan(cypher);
+			}();
 			bool isReadOnly = !plan.mutatesData && !plan.mutatesSchema;
 
 			// Implicit transaction wrapping:
@@ -719,21 +734,30 @@ namespace zyx {
 			//   wrap reads in implicit read-only txn (for snapshot isolation).
 			std::optional<graph::Transaction> implicitTxn;
 
-			if (impl_->needsImplicitTransaction()) {
-				if (isReadOnly) {
-					implicitTxn.emplace(impl_->db_.beginReadOnlyTransaction());
-				} else {
-					implicitTxn.emplace(impl_->db_.beginTransaction());
+			{
+				graph::debug::ScopedPerfTimer timer("api.begin_implicit_txn");
+				if (impl_->needsImplicitTransaction()) {
+					if (isReadOnly) {
+						implicitTxn.emplace(impl_->db_.beginReadOnlyTransaction());
+					} else {
+						implicitTxn.emplace(impl_->db_.beginTransaction());
+					}
 				}
 			}
 
 			auto start = std::chrono::high_resolution_clock::now();
 
-			auto ctx = toQueryContext(params);
+			auto ctx = [&]() {
+				graph::debug::ScopedPerfTimer timer("api.to_query_context");
+				return toQueryContext(params);
+			}();
 			if (implicitTxn && implicitTxn->isReadOnly()) {
 				ctx.execMode = graph::query::ExecMode::EM_READ_ONLY;
 			}
-			auto internalRes = queryEngine->executePlan(std::move(plan), ctx);
+			auto internalRes = [&]() {
+				graph::debug::ScopedPerfTimer timer("api.execute_plan");
+				return queryEngine->executePlan(std::move(plan), ctx);
+			}();
 
 			auto end = std::chrono::high_resolution_clock::now();
 			std::chrono::duration<double, std::milli> elapsed = end - start;
@@ -747,13 +771,17 @@ namespace zyx {
 				}
 			}
 
-			if (implicitTxn) {
-				implicitTxn->commit();
+			{
+				graph::debug::ScopedPerfTimer timer("api.commit_implicit_txn");
+				if (implicitTxn) {
+					implicitTxn->commit();
+				}
 			}
 
 			// We MUST inject DataManager into ResultImpl to allow label resolution later
 			auto dm = impl_->db_.getStorage()->getDataManager();
 
+			graph::debug::ScopedPerfTimer resultTimer("api.result_wrap");
 			Result res;
 			res.impl_ = std::make_unique<ResultImpl>(std::move(internalRes), std::move(dm));
 			return res;
@@ -787,8 +815,9 @@ namespace zyx {
 
 		if (!props.empty()) {
 			std::unordered_map<std::string, graph::PropertyValue> internalProps;
+			internalProps.reserve(props.size());
 			for (const auto &[k, v]: props)
-				internalProps[k] = toInternal(v);
+				internalProps.emplace(k, toInternal(v));
 			dm->addNodeProperties(newId, internalProps);
 		}
 
@@ -857,8 +886,9 @@ namespace zyx {
 		for (const auto &props: propsList) {
 			graph::Node n(0, labelId);
 			std::unordered_map<std::string, graph::PropertyValue> internalProps;
+			internalProps.reserve(props.size());
 			for (const auto &[k, v]: props)
-				internalProps[k] = toInternal(v);
+				internalProps.emplace(k, toInternal(v));
 			n.setProperties(std::move(internalProps));
 			nodes.push_back(std::move(n));
 		}
@@ -894,8 +924,9 @@ namespace zyx {
 
 		if (!props.empty()) {
 			std::unordered_map<std::string, graph::PropertyValue> internalProps;
+			internalProps.reserve(props.size());
 			for (const auto &[k, v]: props)
-				internalProps[k] = toInternal(v);
+				internalProps.emplace(k, toInternal(v));
 			dm->addEdgeProperties(edgeId, internalProps);
 		}
 
@@ -927,8 +958,9 @@ namespace zyx {
 			graph::Edge e(0, srcId, dstId, typeId);
 			if (!props.empty()) {
 				std::unordered_map<std::string, graph::PropertyValue> internalProps;
+				internalProps.reserve(props.size());
 				for (const auto &[k, v]: props)
-					internalProps[k] = toInternal(v);
+					internalProps.emplace(k, toInternal(v));
 				e.setProperties(std::move(internalProps));
 			}
 			edges.push_back(std::move(e));
@@ -946,6 +978,45 @@ namespace zyx {
 			implicitTxn->commit();
 		}
 		return ids;
+	}
+
+	bool Database::createNodePropertyIndexes(const std::string &label,
+											 const std::vector<std::string> &properties) const {
+		impl_->ensureOpen();
+		if (label.empty()) {
+			throw std::invalid_argument("createNodePropertyIndexes requires a non-empty label");
+		}
+		if (properties.empty()) {
+			return true;
+		}
+		if (impl_->db_.hasActiveTransaction() || impl_->cypherTxn_.has_value()) {
+			throw std::runtime_error("Schema operations cannot run inside an active transaction");
+		}
+
+		std::vector<graph::query::indexes::IndexManager::IndexCreateRequest> requests;
+		requests.reserve(properties.size());
+		for (const auto &property: properties) {
+			if (property.empty()) {
+				throw std::invalid_argument("createNodePropertyIndexes requires non-empty property names");
+			}
+			requests.push_back({"", "node", label, property});
+		}
+
+		auto queryEngine = impl_->db_.getQueryEngine();
+		if (!queryEngine) {
+			throw std::runtime_error("Query engine is not available");
+		}
+		auto schemaTxn = impl_->db_.beginTransaction();
+		auto results = queryEngine->getIndexManager()->createIndexes(requests);
+		const bool success = std::all_of(results.begin(), results.end(),
+										 [](const auto &result) { return result.success; });
+		if (success) {
+			queryEngine->getPlanCache().clear();
+			schemaTxn.commit();
+		} else {
+			schemaTxn.rollback();
+		}
+		return success;
 	}
 
 	std::vector<Node> Database::getShortestPath(int64_t startId, int64_t endId, int maxDepth) const {

@@ -34,6 +34,8 @@ namespace graph::storage {
 	class NodeManager final : public BaseEntityManager<Node> {
 	public:
 		NodeManager(DataManager* dataManager, std::shared_ptr<DeletionManager> deletionManager);
+		void prepareAddBatch(std::vector<Node> &nodes);
+		void persistPreparedAddBatch(const std::vector<Node> &nodes);
 
 	protected:
 		int64_t doAllocateId() override;

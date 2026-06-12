@@ -255,7 +255,7 @@ TEST_F(DataManagerTest, UpdateEdgeStandardFlowNotInDirtyTracking) {
 }
 
 TEST_F(DataManagerTest, GetDirtyEdgeInfosAllThreeTypes) {
-	// Covers types.size() == 3 fast path for Edge template
+	// Covers types.size() == 3 hot path for Edge template
 	auto node1 = createTestNode(dataManager, "Src");
 	dataManager->addNode(node1);
 	auto node2 = createTestNode(dataManager, "Tgt");
@@ -278,7 +278,7 @@ TEST_F(DataManagerTest, GetDirtyEdgeInfosAllThreeTypes) {
 	simulateSave();
 	dataManager->deleteEdge(edge3);
 
-	// Request all 3 types - should hit the fast path (types.size() == 3)
+	// Request all 3 types - should hit the hot path (types.size() == 3)
 	auto allDirty = dataManager->getDirtyEntityInfos<Edge>(
 			{EntityChangeType::CHANGE_ADDED, EntityChangeType::CHANGE_MODIFIED, EntityChangeType::CHANGE_DELETED});
 	EXPECT_GE(allDirty.size(), 1UL) << "Should have at least one dirty edge info";
@@ -300,7 +300,7 @@ TEST_F(DataManagerTest, GetDirtyEdgeInfosFiltered) {
 }
 
 TEST_F(DataManagerTest, GetDirtyPropertyInfosAllThreeTypes) {
-	// Covers types.size() == 3 fast path for Property template
+	// Covers types.size() == 3 hot path for Property template
 	auto node = createTestNode(dataManager, "PropNode");
 	dataManager->addNode(node);
 
@@ -316,7 +316,7 @@ TEST_F(DataManagerTest, GetDirtyPropertyInfosAllThreeTypes) {
 }
 
 TEST_F(DataManagerTest, GetDirtyBlobInfosAllThreeTypes) {
-	// Covers types.size() == 3 fast path for Blob template
+	// Covers types.size() == 3 hot path for Blob template
 	// Use addStateProperties with useBlobStorage=true to create Blob entities
 	auto state = createTestState("blob_state_key");
 	dataManager->addStateEntity(state);
@@ -333,7 +333,7 @@ TEST_F(DataManagerTest, GetDirtyBlobInfosAllThreeTypes) {
 }
 
 TEST_F(DataManagerTest, GetDirtyIndexInfosAllThreeTypes) {
-	// Covers types.size() == 3 fast path for Index template
+	// Covers types.size() == 3 hot path for Index template
 	auto index = createTestIndex(Index::NodeType::INTERNAL, 1);
 	dataManager->addIndexEntity(index);
 
@@ -344,7 +344,7 @@ TEST_F(DataManagerTest, GetDirtyIndexInfosAllThreeTypes) {
 }
 
 TEST_F(DataManagerTest, GetDirtyStateInfosAllThreeTypes) {
-	// Covers types.size() == 3 fast path for State template
+	// Covers types.size() == 3 hot path for State template
 	auto state = createTestState("dirty_state_key");
 	dataManager->addStateEntity(state);
 

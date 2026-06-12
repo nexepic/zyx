@@ -20,12 +20,15 @@
 
 #pragma once
 
+#include <algorithm>
 #include <atomic>
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
+#include <span>
 #include <unordered_map>
 #include <vector>
+#include "data/EntityChangeType.hpp"
 #include "data/DirtyEntityInfo.hpp"
 
 namespace graph::storage {
@@ -52,6 +55,35 @@ namespace graph::storage {
 				activeMap_[info.backup->getId()] = info;
 				updateCount();
 			}
+		}
+
+		void upsertBatch(const std::vector<EntityType> &entities, EntityChangeType changeType) {
+			if (entities.empty()) {
+				return;
+			}
+			std::unique_lock<std::shared_mutex> lock(mutex_);
+			activeMap_.reserve(activeMap_.size() + entities.size());
+			for (const auto &entity : entities) {
+				if (entity.getId() != 0) {
+					activeMap_[entity.getId()] = DirtyEntityInfo<EntityType>(changeType, entity);
+				}
+			}
+			updateCount();
+		}
+
+		void upsertBatchSelected(const std::vector<EntityType> &entities, const std::vector<size_t> &indices,
+								 EntityChangeType changeType) {
+			if (indices.empty()) {
+				return;
+			}
+			std::unique_lock<std::shared_mutex> lock(mutex_);
+			activeMap_.reserve(activeMap_.size() + indices.size());
+			for (const size_t index : indices) {
+				if (index < entities.size() && entities[index].getId() != 0) {
+					activeMap_[entities[index].getId()] = DirtyEntityInfo<EntityType>(changeType, entities[index]);
+				}
+			}
+			updateCount();
 		}
 
 		/**
@@ -101,6 +133,26 @@ namespace graph::storage {
 			return std::nullopt;
 		}
 
+		template<typename Visitor>
+		void visitInfos(std::span<const int64_t> ids, Visitor &&visitor) const {
+			std::shared_lock<std::shared_mutex> lock(mutex_);
+			for (int64_t id: ids) {
+				auto it = activeMap_.find(id);
+				if (it != activeMap_.end()) {
+					visitor(id, &it->second);
+					continue;
+				}
+
+				auto fit = flushingMap_.find(id);
+				if (fit != flushingMap_.end()) {
+					visitor(id, &fit->second);
+					continue;
+				}
+
+				visitor(id, nullptr);
+			}
+		}
+
 		std::vector<DirtyEntityInfo<EntityType>> getAllDirtyInfos() const {
 			std::shared_lock<std::shared_mutex> lock(mutex_);
 			std::vector<DirtyEntityInfo<EntityType>> result;
@@ -122,6 +174,31 @@ namespace graph::storage {
 			}
 
 			return result;
+		}
+
+		bool hasDirtyInfoOfTypes(std::span<const EntityChangeType> types) const {
+			std::shared_lock<std::shared_mutex> lock(mutex_);
+			const auto matches = [types](const DirtyEntityInfo<EntityType> &info) {
+				if (types.empty()) {
+					return true;
+				}
+				return std::ranges::find(types, info.changeType) != types.end();
+			};
+			for (const auto &[id, info]: activeMap_) {
+				(void) id;
+				if (matches(info)) {
+					return true;
+				}
+			}
+			for (const auto &[id, info]: flushingMap_) {
+				if (activeMap_.contains(id)) {
+					continue;
+				}
+				if (matches(info)) {
+					return true;
+				}
+			}
+			return false;
 		}
 
 		/**
@@ -193,6 +270,13 @@ namespace graph::storage {
 		void clear() {
 			std::unique_lock<std::shared_mutex> lock(mutex_);
 			activeMap_.clear();
+			flushingMap_.clear();
+			updateCount();
+		}
+
+		void replaceWith(DirtyMap map) {
+			std::unique_lock<std::shared_mutex> lock(mutex_);
+			activeMap_ = std::move(map);
 			flushingMap_.clear();
 			updateCount();
 		}

@@ -25,6 +25,7 @@
 #include <limits>
 #include "graph/query/QueryContext.hpp"
 #include <string>
+#include "graph/concurrent/ParallelExecutionPolicy.hpp"
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
@@ -175,15 +176,24 @@ void SortOperator::performSort() {
 	};
 
 	static constexpr size_t PARALLEL_SORT_THRESHOLD = 8192;
+	const graph::concurrent::ParallelWorkEstimate estimate{
+			.workloadKind = graph::concurrent::ParallelWorkloadKind::PWK_MEMORY_INTENSIVE,
+			.partitions = decorated.size(),
+			.estimatedItems = decorated.size(),
+			.minPartitions = 2,
+			.minItems = PARALLEL_SORT_THRESHOLD,
+			.minItemsPerWorker = PARALLEL_SORT_THRESHOLD};
+	const auto parallelDecision = graph::concurrent::decideParallelExecution(threadPool_, estimate);
+	graph::concurrent::ScopedParallelExecutionTelemetry telemetry(threadPool_, estimate, parallelDecision);
 
-	if (!threadPool_ || threadPool_->isSingleThreaded() ||
-		decorated.size() < PARALLEL_SORT_THRESHOLD) {
+	if (!parallelDecision.useParallel) {
 		// Sequential sort for small datasets
 		std::sort(decorated.begin(), decorated.end(), comparator);
 		sortedRecords_.reserve(decorated.size());
 		for (auto &item: decorated) {
 			sortedRecords_.push_back(std::move(item.record));
 		}
+		telemetry.markCompleted();
 		debug::PerfTrace::addDuration(
 				"sort", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
 														 sortStart)
@@ -192,7 +202,7 @@ void SortOperator::performSort() {
 	}
 
 	// Parallel sort: split into chunks, sort each in parallel, then k-way merge
-	size_t numChunks = threadPool_->getThreadCount();
+	size_t numChunks = parallelDecision.workerCount;
 	size_t total = decorated.size();
 	size_t chunkSize = total / numChunks;
 	size_t remainder = total % numChunks;
@@ -210,18 +220,19 @@ void SortOperator::performSort() {
 		pos += sz;
 	}
 
-	threadPool_->parallelFor(0, numChunks, [&](size_t c) {
+	threadPool_->parallelFor(0, numChunks, parallelDecision.workerCount, [&](size_t c) {
 		std::sort(decorated.begin() + chunks[c].begin,
 				  decorated.begin() + chunks[c].end, comparator);
 	});
 
 	// Phase 2: Sequential k-way merge (merge pairs bottom-up)
 	// This is an iterative merge: merge adjacent sorted chunks pairwise
+	const auto mergeStart = Clock::now();
 	size_t step = 1;
 	while (step < numChunks) {
 		size_t numPairs = (numChunks + 2 * step - 1) / (2 * step);
 		// Parallel merge of independent pairs
-		threadPool_->parallelFor(0, numPairs, [&](size_t p) {
+		threadPool_->parallelFor(0, numPairs, std::min(parallelDecision.workerCount, numPairs), [&](size_t p) {
 			size_t left = p * 2 * step;
 			size_t right = left + step;
 			if (right >= numChunks)
@@ -237,11 +248,14 @@ void SortOperator::performSort() {
 		});
 		step *= 2;
 	}
+	telemetry.setMergeNs(static_cast<uint64_t>(
+			std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - mergeStart).count()));
 
 	sortedRecords_.reserve(decorated.size());
 	for (auto &item: decorated) {
 		sortedRecords_.push_back(std::move(item.record));
 	}
+	telemetry.markCompleted();
 
 	debug::PerfTrace::addDuration(
 			"sort", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -

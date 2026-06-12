@@ -25,6 +25,7 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <unordered_set>
 #include <vector>
 
 namespace graph::storage {
@@ -47,6 +48,11 @@ namespace graph::query::indexes {
 	 */
 	class IndexBuilder {
 	public:
+		struct NodePropertyIndexBuildSpec {
+			std::string propertyKey;
+			std::string label;
+		};
+
 		/**
 		 * @brief Constructs an IndexBuilder.
 		 * @param indexManager A shared pointer to the main IndexManager, used to access entity-specific managers.
@@ -73,6 +79,7 @@ namespace graph::query::indexes {
 		 */
 		bool buildNodePropertyIndex(const std::string &key) const;
 		bool buildNodePropertyIndex(const std::string &key, const std::string &label) const;
+		bool buildNodePropertyIndexes(const std::vector<NodePropertyIndexBuildSpec> &specs) const;
 
 		/**
 		 * @brief Builds an index for a specific property key on all edges.
@@ -81,6 +88,7 @@ namespace graph::query::indexes {
 		 * @return true if successful, false otherwise.
 		 */
 		bool buildEdgePropertyIndex(const std::string &key) const;
+		bool buildEdgePropertyIndexes(const std::vector<std::string> &keys) const;
 
 		/**
 		 * @brief Retrieves all active ID ranges for nodes from the data manager.
@@ -109,7 +117,8 @@ namespace graph::query::indexes {
 							  const std::shared_ptr<PropertyIndex> &propertyIndex,
 							  const std::string &propertyKey = "",
 							  int64_t scopedLabelId = 0,
-							  const std::string &scopedPropertyKey = "") const;
+							  const std::string &scopedPropertyKey = "",
+							  bool buildGlobalProperty = true) const;
 
 		/**
 		 * @brief Processes a batch of edge IDs, adding them to the provided indexes.
@@ -122,6 +131,15 @@ namespace graph::query::indexes {
 		void processEdgeBatch(const std::vector<int64_t> &edgeIds, const std::shared_ptr<LabelIndex> &labelIndex,
 							  const std::shared_ptr<PropertyIndex> &propertyIndex,
 							  const std::string &propertyKey = "") const;
+
+		bool buildNodePropertyIndexFromOwnerScan(const std::shared_ptr<PropertyIndex> &propertyIndex,
+												 const std::string &propertyKey,
+												 int64_t scopedLabelId,
+												 const std::string &scopedPropertyKey,
+												 bool buildGlobalProperty) const;
+		bool buildEdgePropertyIndexFromOwnerScan(const std::shared_ptr<PropertyIndex> &propertyIndex,
+												 const std::string &propertyKey) const;
+		std::unordered_set<int64_t> collectNodeIdsWithLabel(int64_t labelId) const;
 
 		// --- Member Variables ---
 		std::shared_ptr<IndexManager> indexManager_;

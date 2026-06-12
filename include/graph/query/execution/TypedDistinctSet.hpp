@@ -3,31 +3,76 @@
 #include <array>
 #include <cstddef>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 
 #include "graph/core/PropertyTypes.hpp"
 #include "graph/core/TemporalTypes.hpp"
+#include "graph/query/execution/TypedScalarValue.hpp"
 
 namespace graph::query::execution {
 
 	class TypedDistinctSet {
 	public:
+		bool insertNull() { return markNull(); }
+
+		bool insertBoolean(bool value) { return markBool(value); }
+
+		bool insertInteger(int64_t value) { return integers_.insert(value).second; }
+
+		bool insertDouble(double value) { return doubles_.insert(value).second; }
+
+		bool insertString(std::string_view value) { return strings_.insert(std::string(value)).second; }
+
+		bool insertDateEpochDays(int32_t epochDays) { return dates_.insert(epochDays).second; }
+
+		bool insertDateTimeEpochMillis(int64_t epochMillis) { return dateTimes_.insert(epochMillis).second; }
+
+		bool insertDuration(const TemporalDuration &value) { return fallback_.insert(PropertyValue(value)).second; }
+
+		bool insertScalar(const TypedScalarValue &value) {
+			switch (value.type) {
+				case PropertyType::NULL_TYPE:
+					return insertNull();
+				case PropertyType::BOOLEAN:
+					return insertBoolean(value.boolValue);
+				case PropertyType::INTEGER:
+					return insertInteger(value.intValue);
+				case PropertyType::DOUBLE:
+					return insertDouble(value.doubleValue);
+				case PropertyType::STRING:
+					return insertString(value.stringValue);
+				case PropertyType::DATE:
+					return insertDateEpochDays(static_cast<int32_t>(value.intValue));
+				case PropertyType::DATETIME:
+					return insertDateTimeEpochMillis(value.intValue);
+				case PropertyType::DURATION:
+					return insertDuration(value.durationValue);
+				case PropertyType::LIST:
+				case PropertyType::MAP:
+				case PropertyType::COMPOSITE:
+				case PropertyType::UNKNOWN:
+				default:
+					return insert(value.fallbackValue != nullptr ? *value.fallbackValue : PropertyValue());
+			}
+		}
+
 		bool insert(const PropertyValue &value) {
 			switch (value.getType()) {
 				case PropertyType::NULL_TYPE:
-					return markNull();
+					return insertNull();
 				case PropertyType::BOOLEAN:
-					return markBool(std::get<bool>(value.getVariant()));
+					return insertBoolean(std::get<bool>(value.getVariant()));
 				case PropertyType::INTEGER:
-					return integers_.insert(std::get<int64_t>(value.getVariant())).second;
+					return insertInteger(std::get<int64_t>(value.getVariant()));
 				case PropertyType::DOUBLE:
-					return doubles_.insert(std::get<double>(value.getVariant())).second;
+					return insertDouble(std::get<double>(value.getVariant()));
 				case PropertyType::STRING:
-					return strings_.insert(std::get<std::string>(value.getVariant())).second;
+					return insertString(std::get<std::string>(value.getVariant()));
 				case PropertyType::DATE:
-					return dates_.insert(std::get<TemporalDate>(value.getVariant()).epochDays).second;
+					return insertDateEpochDays(std::get<TemporalDate>(value.getVariant()).epochDays);
 				case PropertyType::DATETIME:
-					return dateTimes_.insert(std::get<TemporalDateTime>(value.getVariant()).epochMillis).second;
+					return insertDateTimeEpochMillis(std::get<TemporalDateTime>(value.getVariant()).epochMillis);
 				case PropertyType::DURATION:
 				case PropertyType::LIST:
 				case PropertyType::MAP:
@@ -53,6 +98,36 @@ namespace graph::query::execution {
 			dates_.clear();
 			dateTimes_.clear();
 			fallback_.clear();
+		}
+
+		void mergeFrom(const TypedDistinctSet &other) {
+			if (other.hasNull_) {
+				insertNull();
+			}
+			if (other.seenBools_[0]) {
+				insertBoolean(false);
+			}
+			if (other.seenBools_[1]) {
+				insertBoolean(true);
+			}
+			for (const auto value : other.integers_) {
+				insertInteger(value);
+			}
+			for (const auto value : other.doubles_) {
+				insertDouble(value);
+			}
+			for (const auto &value : other.strings_) {
+				insertString(value);
+			}
+			for (const auto value : other.dates_) {
+				insertDateEpochDays(value);
+			}
+			for (const auto value : other.dateTimes_) {
+				insertDateTimeEpochMillis(value);
+			}
+			for (const auto &value : other.fallback_) {
+				insert(value);
+			}
 		}
 
 	private:

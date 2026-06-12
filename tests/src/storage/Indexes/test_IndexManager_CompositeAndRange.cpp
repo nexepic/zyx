@@ -122,6 +122,35 @@ TEST_F(IndexManagerCompositeTest, FindNodeIdsByCompositeIndex_Basic) {
 	EXPECT_GE(results.size(), 1UL);
 }
 
+TEST_F(IndexManagerCompositeTest, BatchNodeAddMaintainsCompositeIndex) {
+	EXPECT_TRUE(indexManager->createCompositeIndex(
+		"comp_batch", "node", "Person", {"name", "age"}));
+
+	int64_t labelId = dataManager->getOrCreateTokenId("Person");
+	std::vector<graph::Node> nodes;
+	graph::Node alice(0, labelId);
+	alice.addProperty("name", std::string("Alice"));
+	alice.addProperty("age", static_cast<int64_t>(30));
+	nodes.push_back(alice);
+	graph::Node bob(0, labelId);
+	bob.addProperty("name", std::string("Bob"));
+	bob.addProperty("age", static_cast<int64_t>(31));
+	nodes.push_back(bob);
+
+	dataManager->addNodes(nodes);
+
+	auto aliceResults = indexManager->findNodeIdsByCompositeIndex(
+		{"name", "age"},
+		{PropertyValue(std::string("Alice")), PropertyValue(static_cast<int64_t>(30))});
+	auto bobResults = indexManager->findNodeIdsByCompositeIndex(
+		{"name", "age"},
+		{PropertyValue(std::string("Bob")), PropertyValue(static_cast<int64_t>(31))});
+	ASSERT_EQ(aliceResults.size(), 1UL);
+	ASSERT_EQ(bobResults.size(), 1UL);
+	EXPECT_EQ(aliceResults[0], nodes[0].getId());
+	EXPECT_EQ(bobResults[0], nodes[1].getId());
+}
+
 TEST_F(IndexManagerCompositeTest, FindNodeIdsByCompositeIndex_NotFound) {
 	EXPECT_TRUE(indexManager->createCompositeIndex(
 		"comp_nf", "node", "X", {"a", "b"}));
@@ -274,8 +303,8 @@ TEST_F(IndexManagerCompositeTest, FindNodeIdsByPropertyRange_Basic) {
 		dataManager->addNodeProperties(n.getId(), {{"level", static_cast<int64_t>(i * 10)}});
 	}
 
-	auto results = indexManager->findNodeIdsByPropertyRange(
-		"level", PropertyValue(static_cast<int64_t>(20)), PropertyValue(static_cast<int64_t>(40)));
+	auto results = indexManager->findNodeIdsByLabelAndPropertyRange(
+		"Player", "level", PropertyValue(static_cast<int64_t>(20)), PropertyValue(static_cast<int64_t>(40)));
 	EXPECT_GE(results.size(), 2UL); // 20, 30, 40
 }
 
@@ -289,7 +318,8 @@ TEST_F(IndexManagerCompositeTest, FindNodeIdsByPropertyRange_HonorsExclusiveBoun
 		dataManager->addNodeProperties(n.getId(), {{"level", static_cast<int64_t>(i * 10)}});
 	}
 
-	auto results = indexManager->findNodeIdsByPropertyRange(
+	auto results = indexManager->findNodeIdsByLabelAndPropertyRange(
+		"Player",
 		"level",
 		PropertyValue(static_cast<int64_t>(20)),
 		PropertyValue(static_cast<int64_t>(40)),
@@ -306,8 +336,8 @@ TEST_F(IndexManagerCompositeTest, FindNodeIdsByPropertyRange_HonorsExclusiveBoun
 TEST_F(IndexManagerCompositeTest, FindNodeIdsByPropertyRange_EmptyResult) {
 	(void)indexManager->createIndex("idx_score", "node", "G", "score");
 
-	auto results = indexManager->findNodeIdsByPropertyRange(
-		"score", PropertyValue(static_cast<int64_t>(100)), PropertyValue(static_cast<int64_t>(200)));
+	auto results = indexManager->findNodeIdsByLabelAndPropertyRange(
+		"G", "score", PropertyValue(static_cast<int64_t>(100)), PropertyValue(static_cast<int64_t>(200)));
 	EXPECT_TRUE(results.empty());
 }
 
@@ -323,7 +353,7 @@ TEST_F(IndexManagerCompositeTest, StatsCounters) {
 	EXPECT_EQ(indexManager->indexHits(), 0u);
 
 	// A lookup with no data → hit count stays 0
-	(void)indexManager->findNodeIdsByProperty("val", static_cast<int64_t>(1));
+	(void)indexManager->findNodeIdsByLabelAndProperty("S", "val", static_cast<int64_t>(1));
 	EXPECT_EQ(indexManager->lookups(), 1u);
 	EXPECT_EQ(indexManager->indexHits(), 0u);
 
@@ -333,7 +363,7 @@ TEST_F(IndexManagerCompositeTest, StatsCounters) {
 	dataManager->addNode(n);
 	dataManager->addNodeProperties(n.getId(), {{"val", static_cast<int64_t>(42)}});
 
-	(void)indexManager->findNodeIdsByProperty("val", static_cast<int64_t>(42));
+	(void)indexManager->findNodeIdsByLabelAndProperty("S", "val", static_cast<int64_t>(42));
 	EXPECT_EQ(indexManager->lookups(), 2u);
 	EXPECT_EQ(indexManager->indexHits(), 1u);
 
@@ -396,7 +426,7 @@ TEST_F(IndexManagerCompositeTest, StatsCounters_PropertyRange) {
 	(void)indexManager->createIndex("idx_rng_stats", "node", "N", "score");
 	indexManager->resetStats();
 
-	(void)indexManager->findNodeIdsByPropertyRange(
-		"score", PropertyValue(static_cast<int64_t>(0)), PropertyValue(static_cast<int64_t>(100)));
+	(void)indexManager->findNodeIdsByLabelAndPropertyRange(
+		"N", "score", PropertyValue(static_cast<int64_t>(0)), PropertyValue(static_cast<int64_t>(100)));
 	EXPECT_EQ(indexManager->lookups(), 1u);
 }

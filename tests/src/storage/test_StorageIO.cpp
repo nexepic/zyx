@@ -152,6 +152,35 @@ TEST_F(StorageIOTest, ReserveAppendSpaceExtendsWithZeroReadableGap) {
 	EXPECT_EQ(appendOffset, testSize_ + 128);
 }
 
+TEST_F(StorageIOTest, ReserveAppendSpaceNativeExtendsWithZeroReadableGap) {
+	auto io = createIO(true);
+
+	uint64_t offset = io->reserveAppendSpace(128);
+	EXPECT_EQ(offset, testSize_);
+	EXPECT_EQ(std::filesystem::file_size(testFile_), testSize_ + 128);
+
+	std::vector<char> buffer(128, 1);
+	size_t bytesRead = io->readAt(offset, buffer.data(), buffer.size());
+	EXPECT_EQ(bytesRead, buffer.size());
+	EXPECT_TRUE(std::all_of(buffer.begin(), buffer.end(), [](char c) { return c == 0; }));
+}
+
+TEST_F(StorageIOTest, AppendNativeUsesEndAfterReserve) {
+	auto io = createIO(true);
+
+	uint64_t reservedOffset = io->reserveAppendSpace(128);
+	EXPECT_EQ(reservedOffset, testSize_);
+
+	const char data[] = "native append after reserve";
+	uint64_t appendOffset = io->append(data, sizeof(data));
+	EXPECT_EQ(appendOffset, testSize_ + 128);
+
+	char buffer[sizeof(data)] = {};
+	size_t bytesRead = io->readAt(appendOffset, buffer, sizeof(buffer));
+	EXPECT_EQ(bytesRead, sizeof(data));
+	EXPECT_EQ(std::memcmp(data, buffer, sizeof(data)), 0);
+}
+
 // ============================================================================
 // writeAt with null buffer or zero size is a no-op
 // ============================================================================
@@ -194,6 +223,19 @@ TEST_F(StorageIOTest, AppendAndReserveReportClosedStreamWriteFailures) {
 	const char data[] = "closed";
 	EXPECT_THROW(io->append(data, sizeof(data)), std::runtime_error);
 	stream->clear();
+	EXPECT_THROW(io->reserveAppendSpace(8), std::runtime_error);
+}
+
+TEST_F(StorageIOTest, AppendAndReserveReportClosedNativeWriteFailures) {
+	auto stream = std::make_shared<std::fstream>(testFile_, std::ios::binary | std::ios::in | std::ios::out);
+	ASSERT_TRUE(stream->is_open());
+	file_handle_t wfd = portable_open_rw(testFile_.c_str());
+	ASSERT_NE(wfd, INVALID_FILE_HANDLE);
+	portable_close_rw(wfd);
+	auto io = std::make_shared<StorageIO>(stream, wfd, INVALID_FILE_HANDLE);
+
+	const char data[] = "closed native";
+	EXPECT_THROW(io->append(data, sizeof(data)), std::runtime_error);
 	EXPECT_THROW(io->reserveAppendSpace(8), std::runtime_error);
 }
 
@@ -389,7 +431,7 @@ TEST_F(StorageIOTest, FlushStreamFstreamFallback) {
 }
 
 // ============================================================================
-// append with native fd IO (append always uses fstream)
+// append with native fd IO
 // ============================================================================
 
 TEST_F(StorageIOTest, AppendWithNativeFds) {

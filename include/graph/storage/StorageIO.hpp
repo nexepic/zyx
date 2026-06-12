@@ -94,6 +94,7 @@ namespace graph::storage {
 
 		[[nodiscard]] file_handle_t getWriteFd() const { return writeFd_; }
 		[[nodiscard]] file_handle_t getReadFd() const { return readFd_; }
+		void setWriteFd(file_handle_t writeFd) { writeFd_ = writeFd; }
 
 	private:
 		std::shared_ptr<std::fstream> stream_;

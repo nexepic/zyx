@@ -23,14 +23,14 @@
 #include "graph/query/execution/operators/LimitOperator.hpp"
 #include "graph/query/execution/operators/MergeEdgeOperator.hpp"
 #include "graph/query/execution/operators/MergeNodeOperator.hpp"
-#include "graph/query/execution/operators/NodeCountFastPathOperator.hpp"
-#include "graph/query/execution/operators/NodeDistinctCountFastPathOperator.hpp"
-#include "graph/query/execution/operators/NodeGroupCountFastPathOperator.hpp"
+#include "graph/query/execution/operators/NodeCountScanOperator.hpp"
+#include "graph/query/execution/operators/NodeDistinctCountScanOperator.hpp"
+#include "graph/query/execution/operators/NodeGroupCountScanOperator.hpp"
 #include "graph/query/execution/operators/NodeScanOperator.hpp"
-#include "graph/query/execution/operators/NodeTopKFastPathOperator.hpp"
+#include "graph/query/execution/operators/NodeTopKScanOperator.hpp"
 #include "graph/query/execution/operators/OptionalMatchOperator.hpp"
 #include "graph/query/execution/operators/ProjectOperator.hpp"
-#include "graph/query/execution/operators/RelationshipCountFastPathOperator.hpp"
+#include "graph/query/execution/operators/RelationshipCountScanOperator.hpp"
 #include "graph/query/execution/operators/RemoveOperator.hpp"
 #include "graph/query/execution/operators/SetOperator.hpp"
 #include "graph/query/execution/operators/ShowConstraintsOperator.hpp"
@@ -87,15 +87,15 @@
 #include "graph/query/logical/operators/LogicalCallSubquery.hpp"
 #include "graph/query/logical/operators/LogicalLoadCsv.hpp"
 #include "graph/query/logical/operators/LogicalNamedPath.hpp"
-#include "graph/query/optimizer/Optimizer.hpp"
-#include "graph/query/planner/NodeCountFastPathPlanner.hpp"
-#include "graph/query/planner/NodeTopKFastPathPlanner.hpp"
+#include "graph/query/planner/NodeAccessPathPlanner.hpp"
+#include "graph/query/planner/PhysicalScanLoweringPlanner.hpp"
 #include "graph/query/planner/ProcedureRegistry.hpp"
-#include "graph/query/planner/RelationshipCountFastPathPlanner.hpp"
 #include "graph/storage/data/DataManager.hpp"
 
 #include <algorithm>
+#include <iterator>
 #include <stdexcept>
+#include <variant>
 
 namespace graph::query {
 
@@ -129,6 +129,95 @@ const expressions::VariableReferenceExpression *asPropertyAccess(
 		return nullptr;
 	}
 	return static_cast<const expressions::VariableReferenceExpression *>(expression.get());
+}
+
+	std::vector<PhysicalOperator::ExplainAttribute> accessPathAttributes(
+			const planner::AccessPathSummary &summary,
+			const std::string &prefix = "access_path") {
+		return planner::toAccessPathAttributes(summary, prefix);
+	}
+
+	void appendExplainAttributes(std::vector<PhysicalOperator::ExplainAttribute> &target,
+	                             std::vector<PhysicalOperator::ExplainAttribute> extra) {
+		target.insert(target.end(), std::make_move_iterator(extra.begin()), std::make_move_iterator(extra.end()));
+	}
+
+	std::vector<PhysicalOperator::ExplainAttribute> scanSpecializationAttributes(
+			const planner::PhysicalScanLowering &lowering) {
+		auto attributes = lowering.explainAttributes;
+		if (attributes.empty()) {
+			attributes.emplace_back("scan_specialization.rule", lowering.ruleName);
+			attributes.emplace_back("scan_specialization.reason", lowering.reason);
+			attributes.emplace_back("scan_specialization.estimated_cost",
+			                        planner::formatAccessPathCost(lowering.estimatedCost));
+		}
+		return attributes;
+	}
+
+std::vector<PhysicalOperator::ExplainAttribute> relationshipAccessPathAttributes(
+		const planner::RelationshipCountScanPlan &plan) {
+	auto attributes = planner::toAccessPathAttributes(plan.seedAccessPath, "seed_access_path");
+	if (plan.relationshipAccessPath.has_value()) {
+		planner::appendAccessPathAttributes(attributes, *plan.relationshipAccessPath, "relationship_access_path");
+	}
+	return attributes;
+}
+
+	std::unique_ptr<PhysicalOperator> createLoweredScanOperator(
+			const std::shared_ptr<storage::DataManager> &dm,
+			const std::shared_ptr<indexes::IndexManager> &im,
+			planner::PhysicalScanLowering lowering) {
+		auto specializationAttributes = scanSpecializationAttributes(lowering);
+		switch (lowering.kind) {
+			case planner::PhysicalScanLoweringKind::PSLK_NODE_TOPK_SCAN: {
+				auto plan = std::move(std::get<planner::NodeTopKScanPlan>(lowering.plan));
+				auto attributes = std::move(specializationAttributes);
+				appendExplainAttributes(attributes, accessPathAttributes(plan.accessPath));
+				return std::make_unique<NodeTopKScanOperator>(
+						dm, im, std::move(plan.config), std::move(plan.requirements),
+						std::move(plan.predicates), std::move(plan.projections),
+						std::move(plan.sortProperty), plan.ascending, plan.limit,
+						std::move(attributes));
+			}
+			case planner::PhysicalScanLoweringKind::PSLK_NODE_COUNT_SCAN: {
+				auto plan = std::move(std::get<planner::NodeCountScanPlan>(lowering.plan));
+				auto attributes = std::move(specializationAttributes);
+				appendExplainAttributes(attributes, accessPathAttributes(plan.accessPath));
+				return std::make_unique<NodeCountScanOperator>(
+						dm, im, std::move(plan.config), std::move(plan.requirements),
+						std::move(plan.predicates), std::move(plan.outputAlias),
+						std::move(attributes));
+			}
+			case planner::PhysicalScanLoweringKind::PSLK_NODE_DISTINCT_COUNT_SCAN: {
+				auto plan = std::move(std::get<planner::NodeDistinctCountScanPlan>(lowering.plan));
+				auto attributes = std::move(specializationAttributes);
+				appendExplainAttributes(attributes, accessPathAttributes(plan.accessPath));
+				return std::make_unique<NodeDistinctCountScanOperator>(
+						dm, im, std::move(plan.config), std::move(plan.requirements),
+						std::move(plan.predicates), std::move(plan.distinctProperty),
+						std::move(plan.outputAlias), std::move(attributes));
+			}
+			case planner::PhysicalScanLoweringKind::PSLK_NODE_GROUP_COUNT_SCAN: {
+				auto plan = std::move(std::get<planner::NodeGroupCountScanPlan>(lowering.plan));
+				auto attributes = std::move(specializationAttributes);
+				appendExplainAttributes(attributes, accessPathAttributes(plan.accessPath));
+				return std::make_unique<NodeGroupCountScanOperator>(
+						dm, im, std::move(plan.config), std::move(plan.requirements),
+						std::move(plan.predicates), std::move(plan.groupProperty),
+						std::move(plan.groupAlias), std::move(plan.outputAlias),
+						std::move(attributes));
+			}
+			case planner::PhysicalScanLoweringKind::PSLK_RELATIONSHIP_COUNT_SCAN: {
+				auto plan = std::move(std::get<planner::RelationshipCountScanPlan>(lowering.plan));
+				auto attributes = std::move(specializationAttributes);
+				appendExplainAttributes(attributes, relationshipAccessPathAttributes(plan));
+				return std::make_unique<RelationshipCountScanOperator>(
+						dm, im, std::move(plan.seedConfig), std::move(plan.seedRequirements),
+						std::move(plan.seedPredicates), std::move(plan.hops), std::move(plan.directCount),
+						std::move(plan.outputAlias), std::move(attributes));
+			}
+		}
+	throw std::logic_error("unhandled physical scan lowering kind");
 }
 
 void addRequiredProperty(NodeScanRequirements &requirements, const std::string &property) {
@@ -205,14 +294,13 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertNodeScan(
 	const auto *scan = static_cast<const LogicalNodeScan *>(op);
 
 	const auto &predicates = scan->getPropertyPredicates();
-	std::string key   = !predicates.empty() ? predicates[0].first  : "";
-	PropertyValue val = !predicates.empty() ? predicates[0].second : PropertyValue();
 
-	// Use the optimizer to choose the best scan strategy
-	optimizer::rules::IndexPushdownRule pushdown(im_);
-	NodeScanConfig config = pushdown.apply(
-		scan->getVariable(), scan->getLabels(), key, val,
-		scan->getRangePredicates(), scan->getCompositeEquality());
+	// Keep ordinary scans on the same access-path decision layer as specialized plans.
+	auto accessPath = planner::chooseNodeAccessPathDecision(*scan, im_);
+	NodeScanConfig config = accessPath.config();
+	if (accessPath.selectedRequiresConservativeFallback()) {
+		planner::fallbackToLabelOrFullScan(config);
+	}
 
 	std::unique_ptr<PhysicalOperator> root =
 		std::make_unique<NodeScanOperator>(dm_, im_, config);
@@ -240,8 +328,8 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertNodeScan(
 	// Residual property filters for all predicates not handled by index scan
 	for (size_t i = 0; i < predicates.size(); ++i) {
 		const auto &[pKey, pVal] = predicates[i];
-		// Skip the first predicate if it was handled by a property or composite scan
-		if (i == 0 && config.type == ScanType::PROPERTY_SCAN) continue;
+		// Skip the predicate actually selected for the property scan.
+		if (config.type == ScanType::PROPERTY_SCAN && pKey == config.indexKey) continue;
 		if (config.type == ScanType::COMPOSITE_SCAN) { // ZYX_COV_EXCL_LINE
 			// Skip predicates that are part of the composite index
 			bool inComposite = false;
@@ -317,11 +405,8 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertProject(
 
 	const auto *project = static_cast<const LogicalProject *>(op);
 
-	if (auto fastPath = planner::tryBuildNodeTopKFastPathPlan(*project, im_)) {
-		return std::make_unique<NodeTopKFastPathOperator>(
-			dm_, im_, std::move(fastPath->config), std::move(fastPath->requirements),
-			std::move(fastPath->predicates), std::move(fastPath->projections),
-			std::move(fastPath->sortProperty), fastPath->ascending, fastPath->limit);
+	if (auto lowering = planner::tryLowerProjectToScan(*project, im_)) {
+		return createLoweredScanOperator(dm_, im_, std::move(*lowering));
 	}
 
 	auto children = project->getChildren();
@@ -361,9 +446,7 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertProject(
 				}
 
 				if (canUseSelectedScan) {
-					optimizer::rules::IndexPushdownRule pushdown(im_);
-					NodeScanConfig config = pushdown.apply(scan->getVariable(), scan->getLabels(), "",
-					                                       PropertyValue(), {}, std::nullopt);
+					NodeScanConfig config = planner::chooseNodeAccessPathDecision(*scan, im_).config();
 					auto scanPhys = std::make_unique<NodeScanOperator>(
 						dm_, im_, std::move(config), std::move(requirements));
 					auto sortPhys = std::make_unique<SortOperator>(
@@ -386,31 +469,8 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertAggregate(
 
 	const auto *agg = static_cast<const LogicalAggregate *>(op);
 
-	if (auto fastPath = planner::tryBuildNodeCountFastPathPlan(*agg, im_)) {
-		return std::make_unique<NodeCountFastPathOperator>(
-			dm_, im_, std::move(fastPath->config), std::move(fastPath->requirements),
-			std::move(fastPath->predicates), std::move(fastPath->outputAlias));
-	}
-
-	if (auto fastPath = planner::tryBuildNodeDistinctCountFastPathPlan(*agg, im_)) {
-		return std::make_unique<NodeDistinctCountFastPathOperator>(
-			dm_, im_, std::move(fastPath->config), std::move(fastPath->requirements),
-			std::move(fastPath->predicates), std::move(fastPath->distinctProperty),
-			std::move(fastPath->outputAlias));
-	}
-
-	if (auto fastPath = planner::tryBuildNodeGroupCountFastPathPlan(*agg, im_)) {
-		return std::make_unique<NodeGroupCountFastPathOperator>(
-			dm_, im_, std::move(fastPath->config), std::move(fastPath->requirements),
-			std::move(fastPath->predicates), std::move(fastPath->groupProperty),
-			std::move(fastPath->groupAlias), std::move(fastPath->outputAlias));
-	}
-
-	if (auto fastPath = planner::tryBuildRelationshipCountFastPathPlan(*agg, im_)) {
-		return std::make_unique<RelationshipCountFastPathOperator>(
-			dm_, im_, std::move(fastPath->seedConfig), std::move(fastPath->seedRequirements),
-			std::move(fastPath->seedPredicates), std::move(fastPath->hops), std::move(fastPath->directCount),
-			std::move(fastPath->outputAlias));
+	if (auto lowering = planner::tryLowerAggregateToScan(*agg, im_)) {
+		return createLoweredScanOperator(dm_, im_, std::move(*lowering));
 	}
 
 	auto childPhys = convert(agg->getChildren()[0]);

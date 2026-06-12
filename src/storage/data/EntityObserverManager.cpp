@@ -70,9 +70,7 @@ namespace graph::storage {
 	void EntityObserverManager::notifyEdgesAdded(const std::vector<Edge> &edges) const {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 		for (const auto &observer : observers_) {
-			for (const auto &edge : edges) {
-				observer->onEdgeAdded(edge);
-			}
+			observer->onEdgesAdded(edges);
 		}
 	}
 

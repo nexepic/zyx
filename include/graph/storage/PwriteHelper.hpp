@@ -17,6 +17,7 @@
 	#include <windows.h>
 #else
 	#include <fcntl.h>
+	#include <sys/stat.h>
 	#include <unistd.h>
 #endif
 
@@ -90,6 +91,27 @@ inline pwrite_ssize_t portable_pwrite(file_handle_t fd, const void* buf, size_t 
 	return result ? static_cast<pwrite_ssize_t>(bytesWritten) : -1;
 #else
 	return ::pwrite(fd, buf, count, offset);
+#endif
+}
+
+/**
+ * @brief Return the current file size for a native write handle.
+ */
+inline int portable_file_size(file_handle_t fd, uint64_t *outSize) {
+	if (fd == INVALID_FILE_HANDLE || outSize == nullptr) return -1;
+
+#ifdef _WIN32
+	HANDLE hFile = reinterpret_cast<HANDLE>(fd);
+	LARGE_INTEGER size;
+	if (!::GetFileSizeEx(hFile, &size)) return -1;
+	*outSize = static_cast<uint64_t>(size.QuadPart);
+	return 0;
+#else
+	struct stat st {};
+	if (::fstat(fd, &st) != 0) return -1;
+	if (st.st_size < 0) return -1;
+	*outSize = static_cast<uint64_t>(st.st_size);
+	return 0;
 #endif
 }
 

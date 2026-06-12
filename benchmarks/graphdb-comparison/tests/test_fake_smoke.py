@@ -88,6 +88,126 @@ def test_fake_adapter_uses_indexed_profile_workloads(tmp_path: Path):
     assert [result.status for result in results] == ["ok"] * 4
 
 
+def test_fake_adapter_uses_multihop_profile_workloads(tmp_path: Path):
+    dataset_dir = tmp_path / "dataset"
+    graph = generate_graph(SCALES["smoke"], seed=42)
+    write_dataset(graph, dataset_dir)
+
+    adapter = FakeAdapter(database="fake", dataset_dir=dataset_dir, scale="smoke", profile="multihop")
+    results = adapter.run_all(warmup=0, iterations=1)
+
+    assert [result.workload for result in results] == [
+        "load_nodes_edges",
+        "reachable_within_6",
+        "reachable_within_12",
+        "reachable_within_24",
+        "reachable_within_30",
+    ]
+    assert [result.status for result in results] == ["ok"] * 5
+
+
+def test_fake_adapter_uses_write_profile_workloads(tmp_path: Path):
+    dataset_dir = tmp_path / "dataset"
+    graph = generate_graph(SCALES["smoke"], seed=42)
+    write_dataset(graph, dataset_dir)
+
+    adapter = FakeAdapter(database="fake", dataset_dir=dataset_dir, scale="smoke", profile="write")
+    results = adapter.run_all(warmup=0, iterations=1)
+
+    assert [result.workload for result in results] == [
+        "load_nodes_edges",
+        "point_create_node",
+        "point_create_edge",
+        "point_update_node_property",
+        "point_update_edge_property",
+        "point_create_delete_edge",
+        "write_then_read_edge",
+    ]
+    assert [result.status for result in results] == ["ok"] * 7
+
+
+def test_fake_adapter_uses_write_durable_profile_workloads(tmp_path: Path):
+    dataset_dir = tmp_path / "dataset"
+    graph = generate_graph(SCALES["smoke"], seed=42)
+    write_dataset(graph, dataset_dir)
+
+    adapter = FakeAdapter(database="fake", dataset_dir=dataset_dir, scale="smoke", profile="write_durable")
+    results = adapter.run_all(warmup=0, iterations=1)
+
+    assert [result.workload for result in results] == [
+        "load_nodes_edges",
+        "point_create_node_durable",
+        "point_create_edge_durable",
+        "point_update_node_property_durable",
+        "point_update_edge_property_durable",
+        "point_create_delete_edge_durable",
+        "write_then_read_edge_durable",
+    ]
+    assert [result.status for result in results] == ["ok"] * 7
+
+
+def test_fake_adapter_uses_operational_dynamic_profile_workloads(tmp_path: Path):
+    dataset_dir = tmp_path / "dataset"
+    graph = generate_graph(SCALES["smoke"], seed=42)
+    write_dataset(graph, dataset_dir)
+
+    adapter = FakeAdapter(database="fake", dataset_dir=dataset_dir, scale="smoke", profile="operational_dynamic")
+    results = adapter.run_all(warmup=0, iterations=1)
+
+    assert [result.workload for result in results] == [
+        "load_nodes_edges",
+        "index_seek_then_one_hop_expand",
+        "index_seek_then_two_hop_expand",
+        "post_persist_create_node",
+        "post_persist_create_edge",
+        "write_then_one_hop_expand",
+        "batch_create_edges_100",
+        "batch_create_edges_1000",
+        "batch_create_edges_10000",
+        "batch_create_edges_100_then_one_hop_expand",
+        "batch_create_edges_10000_then_one_hop_expand",
+    ]
+    assert [result.status for result in results] == ["ok"] * 11
+
+
+def test_write_profile_validation_requires_single_affected_row(tmp_path: Path):
+    dataset_dir = tmp_path / "dataset"
+    graph = generate_graph(SCALES["smoke"], seed=42)
+    write_dataset(graph, dataset_dir)
+
+    class BrokenWriteAdapter(FakeAdapter):
+        def point_create_node(self) -> int:
+            return 2
+
+    adapter = BrokenWriteAdapter(database="fake", dataset_dir=dataset_dir, scale="smoke", profile="write")
+    adapter.setup()
+    adapter.load_nodes_edges()
+
+    result = adapter.run_workload("point_create_node", warmup=0, iterations=1)
+
+    assert result.status == "failed"
+    assert "expected exactly one affected row" in result.error
+
+
+def test_batch_operational_dynamic_validation_requires_expected_edge_count(tmp_path: Path):
+    dataset_dir = tmp_path / "dataset"
+    graph = generate_graph(SCALES["smoke"], seed=42)
+    write_dataset(graph, dataset_dir)
+
+    class BrokenBatchAdapter(FakeAdapter):
+        def batch_create_edges_100(self) -> int:
+            return 99
+
+    adapter = BrokenBatchAdapter(database="fake", dataset_dir=dataset_dir, scale="smoke", profile="operational_dynamic")
+    adapter.setup()
+    adapter.load_nodes_edges()
+
+    result = adapter.run_workload("batch_create_edges_100", warmup=0, iterations=1)
+
+    assert result.status == "failed"
+    assert "batch_create_edges_100 expected 100 created edges" in result.error
+
+
 def test_shortest_path_chain_uses_loaded_edges(tmp_path: Path):
     dataset_dir = tmp_path / "dataset"
     graph = generate_graph(SCALES["smoke"], seed=42)
@@ -99,6 +219,22 @@ def test_shortest_path_chain_uses_loaded_edges(tmp_path: Path):
 
     adapter.follows = []
     assert adapter.shortest_path_chain() == 0
+
+
+def test_reachable_within_validation_requires_expected_target(tmp_path: Path):
+    dataset_dir = tmp_path / "dataset"
+    graph = generate_graph(SCALES["smoke"], seed=42)
+    write_dataset(graph, dataset_dir)
+
+    adapter = FakeAdapter(database="fake", dataset_dir=dataset_dir, scale="smoke", profile="multihop")
+    adapter.setup()
+    adapter.load_nodes_edges()
+    adapter.follows = []
+
+    result = adapter.run_workload("reachable_within_6", warmup=0, iterations=1)
+
+    assert result.status == "failed"
+    assert "reachable_within_6 expected a reachable target" in result.error
 
 
 def test_run_workload_rejects_invalid_iteration_config(tmp_path: Path):
@@ -199,6 +335,30 @@ def test_coldish_execution_mode_uses_fresh_loaded_adapter_for_queries(tmp_path: 
     assert ObservedFakeAdapter.teardown_count == 3
     assert ObservedFakeAdapter.query_loaded_flags == [True, True, True]
 
+
+def test_opened_execution_mode_skips_explicit_query_warmup(tmp_path: Path):
+    dataset_dir = tmp_path / "dataset"
+    graph = generate_graph(SCALES["smoke"], seed=42)
+    write_dataset(graph, dataset_dir)
+
+    class ObservedFakeAdapter(FakeAdapter):
+        query_calls = 0
+
+        def label_scan_filter(self) -> int:
+            type(self).query_calls += 1
+            return super().label_scan_filter()
+
+    adapter = ObservedFakeAdapter(database="fake", dataset_dir=dataset_dir, scale="smoke")
+    adapter.setup()
+    adapter.load_nodes_edges()
+
+    result = adapter.run_workload("label_scan_filter", warmup=5, iterations=2, execution_mode="opened")
+
+    assert result.status == "ok"
+    assert len(result.samples) == 2
+    assert ObservedFakeAdapter.query_calls == 2
+
+
 def test_run_all_preloads_query_adapter_before_timing(tmp_path: Path):
     dataset_dir = tmp_path / "dataset"
     graph = generate_graph(SCALES["smoke"], seed=42)
@@ -222,6 +382,39 @@ def test_run_all_preloads_query_adapter_before_timing(tmp_path: Path):
     assert ("label", True) in ObservedFakeAdapter.events
 
 
+def test_run_all_isolates_mutating_workloads_per_workload(tmp_path: Path):
+    dataset_dir = tmp_path / "dataset"
+    graph = generate_graph(SCALES["smoke"], seed=42)
+    write_dataset(graph, dataset_dir)
+
+    class ObservedFakeAdapter(FakeAdapter):
+        next_adapter_id = 0
+        operation_adapter_ids: dict[str, int] = {}
+
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            type(self).next_adapter_id += 1
+            self.observed_adapter_id = type(self).next_adapter_id
+
+        def point_create_node(self) -> int:
+            type(self).operation_adapter_ids["point_create_node"] = self.observed_adapter_id
+            return super().point_create_node()
+
+        def point_create_edge(self) -> int:
+            type(self).operation_adapter_ids["point_create_edge"] = self.observed_adapter_id
+            return super().point_create_edge()
+
+    adapter = ObservedFakeAdapter(database="fake", dataset_dir=dataset_dir, scale="smoke", profile="write")
+    results = adapter.run_all(warmup=0, iterations=1)
+
+    assert [result.status for result in results] == ["ok"] * 7
+    assert ObservedFakeAdapter.operation_adapter_ids["point_create_node"] != ObservedFakeAdapter.operation_adapter_ids[
+        "point_create_edge"
+    ]
+    assert adapter.users == []
+    assert adapter.follows == []
+
+
 def _read_jsonl(path: Path) -> list[dict[str, object]]:
     return [json.loads(line) for line in path.read_text().splitlines() if line]
 
@@ -242,6 +435,7 @@ def test_run_benchmark_writes_raw_and_summary(tmp_path: Path):
     assert (result_dir / "raw.jsonl").exists()
     assert (result_dir / "summary.csv").exists()
     assert (result_dir / "summary.md").exists()
+    assert (result_dir / "quality_gates.json").exists()
     assert (result_dir / "run_status.json").exists()
     assert (output_root / "latest.txt").read_text().strip() == result_dir.name
 
@@ -252,7 +446,160 @@ def test_run_benchmark_writes_raw_and_summary(tmp_path: Path):
     assert environment["seed"] == 42
     assert environment["scale"] == "smoke"
     assert environment["execution_mode"] == "cold-ish"
+    assert environment["threads"] is None
+    assert environment["thread_contract"] == "adapter default thread configuration"
+    assert environment["benchmark_schema_version"] == 1
+    assert environment["keep_db_artifacts"] is False
+    assert environment["measurement_semantics"]["execution_mode"] == "cold-ish"
+    assert "does not flush OS" in environment["measurement_semantics"]["execution_contract"]
+    assert "workload_isolation" in environment["measurement_semantics"]
+    assert environment["required_workloads"][0] == "load_nodes_edges"
+    assert environment["mutating_workloads"] == []
+    assert "git_commit" in environment
     assert "label_scan_filter" in (result_dir / "summary.csv").read_text()
+    quality = json.loads((result_dir / "quality_gates.json").read_text())
+    assert quality["status"] == "passed"
+
+
+def test_run_benchmark_records_and_forwards_thread_count(tmp_path: Path, monkeypatch):
+    import runner.run as run_module
+
+    observed_threads: list[int | None] = []
+
+    class ThreadObservedFakeAdapter(FakeAdapter):
+        def __init__(
+            self,
+            database: str,
+            dataset_dir: Path,
+            scale: str,
+            profile: str,
+            threads: int | None = None,
+        ):
+            super().__init__(database=database, dataset_dir=dataset_dir, scale=scale, profile=profile, threads=threads)
+            observed_threads.append(threads)
+
+    monkeypatch.setattr(
+        run_module,
+        "_adapter_for",
+        lambda database, dataset_dir, scale, profile, threads=None: ThreadObservedFakeAdapter(
+            database, dataset_dir, scale, profile, threads
+        ),
+    )
+
+    result_dir = run_benchmark(
+        databases=["fake"],
+        scale="smoke",
+        seed=42,
+        output_root=tmp_path / "results",
+        warmup=0,
+        iterations=1,
+        threads=4,
+    )
+
+    environment = json.loads((result_dir / "environment.json").read_text())
+    assert environment["threads"] == 4
+    assert environment["thread_contract"] == "fixed 4 execution thread(s)"
+    assert observed_threads[0] == 4
+
+
+def test_run_benchmark_cleans_adapter_artifacts_by_default(tmp_path: Path, monkeypatch):
+    import runner.run as run_module
+
+    class ArtifactFakeAdapter(FakeAdapter):
+        def __init__(
+            self,
+            database: str,
+            dataset_dir: Path,
+            scale: str,
+            profile: str,
+            threads: int | None = None,
+        ):
+            super().__init__(database=database, dataset_dir=dataset_dir, scale=scale, profile=profile, threads=threads)
+            self.artifact = dataset_dir.parent / "fake.db"
+
+        def run_all(self, warmup: int, iterations: int, execution_mode: str = "warm"):
+            self.artifact.write_text("temporary benchmark database")
+            return super().run_all(warmup=warmup, iterations=iterations, execution_mode=execution_mode)
+
+        def cleanup_artifacts(self) -> list[Path]:
+            if not self.artifact.exists():
+                return []
+            self.artifact.unlink()
+            return [self.artifact]
+
+    monkeypatch.setattr(
+        run_module,
+        "_adapter_for",
+        lambda database, dataset_dir, scale, profile, threads=None: ArtifactFakeAdapter(
+            database, dataset_dir, scale, profile, threads
+        ),
+    )
+
+    result_dir = run_benchmark(
+        databases=["fake"],
+        scale="smoke",
+        seed=42,
+        output_root=tmp_path / "results",
+        warmup=0,
+        iterations=1,
+    )
+
+    assert not (result_dir / "fake.db").exists()
+    cleanup_events = [event for event in _read_jsonl(result_dir / "raw.jsonl") if event["event"] == "artifact_cleanup"]
+    assert cleanup_events == [
+        {
+            "event": "artifact_cleanup",
+            "database": "fake",
+            "scale": "smoke",
+            "removed": [str(result_dir / "fake.db")],
+        }
+    ]
+
+
+def test_run_benchmark_can_keep_adapter_artifacts_for_debugging(tmp_path: Path, monkeypatch):
+    import runner.run as run_module
+
+    class ArtifactFakeAdapter(FakeAdapter):
+        def __init__(
+            self,
+            database: str,
+            dataset_dir: Path,
+            scale: str,
+            profile: str,
+            threads: int | None = None,
+        ):
+            super().__init__(database=database, dataset_dir=dataset_dir, scale=scale, profile=profile, threads=threads)
+            self.artifact = dataset_dir.parent / "fake.db"
+
+        def run_all(self, warmup: int, iterations: int, execution_mode: str = "warm"):
+            self.artifact.write_text("temporary benchmark database")
+            return super().run_all(warmup=warmup, iterations=iterations, execution_mode=execution_mode)
+
+        def cleanup_artifacts(self) -> list[Path]:
+            self.artifact.unlink()
+            return [self.artifact]
+
+    monkeypatch.setattr(
+        run_module,
+        "_adapter_for",
+        lambda database, dataset_dir, scale, profile, threads=None: ArtifactFakeAdapter(
+            database, dataset_dir, scale, profile, threads
+        ),
+    )
+
+    result_dir = run_benchmark(
+        databases=["fake"],
+        scale="smoke",
+        seed=42,
+        output_root=tmp_path / "results",
+        warmup=0,
+        iterations=1,
+        keep_db_artifacts=True,
+    )
+
+    assert (result_dir / "fake.db").read_text() == "temporary benchmark database"
+    environment = json.loads((result_dir / "environment.json").read_text())
+    assert environment["keep_db_artifacts"] is True
 
 
 def test_run_benchmark_records_profile_and_uses_profile_workloads(tmp_path: Path):
@@ -275,6 +622,7 @@ def test_run_benchmark_records_profile_and_uses_profile_workloads(tmp_path: Path
         if event.get("event") == "sample"
     ]
     assert environment["profile"] == "indexed"
+    assert environment["measurement_semantics"]["profile"] == "indexed"
     assert "result_cache" not in environment
     assert sample_workloads == [
         "load_nodes_edges",
@@ -284,13 +632,76 @@ def test_run_benchmark_records_profile_and_uses_profile_workloads(tmp_path: Path
     ]
 
 
+def test_run_benchmark_records_write_durable_semantics(tmp_path: Path):
+    result_dir = run_benchmark(
+        databases=["fake"],
+        scale="smoke",
+        seed=42,
+        output_root=tmp_path / "results",
+        warmup=0,
+        iterations=1,
+        profile="write_durable",
+        execution_mode="opened",
+    )
+
+    environment = json.loads((result_dir / "environment.json").read_text())
+    semantics = environment["measurement_semantics"]
+    assert semantics["execution_mode"] == "opened"
+    assert semantics["profile"] == "write_durable"
+    assert semantics["profile_contract"]["latency_contract"] == "durable_after_each_write_latency"
+    assert semantics["profile_contract"]["barrier_by_database"]["kuzu"] == "CHECKPOINT after each measured write."
+    assert environment["mutating_workloads"] == [
+        "point_create_node_durable",
+        "point_create_edge_durable",
+        "point_update_node_property_durable",
+        "point_update_edge_property_durable",
+        "point_create_delete_edge_durable",
+        "write_then_read_edge_durable",
+    ]
+
+
+def test_run_benchmark_writes_baseline_regression_gate(tmp_path: Path):
+    baseline_dir = tmp_path / "baseline"
+    baseline_dir.mkdir()
+    (baseline_dir / "summary.csv").write_text(
+        "database,workload,scale,samples,first_ms,min_ms,avg_ms,p50_ms,p95_ms,p99_ms,max_ms,ops_per_sec,status,equivalent_mode\n"
+        "fake,load_nodes_edges,smoke,1,100,100,100,100,100,100,100,10,ok,cypher\n"
+    )
+
+    result_dir = run_benchmark(
+        databases=["fake"],
+        scale="smoke",
+        seed=42,
+        output_root=tmp_path / "results",
+        warmup=0,
+        iterations=1,
+        baseline_summary=baseline_dir / "summary.csv",
+        max_regression_ratio=10.0,
+    )
+
+    environment = json.loads((result_dir / "environment.json").read_text())
+    quality = json.loads((result_dir / "quality_gates.json").read_text())
+    regression_gate = next(gate for gate in quality["gates"] if gate["name"] == "p50_regression_against_baseline")
+    assert environment["baseline_summary"].endswith("summary.csv")
+    assert environment["max_regression_ratio"] == 10.0
+    assert regression_gate["status"] == "passed"
+
+
 def test_run_benchmark_writes_zyx_profiles_jsonl(tmp_path: Path, monkeypatch):
     import runner.run as run_module
     from runner.adapters.base import WorkloadResult
     from runner.models import ProfileEvent, Sample
 
     class ProfiledZyxAdapter:
-        def __init__(self, database: str, dataset_dir: Path, scale: str, profile: str):
+        def __init__(
+            self,
+            database: str,
+            dataset_dir: Path,
+            scale: str,
+            profile: str,
+            threads: int | None = None,
+        ):
+            self.threads = threads
             self.profile_events = [
                 ProfileEvent(
                     database="zyx",
@@ -326,9 +737,9 @@ def test_run_benchmark_writes_zyx_profiles_jsonl(tmp_path: Path, monkeypatch):
                 )
             ]
 
-    def fake_adapter_for(database: str, dataset_dir: Path, scale: str, profile: str):
+    def fake_adapter_for(database: str, dataset_dir: Path, scale: str, profile: str, threads: int | None = None):
         assert database == "zyx"
-        return ProfiledZyxAdapter(database, dataset_dir, scale, profile)
+        return ProfiledZyxAdapter(database, dataset_dir, scale, profile, threads)
 
     monkeypatch.setattr(run_module, "_adapter_for", fake_adapter_for)
 
@@ -390,12 +801,15 @@ def test_run_benchmark_records_missing_adapter_failures(tmp_path: Path):
     assert any(event["event"] == "failure" and event["database"] == "zyx" for event in raw_events)
     assert any(event["event"] == "error" and event["database"] == "zyx" for event in error_events)
     assert status["failure_count"] == 1
+    assert status["quality_failure_count"] > 0
     assert "failed" in summary
     assert "run_all" in summary
 
 
 def test_run_benchmark_records_run_all_exceptions(tmp_path: Path, monkeypatch):
-    def failing_adapter(database: str, dataset_dir: Path, scale: str, profile: str) -> SetupFailureAdapter:
+    def failing_adapter(
+        database: str, dataset_dir: Path, scale: str, profile: str, threads: int | None = None
+    ) -> SetupFailureAdapter:
         return SetupFailureAdapter(database=database, dataset_dir=dataset_dir, scale=scale, profile=profile)
 
     monkeypatch.setattr("runner.run._adapter_for", failing_adapter)
@@ -417,5 +831,6 @@ def test_run_benchmark_records_run_all_exceptions(tmp_path: Path, monkeypatch):
     assert any(event["event"] == "failure" and event["workload"] == "run_all" for event in raw_events)
     assert any(event["event"] == "error" and event["workload"] == "run_all" for event in error_events)
     assert status["failure_count"] == 1
+    assert status["quality_failure_count"] > 0
     assert "failed" in summary
     assert "run_all" in summary

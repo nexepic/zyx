@@ -76,6 +76,39 @@ TEST_F(CompareBenchmarkTest, MeasureOperationDoesNotEmitEventsWhenValidationFail
 	EXPECT_TRUE(graph::debug::PerfTrace::snapshotAndReset().empty());
 }
 
+TEST_F(CompareBenchmarkTest, RunMeasuredEmitsProfileForSuccessfulWarmupAndIteration) {
+	Options options;
+	options.scale = "smoke";
+	options.profile = std::string(kProfileScan);
+	options.emitProfile = true;
+	options.warmup = 1;
+	options.iterations = 1;
+
+	int calls = 0;
+	EXPECT_NO_THROW(runMeasured(options, "profiled_workload",
+								[&]() {
+									graph::debug::PerfTrace::addDuration("profiled.phase", 1000);
+									return int64_t{++calls};
+								}));
+
+	EXPECT_EQ(calls, 2);
+	EXPECT_FALSE(graph::debug::PerfTrace::isEnabled());
+}
+
+TEST_F(CompareBenchmarkTest, RunMeasuredOpenedModeSkipsExplicitQueryWarmup) {
+	Options options;
+	options.scale = "smoke";
+	options.profile = std::string(kProfileScan);
+	options.executionMode = std::string(kExecutionModeOpened);
+	options.warmup = 5;
+	options.iterations = 2;
+
+	int calls = 0;
+	EXPECT_NO_THROW(runMeasured(options, "opened_workload", [&]() { return int64_t{++calls}; }));
+
+	EXPECT_EQ(calls, 2);
+}
+
 TEST_F(CompareBenchmarkTest, ParseArgsAcceptsCompleteScanAndIndexedOptions) {
 	std::vector<std::string> args = {"zyx-compare-bench",
 									 "--dataset",
@@ -110,6 +143,126 @@ TEST_F(CompareBenchmarkTest, ParseArgsAcceptsCompleteScanAndIndexedOptions) {
 	EXPECT_EQ(options.iterations, 3);
 }
 
+TEST_F(CompareBenchmarkTest, ParseArgsAcceptsThreadsOption) {
+	std::vector<std::string> args = {"zyx-compare-bench", "--dataset", "data", "--db-path", "db",
+									 "--scale", "small", "--threads", "8"};
+	std::vector<char *> argv;
+	for (auto &arg: args) {
+		argv.push_back(arg.data());
+	}
+
+	const Options options = parseArgs(static_cast<int>(argv.size()), argv.data());
+
+	ASSERT_TRUE(options.threads.has_value());
+	EXPECT_EQ(*options.threads, 8UL);
+}
+
+TEST_F(CompareBenchmarkTest, ParseArgsAcceptsOpenedExecutionMode) {
+	std::vector<std::string> args = {"zyx-compare-bench", "--dataset", "data", "--db-path", "db",
+									 "--scale", "small", "--execution-mode", "opened"};
+	std::vector<char *> argv;
+	for (auto &arg: args) {
+		argv.push_back(arg.data());
+	}
+
+	const Options options = parseArgs(static_cast<int>(argv.size()), argv.data());
+
+	EXPECT_EQ(options.executionMode, std::string(kExecutionModeOpened));
+}
+
+TEST_F(CompareBenchmarkTest, ParseArgsAcceptsMultihopProfileAndComputesTargets) {
+	std::vector<std::string> args = {"zyx-compare-bench", "--dataset", "data", "--db-path", "db",
+									 "--scale", "small", "--profile", "multihop"};
+	std::vector<char *> argv;
+	for (auto &arg: args) {
+		argv.push_back(arg.data());
+	}
+
+	const Options options = parseArgs(static_cast<int>(argv.size()), argv.data());
+
+	EXPECT_EQ(options.profile, std::string(kProfileMultihop));
+	EXPECT_EQ(targetUserIdForDepth(6), "user-000031");
+	EXPECT_EQ(targetUserIdForDepth(30), "user-000151");
+	EXPECT_EQ(targetUserIdForDepth(6, "smoke"), "user-000019");
+	EXPECT_EQ(targetUserIdForDepth(30, "smoke"), "user-000091");
+}
+
+TEST_F(CompareBenchmarkTest, ParseArgsAcceptsWriteProfileAndComputesWriteTargets) {
+	std::vector<std::string> args = {"zyx-compare-bench", "--dataset", "data", "--db-path", "db",
+									 "--scale", "smoke", "--profile", "write"};
+	std::vector<char *> argv;
+	for (auto &arg: args) {
+		argv.push_back(arg.data());
+	}
+
+	const Options options = parseArgs(static_cast<int>(argv.size()), argv.data());
+
+	EXPECT_EQ(options.profile, std::string(kProfileWrite));
+	EXPECT_EQ(writeUpdateTargetUserId("smoke"), "user-000004");
+	EXPECT_EQ(writeUpdateTargetUserId("small"), "user-000006");
+	EXPECT_EQ(writeUpdateTargetUserId("tiny"), "user-000006");
+	EXPECT_TRUE(isMutatingWorkload("point_create_node"));
+	EXPECT_TRUE(isMutatingWorkload("batch_create_edges_10000_then_one_hop_expand"));
+	EXPECT_TRUE(isMutatingWorkload("write_then_read_edge_durable"));
+	EXPECT_FALSE(isMutatingWorkload("relationship_type_scan"));
+	EXPECT_EQ(workloadPathToken("batch/create edges"), "batch_create_edges");
+}
+
+TEST_F(CompareBenchmarkTest, ParseArgsAcceptsWriteDurableProfile) {
+	std::vector<std::string> args = {"zyx-compare-bench", "--dataset", "data", "--db-path", "db",
+									 "--scale", "smoke", "--profile", "write_durable"};
+	std::vector<char *> argv;
+	for (auto &arg: args) {
+		argv.push_back(arg.data());
+	}
+
+	const Options options = parseArgs(static_cast<int>(argv.size()), argv.data());
+
+	EXPECT_EQ(options.profile, std::string(kProfileWriteDurable));
+}
+
+TEST_F(CompareBenchmarkTest, ParseArgsAcceptsOperationalDynamicProfile) {
+	std::vector<std::string> args = {"zyx-compare-bench", "--dataset", "data", "--db-path", "db",
+									 "--scale", "smoke", "--profile", "operational_dynamic"};
+	std::vector<char *> argv;
+	for (auto &arg: args) {
+		argv.push_back(arg.data());
+	}
+
+	const Options options = parseArgs(static_cast<int>(argv.size()), argv.data());
+
+	EXPECT_EQ(options.profile, std::string(kProfileOperationalDynamic));
+}
+
+TEST_F(CompareBenchmarkTest, ReachableWithinUsesStrictBoundedPathSemantics) {
+	zyx::Database db((tempRoot / "bounded_reachability.db").string());
+	db.open();
+	auto txn = db.beginTransaction();
+
+	for (int64_t user = 1; user <= 32; ++user) {
+		std::ostringstream query;
+		query << "CREATE (:User {id: '" << userIdForIndex(user) << "'})";
+		executeOk(db, query.str());
+	}
+	for (int64_t src = 1; src <= 32; ++src) {
+		for (int64_t step = 1; step <= 5 && src + step <= 32; ++step) {
+			std::ostringstream query;
+			query << "MATCH (a:User {id: '" << userIdForIndex(src) << "'}), (b:User {id: '"
+				  << userIdForIndex(src + step) << "'}) CREATE (a)-[:FOLLOWS]->(b)";
+			executeOk(db, query.str());
+		}
+	}
+	txn.commit();
+
+	EXPECT_EQ(reachableWithinTarget(db, 6, "user-000031"), 1);
+	EXPECT_EQ(reachableWithinTarget(db, 6, "user-000032"), 0);
+	EXPECT_EQ(reachableWithinTarget(db, 7, "user-000032"), 1);
+	EXPECT_EQ(requireReachableWithinTarget(db, 6, "user-000031"), 1);
+	EXPECT_THROW((void) requireReachableWithinTarget(db, 6, "user-000032"), std::runtime_error);
+
+	db.close();
+}
+
 TEST_F(CompareBenchmarkTest, ParseArgsRejectsInvalidAndMissingValues) {
 	auto parse = [](std::vector<std::string> args) {
 		std::vector<char *> argv;
@@ -132,6 +285,12 @@ TEST_F(CompareBenchmarkTest, ParseArgsRejectsInvalidAndMissingValues) {
 			std::invalid_argument);
 	EXPECT_THROW(parse({"zyx-compare-bench", "--dataset", "data", "--db-path", "db", "--scale", "small", "--iterations",
 						"0"}),
+				 std::invalid_argument);
+	EXPECT_THROW(parse({"zyx-compare-bench", "--dataset", "data", "--db-path", "db", "--scale", "small", "--threads",
+						"-1"}),
+				 std::invalid_argument);
+	EXPECT_THROW(parse({"zyx-compare-bench", "--dataset", "data", "--db-path", "db", "--scale", "small", "--threads",
+						"2x"}),
 				 std::invalid_argument);
 	EXPECT_THROW(parse({"zyx-compare-bench", "--dataset", "data", "--db-path", "db", "--scale", "small", "--unknown"}),
 				 std::invalid_argument);
@@ -194,6 +353,8 @@ TEST_F(CompareBenchmarkTest, RowCountAndValidationHelpersHandleAlternatePaths) {
 	EXPECT_EQ(rowCount([]() { return FakeRows{}; }), 3);
 	EXPECT_NO_THROW(requireNonNegative("ok", 0));
 	EXPECT_THROW(requireNonNegative("bad", -1), std::runtime_error);
+	EXPECT_EQ(requireExactlyOne("one", 1), 1);
+	EXPECT_THROW((void) requireExactlyOne("not_one", 2), std::runtime_error);
 
 	zyx::Database db((tempRoot / "execute_ok.db").string());
 	db.open();
@@ -257,11 +418,17 @@ TEST_F(CompareBenchmarkTest, LoadGraphCommitsDatasetInSingleWriteTransaction) {
 	const auto trace = graph::debug::PerfTrace::snapshotAndReset();
 
 	EXPECT_EQ(loaded.loadedRows, 9);
-	ASSERT_TRUE(trace.contains("txn.save"));
 	ASSERT_TRUE(trace.contains("wal.commit_sync"));
-	EXPECT_EQ(trace.at("txn.save").calls, 1U);
+	EXPECT_FALSE(trace.contains("txn.save"));
+	EXPECT_FALSE(trace.contains("save.sync"));
+	ASSERT_TRUE(trace.contains("load.users.csv_read"));
+	ASSERT_TRUE(trace.contains("load.users.create_nodes"));
+	ASSERT_TRUE(trace.contains("load.follows.create_edges"));
+	ASSERT_TRUE(trace.contains("load.commit"));
 	EXPECT_EQ(trace.at("wal.commit_sync").calls, 1U);
 	EXPECT_EQ(scalarInt(db.execute("MATCH (u:User) RETURN count(u)")), 3);
+	EXPECT_EQ(scalarInt(db.execute("MATCH (:User {id: 'user-000001'})-[:FOLLOWS]->(v:User) RETURN count(v)")), 1);
+	EXPECT_EQ(scalarInt(db.execute("MATCH (:User {id: 'user-000001'})-[:AUTHORED]->(p:Post) RETURN count(p)")), 1);
 
 	db.close();
 }
@@ -282,7 +449,7 @@ TEST_F(CompareBenchmarkTest, LoadGraphUsesExistingWriteTransactionWhenPresent) {
 	db.close();
 }
 
-TEST_F(CompareBenchmarkTest, RunExecutesSmallScanAndIndexedProfiles) {
+TEST_F(CompareBenchmarkTest, RunExecutesSmallScanIndexedAndWriteProfiles) {
 	const auto dataset = writeSmallDataset();
 
 	Options scan;
@@ -300,6 +467,11 @@ TEST_F(CompareBenchmarkTest, RunExecutesSmallScanAndIndexedProfiles) {
 	coldish.executionMode = std::string(kExecutionModeColdish);
 	EXPECT_EQ(run(coldish), 0);
 
+	Options opened = scan;
+	opened.dbPath = tempRoot / "opened.db";
+	opened.executionMode = std::string(kExecutionModeOpened);
+	EXPECT_EQ(run(opened), 0);
+
 	Options indexed;
 	indexed.dataset = dataset;
 	indexed.dbPath = tempRoot / "indexed.db";
@@ -308,6 +480,64 @@ TEST_F(CompareBenchmarkTest, RunExecutesSmallScanAndIndexedProfiles) {
 	indexed.iterations = 1;
 
 	EXPECT_EQ(run(indexed), 0);
+
+	Options write;
+	write.dataset = dataset;
+	write.dbPath = tempRoot / "write.db";
+	write.scale = "tiny";
+	write.profile = std::string(kProfileWrite);
+	write.iterations = 1;
+
+	EXPECT_EQ(run(write), 0);
+
+	Options writeDurable = write;
+	writeDurable.dbPath = tempRoot / "write_durable.db";
+	writeDurable.profile = std::string(kProfileWriteDurable);
+	EXPECT_EQ(run(writeDurable), 0);
+}
+
+TEST_F(CompareBenchmarkTest, RunExecutesSmallOperationalDynamicProfile) {
+	const auto dataset = tempRoot / "operational_dynamic_dataset";
+	std::filesystem::create_directories(dataset);
+	writeFile(dataset / "users.csv", "id,age,country,score\n"
+									 "user-000001,31,CN,901.5\n"
+									 "user-000006,36,US,850.0\n"
+									 "user-000007,42,CN,990.0\n"
+									 "user-000008,28,US,710.0\n");
+	writeFile(dataset / "posts.csv", "id,created_at,score\n"
+									 "post-000001,1,10.5\n");
+	writeFile(dataset / "tags.csv", "id,rank\n"
+									"tag-000001,1\n");
+	writeFile(dataset / "follows.csv", "src,dst,weight\n"
+									   "user-000001,user-000006,1\n"
+									   "user-000006,user-000007,2\n"
+									   "user-000007,user-000001,3\n"
+									   "user-000008,user-000001,4\n");
+	writeFile(dataset / "authored.csv", "src,dst,weight\n"
+										"user-000001,post-000001,1\n");
+	writeFile(dataset / "has_tag.csv", "src,dst,weight\n"
+									   "post-000001,tag-000001,1\n");
+
+	Options operational_dynamic;
+	operational_dynamic.dataset = dataset;
+	operational_dynamic.dbPath = tempRoot / "operational_dynamic.db";
+	operational_dynamic.scale = "tiny";
+	operational_dynamic.profile = std::string(kProfileOperationalDynamic);
+	operational_dynamic.iterations = 1;
+
+	EXPECT_EQ(run(operational_dynamic), 0);
+
+	zyx::Database db(operational_dynamic.dbPath.string());
+	db.open();
+	EXPECT_EQ(scalarInt(db.execute("MATCH (u:User {id: 'post-persist-user-000001'}) RETURN count(u)")), 0);
+	EXPECT_EQ(scalarInt(db.execute("MATCH (:User {id: 'user-000006'})-[r:FOLLOWS]->(:User {id: 'user-000001'}) "
+						   "RETURN count(r)")),
+		  0);
+	db.close();
+
+	for (const auto &entry: std::filesystem::directory_iterator(tempRoot)) {
+		EXPECT_EQ(entry.path().filename().string().find(".workload-"), std::string::npos);
+	}
 }
 
 TEST_F(CompareBenchmarkTest, MainReportsJsonErrorForInvalidArguments) {

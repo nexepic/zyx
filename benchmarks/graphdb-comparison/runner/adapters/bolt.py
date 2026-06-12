@@ -9,7 +9,7 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any, Iterable
 
-from runner.adapters.base import BenchmarkAdapter, DEFAULT_PROFILE
+from runner.adapters.base import BenchmarkAdapter, DEFAULT_PROFILE, multihop_target_user_id, write_update_target_user_id
 
 
 class BoltCypherAdapter(BenchmarkAdapter):
@@ -19,8 +19,15 @@ class BoltCypherAdapter(BenchmarkAdapter):
     default_password: str | None = None
     batch_size = 1_000
 
-    def __init__(self, database: str, dataset_dir: Path, scale: str, profile: str = DEFAULT_PROFILE):
-        super().__init__(database, dataset_dir, scale, profile)
+    def __init__(
+        self,
+        database: str,
+        dataset_dir: Path,
+        scale: str,
+        profile: str = DEFAULT_PROFILE,
+        threads: int | None = None,
+    ):
+        super().__init__(database, dataset_dir, scale, profile, threads)
         self.uri = os.getenv(f"{self.env_prefix}_URI", os.getenv("BOLT_URI", self.default_uri))
         self.user = os.getenv(f"{self.env_prefix}_USER", os.getenv("BOLT_USER", self.default_user or "")) or None
         self.password = os.getenv(
@@ -28,6 +35,7 @@ class BoltCypherAdapter(BenchmarkAdapter):
         ) or None
         self._driver: Any | None = None
         self._loaded_rows: int | None = None
+        self._write_counter = 0
 
     def setup(self) -> None:
         self._driver = self._create_driver()
@@ -90,6 +98,18 @@ class BoltCypherAdapter(BenchmarkAdapter):
             {"src": "user-000001", "dst": "user-000006"},
         )
 
+    def reachable_within_6(self) -> int:
+        return self._reachable_within(6)
+
+    def reachable_within_12(self) -> int:
+        return self._reachable_within(12)
+
+    def reachable_within_24(self) -> int:
+        return self._reachable_within(24)
+
+    def reachable_within_30(self) -> int:
+        return self._reachable_within(30)
+
     def all_nodes_property_filter(self) -> int:
         self._ensure_loaded()
         return self._scalar_int("MATCH (n) WHERE n.score >= $min_score RETURN count(n) AS count", {"min_score": 900.0})
@@ -133,6 +153,87 @@ class BoltCypherAdapter(BenchmarkAdapter):
             "MATCH (u:User) WHERE u.age >= $min_age AND u.age < $max_age RETURN count(u) AS count",
             {"min_age": 30, "max_age": 40},
         )
+
+    def point_create_node(self) -> int:
+        self._ensure_loaded()
+        write_id = self._next_write_id()
+        return len(
+            self._records(
+                "CREATE (:User {id: $id, age: $age, country: $country, score: $score}) RETURN 1 AS ok",
+                {"id": f"bench-user-{write_id:06d}", "age": 41, "country": "ZZ", "score": float(write_id)},
+            )
+        )
+
+    def point_create_edge(self) -> int:
+        self._ensure_loaded()
+        self._next_write_id()
+        return len(
+            self._records(
+                "MATCH (src:User {id: $src}), (dst:User {id: $dst}) "
+                "CREATE (src)-[:FOLLOWS {weight: $weight}]->(dst) RETURN 1 AS ok",
+                {"src": "user-000006", "dst": "user-000001", "weight": 1},
+            )
+        )
+
+    def point_update_node_property(self) -> int:
+        self._ensure_loaded()
+        write_id = self._next_write_id()
+        return self._scalar_int(
+            "MATCH (u:User {id: $id}) SET u.score = $score RETURN count(u) AS count",
+            {"id": "user-000001", "score": 1000.0 + write_id},
+        )
+
+    def point_update_edge_property(self) -> int:
+        self._ensure_loaded()
+        write_id = self._next_write_id()
+        return self._scalar_int(
+            "MATCH (:User {id: $src})-[r:FOLLOWS]->(:User {id: $dst}) "
+            "SET r.weight = $weight RETURN count(r) AS count",
+            {"src": "user-000001", "dst": write_update_target_user_id(self.scale), "weight": 10_000 + write_id},
+        )
+
+    def point_create_delete_edge(self) -> int:
+        self._ensure_loaded()
+        write_id = self._next_write_id()
+        weight = -write_id
+        self._execute(
+            "MATCH (src:User {id: $src}), (dst:User {id: $dst}) "
+            "CREATE (src)-[:FOLLOWS {weight: $weight}]->(dst)",
+            {"src": "user-000006", "dst": "user-000001", "weight": weight},
+        )
+        return len(
+            self._records(
+                "MATCH (:User {id: $src})-[r:FOLLOWS]->(:User {id: $dst}) "
+                "WHERE r.weight = $weight DELETE r RETURN 1 AS ok",
+                {"src": "user-000006", "dst": "user-000001", "weight": weight},
+            )
+        )
+
+    def write_then_read_edge(self) -> int:
+        self._ensure_loaded()
+        write_id = self._next_write_id()
+        weight = -1_000_000 - write_id
+        self._execute(
+            "MATCH (src:User {id: $src}), (dst:User {id: $dst}) "
+            "CREATE (src)-[:FOLLOWS {weight: $weight}]->(dst)",
+            {"src": "user-000007", "dst": "user-000001", "weight": weight},
+        )
+        return self._scalar_int(
+            "MATCH (:User {id: $src})-[r:FOLLOWS]->(:User {id: $dst}) "
+            "WHERE r.weight = $weight RETURN count(r) AS count",
+            {"src": "user-000007", "dst": "user-000001", "weight": weight},
+        )
+
+    def _next_write_id(self) -> int:
+        self._write_counter += 1
+        return self._write_counter
+
+    def _reachable_within(self, depth: int) -> int:
+        self._ensure_loaded()
+        return 1 if self._records(
+            f"MATCH p = (:User {{id: $src}})-[:FOLLOWS*1..{depth}]->(:User {{id: $dst}}) RETURN 1 AS found LIMIT 1",
+            {"src": "user-000001", "dst": multihop_target_user_id(depth, self.scale)},
+        ) else 0
 
     def _create_driver(self) -> Any:
         graph_database = import_module("neo4j").GraphDatabase

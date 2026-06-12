@@ -43,12 +43,12 @@ TEST(QueryGuardTest, MemoryLimit_ThrowsWhenExceeded) {
 	}, QueryMemoryExceededException);
 }
 
-TEST(QueryGuardTest, CheckInterval_FastPath) {
+TEST(QueryGuardTest, CheckIntervalSkipsMostChecks) {
 	// Verify that checks below CHECK_MASK don't trigger slow path (timing test)
 	QueryGuard guard(30000, 0); // 30s timeout — won't fire
 	auto start = std::chrono::steady_clock::now();
 	for (int i = 0; i < 1000; ++i) {
-		guard.check(); // All fast path (counter & 1023 != 0 for most)
+		guard.check(); // Most iterations skip the full interval check
 	}
 	auto elapsed = std::chrono::steady_clock::now() - start;
 	// 1000 fast-path checks should take well under 1ms

@@ -20,7 +20,9 @@
 
 #pragma once
 
+#include <algorithm>
 #include <condition_variable>
+#include <exception>
 #include <functional>
 #include <future>
 #include <memory>
@@ -29,7 +31,10 @@
 #include <stdexcept>
 #include <thread>
 #include <type_traits>
+#include <utility>
 #include <vector>
+
+#include "graph/concurrent/ParallelAdaptivePolicy.hpp"
 
 namespace graph::concurrent {
 
@@ -46,22 +51,23 @@ namespace graph::concurrent {
 	 * thread and parallelFor() runs sequentially. This ensures zero overhead when
 	 * concurrency is disabled.
 	 */
-		class ThreadPool {
-		public:
+	class ThreadPool {
+	public:
 		/**
 		 * @brief Construct a thread pool.
 		 * @param threadCount Number of threads. 0 = auto-detect, 1 = single-threaded (inline).
 		 */
-			explicit ThreadPool(size_t threadCount = 0) {
+		explicit ThreadPool(size_t threadCount = 0) {
 #ifdef __EMSCRIPTEN__
-				threadCount = 1;  // WASM: single-threaded mode only
+			threadCount = 1; // WASM: single-threaded mode only
 #endif
-				threadCount_ = resolveThreadCount(threadCount, std::thread::hardware_concurrency());
+			hardwareInfo_ = resolveThreadPoolHardwareInfo(threadCount, std::thread::hardware_concurrency());
+			threadCount_ = hardwareInfo_.resolvedThreadCount;
 
-				if (threadCount_ <= 1) {
-					// Single-threaded mode: no worker threads needed
-					return;
-				}
+			if (threadCount_ <= 1) {
+				// Single-threaded mode: no worker threads needed
+				return;
+			}
 
 			// Multi-threaded mode: launch worker threads
 			workers_.reserve(threadCount_);
@@ -76,7 +82,7 @@ namespace graph::concurrent {
 				stop_ = true;
 			}
 			condition_.notify_all();
-			for (auto &worker : workers_) {
+			for (auto &worker: workers_) {
 				if (worker.joinable())
 					worker.join();
 			}
@@ -94,7 +100,7 @@ namespace graph::concurrent {
 		 * In single-threaded mode (threadCount == 1), the task is executed
 		 * immediately on the calling thread.
 		 */
-		template <typename F, typename... Args>
+		template<typename F, typename... Args>
 		auto submit(F &&f, Args &&...args) -> std::future<std::invoke_result_t<F, Args...>> {
 			using ReturnType = std::invoke_result_t<F, Args...>;
 
@@ -116,7 +122,7 @@ namespace graph::concurrent {
 			}
 
 			auto task = std::make_shared<std::packaged_task<ReturnType()>>(
-				std::bind(std::forward<F>(f), std::forward<Args>(args)...));
+					std::bind(std::forward<F>(f), std::forward<Args>(args)...));
 
 			auto future = task->get_future();
 			enqueue([task]() { (*task)(); });
@@ -133,45 +139,20 @@ namespace graph::concurrent {
 		 * @param end End index (exclusive)
 		 * @param func Function taking (size_t index) called for each element
 		 */
-		template <typename Func>
+		template<typename Func>
 		void parallelFor(size_t begin, size_t end, Func &&func) {
-			if (begin >= end)
-				return;
+			parallelForWithMaxWorkers(begin, end, threadCount_, std::forward<Func>(func));
+		}
 
-			size_t total = end - begin;
-
-			if (threadCount_ <= 1 || total <= 1) {
-				// Sequential execution
-				for (size_t i = begin; i < end; ++i)
-					func(i);
-				return;
-			}
-
-			// Determine number of chunks
-			size_t numChunks = std::min(threadCount_, total);
-			size_t chunkSize = total / numChunks;
-			size_t remainder = total % numChunks;
-
-			std::vector<std::future<void>> futures;
-			futures.reserve(numChunks);
-
-			size_t start = begin;
-			for (size_t c = 0; c < numChunks; ++c) {
-				size_t thisChunk = chunkSize + static_cast<size_t>(c < remainder);
-				size_t chunkEnd = start + thisChunk;
-
-				futures.push_back(submit([start, chunkEnd, &func]() {
-					for (size_t i = start; i < chunkEnd; ++i)
-						func(i);
-				}));
-
-				start = chunkEnd;
-			}
-
-			// Wait for all chunks and propagate exceptions
-			for (auto &fut : futures) {
-				fut.get();
-			}
+		/**
+		 * @brief Execute a function over a range using at most maxWorkers chunks.
+		 *
+		 * This is useful for memory-bandwidth-bound scans where the database can
+		 * benefit from parallelism but should not blindly use every worker thread.
+		 */
+		template<typename Func>
+		void parallelFor(size_t begin, size_t end, size_t maxWorkers, Func &&func) {
+			parallelForWithMaxWorkers(begin, end, maxWorkers, std::forward<Func>(func));
 		}
 
 		/**
@@ -184,31 +165,148 @@ namespace graph::concurrent {
 		 */
 		[[nodiscard]] bool isSingleThreaded() const { return threadCount_ <= 1; }
 
-		private:
-			void enqueue(std::function<void()> task) {
-				{
-					std::unique_lock lock(mutex_);
-					if (stop_)
-						throw std::runtime_error("Cannot submit to stopped ThreadPool");
-					tasks_.emplace(std::move(task));
-				}
-				condition_.notify_one();
+		/**
+		 * @brief Returns portable hardware/thread-pool resolution metadata.
+		 */
+		[[nodiscard]] const ThreadPoolHardwareInfo &getHardwareInfo() const { return hardwareInfo_; }
+
+		[[nodiscard]] AdaptiveParallelPolicyState &adaptivePolicyState() { return adaptivePolicyState_; }
+
+		[[nodiscard]] const AdaptiveParallelPolicyState &adaptivePolicyState() const { return adaptivePolicyState_; }
+
+		void setParallelPolicyMode(ParallelPolicyMode mode) { adaptivePolicyState_.setMode(mode); }
+
+		[[nodiscard]] ParallelPolicyMode getParallelPolicyMode() const { return adaptivePolicyState_.mode(); }
+
+		void resetAdaptiveParallelPolicy() { adaptivePolicyState_.reset(); }
+
+	private:
+		template<typename Func>
+		void parallelForWithMaxWorkers(size_t begin, size_t end, size_t maxWorkers, Func &&func) {
+			if (begin >= end)
+				return;
+
+			size_t total = end - begin;
+			const size_t effectiveThreadCount = std::min(threadCount_, std::max<size_t>(1, maxWorkers));
+
+			if (effectiveThreadCount <= 1 || total <= 1) {
+				// Sequential execution
+				for (size_t i = begin; i < end; ++i)
+					func(i);
+				return;
 			}
 
-			static size_t resolveThreadCount(size_t requestedThreadCount, unsigned int hardwareThreadCount) {
-				if (requestedThreadCount == 0) {
-					requestedThreadCount = static_cast<size_t>(hardwareThreadCount);
-					if (requestedThreadCount == 0) {
-						return 2; // Fallback if hardware_concurrency returns 0
+			// Determine number of chunks
+			size_t numChunks = std::min(effectiveThreadCount, total);
+			size_t chunkSize = total / numChunks;
+			size_t remainder = total % numChunks;
+
+			std::mutex completionMutex;
+			std::condition_variable completionCv;
+			size_t remainingWorkerChunks = numChunks - 1;
+			std::exception_ptr firstException;
+
+			auto rememberException = [&](std::exception_ptr exception) {
+				std::lock_guard lock(completionMutex);
+				if (!firstException) {
+					firstException = std::move(exception);
+				}
+			};
+
+			auto completeWorkerChunk = [&]() {
+				std::lock_guard lock(completionMutex);
+				if (--remainingWorkerChunks == 0) {
+					completionCv.notify_one();
+				}
+			};
+
+			auto runChunk = [&](size_t chunkBegin, size_t chunkEnd) {
+				try {
+					for (size_t i = chunkBegin; i < chunkEnd; ++i) {
+						func(i);
+					}
+				} catch (...) {
+					rememberException(std::current_exception());
+				}
+			};
+
+			size_t start = begin;
+			size_t inlineBegin = begin;
+			size_t inlineEnd = begin;
+			for (size_t c = 0; c < numChunks; ++c) {
+				const size_t thisChunk = chunkSize + static_cast<size_t>(c < remainder);
+				const size_t chunkEnd = start + thisChunk;
+				if (c + 1 == numChunks) {
+					inlineBegin = start;
+					inlineEnd = chunkEnd;
+				} else {
+					try {
+						enqueue([start, chunkEnd, &runChunk, &completeWorkerChunk]() {
+							runChunk(start, chunkEnd);
+							completeWorkerChunk();
+						});
+					} catch (...) {
+						rememberException(std::current_exception());
+						completeWorkerChunk();
 					}
 				}
-				if (requestedThreadCount <= 1) {
-					return 1;
-				}
-				return requestedThreadCount;
+				start = chunkEnd;
 			}
 
-			void workerLoop() {
+			// Let the caller contribute one chunk instead of idling while workers run.
+			runChunk(inlineBegin, inlineEnd);
+
+			{
+				std::unique_lock lock(completionMutex);
+				completionCv.wait(lock, [&] { return remainingWorkerChunks == 0; });
+				if (firstException) {
+					std::rethrow_exception(firstException);
+				}
+			}
+		}
+
+		void enqueue(std::function<void()> task) {
+			{
+				std::unique_lock lock(mutex_);
+				if (stop_)
+					throw std::runtime_error("Cannot submit to stopped ThreadPool");
+				tasks_.emplace(std::move(task));
+			}
+			condition_.notify_one();
+		}
+
+		static size_t resolveThreadCount(size_t requestedThreadCount, unsigned int hardwareThreadCount) {
+			return resolveThreadPoolHardwareInfo(requestedThreadCount, hardwareThreadCount).resolvedThreadCount;
+		}
+
+		static ThreadPoolHardwareInfo resolveThreadPoolHardwareInfo(size_t requestedThreadCount,
+																	 unsigned int hardwareThreadCount) {
+			ThreadPoolHardwareInfo info{.requestedThreadCount = requestedThreadCount,
+										.hardwareThreadCount = hardwareThreadCount,
+										.resolvedThreadCount = 1,
+										.source = ThreadPoolSizeSource::TPSS_MANUAL};
+			if (requestedThreadCount == 0) {
+				requestedThreadCount = static_cast<size_t>(hardwareThreadCount);
+				if (requestedThreadCount == 0) {
+					info.resolvedThreadCount = 2; // Fallback if hardware_concurrency returns 0
+					info.source = ThreadPoolSizeSource::TPSS_AUTO_FALLBACK;
+					return info;
+				}
+				info.resolvedThreadCount = requestedThreadCount;
+				info.source = ThreadPoolSizeSource::TPSS_AUTO_DETECTED;
+				return info;
+			}
+			if (requestedThreadCount <= 1) {
+				info.resolvedThreadCount = 1;
+				info.source = ThreadPoolSizeSource::TPSS_FORCED_SINGLE_THREADED;
+				return info;
+			}
+			info.resolvedThreadCount = requestedThreadCount;
+			info.source = ThreadPoolSizeSource::TPSS_MANUAL;
+			return info;
+		}
+
+		void workerLoop() {
 			for (;;) {
 				std::function<void()> task;
 				std::unique_lock lock(mutex_);
@@ -222,7 +320,9 @@ namespace graph::concurrent {
 			}
 		}
 
-		size_t threadCount_;
+		size_t threadCount_ = 1;
+		ThreadPoolHardwareInfo hardwareInfo_{};
+		AdaptiveParallelPolicyState adaptivePolicyState_;
 		std::vector<std::thread> workers_;
 		std::queue<std::function<void()>> tasks_;
 		std::mutex mutex_;

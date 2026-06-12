@@ -22,16 +22,32 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
+#include <optional>
+#include <sstream>
 #include "graph/core/Database.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/storage/data/TransactionContext.hpp"
+#include "graph/storage/data/EntityChangeType.hpp"
+#include "graph/storage/wal/WALManager.hpp"
+#include "graph/storage/wal/WALRecord.hpp"
 #include "graph/storage/wal/UndoLog.hpp"
+#include "graph/utils/FixedSizeSerializer.hpp"
 
 namespace fs = std::filesystem;
 using namespace graph;
 using namespace graph::storage;
 using namespace graph::storage::wal;
+
+namespace {
+	WALReadResult readWalRecordsForDb(const fs::path &dbPath) {
+		WALManager reader;
+		reader.open(dbPath.string());
+		auto result = reader.readRecords();
+		reader.close(WALManager::CloseMode::WCM_KEEP_FILE);
+		return result;
+	}
+} // namespace
 
 class TransactionUndoLogTest : public ::testing::Test {
 protected:
@@ -349,6 +365,120 @@ TEST_F(TransactionUndoLogTest, AddNodeWritesSerializedDataToWAL) {
 	txn.commit();
 	EXPECT_GT(node.getId(), 0);
 	// If we get here without throw, WAL write with serialized data succeeded
+}
+
+TEST_F(TransactionUndoLogTest, CommitCoalescesAddThenUpdateIntoSingleNodeWalRecord) {
+	auto &dm = *db->getStorage()->getDataManager();
+	int64_t nodeId = 0;
+	{
+		auto txn = db->beginTransaction();
+		Node node(0, 42);
+		dm.addNode(node);
+		nodeId = node.getId();
+		node.setLabelId(99);
+		dm.updateNode(node);
+		txn.commit();
+	}
+
+	const auto walResult = readWalRecordsForDb(testDbPath);
+	ASSERT_FALSE(walResult.corrupted);
+
+	size_t matchingRecords = 0;
+	std::optional<Node> recoveredNode;
+	uint8_t changeType = 0;
+	for (const auto &record : walResult.records) {
+		if (record.header.type != WALRecordType::WAL_ENTITY_WRITE ||
+			record.data.size() < sizeof(WALEntityPayload)) {
+			continue;
+		}
+		const auto payload = deserializeEntityPayload(record.data.data());
+		if (payload.entityType != static_cast<uint8_t>(EntityType::Node) || payload.entityId != nodeId) {
+			continue;
+		}
+		++matchingRecords;
+		changeType = payload.changeType;
+		ASSERT_GE(record.data.size(), sizeof(WALEntityPayload) + payload.dataSize);
+		std::string entityBytes(record.data.begin() + static_cast<ptrdiff_t>(sizeof(WALEntityPayload)),
+								record.data.begin() + static_cast<ptrdiff_t>(sizeof(WALEntityPayload) + payload.dataSize));
+		std::istringstream iss(entityBytes, std::ios::binary);
+		recoveredNode = utils::FixedSizeSerializer::deserializeWithFixedSize<Node>(iss, Node::getTotalSize());
+	}
+
+	ASSERT_EQ(matchingRecords, 1u);
+	ASSERT_TRUE(recoveredNode.has_value());
+	EXPECT_EQ(changeType, static_cast<uint8_t>(EntityChangeType::CHANGE_ADDED));
+	EXPECT_EQ(recoveredNode->getLabelId(), 99u);
+}
+
+TEST_F(TransactionUndoLogTest, CommitOmitsWalEntityRecordForAddThenDeleteNoOp) {
+	auto &dm = *db->getStorage()->getDataManager();
+	int64_t nodeId = 0;
+	{
+		auto txn = db->beginTransaction();
+		Node node(0, 7);
+		dm.addNode(node);
+		nodeId = node.getId();
+		dm.deleteNode(node);
+		txn.commit();
+	}
+
+	const auto walResult = readWalRecordsForDb(testDbPath);
+	ASSERT_FALSE(walResult.corrupted);
+
+	for (const auto &record : walResult.records) {
+		if (record.header.type != WALRecordType::WAL_ENTITY_WRITE ||
+			record.data.size() < sizeof(WALEntityPayload)) {
+			continue;
+		}
+		const auto payload = deserializeEntityPayload(record.data.data());
+		EXPECT_FALSE(payload.entityType == static_cast<uint8_t>(EntityType::Node) && payload.entityId == nodeId)
+				<< "Add+delete within one transaction should not emit a recoverable entity state";
+	}
+	EXPECT_FALSE(dm.getNode(nodeId).isActive());
+}
+
+TEST_F(TransactionUndoLogTest, DeleteOfDeferredCommittedAddWritesWalTombstone) {
+	auto &dm = *db->getStorage()->getDataManager();
+	int64_t nodeId = 0;
+	{
+		auto txn = db->beginTransaction();
+		Node node(0, 11);
+		dm.addNode(node);
+		nodeId = node.getId();
+		txn.commit();
+	}
+	{
+		auto txn = db->beginTransaction();
+		Node toDelete = dm.getNode(nodeId);
+		dm.deleteNode(toDelete);
+		txn.commit();
+	}
+
+	const auto walResult = readWalRecordsForDb(testDbPath);
+	ASSERT_FALSE(walResult.corrupted);
+
+	size_t addedRecords = 0;
+	size_t deletedRecords = 0;
+	for (const auto &record : walResult.records) {
+		if (record.header.type != WALRecordType::WAL_ENTITY_WRITE ||
+			record.data.size() < sizeof(WALEntityPayload)) {
+			continue;
+		}
+		const auto payload = deserializeEntityPayload(record.data.data());
+		if (payload.entityType != static_cast<uint8_t>(EntityType::Node) || payload.entityId != nodeId) {
+			continue;
+		}
+		if (payload.changeType == static_cast<uint8_t>(EntityChangeType::CHANGE_ADDED)) {
+			++addedRecords;
+		}
+		if (payload.changeType == static_cast<uint8_t>(EntityChangeType::CHANGE_DELETED)) {
+			++deletedRecords;
+			EXPECT_GT(payload.dataSize, 0u);
+		}
+	}
+
+	EXPECT_EQ(addedRecords, 1u);
+	EXPECT_EQ(deletedRecords, 1u);
 }
 
 // --- TransactionContext const overloads ---

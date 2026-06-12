@@ -64,6 +64,19 @@ namespace graph::query::indexes {
 						 public storage::IStorageEventListener,
 						 public std::enable_shared_from_this<IndexManager> {
 	public:
+		struct IndexCreateRequest {
+			std::string indexName;
+			std::string entityType;
+			std::string label;
+			std::string property;
+		};
+
+		struct IndexCreateResult {
+			IndexCreateRequest request;
+			bool success = false;
+			std::string reason;
+		};
+
 		explicit IndexManager(std::shared_ptr<storage::FileStorage> storage);
 		~IndexManager() override;
 
@@ -77,6 +90,7 @@ namespace graph::query::indexes {
 		 */
 		bool createIndex(const std::string &indexName, const std::string &entityType, const std::string &label,
 						 const std::string &property) const;
+		std::vector<IndexCreateResult> createIndexes(const std::vector<IndexCreateRequest> &requests) const;
 
 		/**
 		 * @brief Drops an index by name or definition.
@@ -130,6 +144,7 @@ namespace graph::query::indexes {
 
 		// Query methods now need to know which index to use
 		std::vector<int64_t> findNodeIdsByLabel(const std::string &label) const;
+		size_t estimateNodeIdsByLabel(const std::string &label) const;
 		std::vector<int64_t> findNodeIdsByProperty(const std::string &key, const PropertyValue &value) const;
 		std::vector<int64_t> findNodeIdsByPropertyRange(const std::string &key,
 		                                                 const PropertyValue &minValue,
@@ -165,6 +180,23 @@ namespace graph::query::indexes {
 		    const PropertyValue &maxValue,
 		    bool minInclusive = true,
 		    bool maxInclusive = true) const;
+		size_t estimateNodeIdsByProperty(const std::string &key, const PropertyValue &value) const;
+		size_t estimateNodeIdsByPropertyRange(const std::string &key,
+		                                      const PropertyValue &minValue,
+		                                      const PropertyValue &maxValue,
+		                                      bool minInclusive = true,
+		                                      bool maxInclusive = true) const;
+		size_t estimateNodeIdsByLabelAndProperty(
+		    const std::string &label,
+		    const std::string &key,
+		    const PropertyValue &value) const;
+		size_t estimateNodeIdsByLabelAndPropertyRange(
+		    const std::string &label,
+		    const std::string &key,
+		    const PropertyValue &minValue,
+		    const PropertyValue &maxValue,
+		    bool minInclusive = true,
+		    bool maxInclusive = true) const;
 
 		// Composite index API
 		bool createCompositeIndex(const std::string &indexName, const std::string &entityType,
@@ -174,9 +206,14 @@ namespace graph::query::indexes {
 		std::vector<int64_t> findNodeIdsByCompositeIndex(
 		    const std::vector<std::string> &keys,
 		    const std::vector<PropertyValue> &values) const;
+		size_t estimateNodeIdsByCompositeIndex(
+		    const std::vector<std::string> &keys,
+		    const std::vector<PropertyValue> &values) const;
 
 		std::vector<int64_t> findEdgeIdsByType(const std::string &type) const;
 		std::vector<int64_t> findEdgeIdsByProperty(const std::string &key, const PropertyValue &value) const;
+		size_t estimateEdgeIdsByType(const std::string &type) const;
+		size_t estimateEdgeIdsByProperty(const std::string &key, const PropertyValue &value) const;
 
 		[[nodiscard]] uint64_t lookups() const { return lookups_.load(std::memory_order_relaxed); }
 		[[nodiscard]] uint64_t indexHits() const { return indexHits_.load(std::memory_order_relaxed); }
@@ -201,8 +238,10 @@ namespace graph::query::indexes {
 
 		// Composite index maintenance helpers
 		void updateCompositeIndexForNode(const Node &node);
+		void updateCompositeIndexesForNodes(const std::vector<Node> &nodes);
 		void removeCompositeIndexForNode(const Node &node);
 		void updateScopedPropertyIndexesForNode(const Node &oldNode, const Node &newNode);
+		void updateScopedPropertyIndexesForNodes(const std::vector<Node> &nodes);
 		void removeScopedPropertyIndexesForNode(const Node &node);
 
 		mutable std::atomic<uint64_t> lookups_{0};

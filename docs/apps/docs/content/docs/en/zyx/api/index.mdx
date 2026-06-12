@@ -48,4 +48,4 @@ The Driver ABI is the stable C-facing runtime boundary used by language bindings
   - **API-level explicit transactions** — `beginTransaction()` / `zyx_driver_txn_begin()`
   - **Read-only transactions** — `beginReadOnlyTransaction()` / `zyx_driver_txn_begin_read_only()`
   - **Cypher transaction statements** — `BEGIN` / `COMMIT` / `ROLLBACK` within `execute()`
-- When no explicit transaction is active, `execute()` auto-commits write queries and uses a read-only fast path for reads.
+- When no explicit transaction is active, `execute()` auto-commits write queries and uses a read-only execution path for reads.

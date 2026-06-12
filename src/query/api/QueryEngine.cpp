@@ -91,8 +91,6 @@ namespace graph::query {
 	}
 
 	QueryResult QueryEngine::executePlan(QueryPlan plan, const QueryContext &ctx) {
-		using Clock = std::chrono::steady_clock;
-
 		// ExecMode access control checks
 		if (ctx.execMode == ExecMode::EM_READ_ONLY && (plan.mutatesData || plan.mutatesSchema)) {
 			throw std::runtime_error("Read-only transaction cannot execute write queries");

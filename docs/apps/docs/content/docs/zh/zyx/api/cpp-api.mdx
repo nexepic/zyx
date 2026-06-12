@@ -124,6 +124,22 @@ auto edgeIds = db.createEdges({
 | `createEdge` | `int64_t createEdge(int64_t sourceId, int64_t targetId, const string& edgeType, const unordered_map<string, Value>& props = {}) const` | 通过节点 ID 创建边，返回边 ID |
 | `createEdges` | `vector<int64_t> createEdges(const vector<tuple<int64_t, int64_t, string, unordered_map<string, Value>>>& edges) const` | 批量创建边，返回边 ID 列表 |
 
+### Schema API
+
+当嵌入式应用已经知道需要哪些索引，并且不希望为每个属性分别执行一条 Cypher DDL 时，可以使用
+schema API。
+
+```cpp
+bool ok = db.createNodePropertyIndexes("User", {"id", "country", "age"});
+if (!ok) {
+    throw std::runtime_error("failed to create User indexes");
+}
+```
+
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `createNodePropertyIndexes` | `bool createNodePropertyIndexes(const string& label, const vector<string>& properties) const` | 针对同一个 label 协调创建多个节点属性索引。只有全部索引创建成功时才返回 `true` |
+
 ### 图算法
 
 ```cpp

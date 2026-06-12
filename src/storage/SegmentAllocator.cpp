@@ -31,6 +31,14 @@ namespace graph::storage {
 	}
 
 	uint64_t SegmentAllocator::allocateSegment(uint32_t type, uint32_t capacity) const {
+		if (type > getMaxEntityType()) {
+			throw std::invalid_argument("Invalid segment type");
+		}
+		const auto startId = static_cast<int64_t>(findMaxId(type, segmentTracker_)) + 1;
+		return allocateSegmentWithStartId(type, capacity, startId);
+	}
+
+	uint64_t SegmentAllocator::allocateSegmentWithStartId(uint32_t type, uint32_t capacity, int64_t startId) const {
 		size_t segmentSize = TOTAL_SEGMENT_SIZE;
 
 		auto freeSegments = segmentTracker_->getFreeSegments();
@@ -53,7 +61,7 @@ namespace graph::storage {
 		header.prev_segment_offset = 0;
 
 		if (type <= getMaxEntityType()) {
-			header.start_id = static_cast<int64_t>(findMaxId(type, segmentTracker_)) + 1;
+			header.start_id = startId;
 		} else {
 			throw std::invalid_argument("Invalid segment type");
 		}

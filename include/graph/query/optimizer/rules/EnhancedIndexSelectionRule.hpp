@@ -88,6 +88,11 @@ private:
         const auto &labels     = scan->getLabels();
         const auto &propPreds  = scan->getPropertyPredicates();
         const std::string firstLabel = labels.empty() ? "" : labels[0];
+        const auto hasPropertyCandidate = [&](const std::string &key) {
+            return (labels.size() == 1 &&
+                    indexManager_->hasNodePropertyIndexForLabel(firstLabel, key)) ||
+                   indexManager_->hasPropertyIndex("node", key);
+        };
 
         // ----- Full scan -----
         double bestCost = CostModel::fullScanCost(stats);
@@ -106,7 +111,7 @@ private:
         // ----- Property scan (one candidate per predicate key) -----
         for (const auto &kv : propPreds) {
             const std::string &key = kv.first;
-            if (!indexManager_->hasPropertyIndex("node", key)) continue;
+            if (!hasPropertyCandidate(key)) continue;
 
             double propCost = CostModel::propertyIndexCost(
                 stats, firstLabel, key, /*isEquality=*/true);
@@ -135,7 +140,7 @@ private:
         // ----- Range scan -----
         const auto &rangePreds = scan->getRangePredicates();
         for (const auto &rp : rangePreds) {
-            if (!indexManager_->hasPropertyIndex("node", rp.key)) continue;
+            if (!hasPropertyCandidate(rp.key)) continue;
 
             double rangeCost = CostModel::rangeIndexCost(stats, firstLabel, rp.key);
             if (rangeCost < bestCost) {

@@ -81,6 +81,7 @@ namespace graph::storage {
 
 		// Unified segment header update operations
 		void updateSegmentHeader(uint64_t offset, const std::function<void(SegmentHeader &)> &updateFn);
+		void appendEntityRange(uint64_t offset, int64_t firstEntityId, uint32_t baseUsed, uint32_t count);
 
 		void writeSegmentHeader(uint64_t offset, const SegmentHeader &header);
 

@@ -80,7 +80,7 @@ private:
 	std::shared_ptr<DataManager> dataManager_;
 	std::shared_ptr<query::indexes::IndexManager> indexManager_;
 
-	// Label ID -> constraints for that label. O(1) lookup, fast path when empty.
+	// Label ID -> constraints for that label. O(1) lookup, hot path when empty.
 	std::unordered_map<int64_t, std::vector<std::unique_ptr<IConstraint>>> nodeConstraints_;
 	std::unordered_map<int64_t, std::vector<std::unique_ptr<IConstraint>>> edgeConstraints_;
 

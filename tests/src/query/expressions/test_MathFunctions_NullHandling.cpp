@@ -5,6 +5,9 @@
  **/
 
 #include <cmath>
+#include <string>
+#include <vector>
+
 #include <gtest/gtest.h>
 #include "query/expressions/FunctionRegistryTestFixture.hpp"
 
@@ -94,6 +97,18 @@ TEST_F(FunctionRegistryTest, Log_Null_ReturnsNull) {
 	auto* func = registry->lookupScalarFunction("log");
 	std::vector<PropertyValue> args = {PropertyValue()};
 	EXPECT_EQ(func->evaluate(args, *context_).getType(), PropertyType::NULL_TYPE);
+}
+
+TEST_F(FunctionRegistryTest, UnaryMathFunctionsWithEmptyArgumentsReturnNull) {
+	const std::vector<std::string> functionNames = {
+		"log", "log10", "exp", "sin", "cos", "tan", "asin", "acos", "atan"
+	};
+	const std::vector<PropertyValue> args;
+	for (const auto &functionName : functionNames) {
+		auto* func = registry->lookupScalarFunction(functionName);
+		ASSERT_NE(func, nullptr) << functionName;
+		EXPECT_EQ(func->evaluate(args, *context_).getType(), PropertyType::NULL_TYPE) << functionName;
+	}
 }
 
 TEST_F(FunctionRegistryTest, Log_Zero_ReturnsNull) {

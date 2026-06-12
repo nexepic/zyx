@@ -36,6 +36,7 @@ namespace graph::storage {
 		~FileHeaderManager();
 
 		void flushFileHeader() const;
+		[[nodiscard]] bool hasPendingChanges() const;
 
 		// Read current file header
 		[[nodiscard]] FileHeader readFileHeader() const;
@@ -69,9 +70,13 @@ namespace graph::storage {
 		void updateAggregatedCrc(const std::vector<uint32_t> &segmentCrcs);
 
 	private:
+		[[nodiscard]] FileHeader currentHeaderSnapshot() const;
+		[[nodiscard]] static bool sameHeader(const FileHeader &lhs, const FileHeader &rhs);
+
 		std::shared_ptr<std::fstream> file_;
 
 		FileHeader &fileHeader_;
+		mutable FileHeader lastFlushedHeader_{};
 
 		int64_t maxNodeId = 0;
 		int64_t maxEdgeId = 0;

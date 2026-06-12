@@ -124,6 +124,47 @@ TEST_F(BaseEntityManagerTest, AddNodeEntity) {
 	EXPECT_TRUE(retrievedNode.isActive());
 }
 
+TEST_F(BaseEntityManagerTest, UpdateBatchSelectedPreservesAddedStateAndSkipsInvalidIndices) {
+	std::vector<graph::Node> nodes;
+	nodes.push_back(createTestNode(dataManager, "BatchSelectedAdded"));
+	nodes.push_back(createTestNode(dataManager, "BatchSelectedAdded"));
+	nodeManager->addBatch(nodes);
+
+	nodes[0].setProperties({{"name", graph::PropertyValue(std::string("updated"))}});
+	nodeManager->updateBatch(nodes, {0, 99});
+
+	auto dirty = dataManager->getDirtyInfo<graph::Node>(nodes[0].getId());
+	ASSERT_TRUE(dirty.has_value());
+	EXPECT_EQ(dirty->changeType, graph::storage::EntityChangeType::CHANGE_ADDED);
+	ASSERT_TRUE(dirty->backup.has_value());
+	EXPECT_EQ(dirty->backup->getProperties().at("name"), graph::PropertyValue(std::string("updated")));
+}
+
+TEST_F(BaseEntityManagerTest, UpdateBatchSelectedMarksPersistedEntitiesModified) {
+	std::vector<graph::Node> nodes;
+	nodes.push_back(createTestNode(dataManager, "BatchSelectedModified"));
+	nodeManager->addBatch(nodes);
+	fileStorage->flush();
+
+	nodes[0].setProperties({{"name", graph::PropertyValue(std::string("modified"))}});
+	nodeManager->updateBatch(nodes, {0});
+
+	auto dirty = dataManager->getDirtyInfo<graph::Node>(nodes[0].getId());
+	ASSERT_TRUE(dirty.has_value());
+	EXPECT_EQ(dirty->changeType, graph::storage::EntityChangeType::CHANGE_MODIFIED);
+	ASSERT_TRUE(dirty->backup.has_value());
+	EXPECT_EQ(dirty->backup->getProperties().at("name"), graph::PropertyValue(std::string("modified")));
+}
+
+TEST_F(BaseEntityManagerTest, UpdateBatchSelectedRejectsInactiveEntities) {
+	std::vector<graph::Node> nodes;
+	nodes.push_back(createTestNode(dataManager, "BatchSelectedInactive"));
+	nodeManager->addBatch(nodes);
+	nodes[0].markInactive();
+
+	EXPECT_THROW(nodeManager->updateBatch(nodes, {0}), std::runtime_error);
+}
+
 // Tests for update method
 TEST_F(BaseEntityManagerTest, UpdateNodeEntity) {
 	graph::Node node = createTestNode(dataManager, "OriginalLabel");

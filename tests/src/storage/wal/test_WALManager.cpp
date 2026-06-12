@@ -71,8 +71,8 @@ TEST_F(WALManagerTest, OpenCreatesWALFile) {
 
 	mgr.close();
 	EXPECT_FALSE(mgr.isOpen());
-	// close() removes the WAL file
-	EXPECT_FALSE(fs::exists(walPath));
+	// close() keeps the WAL by default; callers remove it only after a safe checkpoint.
+	EXPECT_TRUE(fs::exists(walPath));
 }
 
 TEST_F(WALManagerTest, DoubleOpenIsNoop) {
@@ -187,8 +187,8 @@ TEST_F(WALManagerTest, NeedsRecoveryWithRecords) {
 	EXPECT_TRUE(mgr.needsRecovery());
 
 	mgr.close();
-	// After close, WAL file is removed
-	EXPECT_FALSE(fs::exists(walPath));
+	// close() keeps records so recovery can run if no checkpoint completed.
+	EXPECT_TRUE(fs::exists(walPath));
 }
 
 TEST_F(WALManagerTest, CheckpointTruncatesWAL) {
@@ -316,12 +316,12 @@ TEST_F(WALManagerTest, ReopenAfterClose) {
 		mgr.close();
 	}
 
-	// close() removes WAL; reopen creates a fresh one
-	EXPECT_FALSE(fs::exists(walPath));
+	// close() keeps WAL records; reopen sees the existing log.
+	EXPECT_TRUE(fs::exists(walPath));
 	WALManager mgr2;
 	mgr2.open(testDbPath.string());
 	EXPECT_TRUE(mgr2.isOpen());
-	EXPECT_FALSE(mgr2.needsRecovery());
+	EXPECT_TRUE(mgr2.needsRecovery());
 	mgr2.writeBegin(2);
 	mgr2.writeCommit(2);
 	mgr2.close();
@@ -852,7 +852,7 @@ TEST_F(WALManagerTest, OpenAndFullLifecycle) {
 	mgr.checkpoint();
 	EXPECT_FALSE(mgr.needsRecovery());
 	mgr.close();
-	EXPECT_FALSE(fs::exists(walPath));
+	EXPECT_TRUE(fs::exists(walPath));
 }
 
 // Test destructor closes WAL properly when records are present
@@ -864,13 +864,13 @@ TEST_F(WALManagerTest, DestructorWithPendingRecords) {
 		mgr.writeCommit(1);
 		// Don't close explicitly; destructor should handle it
 	}
-	// Destructor calls close() which removes the WAL file
-	EXPECT_FALSE(fs::exists(walPath));
+	// Destructor keeps the WAL when no checkpoint has completed.
+	EXPECT_TRUE(fs::exists(walPath));
 
-	// Reopening creates a fresh WAL with no recovery needed
+	// Reopening sees the preserved WAL so recovery remains possible.
 	WALManager mgr2;
 	mgr2.open(testDbPath.string());
-	EXPECT_FALSE(mgr2.needsRecovery());
+	EXPECT_TRUE(mgr2.needsRecovery());
 	mgr2.close();
 }
 
@@ -1212,8 +1212,8 @@ TEST_F(WALManagerTest, NeedsRecoveryClosedManagerReturnsFalse) {
 
 	// After close, isOpen_ = false => needsRecovery returns false
 	EXPECT_FALSE(mgr.needsRecovery());
-	// WAL file is also removed
-	EXPECT_FALSE(fs::exists(walPath));
+	// WAL file is kept for recovery unless explicitly removed after checkpoint.
+	EXPECT_TRUE(fs::exists(walPath));
 }
 
 // Cover line 159: checkpoint truncate reopen path
@@ -1504,7 +1504,7 @@ TEST_F(WALManagerTest, CloseRemovesWALFile_FreshWAL) {
 	mgr.open(testDbPath.string());
 	EXPECT_TRUE(fs::exists(walPath));
 
-	mgr.close();
+	mgr.close(WALManager::CloseMode::WCM_REMOVE_FILE);
 	EXPECT_FALSE(fs::exists(walPath));
 }
 
@@ -1521,7 +1521,7 @@ TEST_F(WALManagerTest, CloseRemovesWALFile_WithCommittedRecords) {
 	EXPECT_TRUE(fs::exists(walPath));
 	EXPECT_TRUE(mgr.needsRecovery());
 
-	mgr.close();
+	mgr.close(WALManager::CloseMode::WCM_REMOVE_FILE);
 	EXPECT_FALSE(fs::exists(walPath));
 }
 
@@ -1538,8 +1538,8 @@ TEST_F(WALManagerTest, CloseRemovesWALFile_AfterCheckpoint) {
 	EXPECT_TRUE(fs::exists(walPath));
 	EXPECT_FALSE(mgr.needsRecovery());
 
-	mgr.close();
-	// close() still removes the WAL file
+	mgr.close(WALManager::CloseMode::WCM_REMOVE_FILE);
+	// Explicit remove is used only after a safe checkpoint.
 	EXPECT_FALSE(fs::exists(walPath));
 }
 
@@ -1548,7 +1548,7 @@ TEST_F(WALManagerTest, CloseRemovesWALFile_ReopenCreatesNew) {
 	mgr.open(testDbPath.string());
 	mgr.writeBegin(1);
 	mgr.writeCommit(1);
-	mgr.close();
+	mgr.close(WALManager::CloseMode::WCM_REMOVE_FILE);
 
 	EXPECT_FALSE(fs::exists(walPath));
 
@@ -1559,7 +1559,7 @@ TEST_F(WALManagerTest, CloseRemovesWALFile_ReopenCreatesNew) {
 	mgr.close();
 }
 
-TEST_F(WALManagerTest, DestructorRemovesWALFile) {
+TEST_F(WALManagerTest, DestructorKeepsWALFileForRecovery) {
 	{
 		WALManager mgr;
 		mgr.open(testDbPath.string());
@@ -1568,5 +1568,5 @@ TEST_F(WALManagerTest, DestructorRemovesWALFile) {
 		mgr.sync();
 		// destructor calls close()
 	}
-	EXPECT_FALSE(fs::exists(walPath));
+	EXPECT_TRUE(fs::exists(walPath));
 }

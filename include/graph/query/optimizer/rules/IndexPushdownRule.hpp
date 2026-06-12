@@ -50,7 +50,10 @@ namespace graph::query::optimizer::rules {
 
 			std::string firstLabel = labels.empty() ? "" : labels[0];
 
-			bool hasPropIndex = !key.empty() && indexManager_->hasPropertyIndex("node", key);
+			bool hasPropIndex = !key.empty() &&
+								((labels.size() == 1 &&
+								  indexManager_->hasNodePropertyIndexForLabel(firstLabel, key)) ||
+								 indexManager_->hasPropertyIndex("node", key));
 			bool hasLabelIndex = !firstLabel.empty() && indexManager_->hasLabelIndex("node");
 
 			// Priority 1: Composite index (most selective when matching 2+ fields)
@@ -72,7 +75,8 @@ namespace graph::query::optimizer::rules {
 
 			// Priority 3: Range scan with index
 			for (const auto &rp : rangePredicates) {
-				if (indexManager_->hasPropertyIndex("node", rp.key)) {
+				if ((labels.size() == 1 && indexManager_->hasNodePropertyIndexForLabel(firstLabel, rp.key)) ||
+					indexManager_->hasPropertyIndex("node", rp.key)) {
 					config.type = execution::ScanType::RANGE_SCAN;
 					config.indexKey = rp.key;
 					config.rangeMin = rp.minValue;
