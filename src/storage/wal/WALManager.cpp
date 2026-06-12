@@ -18,6 +18,7 @@
  **/
 
 #include "graph/storage/wal/WALManager.hpp"
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstring>
@@ -63,27 +64,34 @@ namespace graph::storage::wal {
 		}
 
 		if (!exists) {
-			writeHeader();
+			// Keep the file header durable as its own boundary. This avoids
+			// making the first transaction commit pay for both WAL file creation
+			// metadata and the transaction payload, which is especially visible
+			// for large bulk imports.
+			writeHeader(true);
 			currentWriteOffset_ = sizeof(WALFileHeader);
+			lastSyncedOffset_ = currentWriteOffset_;
 		} else {
 			// Determine current file size for write offset
 			// Read to find end of file
 			// Use lseek or stat to get file size
 			auto fileSize = std::filesystem::file_size(walPath_);
 			currentWriteOffset_ = fileSize;
+			lastSyncedOffset_ = currentWriteOffset_;
 		}
 
 		writeBuffer_.reserve(walBufferSize_);
-		lastSyncedOffset_ = currentWriteOffset_;
 		isOpen_ = true;
 	}
 
-	void WALManager::close(CloseMode mode) {
+	void WALManager::close(CloseMode mode, CloseSyncMode syncMode) {
 		if (isOpen_) {
 			{
 				std::lock_guard lock(commitMutex_);
-				if (!writeBuffer_.empty()) {
+				if (syncMode == CloseSyncMode::WSM_SYNC) {
 					flushAndSync();
+				} else if (!writeBuffer_.empty()) {
+					flushBuffer();
 				}
 			}
 			if (walFd_ != INVALID_FILE_HANDLE) {
@@ -103,14 +111,17 @@ namespace graph::storage::wal {
 		}
 	}
 
-	void WALManager::writeHeader() {
+	void WALManager::writeHeader(bool syncHeader) {
 		WALFileHeader header;
 		auto buf = serializeFileHeader(header);
 		ssize_t n = portable_pwrite(walFd_, buf.data(), buf.size(), 0);
 		if (n < static_cast<ssize_t>(buf.size())) {
 			throw std::runtime_error("Failed to write WAL header");
 		}
-		portable_fsync(walFd_);
+		if (syncHeader) {
+			portable_fsync(walFd_);
+			lastSyncedOffset_ = (std::max)(lastSyncedOffset_, static_cast<uint64_t>(sizeof(WALFileHeader)));
+		}
 	}
 
 	bool WALManager::validateHeader() {
@@ -374,7 +385,7 @@ namespace graph::storage::wal {
 			throw std::runtime_error("Cannot reopen WAL file: " + walPath_);
 		}
 
-		writeHeader();
+		writeHeader(true);
 		currentWriteOffset_ = sizeof(WALFileHeader);
 		lastSyncedOffset_ = currentWriteOffset_;
 		writeBuffer_.clear();

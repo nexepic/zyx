@@ -21,9 +21,11 @@
 #include "graph/storage/DeletionManager.hpp"
 #include <chrono>
 #include <iostream>
+#include <unordered_set>
 #include <utility>
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/data/DataManager.hpp"
+#include "graph/traversal/RelationshipTraversal.hpp"
 
 namespace graph::storage {
 
@@ -148,7 +150,13 @@ namespace graph::storage {
 
 	void DeletionManager::deleteNodeConnectedEdges(int64_t nodeId) const {
 		auto edges = dataManager_->findEdgesByNode(nodeId, "both");
+		std::unordered_set<int64_t> deletedEdgeIds;
+		deletedEdgeIds.reserve(edges.size());
 		for (auto &edge: edges) {
+			if (edge.getId() == 0 || !deletedEdgeIds.insert(edge.getId()).second) {
+				continue;
+			}
+			dataManager_->getRelationshipTraversal()->unlinkEdge(edge);
 			markEdgeInactive(edge);
 		}
 	}

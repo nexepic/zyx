@@ -25,6 +25,7 @@
 #include <filesystem>
 #include "graph/core/Database.hpp"
 #include "graph/core/Transaction.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/data/DataManager.hpp"
 
 namespace fs = std::filesystem;
@@ -37,7 +38,11 @@ protected:
 		fs::remove_all(testDbPath);
 	}
 
-	void TearDown() override { std::error_code ec; fs::remove_all(testDbPath, ec); }
+	void TearDown() override {
+		std::error_code ec;
+		fs::remove_all(testDbPath, ec);
+		fs::remove(testDbPath.string() + "-wal", ec);
+	}
 
 	fs::path testDbPath;
 };
@@ -64,6 +69,24 @@ TEST_F(TransactionTest, CommitChangesState) {
 	EXPECT_NO_THROW(txn.commit());
 	EXPECT_FALSE(txn.isActive());
 	EXPECT_EQ(txn.getState(), graph::Transaction::TxnState::TXN_COMMITTED);
+}
+
+TEST_F(TransactionTest, EmptyWriteCommitSkipsWalCommitSync) {
+	graph::Database db(testDbPath.string());
+	db.open();
+	db.flush();
+
+	graph::debug::PerfTrace::setEnabled(true);
+	graph::debug::PerfTrace::reset();
+	{
+		auto txn = db.beginTransaction();
+		txn.commit();
+	}
+	const auto snapshot = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setEnabled(false);
+
+	EXPECT_FALSE(snapshot.contains("wal.commit_sync"));
+	db.close();
 }
 
 TEST_F(TransactionTest, RollbackChangesState) {
@@ -207,6 +230,63 @@ TEST_F(TransactionTest, TransactionContextIgnoresEmptyBulkRecords) {
 
 	EXPECT_TRUE(ctx.getOps().empty());
 	EXPECT_EQ(ctx.undoLog().size(), 0u);
+}
+
+TEST_F(TransactionTest, TransactionContextCoalescesUpdatesToAddedEntities) {
+	graph::storage::TransactionContext ctx;
+	ctx.setActive(42);
+
+	graph::Node original(1, 7);
+	graph::Node updated(1, 7);
+	updated.setFirstOutEdgeId(99);
+
+	ctx.recordAdd(original);
+	ASSERT_EQ(ctx.getOps().size(), 1UL);
+	ASSERT_EQ(ctx.undoLog().size(), 1UL);
+	ASSERT_EQ(ctx.pendingWalChanges().size(), 0UL);
+	ASSERT_EQ(ctx.pendingWalAddsByType()[graph::Node::typeId].size(), 1UL);
+	EXPECT_EQ(ctx.pendingWalAddsByType()[graph::Node::typeId][0], original.getId());
+
+	ctx.recordUpdate(updated, original);
+	EXPECT_EQ(ctx.getOps().size(), 1UL);
+	EXPECT_EQ(ctx.undoLog().size(), 1UL);
+	ASSERT_EQ(ctx.pendingWalChanges().size(), 0UL);
+	ASSERT_EQ(ctx.pendingWalAddsByType()[graph::Node::typeId].size(), 1UL);
+
+	graph::Node existingBefore(2, 7);
+	graph::Node existingAfter(2, 7);
+	existingAfter.setFirstInEdgeId(100);
+	ctx.recordUpdates<graph::Node>({updated, existingAfter}, {original, existingBefore});
+
+	EXPECT_EQ(ctx.getOps().size(), 2UL);
+	EXPECT_EQ(ctx.undoLog().size(), 2UL);
+	ASSERT_EQ(ctx.pendingWalAddsByType()[graph::Node::typeId].size(), 1UL);
+	ASSERT_EQ(ctx.pendingWalChanges().size(), 1UL);
+
+	size_t modifiedChanges = 0;
+	for (const auto &[key, change]: ctx.pendingWalChanges()) {
+		(void) key;
+		if (change.changeType == graph::storage::EntityChangeType::CHANGE_MODIFIED) {
+			++modifiedChanges;
+		}
+	}
+	EXPECT_EQ(modifiedChanges, 1UL);
+}
+
+TEST_F(TransactionTest, TransactionContextTracksCanceledPendingWalAdd) {
+	graph::storage::TransactionContext ctx;
+	ctx.setActive(42);
+
+	graph::Node node(1, 7);
+	ctx.recordAdd(node);
+	EXPECT_FALSE(ctx.hasCanceledPendingWalAdds(graph::Node::typeId));
+	EXPECT_TRUE(ctx.wasEntityAddedInActiveTransaction(graph::Node::typeId, node.getId()));
+
+	ctx.recordDelete<graph::Node>(node.getId(), [&](int64_t) { return node; });
+	EXPECT_TRUE(ctx.hasCanceledPendingWalAdds(graph::Node::typeId));
+	EXPECT_FALSE(ctx.wasEntityAddedInActiveTransaction(graph::Node::typeId, node.getId()));
+	EXPECT_EQ(ctx.pendingWalAddsByType()[graph::Node::typeId].size(), 1UL);
+	EXPECT_TRUE(ctx.pendingWalChanges().empty());
 }
 
 TEST_F(TransactionTest, HasActiveTransaction) {

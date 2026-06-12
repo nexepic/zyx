@@ -40,11 +40,17 @@ namespace graph::storage {
 
 		void notifyNodeAdded(const Node &node) const;
 		void notifyNodesAdded(const std::vector<Node> &nodes) const;
+		void notifyNodesAddedColumnar(
+				const std::vector<Node> &nodes,
+				const std::vector<BulkPropertyColumn> &columns) const;
 		void notifyNodeUpdated(const Node &oldNode, const Node &newNode) const;
 		void notifyNodeDeleted(const Node &node) const;
 
 		void notifyEdgeAdded(const Edge &edge) const;
 		void notifyEdgesAdded(const std::vector<Edge> &edges) const;
+		void notifyEdgesAddedColumnar(
+				const std::vector<Edge> &edges,
+				const std::vector<BulkPropertyColumn> &columns) const;
 		void notifyEdgeUpdated(const Edge &oldEdge, const Edge &newEdge) const;
 		void notifyEdgeDeleted(const Edge &edge) const;
 

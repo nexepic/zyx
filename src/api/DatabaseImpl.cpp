@@ -26,6 +26,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string_view>
+#include <unordered_set>
 #include "graph/core/Database.hpp"
 #include "graph/core/Transaction.hpp"
 #include "graph/debug/PerfTrace.hpp"
@@ -320,6 +321,132 @@ namespace zyx {
 					}
 				},
 				v);
+	}
+
+	void validatePropertyColumns(const std::vector<PropertyColumn> &columns, size_t rowCount, std::string_view context) {
+		std::unordered_set<std::string> seenNames;
+		seenNames.reserve(columns.size());
+
+		for (const auto &column: columns) {
+			if (column.name.empty()) {
+				throw std::invalid_argument(std::string(context) + " requires non-empty property column names");
+			}
+			if (column.values.size() != rowCount) {
+				throw std::invalid_argument(std::string(context) + " property column '" + column.name +
+											"' has " + std::to_string(column.values.size()) +
+											" values for " + std::to_string(rowCount) + " rows");
+			}
+			auto [_, inserted] = seenNames.insert(column.name);
+			if (!inserted) {
+				throw std::invalid_argument(std::string(context) + " duplicate property column: " + column.name);
+			}
+		}
+	}
+
+	std::vector<graph::storage::BulkPropertyColumn>
+	toInternalPropertyColumns(const std::vector<PropertyColumn> &columns) {
+		std::vector<graph::storage::BulkPropertyColumn> internalColumns;
+		internalColumns.reserve(columns.size());
+		for (const auto &column: columns) {
+			graph::storage::BulkPropertyColumn internalColumn;
+			internalColumn.key = column.name;
+			internalColumn.values.reserve(column.values.size());
+			for (const auto &value: column.values) {
+				internalColumn.values.push_back(toInternal(value));
+			}
+			internalColumns.push_back(std::move(internalColumn));
+		}
+		return internalColumns;
+	}
+
+	bool buildHomogeneousPropertyColumns(
+			const std::vector<std::unordered_map<std::string, Value>> &rows,
+			std::vector<graph::storage::BulkPropertyColumn> &columns) {
+		columns.clear();
+		if (rows.empty()) {
+			return true;
+		}
+
+		std::vector<std::string> keys;
+		keys.reserve(rows.front().size());
+		for (const auto &entry: rows.front()) {
+			const auto &key = entry.first;
+			if (key.empty()) {
+				return false;
+			}
+			keys.push_back(key);
+		}
+		std::sort(keys.begin(), keys.end());
+
+		columns.reserve(keys.size());
+		for (const auto &key: keys) {
+			graph::storage::BulkPropertyColumn column;
+			column.key = key;
+			column.values.reserve(rows.size());
+			columns.push_back(std::move(column));
+		}
+
+		for (const auto &row: rows) {
+			if (row.size() != keys.size()) {
+				columns.clear();
+				return false;
+			}
+			for (size_t index = 0; index < keys.size(); ++index) {
+				auto valueIt = row.find(keys[index]);
+				if (valueIt == row.end()) {
+					columns.clear();
+					return false;
+				}
+				columns[index].values.push_back(toInternal(valueIt->second));
+			}
+		}
+		return true;
+	}
+
+	bool buildHomogeneousEdgePropertyColumns(
+			const std::vector<std::tuple<int64_t, int64_t, std::unordered_map<std::string, Value>>> &rows,
+			std::vector<graph::storage::BulkPropertyColumn> &columns) {
+		columns.clear();
+		if (rows.empty()) {
+			return true;
+		}
+
+		const auto &firstProps = std::get<2>(rows.front());
+		std::vector<std::string> keys;
+		keys.reserve(firstProps.size());
+		for (const auto &entry: firstProps) {
+			const auto &key = entry.first;
+			if (key.empty()) {
+				return false;
+			}
+			keys.push_back(key);
+		}
+		std::sort(keys.begin(), keys.end());
+
+		columns.reserve(keys.size());
+		for (const auto &key: keys) {
+			graph::storage::BulkPropertyColumn column;
+			column.key = key;
+			column.values.reserve(rows.size());
+			columns.push_back(std::move(column));
+		}
+
+		for (const auto &row: rows) {
+			const auto &props = std::get<2>(row);
+			if (props.size() != keys.size()) {
+				columns.clear();
+				return false;
+			}
+			for (size_t index = 0; index < keys.size(); ++index) {
+				auto valueIt = props.find(keys[index]);
+				if (valueIt == props.end()) {
+					columns.clear();
+					return false;
+				}
+				columns[index].values.push_back(toInternal(valueIt->second));
+			}
+		}
+		return true;
 	}
 
 	// Convert public Value params to internal PropertyValue params
@@ -639,6 +766,18 @@ namespace zyx {
 		return txn;
 	}
 
+	Transaction Database::beginBulkTransaction() {
+		if (!impl_->db_.isOpen()) {
+			impl_->db_.open();
+		}
+
+		auto internalTxn = impl_->db_.beginBulkTransaction();
+
+		Transaction txn;
+		txn.impl_ = std::make_unique<TransactionImpl>(std::move(internalTxn), impl_.get());
+		return txn;
+	}
+
 	Transaction Database::beginReadOnlyTransaction() {
 		if (!impl_->db_.isOpen()) {
 			impl_->db_.open();
@@ -852,6 +991,7 @@ namespace zyx {
 
 		if (!props.empty()) {
 			std::unordered_map<std::string, graph::PropertyValue> internalProps;
+			internalProps.reserve(props.size());
 			for (const auto &[k, v]: props)
 				internalProps[k] = toInternal(v);
 			dm->addNodeProperties(newId, internalProps);
@@ -880,6 +1020,15 @@ namespace zyx {
 
 		int64_t labelId = dm->getOrCreateTokenId(label);
 
+		std::vector<graph::storage::BulkPropertyColumn> columnarProperties;
+		if (buildHomogeneousPropertyColumns(propsList, columnarProperties)) {
+			auto ids = dm->addNodesColumnar(labelId, propsList.size(), columnarProperties);
+			if (implicitTxn) {
+				implicitTxn->commit();
+			}
+			return ids;
+		}
+
 		std::vector<graph::Node> nodes;
 		nodes.reserve(propsList.size());
 
@@ -900,6 +1049,33 @@ namespace zyx {
 		for (const auto &n: nodes) {
 			ids.push_back(n.getId());
 		}
+
+		if (implicitTxn) {
+			implicitTxn->commit();
+		}
+		return ids;
+	}
+
+	std::vector<int64_t>
+	Database::createNodesColumnar(const std::string &label,
+								  size_t count,
+								  const std::vector<PropertyColumn> &columns) const {
+		validatePropertyColumns(columns, count, "createNodesColumnar");
+		if (count == 0) {
+			return {};
+		}
+
+		impl_->ensureOpen();
+		std::optional<graph::Transaction> implicitTxn;
+		if (impl_->needsImplicitTransaction()) {
+			implicitTxn.emplace(impl_->db_.beginTransaction());
+		}
+
+		auto storage = impl_->db_.getStorage();
+		auto dm = storage->getDataManager();
+
+		const int64_t labelId = dm->getOrCreateTokenId(label);
+		auto ids = dm->addNodesColumnar(labelId, count, toInternalPropertyColumns(columns));
 
 		if (implicitTxn) {
 			implicitTxn->commit();
@@ -951,6 +1127,24 @@ namespace zyx {
 		auto dm = impl_->db_.getStorage()->getDataManager();
 		int64_t typeId = dm->getOrCreateTokenId(edgeType);
 
+		std::vector<graph::storage::BulkPropertyColumn> columnarProperties;
+		if (buildHomogeneousEdgePropertyColumns(edgesList, columnarProperties)) {
+			std::vector<int64_t> sourceIds;
+			std::vector<int64_t> targetIds;
+			sourceIds.reserve(edgesList.size());
+			targetIds.reserve(edgesList.size());
+			for (const auto &edgeRow: edgesList) {
+				sourceIds.push_back(std::get<0>(edgeRow));
+				targetIds.push_back(std::get<1>(edgeRow));
+			}
+
+			auto ids = dm->addEdgesColumnar(typeId, sourceIds, targetIds, columnarProperties);
+			if (implicitTxn) {
+				implicitTxn->commit();
+			}
+			return ids;
+		}
+
 		std::vector<graph::Edge> edges;
 		edges.reserve(edgesList.size());
 
@@ -973,6 +1167,37 @@ namespace zyx {
 		for (const auto &e: edges) {
 			ids.push_back(e.getId());
 		}
+
+		if (implicitTxn) {
+			implicitTxn->commit();
+		}
+		return ids;
+	}
+
+	std::vector<int64_t> Database::createEdgesColumnar(
+			const std::string &edgeType,
+			const std::vector<int64_t> &sourceIds,
+			const std::vector<int64_t> &targetIds,
+			const std::vector<PropertyColumn> &columns) const {
+		if (sourceIds.size() != targetIds.size()) {
+			throw std::invalid_argument("createEdgesColumnar requires matching source and target counts");
+		}
+
+		const size_t count = sourceIds.size();
+		validatePropertyColumns(columns, count, "createEdgesColumnar");
+		if (count == 0) {
+			return {};
+		}
+
+		impl_->ensureOpen();
+		std::optional<graph::Transaction> implicitTxn;
+		if (impl_->needsImplicitTransaction()) {
+			implicitTxn.emplace(impl_->db_.beginTransaction());
+		}
+
+		auto dm = impl_->db_.getStorage()->getDataManager();
+		const int64_t typeId = dm->getOrCreateTokenId(edgeType);
+		auto ids = dm->addEdgesColumnar(typeId, sourceIds, targetIds, toInternalPropertyColumns(columns));
 
 		if (implicitTxn) {
 			implicitTxn->commit();
@@ -1006,7 +1231,12 @@ namespace zyx {
 		if (!queryEngine) {
 			throw std::runtime_error("Query engine is not available");
 		}
-		auto schemaTxn = impl_->db_.beginTransaction();
+		if (auto storage = impl_->db_.getStorage()) {
+			if (auto dm = storage->getDataManager(); dm && dm->hasUnsavedChanges()) {
+				impl_->db_.flush();
+			}
+		}
+		auto schemaTxn = impl_->db_.beginBulkTransaction();
 		auto results = queryEngine->getIndexManager()->createIndexes(requests);
 		const bool success = std::all_of(results.begin(), results.end(),
 										 [](const auto &result) { return result.success; });

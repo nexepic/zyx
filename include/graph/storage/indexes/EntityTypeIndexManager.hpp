@@ -24,6 +24,7 @@
 #include <string>
 #include "LabelIndex.hpp"
 #include "PropertyIndex.hpp"
+#include "graph/storage/data/ColumnarBulkInput.hpp"
 
 
 namespace graph::storage {
@@ -62,6 +63,11 @@ namespace graph::query::indexes {
 
 		template<typename T>
 		void onEntitiesAdded(const std::vector<T> &entities) const;
+
+		template<typename T>
+		void onEntitiesAddedColumnar(
+				const std::vector<T> &entities,
+				const std::vector<storage::BulkPropertyColumn> &columns) const;
 
 		template<typename T>
 		void onEntityUpdated(const T &oldEntity, const T &newEntity) const;

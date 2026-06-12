@@ -26,6 +26,30 @@ namespace graph::query::execution {
 		return edge.getTargetNodeId();
 	}
 
+	int64_t RelationshipAdjacencyCursor::targetForSource(
+			const traversal::RelationshipEdgeRef &edgeRef,
+			int64_t sourceId,
+			const std::string &direction) const {
+		if (direction == "in") {
+			return edgeRef.sourceNodeId;
+		}
+		if (direction == "both") {
+			return edgeRef.sourceNodeId == sourceId ? edgeRef.targetNodeId : edgeRef.sourceNodeId;
+		}
+		return edgeRef.targetNodeId;
+	}
+
+	traversal::RelationshipTraversalOptions RelationshipAdjacencyCursor::traversalOptions(
+			const RelationshipExpandConfig &config,
+			const RelationshipExpandRequirements &requirements) const {
+		traversal::RelationshipTraversalOptions options;
+		options.direction = traversal::RelationshipTraversal::directionFromString(config.direction);
+		options.integrity = traversal::RelationshipTraversalIntegrity::RTI_BOUND_BY_EDGE_COUNT;
+		options.activeOnly = requirements.needsEdgeActiveCheck;
+		options.typeId = config.edgeTypeId;
+		return options;
+	}
+
 	bool RelationshipAdjacencyCursor::acceptsTarget(int64_t targetId,
 	                                                const RelationshipExpandConfig &config,
 	                                                const RelationshipExpandRequirements &requirements) const {
@@ -65,6 +89,25 @@ namespace graph::query::execution {
 		return targetId;
 	}
 
+	std::optional<int64_t> RelationshipAdjacencyCursor::acceptedTargetForEdgeRef(
+			const traversal::RelationshipEdgeRef &edgeRef,
+			int64_t sourceId,
+			const RelationshipExpandConfig &config,
+			const RelationshipExpandRequirements &requirements) const {
+		if (requirements.needsEdgeActiveCheck && !edgeRef.active) {
+			return std::nullopt;
+		}
+		if (config.edgeTypeId != 0 && edgeRef.typeId != config.edgeTypeId) {
+			return std::nullopt;
+		}
+
+		const int64_t targetId = targetForSource(edgeRef, sourceId, config.direction);
+		if (!acceptsTarget(targetId, config, requirements)) {
+			return std::nullopt;
+		}
+		return targetId;
+	}
+
 	RelationshipExpandBatch RelationshipAdjacencyCursor::expand(const std::vector<int64_t> &sourceIds,
 	                                                          const RelationshipExpandConfig &config,
 	                                                          const RelationshipExpandRequirements &requirements) const {
@@ -88,17 +131,23 @@ namespace graph::query::execution {
 		if (!dm_ || config.edgeTypeId < 0) {
 			return total;
 		}
+		auto traversal = dm_->getRelationshipTraversal();
+		if (!traversal) {
+			return total;
+		}
+		const auto options = traversalOptions(config, requirements);
 
 		for (const int64_t sourceId : sourceIds) {
-			dm_->visitEdgesByNode(
-					sourceId,
-					[&](const Edge &edge) {
-						if (acceptedTargetForEdge(edge, sourceId, config, requirements).has_value()) {
-							++total;
-						}
-						return true;
-					},
-					config.direction);
+			if (!requirements.needsTargetActiveCheck && !requirements.needsTargetLabels) {
+				total += static_cast<int64_t>(traversal->countAdjacentEdgeRefs(sourceId, options));
+				continue;
+			}
+			(void) traversal->visitAdjacentEdgeRefs(sourceId, options, [&](const traversal::RelationshipEdgeRef &edgeRef) {
+				if (acceptedTargetForEdgeRef(edgeRef, sourceId, config, requirements).has_value()) {
+					++total;
+				}
+				return true;
+			});
 		}
 		return total;
 	}
@@ -113,23 +162,28 @@ namespace graph::query::execution {
 
 		size_t emitted = 0;
 		bool keepGoing = true;
+		auto traversal = dm_->getRelationshipTraversal();
+		if (!traversal) {
+			return emitted;
+		}
+		const auto options = traversalOptions(config, requirements);
 		for (const int64_t sourceId : sourceIds) {
 			if (!keepGoing) {
 				break;
 			}
-			dm_->visitEdgesByNode(
+			(void) traversal->visitAdjacentEdgeRefs(
 					sourceId,
-					[&](const Edge &edge) {
-						const auto targetId = acceptedTargetForEdge(edge, sourceId, config, requirements);
+					options,
+					[&](const traversal::RelationshipEdgeRef &edgeRef) {
+						const auto targetId = acceptedTargetForEdgeRef(edgeRef, sourceId, config, requirements);
 						if (!targetId.has_value()) {
 							return true;
 						}
 
 						++emitted;
-						keepGoing = visitor(RelationshipExpandRow{sourceId, edge.getId(), *targetId});
+						keepGoing = visitor(RelationshipExpandRow{sourceId, edgeRef.edgeId, *targetId});
 						return keepGoing;
-					},
-					config.direction);
+					});
 		}
 		return emitted;
 	}

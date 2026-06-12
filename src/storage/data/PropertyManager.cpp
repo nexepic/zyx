@@ -19,7 +19,10 @@
  **/
 
 #include "graph/storage/data/PropertyManager.hpp"
+#include <algorithm>
+#include <stdexcept>
 #include <sstream>
+#include <type_traits>
 #include "graph/core/Blob.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/EntityPropertyTraits.hpp"
@@ -34,6 +37,96 @@
 #include "graph/utils/Serializer.hpp"
 
 namespace graph::storage {
+namespace {
+
+	template<typename T>
+	void appendPod(std::vector<char> &buffer, const T &value) {
+		static_assert(std::is_trivial_v<T>, "appendPod expects a trivial value");
+		const auto *bytes = reinterpret_cast<const char *>(&value);
+		buffer.insert(buffer.end(), bytes, bytes + sizeof(T));
+	}
+
+	void appendString(std::vector<char> &buffer, const std::string &value) {
+		appendPod(buffer, static_cast<uint32_t>(value.size()));
+		buffer.insert(buffer.end(), value.begin(), value.end());
+	}
+
+	void appendPropertyValue(std::vector<char> &buffer, const PropertyValue &value) {
+		std::visit(
+				[&buffer](const auto &arg) {
+					using ValueType = std::decay_t<decltype(arg)>;
+					if constexpr (std::is_same_v<ValueType, std::monostate>) {
+						appendPod(buffer, PropertyType::NULL_TYPE);
+					} else if constexpr (std::is_same_v<ValueType, bool>) {
+						appendPod(buffer, PropertyType::BOOLEAN);
+						appendPod(buffer, arg);
+					} else if constexpr (std::is_same_v<ValueType, int64_t>) {
+						appendPod(buffer, PropertyType::INTEGER);
+						appendPod(buffer, arg);
+					} else if constexpr (std::is_same_v<ValueType, double>) {
+						appendPod(buffer, PropertyType::DOUBLE);
+						appendPod(buffer, arg);
+					} else if constexpr (std::is_same_v<ValueType, std::string>) {
+						appendPod(buffer, PropertyType::STRING);
+						appendString(buffer, arg);
+					} else if constexpr (std::is_same_v<ValueType, std::vector<PropertyValue>>) {
+						appendPod(buffer, PropertyType::LIST);
+						appendPod(buffer, static_cast<uint32_t>(arg.size()));
+						for (const auto &element: arg) {
+							appendPropertyValue(buffer, element);
+						}
+					} else if constexpr (std::is_same_v<ValueType, PropertyValue::MapType>) {
+						appendPod(buffer, PropertyType::MAP);
+						appendPod(buffer, static_cast<uint32_t>(arg.size()));
+						for (const auto &[key, mapValue]: arg) {
+							appendString(buffer, key);
+							appendPropertyValue(buffer, mapValue);
+						}
+					} else if constexpr (std::is_same_v<ValueType, TemporalDate>) {
+						appendPod(buffer, PropertyType::DATE);
+						appendPod(buffer, arg.epochDays);
+					} else if constexpr (std::is_same_v<ValueType, TemporalDateTime>) {
+						appendPod(buffer, PropertyType::DATETIME);
+						appendPod(buffer, arg.epochMillis);
+					} else if constexpr (std::is_same_v<ValueType, TemporalDuration>) {
+						appendPod(buffer, PropertyType::DURATION);
+						appendPod(buffer, arg.months);
+						appendPod(buffer, arg.days);
+						appendPod(buffer, arg.nanos);
+					}
+				},
+				value.getVariant());
+	}
+
+	std::vector<char> serializeColumnarPropertyPayload(
+			const std::vector<BulkPropertyColumn> &columns,
+			size_t row) {
+		std::vector<char> payload;
+		size_t reserveSize = sizeof(uint32_t);
+		for (const auto &column: columns) {
+			reserveSize += sizeof(uint32_t) + column.key.size() + sizeof(PropertyType) + sizeof(uint64_t);
+		}
+		payload.reserve((std::min)(reserveSize, Property::TOTAL_PROPERTY_SIZE - Property::METADATA_SIZE));
+		appendPod(payload, static_cast<uint32_t>(columns.size()));
+		for (const auto &column: columns) {
+			appendString(payload, column.key);
+			appendPropertyValue(payload, column.values[row]);
+		}
+		return payload;
+	}
+
+	std::unordered_map<std::string, PropertyValue> materializeColumnarPropertyRow(
+			const std::vector<BulkPropertyColumn> &columns,
+			size_t row) {
+		std::unordered_map<std::string, PropertyValue> properties;
+		properties.reserve(columns.size());
+		for (const auto &column: columns) {
+			properties.emplace(column.key, column.values[row]);
+		}
+		return properties;
+	}
+
+} // namespace
 
 	PropertyManager::PropertyManager(DataManager* dataManager,
 									 std::shared_ptr<DeletionManager> deletionManager) :
@@ -55,7 +148,7 @@ namespace graph::storage {
 
 		for (const auto &[key, value]: properties) {
 			size += sizeof(uint32_t) + key.size(); // Key length + key content
-			size += property_utils::getPropertyValueSize(value); // Value size
+			size += utils::getSerializedSize(value); // Value size
 		}
 
 		return size;
@@ -140,14 +233,11 @@ namespace graph::storage {
 				return {};
 			}
 
-			struct PendingPropertyEntity {
-				size_t entityIndex = 0;
-				std::unordered_map<std::string, PropertyValue> properties;
-			};
-
 			constexpr size_t PROPERTY_ENTITY_PAYLOAD_SIZE = Property::TOTAL_PROPERTY_SIZE - Property::METADATA_SIZE;
-			std::vector<PendingPropertyEntity> pendingPropertyEntities;
-			pendingPropertyEntities.reserve(entities.size());
+			std::vector<size_t> propertyEntityOwnerIndices;
+			propertyEntityOwnerIndices.reserve(entities.size());
+			std::vector<Property> propertyEntities;
+			propertyEntities.reserve(entities.size());
 			std::vector<size_t> changedEntityIndices;
 			changedEntityIndices.reserve(entities.size());
 
@@ -173,29 +263,88 @@ namespace graph::storage {
 					continue;
 				}
 
-				pendingPropertyEntities.push_back({index, std::move(properties)});
+				Property property;
+				property.setProperties(std::move(properties));
+				property.setEntityInfo(entity.getId(), EntityType::typeId);
+				propertyEntityOwnerIndices.push_back(index);
+				propertyEntities.push_back(std::move(property));
 			}
 
-			if (!pendingPropertyEntities.empty()) {
+			if (!propertyEntities.empty()) {
 				graph::debug::ScopedPerfTimer entityTimer("property.store_batch.property_entities");
-				std::vector<Property> propertyEntities;
-				propertyEntities.reserve(pendingPropertyEntities.size());
-				for (auto &pending: pendingPropertyEntities) {
-					auto &owner = entities[pending.entityIndex];
-					Property property;
-					property.setProperties(std::move(pending.properties));
-					property.setEntityInfo(owner.getId(), EntityType::typeId);
-					propertyEntities.push_back(std::move(property));
-				}
-
 				getDataManagerPtr()->addPropertyEntities(propertyEntities);
 
-				for (size_t i = 0; i < pendingPropertyEntities.size(); ++i) {
-					auto &owner = entities[pendingPropertyEntities[i].entityIndex];
+				for (size_t i = 0; i < propertyEntityOwnerIndices.size(); ++i) {
+					auto &owner = entities[propertyEntityOwnerIndices[i]];
 					EntityPropertyTraits<EntityType>::setPropertyEntityId(
 							owner, propertyEntities[i].getId(), PropertyStorageType::PROPERTY_ENTITY);
 					EntityPropertyTraits<EntityType>::clearProperties(owner);
-					changedEntityIndices.push_back(pendingPropertyEntities[i].entityIndex);
+					changedEntityIndices.push_back(propertyEntityOwnerIndices[i]);
+				}
+			}
+
+			return changedEntityIndices;
+		}
+	}
+
+	template<typename EntityType>
+	std::vector<size_t> PropertyManager::storePropertiesColumnarBatch(
+			std::vector<EntityType> &entities,
+			const std::vector<BulkPropertyColumn> &columns) {
+		graph::debug::ScopedPerfTimer timer("property.store_columnar_batch.total");
+		if constexpr (!EntityPropertyTraits<EntityType>::supportsProperties ||
+					  !EntityPropertyTraits<EntityType>::supportsExternalProperties) {
+			return {};
+		} else {
+			if (entities.empty() || columns.empty()) {
+				return {};
+			}
+
+			for (const auto &column: columns) {
+				if (column.values.size() != entities.size()) {
+					throw std::invalid_argument("Columnar property batch requires all columns to match entity count");
+				}
+			}
+
+			constexpr size_t PROPERTY_ENTITY_PAYLOAD_SIZE = Property::TOTAL_PROPERTY_SIZE - Property::METADATA_SIZE;
+			std::vector<size_t> propertyEntityOwnerIndices;
+			propertyEntityOwnerIndices.reserve(entities.size());
+			std::vector<Property> propertyEntities;
+			propertyEntities.reserve(entities.size());
+			std::vector<size_t> changedEntityIndices;
+			changedEntityIndices.reserve(entities.size());
+
+			for (size_t row = 0; row < entities.size(); ++row) {
+				auto &entity = entities[row];
+				if (EntityPropertyTraits<EntityType>::hasPropertyEntity(entity)) {
+					cleanupExternalProperties(entity);
+					EntityPropertyTraits<EntityType>::setPropertyEntityId(entity, 0, PropertyStorageType::NONE);
+				}
+
+				auto payload = serializeColumnarPropertyPayload(columns, row);
+				if (payload.size() > PROPERTY_ENTITY_PAYLOAD_SIZE) {
+					graph::debug::ScopedPerfTimer blobTimer("property.store_columnar_batch.blobs");
+					auto properties = materializeColumnarPropertyRow(columns, row);
+					storePropertiesInBlob(entity, properties);
+					changedEntityIndices.push_back(row);
+					continue;
+				}
+
+				Property property(0, entity.getId(), EntityType::typeId);
+				property.setSerializedPropertyPayload(std::move(payload));
+				propertyEntityOwnerIndices.push_back(row);
+				propertyEntities.push_back(std::move(property));
+			}
+
+			if (!propertyEntities.empty()) {
+				graph::debug::ScopedPerfTimer entityTimer("property.store_columnar_batch.property_entities");
+				getDataManagerPtr()->addPropertyEntities(propertyEntities);
+				for (size_t i = 0; i < propertyEntityOwnerIndices.size(); ++i) {
+					auto &owner = entities[propertyEntityOwnerIndices[i]];
+					EntityPropertyTraits<EntityType>::setPropertyEntityId(
+							owner, propertyEntities[i].getId(), PropertyStorageType::PROPERTY_ENTITY);
+					EntityPropertyTraits<EntityType>::clearProperties(owner);
+					changedEntityIndices.push_back(propertyEntityOwnerIndices[i]);
 				}
 			}
 
@@ -583,6 +732,12 @@ namespace graph::storage {
 	// storePropertiesBatch instantiations
 	template std::vector<size_t> PropertyManager::storePropertiesBatch<Node>(std::vector<Node> &entities);
 	template std::vector<size_t> PropertyManager::storePropertiesBatch<Edge>(std::vector<Edge> &entities);
+
+	// storePropertiesColumnarBatch instantiations
+	template std::vector<size_t> PropertyManager::storePropertiesColumnarBatch<Node>(
+			std::vector<Node> &entities, const std::vector<BulkPropertyColumn> &columns);
+	template std::vector<size_t> PropertyManager::storePropertiesColumnarBatch<Edge>(
+			std::vector<Edge> &entities, const std::vector<BulkPropertyColumn> &columns);
 
 	// cleanupExternalProperties instantiations
 	template void PropertyManager::cleanupExternalProperties<Node>(Node &entity);

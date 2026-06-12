@@ -98,6 +98,9 @@ namespace graph {
 			debug::ScopedPerfTimer walTimer("db.flush.wal_checkpoint");
 			walManager_->checkpoint();
 		}
+		if (transactionManager_) {
+			transactionManager_->markStorageCheckpointed();
+		}
 	}
 
 	void Database::close() const {
@@ -110,9 +113,16 @@ namespace graph {
 		// file current before deleting the WAL. If this throws, the WAL stays on
 		// disk for recovery instead of being silently discarded.
 		if (walManager_) {
-			flush();
+			{
+				debug::ScopedPerfTimer storageTimer("db.close.storage_checkpoint");
+				storage->flushOrThrow();
+			}
+			if (transactionManager_) {
+				transactionManager_->markStorageCheckpointed();
+			}
 			debug::ScopedPerfTimer walTimer("db.close.wal");
-			walManager_->close(storage::wal::WALManager::CloseMode::WCM_REMOVE_FILE);
+			walManager_->close(storage::wal::WALManager::CloseMode::WCM_REMOVE_FILE,
+							   storage::wal::WALManager::CloseSyncMode::WSM_FLUSH_ONLY);
 		}
 
 		{
@@ -137,6 +147,17 @@ namespace graph {
 		// TransactionManager::begin() acquires the write lock, writes WAL begin,
 		// and sets DataManager's transaction context (flag + txnId).
 		return transactionManager_->begin();
+	}
+
+	Transaction Database::beginBulkTransaction() {
+		if (!isOpen()) {
+			open();
+		}
+
+		const_cast<Database *>(this)->ensureWALAndTransactionManager();
+		const_cast<Database *>(this)->ensureWALForWrites();
+
+		return transactionManager_->beginBulk();
 	}
 
 	Transaction Database::beginReadOnlyTransaction() {

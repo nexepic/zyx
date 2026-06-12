@@ -40,8 +40,8 @@ namespace graph {
 	}
 
 	Transaction::Transaction(Transaction &&other) noexcept :
-		txnId_(other.txnId_), state_(other.state_), readOnly_(other.readOnly_), manager_(other.manager_),
-		storage_(std::move(other.storage_)),
+		txnId_(other.txnId_), state_(other.state_), readOnly_(other.readOnly_),
+		checkpointPolicy_(other.checkpointPolicy_), manager_(other.manager_), storage_(std::move(other.storage_)),
 		readLock_(std::move(other.readLock_)),
 		writeLock_(std::move(other.writeLock_)),
 		snapshot_(std::move(other.snapshot_)) {
@@ -62,6 +62,7 @@ namespace graph {
 			txnId_ = other.txnId_;
 			state_ = other.state_;
 			readOnly_ = other.readOnly_;
+			checkpointPolicy_ = other.checkpointPolicy_;
 			manager_ = other.manager_;
 			storage_ = std::move(other.storage_);
 			readLock_ = std::move(other.readLock_);

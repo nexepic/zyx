@@ -26,6 +26,7 @@
 #include <fstream>
 #include "graph/core/Database.hpp"
 #include "graph/core/Node.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/wal/WALRecord.hpp"
 
 namespace fs = std::filesystem;
@@ -191,4 +192,86 @@ TEST_F(DatabaseWALRecoveryTest, DeferredCommitIsVisibleAndCleanCloseRemovesWAL) 
 		EXPECT_TRUE(loaded.isActive());
 		reopened.close();
 	}
+}
+
+TEST_F(DatabaseWALRecoveryTest, BulkTransactionDefersLargeCheckpointUntilCleanClose) {
+	const std::string walPath = testDbPath.string() + "-wal";
+	int64_t firstNodeId = 0;
+	int64_t lastNodeId = 0;
+
+	{
+		Database db(testDbPath.string());
+		db.open();
+		auto dm = db.getStorage()->getDataManager();
+		{
+			auto txn = db.beginBulkTransaction();
+			const int64_t labelId = dm->getOrCreateTokenId("BulkDeferredNode");
+			for (int i = 0; i < 12000; ++i) {
+				Node node(0, labelId);
+				dm->addNode(node);
+				if (i == 0) {
+					firstNodeId = node.getId();
+				}
+				lastNodeId = node.getId();
+			}
+			txn.commit();
+		}
+
+		ASSERT_GT(firstNodeId, 0);
+		ASSERT_GT(lastNodeId, firstNodeId);
+		ASSERT_TRUE(fs::exists(walPath));
+		ASSERT_GT(fs::file_size(walPath), sizeof(storage::wal::WALFileHeader));
+		EXPECT_TRUE(dm->hasUnsavedChanges());
+
+		{
+			auto readTxn = db.beginReadOnlyTransaction();
+			EXPECT_EQ(dm->getNode(firstNodeId).getId(), firstNodeId);
+			EXPECT_EQ(dm->getNode(lastNodeId).getId(), lastNodeId);
+			readTxn.commit();
+		}
+
+		db.close();
+	}
+
+	EXPECT_FALSE(fs::exists(walPath));
+
+	{
+		Database reopened(testDbPath.string());
+		reopened.open();
+		auto dm = reopened.getStorage()->getDataManager();
+		EXPECT_EQ(dm->getNode(firstNodeId).getId(), firstNodeId);
+		EXPECT_EQ(dm->getNode(lastNodeId).getId(), lastNodeId);
+		reopened.close();
+	}
+}
+
+TEST_F(DatabaseWALRecoveryTest, BulkTransactionMaterializesReadSnapshotLazily) {
+	Database db(testDbPath.string());
+	db.open();
+	auto dm = db.getStorage()->getDataManager();
+
+	int64_t nodeId = 0;
+	graph::debug::PerfTrace::setEnabled(true);
+	graph::debug::PerfTrace::reset();
+	{
+		auto txn = db.beginBulkTransaction();
+		Node node(0, dm->getOrCreateTokenId("LazyBulkSnapshotNode"));
+		dm->addNode(node);
+		nodeId = node.getId();
+		txn.commit();
+	}
+
+	auto commitTrace = graph::debug::PerfTrace::snapshotAndReset();
+	EXPECT_FALSE(commitTrace.contains("txn.snapshot_materialize"));
+
+	{
+		auto readTxn = db.beginReadOnlyTransaction();
+		EXPECT_EQ(dm->getNode(nodeId).getId(), nodeId);
+		readTxn.commit();
+	}
+
+	auto readTrace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setEnabled(false);
+	EXPECT_TRUE(readTrace.contains("txn.snapshot_materialize"));
+	db.close();
 }

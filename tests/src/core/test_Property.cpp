@@ -20,8 +20,10 @@
 
 #include <gtest/gtest.h>
 #include <sstream>
+#include <vector>
 #include "graph/core/Property.hpp"
 #include "graph/core/PropertyTypes.hpp"
+#include "graph/utils/Serializer.hpp"
 
 class PropertyTest : public ::testing::Test {
 protected:
@@ -230,14 +232,38 @@ TEST_F(PropertyTest, GetSerializedSizeWithValues) {
 	// First property
 	expectedSize += sizeof(uint32_t); // key length prefix
 	expectedSize += std::string("short").size(); // key content
-	expectedSize += graph::property_utils::getPropertyValueSize(graph::PropertyValue(1));
+	expectedSize += graph::utils::getSerializedSize(graph::PropertyValue(1));
 
 	// Second property
 	expectedSize += sizeof(uint32_t); // key length prefix
 	expectedSize += std::string("longer_key_name").size(); // key content
-	expectedSize += graph::property_utils::getPropertyValueSize(graph::PropertyValue("string_value"));
+	expectedSize += graph::utils::getSerializedSize(graph::PropertyValue("string_value"));
 
 	EXPECT_EQ(property.getSerializedSize(), expectedSize);
+}
+
+TEST_F(PropertyTest, SerializedPayloadDecodesLazilyAndClearsOnMapUpdate) {
+	graph::Property property(7, 11, graph::toUnderlying(graph::EntityType::Node));
+
+	std::stringstream payloadStream;
+	graph::utils::Serializer::writePOD(payloadStream, static_cast<uint32_t>(2));
+	graph::utils::Serializer::serialize<std::string>(payloadStream, "name");
+	graph::utils::Serializer::serialize<graph::PropertyValue>(payloadStream, graph::PropertyValue("Ada"));
+	graph::utils::Serializer::serialize<std::string>(payloadStream, "age");
+	graph::utils::Serializer::serialize<graph::PropertyValue>(payloadStream, graph::PropertyValue(int64_t{37}));
+
+	const auto payloadString = payloadStream.str();
+	property.setSerializedPropertyPayload(std::vector<char>(payloadString.begin(), payloadString.end()));
+
+	EXPECT_TRUE(property.hasSerializedPropertyPayload());
+	EXPECT_TRUE(property.hasPropertyValue("name"));
+	EXPECT_EQ(property.getPropertyValues().at("name"), graph::PropertyValue("Ada"));
+	EXPECT_EQ(property.getPropertyValues().at("age"), graph::PropertyValue(int64_t{37}));
+
+	property.setProperties({{"updated", graph::PropertyValue(true)}});
+	EXPECT_FALSE(property.hasSerializedPropertyPayload());
+	EXPECT_TRUE(property.hasPropertyValue("updated"));
+	EXPECT_FALSE(property.hasPropertyValue("name"));
 }
 
 TEST_F(PropertyTest, Constants) {

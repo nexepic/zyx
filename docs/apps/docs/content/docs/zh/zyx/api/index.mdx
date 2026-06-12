@@ -15,7 +15,7 @@ ZYX 暴露现代 C++ API，并通过稳定的 Driver ABI 支撑各语言绑定�
 
 ## 如何选择？
 
-- **C++ API**（`include/zyx/zyx.hpp`）— C++20 开发首选。类型安全的 Value、RAII 事务管理、流式 `QueryBuilder`。
+- **C++ API**（`include/zyx/zyx.hpp`）— C++20 开发首选。类型安全的 Value、RAII 事务管理、列式批量写入、流式 `QueryBuilder`。
 - **Node.js API**（`npm install zyxdb`）— Node.js 开发首选。异步接口，预编译平台二进制。
 - **Python API**（`pip install zyxdb`）— Python 开发首选。提供 Pythonic 接口，支持上下文管理器、迭代器和 pandas 集成。
 - **Driver ABI**（`include/zyx/zyx_driver_abi.h`）— 构建 Rust、WASM 与未来语言绑定时使用。提供不透明句柄、显式生命周期、嵌套值遍历与稳定的 `zyx_driver_*` 符号。
@@ -44,8 +44,9 @@ Driver ABI 是语言绑定和 WASM 使用的稳定 C-facing 运行时边界。�
 ## 设计约定
 
 - 查询执行统一返回 `Result` 或 Driver ABI 结果句柄，由调用方显式迭代结果集。
-- 事务支持三种形式：
+- 事务支持四种形式：
   - **API 级显式事务** — `beginTransaction()` / `zyx_driver_txn_begin()`
+  - **批量直接 API 事务** — `beginBulkTransaction()`，用于大型 C++ 直接写入，通常搭配 `createNodesColumnar()` / `createEdgesColumnar()`
   - **只读事务** — `beginReadOnlyTransaction()` / `zyx_driver_txn_begin_read_only()`
   - **Cypher 事务语句** — 在 `execute()` 中使用 `BEGIN` / `COMMIT` / `ROLLBACK`
 - 无显式事务时，`execute()` 对写查询自动提交，对读查询走只读快速路径。

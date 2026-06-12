@@ -73,6 +73,11 @@ auto tx = db.beginTransaction();
 tx.execute("CREATE (n:Person {name: 'Bob'})");
 tx.commit();
 
+// Bulk write transaction for large direct API imports
+auto bulkTx = db.beginBulkTransaction();
+db.createNodes("Person", {{{"name", std::string("Ada")}}});
+bulkTx.commit();
+
 // Read-only transaction (snapshot isolation)
 auto roTx = db.beginReadOnlyTransaction();
 auto result = roTx.execute("MATCH (n) RETURN count(n)");
@@ -82,6 +87,7 @@ auto result = roTx.execute("MATCH (n) RETURN count(n)");
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | `beginTransaction` | `Transaction beginTransaction()` | Begin a read-write transaction. Blocks if another write transaction is active. |
+| `beginBulkTransaction` | `Transaction beginBulkTransaction()` | Begin a read-write transaction optimized for large direct API imports. Commit is WAL-durable; the main DB checkpoint may be deferred until `save()` or clean `close()`. |
 | `beginReadOnlyTransaction` | `Transaction beginReadOnlyTransaction()` | Begin a read-only transaction with snapshot isolation. Multiple can run concurrently. |
 | `hasActiveTransaction` | `bool hasActiveTransaction() const` | Check if a write transaction is currently active. |
 
@@ -106,15 +112,29 @@ auto ids = db.createNodes("Person", {
     {{"name", std::string("Charlie")}, {"age", int64_t(35)}}
 });
 
+// Columnar batch create nodes for import-style workloads
+std::vector<zyx::PropertyColumn> columns = {
+    {"name", {std::string("Ada"), std::string("Grace")}},
+    {"age", {int64_t(37), int64_t(45)}},
+};
+auto columnarIds = db.createNodesColumnar("Person", 2, columns);
+
 // Create an edge by node IDs (returns edge ID)
 int64_t edgeId = db.createEdge(aliceId, empId, "KNOWS",
     {{"since", int64_t(2020)}});
 
 // Batch create edges (returns list of edge IDs)
-auto edgeIds = db.createEdges({
-    {id1, id2, "FOLLOWS", {{"weight", 1.0}}},
-    {id2, id3, "FOLLOWS", {}},
+auto edgeIds = db.createEdges("FOLLOWS", {
+    {id1, id2, {{"weight", 1.0}}},
+    {id2, id3, {}},
 });
+
+// Columnar batch create edges
+auto columnarEdgeIds = db.createEdgesColumnar(
+    "FOLLOWS",
+    {columnarIds[0]},
+    {columnarIds[1]},
+    {{"weight", {int64_t(1)}}});
 ```
 
 | Method | Signature | Description |
@@ -122,8 +142,10 @@ auto edgeIds = db.createEdges({
 | `createNode` | `int64_t createNode(const string& label, const unordered_map<string, Value>& props) const` | Create a node with one label. Returns node ID. |
 | `createNode` | `int64_t createNode(const vector<string>& labels, const unordered_map<string, Value>& props) const` | Create a node with multiple labels. Returns node ID. |
 | `createNodes` | `vector<int64_t> createNodes(const string& label, const vector<unordered_map<string, Value>>& propsList) const` | Batch-create nodes with the same label. Returns list of IDs. |
+| `createNodesColumnar` | `vector<int64_t> createNodesColumnar(const string& label, size_t count, const vector<PropertyColumn>& columns) const` | Batch-create nodes from property columns. Useful for import workloads that already hold columnar data. |
 | `createEdge` | `int64_t createEdge(int64_t sourceId, int64_t targetId, const string& edgeType, const unordered_map<string, Value>& props = {}) const` | Create an edge by node IDs. Returns edge ID. |
-| `createEdges` | `vector<int64_t> createEdges(const vector<tuple<int64_t, int64_t, string, unordered_map<string, Value>>>& edges) const` | Batch-create edges. Returns list of edge IDs. |
+| `createEdges` | `vector<int64_t> createEdges(const string& edgeType, const vector<tuple<int64_t, int64_t, unordered_map<string, Value>>>& edges) const` | Batch-create edges of the same type. Returns list of edge IDs. |
+| `createEdgesColumnar` | `vector<int64_t> createEdgesColumnar(const string& edgeType, const vector<int64_t>& sourceIds, const vector<int64_t>& targetIds, const vector<PropertyColumn>& columns = {}) const` | Batch-create edges from source/target ID columns and property columns. |
 
 ### Schema APIs
 

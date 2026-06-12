@@ -41,6 +41,32 @@ tx.commit();
 }
 ```
 
+### 批量写事务
+
+大型直接 API 导入场景可以使用 `beginBulkTransaction()`，例如批量调用 `createNodes()` / `createEdges()`。
+它与普通写事务使用相同的写锁和回滚语义；区别在于 checkpoint 策略：`commit()` 仍然保证 WAL 持久化，
+但主数据库文件的 checkpoint 可以延迟到 `save()` 或正常 `close()`。
+
+```cpp
+auto tx = db.beginBulkTransaction();
+db.createNodes("Person", {{{"name", std::string("Ada")}}});
+tx.commit();
+```
+
+对于导入型 workload，可以搭配列式批量写入 API，避免调用侧先构造大量按行组织的属性 map：
+
+```cpp
+auto tx = db.beginBulkTransaction();
+auto ids = db.createNodesColumnar(
+    "Person",
+    2,
+    {{"name", {std::string("Ada"), std::string("Grace")}},
+     {"age", {int64_t(37), int64_t(45)}}});
+tx.commit();
+```
+
+如果下一步要构建 schema index，index builder 会扫描逻辑存储视图，包括已经提交但尚未 checkpoint 的 bulk overlay。
+
 ### 只读事务
 
 ```cpp

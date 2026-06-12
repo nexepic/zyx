@@ -213,12 +213,24 @@ namespace graph::storage {
 			}
 
 			std::memset(dest, 0, fixedSize);
-			FixedBufferWriter writer(dest, fixedSize);
+			char *out = dest;
 			const auto &metadata = property.getMetadata();
-			writer.writePod(metadata.id);
-			writer.writePod(metadata.entityId);
-			writer.writePod(metadata.entityType);
-			writer.writePod(metadata.isActive);
+			appendPod(out, metadata.id);
+			appendPod(out, metadata.entityId);
+			appendPod(out, metadata.entityType);
+			appendPod(out, metadata.isActive);
+
+			const auto &payload = property.getSerializedPropertyPayload();
+			if (!payload.empty()) {
+				const auto used = static_cast<size_t>(out - dest);
+				if (payload.size() > fixedSize - used) {
+					throw std::runtime_error("Property serialized payload exceeds allocated fixed size");
+				}
+				std::memcpy(out, payload.data(), payload.size());
+				return;
+			}
+
+			FixedBufferWriter writer(out, fixedSize - static_cast<size_t>(out - dest));
 			const auto &values = property.getPropertyValues();
 			writer.writePod(static_cast<uint32_t>(values.size()));
 			for (const auto &[key, value]: values) {

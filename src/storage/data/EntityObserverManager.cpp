@@ -45,6 +45,15 @@ namespace graph::storage {
 		}
 	}
 
+	void EntityObserverManager::notifyNodesAddedColumnar(
+			const std::vector<Node> &nodes,
+			const std::vector<BulkPropertyColumn> &columns) const {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+		for (const auto &observer : observers_) {
+			observer->onNodesAddedColumnar(nodes, columns);
+		}
+	}
+
 	void EntityObserverManager::notifyNodeUpdated(const Node &oldNode, const Node &newNode) const {
 		if (suppressNotifications_) return;
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
@@ -71,6 +80,15 @@ namespace graph::storage {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 		for (const auto &observer : observers_) {
 			observer->onEdgesAdded(edges);
+		}
+	}
+
+	void EntityObserverManager::notifyEdgesAddedColumnar(
+			const std::vector<Edge> &edges,
+			const std::vector<BulkPropertyColumn> &columns) const {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+		for (const auto &observer : observers_) {
+			observer->onEdgesAddedColumnar(edges, columns);
 		}
 	}
 

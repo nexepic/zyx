@@ -18,6 +18,7 @@
  **/
 
 #pragma once
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -59,6 +60,8 @@ namespace graph::storage::wal {
 	class UndoLog {
 	public:
 		void record(UndoEntry entry) { entries_.push_back(std::move(entry)); }
+
+		void reserve(size_t capacity) { entries_.reserve(capacity); }
 
 		[[nodiscard]] const std::vector<UndoEntry> &entries() const { return entries_; }
 

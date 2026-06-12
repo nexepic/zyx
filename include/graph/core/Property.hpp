@@ -23,6 +23,7 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 #include "PropertyTypes.hpp"
 #include "Types.hpp"
 #include "graph/core/Entity.hpp"
@@ -63,8 +64,11 @@ namespace graph {
 		[[nodiscard]] const std::unordered_map<std::string, PropertyValue> &getPropertyValues() const;
 
 		// Property map management
-		void setProperties(const std::unordered_map<std::string, PropertyValue> &newValues) { values = newValues; }
-		void setProperties(std::unordered_map<std::string, PropertyValue> &&newValues) { values = std::move(newValues); }
+		void setProperties(const std::unordered_map<std::string, PropertyValue> &newValues);
+		void setProperties(std::unordered_map<std::string, PropertyValue> &&newValues);
+		void setSerializedPropertyPayload(std::vector<char> payload);
+		[[nodiscard]] bool hasSerializedPropertyPayload() const { return !serializedPropertyPayload.empty(); }
+		[[nodiscard]] const std::vector<char> &getSerializedPropertyPayload() const { return serializedPropertyPayload; }
 
 		// Serialization methods
 		void serialize(std::ostream &os) const;
@@ -78,7 +82,12 @@ namespace graph {
 		Metadata metadata;
 
 		// Variable-sized data (not included in the fixed-size structure)
-		std::unordered_map<std::string, PropertyValue> values;
+		mutable std::unordered_map<std::string, PropertyValue> values;
+		std::vector<char> serializedPropertyPayload;
+		mutable bool serializedPayloadDecoded = true;
+
+		void ensureValuesDecoded() const;
+		void clearSerializedPropertyPayload();
 	};
 
 } // namespace graph

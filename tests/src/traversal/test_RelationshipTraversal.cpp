@@ -87,6 +87,33 @@ TEST_F(RelationshipTraversalTest, GetOutgoingAndIncomingEdgesForSingleEdge) {
 	EXPECT_EQ(inEdges[0].getId(), edge.getId());
 }
 
+TEST_F(RelationshipTraversalTest, LightweightAdjacencyRefsSupportTypeFilteringAndBoundedIntegrity) {
+	const int64_t relatedType = dataManager->resolveTokenId("RELATED_TO");
+	const int64_t ignoredType = dataManager->getOrCreateTokenId("IGNORED_FOR_REF_SCAN");
+	graph::Edge ignored(0, node1.getId(), node2.getId(), ignoredType);
+	dataManager->addEdge(ignored);
+
+	graph::traversal::RelationshipTraversalOptions options;
+	options.direction = graph::traversal::RelationshipDirectionKind::RDK_OUT;
+	options.integrity = graph::traversal::RelationshipTraversalIntegrity::RTI_BOUND_BY_EDGE_COUNT;
+	options.typeId = relatedType;
+
+	std::vector<int64_t> edgeIds;
+	const size_t visited = traversal->visitAdjacentEdgeRefs(
+			node1.getId(), options, [&](const graph::traversal::RelationshipEdgeRef &edgeRef) {
+				edgeIds.push_back(edgeRef.edgeId);
+				EXPECT_EQ(edgeRef.sourceNodeId, node1.getId());
+				EXPECT_EQ(edgeRef.targetNodeId, node2.getId());
+				EXPECT_EQ(edgeRef.typeId, relatedType);
+				return true;
+			});
+
+	EXPECT_EQ(visited, 1U);
+	ASSERT_EQ(edgeIds.size(), 1U);
+	EXPECT_EQ(edgeIds[0], edge.getId());
+	EXPECT_EQ(traversal->countAdjacentEdgeRefs(node1.getId(), options), 1U);
+}
+
 TEST_F(RelationshipTraversalTest, AddEdgesBatchPreservesLinkedListOrderAndProfilesPhases) {
 	const int64_t typeId = dataManager->getOrCreateTokenId("BATCH_RELATED_TO");
 	std::vector<graph::Edge> edges;
@@ -203,6 +230,39 @@ TEST_F(RelationshipTraversalTest, BatchLinkPlannerToleratesDanglingHeadPointers)
 	EXPECT_EQ(edges[0].getNextInEdgeId(), 777778);
 	EXPECT_TRUE(updates.oldHeadEdges.empty());
 	ASSERT_EQ(updates.nodes.size(), 2U);
+}
+
+TEST_F(RelationshipTraversalTest, DenseBatchLinkingHandlesManyEdgesOverCompactNodeIds) {
+	const int64_t labelId = dataManager->getOrCreateTokenId("DenseBatchNode");
+	std::vector<graph::Node> nodes;
+	nodes.reserve(600);
+	for (int64_t id = 1000; id < 1600; ++id) {
+		nodes.emplace_back(id, labelId);
+	}
+	dataManager->addNodes(nodes);
+
+	const int64_t typeId = dataManager->getOrCreateTokenId("DENSE_BATCH_LINK");
+	std::vector<graph::Edge> edges;
+	edges.reserve(1200);
+	for (size_t index = 0; index < 1200; ++index) {
+		const int64_t sourceId = nodes[index % nodes.size()].getId();
+		const int64_t targetId = nodes[(index + 1) % nodes.size()].getId();
+		edges.emplace_back(0, sourceId, targetId, typeId);
+	}
+
+	dataManager->addEdges(edges);
+
+	auto outgoing = traversal->getOutgoingEdges(nodes.front().getId());
+	ASSERT_EQ(outgoing.size(), 2U);
+	EXPECT_EQ(outgoing[0].getSourceNodeId(), nodes.front().getId());
+	EXPECT_EQ(outgoing[1].getSourceNodeId(), nodes.front().getId());
+	EXPECT_EQ(dataManager->getNode(nodes.front().getId()).getFirstOutEdgeId(), outgoing[0].getId());
+
+	auto incoming = traversal->getIncomingEdges(nodes[1].getId());
+	ASSERT_EQ(incoming.size(), 2U);
+	EXPECT_EQ(incoming[0].getTargetNodeId(), nodes[1].getId());
+	EXPECT_EQ(incoming[1].getTargetNodeId(), nodes[1].getId());
+	EXPECT_EQ(dataManager->getNode(nodes[1].getId()).getFirstInEdgeId(), incoming[0].getId());
 }
 
 TEST_F(RelationshipTraversalTest, DirectBatchLinkingMaterializesPreparedEdges) {

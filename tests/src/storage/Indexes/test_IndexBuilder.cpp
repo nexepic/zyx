@@ -434,6 +434,39 @@ TEST_F(IndexBuilderTest, BuildNodePropertyIndexWithMissingLabelKeepsScopedIndexE
 	EXPECT_TRUE(indexManager->findNodeIdsByProperty("code", int64_t{11}).empty());
 }
 
+TEST_F(IndexBuilderTest, BuildNodePropertyIndexesGroupsScopedOwnersByLabel) {
+	graph::Node alphaNode(0, dataManager->getOrCreateTokenId("GroupedScopedAlpha"));
+	dataManager->addNode(alphaNode);
+	dataManager->addNodeProperties(alphaNode.getId(), {{"code", graph::PropertyValue(int64_t{13})}});
+
+	graph::Node betaNode(0, dataManager->getOrCreateTokenId("GroupedScopedBeta"));
+	dataManager->addNode(betaNode);
+	dataManager->addNodeProperties(betaNode.getId(), {{"code", graph::PropertyValue(int64_t{13})}});
+
+	graph::Node gammaNode(0, dataManager->getOrCreateTokenId("GroupedScopedGamma"));
+	dataManager->addNode(gammaNode);
+	dataManager->addNodeProperties(gammaNode.getId(), {{"code", graph::PropertyValue(int64_t{13})}});
+
+	fileStorage->flush();
+	dataManager->clearCache();
+
+	ASSERT_TRUE(indexBuilder->buildNodePropertyIndexes(
+			{{"code", "GroupedScopedAlpha"}, {"code", "GroupedScopedBeta"}}));
+
+	auto alphaResults =
+			indexManager->findNodeIdsByLabelAndProperty("GroupedScopedAlpha", "code", int64_t{13});
+	ASSERT_EQ(alphaResults.size(), 1UL);
+	EXPECT_EQ(alphaResults.front(), alphaNode.getId());
+
+	auto betaResults =
+			indexManager->findNodeIdsByLabelAndProperty("GroupedScopedBeta", "code", int64_t{13});
+	ASSERT_EQ(betaResults.size(), 1UL);
+	EXPECT_EQ(betaResults.front(), betaNode.getId());
+
+	EXPECT_TRUE(indexManager->findNodeIdsByLabelAndProperty("GroupedScopedGamma", "code", int64_t{13}).empty());
+	EXPECT_TRUE(indexManager->findNodeIdsByProperty("code", int64_t{13}).empty());
+}
+
 TEST_F(IndexBuilderTest, ProcessBatch_SkipInactive) {
 	// 1. Create a node and delete it immediately
 	int64_t lbl = dataManager->getOrCreateTokenId("SkipMe");

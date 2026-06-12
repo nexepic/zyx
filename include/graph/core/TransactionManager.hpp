@@ -22,9 +22,11 @@
 #include <atomic>
 #include <chrono>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 
 #include "graph/concurrent/AtomicRWLock.hpp"
+#include "graph/core/Transaction.hpp"
 
 namespace graph::storage {
 	class FileStorage;
@@ -36,8 +38,6 @@ namespace graph::storage {
 
 namespace graph {
 
-	class Transaction;
-
 	class TransactionManager {
 	public:
 		TransactionManager(std::shared_ptr<storage::FileStorage> storage,
@@ -48,12 +48,15 @@ namespace graph {
 
 		Transaction begin();
 		Transaction begin(std::chrono::milliseconds timeout);
+		Transaction beginBulk();
+		Transaction beginBulk(std::chrono::milliseconds timeout);
 		Transaction beginReadOnly();
 		Transaction beginReadOnly(std::chrono::milliseconds timeout);
 		void commitTransaction(Transaction &txn);
 		void rollbackTransaction(Transaction &txn);
 		[[nodiscard]] bool hasActiveTransaction() const;
 		void setWALManager(std::shared_ptr<storage::wal::WALManager> walManager);
+		void markStorageCheckpointed();
 
 	private:
 		friend class Transaction;
@@ -63,6 +66,11 @@ namespace graph {
 		std::shared_ptr<storage::FileStorage> storage_;
 		std::shared_ptr<storage::wal::WALManager> walManager_;
 		std::unique_ptr<storage::SnapshotManager> snapshotManager_;
+		std::atomic<bool> dirtySnapshotPending_{false};
+		std::mutex snapshotPublishMutex_;
+
+		Transaction beginWithPolicy(std::chrono::milliseconds timeout, Transaction::CheckpointPolicy policy);
+		void ensureReadSnapshotCurrent();
 	};
 
 } // namespace graph

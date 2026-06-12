@@ -64,11 +64,17 @@ namespace graph::storage::wal {
 			WCM_REMOVE_FILE,
 		};
 
+		enum class CloseSyncMode {
+			WSM_SYNC,
+			WSM_FLUSH_ONLY,
+		};
+
 		WALManager() = default;
 		~WALManager();
 
 		void open(const std::string &dbPath);
-		void close(CloseMode mode = CloseMode::WCM_KEEP_FILE);
+		void close(CloseMode mode = CloseMode::WCM_KEEP_FILE,
+				   CloseSyncMode syncMode = CloseSyncMode::WSM_SYNC);
 
 		void writeBegin(uint64_t txnId);
 		void writeEntityChange(uint64_t txnId, uint8_t entityType, uint8_t changeType, int64_t entityId,
@@ -123,7 +129,7 @@ namespace graph::storage::wal {
 											const uint8_t *data, uint32_t dataSize);
 		void ensureAppendCapacityLocked(size_t appendSize);
 		void appendBytesLocked(const uint8_t *data, size_t size);
-		void writeHeader();
+		void writeHeader(bool syncHeader = false);
 		[[nodiscard]] bool validateHeader();
 
 		// Flush write buffer to file (no fsync)

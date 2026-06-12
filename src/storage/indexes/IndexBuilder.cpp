@@ -23,6 +23,7 @@
 #include "graph/core/Node.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/FileStorage.hpp"
+#include "graph/storage/PersistenceManager.hpp"
 #include "graph/storage/SegmentTracker.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/data/PropertyIndexBuildScanner.hpp"
@@ -32,6 +33,7 @@
 #include "graph/storage/indexes/PropertyIndex.hpp"
 #include "graph/storage/indexes/ScopedNodePropertyKey.hpp"
 #include <algorithm>
+#include <optional>
 #include <span>
 #include <unordered_map>
 #include <unordered_set>
@@ -47,6 +49,19 @@ namespace {
 		bool buildGlobalProperty = true;
 	};
 
+	struct NodePropertyIndexScanGroup {
+		bool global = false;
+		int64_t scopedLabelId = 0;
+		std::vector<size_t> specIndexes;
+		std::vector<std::string> requestedKeys;
+	};
+
+	void appendUnique(std::vector<std::string> &values, const std::string &value) {
+		if (!value.empty() && std::find(values.begin(), values.end(), value) == values.end()) {
+			values.push_back(value);
+		}
+	}
+
 	PropertyIndex::TypedPropertyEntry makeTypedPropertyEntry(
 			const storage::PropertyEntityOwnerScalarKeyValue &ownerValue,
 			const std::string &physicalKey) {
@@ -61,21 +76,101 @@ namespace {
 		return entry;
 	}
 
-	bool nodeValueMatchesSpec(
-			const storage::PropertyEntityOwnerScalarKeyValue &ownerValue,
-			const PreparedNodePropertyIndexSpec &spec,
-			const std::unordered_map<int64_t, std::unordered_set<int64_t>> &scopedNodeIdsByLabel) {
-		if (ownerValue.key != spec.propertyKey) {
-			return false;
+	std::vector<int64_t> sortedUniqueIds(std::vector<int64_t> ids) {
+		std::ranges::sort(ids);
+		ids.erase(std::ranges::unique(ids).begin(), ids.end());
+		return ids;
+	}
+
+	void appendUncheckpointedTailRange(std::vector<std::pair<int64_t, int64_t>> &ranges, int64_t maxAllocatedId) {
+		if (maxAllocatedId <= 0) {
+			return;
 		}
-		if (spec.buildGlobalProperty) {
-			return true;
+
+		int64_t maxCoveredId = 0;
+		for (const auto &[startId, endId]: ranges) {
+			if (endId >= startId) {
+				maxCoveredId = (std::max)(maxCoveredId, endId);
+			}
 		}
-		if (spec.scopedLabelId == 0) {
-			return false;
+		if (maxAllocatedId > maxCoveredId) {
+			ranges.emplace_back(maxCoveredId + 1, maxAllocatedId);
 		}
-		const auto scopedIt = scopedNodeIdsByLabel.find(spec.scopedLabelId);
-		return scopedIt != scopedNodeIdsByLabel.end() && scopedIt->second.contains(ownerValue.ownerId);
+	}
+
+	bool rangesContainId(const std::vector<std::pair<int64_t, int64_t>> &ranges, int64_t id) {
+		return std::any_of(ranges.begin(), ranges.end(), [id](const auto &range) {
+			return range.first <= id && id <= range.second;
+		});
+	}
+
+	template<typename Entity>
+	void appendDirtyEntityPointRanges(
+			const storage::DataManager &dataManager,
+			std::vector<std::pair<int64_t, int64_t>> &ranges) {
+		auto persistence = dataManager.getPersistenceManager();
+		if (!persistence) {
+			return;
+		}
+
+		for (const auto &info: persistence->getAllDirtyInfos<Entity>()) {
+			if (!info.backup.has_value()) {
+				continue;
+			}
+			const int64_t id = info.backup->getId();
+			if (id <= 0 || rangesContainId(ranges, id)) {
+				continue;
+			}
+			ranges.emplace_back(id, id);
+		}
+
+		std::ranges::sort(ranges, [](const auto &lhs, const auto &rhs) {
+			if (lhs.first != rhs.first) {
+				return lhs.first < rhs.first;
+			}
+			return lhs.second < rhs.second;
+		});
+	}
+
+	void appendUniqueId(std::vector<int64_t> &ids, std::unordered_set<int64_t> &seen, int64_t id) {
+		if (id > 0 && seen.insert(id).second) {
+			ids.push_back(id);
+		}
+	}
+
+	void appendActiveDirtyNodeIdsByLabel(
+			const storage::DataManager &dataManager,
+			std::unordered_map<int64_t, std::vector<int64_t>> &idsByLabel) {
+		auto persistence = dataManager.getPersistenceManager();
+		if (!persistence || idsByLabel.empty()) {
+			return;
+		}
+
+		std::unordered_map<int64_t, std::unordered_set<int64_t>> seenByLabel;
+		seenByLabel.reserve(idsByLabel.size());
+		for (const auto &[labelId, ids]: idsByLabel) {
+			auto &seen = seenByLabel[labelId];
+			seen.reserve(ids.size());
+			for (const int64_t id: ids) {
+				seen.insert(id);
+			}
+		}
+
+		for (const auto &info: persistence->getAllDirtyInfos<Node>()) {
+			if (!info.backup.has_value()) {
+				continue;
+			}
+			const Node &node = *info.backup;
+			if (node.getId() == 0 || !node.isActive()) {
+				continue;
+			}
+			for (const int64_t labelId: node.getLabelIds()) {
+				auto labelIt = idsByLabel.find(labelId);
+				if (labelIt != idsByLabel.end()) {
+					appendUniqueId(labelIt->second, seenByLabel[labelId], node.getId());
+				}
+			}
+		}
 	}
 
 	std::vector<int64_t> collectActiveNodeIds(
@@ -97,6 +192,63 @@ namespace {
 		std::ranges::sort(ids);
 		ids.erase(std::ranges::unique(ids).begin(), ids.end());
 		return ids;
+	}
+
+	std::unordered_map<int64_t, std::vector<int64_t>> collectActiveNodeIdsByLabel(
+			const storage::DataManager &dataManager,
+			const std::vector<std::pair<int64_t, int64_t>> &ranges,
+			const std::vector<int64_t> &labelIds,
+			const std::shared_ptr<LabelIndex> &labelIndex) {
+		std::unordered_map<int64_t, std::vector<int64_t>> idsByLabel;
+		for (const int64_t labelId: labelIds) {
+			if (labelId != 0) {
+				idsByLabel.try_emplace(labelId);
+			}
+		}
+		if (idsByLabel.empty()) {
+			return idsByLabel;
+		}
+
+		if (labelIndex && labelIndex->hasPhysicalData()) {
+			for (auto &[labelId, ids]: idsByLabel) {
+				const auto label = dataManager.resolveTokenName(labelId);
+				if (!label.empty()) {
+					std::vector<int64_t> validatedIds;
+					for (const int64_t candidateId: labelIndex->findNodes(label)) {
+						Node node = dataManager.getNode(candidateId);
+						if (node.getId() != 0 && node.isActive() && node.hasLabelId(labelId)) {
+							validatedIds.push_back(node.getId());
+						}
+					}
+					ids = sortedUniqueIds(std::move(validatedIds));
+				}
+			}
+			appendActiveDirtyNodeIdsByLabel(dataManager, idsByLabel);
+			for (auto &[labelId, ids]: idsByLabel) {
+				(void) labelId;
+				ids = sortedUniqueIds(std::move(ids));
+			}
+			return idsByLabel;
+		}
+
+		for (const auto &[startId, endId]: ranges) {
+			for (int64_t id = startId; id <= endId; ++id) {
+				Node node = dataManager.getNode(id);
+				if (node.getId() == 0 || !node.isActive()) {
+					continue;
+				}
+				for (const int64_t labelId: node.getLabelIds()) {
+					if (auto labelIt = idsByLabel.find(labelId); labelIt != idsByLabel.end()) {
+						labelIt->second.push_back(node.getId());
+					}
+				}
+			}
+		}
+		for (auto &[labelId, ids]: idsByLabel) {
+			(void) labelId;
+			ids = sortedUniqueIds(std::move(ids));
+		}
+		return idsByLabel;
 	}
 
 	std::vector<int64_t> collectActiveEdgeIds(
@@ -241,8 +393,6 @@ namespace {
 			auto propertyIndex = indexManager_->getNodeIndexManager()->getPropertyIndex();
 			std::vector<PreparedNodePropertyIndexSpec> prepared;
 			prepared.reserve(specs.size());
-			std::vector<std::string> requestedKeys;
-			requestedKeys.reserve(specs.size());
 
 			for (const auto &spec: specs) {
 				if (spec.propertyKey.empty()) {
@@ -260,10 +410,6 @@ namespace {
 
 				propertyIndex->createIndex(preparedSpec.physicalKey);
 				propertyIndex->clearIndexData(preparedSpec.physicalKey);
-				if (std::find(requestedKeys.begin(), requestedKeys.end(), preparedSpec.propertyKey) ==
-					requestedKeys.end()) {
-					requestedKeys.push_back(preparedSpec.propertyKey);
-				}
 				prepared.push_back(std::move(preparedSpec));
 			}
 
@@ -271,7 +417,8 @@ namespace {
 				return true;
 			}
 
-			if (!dataManager_->canCountPropertyEntityPredicatesByOwnerType(EntityType::Node)) {
+			storage::PropertyIndexBuildScanner scanner(*dataManager_);
+			if (!scanner.canCollect(EntityType::Node)) {
 				for (const auto &spec: prepared) {
 					if (!buildNodePropertyIndex(spec.propertyKey, spec.label)) {
 						return false;
@@ -283,54 +430,90 @@ namespace {
 			const bool typedScanCoversAllProperties =
 					dataManager_->canCountAllPropertyPredicatesByOwnerType(EntityType::Node);
 
-			const auto activeNodeIds = collectActiveNodeIds(*dataManager_, getNodeIdRanges());
-			if (activeNodeIds.empty()) {
-				propertyIndex->flush();
-				return true;
-			}
-
-			std::vector<storage::PropertyEntityOwnerScalarKeyValue> values;
-			{
-				debug::ScopedPerfTimer timer("index_build.node_property.typed_scan");
-				storage::PropertyIndexBuildScanner scanner(*dataManager_);
-				values = scanner.collect(
-						EntityType::Node,
-						requestedKeys,
-						std::span<const int64_t>(activeNodeIds.data(), activeNodeIds.size()),
-						storage_->getThreadPool());
-			}
-
-			std::unordered_map<int64_t, std::unordered_set<int64_t>> scopedNodeIdsByLabel;
-			if (!values.empty()) {
-				debug::ScopedPerfTimer timer("index_build.node_property.typed_label_filter");
-				for (const auto &spec: prepared) {
-					if (!spec.buildGlobalProperty && spec.scopedLabelId != 0 &&
-						!scopedNodeIdsByLabel.contains(spec.scopedLabelId)) {
-						scopedNodeIdsByLabel.emplace(spec.scopedLabelId, collectNodeIdsWithLabel(spec.scopedLabelId));
-					}
-				}
-			}
-
 			std::vector<PropertyIndex::TypedPropertyEntry> propertyEntries;
-			propertyEntries.reserve(values.size());
-			for (const auto &ownerValue: values) {
-				for (const auto &spec: prepared) {
-					if (nodeValueMatchesSpec(ownerValue, spec, scopedNodeIdsByLabel)) {
-						propertyEntries.push_back(makeTypedPropertyEntry(ownerValue, spec.physicalKey));
+			std::vector<std::tuple<int64_t, std::string, PropertyValue>> fallbackEntries;
+
+			std::vector<NodePropertyIndexScanGroup> scanGroups;
+			std::optional<size_t> globalGroupIndex;
+			std::unordered_map<int64_t, size_t> scopedGroupByLabel;
+			std::vector<int64_t> neededScopedLabels;
+
+			for (size_t specIndex = 0; specIndex < prepared.size(); ++specIndex) {
+				const auto &spec = prepared[specIndex];
+				size_t groupIndex = 0;
+				if (spec.buildGlobalProperty) {
+					if (!globalGroupIndex.has_value()) {
+						globalGroupIndex = scanGroups.size();
+						scanGroups.push_back(NodePropertyIndexScanGroup{true, 0, {}, {}});
 					}
+					groupIndex = *globalGroupIndex;
+				} else {
+					auto [it, inserted] = scopedGroupByLabel.try_emplace(spec.scopedLabelId, scanGroups.size());
+					if (inserted) {
+						scanGroups.push_back(NodePropertyIndexScanGroup{false, spec.scopedLabelId, {}, {}});
+						if (spec.scopedLabelId != 0) {
+							neededScopedLabels.push_back(spec.scopedLabelId);
+						}
+					}
+					groupIndex = it->second;
 				}
+
+				auto &group = scanGroups[groupIndex];
+				group.specIndexes.push_back(specIndex);
+				appendUnique(group.requestedKeys, spec.propertyKey);
 			}
 
-			if (!propertyEntries.empty()) {
-				debug::ScopedPerfTimer timer("index_build.node_property.typed_insert");
-				propertyIndex->addTypedPropertiesBatch(std::move(propertyEntries));
+			const auto nodeRanges = getNodeIdRanges();
+			std::vector<int64_t> globalOwnerIds;
+			if (globalGroupIndex.has_value()) {
+				globalOwnerIds = collectActiveNodeIds(*dataManager_, nodeRanges);
 			}
-			if (!typedScanCoversAllProperties) {
-				debug::ScopedPerfTimer timer("index_build.node_property.fallback_blob_or_inline");
-				std::vector<std::tuple<int64_t, std::string, PropertyValue>> fallbackEntries;
-				fallbackEntries.reserve(prepared.size());
-				for (const auto &[startId, endId]: getNodeIdRanges()) {
-					for (int64_t id = startId; id <= endId; ++id) {
+			const auto scopedOwnerIdsByLabel = collectActiveNodeIdsByLabel(
+					*dataManager_, nodeRanges, sortedUniqueIds(std::move(neededScopedLabels)),
+					indexManager_->getNodeIndexManager()->getLabelIndex());
+
+				for (const auto &group: scanGroups) {
+				std::span<const int64_t> ownerIds;
+				if (group.global) {
+					ownerIds = std::span<const int64_t>(globalOwnerIds.data(), globalOwnerIds.size());
+				} else {
+					auto ownerIt = scopedOwnerIdsByLabel.find(group.scopedLabelId);
+					if (ownerIt == scopedOwnerIdsByLabel.end()) {
+						continue;
+					}
+					ownerIds = std::span<const int64_t>(ownerIt->second.data(), ownerIt->second.size());
+				}
+				if (ownerIds.empty() || group.requestedKeys.empty()) {
+					continue;
+				}
+
+				std::unordered_map<std::string, std::vector<std::string>> physicalKeysByProperty;
+				physicalKeysByProperty.reserve(group.specIndexes.size());
+				for (const size_t specIndex: group.specIndexes) {
+					const auto &spec = prepared[specIndex];
+					physicalKeysByProperty[spec.propertyKey].push_back(spec.physicalKey);
+				}
+
+				std::vector<storage::PropertyEntityOwnerScalarKeyValue> values;
+				{
+					debug::ScopedPerfTimer timer("index_build.node_property.typed_scan");
+					values = scanner.collect(EntityType::Node, group.requestedKeys, ownerIds, storage_->getThreadPool());
+				}
+
+				propertyEntries.reserve(propertyEntries.size() + values.size());
+				for (const auto &ownerValue: values) {
+					auto keyIt = physicalKeysByProperty.find(ownerValue.key);
+					if (keyIt == physicalKeysByProperty.end()) {
+						continue;
+					}
+					for (const auto &physicalKey: keyIt->second) {
+						propertyEntries.push_back(makeTypedPropertyEntry(ownerValue, physicalKey));
+					}
+				}
+
+				if (!typedScanCoversAllProperties) {
+					debug::ScopedPerfTimer timer("index_build.node_property.fallback_blob_or_inline");
+					for (const int64_t id: ownerIds) {
 						Node node = dataManager_->getNode(id);
 						if (node.getId() == 0 || !node.isActive() ||
 							node.getPropertyStorageType() == PropertyStorageType::PROPERTY_ENTITY) {
@@ -340,22 +523,25 @@ namespace {
 						if (properties.empty()) {
 							continue;
 						}
-						for (const auto &spec: prepared) {
-							auto propIt = properties.find(spec.propertyKey);
+						for (const auto &[propertyKey, physicalKeys]: physicalKeysByProperty) {
+							auto propIt = properties.find(propertyKey);
 							if (propIt == properties.end()) {
 								continue;
 							}
-							if (spec.buildGlobalProperty) {
-								fallbackEntries.emplace_back(node.getId(), spec.physicalKey, propIt->second);
-							} else if (spec.scopedLabelId != 0 && node.hasLabelId(spec.scopedLabelId)) {
-								fallbackEntries.emplace_back(node.getId(), spec.physicalKey, propIt->second);
+							for (const auto &physicalKey: physicalKeys) {
+								fallbackEntries.emplace_back(node.getId(), physicalKey, propIt->second);
 							}
 						}
 					}
 				}
-				if (!fallbackEntries.empty()) {
-					propertyIndex->addPropertiesBatch(fallbackEntries);
-				}
+			}
+
+			if (!propertyEntries.empty()) {
+				debug::ScopedPerfTimer timer("index_build.node_property.typed_insert");
+				propertyIndex->addTypedPropertiesBatch(std::move(propertyEntries));
+			}
+			if (!fallbackEntries.empty()) {
+				propertyIndex->addPropertiesBatch(fallbackEntries);
 			}
 			propertyIndex->flush();
 			return true;
@@ -417,7 +603,8 @@ namespace {
 				return true;
 			}
 
-			if (!dataManager_->canCountPropertyEntityPredicatesByOwnerType(EntityType::Edge)) {
+			storage::PropertyIndexBuildScanner scanner(*dataManager_);
+			if (!scanner.canCollect(EntityType::Edge)) {
 				for (const auto &key: requestedKeys) {
 					if (!buildEdgePropertyIndex(key)) {
 						return false;
@@ -438,7 +625,6 @@ namespace {
 			std::vector<storage::PropertyEntityOwnerScalarKeyValue> values;
 			{
 				debug::ScopedPerfTimer timer("index_build.edge_property.typed_scan");
-				storage::PropertyIndexBuildScanner scanner(*dataManager_);
 				values = scanner.collect(
 						EntityType::Edge,
 						requestedKeys,
@@ -495,7 +681,7 @@ namespace {
 			const std::string &scopedPropertyKey,
 			bool buildGlobalProperty) const {
 		if (!propertyIndex || propertyKey.empty() ||
-			!dataManager_->canCountPropertyEntityPredicatesByOwnerType(EntityType::Node)) {
+			!storage::PropertyIndexBuildScanner(*dataManager_).canCollect(EntityType::Node)) {
 			return false;
 		}
 
@@ -506,14 +692,20 @@ namespace {
 		const bool typedScanCoversAllProperties =
 				dataManager_->canCountAllPropertyPredicatesByOwnerType(EntityType::Node);
 
-		const auto activeNodeIds = collectActiveNodeIds(*dataManager_, getNodeIdRanges());
-		if (activeNodeIds.empty()) {
-			return true;
+		const auto nodeRanges = getNodeIdRanges();
+		std::vector<int64_t> ownerIds;
+		if (buildGlobalProperty) {
+			ownerIds = collectActiveNodeIds(*dataManager_, nodeRanges);
+		} else {
+			auto labelIds = collectActiveNodeIdsByLabel(
+					*dataManager_, nodeRanges, std::vector<int64_t>{scopedLabelId},
+					indexManager_->getNodeIndexManager()->getLabelIndex());
+			if (auto it = labelIds.find(scopedLabelId); it != labelIds.end()) {
+				ownerIds = std::move(it->second);
+			}
 		}
-
-		std::unordered_set<int64_t> scopedNodeIds;
-		if (buildScopedEntries) {
-			scopedNodeIds = collectNodeIdsWithLabel(scopedLabelId);
+		if (ownerIds.empty()) {
+			return true;
 		}
 
 		std::vector<storage::PropertyEntityOwnerScalarKeyValue> values;
@@ -523,7 +715,7 @@ namespace {
 			values = scanner.collect(
 					EntityType::Node,
 					std::vector<std::string>{propertyKey},
-					std::span<const int64_t>(activeNodeIds.data(), activeNodeIds.size()),
+					std::span<const int64_t>(ownerIds.data(), ownerIds.size()),
 					storage_->getThreadPool());
 		}
 
@@ -531,9 +723,6 @@ namespace {
 		propertyEntries.reserve(values.size());
 		const std::string &physicalKey = buildGlobalProperty ? propertyKey : scopedPropertyKey;
 		for (const auto &ownerValue: values) {
-			if (!buildGlobalProperty && (!buildScopedEntries || !scopedNodeIds.contains(ownerValue.ownerId))) {
-				continue;
-			}
 			propertyEntries.push_back(makeTypedPropertyEntry(ownerValue, physicalKey));
 		}
 		if (!propertyEntries.empty()) {
@@ -545,20 +734,15 @@ namespace {
 			debug::ScopedPerfTimer timer("index_build.node_property.fallback_blob_or_inline");
 			std::vector<std::tuple<int64_t, std::string, PropertyValue>> fallbackEntries;
 			fallbackEntries.reserve(values.size());
-			for (const auto &[startId, endId]: getNodeIdRanges()) {
-				for (int64_t id = startId; id <= endId; ++id) {
-					Node node = dataManager_->getNode(id);
-					if (node.getId() == 0 || !node.isActive() ||
-						node.getPropertyStorageType() == PropertyStorageType::PROPERTY_ENTITY) {
-						continue;
-					}
-					if (!buildGlobalProperty && !node.hasLabelId(scopedLabelId)) {
-						continue;
-					}
-					const auto properties = dataManager_->getNodeProperties(node.getId());
-					if (auto propIt = properties.find(propertyKey); propIt != properties.end()) {
-						fallbackEntries.emplace_back(node.getId(), physicalKey, propIt->second);
-					}
+			for (const int64_t id: ownerIds) {
+				Node node = dataManager_->getNode(id);
+				if (node.getId() == 0 || !node.isActive() ||
+					node.getPropertyStorageType() == PropertyStorageType::PROPERTY_ENTITY) {
+					continue;
+				}
+				const auto properties = dataManager_->getNodeProperties(node.getId());
+				if (auto propIt = properties.find(propertyKey); propIt != properties.end()) {
+					fallbackEntries.emplace_back(node.getId(), physicalKey, propIt->second);
 				}
 			}
 			if (!fallbackEntries.empty()) {
@@ -572,7 +756,7 @@ namespace {
 			const std::shared_ptr<PropertyIndex> &propertyIndex,
 			const std::string &propertyKey) const {
 		if (!propertyIndex || propertyKey.empty() ||
-			!dataManager_->canCountPropertyEntityPredicatesByOwnerType(EntityType::Edge)) {
+			!storage::PropertyIndexBuildScanner(*dataManager_).canCollect(EntityType::Edge)) {
 			return false;
 		}
 
@@ -627,31 +811,6 @@ namespace {
 			}
 		}
 		return true;
-	}
-
-	std::unordered_set<int64_t> IndexBuilder::collectNodeIdsWithLabel(int64_t labelId) const {
-		std::unordered_set<int64_t> nodeIds;
-		if (labelId == 0) {
-			return nodeIds;
-		}
-		const auto label = dataManager_->resolveTokenName(labelId);
-		auto labelIndex = indexManager_->getNodeIndexManager()->getLabelIndex();
-		if (!label.empty() && labelIndex && labelIndex->hasPhysicalData()) {
-			const auto indexedNodeIds = labelIndex->findNodes(label);
-			nodeIds.reserve(indexedNodeIds.size());
-			nodeIds.insert(indexedNodeIds.begin(), indexedNodeIds.end());
-			return nodeIds;
-		}
-
-		for (const auto &[startId, endId]: getNodeIdRanges()) {
-			for (int64_t id = startId; id <= endId; ++id) {
-				Node node = dataManager_->getNode(id);
-				if (node.getId() != 0 && node.isActive() && node.hasLabelId(labelId)) {
-					nodeIds.insert(node.getId());
-				}
-			}
-		}
-		return nodeIds;
 	}
 
 	void IndexBuilder::processNodeBatch(const std::vector<int64_t> &nodeIds,
@@ -777,6 +936,12 @@ namespace {
 			ranges.emplace_back(segment.start_id, segment.start_id + segment.used - 1);
 		}
 
+		if (dataManager_->hasUnsavedChanges()) {
+			appendUncheckpointedTailRange(
+					ranges, dataManager_->getIdAllocator(EntityType::Node)->getCurrentMaxId());
+			appendDirtyEntityPointRanges<Node>(*dataManager_, ranges);
+		}
+
 		return ranges;
 	}
 
@@ -789,6 +954,12 @@ namespace {
 		for (const auto &segment: edgeSegments) {
 			// Create a range from start_id to (start_id + used - 1)
 			ranges.emplace_back(segment.start_id, segment.start_id + segment.used - 1);
+		}
+
+		if (dataManager_->hasUnsavedChanges()) {
+			appendUncheckpointedTailRange(
+					ranges, dataManager_->getIdAllocator(EntityType::Edge)->getCurrentMaxId());
+			appendDirtyEntityPointRanges<Edge>(*dataManager_, ranges);
 		}
 
 		return ranges;

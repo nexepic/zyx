@@ -73,6 +73,11 @@ auto tx = db.beginTransaction();
 tx.execute("CREATE (n:Person {name: 'Bob'})");
 tx.commit();
 
+// 面向大型直接 API 导入的批量写事务
+auto bulkTx = db.beginBulkTransaction();
+db.createNodes("Person", {{{"name", std::string("Ada")}}});
+bulkTx.commit();
+
 // 只读事务（快照隔离）
 auto roTx = db.beginReadOnlyTransaction();
 auto result = roTx.execute("MATCH (n) RETURN count(n)");
@@ -82,6 +87,7 @@ auto result = roTx.execute("MATCH (n) RETURN count(n)");
 | 方法 | 签名 | 说明 |
 |------|------|------|
 | `beginTransaction` | `Transaction beginTransaction()` | 开始读写事务，若有其他写事务活跃则阻塞 |
+| `beginBulkTransaction` | `Transaction beginBulkTransaction()` | 开始面向大型直接 API 导入的读写事务。`commit()` 保证 WAL 持久化；主数据库 checkpoint 可延迟到 `save()` 或正常 `close()`。 |
 | `beginReadOnlyTransaction` | `Transaction beginReadOnlyTransaction()` | 开始只读事务，快照隔离，可多并发 |
 | `hasActiveTransaction` | `bool hasActiveTransaction() const` | 检查是否有活跃写事务 |
 
@@ -105,15 +111,29 @@ auto ids = db.createNodes("Person", {
     {{"name", std::string("Bob")}, {"age", int64_t(25)}},
 });
 
+// 面向导入场景的列式批量创建节点
+std::vector<zyx::PropertyColumn> columns = {
+    {"name", {std::string("Ada"), std::string("Grace")}},
+    {"age", {int64_t(37), int64_t(45)}},
+};
+auto columnarIds = db.createNodesColumnar("Person", 2, columns);
+
 // 通过节点 ID 创建边（返回边 ID）
 int64_t edgeId = db.createEdge(aliceId, empId, "KNOWS",
     {{"since", int64_t(2020)}});
 
 // 批量创建边（返回边 ID 列表）
-auto edgeIds = db.createEdges({
-    {id1, id2, "FOLLOWS", {{"weight", 1.0}}},
-    {id2, id3, "FOLLOWS", {}},
+auto edgeIds = db.createEdges("FOLLOWS", {
+    {id1, id2, {{"weight", 1.0}}},
+    {id2, id3, {}},
 });
+
+// 列式批量创建边
+auto columnarEdgeIds = db.createEdgesColumnar(
+    "FOLLOWS",
+    {columnarIds[0]},
+    {columnarIds[1]},
+    {{"weight", {int64_t(1)}}});
 ```
 
 | 方法 | 签名 | 说明 |
@@ -121,8 +141,10 @@ auto edgeIds = db.createEdges({
 | `createNode` | `int64_t createNode(const string& label, const unordered_map<string, Value>& props) const` | 创建单标签节点，返回节点 ID |
 | `createNode` | `int64_t createNode(const vector<string>& labels, const unordered_map<string, Value>& props) const` | 创建多标签节点，返回节点 ID |
 | `createNodes` | `vector<int64_t> createNodes(const string& label, const vector<unordered_map<string, Value>>& propsList) const` | 批量创建同标签节点，返回 ID 列表 |
+| `createNodesColumnar` | `vector<int64_t> createNodesColumnar(const string& label, size_t count, const vector<PropertyColumn>& columns) const` | 按属性列批量创建同标签节点，适合已经按列持有数据的导入场景 |
 | `createEdge` | `int64_t createEdge(int64_t sourceId, int64_t targetId, const string& edgeType, const unordered_map<string, Value>& props = {}) const` | 通过节点 ID 创建边，返回边 ID |
-| `createEdges` | `vector<int64_t> createEdges(const vector<tuple<int64_t, int64_t, string, unordered_map<string, Value>>>& edges) const` | 批量创建边，返回边 ID 列表 |
+| `createEdges` | `vector<int64_t> createEdges(const string& edgeType, const vector<tuple<int64_t, int64_t, unordered_map<string, Value>>>& edges) const` | 批量创建同类型边，返回边 ID 列表 |
+| `createEdgesColumnar` | `vector<int64_t> createEdgesColumnar(const string& edgeType, const vector<int64_t>& sourceIds, const vector<int64_t>& targetIds, const vector<PropertyColumn>& columns = {}) const` | 按 source/target ID 列与属性列批量创建边 |
 
 ### Schema API
 

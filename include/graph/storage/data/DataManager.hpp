@@ -227,6 +227,10 @@ namespace graph::storage {
 		// Node-specific operations
 		void addNode(Node &node) const;
 		void addNodes(std::vector<Node> &nodes) const;
+		std::vector<int64_t> addNodesColumnar(
+				int64_t labelId,
+				size_t count,
+				const std::vector<BulkPropertyColumn> &columns) const;
 		void updateNode(const Node &node);
 		void updateNodes(const std::vector<Node> &nodes);
 		void updateNodesWithBeforeImages(const std::vector<Node> &nodes, const std::vector<Node> &oldNodes);
@@ -364,11 +368,17 @@ namespace graph::storage {
 		// Edge-specific operations
 		void addEdge(Edge &edge) const;
 		void addEdges(std::vector<Edge> &edges) const;
+		std::vector<int64_t> addEdgesColumnar(
+				int64_t typeId,
+				const std::vector<int64_t> &sourceIds,
+				const std::vector<int64_t> &targetIds,
+				const std::vector<BulkPropertyColumn> &columns) const;
 		void updateEdge(const Edge &edge);
 		void updateEdges(const std::vector<Edge> &edges);
 		void updateEdgesWithBeforeImages(const std::vector<Edge> &edges, const std::vector<Edge> &oldEdges);
 		void deleteEdge(Edge &edge) const;
 		Edge getEdge(int64_t id) const;
+		Edge getEdgeForAdjacency(int64_t id) const;
 		std::vector<Edge> getEdgeBatch(const std::vector<int64_t> &ids) const;
 		std::vector<Edge> getEdgesInRange(int64_t startId, int64_t endId, size_t limit = 1000) const;
 			void addEdgeProperties(int64_t edgeId, const std::unordered_map<std::string, PropertyValue> &properties) const;
@@ -606,6 +616,7 @@ namespace graph::storage {
 		void setWALManager(wal::WALManager *wal) { txnContext_.setWALManager(wal); }
 		[[nodiscard]] TransactionContext &getTransactionContext() { return txnContext_; }
 
+		[[nodiscard]] bool hasTransactionWALRecordsToFlush() const;
 		void flushTransactionWALRecords() const;
 		void rollbackActiveTransaction();
 
@@ -740,7 +751,10 @@ namespace graph::storage {
 								  std::function<void(const EntityType &)> notifyAdded) const;
 
 		template<typename EntityType>
-		void flushPendingWALRecordsForType(const TransactionContext::PendingWalChangeMap &changes) const;
+		void flushPendingWALRecordsForType(
+				std::span<const TransactionContext::PendingWalChange *const> changes) const;
+		template<typename EntityType>
+		void flushPendingWALAddRecordsForType(std::span<const int64_t> entityIds) const;
 
 		EntityObserverManager observerManager_;
 

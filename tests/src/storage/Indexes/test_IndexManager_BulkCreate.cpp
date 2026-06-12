@@ -81,6 +81,8 @@ TEST_F(IndexManagerBulkCreateTest, CreateIndexesBuildsScopedNodePropertyIndexesT
 	nodes.push_back(std::move(post));
 
 	dataManager->addNodes(nodes);
+	fileStorage->flush();
+	dataManager->clearCache();
 
 	graph::debug::PerfTrace::reset();
 	graph::debug::PerfTrace::setEnabled(true);
@@ -133,6 +135,8 @@ TEST_F(IndexManagerBulkCreateTest, CreateIndexesCombinesTypedScanWithBlobFallbac
 	blobUser.setProperties({{"id", PropertyValue("blob-user")}, {"bio", PropertyValue(std::string(512, 'x'))}});
 	nodes.push_back(std::move(blobUser));
 	dataManager->addNodes(nodes);
+	fileStorage->flush();
+	dataManager->clearCache();
 
 	graph::debug::PerfTrace::reset();
 	graph::debug::PerfTrace::setEnabled(true);
@@ -166,6 +170,8 @@ TEST_F(IndexManagerBulkCreateTest, CreateIndexesBuildsEdgePropertyIndexesTogethe
 	second.setProperties({{"weight", PropertyValue(int64_t{9})}, {"rank", PropertyValue(int64_t{2})}});
 	edges.push_back(std::move(second));
 	dataManager->addEdges(edges);
+	fileStorage->flush();
+	dataManager->clearCache();
 
 	graph::debug::PerfTrace::reset();
 	graph::debug::PerfTrace::setEnabled(true);
