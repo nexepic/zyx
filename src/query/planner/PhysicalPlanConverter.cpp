@@ -657,49 +657,19 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertVarLengthTravers
 
 	const auto *vlt = static_cast<const LogicalVarLengthTraversal *>(op);
 	auto childPhys = convert(vlt->getChildren()[0]);
+	std::vector<int64_t> targetLabelIds;
+	targetLabelIds.reserve(vlt->getTargetLabels().size());
+	for (const auto &label : vlt->getTargetLabels()) {
+		targetLabelIds.push_back(dm_->getOrCreateTokenId(label));
+	}
+
 	std::unique_ptr<PhysicalOperator> root =
 		std::make_unique<VarLengthTraversalOperator>(dm_, std::move(childPhys),
 		                                             vlt->getSourceVar(), vlt->getTargetVar(),
 		                                             vlt->getEdgeType(), vlt->getMinHops(),
-		                                             vlt->getMaxHops(), vlt->getDirection());
-
-	// Add target label filter if specified
-	if (!vlt->getTargetLabels().empty()) {
-		std::vector<int64_t> labelIds;
-		labelIds.reserve(vlt->getTargetLabels().size());
-		for (const auto &lbl : vlt->getTargetLabels()) {
-			labelIds.push_back(dm_->getOrCreateTokenId(lbl));
-		}
-		std::string targetVar = vlt->getTargetVar();
-		auto predicate = [targetVar, labelIds](const Record &r) -> bool {
-			auto n = r.getNode(targetVar);
-			if (!n) return false; // ZYX_COV_EXCL_LINE
-			for (int64_t lid : labelIds) {
-				if (!n->hasLabelId(lid)) return false;
-			}
-			return true;
-		};
-		std::string desc = "TargetLabel(" + targetVar + ")";
-		root = std::make_unique<FilterOperator>(std::move(root), predicate, desc);
-	}
-
-	// Add target property filter if specified
-	if (!vlt->getTargetProperties().empty()) {
-		std::string targetVar = vlt->getTargetVar();
-		auto props = vlt->getTargetProperties();
-		auto predicate = [targetVar, props](const Record &r) -> bool {
-			auto n = r.getNode(targetVar);
-			if (!n) return false; // ZYX_COV_EXCL_LINE
-			const auto &nodeProps = n->getProperties();
-			for (const auto &[key, val] : props) {
-				auto it = nodeProps.find(key);
-				if (it == nodeProps.end() || it->second != val) return false; // ZYX_COV_EXCL_LINE
-			}
-			return true;
-		};
-		std::string desc = "TargetProps(" + targetVar + ")";
-		root = std::make_unique<FilterOperator>(std::move(root), predicate, desc);
-	}
+		                                             vlt->getMaxHops(), vlt->getDirection(),
+		                                             std::move(targetLabelIds), vlt->getTargetProperties(),
+		                                             im_, vlt->getTargetLabels());
 
 	return root;
 }

@@ -11,6 +11,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string_view>
 
 namespace graph::concurrent {
 
@@ -19,7 +20,8 @@ namespace graph::concurrent {
 		PWK_CPU_BOUND,
 		PWK_MEMORY_SCAN,
 		PWK_MEMORY_INTENSIVE,
-		PWK_STORAGE_SCAN
+		PWK_STORAGE_SCAN,
+		PWK_ADJACENCY_TRAVERSAL
 	};
 
 	enum class ParallelDecisionReason {
@@ -40,6 +42,9 @@ namespace graph::concurrent {
 		size_t minItemsPerWorker = 0;
 		size_t minBytesPerWorker = 0;
 		size_t maxWorkers = 0;
+		size_t estimatedStateBytesPerItem = 0;
+		size_t frontierWidth = 0;
+		size_t traversalDepth = 0;
 	};
 
 	struct ParallelExecutionDecision {
@@ -59,5 +64,37 @@ namespace graph::concurrent {
 		uint64_t mergeNs = 0;
 		bool completed = true;
 	};
+
+	inline std::string_view parallelDecisionReasonName(ParallelDecisionReason reason) {
+		switch (reason) {
+			case ParallelDecisionReason::PDR_PARALLEL:
+				return "parallel";
+			case ParallelDecisionReason::PDR_NO_WORKERS:
+				return "no_workers";
+			case ParallelDecisionReason::PDR_INSUFFICIENT_PARTITIONS:
+				return "insufficient_partitions";
+			case ParallelDecisionReason::PDR_INSUFFICIENT_ITEMS:
+				return "insufficient_items";
+			case ParallelDecisionReason::PDR_INSUFFICIENT_GRANULARITY:
+				return "insufficient_granularity";
+		}
+		return "unknown";
+	}
+
+	inline int64_t parallelDecisionReasonCode(ParallelDecisionReason reason) {
+		switch (reason) {
+			case ParallelDecisionReason::PDR_PARALLEL:
+				return 0;
+			case ParallelDecisionReason::PDR_NO_WORKERS:
+				return 1;
+			case ParallelDecisionReason::PDR_INSUFFICIENT_PARTITIONS:
+				return 2;
+			case ParallelDecisionReason::PDR_INSUFFICIENT_ITEMS:
+				return 3;
+			case ParallelDecisionReason::PDR_INSUFFICIENT_GRANULARITY:
+				return 4;
+		}
+		return -1;
+	}
 
 } // namespace graph::concurrent

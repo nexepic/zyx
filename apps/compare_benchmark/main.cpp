@@ -1,6 +1,12 @@
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/core/Database.hpp"
+#include "graph/query/api/QueryEngine.hpp"
+#include "graph/storage/data/DataManager.hpp"
+#include "graph/storage/data/NativeBulkLoader.hpp"
+#include "graph/storage/indexes/IndexManager.hpp"
 #include "zyx/zyx.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cctype>
 #include <cstdint>
@@ -9,6 +15,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -107,19 +114,26 @@ namespace {
 	}
 
 	void emitProfileEvent(const std::string &workload, const std::string &scale, const std::string &profile,
-						  int iteration, const std::string &phase, double totalTimeMs, uint64_t calls) {
+						  int iteration, const std::string &phase, double totalTimeMs, uint64_t calls,
+						  int64_t totalValue = 0, uint64_t valueCalls = 0) {
 		std::cout << "{\"database\":\"" << kDatabase << "\",\"equivalent_mode\":\"" << kEquivalentMode
 				  << "\",\"event\":\"profile\",\"iteration\":" << iteration << ",\"phase\":\"" << jsonEscape(phase)
 				  << "\",\"profile\":\"" << jsonEscape(profile) << "\",\"scale\":\"" << jsonEscape(scale)
-				  << "\",\"total_time_ms\":" << totalTimeMs << ",\"calls\":" << calls << ",\"workload\":\""
-				  << jsonEscape(workload) << "\"}\n";
+				  << "\",\"total_time_ms\":" << totalTimeMs << ",\"calls\":" << calls;
+		if (valueCalls != 0) {
+			const double averageValue = static_cast<double>(totalValue) / static_cast<double>(valueCalls);
+			std::cout << ",\"value_total\":" << totalValue << ",\"value_calls\":" << valueCalls
+					  << ",\"value_avg\":" << averageValue;
+		}
+		std::cout << ",\"workload\":\"" << jsonEscape(workload) << "\"}\n";
 	}
 
 	void emitProfileSnapshot(const Options &options, const std::string &workload, int iteration,
 							 const graph::debug::PerfTrace::Snapshot &snapshot) {
 		for (const auto &[phase, entry]: snapshot) {
 			const double totalMs = static_cast<double>(entry.totalNs) / 1e6;
-			emitProfileEvent(workload, options.scale, options.profile, iteration, phase, totalMs, entry.calls);
+			emitProfileEvent(workload, options.scale, options.profile, iteration, phase, totalMs, entry.calls,
+							 entry.totalValue, entry.valueCalls);
 		}
 	}
 
@@ -159,7 +173,7 @@ namespace {
 		return fields;
 	}
 
-	std::vector<CsvRow> readCsv(const std::filesystem::path &path) {
+	[[maybe_unused]] std::vector<CsvRow> readCsv(const std::filesystem::path &path) {
 		std::ifstream file(path);
 		if (!file) {
 			throw std::runtime_error("failed to open CSV: " + path.string());
@@ -192,12 +206,83 @@ namespace {
 		return rows;
 	}
 
-	const std::string &field(const CsvRow &row, const std::string &name) {
+	[[maybe_unused]] const std::string &field(const CsvRow &row, const std::string &name) {
 		auto it = row.values.find(name);
 		if (it == row.values.end()) {
 			throw std::runtime_error("missing CSV field: " + name);
 		}
 		return it->second;
+	}
+
+	class CsvStreamReader {
+	public:
+		explicit CsvStreamReader(const std::filesystem::path &path) : file_(path) {
+			if (!file_) {
+				throw std::runtime_error("failed to open CSV: " + path.string());
+			}
+
+			std::string headerLine;
+			if (!std::getline(file_, headerLine)) {
+				return;
+			}
+			if (!headerLine.empty() && headerLine.back() == '\r') {
+				headerLine.pop_back();
+			}
+			headers_ = parseCsvLine(headerLine);
+			headerIndexes_.reserve(headers_.size());
+			for (size_t i = 0; i < headers_.size(); ++i) {
+				headerIndexes_.emplace(headers_[i], i);
+			}
+		}
+
+		[[nodiscard]] bool hasHeader() const noexcept { return !headers_.empty(); }
+
+		[[nodiscard]] size_t requireColumn(const std::string &name) const {
+			const auto it = headerIndexes_.find(name);
+			if (it == headerIndexes_.end()) {
+				throw std::runtime_error("missing CSV field: " + name);
+			}
+			return it->second;
+		}
+
+		[[nodiscard]] const std::string &fieldAt(
+				const std::vector<std::string> &fields,
+				size_t column,
+				const std::string &name) const {
+			if (column >= fields.size()) {
+				throw std::runtime_error("missing CSV field: " + name);
+			}
+			return fields[column];
+		}
+
+		bool next(std::vector<std::string> &fields) {
+			std::string line;
+			while (std::getline(file_, line)) {
+				if (!line.empty() && line.back() == '\r') {
+					line.pop_back();
+				}
+				if (line.empty()) {
+					continue;
+				}
+				fields = parseCsvLine(line);
+				return true;
+			}
+			return false;
+		}
+
+	private:
+		std::ifstream file_;
+		std::vector<std::string> headers_;
+		std::unordered_map<std::string, size_t> headerIndexes_;
+	};
+
+	size_t estimateCsvRows(const std::filesystem::path &path, size_t averageBytesPerRow) {
+		std::error_code ec;
+		const auto bytes = std::filesystem::file_size(path, ec);
+		if (ec || averageBytesPerRow == 0) {
+			return 0;
+		}
+		return static_cast<size_t>((std::max<uintmax_t>)(16, bytes / averageBytesPerRow));
 	}
 
 	int64_t toInt64(const std::string &value) { return std::stoll(value); }
@@ -216,7 +301,8 @@ namespace {
 		return static_cast<size_t>(parsed);
 	}
 
-	void configureThreadPool(zyx::Database &db, const Options &options) {
+	template<typename DatabaseT>
+	void configureThreadPool(DatabaseT &db, const Options &options) {
 		if (options.threads.has_value()) {
 			db.setThreadPoolSize(*options.threads);
 		}
@@ -406,13 +492,14 @@ namespace {
 		}
 	}
 
-	void reserveColumnValues(std::vector<zyx::PropertyColumn> &columns, size_t count) {
+	template<typename Column>
+	void reserveColumnValues(std::vector<Column> &columns, size_t count) {
 		for (auto &column: columns) {
 			column.values.reserve(count);
 		}
 	}
 
-	LoadedGraph loadGraph(zyx::Database &db, const std::filesystem::path &dataset) {
+	[[maybe_unused]] LoadedGraph loadGraph(zyx::Database &db, const std::filesystem::path &dataset) {
 		std::optional<zyx::Transaction> loadTxn;
 		if (!db.hasActiveTransaction()) {
 			loadTxn.emplace(db.beginBulkTransaction());
@@ -421,23 +508,36 @@ namespace {
 		LoadedGraph graph;
 		std::vector<zyx::PropertyColumn> userColumns{{"id", {}}, {"age", {}}, {"country", {}}, {"score", {}}};
 		std::vector<std::string> userExternalIds;
-		const auto userRows = tracePhase("load.users.csv_read", [&]() { return readCsv(dataset / "users.csv"); });
+		const auto usersPath = dataset / "users.csv";
 		tracePhase("load.users.prepare", [&]() {
-			reserveColumnValues(userColumns, userRows.size());
-			userExternalIds.reserve(userRows.size());
-			for (const auto &row: userRows) {
-				const std::string id = field(row, "id");
+			const size_t estimate = estimateCsvRows(usersPath, 48);
+			reserveColumnValues(userColumns, estimate);
+			userExternalIds.reserve(estimate);
+			graph.usersByExternalId.reserve(estimate);
+		});
+		tracePhase("load.users.csv_read", [&]() {
+			CsvStreamReader reader(usersPath);
+			if (!reader.hasHeader()) {
+				return;
+			}
+			const size_t idColumn = reader.requireColumn("id");
+			const size_t ageColumn = reader.requireColumn("age");
+			const size_t countryColumn = reader.requireColumn("country");
+			const size_t scoreColumn = reader.requireColumn("score");
+			std::vector<std::string> fields;
+			while (reader.next(fields)) {
+				const std::string id = reader.fieldAt(fields, idColumn, "id");
 				userExternalIds.push_back(id);
 				userColumns[0].values.emplace_back(id);
-				userColumns[1].values.emplace_back(toInt64(field(row, "age")));
-				userColumns[2].values.emplace_back(field(row, "country"));
-				userColumns[3].values.emplace_back(toDouble(field(row, "score")));
+				userColumns[1].values.emplace_back(toInt64(reader.fieldAt(fields, ageColumn, "age")));
+				userColumns[2].values.emplace_back(reader.fieldAt(fields, countryColumn, "country"));
+				userColumns[3].values.emplace_back(toDouble(reader.fieldAt(fields, scoreColumn, "score")));
 			}
 		});
 
 		const auto nodeIds =
 				tracePhase("load.users.create_nodes",
-						   [&]() { return db.createNodesColumnar("User", userRows.size(), userColumns); });
+						   [&]() { return db.createNodesColumnar("User", userExternalIds.size(), userColumns); });
 		for (size_t i = 0; i < userExternalIds.size() && i < nodeIds.size(); ++i) { // ZYX_COV_EXCL_LINE: bulk API returns one node id per input row.
 			graph.usersByExternalId.emplace(userExternalIds[i], nodeIds[i]);
 		}
@@ -445,22 +545,34 @@ namespace {
 
 		std::vector<zyx::PropertyColumn> postColumns{{"id", {}}, {"created_at", {}}, {"score", {}}};
 		std::vector<std::string> postExternalIds;
-		const auto postRows = tracePhase("load.posts.csv_read", [&]() { return readCsv(dataset / "posts.csv"); });
+		const auto postsPath = dataset / "posts.csv";
 		tracePhase("load.posts.prepare", [&]() {
-			reserveColumnValues(postColumns, postRows.size());
-			postExternalIds.reserve(postRows.size());
-			for (const auto &row: postRows) {
-				const std::string id = field(row, "id");
+			const size_t estimate = estimateCsvRows(postsPath, 40);
+			reserveColumnValues(postColumns, estimate);
+			postExternalIds.reserve(estimate);
+			graph.postsByExternalId.reserve(estimate);
+		});
+		tracePhase("load.posts.csv_read", [&]() {
+			CsvStreamReader reader(postsPath);
+			if (!reader.hasHeader()) {
+				return;
+			}
+			const size_t idColumn = reader.requireColumn("id");
+			const size_t createdAtColumn = reader.requireColumn("created_at");
+			const size_t scoreColumn = reader.requireColumn("score");
+			std::vector<std::string> fields;
+			while (reader.next(fields)) {
+				const std::string id = reader.fieldAt(fields, idColumn, "id");
 				postExternalIds.push_back(id);
 				postColumns[0].values.emplace_back(id);
-				postColumns[1].values.emplace_back(toInt64(field(row, "created_at")));
-				postColumns[2].values.emplace_back(toDouble(field(row, "score")));
+				postColumns[1].values.emplace_back(toInt64(reader.fieldAt(fields, createdAtColumn, "created_at")));
+				postColumns[2].values.emplace_back(toDouble(reader.fieldAt(fields, scoreColumn, "score")));
 			}
 		});
 
 		const auto postNodeIds =
 				tracePhase("load.posts.create_nodes",
-						   [&]() { return db.createNodesColumnar("Post", postRows.size(), postColumns); });
+						   [&]() { return db.createNodesColumnar("Post", postExternalIds.size(), postColumns); });
 		for (size_t i = 0; i < postExternalIds.size() && i < postNodeIds.size(); ++i) { // ZYX_COV_EXCL_LINE: bulk API returns one node id per input row.
 			graph.postsByExternalId.emplace(postExternalIds[i], postNodeIds[i]);
 		}
@@ -468,21 +580,32 @@ namespace {
 
 		std::vector<zyx::PropertyColumn> tagColumns{{"id", {}}, {"rank", {}}};
 		std::vector<std::string> tagExternalIds;
-		const auto tagRows = tracePhase("load.tags.csv_read", [&]() { return readCsv(dataset / "tags.csv"); });
+		const auto tagsPath = dataset / "tags.csv";
 		tracePhase("load.tags.prepare", [&]() {
-			reserveColumnValues(tagColumns, tagRows.size());
-			tagExternalIds.reserve(tagRows.size());
-			for (const auto &row: tagRows) {
-				const std::string id = field(row, "id");
+			const size_t estimate = estimateCsvRows(tagsPath, 32);
+			reserveColumnValues(tagColumns, estimate);
+			tagExternalIds.reserve(estimate);
+			graph.tagsByExternalId.reserve(estimate);
+		});
+		tracePhase("load.tags.csv_read", [&]() {
+			CsvStreamReader reader(tagsPath);
+			if (!reader.hasHeader()) {
+				return;
+			}
+			const size_t idColumn = reader.requireColumn("id");
+			const size_t rankColumn = reader.requireColumn("rank");
+			std::vector<std::string> fields;
+			while (reader.next(fields)) {
+				const std::string id = reader.fieldAt(fields, idColumn, "id");
 				tagExternalIds.push_back(id);
 				tagColumns[0].values.emplace_back(id);
-				tagColumns[1].values.emplace_back(toInt64(field(row, "rank")));
+				tagColumns[1].values.emplace_back(toInt64(reader.fieldAt(fields, rankColumn, "rank")));
 			}
 		});
 
 		const auto tagNodeIds =
 				tracePhase("load.tags.create_nodes",
-						   [&]() { return db.createNodesColumnar("Tag", tagRows.size(), tagColumns); });
+						   [&]() { return db.createNodesColumnar("Tag", tagExternalIds.size(), tagColumns); });
 		for (size_t i = 0; i < tagExternalIds.size() && i < tagNodeIds.size(); ++i) { // ZYX_COV_EXCL_LINE: bulk API returns one node id per input row.
 			graph.tagsByExternalId.emplace(tagExternalIds[i], tagNodeIds[i]);
 		}
@@ -491,20 +614,31 @@ namespace {
 		std::vector<int64_t> followSources;
 		std::vector<int64_t> followTargets;
 		std::vector<zyx::PropertyColumn> followColumns{{"weight", {}}};
-		const auto followsRows = tracePhase("load.follows.csv_read", [&]() { return readCsv(dataset / "follows.csv"); });
+		const auto followsPath = dataset / "follows.csv";
 		tracePhase("load.follows.prepare", [&]() {
-			followSources.reserve(followsRows.size());
-			followTargets.reserve(followsRows.size());
-			reserveColumnValues(followColumns, followsRows.size());
-			for (const auto &row: followsRows) {
-				auto src = graph.usersByExternalId.find(field(row, "src"));
-				auto dst = graph.usersByExternalId.find(field(row, "dst"));
+			const size_t estimate = estimateCsvRows(followsPath, 40);
+			followSources.reserve(estimate);
+			followTargets.reserve(estimate);
+			reserveColumnValues(followColumns, estimate);
+		});
+		tracePhase("load.follows.csv_read", [&]() {
+			CsvStreamReader reader(followsPath);
+			if (!reader.hasHeader()) {
+				return;
+			}
+			const size_t srcColumn = reader.requireColumn("src");
+			const size_t dstColumn = reader.requireColumn("dst");
+			const size_t weightColumn = reader.requireColumn("weight");
+			std::vector<std::string> fields;
+			while (reader.next(fields)) {
+				auto src = graph.usersByExternalId.find(reader.fieldAt(fields, srcColumn, "src"));
+				auto dst = graph.usersByExternalId.find(reader.fieldAt(fields, dstColumn, "dst"));
 				if (src == graph.usersByExternalId.end() || dst == graph.usersByExternalId.end()) {
 					throw std::runtime_error("follows.csv references unknown user");
 				}
 				followSources.push_back(src->second);
 				followTargets.push_back(dst->second);
-				followColumns[0].values.emplace_back(toInt64(field(row, "weight")));
+				followColumns[0].values.emplace_back(toInt64(reader.fieldAt(fields, weightColumn, "weight")));
 			}
 		});
 		const auto followEdgeIds =
@@ -515,20 +649,31 @@ namespace {
 		std::vector<int64_t> authoredSources;
 		std::vector<int64_t> authoredTargets;
 		std::vector<zyx::PropertyColumn> authoredColumns{{"weight", {}}};
-		const auto authoredRows = tracePhase("load.authored.csv_read", [&]() { return readCsv(dataset / "authored.csv"); });
+		const auto authoredPath = dataset / "authored.csv";
 		tracePhase("load.authored.prepare", [&]() {
-			authoredSources.reserve(authoredRows.size());
-			authoredTargets.reserve(authoredRows.size());
-			reserveColumnValues(authoredColumns, authoredRows.size());
-			for (const auto &row: authoredRows) {
-				auto src = graph.usersByExternalId.find(field(row, "src"));
-				auto dst = graph.postsByExternalId.find(field(row, "dst"));
+			const size_t estimate = estimateCsvRows(authoredPath, 40);
+			authoredSources.reserve(estimate);
+			authoredTargets.reserve(estimate);
+			reserveColumnValues(authoredColumns, estimate);
+		});
+		tracePhase("load.authored.csv_read", [&]() {
+			CsvStreamReader reader(authoredPath);
+			if (!reader.hasHeader()) {
+				return;
+			}
+			const size_t srcColumn = reader.requireColumn("src");
+			const size_t dstColumn = reader.requireColumn("dst");
+			const size_t weightColumn = reader.requireColumn("weight");
+			std::vector<std::string> fields;
+			while (reader.next(fields)) {
+				auto src = graph.usersByExternalId.find(reader.fieldAt(fields, srcColumn, "src"));
+				auto dst = graph.postsByExternalId.find(reader.fieldAt(fields, dstColumn, "dst"));
 				if (src == graph.usersByExternalId.end() || dst == graph.postsByExternalId.end()) {
 					throw std::runtime_error("authored.csv references unknown user or post");
 				}
 				authoredSources.push_back(src->second);
 				authoredTargets.push_back(dst->second);
-				authoredColumns[0].values.emplace_back(toInt64(field(row, "weight")));
+				authoredColumns[0].values.emplace_back(toInt64(reader.fieldAt(fields, weightColumn, "weight")));
 			}
 		});
 		const auto authoredEdgeIds =
@@ -539,20 +684,31 @@ namespace {
 		std::vector<int64_t> hasTagSources;
 		std::vector<int64_t> hasTagTargets;
 		std::vector<zyx::PropertyColumn> hasTagColumns{{"weight", {}}};
-		const auto hasTagRows = tracePhase("load.has_tag.csv_read", [&]() { return readCsv(dataset / "has_tag.csv"); });
+		const auto hasTagPath = dataset / "has_tag.csv";
 		tracePhase("load.has_tag.prepare", [&]() {
-			hasTagSources.reserve(hasTagRows.size());
-			hasTagTargets.reserve(hasTagRows.size());
-			reserveColumnValues(hasTagColumns, hasTagRows.size());
-			for (const auto &row: hasTagRows) {
-				auto src = graph.postsByExternalId.find(field(row, "src"));
-				auto dst = graph.tagsByExternalId.find(field(row, "dst"));
+			const size_t estimate = estimateCsvRows(hasTagPath, 40);
+			hasTagSources.reserve(estimate);
+			hasTagTargets.reserve(estimate);
+			reserveColumnValues(hasTagColumns, estimate);
+		});
+		tracePhase("load.has_tag.csv_read", [&]() {
+			CsvStreamReader reader(hasTagPath);
+			if (!reader.hasHeader()) {
+				return;
+			}
+			const size_t srcColumn = reader.requireColumn("src");
+			const size_t dstColumn = reader.requireColumn("dst");
+			const size_t weightColumn = reader.requireColumn("weight");
+			std::vector<std::string> fields;
+			while (reader.next(fields)) {
+				auto src = graph.postsByExternalId.find(reader.fieldAt(fields, srcColumn, "src"));
+				auto dst = graph.tagsByExternalId.find(reader.fieldAt(fields, dstColumn, "dst"));
 				if (src == graph.postsByExternalId.end() || dst == graph.tagsByExternalId.end()) {
 					throw std::runtime_error("has_tag.csv references unknown post or tag");
 				}
 				hasTagSources.push_back(src->second);
 				hasTagTargets.push_back(dst->second);
-				hasTagColumns[0].values.emplace_back(toInt64(field(row, "weight")));
+				hasTagColumns[0].values.emplace_back(toInt64(reader.fieldAt(fields, weightColumn, "weight")));
 			}
 		});
 		const auto hasTagEdgeIds =
@@ -567,7 +723,238 @@ namespace {
 		return graph;
 	}
 
-	void createBenchmarkIndexes(zyx::Database &db, const Options &options) {
+	LoadedGraph loadGraphNative(graph::Database &db, const std::filesystem::path &dataset) {
+		std::optional<graph::Transaction> loadTxn;
+		if (!db.hasActiveTransaction()) {
+			loadTxn.emplace(db.beginBulkTransaction());
+		}
+
+		auto storage = db.getStorage();
+		if (!storage) {
+			throw std::runtime_error("storage is not available for native bulk load");
+		}
+		auto dm = storage->getDataManager();
+		if (!dm) {
+			throw std::runtime_error("data manager is not available for native bulk load");
+		}
+		graph::storage::NativeBulkLoader loader(dm);
+
+		LoadedGraph graph;
+		std::vector<graph::storage::BulkPropertyColumn> userColumns{
+				{"id", {}}, {"age", {}}, {"country", {}}, {"score", {}}};
+		std::vector<std::string> userExternalIds;
+		const auto usersPath = dataset / "users.csv";
+		tracePhase("load.users.prepare", [&]() {
+			const size_t estimate = estimateCsvRows(usersPath, 48);
+			reserveColumnValues(userColumns, estimate);
+			userExternalIds.reserve(estimate);
+			graph.usersByExternalId.reserve(estimate);
+		});
+		tracePhase("load.users.csv_read", [&]() {
+			CsvStreamReader reader(usersPath);
+			if (!reader.hasHeader()) {
+				return;
+			}
+			const size_t idColumn = reader.requireColumn("id");
+			const size_t ageColumn = reader.requireColumn("age");
+			const size_t countryColumn = reader.requireColumn("country");
+			const size_t scoreColumn = reader.requireColumn("score");
+			std::vector<std::string> fields;
+			while (reader.next(fields)) {
+				const std::string id = reader.fieldAt(fields, idColumn, "id");
+				userExternalIds.push_back(id);
+				userColumns[0].values.emplace_back(id);
+				userColumns[1].values.emplace_back(toInt64(reader.fieldAt(fields, ageColumn, "age")));
+				userColumns[2].values.emplace_back(reader.fieldAt(fields, countryColumn, "country"));
+				userColumns[3].values.emplace_back(toDouble(reader.fieldAt(fields, scoreColumn, "score")));
+			}
+		});
+		const auto nodeIds = tracePhase("load.users.create_nodes", [&]() {
+			return loader.addNodes("User", userExternalIds.size(), userColumns);
+		});
+		for (size_t i = 0; i < userExternalIds.size() && i < nodeIds.size(); ++i) { // ZYX_COV_EXCL_LINE: native bulk API returns one node id per input row.
+			graph.usersByExternalId.emplace(userExternalIds[i], nodeIds[i]);
+		}
+		graph.loadedRows += static_cast<int64_t>(nodeIds.size());
+
+		std::vector<graph::storage::BulkPropertyColumn> postColumns{{"id", {}}, {"created_at", {}}, {"score", {}}};
+		std::vector<std::string> postExternalIds;
+		const auto postsPath = dataset / "posts.csv";
+		tracePhase("load.posts.prepare", [&]() {
+			const size_t estimate = estimateCsvRows(postsPath, 40);
+			reserveColumnValues(postColumns, estimate);
+			postExternalIds.reserve(estimate);
+			graph.postsByExternalId.reserve(estimate);
+		});
+		tracePhase("load.posts.csv_read", [&]() {
+			CsvStreamReader reader(postsPath);
+			if (!reader.hasHeader()) {
+				return;
+			}
+			const size_t idColumn = reader.requireColumn("id");
+			const size_t createdAtColumn = reader.requireColumn("created_at");
+			const size_t scoreColumn = reader.requireColumn("score");
+			std::vector<std::string> fields;
+			while (reader.next(fields)) {
+				const std::string id = reader.fieldAt(fields, idColumn, "id");
+				postExternalIds.push_back(id);
+				postColumns[0].values.emplace_back(id);
+				postColumns[1].values.emplace_back(toInt64(reader.fieldAt(fields, createdAtColumn, "created_at")));
+				postColumns[2].values.emplace_back(toDouble(reader.fieldAt(fields, scoreColumn, "score")));
+			}
+		});
+		const auto postNodeIds = tracePhase("load.posts.create_nodes", [&]() {
+			return loader.addNodes("Post", postExternalIds.size(), postColumns);
+		});
+		for (size_t i = 0; i < postExternalIds.size() && i < postNodeIds.size(); ++i) { // ZYX_COV_EXCL_LINE: native bulk API returns one node id per input row.
+			graph.postsByExternalId.emplace(postExternalIds[i], postNodeIds[i]);
+		}
+		graph.loadedRows += static_cast<int64_t>(postNodeIds.size());
+
+		std::vector<graph::storage::BulkPropertyColumn> tagColumns{{"id", {}}, {"rank", {}}};
+		std::vector<std::string> tagExternalIds;
+		const auto tagsPath = dataset / "tags.csv";
+		tracePhase("load.tags.prepare", [&]() {
+			const size_t estimate = estimateCsvRows(tagsPath, 32);
+			reserveColumnValues(tagColumns, estimate);
+			tagExternalIds.reserve(estimate);
+			graph.tagsByExternalId.reserve(estimate);
+		});
+		tracePhase("load.tags.csv_read", [&]() {
+			CsvStreamReader reader(tagsPath);
+			if (!reader.hasHeader()) {
+				return;
+			}
+			const size_t idColumn = reader.requireColumn("id");
+			const size_t rankColumn = reader.requireColumn("rank");
+			std::vector<std::string> fields;
+			while (reader.next(fields)) {
+				const std::string id = reader.fieldAt(fields, idColumn, "id");
+				tagExternalIds.push_back(id);
+				tagColumns[0].values.emplace_back(id);
+				tagColumns[1].values.emplace_back(toInt64(reader.fieldAt(fields, rankColumn, "rank")));
+			}
+		});
+		const auto tagNodeIds = tracePhase("load.tags.create_nodes", [&]() {
+			return loader.addNodes("Tag", tagExternalIds.size(), tagColumns);
+		});
+		for (size_t i = 0; i < tagExternalIds.size() && i < tagNodeIds.size(); ++i) { // ZYX_COV_EXCL_LINE: native bulk API returns one node id per input row.
+			graph.tagsByExternalId.emplace(tagExternalIds[i], tagNodeIds[i]);
+		}
+		graph.loadedRows += static_cast<int64_t>(tagNodeIds.size());
+
+		std::vector<int64_t> followSources;
+		std::vector<int64_t> followTargets;
+		std::vector<graph::storage::BulkPropertyColumn> followColumns{{"weight", {}}};
+		const auto followsPath = dataset / "follows.csv";
+		tracePhase("load.follows.prepare", [&]() {
+			const size_t estimate = estimateCsvRows(followsPath, 40);
+			followSources.reserve(estimate);
+			followTargets.reserve(estimate);
+			reserveColumnValues(followColumns, estimate);
+		});
+		tracePhase("load.follows.csv_read", [&]() {
+			CsvStreamReader reader(followsPath);
+			if (!reader.hasHeader()) {
+				return;
+			}
+			const size_t srcColumn = reader.requireColumn("src");
+			const size_t dstColumn = reader.requireColumn("dst");
+			const size_t weightColumn = reader.requireColumn("weight");
+			std::vector<std::string> fields;
+			while (reader.next(fields)) {
+				auto src = graph.usersByExternalId.find(reader.fieldAt(fields, srcColumn, "src"));
+				auto dst = graph.usersByExternalId.find(reader.fieldAt(fields, dstColumn, "dst"));
+				if (src == graph.usersByExternalId.end() || dst == graph.usersByExternalId.end()) {
+					throw std::runtime_error("follows.csv references unknown user");
+				}
+				followSources.push_back(src->second);
+				followTargets.push_back(dst->second);
+				followColumns[0].values.emplace_back(toInt64(reader.fieldAt(fields, weightColumn, "weight")));
+			}
+		});
+		const auto followEdgeIds = tracePhase("load.follows.create_edges", [&]() {
+			return loader.addEdges("FOLLOWS", followSources, followTargets, followColumns);
+		});
+		graph.loadedRows += static_cast<int64_t>(followEdgeIds.size());
+
+		std::vector<int64_t> authoredSources;
+		std::vector<int64_t> authoredTargets;
+		std::vector<graph::storage::BulkPropertyColumn> authoredColumns{{"weight", {}}};
+		const auto authoredPath = dataset / "authored.csv";
+		tracePhase("load.authored.prepare", [&]() {
+			const size_t estimate = estimateCsvRows(authoredPath, 40);
+			authoredSources.reserve(estimate);
+			authoredTargets.reserve(estimate);
+			reserveColumnValues(authoredColumns, estimate);
+		});
+		tracePhase("load.authored.csv_read", [&]() {
+			CsvStreamReader reader(authoredPath);
+			if (!reader.hasHeader()) {
+				return;
+			}
+			const size_t srcColumn = reader.requireColumn("src");
+			const size_t dstColumn = reader.requireColumn("dst");
+			const size_t weightColumn = reader.requireColumn("weight");
+			std::vector<std::string> fields;
+			while (reader.next(fields)) {
+				auto src = graph.usersByExternalId.find(reader.fieldAt(fields, srcColumn, "src"));
+				auto dst = graph.postsByExternalId.find(reader.fieldAt(fields, dstColumn, "dst"));
+				if (src == graph.usersByExternalId.end() || dst == graph.postsByExternalId.end()) {
+					throw std::runtime_error("authored.csv references unknown user or post");
+				}
+				authoredSources.push_back(src->second);
+				authoredTargets.push_back(dst->second);
+				authoredColumns[0].values.emplace_back(toInt64(reader.fieldAt(fields, weightColumn, "weight")));
+			}
+		});
+		const auto authoredEdgeIds = tracePhase("load.authored.create_edges", [&]() {
+			return loader.addEdges("AUTHORED", authoredSources, authoredTargets, authoredColumns);
+		});
+		graph.loadedRows += static_cast<int64_t>(authoredEdgeIds.size());
+
+		std::vector<int64_t> hasTagSources;
+		std::vector<int64_t> hasTagTargets;
+		std::vector<graph::storage::BulkPropertyColumn> hasTagColumns{{"weight", {}}};
+		const auto hasTagPath = dataset / "has_tag.csv";
+		tracePhase("load.has_tag.prepare", [&]() {
+			const size_t estimate = estimateCsvRows(hasTagPath, 40);
+			hasTagSources.reserve(estimate);
+			hasTagTargets.reserve(estimate);
+			reserveColumnValues(hasTagColumns, estimate);
+		});
+		tracePhase("load.has_tag.csv_read", [&]() {
+			CsvStreamReader reader(hasTagPath);
+			if (!reader.hasHeader()) {
+				return;
+			}
+			const size_t srcColumn = reader.requireColumn("src");
+			const size_t dstColumn = reader.requireColumn("dst");
+			const size_t weightColumn = reader.requireColumn("weight");
+			std::vector<std::string> fields;
+			while (reader.next(fields)) {
+				auto src = graph.postsByExternalId.find(reader.fieldAt(fields, srcColumn, "src"));
+				auto dst = graph.tagsByExternalId.find(reader.fieldAt(fields, dstColumn, "dst"));
+				if (src == graph.postsByExternalId.end() || dst == graph.tagsByExternalId.end()) {
+					throw std::runtime_error("has_tag.csv references unknown post or tag");
+				}
+				hasTagSources.push_back(src->second);
+				hasTagTargets.push_back(dst->second);
+				hasTagColumns[0].values.emplace_back(toInt64(reader.fieldAt(fields, weightColumn, "weight")));
+			}
+		});
+		const auto hasTagEdgeIds = tracePhase("load.has_tag.create_edges", [&]() {
+			return loader.addEdges("HAS_TAG", hasTagSources, hasTagTargets, hasTagColumns);
+		});
+		graph.loadedRows += static_cast<int64_t>(hasTagEdgeIds.size());
+
+		if (loadTxn) {
+			tracePhase("load.commit", [&]() { loadTxn->commit(); });
+		}
+		return graph;
+	}
+
+	[[maybe_unused]] void createBenchmarkIndexes(zyx::Database &db, const Options &options) {
 		std::vector<std::string> userIndexes{"id"};
 		if (options.profile == kProfileIndexed || options.profile == kProfileOperationalDynamic) {
 			userIndexes.push_back("country");
@@ -577,6 +964,44 @@ namespace {
 			if (!db.createNodePropertyIndexes("User", userIndexes)) {
 				throw std::runtime_error("failed to create benchmark User property indexes");
 			}
+		});
+	}
+
+	void createBenchmarkIndexesNative(graph::Database &db, const Options &options) {
+		std::vector<std::string> userIndexes{"id"};
+		if (options.profile == kProfileIndexed || options.profile == kProfileOperationalDynamic) {
+			userIndexes.push_back("country");
+			userIndexes.push_back("age");
+		}
+
+		tracePhase("load.index.user_properties", [&]() {
+			if (db.hasActiveTransaction()) {
+				throw std::runtime_error("native benchmark index build requires no active transaction");
+			}
+			auto queryEngine = db.getQueryEngine();
+			if (!queryEngine) {
+				throw std::runtime_error("query engine is not available for native index build");
+			}
+			if (auto storage = db.getStorage()) {
+				if (auto dm = storage->getDataManager(); dm && dm->hasUnsavedChanges()) {
+					db.flush();
+				}
+			}
+
+			graph::storage::NativeBulkLoader indexLoader(db.getStorage()->getDataManager());
+			indexLoader.deferNodePropertyIndexes("User", userIndexes);
+
+			auto schemaTxn = db.beginBulkTransaction();
+			auto results = indexLoader.buildDeferredIndexes(*queryEngine->getIndexManager());
+			const bool success = std::all_of(results.begin(), results.end(),
+											 [](const auto &result) { return result.success; });
+			if (success) {
+				queryEngine->getPlanCache().clear();
+				schemaTxn.commit();
+				return;
+			}
+			schemaTxn.rollback();
+			throw std::runtime_error("failed to create benchmark User property indexes");
 		});
 	}
 
@@ -592,11 +1017,11 @@ namespace {
 
 	LoadedGraph loadDatabase(const Options &options, const std::filesystem::path &dbPath) {
 		tracePhase("load.remove_existing_db", [&]() { removeDatabaseArtifacts(dbPath); });
-		zyx::Database db(dbPath.string());
+		graph::Database db(dbPath.string());
 		configureThreadPool(db, options);
 		tracePhase("load.db_open", [&]() { db.open(); });
-		LoadedGraph loaded = tracePhase("load.graph", [&]() { return loadGraph(db, options.dataset); });
-		tracePhase("load.indexes", [&]() { createBenchmarkIndexes(db, options); });
+		LoadedGraph loaded = tracePhase("load.graph", [&]() { return loadGraphNative(db, options.dataset); });
+		tracePhase("load.indexes", [&]() { createBenchmarkIndexesNative(db, options); });
 		tracePhase("load.db_close", [&]() { db.close(); });
 		return loaded;
 	}
@@ -1000,6 +1425,10 @@ namespace {
 							 [scale](zyx::Database &queryDb) { return requireReachableWithin(queryDb, 24, scale); });
 			runQueryWorkload(options, db, loaded, "reachable_within_30",
 							 [scale](zyx::Database &queryDb) { return requireReachableWithin(queryDb, 30, scale); });
+			runQueryWorkload(options, db, loaded, "varlength_frontier_count", [](zyx::Database &queryDb) {
+				return scalarInt(queryDb.execute(
+						"MATCH (u:User {country: 'CN'})-[:FOLLOWS*1..2]->(v:User) RETURN count(v)"));
+			});
 		} else if (options.profile == kProfileOperationalDynamic) {
 			int64_t createNodeId = 0;
 			int64_t createEdgeId = 0;

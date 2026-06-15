@@ -20,10 +20,11 @@
 
 #pragma once
 
-#include <atomic>
+#include <cstddef>
 #include <limits>
 #include <random>
 #include <vector>
+#include "graph/concurrent/ParallelOperatorExecutor.hpp"
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/vector/core/VectorMetric.hpp"
 
@@ -49,63 +50,75 @@ namespace graph::vector {
 			}
 
 			bool canParallelize = pool && !pool->isSingleThreaded() && n >= 256;
-			size_t numThreads = canParallelize ? pool->getThreadCount() : 1;
 
 			for (size_t it = 0; it < max_iter; ++it) {
-				std::atomic<bool> changed{false};
-
 				if (canParallelize) {
-					// Parallel E-Step: thread-local accumulators to avoid contention
-					std::vector<std::vector<std::vector<float>>> threadSums(
-						numThreads, std::vector<std::vector<float>>(k, std::vector<float>(dim, 0.0f)));
-					std::vector<std::vector<size_t>> threadCounts(numThreads, std::vector<size_t>(k, 0));
-
-					pool->parallelFor(0, n, [&](size_t i) {
-						float min_dist = std::numeric_limits<float>::max();
-						int best_c = 0;
-
-						for (size_t c = 0; c < k; ++c) {
-							float dist_val = VectorMetric::computeL2Sqr(data[i].data(), centroids[c].data(), dim);
-							if (dist_val < min_dist) {
-								min_dist = dist_val;
-								best_c = c;
-							}
-						}
-						if (assignment[i] != best_c) {
-							changed.store(true, std::memory_order_relaxed);
-							assignment[i] = best_c;
-						}
-
-						// Determine thread index from partitioning
-						size_t chunkSize = (n + numThreads - 1) / numThreads;
-						size_t tid = i / chunkSize;
-						if (tid >= numThreads) tid = numThreads - 1;
-
-						for (size_t d = 0; d < dim; ++d)
-							threadSums[tid][best_c][d] += data[i][d];
-						threadCounts[tid][best_c]++;
-					});
-
-					if (!changed.load())
-						break;
-
-					// Merge thread-local accumulators
+					struct PartitionState {
+						std::vector<std::vector<float>> sums;
+						std::vector<size_t> counts;
+						bool changed = false;
+					};
+					bool changedAny = false;
 					std::vector sums(k, std::vector(dim, 0.0f));
 					std::vector<size_t> counts(k, 0);
-					for (size_t t = 0; t < numThreads; ++t) {
-						for (size_t c = 0; c < k; ++c) {
-							counts[c] += threadCounts[t][c];
-							for (size_t d = 0; d < dim; ++d)
-								sums[c][d] += threadSums[t][c][d];
-						}
+
+					(void) concurrent::ParallelOperatorExecutor::runRangePartitions<PartitionState>(
+							0,
+							n,
+							pool,
+							{.phase = "vector.kmeans.assignment",
+							 .workloadKind = concurrent::ParallelWorkloadKind::PWK_CPU_BOUND,
+							 .estimatedItems = n,
+							 .minPartitions = 2,
+							 .minItems = 256,
+							 .minItemsPerWorker = 64},
+							[&](const concurrent::ParallelRangePartition &range, PartitionState &state) {
+								state.sums.assign(k, std::vector<float>(dim, 0.0f));
+								state.counts.assign(k, 0);
+
+								for (size_t i = range.begin; i < range.end; ++i) {
+									float min_dist = std::numeric_limits<float>::max();
+									int best_c = 0;
+
+									for (size_t c = 0; c < k; ++c) {
+										float dist_val = VectorMetric::computeL2Sqr(data[i].data(), centroids[c].data(), dim);
+										if (dist_val < min_dist) {
+											min_dist = dist_val;
+											best_c = static_cast<int>(c);
+										}
+									}
+									if (assignment[i] != best_c) {
+										state.changed = true;
+										assignment[i] = best_c;
+									}
+
+									for (size_t d = 0; d < dim; ++d) {
+										state.sums[static_cast<size_t>(best_c)][d] += data[i][d];
+									}
+									state.counts[static_cast<size_t>(best_c)]++;
+								}
+							},
+							[&](size_t, PartitionState &state) {
+								changedAny = changedAny || state.changed;
+								for (size_t c = 0; c < k; ++c) {
+									counts[c] += state.counts[c];
+									for (size_t d = 0; d < dim; ++d) {
+										sums[c][d] += state.sums[c][d];
+									}
+								}
+							});
+
+					if (!changedAny) {
+						break;
 					}
 
 					// M-Step: Update centroids
 					for (size_t c = 0; c < k; ++c) {
 						if (counts[c] > 0) {
 							float inv_count = 1.0f / static_cast<float>(counts[c]);
-							for (size_t d = 0; d < dim; ++d)
+							for (size_t d = 0; d < dim; ++d) {
 								centroids[c][d] = sums[c][d] * inv_count;
+							}
 						} else {
 							centroids[c] = data[dist(rng)];
 						}

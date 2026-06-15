@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "graph/concurrent/ParallelExecutionPolicy.hpp"
+#include "graph/concurrent/ParallelOperatorExecutor.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/CommittedSnapshot.hpp"
 #include "graph/storage/SegmentReadUtils.hpp"
@@ -65,6 +66,8 @@ namespace graph::query::execution {
 			thread_local std::vector<char> buffer;
 			return buffer;
 		}
+
+		struct RelationshipMetadataReadTaskState {};
 
 		constexpr size_t kMaxCoalescedRelationshipMetadataReadSegments = 16;
 		constexpr size_t kMinParallelRelationshipMetadataReadTasks = 2;
@@ -245,7 +248,15 @@ namespace graph::query::execution {
 			}
 
 			std::atomic<bool> failed{false};
-			threadPool->parallelFor(0, plan.tasks.size(), decision.workerCount, [&](size_t taskIndex) {
+			const concurrent::ParallelOperatorOptions options{
+					.phase = "relationship_metadata.scan",
+					.workloadKind = concurrent::ParallelWorkloadKind::PWK_STORAGE_SCAN,
+					.estimatedItems = plan.totalSegments,
+					.estimatedBytes = plan.totalSegments * storage::TOTAL_SEGMENT_SIZE,
+					.minPartitions = kMinParallelRelationshipMetadataReadTasks,
+					.minItems = kMinParallelRelationshipMetadataReadSegments};
+			(void) concurrent::ParallelOperatorExecutor::runIndexedPartitions<RelationshipMetadataReadTaskState>(
+					plan.tasks.size(), threadPool, options, [&](size_t taskIndex, RelationshipMetadataReadTaskState &) {
 				const auto &task = plan.tasks[taskIndex];
 				const auto &group = plan.groups[task.groupIndex];
 				const size_t totalBytes = task.segCount * storage::TOTAL_SEGMENT_SIZE;
@@ -254,7 +265,7 @@ namespace graph::query::execution {
 				const auto read = dm->preadSegments(groupBuffer.data(), task.segCount, task.startOffset);
 				if (read < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
 					failed.store(true, std::memory_order_relaxed); // ZYX_COV_EXCL_LINE
-					return; // ZYX_COV_EXCL_LINE
+					return false; // ZYX_COV_EXCL_LINE
 				}
 
 				for (size_t member = 0; member < task.memberCount; ++member) {
@@ -272,7 +283,8 @@ namespace graph::query::execution {
 						});
 					}
 				}
-			});
+				return true;
+			}, [](size_t, RelationshipMetadataReadTaskState &) {});
 			return !failed.load(std::memory_order_relaxed);
 		}
 

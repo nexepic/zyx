@@ -171,7 +171,7 @@ namespace {
 	}
 
 	int64_t RelationshipCountScanOperator::countExpandedPaths(const std::vector<int64_t> &seedIds) const {
-		RelationshipAdjacencyCursor cursor(dm_);
+		RelationshipAdjacencyCursor cursor(dm_, threadPool_);
 		std::vector<int64_t> current = seedIds;
 		int64_t count = 0;
 		for (size_t hopIndex = 0; hopIndex < hops_.size(); ++hopIndex) {
@@ -192,11 +192,12 @@ namespace {
 			if (finalHop) {
 				count += cursor.count(current, hop, requirements);
 			} else {
+				auto expanded = cursor.expand(current, hop, requirements);
 				std::vector<int64_t> next;
-				(void) cursor.forEach(current, hop, requirements, [&](const RelationshipExpandRow &row) {
+				next.reserve(expanded.rows.size());
+				for (const auto &row: expanded.rows) {
 					next.push_back(row.targetId);
-					return true;
-				});
+				}
 				current = std::move(next);
 			}
 			addProfile("relationship_expand.edges", edgeStart);

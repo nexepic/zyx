@@ -17,6 +17,7 @@
 #include <sstream>
 #include <type_traits>
 #include <vector>
+#include "graph/concurrent/ParallelOperatorExecutor.hpp"
 #include "graph/core/Blob.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Index.hpp"
@@ -379,13 +380,60 @@ namespace graph::storage {
 		// Classify entities by change type for all entity types.
 		auto prepStart = Clock::now();
 
-		auto allBatches = std::make_tuple(
-				classifyEntities(nodes),
-				classifyEntities(edges),
-				classifyEntities(properties),
-				classifyEntities(blobs),
-				classifyEntities(indexes),
-				classifyEntities(states));
+		auto allBatches = std::tuple<SaveBatch<Node>, SaveBatch<Edge>, SaveBatch<Property>, SaveBatch<Blob>,
+									 SaveBatch<Index>, SaveBatch<State>>{};
+		const size_t dirtyEntityCount =
+				nodes.size() + edges.size() + properties.size() + blobs.size() + indexes.size() + states.size();
+		const auto classifySerial = [&]() {
+			std::get<0>(allBatches) = classifyEntities(nodes);
+			std::get<1>(allBatches) = classifyEntities(edges);
+			std::get<2>(allBatches) = classifyEntities(properties);
+			std::get<3>(allBatches) = classifyEntities(blobs);
+			std::get<4>(allBatches) = classifyEntities(indexes);
+			std::get<5>(allBatches) = classifyEntities(states);
+		};
+		if (concurrent::hasParallelWorkers(threadPool) && dirtyEntityCount >= 4096) {
+			struct SavePrepareState {};
+			const concurrent::ParallelOperatorOptions options{
+					.phase = "save.prepare.parallel",
+					.workloadKind = concurrent::ParallelWorkloadKind::PWK_CPU_BOUND,
+					.estimatedItems = dirtyEntityCount,
+					.minPartitions = 2,
+					.minItems = 4096,
+					.minItemsPerWorker = 1024,
+					.maxWorkers = 6};
+			(void) concurrent::ParallelOperatorExecutor::runIndexedPartitions<SavePrepareState>(
+					6,
+					threadPool,
+					options,
+					[&](size_t partition, SavePrepareState &) {
+						switch (partition) {
+							case 0:
+								std::get<0>(allBatches) = classifyEntities(nodes);
+								break;
+							case 1:
+								std::get<1>(allBatches) = classifyEntities(edges);
+								break;
+							case 2:
+								std::get<2>(allBatches) = classifyEntities(properties);
+								break;
+							case 3:
+								std::get<3>(allBatches) = classifyEntities(blobs);
+								break;
+							case 4:
+								std::get<4>(allBatches) = classifyEntities(indexes);
+								break;
+							case 5:
+								std::get<5>(allBatches) = classifyEntities(states);
+								break;
+							default: // ZYX_COV_EXCL_LINE
+								break; // ZYX_COV_EXCL_LINE
+						}
+					},
+					[](size_t, SavePrepareState &) {});
+		} else {
+			classifySerial();
+		}
 
 		debug::PerfTrace::addDuration(
 				"save.prepare", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -

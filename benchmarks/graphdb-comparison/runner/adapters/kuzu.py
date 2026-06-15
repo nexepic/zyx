@@ -172,6 +172,10 @@ class KuzuAdapter(BenchmarkAdapter):
     def reachable_within_30(self) -> int:
         return self._reachable_within(30)
 
+    def varlength_frontier_count(self) -> int:
+        self._ensure_loaded()
+        return self._scalar_int("MATCH (u:User {country: 'CN'})-[:FOLLOWS*1..2]->(v:User) RETURN COUNT(v)")
+
     def all_nodes_property_filter(self) -> int:
         self._ensure_loaded()
         return self._scalar_int("MATCH (n) WHERE n.score >= 900 RETURN COUNT(n)")

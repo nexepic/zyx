@@ -443,6 +443,23 @@ def test_profile_event_to_event_uses_profile_schema():
         "event": "profile",
     }
 
+    valued_event = ProfileEvent(
+        database="zyx",
+        workload="label_scan_filter",
+        scale="smoke",
+        profile="scan",
+        iteration=0,
+        phase="filter.parallel.workers",
+        total_time_ms=0.0,
+        calls=0,
+        equivalent_mode="api",
+        value_total=4,
+        value_calls=1,
+        value_avg=4.0,
+    )
+
+    assert valued_event.to_event()["value_avg"] == 4.0
+
 
 def test_zyx_adapter_parses_profile_events_separately_from_samples(tmp_path: Path, monkeypatch):
     binary = tmp_path / "zyx-bench-profile-events.py"
@@ -453,7 +470,7 @@ def test_zyx_adapter_parses_profile_events_separately_from_samples(tmp_path: Pat
         "workloads = ['load_nodes_edges', 'point_lookup_indexed', 'property_equality_indexed', 'property_range_indexed']\n"
         "for workload in workloads:\n"
         "    print(json.dumps({'event':'sample','database':'zyx','workload':workload,'scale':'smoke','iteration':0,'latency_ms':1.0,'status':'ok','equivalent_mode':'api'}))\n"
-        "print(json.dumps({'event':'profile','database':'zyx','equivalent_mode':'api','scale':'smoke','profile':'indexed','workload':'point_lookup_indexed','iteration':0,'phase':'parse','total_time_ms':0.25,'calls':1}))\n",
+        "print(json.dumps({'event':'profile','database':'zyx','equivalent_mode':'api','scale':'smoke','profile':'indexed','workload':'point_lookup_indexed','iteration':0,'phase':'parse','total_time_ms':0.25,'calls':1,'value_total':4,'value_calls':1,'value_avg':4.0}))\n",
     )
     monkeypatch.setenv("ZYX_COMPARE_BENCH", str(binary))
     adapter = ZyxAdapter(database="zyx", dataset_dir=tmp_path / "dataset", scale="smoke", profile="indexed")
@@ -473,4 +490,7 @@ def test_zyx_adapter_parses_profile_events_separately_from_samples(tmp_path: Pat
         "phase": "parse",
         "total_time_ms": 0.25,
         "calls": 1,
+        "value_total": 4,
+        "value_calls": 1,
+        "value_avg": 4.0,
     }

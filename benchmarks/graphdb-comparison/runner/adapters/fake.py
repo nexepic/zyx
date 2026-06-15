@@ -84,6 +84,23 @@ class FakeAdapter(BenchmarkAdapter):
     def reachable_within_30(self) -> int:
         return self._reachable_within(multihop_target_user_id(30, self.scale), 30)
 
+    def varlength_frontier_count(self) -> int:
+        self._ensure_loaded()
+        adjacency: dict[str, list[str]] = {}
+        for edge in self.follows:
+            adjacency.setdefault(edge["src"], []).append(edge["dst"])
+
+        count = 0
+        for user in self.users:
+            if user["country"] != "CN":
+                continue
+            source = user["id"]
+            first_hop = adjacency.get(source, [])
+            count += len(first_hop)
+            for middle in first_hop:
+                count += len(adjacency.get(middle, []))
+        return count
+
     def _reachable_within(self, target: str, max_depth: int) -> int:
         self._ensure_loaded()
         frontier = {"user-000001"}

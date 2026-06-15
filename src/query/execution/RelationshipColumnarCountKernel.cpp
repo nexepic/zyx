@@ -9,6 +9,7 @@
 #include "graph/query/execution/PropertyPredicateKernel.hpp"
 #include "graph/query/execution/PropertyPredicateScanKernel.hpp"
 #include "graph/query/execution/RelationshipMetadataColumnLoader.hpp"
+#include "graph/storage/IDAllocator.hpp"
 
 namespace graph::query::execution {
 	namespace {
@@ -91,6 +92,18 @@ namespace graph::query::execution {
 
 		auto tryCountTypedPropertyCandidates = [&]() -> std::optional<RelationshipColumnarCountResult> {
 			if (request.typeId == 0) {
+				const auto edgeAllocator = dm_->getIdAllocator(EntityType::Edge);
+				const int64_t maxEdgeId = edgeAllocator ? edgeAllocator->getCurrentMaxId() : int64_t{0};
+				if (request.beginId <= 1 && request.endId >= maxEdgeId) {
+					const auto propertyStart = Clock::now();
+					if (auto predicateCount = scanKernel.countAllOwnerProperties(EntityType::Edge)) {
+						RelationshipColumnarCountResult allEdgeResult;
+						allEdgeResult.propertyCandidates = predicateCount->loadedCount;
+						allEdgeResult.count = static_cast<int64_t>(predicateCount->matchedCount);
+						addProfile("relationship_count.property_predicate", propertyStart);
+						return allEdgeResult;
+					}
+				}
 				return std::nullopt;
 			}
 

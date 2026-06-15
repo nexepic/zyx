@@ -22,6 +22,10 @@ namespace graph::concurrent {
 	inline constexpr size_t kDefaultMemoryScanMaxWorkers = 4;
 	inline constexpr size_t kDefaultMemoryIntensiveBytesPerWorker = kDefaultMemoryScanBytesPerWorker;
 	inline constexpr size_t kDefaultMemoryIntensiveMaxWorkers = kDefaultMemoryScanMaxWorkers;
+	inline constexpr size_t kDefaultStorageScanBytesPerWorker = size_t{4} * 1024 * 1024;
+	inline constexpr size_t kDefaultStorageScanMaxWorkers = 8;
+	inline constexpr size_t kDefaultAdjacencyTraversalItemsPerWorker = 2048;
+	inline constexpr size_t kDefaultAdjacencyTraversalMaxWorkers = 0;
 
 	struct ParallelExecutionPolicyConfig {
 		size_t generalItemsPerWorker = 0;
@@ -30,8 +34,10 @@ namespace graph::concurrent {
 		size_t memoryScanMaxWorkers = kDefaultMemoryScanMaxWorkers;
 		size_t memoryIntensiveBytesPerWorker = kDefaultMemoryIntensiveBytesPerWorker;
 		size_t memoryIntensiveMaxWorkers = kDefaultMemoryIntensiveMaxWorkers;
-		size_t storageScanBytesPerWorker = 0;
-		size_t storageScanMaxWorkers = 0;
+		size_t storageScanBytesPerWorker = kDefaultStorageScanBytesPerWorker;
+		size_t storageScanMaxWorkers = kDefaultStorageScanMaxWorkers;
+		size_t adjacencyTraversalItemsPerWorker = kDefaultAdjacencyTraversalItemsPerWorker;
+		size_t adjacencyTraversalMaxWorkers = kDefaultAdjacencyTraversalMaxWorkers;
 	};
 
 	struct ParallelWorkloadDefaults {
@@ -54,6 +60,9 @@ namespace graph::concurrent {
 			case ParallelWorkloadKind::PWK_STORAGE_SCAN:
 				return {.minBytesPerWorker = config.storageScanBytesPerWorker,
 						.maxWorkers = config.storageScanMaxWorkers};
+			case ParallelWorkloadKind::PWK_ADJACENCY_TRAVERSAL:
+				return {.minItemsPerWorker = config.adjacencyTraversalItemsPerWorker,
+						.maxWorkers = config.adjacencyTraversalMaxWorkers};
 			case ParallelWorkloadKind::PWK_GENERAL:
 			default:
 				return {.minItemsPerWorker = config.generalItemsPerWorker};
@@ -81,6 +90,23 @@ namespace graph::concurrent {
 				estimate.minBytesPerWorker != 0 ? estimate.minBytesPerWorker : defaults.minBytesPerWorker;
 		if (bytesPerWorker != 0 && estimate.estimatedBytes != 0) {
 			workerCount = std::min(workerCount, ceilDiv(estimate.estimatedBytes, bytesPerWorker));
+		}
+		return workerCount;
+	}
+
+	inline size_t applyAdjacencyTraversalStateLimit(size_t workerCount,
+													const ParallelWorkEstimate &estimate) {
+		if (estimate.workloadKind != ParallelWorkloadKind::PWK_ADJACENCY_TRAVERSAL || workerCount <= 1) {
+			return workerCount;
+		}
+
+		// Frontier traversal is usually memory-bandwidth bound once each output carries
+		// path state. Prefer a conservative baseline and let the adaptive policy explore
+		// higher counts only after local telemetry proves that they help.
+		const bool carriesPathState = estimate.estimatedStateBytesPerItem >= 32;
+		const bool broadFrontier = estimate.frontierWidth >= 1024;
+		if (carriesPathState && (estimate.traversalDepth >= 1 || broadFrontier)) {
+			workerCount = std::min(workerCount, size_t{2});
 		}
 		return workerCount;
 	}
@@ -114,6 +140,7 @@ namespace graph::concurrent {
 		if (estimate.maxWorkers == 0 && defaults.maxWorkers != 0) {
 			workerCount = std::min(workerCount, defaults.maxWorkers);
 		}
+		workerCount = applyAdjacencyTraversalStateLimit(workerCount, estimate);
 		decision.baselineWorkerCount = std::max<size_t>(1, workerCount);
 
 		if (workerCount > 1 && estimate.maxWorkers == 0) {

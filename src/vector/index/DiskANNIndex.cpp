@@ -27,6 +27,7 @@
 #include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
+#include "graph/concurrent/ParallelOperatorExecutor.hpp"
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/log/Log.hpp"
 #include "graph/vector/VectorIndexRegistry.hpp"
@@ -276,7 +277,24 @@ namespace graph::vector {
 			}
 		};
 		if (threadPool_ && !threadPool_->isSingleThreaded() && candidateIds.size() > 16) {
-			threadPool_->parallelFor(0, candidateIds.size(), loadVector);
+			struct LoadVectorState {};
+			(void) concurrent::ParallelOperatorExecutor::runRangePartitions<LoadVectorState>(
+					0,
+					candidateIds.size(),
+					threadPool_,
+					{.phase = "vector.diskann.load_candidates",
+					 .workloadKind = concurrent::ParallelWorkloadKind::PWK_STORAGE_SCAN,
+					 .estimatedItems = candidateIds.size(),
+					 .estimatedBytes = candidateIds.size() * config_.dim * sizeof(float),
+					 .minPartitions = 2,
+					 .minItems = 17,
+					 .minItemsPerWorker = 16},
+					[&](const concurrent::ParallelRangePartition &range, LoadVectorState &) {
+						for (size_t i = range.begin; i < range.end; ++i) {
+							loadVector(i);
+						}
+					},
+					[](size_t, LoadVectorState &) {});
 		} else {
 			for (size_t i = 0; i < candidateIds.size(); ++i)
 				loadVector(i);
@@ -300,7 +318,23 @@ namespace graph::vector {
 		};
 
 		if (threadPool_ && !threadPool_->isSingleThreaded() && candidateIds.size() > 16) {
-			threadPool_->parallelFor(0, candidateIds.size(), computeRank);
+			struct RankState {};
+			(void) concurrent::ParallelOperatorExecutor::runRangePartitions<RankState>(
+					0,
+					candidateIds.size(),
+					threadPool_,
+					{.phase = "vector.diskann.rank_candidates",
+					 .workloadKind = concurrent::ParallelWorkloadKind::PWK_CPU_BOUND,
+					 .estimatedItems = candidateIds.size(),
+					 .minPartitions = 2,
+					 .minItems = 17,
+					 .minItemsPerWorker = 16},
+					[&](const concurrent::ParallelRangePartition &range, RankState &) {
+						for (size_t i = range.begin; i < range.end; ++i) {
+							computeRank(i);
+						}
+					},
+					[](size_t, RankState &) {});
 		} else {
 			for (size_t i = 0; i < candidateIds.size(); ++i)
 				computeRank(i);

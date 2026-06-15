@@ -18,9 +18,8 @@
 
 #include "PropertyEntityScanPrimitives.hpp"
 #include "PropertySerializedValueReader.hpp"
-#include "graph/concurrent/ParallelScanExecutor.hpp"
 #include "graph/concurrent/ThreadPool.hpp"
-#include "graph/storage/SegmentReadUtils.hpp"
+#include "graph/storage/data/PropertyEntitySegmentScanner.hpp"
 
 namespace graph::storage {
 namespace {
@@ -310,117 +309,50 @@ namespace {
 					values);
 			return values;
 		}
-		const auto &segIndex = segmentIndexManager->getPropertySegmentIndex();
-
-		std::vector<size_t> segmentIndices;
-		segmentIndices.reserve(segIndex.size());
-		for (size_t index = 0; index < segIndex.size(); ++index) {
-			segmentIndices.push_back(index);
-		}
 
 		constexpr size_t entitySize = Property::getTotalSize();
-		auto scanSegmentInto = [&](const SegmentHeader &header,
-								   const char *dataBuf,
-								   std::vector<PropertyEntityOwnerScalarKeyValue> &target) {
+		auto scanSegmentInto = [&](const SegmentHeader &header, const char *dataBuf,
+							   PropertyIndexBuildScanState &state) {
 			if (header.data_type != Property::typeId || header.used == 0) {
 				return;
 			}
-				for (uint32_t slot = 0; slot < header.used; ++slot) {
-					const char *entityBuffer = dataBuf + static_cast<size_t>(slot) * entitySize;
-					const int64_t expectedId = header.start_id + static_cast<int64_t>(slot);
-					if (dirtyPropertyIds.contains(expectedId)) {
-						continue;
-					}
-					if (readSerializedPropertyId(entityBuffer) != expectedId) {
-						continue; // ZYX_COV_EXCL_LINE
-					}
+			for (uint32_t slot = 0; slot < header.used; ++slot) {
+				const char *entityBuffer = dataBuf + static_cast<size_t>(slot) * entitySize;
+				const int64_t expectedId = header.start_id + static_cast<int64_t>(slot);
+				if (dirtyPropertyIds.contains(expectedId)) {
+					continue;
+				}
+				if (readSerializedPropertyId(entityBuffer) != expectedId) {
+					continue; // ZYX_COV_EXCL_LINE
+				}
 				readIndexableOwnerValues(
 						entityBuffer,
 						ownerType,
 						std::span<const std::string>(requestedKeys.data(), requestedKeys.size()),
 						sortedOwnerIds,
-						target);
+						state.values);
 			}
 		};
 
-		const auto groups = buildCoalescedGroups(segmentIndices, segIndex);
-		auto tasks = buildCoalescedReadTasks(groups, kMaxCoalescedPropertyReadSegments);
-		const size_t segmentCount = totalCoalescedSegments(groups);
-		const auto decision = decidePropertyEntityScan(pool, tasks.size(), segmentCount);
-		if (decision.useParallel) {
-			(void) concurrent::runIndexedPartitions<PropertyIndexBuildScanState>(
-					tasks.size(),
-					pool,
-					{.phase = "property_index_build_scan.parallel",
-					 .workloadKind = concurrent::ParallelWorkloadKind::PWK_MEMORY_SCAN,
-					 .estimatedItems = segmentCount,
-					 .estimatedBytes = segmentCount * TOTAL_SEGMENT_SIZE,
-					 .minPartitions = kMinParallelPropertyReadTasks,
-					 .minItems = kMinParallelPropertyReadSegments},
-					[&](size_t taskIndex, PropertyIndexBuildScanState &state) {
-						const auto &task = tasks[taskIndex];
-						const size_t totalBytes = task.segCount * TOTAL_SEGMENT_SIZE;
-						state.readBuffer.resize(totalBytes);
-						const ssize_t n = dataManager_.preadSegments(
-								state.readBuffer.data(), task.segCount, task.startOffset);
-						if (n < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
-							std::vector<char>().swap(state.readBuffer); // ZYX_COV_EXCL_LINE
-							return; // ZYX_COV_EXCL_LINE
-						}
+		(void) detail::scanAllPropertyEntitySegments<PropertyIndexBuildScanState>(
+				dataManager_,
+				pool,
+				"property_index_build_scan.parallel",
+				scanSegmentInto,
+				[&](size_t, PropertyIndexBuildScanState &state) {
+					values.insert(values.end(),
+								  std::make_move_iterator(state.values.begin()),
+								  std::make_move_iterator(state.values.end()));
+				});
 
-						for (size_t member = 0; member < task.memberCount; ++member) {
-							const size_t bufferOffset = member * TOTAL_SEGMENT_SIZE;
-							SegmentHeader header;
-							std::memcpy(&header, state.readBuffer.data() + bufferOffset, sizeof(SegmentHeader));
-							scanSegmentInto(
-									header,
-									state.readBuffer.data() + bufferOffset + sizeof(SegmentHeader),
-									state.values);
-						}
-						std::vector<char>().swap(state.readBuffer);
-					},
-						[&](size_t, PropertyIndexBuildScanState &state) {
-							values.insert(values.end(),
-										  std::make_move_iterator(state.values.begin()),
-										  std::make_move_iterator(state.values.end()));
-						});
-				appendDirtyOwnerValues(
-						dirtyInfos,
-						ownerType,
-						std::span<const std::string>(requestedKeys.data(), requestedKeys.size()),
-						sortedOwnerIds,
-						values);
-				return values;
-			}
+		appendDirtyOwnerValues(
+				dirtyInfos,
+				ownerType,
+				std::span<const std::string>(requestedKeys.data(), requestedKeys.size()),
+				sortedOwnerIds,
+				values);
+		return values;
+	}
 
-		auto &readBuffer = propertyEntityScanScratchBuffer(0);
-		for (const auto &group: groups) {
-			for (size_t chunkBegin = 0; chunkBegin < group.memberIndices.size();
-				 chunkBegin += kMaxCoalescedPropertyReadSegments) {
-				const size_t chunkSegments =
-						std::min(kMaxCoalescedPropertyReadSegments, group.memberIndices.size() - chunkBegin);
-				const size_t totalBytes = chunkSegments * TOTAL_SEGMENT_SIZE;
-				readBuffer.resize(totalBytes);
-				const uint64_t groupOffset = group.startOffset + chunkBegin * TOTAL_SEGMENT_SIZE;
-				const ssize_t n = dataManager_.preadSegments(readBuffer.data(), chunkSegments, groupOffset);
-				if (n < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
-					continue; // ZYX_COV_EXCL_LINE
-				}
-				for (size_t member = 0; member < chunkSegments; ++member) {
-					const size_t bufferOffset = member * TOTAL_SEGMENT_SIZE;
-					SegmentHeader header;
-					std::memcpy(&header, readBuffer.data() + bufferOffset, sizeof(SegmentHeader));
-					scanSegmentInto(header, readBuffer.data() + bufferOffset + sizeof(SegmentHeader), values);
-					}
-				}
-			}
-			appendDirtyOwnerValues(
-					dirtyInfos,
-					ownerType,
-					std::span<const std::string>(requestedKeys.data(), requestedKeys.size()),
-					sortedOwnerIds,
-					values);
-			return values;
-		}
 
 } // namespace graph::storage

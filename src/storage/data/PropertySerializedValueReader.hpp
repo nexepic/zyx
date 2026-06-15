@@ -10,9 +10,6 @@
 #include <unordered_set>
 #include <vector>
 
-#include "graph/concurrent/ParallelExecutionPolicy.hpp"
-#include "graph/concurrent/ThreadPool.hpp"
-#include "graph/storage/SegmentReadUtils.hpp"
 #include "graph/utils/Serializer.hpp"
 
 namespace graph::storage {
@@ -69,30 +66,6 @@ namespace graph::storage {
 			bool active = false;
 			uint32_t propertyCount = 0;
 		};
-
-		constexpr size_t kMaxCoalescedPropertyReadSegments = 16;
-		constexpr size_t kMinParallelPropertyReadTasks = 2;
-		constexpr size_t kMinParallelPropertyReadSegments = kMaxCoalescedPropertyReadSegments * 2;
-
-		concurrent::ParallelExecutionDecision decidePropertyEntityScan(
-				concurrent::ThreadPool *pool,
-				size_t taskCount,
-				size_t segmentCount) {
-			return concurrent::decideParallelExecution(
-					pool,
-					{.workloadKind = concurrent::ParallelWorkloadKind::PWK_MEMORY_SCAN,
-					 .partitions = taskCount,
-					 .estimatedItems = segmentCount,
-					 .estimatedBytes = segmentCount * TOTAL_SEGMENT_SIZE,
-					 .minPartitions = kMinParallelPropertyReadTasks,
-					 .minItems = kMinParallelPropertyReadSegments});
-		}
-
-		std::vector<char> &propertyEntityScanScratchBuffer(size_t requiredBytes) {
-			thread_local std::vector<char> buffer;
-			buffer.resize(requiredBytes);
-			return buffer;
-		}
 
 		bool readPropertyRecordHeader(const char *&cursor, const char *end, PropertyRecordHeader &header) {
 			constexpr size_t headerBytes = sizeof(header.propertyId) + sizeof(header.entityId) +

@@ -46,6 +46,7 @@ OPERATION_SPECS = [
     OperationSpec("adjacency expand", "multihop", "reachable_within_12", "bounded reachability <= 12 hops"),
     OperationSpec("adjacency expand", "multihop", "reachable_within_24", "bounded reachability <= 24 hops"),
     OperationSpec("adjacency expand", "multihop", "reachable_within_30", "bounded reachability <= 30 hops"),
+    OperationSpec("adjacency expand", "multihop", "varlength_frontier_count", "batched variable-length expansion count"),
     OperationSpec("point write", "write", "point_create_node", "create one node"),
     OperationSpec("point write", "write", "point_create_edge", "create one relationship"),
     OperationSpec("point write", "write", "point_update_node_property", "update one node property"),

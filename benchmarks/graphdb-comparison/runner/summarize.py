@@ -55,6 +55,9 @@ PROFILE_SUMMARY_FIELDS = [
     "samples",
     "total_calls",
     "avg_calls",
+    "total_value",
+    "total_value_calls",
+    "avg_value",
     "first_ms",
     "min_ms",
     "avg_ms",
@@ -123,6 +126,7 @@ ADJACENCY_EXPAND_WORKLOADS = {
     "shortest_path_chain",
     "index_seek_then_one_hop_expand",
     "index_seek_then_two_hop_expand",
+    "varlength_frontier_count",
     "write_then_one_hop_expand",
     "batch_create_edges_100_then_one_hop_expand",
     "batch_create_edges_10000_then_one_hop_expand",
@@ -379,6 +383,8 @@ def build_profile_summary_rows(events: Iterable[ProfileEvent]) -> list[ProfileSu
         group = grouped[key]
         durations = [event.total_time_ms for event in group]
         total_calls = sum(event.calls for event in group)
+        total_value = sum(event.value_total or 0 for event in group)
+        total_value_calls = sum(event.value_calls or 0 for event in group)
         first = min(group, key=lambda event: event.iteration)
         sample_count = len(group)
         rows.append(
@@ -391,6 +397,9 @@ def build_profile_summary_rows(events: Iterable[ProfileEvent]) -> list[ProfileSu
                 samples=sample_count,
                 total_calls=total_calls,
                 avg_calls=total_calls / sample_count,
+                total_value=total_value,
+                total_value_calls=total_value_calls,
+                avg_value=total_value / total_value_calls if total_value_calls else 0.0,
                 first_ms=first.total_time_ms,
                 min_ms=min(durations),
                 avg_ms=sum(durations) / sample_count,

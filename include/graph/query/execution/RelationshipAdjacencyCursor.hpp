@@ -8,6 +8,7 @@
 
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
+#include "graph/concurrent/ThreadPool.hpp"
 #include "graph/query/execution/RelationshipExpandConfig.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/traversal/RelationshipTraversal.hpp"
@@ -18,7 +19,8 @@ namespace graph::query::execution {
 
 	class RelationshipAdjacencyCursor {
 	public:
-		explicit RelationshipAdjacencyCursor(std::shared_ptr<storage::DataManager> dm);
+		explicit RelationshipAdjacencyCursor(std::shared_ptr<storage::DataManager> dm,
+		                                     concurrent::ThreadPool *threadPool = nullptr);
 
 		[[nodiscard]] RelationshipExpandBatch expand(const std::vector<int64_t> &sourceIds,
 		                                             const RelationshipExpandConfig &config,
@@ -55,6 +57,7 @@ namespace graph::query::execution {
 				const RelationshipExpandRequirements &requirements) const;
 
 		std::shared_ptr<storage::DataManager> dm_;
+		concurrent::ThreadPool *threadPool_ = nullptr;
 	};
 
 } // namespace graph::query::execution

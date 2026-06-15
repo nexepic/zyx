@@ -102,8 +102,9 @@ def test_fake_adapter_uses_multihop_profile_workloads(tmp_path: Path):
         "reachable_within_12",
         "reachable_within_24",
         "reachable_within_30",
+        "varlength_frontier_count",
     ]
-    assert [result.status for result in results] == ["ok"] * 5
+    assert [result.status for result in results] == ["ok"] * 6
 
 
 def test_fake_adapter_uses_write_profile_workloads(tmp_path: Path):

@@ -22,7 +22,7 @@
 #include <algorithm>
 #include <sstream>
 #include <utility>
-#include "graph/concurrent/ParallelExecutionPolicy.hpp"
+#include "graph/concurrent/ParallelOperatorExecutor.hpp"
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/query/expressions/ExpressionEvaluationHelper.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
@@ -98,26 +98,34 @@ std::optional<RecordBatch> ProjectOperator::next() {
 
 	// Parallel path for non-DISTINCT projections on large batches.
 	if (!distinct_) {
-		const graph::concurrent::ParallelWorkEstimate estimate{
+		struct ProjectPartitionState {
+			RecordBatch records;
+		};
+		const graph::concurrent::ParallelOperatorOptions options{
+				.phase = "project.parallel",
 				.workloadKind = graph::concurrent::ParallelWorkloadKind::PWK_CPU_BOUND,
-				.partitions = inputBatch.size(),
 				.estimatedItems = inputBatch.size(),
 				.minPartitions = 2,
 				.minItems = PARALLEL_PROJECT_THRESHOLD,
 				.minItemsPerWorker = std::max<size_t>(1, PARALLEL_PROJECT_THRESHOLD / 4)};
-		const auto parallelDecision = graph::concurrent::decideParallelExecution(threadPool_, estimate);
-		graph::concurrent::ScopedParallelExecutionTelemetry telemetry(threadPool_, estimate, parallelDecision);
-		RecordBatch outputBatch(inputBatch.size());
-		if (parallelDecision.useParallel) {
-			threadPool_->parallelFor(0, inputBatch.size(), parallelDecision.workerCount, [&](size_t i) {
-				outputBatch[i] = projectRecord(inputBatch[i]);
-			});
-		} else {
-			for (size_t i = 0; i < inputBatch.size(); ++i) {
-				outputBatch[i] = projectRecord(inputBatch[i]);
-			}
-		}
-		telemetry.markCompleted();
+		RecordBatch outputBatch;
+		outputBatch.reserve(inputBatch.size());
+		(void) graph::concurrent::ParallelOperatorExecutor::runRangePartitions<ProjectPartitionState>(
+				0,
+				inputBatch.size(),
+				threadPool_,
+				options,
+				[&](const graph::concurrent::ParallelRangePartition &range, ProjectPartitionState &state) {
+					state.records.reserve(range.size());
+					for (size_t i = range.begin; i < range.end; ++i) {
+						state.records.push_back(projectRecord(inputBatch[i]));
+					}
+				},
+				[&](size_t, ProjectPartitionState &state) {
+					for (auto &record: state.records) {
+						outputBatch.push_back(std::move(record));
+					}
+				});
 		return outputBatch;
 	}
 

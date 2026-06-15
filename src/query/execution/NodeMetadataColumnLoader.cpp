@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "graph/concurrent/ParallelExecutionPolicy.hpp"
+#include "graph/concurrent/ParallelOperatorExecutor.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/execution/NodeMetadataFilter.hpp"
 #include "graph/storage/CommittedSnapshot.hpp"
@@ -34,6 +35,8 @@ namespace graph::query::execution {
 			std::vector<size_t> workSegmentIndices;
 		};
 
+		struct NodeMetadataReadTaskState {};
+
 		int64_t readSerializedNodeId(const char *buf) {
 			int64_t nodeId = 0;
 			std::memcpy(&nodeId, buf, sizeof(int64_t));
@@ -48,6 +51,7 @@ namespace graph::query::execution {
 		constexpr size_t kMaxCoalescedNodeMetadataReadSegments = 16;
 		constexpr size_t kMinParallelNodeMetadataReadTasks = 2;
 		constexpr size_t kMinParallelNodeMetadataReadSegments = 32;
+		constexpr size_t kNodeMetadataReadBytesPerWorker = size_t{8} * 1024 * 1024;
 
 		concurrent::ParallelExecutionDecision decideNodeMetadataScan(
 				concurrent::ThreadPool *threadPool,
@@ -60,7 +64,8 @@ namespace graph::query::execution {
 					 .estimatedItems = segmentCount,
 					 .estimatedBytes = segmentCount * storage::TOTAL_SEGMENT_SIZE,
 					 .minPartitions = kMinParallelNodeMetadataReadTasks,
-					 .minItems = kMinParallelNodeMetadataReadSegments});
+					 .minItems = kMinParallelNodeMetadataReadSegments,
+					 .minBytesPerWorker = kNodeMetadataReadBytesPerWorker});
 		}
 
 		NodeMetadataRow readMetadataRow(const char *buf, NodeMetadataProjection projection = {}) {
@@ -204,25 +209,35 @@ namespace graph::query::execution {
 			constexpr size_t entitySize = Node::getTotalSize();
 			std::atomic<bool> cancelled{false};
 			std::atomic<bool> failed{false};
-			threadPool->parallelFor(0, tasks.size(), decision.workerCount, [&](size_t taskIndex) {
+			const concurrent::ParallelOperatorOptions options{
+					.phase = "node_metadata.scan_candidates",
+					.workloadKind = concurrent::ParallelWorkloadKind::PWK_MEMORY_SCAN,
+					.estimatedItems = storage::totalCoalescedSegments(groups),
+					.estimatedBytes = storage::totalCoalescedSegments(groups) * storage::TOTAL_SEGMENT_SIZE,
+					.minPartitions = kMinParallelNodeMetadataReadTasks,
+					.minItems = kMinParallelNodeMetadataReadSegments,
+					.minBytesPerWorker = kNodeMetadataReadBytesPerWorker};
+			(void) concurrent::ParallelOperatorExecutor::runIndexedPartitions<NodeMetadataReadTaskState>(
+					tasks.size(), threadPool, options, [&](size_t taskIndex, NodeMetadataReadTaskState &) {
 				if (cancelled.load(std::memory_order_relaxed)) {
-					return;
+					return true;
 				}
 
 				const auto &task = tasks[taskIndex];
 				const auto &group = groups[task.groupIndex];
 				const size_t totalBytes = task.segCount * storage::TOTAL_SEGMENT_SIZE;
-				std::vector<char> groupBuffer(totalBytes);
+				auto &groupBuffer = nodeMetadataScanBuffer();
+				groupBuffer.resize(totalBytes);
 				const auto read = dm->preadSegments(groupBuffer.data(), task.segCount, task.startOffset);
 				if (read < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
 					failed.store(true, std::memory_order_relaxed); // ZYX_COV_EXCL_LINE
 					cancelled.store(true, std::memory_order_relaxed); // ZYX_COV_EXCL_LINE
-					return; // ZYX_COV_EXCL_LINE
+					return false; // ZYX_COV_EXCL_LINE
 				}
 
 				for (size_t member = 0; member < task.memberCount; ++member) {
 					if (cancelled.load(std::memory_order_relaxed)) {
-						return;
+						return true;
 					}
 					const size_t workIndex = group.memberIndices[task.memberBegin + member];
 					const auto &range = plan.work[workIndex];
@@ -237,7 +252,7 @@ namespace graph::query::execution {
 					const char *data = groupBuffer.data() + bufferOffset + sizeof(storage::SegmentHeader);
 					for (size_t index = range.idBegin; index < range.idEnd; ++index) {
 						if (cancelled.load(std::memory_order_relaxed)) {
-							return;
+							return true;
 						}
 						const int64_t nodeId = candidateIds[index];
 						const auto slot = static_cast<uint32_t>(nodeId - header.start_id);
@@ -249,12 +264,13 @@ namespace graph::query::execution {
 						if (readSerializedNodeId(serializedNode) == nodeId) { // ZYX_COV_EXCL_LINE
 							if (!visitor(taskIndex, index, serializedNode)) {
 								cancelled.store(true, std::memory_order_relaxed);
-								return;
+								return true;
 							}
 						}
 					}
 				}
-			});
+				return true;
+			}, [](size_t, NodeMetadataReadTaskState &) {});
 			return !failed.load(std::memory_order_relaxed);
 		}
 
@@ -343,24 +359,34 @@ namespace graph::query::execution {
 			constexpr size_t entitySize = Node::getTotalSize();
 			std::atomic<bool> cancelled{false};
 			std::atomic<bool> failed{false};
-			threadPool->parallelFor(0, tasks.size(), decision.workerCount, [&](size_t taskIndex) {
+			const concurrent::ParallelOperatorOptions options{
+					.phase = "node_metadata.scan_all",
+					.workloadKind = concurrent::ParallelWorkloadKind::PWK_MEMORY_SCAN,
+					.estimatedItems = storage::totalCoalescedSegments(groups),
+					.estimatedBytes = storage::totalCoalescedSegments(groups) * storage::TOTAL_SEGMENT_SIZE,
+					.minPartitions = kMinParallelNodeMetadataReadTasks,
+					.minItems = kMinParallelNodeMetadataReadSegments,
+					.minBytesPerWorker = kNodeMetadataReadBytesPerWorker};
+			(void) concurrent::ParallelOperatorExecutor::runIndexedPartitions<NodeMetadataReadTaskState>(
+					tasks.size(), threadPool, options, [&](size_t taskIndex, NodeMetadataReadTaskState &) {
 				if (cancelled.load(std::memory_order_relaxed)) {
-					return;
+					return true;
 				}
 
 				const auto &task = tasks[taskIndex];
 				const size_t totalBytes = task.segCount * storage::TOTAL_SEGMENT_SIZE;
-				std::vector<char> groupBuffer(totalBytes);
+				auto &groupBuffer = nodeMetadataScanBuffer();
+				groupBuffer.resize(totalBytes);
 				const ssize_t read = dm->preadSegments(groupBuffer.data(), task.segCount, task.startOffset);
 				if (read < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
 					failed.store(true, std::memory_order_relaxed); // ZYX_COV_EXCL_LINE
 					cancelled.store(true, std::memory_order_relaxed); // ZYX_COV_EXCL_LINE
-					return; // ZYX_COV_EXCL_LINE
+					return false; // ZYX_COV_EXCL_LINE
 				}
 
 				for (size_t member = 0; member < task.memberCount; ++member) {
 					if (cancelled.load(std::memory_order_relaxed)) {
-						return;
+						return true;
 					}
 
 					const size_t bufferOffset = member * storage::TOTAL_SEGMENT_SIZE;
@@ -373,7 +399,7 @@ namespace graph::query::execution {
 					const char *data = groupBuffer.data() + bufferOffset + sizeof(storage::SegmentHeader);
 					for (uint32_t slot = 0; slot < header.used; ++slot) {
 						if (cancelled.load(std::memory_order_relaxed)) {
-							return;
+							return true;
 						}
 						const int64_t expectedId = header.start_id + static_cast<int64_t>(slot);
 						const char *serializedNode = data + static_cast<size_t>(slot) * entitySize;
@@ -382,11 +408,12 @@ namespace graph::query::execution {
 						}
 						if (!visitor(taskIndex, serializedNode)) {
 							cancelled.store(true, std::memory_order_relaxed);
-							return;
+							return true;
 						}
 					}
 				}
-			});
+				return true;
+			}, [](size_t, NodeMetadataReadTaskState &) {});
 			return !failed.load(std::memory_order_relaxed);
 		}
 

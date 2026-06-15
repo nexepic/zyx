@@ -4,12 +4,15 @@
 #include <cstring>
 #include <exception>
 #include <optional>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "DataManagerPropertyEntityScanDetail.hpp"
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/storage/CommittedSnapshot.hpp"
 #include "graph/storage/SegmentReadUtils.hpp"
+#include "graph/storage/data/PropertyEntitySegmentScanner.hpp"
 
 namespace graph::storage {
 namespace {
@@ -18,6 +21,25 @@ namespace {
 	constexpr size_t kSerializedBlobEntityTypeOffset = sizeof(int64_t) * 4 + sizeof(uint32_t);
 	constexpr size_t kSerializedBlobActiveOffset =
 			sizeof(int64_t) * 4 + sizeof(uint32_t) * 3 + sizeof(int32_t) + sizeof(bool);
+
+	struct PropertyEntityLoadScanState {
+		std::vector<char> readBuffer;
+		std::vector<std::pair<int64_t, Property>> properties;
+	};
+
+	struct PropertyEntityValueLoadScanState {
+		std::vector<char> readBuffer;
+		std::vector<std::pair<int64_t, std::unordered_map<std::string, PropertyValue>>> values;
+	};
+
+	struct PropertyEntityColumnLoadScanState {
+		std::vector<char> readBuffer;
+	};
+
+	struct PropertyEntityVisitScanState {
+		std::vector<char> readBuffer;
+		size_t visited = 0;
+	};
 
 	bool hasActiveBlobPropertiesForOwnerType(const DataManager &dm, EntityType ownerType) {
 		const auto segmentIndexManager = dm.getSegmentIndexManager();
@@ -90,116 +112,40 @@ namespace {
 			std::sort(sortedIds.begin(), sortedIds.end());
 		}
 
-		const auto &segIndex = segmentIndexManager_->getPropertySegmentIndex();
-		constexpr size_t entitySize = Property::getTotalSize();
-
-		// Find relevant segments and their ID ranges
-		struct SegWork {
-			size_t segIdx;
-			size_t idBegin, idEnd; // indices into sortedIds
-		};
-		std::vector<SegWork> work;
-		for (size_t s = 0; s < segIndex.size(); ++s) {
-			auto lo = std::lower_bound(sortedIds.begin(), sortedIds.end(), segIndex[s].startId);
-			auto hi = std::upper_bound(lo, sortedIds.end(), segIndex[s].endId);
-			if (lo != hi) {
-				work.push_back(
-						{s, static_cast<size_t>(lo - sortedIds.begin()), static_cast<size_t>(hi - sortedIds.begin())});
+			constexpr size_t entitySize = Property::getTotalSize();
+			const auto &segIndex = segmentIndexManager_->getPropertySegmentIndex();
+			const auto work = collectPropertyEntitySegmentWork(
+					std::span<const int64_t>(sortedIds.data(), sortedIds.size()), segIndex);
+			if (work.empty()) {
+				return result;
 			}
-		}
 
-		if (work.empty())
-			return result;
-
-		std::vector<CoalescedGroup> groups;
-		std::vector<CoalescedReadTask> tasks;
-		if (concurrent::hasParallelWorkers(pool) && work.size() > 1) {
-			std::vector<size_t> workSegIndices;
-			workSegIndices.reserve(work.size());
-			for (const auto &w: work)
-				workSegIndices.push_back(w.segIdx);
-
-			groups = buildCoalescedGroups(workSegIndices, segIndex);
-			tasks = buildCoalescedReadTasks(groups, kMaxCoalescedPropertyReadSegments);
-		}
-
-		// Parallel path: split coalesced segment groups into bounded read tasks.
-		const auto decision = decidePropertyEntityScan(pool, tasks.size(), totalCoalescedSegments(groups));
-		if (decision.useParallel) {
-			std::vector<std::vector<std::pair<int64_t, Property>>> perSeg(work.size());
-
-			pool->parallelFor(0, tasks.size(), decision.workerCount, [&](size_t taskIndex) {
-				const auto &task = tasks[taskIndex];
-				const auto &group = groups[task.groupIndex];
-				size_t totalBytes = task.segCount * TOTAL_SEGMENT_SIZE;
-				std::vector<char> groupBuf(totalBytes);
-				ssize_t n = preadSegments(groupBuf.data(), task.segCount, task.startOffset);
-				if (n < static_cast<ssize_t>(totalBytes)) // ZYX_COV_EXCL_LINE: short pread is an OS/file-corruption defensive path.
-					return;
-
-				for (size_t mi = 0; mi < task.memberCount; ++mi) {
-					size_t wi = group.memberIndices[task.memberBegin + mi];
-					const auto &w = work[wi];
-					size_t bufOffset = mi * TOTAL_SEGMENT_SIZE;
-
-					SegmentHeader header;
-					std::memcpy(&header, groupBuf.data() + bufOffset, sizeof(SegmentHeader));
-					if (header.used == 0)
-						continue;
-
-					const char *dataBuf = groupBuf.data() + bufOffset + sizeof(SegmentHeader);
-					auto &local = perSeg[wi];
-					for (size_t i = w.idBegin; i < w.idEnd; ++i) {
-						int64_t id = sortedIds[i];
-						uint32_t slot = static_cast<uint32_t>(id - header.start_id);
+			(void) detail::scanPropertyEntitySegmentWork<PropertyEntityLoadScanState>(
+					*this,
+					pool,
+					"property_entity.load_entities",
+					work,
+					[&](size_t, size_t, const PropertyEntitySegmentWork &w,
+						const SegmentHeader &header, const char *dataBuf, PropertyEntityLoadScanState &state) {
+						for (size_t i = w.idBegin; i < w.idEnd; ++i) {
+							int64_t id = sortedIds[i];
+							uint32_t slot = static_cast<uint32_t>(id - header.start_id);
 						if (slot >= header.used) // ZYX_COV_EXCL_LINE: segment index bounds persisted ids to used slots.
-							continue;
-						Property prop = Property::deserializeFromBuffer(dataBuf + slot * entitySize);
-						if (prop.isActive())
-							local.emplace_back(id, std::move(prop));
-					}
-				}
-			});
+								continue;
+							Property prop = Property::deserializeFromBuffer(dataBuf + slot * entitySize);
+							if (prop.isActive())
+								state.properties.emplace_back(id, std::move(prop));
+						}
+					},
+					[&](size_t, PropertyEntityLoadScanState &state) {
+						result.reserve(result.size() + state.properties.size());
+						for (auto &[id, prop]: state.properties) {
+							result[id] = std::move(prop);
+						}
+					});
 
-			// Merge thread-local results
-			size_t totalCount = 0;
-			for (const auto &v: perSeg)
-				totalCount += v.size();
-			result.reserve(totalCount);
-			for (auto &v: perSeg) {
-				for (auto &[id, prop]: v)
-					result[id] = std::move(prop);
-			}
-		} else {
-			// Sequential path
-			result.reserve(ids.size());
-			for (const auto &w: work) {
-				const auto &seg = segIndex[w.segIdx];
-				SegmentHeader header = segmentTracker_->getSegmentHeaderCopy(seg.segmentOffset);
-				if (header.used == 0)
-					continue;
-
-				size_t dataBytes = static_cast<size_t>(header.used) * entitySize;
-				auto &buf = propertyEntityScanScratchBuffer(dataBytes);
-				auto dataOffset = static_cast<int64_t>(seg.segmentOffset + sizeof(SegmentHeader));
-				ssize_t n = preadBytes(buf.data(), dataBytes, dataOffset);
-				if (n < static_cast<ssize_t>(dataBytes)) // ZYX_COV_EXCL_LINE: short pread is an OS/file-corruption defensive path.
-					continue;
-
-				for (size_t i = w.idBegin; i < w.idEnd; ++i) {
-					int64_t id = sortedIds[i];
-					uint32_t slot = static_cast<uint32_t>(id - header.start_id);
-					if (slot >= header.used) // ZYX_COV_EXCL_LINE: segment index bounds persisted ids to used slots.
-						continue;
-					Property prop = Property::deserializeFromBuffer(buf.data() + slot * entitySize);
-					if (prop.isActive())
-						result[id] = std::move(prop);
-				}
-			}
+			return result;
 		}
-
-		return result;
-	}
 
 	std::unordered_map<int64_t, std::unordered_map<std::string, PropertyValue>>
 	DataManager::bulkLoadPropertyEntityValues(const std::vector<int64_t> &ids, const std::vector<std::string> &keys,
@@ -219,131 +165,48 @@ namespace {
 			requestedKeys.insert(key);
 		}
 
-		const auto &segIndex = segmentIndexManager_->getPropertySegmentIndex();
-		constexpr size_t entitySize = Property::getTotalSize();
-
-		struct SegWork {
-			size_t segIdx;
-			size_t idBegin;
-			size_t idEnd;
-		};
-		std::vector<SegWork> work;
-		for (size_t s = 0; s < segIndex.size(); ++s) {
-			auto lo = std::lower_bound(sortedIds.begin(), sortedIds.end(), segIndex[s].startId);
-			auto hi = std::upper_bound(lo, sortedIds.end(), segIndex[s].endId);
-			if (lo != hi) {
-				work.push_back(
-						{s, static_cast<size_t>(lo - sortedIds.begin()), static_cast<size_t>(hi - sortedIds.begin())});
+			constexpr size_t entitySize = Property::getTotalSize();
+			const auto &segIndex = segmentIndexManager_->getPropertySegmentIndex();
+			const auto work = collectPropertyEntitySegmentWork(
+					std::span<const int64_t>(sortedIds.data(), sortedIds.size()), segIndex);
+			if (work.empty()) {
+				return result;
 			}
-		}
-
-		if (work.empty()) {
-			return result;
-		}
 
 		auto readPropertyValues =
 				[&](const char *entityBuffer) -> std::optional<std::unordered_map<std::string, PropertyValue>> {
 			return readSelectedPropertyValues(entityBuffer, requestedKeys);
 		};
 
-		std::vector<CoalescedGroup> groups;
-		std::vector<CoalescedReadTask> tasks;
-		if (concurrent::hasParallelWorkers(pool) && work.size() > 1) {
-			std::vector<size_t> workSegIndices;
-			workSegIndices.reserve(work.size());
-			for (const auto &w: work) {
-				workSegIndices.push_back(w.segIdx);
-			}
-
-			groups = buildCoalescedGroups(workSegIndices, segIndex);
-			tasks = buildCoalescedReadTasks(groups, kMaxCoalescedPropertyReadSegments);
-		}
-
-		const auto decision = decidePropertyEntityScan(pool, tasks.size(), totalCoalescedSegments(groups));
-		if (decision.useParallel) { // ZYX_COV_EXCL_LINE
-			std::vector<std::vector<std::pair<int64_t, std::unordered_map<std::string, PropertyValue>>>> perWork(
-					work.size());
-
-			pool->parallelFor(0, tasks.size(), decision.workerCount, [&](size_t taskIndex) {
-				const auto &task = tasks[taskIndex];
-				const auto &group = groups[task.groupIndex];
-				size_t totalBytes = task.segCount * TOTAL_SEGMENT_SIZE;
-				std::vector<char> groupBuf(totalBytes);
-				ssize_t n = preadSegments(groupBuf.data(), task.segCount, task.startOffset);
-				if (n < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE: short pread is an OS/file-corruption defensive path.
-					return;
-				}
-
-				for (size_t mi = 0; mi < task.memberCount; ++mi) {
-					size_t wi = group.memberIndices[task.memberBegin + mi];
-					const auto &w = work[wi];
-					size_t bufOffset = mi * TOTAL_SEGMENT_SIZE;
-
-					SegmentHeader header;
-					std::memcpy(&header, groupBuf.data() + bufOffset, sizeof(SegmentHeader));
-						if (header.used == 0) { // ZYX_COV_EXCL_LINE: coalesced group members are allocated non-empty property segments.
-							continue;
-						}
-
-					const char *dataBuf = groupBuf.data() + bufOffset + sizeof(SegmentHeader);
-					auto &local = perWork[wi];
-					for (size_t i = w.idBegin; i < w.idEnd; ++i) {
-						int64_t id = sortedIds[i];
-						uint32_t slot = static_cast<uint32_t>(id - header.start_id);
+			result.reserve(sortedIds.size());
+			(void) detail::scanPropertyEntitySegmentWork<PropertyEntityValueLoadScanState>(
+					*this,
+					pool,
+					"property_entity.load_values",
+					work,
+					[&](size_t, size_t, const PropertyEntitySegmentWork &w,
+						const SegmentHeader &header, const char *dataBuf,
+						PropertyEntityValueLoadScanState &state) {
+						for (size_t i = w.idBegin; i < w.idEnd; ++i) {
+							int64_t id = sortedIds[i];
+							uint32_t slot = static_cast<uint32_t>(id - header.start_id);
 						if (slot >= header.used) { // ZYX_COV_EXCL_LINE: segment index bounds persisted ids to used slots.
 							continue;
+							}
+							auto values = readPropertyValues(dataBuf + slot * entitySize);
+							if (values.has_value()) {
+								state.values.emplace_back(id, std::move(*values));
+							}
 						}
-						auto values = readPropertyValues(dataBuf + slot * entitySize);
-						if (values.has_value()) {
-							local.emplace_back(id, std::move(*values));
+					},
+					[&](size_t, PropertyEntityValueLoadScanState &state) {
+						for (auto &[id, propertyValues]: state.values) {
+							result.emplace(id, std::move(propertyValues));
 						}
-					}
-				}
-			});
+					});
 
-			size_t totalCount = 0;
-			for (const auto &values: perWork) {
-				totalCount += values.size();
-			}
-			result.reserve(totalCount);
-			for (auto &values: perWork) {
-				for (auto &[id, propertyValues]: values) {
-					result.emplace(id, std::move(propertyValues));
-				}
-			}
-		} else {
-			result.reserve(sortedIds.size());
-			for (const auto &w: work) {
-				const auto &seg = segIndex[w.segIdx];
-				SegmentHeader header = segmentTracker_->getSegmentHeaderCopy(seg.segmentOffset);
-				if (header.used == 0) {
-					continue;
-				}
-
-				size_t dataBytes = static_cast<size_t>(header.used) * entitySize;
-				auto &buf = propertyEntityScanScratchBuffer(dataBytes);
-				auto dataOffset = static_cast<int64_t>(seg.segmentOffset + sizeof(SegmentHeader));
-				ssize_t n = preadBytes(buf.data(), dataBytes, dataOffset);
-				if (n < static_cast<ssize_t>(dataBytes)) { // ZYX_COV_EXCL_LINE: short pread is an OS/file-corruption defensive path.
-					continue;
-				}
-
-				for (size_t i = w.idBegin; i < w.idEnd; ++i) {
-					int64_t id = sortedIds[i];
-					uint32_t slot = static_cast<uint32_t>(id - header.start_id);
-					if (slot >= header.used) { // ZYX_COV_EXCL_LINE: segment index bounds persisted ids to used slots.
-						continue;
-					}
-					auto values = readPropertyValues(buf.data() + slot * entitySize);
-					if (values.has_value()) {
-						result.emplace(id, std::move(*values));
-					}
-				}
-			}
+			return result;
 		}
-
-		return result;
-	}
 
 	std::vector<size_t> DataManager::bulkLoadPropertyEntityColumns(
 			const std::vector<int64_t> &ids, const std::vector<size_t> &rows, size_t rowCount,
@@ -423,71 +286,27 @@ namespace {
 			begin = end;
 		}
 
-		const auto &segIndex = segmentIndexManager_->getPropertySegmentIndex();
-		constexpr size_t entitySize = Property::getTotalSize();
-
-		struct SegWork {
-			size_t segIdx;
-			size_t idBegin;
-			size_t idEnd;
-		};
-		std::vector<SegWork> work;
-		for (size_t s = 0; s < segIndex.size(); ++s) {
-			auto lo = std::lower_bound(sortedIds.begin(), sortedIds.end(), segIndex[s].startId);
-			auto hi = std::upper_bound(lo, sortedIds.end(), segIndex[s].endId);
-			if (lo != hi) {
-				work.push_back(
-						{s, static_cast<size_t>(lo - sortedIds.begin()), static_cast<size_t>(hi - sortedIds.begin())});
-			}
-		}
-
-		if (work.empty()) {
-			return loadedRows;
-		}
-
-		std::vector<CoalescedGroup> groups;
-		std::vector<CoalescedReadTask> tasks;
-		if (concurrent::hasParallelWorkers(pool) && work.size() > 1) {
-			std::vector<size_t> workSegIndices;
-			workSegIndices.reserve(work.size());
-			for (const auto &w: work) {
-				workSegIndices.push_back(w.segIdx);
+			constexpr size_t entitySize = Property::getTotalSize();
+			const auto &segIndex = segmentIndexManager_->getPropertySegmentIndex();
+			const auto work = collectPropertyEntitySegmentWork(
+					std::span<const int64_t>(sortedIds.data(), sortedIds.size()), segIndex);
+			if (work.empty()) {
+				return loadedRows;
 			}
 
-			groups = buildCoalescedGroups(workSegIndices, segIndex);
-			tasks = buildCoalescedReadTasks(groups, kMaxCoalescedPropertyReadSegments);
-		}
-
-		const auto decision = decidePropertyEntityScan(pool, tasks.size(), totalCoalescedSegments(groups));
-		if (decision.useParallel) { // ZYX_COV_EXCL_LINE
 			std::vector<std::vector<size_t>> perWorkLoadedRows(work.size());
-
-			pool->parallelFor(0, tasks.size(), decision.workerCount, [&](size_t taskIndex) {
-				const auto &task = tasks[taskIndex];
-				const auto &group = groups[task.groupIndex];
-				size_t totalBytes = task.segCount * TOTAL_SEGMENT_SIZE;
-				std::vector<char> groupBuf(totalBytes);
-				ssize_t n = preadSegments(groupBuf.data(), task.segCount, task.startOffset);
-				if (n < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
-					return;
-				}
-
-				for (size_t mi = 0; mi < task.memberCount; ++mi) {
-					size_t wi = group.memberIndices[task.memberBegin + mi];
-					const auto &w = work[wi];
-					size_t bufOffset = mi * TOTAL_SEGMENT_SIZE;
-
-					SegmentHeader header;
-					std::memcpy(&header, groupBuf.data() + bufOffset, sizeof(SegmentHeader));
-					if (header.used == 0) {
-						continue;
-					}
-
-					const char *dataBuf = groupBuf.data() + bufOffset + sizeof(SegmentHeader);
-					auto &localLoadedRows = perWorkLoadedRows[wi];
-					for (size_t i = w.idBegin; i < w.idEnd; ++i) {
-						int64_t id = sortedIds[i];
-						uint32_t slot = static_cast<uint32_t>(id - header.start_id);
+			(void) detail::scanPropertyEntitySegmentWork<PropertyEntityColumnLoadScanState>(
+					*this,
+					pool,
+					"property_entity.load_columns",
+					work,
+					[&](size_t, size_t workIndex, const PropertyEntitySegmentWork &w,
+						const SegmentHeader &header, const char *dataBuf,
+						PropertyEntityColumnLoadScanState &) {
+						auto &localLoadedRows = perWorkLoadedRows[workIndex];
+						for (size_t i = w.idBegin; i < w.idEnd; ++i) {
+							int64_t id = sortedIds[i];
+							uint32_t slot = static_cast<uint32_t>(id - header.start_id);
 						if (slot >= header.used) { // ZYX_COV_EXCL_LINE
 							continue;
 						}
@@ -496,15 +315,15 @@ namespace {
 								continue;
 							}
 						const auto [refBegin, refEnd] = refRanges[i];
-						if (readSelectedPropertyColumns(entityBuffer, requestedKeyIndices, columnTargets, refs,
-														refBegin, refEnd)) {
-							for (size_t ref = refBegin; ref < refEnd; ++ref) {
-								localLoadedRows.push_back(refs[ref].row);
+							if (readSelectedPropertyColumns(entityBuffer, requestedKeyIndices, columnTargets, refs,
+															refBegin, refEnd)) {
+								for (size_t ref = refBegin; ref < refEnd; ++ref) {
+									localLoadedRows.push_back(refs[ref].row);
+								}
 							}
 						}
-					}
-				}
-			});
+					},
+					[](size_t, PropertyEntityColumnLoadScanState &) {});
 
 			size_t loadedCount = 0;
 			for (const auto &rowsForWork: perWorkLoadedRows) {
@@ -514,45 +333,8 @@ namespace {
 			for (auto &rowsForWork: perWorkLoadedRows) {
 				loadedRows.insert(loadedRows.end(), rowsForWork.begin(), rowsForWork.end());
 			}
-		} else {
-			loadedRows.reserve(refs.size());
-			for (const auto &w: work) {
-				const auto &seg = segIndex[w.segIdx];
-				SegmentHeader header = segmentTracker_->getSegmentHeaderCopy(seg.segmentOffset);
-				if (header.used == 0) { // ZYX_COV_EXCL_LINE: work is derived from allocated non-empty property segments.
-					continue;
-				}
 
-				size_t dataBytes = static_cast<size_t>(header.used) * entitySize;
-				auto &buf = propertyEntityScanScratchBuffer(dataBytes);
-				auto dataOffset = static_cast<int64_t>(seg.segmentOffset + sizeof(SegmentHeader));
-				ssize_t n = preadBytes(buf.data(), dataBytes, dataOffset);
-				if (n < static_cast<ssize_t>(dataBytes)) { // ZYX_COV_EXCL_LINE: short pread is an OS/file-corruption defensive path.
-					continue;
-				}
-
-				for (size_t i = w.idBegin; i < w.idEnd; ++i) {
-					int64_t id = sortedIds[i];
-					uint32_t slot = static_cast<uint32_t>(id - header.start_id);
-					if (slot >= header.used) { // ZYX_COV_EXCL_LINE: segment index bounds persisted ids to used slots.
-						continue;
-					}
-					const char *entityBuffer = buf.data() + slot * entitySize;
-					if (readSerializedPropertyId(entityBuffer) != id) { // ZYX_COV_EXCL_LINE: mismatched ids indicate corrupt persisted segments.
-						continue;
-					}
-					const auto [refBegin, refEnd] = refRanges[i];
-					if (readSelectedPropertyColumns(entityBuffer, requestedKeyIndices, columnTargets, refs, refBegin,
-													refEnd)) {
-						for (size_t ref = refBegin; ref < refEnd; ++ref) {
-							loadedRows.push_back(refs[ref].row);
-						}
-					}
-				}
-			}
-		}
-
-		return loadedRows;
+			return loadedRows;
 	}
 
 	size_t DataManager::bulkVisitPropertyEntityValues(const std::vector<int64_t> &ids, const std::vector<size_t> &rows,
@@ -615,12 +397,11 @@ namespace {
 			return 0;
 		}
 
-		size_t visited = 0;
-		auto scanPropertyWork = [&](const PropertyEntitySegmentWork &w, const SegmentHeader &header,
-									const char *dataBuf) {
-			for (size_t i = w.idBegin; i < w.idEnd; ++i) {
-				const int64_t id = sortedIds[i];
-				const auto slot = static_cast<uint32_t>(id - header.start_id);
+			auto scanPropertyWork = [&](const PropertyEntitySegmentWork &w, const SegmentHeader &header,
+										const char *dataBuf, size_t &visited) {
+				for (size_t i = w.idBegin; i < w.idEnd; ++i) {
+					const int64_t id = sortedIds[i];
+					const auto slot = static_cast<uint32_t>(id - header.start_id);
 				if (slot >= header.used) { // ZYX_COV_EXCL_LINE: segment index bounds persisted ids to used slots.
 					continue;
 				}
@@ -633,61 +414,25 @@ namespace {
 				if (visitCount.has_value()) {
 					visited += *visitCount;
 				}
-			}
-		};
-
-		const auto workSegIndices = collectPropertyEntityWorkSegmentIndices(work);
-		auto groups = buildCoalescedGroups(workSegIndices, segIndex);
-		auto &readBuffer = propertyEntityScanScratchBuffer(0);
-		for (const auto &group: groups) {
-			if (group.segCount == 1) {
-				const size_t wi = group.memberIndices.front();
-				const auto &w = work[wi];
-				const auto &seg = segIndex[w.segmentIndex];
-				SegmentHeader header = segmentTracker_->getSegmentHeaderCopy(seg.segmentOffset);
-				if (header.used == 0) { // ZYX_COV_EXCL_LINE: work is derived from allocated non-empty property segments.
-					continue;
 				}
+			};
 
-				const size_t dataBytes = static_cast<size_t>(header.used) * entitySize;
-				readBuffer.resize(dataBytes);
-				const auto dataOffset = static_cast<int64_t>(seg.segmentOffset + sizeof(SegmentHeader));
-				const ssize_t n = preadBytes(readBuffer.data(), dataBytes, dataOffset);
-				if (n < static_cast<ssize_t>(dataBytes)) { // ZYX_COV_EXCL_LINE: short pread is an OS/file-corruption defensive path.
-					continue;
-				}
-				scanPropertyWork(w, header, readBuffer.data());
-				continue;
-			}
-
-			for (size_t chunkBegin = 0; chunkBegin < group.memberIndices.size();
-				 chunkBegin += kMaxCoalescedPropertyReadSegments) {
-				const size_t chunkSegments =
-						std::min(kMaxCoalescedPropertyReadSegments, group.memberIndices.size() - chunkBegin);
-				const size_t totalBytes = chunkSegments * TOTAL_SEGMENT_SIZE;
-				readBuffer.resize(totalBytes);
-				const uint64_t groupOffset = group.startOffset + chunkBegin * TOTAL_SEGMENT_SIZE;
-				const ssize_t n = preadSegments(readBuffer.data(), chunkSegments, groupOffset);
-				if (n < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
-					continue;
-				}
-
-				for (size_t member = 0; member < chunkSegments; ++member) {
-					const size_t wi = group.memberIndices[chunkBegin + member];
-					const auto &w = work[wi];
-					const size_t bufferOffset = member * TOTAL_SEGMENT_SIZE;
-					SegmentHeader header;
-					std::memcpy(&header, readBuffer.data() + bufferOffset, sizeof(SegmentHeader));
-					if (header.used == 0) { // ZYX_COV_EXCL_LINE: coalesced group members are allocated non-empty property segments.
-						continue;
-					}
-					const char *dataBuf = readBuffer.data() + bufferOffset + sizeof(SegmentHeader);
-					scanPropertyWork(w, header, dataBuf);
-				}
-			}
+			PropertyEntityVisitScanState finalState;
+			(void) detail::scanPropertyEntitySegmentWork<PropertyEntityVisitScanState>(
+					*this,
+					nullptr,
+					"property_entity.visit_values",
+					work,
+					[&](size_t, size_t, const PropertyEntitySegmentWork &w,
+						const SegmentHeader &header, const char *dataBuf, PropertyEntityVisitScanState &state) {
+						scanPropertyWork(w, header, dataBuf, state.visited);
+					},
+					[&](size_t, PropertyEntityVisitScanState &state) {
+						finalState.visited += state.visited;
+					});
+			const size_t visited = finalState.visited;
+			return visited;
 		}
-		return visited;
-	}
 
 	size_t DataManager::bulkVisitPropertyEntityScalarValues(const std::vector<int64_t> &ids,
 															const std::vector<size_t> &rows, size_t rowCount,
@@ -782,11 +527,10 @@ namespace {
 			return 0;
 		}
 
-		const auto segmentIndexManager = getSegmentIndexManager();
-		const auto segmentTracker = getSegmentTracker();
-		if (!segmentIndexManager || !segmentTracker) { // ZYX_COV_EXCL_LINE
-			return 0; // ZYX_COV_EXCL_LINE
-		}
+			const auto segmentIndexManager = getSegmentIndexManager();
+			if (!segmentIndexManager) { // ZYX_COV_EXCL_LINE
+				return 0; // ZYX_COV_EXCL_LINE
+			}
 		const auto &segIndex = segmentIndexManager->getPropertySegmentIndex();
 		constexpr size_t entitySize = Property::getTotalSize();
 		const auto work = collectPropertyEntitySegmentWork(sortedIds, segIndex);
@@ -818,100 +562,37 @@ namespace {
 			}
 		};
 
-		const auto workSegIndices = collectPropertyEntityWorkSegmentIndices(work);
-		auto groups = buildCoalescedGroups(workSegIndices, segIndex);
-		auto tasks = buildCoalescedReadTasks(groups, kMaxCoalescedPropertyReadSegments);
-		const auto decision = decidePropertyEntityScan(pool, tasks.size(), totalCoalescedSegments(groups));
-		if (decision.useParallel) { // ZYX_COV_EXCL_LINE
 			if (initializer) {
-				initializer(tasks.size());
+				const auto workSegIndices = collectPropertyEntityWorkSegmentIndices(work);
+				const auto groups = buildCoalescedGroups(workSegIndices, segIndex);
+				const auto tasks = buildCoalescedReadTasks(
+						groups, detail::kPropertyScannerMaxCoalescedReadSegments);
+				const auto decision = concurrent::decideParallelExecution(
+						pool,
+						{.workloadKind = concurrent::ParallelWorkloadKind::PWK_MEMORY_SCAN,
+						 .partitions = tasks.size(),
+						 .estimatedItems = totalCoalescedSegments(groups),
+						 .estimatedBytes = totalCoalescedSegments(groups) * TOTAL_SEGMENT_SIZE,
+						 .minPartitions = detail::kPropertyScannerMinParallelReadTasks,
+						 .minItems = detail::kPropertyScannerMinParallelReadSegments});
+				initializer(decision.useParallel ? tasks.size() : size_t{1});
 			}
-			std::vector<size_t> perTaskVisited(tasks.size(), 0);
-			pool->parallelFor(0, tasks.size(), decision.workerCount, [&](size_t taskIndex) {
-				const auto &task = tasks[taskIndex];
-				const auto &group = groups[task.groupIndex];
-				const size_t totalBytes = task.segCount * TOTAL_SEGMENT_SIZE;
-				std::vector<char> groupBuf(totalBytes);
-				const ssize_t n = preadSegments(groupBuf.data(), task.segCount, task.startOffset);
-				if (n < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
-					return;
-				}
 
-				for (size_t mi = 0; mi < task.memberCount; ++mi) {
-					const size_t wi = group.memberIndices[task.memberBegin + mi];
-					const auto &w = work[wi];
-					const size_t bufferOffset = mi * TOTAL_SEGMENT_SIZE;
-					SegmentHeader header;
-					std::memcpy(&header, groupBuf.data() + bufferOffset, sizeof(SegmentHeader));
-					if (header.used == 0) { // ZYX_COV_EXCL_LINE: coalesced group members are allocated non-empty property segments.
-						continue;
-					}
-					const char *dataBuf = groupBuf.data() + bufferOffset + sizeof(SegmentHeader);
-					scanPropertyWork(taskIndex, w, header, dataBuf, perTaskVisited[taskIndex]);
-				}
-			});
-
-			size_t visited = 0;
-			for (const auto count: perTaskVisited) {
-				visited += count;
-			}
-			return visited;
+			PropertyEntityVisitScanState finalState;
+			(void) detail::scanPropertyEntitySegmentWork<PropertyEntityVisitScanState>(
+					*this,
+					pool,
+					"property_entity.visit_scalar_values",
+					work,
+					[&](size_t partition, size_t, const PropertyEntitySegmentWork &w,
+						const SegmentHeader &header, const char *dataBuf, PropertyEntityVisitScanState &state) {
+						scanPropertyWork(partition, w, header, dataBuf, state.visited);
+					},
+					[&](size_t, PropertyEntityVisitScanState &state) {
+						finalState.visited += state.visited;
+					});
+			return finalState.visited;
 		}
-
-		if (initializer) {
-			initializer(1);
-		}
-		size_t visited = 0;
-		auto &readBuffer = propertyEntityScanScratchBuffer(0);
-		for (const auto &group: groups) {
-			if (group.segCount == 1) {
-				const size_t wi = group.memberIndices.front();
-				const auto &w = work[wi];
-				const auto &seg = segIndex[w.segmentIndex];
-				SegmentHeader header = segmentTracker->getSegmentHeaderCopy(seg.segmentOffset);
-				if (header.used == 0) { // ZYX_COV_EXCL_LINE: work is derived from allocated non-empty property segments.
-					continue;
-				}
-
-				const size_t dataBytes = static_cast<size_t>(header.used) * entitySize;
-				readBuffer.resize(dataBytes);
-				const auto dataOffset = static_cast<int64_t>(seg.segmentOffset + sizeof(SegmentHeader));
-				const ssize_t n = preadBytes(readBuffer.data(), dataBytes, dataOffset);
-				if (n < static_cast<ssize_t>(dataBytes)) { // ZYX_COV_EXCL_LINE: short pread is an OS/file-corruption defensive path.
-					continue;
-				}
-				scanPropertyWork(0, w, header, readBuffer.data(), visited);
-				continue;
-			}
-
-			for (size_t chunkBegin = 0; chunkBegin < group.memberIndices.size();
-				 chunkBegin += kMaxCoalescedPropertyReadSegments) {
-				const size_t chunkSegments =
-						std::min(kMaxCoalescedPropertyReadSegments, group.memberIndices.size() - chunkBegin);
-				const size_t totalBytes = chunkSegments * TOTAL_SEGMENT_SIZE;
-				readBuffer.resize(totalBytes);
-				const uint64_t groupOffset = group.startOffset + chunkBegin * TOTAL_SEGMENT_SIZE;
-				const ssize_t n = preadSegments(readBuffer.data(), chunkSegments, groupOffset);
-				if (n < static_cast<ssize_t>(totalBytes)) { // ZYX_COV_EXCL_LINE
-					continue;
-				}
-
-				for (size_t member = 0; member < chunkSegments; ++member) {
-					const size_t wi = group.memberIndices[chunkBegin + member];
-					const auto &w = work[wi];
-					const size_t bufferOffset = member * TOTAL_SEGMENT_SIZE;
-					SegmentHeader header;
-					std::memcpy(&header, readBuffer.data() + bufferOffset, sizeof(SegmentHeader));
-					if (header.used == 0) { // ZYX_COV_EXCL_LINE: coalesced group members are allocated non-empty property segments.
-						continue;
-					}
-					const char *dataBuf = readBuffer.data() + bufferOffset + sizeof(SegmentHeader);
-					scanPropertyWork(0, w, header, dataBuf, visited);
-				}
-			}
-		}
-		return visited;
-	}
 
 	PropertyEntityPredicateMatchResult DataManager::bulkMatchPropertyEntityPredicates(
 			const std::vector<int64_t> &ids, const std::vector<size_t> &rows, size_t rowCount,

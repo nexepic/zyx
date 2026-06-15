@@ -251,6 +251,7 @@ def test_workload_methods_return_scalar_counts_without_live_database(tmp_path: P
     assert adapter.two_hop_expand() == 7
     assert adapter.shortest_path_chain() == 7
     assert adapter.reachable_within_30() == 1
+    assert adapter.varlength_frontier_count() == 7
 
     queries = [query for query, _ in driver.queries]
     assert "MATCH (u:User {id: $id}) RETURN count(u) AS count" in queries
@@ -258,6 +259,7 @@ def test_workload_methods_return_scalar_counts_without_live_database(tmp_path: P
     assert any("[:FOLLOWS]->(v:User)" in query for query in queries)
     assert any("[:FOLLOWS]->(:User)-[:FOLLOWS]->(v:User)" in query for query in queries)
     assert any("[:FOLLOWS*1..6]" in query for query in queries)
+    assert any("[:FOLLOWS*1..2]" in query and "{country: $country}" in query for query in queries)
     assert any("[:FOLLOWS*1..30]" in query and "LIMIT 1" in query for query in queries)
     assert any(params.get("dst") == "user-000091" for _, params in driver.queries)
 
