@@ -513,10 +513,10 @@ namespace graph::traversal {
 	}
 
 	RelationshipDirectionKind RelationshipTraversal::directionFromString(const std::string &direction) {
-		if (direction == "out") {
+		if (direction == "out" || direction == "outgoing") {
 			return RelationshipDirectionKind::RDK_OUT;
 		}
-		if (direction == "in") {
+		if (direction == "in" || direction == "incoming") {
 			return RelationshipDirectionKind::RDK_IN;
 		}
 		return RelationshipDirectionKind::RDK_BOTH;

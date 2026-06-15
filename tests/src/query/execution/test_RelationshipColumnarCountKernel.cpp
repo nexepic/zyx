@@ -296,7 +296,8 @@ TEST_F(RelationshipColumnarCountKernelTest, CountsLargeTypedPropertyPredicatesWi
 	snapshot = graph::debug::PerfTrace::snapshotAndReset();
 	ASSERT_TRUE(allTypeMatches.has_value());
 	EXPECT_EQ(allTypeMatches->count, expectedAllTypes);
-	EXPECT_TRUE(snapshot.contains("relationship_count.property_owner_scan"));
+	EXPECT_TRUE(snapshot.contains("relationship_count.property_predicate"));
+	EXPECT_FALSE(snapshot.contains("relationship_count.property_owner_scan"));
 	EXPECT_FALSE(snapshot.contains("relationship_count.property_owner_type_filter"));
 	EXPECT_FALSE(snapshot.contains("relationship_count.load_edge_metadata"));
 }

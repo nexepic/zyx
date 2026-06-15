@@ -33,6 +33,8 @@ namespace graph::debug {
 		struct Entry {
 			uint64_t totalNs = 0;
 			uint64_t calls = 0;
+			int64_t totalValue = 0;
+			uint64_t valueCalls = 0;
 		};
 
 		using Snapshot = std::unordered_map<std::string, Entry>;
@@ -41,6 +43,8 @@ namespace graph::debug {
 		[[nodiscard]] static bool isEnabled();
 
 		static void addDuration(std::string_view key, uint64_t durationNs);
+		static void addDurationBatch(std::string_view key, uint64_t durationNs, uint64_t calls);
+		static void addValue(std::string_view key, int64_t value);
 
 		static void reset();
 		[[nodiscard]] static Snapshot snapshotAndReset();

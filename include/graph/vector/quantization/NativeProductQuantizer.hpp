@@ -23,6 +23,7 @@
 #include <memory>
 #include <vector>
 #include "KMeans.hpp"
+#include "graph/concurrent/ParallelOperatorExecutor.hpp"
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/utils/Serializer.hpp"
 
@@ -46,7 +47,7 @@ namespace graph::vector {
 			codebooks_.resize(numSubspaces_);
 
 			// When parallelizing across subspaces, each KMeans runs sequentially
-			// (passing pool to KMeans from inside parallelFor would cause deadlock).
+			// (passing the same pool to nested KMeans work could deadlock).
 			// When running subspaces sequentially, pass pool to KMeans for inner parallelism.
 			auto trainSubspace = [&](size_t m, concurrent::ThreadPool *kmeansPool) {
 				std::vector<std::vector<float>> subData;
@@ -72,9 +73,23 @@ namespace graph::vector {
 
 			if (pool && !pool->isSingleThreaded()) {
 				// Outer parallelism across subspaces; KMeans runs sequentially per subspace
-				pool->parallelFor(0, numSubspaces_, [&](size_t m) {
-					trainSubspace(m, nullptr);
-				});
+				struct TrainState {};
+				(void) concurrent::ParallelOperatorExecutor::runRangePartitions<TrainState>(
+						0,
+						numSubspaces_,
+						pool,
+						{.phase = "vector.pq.train_subspaces",
+						 .workloadKind = concurrent::ParallelWorkloadKind::PWK_CPU_BOUND,
+						 .estimatedItems = numSubspaces_,
+						 .minPartitions = 2,
+						 .minItems = 2,
+						 .minItemsPerWorker = 1},
+						[&](const concurrent::ParallelRangePartition &range, TrainState &) {
+							for (size_t m = range.begin; m < range.end; ++m) {
+								trainSubspace(m, nullptr);
+							}
+						},
+						[](size_t, TrainState &) {});
 			} else {
 				// Sequential subspaces; each KMeans gets the pool for inner parallelism
 				for (size_t m = 0; m < numSubspaces_; ++m)
@@ -113,7 +128,23 @@ namespace graph::vector {
 			// Only parallelize for high subspace counts; for <=32 subspaces
 			// thread dispatch overhead exceeds the compute savings
 			if (pool && !pool->isSingleThreaded() && numSubspaces_ > 32) {
-				pool->parallelFor(0, numSubspaces_, encodeSubspace);
+				struct EncodeState {};
+				(void) concurrent::ParallelOperatorExecutor::runRangePartitions<EncodeState>(
+						0,
+						numSubspaces_,
+						pool,
+						{.phase = "vector.pq.encode",
+						 .workloadKind = concurrent::ParallelWorkloadKind::PWK_CPU_BOUND,
+						 .estimatedItems = numSubspaces_,
+						 .minPartitions = 2,
+						 .minItems = 33,
+						 .minItemsPerWorker = 8},
+						[&](const concurrent::ParallelRangePartition &range, EncodeState &) {
+							for (size_t m = range.begin; m < range.end; ++m) {
+								encodeSubspace(m);
+							}
+						},
+						[](size_t, EncodeState &) {});
 			} else {
 				for (size_t m = 0; m < numSubspaces_; ++m)
 					encodeSubspace(m);
@@ -136,7 +167,23 @@ namespace graph::vector {
 			};
 
 			if (pool && !pool->isSingleThreaded() && numSubspaces_ > 32) {
-				pool->parallelFor(0, numSubspaces_, computeSubspace);
+				struct DistanceTableState {};
+				(void) concurrent::ParallelOperatorExecutor::runRangePartitions<DistanceTableState>(
+						0,
+						numSubspaces_,
+						pool,
+						{.phase = "vector.pq.distance_table",
+						 .workloadKind = concurrent::ParallelWorkloadKind::PWK_CPU_BOUND,
+						 .estimatedItems = numSubspaces_,
+						 .minPartitions = 2,
+						 .minItems = 33,
+						 .minItemsPerWorker = 8},
+						[&](const concurrent::ParallelRangePartition &range, DistanceTableState &) {
+							for (size_t m = range.begin; m < range.end; ++m) {
+								computeSubspace(m);
+							}
+						},
+						[](size_t, DistanceTableState &) {});
 			} else {
 				for (size_t m = 0; m < numSubspaces_; ++m)
 					computeSubspace(m);

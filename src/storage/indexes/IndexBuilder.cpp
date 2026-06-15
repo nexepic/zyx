@@ -21,6 +21,7 @@
 #include "graph/storage/indexes/IndexBuilder.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
+#include "graph/concurrent/ParallelOperatorExecutor.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/PersistenceManager.hpp"
@@ -33,8 +34,12 @@
 #include "graph/storage/indexes/PropertyIndex.hpp"
 #include "graph/storage/indexes/ScopedNodePropertyKey.hpp"
 #include <algorithm>
+#include <iterator>
+#include <limits>
+#include <numeric>
 #include <optional>
 #include <span>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -56,6 +61,15 @@ namespace {
 		std::vector<std::string> requestedKeys;
 	};
 
+	struct ActiveIdRangeTask {
+		int64_t startId = 0;
+		int64_t endId = 0;
+	};
+
+	struct ActiveIdCollectState {
+		std::vector<int64_t> ids;
+	};
+
 	void appendUnique(std::vector<std::string> &values, const std::string &value) {
 		if (!value.empty() && std::find(values.begin(), values.end(), value) == values.end()) {
 			values.push_back(value);
@@ -74,6 +88,55 @@ namespace {
 		entry.doubleValue = ownerValue.doubleValue;
 		entry.stringValue = ownerValue.stringValue;
 		return entry;
+	}
+
+	struct TypedEntryBuildState {
+		std::vector<PropertyIndex::TypedPropertyEntry> entries;
+		std::vector<std::string> physicalKeys;
+	};
+
+	template<typename PhysicalKeyCollector>
+	std::vector<PropertyIndex::TypedPropertyEntry> buildTypedPropertyEntries(
+			const std::vector<storage::PropertyEntityOwnerScalarKeyValue> &values,
+			concurrent::ThreadPool *threadPool,
+			std::string_view phase,
+			PhysicalKeyCollector &&collector) {
+		std::vector<PropertyIndex::TypedPropertyEntry> entries;
+		if (values.empty()) {
+			return entries;
+		}
+		entries.reserve(values.size());
+
+		const concurrent::ParallelOperatorOptions options{
+				.phase = phase,
+				.workloadKind = concurrent::ParallelWorkloadKind::PWK_CPU_BOUND,
+				.estimatedItems = values.size(),
+				.minPartitions = 2,
+				.minItems = 4096,
+				.minItemsPerWorker = 1024};
+		(void) concurrent::ParallelOperatorExecutor::runRangePartitions<TypedEntryBuildState>(
+				0,
+				values.size(),
+				threadPool,
+				options,
+				[&](const concurrent::ParallelRangePartition &range, TypedEntryBuildState &state) {
+					state.entries.reserve(range.size());
+					for (size_t index = range.begin; index < range.end; ++index) {
+						const auto &ownerValue = values[index];
+						state.physicalKeys.clear();
+						collector(ownerValue, state.physicalKeys);
+						for (const auto &physicalKey: state.physicalKeys) {
+							state.entries.push_back(makeTypedPropertyEntry(ownerValue, physicalKey));
+						}
+					}
+				},
+				[&](size_t, TypedEntryBuildState &state) {
+					entries.insert(
+							entries.end(),
+							std::make_move_iterator(state.entries.begin()),
+							std::make_move_iterator(state.entries.end()));
+				});
+		return entries;
 	}
 
 	std::vector<int64_t> sortedUniqueIds(std::vector<int64_t> ids) {
@@ -138,6 +201,29 @@ namespace {
 		}
 	}
 
+	std::vector<ActiveIdRangeTask> buildActiveIdRangeTasks(
+			const std::vector<std::pair<int64_t, int64_t>> &ranges,
+			size_t targetIdsPerTask = 4096) {
+		std::vector<ActiveIdRangeTask> tasks;
+		targetIdsPerTask = std::max<size_t>(1, targetIdsPerTask);
+		for (const auto &[startId, endId]: ranges) {
+			if (endId < startId) {
+				continue;
+			}
+			for (int64_t taskStart = startId; taskStart <= endId;) {
+				const auto remaining = static_cast<uint64_t>(endId) - static_cast<uint64_t>(taskStart) + 1U;
+				const auto taskSize = static_cast<int64_t>(std::min<uint64_t>(remaining, targetIdsPerTask));
+				const int64_t taskEnd = taskStart + taskSize - 1;
+				tasks.push_back({taskStart, taskEnd});
+				if (taskEnd == std::numeric_limits<int64_t>::max()) { // ZYX_COV_EXCL_LINE
+					break; // ZYX_COV_EXCL_LINE
+				}
+				taskStart = taskEnd + 1;
+			}
+		}
+		return tasks;
+	}
+
 	void appendActiveDirtyNodeIdsByLabel(
 			const storage::DataManager &dataManager,
 			std::unordered_map<int64_t, std::vector<int64_t>> &idsByLabel) {
@@ -175,20 +261,37 @@ namespace {
 
 	std::vector<int64_t> collectActiveNodeIds(
 			const storage::DataManager &dataManager,
-			const std::vector<std::pair<int64_t, int64_t>> &ranges) {
+			const std::vector<std::pair<int64_t, int64_t>> &ranges,
+			graph::concurrent::ThreadPool *threadPool) {
 		std::vector<int64_t> ids;
-		for (const auto &[startId, endId]: ranges) {
-			if (endId < startId) {
-				continue;
-			}
-			ids.reserve(ids.size() + static_cast<size_t>(endId - startId + 1));
-			for (int64_t id = startId; id <= endId; ++id) {
-				Node node = dataManager.getNode(id);
-				if (node.getId() != 0 && node.isActive()) {
-					ids.push_back(node.getId());
-				}
-			}
-		}
+		const auto tasks = buildActiveIdRangeTasks(ranges);
+		const size_t estimatedItems = std::accumulate(tasks.begin(), tasks.end(), size_t{0}, [](size_t total, const auto &task) {
+			return total + static_cast<size_t>(task.endId - task.startId + 1);
+		});
+		const graph::concurrent::ParallelOperatorOptions options{
+				.phase = "index_build.collect_active_nodes",
+				.workloadKind = graph::concurrent::ParallelWorkloadKind::PWK_STORAGE_SCAN,
+				.estimatedItems = estimatedItems,
+				.minPartitions = 2,
+				.minItems = 4096,
+				.minItemsPerWorker = 1024};
+		(void) graph::concurrent::ParallelOperatorExecutor::runIndexedPartitions<ActiveIdCollectState>(
+				tasks.size(),
+				threadPool,
+				options,
+				[&](size_t taskIndex, ActiveIdCollectState &state) {
+					const auto &task = tasks[taskIndex];
+					state.ids.reserve(static_cast<size_t>(task.endId - task.startId + 1));
+					for (int64_t id = task.startId; id <= task.endId; ++id) {
+						Node node = dataManager.getNode(id);
+						if (node.getId() != 0 && node.isActive()) {
+							state.ids.push_back(node.getId());
+						}
+					}
+				},
+				[&](size_t, ActiveIdCollectState &state) {
+					ids.insert(ids.end(), state.ids.begin(), state.ids.end());
+				});
 		std::ranges::sort(ids);
 		ids.erase(std::ranges::unique(ids).begin(), ids.end());
 		return ids;
@@ -253,20 +356,37 @@ namespace {
 
 	std::vector<int64_t> collectActiveEdgeIds(
 			const storage::DataManager &dataManager,
-			const std::vector<std::pair<int64_t, int64_t>> &ranges) {
+			const std::vector<std::pair<int64_t, int64_t>> &ranges,
+			graph::concurrent::ThreadPool *threadPool) {
 		std::vector<int64_t> ids;
-		for (const auto &[startId, endId]: ranges) {
-			if (endId < startId) {
-				continue;
-			}
-			ids.reserve(ids.size() + static_cast<size_t>(endId - startId + 1));
-			for (int64_t id = startId; id <= endId; ++id) {
-				Edge edge = dataManager.getEdge(id);
-				if (edge.getId() != 0 && edge.isActive()) {
-					ids.push_back(edge.getId());
-				}
-			}
-		}
+		const auto tasks = buildActiveIdRangeTasks(ranges);
+		const size_t estimatedItems = std::accumulate(tasks.begin(), tasks.end(), size_t{0}, [](size_t total, const auto &task) {
+			return total + static_cast<size_t>(task.endId - task.startId + 1);
+		});
+		const graph::concurrent::ParallelOperatorOptions options{
+				.phase = "index_build.collect_active_edges",
+				.workloadKind = graph::concurrent::ParallelWorkloadKind::PWK_STORAGE_SCAN,
+				.estimatedItems = estimatedItems,
+				.minPartitions = 2,
+				.minItems = 4096,
+				.minItemsPerWorker = 1024};
+		(void) graph::concurrent::ParallelOperatorExecutor::runIndexedPartitions<ActiveIdCollectState>(
+				tasks.size(),
+				threadPool,
+				options,
+				[&](size_t taskIndex, ActiveIdCollectState &state) {
+					const auto &task = tasks[taskIndex];
+					state.ids.reserve(static_cast<size_t>(task.endId - task.startId + 1));
+					for (int64_t id = task.startId; id <= task.endId; ++id) {
+						Edge edge = dataManager.getEdge(id);
+						if (edge.getId() != 0 && edge.isActive()) {
+							state.ids.push_back(edge.getId());
+						}
+					}
+				},
+				[&](size_t, ActiveIdCollectState &state) {
+					ids.insert(ids.end(), state.ids.begin(), state.ids.end());
+				});
 		std::ranges::sort(ids);
 		ids.erase(std::ranges::unique(ids).begin(), ids.end());
 		return ids;
@@ -466,7 +586,7 @@ namespace {
 			const auto nodeRanges = getNodeIdRanges();
 			std::vector<int64_t> globalOwnerIds;
 			if (globalGroupIndex.has_value()) {
-				globalOwnerIds = collectActiveNodeIds(*dataManager_, nodeRanges);
+				globalOwnerIds = collectActiveNodeIds(*dataManager_, nodeRanges, storage_->getThreadPool());
 			}
 			const auto scopedOwnerIdsByLabel = collectActiveNodeIdsByLabel(
 					*dataManager_, nodeRanges, sortedUniqueIds(std::move(neededScopedLabels)),
@@ -500,16 +620,22 @@ namespace {
 					values = scanner.collect(EntityType::Node, group.requestedKeys, ownerIds, storage_->getThreadPool());
 				}
 
-				propertyEntries.reserve(propertyEntries.size() + values.size());
-				for (const auto &ownerValue: values) {
-					auto keyIt = physicalKeysByProperty.find(ownerValue.key);
-					if (keyIt == physicalKeysByProperty.end()) {
-						continue;
-					}
-					for (const auto &physicalKey: keyIt->second) {
-						propertyEntries.push_back(makeTypedPropertyEntry(ownerValue, physicalKey));
-					}
-				}
+				auto groupEntries = buildTypedPropertyEntries(
+						values,
+						storage_->getThreadPool(),
+						"index_build.node_property.typed_entry_build",
+						[&](const storage::PropertyEntityOwnerScalarKeyValue &ownerValue,
+							std::vector<std::string> &physicalKeys) {
+							if (auto keyIt = physicalKeysByProperty.find(ownerValue.key);
+								keyIt != physicalKeysByProperty.end()) {
+								physicalKeys.insert(
+										physicalKeys.end(), keyIt->second.begin(), keyIt->second.end());
+							}
+						});
+				propertyEntries.insert(
+						propertyEntries.end(),
+						std::make_move_iterator(groupEntries.begin()),
+						std::make_move_iterator(groupEntries.end()));
 
 				if (!typedScanCoversAllProperties) {
 					debug::ScopedPerfTimer timer("index_build.node_property.fallback_blob_or_inline");
@@ -616,7 +742,7 @@ namespace {
 			const bool typedScanCoversAllProperties =
 					dataManager_->canCountAllPropertyPredicatesByOwnerType(EntityType::Edge);
 
-			const auto activeEdgeIds = collectActiveEdgeIds(*dataManager_, getEdgeIdRanges());
+			const auto activeEdgeIds = collectActiveEdgeIds(*dataManager_, getEdgeIdRanges(), storage_->getThreadPool());
 			if (activeEdgeIds.empty()) {
 				propertyIndex->flush();
 				return true;
@@ -631,11 +757,14 @@ namespace {
 						std::span<const int64_t>(activeEdgeIds.data(), activeEdgeIds.size()),
 						storage_->getThreadPool());
 			}
-			std::vector<PropertyIndex::TypedPropertyEntry> propertyEntries;
-			propertyEntries.reserve(values.size());
-			for (const auto &ownerValue: values) {
-				propertyEntries.push_back(makeTypedPropertyEntry(ownerValue, ownerValue.key));
-			}
+			auto propertyEntries = buildTypedPropertyEntries(
+					values,
+					storage_->getThreadPool(),
+					"index_build.edge_property.typed_entry_build",
+					[](const storage::PropertyEntityOwnerScalarKeyValue &ownerValue,
+					   std::vector<std::string> &physicalKeys) {
+						physicalKeys.push_back(ownerValue.key);
+					});
 			if (!propertyEntries.empty()) {
 				debug::ScopedPerfTimer timer("index_build.edge_property.typed_insert");
 				propertyIndex->addTypedPropertiesBatch(std::move(propertyEntries));
@@ -695,7 +824,7 @@ namespace {
 		const auto nodeRanges = getNodeIdRanges();
 		std::vector<int64_t> ownerIds;
 		if (buildGlobalProperty) {
-			ownerIds = collectActiveNodeIds(*dataManager_, nodeRanges);
+			ownerIds = collectActiveNodeIds(*dataManager_, nodeRanges, storage_->getThreadPool());
 		} else {
 			auto labelIds = collectActiveNodeIdsByLabel(
 					*dataManager_, nodeRanges, std::vector<int64_t>{scopedLabelId},
@@ -719,12 +848,14 @@ namespace {
 					storage_->getThreadPool());
 		}
 
-		std::vector<PropertyIndex::TypedPropertyEntry> propertyEntries;
-		propertyEntries.reserve(values.size());
 		const std::string &physicalKey = buildGlobalProperty ? propertyKey : scopedPropertyKey;
-		for (const auto &ownerValue: values) {
-			propertyEntries.push_back(makeTypedPropertyEntry(ownerValue, physicalKey));
-		}
+		auto propertyEntries = buildTypedPropertyEntries(
+				values,
+				storage_->getThreadPool(),
+				"index_build.node_property.typed_entry_build",
+				[&](const storage::PropertyEntityOwnerScalarKeyValue &, std::vector<std::string> &physicalKeys) {
+					physicalKeys.push_back(physicalKey);
+				});
 		if (!propertyEntries.empty()) {
 			debug::ScopedPerfTimer timer("index_build.node_property.typed_insert");
 			propertyIndex->addTypedPropertiesBatch(std::move(propertyEntries));
@@ -763,7 +894,7 @@ namespace {
 		const bool typedScanCoversAllProperties =
 				dataManager_->canCountAllPropertyPredicatesByOwnerType(EntityType::Edge);
 
-		const auto activeEdgeIds = collectActiveEdgeIds(*dataManager_, getEdgeIdRanges());
+		const auto activeEdgeIds = collectActiveEdgeIds(*dataManager_, getEdgeIdRanges(), storage_->getThreadPool());
 		if (activeEdgeIds.empty()) {
 			return true;
 		}
@@ -779,11 +910,13 @@ namespace {
 					storage_->getThreadPool());
 		}
 
-		std::vector<PropertyIndex::TypedPropertyEntry> propertyEntries;
-		propertyEntries.reserve(values.size());
-		for (const auto &ownerValue: values) {
-			propertyEntries.push_back(makeTypedPropertyEntry(ownerValue, propertyKey));
-		}
+		auto propertyEntries = buildTypedPropertyEntries(
+				values,
+				storage_->getThreadPool(),
+				"index_build.edge_property.typed_entry_build",
+				[&](const storage::PropertyEntityOwnerScalarKeyValue &, std::vector<std::string> &physicalKeys) {
+					physicalKeys.push_back(propertyKey);
+				});
 		if (!propertyEntries.empty()) {
 			debug::ScopedPerfTimer timer("index_build.edge_property.typed_insert");
 			propertyIndex->addTypedPropertiesBatch(std::move(propertyEntries));

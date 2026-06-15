@@ -30,7 +30,7 @@
 #include <utility>
 #include <vector>
 #include "../PhysicalOperator.hpp"
-#include "graph/concurrent/ParallelExecutionPolicy.hpp"
+#include "graph/concurrent/ParallelOperatorExecutor.hpp"
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/QueryContext.hpp"
@@ -82,33 +82,35 @@ namespace graph::query::execution::operators {
 
 				RecordBatch outputBatch;
 
-				const graph::concurrent::ParallelWorkEstimate estimate{
+				struct FilterPartitionState {
+					RecordBatch records;
+				};
+				const graph::concurrent::ParallelOperatorOptions options{
+						.phase = "filter.parallel",
 						.workloadKind = graph::concurrent::ParallelWorkloadKind::PWK_CPU_BOUND,
-						.partitions = inputBatch.size(),
 						.estimatedItems = inputBatch.size(),
 						.minPartitions = 2,
 						.minItems = PARALLEL_FILTER_THRESHOLD,
 						.minItemsPerWorker = std::max<size_t>(1, PARALLEL_FILTER_THRESHOLD / 4)};
-				const auto parallelDecision = graph::concurrent::decideParallelExecution(threadPool_, estimate);
-				graph::concurrent::ScopedParallelExecutionTelemetry telemetry(threadPool_, estimate, parallelDecision);
-				if (parallelDecision.useParallel) {
-					std::vector<uint8_t> keep(inputBatch.size());
-					threadPool_->parallelFor(0, inputBatch.size(), parallelDecision.workerCount, [&](size_t i) {
-						keep[i] = evaluateRecord(inputBatch[i]) ? 1 : 0;
-					});
-					outputBatch.reserve(inputBatch.size());
-					for (size_t i = 0; i < inputBatch.size(); ++i) {
-						if (keep[i])
-							outputBatch.push_back(std::move(inputBatch[i]));
-					}
-				} else {
-					outputBatch.reserve(inputBatch.size());
-					for (auto &record : inputBatch) {
-						if (evaluateRecord(record))
-							outputBatch.push_back(std::move(record));
-					}
-				}
-				telemetry.markCompleted();
+				outputBatch.reserve(inputBatch.size());
+				(void) graph::concurrent::ParallelOperatorExecutor::runRangePartitions<FilterPartitionState>(
+						0,
+						inputBatch.size(),
+						threadPool_,
+						options,
+						[&](const graph::concurrent::ParallelRangePartition &range, FilterPartitionState &state) {
+							state.records.reserve(range.size());
+							for (size_t i = range.begin; i < range.end; ++i) {
+								if (evaluateRecord(inputBatch[i])) {
+									state.records.push_back(std::move(inputBatch[i]));
+								}
+							}
+						},
+						[&](size_t, FilterPartitionState &state) {
+							for (auto &record: state.records) {
+								outputBatch.push_back(std::move(record));
+							}
+						});
 
 				debug::PerfTrace::addDuration(
 						"filter",

@@ -20,6 +20,7 @@
 
 #include <gtest/gtest.h>
 #include "graph/concurrent/ThreadPool.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/vector/quantization/KMeans.hpp"
 
 using namespace graph::vector;
@@ -86,4 +87,32 @@ TEST(KMeansTest, ParallelPathReseedsEmptyClustersWhenKExceedsDataSize) {
 	for (const auto &c : centroids) {
 		EXPECT_EQ(c.size(), 2UL);
 	}
+}
+
+TEST(KMeansTest, ParallelPathUsesPartitionLocalAccumulationForUnevenRanges) {
+	std::vector<std::vector<float>> data;
+	data.reserve(260);
+	for (int i = 0; i < 260; ++i) {
+		const float group = static_cast<float>(i % 13);
+		data.push_back({group, static_cast<float>(i) * 0.125f, static_cast<float>(i % 5)});
+	}
+
+	graph::concurrent::ThreadPool pool(4);
+	graph::debug::PerfTrace::setEnabled(true);
+	graph::debug::PerfTrace::reset();
+	auto parallelCentroids = KMeans::run(data, 8, 4, &pool);
+	const auto snapshot = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setEnabled(false);
+
+	auto sequentialCentroids = KMeans::run(data, 8, 4);
+
+	ASSERT_EQ(parallelCentroids.size(), sequentialCentroids.size());
+	for (size_t c = 0; c < parallelCentroids.size(); ++c) {
+		ASSERT_EQ(parallelCentroids[c].size(), sequentialCentroids[c].size());
+		for (size_t d = 0; d < parallelCentroids[c].size(); ++d) {
+			EXPECT_NEAR(parallelCentroids[c][d], sequentialCentroids[c][d], 1.0e-4f);
+		}
+	}
+	ASSERT_TRUE(snapshot.contains("vector.kmeans.assignment.workers"));
+	EXPECT_GE(snapshot.at("vector.kmeans.assignment.workers").totalValue, 2);
 }

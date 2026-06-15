@@ -240,6 +240,40 @@ TEST(ThreadPoolExceptionAndParallelTest, ParallelExecutionDecisionUsesExplicitBy
 	EXPECT_EQ(decision.workerCount, 2UL);
 }
 
+TEST(ThreadPoolExceptionAndParallelTest, ParallelExecutionDecisionCapsStorageScanByDefaultBytes) {
+	ThreadPool pool(8);
+
+	const auto decision = decideParallelExecution(
+			&pool,
+			{.workloadKind = ParallelWorkloadKind::PWK_STORAGE_SCAN,
+			 .partitions = 16,
+			 .estimatedItems = 128,
+			 .estimatedBytes = size_t{7} * 1024 * 1024,
+			 .minPartitions = 2,
+			 .minItems = 2});
+
+	EXPECT_TRUE(decision.useParallel);
+	EXPECT_EQ(decision.workerCount, 2UL);
+	EXPECT_EQ(decision.hardWorkerLimit, 2UL);
+}
+
+TEST(ThreadPoolExceptionAndParallelTest, ParallelExecutionDecisionRejectsTinyStorageScanByDefaultBytes) {
+	ThreadPool pool(8);
+
+	const auto decision = decideParallelExecution(
+			&pool,
+			{.workloadKind = ParallelWorkloadKind::PWK_STORAGE_SCAN,
+			 .partitions = 16,
+			 .estimatedItems = 128,
+			 .estimatedBytes = size_t{2} * 1024 * 1024,
+			 .minPartitions = 2,
+			 .minItems = 2});
+
+	EXPECT_FALSE(decision.useParallel);
+	EXPECT_EQ(decision.workerCount, 1UL);
+	EXPECT_EQ(decision.reason, ParallelDecisionReason::PDR_INSUFFICIENT_GRANULARITY);
+}
+
 TEST(ThreadPoolExceptionAndParallelTest, ParallelExecutionDecisionUsesItemsPerWorkerCap) {
 	ThreadPool pool(8);
 
@@ -296,6 +330,72 @@ TEST(ThreadPoolExceptionAndParallelTest, ParallelExecutionDecisionCapsMemoryInte
 
 	EXPECT_TRUE(decision.useParallel);
 	EXPECT_EQ(decision.workerCount, 2UL);
+}
+
+TEST(ThreadPoolExceptionAndParallelTest, ParallelExecutionDecisionCapsAdjacencyTraversalByEstimatedEdges) {
+	ThreadPool pool(8);
+
+	const auto smallDecision = decideParallelExecution(
+			&pool,
+			{.workloadKind = ParallelWorkloadKind::PWK_ADJACENCY_TRAVERSAL,
+			 .partitions = 16,
+			 .estimatedItems = 1024,
+			 .minPartitions = 2,
+			 .minItems = 2});
+	EXPECT_FALSE(smallDecision.useParallel);
+	EXPECT_EQ(smallDecision.reason, ParallelDecisionReason::PDR_INSUFFICIENT_GRANULARITY);
+
+	const auto largeDecision = decideParallelExecution(
+			&pool,
+			{.workloadKind = ParallelWorkloadKind::PWK_ADJACENCY_TRAVERSAL,
+			 .partitions = 16,
+			 .estimatedItems = 10'000,
+			 .minPartitions = 2,
+			 .minItems = 2});
+	EXPECT_TRUE(largeDecision.useParallel);
+	EXPECT_EQ(largeDecision.workerCount, 4UL);
+	EXPECT_EQ(largeDecision.hardWorkerLimit, 4UL);
+}
+
+TEST(ThreadPoolExceptionAndParallelTest, ParallelExecutionDecisionLimitsDeepFrontierStateBaseline) {
+	ThreadPool pool(8);
+
+	const auto decision = decideParallelExecution(
+			&pool,
+			{.workloadKind = ParallelWorkloadKind::PWK_ADJACENCY_TRAVERSAL,
+			 .partitions = 16,
+			 .estimatedItems = 100'000,
+			 .estimatedBytes = 100'000 * size_t{32},
+			 .minPartitions = 2,
+			 .minItems = 2,
+			 .estimatedStateBytesPerItem = 32,
+			 .frontierWidth = 4096,
+			 .traversalDepth = 2});
+
+	EXPECT_TRUE(decision.useParallel);
+	EXPECT_EQ(decision.baselineWorkerCount, 2UL);
+	EXPECT_LE(decision.workerCount, 2UL);
+	EXPECT_EQ(decision.reason, ParallelDecisionReason::PDR_PARALLEL);
+}
+
+TEST(ThreadPoolExceptionAndParallelTest, ParallelExecutionDecisionLimitsBroadFrontierStateBaseline) {
+	ThreadPool pool(8);
+
+	const auto decision = decideParallelExecution(
+			&pool,
+			{.workloadKind = ParallelWorkloadKind::PWK_ADJACENCY_TRAVERSAL,
+			 .partitions = 16,
+			 .estimatedItems = 100'000,
+			 .estimatedBytes = 100'000 * size_t{32},
+			 .minPartitions = 2,
+			 .minItems = 2,
+			 .estimatedStateBytesPerItem = 32,
+			 .frontierWidth = 4096,
+			 .traversalDepth = 0});
+
+	EXPECT_TRUE(decision.useParallel);
+	EXPECT_EQ(decision.baselineWorkerCount, 2UL);
+	EXPECT_LE(decision.workerCount, 2UL);
 }
 
 TEST(ThreadPoolExceptionAndParallelTest, ParallelExecutionDecisionUsesPolicyConfigDefaults) {
@@ -532,6 +632,7 @@ TEST(ThreadPoolExceptionAndParallelTest, AdaptiveParallelPolicyConfigValidationK
 	ParallelAdaptivePolicyConfig config;
 	config.ewmaAlpha = 2.0;
 	config.minImprovementRatio = 0.5;
+	config.maxMergeRatioForRecommendation = 2.0;
 	config.minSamplesBeforeRecommend = 1;
 
 	pool.adaptivePolicyState().setConfig(config);
@@ -540,6 +641,7 @@ TEST(ThreadPoolExceptionAndParallelTest, AdaptiveParallelPolicyConfigValidationK
 	EXPECT_EQ(applied.minSamplesBeforeRecommend, 1U);
 	EXPECT_DOUBLE_EQ(applied.ewmaAlpha, 0.25);
 	EXPECT_DOUBLE_EQ(applied.minImprovementRatio, 1.0);
+	EXPECT_DOUBLE_EQ(applied.maxMergeRatioForRecommendation, 0.45);
 }
 
 TEST(ThreadPoolExceptionAndParallelTest, ScopedTelemetryRecordsOnlyCompletedWork) {
@@ -676,6 +778,78 @@ TEST(ThreadPoolExceptionAndParallelTest, AdaptivePolicyUsesCandidateWithoutBasel
 	EXPECT_EQ(state.recommendWorkerCount(estimate, 4, 8), 4UL);
 }
 
+TEST(ThreadPoolExceptionAndParallelTest, AdaptivePolicyAvoidsWorkersWithHighMergeCost) {
+	AdaptiveParallelPolicyState state;
+	const auto estimate = graph::concurrent::ParallelWorkEstimate{
+			.workloadKind = ParallelWorkloadKind::PWK_CPU_BOUND,
+			.partitions = 64,
+			.estimatedItems = 100000,
+			.minPartitions = 2,
+			.minItems = 2};
+
+	for (int i = 0; i < 2; ++i) {
+		state.record(ParallelExecutionTelemetry{
+				.estimate = estimate,
+				.workerCount = 4,
+				.elapsedNs = 100,
+				.mergeNs = 10,
+				.completed = true});
+		state.record(ParallelExecutionTelemetry{
+				.estimate = estimate,
+				.workerCount = 8,
+				.elapsedNs = 90,
+				.mergeNs = 60,
+				.completed = true});
+	}
+
+	EXPECT_EQ(state.recommendWorkerCount(estimate, 4, 8), 4UL);
+}
+
+TEST(ThreadPoolExceptionAndParallelTest, AdaptivePolicyPrefersLowerWorkerOnMarginalThroughputGain) {
+	AdaptiveParallelPolicyState state;
+	const auto estimate = graph::concurrent::ParallelWorkEstimate{
+			.workloadKind = ParallelWorkloadKind::PWK_CPU_BOUND,
+			.partitions = 64,
+			.estimatedItems = 100000,
+			.minPartitions = 2,
+			.minItems = 2};
+
+	for (int i = 0; i < 2; ++i) {
+		state.record(ParallelExecutionTelemetry{
+				.estimate = estimate,
+				.workerCount = 4,
+				.elapsedNs = 100,
+				.completed = true});
+		state.record(ParallelExecutionTelemetry{
+				.estimate = estimate,
+				.workerCount = 8,
+				.elapsedNs = 95,
+				.completed = true});
+	}
+
+	EXPECT_EQ(state.recommendWorkerCount(estimate, 8, 8), 4UL);
+}
+
+TEST(ThreadPoolExceptionAndParallelTest, AdaptivePolicyExploresLowerWhenBaselineSaturatesHardLimit) {
+	AdaptiveParallelPolicyState state;
+	const auto estimate = graph::concurrent::ParallelWorkEstimate{
+			.workloadKind = ParallelWorkloadKind::PWK_CPU_BOUND,
+			.partitions = 64,
+			.estimatedItems = 100000,
+			.minPartitions = 2,
+			.minItems = 2};
+
+	for (int i = 0; i < 2; ++i) {
+		state.record(ParallelExecutionTelemetry{
+				.estimate = estimate,
+				.workerCount = 8,
+				.elapsedNs = 100,
+				.completed = true});
+	}
+
+	EXPECT_EQ(state.recommendWorkerCount(estimate, 8, 8), 4UL);
+}
+
 TEST(ThreadPoolExceptionAndParallelTest, AdaptivePolicyRespectsGranularityWhenExploring) {
 	AdaptiveParallelPolicyState state;
 	const auto estimate = graph::concurrent::ParallelWorkEstimate{
@@ -696,4 +870,39 @@ TEST(ThreadPoolExceptionAndParallelTest, AdaptivePolicyRespectsGranularityWhenEx
 
 	EXPECT_EQ(state.recommendWorkerCount(estimate, 4, 8), 4UL);
 	EXPECT_EQ(state.recommendWorkerCount(estimate, 4, 0), 1UL);
+}
+
+TEST(ThreadPoolExceptionAndParallelTest, AdaptivePolicySeparatesAdjacencyFrontierShapes) {
+	AdaptiveParallelPolicyState state;
+	const auto broadFrontier = graph::concurrent::ParallelWorkEstimate{
+			.workloadKind = ParallelWorkloadKind::PWK_ADJACENCY_TRAVERSAL,
+			.partitions = 64,
+			.estimatedItems = 100000,
+			.estimatedBytes = 100000 * size_t{32},
+			.minPartitions = 2,
+			.minItems = 2,
+			.estimatedStateBytesPerItem = 32,
+			.frontierWidth = 4096,
+			.traversalDepth = 2};
+	const auto narrowFrontier = graph::concurrent::ParallelWorkEstimate{
+			.workloadKind = ParallelWorkloadKind::PWK_ADJACENCY_TRAVERSAL,
+			.partitions = 64,
+			.estimatedItems = 100000,
+			.estimatedBytes = 100000 * size_t{32},
+			.minPartitions = 2,
+			.minItems = 2,
+			.estimatedStateBytesPerItem = 32,
+			.frontierWidth = 8,
+			.traversalDepth = 1};
+
+	for (int i = 0; i < 2; ++i) {
+		state.record(ParallelExecutionTelemetry{
+				.estimate = broadFrontier,
+				.workerCount = 8,
+				.elapsedNs = 100,
+				.completed = true});
+	}
+
+	EXPECT_EQ(state.recommendWorkerCount(broadFrontier, 2, 8), 8UL);
+	EXPECT_EQ(state.recommendWorkerCount(narrowFrontier, 2, 8), 2UL);
 }

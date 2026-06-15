@@ -1,11 +1,57 @@
 #include "graph/query/execution/RelationshipAdjacencyCursor.hpp"
 
+#include <algorithm>
+#include <limits>
 #include <utility>
 
-namespace graph::query::execution {
+#include "graph/concurrent/ParallelOperatorExecutor.hpp"
 
-	RelationshipAdjacencyCursor::RelationshipAdjacencyCursor(std::shared_ptr<storage::DataManager> dm)
-		: dm_(std::move(dm)) {}
+namespace graph::query::execution {
+	namespace {
+		constexpr size_t kParallelFrontierMinItems = 4096;
+		constexpr size_t kParallelFrontierSampleSources = 16;
+		constexpr size_t kEstimatedFrontierEdgeBytes = 64;
+
+		struct RelationshipCountPartitionState {
+			int64_t count = 0;
+		};
+
+		struct RelationshipExpandPartitionState {
+			RelationshipExpandBatch batch;
+		};
+
+		size_t estimateFrontierItems(
+				const std::vector<int64_t> &sourceIds,
+				const std::shared_ptr<traversal::RelationshipTraversal> &traversal,
+				const traversal::RelationshipTraversalOptions &options,
+				const concurrent::ThreadPool *threadPool) {
+			size_t estimatedItems = sourceIds.size();
+			if (!concurrent::hasParallelWorkers(threadPool) || sourceIds.size() < kParallelFrontierSampleSources) {
+				return estimatedItems;
+			}
+
+			const size_t sampleCount = std::min(kParallelFrontierSampleSources, sourceIds.size());
+			size_t sampledEdges = 0;
+			for (size_t i = 0; i < sampleCount; ++i) {
+				sampledEdges += traversal->countAdjacentEdgeRefs(sourceIds[i], options);
+			}
+			if (sampleCount != 0) {
+				estimatedItems = std::max(estimatedItems, (sampledEdges * sourceIds.size()) / sampleCount);
+			}
+			return estimatedItems;
+		}
+
+		size_t estimateFrontierBytes(size_t estimatedItems) {
+			if (estimatedItems > std::numeric_limits<size_t>::max() / kEstimatedFrontierEdgeBytes) {
+				return std::numeric_limits<size_t>::max();
+			}
+			return estimatedItems * kEstimatedFrontierEdgeBytes;
+		}
+	} // namespace
+
+	RelationshipAdjacencyCursor::RelationshipAdjacencyCursor(std::shared_ptr<storage::DataManager> dm,
+	                                                         concurrent::ThreadPool *threadPool)
+		: dm_(std::move(dm)), threadPool_(threadPool) {}
 
 	bool RelationshipAdjacencyCursor::matchesTargetLabels(const Node &node, const RelationshipExpandConfig &config) const {
 		for (const int64_t labelId : config.targetLabelIds) {
@@ -112,15 +158,49 @@ namespace graph::query::execution {
 	                                                          const RelationshipExpandConfig &config,
 	                                                          const RelationshipExpandRequirements &requirements) const {
 		RelationshipExpandBatch batch;
-		if (!dm_ || config.edgeTypeId < 0) {
+		if (!dm_ || config.edgeTypeId < 0 || sourceIds.empty()) {
 			return batch;
 		}
+		auto traversal = dm_->getRelationshipTraversal();
+		if (!traversal) {
+			return batch;
+		}
+		const auto options = traversalOptions(config, requirements);
 
-		(void) forEach(sourceIds, config, requirements, [&](const RelationshipExpandRow &row) {
-			batch.rows.push_back(row);
-			batch.selected.push_back(1);
-			return true;
-		});
+		const size_t estimatedItems = estimateFrontierItems(sourceIds, traversal, options, threadPool_);
+		const concurrent::ParallelOperatorOptions parallelOptions{
+				.phase = "relationship_frontier.expand",
+				.workloadKind = concurrent::ParallelWorkloadKind::PWK_ADJACENCY_TRAVERSAL,
+				.estimatedItems = estimatedItems,
+				.estimatedBytes = estimateFrontierBytes(estimatedItems),
+				.minPartitions = 2,
+				.minItems = kParallelFrontierMinItems};
+		(void) concurrent::ParallelOperatorExecutor::runRangePartitions<RelationshipExpandPartitionState>(
+				0,
+				sourceIds.size(),
+				threadPool_,
+				parallelOptions,
+				[&](const concurrent::ParallelRangePartition &range, RelationshipExpandPartitionState &state) {
+					for (size_t i = range.begin; i < range.end; ++i) {
+						const int64_t sourceId = sourceIds[i];
+						(void) traversal->visitAdjacentEdgeRefs(
+								sourceId,
+								options,
+								[&](const traversal::RelationshipEdgeRef &edgeRef) {
+									const auto targetId = acceptedTargetForEdgeRef(edgeRef, sourceId, config, requirements);
+									if (!targetId.has_value()) {
+										return true;
+									}
+									state.batch.rows.push_back(RelationshipExpandRow{sourceId, edgeRef.edgeId, *targetId});
+									state.batch.selected.push_back(1);
+									return true;
+								});
+					}
+				},
+				[&](size_t, RelationshipExpandPartitionState &state) {
+					batch.rows.insert(batch.rows.end(), state.batch.rows.begin(), state.batch.rows.end());
+					batch.selected.insert(batch.selected.end(), state.batch.selected.begin(), state.batch.selected.end());
+				});
 		return batch;
 	}
 
@@ -128,7 +208,7 @@ namespace graph::query::execution {
 	                                           const RelationshipExpandConfig &config,
 	                                           const RelationshipExpandRequirements &requirements) const {
 		int64_t total = 0;
-		if (!dm_ || config.edgeTypeId < 0) {
+		if (!dm_ || config.edgeTypeId < 0 || sourceIds.empty()) {
 			return total;
 		}
 		auto traversal = dm_->getRelationshipTraversal();
@@ -137,18 +217,40 @@ namespace graph::query::execution {
 		}
 		const auto options = traversalOptions(config, requirements);
 
-		for (const int64_t sourceId : sourceIds) {
-			if (!requirements.needsTargetActiveCheck && !requirements.needsTargetLabels) {
-				total += static_cast<int64_t>(traversal->countAdjacentEdgeRefs(sourceId, options));
-				continue;
-			}
-			(void) traversal->visitAdjacentEdgeRefs(sourceId, options, [&](const traversal::RelationshipEdgeRef &edgeRef) {
-				if (acceptedTargetForEdgeRef(edgeRef, sourceId, config, requirements).has_value()) {
-					++total;
-				}
-				return true;
-			});
-		}
+		const size_t estimatedItems = estimateFrontierItems(sourceIds, traversal, options, threadPool_);
+		const concurrent::ParallelOperatorOptions parallelOptions{
+				.phase = "relationship_frontier.count",
+				.workloadKind = concurrent::ParallelWorkloadKind::PWK_ADJACENCY_TRAVERSAL,
+				.estimatedItems = estimatedItems,
+				.estimatedBytes = estimateFrontierBytes(estimatedItems),
+				.minPartitions = 2,
+				.minItems = kParallelFrontierMinItems};
+		(void) concurrent::ParallelOperatorExecutor::runRangePartitions<RelationshipCountPartitionState>(
+				0,
+				sourceIds.size(),
+				threadPool_,
+				parallelOptions,
+				[&](const concurrent::ParallelRangePartition &range, RelationshipCountPartitionState &state) {
+					for (size_t i = range.begin; i < range.end; ++i) {
+						const int64_t sourceId = sourceIds[i];
+						if (!requirements.needsTargetActiveCheck && !requirements.needsTargetLabels) {
+							state.count += static_cast<int64_t>(traversal->countAdjacentEdgeRefs(sourceId, options));
+							continue;
+						}
+						(void) traversal->visitAdjacentEdgeRefs(
+								sourceId,
+								options,
+								[&](const traversal::RelationshipEdgeRef &edgeRef) {
+									if (acceptedTargetForEdgeRef(edgeRef, sourceId, config, requirements).has_value()) {
+										++state.count;
+									}
+									return true;
+								});
+					}
+				},
+				[&](size_t, RelationshipCountPartitionState &state) {
+					total += state.count;
+				});
 		return total;
 	}
 

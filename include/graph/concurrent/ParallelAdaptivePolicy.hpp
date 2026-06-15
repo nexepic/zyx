@@ -46,6 +46,7 @@ namespace graph::concurrent {
 		ParallelPolicyMode mode = ParallelPolicyMode::PPM_ADAPTIVE;
 		uint32_t minSamplesBeforeRecommend = 2;
 		double minImprovementRatio = 1.08;
+		double maxMergeRatioForRecommendation = 0.45;
 		double ewmaAlpha = 0.25;
 		bool explorationEnabled = true;
 	};
@@ -58,8 +59,9 @@ namespace graph::concurrent {
 	};
 
 	namespace detail {
-		inline constexpr size_t kAdaptiveWorkloadCount = 5;
+		inline constexpr size_t kAdaptiveWorkloadCount = 6;
 		inline constexpr size_t kAdaptiveSizeBucketCount = 9;
+		inline constexpr size_t kAdaptiveShapeBucketCount = 6;
 		inline constexpr size_t kAdaptiveWorkerSlotCount = 11; // 1..1024 by powers of two.
 
 		inline size_t workloadIndex(ParallelWorkloadKind workloadKind) {
@@ -72,6 +74,8 @@ namespace graph::concurrent {
 					return 3;
 				case ParallelWorkloadKind::PWK_STORAGE_SCAN:
 					return 4;
+				case ParallelWorkloadKind::PWK_ADJACENCY_TRAVERSAL:
+					return 5;
 				case ParallelWorkloadKind::PWK_GENERAL:
 				default:
 					return 0;
@@ -97,6 +101,33 @@ namespace graph::concurrent {
 				++bucket;
 			}
 			return bucket;
+		}
+
+		inline size_t shapeBucket(const ParallelWorkEstimate &estimate) {
+			if (estimate.workloadKind != ParallelWorkloadKind::PWK_ADJACENCY_TRAVERSAL) {
+				return 0;
+			}
+
+			const bool carriesPathState = estimate.estimatedStateBytesPerItem >= 32;
+			if (!carriesPathState) {
+				return 0;
+			}
+
+			const bool broadFrontier = estimate.frontierWidth >= 1024;
+			const bool deepTraversal = estimate.traversalDepth >= 2;
+			if (deepTraversal && broadFrontier) {
+				return 5;
+			}
+			if (deepTraversal) {
+				return 4;
+			}
+			if (broadFrontier) {
+				return 3;
+			}
+			if (estimate.traversalDepth >= 1) {
+				return 2;
+			}
+			return 1;
 		}
 
 		inline size_t workerSlot(size_t workerCount) {
@@ -163,6 +194,17 @@ namespace graph::concurrent {
 			}
 			return previous * (1.0 - alpha) + observed * alpha;
 		}
+
+		inline bool hasReliableThroughput(const ParallelAdaptiveStats &stats,
+										   const ParallelAdaptivePolicyConfig &config) {
+			return stats.samples >= config.minSamplesBeforeRecommend && stats.throughputEwma > 0.0 &&
+				   std::isfinite(stats.throughputEwma);
+		}
+
+		inline bool hasRecommendationMergeCost(const ParallelAdaptiveStats &stats,
+												const ParallelAdaptivePolicyConfig &config) {
+			return stats.mergeRatioEwma <= config.maxMergeRatioForRecommendation;
+		}
 	} // namespace detail
 
 	class AdaptiveParallelPolicyState {
@@ -189,6 +231,9 @@ namespace graph::concurrent {
 			if (config.minImprovementRatio < 1.0) {
 				config.minImprovementRatio = 1.0;
 			}
+			if (config.maxMergeRatioForRecommendation <= 0.0 || config.maxMergeRatioForRecommendation > 1.0) {
+				config.maxMergeRatioForRecommendation = 0.45;
+			}
 			std::lock_guard lock(mutex_);
 			config_ = config;
 		}
@@ -213,51 +258,109 @@ namespace graph::concurrent {
 
 			const auto workload = detail::workloadIndex(estimate.workloadKind);
 			const auto bucket = detail::sizeBucket(estimate);
+			const auto shape = detail::shapeBucket(estimate);
 			const auto baselineSlot = detail::workerSlot(clampedBaseline);
-			const auto &statsByWorker = entries_[workload][bucket];
+			const auto &statsByWorker = entries_[workload][bucket][shape];
 			const auto &baselineStats = statsByWorker[baselineSlot];
 
-			size_t bestWorker = clampedBaseline;
-			double bestThroughput = baselineStats.throughputEwma;
-			bool foundReliableBetterWorker = false;
-			for (size_t slot = 1; slot < statsByWorker.size(); ++slot) {
+			auto workerForSlot = [&](size_t slot) -> size_t {
 				const size_t candidate = detail::clampWorkerCandidate(detail::workerCountForSlot(slot), hardWorkerLimit);
-				if (candidate <= 1 || candidate > hardWorkerLimit || !detail::hasEnoughGranularity(estimate, candidate)) {
+				if (candidate > hardWorkerLimit || detail::workerSlot(candidate) != slot ||
+					!detail::hasEnoughGranularity(estimate, candidate)) {
+					return 0;
+				}
+				return candidate;
+			};
+
+			size_t bestWorker = clampedBaseline;
+			double bestThroughput = 0.0;
+			bool foundReliableWorker = false;
+			for (size_t slot = 0; slot < statsByWorker.size(); ++slot) {
+				const size_t candidate = workerForSlot(slot);
+				if (candidate == 0) {
 					continue;
 				}
 				const auto &stats = statsByWorker[slot];
-				if (stats.samples < config_.minSamplesBeforeRecommend || stats.throughputEwma <= 0.0) {
+				if (!detail::hasReliableThroughput(stats, config_) ||
+					!detail::hasRecommendationMergeCost(stats, config_)) {
 					continue;
 				}
-				const bool baselineReliable = baselineStats.samples >= config_.minSamplesBeforeRecommend &&
-											  baselineStats.throughputEwma > 0.0;
-				const bool beatsBaseline = !baselineReliable ||
-										   stats.throughputEwma >=
-												   baselineStats.throughputEwma * config_.minImprovementRatio;
-				if (beatsBaseline && stats.throughputEwma > bestThroughput) {
+				if (!foundReliableWorker || stats.throughputEwma > bestThroughput ||
+					(stats.throughputEwma == bestThroughput && candidate < bestWorker)) {
 					bestThroughput = stats.throughputEwma;
 					bestWorker = candidate;
-					foundReliableBetterWorker = true;
+					foundReliableWorker = true;
 				}
 			}
-			if (foundReliableBetterWorker) {
-				return bestWorker;
+			if (foundReliableWorker) {
+				size_t stableWorker = bestWorker;
+				for (size_t slot = 0; slot < statsByWorker.size(); ++slot) {
+					const size_t candidate = workerForSlot(slot);
+					if (candidate == 0 || candidate >= stableWorker) {
+						continue;
+					}
+					const auto &stats = statsByWorker[slot];
+					if (!detail::hasReliableThroughput(stats, config_) ||
+						!detail::hasRecommendationMergeCost(stats, config_)) {
+						continue;
+					}
+					if (stats.throughputEwma * config_.minImprovementRatio >= bestThroughput) {
+						stableWorker = candidate;
+					}
+				}
+				if (stableWorker != clampedBaseline) {
+					return stableWorker;
+				}
 			}
 
 			if (!config_.explorationEnabled ||
-				baselineStats.samples < config_.minSamplesBeforeRecommend) {
-				return clampedBaseline;
+				!detail::hasReliableThroughput(baselineStats, config_)) {
+				return foundReliableWorker ? bestWorker : clampedBaseline;
 			}
 
-			for (size_t slot = baselineSlot + 1; slot < statsByWorker.size(); ++slot) {
-				const size_t candidate = detail::clampWorkerCandidate(detail::workerCountForSlot(slot), hardWorkerLimit);
-				if (candidate <= clampedBaseline || candidate > hardWorkerLimit ||
-					!detail::hasEnoughGranularity(estimate, candidate)) {
-					continue;
+			auto exploreHigher = [&]() -> size_t {
+				for (size_t slot = baselineSlot + 1; slot < statsByWorker.size(); ++slot) {
+					const size_t candidate = workerForSlot(slot);
+					if (candidate <= clampedBaseline) {
+						continue;
+					}
+					if (statsByWorker[slot].samples < config_.minSamplesBeforeRecommend) {
+						return candidate;
+					}
 				}
-				if (statsByWorker[slot].samples < config_.minSamplesBeforeRecommend) {
+				return 0;
+			};
+			auto exploreLower = [&]() -> size_t {
+				for (size_t slot = baselineSlot; slot > 0; --slot) {
+					const size_t candidate = workerForSlot(slot - 1);
+					if (candidate == 0 || candidate >= clampedBaseline) {
+						continue;
+					}
+					if (statsByWorker[slot - 1].samples < config_.minSamplesBeforeRecommend) {
+						return candidate;
+					}
+				}
+				return 0;
+			};
+
+			const bool saturatedAtHardLimit = clampedBaseline == hardWorkerLimit && clampedBaseline > 2;
+			const bool expensiveMerge =
+					baselineStats.mergeRatioEwma > config_.maxMergeRatioForRecommendation;
+			if (saturatedAtHardLimit || expensiveMerge) {
+				if (const size_t candidate = exploreLower(); candidate != 0) {
 					return candidate;
 				}
+				if (const size_t candidate = exploreHigher(); candidate != 0) {
+					return candidate;
+				}
+			} else {
+				if (const size_t candidate = exploreHigher(); candidate != 0) {
+					return candidate;
+				}
+			}
+
+			if (foundReliableWorker) {
+				return bestWorker;
 			}
 			return clampedBaseline;
 		}
@@ -273,9 +376,10 @@ namespace graph::concurrent {
 
 			const auto workload = detail::workloadIndex(telemetry.estimate.workloadKind);
 			const auto bucket = detail::sizeBucket(telemetry.estimate);
+			const auto shape = detail::shapeBucket(telemetry.estimate);
 			const auto slot = detail::workerSlot(telemetry.workerCount);
 			std::lock_guard lock(mutex_);
-			auto &stats = entries_[workload][bucket][slot];
+			auto &stats = entries_[workload][bucket][shape][slot];
 			const double elapsed = static_cast<double>(telemetry.elapsedNs);
 			const double merge = detail::mergeRatio(telemetry);
 			stats.throughputEwma = detail::updateEwma(
@@ -291,12 +395,14 @@ namespace graph::concurrent {
 			std::lock_guard lock(mutex_);
 			return entries_[detail::workloadIndex(estimate.workloadKind)]
 						   [detail::sizeBucket(estimate)]
+						   [detail::shapeBucket(estimate)]
 						   [detail::workerSlot(workerCount)];
 		}
 
 	private:
 		using WorkerStats = std::array<ParallelAdaptiveStats, detail::kAdaptiveWorkerSlotCount>;
-		using SizeStats = std::array<WorkerStats, detail::kAdaptiveSizeBucketCount>;
+		using ShapeStats = std::array<WorkerStats, detail::kAdaptiveShapeBucketCount>;
+		using SizeStats = std::array<ShapeStats, detail::kAdaptiveSizeBucketCount>;
 		using WorkloadStats = std::array<SizeStats, detail::kAdaptiveWorkloadCount>;
 
 		mutable std::mutex mutex_;

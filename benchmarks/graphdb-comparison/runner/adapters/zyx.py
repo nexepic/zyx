@@ -173,6 +173,9 @@ class ZyxAdapter(BenchmarkAdapter):
                     total_time_ms=float(event["total_time_ms"]),
                     calls=int(event["calls"]),
                     equivalent_mode=str(event.get("equivalent_mode", "api")),
+                    value_total=int(event["value_total"]) if "value_total" in event else None,
+                    value_calls=int(event["value_calls"]) if "value_calls" in event else None,
+                    value_avg=float(event["value_avg"]) if "value_avg" in event else None,
                 )
             except (KeyError, TypeError, ValueError) as exc:
                 malformed.append(f"{stream_name}:{line_number}: invalid profile event: {exc}")

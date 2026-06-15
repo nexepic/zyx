@@ -53,6 +53,8 @@ namespace graph::debug {
 				auto &targetEntry = target[key];
 				targetEntry.totalNs += sourceEntry.totalNs;
 				targetEntry.calls += sourceEntry.calls;
+				targetEntry.totalValue += sourceEntry.totalValue;
+				targetEntry.valueCalls += sourceEntry.valueCalls;
 			}
 		}
 	}
@@ -75,6 +77,30 @@ namespace graph::debug {
 		auto &entry = shard.data[std::string(key)];
 		entry.totalNs += durationNs;
 		entry.calls += 1;
+	}
+
+	void PerfTrace::addDurationBatch(const std::string_view key, const uint64_t durationNs, const uint64_t calls) {
+		if (!isEnabled() || key.empty() || calls == 0) {
+			return;
+		}
+
+		auto &shard = currentThreadShard();
+		std::lock_guard<std::mutex> lock(shard.mutex);
+		auto &entry = shard.data[std::string(key)];
+		entry.totalNs += durationNs;
+		entry.calls += calls;
+	}
+
+	void PerfTrace::addValue(const std::string_view key, const int64_t value) {
+		if (!isEnabled() || key.empty()) {
+			return;
+		}
+
+		auto &shard = currentThreadShard();
+		std::lock_guard<std::mutex> lock(shard.mutex);
+		auto &entry = shard.data[std::string(key)];
+		entry.totalValue += value;
+		entry.valueCalls += 1;
 	}
 
 	void PerfTrace::reset() {

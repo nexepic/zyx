@@ -230,6 +230,19 @@ def test_kuzu_reachable_within_uses_bounded_existence_query(tmp_path: Path):
     assert "RETURN 1 LIMIT 1" in query
 
 
+def test_kuzu_varlength_frontier_count_uses_batched_seed_query(tmp_path: Path):
+    adapter = KuzuAdapter(database="kuzu", dataset_dir=tmp_path / "dataset", scale="smoke")
+    connection = FakeConnection()
+    adapter._connection = connection
+    adapter._loaded_rows = 1
+
+    assert adapter.varlength_frontier_count() == 1
+
+    query = connection.queries[-1]
+    assert "MATCH (u:User {country: 'CN'})-[:FOLLOWS*1..2]->(v:User)" in query
+    assert "RETURN COUNT(v)" in query
+
+
 def test_kuzu_first_value_handles_representative_result_shapes(tmp_path: Path):
     adapter = KuzuAdapter(database="kuzu", dataset_dir=tmp_path / "dataset", scale="smoke")
 

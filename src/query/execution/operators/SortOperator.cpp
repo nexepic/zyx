@@ -25,6 +25,7 @@
 #include <limits>
 #include "graph/query/QueryContext.hpp"
 #include <string>
+#include "graph/concurrent/ParallelOperatorExecutor.hpp"
 #include "graph/concurrent/ParallelExecutionPolicy.hpp"
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/debug/PerfTrace.hpp"
@@ -184,7 +185,6 @@ void SortOperator::performSort() {
 			.minItems = PARALLEL_SORT_THRESHOLD,
 			.minItemsPerWorker = PARALLEL_SORT_THRESHOLD};
 	const auto parallelDecision = graph::concurrent::decideParallelExecution(threadPool_, estimate);
-	graph::concurrent::ScopedParallelExecutionTelemetry telemetry(threadPool_, estimate, parallelDecision);
 
 	if (!parallelDecision.useParallel) {
 		// Sequential sort for small datasets
@@ -193,7 +193,6 @@ void SortOperator::performSort() {
 		for (auto &item: decorated) {
 			sortedRecords_.push_back(std::move(item.record));
 		}
-		telemetry.markCompleted();
 		debug::PerfTrace::addDuration(
 				"sort", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
 														 sortStart)
@@ -220,42 +219,63 @@ void SortOperator::performSort() {
 		pos += sz;
 	}
 
-	threadPool_->parallelFor(0, numChunks, parallelDecision.workerCount, [&](size_t c) {
-		std::sort(decorated.begin() + chunks[c].begin,
-				  decorated.begin() + chunks[c].end, comparator);
-	});
+	struct SortPartitionState {};
+	const graph::concurrent::ParallelOperatorOptions chunkSortOptions{
+			.phase = "sort.parallel.chunk_sort",
+			.workloadKind = graph::concurrent::ParallelWorkloadKind::PWK_CPU_BOUND,
+			.estimatedItems = decorated.size(),
+			.minPartitions = 2,
+			.minItems = 1,
+			.maxWorkers = parallelDecision.workerCount};
+	(void) graph::concurrent::ParallelOperatorExecutor::runIndexedPartitions<SortPartitionState>(
+			numChunks,
+			threadPool_,
+			chunkSortOptions,
+			[&](size_t c, SortPartitionState &) {
+				std::sort(decorated.begin() + chunks[c].begin,
+						  decorated.begin() + chunks[c].end, comparator);
+			},
+			[](size_t, SortPartitionState &) {});
 
 	// Phase 2: Sequential k-way merge (merge pairs bottom-up)
 	// This is an iterative merge: merge adjacent sorted chunks pairwise
-	const auto mergeStart = Clock::now();
 	size_t step = 1;
 	while (step < numChunks) {
 		size_t numPairs = (numChunks + 2 * step - 1) / (2 * step);
 		// Parallel merge of independent pairs
-		threadPool_->parallelFor(0, numPairs, std::min(parallelDecision.workerCount, numPairs), [&](size_t p) {
-			size_t left = p * 2 * step;
-			size_t right = left + step;
-			if (right >= numChunks)
-				return;
+		const graph::concurrent::ParallelOperatorOptions mergeOptions{
+				.phase = "sort.parallel.merge_pairs",
+				.workloadKind = graph::concurrent::ParallelWorkloadKind::PWK_CPU_BOUND,
+				.estimatedItems = decorated.size(),
+				.minPartitions = 2,
+				.minItems = 1,
+				.maxWorkers = std::min(parallelDecision.workerCount, numPairs)};
+		(void) graph::concurrent::ParallelOperatorExecutor::runIndexedPartitions<SortPartitionState>(
+				numPairs,
+				threadPool_,
+				mergeOptions,
+				[&](size_t p, SortPartitionState &) {
+					size_t left = p * 2 * step;
+					size_t right = left + step;
+					if (right >= numChunks)
+						return;
 
-			size_t mergeBegin = chunks[left].begin;
-			size_t mergeMid = chunks[right].begin;
-			size_t mergeEnd = chunks[std::min(right + step, numChunks) - 1].end;
+					size_t mergeBegin = chunks[left].begin;
+					size_t mergeMid = chunks[right].begin;
+					size_t mergeEnd = chunks[std::min(right + step, numChunks) - 1].end;
 
-			std::inplace_merge(decorated.begin() + mergeBegin,
-							   decorated.begin() + mergeMid,
-							   decorated.begin() + mergeEnd, comparator);
-		});
+					std::inplace_merge(decorated.begin() + mergeBegin,
+									   decorated.begin() + mergeMid,
+									   decorated.begin() + mergeEnd, comparator);
+				},
+				[](size_t, SortPartitionState &) {});
 		step *= 2;
 	}
-	telemetry.setMergeNs(static_cast<uint64_t>(
-			std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - mergeStart).count()));
 
 	sortedRecords_.reserve(decorated.size());
 	for (auto &item: decorated) {
 		sortedRecords_.push_back(std::move(item.record));
 	}
-	telemetry.markCompleted();
 
 	debug::PerfTrace::addDuration(
 			"sort", static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() -
@@ -281,6 +301,21 @@ void SortOperator::performTopN() {
 		// current worst retained row and can be replaced by a better candidate.
 		return compareKeys(a.sortKeys, b.sortKeys);
 	};
+	auto retainTopCandidate = [&](std::vector<DecoratedRecord> &targetHeap, DecoratedRecord candidate) {
+		if (targetHeap.size() < limit) {
+			targetHeap.push_back(std::move(candidate));
+			std::push_heap(targetHeap.begin(), targetHeap.end(), heapComparator);
+		} else if (compareKeys(candidate.sortKeys, targetHeap.front().sortKeys)) {
+			std::pop_heap(targetHeap.begin(), targetHeap.end(), heapComparator);
+			targetHeap.back() = std::move(candidate);
+			std::push_heap(targetHeap.begin(), targetHeap.end(), heapComparator);
+		}
+	};
+
+	struct TopNPartitionState {
+		std::vector<DecoratedRecord> heap;
+	};
+	static constexpr size_t kParallelTopNBatchThreshold = 4096;
 
 	while (true) {
 		if (queryContext_) queryContext_->checkGuard();
@@ -290,16 +325,35 @@ void SortOperator::performTopN() {
 
 		auto sortStart = Clock::now();
 		auto &batch = *batchOpt;
-		for (auto &record: batch) {
-			auto keys = evaluateSortKeys(record);
-			DecoratedRecord candidate{std::move(record), std::move(keys)};
-			if (heap.size() < limit) {
-				heap.push_back(std::move(candidate));
-				std::push_heap(heap.begin(), heap.end(), heapComparator);
-			} else if (compareKeys(candidate.sortKeys, heap.front().sortKeys)) {
-				std::pop_heap(heap.begin(), heap.end(), heapComparator);
-				heap.back() = std::move(candidate);
-				std::push_heap(heap.begin(), heap.end(), heapComparator);
+		if (batch.size() >= kParallelTopNBatchThreshold) {
+			const graph::concurrent::ParallelOperatorOptions options{
+					.phase = "sort.topn.parallel",
+					.workloadKind = graph::concurrent::ParallelWorkloadKind::PWK_CPU_BOUND,
+					.estimatedItems = batch.size(),
+					.minPartitions = 2,
+					.minItems = kParallelTopNBatchThreshold,
+					.minItemsPerWorker = std::max<size_t>(1, kParallelTopNBatchThreshold / 4)};
+			(void) graph::concurrent::ParallelOperatorExecutor::runRangePartitions<TopNPartitionState>(
+					0,
+					batch.size(),
+					threadPool_,
+					options,
+					[&](const graph::concurrent::ParallelRangePartition &range, TopNPartitionState &state) {
+						state.heap.reserve(std::min(limit, range.size()));
+						for (size_t i = range.begin; i < range.end; ++i) {
+							auto keys = evaluateSortKeys(batch[i]);
+							retainTopCandidate(state.heap, DecoratedRecord{std::move(batch[i]), std::move(keys)});
+						}
+					},
+					[&](size_t, TopNPartitionState &state) {
+						for (auto &candidate: state.heap) {
+							retainTopCandidate(heap, std::move(candidate));
+						}
+					});
+		} else {
+			for (auto &record: batch) {
+				auto keys = evaluateSortKeys(record);
+				retainTopCandidate(heap, DecoratedRecord{std::move(record), std::move(keys)});
 			}
 		}
 		sortNanos += static_cast<uint64_t>(

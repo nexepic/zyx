@@ -31,9 +31,12 @@ class ProfileEvent:
     total_time_ms: float
     calls: int
     equivalent_mode: str = "api"
+    value_total: int | None = None
+    value_calls: int | None = None
+    value_avg: float | None = None
 
     def to_event(self) -> dict[str, Any]:
-        event = asdict(self)
+        event = {key: value for key, value in asdict(self).items() if value is not None}
         event["event"] = "profile"
         return event
 
@@ -48,6 +51,9 @@ class ProfileSummaryRow:
     samples: int
     total_calls: int
     avg_calls: float
+    total_value: int
+    total_value_calls: int
+    avg_value: float
     first_ms: float
     min_ms: float
     avg_ms: float

@@ -32,7 +32,11 @@ INDEXED_WORKLOADS = [
 ]
 
 MULTIHOP_DEPTHS = (6, 12, 24, 30)
-MULTIHOP_WORKLOADS = ["load_nodes_edges"] + [f"reachable_within_{depth}" for depth in MULTIHOP_DEPTHS]
+MULTIHOP_WORKLOADS = (
+    ["load_nodes_edges"]
+    + [f"reachable_within_{depth}" for depth in MULTIHOP_DEPTHS]
+    + ["varlength_frontier_count"]
+)
 MULTIHOP_FOLLOWS_PER_USER_BY_SCALE = {
     "smoke": 3,
     "small": 5,
@@ -191,6 +195,9 @@ class BenchmarkAdapter:
         raise NotImplementedError
 
     def reachable_within_30(self) -> int:
+        raise NotImplementedError
+
+    def varlength_frontier_count(self) -> int:
         raise NotImplementedError
 
     def aggregation_group_by(self) -> int:

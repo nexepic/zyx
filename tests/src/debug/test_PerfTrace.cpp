@@ -58,6 +58,33 @@ TEST_F(PerfTraceTest, AddDurationWithValidKey) {
 	EXPECT_EQ(snapshot["commit"].calls, 1u);
 }
 
+TEST_F(PerfTraceTest, AddDurationBatchRecordsTotalWithExplicitCallCount) {
+	PerfTrace::setEnabled(true);
+	PerfTrace::addDurationBatch("operator.task", 9000, 3);
+	PerfTrace::addDurationBatch("operator.task", 4000, 2);
+	PerfTrace::addDurationBatch("ignored", 1, 0);
+	PerfTrace::addDurationBatch("", 1, 1);
+
+	auto snapshot = PerfTrace::snapshotAndReset();
+	ASSERT_EQ(snapshot.size(), 1u);
+	EXPECT_EQ(snapshot["operator.task"].totalNs, 13000u);
+	EXPECT_EQ(snapshot["operator.task"].calls, 5u);
+}
+
+TEST_F(PerfTraceTest, AddValueWithValidKey) {
+	PerfTrace::setEnabled(true);
+	PerfTrace::addValue("workers", 4);
+	PerfTrace::addValue("workers", 2);
+	PerfTrace::addValue("", 8);
+
+	auto snapshot = PerfTrace::snapshotAndReset();
+	ASSERT_EQ(snapshot.size(), 1u);
+	EXPECT_EQ(snapshot["workers"].totalNs, 0u);
+	EXPECT_EQ(snapshot["workers"].calls, 0u);
+	EXPECT_EQ(snapshot["workers"].totalValue, 6);
+	EXPECT_EQ(snapshot["workers"].valueCalls, 2u);
+}
+
 TEST_F(PerfTraceTest, ResetClearsData) {
 	PerfTrace::setEnabled(true);
 	PerfTrace::addDuration("op", 100);
@@ -124,6 +151,7 @@ TEST_F(PerfTraceTest, ConcurrentAddsAreMergedAcrossWorkerShards) {
 		workers.emplace_back([] {
 			for (int iteration = 0; iteration < 100; ++iteration) {
 				PerfTrace::addDuration("parallel-op", 10);
+				PerfTrace::addValue("parallel-workers", 1);
 			}
 		});
 	}
@@ -132,8 +160,10 @@ TEST_F(PerfTraceTest, ConcurrentAddsAreMergedAcrossWorkerShards) {
 	}
 
 	auto snapshot = PerfTrace::snapshotAndReset();
-	ASSERT_EQ(snapshot.size(), 1u);
+	ASSERT_EQ(snapshot.size(), 2u);
 	EXPECT_EQ(snapshot["parallel-op"].calls, 800u);
 	EXPECT_EQ(snapshot["parallel-op"].totalNs, 8000u);
+	EXPECT_EQ(snapshot["parallel-workers"].valueCalls, 800u);
+	EXPECT_EQ(snapshot["parallel-workers"].totalValue, 800);
 	EXPECT_TRUE(PerfTrace::snapshotAndReset().empty());
 }

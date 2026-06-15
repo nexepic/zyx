@@ -110,6 +110,13 @@ class BoltCypherAdapter(BenchmarkAdapter):
     def reachable_within_30(self) -> int:
         return self._reachable_within(30)
 
+    def varlength_frontier_count(self) -> int:
+        self._ensure_loaded()
+        return self._scalar_int(
+            "MATCH (u:User {country: $country})-[:FOLLOWS*1..2]->(v:User) RETURN count(v) AS count",
+            {"country": "CN"},
+        )
+
     def all_nodes_property_filter(self) -> int:
         self._ensure_loaded()
         return self._scalar_int("MATCH (n) WHERE n.score >= $min_score RETURN count(n) AS count", {"min_score": 900.0})

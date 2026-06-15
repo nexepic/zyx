@@ -132,8 +132,8 @@ def test_build_profile_summary_rows_aggregates_phase_timings_and_calls():
     rows = build_profile_summary_rows(
         [
             ProfileEvent("zyx", "scan", "small", "scan", 0, "node_scan.count", 3.0, 2),
-            ProfileEvent("zyx", "scan", "small", "scan", 1, "node_scan.count", 1.0, 4),
-            ProfileEvent("zyx", "scan", "small", "scan", 2, "node_scan.count", 5.0, 6),
+            ProfileEvent("zyx", "scan", "small", "scan", 1, "node_scan.count", 1.0, 4, value_total=8, value_calls=2),
+            ProfileEvent("zyx", "scan", "small", "scan", 2, "node_scan.count", 5.0, 6, value_total=10, value_calls=2),
             ProfileEvent("zyx", "scan", "small", "scan", 0, "node_scan.load", 7.0, 1),
         ]
     )
@@ -142,6 +142,9 @@ def test_build_profile_summary_rows_aggregates_phase_timings_and_calls():
     assert count_row.samples == 3
     assert count_row.total_calls == 12
     assert count_row.avg_calls == 4.0
+    assert count_row.total_value == 18
+    assert count_row.total_value_calls == 4
+    assert count_row.avg_value == 4.5
     assert count_row.first_ms == 3.0
     assert count_row.min_ms == 1.0
     assert count_row.avg_ms == 3.0
