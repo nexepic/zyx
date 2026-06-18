@@ -62,6 +62,7 @@ namespace graph::query::execution::operators {
 
 		void open() override {
 			currentIdx_ = 0;
+			emittedRows_ = 0;
 			candidateIds_.clear();
 
 			NodeCandidateSource candidateSource(dm_, im_);
@@ -79,6 +80,10 @@ namespace graph::query::execution::operators {
 			}
 		}
 
+		void setOutputLimitHint(size_t limit) override {
+			outputLimitHint_ = limit;
+		}
+
 		std::optional<RecordBatch> next() override {
 			using Clock = std::chrono::steady_clock;
 			const bool profileEnabled = debug::PerfTrace::isEnabled();
@@ -86,16 +91,20 @@ namespace graph::query::execution::operators {
 
 			if (currentIdx_ >= candidateIds_.size())
 				return std::nullopt;
+			if (outputLimitHint_.has_value() && emittedRows_ >= *outputLimitHint_) {
+				return std::nullopt;
+			}
 
 			// When thread pool is available and enough candidates remain,
 			// use a larger batch to amortize parallelization overhead.
 			static constexpr size_t PARALLEL_SCAN_THRESHOLD = 4096;
-			size_t effectiveBatchSize = DEFAULT_BATCH_SIZE;
+			size_t effectiveBatchSize = chooseEffectiveBatchSize(candidateIds_.size() - currentIdx_);
 			bool canParallelize = threadPool_ && !threadPool_->isSingleThreaded();
 			size_t remaining = candidateIds_.size() - currentIdx_;
 			if (canParallelize && remaining >= PARALLEL_SCAN_THRESHOLD) {
-				// Use all remaining candidates as one large parallel batch
-				effectiveBatchSize = remaining;
+				// Use all remaining candidates as one large parallel batch unless a downstream LIMIT
+				// asks for bounded source work.
+				effectiveBatchSize = outputLimitHint_.has_value() ? std::min(effectiveBatchSize, remaining) : remaining;
 			}
 
 			size_t batchStart = currentIdx_;
@@ -111,6 +120,7 @@ namespace graph::query::execution::operators {
 				NodeBatchLoader loader(dm_, threadPool_);
 				auto columnBatch = loader.load(candidateIds_, batchStart, batchEnd, config_, requirements);
 				auto batch = materializeNodeRecords(columnBatch, config_.variable, *dm_, requirements);
+				trimToOutputLimit(batch);
 				if (batch.empty() && currentIdx_ >= candidateIds_.size()) // ZYX_COV_EXCL_LINE
 					return std::nullopt;
 				if (profileEnabled) {
@@ -125,6 +135,9 @@ namespace graph::query::execution::operators {
 
 			if (canParallelize && batchCount >= PARALLEL_SCAN_THRESHOLD) {
 				auto batch = parallelLoadBatch(batchStart, batchEnd);
+				if (batch.has_value()) {
+					trimToOutputLimit(*batch);
+				}
 				if (profileEnabled) {
 					debug::PerfTrace::addDuration(
 							"scan.parallel",
@@ -140,6 +153,9 @@ namespace graph::query::execution::operators {
 			batch.reserve(batchCount);
 
 			for (size_t idx = batchStart; idx < batchEnd; ++idx) {
+				if (outputLimitHint_.has_value() && batch.size() >= (*outputLimitHint_ - emittedRows_)) {
+					break;
+				}
 				int64_t id = candidateIds_[idx];
 				Node node = dm_->getNode(id);
 
@@ -164,6 +180,7 @@ namespace graph::query::execution::operators {
 				r.setNode(config_.variable, std::move(node));
 				batch.push_back(std::move(r));
 			}
+			emittedRows_ += batch.size();
 
 			if (batch.empty() && currentIdx_ >= candidateIds_.size()) // ZYX_COV_EXCL_LINE
 				return std::nullopt;
@@ -195,9 +212,34 @@ namespace graph::query::execution::operators {
 		std::vector<int64_t> targetLabelIds_; // Cached label IDs (AND semantics)
 		bool labelsSatisfied_ = false;
 		bool activeSatisfied_ = false;
+		std::optional<size_t> outputLimitHint_;
+		size_t emittedRows_ = 0;
 
 		static constexpr size_t kParallelNodeScanMinSegments = 32;
 		static constexpr size_t kParallelNodeScanMinTasks = 2;
+
+		[[nodiscard]] size_t chooseEffectiveBatchSize(size_t remainingCandidates) const {
+			size_t batchSize = DEFAULT_BATCH_SIZE;
+			if (outputLimitHint_.has_value() && emittedRows_ < *outputLimitHint_) {
+				const size_t remainingRows = *outputLimitHint_ - emittedRows_;
+				// Small LIMIT queries should not trigger a full remaining parallel scan.
+				const size_t boundedWindow = std::max<size_t>(remainingRows, DEFAULT_BATCH_SIZE / 4);
+				batchSize = std::min(batchSize, boundedWindow);
+			}
+			return std::min(batchSize, remainingCandidates);
+		}
+
+		void trimToOutputLimit(RecordBatch &batch) {
+			if (!outputLimitHint_.has_value()) {
+				emittedRows_ += batch.size();
+				return;
+			}
+			const size_t remainingRows = emittedRows_ < *outputLimitHint_ ? *outputLimitHint_ - emittedRows_ : 0;
+			if (batch.size() > remainingRows) {
+				batch.resize(remainingRows);
+			}
+			emittedRows_ += batch.size();
+		}
 
 		std::optional<RecordBatch> parallelLoadBatch(size_t batchStart, size_t batchEnd) {
 			using Clock = std::chrono::steady_clock;

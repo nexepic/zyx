@@ -11,8 +11,10 @@
 #include "graph/query/logical/operators/LogicalAggregate.hpp"
 #include "graph/query/logical/operators/LogicalProject.hpp"
 #include "graph/query/planner/NodeAggregateScanPlanner.hpp"
+#include "graph/query/planner/NodeProjectionScanPlanner.hpp"
 #include "graph/query/planner/NodeTopKScanPlanner.hpp"
 #include "graph/query/planner/RelationshipCountScanPlanner.hpp"
+#include "graph/query/planner/RelationshipProjectionScanPlanner.hpp"
 
 namespace graph::query::indexes {
 class IndexManager;
@@ -21,7 +23,9 @@ class IndexManager;
 namespace graph::query::planner {
 
 enum class PhysicalScanLoweringKind {
+	PSLK_NODE_PROJECTION_SCAN,
 	PSLK_NODE_TOPK_SCAN,
+	PSLK_RELATIONSHIP_PROJECTION_SCAN,
 	PSLK_NODE_COUNT_SCAN,
 	PSLK_NODE_DISTINCT_COUNT_SCAN,
 	PSLK_NODE_GROUP_COUNT_SCAN,
@@ -34,7 +38,9 @@ enum class ScanSpecializationShape {
 };
 
 using PhysicalScanLoweringPlan = std::variant<
+		NodeProjectionScanPlan,
 		NodeTopKScanPlan,
+		RelationshipProjectionScanPlan,
 		NodeCountScanPlan,
 		NodeDistinctCountScanPlan,
 		NodeGroupCountScanPlan,
