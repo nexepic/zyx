@@ -87,6 +87,14 @@ namespace graph::query::execution {
 		[[nodiscard]] virtual std::vector<const PhysicalOperator *> getChildren() const { return {}; }
 
 		/**
+		 * @brief Provides a cardinality-preserving upper-bound hint from downstream LIMIT operators.
+		 *
+		 * This is an execution hint, not a semantic contract: only operators that preserve row cardinality
+		 * should propagate it to children, and source operators may use it to cap work early.
+		 */
+		virtual void setOutputLimitHint(size_t /*limit*/) {}
+
+		/**
 		 * @brief Sets the thread pool for parallel execution within operators.
 		 * Propagated to child operators automatically.
 		 */

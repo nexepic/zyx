@@ -66,6 +66,7 @@ namespace graph::query::execution::operators {
 		void open() override;
 		std::optional<RecordBatch> next() override;
 		void close() override;
+		void setOutputLimitHint(size_t limit) override;
 
 		[[nodiscard]] std::vector<std::string> getOutputVariables() const override {
 			std::vector<std::string> vars;

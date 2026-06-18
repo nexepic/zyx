@@ -20,6 +20,9 @@
 
 #pragma once
 
+#include <algorithm>
+#include <cstdint>
+#include <limits>
 #include "../PhysicalOperator.hpp"
 
 namespace graph::query::execution::operators {
@@ -31,8 +34,10 @@ namespace graph::query::execution::operators {
 
 		void open() override {
 			count_ = 0;
-			if (child_)
+			if (child_) {
+				child_->setOutputLimitHint(normalizeLimit(limit_));
 				child_->open();
+			}
 		}
 
 		std::optional<RecordBatch> next() override {
@@ -82,6 +87,15 @@ namespace graph::query::execution::operators {
 		[[nodiscard]] std::vector<const PhysicalOperator *> getChildren() const override { return {child_.get()}; }
 
 	private:
+		[[nodiscard]] static size_t normalizeLimit(int64_t limit) {
+			if (limit <= 0) {
+				return 0;
+			}
+			const auto unsignedLimit = static_cast<uint64_t>(limit);
+			const auto maxSize = static_cast<uint64_t>(std::numeric_limits<size_t>::max());
+			return static_cast<size_t>(std::min(unsignedLimit, maxSize));
+		}
+
 		std::unique_ptr<PhysicalOperator> child_;
 		int64_t limit_;
 		int64_t count_ = 0;

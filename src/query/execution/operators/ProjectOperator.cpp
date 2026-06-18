@@ -36,6 +36,12 @@ void ProjectOperator::open() {
 		child_->open();
 }
 
+void ProjectOperator::setOutputLimitHint(size_t limit) {
+	if (!distinct_ && child_) {
+		child_->setOutputLimitHint(limit);
+	}
+}
+
 Record ProjectOperator::projectRecord(const Record &record) const {
 	using namespace graph::query::expressions;
 

@@ -26,11 +26,13 @@
 #include "graph/query/execution/operators/NodeCountScanOperator.hpp"
 #include "graph/query/execution/operators/NodeDistinctCountScanOperator.hpp"
 #include "graph/query/execution/operators/NodeGroupCountScanOperator.hpp"
+#include "graph/query/execution/operators/NodeProjectionScanOperator.hpp"
 #include "graph/query/execution/operators/NodeScanOperator.hpp"
 #include "graph/query/execution/operators/NodeTopKScanOperator.hpp"
 #include "graph/query/execution/operators/OptionalMatchOperator.hpp"
 #include "graph/query/execution/operators/ProjectOperator.hpp"
 #include "graph/query/execution/operators/RelationshipCountScanOperator.hpp"
+#include "graph/query/execution/operators/RelationshipProjectionScanOperator.hpp"
 #include "graph/query/execution/operators/RemoveOperator.hpp"
 #include "graph/query/execution/operators/SetOperator.hpp"
 #include "graph/query/execution/operators/ShowConstraintsOperator.hpp"
@@ -169,6 +171,15 @@ std::vector<PhysicalOperator::ExplainAttribute> relationshipAccessPathAttributes
 			planner::PhysicalScanLowering lowering) {
 		auto specializationAttributes = scanSpecializationAttributes(lowering);
 		switch (lowering.kind) {
+			case planner::PhysicalScanLoweringKind::PSLK_NODE_PROJECTION_SCAN: {
+				auto plan = std::move(std::get<planner::NodeProjectionScanPlan>(lowering.plan));
+				auto attributes = std::move(specializationAttributes);
+				appendExplainAttributes(attributes, accessPathAttributes(plan.accessPath));
+				return std::make_unique<NodeProjectionScanOperator>(
+						dm, im, std::move(plan.config), std::move(plan.requirements),
+						std::move(plan.predicates), std::move(plan.projections), plan.limit,
+						std::move(attributes));
+			}
 			case planner::PhysicalScanLoweringKind::PSLK_NODE_TOPK_SCAN: {
 				auto plan = std::move(std::get<planner::NodeTopKScanPlan>(lowering.plan));
 				auto attributes = std::move(specializationAttributes);
@@ -205,6 +216,15 @@ std::vector<PhysicalOperator::ExplainAttribute> relationshipAccessPathAttributes
 						dm, im, std::move(plan.config), std::move(plan.requirements),
 						std::move(plan.predicates), std::move(plan.groupProperty),
 						std::move(plan.groupAlias), std::move(plan.outputAlias),
+						std::move(attributes));
+			}
+			case planner::PhysicalScanLoweringKind::PSLK_RELATIONSHIP_PROJECTION_SCAN: {
+				auto plan = std::move(std::get<planner::RelationshipProjectionScanPlan>(lowering.plan));
+				auto attributes = std::move(specializationAttributes);
+				appendExplainAttributes(attributes, accessPathAttributes(plan.relationshipAccessPath, "relationship_access_path"));
+				return std::make_unique<RelationshipProjectionScanOperator>(
+						dm, im, std::move(plan.config), std::move(plan.targetVariable),
+						std::move(plan.targetLabels), std::move(plan.projections), plan.limit,
 						std::move(attributes));
 			}
 			case planner::PhysicalScanLoweringKind::PSLK_RELATIONSHIP_COUNT_SCAN: {

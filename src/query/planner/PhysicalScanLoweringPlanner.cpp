@@ -21,6 +21,10 @@ namespace {
 		return plan.accessPath.estimatedCost;
 	}
 
+	double accessPathCost(const RelationshipProjectionScanPlan &plan) {
+		return plan.relationshipAccessPath.estimatedCost;
+	}
+
 	double accessPathCost(const RelationshipCountScanPlan &plan) {
 		double cost = plan.seedAccessPath.estimatedCost;
 		if (plan.relationshipAccessPath.has_value()) {
@@ -50,6 +54,23 @@ namespace {
 	}
 
 	std::optional<ScanPlanCandidate>
+	buildNodeProjectionRule(const logical::LogicalProject &project,
+	                        const std::shared_ptr<indexes::IndexManager> &indexManager) {
+		auto plan = tryBuildNodeProjectionScanPlan(project, indexManager);
+		if (!plan.has_value()) {
+			return std::nullopt;
+		}
+		const double cost = accessPathCost(*plan) + 0.5;
+		return makeCandidate(
+				ScanSpecializationShape::SSS_PROJECT,
+				PhysicalScanLoweringKind::PSLK_NODE_PROJECTION_SCAN,
+				std::move(*plan),
+				cost,
+				"node_projection_scan",
+				"project_limit_node_scan");
+	}
+
+	std::optional<ScanPlanCandidate>
 	buildNodeTopKRule(const logical::LogicalProject &project,
 	                  const std::shared_ptr<indexes::IndexManager> &indexManager) {
 		auto plan = tryBuildNodeTopKScanPlan(project, indexManager);
@@ -64,6 +85,23 @@ namespace {
 				cost,
 				"node_topk_scan",
 				"project_sort_limit_node_scan");
+	}
+
+	std::optional<ScanPlanCandidate>
+	buildRelationshipProjectionRule(const logical::LogicalProject &project,
+	                                const std::shared_ptr<indexes::IndexManager> &indexManager) {
+		auto plan = tryBuildRelationshipProjectionScanPlan(project, indexManager);
+		if (!plan.has_value()) {
+			return std::nullopt;
+		}
+		const double cost = accessPathCost(*plan) + 0.5;
+		return makeCandidate(
+				ScanSpecializationShape::SSS_PROJECT,
+				PhysicalScanLoweringKind::PSLK_RELATIONSHIP_PROJECTION_SCAN,
+				std::move(*plan),
+				cost,
+				"relationship_projection_scan",
+				"project_limit_unanchored_relationship_scan");
 	}
 
 	std::optional<ScanPlanCandidate>
@@ -134,9 +172,14 @@ namespace {
 				"aggregate_count_relationship_scan_or_expand");
 	}
 
-	const std::array<ScanSpecializationRule, 5> &scanSpecializationRules() {
-		static const std::array<ScanSpecializationRule, 5> rules = {{
+	const std::array<ScanSpecializationRule, 7> &scanSpecializationRules() {
+		static const std::array<ScanSpecializationRule, 7> rules = {{
+				{"node_projection_scan", ScanSpecializationShape::SSS_PROJECT, buildNodeProjectionRule, nullptr},
 				{"node_topk_scan", ScanSpecializationShape::SSS_PROJECT, buildNodeTopKRule, nullptr},
+				{"relationship_projection_scan",
+				 ScanSpecializationShape::SSS_PROJECT,
+				 buildRelationshipProjectionRule,
+				 nullptr},
 				{"node_count_scan", ScanSpecializationShape::SSS_AGGREGATE, nullptr, buildNodeCountRule},
 				{"node_distinct_count_scan",
 				 ScanSpecializationShape::SSS_AGGREGATE,
