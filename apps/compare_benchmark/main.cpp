@@ -13,9 +13,11 @@
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -38,6 +40,7 @@ namespace {
 	constexpr std::string_view kProfileWrite = "write";
 	constexpr std::string_view kProfileWriteDurable = "write_durable";
 	constexpr std::string_view kProfileOperationalDynamic = "operational_dynamic";
+	constexpr std::string_view kProfileRetrieval = "retrieval";
 	constexpr std::string_view kExecutionModeWarm = "warm";
 	constexpr std::string_view kExecutionModeOpened = "opened";
 	constexpr std::string_view kExecutionModeColdish = "cold-ish";
@@ -367,8 +370,20 @@ namespace {
 		return userIdForIndex(1 + multihopFollowsPerUser(scale) * static_cast<int64_t>(depth));
 	}
 
-	std::string writeUpdateTargetUserId(std::string_view scale) {
+	std::string anchoredNeighborUserId(std::string_view scale) {
 		return scale == "smoke" ? "user-000004" : "user-000006";
+	}
+
+	std::string writeUpdateTargetUserId(std::string_view scale) { return anchoredNeighborUserId(scale); }
+
+	bool isSupportedProfile(const std::string &profile) {
+		return profile == kProfileScan || profile == kProfileIndexed || profile == kProfileMultihop ||
+			   profile == kProfileWrite || profile == kProfileWriteDurable ||
+			   profile == kProfileOperationalDynamic || profile == kProfileRetrieval;
+	}
+
+	const char *supportedProfileMessage() {
+		return "--profile must be scan, indexed, multihop, write, write_durable, operational_dynamic, or retrieval";
 	}
 
 	bool isMutatingWorkload(std::string_view workload) {
@@ -956,7 +971,8 @@ namespace {
 
 	[[maybe_unused]] void createBenchmarkIndexes(zyx::Database &db, const Options &options) {
 		std::vector<std::string> userIndexes{"id"};
-		if (options.profile == kProfileIndexed || options.profile == kProfileOperationalDynamic) {
+		if (options.profile == kProfileIndexed || options.profile == kProfileOperationalDynamic ||
+			options.profile == kProfileRetrieval) {
 			userIndexes.push_back("country");
 			userIndexes.push_back("age");
 		}
@@ -969,7 +985,8 @@ namespace {
 
 	void createBenchmarkIndexesNative(graph::Database &db, const Options &options) {
 		std::vector<std::string> userIndexes{"id"};
-		if (options.profile == kProfileIndexed || options.profile == kProfileOperationalDynamic) {
+		if (options.profile == kProfileIndexed || options.profile == kProfileOperationalDynamic ||
+			options.profile == kProfileRetrieval) {
 			userIndexes.push_back("country");
 			userIndexes.push_back("age");
 		}
@@ -1288,6 +1305,60 @@ namespace {
 		}
 	}
 
+	size_t valueDigest(const zyx::Value &value) {
+		if (const auto *boolValue = std::get_if<bool>(&value)) {
+			return *boolValue ? 0x9e3779b97f4a7c15ULL : 0x85ebca6bU;
+		}
+		if (const auto *intValue = std::get_if<int64_t>(&value)) {
+			return std::hash<int64_t>{}(*intValue);
+		}
+		if (const auto *doubleValue = std::get_if<double>(&value)) {
+			return std::hash<double>{}(*doubleValue);
+		}
+		if (const auto *stringValue = std::get_if<std::string>(&value)) {
+			return std::hash<std::string>{}(*stringValue);
+		}
+		if (const auto *nodeValue = std::get_if<std::shared_ptr<zyx::Node>>(&value)) {
+			return *nodeValue ? std::hash<int64_t>{}((*nodeValue)->id) ^ (*nodeValue)->properties.size() : 0;
+		}
+		if (const auto *edgeValue = std::get_if<std::shared_ptr<zyx::Edge>>(&value)) {
+			return *edgeValue ? std::hash<int64_t>{}((*edgeValue)->id) ^ (*edgeValue)->properties.size() : 0;
+		}
+		if (const auto *vectorValue = std::get_if<std::vector<float>>(&value)) {
+			return vectorValue->size();
+		}
+		if (const auto *stringsValue = std::get_if<std::vector<std::string>>(&value)) {
+			return stringsValue->size();
+		}
+		if (const auto *listValue = std::get_if<std::shared_ptr<zyx::ValueList>>(&value)) {
+			return *listValue ? (*listValue)->elements.size() : 0;
+		}
+		if (const auto *mapValue = std::get_if<std::shared_ptr<zyx::ValueMap>>(&value)) {
+			return *mapValue ? (*mapValue)->entries.size() : 0;
+		}
+		return 0;
+	}
+
+	int64_t materializedRowCount(zyx::Result result) {
+		if (!result.isSuccess()) {
+			throw std::runtime_error(result.getError());
+		}
+		const int columns = result.getColumnCount();
+		int64_t count = 0;
+		size_t checksum = 0;
+		while (result.hasNext()) {
+			result.next();
+			for (int column = 0; column < columns; ++column) {
+				checksum ^= valueDigest(result.get(column)) + 0x9e3779b97f4a7c15ULL + (checksum << 6U) + (checksum >> 2U);
+			}
+			++count;
+		}
+		if (checksum == (std::numeric_limits<size_t>::max)()) { // Keep projected values observable to the optimizer.
+			std::cerr << "";
+		}
+		return count;
+	}
+
 	Options parseArgs(int argc, char **argv) {
 		Options options;
 		for (int i = 1; i < argc; ++i) {
@@ -1306,11 +1377,8 @@ namespace {
 				options.scale = requireValue(arg);
 			} else if (arg == "--profile") {
 				options.profile = requireValue(arg);
-				if (options.profile != kProfileScan && options.profile != kProfileIndexed &&
-					options.profile != kProfileMultihop && options.profile != kProfileWrite &&
-					options.profile != kProfileWriteDurable && options.profile != kProfileOperationalDynamic) {
-					throw std::invalid_argument(
-							"--profile must be scan, indexed, multihop, write, write_durable, or operational_dynamic");
+				if (!isSupportedProfile(options.profile)) {
+					throw std::invalid_argument(supportedProfileMessage());
 				}
 			} else if (arg == "--emit-profile") {
 				options.emitProfile = true;
@@ -1339,11 +1407,8 @@ namespace {
 		if (options.scale.empty()) {
 			throw std::invalid_argument("--scale is required");
 		}
-		if (options.profile != kProfileScan && options.profile != kProfileIndexed && options.profile != kProfileMultihop &&
-			options.profile != kProfileWrite && options.profile != kProfileWriteDurable &&
-			options.profile != kProfileOperationalDynamic) {
-			throw std::invalid_argument(
-					"--profile must be scan, indexed, multihop, write, write_durable, or operational_dynamic");
+		if (!isSupportedProfile(options.profile)) {
+			throw std::invalid_argument(supportedProfileMessage());
 		}
 		if (options.executionMode != kExecutionModeWarm && options.executionMode != kExecutionModeOpened &&
 			options.executionMode != kExecutionModeColdish) {
@@ -1414,6 +1479,45 @@ namespace {
 			});
 			runQueryWorkload(options, db, loaded, "property_range_indexed", [](zyx::Database &queryDb) {
 				return scalarInt(queryDb.execute("MATCH (u:User) WHERE u.age >= 30 AND u.age < 40 RETURN count(u)"));
+			});
+		} else if (options.profile == kProfileRetrieval) {
+			const std::string endpointTarget = anchoredNeighborUserId(options.scale);
+			runQueryWorkload(options, db, loaded, "point_node_fetch_by_id", [](zyx::Database &queryDb) {
+				return materializedRowCount(
+						queryDb.execute("MATCH (u:User {id: 'user-000001'}) RETURN u.id, u.age, u.country, u.score"));
+			});
+			runQueryWorkload(options, db, loaded, "point_edge_fetch_by_endpoints",
+							 [endpointTarget](zyx::Database &queryDb) {
+								 std::ostringstream query;
+								 query << "MATCH (:User {id: 'user-000001'})-[r:FOLLOWS]->(:User {id: '"
+									   << endpointTarget << "'}) RETURN r.weight";
+								 return materializedRowCount(queryDb.execute(query.str()));
+							 });
+			runQueryWorkload(options, db, loaded, "batch_node_fetch_100", [](zyx::Database &queryDb) {
+				return materializedRowCount(
+						queryDb.execute("MATCH (u:User) RETURN u.id, u.age, u.country, u.score LIMIT 100"));
+			});
+			runQueryWorkload(options, db, loaded, "one_hop_fetch_neighbor_ids", [](zyx::Database &queryDb) {
+				return materializedRowCount(
+						queryDb.execute("MATCH (:User {id: 'user-000001'})-[:FOLLOWS]->(v:User) RETURN v.id"));
+			});
+			runQueryWorkload(options, db, loaded, "one_hop_fetch_neighbor_records", [](zyx::Database &queryDb) {
+				return materializedRowCount(queryDb.execute(
+						"MATCH (:User {id: 'user-000001'})-[:FOLLOWS]->(v:User) "
+						"RETURN v.id, v.age, v.country, v.score"));
+			});
+			runQueryWorkload(options, db, loaded, "property_index_fetch_users_by_country", [](zyx::Database &queryDb) {
+				return materializedRowCount(
+						queryDb.execute("MATCH (u:User) WHERE u.country = 'CN' RETURN u.id, u.age, u.score LIMIT 100"));
+			});
+			runQueryWorkload(options, db, loaded, "range_index_fetch_user_projection", [](zyx::Database &queryDb) {
+				return materializedRowCount(queryDb.execute(
+						"MATCH (u:User) WHERE u.age >= 30 AND u.age < 40 "
+						"RETURN u.id, u.age, u.country, u.score LIMIT 100"));
+			});
+			runQueryWorkload(options, db, loaded, "relationship_property_fetch", [](zyx::Database &queryDb) {
+				return materializedRowCount(queryDb.execute(
+						"MATCH ()-[r:FOLLOWS]->(v:User) WHERE r.weight = 1 RETURN r.weight, v.id LIMIT 100"));
 			});
 		} else if (options.profile == kProfileMultihop) {
 			const std::string scale = options.scale;

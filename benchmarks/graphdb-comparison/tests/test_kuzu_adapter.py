@@ -300,6 +300,31 @@ def test_kuzu_indexed_workload_methods_issue_expected_queries(tmp_path: Path, mo
     assert "MATCH (u:User) WHERE u.age >= 30 AND u.age < 40 RETURN COUNT(u)" in connection.queries
 
 
+def test_kuzu_retrieval_workload_methods_issue_expected_queries(tmp_path: Path, monkeypatch):
+    adapter = KuzuAdapter(database="kuzu", dataset_dir=tmp_path / "dataset", scale="smoke", profile="retrieval")
+    connection = FakeConnection()
+    adapter._connection = connection
+    adapter._loaded_rows = 1
+    monkeypatch.setattr(kuzu_adapter, "_SECONDARY_PROPERTY_INDEX_SUPPORT", True)
+
+    assert adapter.point_node_fetch_by_id() == 1
+    assert adapter.point_edge_fetch_by_endpoints() == 1
+    assert adapter.batch_node_fetch_100() == 1
+    assert adapter.one_hop_fetch_neighbor_ids() == 1
+    assert adapter.one_hop_fetch_neighbor_records() == 1
+    assert adapter.property_index_fetch_users_by_country() == 1
+    assert adapter.range_index_fetch_user_projection() == 1
+    assert adapter.relationship_property_fetch() == 1
+
+    assert "MATCH (u:User {id: 'user-000001'}) RETURN u.id, u.age, u.country, u.score" in connection.queries
+    assert any("user-000004" in query and "RETURN r.weight" in query for query in connection.queries)
+    assert "MATCH (u:User) RETURN u.id, u.age, u.country, u.score LIMIT 100" in connection.queries
+    assert any("RETURN v.id, v.age, v.country, v.score" in query for query in connection.queries)
+    assert any("WHERE u.country = 'CN'" in query and "LIMIT 100" in query for query in connection.queries)
+    assert any("WHERE u.age >= 30 AND u.age < 40" in query and "LIMIT 100" in query for query in connection.queries)
+    assert any("WHERE r.weight = 1 RETURN r.weight, v.id LIMIT 100" in query for query in connection.queries)
+
+
 def test_kuzu_write_profile_methods_issue_expected_queries(tmp_path: Path):
     adapter = KuzuAdapter(database="kuzu", dataset_dir=tmp_path / "dataset", scale="smoke", profile="write")
     connection = FakeConnection()
@@ -405,6 +430,20 @@ def test_kuzu_indexed_profile_adds_property_indexes_when_supported(tmp_path: Pat
     monkeypatch.setattr(kuzu_adapter, "_SECONDARY_PROPERTY_INDEX_SUPPORT", None)
 
     adapter = KuzuAdapter(database="kuzu", dataset_dir=dataset_dir, scale="smoke", profile="indexed")
+    adapter.setup()
+
+    assert "CREATE INDEX user_country IF NOT EXISTS ON User(country)" in adapter._connection.queries
+    assert "CREATE INDEX user_age IF NOT EXISTS ON User(age)" in adapter._connection.queries
+
+
+def test_kuzu_retrieval_profile_adds_property_indexes_when_supported(tmp_path: Path, monkeypatch):
+    dataset_dir = tmp_path / "dataset"
+    dataset_dir.mkdir()
+    fake_kuzu = types.SimpleNamespace(Database=lambda path: {"path": path}, Connection=FakeConnection)
+    monkeypatch.setitem(sys.modules, "kuzu", fake_kuzu)
+    monkeypatch.setattr(kuzu_adapter, "_SECONDARY_PROPERTY_INDEX_SUPPORT", None)
+
+    adapter = KuzuAdapter(database="kuzu", dataset_dir=dataset_dir, scale="smoke", profile="retrieval")
     adapter.setup()
 
     assert "CREATE INDEX user_country IF NOT EXISTS ON User(country)" in adapter._connection.queries

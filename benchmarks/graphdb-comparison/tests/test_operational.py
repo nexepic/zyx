@@ -26,6 +26,7 @@ def _unsupported_row(database: str, workload: str) -> str:
 def test_build_operational_rows_groups_workloads_by_database_operation(tmp_path: Path):
     scan_summary = tmp_path / "scan.csv"
     indexed_summary = tmp_path / "indexed.csv"
+    retrieval_summary = tmp_path / "retrieval.csv"
     multihop_summary = tmp_path / "multihop.csv"
     write_summary = tmp_path / "write.csv"
     operational_dynamic_summary = tmp_path / "operational_dynamic.csv"
@@ -42,6 +43,11 @@ def test_build_operational_rows_groups_workloads_by_database_operation(tmp_path:
         + _unsupported_row("kuzu", "load_nodes_edges")
         + _summary_row("zyx", "point_lookup_indexed", 0.1)
         + _summary_row("kuzu", "point_lookup_indexed", 1.0)
+    )
+    retrieval_summary.write_text(
+        SUMMARY_HEADER
+        + _summary_row("zyx", "point_node_fetch_by_id", 0.2)
+        + _summary_row("kuzu", "point_node_fetch_by_id", 0.4)
     )
     multihop_summary.write_text(
         SUMMARY_HEADER
@@ -63,6 +69,7 @@ def test_build_operational_rows_groups_workloads_by_database_operation(tmp_path:
         {
             "scan": scan_summary,
             "indexed": indexed_summary,
+            "retrieval": retrieval_summary,
             "multihop": multihop_summary,
             "write": write_summary,
             "operational_dynamic": operational_dynamic_summary,
@@ -80,6 +87,7 @@ def test_build_operational_rows_groups_workloads_by_database_operation(tmp_path:
     assert by_key[("scan", "one_hop_expand")]["category"] == "adjacency expand"
     assert by_key[("scan", "one_hop_expand")]["fastest_database"] == "zyx"
     assert by_key[("indexed", "point_lookup_indexed")]["category"] == "property filter"
+    assert by_key[("retrieval", "point_node_fetch_by_id")]["category"] == "data retrieval"
     assert by_key[("multihop", "reachable_within_6")]["category"] == "adjacency expand"
     assert by_key[("write", "point_create_node")]["category"] == "point write"
     assert by_key[("operational_dynamic", "batch_create_edges_100")]["category"] == "batch write"
@@ -154,6 +162,10 @@ def test_run_operational_steady_state_writes_manifest_and_report(tmp_path: Path,
                 _summary_row("zyx", "point_lookup_indexed", 0.1),
                 _summary_row("kuzu", "point_lookup_indexed", 1.0),
             ],
+            "retrieval": [
+                _summary_row("zyx", "point_node_fetch_by_id", 0.2),
+                _summary_row("kuzu", "point_node_fetch_by_id", 0.4),
+            ],
             "multihop": [
                 _summary_row("zyx", "reachable_within_6", 4.0),
                 _summary_row("kuzu", "reachable_within_6", 2.0),
@@ -185,7 +197,14 @@ def test_run_operational_steady_state_writes_manifest_and_report(tmp_path: Path,
         threads=4,
     )
 
-    assert calls == [("scan", 4), ("indexed", 4), ("multihop", 4), ("write", 4), ("operational_dynamic", 4)]
+    assert calls == [
+        ("scan", 4),
+        ("indexed", 4),
+        ("retrieval", 4),
+        ("multihop", 4),
+        ("write", 4),
+        ("operational_dynamic", 4),
+    ]
     manifest = json.loads(manifest_path.read_text())
     assert manifest["operational_steady_state_schema_version"] == 1
     assert manifest["profile"] == "operational_steady_state"
@@ -196,6 +215,7 @@ def test_run_operational_steady_state_writes_manifest_and_report(tmp_path: Path,
     assert report.startswith("# Operational Steady-State Performance")
     assert "p50/status" in report
     assert "unsupported" in report
+    assert "data retrieval" in report
     assert "point write" in report
     assert "batch write" in report
     assert "| threads | 4 |" in report

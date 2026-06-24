@@ -68,6 +68,17 @@ OPERATIONAL_DYNAMIC_WORKLOADS = [
     "batch_create_edges_100_then_one_hop_expand",
     "batch_create_edges_10000_then_one_hop_expand",
 ]
+RETRIEVAL_WORKLOADS = [
+    "load_nodes_edges",
+    "point_node_fetch_by_id",
+    "point_edge_fetch_by_endpoints",
+    "batch_node_fetch_100",
+    "one_hop_fetch_neighbor_ids",
+    "one_hop_fetch_neighbor_records",
+    "property_index_fetch_users_by_country",
+    "range_index_fetch_user_projection",
+    "relationship_property_fetch",
+]
 WRITE_RESULT_ONE_WORKLOADS = (
     (set(WRITE_WORKLOADS) | set(WRITE_DURABLE_WORKLOADS))
     | {"post_persist_create_node", "post_persist_create_edge"}
@@ -85,7 +96,9 @@ PROFILE_WORKLOADS = {
     "write": WRITE_WORKLOADS,
     "write_durable": WRITE_DURABLE_WORKLOADS,
     "operational_dynamic": OPERATIONAL_DYNAMIC_WORKLOADS,
+    "retrieval": RETRIEVAL_WORKLOADS,
 }
+SECONDARY_INDEX_PROFILES = frozenset({"indexed", "operational_dynamic", "retrieval"})
 
 DEFAULT_PROFILE = "scan"
 WARM_EXECUTION_MODE = "warm"
@@ -113,6 +126,10 @@ def multihop_target_user_id(depth: int, scale: str = "medium") -> str:
 
 
 def write_update_target_user_id(scale: str = "medium") -> str:
+    return anchored_neighbor_user_id(scale)
+
+
+def anchored_neighbor_user_id(scale: str = "medium") -> str:
     return "user-000004" if scale == "smoke" else "user-000006"
 
 
@@ -213,6 +230,30 @@ class BenchmarkAdapter:
         raise NotImplementedError
 
     def property_range_indexed(self) -> int:
+        raise NotImplementedError
+
+    def point_node_fetch_by_id(self) -> int:
+        raise NotImplementedError
+
+    def point_edge_fetch_by_endpoints(self) -> int:
+        raise NotImplementedError
+
+    def batch_node_fetch_100(self) -> int:
+        raise NotImplementedError
+
+    def one_hop_fetch_neighbor_ids(self) -> int:
+        raise NotImplementedError
+
+    def one_hop_fetch_neighbor_records(self) -> int:
+        raise NotImplementedError
+
+    def property_index_fetch_users_by_country(self) -> int:
+        raise NotImplementedError
+
+    def range_index_fetch_user_projection(self) -> int:
+        raise NotImplementedError
+
+    def relationship_property_fetch(self) -> int:
         raise NotImplementedError
 
     def point_create_node(self) -> int:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from runner.adapters.base import BenchmarkAdapter, multihop_target_user_id, read_csv
+from runner.adapters.base import BenchmarkAdapter, anchored_neighbor_user_id, multihop_target_user_id, read_csv
 
 
 class FakeAdapter(BenchmarkAdapter):
@@ -141,6 +141,75 @@ class FakeAdapter(BenchmarkAdapter):
     def property_range_indexed(self) -> int:
         self._ensure_loaded()
         return sum(1 for row in self.users if 30 <= int(row["age"]) < 40)
+
+    def point_node_fetch_by_id(self) -> int:
+        self._ensure_loaded()
+        rows = [
+            (user["id"], int(user["age"]), user["country"], float(user["score"]))
+            for user in self.users
+            if user["id"] == "user-000001"
+        ]
+        return len(rows)
+
+    def point_edge_fetch_by_endpoints(self) -> int:
+        self._ensure_loaded()
+        target = anchored_neighbor_user_id(self.scale)
+        rows = [
+            int(edge["weight"])
+            for edge in self.follows
+            if edge["src"] == "user-000001" and edge["dst"] == target
+        ]
+        return len(rows)
+
+    def batch_node_fetch_100(self) -> int:
+        self._ensure_loaded()
+        rows = [
+            (user["id"], int(user["age"]), user["country"], float(user["score"]))
+            for user in self.users[:100]
+        ]
+        return len(rows)
+
+    def one_hop_fetch_neighbor_ids(self) -> int:
+        self._ensure_loaded()
+        rows = [edge["dst"] for edge in self.follows if edge["src"] == "user-000001"]
+        return len(rows)
+
+    def one_hop_fetch_neighbor_records(self) -> int:
+        self._ensure_loaded()
+        neighbors = {edge["dst"] for edge in self.follows if edge["src"] == "user-000001"}
+        rows = [
+            (user["id"], int(user["age"]), user["country"], float(user["score"]))
+            for user in self.users
+            if user["id"] in neighbors
+        ]
+        return len(rows)
+
+    def property_index_fetch_users_by_country(self) -> int:
+        self._ensure_loaded()
+        rows = [
+            (user["id"], int(user["age"]), float(user["score"]))
+            for user in self.users
+            if user["country"] == "CN"
+        ][:100]
+        return len(rows)
+
+    def range_index_fetch_user_projection(self) -> int:
+        self._ensure_loaded()
+        rows = [
+            (user["id"], int(user["age"]), user["country"], float(user["score"]))
+            for user in self.users
+            if 30 <= int(user["age"]) < 40
+        ][:100]
+        return len(rows)
+
+    def relationship_property_fetch(self) -> int:
+        self._ensure_loaded()
+        rows = [
+            (int(edge["weight"]), edge["dst"])
+            for edge in self.follows
+            if int(edge["weight"]) == 1
+        ][:100]
+        return len(rows)
 
     def point_create_node(self) -> int:
         self._ensure_loaded()

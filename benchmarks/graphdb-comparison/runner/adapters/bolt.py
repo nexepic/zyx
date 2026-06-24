@@ -9,7 +9,14 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any, Iterable
 
-from runner.adapters.base import BenchmarkAdapter, DEFAULT_PROFILE, multihop_target_user_id, write_update_target_user_id
+from runner.adapters.base import (
+    BenchmarkAdapter,
+    DEFAULT_PROFILE,
+    SECONDARY_INDEX_PROFILES,
+    anchored_neighbor_user_id,
+    multihop_target_user_id,
+    write_update_target_user_id,
+)
 
 
 class BoltCypherAdapter(BenchmarkAdapter):
@@ -159,6 +166,79 @@ class BoltCypherAdapter(BenchmarkAdapter):
         return self._scalar_int(
             "MATCH (u:User) WHERE u.age >= $min_age AND u.age < $max_age RETURN count(u) AS count",
             {"min_age": 30, "max_age": 40},
+        )
+
+    def point_node_fetch_by_id(self) -> int:
+        self._ensure_loaded()
+        return len(
+            self._records(
+                "MATCH (u:User {id: $id}) RETURN u.id AS id, u.age AS age, u.country AS country, u.score AS score",
+                {"id": "user-000001"},
+            )
+        )
+
+    def point_edge_fetch_by_endpoints(self) -> int:
+        self._ensure_loaded()
+        return len(
+            self._records(
+                "MATCH (:User {id: $src})-[r:FOLLOWS]->(:User {id: $dst}) RETURN r.weight AS weight",
+                {"src": "user-000001", "dst": anchored_neighbor_user_id(self.scale)},
+            )
+        )
+
+    def batch_node_fetch_100(self) -> int:
+        self._ensure_loaded()
+        return len(
+            self._records(
+                "MATCH (u:User) RETURN u.id AS id, u.age AS age, u.country AS country, u.score AS score LIMIT 100"
+            )
+        )
+
+    def one_hop_fetch_neighbor_ids(self) -> int:
+        self._ensure_loaded()
+        return len(
+            self._records(
+                "MATCH (:User {id: $id})-[:FOLLOWS]->(v:User) RETURN v.id AS id",
+                {"id": "user-000001"},
+            )
+        )
+
+    def one_hop_fetch_neighbor_records(self) -> int:
+        self._ensure_loaded()
+        return len(
+            self._records(
+                "MATCH (:User {id: $id})-[:FOLLOWS]->(v:User) "
+                "RETURN v.id AS id, v.age AS age, v.country AS country, v.score AS score",
+                {"id": "user-000001"},
+            )
+        )
+
+    def property_index_fetch_users_by_country(self) -> int:
+        self._ensure_loaded()
+        return len(
+            self._records(
+                "MATCH (u:User) WHERE u.country = $country RETURN u.id AS id, u.age AS age, u.score AS score LIMIT 100",
+                {"country": "CN"},
+            )
+        )
+
+    def range_index_fetch_user_projection(self) -> int:
+        self._ensure_loaded()
+        return len(
+            self._records(
+                "MATCH (u:User) WHERE u.age >= $min_age AND u.age < $max_age "
+                "RETURN u.id AS id, u.age AS age, u.country AS country, u.score AS score LIMIT 100",
+                {"min_age": 30, "max_age": 40},
+            )
+        )
+
+    def relationship_property_fetch(self) -> int:
+        self._ensure_loaded()
+        return len(
+            self._records(
+                "MATCH ()-[r:FOLLOWS]->(v:User) WHERE r.weight = $weight RETURN r.weight AS weight, v.id AS id LIMIT 100",
+                {"weight": 1},
+            )
         )
 
     def point_create_node(self) -> int:
@@ -405,7 +485,7 @@ class Neo4jAdapter(BoltCypherAdapter):
         for label in ["User", "Post", "Tag"]:
             name = f"{label.lower()}_id_unique"
             self._execute_ddl(f"CREATE CONSTRAINT {name} IF NOT EXISTS FOR (n:{label}) REQUIRE n.id IS UNIQUE")
-        if self.profile == "indexed":
+        if self.profile in SECONDARY_INDEX_PROFILES:
             self._execute_ddl("CREATE INDEX user_country IF NOT EXISTS FOR (n:User) ON (n.country)")
             self._execute_ddl("CREATE INDEX user_age IF NOT EXISTS FOR (n:User) ON (n.age)")
 
@@ -424,7 +504,7 @@ class MemgraphAdapter(BoltCypherAdapter):
     def _create_indexes(self) -> None:
         for label in ["User", "Post", "Tag"]:
             self._execute_ddl(f"CREATE INDEX ON :{label}(id)", ignore_duplicate=True)
-        if self.profile == "indexed":
+        if self.profile in SECONDARY_INDEX_PROFILES:
             self._execute_ddl("CREATE INDEX ON :User(country)", ignore_duplicate=True)
             self._execute_ddl("CREATE INDEX ON :User(age)", ignore_duplicate=True)
 

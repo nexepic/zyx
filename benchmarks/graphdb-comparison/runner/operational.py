@@ -12,7 +12,7 @@ from runner.adapters.base import WARM_EXECUTION_MODE
 from runner.run import DATABASE_CHOICES, DEFAULT_DATABASES, DEFAULT_ITERATIONS, DEFAULT_OUTPUT_ROOT, DEFAULT_WARMUP, run_benchmark
 
 STEADY_STATE_PROFILE = "operational_steady_state"
-STEADY_STATE_PROFILES = ("scan", "indexed", "multihop", "write", "operational_dynamic")
+STEADY_STATE_PROFILES = ("scan", "indexed", "retrieval", "multihop", "write", "operational_dynamic")
 DEFAULT_SCALE = "medium"
 
 
@@ -42,6 +42,14 @@ OPERATION_SPECS = [
     OperationSpec("property filter", "indexed", "point_lookup_indexed", "indexed point lookup"),
     OperationSpec("property filter", "indexed", "property_equality_indexed", "indexed equality predicate"),
     OperationSpec("property filter", "indexed", "property_range_indexed", "indexed range predicate"),
+    OperationSpec("data retrieval", "retrieval", "point_node_fetch_by_id", "fetch one node projection by id"),
+    OperationSpec("data retrieval", "retrieval", "point_edge_fetch_by_endpoints", "fetch one relationship projection by endpoints"),
+    OperationSpec("data retrieval", "retrieval", "batch_node_fetch_100", "fetch 100 node projections"),
+    OperationSpec("data retrieval", "retrieval", "one_hop_fetch_neighbor_ids", "fetch one-hop neighbor ids"),
+    OperationSpec("data retrieval", "retrieval", "one_hop_fetch_neighbor_records", "fetch one-hop neighbor projections"),
+    OperationSpec("data retrieval", "retrieval", "property_index_fetch_users_by_country", "fetch projected users through equality index"),
+    OperationSpec("data retrieval", "retrieval", "range_index_fetch_user_projection", "fetch projected users through range index"),
+    OperationSpec("data retrieval", "retrieval", "relationship_property_fetch", "fetch relationship-property projections"),
     OperationSpec("adjacency expand", "multihop", "reachable_within_6", "bounded reachability <= 6 hops"),
     OperationSpec("adjacency expand", "multihop", "reachable_within_12", "bounded reachability <= 12 hops"),
     OperationSpec("adjacency expand", "multihop", "reachable_within_24", "bounded reachability <= 24 hops"),
