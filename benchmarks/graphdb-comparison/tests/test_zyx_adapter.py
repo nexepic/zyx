@@ -180,6 +180,35 @@ def test_zyx_adapter_accepts_operational_dynamic_profile_workloads(tmp_path: Pat
     assert [result.status for result in results] == ["ok"] * 11
 
 
+def test_zyx_adapter_accepts_retrieval_profile_workloads(tmp_path: Path, monkeypatch):
+    binary = tmp_path / "zyx-bench-retrieval.py"
+    _write_executable(
+        binary,
+        f"#!{sys.executable}\n"
+        "import json\n"
+        "workloads = ['load_nodes_edges', 'point_node_fetch_by_id', 'point_edge_fetch_by_endpoints', 'batch_node_fetch_100', 'one_hop_fetch_neighbor_ids', 'one_hop_fetch_neighbor_records', 'property_index_fetch_users_by_country', 'range_index_fetch_user_projection', 'relationship_property_fetch']\n"
+        "for workload in workloads:\n"
+        "    print(json.dumps({'event':'sample','database':'zyx','workload':workload,'scale':'smoke','iteration':0,'latency_ms':1.0,'status':'ok','equivalent_mode':'api'}))\n",
+    )
+    monkeypatch.setenv("ZYX_COMPARE_BENCH", str(binary))
+    adapter = ZyxAdapter(database="zyx", dataset_dir=tmp_path / "dataset", scale="smoke", profile="retrieval")
+
+    results = adapter.run_all(warmup=0, iterations=1)
+
+    assert [result.workload for result in results] == [
+        "load_nodes_edges",
+        "point_node_fetch_by_id",
+        "point_edge_fetch_by_endpoints",
+        "batch_node_fetch_100",
+        "one_hop_fetch_neighbor_ids",
+        "one_hop_fetch_neighbor_records",
+        "property_index_fetch_users_by_country",
+        "range_index_fetch_user_projection",
+        "relationship_property_fetch",
+    ]
+    assert [result.status for result in results] == ["ok"] * 9
+
+
 def test_zyx_adapter_forwards_coldish_execution_mode_to_subprocess(tmp_path: Path, monkeypatch):
     binary = tmp_path / "zyx-bench-coldish.py"
     args_path = tmp_path / "args.txt"

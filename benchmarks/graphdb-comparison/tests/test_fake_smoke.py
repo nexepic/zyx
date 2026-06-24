@@ -171,6 +171,28 @@ def test_fake_adapter_uses_operational_dynamic_profile_workloads(tmp_path: Path)
     assert [result.status for result in results] == ["ok"] * 11
 
 
+def test_fake_adapter_uses_retrieval_profile_workloads(tmp_path: Path):
+    dataset_dir = tmp_path / "dataset"
+    graph = generate_graph(SCALES["smoke"], seed=42)
+    write_dataset(graph, dataset_dir)
+
+    adapter = FakeAdapter(database="fake", dataset_dir=dataset_dir, scale="smoke", profile="retrieval")
+    results = adapter.run_all(warmup=0, iterations=1)
+
+    assert [result.workload for result in results] == [
+        "load_nodes_edges",
+        "point_node_fetch_by_id",
+        "point_edge_fetch_by_endpoints",
+        "batch_node_fetch_100",
+        "one_hop_fetch_neighbor_ids",
+        "one_hop_fetch_neighbor_records",
+        "property_index_fetch_users_by_country",
+        "range_index_fetch_user_projection",
+        "relationship_property_fetch",
+    ]
+    assert [result.status for result in results] == ["ok"] * 9
+
+
 def test_write_profile_validation_requires_single_affected_row(tmp_path: Path):
     dataset_dir = tmp_path / "dataset"
     graph = generate_graph(SCALES["smoke"], seed=42)

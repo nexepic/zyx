@@ -234,6 +234,21 @@ TEST_F(CompareBenchmarkTest, ParseArgsAcceptsOperationalDynamicProfile) {
 	EXPECT_EQ(options.profile, std::string(kProfileOperationalDynamic));
 }
 
+TEST_F(CompareBenchmarkTest, ParseArgsAcceptsRetrievalProfile) {
+	std::vector<std::string> args = {"zyx-compare-bench", "--dataset", "data", "--db-path", "db",
+									 "--scale", "smoke", "--profile", "retrieval"};
+	std::vector<char *> argv;
+	for (auto &arg: args) {
+		argv.push_back(arg.data());
+	}
+
+	const Options options = parseArgs(static_cast<int>(argv.size()), argv.data());
+
+	EXPECT_EQ(options.profile, std::string(kProfileRetrieval));
+	EXPECT_TRUE(isSupportedProfile(std::string(kProfileRetrieval)));
+	EXPECT_FALSE(isSupportedProfile("not_a_profile"));
+}
+
 TEST_F(CompareBenchmarkTest, ReachableWithinUsesStrictBoundedPathSemantics) {
 	zyx::Database db((tempRoot / "bounded_reachability.db").string());
 	db.open();
@@ -360,6 +375,9 @@ TEST_F(CompareBenchmarkTest, RowCountAndValidationHelpersHandleAlternatePaths) {
 	db.open();
 	EXPECT_NO_THROW(executeOk(db, "RETURN 1"));
 	EXPECT_THROW(executeOk(db, "THIS IS NOT CYPHER"), std::runtime_error);
+	EXPECT_EQ(materializedRowCount(db.execute("RETURN 1 AS a, 'x' AS b")), 1);
+	EXPECT_EQ(materializedRowCount(db.execute("MATCH (n:Missing) RETURN n.id")), 0);
+	EXPECT_THROW((void) materializedRowCount(db.execute("THIS IS NOT CYPHER")), std::runtime_error);
 	db.close();
 
 	Options options;
@@ -480,6 +498,15 @@ TEST_F(CompareBenchmarkTest, RunExecutesSmallScanIndexedAndWriteProfiles) {
 	indexed.iterations = 1;
 
 	EXPECT_EQ(run(indexed), 0);
+
+	Options retrieval;
+	retrieval.dataset = dataset;
+	retrieval.dbPath = tempRoot / "retrieval.db";
+	retrieval.scale = "tiny";
+	retrieval.profile = std::string(kProfileRetrieval);
+	retrieval.iterations = 1;
+
+	EXPECT_EQ(run(retrieval), 0);
 
 	Options write;
 	write.dataset = dataset;

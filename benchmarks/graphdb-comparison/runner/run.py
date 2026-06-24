@@ -91,6 +91,15 @@ def _measurement_semantics(profile: str, execution_mode: str) -> dict[str, objec
                 "timers visible as separate operation and phase summaries."
             ),
         }
+    elif profile == "retrieval":
+        profile_semantics = {
+            "latency_contract": "materialized_row_projection_latency",
+            "durability_contract": "not_applicable",
+            "phase_contract": (
+                "Retrieval workloads return and materialize projected scalar fields instead of replacing data access "
+                "with count-only aggregation."
+            ),
+        }
     return {
         "execution_mode": execution_mode,
         "execution_contract": execution_semantics.get(execution_mode, "unknown"),

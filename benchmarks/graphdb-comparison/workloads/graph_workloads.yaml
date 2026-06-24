@@ -11,3 +11,6 @@ workloads:
   - one_hop_expand
   - two_hop_expand
   - shortest_path_chain
+  - point_node_fetch_by_id
+  - one_hop_fetch_neighbor_records
+  - property_index_fetch_users_by_country

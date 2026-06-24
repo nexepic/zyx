@@ -89,7 +89,7 @@ summary.
 
 For the primary cross-database performance report, prefer the Operational Steady-State runner. It
 uses one clear main dimension (`medium`, `warm` steady-state execution, p50 latency), combines the
-core read/index/traversal/write-statement profiles, and writes a categorized report instead of mixing
+core read/index/retrieval/traversal/write-statement profiles, and writes a categorized report instead of mixing
 scale or lifecycle modes in one table:
 
 ```bash
@@ -172,6 +172,23 @@ fsyncs the WAL commit record and may defer the main database checkpoint until th
 clean close. This profile is intentionally separate from `write` so statement latency and
 durable-after-each-write latency are not mixed into one number.
 
+Use `--profile retrieval` when evaluating data-return latency rather than count-only execution. The
+retrieval profile returns and drains projected scalar fields for point lookup, edge lookup, batched
+node fetch, one-hop neighbor fetch, secondary-index equality/range fetch, and relationship-property
+fetch workloads. This keeps materialization/projection cost visible instead of replacing the query
+with `COUNT(*)`.
+
+```bash
+PYTHONPATH=benchmarks/graphdb-comparison python3 -m runner.run \
+  --database zyx \
+  --database kuzu \
+  --profile retrieval \
+  --scale small \
+  --output-root benchmarks/graphdb-comparison/results \
+  --warmup 5 \
+  --iterations 50
+```
+
 ## Datasets
 
 Datasets are deterministic CSV files generated per run under `<result>/dataset` using `--scale` and `--seed`.
@@ -200,6 +217,8 @@ The benchmark records one row per database/workload and labels how equivalent wo
 | --- | --- |
 | `load_nodes_edges` | Create/load graph schema, indexes or constraints, nodes, and edges from CSV files in a fresh adapter/database instance for each warmup and measured sample. |
 | `point_lookup_indexed` | Lookup one `User` by primary key-like `id`. |
+| `property_equality_indexed` | Count users matched by the benchmark secondary `User(country)` equality predicate. Databases without equivalent scalar secondary-index semantics report `unsupported` instead of scan fallback latency. |
+| `property_range_indexed` | Count users matched by the benchmark secondary `User(age)` range predicate. Databases without equivalent scalar secondary-index semantics report `unsupported` instead of scan fallback latency. |
 | `index_seek_then_one_hop_expand` | `operational_dynamic` profile workload that uses a secondary `User(country)` predicate to select seed users and then counts one-hop `FOLLOWS` expansions. Databases without equivalent scalar secondary-index semantics report `unsupported` instead of scan fallback latency. |
 | `index_seek_then_two_hop_expand` | `operational_dynamic` profile workload that uses the same secondary-index seed selection and then counts two-hop `FOLLOWS` expansions. |
 | `label_scan_filter` | Count users filtered by `country`. |
@@ -210,6 +229,14 @@ The benchmark records one row per database/workload and labels how equivalent wo
 | `aggregation_group_by` | Count distinct user countries. |
 | `aggregation_count_by_group` | Group users by country and count rows per group. |
 | `topk_property_sort` | Return top users by score with `ORDER BY ... LIMIT`. |
+| `point_node_fetch_by_id` | `retrieval` profile workload that fetches one user's scalar properties by `id` and drains the projected row. |
+| `point_edge_fetch_by_endpoints` | `retrieval` profile workload that fetches one `FOLLOWS` relationship property between fixed endpoint users. |
+| `batch_node_fetch_100` | `retrieval` profile workload that fetches up to 100 user projections. |
+| `one_hop_fetch_neighbor_ids` | `retrieval` profile workload that fetches outgoing neighbor ids from the anchored seed user. |
+| `one_hop_fetch_neighbor_records` | `retrieval` profile workload that fetches outgoing neighbor scalar properties from the anchored seed user. |
+| `property_index_fetch_users_by_country` | `retrieval` profile workload that fetches projected users through the benchmark `User(country)` equality index. Unsupported secondary-index semantics are reported as `unsupported`. |
+| `range_index_fetch_user_projection` | `retrieval` profile workload that fetches projected users through the benchmark `User(age)` range index. Unsupported secondary-index semantics are reported as `unsupported`. |
+| `relationship_property_fetch` | `retrieval` profile workload that fetches relationship-property and target-id projections for `FOLLOWS` edges with `weight = 1`. |
 | `point_create_node` | `write` profile workload that creates one `User` node with a unique benchmark id. |
 | `point_create_edge` | `write` profile workload that creates one `FOLLOWS` edge between existing users. |
 | `point_update_node_property` | `write` profile workload that updates one existing `User` property and returns the affected count. |

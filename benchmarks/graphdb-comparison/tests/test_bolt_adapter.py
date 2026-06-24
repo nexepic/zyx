@@ -308,6 +308,33 @@ def test_bolt_indexed_workload_methods_issue_expected_queries(tmp_path: Path):
     assert "MATCH (u:User) WHERE u.age >= $min_age AND u.age < $max_age RETURN count(u) AS count" in queries
 
 
+def test_bolt_retrieval_workload_methods_issue_expected_queries(tmp_path: Path):
+    adapter = BoltCypherAdapter(database="bolt", dataset_dir=tmp_path / "dataset", scale="smoke", profile="retrieval")
+    driver = FakeDriver()
+    driver.rows = [{"id": "user-000001", "age": "20", "country": "CN", "score": "1.5"}]
+    adapter._driver = driver
+    adapter._loaded_rows = 1
+
+    assert adapter.point_node_fetch_by_id() == 1
+    assert adapter.point_edge_fetch_by_endpoints() == 1
+    assert adapter.batch_node_fetch_100() == 1
+    assert adapter.one_hop_fetch_neighbor_ids() == 1
+    assert adapter.one_hop_fetch_neighbor_records() == 1
+    assert adapter.property_index_fetch_users_by_country() == 1
+    assert adapter.range_index_fetch_user_projection() == 1
+    assert adapter.relationship_property_fetch() == 1
+
+    queries = [query for query, _ in driver.queries]
+    params = [parameters for _, parameters in driver.queries]
+    assert any("RETURN u.id AS id, u.age AS age, u.country AS country, u.score AS score" in query for query in queries)
+    assert any("RETURN r.weight AS weight" in query for query in queries)
+    assert any("RETURN v.id AS id, v.age AS age, v.country AS country, v.score AS score" in query for query in queries)
+    assert any("WHERE u.country = $country" in query and "LIMIT 100" in query for query in queries)
+    assert any("WHERE u.age >= $min_age AND u.age < $max_age" in query and "LIMIT 100" in query for query in queries)
+    assert any("WHERE r.weight = $weight" in query and "LIMIT 100" in query for query in queries)
+    assert any(parameters.get("dst") == "user-000004" for parameters in params)
+
+
 def test_bolt_write_profile_methods_issue_expected_queries(tmp_path: Path):
     adapter = BoltCypherAdapter(database="bolt", dataset_dir=tmp_path / "dataset", scale="smoke", profile="write")
     driver = FakeDriver()
@@ -356,6 +383,18 @@ def test_neo4j_indexed_profile_adds_property_indexes(tmp_path: Path, monkeypatch
     driver = FakeDriver()
     _install_fake_neo4j(monkeypatch, driver)
     adapter = Neo4jAdapter(database="neo4j", dataset_dir=tmp_path / "dataset", scale="smoke", profile="indexed")
+
+    adapter.setup()
+
+    queries = [query for query, _ in driver.queries]
+    assert "CREATE INDEX user_country IF NOT EXISTS FOR (n:User) ON (n.country)" in queries
+    assert "CREATE INDEX user_age IF NOT EXISTS FOR (n:User) ON (n.age)" in queries
+
+
+def test_neo4j_retrieval_profile_adds_property_indexes(tmp_path: Path, monkeypatch: Any):
+    driver = FakeDriver()
+    _install_fake_neo4j(monkeypatch, driver)
+    adapter = Neo4jAdapter(database="neo4j", dataset_dir=tmp_path / "dataset", scale="smoke", profile="retrieval")
 
     adapter.setup()
 

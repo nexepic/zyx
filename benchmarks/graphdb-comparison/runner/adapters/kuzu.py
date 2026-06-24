@@ -9,8 +9,10 @@ from typing import Any
 from runner.adapters.base import (
     BenchmarkAdapter,
     DEFAULT_PROFILE,
+    SECONDARY_INDEX_PROFILES,
     UnsupportedWorkload,
     WorkloadResult,
+    anchored_neighbor_user_id,
     multihop_target_user_id,
     remove_artifact_family,
     write_update_target_user_id,
@@ -61,7 +63,7 @@ class KuzuAdapter(BenchmarkAdapter):
         self._execute_statement("CREATE REL TABLE FOLLOWS(FROM User TO User, weight INT64)")
         self._execute_statement("CREATE REL TABLE AUTHORED(FROM User TO Post, weight INT64)")
         self._execute_statement("CREATE REL TABLE HAS_TAG(FROM Post TO Tag, weight INT64)")
-        if self.profile in {"indexed", "operational_dynamic"} and supports_secondary_property_indexes():
+        if self.profile in SECONDARY_INDEX_PROFILES and supports_secondary_property_indexes():
             self._create_secondary_property_indexes()
 
     def teardown(self) -> None:
@@ -213,6 +215,53 @@ class KuzuAdapter(BenchmarkAdapter):
         self._require_secondary_property_indexes()
         self._ensure_loaded()
         return self._scalar_int("MATCH (u:User) WHERE u.age >= 30 AND u.age < 40 RETURN COUNT(u)")
+
+    def point_node_fetch_by_id(self) -> int:
+        self._ensure_loaded()
+        return self._row_count(
+            "MATCH (u:User {id: 'user-000001'}) RETURN u.id, u.age, u.country, u.score"
+        )
+
+    def point_edge_fetch_by_endpoints(self) -> int:
+        self._ensure_loaded()
+        target = anchored_neighbor_user_id(self.scale)
+        return self._row_count(
+            f"MATCH (:User {{id: 'user-000001'}})-[r:FOLLOWS]->(:User {{id: '{target}'}}) RETURN r.weight"
+        )
+
+    def batch_node_fetch_100(self) -> int:
+        self._ensure_loaded()
+        return self._row_count("MATCH (u:User) RETURN u.id, u.age, u.country, u.score LIMIT 100")
+
+    def one_hop_fetch_neighbor_ids(self) -> int:
+        self._ensure_loaded()
+        return self._row_count("MATCH (:User {id: 'user-000001'})-[:FOLLOWS]->(v:User) RETURN v.id")
+
+    def one_hop_fetch_neighbor_records(self) -> int:
+        self._ensure_loaded()
+        return self._row_count(
+            "MATCH (:User {id: 'user-000001'})-[:FOLLOWS]->(v:User) RETURN v.id, v.age, v.country, v.score"
+        )
+
+    def property_index_fetch_users_by_country(self) -> int:
+        self._require_secondary_property_indexes()
+        self._ensure_loaded()
+        return self._row_count(
+            "MATCH (u:User) WHERE u.country = 'CN' RETURN u.id, u.age, u.score LIMIT 100"
+        )
+
+    def range_index_fetch_user_projection(self) -> int:
+        self._require_secondary_property_indexes()
+        self._ensure_loaded()
+        return self._row_count(
+            "MATCH (u:User) WHERE u.age >= 30 AND u.age < 40 RETURN u.id, u.age, u.country, u.score LIMIT 100"
+        )
+
+    def relationship_property_fetch(self) -> int:
+        self._ensure_loaded()
+        return self._row_count(
+            "MATCH ()-[r:FOLLOWS]->(v:User) WHERE r.weight = 1 RETURN r.weight, v.id LIMIT 100"
+        )
 
     def point_create_node(self) -> int:
         self._ensure_loaded()
