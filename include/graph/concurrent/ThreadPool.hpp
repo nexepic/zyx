@@ -104,28 +104,11 @@ namespace graph::concurrent {
 		auto submit(F &&f, Args &&...args) -> std::future<std::invoke_result_t<F, Args...>> {
 			using ReturnType = std::invoke_result_t<F, Args...>;
 
-			if (threadCount_ <= 1) {
-				// Single-threaded: execute inline
-				std::promise<ReturnType> promise;
-				auto future = promise.get_future();
-				try {
-					if constexpr (std::is_void_v<ReturnType>) {
-						std::invoke(std::forward<F>(f), std::forward<Args>(args)...);
-						promise.set_value();
-					} else {
-						promise.set_value(std::invoke(std::forward<F>(f), std::forward<Args>(args)...));
-					}
-				} catch (...) {
-					promise.set_exception(std::current_exception());
-				}
-				return future;
-			}
-
 			auto task = std::make_shared<std::packaged_task<ReturnType()>>(
 					std::bind(std::forward<F>(f), std::forward<Args>(args)...));
 
 			auto future = task->get_future();
-			enqueue([task]() { (*task)(); });
+			dispatchTask([task]() { (*task)(); });
 			return future;
 		}
 
@@ -181,15 +164,36 @@ namespace graph::concurrent {
 		void resetAdaptiveParallelPolicy() { adaptivePolicyState_.reset(); }
 
 	private:
+		struct ParallelForPlan {
+			bool hasWork = false;
+			bool runSequential = true;
+			size_t total = 0;
+			size_t effectiveThreadCount = 1;
+		};
+
+		static ParallelForPlan makeParallelForPlan(size_t begin,
+		                                          size_t end,
+		                                          size_t threadCount,
+		                                          size_t maxWorkers) {
+			if (begin >= end) {
+				return {};
+			}
+			ParallelForPlan plan;
+			plan.hasWork = true;
+			plan.total = end - begin;
+			plan.effectiveThreadCount = std::min(threadCount, std::max<size_t>(1, maxWorkers));
+			plan.runSequential = plan.effectiveThreadCount <= 1 || plan.total <= 1;
+			return plan;
+		}
+
 		template<typename Func>
 		void parallelForWithMaxWorkers(size_t begin, size_t end, size_t maxWorkers, Func &&func) {
-			if (begin >= end)
+			const ParallelForPlan plan = makeParallelForPlan(begin, end, threadCount_, maxWorkers);
+			if (!plan.hasWork) {
 				return;
+			}
 
-			size_t total = end - begin;
-			const size_t effectiveThreadCount = std::min(threadCount_, std::max<size_t>(1, maxWorkers));
-
-			if (effectiveThreadCount <= 1 || total <= 1) {
+			if (plan.runSequential) {
 				// Sequential execution
 				for (size_t i = begin; i < end; ++i)
 					func(i);
@@ -197,9 +201,9 @@ namespace graph::concurrent {
 			}
 
 			// Determine number of chunks
-			size_t numChunks = std::min(effectiveThreadCount, total);
-			size_t chunkSize = total / numChunks;
-			size_t remainder = total % numChunks;
+			size_t numChunks = std::min(plan.effectiveThreadCount, plan.total);
+			size_t chunkSize = plan.total / numChunks;
+			size_t remainder = plan.total % numChunks;
 
 			std::mutex completionMutex;
 			std::condition_variable completionCv;
@@ -273,6 +277,14 @@ namespace graph::concurrent {
 				tasks_.emplace(std::move(task));
 			}
 			condition_.notify_one();
+		}
+
+		void dispatchTask(std::function<void()> task) {
+			if (threadCount_ <= 1) {
+				task();
+				return;
+			}
+			enqueue(std::move(task));
 		}
 
 		static size_t resolveThreadCount(size_t requestedThreadCount, unsigned int hardwareThreadCount) {

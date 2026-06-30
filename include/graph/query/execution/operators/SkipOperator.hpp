@@ -36,7 +36,7 @@ namespace graph::query::execution::operators {
 		}
 
 		std::optional<RecordBatch> next() override {
-			while (true) {
+			while (true) { // ZYX_COV_EXCL_LINE - loop exits through child exhaustion or a returned batch.
 				auto batchOpt = child_->next();
 				if (!batchOpt)
 					return std::nullopt; // End of stream

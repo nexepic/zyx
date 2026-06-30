@@ -44,8 +44,8 @@ namespace graph {
 	}
 
 	bool Database::isOpen() const {
-		// The database is open if the storage is initialized and its file is open.
-		return storage && storage->isOpen();
+		// Database owns FileStorage for its full lifetime; the open state lives there.
+		return storage->isOpen();
 	}
 
 	void Database::open() {
@@ -193,8 +193,7 @@ namespace graph {
 		if (queryEngine) {
 			queryEngine->setThreadPool(threadPool_.get());
 			auto vim = queryEngine->getIndexManager()->getVectorIndexManager();
-			if (vim)
-				vim->setThreadPool(threadPool_.get());
+			vim->setThreadPool(threadPool_.get());
 		}
 	}
 
@@ -206,12 +205,6 @@ namespace graph {
 			size_t poolSize = configuredThreadPoolSize_.value_or(configManager_->getThreadPoolSize());
 			threadPool_ = std::make_shared<concurrent::ThreadPool>(poolSize);
 			storage->setThreadPool(threadPool_.get());
-			if (queryEngine) {
-				queryEngine->setThreadPool(threadPool_.get());
-				auto vim = queryEngine->getIndexManager()->getVectorIndexManager();
-				if (vim)
-					vim->setThreadPool(threadPool_.get());
-			}
 		});
 	}
 
@@ -225,8 +218,7 @@ namespace graph {
 
 			// Wire thread pool to vector index subsystem
 			auto vim = queryEngine->getIndexManager()->getVectorIndexManager();
-			if (vim)
-				vim->setThreadPool(threadPool_.get());
+			vim->setThreadPool(threadPool_.get());
 		});
 	}
 

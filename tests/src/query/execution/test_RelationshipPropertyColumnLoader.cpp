@@ -107,6 +107,17 @@ TEST(RelationshipPropertyColumnLoaderTest, EdgeRowsSkipInactiveInvalidAndUnselec
 }
 
 TEST(RelationshipPropertyColumnLoaderTest, MetadataRowsSkipInvalidInactiveAndMissingExternalProperties) {
+	RelationshipMetadataBatch invalidOnly;
+	invalidOnly.appendDefault();
+	invalidOnly.active[0] = 1;
+	invalidOnly.propertyEntityIds[0] = 99;
+	invalidOnly.propertyStorageTypes[0] = PropertyStorageType::PROPERTY_ENTITY;
+	RelationshipPropertyColumnLoader loader(nullptr);
+	auto invalidColumns = loader.loadColumns(invalidOnly, {}, {"weight"});
+	ASSERT_TRUE(invalidColumns.contains("weight"));
+	ASSERT_EQ(invalidColumns["weight"].size(), 1U);
+	EXPECT_FALSE(invalidColumns["weight"][0].has_value());
+
 	RelationshipMetadataBatch metadata;
 	metadata.appendDefault();
 	metadata.edgeIds[0] = 1;
@@ -128,7 +139,6 @@ TEST(RelationshipPropertyColumnLoaderTest, MetadataRowsSkipInvalidInactiveAndMis
 	metadata.active[3] = 1;
 	metadata.propertyEntityIds[3] = 0;
 	metadata.propertyStorageTypes[3] = PropertyStorageType::BLOB_ENTITY;
-	RelationshipPropertyColumnLoader loader(nullptr);
 
 	EXPECT_TRUE(loader.loadColumns(metadata, {1, 0}, {"weight"}).empty());
 	auto columns = loader.loadColumns(metadata, {}, {"weight"});
@@ -412,6 +422,11 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderRejectsUnsafeO
 	EXPECT_FALSE(loader.collectPropertyCandidatesByType(edge.getId(), edge.getId(), followsType).has_value());
 	EXPECT_FALSE(loader.collectPropertyCountCandidatesByType(edge.getId(), edge.getId(), followsType).has_value());
 	EXPECT_FALSE(loader.loadRange(edge.getId() + 1000, edge.getId() + 1127).has_value());
+	EXPECT_FALSE(loader.countActiveByType(edge.getId() + 1000, edge.getId() + 1127, followsType).has_value());
+	EXPECT_FALSE(loader.collectPropertyCandidatesByType(edge.getId() + 1000, edge.getId() + 1127, followsType)
+						 .has_value());
+	EXPECT_FALSE(loader.collectPropertyCountCandidatesByType(edge.getId() + 1000, edge.getId() + 1127, followsType)
+						 .has_value());
 }
 
 TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderStopsWhenSegmentIndexPointsPastFile) {

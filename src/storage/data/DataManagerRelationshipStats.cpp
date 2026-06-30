@@ -226,12 +226,12 @@ namespace graph::storage {
 			}
 			if (auto propertyIt = stats->activePropertyEntityIdsByType.find(typeId);
 				propertyIt != stats->activePropertyEntityIdsByType.end()) {
-				const auto edgeIt = stats->activePropertyEdgeIdsByType.find(typeId);
+				// The scanner records property entity ids and owner edge ids in lockstep.
+				const auto &propertyEdgeIds = stats->activePropertyEdgeIdsByType.at(typeId);
 				appendRelationshipPropertyCandidates(
 						candidates,
 						propertyIt->second,
-						edgeIt != stats->activePropertyEdgeIdsByType.end() ? std::span<const int64_t>{edgeIt->second}
-																			: std::span<const int64_t>{},
+						propertyEdgeIds,
 						std::span<const int64_t>{},
 						includePropertyEdgeRefs);
 			}

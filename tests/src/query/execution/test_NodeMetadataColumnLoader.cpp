@@ -294,6 +294,37 @@ TEST_F(NodeMetadataColumnLoaderStorageTest, VisitBatchCanStopEarlyAndPartitionWi
 	EXPECT_EQ(partitionedRows, ids.size());
 }
 
+TEST_F(NodeMetadataColumnLoaderStorageTest, PartitionedVisitRejectsOutOfRangeWorkWithTrace) {
+	auto ids = addUsers(130);
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+
+	std::vector<int64_t> outOfRangeIds;
+	outOfRangeIds.reserve(130);
+	for (int64_t id = ids.back() + 1000; outOfRangeIds.size() < 130; ++id) {
+		outOfRangeIds.push_back(id);
+	}
+
+	NodeMetadataColumnLoader loader(dm);
+	bool initialized = false;
+	graph::debug::PerfTrace::setEnabled(true);
+	graph::debug::PerfTrace::reset();
+	EXPECT_FALSE(loader.visitBatchPartitioned(
+			outOfRangeIds, 0, outOfRangeIds.size(),
+			[&](size_t) { initialized = true; },
+			[](size_t, size_t, const NodeMetadataRow &) { return true; },
+			nullptr));
+	const auto snapshot = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setEnabled(false);
+	EXPECT_FALSE(initialized);
+	EXPECT_TRUE(snapshot.contains("node_scan.load_node_metadata"));
+
+	NodeScanConfig config;
+	NodeScanRequirements requirements;
+	EXPECT_FALSE(loader.collectPropertyCountCandidates(outOfRangeIds, 0, outOfRangeIds.size(), config, requirements)
+						 .has_value());
+}
+
 TEST_F(NodeMetadataColumnLoaderStorageTest, VisitBatchPartitionedScansMultipleNodeMetadataTasks) {
 	auto ids = addUsers(kParallelNodeMetadataUserCount);
 	db->getStorage()->flush();
@@ -465,6 +496,31 @@ TEST_F(NodeMetadataColumnLoaderStorageTest, FullScanPropertyCandidatesRejectDirt
 	dm->setCurrentSnapshot(&blobSnapshot);
 	EXPECT_FALSE(loader.collectFullScanPropertyCountCandidates(config, requirements).has_value());
 	dm->clearCurrentSnapshot();
+}
+
+TEST_F(NodeMetadataColumnLoaderStorageTest, FullScanPropertyCandidatesHandleEmptyStoreAndInvalidInputs) {
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	NodeScanRequirements requirements;
+	requirements.needsLabels = false;
+	requirements.needsActiveCheck = true;
+
+	NodeMetadataColumnLoader loader(dm);
+	auto empty = loader.collectFullScanPropertyCountCandidates(config, requirements);
+	ASSERT_TRUE(empty.has_value());
+	EXPECT_EQ(empty->acceptedRowCount, 0U);
+	EXPECT_TRUE(empty->propertyEntityIds.empty());
+	EXPECT_TRUE(empty->blobRefs.empty());
+
+	NodeScanConfig wrongType;
+	wrongType.type = ScanType::LABEL_SCAN;
+	EXPECT_FALSE(loader.collectFullScanPropertyCountCandidates(wrongType, requirements).has_value());
+
+	NodeMetadataColumnLoader nullLoader(nullptr);
+	EXPECT_FALSE(nullLoader.collectFullScanPropertyCountCandidates(config, requirements).has_value());
 }
 
 TEST_F(NodeMetadataColumnLoaderStorageTest, VisitBatchSupportsProjectedMetadataRows) {

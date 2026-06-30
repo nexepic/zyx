@@ -6,10 +6,12 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "graph/core/Database.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/execution/RelationshipColumnarCountKernel.hpp"
+#include "src/query/execution/RelationshipColumnarCountKernelDetail.hpp"
 
 namespace fs = std::filesystem;
 using namespace graph;
@@ -80,6 +82,47 @@ protected:
 	int64_t sourceId = 0;
 	int64_t targetId = 0;
 };
+
+TEST(RelationshipColumnarCountKernelDetailTest, BuildsRowsAndAppendsMissingBulkMatches) {
+	EXPECT_EQ(relationship_columnar_count_detail::sequenceRows(0), (std::vector<size_t>{}));
+	EXPECT_EQ(relationship_columnar_count_detail::sequenceRows(4), (std::vector<size_t>{0, 1, 2, 3}));
+
+	std::vector<size_t> fallbackRows{9};
+	relationship_columnar_count_detail::appendRowsMissingFromBulkMatch(4, {0, 1, 2, 3}, fallbackRows);
+	EXPECT_EQ(fallbackRows, (std::vector<size_t>{9}));
+
+	relationship_columnar_count_detail::appendRowsMissingFromBulkMatch(5, {3, 1, 1}, fallbackRows);
+	EXPECT_EQ(fallbackRows, (std::vector<size_t>{9, 0, 2, 4}));
+}
+
+TEST_F(RelationshipColumnarCountKernelTest, DetailCountsFallbackEdgesAndRows) {
+	const auto first = addRelationshipWithProperties(
+			followsType, {{"weight", PropertyValue(int64_t{10})}});
+	const auto second = addRelationshipWithProperties(
+			followsType, {{"weight", PropertyValue(int64_t{20})}});
+	db->getStorage()->flush();
+	dm->clearCache();
+
+	VectorizedPropertyPredicate predicate;
+	predicate.propertyKey = "weight";
+	predicate.op = VectorPredicateOp::VPO_GE;
+	predicate.value = PropertyValue(int64_t{15});
+	PropertyPredicateScanKernel weightAtLeast15(dm, {predicate});
+
+	const std::vector<int64_t> edgeIds{first.getId(), second.getId()};
+	EXPECT_EQ(relationship_columnar_count_detail::countFallbackPropertyRows(
+			          *dm, weightAtLeast15, {0, 1, 5}, edgeIds),
+	          1U);
+	EXPECT_EQ(relationship_columnar_count_detail::countFallbackEdgeIds(
+			          *dm, weightAtLeast15, edgeIds),
+	          1U);
+
+	predicate.value = PropertyValue(int64_t{30});
+	PropertyPredicateScanKernel weightAtLeast30(dm, {predicate});
+	EXPECT_EQ(relationship_columnar_count_detail::countFallbackEdgeIds(
+			          *dm, weightAtLeast30, edgeIds),
+	          0U);
+}
 
 TEST_F(RelationshipColumnarCountKernelTest, RejectsMissingAndShortRangesButCountsDirtyOverlay) {
 	RelationshipColumnarCountKernel missingStorage(nullptr);
@@ -300,6 +343,41 @@ TEST_F(RelationshipColumnarCountKernelTest, CountsLargeTypedPropertyPredicatesWi
 	EXPECT_FALSE(snapshot.contains("relationship_count.property_owner_scan"));
 	EXPECT_FALSE(snapshot.contains("relationship_count.property_owner_type_filter"));
 	EXPECT_FALSE(snapshot.contains("relationship_count.load_edge_metadata"));
+}
+
+TEST_F(RelationshipColumnarCountKernelTest, CountsAllTypesByOwnerScanForPartialLargeRanges) {
+	int64_t maxEdgeId = 0;
+	int64_t expectedMatches = 0;
+	for (int i = 0; i < 1300; ++i) {
+		const bool matches = i % 7 == 0;
+		const Edge edge = addRelationshipWithProperties(
+				i % 2 == 0 ? followsType : likesType,
+				{{"weight", PropertyValue(matches ? int64_t{7} : int64_t{3})}});
+		maxEdgeId = edge.getId();
+		if (edge.getId() >= 2 && matches) {
+			++expectedMatches;
+		}
+	}
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+
+	RelationshipColumnarCountKernel kernel(dm);
+	RelationshipColumnarCountRequest countRequest;
+	countRequest.beginId = 2;
+	countRequest.endId = maxEdgeId;
+	countRequest.typeId = 0;
+	countRequest.propertyPredicates = {{"weight", PropertyValue(int64_t{7})}};
+
+	graph::debug::PerfTrace::setEnabled(true);
+	graph::debug::PerfTrace::reset();
+	const auto result = kernel.count(countRequest);
+	const auto snapshot = graph::debug::PerfTrace::snapshotAndReset();
+
+	ASSERT_TRUE(result.has_value());
+	EXPECT_EQ(result->count, expectedMatches);
+	EXPECT_EQ(result->propertyCandidates, static_cast<size_t>(expectedMatches));
+	EXPECT_TRUE(snapshot.contains("relationship_count.property_owner_scan"));
+	EXPECT_FALSE(snapshot.contains("relationship_count.property_owner_type_filter"));
 }
 
 TEST_F(RelationshipColumnarCountKernelTest, TypedOwnerScanFiltersLargeFallbackCandidatesByRelationshipType) {

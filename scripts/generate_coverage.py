@@ -28,6 +28,7 @@ IGNORE_PATTERNS = [
     "antlr4",
     "helpers/internal",  # Internal implementation files (tested through integration tests)
     "debug/",  # Debug visualization utilities (not unit-testable)
+    "apps/compare_benchmark",  # Benchmark harness entrypoint, not a unit-tested engine module
     "Terminal.cpp", # OS-level terminal wrapper (untestable without real PTY)
     "src/cli/Repl.cpp" # Top-level REPL entrypoint (blocks on stdin)
 ]
@@ -170,7 +171,9 @@ def apply_source_exclusions(file_coverage, source_path):
     excluded_lines = excluded_source_lines(source_path)
     summary = file_coverage["summary"]
     if not excluded_lines:
-        return {key: _normalize_metric(value) for key, value in summary.items()}
+        metrics = {key: _normalize_metric(value) for key, value in summary.items()}
+        metrics["branches"] = _adjust_branches(file_coverage.get("branches", []), summary["branches"], set())
+        return metrics
     return {
         "lines": _adjust_lines(file_coverage["segments"], summary["lines"], excluded_lines),
         "regions": _adjust_regions(file_coverage["segments"], summary["regions"], excluded_lines),
@@ -182,8 +185,8 @@ def apply_source_exclusions(file_coverage, source_path):
 def _adjust_lines(segments, raw, excluded_lines):
     executable = set()
     covered = set()
-    for line, _col, count, has_count, _is_region_entry, _is_gap in segments:
-        if has_count:
+    for line, _col, count, has_count, _is_region_entry, is_gap in segments:
+        if has_count and not is_gap:
             executable.add(line)
             if count > 0:
                 covered.add(line)
@@ -203,20 +206,18 @@ def _adjust_regions(segments, raw, excluded_lines):
 
 
 def _adjust_branches(branches, raw, excluded_lines):
-    removed_count = 0
-    removed_covered = 0
+    # llvm-cov reports branch counters per template instantiation. For header-heavy
+    # code this makes a single source branch look uncovered when one instantiation
+    # is not exercised even if the same source branch is covered elsewhere. Report
+    # source-level branch coverage by aggregating counters at each source location.
+    sites = {}
     for line_start, _col_start, line_end, _col_end, true_count, false_count, *_rest in branches:
-        if not _branch_intersects_excluded_lines(line_start, line_end, excluded_lines):
+        if _branch_intersects_excluded_lines(line_start, line_end, excluded_lines):
             continue
-        removed_count += 2
-        if true_count > 0:
-            removed_covered += 1
-        if false_count > 0:
-            removed_covered += 1
-    adjusted_count = max(0, raw["count"] - removed_count)
-    adjusted_notcovered = max(0, raw["notcovered"] - (removed_count - removed_covered))
-    adjusted_notcovered = min(adjusted_notcovered, adjusted_count)
-    return _metric_with_notcovered(adjusted_count, adjusted_notcovered)
+        key = (line_start, _col_start, line_end, _col_end)
+        covered_true, covered_false = sites.get(key, (False, False))
+        sites[key] = (covered_true or true_count > 0, covered_false or false_count > 0)
+    return _metric(2 * len(sites), sum(int(t) + int(f) for t, f in sites.values()))
 
 
 def _branch_intersects_excluded_lines(line_start, line_end, excluded_lines):

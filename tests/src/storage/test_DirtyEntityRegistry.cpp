@@ -891,3 +891,58 @@ TYPED_TEST(DirtyEntityRegistryTypedTest, VisitInfosPreservesOrderAcrossActiveFlu
 	EXPECT_EQ(changeTypes[0], EntityChangeType::CHANGE_MODIFIED);
 	EXPECT_EQ(changeTypes[1], EntityChangeType::CHANGE_ADDED);
 }
+
+TYPED_TEST(DirtyEntityRegistryTypedTest, BatchUpsertIgnoresEmptyZeroIdAndOutOfRangeRows) {
+	std::vector<TypeParam> emptyEntities;
+	this->registry.upsertBatch(emptyEntities, EntityChangeType::CHANGE_ADDED);
+	EXPECT_EQ(this->registry.size(), 0UL);
+
+	TypeParam zeroIdEntity;
+	zeroIdEntity.setId(0);
+	TypeParam persistedEntity;
+	persistedEntity.setId(41);
+	std::vector<TypeParam> entities{zeroIdEntity, persistedEntity};
+	this->registry.upsertBatch(entities, EntityChangeType::CHANGE_ADDED);
+
+	EXPECT_EQ(this->registry.size(), 1UL);
+	EXPECT_FALSE(this->registry.contains(0));
+	EXPECT_TRUE(this->registry.contains(41));
+
+	const std::vector<size_t> emptySelection;
+	this->registry.upsertBatchSelected(entities, emptySelection, EntityChangeType::CHANGE_MODIFIED);
+	EXPECT_EQ(this->registry.getInfo(41)->changeType, EntityChangeType::CHANGE_ADDED);
+
+	const std::vector<size_t> selection{0, 1, 7};
+	this->registry.upsertBatchSelected(entities, selection, EntityChangeType::CHANGE_MODIFIED);
+	EXPECT_EQ(this->registry.size(), 1UL);
+	EXPECT_EQ(this->registry.getInfo(41)->changeType, EntityChangeType::CHANGE_MODIFIED);
+}
+
+TYPED_TEST(DirtyEntityRegistryTypedTest, FlushingOnlyVisitorsAndChangeTypePredicatesAreObservable) {
+	this->registry.upsert(this->makeInfo(1, EntityChangeType::CHANGE_ADDED));
+	this->registry.upsert(this->makeInfo(2, EntityChangeType::CHANGE_DELETED));
+	this->registry.createFlushSnapshot();
+
+	const std::array<int64_t, 3> ids{1, 2, 3};
+	std::vector<EntityChangeType> observedTypes;
+	std::vector<bool> found;
+	this->registry.visitInfos(std::span<const int64_t>(ids), [&](int64_t, const DirtyEntityInfo<TypeParam> *info) {
+		found.push_back(info != nullptr);
+		if (info) {
+			observedTypes.push_back(info->changeType);
+		}
+	});
+
+	EXPECT_EQ(found, (std::vector<bool>{true, true, false}));
+	ASSERT_EQ(observedTypes.size(), 2UL);
+	EXPECT_EQ(observedTypes[0], EntityChangeType::CHANGE_ADDED);
+	EXPECT_EQ(observedTypes[1], EntityChangeType::CHANGE_DELETED);
+
+	constexpr std::array deletedOnly{EntityChangeType::CHANGE_DELETED};
+	constexpr std::array modifiedOnly{EntityChangeType::CHANGE_MODIFIED};
+	EXPECT_TRUE(this->registry.hasDirtyInfoOfTypes(deletedOnly));
+	EXPECT_FALSE(this->registry.hasDirtyInfoOfTypes(modifiedOnly));
+
+	this->registry.upsert(this->makeInfo(2, EntityChangeType::CHANGE_MODIFIED));
+	EXPECT_TRUE(this->registry.hasDirtyInfoOfTypes(modifiedOnly));
+}

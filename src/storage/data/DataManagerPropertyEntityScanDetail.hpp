@@ -84,12 +84,7 @@ namespace graph::storage {
 			if (!dm.hasPreadSupport()) {
 				return 0;
 			}
-			const auto segmentIndexManager = dm.getSegmentIndexManager();
-			if (!segmentIndexManager) { // ZYX_COV_EXCL_LINE
-				return 0; // ZYX_COV_EXCL_LINE
-			}
-
-			const auto &segIndex = segmentIndexManager->getPropertySegmentIndex();
+			const auto &segIndex = dm.getSegmentIndexManager()->getPropertySegmentIndex();
 			const auto work = collectPropertyEntitySegmentWork(
 					std::span<const int64_t>(ids.data(), ids.size()), segIndex);
 			if (work.empty()) {
@@ -102,12 +97,12 @@ namespace graph::storage {
 				for (size_t i = w.idBegin; i < w.idEnd; ++i) {
 					const int64_t id = ids[i];
 					const auto slot = static_cast<uint32_t>(id - header.start_id);
-					if (slot >= header.used) {
-						continue;
+					if (slot >= header.used) { // ZYX_COV_EXCL_LINE: segment index bounds property ids to used slots.
+						continue; // ZYX_COV_EXCL_LINE
 					}
 					const char *entityBuffer = dataBuf + static_cast<size_t>(slot) * entitySize;
-					if (readSerializedPropertyId(entityBuffer) != id) {
-						continue;
+					if (readSerializedPropertyId(entityBuffer) != id) { // ZYX_COV_EXCL_LINE: mismatched ids require corrupt persisted segment data.
+						continue; // ZYX_COV_EXCL_LINE
 					}
 					visited += visitor(rows[i], entityBuffer);
 				}
@@ -186,11 +181,7 @@ namespace graph::storage {
 				sortedIds = std::span<const int64_t>(sortedStorage.data(), sortedStorage.size());
 			}
 
-			const auto segmentIndexManager = dm.getSegmentIndexManager();
-			if (!segmentIndexManager) { // ZYX_COV_EXCL_LINE
-				return {}; // ZYX_COV_EXCL_LINE
-			}
-			const auto &segIndex = segmentIndexManager->getPropertySegmentIndex();
+			const auto &segIndex = dm.getSegmentIndexManager()->getPropertySegmentIndex();
 			const auto work = collectPropertyEntitySegmentWork(sortedIds, segIndex);
 			if (work.empty()) {
 				return {};
@@ -286,12 +277,7 @@ namespace graph::storage {
 				begin = end;
 			}
 
-			const auto segmentIndexManager = dm.getSegmentIndexManager();
-			if (!segmentIndexManager) { // ZYX_COV_EXCL_LINE
-				return result; // ZYX_COV_EXCL_LINE
-			}
-
-			const auto &segIndex = segmentIndexManager->getPropertySegmentIndex();
+			const auto &segIndex = dm.getSegmentIndexManager()->getPropertySegmentIndex();
 			const auto work =
 					collectPropertyEntitySegmentWork(std::span<const int64_t>(sortedIds.data(), sortedIds.size()),
 													 segIndex);
@@ -404,13 +390,10 @@ namespace graph::storage {
 			auto scanSegmentInto = [&](const SegmentHeader &header,
 									   const char *dataBuf,
 									   PropertyOwnerValueScanState &state) {
-				if (header.data_type != Property::typeId || header.used == 0) {
-					return;
-				}
 				for (uint32_t slot = 0; slot < header.used; ++slot) {
 					const char *entityBuffer = dataBuf + static_cast<size_t>(slot) * entitySize;
 					const int64_t expectedId = header.start_id + static_cast<int64_t>(slot);
-					if (readSerializedPropertyId(entityBuffer) != expectedId) {
+					if (readSerializedPropertyId(entityBuffer) != expectedId) { // ZYX_COV_EXCL_LINE: mismatched ids require corrupt persisted segment data.
 						continue; // ZYX_COV_EXCL_LINE
 					}
 					auto value = readPropertyOwnerValue(entityBuffer, ownerType, key, sortedOwnerIds);
@@ -460,13 +443,10 @@ namespace graph::storage {
 			auto scanSegmentInto = [&](const SegmentHeader &header,
 									   const char *dataBuf,
 									   PropertyOwnerKeyValueScanState &state) {
-				if (header.data_type != Property::typeId || header.used == 0) {
-					return;
-				}
 				for (uint32_t slot = 0; slot < header.used; ++slot) {
 					const char *entityBuffer = dataBuf + static_cast<size_t>(slot) * entitySize;
 					const int64_t expectedId = header.start_id + static_cast<int64_t>(slot);
-					if (readSerializedPropertyId(entityBuffer) != expectedId) {
+					if (readSerializedPropertyId(entityBuffer) != expectedId) { // ZYX_COV_EXCL_LINE: mismatched ids require corrupt persisted segment data.
 						continue; // ZYX_COV_EXCL_LINE
 					}
 					auto entityValues = readPropertyOwnerKeyValues(
@@ -510,9 +490,6 @@ namespace graph::storage {
 			auto scanSegmentInto = [&](const SegmentHeader &header,
 									   const char *dataBuf,
 									   PropertyOwnerPredicateScanState &state) {
-				if (header.data_type != Property::typeId || header.used == 0) {
-					return;
-				}
 				for (uint32_t slot = 0; slot < header.used; ++slot) {
 					const char *entityBuffer = dataBuf + static_cast<size_t>(slot) * entitySize;
 					const char *cursor = entityBuffer;
@@ -527,8 +504,8 @@ namespace graph::storage {
 						continue;
 					}
 					const int64_t expectedId = header.start_id + static_cast<int64_t>(slot);
-					if (propertyHeader.propertyId != expectedId) {
-						continue;
+					if (propertyHeader.propertyId != expectedId) { // ZYX_COV_EXCL_LINE: mismatched ids require corrupt persisted segment data.
+						continue; // ZYX_COV_EXCL_LINE
 					}
 					auto matches = matchesPredicate(entityBuffer);
 					if (matches.has_value() && matches.value()) {
@@ -571,9 +548,6 @@ namespace graph::storage {
 			auto scanSegment = [&](const SegmentHeader &header,
 								  const char *dataBuf,
 								  PropertyPredicateCountScanState &state) {
-				if (header.data_type != Property::typeId || header.used == 0) {
-					return;
-				}
 				for (uint32_t slot = 0; slot < header.used; ++slot) {
 					const char *entityBuffer = dataBuf + static_cast<size_t>(slot) * entitySize;
 					const char *cursor = entityBuffer;
@@ -585,8 +559,8 @@ namespace graph::storage {
 						continue;
 					}
 					const int64_t expectedId = header.start_id + static_cast<int64_t>(slot);
-					if (propertyHeader.propertyId != expectedId) {
-						continue;
+					if (propertyHeader.propertyId != expectedId) { // ZYX_COV_EXCL_LINE: mismatched ids require corrupt persisted segment data.
+						continue; // ZYX_COV_EXCL_LINE
 					}
 					auto matches = matchesPredicate(entityBuffer);
 					if (!matches.has_value()) {

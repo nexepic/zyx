@@ -13,16 +13,16 @@
 #include "graph/utils/Serializer.hpp"
 
 namespace graph::storage {
-	namespace {
+	namespace property_serialized_value_reader_detail {
 		class membuf : public std::streambuf {
 		public:
 			membuf(char *base, size_t size) { this->setg(base, base, base + size); }
 			[[nodiscard]] size_t consumed() const { return static_cast<size_t>(this->gptr() - this->eback()); }
 		};
 
-		size_t remainingBytes(const char *cursor, const char *end) { return static_cast<size_t>(end - cursor); }
+		inline size_t remainingBytes(const char *cursor, const char *end) { return static_cast<size_t>(end - cursor); }
 
-		bool readRawBytes(const char *&cursor, const char *end, void *out, size_t size) {
+		inline bool readRawBytes(const char *&cursor, const char *end, void *out, size_t size) {
 			if (remainingBytes(cursor, end) < size) { // ZYX_COV_EXCL_LINE
 				return false; // ZYX_COV_EXCL_LINE
 			}
@@ -44,7 +44,7 @@ namespace graph::storage {
 			cursor += sizeof(T);
 		}
 
-		bool readString(const char *&cursor, const char *end, std::string &out) {
+		inline bool readString(const char *&cursor, const char *end, std::string &out) {
 			uint32_t size = 0;
 			if (!readPod(cursor, end, size) || remainingBytes(cursor, end) < size) { // ZYX_COV_EXCL_LINE
 				return false; // ZYX_COV_EXCL_LINE
@@ -67,7 +67,7 @@ namespace graph::storage {
 			uint32_t propertyCount = 0;
 		};
 
-		bool readPropertyRecordHeader(const char *&cursor, const char *end, PropertyRecordHeader &header) {
+		inline bool readPropertyRecordHeader(const char *&cursor, const char *end, PropertyRecordHeader &header) {
 			constexpr size_t headerBytes = sizeof(header.propertyId) + sizeof(header.entityId) +
 										   sizeof(header.entityType) + sizeof(header.active) +
 										   sizeof(header.propertyCount);
@@ -82,7 +82,7 @@ namespace graph::storage {
 			return true;
 		}
 
-		std::optional<PropertyRecordHeader> readActivePropertyRecordHeader(const char *&cursor, const char *end) {
+		inline std::optional<PropertyRecordHeader> readActivePropertyRecordHeader(const char *&cursor, const char *end) {
 			PropertyRecordHeader header;
 			if (!readPropertyRecordHeader(cursor, end, header)) { // ZYX_COV_EXCL_LINE
 				return std::nullopt; // ZYX_COV_EXCL_LINE
@@ -93,7 +93,7 @@ namespace graph::storage {
 			return header;
 		}
 
-		bool readStringView(const char *&cursor, const char *end, SerializedStringView &out) {
+		inline bool readStringView(const char *&cursor, const char *end, SerializedStringView &out) {
 			uint32_t size = 0;
 			if (!readPod(cursor, end, size) || remainingBytes(cursor, end) < size) { // ZYX_COV_EXCL_LINE
 				return false; // ZYX_COV_EXCL_LINE
@@ -103,12 +103,12 @@ namespace graph::storage {
 			return true;
 		}
 
-		bool stringViewEquals(const SerializedStringView &view, const std::string &value) {
+		inline bool stringViewEquals(const SerializedStringView &view, const std::string &value) {
 			return view.size == value.size() &&
 				   (view.size == 0 || std::memcmp(view.data, value.data(), view.size) == 0); // ZYX_COV_EXCL_LINE
 		}
 
-		bool skipBytes(const char *&cursor, const char *end, size_t size) {
+		inline bool skipBytes(const char *&cursor, const char *end, size_t size) {
 			if (remainingBytes(cursor, end) < size) { // ZYX_COV_EXCL_LINE
 				return false; // ZYX_COV_EXCL_LINE
 			}
@@ -116,12 +116,12 @@ namespace graph::storage {
 			return true;
 		}
 
-		bool skipString(const char *&cursor, const char *end) {
+		inline bool skipString(const char *&cursor, const char *end) {
 			uint32_t size = 0;
 			return readPod(cursor, end, size) && skipBytes(cursor, end, size); // ZYX_COV_EXCL_LINE
 		}
 
-		bool skipPropertyValue(const char *&cursor, const char *end) {
+		inline bool skipPropertyValue(const char *&cursor, const char *end) {
 			PropertyType type = PropertyType::UNKNOWN;
 			if (!readPod(cursor, end, type)) { // ZYX_COV_EXCL_LINE
 				return false; // ZYX_COV_EXCL_LINE
@@ -173,7 +173,7 @@ namespace graph::storage {
 			}
 		}
 
-		std::optional<PropertyValue> readSerializedPropertyValueFallback(const char *&cursor, const char *end) {
+		inline std::optional<PropertyValue> readSerializedPropertyValueFallback(const char *&cursor, const char *end) {
 			if (cursor > end) { // ZYX_COV_EXCL_LINE
 				return std::nullopt; // ZYX_COV_EXCL_LINE
 			}
@@ -192,7 +192,7 @@ namespace graph::storage {
 			}
 		}
 
-		std::optional<PropertyValue> readSerializedPropertyValue(const char *&cursor, const char *end) {
+		inline std::optional<PropertyValue> readSerializedPropertyValue(const char *&cursor, const char *end) {
 			const char *valueStart = cursor;
 			PropertyType type = PropertyType::UNKNOWN;
 			if (!readPod(cursor, end, type)) { // ZYX_COV_EXCL_LINE
@@ -262,7 +262,7 @@ namespace graph::storage {
 			}
 		}
 
-		[[maybe_unused]] std::optional<std::unordered_map<std::string, PropertyValue>>
+		[[maybe_unused]] inline std::optional<std::unordered_map<std::string, PropertyValue>>
 		readSelectedPropertyValues(const char *buf, const std::unordered_set<std::string> &requestedKeys) {
 			const char *cursor = buf;
 			const char *end = buf + Property::TOTAL_PROPERTY_SIZE;
@@ -293,5 +293,23 @@ namespace graph::storage {
 			return values;
 		}
 
-	} // namespace
+	} // namespace property_serialized_value_reader_detail
+
+	using property_serialized_value_reader_detail::readActivePropertyRecordHeader;
+	using property_serialized_value_reader_detail::readPod;
+	using property_serialized_value_reader_detail::readPropertyRecordHeader;
+	using property_serialized_value_reader_detail::readRawBytes;
+	using property_serialized_value_reader_detail::readSelectedPropertyValues;
+	using property_serialized_value_reader_detail::readSerializedPropertyValue;
+	using property_serialized_value_reader_detail::readSerializedPropertyValueFallback;
+	using property_serialized_value_reader_detail::readString;
+	using property_serialized_value_reader_detail::readStringView;
+	using property_serialized_value_reader_detail::readUncheckedPod;
+	using property_serialized_value_reader_detail::SerializedStringView;
+	using property_serialized_value_reader_detail::skipBytes;
+	using property_serialized_value_reader_detail::skipPropertyValue;
+	using property_serialized_value_reader_detail::skipString;
+	using property_serialized_value_reader_detail::stringViewEquals;
+	using property_serialized_value_reader_detail::PropertyRecordHeader;
+
 } // namespace graph::storage

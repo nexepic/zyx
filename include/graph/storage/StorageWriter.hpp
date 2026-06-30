@@ -158,11 +158,6 @@ namespace graph::storage {
 		void writeSegmentDataWithAccessor(uint64_t segmentOffset, size_t count, uint32_t baseUsed,
 										  EntityAt entityAt);
 
-		template<typename EntityType>
-		void updateBitmapForEntity(uint64_t segmentOffset, uint64_t entityId, bool isActive);
-
-		void updateSegmentBitmap(uint64_t segmentOffset, uint64_t startId, uint32_t count, bool isActive) const;
-
 		SegmentHeader readSegmentHeader(uint64_t segmentOffset) const;
 		void markTouchedSegment(uint64_t segmentOffset);
 

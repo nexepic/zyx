@@ -36,6 +36,9 @@ namespace graph::query::indexes {
 	class IndexManager;
 	class LabelIndex;
 	class PropertyIndex;
+	namespace testing {
+		class IndexBuilderAccess;
+	}
 
 	/**
 	 * @class IndexBuilder
@@ -102,6 +105,8 @@ namespace graph::query::indexes {
 		std::vector<std::pair<int64_t, int64_t>> getEdgeIdRanges() const;
 
 	private:
+		friend class testing::IndexBuilderAccess;
+
 		// --- Private Helper Methods ---
 
 		/**

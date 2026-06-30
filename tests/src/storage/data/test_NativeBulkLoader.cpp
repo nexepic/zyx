@@ -52,6 +52,8 @@ TEST_F(NativeBulkLoaderTest, LoadsColumnarNodesEdgesAndBuildsDeferredIndexes) {
 						   graph::PropertyValue(int64_t{30})}}};
 	const auto nodeIds = loader.addNodes("NativeBulkUser", nodeColumns.front().values.size(), nodeColumns);
 	ASSERT_EQ(nodeIds.size(), 3U);
+	const auto cachedTokenNodeIds = loader.addNodes("NativeBulkUser", 1, {{"id", {graph::PropertyValue("u4")}}});
+	ASSERT_EQ(cachedTokenNodeIds.size(), 1U);
 
 	std::vector<graph::storage::BulkPropertyColumn> edgeColumns{
 			{"weight", {graph::PropertyValue(int64_t{7}), graph::PropertyValue(int64_t{11})}}};
@@ -61,7 +63,7 @@ TEST_F(NativeBulkLoaderTest, LoadsColumnarNodesEdgesAndBuildsDeferredIndexes) {
 			std::vector<int64_t>{nodeIds[1], nodeIds[2]},
 			edgeColumns);
 	ASSERT_EQ(edgeIds.size(), 2U);
-	EXPECT_EQ(loader.stats().nodeRows, 3U);
+	EXPECT_EQ(loader.stats().nodeRows, 4U);
 	EXPECT_EQ(loader.stats().edgeRows, 2U);
 	loadTxn.commit();
 
@@ -119,6 +121,26 @@ TEST_F(NativeBulkLoaderTest, RejectsInvalidConstructionAndDeferredIndexRequests)
 	EXPECT_THROW(loader.deferNodePropertyIndexes("User", {""}), std::invalid_argument);
 	EXPECT_THROW(loader.deferEdgePropertyIndexes({""}), std::invalid_argument);
 	EXPECT_TRUE(loader.buildDeferredIndexes(*db.getQueryEngine()->getIndexManager()).empty());
+
+	db.close();
+}
+
+TEST_F(NativeBulkLoaderTest, KeepsDeferredIndexesWhenBuildReportsFailures) {
+	graph::Database db(dbPath.string());
+	db.open();
+	auto queryEngine = db.getQueryEngine();
+	ASSERT_NE(queryEngine, nullptr);
+	ASSERT_TRUE(queryEngine->getIndexManager()->createIndex("existing_user_id", "node", "User", "id"));
+
+	graph::storage::NativeBulkLoader loader(db.getStorage()->getDataManager());
+	loader.deferNodePropertyIndexes("User", {"id"});
+	const auto results = loader.buildDeferredIndexes(*queryEngine->getIndexManager());
+
+	ASSERT_EQ(results.size(), 1U);
+	EXPECT_FALSE(results.front().success);
+	EXPECT_EQ(results.front().reason, "property index already exists");
+	EXPECT_TRUE(loader.hasDeferredIndexes());
+	EXPECT_EQ(loader.stats().deferredIndexRequests, 1U);
 
 	db.close();
 }

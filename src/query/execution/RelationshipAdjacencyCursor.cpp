@@ -35,9 +35,7 @@ namespace graph::query::execution {
 			for (size_t i = 0; i < sampleCount; ++i) {
 				sampledEdges += traversal->countAdjacentEdgeRefs(sourceIds[i], options);
 			}
-			if (sampleCount != 0) {
-				estimatedItems = std::max(estimatedItems, (sampledEdges * sourceIds.size()) / sampleCount);
-			}
+			estimatedItems = std::max(estimatedItems, (sampledEdges * sourceIds.size()) / sampleCount);
 			return estimatedItems;
 		}
 
@@ -53,23 +51,13 @@ namespace graph::query::execution {
 	                                                         concurrent::ThreadPool *threadPool)
 		: dm_(std::move(dm)), threadPool_(threadPool) {}
 
-	bool RelationshipAdjacencyCursor::matchesTargetLabels(const Node &node, const RelationshipExpandConfig &config) const {
-		for (const int64_t labelId : config.targetLabelIds) {
-			if (labelId <= 0 || !node.hasLabelId(labelId)) {
-				return false;
+		bool RelationshipAdjacencyCursor::matchesTargetLabels(const Node &node, const RelationshipExpandConfig &config) const {
+			for (const int64_t labelId : config.targetLabelIds) {
+				if (!node.hasLabelId(labelId)) {
+					return false;
+				}
 			}
-		}
 		return true;
-	}
-
-	int64_t RelationshipAdjacencyCursor::targetForSource(const Edge &edge, int64_t sourceId, const std::string &direction) const {
-		if (direction == "in") {
-			return edge.getSourceNodeId();
-		}
-		if (direction == "both") {
-			return edge.getSourceNodeId() == sourceId ? edge.getTargetNodeId() : edge.getSourceNodeId();
-		}
-		return edge.getTargetNodeId();
 	}
 
 	int64_t RelationshipAdjacencyCursor::targetForSource(
@@ -116,38 +104,12 @@ namespace graph::query::execution {
 		return !requirements.needsTargetLabels || matchesTargetLabels(target, config);
 	}
 
-	std::optional<int64_t> RelationshipAdjacencyCursor::acceptedTargetForEdge(
-			const Edge &edge,
-			int64_t sourceId,
-			const RelationshipExpandConfig &config,
-			const RelationshipExpandRequirements &requirements) const {
-		if (requirements.needsEdgeActiveCheck && !edge.isActive()) {
-			return std::nullopt;
-		}
-		if (config.edgeTypeId != 0 && edge.getTypeId() != config.edgeTypeId) {
-			return std::nullopt;
-		}
-
-		const int64_t targetId = targetForSource(edge, sourceId, config.direction);
-		if (!acceptsTarget(targetId, config, requirements)) {
-			return std::nullopt;
-		}
-		return targetId;
-	}
-
 	std::optional<int64_t> RelationshipAdjacencyCursor::acceptedTargetForEdgeRef(
 			const traversal::RelationshipEdgeRef &edgeRef,
 			int64_t sourceId,
 			const RelationshipExpandConfig &config,
 			const RelationshipExpandRequirements &requirements) const {
-		if (requirements.needsEdgeActiveCheck && !edgeRef.active) {
-			return std::nullopt;
-		}
-		if (config.edgeTypeId != 0 && edgeRef.typeId != config.edgeTypeId) {
-			return std::nullopt;
-		}
-
-		const int64_t targetId = targetForSource(edgeRef, sourceId, config.direction);
+			const int64_t targetId = targetForSource(edgeRef, sourceId, config.direction);
 		if (!acceptsTarget(targetId, config, requirements)) {
 			return std::nullopt;
 		}

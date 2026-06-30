@@ -499,10 +499,6 @@ namespace graph::query::execution::operators {
 		}
 	}
 
-	bool NodeTopKScanOperator::comesBefore(const PropertyValue &left, const PropertyValue &right) const {
-		return comesBefore(TypedOrderKey::from(left), TypedOrderKey::from(right));
-	}
-
 	bool NodeTopKScanOperator::comesBefore(const TypedOrderKey &left, const TypedOrderKey &right) const {
 		const int comparison = left.compare(right);
 		if (comparison == 0) {

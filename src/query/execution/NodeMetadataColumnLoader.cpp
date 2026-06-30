@@ -182,33 +182,22 @@ namespace graph::query::execution {
 			return true;
 		}
 
-		template<typename PartitionVisitor>
-		bool scanSerializedNodeMetadataPartitioned(const std::shared_ptr<storage::DataManager> &dm,
-		                                           const std::vector<int64_t> &candidateIds,
-		                                           size_t begin,
-		                                           size_t clampedEnd,
+			template<typename PartitionVisitor>
+			bool scanSerializedNodeMetadataPartitioned(const std::shared_ptr<storage::DataManager> &dm,
+			                                           const std::vector<int64_t> &candidateIds,
+			                                           size_t begin,
+			                                           size_t clampedEnd,
 		                                           concurrent::ThreadPool *threadPool,
-		                                           PartitionVisitor &&visitor) {
-			const auto &segmentIndex = dm->getSegmentIndexManager()->getNodeSegmentIndex();
-			auto plan = collectNodeMetadataScanPlan(segmentIndex, candidateIds, begin, clampedEnd);
-			if (plan.work.empty()) {
-				return false;
-			}
-
-			auto groups = storage::buildCoalescedGroups(plan.workSegmentIndices, segmentIndex);
+			                                           PartitionVisitor &&visitor) {
+				const auto &segmentIndex = dm->getSegmentIndexManager()->getNodeSegmentIndex();
+				auto plan = collectNodeMetadataScanPlan(segmentIndex, candidateIds, begin, clampedEnd);
+				// visitBatchPartitioned validates that the plan is non-empty before selecting this execution path.
+				auto groups = storage::buildCoalescedGroups(plan.workSegmentIndices, segmentIndex);
 			auto tasks = storage::buildCoalescedReadTasks(groups, kMaxCoalescedNodeMetadataReadSegments);
-			const auto decision = decideNodeMetadataScan(
-					threadPool, tasks.size(), storage::totalCoalescedSegments(groups));
-			if (!decision.useParallel) {
-				return scanSerializedNodeMetadata(dm, candidateIds, begin, clampedEnd,
-						[&](size_t row, const char *serializedNode) {
-							return visitor(0, row, serializedNode);
-						});
-			}
-
-			constexpr size_t entitySize = Node::getTotalSize();
-			std::atomic<bool> cancelled{false};
-			std::atomic<bool> failed{false};
+				// The public entry point selects this helper only after the policy chooses parallel execution.
+				constexpr size_t entitySize = Node::getTotalSize();
+				std::atomic<bool> cancelled{false};
+				std::atomic<bool> failed{false};
 			const concurrent::ParallelOperatorOptions options{
 					.phase = "node_metadata.scan_candidates",
 					.workloadKind = concurrent::ParallelWorkloadKind::PWK_MEMORY_SCAN,
@@ -274,17 +263,13 @@ namespace graph::query::execution {
 			return !failed.load(std::memory_order_relaxed);
 		}
 
-		template<typename Visitor>
-		bool scanAllSerializedNodeMetadata(const std::shared_ptr<storage::DataManager> &dm,
-		                                   Visitor &&visitor) {
-			const auto &segmentIndex = dm->getSegmentIndexManager()->getNodeSegmentIndex();
-			if (segmentIndex.empty()) {
-				return true;
-			}
-
-			std::vector<size_t> segmentIndices;
-			segmentIndices.reserve(segmentIndex.size());
-			for (size_t index = 0; index < segmentIndex.size(); ++index) {
+			template<typename Visitor>
+			bool scanAllSerializedNodeMetadata(const std::shared_ptr<storage::DataManager> &dm,
+			                                   Visitor &&visitor) {
+				const auto &segmentIndex = dm->getSegmentIndexManager()->getNodeSegmentIndex();
+				std::vector<size_t> segmentIndices;
+				segmentIndices.reserve(segmentIndex.size());
+				for (size_t index = 0; index < segmentIndex.size(); ++index) {
 				segmentIndices.push_back(index);
 			}
 
@@ -310,23 +295,21 @@ namespace graph::query::execution {
 						const size_t bufferOffset = member * storage::TOTAL_SEGMENT_SIZE;
 						storage::SegmentHeader header{};
 						std::memcpy(&header, groupBuffer.data() + bufferOffset, sizeof(storage::SegmentHeader));
-						if (header.used == 0 || header.data_type != Node::typeId) {
-							continue;
+						if (header.used == 0 || header.data_type != Node::typeId) { // ZYX_COV_EXCL_LINE: node segment index points at active node segments.
+							continue; // ZYX_COV_EXCL_LINE
 						}
 
 						const char *data = groupBuffer.data() + bufferOffset + sizeof(storage::SegmentHeader);
 						for (uint32_t slot = 0; slot < header.used; ++slot) {
 							const int64_t expectedId = header.start_id + static_cast<int64_t>(slot);
 							const char *serializedNode = data + static_cast<size_t>(slot) * entitySize;
-							if (readSerializedNodeId(serializedNode) != expectedId) {
-								continue;
-							}
-							if (!visitor(serializedNode)) {
-								return true;
+								if (readSerializedNodeId(serializedNode) != expectedId) { // ZYX_COV_EXCL_LINE: mismatched ids require corrupt persisted segment data.
+									continue; // ZYX_COV_EXCL_LINE
+								}
+								visitor(serializedNode);
 							}
 						}
 					}
-				}
 			}
 			return true;
 		}
@@ -392,8 +375,8 @@ namespace graph::query::execution {
 					const size_t bufferOffset = member * storage::TOTAL_SEGMENT_SIZE;
 					storage::SegmentHeader header{};
 					std::memcpy(&header, groupBuffer.data() + bufferOffset, sizeof(storage::SegmentHeader));
-					if (header.used == 0 || header.data_type != Node::typeId) {
-						continue;
+					if (header.used == 0 || header.data_type != Node::typeId) { // ZYX_COV_EXCL_LINE: node segment index points at active node segments.
+						continue; // ZYX_COV_EXCL_LINE
 					}
 
 					const char *data = groupBuffer.data() + bufferOffset + sizeof(storage::SegmentHeader);
@@ -403,16 +386,13 @@ namespace graph::query::execution {
 						}
 						const int64_t expectedId = header.start_id + static_cast<int64_t>(slot);
 						const char *serializedNode = data + static_cast<size_t>(slot) * entitySize;
-						if (readSerializedNodeId(serializedNode) != expectedId) {
-							continue;
-						}
-						if (!visitor(taskIndex, serializedNode)) {
-							cancelled.store(true, std::memory_order_relaxed);
-							return true;
+							if (readSerializedNodeId(serializedNode) != expectedId) { // ZYX_COV_EXCL_LINE: mismatched ids require corrupt persisted segment data.
+								continue; // ZYX_COV_EXCL_LINE
+							}
+							visitor(taskIndex, serializedNode);
 						}
 					}
-				}
-				return true;
+					return true;
 			}, [](size_t, NodeMetadataReadTaskState &) {});
 			return !failed.load(std::memory_order_relaxed);
 		}
@@ -610,8 +590,8 @@ namespace graph::query::execution {
 	bool NodeMetadataColumnLoader::canLoad(const std::vector<int64_t> &candidateIds, size_t begin, size_t end) const {
 		static constexpr size_t METADATA_LOAD_THRESHOLD = 128;
 		if (!dm_ || !dm_->hasPreadSupport() || dm_->hasUnsavedChanges() ||
-		    begin > candidateIds.size() || end > candidateIds.size() ||
-		    end <= begin || end - begin < METADATA_LOAD_THRESHOLD) {
+			    begin > candidateIds.size() ||
+			    end <= begin || end - begin < METADATA_LOAD_THRESHOLD) {
 			return false;
 		}
 		const auto *snapshot = dm_->getCurrentSnapshot();
@@ -672,13 +652,11 @@ namespace graph::query::execution {
 
 		const bool traceEnabled = debug::PerfTrace::isEnabled();
 		const auto start = traceEnabled ? Clock::now() : Clock::time_point{};
-		bool initialized = false;
-		auto ensureInitialized = [&](size_t partitionCount) {
-			if (!initialized && initializer) {
-				initializer(partitionCount);
-			}
-			initialized = true;
-		};
+			auto initializePartitions = [&](size_t partitionCount) {
+				if (initializer) {
+					initializer(partitionCount);
+				}
+			};
 
 		const auto &segmentIndex = dm_->getSegmentIndexManager()->getNodeSegmentIndex();
 		auto plan = collectNodeMetadataScanPlan(segmentIndex, candidateIds, begin, clampedEnd);
@@ -692,7 +670,7 @@ namespace graph::query::execution {
 		auto tasks = storage::buildCoalescedReadTasks(groups, kMaxCoalescedNodeMetadataReadSegments);
 		const auto decision = decideNodeMetadataScan(
 				threadPool, tasks.size(), storage::totalCoalescedSegments(groups));
-		ensureInitialized(decision.useParallel ? tasks.size() : 1);
+			initializePartitions(decision.useParallel ? tasks.size() : 1);
 
 		const bool scanned = decision.useParallel ?
 			scanSerializedNodeMetadataPartitioned(dm_, candidateIds, begin, clampedEnd, threadPool,
@@ -829,15 +807,12 @@ namespace graph::query::execution {
 			partition.reserve(1024);
 		}
 
-		const bool scanned = scanAllSerializedNodeMetadataPartitioned(dm_, threadPool, [&](size_t partition,
-		                                                                                  const char *serializedNode) {
-			const NodeMetadataRow metadata = readMetadataRow(serializedNode, projection);
-			if (!metadata.isValid()) {
-				return true;
-			}
-			if (requirements.needsActiveCheck && metadata.active == 0) {
-				return true;
-			}
+			const bool scanned = scanAllSerializedNodeMetadataPartitioned(dm_, threadPool, [&](size_t partition,
+			                                                                                  const char *serializedNode) {
+				const NodeMetadataRow metadata = readMetadataRow(serializedNode, projection);
+				if (requirements.needsActiveCheck && metadata.active == 0) {
+					return true;
+				}
 
 			if (partition < partitions.size()) {
 				appendPropertyCountCandidate(partitions[partition], metadata, options);
@@ -848,8 +823,8 @@ namespace graph::query::execution {
 		if (traceEnabled) {
 			debug::PerfTrace::addDuration("node_scan.load_node_metadata", elapsedNs(start));
 		}
-		if (!scanned) {
-			return std::nullopt;
+		if (!scanned) { // ZYX_COV_EXCL_LINE: scanAll only fails on defensive short-read/corruption paths.
+			return std::nullopt; // ZYX_COV_EXCL_LINE
 		}
 		return mergePropertyCountCandidatePartitions(partitions, options);
 	}

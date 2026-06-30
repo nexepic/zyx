@@ -502,9 +502,6 @@ namespace graph::storage {
 	}
 
 	void StorageWriter::markTouchedSegmentWithCrc(uint64_t segmentOffset, uint32_t crc) {
-		if (segmentOffset == 0) { // ZYX_COV_EXCL_LINE: private write path only passes allocated segment offsets.
-			return;
-		}
 		std::lock_guard lock(pendingSegmentStateMutex_);
 		touchedSegments_.insert(segmentOffset);
 		pendingSegmentCrcs_[segmentOffset] = crc;
@@ -568,9 +565,6 @@ namespace graph::storage {
 
 	template<typename T>
 	void StorageWriter::saveDataRefs(std::vector<const T *> &data, uint64_t &segmentHead, uint32_t itemsPerSegment) {
-		if (data.empty())
-			return;
-
 		if (segmentHead == 0) {
 			writeNewSlotEntityRefs(data, segmentHead, itemsPerSegment);
 			return;
@@ -694,7 +688,7 @@ namespace graph::storage {
 				currentSegmentOffset = tail;
 			} else {
 				// Fallback: walk the chain (should not happen after init)
-				while (true) {
+				for (;;) {
 					currentSegHeader = readSegmentHeader(currentSegmentOffset);
 					if (currentSegHeader.next_segment_offset == 0)
 						break;
@@ -777,9 +771,6 @@ namespace graph::storage {
 	template<typename T>
 	void StorageWriter::writeSegmentDataRefs(uint64_t segmentOffset, std::span<const T *const> data,
 											 uint32_t baseUsed) {
-		if (data.empty()) {
-			return;
-		}
 		writeSegmentDataWithAccessor<T>(
 				segmentOffset, data.size(), baseUsed, [&data](size_t index) -> const T & { return *data[index]; });
 	}
@@ -841,7 +832,7 @@ namespace graph::storage {
 		markTouchedSegment(segmentOffset);
 		invalidatePendingSegmentCrc(segmentOffset);
 
-		updateBitmapForEntity<T>(segmentOffset, id, entity.isActive());
+		tracker_->setEntityActive(segmentOffset, entityIndex, entity.isActive());
 	}
 
 	// ── deleteEntityOnDisk ──────────────────────────────────────────────────
@@ -861,41 +852,6 @@ namespace graph::storage {
 		}
 	}
 
-	// ── updateBitmapForEntity ───────────────────────────────────────────────
-
-	template<typename EntityType>
-	void StorageWriter::updateBitmapForEntity(uint64_t segmentOffset, uint64_t entityId, bool isActive) {
-		if (segmentOffset == 0) {
-			return;
-		}
-
-		SegmentHeader header = tracker_->getSegmentHeader(segmentOffset);
-		uint64_t entityIndex = entityId - header.start_id;
-		if (entityIndex >= header.capacity) {
-			throw std::runtime_error("Entity index out of bounds for segment bitmap update");
-		}
-
-		tracker_->setEntityActive(segmentOffset, entityIndex, isActive);
-	}
-
-	// ── updateSegmentBitmap ─────────────────────────────────────────────────
-
-	void StorageWriter::updateSegmentBitmap(uint64_t segmentOffset, uint64_t startId, uint32_t count,
-											bool isActive) const {
-		if (segmentOffset == 0 || count == 0) {
-			return;
-		}
-
-		SegmentHeader header = tracker_->getSegmentHeader(segmentOffset);
-
-		uint64_t startIndex = startId - header.start_id;
-		if (startIndex + count > header.capacity) {
-			throw std::runtime_error("Entity range out of bounds for segment bitmap batch update");
-		}
-
-		tracker_->setEntityActiveRange(segmentOffset, static_cast<uint32_t>(startIndex), count, isActive);
-	}
-
 	// ── readSegmentHeader ───────────────────────────────────────────────────
 
 	SegmentHeader StorageWriter::readSegmentHeader(uint64_t segmentOffset) const {
@@ -903,10 +859,8 @@ namespace graph::storage {
 	}
 
 	void StorageWriter::markTouchedSegment(uint64_t segmentOffset) {
-		if (segmentOffset != 0) {
-			std::lock_guard lock(pendingSegmentStateMutex_);
-			touchedSegments_.insert(segmentOffset);
-		}
+		std::lock_guard lock(pendingSegmentStateMutex_);
+		touchedSegments_.insert(segmentOffset);
 	}
 
 	// ── Template instantiations ─────────────────────────────────────────────
@@ -948,8 +902,5 @@ namespace graph::storage {
 	template void StorageWriter::saveModifiedAndDeleted<Blob>(const std::vector<Blob> &, const std::vector<Blob> &);
 	template void StorageWriter::saveModifiedAndDeleted<Index>(const std::vector<Index> &, const std::vector<Index> &);
 	template void StorageWriter::saveModifiedAndDeleted<State>(const std::vector<State> &, const std::vector<State> &);
-
-	template void StorageWriter::updateBitmapForEntity<Node>(uint64_t, uint64_t, bool);
-	template void StorageWriter::updateBitmapForEntity<Edge>(uint64_t, uint64_t, bool);
 
 } // namespace graph::storage

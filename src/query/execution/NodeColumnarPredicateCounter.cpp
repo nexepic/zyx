@@ -9,48 +9,12 @@
 #include "graph/query/execution/NodeMetadataColumnLoader.hpp"
 #include "graph/query/execution/NodeScanRequirementUtils.hpp"
 #include "graph/query/execution/PropertyPredicateScanKernel.hpp"
+#include "src/query/execution/NodeColumnarPredicateCounterDetail.hpp"
 
 namespace graph::query::execution {
 namespace {
 	using Clock = std::chrono::steady_clock;
-
-	uint64_t elapsedNs(Clock::time_point start) {
-		return static_cast<uint64_t>(
-			std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count());
-	}
-
-	void appendRowsMissingFromBulkMatch(const std::vector<size_t> &externalRows,
-	                                  std::vector<size_t> loadedRows,
-	                                  std::vector<size_t> &fallbackRows) {
-		if (loadedRows.size() == externalRows.size()) {
-			return;
-		}
-		std::sort(loadedRows.begin(), loadedRows.end());
-		loadedRows.erase(std::unique(loadedRows.begin(), loadedRows.end()), loadedRows.end());
-		for (const size_t row : externalRows) {
-			if (!std::binary_search(loadedRows.begin(), loadedRows.end(), row)) {
-				fallbackRows.push_back(row);
-			}
-		}
-	}
-
-	bool isCompleteFullNodeCandidateSet(const storage::DataManager &dm,
-	                                    const std::vector<int64_t> &candidateIds,
-	                                    const NodeScanConfig &config,
-	                                    const NodeScanRequirements &requirements) {
-		if (config.type != ScanType::FULL_SCAN || !config.labels.empty() || requirements.needsLabels ||
-		    candidateIds.empty()) {
-			return false;
-		}
-		const auto allocator = dm.getIdAllocator(EntityType::Node);
-		if (!allocator) {
-			return false;
-		}
-		const int64_t maxId = allocator->getCurrentMaxId();
-		return maxId > 0 && candidateIds.front() == 1 && candidateIds.back() == maxId &&
-		       candidateIds.size() == static_cast<size_t>(maxId) &&
-		       std::is_sorted(candidateIds.begin(), candidateIds.end());
-	}
+	namespace detail = node_columnar_predicate_counter_detail;
 
 } // namespace
 
@@ -80,14 +44,12 @@ namespace {
 		static constexpr size_t kColumnarCountBatchSize = 65536;
 		std::vector<size_t> propertyFallbackRows;
 
-		const bool completeFullScan = isCompleteFullNodeCandidateSet(*dm_, candidateIds, config, requirements);
+		const bool completeFullScan = detail::isCompleteFullNodeCandidateSet(*dm_, candidateIds, config, requirements);
 		if (completeFullScan) {
 			if (auto ownerCount = scanKernel.countAllOwnerProperties(EntityType::Node)) {
 				result.count = static_cast<int64_t>(ownerCount->matchedCount);
 				result.available = true;
-				if (traceEnabled) {
-					debug::PerfTrace::addDuration("node_scan.predicate_count", elapsedNs(traceStart));
-				}
+				detail::recordPredicateCountTrace(traceEnabled, traceStart);
 				return result;
 			}
 		}
@@ -109,7 +71,7 @@ namespace {
 						auto predicateResult = scanKernel.matchPropertyEntities(
 								detailedCandidates->propertyEntityIds, detailedCandidates->propertyRows,
 								detailedCandidates->propertyRowCount(), matchOptions);
-						appendRowsMissingFromBulkMatch(
+						detail::appendRowsMissingFromBulkMatch(
 								detailedCandidates->propertyRows, std::move(predicateResult.loadedRows), propertyFallbackRows);
 						predicateCount.loadedCount = predicateResult.loadedCount;
 						predicateCount.matchedCount = predicateResult.matchedCount;
@@ -118,36 +80,17 @@ namespace {
 					result.count += static_cast<int64_t>(predicateCount.matchedCount);
 				}
 				if (!propertyFallbackRows.empty()) {
-					std::sort(propertyFallbackRows.begin(), propertyFallbackRows.end());
-					propertyFallbackRows.erase(std::unique(propertyFallbackRows.begin(), propertyFallbackRows.end()),
-					                           propertyFallbackRows.end());
-					for (const size_t row : propertyFallbackRows) {
-						if (row >= fullScanCandidates->propertyNodeIds.size() ||
-							row >= fullScanCandidates->propertyEntityIds.size()) { // ZYX_COV_EXCL_LINE
-							continue;
-						}
-						Node node;
-						auto &metadata = node.getMutableMetadata();
-						metadata.id = fullScanCandidates->propertyNodeIds[row];
-						metadata.propertyEntityId = fullScanCandidates->propertyEntityIds[row];
-						metadata.propertyStorageType = static_cast<uint32_t>(PropertyStorageType::PROPERTY_ENTITY);
-						metadata.isActive = true;
-						if (scanKernel.matchesMap(dm_->getNodePropertiesDirect(node))) {
-							++result.count;
-						}
-					}
+					result.count += static_cast<int64_t>(detail::countPropertyEntityFallbackMatches(
+							*dm_, scanKernel, std::move(propertyFallbackRows),
+							fullScanCandidates->propertyNodeIds,
+							fullScanCandidates->propertyEntityIds));
 				}
 				if (!fullScanCandidates->blobRefs.empty()) {
-					for (const auto &fallback : fullScanCandidates->blobRefs) {
-						if (scanKernel.matchesMap(dm_->getNodePropertiesDirect(fallback.toNode()))) {
-							++result.count;
-						}
-					}
+					result.count += static_cast<int64_t>(
+							detail::countBlobFallbackMatches(*dm_, scanKernel, fullScanCandidates->blobRefs));
 				}
 				result.available = true;
-				if (traceEnabled) {
-					debug::PerfTrace::addDuration("node_scan.predicate_count", elapsedNs(traceStart));
-				}
+				detail::recordPredicateCountTrace(traceEnabled, traceStart);
 				return result;
 			}
 		}
@@ -178,7 +121,7 @@ namespace {
 					auto predicateResult = scanKernel.matchPropertyEntities(
 							detailedCandidates->propertyEntityIds, detailedCandidates->propertyRows,
 							detailedCandidates->propertyRowCount(), matchOptions);
-					appendRowsMissingFromBulkMatch(
+					detail::appendRowsMissingFromBulkMatch(
 						detailedCandidates->propertyRows, std::move(predicateResult.loadedRows), propertyFallbackRows);
 					predicateCount.loadedCount = predicateResult.loadedCount;
 					predicateCount.matchedCount = predicateResult.matchedCount;
@@ -188,40 +131,22 @@ namespace {
 			}
 
 			if (!propertyFallbackRows.empty()) {
-				std::sort(propertyFallbackRows.begin(), propertyFallbackRows.end());
-				propertyFallbackRows.erase(std::unique(propertyFallbackRows.begin(), propertyFallbackRows.end()),
-				                           propertyFallbackRows.end());
-				for (const size_t row : propertyFallbackRows) {
-					if (row >= candidates->propertyNodeIds.size() || row >= candidates->propertyEntityIds.size()) { // ZYX_COV_EXCL_LINE
-						continue;
-					}
-					Node node;
-					auto &metadata = node.getMutableMetadata();
-					metadata.id = candidates->propertyNodeIds[row];
-					metadata.propertyEntityId = candidates->propertyEntityIds[row];
-					metadata.propertyStorageType = static_cast<uint32_t>(PropertyStorageType::PROPERTY_ENTITY);
-					metadata.isActive = true;
-					if (scanKernel.matchesMap(dm_->getNodePropertiesDirect(node))) {
-						++result.count;
-					}
-				}
+				result.count += static_cast<int64_t>(detail::countPropertyEntityFallbackMatches(
+						*dm_, scanKernel, std::move(propertyFallbackRows),
+						candidates->propertyNodeIds,
+						candidates->propertyEntityIds));
 			}
 
 			if (!candidates->blobRefs.empty()) {
-				for (const auto &fallback : candidates->blobRefs) {
-					if (scanKernel.matchesMap(dm_->getNodePropertiesDirect(fallback.toNode()))) {
-						++result.count;
-					}
-				}
+				result.count += static_cast<int64_t>(
+						detail::countBlobFallbackMatches(*dm_, scanKernel, candidates->blobRefs));
 			}
 
 			begin = end;
 		}
 
 		result.available = true;
-		if (traceEnabled) {
-			debug::PerfTrace::addDuration("node_scan.predicate_count", elapsedNs(traceStart));
-		}
+		detail::recordPredicateCountTrace(traceEnabled, traceStart);
 		return result;
 	}
 

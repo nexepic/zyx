@@ -90,6 +90,17 @@ TEST_F(RelationshipCandidateSourceTest, NullManagersAndMissingIndexesReturnUnava
 	EXPECT_FALSE(source.collect(unconstrained).available);
 }
 
+TEST_F(RelationshipCandidateSourceTest, UnknownPlannedSourceTypeIsRejected) {
+	DirectRelationshipCountConfig config;
+	config.candidateSource.type = static_cast<DirectRelationshipCandidateSourceType>(127);
+
+	RelationshipCandidateSource source(dm, im);
+	const auto candidates = source.collect(config);
+
+	EXPECT_FALSE(candidates.available);
+	EXPECT_TRUE(candidates.ids.empty());
+}
+
 TEST_F(RelationshipCandidateSourceTest, TypeIndexProvidesActiveTypeSatisfiedCandidates) {
 	const int64_t a = addUser();
 	const int64_t b = addUser();

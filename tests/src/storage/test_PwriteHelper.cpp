@@ -16,6 +16,27 @@
 
 using namespace graph::storage;
 
+namespace {
+
+#if defined(_MSC_VER)
+#define ZYX_TEST_NOINLINE __declspec(noinline)
+#else
+#define ZYX_TEST_NOINLINE __attribute__((noinline))
+#endif
+
+	ZYX_TEST_NOINLINE const void *runtimeMaybeNullBuffer(bool makeNull) {
+		static const char data[] = "runtime";
+		return makeNull ? nullptr : static_cast<const void *>(data);
+	}
+
+	ZYX_TEST_NOINLINE uint64_t *runtimeMaybeNullSizeOut(bool makeNull, uint64_t &value) {
+		return makeNull ? nullptr : &value;
+	}
+
+#undef ZYX_TEST_NOINLINE
+
+} // namespace
+
 class PwriteHelperTest : public ::testing::Test {
 protected:
 	std::string testFile_ = "test_pwrite_data.bin";
@@ -203,6 +224,20 @@ TEST_F(PwriteHelperTest, PwriteZeroCount) {
 	const char data[] = "test";
 	auto result = portable_pwrite(fd, data, 0, 0);
 	EXPECT_EQ(result, -1);
+
+	portable_close_rw(fd);
+}
+
+TEST_F(PwriteHelperTest, RuntimeInvalidArgumentsAreRejected) {
+	file_handle_t fd = portable_open_rw(testFile_.c_str());
+	ASSERT_NE(fd, INVALID_FILE_HANDLE);
+
+	EXPECT_EQ(portable_pwrite(fd, runtimeMaybeNullBuffer(true), 7, 0), -1);
+
+	uint64_t size = 0;
+	EXPECT_EQ(portable_file_size(fd, runtimeMaybeNullSizeOut(true, size)), -1);
+	EXPECT_EQ(portable_file_size(fd, runtimeMaybeNullSizeOut(false, size)), 0);
+	EXPECT_EQ(size, testSize_);
 
 	portable_close_rw(fd);
 }

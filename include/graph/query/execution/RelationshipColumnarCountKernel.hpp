@@ -39,10 +39,6 @@ namespace graph::query::execution {
 		count(const RelationshipColumnarCountRequest &request) const;
 
 	private:
-		[[nodiscard]] bool propertyMapMatches(
-			const std::unordered_map<std::string, PropertyValue> &properties,
-			const PropertyPredicateScanKernel &scanKernel) const;
-
 		std::shared_ptr<storage::DataManager> dm_;
 		concurrent::ThreadPool *pool_ = nullptr;
 	};

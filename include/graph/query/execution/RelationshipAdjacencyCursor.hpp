@@ -37,18 +37,12 @@ namespace graph::query::execution {
 		[[nodiscard]] bool acceptsTarget(int64_t targetId,
 		                                 const RelationshipExpandConfig &config,
 		                                 const RelationshipExpandRequirements &requirements) const;
-		[[nodiscard]] std::optional<int64_t> acceptedTargetForEdge(
-				const Edge &edge,
-				int64_t sourceId,
-				const RelationshipExpandConfig &config,
-				const RelationshipExpandRequirements &requirements) const;
 		[[nodiscard]] std::optional<int64_t> acceptedTargetForEdgeRef(
 				const traversal::RelationshipEdgeRef &edgeRef,
 				int64_t sourceId,
 				const RelationshipExpandConfig &config,
 				const RelationshipExpandRequirements &requirements) const;
 		[[nodiscard]] bool matchesTargetLabels(const Node &node, const RelationshipExpandConfig &config) const;
-		[[nodiscard]] int64_t targetForSource(const Edge &edge, int64_t sourceId, const std::string &direction) const;
 		[[nodiscard]] int64_t targetForSource(const traversal::RelationshipEdgeRef &edgeRef,
 		                                      int64_t sourceId,
 		                                      const std::string &direction) const;

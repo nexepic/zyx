@@ -125,14 +125,6 @@ std::vector<ProjectItem> toPhysicalProjectItems(const std::vector<LogicalProject
 	return items;
 }
 
-const expressions::VariableReferenceExpression *asPropertyAccess(
-		const std::shared_ptr<expressions::Expression> &expression) {
-	if (!expression || expression->getExpressionType() != expressions::ExpressionType::PROPERTY_ACCESS) { // ZYX_COV_EXCL_LINE
-		return nullptr;
-	}
-	return static_cast<const expressions::VariableReferenceExpression *>(expression.get());
-}
-
 	std::vector<PhysicalOperator::ExplainAttribute> accessPathAttributes(
 			const planner::AccessPathSummary &summary,
 			const std::string &prefix = "access_path") {
@@ -238,13 +230,6 @@ std::vector<PhysicalOperator::ExplainAttribute> relationshipAccessPathAttributes
 			}
 		}
 	throw std::logic_error("unhandled physical scan lowering kind");
-}
-
-void addRequiredProperty(NodeScanRequirements &requirements, const std::string &property) {
-	if (std::find(requirements.requiredProperties.begin(), requirements.requiredProperties.end(), property) ==
-	    requirements.requiredProperties.end()) {
-		requirements.requiredProperties.push_back(property);
-	}
 }
 
 } // namespace
@@ -430,54 +415,6 @@ std::unique_ptr<PhysicalOperator> PhysicalPlanConverter::convertProject(
 	}
 
 	auto children = project->getChildren();
-	if (!project->isDistinct() && !children.empty() && children[0] && // ZYX_COV_EXCL_LINE
-	    children[0]->getType() == LogicalOpType::LOP_LIMIT) {
-		const auto *limit = static_cast<const LogicalLimit *>(children[0]);
-		auto limitChildren = limit->getChildren();
-		if (!limitChildren.empty() && limitChildren[0] && // ZYX_COV_EXCL_LINE
-		    limitChildren[0]->getType() == LogicalOpType::LOP_SORT) {
-			const auto *sort = static_cast<const LogicalSort *>(limitChildren[0]);
-			auto sortChildren = sort->getChildren();
-			if (!sortChildren.empty() && sortChildren[0] && // ZYX_COV_EXCL_LINE
-			    sortChildren[0]->getType() == LogicalOpType::LOP_NODE_SCAN) { // ZYX_COV_EXCL_LINE
-				const auto *scan = static_cast<const LogicalNodeScan *>(sortChildren[0]);
-				NodeScanRequirements requirements;
-				requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
-				const auto &scanVariable = scan->getVariable();
-				bool canUseSelectedScan = scan->getPropertyPredicates().empty() && // ZYX_COV_EXCL_LINE
-				                          scan->getRangePredicates().empty() &&
-				                          !scan->getCompositeEquality().has_value(); // ZYX_COV_EXCL_LINE
-
-				for (const auto &item : project->getItems()) {
-					const auto *property = asPropertyAccess(item.expression);
-					if (!property || property->getVariableName() != scanVariable) { // ZYX_COV_EXCL_LINE
-						canUseSelectedScan = false;
-						break;
-					}
-					addRequiredProperty(requirements, property->getPropertyName());
-				}
-				for (const auto &item : sort->getSortItems()) {
-					const auto *property = asPropertyAccess(item.expression);
-					if (!property || property->getVariableName() != scanVariable) { // ZYX_COV_EXCL_LINE
-						canUseSelectedScan = false;
-						break;
-					}
-					addRequiredProperty(requirements, property->getPropertyName());
-				}
-
-				if (canUseSelectedScan) {
-					NodeScanConfig config = planner::chooseNodeAccessPathDecision(*scan, im_).config();
-					auto scanPhys = std::make_unique<NodeScanOperator>(
-						dm_, im_, std::move(config), std::move(requirements));
-					auto sortPhys = std::make_unique<SortOperator>(
-						std::move(scanPhys), toPhysicalSortItems(sort->getSortItems()), limit->getLimit());
-					return std::make_unique<ProjectOperator>(
-						std::move(sortPhys), toPhysicalProjectItems(project->getItems()), false, dm_.get());
-				}
-			}
-		}
-	}
-
 	auto childPhys = convert(children[0]);
 	auto items = toPhysicalProjectItems(project->getItems());
 	return std::make_unique<ProjectOperator>(std::move(childPhys), std::move(items),

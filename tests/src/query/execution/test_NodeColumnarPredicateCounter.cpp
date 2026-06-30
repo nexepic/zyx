@@ -2,6 +2,7 @@
 
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
@@ -12,6 +13,8 @@
 #include "graph/core/Database.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/execution/NodeColumnarPredicateCounter.hpp"
+#include "graph/query/execution/PropertyPredicateScanKernel.hpp"
+#include "src/query/execution/NodeColumnarPredicateCounterDetail.hpp"
 
 namespace fs = std::filesystem;
 
@@ -107,6 +110,148 @@ VectorizedPropertyPredicate predicate(std::string key, VectorPredicateOp op, Pro
 
 } // namespace
 
+TEST(NodeColumnarPredicateCounterDetailTest, AppendsRowsMissingFromBulkMatch) {
+	std::vector<size_t> fallbackRows{9};
+	node_columnar_predicate_counter_detail::appendRowsMissingFromBulkMatch(
+			{0, 1, 2, 2, 4},
+			{2, 1, 1},
+			fallbackRows);
+
+	EXPECT_EQ(fallbackRows, (std::vector<size_t>{9, 0, 4}));
+}
+
+TEST(NodeColumnarPredicateCounterDetailTest, BuildsFallbackNodesOnlyForValidRows) {
+	EXPECT_EQ(node_columnar_predicate_counter_detail::normalizeFallbackRows({3, 1, 3, 2}),
+	          (std::vector<size_t>{1, 2, 3}));
+
+	const std::vector<int64_t> nodeIds{11, 22};
+	const std::vector<int64_t> propertyEntityIds{101};
+	auto node = node_columnar_predicate_counter_detail::makePropertyEntityFallbackNode(
+			nodeIds, propertyEntityIds, 0);
+	ASSERT_TRUE(node.has_value());
+	EXPECT_EQ(node->getId(), 11);
+	EXPECT_EQ(node->getPropertyEntityId(), 101);
+	EXPECT_EQ(node->getPropertyStorageType(), PropertyStorageType::PROPERTY_ENTITY);
+	EXPECT_TRUE(node->isActive());
+
+	EXPECT_FALSE(node_columnar_predicate_counter_detail::makePropertyEntityFallbackNode(
+			nodeIds, propertyEntityIds, 1).has_value());
+	EXPECT_FALSE(node_columnar_predicate_counter_detail::makePropertyEntityFallbackNode(
+			nodeIds, propertyEntityIds, 2).has_value());
+}
+
+TEST(NodeColumnarPredicateCounterDetailTest, RecordsPredicateCountTraceOnlyWhenEnabled) {
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setEnabled(true);
+	const auto start = std::chrono::steady_clock::now();
+	node_columnar_predicate_counter_detail::recordPredicateCountTrace(false, start);
+	EXPECT_TRUE(graph::debug::PerfTrace::snapshotAndReset().empty());
+
+	node_columnar_predicate_counter_detail::recordPredicateCountTrace(true, start);
+	const auto snapshot = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setEnabled(false);
+	ASSERT_TRUE(snapshot.contains("node_scan.predicate_count"));
+	EXPECT_EQ(snapshot.at("node_scan.predicate_count").calls, 1U);
+}
+
+TEST_F(NodeColumnarPredicateCounterTest, DetailRecognizesCompleteFullNodeCandidateSets) {
+	auto ids = addScoreOnlyNodes(8);
+	db_->getStorage()->flush();
+	dm_->clearCache();
+
+	NodeScanConfig config;
+	auto requirements = countRequirements(false);
+	EXPECT_TRUE(node_columnar_predicate_counter_detail::isCompleteFullNodeCandidateSet(
+			*dm_, ids, config, requirements));
+
+	config.type = ScanType::RANGE_SCAN;
+	EXPECT_FALSE(node_columnar_predicate_counter_detail::isCompleteFullNodeCandidateSet(
+			*dm_, ids, config, requirements));
+	config.type = ScanType::FULL_SCAN;
+
+	config.labels = {"User"};
+	EXPECT_FALSE(node_columnar_predicate_counter_detail::isCompleteFullNodeCandidateSet(
+			*dm_, ids, config, requirements));
+	config.labels.clear();
+
+	requirements.needsLabels = true;
+	EXPECT_FALSE(node_columnar_predicate_counter_detail::isCompleteFullNodeCandidateSet(
+			*dm_, ids, config, requirements));
+	requirements.needsLabels = false;
+
+	auto missingTail = ids;
+	missingTail.pop_back();
+	EXPECT_FALSE(node_columnar_predicate_counter_detail::isCompleteFullNodeCandidateSet(
+			*dm_, missingTail, config, requirements));
+
+	auto missingHead = ids;
+	missingHead.erase(missingHead.begin());
+	EXPECT_FALSE(node_columnar_predicate_counter_detail::isCompleteFullNodeCandidateSet(
+			*dm_, missingHead, config, requirements));
+
+	auto duplicateTail = ids;
+	duplicateTail.push_back(ids.back());
+	EXPECT_FALSE(node_columnar_predicate_counter_detail::isCompleteFullNodeCandidateSet(
+			*dm_, duplicateTail, config, requirements));
+
+	auto unordered = ids;
+	std::swap(unordered[1], unordered[2]);
+	EXPECT_FALSE(node_columnar_predicate_counter_detail::isCompleteFullNodeCandidateSet(
+			*dm_, unordered, config, requirements));
+}
+
+TEST_F(NodeColumnarPredicateCounterTest, DetailCountsMaterializedFallbackMatches) {
+	auto ids = addScoreOnlyNodes(3);
+	db_->getStorage()->flush();
+	dm_->clearCache();
+
+	std::vector<int64_t> propertyEntityIds;
+	propertyEntityIds.reserve(ids.size());
+	for (const int64_t id : ids) {
+		propertyEntityIds.push_back(dm_->getNode(id).getPropertyEntityId());
+	}
+	PropertyPredicateScanKernel kernel(
+			dm_,
+			{predicate("score", VectorPredicateOp::VPO_GE, PropertyValue(static_cast<int64_t>(10)))});
+
+	const auto matches = node_columnar_predicate_counter_detail::countPropertyEntityFallbackMatches(
+			*dm_, kernel, {0, 1, 1, 2, 99}, ids, propertyEntityIds);
+	EXPECT_EQ(matches, 2U);
+
+	const auto invalidOnly = node_columnar_predicate_counter_detail::countPropertyEntityFallbackMatches(
+			*dm_, kernel, {5}, ids, propertyEntityIds);
+	EXPECT_EQ(invalidOnly, 0U);
+}
+
+TEST_F(NodeColumnarPredicateCounterTest, DetailCountsBlobFallbackMatches) {
+	std::vector<NodePropertyCandidateRef> refs;
+	const std::string matchingPayload(5000, 'm');
+	const std::string otherPayload(5000, 'x');
+	for (const auto &payload : {matchingPayload, otherPayload}) {
+		Node node(0, userLabel_);
+		dm_->addNode(node);
+		dm_->addNodeProperties(node.getId(), {{"payload", PropertyValue(payload)}});
+		const Node stored = dm_->getNode(node.getId());
+		refs.push_back({
+				stored.getId(),
+				stored.getPropertyEntityId(),
+				stored.getPropertyStorageType(),
+		});
+	}
+	db_->getStorage()->flush();
+	dm_->clearCache();
+
+	PropertyPredicateScanKernel kernel(
+			dm_,
+			{predicate("payload", VectorPredicateOp::VPO_EQ, PropertyValue(matchingPayload))});
+	EXPECT_EQ(node_columnar_predicate_counter_detail::countBlobFallbackMatches(*dm_, kernel, refs), 1U);
+
+	PropertyPredicateScanKernel missing(
+			dm_,
+			{predicate("payload", VectorPredicateOp::VPO_EQ, PropertyValue(std::string(5000, 'z')))});
+	EXPECT_EQ(node_columnar_predicate_counter_detail::countBlobFallbackMatches(*dm_, missing, refs), 0U);
+}
+
 TEST_F(NodeColumnarPredicateCounterTest, CountsRangePredicateWithoutMaterializingNodes) {
 	auto ids = addNodes(160);
 	db_->getStorage()->flush();
@@ -142,6 +287,44 @@ TEST_F(NodeColumnarPredicateCounterTest, FullScanOwnerShortcutRequiresCompleteCa
 
 	EXPECT_TRUE(result.available);
 	EXPECT_EQ(result.count, 130);
+}
+
+TEST_F(NodeColumnarPredicateCounterTest, ReportsUnavailableForUnorderedCandidateIds) {
+	auto ids = addNodes(160);
+	ASSERT_GT(ids.size(), 3U);
+	std::swap(ids[1], ids[2]);
+	db_->getStorage()->flush();
+	dm_->clearCache();
+
+	NodeColumnarPredicateCounter counter(dm_);
+	NodeScanConfig config;
+	const auto result = counter.count(
+		ids,
+		candidateSet(ids),
+		config,
+		countRequirements(false),
+		{predicate("score", VectorPredicateOp::VPO_GE, PropertyValue(static_cast<int64_t>(0)))});
+
+	EXPECT_FALSE(result.available);
+	EXPECT_EQ(result.count, 0);
+}
+
+TEST_F(NodeColumnarPredicateCounterTest, LabelMaterializationRequirementUsesCandidateScanWithoutLabelFilter) {
+	auto ids = addNodes(160);
+	db_->getStorage()->flush();
+	dm_->clearCache();
+
+	NodeColumnarPredicateCounter counter(dm_);
+	NodeScanConfig config;
+	const auto result = counter.count(
+		ids,
+		candidateSet(ids),
+		config,
+		countRequirements(true),
+		{predicate("country", VectorPredicateOp::VPO_EQ, PropertyValue("CN"))});
+
+	EXPECT_TRUE(result.available);
+	EXPECT_EQ(result.count, 54);
 }
 
 TEST_F(NodeColumnarPredicateCounterTest, FullScanUsesCompleteOwnerPropertyShortcutForScalarProperties) {
@@ -424,6 +607,8 @@ TEST_F(NodeColumnarPredicateCounterTest, ReportsUnavailableForUnsafeMetadataLoad
 	EXPECT_FALSE(counter.count({}, candidateSet({}), config, countRequirements(false),
 	                           {predicate("score", VectorPredicateOp::VPO_GE, PropertyValue(static_cast<int64_t>(0)))}).available);
 	EXPECT_FALSE(counter.count({1}, candidateSet({1}), config, countRequirements(false), {}).available);
+	EXPECT_FALSE(counter.count({1}, candidateSet({1}), config, countRequirements(false),
+	                           {predicate("score", VectorPredicateOp::VPO_GE, PropertyValue(static_cast<int64_t>(0)))}).available);
 
 	auto ids = addNodes(160);
 	const auto result = counter.count(

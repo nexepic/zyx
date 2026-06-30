@@ -149,6 +149,117 @@ TEST_F(NodeScanOperatorParallelTest, ParallelFullScanExecutesParallelPathAndPerf
 	EXPECT_TRUE(trace.contains("scan.parallel.phase3"));
 }
 
+TEST_F(NodeScanOperatorParallelTest, RuntimeLimitStopsBeforeSequentialScanExhaustsCandidates) {
+	static constexpr size_t kNodeCount = 300;
+	(void)addNodes("LimitedPerson", kNodeCount);
+
+	NodeScanConfig cfg;
+	cfg.type = ScanType::FULL_SCAN;
+	cfg.variable = "n";
+
+	NodeScanOperator op(dm, im, cfg);
+	op.setOutputLimitHint(1);
+
+	op.open();
+	auto batch = op.next();
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(batch->size(), 1U);
+	EXPECT_FALSE(op.next().has_value());
+	op.close();
+}
+
+TEST_F(NodeScanOperatorParallelTest, ColumnarScanTrimsRuntimeLimitWithoutMaterializingFullNodes) {
+	static constexpr size_t kNodeCount = 300;
+	(void)addNodes("ColumnarLimitedPerson", kNodeCount);
+
+	NodeScanConfig cfg;
+	cfg.type = ScanType::FULL_SCAN;
+	cfg.variable = "n";
+
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_ID_ONLY;
+	requirements.needsLabels = false;
+
+	NodeScanOperator op(dm, im, cfg, requirements);
+	op.setOutputLimitHint(1);
+
+	op.open();
+	auto batch = op.next();
+	ASSERT_TRUE(batch.has_value());
+	ASSERT_EQ(batch->size(), 1U);
+	EXPECT_TRUE((*batch)[0].getNode("n").has_value());
+	EXPECT_FALSE(op.next().has_value());
+	op.close();
+}
+
+TEST_F(NodeScanOperatorParallelTest, ColumnarScanHonorsLargeRuntimeLimitAndRecordsTrace) {
+	static constexpr size_t kNodeCount = 10;
+	(void)addNodes("ColumnarTracePerson", kNodeCount);
+
+	NodeScanConfig cfg;
+	cfg.type = ScanType::FULL_SCAN;
+	cfg.variable = "n";
+
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_ID_ONLY;
+	requirements.needsLabels = false;
+
+	NodeScanOperator op(dm, im, cfg, requirements);
+	op.setOutputLimitHint(100);
+
+	debug::PerfTrace::reset();
+	debug::PerfTrace::setEnabled(true);
+	op.open();
+	auto batch = op.next();
+	debug::PerfTrace::setEnabled(false);
+	auto trace = debug::PerfTrace::snapshotAndReset();
+
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(batch->size(), kNodeCount);
+	EXPECT_FALSE(op.next().has_value());
+	EXPECT_TRUE(trace.contains("scan.sequential"));
+	op.close();
+}
+
+TEST_F(NodeScanOperatorParallelTest, ParallelCandidateWindowStillRespectsSmallRuntimeLimit) {
+	static constexpr size_t kNodeCount = 4200;
+	(void)addNodes("ParallelLimitedPerson", kNodeCount);
+
+	NodeScanConfig cfg;
+	cfg.type = ScanType::FULL_SCAN;
+	cfg.variable = "n";
+
+	NodeScanOperator op(dm, im, cfg);
+	op.setOutputLimitHint(1);
+	concurrent::ThreadPool pool(4);
+	op.setThreadPool(&pool);
+
+	op.open();
+	auto batch = op.next();
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(batch->size(), 1U);
+	EXPECT_FALSE(op.next().has_value());
+	op.close();
+}
+
+TEST_F(NodeScanOperatorParallelTest, SingleThreadPoolUsesSequentialScanPath) {
+	(void)addNodes("SingleThreadPerson", 4);
+
+	NodeScanConfig cfg;
+	cfg.type = ScanType::FULL_SCAN;
+	cfg.variable = "n";
+
+	NodeScanOperator op(dm, im, cfg);
+	concurrent::ThreadPool pool(1);
+	op.setThreadPool(&pool);
+
+	op.open();
+	auto batch = op.next();
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(batch->size(), 4U);
+	op.close();
+}
+
 TEST_F(NodeScanOperatorParallelTest, ParallelLabelScanUsesCandidateSetPath) {
 	static constexpr size_t kMatchCount = 4200;
 	static constexpr size_t kOtherCount = 120;

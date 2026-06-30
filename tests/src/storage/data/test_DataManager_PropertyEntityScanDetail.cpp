@@ -15,9 +15,15 @@
 
 #include <gtest/gtest.h>
 
+#include <fstream>
+#include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <vector>
+
+#include "DataManagerTestFixture.hpp"
+#include "graph/storage/SegmentTracker.hpp"
 
 namespace graph::storage {
 namespace {
@@ -38,12 +44,13 @@ PredicateSpecExpectation predicateSpec(const std::string &key, const PropertyVal
 	return spec;
 }
 
-std::string makeRawPropertyRecord(const std::vector<std::pair<std::string, std::string>> &entries) {
+std::string makeRawPropertyRecordForOwner(int64_t propertyId, int64_t ownerId, uint32_t entityType, bool active,
+										  const std::vector<std::pair<std::string, std::string>> &entries) {
 	std::ostringstream stream(std::ios::binary);
-	utils::Serializer::writePOD(stream, int64_t{99});
-	utils::Serializer::writePOD(stream, int64_t{7});
-	utils::Serializer::writePOD(stream, Node::typeId);
-	utils::Serializer::writePOD(stream, true);
+	utils::Serializer::writePOD(stream, propertyId);
+	utils::Serializer::writePOD(stream, ownerId);
+	utils::Serializer::writePOD(stream, entityType);
+	utils::Serializer::writePOD(stream, active);
 	utils::Serializer::writePOD(stream, static_cast<uint32_t>(entries.size()));
 	for (const auto &[key, valueBytes] : entries) {
 		utils::Serializer::serialize<std::string>(stream, key);
@@ -54,10 +61,48 @@ std::string makeRawPropertyRecord(const std::vector<std::pair<std::string, std::
 	return record;
 }
 
+std::string makeRawPropertyRecord(const std::vector<std::pair<std::string, std::string>> &entries) {
+	return makeRawPropertyRecordForOwner(99, 7, Node::typeId, true, entries);
+}
+
+std::shared_ptr<DataManager> makeDataManagerWithoutPositionalRead() {
+	auto file = std::make_shared<std::fstream>();
+	static auto header = std::make_shared<FileHeader>();
+	auto tracker = std::make_shared<SegmentTracker>(nullptr, *header);
+	IDAllocators allocators;
+	return std::make_shared<DataManager>(file, 0, *header, std::move(allocators), tracker, nullptr);
+}
+
+struct AlwaysTruePropertyEntityMatcher {
+	std::optional<bool> operator()(const char *) const { return true; }
+};
+
+std::string makeRawPropertyRecordWithMalformedKey() {
+	std::ostringstream stream(std::ios::binary);
+	utils::Serializer::writePOD(stream, int64_t{99});
+	utils::Serializer::writePOD(stream, int64_t{7});
+	utils::Serializer::writePOD(stream, Node::typeId);
+	utils::Serializer::writePOD(stream, true);
+	utils::Serializer::writePOD(stream, uint32_t{1});
+	utils::Serializer::writePOD(stream, uint32_t{Property::TOTAL_PROPERTY_SIZE});
+	std::string record = stream.str();
+	record.resize(Property::TOTAL_PROPERTY_SIZE, '\0');
+	return record;
+}
+
 std::string malformedStringValueBytes() {
 	std::ostringstream stream(std::ios::binary);
 	utils::Serializer::writePOD(stream, PropertyType::STRING);
 	utils::Serializer::writePOD(stream, uint32_t{Property::TOTAL_PROPERTY_SIZE});
+	return stream.str();
+}
+
+std::string truncatedDurationValueBytes(size_t componentCount) {
+	std::ostringstream stream(std::ios::binary);
+	utils::Serializer::writePOD(stream, PropertyType::DURATION);
+	for (size_t i = 0; i < componentCount; ++i) {
+		utils::Serializer::writePOD(stream, int64_t{static_cast<int64_t>(i + 1)});
+	}
 	return stream.str();
 }
 
@@ -98,6 +143,88 @@ TEST(PropertyEntityScanDetailTest, ReadsAndSkipsSerializedScalarAndFallbackValue
 	const char *skipEnd = skipCursor + listBytes.size();
 	EXPECT_TRUE(skipPropertyValue(skipCursor, skipEnd));
 	EXPECT_EQ(skipCursor, skipEnd);
+}
+
+TEST(PropertyEntityScanDetailTest, DirectOrderedRowsValidationRejectsUnsafeInputs) {
+	EXPECT_FALSE(canUseDirectOrderedRows({}, {}, 1));
+	EXPECT_FALSE(canUseDirectOrderedRows({1}, {}, 1));
+	EXPECT_FALSE(canUseDirectOrderedRows({1}, {0}, 0));
+	EXPECT_FALSE(canUseDirectOrderedRows({0}, {0}, 1));
+	EXPECT_FALSE(canUseDirectOrderedRows({1}, {1}, 1));
+	EXPECT_FALSE(canUseDirectOrderedRows({2, 1}, {0, 1}, 2));
+	EXPECT_FALSE(canUseDirectOrderedRows({1, 2}, {1, 1}, 3));
+	EXPECT_TRUE(canUseDirectOrderedRows({1, 2, 4}, {0, 1, 3}, 4));
+}
+
+TEST(PropertyEntityScanDetailTest, PersistedScanHelpersReturnEmptyWithoutPositionalReads) {
+	auto dm = makeDataManagerWithoutPositionalRead();
+	ASSERT_FALSE(dm->hasPreadSupport());
+
+	size_t directVisits = visitPropertyEntityRowsDirect(*dm, {1}, {0}, [](size_t, const char *) { return size_t{1}; });
+	EXPECT_EQ(directVisits, 0U);
+
+	auto count = countPropertyEntityMatches(*dm, {1}, nullptr, AlwaysTruePropertyEntityMatcher{});
+	EXPECT_EQ(count.loadedCount, 0U);
+	EXPECT_EQ(count.matchedCount, 0U);
+
+	auto match = matchPropertyEntityRows(*dm, {1}, {0}, 1, nullptr, PropertyEntityPredicateMatchOptions{},
+										 AlwaysTruePropertyEntityMatcher{});
+	EXPECT_EQ(match.loadedCount, 0U);
+	EXPECT_TRUE(match.loadedRows.empty());
+
+	const std::vector<int64_t> owners{1};
+	EXPECT_TRUE(collectPropertyValuesByOwnerType(*dm, EntityType::Node, "rank",
+												 std::span<const int64_t>(owners.data(), owners.size()), nullptr)
+						.empty());
+	EXPECT_TRUE(collectPropertyValuesByOwnerType(*dm, EntityType::Node, std::vector<std::string>{"rank"},
+												 std::span<const int64_t>(owners.data(), owners.size()), nullptr)
+						.empty());
+
+	PropertyEntityOwnerPredicateScanOptions options;
+	options.beginOwnerId = 1;
+	options.endOwnerId = 10;
+	EXPECT_TRUE(collectPropertyPredicateOwnerIdsByOwnerType(*dm, EntityType::Node, options, nullptr,
+															AlwaysTruePropertyEntityMatcher{})
+						.empty());
+
+	auto ownerCount = countPropertyEntityMatchesByOwnerType(*dm, EntityType::Node, nullptr,
+														   AlwaysTruePropertyEntityMatcher{});
+	EXPECT_EQ(ownerCount.loadedCount, 0U);
+	EXPECT_EQ(ownerCount.matchedCount, 0U);
+}
+
+TEST_F(DataManagerTest, PersistedScanHelpersShareMatcherCoverageAcrossPositiveReads) {
+	Node node = createTestNode(dataManager, "DetailPositiveScanNode");
+	dataManager->addNode(node);
+	dataManager->addNodeProperties(node.getId(), {{"rank", PropertyValue(int64_t{42})}});
+	const Node stored = dataManager->getNode(node.getId());
+	ASSERT_TRUE(stored.hasPropertyEntity());
+	simulateSave();
+	dataManager->clearCache();
+
+	const auto matcher = AlwaysTruePropertyEntityMatcher{};
+	const int64_t propertyId = stored.getPropertyEntityId();
+	auto count = countPropertyEntityMatches(*dataManager, {propertyId}, nullptr, matcher);
+	EXPECT_EQ(count.loadedCount, 1U);
+	EXPECT_EQ(count.matchedCount, 1U);
+
+	auto match = matchPropertyEntityRows(
+			*dataManager, {propertyId}, {0}, 1, nullptr, PropertyEntityPredicateMatchOptions{}, matcher);
+	EXPECT_EQ(match.loadedCount, 1U);
+	EXPECT_EQ(match.matchedCount, 1U);
+	EXPECT_EQ(match.loadedRows, (std::vector<size_t>{0U}));
+	EXPECT_EQ(match.matchedRows, (std::vector<size_t>{0U}));
+
+	PropertyEntityOwnerPredicateScanOptions options;
+	options.beginOwnerId = node.getId();
+	options.endOwnerId = node.getId();
+	const auto owners =
+			collectPropertyPredicateOwnerIdsByOwnerType(*dataManager, EntityType::Node, options, nullptr, matcher);
+	EXPECT_EQ(owners, (std::vector<int64_t>{node.getId()}));
+
+	auto ownerCount = countPropertyEntityMatchesByOwnerType(*dataManager, EntityType::Node, nullptr, matcher);
+	EXPECT_EQ(ownerCount.loadedCount, 1U);
+	EXPECT_EQ(ownerCount.matchedCount, 1U);
 }
 
 TEST(PropertyEntityScanDetailTest, SkipsAllInlineScalarValueEncodings) {
@@ -690,8 +817,10 @@ TEST(PropertyEntityScanDetailTest, PredicateReadersHandleMissingKeysAndMismatche
 	const PropertyValue wrongRank(int64_t{7});
 	PredicateExpectation expectedRank{&rankKey, compilePropertyValue(rankValue)};
 	PredicateExpectation expectedMissing{&missingKey, compilePropertyValue(rankValue)};
+	PredicateExpectation expectedWrongRank{&rankKey, compilePropertyValue(wrongRank)};
 	EXPECT_TRUE(readPropertyEntityPredicateMatch(raw, std::vector<PredicateExpectation>{expectedRank}).value());
 	EXPECT_FALSE(readPropertyEntityPredicateMatch(raw, std::vector<PredicateExpectation>{expectedMissing}).value());
+	EXPECT_FALSE(readPropertyEntityPredicateMatch(raw, std::vector<PredicateExpectation>{expectedWrongRank}).value());
 
 	SinglePredicateExpectation wrongSingle{&rankKey, compilePropertyValue(wrongRank)};
 	EXPECT_FALSE(readPropertyEntitySinglePredicateMatch(raw, wrongSingle).value());
@@ -721,6 +850,12 @@ TEST(PropertyEntityScanDetailTest, PredicateReadersHandleMissingKeysAndMismatche
 	auto failingGroups = groupPredicateSpecExpectations(failingSpecs);
 	EXPECT_FALSE(readPropertyEntityPredicateMatch(raw, failingGroups, failingSpecs.size()).value());
 	EXPECT_FALSE(readPropertyEntitySinglePredicateSpecMatch(raw, failingSpecs.front()).value());
+	std::vector<PredicateSpecExpectation> missingSpec{
+			predicateSpec(missingKey, lower, PropertyEntityPredicateOp::PEP_GE)};
+	auto missingGroups = groupPredicateSpecExpectations(missingSpec);
+	EXPECT_FALSE(readPropertyEntityPredicateMatch(raw, missingGroups, missingSpec.size()).value());
+	std::string invalidRecord(Property::TOTAL_PROPERTY_SIZE, '\0');
+	EXPECT_FALSE(readPropertyEntitySinglePredicateSpecMatch(invalidRecord.data(), missingSpec.front()).has_value());
 
 	const std::string boolBytes = serializePropertyValueBytes(PropertyValue(true));
 	const char *boolCursor = boolBytes.data();
@@ -790,6 +925,290 @@ TEST(PropertyEntityScanDetailTest, PredicateReadersStopAfterAllRequestedPredicat
 	};
 	const auto groups = groupPredicateSpecExpectations(specPredicates);
 	EXPECT_TRUE(readPropertyEntityPredicateMatch(raw.data(), groups, specPredicates.size()).value());
+}
+
+TEST(PropertyEntityScanDetailTest, ColumnVisitorsAndOwnerReadersHandleMalformedRecords) {
+	const std::string rankKey = "rank";
+	const std::string nameKey = "name";
+	const PropertyValue rankValue(int64_t{42});
+	const PropertyValue nameValue("milo");
+	const auto raw = makeRawPropertyRecordForOwner(
+			99, 11, Node::typeId, true,
+			{{rankKey, serializePropertyValueBytes(rankValue)}, {nameKey, serializePropertyValueBytes(nameValue)}});
+
+	std::vector<PropertyEntityRowRef> refs{{99, 0}};
+	std::vector<std::optional<PropertyValue>> rankColumn(2);
+	std::unordered_map<std::string, size_t> requested{{rankKey, 0}};
+	std::vector<std::vector<std::optional<PropertyValue>> *> columns{&rankColumn};
+	EXPECT_TRUE(readSelectedPropertyColumns(raw.data(), requested, columns, refs, 0, refs.size()));
+	ASSERT_TRUE(rankColumn[0].has_value());
+	EXPECT_EQ(rankColumn[0].value(), rankValue);
+	EXPECT_TRUE(readSelectedPropertyColumnsOne(raw.data(), requested, columns, 1));
+	ASSERT_TRUE(rankColumn[1].has_value());
+	EXPECT_EQ(rankColumn[1].value(), rankValue);
+
+	size_t valueVisitCount = 0;
+	EXPECT_EQ(visitSelectedPropertyValueOne(raw.data(), nameKey, 1,
+											[&](size_t row, const PropertyValue &value) {
+												++valueVisitCount;
+												EXPECT_EQ(row, 1U);
+												EXPECT_EQ(value, nameValue);
+											})
+					  .value(),
+			  1U);
+	EXPECT_EQ(valueVisitCount, 1U);
+	EXPECT_EQ(visitSelectedPropertyValueOne(raw.data(), "missing", 1, [](size_t, const PropertyValue &) {}).value(),
+			  0U);
+
+	size_t scalarVisitCount = 0;
+	EXPECT_EQ(visitSelectedPropertyScalarValueOne(raw.data(), rankKey, 1,
+												  [&](size_t row, const PropertyEntityScalarValue &value) {
+													  ++scalarVisitCount;
+													  EXPECT_EQ(row, 1U);
+													  EXPECT_EQ(value.type, PropertyType::INTEGER);
+													  EXPECT_EQ(value.intValue, 42);
+												  })
+					  .value(),
+			  1U);
+	EXPECT_EQ(scalarVisitCount, 1U);
+	EXPECT_EQ(visitSelectedPropertyScalarValueOne(raw.data(), "missing", 1,
+												  [](size_t, const PropertyEntityScalarValue &) {})
+					  .value(),
+			  0U);
+
+	const std::vector<int64_t> allOwners;
+	auto ownerValue = readPropertyOwnerValue(raw.data(), EntityType::Node, rankKey, allOwners);
+	ASSERT_TRUE(ownerValue.has_value());
+	EXPECT_EQ(ownerValue->ownerId, 11);
+	EXPECT_EQ(ownerValue->value, rankValue);
+	EXPECT_FALSE(readPropertyOwnerValue(raw.data(), EntityType::Edge, rankKey, allOwners).has_value());
+	const std::vector<int64_t> otherOwners{99};
+	EXPECT_FALSE(readPropertyOwnerValue(raw.data(), EntityType::Node, rankKey, otherOwners).has_value());
+	EXPECT_FALSE(readPropertyOwnerValue(raw.data(), EntityType::Node, "missing", allOwners).has_value());
+
+	const std::vector<std::string> noKeys;
+	EXPECT_TRUE(readPropertyOwnerKeyValues(raw.data(), EntityType::Node, noKeys, allOwners).empty());
+	const std::vector<std::string> keys{rankKey, nameKey, "missing"};
+	auto ownerKeyValues = readPropertyOwnerKeyValues(raw.data(), EntityType::Node, keys, allOwners);
+	ASSERT_EQ(ownerKeyValues.size(), 2U);
+	EXPECT_EQ(ownerKeyValues[0].ownerId, 11);
+	EXPECT_EQ(ownerKeyValues[0].key, rankKey);
+	EXPECT_EQ(ownerKeyValues[0].value, rankValue);
+	EXPECT_EQ(ownerKeyValues[1].key, nameKey);
+	EXPECT_EQ(ownerKeyValues[1].value, nameValue);
+	EXPECT_TRUE(readPropertyOwnerKeyValues(raw.data(), EntityType::Edge, keys, allOwners).empty());
+	EXPECT_TRUE(readPropertyOwnerKeyValues(raw.data(), EntityType::Node, keys, otherOwners).empty());
+	const auto ownerWithSkippedKey = makeRawPropertyRecordForOwner(
+			100, 11, Node::typeId, true,
+			{{"other", serializePropertyValueBytes(PropertyValue(int64_t{7}))},
+			 {rankKey, serializePropertyValueBytes(rankValue)}});
+	auto skippedOwnerKeyValues = readPropertyOwnerKeyValues(ownerWithSkippedKey.data(), EntityType::Node, keys, allOwners);
+	ASSERT_EQ(skippedOwnerKeyValues.size(), 1U);
+	EXPECT_EQ(skippedOwnerKeyValues.front().key, rankKey);
+	EXPECT_EQ(skippedOwnerKeyValues.front().value, rankValue);
+
+	const std::string invalidRecord(Property::TOTAL_PROPERTY_SIZE, '\0');
+	EXPECT_FALSE(readSelectedPropertyColumns(invalidRecord.data(), requested, columns, refs, 0, refs.size()));
+	EXPECT_FALSE(readSelectedPropertyColumnsOne(invalidRecord.data(), requested, columns, 0));
+	EXPECT_FALSE(visitSelectedPropertyValueOne(invalidRecord.data(), rankKey, 0, [](size_t, const PropertyValue &) {})
+						 .has_value());
+	EXPECT_FALSE(visitSelectedPropertyScalarValueOne(invalidRecord.data(), rankKey, 0,
+													 [](size_t, const PropertyEntityScalarValue &) {})
+						 .has_value());
+	EXPECT_FALSE(readPropertyOwnerValue(invalidRecord.data(), EntityType::Node, rankKey, allOwners).has_value());
+	EXPECT_TRUE(readPropertyOwnerKeyValues(invalidRecord.data(), EntityType::Node, keys, allOwners).empty());
+
+	const auto malformedKeyRecord = makeRawPropertyRecordWithMalformedKey();
+	EXPECT_FALSE(readSelectedPropertyColumns(malformedKeyRecord.data(), requested, columns, refs, 0, refs.size()));
+	EXPECT_FALSE(readSelectedPropertyColumnsOne(malformedKeyRecord.data(), requested, columns, 0));
+	EXPECT_FALSE(visitSelectedPropertyValue(malformedKeyRecord.data(), rankKey, refs, 0, refs.size(),
+											[](size_t, const PropertyValue &) {})
+						 .has_value());
+	EXPECT_FALSE(visitSelectedPropertyValueOne(malformedKeyRecord.data(), rankKey, 0,
+											   [](size_t, const PropertyValue &) {})
+						 .has_value());
+	EXPECT_FALSE(visitSelectedPropertyScalarValueOne(malformedKeyRecord.data(), rankKey, 0,
+													 [](size_t, const PropertyEntityScalarValue &) {})
+						 .has_value());
+	EXPECT_FALSE(readPropertyOwnerValue(malformedKeyRecord.data(), EntityType::Node, rankKey, allOwners).has_value());
+	EXPECT_TRUE(readPropertyOwnerKeyValues(malformedKeyRecord.data(), EntityType::Node, keys, allOwners).empty());
+	PredicateExpectation equality{&rankKey, compilePropertyValue(rankValue)};
+	EXPECT_FALSE(readPropertyEntityPredicateMatch(malformedKeyRecord.data(), std::vector<PredicateExpectation>{equality})
+						 .has_value());
+	SinglePredicateExpectation singleEquality{&rankKey, compilePropertyValue(rankValue)};
+	EXPECT_FALSE(readPropertyEntitySinglePredicateMatch(malformedKeyRecord.data(), singleEquality).has_value());
+	std::vector<PredicateSpecExpectation> malformedKeySpecs{
+			predicateSpec(rankKey, rankValue, PropertyEntityPredicateOp::PEP_EQ)};
+	auto malformedKeyGroups = groupPredicateSpecExpectations(malformedKeySpecs);
+	EXPECT_FALSE(readPropertyEntityPredicateMatch(malformedKeyRecord.data(), malformedKeyGroups,
+												 malformedKeySpecs.size())
+						 .has_value());
+
+	const auto malformedRequestedValue =
+			makeRawPropertyRecordForOwner(101, 11, Node::typeId, true, {{rankKey, malformedStringValueBytes()}});
+	EXPECT_FALSE(readSelectedPropertyColumnsOne(malformedRequestedValue.data(), requested, columns, 0));
+	EXPECT_FALSE(visitSelectedPropertyValueOne(malformedRequestedValue.data(), rankKey, 0,
+											   [](size_t, const PropertyValue &) {})
+						 .has_value());
+	EXPECT_FALSE(readPropertyOwnerValue(malformedRequestedValue.data(), EntityType::Node, rankKey, allOwners)
+						 .has_value());
+	EXPECT_TRUE(readPropertyOwnerKeyValues(malformedRequestedValue.data(), EntityType::Node, keys, allOwners).empty());
+
+	const auto malformedSkippedValue =
+			makeRawPropertyRecordForOwner(102, 11, Node::typeId, true, {{"other", malformedStringValueBytes()}});
+	EXPECT_FALSE(readSelectedPropertyColumns(malformedSkippedValue.data(), requested, columns, refs, 0, refs.size()));
+	EXPECT_FALSE(readSelectedPropertyColumnsOne(malformedSkippedValue.data(), requested, columns, 0));
+	EXPECT_FALSE(visitSelectedPropertyScalarValue(malformedSkippedValue.data(), rankKey, refs, 0, refs.size(),
+												  [](size_t, const PropertyEntityScalarValue &) {})
+						 .has_value());
+	EXPECT_FALSE(visitSelectedPropertyValueOne(malformedSkippedValue.data(), rankKey, 0,
+											   [](size_t, const PropertyValue &) {})
+						 .has_value());
+	EXPECT_FALSE(visitSelectedPropertyScalarValueOne(malformedSkippedValue.data(), rankKey, 0,
+													 [](size_t, const PropertyEntityScalarValue &) {})
+						 .has_value());
+	EXPECT_FALSE(readPropertyOwnerValue(malformedSkippedValue.data(), EntityType::Node, rankKey, allOwners)
+						 .has_value());
+	EXPECT_TRUE(readPropertyOwnerKeyValues(malformedSkippedValue.data(), EntityType::Node, keys, allOwners).empty());
+}
+
+TEST(PropertyEntityScanDetailTest, PredicateComparisonHelpersCoverBoundaryBranches) {
+	const std::string key = "rank";
+	const PropertyValue lower(int64_t{10});
+	const PropertyValue upper(int64_t{20});
+	const PropertyValue textLower("b");
+	const PropertyValue textUpper("d");
+
+	EXPECT_FALSE(propertyValueSatisfiesPredicate(PropertyValue(int64_t{5}),
+												predicateSpec(key, lower, PropertyEntityPredicateOp::PEP_RANGE_CLOSED,
+															  &upper)));
+	EXPECT_FALSE(propertyValueSatisfiesPredicate(PropertyValue(int64_t{25}),
+												predicateSpec(key, lower, PropertyEntityPredicateOp::PEP_RANGE_CLOSED,
+															  &upper)));
+	auto invalidOp = predicateSpec(key, lower, static_cast<PropertyEntityPredicateOp>(999));
+	EXPECT_FALSE(propertyValueSatisfiesPredicate(PropertyValue(int64_t{15}), invalidOp));
+	EXPECT_FALSE(typedValueSatisfiesPredicate<int64_t>(15, invalidOp));
+
+	const std::string emptyText;
+	SerializedStringView emptyView{emptyText.data(), 0};
+	EXPECT_EQ(compareStringView(emptyView, ""), 0);
+	EXPECT_LT(compareStringView(emptyView, "x"), 0);
+	const std::string longerText = "abcd";
+	SerializedStringView longerView{longerText.data(), static_cast<uint32_t>(longerText.size())};
+	EXPECT_GT(compareStringView(longerView, "abc"), 0);
+	EXPECT_FALSE(stringViewSatisfiesPredicate(
+			SerializedStringView{longerText.data(), 1},
+			predicateSpec(key, textLower, PropertyEntityPredicateOp::PEP_RANGE_CLOSED, &textUpper)));
+	EXPECT_FALSE(stringViewSatisfiesPredicate(longerView, predicateSpec(key, textLower,
+																		static_cast<PropertyEntityPredicateOp>(999))));
+
+	const std::string stringBytes = serializePropertyValueBytes(PropertyValue("value"));
+	const char *stringCursor = stringBytes.data();
+	const char *stringEnd = stringCursor + stringBytes.size();
+	CompiledPropertyValue missingStringPointer;
+	missingStringPointer.type = PropertyType::STRING;
+	EXPECT_FALSE(serializedPropertyValueEquals(stringCursor, stringEnd, missingStringPointer).value());
+
+	const PropertyValue listValue(std::vector<PropertyValue>{PropertyValue(int64_t{1})});
+	const std::string listBytes = serializePropertyValueBytes(listValue);
+	const char *listCursor = listBytes.data();
+	const char *listEnd = listCursor + listBytes.size();
+	CompiledPropertyValue missingFallbackPointer;
+	missingFallbackPointer.type = PropertyType::LIST;
+	EXPECT_FALSE(serializedPropertyValueEquals(listCursor, listEnd, missingFallbackPointer).value());
+
+	std::ostringstream truncatedListStream(std::ios::binary);
+	utils::Serializer::writePOD(truncatedListStream, PropertyType::LIST);
+	utils::Serializer::writePOD(truncatedListStream, uint32_t{1});
+	std::string truncatedListBytes = truncatedListStream.str();
+	const char *truncatedListCursor = truncatedListBytes.data();
+	const char *truncatedListEnd = truncatedListCursor + truncatedListBytes.size();
+	EXPECT_FALSE(serializedPropertyValueEquals(truncatedListCursor, truncatedListEnd, compilePropertyValue(listValue))
+						 .has_value());
+
+	std::ostringstream unknownStream(std::ios::binary);
+	utils::Serializer::writePOD(unknownStream, PropertyType::UNKNOWN);
+	std::string unknownBytes = unknownStream.str();
+	const char *unknownCursor = unknownBytes.data();
+	const char *unknownEnd = unknownCursor + unknownBytes.size();
+	CompiledPropertyValue unknownExpectation;
+	unknownExpectation.type = PropertyType::UNKNOWN;
+	EXPECT_FALSE(serializedPropertyValueEquals(unknownCursor, unknownEnd, unknownExpectation).has_value());
+}
+
+TEST(PropertyEntityScanDetailTest, PredicateReadersRejectTruncatedTypedPayloads) {
+	const std::string key = "rank";
+	const std::vector<PropertyValue> values{
+			PropertyValue(true),
+			PropertyValue(int64_t{42}),
+			PropertyValue(4.25),
+			PropertyValue("milo"),
+			PropertyValue(TemporalDate::fromYMD(2026, 6, 2)),
+			PropertyValue(TemporalDateTime::fromComponents(2026, 6, 2, 12, 0, 0, 0)),
+			PropertyValue(TemporalDuration::fromComponents(1, 2, 0, 3, 4, 5, 6)),
+	};
+	for (const auto &value: values) {
+		std::string bytes = serializePropertyValueBytes(value);
+		ASSERT_GT(bytes.size(), sizeof(PropertyType));
+		bytes.pop_back();
+		const auto spec = predicateSpec(key, value, PropertyEntityPredicateOp::PEP_EQ);
+		const char *cursor = bytes.data();
+		const char *end = cursor + bytes.size();
+		EXPECT_FALSE(readSerializedPropertyValueSatisfiesPredicate(cursor, end, spec).has_value());
+	}
+
+	{
+		const PropertyValue boolValue(true);
+		const std::string bytes = serializePropertyValueBytes(boolValue);
+		const char *cursor = bytes.data();
+		const char *end = cursor + bytes.size();
+		EXPECT_TRUE(readSerializedPropertyValueSatisfiesPredicate(
+							cursor, end, predicateSpec(key, boolValue, PropertyEntityPredicateOp::PEP_EQ))
+							.value());
+	}
+	{
+		const PropertyValue doubleValue(4.25);
+		const std::string bytes = serializePropertyValueBytes(doubleValue);
+		const char *cursor = bytes.data();
+		const char *end = cursor + bytes.size();
+		EXPECT_TRUE(readSerializedPropertyValueSatisfiesPredicate(
+							cursor, end, predicateSpec(key, doubleValue, PropertyEntityPredicateOp::PEP_EQ))
+							.value());
+	}
+	{
+		const PropertyValue listValue(std::vector<PropertyValue>{PropertyValue(int64_t{1})});
+		const std::string bytes = serializePropertyValueBytes(listValue);
+		const char *cursor = bytes.data();
+		const char *end = cursor + bytes.size();
+		EXPECT_TRUE(readSerializedPropertyValueSatisfiesPredicate(
+							cursor, end, predicateSpec(key, listValue, PropertyEntityPredicateOp::PEP_EQ))
+							.value());
+		EXPECT_EQ(cursor, end);
+	}
+
+	const PropertyValue durationValue(TemporalDuration::fromComponents(1, 2, 0, 3, 4, 5, 6));
+	for (size_t componentCount = 0; componentCount < 3; ++componentCount) {
+		const std::string bytes = truncatedDurationValueBytes(componentCount);
+		const auto spec = predicateSpec(key, durationValue, PropertyEntityPredicateOp::PEP_EQ);
+		const char *predicateCursor = bytes.data();
+		const char *predicateEnd = predicateCursor + bytes.size();
+		EXPECT_FALSE(readSerializedPropertyValueSatisfiesPredicate(predicateCursor, predicateEnd, spec).has_value());
+
+		const char *equalsCursor = bytes.data();
+		const char *equalsEnd = equalsCursor + bytes.size();
+		EXPECT_FALSE(serializedPropertyValueEquals(equalsCursor, equalsEnd, compilePropertyValue(durationValue))
+							 .has_value());
+	}
+
+	for (const auto type: {PropertyType::COMPOSITE, PropertyType::UNKNOWN}) {
+		std::ostringstream stream(std::ios::binary);
+		utils::Serializer::writePOD(stream, type);
+		const std::string bytes = stream.str();
+		const char *cursor = bytes.data();
+		const char *end = cursor + bytes.size();
+		std::optional<PropertyValue> fallback;
+		EXPECT_FALSE(readSerializedPropertyScalarValue(cursor, end, fallback).has_value());
+	}
 }
 
 } // namespace graph::storage

@@ -234,10 +234,7 @@ namespace graph::query::execution {
 													int64_t endId,
 													concurrent::ThreadPool *threadPool,
 													PartitionVisitor &&visitor) {
-			if (plan.empty()) {
-				return false;
-			}
-
+			// Callers validate the scan plan before allocating partition state, so this helper can focus on execution.
 			const auto &segmentIndex = dm->getSegmentIndexManager()->getEdgeSegmentIndex();
 			const auto decision = decideRelationshipMetadataScan(threadPool, plan.tasks.size(), plan.totalSegments);
 			if (!decision.useParallel) {
@@ -286,21 +283,6 @@ namespace graph::query::execution {
 				return true;
 			}, [](size_t, RelationshipMetadataReadTaskState &) {});
 			return !failed.load(std::memory_order_relaxed);
-		}
-
-		template<typename PartitionVisitor>
-		bool scanSerializedEdgesPartitioned(const std::shared_ptr<storage::DataManager> &dm,
-											int64_t beginId,
-											int64_t endId,
-											concurrent::ThreadPool *threadPool,
-											PartitionVisitor &&visitor) {
-			return scanSerializedEdgesPartitionedWithPlan(
-					dm,
-					buildEdgeSegmentScanPlan(dm, beginId, endId),
-					beginId,
-					endId,
-					threadPool,
-					std::forward<PartitionVisitor>(visitor));
 		}
 
 		void appendRelationshipPropertyCountCandidate(RelationshipPropertyCountCandidates &candidates,

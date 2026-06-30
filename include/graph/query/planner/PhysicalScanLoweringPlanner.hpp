@@ -65,11 +65,14 @@ using AggregateScanRuleBuilder = std::optional<ScanPlanCandidate> (*)(
 		const logical::LogicalAggregate &,
 		const std::shared_ptr<indexes::IndexManager> &);
 
-struct ScanSpecializationRule {
+struct ProjectScanSpecializationRule {
 	std::string_view name;
-	ScanSpecializationShape shape = ScanSpecializationShape::SSS_PROJECT;
-	ProjectScanRuleBuilder projectBuilder = nullptr;
-	AggregateScanRuleBuilder aggregateBuilder = nullptr;
+	ProjectScanRuleBuilder builder = nullptr;
+};
+
+struct AggregateScanSpecializationRule {
+	std::string_view name;
+	AggregateScanRuleBuilder builder = nullptr;
 };
 
 [[nodiscard]] std::vector<ScanPlanCandidate>

@@ -43,6 +43,7 @@
 #include "graph/storage/data/EntityTraits.hpp"
 #include "graph/utils/ChecksumUtils.hpp"
 #include "graph/utils/FixedSizeSerializer.hpp"
+#include "src/storage/FileStorageFlushDetail.hpp"
 
 namespace graph::storage {
 
@@ -354,11 +355,7 @@ namespace graph::storage {
 
 			// 5. Invalidate stale cached pages before commit clears the non-owning snapshot view.
 			auto invalidateStart = Clock::now();
-			if (touchedSegments.empty()) {
-				dataManager->invalidateDirtySegments(snapshot);
-			} else {
-				dataManager->invalidateSegments(touchedSegments);
-			}
+			(void) file_storage_detail::invalidateWrittenSnapshotCache(*dataManager, snapshot, touchedSegments);
 			debug::PerfTrace::addDuration("save.invalidate_cache",
 										  static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
 																		Clock::now() - invalidateStart)

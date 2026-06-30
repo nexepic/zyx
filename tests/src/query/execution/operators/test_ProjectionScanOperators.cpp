@@ -8,6 +8,7 @@
 
 #include "graph/core/Database.hpp"
 #include "graph/debug/PerfTrace.hpp"
+#include "graph/query/QueryContext.hpp"
 #include "graph/query/execution/operators/NodeProjectionScanOperator.hpp"
 #include "graph/query/execution/operators/RelationshipProjectionScanOperator.hpp"
 #include "graph/storage/data/DataManager.hpp"
@@ -489,4 +490,43 @@ TEST_F(ProjectionScanOperatorsTest, RelationshipProjectionScanRejectsUnknownType
 		10);
 	unknownLabelOp.open();
 	EXPECT_FALSE(unknownLabelOp.next().has_value());
+}
+
+TEST_F(ProjectionScanOperatorsTest, RelationshipProjectionScanSkipsInvalidAndInactiveTargets) {
+	const int64_t a = addNode(userLabel, {{"id", PropertyValue("a")}});
+	const int64_t deletedTarget = addNode(userLabel, {{"id", PropertyValue("deleted")}});
+	const int64_t liveTarget = addNode(userLabel, {{"id", PropertyValue("live")}});
+
+	Edge zeroTarget(0, a, 0, followsType);
+	dm->addEdge(zeroTarget);
+	dm->addEdgeProperties(zeroTarget.getId(), {{"weight", PropertyValue(int64_t{1})}});
+	Edge deletedEdge(0, a, deletedTarget, followsType);
+	dm->addEdge(deletedEdge);
+	dm->addEdgeProperties(deletedEdge.getId(), {{"weight", PropertyValue(int64_t{2})}});
+	addFollows(a, liveTarget, 3);
+
+	Node deletedNode = dm->getNode(deletedTarget);
+	dm->deleteNode(deletedNode);
+	db->getStorage()->flush();
+
+	DirectRelationshipCountConfig config;
+	config.enabled = true;
+	config.edgeType = "FOLLOWS";
+	config.direction = "out";
+
+	query::QueryContext context;
+	RelationshipProjectionScanOperator op(
+		dm, im, config, "v", {"User"},
+		{{RelationshipProjectionSource::RPS_TARGET_NODE, "id", "id"},
+		 {RelationshipProjectionSource::RPS_EDGE, "weight", "weight"}},
+		10);
+	op.setQueryContext(&context);
+	op.open();
+	auto batch = op.next();
+
+	ASSERT_TRUE(batch.has_value());
+	ASSERT_EQ(batch->size(), 1U);
+	EXPECT_EQ(valueAt((*batch)[0], "id"), PropertyValue("live"));
+	EXPECT_EQ(valueAt((*batch)[0], "weight"), PropertyValue(int64_t{3}));
+	EXPECT_FALSE(op.next().has_value());
 }

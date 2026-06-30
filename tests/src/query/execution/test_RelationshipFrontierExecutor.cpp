@@ -87,6 +87,39 @@ TEST_F(RelationshipFrontierExecutorTest, EmptyAndNullInputsReturnNoNextFrontier)
 	EXPECT_TRUE(executor.expand({}, options(traversal::RelationshipDirectionKind::RDK_OUT)).empty());
 }
 
+TEST_F(RelationshipFrontierExecutorTest, FrontierStateRebuildsSparsePathStateLazily) {
+	Node source = addNode();
+	Node middle = addNode();
+	Node target = addNode();
+
+	Record emptyRecord;
+	RelationshipFrontierState emptyState;
+	EXPECT_EQ(emptyState.currentDepth(), 0);
+
+	RelationshipFrontierState state;
+	Record sourceRecord;
+	sourceRecord.setNode("src", source);
+	state.addPath(sourceRecord, source.getId(), 0, {});
+	ASSERT_EQ(state.sourceCount(), 1U);
+	ASSERT_EQ(state.entryCount(), 1U);
+	ASSERT_EQ(state.size(), 1U);
+	auto sourcePath = state.materializePath(0);
+	EXPECT_EQ(sourcePath.visitedNodeIds, (std::vector<int64_t>{source.getId()}));
+
+	Record targetRecord;
+	targetRecord.setNode("src", source);
+	state.addPath(targetRecord, target.getId(), 2, {source.getId(), middle.getId()});
+	ASSERT_EQ(state.size(), 2U);
+	auto targetPath = state.materializePath(1);
+	EXPECT_EQ(targetPath.nodeId, target.getId());
+	EXPECT_EQ(targetPath.visitedNodeIds,
+			  (std::vector<int64_t>{source.getId(), middle.getId(), target.getId()}));
+
+	state.filterFrontier([](const RelationshipFrontierEntry &) { return false; });
+	EXPECT_TRUE(state.empty());
+	EXPECT_EQ(state.currentDepth(), 0);
+}
+
 TEST_F(RelationshipFrontierExecutorTest, OutgoingExpansionSkipsAncestorAndInactiveTargets) {
 	Node source = addNode();
 	Node middle = addNode();
@@ -169,6 +202,19 @@ TEST_F(RelationshipFrontierExecutorTest, LegacyExpandPreservesExistingPathState)
 	EXPECT_TRUE(next[0].baseRecord.getNode("src").has_value());
 }
 
+TEST_F(RelationshipFrontierExecutorTest, ExpansionSkipsDanglingTargetNode) {
+	Node source = addNode();
+	Edge edge(0, source.getId(), 999999, typeId);
+	dm->addEdge(edge);
+
+	RelationshipFrontierExecutor executor(dm, nullptr);
+	const auto next = executor.expand(
+			{makePath(source)},
+			options(traversal::RelationshipDirectionKind::RDK_OUT));
+
+	EXPECT_TRUE(next.empty());
+}
+
 TEST_F(RelationshipFrontierExecutorTest, ParallelExpansionEmitsDecisionTelemetry) {
 	static constexpr size_t kSources = 64;
 	static constexpr size_t kFanout = 64;
@@ -202,6 +248,27 @@ TEST_F(RelationshipFrontierExecutorTest, ParallelExpansionEmitsDecisionTelemetry
 	EXPECT_GE(snapshot.at("test.relationship_frontier.expand.workers").totalValue, 2);
 }
 
+TEST_F(RelationshipFrontierExecutorTest, ParallelExpansionWithNoEdgesKeepsFrontierEmpty) {
+	Node first = addNode();
+	Node second = addNode();
+	std::vector<RelationshipFrontierPath> frontier{makePath(first), makePath(second)};
+
+	graph::concurrent::ThreadPool pool(4);
+	RelationshipFrontierExecutor executor(dm, &pool);
+
+	graph::debug::PerfTrace::setEnabled(true);
+	graph::debug::PerfTrace::reset();
+	const auto next = executor.expand(
+			frontier,
+			options(traversal::RelationshipDirectionKind::RDK_OUT),
+			"");
+	const auto snapshot = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setEnabled(false);
+
+	EXPECT_TRUE(next.empty());
+	EXPECT_TRUE(snapshot.contains("relationship_frontier.estimated_edges"));
+}
+
 TEST_F(RelationshipFrontierExecutorTest, SingleHighFanoutSourceParallelizesEdgeRefProcessing) {
 	static constexpr size_t kFanout = 4096;
 	Node source = addNode();
@@ -226,6 +293,23 @@ TEST_F(RelationshipFrontierExecutorTest, SingleHighFanoutSourceParallelizesEdgeR
 	ASSERT_TRUE(snapshot.contains("test.relationship_frontier.single_high_fanout.decision.parallel"));
 	ASSERT_TRUE(snapshot.contains("test.relationship_frontier.single_high_fanout.workers"));
 	EXPECT_GE(snapshot.at("test.relationship_frontier.single_high_fanout.workers").totalValue, 2);
+}
+
+TEST_F(RelationshipFrontierExecutorTest, SingleHighFanoutSourceWithOnlyVisitedTargetsReturnsEmpty) {
+	static constexpr size_t kFanout = 4096;
+	Node source = addNode();
+	for (size_t i = 0; i < kFanout; ++i) {
+		addEdge(source.getId(), source.getId());
+	}
+
+	graph::concurrent::ThreadPool pool(4);
+	RelationshipFrontierExecutor executor(dm, &pool);
+
+	const auto next = executor.expand(
+			{makePath(source)},
+			options(traversal::RelationshipDirectionKind::RDK_OUT));
+
+	EXPECT_TRUE(next.empty());
 }
 
 TEST_F(RelationshipFrontierExecutorTest, TypeMismatchProducesEmptyFrontier) {
