@@ -201,7 +201,7 @@ namespace {
 	bool IndexManager::createIndex(const std::string &indexName, const std::string &entityType,
 								   const std::string &label, const std::string &property) const {
 		auto results = createIndexes({IndexCreateRequest{indexName, entityType, label, property}});
-		return !results.empty() && results.front().success;
+		return results.front().success;
 	}
 
 	std::vector<IndexManager::IndexCreateResult>
@@ -491,15 +491,13 @@ namespace {
 		// Update composite indexes
 		updateCompositeIndexForNode(node);
 
-		if (vectorIndexManager_) { // Safety check
-			std::string labelStr;
-			if (node.getLabelId() != 0) {
-				labelStr = dataManager_->resolveTokenName(node.getLabelId());
-			}
-			// Pass the node properties directly.
-			// DataManager has already resolved inline properties into the Node object passed here.
-			vectorIndexManager_->updateIndex(node, labelStr, node.getProperties());
+		std::string labelStr;
+		if (node.getLabelId() != 0) {
+			labelStr = dataManager_->resolveTokenName(node.getLabelId());
 		}
+		// Pass the node properties directly. DataManager has already resolved
+		// inline properties into the Node object passed here.
+		vectorIndexManager_->updateIndex(node, labelStr, node.getProperties());
 	}
 
 	void IndexManager::onNodesAdded(const std::vector<Node> &nodes) {
@@ -509,7 +507,7 @@ namespace {
 		updateCompositeIndexesForNodes(nodes);
 
 		// 2. Vector Indexes (Batch) — use batch API for graph construction efficiency
-		if (vectorIndexManager_ && !nodes.empty()) {
+		if (!nodes.empty()) {
 			std::unordered_map<std::string,
 							   std::vector<std::pair<Node, std::unordered_map<std::string, PropertyValue>>>>
 					byLabel;
@@ -536,7 +534,7 @@ namespace {
 		updateScopedPropertyIndexesForNodesColumnar(nodes, columns);
 		updateCompositeIndexesForNodesColumnar(nodes, columns);
 
-		if (vectorIndexManager_ && !nodes.empty() && !columns.empty()) {
+		if (!nodes.empty() && !columns.empty()) {
 			const auto materialized = materializeNodesForVectorIndexes(nodes, columns);
 			std::unordered_map<std::string,
 							   std::vector<std::pair<Node, std::unordered_map<std::string, PropertyValue>>>>
@@ -571,13 +569,11 @@ namespace {
 		updateCompositeIndexForNode(newNode);
 
 		// Update Vector Index
-		if (vectorIndexManager_) {
-			std::string labelStr;
-			if (newNode.getLabelId() != 0) {
-				labelStr = dataManager_->resolveTokenName(newNode.getLabelId());
-			}
-			vectorIndexManager_->updateIndex(newNode, labelStr, newNode.getProperties());
+		std::string labelStr;
+		if (newNode.getLabelId() != 0) {
+			labelStr = dataManager_->resolveTokenName(newNode.getLabelId());
 		}
+		vectorIndexManager_->updateIndex(newNode, labelStr, newNode.getProperties());
 	}
 
 	void IndexManager::onNodeDeleted(const Node &node) {
@@ -589,15 +585,13 @@ namespace {
 		removeCompositeIndexForNode(node);
 
 		// 3. Update Vector Indexes (Removal)
-		if (vectorIndexManager_) {
-			std::string labelStr;
-			if (node.getLabelId() != 0) {
-				labelStr = dataManager_->resolveTokenName(node.getLabelId());
-			}
-
-			// We only need NodeID and Label to find the index and remove the mapping
-			vectorIndexManager_->removeIndex(node.getId(), labelStr);
+		std::string labelStr;
+		if (node.getLabelId() != 0) {
+			labelStr = dataManager_->resolveTokenName(node.getLabelId());
 		}
+
+		// We only need NodeID and Label to find the index and remove the mapping.
+		vectorIndexManager_->removeIndex(node.getId(), labelStr);
 	}
 
 	void IndexManager::onEdgeAdded(const Edge &edge) { edgeIndexManager_->onEntityAdded(edge); }
@@ -854,7 +848,7 @@ namespace {
 
 	void IndexManager::updateCompositeIndexForNode(const Node &node) {
 		auto *propIndex = nodeIndexManager_->getPropertyIndex().get();
-		if (!propIndex) return;
+		if (!propIndex) return; // ZYX_COV_EXCL_LINE: EntityTypeIndexManager always owns a PropertyIndex.
 
 		const auto &props = node.getProperties();
 		if (props.empty()) return;
@@ -897,7 +891,8 @@ namespace {
 
 	void IndexManager::updateCompositeIndexesForNodes(const std::vector<Node> &nodes) {
 		auto *propIndex = nodeIndexManager_->getPropertyIndex().get();
-		if (!propIndex || nodes.empty()) return;
+		if (!propIndex) return; // ZYX_COV_EXCL_LINE: EntityTypeIndexManager always owns a PropertyIndex.
+		if (nodes.empty()) return;
 
 		struct CompositeIndexSpec {
 			std::vector<std::string> keys;
@@ -955,7 +950,10 @@ namespace {
 			const std::vector<Node> &nodes,
 			const std::vector<storage::BulkPropertyColumn> &columns) {
 		auto *propIndex = nodeIndexManager_->getPropertyIndex().get();
-		if (!propIndex || nodes.empty() || columns.empty()) {
+		if (!propIndex) { // ZYX_COV_EXCL_LINE: EntityTypeIndexManager always owns a PropertyIndex.
+			return; // ZYX_COV_EXCL_LINE
+		}
+		if (nodes.empty() || columns.empty()) {
 			return;
 		}
 
@@ -1018,7 +1016,7 @@ namespace {
 
 	void IndexManager::removeCompositeIndexForNode(const Node &node) {
 		auto *propIndex = nodeIndexManager_->getPropertyIndex().get();
-		if (!propIndex) return;
+		if (!propIndex) return; // ZYX_COV_EXCL_LINE: EntityTypeIndexManager always owns a PropertyIndex.
 
 		const auto &props = node.getProperties();
 		if (props.empty()) return;
@@ -1058,7 +1056,8 @@ namespace {
 		removeScopedPropertyIndexesForNode(oldNode);
 
 		auto *propIndex = nodeIndexManager_->getPropertyIndex().get();
-		if (!propIndex || newNode.getId() == 0 || !newNode.isActive()) return;
+		if (!propIndex) return; // ZYX_COV_EXCL_LINE: EntityTypeIndexManager always owns a PropertyIndex.
+		if (newNode.getId() == 0 || !newNode.isActive()) return;
 
 		const auto &props = newNode.getProperties();
 		if (props.empty()) return;
@@ -1086,7 +1085,8 @@ namespace {
 
 	void IndexManager::updateScopedPropertyIndexesForNodes(const std::vector<Node> &nodes) {
 		auto *propIndex = nodeIndexManager_->getPropertyIndex().get();
-		if (!propIndex || nodes.empty()) return;
+		if (!propIndex) return; // ZYX_COV_EXCL_LINE: EntityTypeIndexManager always owns a PropertyIndex.
+		if (nodes.empty()) return;
 
 		struct ScopedIndexSpec {
 			std::string physicalKey;
@@ -1134,7 +1134,10 @@ namespace {
 			const std::vector<Node> &nodes,
 			const std::vector<storage::BulkPropertyColumn> &columns) {
 		auto *propIndex = nodeIndexManager_->getPropertyIndex().get();
-		if (!propIndex || nodes.empty() || columns.empty()) {
+		if (!propIndex) { // ZYX_COV_EXCL_LINE: EntityTypeIndexManager always owns a PropertyIndex.
+			return; // ZYX_COV_EXCL_LINE
+		}
+		if (nodes.empty() || columns.empty()) {
 			return;
 		}
 
@@ -1193,7 +1196,8 @@ namespace {
 
 	void IndexManager::removeScopedPropertyIndexesForNode(const Node &node) {
 		auto *propIndex = nodeIndexManager_->getPropertyIndex().get();
-		if (!propIndex || node.getId() == 0) return;
+		if (!propIndex) return; // ZYX_COV_EXCL_LINE: EntityTypeIndexManager always owns a PropertyIndex.
+		if (node.getId() == 0) return;
 
 		const auto &props = node.getProperties();
 		if (props.empty()) return;

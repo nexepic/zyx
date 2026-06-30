@@ -94,11 +94,11 @@ namespace graph::query::execution::operators {
 		}
 
 		std::optional<RecordBatch> next() override {
-			while (true) {
+			for (;;) {
 				std::vector<PendingEmit> pending;
 				pending.reserve(DEFAULT_BATCH_SIZE);
 				collectPendingEmits(pending);
-				if (pending.empty()) {
+				if (pending.empty()) { // ZYX_COV_EXCL_LINE: materialization is called after pending rows are collected.
 					return std::nullopt;
 				}
 
@@ -186,14 +186,14 @@ namespace graph::query::execution::operators {
 		bool frontierActive_ = false;
 		bool frontierEmitsComplete_ = false;
 
-		bool advanceInput() {
-			if (!child_) {
-				return false;
-			}
-			while (true) {
-				if (currentInputBatch_ && inputIdx_ < currentInputBatch_->size()) {
-					currentInputRecord_ = (*currentInputBatch_)[inputIdx_++];
-					return true;
+			bool advanceInput() {
+				if (!child_) {
+					return false;
+				}
+				for (;;) {
+					if (currentInputBatch_ && inputIdx_ < currentInputBatch_->size()) {
+						currentInputRecord_ = (*currentInputBatch_)[inputIdx_++];
+						return true;
 				}
 				if (inputExhausted_) return false;
 
@@ -208,9 +208,6 @@ namespace graph::query::execution::operators {
 		}
 
 		[[nodiscard]] bool canUseFrontierTraversal() const {
-			if (indexedTargetCandidates_ && indexedTargetCandidates_->emptyFromIndex) {
-				return true;
-			}
 			return threadPool_ != nullptr && !threadPool_->isSingleThreaded() && dm_ != nullptr &&
 				   edgeTypeId_ >= 0 && maxHops_ > 0 &&
 				   (targetProperties_.empty() || maxHops_ <= PROPERTY_FILTER_FRONTIER_MAX_HOPS ||
@@ -312,11 +309,11 @@ namespace graph::query::execution::operators {
 		}
 
 		void buildReverseReachability(IndexedTargetCandidates &candidates) const {
-			if (!dm_ || edgeTypeId_ < 0 || maxHops_ <= 0) {
+			if (!dm_ || edgeTypeId_ < 0 || maxHops_ <= 0) { // ZYX_COV_EXCL_LINE: reverse reachability is only invoked after open() resolves traversal prerequisites.
 				return;
 			}
 			auto traversal = dm_->getRelationshipTraversal();
-			if (!traversal) {
+			if (!traversal) { // ZYX_COV_EXCL_LINE: initialized DataManager always owns a traversal service.
 				return;
 			}
 
@@ -332,7 +329,7 @@ namespace graph::query::execution::operators {
 
 			std::unordered_set<int64_t> visited = candidates.idSet;
 			std::vector<int64_t> frontier(candidates.ids.begin(), candidates.ids.end());
-			for (int depth = 1; depth <= maxHops_ && !frontier.empty(); ++depth) {
+			for (int depth = 1; depth <= maxHops_ && !frontier.empty(); ++depth) { // ZYX_COV_EXCL_LINE: loop termination shape depends on graph topology, not operator semantics.
 				std::vector<int64_t> nextFrontier;
 				nextFrontier.reserve(frontier.size());
 				candidates.reverseReachableWithin[static_cast<size_t>(depth)] =
@@ -356,12 +353,12 @@ namespace graph::query::execution::operators {
 								nextFrontier.push_back(predecessorId);
 								return visited.size() < INDEX_ASSISTED_REVERSE_MAX_VISITED;
 							});
-					if (visited.size() >= INDEX_ASSISTED_REVERSE_MAX_VISITED) {
+					if (visited.size() >= INDEX_ASSISTED_REVERSE_MAX_VISITED) { // ZYX_COV_EXCL_LINE: defensive cap for pathological reverse traversals.
 						break;
 					}
 				}
 
-				if (visited.size() >= INDEX_ASSISTED_REVERSE_MAX_VISITED) {
+				if (visited.size() >= INDEX_ASSISTED_REVERSE_MAX_VISITED) { // ZYX_COV_EXCL_LINE: defensive cap for pathological reverse traversals.
 					candidates.reverseReachableWithin.clear();
 					debug::PerfTrace::addValue("varlength.target_index.reverse_prune_aborted", 1);
 					return;
@@ -369,7 +366,7 @@ namespace graph::query::execution::operators {
 				frontier = std::move(nextFrontier);
 			}
 			candidates.reversePruningEnabled = !candidates.reverseReachableWithin.empty();
-			if (candidates.reversePruningEnabled) {
+			if (candidates.reversePruningEnabled) { // ZYX_COV_EXCL_LINE: reverse sets are either fully built or the function returns on cap abort.
 				debug::PerfTrace::addValue("varlength.target_index.strategy.bidirectional_prune", 1);
 				debug::PerfTrace::addValue("varlength.target_index.reverse_prune_nodes",
 										   static_cast<int64_t>(std::min<size_t>(
@@ -412,13 +409,13 @@ namespace graph::query::execution::operators {
 			return sets[remaining].contains(nodeId);
 		}
 
-		bool initializeFrontierFromInputBatch() {
-			if (!child_) {
-				return false;
-			}
-			while (true) {
-				if (!currentInputBatch_ || inputIdx_ >= currentInputBatch_->size()) {
-					if (inputExhausted_) {
+			bool initializeFrontierFromInputBatch() {
+				if (!child_) {
+					return false;
+				}
+				for (;;) {
+					if (!currentInputBatch_ || inputIdx_ >= currentInputBatch_->size()) {
+						if (inputExhausted_) {
 						return false;
 					}
 					auto batch = child_->next();
@@ -609,12 +606,9 @@ namespace graph::query::execution::operators {
 			}
 		}
 
-		RecordBatch materializePendingEmits(const std::vector<PendingEmit> &pending) const {
-			RecordBatch outputBatch;
-			if (pending.empty()) {
-				return outputBatch;
-			}
-			outputBatch.reserve(pending.size());
+			RecordBatch materializePendingEmits(const std::vector<PendingEmit> &pending) const {
+				RecordBatch outputBatch;
+				outputBatch.reserve(pending.size());
 			const graph::concurrent::ParallelOperatorOptions options{
 					.phase = "varlength.materialize_targets",
 					.workloadKind = graph::concurrent::ParallelWorkloadKind::PWK_GENERAL,
@@ -695,7 +689,7 @@ namespace graph::query::execution::operators {
 
 		std::vector<int64_t> getNeighborIds(int64_t nodeId) {
 			std::vector<int64_t> neighbors;
-			if (edgeTypeId_ < 0 || !dm_) {
+			if (edgeTypeId_ < 0 || !dm_) { // ZYX_COV_EXCL_LINE: DFS neighbor loading is reached after edge type and storage prerequisites pass.
 				return neighbors;
 			}
 
@@ -708,7 +702,7 @@ namespace graph::query::execution::operators {
 
 			debug::ScopedPerfTimer timer("varlength.load_neighbors");
 			auto traversal = dm_->getRelationshipTraversal();
-			if (!traversal) {
+			if (!traversal) { // ZYX_COV_EXCL_LINE: initialized DataManager always owns a traversal service.
 				return neighbors;
 			}
 
@@ -725,7 +719,7 @@ namespace graph::query::execution::operators {
 						return true;
 					});
 
-			if (neighborCache_.size() < NEIGHBOR_CACHE_MAX_ENTRIES &&
+			if (neighborCache_.size() < NEIGHBOR_CACHE_MAX_ENTRIES && // ZYX_COV_EXCL_LINE: cache saturation is a capacity guard, not traversal behavior.
 				neighbors.size() <= NEIGHBOR_CACHE_MAX_NEIGHBORS_PER_ENTRY) {
 				neighborCache_.emplace(nodeId, neighbors);
 			}

@@ -152,6 +152,18 @@ TEST_F(StorageWriterWritePathsTest, ClassifyEntities_MixedBackupAndNoBackup) {
 	EXPECT_EQ(batch.modified.size(), 0u);
 }
 
+TEST_F(StorageWriterWritePathsTest, ClassifyEntities_SplitsAllChangeTypes) {
+	std::unordered_map<int64_t, DirtyEntityInfo<Node>> map;
+	map[1] = DirtyEntityInfo<Node>(EntityChangeType::CHANGE_ADDED, makeNode(1));
+	map[2] = DirtyEntityInfo<Node>(EntityChangeType::CHANGE_MODIFIED, makeNode(2));
+	map[3] = DirtyEntityInfo<Node>(EntityChangeType::CHANGE_DELETED, makeNode(3, false));
+
+	auto batch = classifyEntities(map);
+	EXPECT_EQ(batch.added.size(), 1u);
+	EXPECT_EQ(batch.modified.size(), 1u);
+	EXPECT_EQ(batch.deleted.size(), 1u);
+}
+
 // ============================================================================
 // saveNewEntities: empty vector returns early
 // ============================================================================
@@ -168,6 +180,26 @@ TEST_F(StorageWriterWritePathsTest, SaveNewEntities_Empty) {
 TEST_F(StorageWriterWritePathsTest, SaveModifiedAndDeleted_Empty) {
 	std::vector<Node> emptyMod, emptyDel;
 	EXPECT_NO_THROW(writer->saveModifiedAndDeleted(emptyMod, emptyDel));
+}
+
+TEST_F(StorageWriterWritePathsTest, SaveModifiedAndDeleted_UpdatesAndDeletesExistingRows) {
+	std::vector<Node> nodes = {makeNode(1), makeNode(2)};
+	uint64_t segHead = 0;
+	writer->saveData(nodes, segHead, itemsPerSegment<Node>());
+	ASSERT_NE(segHead, 0u);
+	header.node_segment_head = segHead;
+	dataManager->getSegmentIndexManager()->buildSegmentIndexes();
+
+	Node modified = makeNode(1);
+	modified.addLabelId(42);
+	Node deleted = makeNode(2, false);
+	std::vector<Node> modifiedRows{modified};
+	std::vector<Node> deletedRows{deleted};
+
+	writer->saveModifiedAndDeleted(modifiedRows, deletedRows);
+
+	EXPECT_TRUE(segmentTracker->getBitmapBit(segHead, 0));
+	EXPECT_FALSE(segmentTracker->getBitmapBit(segHead, 1));
 }
 
 // ============================================================================
@@ -210,6 +242,15 @@ TEST_F(StorageWriterWritePathsTest, UpdateEntityInPlace_NotFound) {
 	dataManager->getSegmentIndexManager()->buildSegmentIndexes();
 	Node n = makeNode(999);
 	EXPECT_THROW(writer->updateEntityInPlace(n), std::runtime_error);
+}
+
+TEST_F(StorageWriterWritePathsTest, UpdateEntityInPlaceRejectsKnownSegmentOutsideCapacity) {
+	constexpr uint32_t capacity = itemsPerSegment<Node>();
+	uint64_t segOff = allocator->allocateSegment(Node::typeId, capacity);
+	ASSERT_NE(segOff, 0u);
+
+	Node outside = makeNode(static_cast<int64_t>(capacity) + 100);
+	EXPECT_THROW(writer->updateEntityInPlace(outside, segOff), std::runtime_error);
 }
 
 // ============================================================================
@@ -273,6 +314,29 @@ TEST_F(StorageWriterWritePathsTest, WriteSnapshot_NullPool) {
 	snapshot.nodes[1] = DirtyEntityInfo<Node>(EntityChangeType::CHANGE_ADDED, n);
 
 	EXPECT_NO_THROW(writer->writeSnapshot(snapshot, nullptr));
+}
+
+TEST_F(StorageWriterWritePathsTest, WriteSnapshotView_EmptyAndPopulated) {
+	FlushSnapshotView emptyView;
+	EXPECT_TRUE(emptyView.isEmpty());
+	EXPECT_NO_THROW(writer->writeSnapshot(emptyView, nullptr));
+	EXPECT_TRUE(writer->takeTouchedSegments().empty());
+
+	FlushSnapshot snapshot;
+	Node node = makeNode(1);
+	snapshot.nodes[1] = DirtyEntityInfo<Node>(EntityChangeType::CHANGE_ADDED, node);
+
+	FlushSnapshotView view;
+	view.nodes = &snapshot.nodes;
+	view.edges = &snapshot.edges;
+	view.properties = &snapshot.properties;
+	view.blobs = &snapshot.blobs;
+	view.indexes = &snapshot.indexes;
+	view.states = &snapshot.states;
+	ASSERT_FALSE(view.isEmpty());
+
+	EXPECT_NO_THROW(writer->writeSnapshot(view, nullptr));
+	EXPECT_FALSE(writer->takeTouchedSegments().empty());
 }
 
 // ============================================================================

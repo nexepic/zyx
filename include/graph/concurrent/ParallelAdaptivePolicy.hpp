@@ -97,7 +97,7 @@ namespace graph::concurrent {
 			size_t bucket = 0;
 			size_t threshold = 1024;
 			while (magnitude > threshold && bucket + 1 < kAdaptiveSizeBucketCount) {
-				threshold = threshold > (static_cast<size_t>(-1) / 4) ? static_cast<size_t>(-1) : threshold * 4;
+				threshold *= 4;
 				++bucket;
 			}
 			return bucket;

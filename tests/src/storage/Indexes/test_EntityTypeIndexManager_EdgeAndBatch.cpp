@@ -16,6 +16,7 @@
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include <algorithm>
 #include <filesystem>
 #include <gtest/gtest.h>
 #include <memory>
@@ -428,6 +429,67 @@ TEST_F(EntityTypeIndexManagerEdgeAndBatchTest, EntitiesAdded_EdgeBatch_ZeroTypeI
 TEST_F(EntityTypeIndexManagerEdgeAndBatchTest, EntitiesAdded_Empty) {
 	std::vector<graph::Node> empty;
 	EXPECT_NO_THROW(nodeIndexManager->onEntitiesAdded(empty));
+}
+
+TEST_F(EntityTypeIndexManagerEdgeAndBatchTest, ColumnarEntitiesAddedHandlesEmptyAndUnindexedInputs) {
+	EXPECT_NO_THROW(nodeIndexManager->onEntitiesAddedColumnar<graph::Node>({}, {}));
+
+	const int64_t labelId = dataManager->getOrCreateTokenId("ColumnarUnindexedNode");
+	std::vector<graph::Node> nodes;
+	nodes.emplace_back(60, labelId);
+	EXPECT_NO_THROW(nodeIndexManager->onEntitiesAddedColumnar(nodes, {}));
+	EXPECT_TRUE(nodeIndexManager->getLabelIndex()->findNodes("ColumnarUnindexedNode").empty());
+}
+
+TEST_F(EntityTypeIndexManagerEdgeAndBatchTest, ColumnarNodeBatchMaintainsLabelAndPropertyIndexes) {
+	(void) nodeIndexManager->createLabelIndex([]() { return true; });
+	(void) nodeIndexManager->createPropertyIndex("score", []() { return true; });
+
+	const int64_t labelId = dataManager->getOrCreateTokenId("ColumnarIndexedNode");
+	std::vector<graph::Node> nodes;
+	nodes.emplace_back(70, labelId);
+	nodes.emplace_back(71, labelId);
+
+	std::vector<graph::storage::BulkPropertyColumn> columns{
+			{"score", {graph::PropertyValue(int64_t{9})}},
+			{"ignored", {graph::PropertyValue("x"), graph::PropertyValue("y")}}};
+	nodeIndexManager->onEntitiesAddedColumnar(nodes, columns);
+
+	auto labelResults = nodeIndexManager->getLabelIndex()->findNodes("ColumnarIndexedNode");
+	std::ranges::sort(labelResults);
+	ASSERT_EQ(labelResults.size(), 2U);
+	EXPECT_EQ(labelResults[0], 70);
+	EXPECT_EQ(labelResults[1], 71);
+
+	auto scoreResults = nodeIndexManager->getPropertyIndex()->findExactMatch("score", graph::PropertyValue(int64_t{9}));
+	ASSERT_EQ(scoreResults.size(), 1U);
+	EXPECT_EQ(scoreResults.front(), 70);
+	EXPECT_TRUE(nodeIndexManager->getPropertyIndex()->findExactMatch("score", graph::PropertyValue(int64_t{10})).empty());
+}
+
+TEST_F(EntityTypeIndexManagerEdgeAndBatchTest, ColumnarEdgeBatchMaintainsTypeAndPropertyIndexes) {
+	(void) edgeIndexManager->createLabelIndex([]() { return true; });
+	(void) edgeIndexManager->createPropertyIndex("weight", []() { return true; });
+
+	const int64_t typeId = dataManager->getOrCreateTokenId("ColumnarEdgeType");
+	std::vector<graph::Edge> edges;
+	edges.emplace_back(80, 1, 2, typeId);
+	edges.emplace_back(81, 1, 3, 0);
+
+	std::vector<graph::storage::BulkPropertyColumn> columns{
+			{"weight", {graph::PropertyValue(int64_t{4}), graph::PropertyValue(int64_t{5})}}};
+	edgeIndexManager->onEntitiesAddedColumnar(edges, columns);
+
+	auto typeResults = edgeIndexManager->getLabelIndex()->findNodes("ColumnarEdgeType");
+	ASSERT_EQ(typeResults.size(), 1U);
+	EXPECT_EQ(typeResults.front(), 80);
+
+	auto weightFour = edgeIndexManager->getPropertyIndex()->findExactMatch("weight", graph::PropertyValue(int64_t{4}));
+	ASSERT_EQ(weightFour.size(), 1U);
+	EXPECT_EQ(weightFour.front(), 80);
+	auto weightFive = edgeIndexManager->getPropertyIndex()->findExactMatch("weight", graph::PropertyValue(int64_t{5}));
+	ASSERT_EQ(weightFive.size(), 1U);
+	EXPECT_EQ(weightFive.front(), 81);
 }
 
 // ============================================================================

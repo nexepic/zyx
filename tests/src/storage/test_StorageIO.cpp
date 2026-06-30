@@ -239,6 +239,22 @@ TEST_F(StorageIOTest, AppendAndReserveReportClosedNativeWriteFailures) {
 	EXPECT_THROW(io->reserveAppendSpace(8), std::runtime_error);
 }
 
+TEST_F(StorageIOTest, NativeWritePathsReportReadOnlyHandleFailures) {
+	auto stream = std::make_shared<std::fstream>(testFile_, std::ios::binary | std::ios::in | std::ios::out);
+	ASSERT_TRUE(stream->is_open());
+
+	file_handle_t readOnlyAsWrite = portable_open(testFile_.c_str(), O_RDONLY);
+	ASSERT_NE(readOnlyAsWrite, INVALID_FILE_HANDLE);
+	auto io = std::make_shared<StorageIO>(stream, readOnlyAsWrite, INVALID_FILE_HANDLE);
+
+	const char data[] = "read only write";
+	EXPECT_THROW(io->writeAt(0, data, sizeof(data)), std::runtime_error);
+	EXPECT_THROW(io->append(data, sizeof(data)), std::runtime_error);
+	EXPECT_THROW(io->reserveAppendSpace(8), std::runtime_error);
+
+	portable_close(readOnlyAsWrite);
+}
+
 // ============================================================================
 // sync does not throw
 // ============================================================================

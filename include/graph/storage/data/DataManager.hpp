@@ -687,6 +687,9 @@ namespace graph::storage {
 		std::optional<EntityType> findAndReadEntity(int64_t id) const;
 
 		template<typename EntityType>
+		EntityType readEntityFromCacheOrSegment(int64_t id);
+
+		template<typename EntityType>
 		std::vector<EntityType> readEntitiesFromSegment(uint64_t segmentOffset, int64_t startId, int64_t endId,
 														size_t limit) const;
 

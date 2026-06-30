@@ -10,6 +10,7 @@
 #include "graph/query/execution/PropertyPredicateScanKernel.hpp"
 #include "graph/query/execution/RelationshipMetadataColumnLoader.hpp"
 #include "graph/storage/IDAllocator.hpp"
+#include "src/query/execution/RelationshipColumnarCountKernelDetail.hpp"
 
 namespace graph::query::execution {
 	namespace {
@@ -36,32 +37,9 @@ namespace graph::query::execution {
 			return PropertyPredicateScanKernel::fromEqualityPredicates(dm, request.propertyPredicates, pool);
 		}
 
-		std::vector<size_t> sequenceRows(size_t count) {
-			std::vector<size_t> rows;
-			rows.reserve(count);
-			for (size_t row = 0; row < count; ++row) {
-				rows.push_back(row);
-			}
-			return rows;
-		}
-
-		void appendRowsMissingFromBulkMatch(size_t rowCount,
-		                                    std::vector<size_t> loadedRows,
-		                                    std::vector<size_t> &fallbackRows) {
-			if (loadedRows.size() == rowCount) { // ZYX_COV_EXCL_LINE: mismatch callers normally have missing rows.
-				return;
-			}
-			std::sort(loadedRows.begin(), loadedRows.end());
-			loadedRows.erase(std::unique(loadedRows.begin(), loadedRows.end()), loadedRows.end());
-			for (size_t row = 0; row < rowCount; ++row) {
-				if (!std::binary_search(loadedRows.begin(), loadedRows.end(), row)) {
-					fallbackRows.push_back(row);
-				}
-			}
-		}
-
 		constexpr int64_t kPropertyOwnerScanMinRange = 1024;
 		constexpr int64_t kDirtyOverlayCountMinRange = 128;
+		namespace detail = relationship_columnar_count_detail;
 	} // namespace
 
 	RelationshipColumnarCountKernel::RelationshipColumnarCountKernel(std::shared_ptr<storage::DataManager> dm,
@@ -129,11 +107,8 @@ namespace graph::query::execution {
 
 			if (!candidates->fallbackEdgeIds.empty()) {
 				const auto fallbackStart = Clock::now();
-				for (const int64_t edgeId: candidates->fallbackEdgeIds) {
-					typedResult.count += propertyMapMatches(dm_->getEdgeProperties(edgeId), scanKernel)
-												 ? int64_t{1}
-												 : int64_t{0};
-				}
+				typedResult.count += static_cast<int64_t>(
+						detail::countFallbackEdgeIds(*dm_, scanKernel, candidates->fallbackEdgeIds));
 				addProfile("relationship_count.property_fallback", fallbackStart);
 			}
 			return typedResult;
@@ -195,10 +170,10 @@ namespace graph::query::execution {
 			storage::PropertyEntityPredicateMatchOptions matchOptions;
 			matchOptions.collectLoadedRows = true;
 			matchOptions.collectMatchedRows = false;
-			auto rows = sequenceRows(detailedCandidates->propertyEntityIds.size());
+			auto rows = detail::sequenceRows(detailedCandidates->propertyEntityIds.size());
 			auto predicateResult = scanKernel.matchPropertyEntities(
 					detailedCandidates->propertyEntityIds, rows, rows.size(), matchOptions);
-			appendRowsMissingFromBulkMatch(rows.size(), std::move(predicateResult.loadedRows), propertyFallbackRows);
+			detail::appendRowsMissingFromBulkMatch(rows.size(), std::move(predicateResult.loadedRows), propertyFallbackRows);
 			predicateCount.loadedCount = predicateResult.loadedCount;
 			predicateCount.matchedCount = predicateResult.matchedCount;
 			candidates = std::move(detailedCandidates);
@@ -208,33 +183,18 @@ namespace graph::query::execution {
 
 		if (!propertyFallbackRows.empty()) {
 			const auto fallbackStart = Clock::now();
-			for (const size_t row: propertyFallbackRows) {
-				if (row >= candidates->propertyEdgeIds.size()) { // ZYX_COV_EXCL_LINE
-					continue; // ZYX_COV_EXCL_LINE
-				}
-				result.count += propertyMapMatches(dm_->getEdgeProperties(candidates->propertyEdgeIds[row]), scanKernel)
-										? int64_t{1}
-										: int64_t{0};
-			}
+			result.count += static_cast<int64_t>(detail::countFallbackPropertyRows(
+					*dm_, scanKernel, propertyFallbackRows, candidates->propertyEdgeIds));
 			addProfile("relationship_count.property_fallback", fallbackStart);
 		}
 
 		if (!candidates->fallbackEdgeIds.empty()) {
 			const auto fallbackStart = Clock::now();
-			for (const int64_t edgeId: candidates->fallbackEdgeIds) {
-				result.count += propertyMapMatches(dm_->getEdgeProperties(edgeId), scanKernel)
-										? int64_t{1}
-										: int64_t{0};
-			}
+			result.count += static_cast<int64_t>(
+					detail::countFallbackEdgeIds(*dm_, scanKernel, candidates->fallbackEdgeIds));
 			addProfile("relationship_count.property_fallback", fallbackStart);
 		}
 		return result;
-	}
-
-	bool RelationshipColumnarCountKernel::propertyMapMatches(
-			const std::unordered_map<std::string, PropertyValue> &properties,
-			const PropertyPredicateScanKernel &scanKernel) const {
-		return scanKernel.matchesMap(properties);
 	}
 
 } // namespace graph::query::execution

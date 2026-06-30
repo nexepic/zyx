@@ -2,7 +2,10 @@
 
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/storage/CommittedSnapshot.hpp"
+#include "graph/storage/IDAllocator.hpp"
 #include "graph/storage/SegmentIndexManager.hpp"
+#include "graph/storage/SegmentTracker.hpp"
+#include "graph/storage/StorageIO.hpp"
 #include "graph/storage/StorageHeaders.hpp"
 #include "graph/storage/data/RelationshipSegmentStatsScanner.hpp"
 
@@ -20,6 +23,14 @@ namespace {
 		Edge edge(0, source, target, typeId);
 		dm->addEdge(edge);
 		return edge;
+	}
+
+	std::shared_ptr<DataManager> makeNoPreadDataManager() {
+		static FileHeader header{};
+		IDAllocators allocators{};
+		auto noPreadIO = std::make_shared<StorageIO>(nullptr, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		auto segmentTracker = std::make_shared<SegmentTracker>(noPreadIO, header);
+		return std::make_shared<DataManager>(nullptr, 16, header, allocators, segmentTracker, noPreadIO);
 	}
 
 } // namespace
@@ -46,6 +57,12 @@ TEST_F(DataManagerTest, RelationshipSegmentStatsRejectUnsafeCandidateScans) {
 	propertySnapshot.properties.emplace(
 			property.getId(), storage::DirtyEntityInfo<Property>(storage::EntityChangeType::CHANGE_MODIFIED, property));
 	dataManager->setCurrentSnapshot(&propertySnapshot);
+	EXPECT_FALSE(dataManager->collectRelationshipPropertyCandidatesFromSegmentStats(1, 128, followsType).has_value());
+
+	storage::CommittedSnapshot edgeSnapshot;
+	edgeSnapshot.edges.emplace(
+			edge.getId(), storage::DirtyEntityInfo<Edge>(storage::EntityChangeType::CHANGE_MODIFIED, edge));
+	dataManager->setCurrentSnapshot(&edgeSnapshot);
 	EXPECT_FALSE(dataManager->collectRelationshipPropertyCandidatesFromSegmentStats(1, 128, followsType).has_value());
 
 	storage::CommittedSnapshot blobSnapshot;
@@ -318,6 +335,151 @@ TEST_F(DataManagerTest, RelationshipSegmentStatsRejectsCorruptSegmentHeaders) {
 	EXPECT_FALSE(dataManager->countActiveEdgesByTypeFromSegmentStats(1, 1, followsType).has_value());
 }
 
+TEST_F(DataManagerTest, RelationshipSegmentStatsScannerHandlesDirectGuardPaths) {
+	Node source = createTestNode(dataManager, "StatsUser");
+	Node target = createTestNode(dataManager, "StatsUser");
+	dataManager->addNode(source);
+	dataManager->addNode(target);
+	const int64_t followsType = dataManager->getOrCreateTokenId("FOLLOWS");
+	const int64_t likesType = dataManager->getOrCreateTokenId("LIKES");
+	Edge firstFollows = addEdgeOfType(dataManager, source.getId(), target.getId(), followsType);
+	Edge firstLikes = addEdgeOfType(dataManager, source.getId(), target.getId(), likesType);
+	Edge secondFollows = addEdgeOfType(dataManager, source.getId(), target.getId(), followsType);
+	Edge secondLikes = addEdgeOfType(dataManager, source.getId(), target.getId(), likesType);
+	simulateSave();
+	dataManager->clearCache();
+
+	const auto originalIndex = dataManager->getSegmentIndexManager()->getEdgeSegmentIndex();
+	ASSERT_FALSE(originalIndex.empty());
+	const uint64_t offset = originalIndex.front().segmentOffset;
+	const SegmentHeader header = dataManager->getSegmentTracker()->getSegmentHeaderCopy(offset);
+	ASSERT_EQ(header.data_type, Edge::typeId);
+	ASSERT_GE(header.used, 4U);
+
+	RelationshipSegmentStatsScanner scanner(*dataManager);
+	auto noPreadDataManager = makeNoPreadDataManager();
+	RelationshipSegmentStatsScanner noPreadScanner(*noPreadDataManager);
+	EXPECT_FALSE(noPreadScanner.build(offset, header, false).has_value());
+	EXPECT_FALSE(noPreadScanner.countActiveInWindow(
+							 offset,
+							 header,
+							 firstFollows.getId(),
+							 firstFollows.getId(),
+							 followsType)
+							 .has_value());
+	EXPECT_FALSE(noPreadScanner.persistedEdgeMatchesType(firstFollows.getId(), followsType).has_value());
+	EXPECT_FALSE(noPreadDataManager->collectRelationshipPropertyCandidatesFromSegmentStats(1, 128, followsType)
+						 .has_value());
+	EXPECT_FALSE(noPreadDataManager->countActivePersistedEdgeIdsByType(std::vector<int64_t>{1}, followsType)
+						 .has_value());
+	EXPECT_FALSE(noPreadDataManager->countActiveEdgesByTypeFromSegmentStats(1, 128, followsType).has_value());
+
+	SegmentHeader wrongType = header;
+	wrongType.data_type = Node::typeId;
+	EXPECT_FALSE(scanner.build(offset, wrongType, false).has_value());
+	EXPECT_FALSE(scanner.countActiveInWindow(offset, wrongType, firstFollows.getId(), secondLikes.getId(), 0).has_value());
+
+	SegmentHeader zeroUsed = header;
+	zeroUsed.used = 0;
+	EXPECT_FALSE(scanner.build(offset, zeroUsed, false).has_value());
+	EXPECT_FALSE(scanner.countActiveInWindow(offset, zeroUsed, firstFollows.getId(), firstFollows.getId(), 0).has_value());
+	EXPECT_FALSE(scanner.countActiveInWindow(offset, header, secondLikes.getId(), firstFollows.getId(), 0).has_value());
+	EXPECT_FALSE(scanner.countActiveInWindow(
+						 offset,
+						 header,
+						 header.start_id - 1,
+						 header.start_id,
+						 0)
+						 .has_value());
+
+	const auto followsInWindow =
+			scanner.countActiveInWindow(offset, header, firstFollows.getId(), secondLikes.getId(), followsType);
+	ASSERT_TRUE(followsInWindow.has_value());
+	EXPECT_EQ(*followsInWindow, 2);
+
+	const uint64_t missingOffset = offset + static_cast<uint64_t>(TOTAL_SEGMENT_SIZE) * 10'000ULL;
+	EXPECT_FALSE(scanner.build(missingOffset, header, false).has_value());
+	EXPECT_FALSE(scanner.countActiveInWindow(
+						 missingOffset,
+						 header,
+						 firstFollows.getId(),
+						 firstFollows.getId(),
+						 followsType)
+						 .has_value());
+
+	EXPECT_FALSE(scanner.persistedEdgeMatchesType(0, followsType).has_value());
+	auto firstIsLikes = scanner.persistedEdgeMatchesType(firstFollows.getId(), likesType);
+	ASSERT_TRUE(firstIsLikes.has_value());
+	EXPECT_FALSE(*firstIsLikes);
+	auto missingEdge = scanner.persistedEdgeMatchesType(secondLikes.getId() + 1'000'000, followsType);
+	ASSERT_TRUE(missingEdge.has_value());
+	EXPECT_FALSE(*missingEdge);
+
+	auto patchedIndex = originalIndex;
+	patchedIndex.front().endId = header.start_id + static_cast<int64_t>(header.used) + 10;
+	dataManager->getSegmentIndexManager()->setSegmentIndex(Edge::typeId, patchedIndex);
+	auto outsideHeader = scanner.persistedEdgeMatchesType(header.start_id + static_cast<int64_t>(header.used), 0);
+	ASSERT_TRUE(outsideHeader.has_value());
+	EXPECT_FALSE(*outsideHeader);
+
+	patchedIndex.front().segmentOffset = missingOffset;
+	patchedIndex.front().startId = firstLikes.getId();
+	patchedIndex.front().endId = firstLikes.getId();
+	dataManager->getSegmentIndexManager()->setSegmentIndex(Edge::typeId, patchedIndex);
+	EXPECT_FALSE(scanner.persistedEdgeMatchesType(firstLikes.getId(), likesType).has_value());
+
+	dataManager->getSegmentIndexManager()->setSegmentIndex(Edge::typeId, originalIndex);
+
+	const auto firstIdOffset = static_cast<std::streamoff>(
+			offset + sizeof(SegmentHeader) + offsetof(Edge::Metadata, id));
+	const int64_t corruptedId = firstFollows.getId() + 10'000;
+	{
+		std::fstream file(testFilePath, std::ios::in | std::ios::out | std::ios::binary);
+		ASSERT_TRUE(file.is_open());
+		file.seekp(firstIdOffset);
+		file.write(reinterpret_cast<const char *>(&corruptedId), sizeof(corruptedId));
+	}
+	auto corruptedWindow = scanner.countActiveInWindow(offset, header, firstFollows.getId(), firstFollows.getId(), 0);
+	ASSERT_TRUE(corruptedWindow.has_value());
+	EXPECT_EQ(*corruptedWindow, 0);
+	auto corruptedMatch = scanner.persistedEdgeMatchesType(firstFollows.getId(), 0);
+	ASSERT_TRUE(corruptedMatch.has_value());
+	EXPECT_FALSE(*corruptedMatch);
+
+	SegmentHeader shiftedHeader = header;
+	shiftedHeader.start_id = firstFollows.getId() + 1;
+	{
+		std::fstream file(testFilePath, std::ios::in | std::ios::out | std::ios::binary);
+		ASSERT_TRUE(file.is_open());
+		file.seekp(static_cast<std::streamoff>(offset));
+		file.write(reinterpret_cast<const char *>(&shiftedHeader), sizeof(shiftedHeader));
+	}
+	patchedIndex = originalIndex;
+	patchedIndex.front().startId = firstFollows.getId();
+	patchedIndex.front().endId = firstFollows.getId();
+	dataManager->getSegmentIndexManager()->setSegmentIndex(Edge::typeId, patchedIndex);
+	auto beforeHeader = scanner.persistedEdgeMatchesType(firstFollows.getId(), 0);
+	ASSERT_TRUE(beforeHeader.has_value());
+	EXPECT_FALSE(*beforeHeader);
+
+	const uint64_t shortReadOffset = static_cast<uint64_t>(std::filesystem::file_size(testFilePath)) +
+									 static_cast<uint64_t>(TOTAL_SEGMENT_SIZE);
+	SegmentHeader headerOnly = header;
+	headerOnly.start_id = firstLikes.getId();
+	headerOnly.used = 1;
+	{
+		std::fstream file(testFilePath, std::ios::in | std::ios::out | std::ios::binary);
+		ASSERT_TRUE(file.is_open());
+		file.seekp(static_cast<std::streamoff>(shortReadOffset));
+		file.write(reinterpret_cast<const char *>(&headerOnly), sizeof(headerOnly));
+	}
+	patchedIndex.front().segmentOffset = shortReadOffset;
+	patchedIndex.front().startId = firstLikes.getId();
+	patchedIndex.front().endId = firstLikes.getId();
+	dataManager->getSegmentIndexManager()->setSegmentIndex(Edge::typeId, patchedIndex);
+	EXPECT_FALSE(scanner.persistedEdgeMatchesType(firstLikes.getId(), 0).has_value());
+}
+
 TEST_F(DataManagerTest, RelationshipSegmentStatsOverlayHandlesSparseSnapshotEntries) {
 	Node source = createTestNode(dataManager, "StatsUser");
 	Node target = createTestNode(dataManager, "StatsUser");
@@ -578,6 +740,10 @@ TEST_F(DataManagerTest, CountActivePersistedEdgeIdsByTypeFiltersSortedIdsAndUnsa
 	ASSERT_TRUE(missing.has_value());
 	EXPECT_EQ(*missing, 0);
 
+	const std::vector<int64_t> idsOutsidePersistedSegments{secondFollows.getId() + 10'000};
+	EXPECT_EQ(dataManager->countActivePersistedEdgeIdsByType(idsOutsidePersistedSegments, followsType),
+			  std::optional<int64_t>(0));
+
 	storage::CommittedSnapshot snapshot;
 	Edge snapshotEdge(firstFollows.getId(), source.getId(), target.getId(), likesType);
 	snapshot.edges.emplace(
@@ -589,6 +755,30 @@ TEST_F(DataManagerTest, CountActivePersistedEdgeIdsByTypeFiltersSortedIdsAndUnsa
 
 	addEdgeOfType(dataManager, source.getId(), target.getId(), followsType);
 	EXPECT_FALSE(dataManager->countActivePersistedEdgeIdsByType(unsortedIds, followsType).has_value());
+}
+
+TEST_F(DataManagerTest, RelationshipSegmentStatsPrunesRangesAndIgnoresUnrelatedDirtyOverlays) {
+	Node source = createTestNode(dataManager, "StatsUser");
+	Node target = createTestNode(dataManager, "StatsUser");
+	dataManager->addNode(source);
+	dataManager->addNode(target);
+	const int64_t followsType = dataManager->getOrCreateTokenId("FOLLOWS");
+	const int64_t likesType = dataManager->getOrCreateTokenId("LIKES");
+	Edge follows = addEdgeOfType(dataManager, source.getId(), target.getId(), followsType);
+	Edge likes = addEdgeOfType(dataManager, source.getId(), target.getId(), likesType);
+	simulateSave();
+	dataManager->clearRelationshipSegmentTypeStats();
+
+	auto outsideRange = dataManager->countActiveEdgesByTypeFromSegmentStats(
+			likes.getId() + 10'000, likes.getId() + 10'127, followsType);
+	ASSERT_TRUE(outsideRange.has_value());
+	EXPECT_EQ(*outsideRange, 0);
+
+	Edge pendingLike = addEdgeOfType(dataManager, source.getId(), target.getId(), likesType);
+	auto followsWithUnrelatedAdd =
+			dataManager->countActiveEdgesByTypeFromSegmentStats(follows.getId(), pendingLike.getId(), followsType);
+	ASSERT_TRUE(followsWithUnrelatedAdd.has_value());
+	EXPECT_EQ(*followsWithUnrelatedAdd, 1);
 }
 
 TEST_F(DataManagerTest, CountActivePersistedEdgeIdsByTypeParallelMatchesSequentialAcrossSegments) {
@@ -744,6 +934,59 @@ TEST_F(DataManagerTest, CountActivePersistedEdgeIdsByTypeReusesCachedSegmentSumm
 	auto likes = dataManager->countActivePersistedEdgeIdsByType(secondSegmentOnly, likesType);
 	ASSERT_TRUE(likes.has_value());
 	EXPECT_EQ(*likes, 2);
+}
+
+TEST_F(DataManagerTest, CountActivePersistedEdgeIdsByTypeIgnoresIdsOutsidePersistedHeaderWindow) {
+	Node source = createTestNode(dataManager, "StatsUser");
+	Node target = createTestNode(dataManager, "StatsUser");
+	dataManager->addNode(source);
+	dataManager->addNode(target);
+	const int64_t followsType = dataManager->getOrCreateTokenId("FOLLOWS");
+	for (int i = 0; i < 4; ++i) {
+		addEdgeOfType(dataManager, source.getId(), target.getId(), followsType);
+	}
+	simulateSave();
+
+	const auto originalIndex = dataManager->getSegmentIndexManager()->getEdgeSegmentIndex();
+	ASSERT_FALSE(originalIndex.empty());
+	auto patchedIndex = originalIndex;
+	patchedIndex.front().endId = 64;
+	dataManager->getSegmentIndexManager()->setSegmentIndex(Edge::typeId, patchedIndex);
+	dataManager->clearRelationshipSegmentTypeStats();
+
+	const std::vector<int64_t> idsOutsideHeader{64};
+	auto count = dataManager->countActivePersistedEdgeIdsByType(idsOutsideHeader, followsType);
+	ASSERT_TRUE(count.has_value());
+	EXPECT_EQ(*count, 0);
+	dataManager->getSegmentIndexManager()->setSegmentIndex(Edge::typeId, originalIndex);
+}
+
+TEST_F(DataManagerTest, CountActivePersistedEdgeIdsByTypeHandlesIndexGapsAndReadFailures) {
+	Node source = createTestNode(dataManager, "StatsUser");
+	Node target = createTestNode(dataManager, "StatsUser");
+	dataManager->addNode(source);
+	dataManager->addNode(target);
+	const int64_t followsType = dataManager->getOrCreateTokenId("FOLLOWS");
+	Edge first = addEdgeOfType(dataManager, source.getId(), target.getId(), followsType);
+	Edge second = addEdgeOfType(dataManager, source.getId(), target.getId(), followsType);
+	simulateSave();
+
+	const auto originalIndex = dataManager->getSegmentIndexManager()->getEdgeSegmentIndex();
+	ASSERT_FALSE(originalIndex.empty());
+
+	auto gappedIndex = originalIndex;
+	gappedIndex.front().startId = second.getId();
+	dataManager->getSegmentIndexManager()->setSegmentIndex(Edge::typeId, gappedIndex);
+	EXPECT_EQ(dataManager->countActivePersistedEdgeIdsByType(std::vector<int64_t>{first.getId()}, followsType),
+			  std::optional<int64_t>(0));
+
+	auto missingSegmentIndex = originalIndex;
+	missingSegmentIndex.front().segmentOffset += static_cast<uint64_t>(TOTAL_SEGMENT_SIZE) * 10'000ULL;
+	dataManager->getSegmentIndexManager()->setSegmentIndex(Edge::typeId, missingSegmentIndex);
+	EXPECT_FALSE(dataManager->countActivePersistedEdgeIdsByType(std::vector<int64_t>{second.getId()}, followsType)
+						 .has_value());
+
+	dataManager->getSegmentIndexManager()->setSegmentIndex(Edge::typeId, originalIndex);
 }
 
 TEST_F(DataManagerTest, RelationshipSegmentStatsCacheValidatesHeaderShape) {

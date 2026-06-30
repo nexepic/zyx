@@ -266,6 +266,29 @@ TEST_F(PropertyTest, SerializedPayloadDecodesLazilyAndClearsOnMapUpdate) {
 	EXPECT_FALSE(property.hasPropertyValue("name"));
 }
 
+TEST_F(PropertyTest, SerializedPayloadSizeUsesRawPayloadLength) {
+	graph::Property property(7, 11, graph::toUnderlying(graph::EntityType::Node));
+
+	std::stringstream payloadStream;
+	graph::utils::Serializer::writePOD(payloadStream, static_cast<uint32_t>(1));
+	graph::utils::Serializer::serialize<std::string>(payloadStream, "name");
+	graph::utils::Serializer::serialize<graph::PropertyValue>(payloadStream, graph::PropertyValue("Ada"));
+	const auto payloadString = payloadStream.str();
+	property.setSerializedPropertyPayload(std::vector<char>(payloadString.begin(), payloadString.end()));
+
+	const size_t metadataSize = sizeof(int64_t) + sizeof(int64_t) + sizeof(uint32_t) + sizeof(bool);
+	EXPECT_EQ(property.getSerializedSize(), metadataSize + payloadString.size());
+}
+
+TEST_F(PropertyTest, EmptySerializedPayloadDecodesToEmptyMap) {
+	graph::Property property(7, 11, graph::toUnderlying(graph::EntityType::Node));
+	property.setSerializedPropertyPayload({});
+
+	EXPECT_FALSE(property.hasSerializedPropertyPayload());
+	EXPECT_TRUE(property.getPropertyValues().empty());
+	EXPECT_FALSE(property.hasPropertyValue("missing"));
+}
+
 TEST_F(PropertyTest, Constants) {
 	EXPECT_EQ(graph::Property::getTotalSize(), 256u);
 	EXPECT_EQ(graph::Property::TOTAL_PROPERTY_SIZE, 256u);

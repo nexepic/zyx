@@ -99,6 +99,32 @@ TEST_F(ConstraintImplementationTest, UniqueConstraintMetadataAndValidation) {
 		{{"email", PropertyValue("ada@example.com")}}));
 }
 
+TEST_F(ConstraintImplementationTest, UniqueConstraintSupportsGlobalPropertyIndexesAndNullUpdates) {
+	ASSERT_TRUE(im->createIndex("idx_global_slug", "node", "", "slug"));
+	auto first = createNode("Package", {{"slug", PropertyValue("zyx-core")}});
+	auto second = createNode("Module", {{"slug", PropertyValue("zyx-query")}});
+
+	UniqueConstraint c("uq_slug", "", "slug", im);
+	EXPECT_EQ(c.getLabel(), "");
+
+	EXPECT_NO_THROW(c.validateInsert(100, {{"slug", PropertyValue("zyx-storage")}}));
+	EXPECT_THROW(c.validateInsert(100, {{"slug", PropertyValue("zyx-core")}}), std::runtime_error);
+	EXPECT_NO_THROW(c.validateInsert(first.getId(), {{"slug", PropertyValue("zyx-core")}}));
+
+	EXPECT_NO_THROW(c.validateUpdate(
+		second.getId(),
+		{{"slug", PropertyValue("zyx-query")}},
+		{}));
+	EXPECT_NO_THROW(c.validateUpdate(
+		second.getId(),
+		{{"slug", PropertyValue("zyx-query")}},
+		{{"slug", PropertyValue()}}));
+	EXPECT_THROW(c.validateUpdate(
+		second.getId(),
+		{{"name", PropertyValue("query")}},
+		{{"slug", PropertyValue("zyx-core")}}), std::runtime_error);
+}
+
 TEST_F(ConstraintImplementationTest, NodeKeyConstraintMetadataAndValidation) {
 	ASSERT_TRUE(im->createIndex("idx_person_first", "node", "Person", "first"));
 	ASSERT_TRUE(im->createIndex("idx_person_last", "node", "Person", "last"));

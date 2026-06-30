@@ -45,10 +45,6 @@ namespace graph::storage {
 									 uint64_t txnId,
 									 uint8_t changeType,
 									 const std::vector<EntityType> &entities) {
-			if (entities.empty()) {
-				return;
-			}
-
 			constexpr size_t kWalBatchSize = 4096;
 			constexpr size_t kEntitySize = EntityType::getTotalSize();
 			std::vector<uint8_t> serialized;

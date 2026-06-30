@@ -172,24 +172,21 @@ namespace {
 				"aggregate_count_relationship_scan_or_expand");
 	}
 
-	const std::array<ScanSpecializationRule, 7> &scanSpecializationRules() {
-		static const std::array<ScanSpecializationRule, 7> rules = {{
-				{"node_projection_scan", ScanSpecializationShape::SSS_PROJECT, buildNodeProjectionRule, nullptr},
-				{"node_topk_scan", ScanSpecializationShape::SSS_PROJECT, buildNodeTopKRule, nullptr},
-				{"relationship_projection_scan",
-				 ScanSpecializationShape::SSS_PROJECT,
-				 buildRelationshipProjectionRule,
-				 nullptr},
-				{"node_count_scan", ScanSpecializationShape::SSS_AGGREGATE, nullptr, buildNodeCountRule},
-				{"node_distinct_count_scan",
-				 ScanSpecializationShape::SSS_AGGREGATE,
-				 nullptr,
-				 buildNodeDistinctCountRule},
-				{"node_group_count_scan", ScanSpecializationShape::SSS_AGGREGATE, nullptr, buildNodeGroupCountRule},
-				{"relationship_count_scan",
-				 ScanSpecializationShape::SSS_AGGREGATE,
-				 nullptr,
-				 buildRelationshipCountRule},
+	const std::array<ProjectScanSpecializationRule, 3> &projectScanSpecializationRules() {
+		static const std::array<ProjectScanSpecializationRule, 3> rules = {{
+				{"node_projection_scan", buildNodeProjectionRule},
+				{"node_topk_scan", buildNodeTopKRule},
+				{"relationship_projection_scan", buildRelationshipProjectionRule},
+		}};
+		return rules;
+	}
+
+	const std::array<AggregateScanSpecializationRule, 4> &aggregateScanSpecializationRules() {
+		static const std::array<AggregateScanSpecializationRule, 4> rules = {{
+				{"node_count_scan", buildNodeCountRule},
+				{"node_distinct_count_scan", buildNodeDistinctCountRule},
+				{"node_group_count_scan", buildNodeGroupCountRule},
+				{"relationship_count_scan", buildRelationshipCountRule},
 		}};
 		return rules;
 	}
@@ -200,16 +197,11 @@ std::vector<ScanPlanCandidate>
 collectProjectScanCandidates(const logical::LogicalProject &project,
                              const std::shared_ptr<indexes::IndexManager> &indexManager) {
 	std::vector<ScanPlanCandidate> candidates;
-	for (const auto &rule : scanSpecializationRules()) {
-		if (rule.shape != ScanSpecializationShape::SSS_PROJECT || rule.projectBuilder == nullptr) {
-			continue;
-		}
-		if (auto candidate = rule.projectBuilder(project, indexManager)) {
-			candidate->shape = rule.shape;
+	for (const auto &rule : projectScanSpecializationRules()) {
+		if (auto candidate = rule.builder(project, indexManager)) {
+			candidate->shape = ScanSpecializationShape::SSS_PROJECT;
 			candidate->ruleName = std::string(rule.name);
-			if (!candidate->explainAttributes.empty()) {
-				candidate->explainAttributes[0].second = candidate->ruleName;
-			}
+			candidate->explainAttributes[0].second = candidate->ruleName;
 			candidates.push_back(std::move(*candidate));
 		}
 	}
@@ -220,16 +212,11 @@ std::vector<ScanPlanCandidate>
 collectAggregateScanCandidates(const logical::LogicalAggregate &aggregate,
                                const std::shared_ptr<indexes::IndexManager> &indexManager) {
 	std::vector<ScanPlanCandidate> candidates;
-	for (const auto &rule : scanSpecializationRules()) {
-		if (rule.shape != ScanSpecializationShape::SSS_AGGREGATE || rule.aggregateBuilder == nullptr) {
-			continue;
-		}
-		if (auto candidate = rule.aggregateBuilder(aggregate, indexManager)) {
-			candidate->shape = rule.shape;
+	for (const auto &rule : aggregateScanSpecializationRules()) {
+		if (auto candidate = rule.builder(aggregate, indexManager)) {
+			candidate->shape = ScanSpecializationShape::SSS_AGGREGATE;
 			candidate->ruleName = std::string(rule.name);
-			if (!candidate->explainAttributes.empty()) {
-				candidate->explainAttributes[0].second = candidate->ruleName;
-			}
+			candidate->explainAttributes[0].second = candidate->ruleName;
 			candidates.push_back(std::move(*candidate));
 		}
 	}

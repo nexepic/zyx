@@ -71,6 +71,17 @@ TEST_F(DatabaseEdgeCaseTest, CloseWithoutWAL) {
 	EXPECT_FALSE(db->isOpen());
 }
 
+TEST_F(DatabaseEdgeCaseTest, FlushIsNoopWhenClosedAndWorksBeforeWalInitialization) {
+	auto db = std::make_unique<Database>(testDbPath.string());
+
+	EXPECT_FALSE(db->isOpen());
+	EXPECT_NO_THROW(db->flush());
+
+	db->open();
+	ASSERT_TRUE(db->isOpen());
+	EXPECT_NO_THROW(db->flush());
+}
+
 // ============================================================================
 // close() when walManager_ is initialized (after transaction)
 // ============================================================================
@@ -160,6 +171,16 @@ TEST_F(DatabaseEdgeCaseTest, BeginReadOnlyTransactionAutoOpens) {
 	auto txn = db->beginReadOnlyTransaction();
 	EXPECT_TRUE(db->isOpen());
 	EXPECT_TRUE(txn.isReadOnly());
+	txn.commit();
+}
+
+TEST_F(DatabaseEdgeCaseTest, BeginBulkTransactionAutoOpens) {
+	auto db = std::make_unique<Database>(testDbPath.string());
+	EXPECT_FALSE(db->isOpen());
+
+	auto txn = db->beginBulkTransaction();
+	EXPECT_TRUE(db->isOpen());
+	EXPECT_TRUE(txn.isActive());
 	txn.commit();
 }
 

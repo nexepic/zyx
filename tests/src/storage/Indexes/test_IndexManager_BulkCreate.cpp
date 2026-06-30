@@ -123,6 +123,32 @@ TEST_F(IndexManagerBulkCreateTest, CreateIndexesRejectsDuplicatePhysicalProperty
 	EXPECT_EQ(results[1].reason, "property index already exists");
 }
 
+TEST_F(IndexManagerBulkCreateTest, CreateIndexesHandlesEmptyRequestsAndDuplicateBatchNames) {
+	EXPECT_TRUE(indexManager->createIndexes({}).empty());
+
+	const auto results = indexManager->createIndexes({
+			{"idx_same_name", "node", "User", "id"},
+			{"idx_same_name", "edge", "", "weight"},
+	});
+
+	ASSERT_EQ(results.size(), 2U);
+	EXPECT_TRUE(results[0].success);
+	EXPECT_FALSE(results[1].success);
+	EXPECT_EQ(results[1].reason, "index name already exists");
+}
+
+TEST_F(IndexManagerBulkCreateTest, CreateIndexesRejectsDuplicateEdgePhysicalPropertyInBatch) {
+	const auto results = indexManager->createIndexes({
+			{"idx_edge_weight_a", "edge", "", "weight"},
+			{"idx_edge_weight_b", "edge", "", "weight"},
+	});
+
+	ASSERT_EQ(results.size(), 2U);
+	EXPECT_TRUE(results[0].success);
+	EXPECT_FALSE(results[1].success);
+	EXPECT_EQ(results[1].reason, "property index already exists");
+}
+
 TEST_F(IndexManagerBulkCreateTest, CreateIndexesCombinesTypedScanWithBlobFallback) {
 	std::vector<Node> nodes;
 	Node compactUser;
@@ -231,4 +257,69 @@ TEST_F(IndexManagerBulkCreateTest, CreateIndexesSkipsDeletedOwnersInTypedPropert
 	EXPECT_EQ(indexManager->findEdgeIdsByProperty("kind", PropertyValue("live-edge")),
 			  (std::vector<int64_t>{edges[0].getId()}));
 	EXPECT_TRUE(indexManager->findEdgeIdsByProperty("kind", PropertyValue("deleted-edge")).empty());
+}
+
+TEST_F(IndexManagerBulkCreateTest, BatchedNodeObserverMaintainsScopedPropertyIndexes) {
+	ASSERT_TRUE(indexManager->createIndex("idx_batch_user_code", "node", "User", "code"));
+
+	const int64_t userLabel = dataManager->getOrCreateTokenId("User");
+	const int64_t postLabel = dataManager->getOrCreateTokenId("Post");
+
+	Node matched(100, userLabel);
+	matched.setProperties({{"code", PropertyValue(int64_t{7})}});
+	Node missingProperty(101, userLabel);
+	missingProperty.setProperties({{"other", PropertyValue(int64_t{7})}});
+	Node nullProperty(102, userLabel);
+	nullProperty.setProperties({{"code", PropertyValue()}});
+	Node wrongLabel(103, postLabel);
+	wrongLabel.setProperties({{"code", PropertyValue(int64_t{7})}});
+
+	indexManager->onNodesAdded({matched, missingProperty, nullProperty, wrongLabel});
+
+	EXPECT_EQ(indexManager->findNodeIdsByLabelAndProperty("User", "code", PropertyValue(int64_t{7})),
+			  (std::vector<int64_t>{matched.getId()}));
+	EXPECT_TRUE(indexManager->findNodeIdsByLabelAndProperty("Post", "code", PropertyValue(int64_t{7})).empty());
+}
+
+TEST_F(IndexManagerBulkCreateTest, ColumnarEdgeObserverMaintainsPropertyIndexes) {
+	ASSERT_TRUE(indexManager->createIndex("idx_columnar_edge_weight", "edge", "", "weight"));
+
+	const int64_t typeId = dataManager->getOrCreateTokenId("LIKES");
+	const std::vector<Edge> edges{
+			Edge(200, 1, 2, typeId),
+			Edge(201, 2, 1, typeId),
+	};
+	const std::vector<graph::storage::BulkPropertyColumn> columns{
+			{"weight", {PropertyValue(int64_t{3}), PropertyValue(int64_t{5})}},
+	};
+
+	indexManager->onEdgesAddedColumnar(edges, columns);
+
+	EXPECT_EQ(indexManager->findEdgeIdsByProperty("weight", PropertyValue(int64_t{3})),
+			  (std::vector<int64_t>{edges[0].getId()}));
+	EXPECT_EQ(indexManager->estimateEdgeIdsByProperty("weight", PropertyValue(int64_t{5})), 1U);
+}
+
+TEST_F(IndexManagerBulkCreateTest, ColumnarNodeObserverMaintainsCompositeIndex) {
+	ASSERT_TRUE(indexManager->createCompositeIndex("idx_columnar_comp", "node", "User", {"name", "age"}));
+
+	const int64_t userLabel = dataManager->getOrCreateTokenId("User");
+	const std::vector<Node> nodes{
+			Node(300, userLabel),
+			Node(301, userLabel),
+	};
+	const std::vector<graph::storage::BulkPropertyColumn> columns{
+			{"name", {PropertyValue("Alice"), PropertyValue("Bob")}},
+			{"age", {PropertyValue(int64_t{30}), PropertyValue()}},
+	};
+
+	indexManager->onNodesAddedColumnar(nodes, columns);
+
+	EXPECT_EQ(indexManager->findNodeIdsByCompositeIndex(
+					  {"name", "age"},
+					  {PropertyValue("Alice"), PropertyValue(int64_t{30})}),
+			  (std::vector<int64_t>{nodes[0].getId()}));
+	EXPECT_TRUE(indexManager->findNodeIdsByCompositeIndex(
+					 {"name", "age"},
+					 {PropertyValue("Bob"), PropertyValue()}).empty());
 }

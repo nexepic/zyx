@@ -130,6 +130,47 @@ TEST_F(OptimizerIndexStrategyTest, IndexPushdownRuleCoversCompositeRangeLabelAnd
 	EXPECT_EQ(fullCfg.type, execution::ScanType::FULL_SCAN);
 }
 
+TEST_F(OptimizerIndexStrategyTest, IndexPushdownRuleCoversGlobalPropertyAndNonCompositeFallbacks) {
+	ASSERT_TRUE(im->createIndex("idx_global_email", "node", "", "email"));
+	ASSERT_TRUE(im->createIndex("idx_global_score", "node", "", "score"));
+	ASSERT_TRUE(im->createIndex("idx_label_only", "node", "Indexed", ""));
+
+	IndexPushdownRule rule(im);
+
+	CompositeEqualityPredicate singleKeyComposite;
+	singleKeyComposite.keys = {"email"};
+	singleKeyComposite.values = {PropertyValue("a@example.test")};
+	auto globalPropertyCfg = rule.apply(
+			"n",
+			{},
+			"email",
+			PropertyValue("a@example.test"),
+			{},
+			singleKeyComposite);
+	EXPECT_EQ(globalPropertyCfg.type, execution::ScanType::PROPERTY_SCAN);
+	EXPECT_EQ(globalPropertyCfg.indexKey, "email");
+
+	RangePredicate scoreRange;
+	scoreRange.key = "score";
+	scoreRange.minValue = PropertyValue(int64_t{1});
+	scoreRange.maxValue = PropertyValue(int64_t{9});
+	scoreRange.minInclusive = true;
+	scoreRange.maxInclusive = false;
+	auto globalRangeCfg = rule.apply("n", {}, "", PropertyValue(), {scoreRange});
+	EXPECT_EQ(globalRangeCfg.type, execution::ScanType::RANGE_SCAN);
+	EXPECT_EQ(globalRangeCfg.indexKey, "score");
+	EXPECT_TRUE(globalRangeCfg.minInclusive);
+	EXPECT_FALSE(globalRangeCfg.maxInclusive);
+
+	RangePredicate missingRange;
+	missingRange.key = "missing";
+	auto labelCfg = rule.apply("n", {"Indexed"}, "", PropertyValue(), {missingRange});
+	EXPECT_EQ(labelCfg.type, execution::ScanType::LABEL_SCAN);
+
+	auto fullCfg = rule.apply("n", {}, "", PropertyValue(), {missingRange});
+	EXPECT_EQ(fullCfg.type, execution::ScanType::FULL_SCAN);
+}
+
 TEST_F(OptimizerIndexStrategyTest, EnhancedIndexSelectionRuleCoversLabelPropertyRangeAndComposite) {
 	ASSERT_TRUE(im->createIndex("idx_person_label", "node", "Person", ""));
 	ASSERT_TRUE(im->createIndex("idx_person_age", "node", "Person", "age"));
@@ -323,4 +364,3 @@ TEST_F(OptimizerIndexStrategyTest, EnhancedIndexSelectionRule_CompositeEqOnlyOne
 	// Single-key composite eq cannot be a composite scan.
 	EXPECT_NE(s->getPreferredScanType(), execution::ScanType::COMPOSITE_SCAN);
 }
-

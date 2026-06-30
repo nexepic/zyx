@@ -80,6 +80,47 @@ TEST_F(WALManagerInternalIOTest, WriteRecordWithNullPositiveLengthCoversChecksum
 	mgr.close();
 }
 
+TEST_F(WALManagerInternalIOTest, WriteRecordWithNonNullPayloadPersistsChecksumProtectedData) {
+	WALManager mgr;
+	mgr.open(testDbPath.string());
+
+	const std::vector<uint8_t> payload{0x10, 0x20, 0x30, 0x40};
+	ASSERT_NO_THROW(mgr.writeRecord(
+			WALRecordType::WAL_TXN_BEGIN,
+			11,
+			payload.data(),
+			static_cast<uint32_t>(payload.size())));
+	mgr.sync();
+
+	auto result = mgr.readRecords();
+	ASSERT_FALSE(result.corrupted);
+	ASSERT_EQ(result.records.size(), 1U);
+	EXPECT_EQ(result.records.front().header.type, WALRecordType::WAL_TXN_BEGIN);
+	EXPECT_EQ(result.records.front().header.checksum, computeCRC32(payload.data(), payload.size()));
+	EXPECT_EQ(result.records.front().data, payload);
+
+	mgr.close();
+}
+
+TEST_F(WALManagerInternalIOTest, WriteHeaderCanSkipSyncWhenCallerOwnsDurabilityBoundary) {
+	WALManager mgr;
+	mgr.open(testDbPath.string());
+	mgr.lastSyncedOffset_ = 0;
+
+	ASSERT_NO_THROW(mgr.writeHeader(false));
+	EXPECT_EQ(mgr.lastSyncedOffset_, 0U);
+
+	mgr.close();
+}
+
+TEST_F(WALManagerInternalIOTest, EnsureAppendCapacityUsesDefaultBufferWhenNoBufferExists) {
+	WALManager mgr;
+	mgr.setBufferSize(4096);
+
+	ASSERT_NO_THROW(mgr.ensureAppendCapacityLocked(64));
+	EXPECT_GE(mgr.writeBuffer_.capacity(), 4096U);
+}
+
 TEST_F(WALManagerInternalIOTest, ValidateHeaderReturnsFalseWhenFdIsInvalidEvenIfOpenFlagIsTrue) {
 	WALFileHeader hdr;
 	writeRaw(walPath, serializeFileHeader(hdr));

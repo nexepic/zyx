@@ -495,6 +495,31 @@ TEST_F(NodeTopKScanOperatorTest, MetadataSortPathHandlesInlineDoubleStringNullAn
 	EXPECT_EQ((*missingBatch)[0].getValue("missingSort"), std::optional<PropertyValue>(PropertyValue()));
 }
 
+TEST_F(NodeTopKScanOperatorTest, MetadataSortPathLoadsProjectedPropertiesFromBlobBackedRows) {
+	for (int64_t i = 0; i < 160; ++i) {
+		std::string blobKey(600, static_cast<char>('a' + (i % 26)));
+		addPerson({{"blobKey", PropertyValue(blobKey)},
+		           {"tag", PropertyValue("tag-" + std::to_string(i))}});
+	}
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "u";
+	config.labels = {"Person"};
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+
+	NodeTopKScanOperator op(dm, im, config, requirements, {}, {{"tag", "tag"}}, "blobKey", false, 1);
+	op.open();
+	auto batch = op.next();
+
+	ASSERT_TRUE(batch.has_value());
+	ASSERT_EQ(batch->size(), 1U);
+	EXPECT_EQ((*batch)[0].getValue("tag"), std::optional<PropertyValue>(PropertyValue("tag-25")));
+}
+
 TEST_F(NodeTopKScanOperatorTest, EmptyCandidateSetUsesMetadataPathAndReturnsNoRows) {
 	NodeScanConfig config;
 	config.type = ScanType::FULL_SCAN;

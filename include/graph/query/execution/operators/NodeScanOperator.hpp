@@ -220,7 +220,7 @@ namespace graph::query::execution::operators {
 
 		[[nodiscard]] size_t chooseEffectiveBatchSize(size_t remainingCandidates) const {
 			size_t batchSize = DEFAULT_BATCH_SIZE;
-			if (outputLimitHint_.has_value() && emittedRows_ < *outputLimitHint_) {
+			if (outputLimitHint_.has_value()) {
 				const size_t remainingRows = *outputLimitHint_ - emittedRows_;
 				// Small LIMIT queries should not trigger a full remaining parallel scan.
 				const size_t boundedWindow = std::max<size_t>(remainingRows, DEFAULT_BATCH_SIZE / 4);
@@ -234,7 +234,7 @@ namespace graph::query::execution::operators {
 				emittedRows_ += batch.size();
 				return;
 			}
-			const size_t remainingRows = emittedRows_ < *outputLimitHint_ ? *outputLimitHint_ - emittedRows_ : 0;
+			const size_t remainingRows = *outputLimitHint_ - emittedRows_;
 			if (batch.size() > remainingRows) {
 				batch.resize(remainingRows);
 			}

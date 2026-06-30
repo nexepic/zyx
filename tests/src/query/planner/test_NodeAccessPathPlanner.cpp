@@ -47,10 +47,12 @@ TEST(NodeAccessPathPlannerTest, ExpressionHelpersRecognizeVariablesAndProperties
 
 	EXPECT_TRUE(isNodeVariableReference(nullptr, "n"));
 	EXPECT_TRUE(isNodeVariableReference(variable, "n"));
+	EXPECT_FALSE(isNodeVariableReference(variable, "m"));
 	EXPECT_FALSE(isNodeVariableReference(property, "n"));
 	EXPECT_FALSE(isNodeVariableReference(literal, "n"));
 
 	ASSERT_NE(asNodePropertyAccess(property, "n"), nullptr);
+	EXPECT_EQ(asNodePropertyAccess(nullptr, "n"), nullptr);
 	EXPECT_EQ(asNodePropertyAccess(otherProperty, "n"), nullptr);
 	EXPECT_EQ(asNodePropertyAccess(variable, "n"), nullptr);
 }
@@ -113,6 +115,31 @@ TEST(NodeAccessPathPlannerTest, PreferredConfigAndFallbackPreserveLabelsAndClear
 	fallbackToLabelOrFullScan(unlabeledConfig);
 	EXPECT_EQ(unlabeledConfig.type, execution::ScanType::FULL_SCAN);
 	EXPECT_TRUE(unlabeledConfig.indexKey.empty());
+}
+
+TEST(NodeAccessPathPlannerTest, PreferredConfigCoversRangeCompositeLabelAndFullScan) {
+	auto rangeScan = makeScan();
+	rangeScan.setRangePredicates({makeClosedRange()});
+	rangeScan.setPreferredScanType(execution::ScanType::RANGE_SCAN);
+	auto rangeDecision = chooseNodeAccessPathDecision(rangeScan, nullptr);
+	EXPECT_EQ(rangeDecision.selected.config.type, execution::ScanType::RANGE_SCAN);
+	EXPECT_EQ(rangeDecision.selected.config.indexKey, "age");
+	EXPECT_FALSE(rangeDecision.selected.openRange);
+
+	auto compositeScan = makeScan();
+	compositeScan.setCompositeEquality({{"country", "city"}, {PropertyValue("CN"), PropertyValue("Shanghai")}});
+	compositeScan.setPreferredScanType(execution::ScanType::COMPOSITE_SCAN);
+	auto compositeDecision = chooseNodeAccessPathDecision(compositeScan, nullptr);
+	EXPECT_EQ(compositeDecision.selected.config.type, execution::ScanType::COMPOSITE_SCAN);
+	EXPECT_TRUE(compositeDecision.selectedSupportsDirectCandidateLookup());
+
+	auto labelScan = makeScan();
+	labelScan.setPreferredScanType(execution::ScanType::LABEL_SCAN);
+	EXPECT_EQ(chooseNodeAccessPathDecision(labelScan, nullptr).selected.config.type, execution::ScanType::LABEL_SCAN);
+
+	auto fullScan = LogicalNodeScan("n");
+	fullScan.setPreferredScanType(execution::ScanType::FULL_SCAN);
+	EXPECT_EQ(chooseNodeAccessPathDecision(fullScan, nullptr).selected.config.type, execution::ScanType::FULL_SCAN);
 }
 
 TEST(NodeAccessPathPlannerTest, PreferredDecisionMarksMalformedCandidateForConservativeFallback) {
@@ -206,6 +233,39 @@ TEST(NodeAccessPathPlannerTest, RangeResidualPredicatesPreserveInclusiveAndExclu
 	EXPECT_EQ(requirements.requiredProperties, (std::vector<std::string>{"age"}));
 }
 
+TEST(NodeAccessPathPlannerTest, ResidualPredicatesSkipHandledCompositeAndAddSingleSidedRange) {
+	auto compositeScan = makeScan();
+	compositeScan.setCompositeEquality({{"country", "city"}, {PropertyValue("CN"), PropertyValue("Shanghai")}});
+	execution::NodeScanConfig compositeConfig;
+	compositeConfig.type = execution::ScanType::COMPOSITE_SCAN;
+	compositeConfig.compositeKeys = {"country", "city"};
+	compositeConfig.compositeValues = {PropertyValue("CN"), PropertyValue("Shanghai")};
+	execution::NodeScanRequirements compositeRequirements;
+	std::vector<execution::VectorizedPropertyPredicate> compositePredicates;
+	ASSERT_TRUE(appendResidualNodePredicates(
+			compositeScan,
+			compositeConfig,
+			compositeRequirements,
+			compositePredicates));
+	EXPECT_TRUE(compositePredicates.empty());
+	EXPECT_TRUE(compositeRequirements.requiredProperties.empty());
+
+	auto rangeScan = makeScan();
+	RangePredicate minOnly;
+	minOnly.key = "age";
+	minOnly.minValue = PropertyValue(int64_t{18});
+	rangeScan.setRangePredicates({minOnly});
+	execution::NodeScanRequirements rangeRequirements;
+	std::vector<execution::VectorizedPropertyPredicate> rangePredicates;
+	ASSERT_TRUE(appendResidualNodePredicates(
+			rangeScan,
+			execution::NodeScanConfig{},
+			rangeRequirements,
+			rangePredicates));
+	ASSERT_EQ(rangePredicates.size(), 1U);
+	EXPECT_EQ(rangePredicates.front().op, execution::VectorPredicateOp::VPO_GE);
+}
+
 TEST(NodeAccessPathPlannerTest, CandidateConfigValidationIdentifiesUsableAccessSources) {
 	execution::NodeScanConfig invalidProperty;
 	invalidProperty.type = execution::ScanType::PROPERTY_SCAN;
@@ -234,6 +294,18 @@ TEST(NodeAccessPathPlannerTest, CandidateConfigValidationIdentifiesUsableAccessS
 	label.type = execution::ScanType::LABEL_SCAN;
 	EXPECT_TRUE(hasValidNodeCandidateConfig(label));
 	EXPECT_FALSE(isIndexCandidateSource(label.type));
+
+	execution::NodeScanConfig openRange;
+	openRange.type = execution::ScanType::RANGE_SCAN;
+	openRange.indexKey = "age";
+	openRange.rangeMin = PropertyValue(int64_t{18});
+	EXPECT_TRUE(hasOpenRangeBounds(openRange));
+	EXPECT_FALSE(hasOpenRangeBounds(label));
+
+	auto invalidType = static_cast<execution::ScanType>(255);
+	EXPECT_FALSE(hasValidNodeCandidateConfig(execution::NodeScanConfig{.type = invalidType}));
+	EXPECT_FALSE(isIndexCandidateSource(invalidType));
+	EXPECT_STREQ(nodeAccessPathKindName(static_cast<NodeAccessPathKind>(255)), "unknown");
 }
 
 TEST(NodeAccessPathPlannerTest, IndexedDecisionPrioritizesCompositeAndKeepsFallbackCandidate) {

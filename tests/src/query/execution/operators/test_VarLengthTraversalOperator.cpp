@@ -60,6 +60,30 @@ private:
 	size_t idx_ = 0;
 };
 
+class MockRecordBatchOperator : public PhysicalOperator {
+public:
+	explicit MockRecordBatchOperator(std::vector<RecordBatch> batches) : batches_(std::move(batches)) {}
+
+	void open() override { idx_ = 0; }
+
+	std::optional<RecordBatch> next() override {
+		if (idx_ >= batches_.size()) {
+			return std::nullopt;
+		}
+		return batches_[idx_++];
+	}
+
+	void close() override {}
+
+	[[nodiscard]] std::vector<std::string> getOutputVariables() const override { return {"src"}; }
+
+	[[nodiscard]] std::string toString() const override { return "MockRecordBatch"; }
+
+private:
+	std::vector<RecordBatch> batches_;
+	size_t idx_ = 0;
+};
+
 } // namespace
 
 class VarLengthTraversalOperatorTest : public ::testing::Test {
@@ -338,6 +362,40 @@ TEST_F(VarLengthTraversalOperatorTest, ReopenWithNonEmptyStack) {
 	op->close();
 }
 
+TEST_F(VarLengthTraversalOperatorTest, ReopenAfterPartialDfsBatchClearsStack) {
+	const int64_t labelId = dm->getOrCreateTokenId("Node");
+	const int64_t typeId = dm->getOrCreateTokenId("NEXT");
+
+	Node center(0, labelId);
+	dm->addNode(center);
+
+	static constexpr size_t kLeaves = PhysicalOperator::DEFAULT_BATCH_SIZE + 25;
+	for (size_t i = 0; i < kLeaves; ++i) {
+		Node leaf(0, labelId);
+		dm->addNode(leaf);
+		Edge edge(0, center.getId(), leaf.getId(), typeId);
+		dm->addEdge(edge);
+	}
+
+	auto source = std::make_unique<MockSourceOperator>("src", std::vector<Node>{center});
+	auto op = std::make_unique<VarLengthTraversalOperator>(
+			dm, std::move(source), "src", "dst", "NEXT", 1, 1, "outgoing");
+
+	op->open();
+	auto firstBatch = op->next();
+	ASSERT_TRUE(firstBatch.has_value());
+	EXPECT_EQ(firstBatch->size(), PhysicalOperator::DEFAULT_BATCH_SIZE);
+
+	// Re-opening mid-stream must discard the old DFS stack rather than resuming stale state.
+	op->open();
+	size_t totalAfterReopen = 0;
+	while (auto batch = op->next()) {
+		totalAfterReopen += batch->size();
+	}
+	EXPECT_EQ(totalAfterReopen, kLeaves);
+	op->close();
+}
+
 TEST_F(VarLengthTraversalOperatorTest, EmptyGraphNoResults) {
 	int64_t labelId = dm->getOrCreateTokenId("Node");
 	Node n1(0, labelId);
@@ -438,6 +496,30 @@ TEST_F(VarLengthTraversalOperatorTest, GetChildrenReturnsChild) {
 	auto children = op->getChildren();
 	ASSERT_EQ(children.size(), 1UL);
 	EXPECT_EQ(children[0], rawPtr);
+}
+
+TEST_F(VarLengthTraversalOperatorTest, NullChildAndMissingSourceRecordsReturnNoRows) {
+	auto nullChildOp = std::make_unique<VarLengthTraversalOperator>(
+			dm, nullptr, "src", "dst", "NEXT", 1, 2, "outgoing");
+	nullChildOp->open();
+	EXPECT_FALSE(nullChildOp->next().has_value());
+	const auto variables = nullChildOp->getOutputVariables();
+	ASSERT_EQ(variables.size(), 1UL);
+	EXPECT_EQ(variables[0], "dst");
+	const auto children = nullChildOp->getChildren();
+	ASSERT_EQ(children.size(), 1UL);
+	EXPECT_EQ(children[0], nullptr);
+	nullChildOp->close();
+
+	RecordBatch batchWithMissingSource;
+	batchWithMissingSource.emplace_back();
+	auto source = std::make_unique<MockRecordBatchOperator>(
+			std::vector<RecordBatch>{std::move(batchWithMissingSource), RecordBatch{}});
+	auto missingSourceOp = std::make_unique<VarLengthTraversalOperator>(
+			dm, std::move(source), "src", "dst", "NEXT", 1, 2, "outgoing");
+	missingSourceOp->open();
+	EXPECT_FALSE(missingSourceOp->next().has_value());
+	missingSourceOp->close();
 }
 
 TEST_F(VarLengthTraversalOperatorTest, BatchOverflow_StarGraph) {
@@ -698,6 +780,47 @@ TEST_F(VarLengthTraversalOperatorTest, FrontierTraversalSupportsTargetPropertyPr
 	EXPECT_TRUE(snapshot.contains("varlength.frontier.expand.frontier_entry_bytes"));
 }
 
+TEST_F(VarLengthTraversalOperatorTest, FrontierMaterializationSkipsInactiveTargets) {
+	const int64_t labelId = dm->getOrCreateTokenId("Node");
+	const int64_t typeId = dm->getOrCreateTokenId("NEXT");
+
+	Node sourceNode(0, labelId);
+	dm->addNode(sourceNode);
+	Node target(0, labelId);
+	dm->addNode(target);
+	Edge edge(0, sourceNode.getId(), target.getId(), typeId);
+	dm->addEdge(edge);
+	dm->deleteNode(target);
+
+	auto source = std::make_unique<MockSourceOperator>("src", std::vector<Node>{sourceNode});
+	auto op = std::make_unique<VarLengthTraversalOperator>(
+			dm, std::move(source), "src", "dst", "NEXT", 1, 1, "outgoing");
+	graph::concurrent::ThreadPool pool(2);
+	op->setThreadPool(&pool);
+
+	op->open();
+	EXPECT_FALSE(op->next().has_value());
+	op->close();
+}
+
+TEST_F(VarLengthTraversalOperatorTest, FrontierTraversalWithMinZeroEmitsSourceBeforeExpansion) {
+	auto chain = createChain(3);
+
+	auto source = std::make_unique<MockSourceOperator>("src", std::vector<Node>{chain.nodes[0]});
+	auto op = std::make_unique<VarLengthTraversalOperator>(
+			dm, std::move(source), "src", "dst", "NEXT", 0, 2, "outgoing");
+	graph::concurrent::ThreadPool pool(2);
+	op->setThreadPool(&pool);
+
+	op->open();
+	size_t total = 0;
+	while (auto batch = op->next()) {
+		total += batch->size();
+	}
+	EXPECT_EQ(total, 3UL);
+	op->close();
+}
+
 TEST_F(VarLengthTraversalOperatorTest, IndexedTargetPropertyEnablesDeepFrontierPruning) {
 	int64_t labelId = dm->getOrCreateTokenId("Node");
 	int64_t typeId = dm->getOrCreateTokenId("NEXT");
@@ -762,6 +885,58 @@ TEST_F(VarLengthTraversalOperatorTest, IndexedTargetPropertyEnablesDeepFrontierP
 	EXPECT_TRUE(snapshot.contains("varlength.target_index.strategy.bidirectional_prune"));
 	EXPECT_TRUE(snapshot.contains("varlength.target_index.reverse_prune_nodes"));
 	EXPECT_TRUE(snapshot.contains("varlength.frontier.expand.estimated_edges"));
+}
+
+TEST_F(VarLengthTraversalOperatorTest, IndexedTargetPropertyPrunesDfsDeadBranches) {
+	const int64_t labelId = dm->getOrCreateTokenId("Node");
+	const int64_t typeId = dm->getOrCreateTokenId("NEXT");
+
+	Node sourceNode(0, labelId);
+	dm->addNode(sourceNode);
+	Node middle(0, labelId);
+	dm->addNode(middle);
+	Node target(0, labelId);
+	dm->addNode(target);
+	dm->addNodeProperties(target.getId(), {{"id", PropertyValue(std::string("target"))}});
+
+	Edge sourceToMiddle(0, sourceNode.getId(), middle.getId(), typeId);
+	dm->addEdge(sourceToMiddle);
+	Edge middleToTarget(0, middle.getId(), target.getId(), typeId);
+	dm->addEdge(middleToTarget);
+
+	for (int i = 0; i < 8; ++i) {
+		Node deadEnd(0, labelId);
+		dm->addNode(deadEnd);
+		Edge deadEdge(0, sourceNode.getId(), deadEnd.getId(), typeId);
+		dm->addEdge(deadEdge);
+	}
+
+	auto indexManager = db->getQueryEngine()->getIndexManager();
+	ASSERT_TRUE(indexManager->createIndex("", "node", "", "id"));
+
+	auto source = std::make_unique<MockSourceOperator>("src", std::vector<Node>{sourceNode});
+	auto op = std::make_unique<VarLengthTraversalOperator>(
+			dm,
+			std::move(source),
+			"src",
+			"dst",
+			"NEXT",
+			1,
+			3,
+			"outgoing",
+			std::vector<int64_t>{},
+			std::vector<std::pair<std::string, PropertyValue>>{{"id", PropertyValue(std::string("target"))}},
+			indexManager);
+
+	op->open();
+	auto batch = op->next();
+	op->close();
+
+	ASSERT_TRUE(batch.has_value());
+	ASSERT_EQ(batch->size(), 1UL);
+	const auto emitted = (*batch)[0].getNode("dst");
+	ASSERT_TRUE(emitted.has_value());
+	EXPECT_EQ(emitted->getId(), target.getId());
 }
 
 TEST_F(VarLengthTraversalOperatorTest, IndexedTargetPropertyUsesGlobalIndexWithoutLabel) {
@@ -921,4 +1096,594 @@ TEST_F(VarLengthTraversalOperatorTest, FrontierTraversalDelaysTargetLabelPredica
 	ASSERT_TRUE(emitted.has_value());
 	EXPECT_EQ(emitted->getId(), matching.getId());
 	EXPECT_TRUE(snapshot.contains("varlength.frontier.expand.estimated_edges"));
+}
+
+TEST_F(VarLengthTraversalOperatorTest, IndexedTargetPropertyEmptyCandidateShortCircuitsTraversal) {
+	const int64_t labelId = dm->getOrCreateTokenId("Node");
+	const int64_t typeId = dm->getOrCreateTokenId("NEXT");
+
+	Node sourceNode(0, labelId);
+	dm->addNode(sourceNode);
+	Node reachable(0, labelId);
+	dm->addNode(reachable);
+	dm->addNodeProperties(reachable.getId(), {{"id", PropertyValue(std::string("other"))}});
+	Edge edge(0, sourceNode.getId(), reachable.getId(), typeId);
+	dm->addEdge(edge);
+
+	auto indexManager = db->getQueryEngine()->getIndexManager();
+	ASSERT_TRUE(indexManager->createIndex("", "node", "", "id"));
+
+	auto source = std::make_unique<MockSourceOperator>("src", std::vector<Node>{sourceNode});
+	auto op = std::make_unique<VarLengthTraversalOperator>(
+			dm,
+			std::move(source),
+			"src",
+			"dst",
+			"NEXT",
+			1,
+			2,
+			"outgoing",
+			std::vector<int64_t>{},
+			std::vector<std::pair<std::string, PropertyValue>>{{"id", PropertyValue(std::string("missing"))}},
+			indexManager);
+	graph::concurrent::ThreadPool pool(4);
+	op->setThreadPool(&pool);
+
+	graph::debug::PerfTrace::setEnabled(true);
+	graph::debug::PerfTrace::reset();
+	op->open();
+	EXPECT_FALSE(op->next().has_value());
+	op->close();
+	const auto snapshot = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setEnabled(false);
+
+	EXPECT_TRUE(snapshot.contains("varlength.target_index.strategy.empty_candidate"));
+}
+
+TEST_F(VarLengthTraversalOperatorTest, IndexedTargetPropertyFallsBackWhenNoUsefulIndexExists) {
+	const int64_t labelId = dm->getOrCreateTokenId("Node");
+	const int64_t typeId = dm->getOrCreateTokenId("NEXT");
+
+	Node sourceNode(0, labelId);
+	dm->addNode(sourceNode);
+	Node target(0, labelId);
+	dm->addNode(target);
+	dm->addNodeProperties(target.getId(), {{"id", PropertyValue(std::string("target"))}});
+	Edge edge(0, sourceNode.getId(), target.getId(), typeId);
+	dm->addEdge(edge);
+
+	auto indexManager = db->getQueryEngine()->getIndexManager();
+	auto source = std::make_unique<MockSourceOperator>("src", std::vector<Node>{sourceNode});
+	auto op = std::make_unique<VarLengthTraversalOperator>(
+			dm,
+			std::move(source),
+			"src",
+			"dst",
+			"NEXT",
+			1,
+			1,
+			"outgoing",
+			std::vector<int64_t>{},
+			std::vector<std::pair<std::string, PropertyValue>>{{"id", PropertyValue(std::string("target"))}},
+			indexManager);
+	graph::concurrent::ThreadPool pool(4);
+	op->setThreadPool(&pool);
+
+	graph::debug::PerfTrace::setEnabled(true);
+	graph::debug::PerfTrace::reset();
+	op->open();
+	auto batch = op->next();
+	op->close();
+	const auto snapshot = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setEnabled(false);
+
+	ASSERT_TRUE(batch.has_value());
+	ASSERT_EQ(batch->size(), 1UL);
+	EXPECT_TRUE(snapshot.contains("varlength.target_index.reason.not_used"));
+}
+
+TEST_F(VarLengthTraversalOperatorTest, IndexedTargetPropertySelectsMostSelectiveIndexedPredicate) {
+	const int64_t labelId = dm->getOrCreateTokenId("Node");
+	const int64_t typeId = dm->getOrCreateTokenId("NEXT");
+
+	Node sourceNode(0, labelId);
+	dm->addNode(sourceNode);
+	Node matching(0, labelId);
+	dm->addNode(matching);
+	Node sameCountry(0, labelId);
+	dm->addNode(sameCountry);
+	dm->addNodeProperties(matching.getId(), {{"country", PropertyValue(std::string("US"))},
+											 {"id", PropertyValue(std::string("target"))}});
+	dm->addNodeProperties(sameCountry.getId(), {{"country", PropertyValue(std::string("US"))},
+												{"id", PropertyValue(std::string("other"))}});
+	Edge matchingEdge(0, sourceNode.getId(), matching.getId(), typeId);
+	dm->addEdge(matchingEdge);
+	Edge sameCountryEdge(0, sourceNode.getId(), sameCountry.getId(), typeId);
+	dm->addEdge(sameCountryEdge);
+
+	auto indexManager = db->getQueryEngine()->getIndexManager();
+	ASSERT_TRUE(indexManager->createIndex("", "node", "", "country"));
+	ASSERT_TRUE(indexManager->createIndex("", "node", "", "id"));
+
+	auto source = std::make_unique<MockSourceOperator>("src", std::vector<Node>{sourceNode});
+	auto op = std::make_unique<VarLengthTraversalOperator>(
+			dm,
+			std::move(source),
+			"src",
+			"dst",
+			"NEXT",
+			1,
+			1,
+			"outgoing",
+			std::vector<int64_t>{},
+			std::vector<std::pair<std::string, PropertyValue>>{
+					{"country", PropertyValue(std::string("US"))},
+					{"id", PropertyValue(std::string("target"))}},
+			indexManager);
+	graph::concurrent::ThreadPool pool(4);
+	op->setThreadPool(&pool);
+
+	op->open();
+	auto batch = op->next();
+	op->close();
+
+	ASSERT_TRUE(batch.has_value());
+	ASSERT_EQ(batch->size(), 1UL);
+	const auto emitted = (*batch)[0].getNode("dst");
+	ASSERT_TRUE(emitted.has_value());
+	EXPECT_EQ(emitted->getId(), matching.getId());
+}
+
+TEST_F(VarLengthTraversalOperatorTest, IndexedTargetPropertyKeepsMoreSelectiveEarlierCandidate) {
+	const int64_t labelId = dm->getOrCreateTokenId("Node");
+	const int64_t typeId = dm->getOrCreateTokenId("NEXT");
+
+	Node sourceNode(0, labelId);
+	dm->addNode(sourceNode);
+	Node matching(0, labelId);
+	dm->addNode(matching);
+	Node sameCountry(0, labelId);
+	dm->addNode(sameCountry);
+	dm->addNodeProperties(matching.getId(), {{"id", PropertyValue(std::string("target"))},
+											 {"country", PropertyValue(std::string("US"))}});
+	dm->addNodeProperties(sameCountry.getId(), {{"id", PropertyValue(std::string("other"))},
+												{"country", PropertyValue(std::string("US"))}});
+
+	Edge matchingEdge(0, sourceNode.getId(), matching.getId(), typeId);
+	dm->addEdge(matchingEdge);
+	Edge sameCountryEdge(0, sourceNode.getId(), sameCountry.getId(), typeId);
+	dm->addEdge(sameCountryEdge);
+
+	auto indexManager = db->getQueryEngine()->getIndexManager();
+	ASSERT_TRUE(indexManager->createIndex("scoped_id", "node", "Node", "id"));
+	ASSERT_TRUE(indexManager->createIndex("scoped_country", "node", "Node", "country"));
+	ASSERT_TRUE(indexManager->createIndex("global_id", "node", "", "id"));
+	ASSERT_TRUE(indexManager->createIndex("global_country", "node", "", "country"));
+
+	auto source = std::make_unique<MockSourceOperator>("src", std::vector<Node>{sourceNode});
+	auto op = std::make_unique<VarLengthTraversalOperator>(
+			dm,
+			std::move(source),
+			"src",
+			"dst",
+			"NEXT",
+			1,
+			1,
+			"outgoing",
+			std::vector<int64_t>{labelId},
+			std::vector<std::pair<std::string, PropertyValue>>{
+					{"id", PropertyValue(std::string("target"))},
+					{"country", PropertyValue(std::string("US"))}},
+			indexManager,
+			std::vector<std::string>{"Node"});
+
+	graph::debug::PerfTrace::setEnabled(true);
+	graph::debug::PerfTrace::reset();
+	op->open();
+	auto batch = op->next();
+	op->close();
+	const auto snapshot = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setEnabled(false);
+
+	ASSERT_TRUE(batch.has_value());
+	ASSERT_EQ(batch->size(), 1UL);
+	const auto emitted = (*batch)[0].getNode("dst");
+	ASSERT_TRUE(emitted.has_value());
+	EXPECT_EQ(emitted->getId(), matching.getId());
+	EXPECT_TRUE(snapshot.contains("varlength.target_index.source.scoped"));
+}
+
+TEST_F(VarLengthTraversalOperatorTest, IndexedReversePruningHandlesBothDirectionAndSharedPredecessor) {
+	const int64_t labelId = dm->getOrCreateTokenId("Node");
+	const int64_t typeId = dm->getOrCreateTokenId("NEXT");
+
+	Node sourceNode(0, labelId);
+	dm->addNode(sourceNode);
+	Node targetA(0, labelId);
+	dm->addNode(targetA);
+	Node targetB(0, labelId);
+	dm->addNode(targetB);
+	dm->addNodeProperties(targetA.getId(), {{"group", PropertyValue(std::string("target"))}});
+	dm->addNodeProperties(targetB.getId(), {{"group", PropertyValue(std::string("target"))}});
+
+	Edge toA(0, sourceNode.getId(), targetA.getId(), typeId);
+	dm->addEdge(toA);
+	Edge toB(0, sourceNode.getId(), targetB.getId(), typeId);
+	dm->addEdge(toB);
+
+	auto indexManager = db->getQueryEngine()->getIndexManager();
+	ASSERT_TRUE(indexManager->createIndex("", "node", "", "group"));
+
+	auto source = std::make_unique<MockSourceOperator>("src", std::vector<Node>{sourceNode});
+	auto op = std::make_unique<VarLengthTraversalOperator>(
+			dm,
+			std::move(source),
+			"src",
+			"dst",
+			"NEXT",
+			1,
+			3,
+			"both",
+			std::vector<int64_t>{},
+			std::vector<std::pair<std::string, PropertyValue>>{{"group", PropertyValue(std::string("target"))}},
+			indexManager);
+
+	graph::debug::PerfTrace::setEnabled(true);
+	graph::debug::PerfTrace::reset();
+	op->open();
+	size_t total = 0;
+	while (auto batch = op->next()) {
+		total += batch->size();
+	}
+	op->close();
+	const auto snapshot = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setEnabled(false);
+
+	EXPECT_EQ(total, 2UL);
+	EXPECT_TRUE(snapshot.contains("varlength.target_index.strategy.bidirectional_prune"));
+}
+
+TEST_F(VarLengthTraversalOperatorTest, IndexedReversePruningSupportsIncomingTraversal) {
+	const int64_t labelId = dm->getOrCreateTokenId("Node");
+	const int64_t typeId = dm->getOrCreateTokenId("NEXT");
+
+	Node target(0, labelId);
+	dm->addNode(target);
+	dm->addNodeProperties(target.getId(), {{"id", PropertyValue(std::string("target"))}});
+	Node middle(0, labelId);
+	dm->addNode(middle);
+	Node sourceNode(0, labelId);
+	dm->addNode(sourceNode);
+	Edge first(0, target.getId(), middle.getId(), typeId);
+	dm->addEdge(first);
+	Edge second(0, middle.getId(), sourceNode.getId(), typeId);
+	dm->addEdge(second);
+
+	auto indexManager = db->getQueryEngine()->getIndexManager();
+	ASSERT_TRUE(indexManager->createIndex("", "node", "", "id"));
+
+	auto source = std::make_unique<MockSourceOperator>("src", std::vector<Node>{sourceNode});
+	auto op = std::make_unique<VarLengthTraversalOperator>(
+			dm,
+			std::move(source),
+			"src",
+			"dst",
+			"NEXT",
+			1,
+			3,
+			"incoming",
+			std::vector<int64_t>{},
+			std::vector<std::pair<std::string, PropertyValue>>{{"id", PropertyValue(std::string("target"))}},
+			indexManager);
+	graph::concurrent::ThreadPool pool(4);
+	op->setThreadPool(&pool);
+
+	graph::debug::PerfTrace::setEnabled(true);
+	graph::debug::PerfTrace::reset();
+	op->open();
+	auto batch = op->next();
+	op->close();
+	const auto snapshot = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setEnabled(false);
+
+	ASSERT_TRUE(batch.has_value());
+	ASSERT_EQ(batch->size(), 1UL);
+	const auto emitted = (*batch)[0].getNode("dst");
+	ASSERT_TRUE(emitted.has_value());
+	EXPECT_EQ(emitted->getId(), target.getId());
+	EXPECT_TRUE(snapshot.contains("varlength.target_index.strategy.bidirectional_prune"));
+}
+
+TEST_F(VarLengthTraversalOperatorTest, TargetPredicateRejectsInvalidLabelsAndMissingProperties) {
+	const int64_t labelId = dm->getOrCreateTokenId("Node");
+	const int64_t typeId = dm->getOrCreateTokenId("NEXT");
+
+	Node sourceNode(0, labelId);
+	dm->addNode(sourceNode);
+	Node target(0, labelId);
+	dm->addNode(target);
+	Edge edge(0, sourceNode.getId(), target.getId(), typeId);
+	dm->addEdge(edge);
+
+	auto source = std::make_unique<MockSourceOperator>("src", std::vector<Node>{sourceNode});
+	auto op = std::make_unique<VarLengthTraversalOperator>(
+			dm,
+			std::move(source),
+			"src",
+			"dst",
+			"NEXT",
+			1,
+			1,
+			"outgoing",
+			std::vector<int64_t>{0},
+			std::vector<std::pair<std::string, PropertyValue>>{{"id", PropertyValue(std::string("missing"))}});
+
+	op->open();
+	EXPECT_FALSE(op->next().has_value());
+	op->close();
+}
+
+TEST_F(VarLengthTraversalOperatorTest, NullChildAndMissingEdgeTypeReturnNoRows) {
+	auto noChild = std::make_unique<VarLengthTraversalOperator>(
+			dm, nullptr, "src", "dst", "", 1, 1, "outgoing");
+	noChild->open();
+	EXPECT_TRUE(noChild->getOutputVariables().size() == 1U);
+	EXPECT_FALSE(noChild->next().has_value());
+	noChild->close();
+
+	const int64_t labelId = dm->getOrCreateTokenId("Node");
+	Node sourceNode(0, labelId);
+	dm->addNode(sourceNode);
+	auto source = std::make_unique<MockSourceOperator>("src", std::vector<Node>{sourceNode});
+	auto missingType = std::make_unique<VarLengthTraversalOperator>(
+			dm, std::move(source), "src", "dst", "MISSING_EDGE_TYPE", 1, 2, "outgoing");
+	missingType->open();
+	EXPECT_FALSE(missingType->next().has_value());
+	missingType->close();
+}
+
+TEST_F(VarLengthTraversalOperatorTest, FrontierTraversalSkipsInputRowsWithoutSourceNode) {
+	const int64_t typeId = dm->getOrCreateTokenId("NEXT");
+	(void) typeId;
+
+	Record rowWithoutSource;
+	rowWithoutSource.setValue("not_src", PropertyValue(int64_t{1}));
+	RecordBatch batch;
+	batch.push_back(std::move(rowWithoutSource));
+
+	auto source = std::make_unique<MockRecordBatchOperator>(std::vector<RecordBatch>{std::move(batch)});
+	auto op = std::make_unique<VarLengthTraversalOperator>(
+			dm, std::move(source), "src", "dst", "NEXT", 1, 2, "outgoing");
+	graph::concurrent::ThreadPool pool(2);
+	op->setThreadPool(&pool);
+
+	op->open();
+	EXPECT_FALSE(op->next().has_value());
+	op->close();
+}
+
+TEST_F(VarLengthTraversalOperatorTest, NullChildWithThreadPoolDoesNotInitializeFrontier) {
+	const int64_t typeId = dm->getOrCreateTokenId("NEXT");
+	(void) typeId;
+
+	auto op = std::make_unique<VarLengthTraversalOperator>(
+			dm, nullptr, "src", "dst", "NEXT", 1, 2, "outgoing");
+	graph::concurrent::ThreadPool pool(2);
+	op->setThreadPool(&pool);
+
+	op->open();
+	EXPECT_FALSE(op->next().has_value());
+	op->close();
+}
+
+TEST_F(VarLengthTraversalOperatorTest, SingleThreadPoolUsesDfsForDeepPropertyTraversal) {
+	const int64_t labelId = dm->getOrCreateTokenId("Node");
+	const int64_t typeId = dm->getOrCreateTokenId("NEXT");
+
+	Node sourceNode(0, labelId);
+	dm->addNode(sourceNode);
+	Node middle(0, labelId);
+	dm->addNode(middle);
+	Node target(0, labelId);
+	dm->addNode(target);
+	dm->addNodeProperties(target.getId(), {{"id", PropertyValue(std::string("target"))}});
+
+	Edge first(0, sourceNode.getId(), middle.getId(), typeId);
+	dm->addEdge(first);
+	Edge second(0, middle.getId(), target.getId(), typeId);
+	dm->addEdge(second);
+
+	auto source = std::make_unique<MockSourceOperator>("src", std::vector<Node>{sourceNode});
+	auto op = std::make_unique<VarLengthTraversalOperator>(
+			dm,
+			std::move(source),
+			"src",
+			"dst",
+			"NEXT",
+			1,
+			3,
+			"outgoing",
+			std::vector<int64_t>{},
+			std::vector<std::pair<std::string, PropertyValue>>{{"id", PropertyValue(std::string("target"))}});
+	graph::concurrent::ThreadPool singleWorkerPool(1);
+	op->setThreadPool(&singleWorkerPool);
+
+	op->open();
+	auto batch = op->next();
+	op->close();
+
+	ASSERT_TRUE(batch.has_value());
+	ASSERT_EQ(batch->size(), 1UL);
+	const auto emitted = (*batch)[0].getNode("dst");
+	ASSERT_TRUE(emitted.has_value());
+	EXPECT_EQ(emitted->getId(), target.getId());
+}
+
+TEST_F(VarLengthTraversalOperatorTest, DfsTargetPropertyMismatchFiltersReachableNode) {
+	const int64_t labelId = dm->getOrCreateTokenId("Node");
+	const int64_t typeId = dm->getOrCreateTokenId("NEXT");
+
+	Node sourceNode(0, labelId);
+	dm->addNode(sourceNode);
+	Node target(0, labelId);
+	dm->addNode(target);
+	dm->addNodeProperties(target.getId(), {{"id", PropertyValue(std::string("actual"))}});
+	Edge edge(0, sourceNode.getId(), target.getId(), typeId);
+	dm->addEdge(edge);
+
+	auto source = std::make_unique<MockSourceOperator>("src", std::vector<Node>{sourceNode});
+	auto op = std::make_unique<VarLengthTraversalOperator>(
+			dm,
+			std::move(source),
+			"src",
+			"dst",
+			"NEXT",
+			1,
+			1,
+			"outgoing",
+			std::vector<int64_t>{},
+			std::vector<std::pair<std::string, PropertyValue>>{{"id", PropertyValue(std::string("expected"))}});
+
+	op->open();
+	EXPECT_FALSE(op->next().has_value());
+	op->close();
+}
+
+TEST_F(VarLengthTraversalOperatorTest, DfsMinZeroPredicateSkipsInactiveSourceNode) {
+	const int64_t labelId = dm->getOrCreateTokenId("Node");
+	const int64_t typeId = dm->getOrCreateTokenId("NEXT");
+	(void) typeId;
+
+	Node sourceNode(0, labelId);
+	dm->addNode(sourceNode);
+	dm->addNodeProperties(sourceNode.getId(), {{"id", PropertyValue(std::string("source"))}});
+	dm->deleteNode(sourceNode);
+
+	auto source = std::make_unique<MockSourceOperator>("src", std::vector<Node>{sourceNode});
+	auto op = std::make_unique<VarLengthTraversalOperator>(
+			dm,
+			std::move(source),
+			"src",
+			"dst",
+			"NEXT",
+			0,
+			0,
+			"outgoing",
+			std::vector<int64_t>{},
+			std::vector<std::pair<std::string, PropertyValue>>{{"id", PropertyValue(std::string("source"))}});
+
+	op->open();
+	EXPECT_FALSE(op->next().has_value());
+	op->close();
+}
+
+TEST_F(VarLengthTraversalOperatorTest, DfsMinZeroWithoutPredicatesDropsInactiveSourceDuringMaterialization) {
+	const int64_t labelId = dm->getOrCreateTokenId("Node");
+	const int64_t typeId = dm->getOrCreateTokenId("NEXT");
+	(void) typeId;
+
+	Node sourceNode(0, labelId);
+	dm->addNode(sourceNode);
+	dm->deleteNode(sourceNode);
+
+	auto source = std::make_unique<MockSourceOperator>("src", std::vector<Node>{sourceNode});
+	auto op = std::make_unique<VarLengthTraversalOperator>(
+			dm, std::move(source), "src", "dst", "NEXT", 0, 0, "outgoing");
+
+	op->open();
+	EXPECT_FALSE(op->next().has_value());
+	op->close();
+}
+
+TEST_F(VarLengthTraversalOperatorTest, ThreadPoolDoesNotUseFrontierWhenMaxHopsIsZero) {
+	const int64_t labelId = dm->getOrCreateTokenId("Node");
+	const int64_t typeId = dm->getOrCreateTokenId("NEXT");
+	(void) typeId;
+
+	Node sourceNode(0, labelId);
+	dm->addNode(sourceNode);
+
+	auto source = std::make_unique<MockSourceOperator>("src", std::vector<Node>{sourceNode});
+	auto op = std::make_unique<VarLengthTraversalOperator>(
+			dm, std::move(source), "src", "dst", "NEXT", 1, 0, "outgoing");
+	graph::concurrent::ThreadPool pool(2);
+	op->setThreadPool(&pool);
+
+	op->open();
+	EXPECT_FALSE(op->next().has_value());
+	op->close();
+}
+
+TEST_F(VarLengthTraversalOperatorTest, UnresolvedEdgeTypeWithThreadPoolReturnsNoRows) {
+	const int64_t labelId = dm->getOrCreateTokenId("Node");
+	Node sourceNode(0, labelId);
+	dm->addNode(sourceNode);
+
+	auto source = std::make_unique<MockSourceOperator>("src", std::vector<Node>{sourceNode});
+	auto op = std::make_unique<VarLengthTraversalOperator>(
+			dm, std::move(source), "src", "dst", "MISSING_EDGE_TYPE", 1, 2, "outgoing");
+	graph::concurrent::ThreadPool pool(2);
+	op->setThreadPool(&pool);
+
+	op->open();
+	EXPECT_FALSE(op->next().has_value());
+	op->close();
+}
+
+TEST_F(VarLengthTraversalOperatorTest, IndexedTargetCandidateSetSkipsReversePruningWhenLarge) {
+	const int64_t labelId = dm->getOrCreateTokenId("Node");
+	const int64_t typeId = dm->getOrCreateTokenId("NEXT");
+
+	Node sourceNode(0, labelId);
+	dm->addNode(sourceNode);
+	Node middle(0, labelId);
+	dm->addNode(middle);
+	Edge first(0, sourceNode.getId(), middle.getId(), typeId);
+	dm->addEdge(first);
+
+	std::vector<Node> candidates;
+	candidates.reserve(VarLengthTraversalOperator::INDEX_ASSISTED_REVERSE_TARGET_MAX_CANDIDATES + 1);
+	for (size_t i = 0; i <= VarLengthTraversalOperator::INDEX_ASSISTED_REVERSE_TARGET_MAX_CANDIDATES; ++i) {
+		Node candidate(0, labelId);
+		dm->addNode(candidate);
+		dm->addNodeProperties(candidate.getId(), {{"group", PropertyValue(std::string("candidate"))}});
+		candidates.push_back(candidate);
+	}
+	Edge reachable(0, middle.getId(), candidates.front().getId(), typeId);
+	dm->addEdge(reachable);
+
+	auto indexManager = db->getQueryEngine()->getIndexManager();
+	ASSERT_TRUE(indexManager->createIndex("", "node", "", "group"));
+
+	auto source = std::make_unique<MockSourceOperator>("src", std::vector<Node>{sourceNode});
+	auto op = std::make_unique<VarLengthTraversalOperator>(
+			dm,
+			std::move(source),
+			"src",
+			"dst",
+			"NEXT",
+			1,
+			3,
+			"outgoing",
+			std::vector<int64_t>{},
+			std::vector<std::pair<std::string, PropertyValue>>{{"group", PropertyValue(std::string("candidate"))}},
+			indexManager);
+	graph::concurrent::ThreadPool pool(4);
+	op->setThreadPool(&pool);
+
+	graph::debug::PerfTrace::setEnabled(true);
+	graph::debug::PerfTrace::reset();
+	op->open();
+	auto batch = op->next();
+	op->close();
+	const auto snapshot = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setEnabled(false);
+
+	ASSERT_TRUE(batch.has_value());
+	ASSERT_EQ(batch->size(), 1UL);
+	const auto emitted = (*batch)[0].getNode("dst");
+	ASSERT_TRUE(emitted.has_value());
+	EXPECT_EQ(emitted->getId(), candidates.front().getId());
+	EXPECT_TRUE(snapshot.contains("varlength.target_index.candidates"));
+	EXPECT_FALSE(snapshot.contains("varlength.target_index.strategy.bidirectional_prune"));
 }

@@ -133,6 +133,51 @@ TEST_F(PropertyIndexCompositeTest, AddCompositeEntriesBatchAddsOnlyExistingDefin
 	EXPECT_TRUE(skippedResults.empty());
 }
 
+TEST_F(PropertyIndexCompositeTest, EmptyCompositeBatchIsANoop) {
+	const std::vector<graph::query::indexes::PropertyIndex::CompositeEntry> entries;
+
+	EXPECT_NO_THROW(propertyIndex->addCompositeEntriesBatch(entries));
+	EXPECT_FALSE(propertyIndex->hasCompositeIndex({"name", "age"}));
+}
+
+TEST_F(PropertyIndexCompositeTest, CompositeBatchWithoutManagerIsIgnored) {
+	const std::vector<graph::query::indexes::PropertyIndex::CompositeEntry> entries = {
+		{1, {"name", "age"}, {PropertyValue(std::string("Alice")), PropertyValue(static_cast<int64_t>(30))}},
+	};
+
+	EXPECT_NO_THROW(propertyIndex->addCompositeEntriesBatch(entries));
+	EXPECT_TRUE(propertyIndex->findCompositeExact(
+		{"name", "age"},
+		{PropertyValue(std::string("Alice")), PropertyValue(static_cast<int64_t>(30))}).empty());
+}
+
+TEST_F(PropertyIndexCompositeTest, CompositeBatchSkipsMalformedEntries) {
+	propertyIndex->createCompositeIndex({"name", "age"});
+
+	const std::vector<graph::query::indexes::PropertyIndex::CompositeEntry> entries = {
+		{0, {"name", "age"}, {PropertyValue(std::string("Zero")), PropertyValue(static_cast<int64_t>(1))}},
+		{2, {}, {PropertyValue(std::string("NoKeys"))}},
+		{3, {"name", "age"}, {}},
+		{4, {"name", "age"}, {PropertyValue(std::string("Carol")), PropertyValue(static_cast<int64_t>(34))}},
+	};
+
+	propertyIndex->addCompositeEntriesBatch(entries);
+
+	EXPECT_TRUE(propertyIndex->findCompositeExact(
+		{"name", "age"},
+		{PropertyValue(std::string("Zero")), PropertyValue(static_cast<int64_t>(1))}).empty());
+	EXPECT_TRUE(propertyIndex->findCompositeExact(
+		{},
+		{PropertyValue(std::string("NoKeys"))}).empty());
+	EXPECT_TRUE(propertyIndex->findCompositeExact({"name", "age"}, {}).empty());
+
+	const auto carolResults = propertyIndex->findCompositeExact(
+		{"name", "age"},
+		{PropertyValue(std::string("Carol")), PropertyValue(static_cast<int64_t>(34))});
+	ASSERT_EQ(carolResults.size(), 1u);
+	EXPECT_EQ(carolResults[0], 4);
+}
+
 TEST_F(PropertyIndexCompositeTest, AddCompositeEntry_NoIndex_Noop) {
 	// Cover line 573: rootIt == compositeRootIds_.end() → return
 	propertyIndex->addCompositeEntry(1,
@@ -183,6 +228,12 @@ TEST_F(PropertyIndexCompositeTest, FindCompositeExact_NoIndex_ReturnsEmpty) {
 		{"no", "index"},
 		{PropertyValue(static_cast<int64_t>(1)), PropertyValue(static_cast<int64_t>(2))});
 	EXPECT_TRUE(results.empty());
+}
+
+TEST_F(PropertyIndexCompositeTest, CountCompositeExactWithoutDefinitionReturnsZero) {
+	EXPECT_EQ(propertyIndex->countCompositeExact(
+		{"no", "index"},
+		{PropertyValue(static_cast<int64_t>(1)), PropertyValue(static_cast<int64_t>(2))}), 0u);
 }
 
 // ============================================================================

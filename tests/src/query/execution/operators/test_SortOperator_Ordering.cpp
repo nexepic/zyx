@@ -295,7 +295,7 @@ TEST_F(SortOperatorOrderingTest, SortWithEqualValues) {
  */
 TEST_F(SortOperatorOrderingTest, ParallelSort_LargeDataset) {
 	// Build dataset above PARALLEL_SORT_THRESHOLD (8192)
-	constexpr size_t N = 10003;
+	constexpr size_t N = 20001;
 	RecordBatch batch;
 	batch.reserve(N);
 	for (size_t i = 0; i < N; ++i) {
@@ -338,6 +338,39 @@ TEST_F(SortOperatorOrderingTest, ParallelSort_LargeDataset) {
 				  std::get<int64_t>(curr->getVariant()));
 	}
 
+	op->close();
+}
+
+TEST_F(SortOperatorOrderingTest, TopNUsesParallelBatchRetentionForLargeBatch) {
+	constexpr size_t N = 5000;
+	RecordBatch batch;
+	batch.reserve(N);
+	for (size_t i = 0; i < N; ++i) {
+		Record record;
+		record.setValue("x", PropertyValue(static_cast<int64_t>(N - i)));
+		batch.push_back(std::move(record));
+	}
+
+	auto expr = std::make_shared<graph::query::expressions::VariableReferenceExpression>("x");
+	SortItem item(expr, true);
+	auto op = std::make_unique<SortOperator>(
+			std::make_unique<SortMockOperator>(std::vector<RecordBatch>{{std::move(batch)}}),
+			std::vector<SortItem>{item},
+			5);
+
+	graph::concurrent::ThreadPool pool(4);
+	op->setThreadPool(&pool);
+
+	op->open();
+	auto result = op->next();
+	ASSERT_TRUE(result.has_value());
+	ASSERT_EQ(result->size(), 5U);
+	for (size_t i = 0; i < result->size(); ++i) {
+		auto value = (*result)[i].getValue("x");
+		ASSERT_TRUE(value.has_value());
+		EXPECT_EQ(std::get<int64_t>(value->getVariant()), static_cast<int64_t>(i + 1));
+	}
+	EXPECT_FALSE(op->next().has_value());
 	op->close();
 }
 

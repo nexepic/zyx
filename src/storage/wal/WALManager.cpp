@@ -231,13 +231,6 @@ namespace graph::storage::wal {
 		writeBuffer_.reserve(target);
 	}
 
-	void WALManager::appendBytesLocked(const uint8_t *data, size_t size) {
-		if (!data || size == 0) {
-			return;
-		}
-		writeBuffer_.insert(writeBuffer_.end(), data, data + size);
-	}
-
 	void WALManager::flushBuffer() {
 		// Must be called with commitMutex_ held
 		if (writeBuffer_.empty())

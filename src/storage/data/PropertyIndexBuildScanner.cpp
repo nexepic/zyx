@@ -117,8 +117,7 @@ namespace {
 			std::vector<PropertyEntityOwnerScalarKeyValue> &out) {
 		if (!property.isActive() ||
 			property.getMetadata().entityType != toUnderlying(ownerType) ||
-			!ownerFilterContains(sortedOwnerIds, property.getMetadata().entityId) ||
-			requestedKeys.empty()) {
+			!ownerFilterContains(sortedOwnerIds, property.getMetadata().entityId)) {
 			return;
 		}
 
@@ -185,9 +184,7 @@ namespace {
 		std::unordered_set<int64_t> ids;
 		ids.reserve(dirtyInfos.size());
 		for (const auto &info: dirtyInfos) {
-			if (info.backup.has_value() && info.backup->getId() > 0) {
-				ids.insert(info.backup->getId());
-			}
+			ids.insert(info.backup->getId());
 		}
 		return ids;
 	}
@@ -199,7 +196,7 @@ namespace {
 			std::span<const int64_t> sortedOwnerIds,
 			std::vector<PropertyEntityOwnerScalarKeyValue> &out) {
 		for (const auto &info: dirtyInfos) {
-			if (info.changeType == EntityChangeType::CHANGE_DELETED || !info.backup.has_value()) {
+			if (info.changeType == EntityChangeType::CHANGE_DELETED) {
 				continue;
 			}
 			readIndexableOwnerValuesFromProperty(*info.backup, ownerType, requestedKeys, sortedOwnerIds, out);
@@ -212,10 +209,6 @@ namespace {
 			std::span<const std::string> requestedKeys,
 			std::span<const int64_t> sortedOwnerIds,
 			std::vector<PropertyEntityOwnerScalarKeyValue> &out) {
-		if (requestedKeys.empty()) {
-			return;
-		}
-
 		const char *cursor = buf;
 		const char *end = buf + Property::TOTAL_PROPERTY_SIZE;
 

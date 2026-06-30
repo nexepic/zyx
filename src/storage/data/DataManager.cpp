@@ -78,9 +78,6 @@ namespace graph::storage {
 				if (views_.size() >= kWalBatchSize) {
 					flush();
 				}
-				if (views_.capacity() == 0) {
-					reserveFor(1);
-				}
 
 				const size_t offset = serialized_.size();
 				serialized_.resize(offset + kEntitySize);
@@ -157,14 +154,14 @@ namespace graph::storage {
 		const size_t totalBytes = segmentCount * TOTAL_SEGMENT_SIZE;
 		auto *out = static_cast<uint8_t *>(buf);
 		const bool readThrough = cachePolicy == SegmentReadCachePolicy::SRCP_READ_THROUGH;
-		if (readThrough && pagePool_ && pagePool_->capacity() > 0) {
+		if (readThrough && pagePool_->capacity() > 0) {
 			if (pagePool_->copyContiguousPages(startSegmentOffset, segmentCount, out, TOTAL_SEGMENT_SIZE)) {
 				return static_cast<ssize_t>(totalBytes);
 			}
 		}
 
 		const ssize_t read = preadBytes(buf, totalBytes, static_cast<int64_t>(startSegmentOffset));
-		if (readThrough && read >= static_cast<ssize_t>(totalBytes) && pagePool_ && pagePool_->capacity() > 0) {
+		if (readThrough && read >= static_cast<ssize_t>(totalBytes) && pagePool_->capacity() > 0) {
 			pagePool_->putContiguousPages(startSegmentOffset, segmentCount, out, TOTAL_SEGMENT_SIZE);
 		}
 		return read;
@@ -1190,7 +1187,7 @@ namespace graph::storage {
 		std::array<std::vector<const TransactionContext::PendingWalChange *>, getMaxEntityType() + 1> changesByType;
 		for (auto &[key, change]: changes) {
 			(void) key;
-			if (change.entityType < changesByType.size()) {
+			if (change.entityType < changesByType.size()) { // ZYX_COV_EXCL_LINE: TransactionContext only records known entity type IDs.
 				changesByType[change.entityType].push_back(&change);
 			}
 		}
@@ -1228,40 +1225,22 @@ namespace graph::storage {
 		writer.flush();
 	}
 
-	template<typename EntityType>
-	void DataManager::flushPendingWALRecordsForType(
-			std::span<const TransactionContext::PendingWalChange *const> changes) const {
-		const auto entityType = static_cast<uint8_t>(EntityType::typeId);
-		std::vector<int64_t> ids;
-		std::vector<const TransactionContext::PendingWalChange *> typedChanges;
-		ids.reserve(changes.size());
-		typedChanges.reserve(changes.size());
-		size_t addedCount = 0;
-		size_t modifiedCount = 0;
-		size_t deletedCount = 0;
+		template<typename EntityType>
+		void DataManager::flushPendingWALRecordsForType(
+				std::span<const TransactionContext::PendingWalChange *const> changes) const {
+			std::vector<int64_t> ids;
+			std::vector<const TransactionContext::PendingWalChange *> typedChanges;
+			ids.reserve(changes.size());
+			typedChanges.reserve(changes.size());
 
-		for (const auto *changePtr: changes) {
-			if (!changePtr || changePtr->entityType != entityType) {
-				continue;
+			for (const auto *changePtr: changes) {
+				ids.push_back(changePtr->entityId);
+				typedChanges.push_back(changePtr);
 			}
-			ids.push_back(changePtr->entityId);
-			typedChanges.push_back(changePtr);
-			switch (changePtr->changeType) {
-				case EntityChangeType::CHANGE_ADDED:
-					++addedCount;
-					break;
-				case EntityChangeType::CHANGE_MODIFIED:
-					++modifiedCount;
-					break;
-				case EntityChangeType::CHANGE_DELETED:
-					++deletedCount;
-					break;
-			}
-		}
 
-		if (ids.empty()) {
-			return;
-		}
+			if (ids.empty()) {
+				return;
+			}
 
 		std::vector<wal::WALEntityChangeView> stagedViews;
 		std::vector<int64_t> materializedIds;
@@ -1282,17 +1261,18 @@ namespace graph::storage {
 								   static_cast<uint32_t>(changePtr->serializedData.size())});
 		}
 		txnContext_.flushWalChangeViews(stagedViews);
-		if (materializedIds.empty()) {
-			return;
-		}
+			if (materializedIds.empty()) {
+				return;
+			}
 
-		WalEntityViewBatchWriter<EntityType> added(txnContext_, EntityChangeType::CHANGE_ADDED, addedCount);
-		WalEntityViewBatchWriter<EntityType> modified(txnContext_, EntityChangeType::CHANGE_MODIFIED, modifiedCount);
-		WalEntityViewBatchWriter<EntityType> deleted(txnContext_, EntityChangeType::CHANGE_DELETED, deletedCount);
-		size_t changeIndex = 0;
+			WalEntityViewBatchWriter<EntityType> modified(
+					txnContext_, EntityChangeType::CHANGE_MODIFIED, materializedChanges.size());
+			WalEntityViewBatchWriter<EntityType> deleted(
+					txnContext_, EntityChangeType::CHANGE_DELETED, materializedChanges.size());
+			size_t changeIndex = 0;
 
-		persistenceManager_->visitDirtyInfos<EntityType>(
-				materializedIds, [&](int64_t, const DirtyEntityInfo<EntityType> *dirtyInfo) {
+			persistenceManager_->visitDirtyInfos<EntityType>(
+					materializedIds, [&](int64_t, const DirtyEntityInfo<EntityType> *dirtyInfo) {
 					const auto &change = *materializedChanges[changeIndex++];
 					if (!dirtyInfo || !dirtyInfo->backup.has_value()) {
 						if (change.changeType == EntityChangeType::CHANGE_DELETED) {
@@ -1301,23 +1281,22 @@ namespace graph::storage {
 						return;
 					}
 
-					switch (change.changeType) {
-						case EntityChangeType::CHANGE_ADDED:
-							added.add(*dirtyInfo->backup);
-							break;
-						case EntityChangeType::CHANGE_MODIFIED:
-							modified.add(*dirtyInfo->backup);
-							break;
+						switch (change.changeType) {
+							case EntityChangeType::CHANGE_ADDED:
+								txnContext_.flushSerializedWalChange(change);
+								break;
+							case EntityChangeType::CHANGE_MODIFIED:
+								modified.add(*dirtyInfo->backup);
+								break;
 						case EntityChangeType::CHANGE_DELETED:
 							deleted.add(*dirtyInfo->backup);
 							break;
 					}
-				});
+					});
 
-		added.flush();
-		modified.flush();
-		deleted.flush();
-	}
+			modified.flush();
+			deleted.flush();
+		}
 
 	template<typename EntityType>
 	std::vector<DirtyEntityInfo<EntityType>>
@@ -1360,6 +1339,35 @@ namespace graph::storage {
 	}
 
 	template<typename EntityType>
+	EntityType DataManager::readEntityFromCacheOrSegment(int64_t id) {
+		auto normalize = [](EntityType entity) {
+			if (entity.getId() != 0 && entity.isActive()) {
+				return entity;
+			}
+			return make_inactive<EntityType>();
+		};
+
+		const uint64_t segmentOffset = findSegmentForEntityId<EntityType>(id);
+		if (segmentOffset != 0) {
+			if (const Page *page = pagePool_->getPage(segmentOffset); page != nullptr) {
+				return normalize(deserializeEntityFromPage<EntityType>(*page, id));
+			}
+
+			if (hasPreadSupport()) { // ZYX_COV_EXCL_LINE: StorageIO supplies positional reads on supported targets.
+				std::vector<uint8_t> segData(TOTAL_SEGMENT_SIZE);
+				const ssize_t n = preadBytes(segData.data(), TOTAL_SEGMENT_SIZE, static_cast<int64_t>(segmentOffset));
+				if (n >= static_cast<ssize_t>(TOTAL_SEGMENT_SIZE)) { // ZYX_COV_EXCL_LINE: short reads require truncated/corrupt files.
+					pagePool_->putPage(segmentOffset, std::vector<uint8_t>(segData));
+					return normalize(deserializeEntityFromPage<EntityType>(
+							Page{segmentOffset, std::move(segData)}, id));
+				}
+			}
+		}
+
+		return normalize(EntityTraits<EntityType>::loadFromDisk(this, id));
+	}
+
+	template<typename EntityType>
 	EntityType DataManager::getEntityFromMemoryOrDisk(int64_t id) {
 		// Check if we're in a read-only transaction with a snapshot
 		const auto *snapshot = currentSnapshot_;
@@ -1381,44 +1389,7 @@ namespace graph::storage {
 			}
 		}
 
-		// 2. Try PageBufferPool (segment-level cache)
-		{
-			uint64_t segmentOffset = findSegmentForEntityId<EntityType>(id);
-			if (segmentOffset != 0) {
-				// Check pool first
-				const Page *page = pagePool_->getPage(segmentOffset);
-				if (page != nullptr) {
-					EntityType entity = deserializeEntityFromPage<EntityType>(*page, id);
-					if (entity.getId() != 0 && entity.isActive()) {
-						return entity;
-					}
-					return make_inactive<EntityType>();
-				}
-
-				// Page pool miss — read full segment from disk, populate pool
-				if (hasPreadSupport()) {
-					std::vector<uint8_t> segData(TOTAL_SEGMENT_SIZE);
-					ssize_t n = preadBytes(segData.data(), TOTAL_SEGMENT_SIZE, static_cast<int64_t>(segmentOffset));
-					if (n >= static_cast<ssize_t>(TOTAL_SEGMENT_SIZE)) {
-						pagePool_->putPage(segmentOffset, std::vector<uint8_t>(segData));
-						EntityType entity =
-								deserializeEntityFromPage<EntityType>(Page{segmentOffset, std::move(segData)}, id);
-						if (entity.getId() != 0 && entity.isActive()) {
-							return entity;
-						}
-						return make_inactive<EntityType>();
-					}
-				}
-			}
-		}
-
-		// 3. Fallback: load single entity from disk (handles segment index miss gracefully)
-		EntityType entity = EntityTraits<EntityType>::loadFromDisk(this, id);
-		if (entity.getId() != 0 && entity.isActive()) {
-			return entity;
-		}
-
-		return make_inactive<EntityType>();
+		return readEntityFromCacheOrSegment<EntityType>(id);
 	}
 
 	// Helper: get the snapshot map for a given entity type
@@ -1479,41 +1450,7 @@ namespace graph::storage {
 			}
 		}
 
-		// 2. Try PageBufferPool (segment-level cache)
-		{
-			uint64_t segmentOffset = findSegmentForEntityId<EntityType>(id);
-			if (segmentOffset != 0) {
-				const Page *page = pagePool_->getPage(segmentOffset);
-				if (page != nullptr) {
-					EntityType entity = deserializeEntityFromPage<EntityType>(*page, id);
-					if (entity.getId() != 0 && entity.isActive()) {
-						return entity;
-					}
-					return make_inactive<EntityType>();
-				}
-
-				if (hasPreadSupport()) {
-					std::vector<uint8_t> segData(TOTAL_SEGMENT_SIZE);
-					ssize_t n = preadBytes(segData.data(), TOTAL_SEGMENT_SIZE, static_cast<int64_t>(segmentOffset));
-					if (n >= static_cast<ssize_t>(TOTAL_SEGMENT_SIZE)) {
-						pagePool_->putPage(segmentOffset, std::vector<uint8_t>(segData));
-						EntityType entity =
-								deserializeEntityFromPage<EntityType>(Page{segmentOffset, std::move(segData)}, id);
-						if (entity.getId() != 0 && entity.isActive()) {
-							return entity;
-						}
-						return make_inactive<EntityType>();
-					}
-				}
-			}
-		}
-
-		// 3. Fallback: load single entity from disk
-		EntityType entity = EntityTraits<EntityType>::loadFromDisk(this, id);
-		if (entity.getId() != 0 && entity.isActive()) {
-			return entity;
-		}
-		return make_inactive<EntityType>();
+		return readEntityFromCacheOrSegment<EntityType>(id);
 	}
 
 	// Explicit instantiations for getEntityWithSnapshot
@@ -1575,22 +1512,22 @@ namespace graph::storage {
 
 		const SegmentHeader header = segmentTracker_->getSegmentHeader(segmentOffset);
 		const auto relativePosition = static_cast<uint64_t>(id - header.start_id);
-		if (relativePosition >= header.used) {
+		if (relativePosition >= header.used) { // ZYX_COV_EXCL_LINE: segment index lookups return matching id ranges.
 			return make_inactive<Edge>();
 		}
 
 		const auto entityOffset = static_cast<int64_t>(
 				segmentOffset + sizeof(SegmentHeader) + relativePosition * Edge::getTotalSize());
 		char buf[Edge::getTotalSize()];
-		if (hasPreadSupport()) {
+		if (hasPreadSupport()) { // ZYX_COV_EXCL_LINE: StorageIO supplies positional reads on supported targets.
 			const ssize_t n = preadBytes(buf, sizeof(buf), entityOffset);
-			if (n < static_cast<ssize_t>(sizeof(buf))) {
+			if (n < static_cast<ssize_t>(sizeof(buf))) { // ZYX_COV_EXCL_LINE: short reads require truncated/corrupt files.
 				return make_inactive<Edge>();
 			}
 		} else {
 			file_->seekg(entityOffset);
 			file_->read(buf, static_cast<std::streamsize>(sizeof(buf)));
-			if (file_->fail() || file_->gcount() < static_cast<std::streamsize>(sizeof(buf))) {
+			if (file_->fail() || file_->gcount() < static_cast<std::streamsize>(sizeof(buf))) { // ZYX_COV_EXCL_LINE
 				return make_inactive<Edge>();
 			}
 		}

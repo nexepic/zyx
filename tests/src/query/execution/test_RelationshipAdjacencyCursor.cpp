@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 #include <set>
 
+#include "graph/concurrent/ThreadPool.hpp"
 #include "graph/core/Database.hpp"
 #include "graph/query/execution/RelationshipAdjacencyCursor.hpp"
 #include "graph/query/execution/RelationshipExpandConfig.hpp"
@@ -274,4 +275,130 @@ TEST_F(RelationshipAdjacencyCursorTest, WildcardTypeCanSkipRuntimeActiveChecks) 
 	EXPECT_TRUE(edgeIds.contains(outboundEdge));
 	EXPECT_TRUE(targetIds.contains(inbound));
 	EXPECT_TRUE(targetIds.contains(outbound));
+}
+
+TEST_F(RelationshipAdjacencyCursorTest, CountAndForEachHandleInvalidInputs) {
+	const int64_t source = addNode();
+	const int64_t target = addNode();
+	(void)addEdge(source, target, "FOLLOWS");
+
+	RelationshipExpandConfig config;
+	config.direction = "out";
+	config.edgeTypeId = followsType;
+	RelationshipExpandRequirements requirements;
+	RelationshipAdjacencyCursor cursor(dm);
+
+	EXPECT_TRUE(cursor.expand({}, config, requirements).rows.empty());
+	EXPECT_EQ(cursor.count({}, config, requirements), 0);
+	EXPECT_EQ(cursor.forEach({source}, config, requirements, {}), 0U);
+
+	RelationshipAdjacencyCursor nullCursor(nullptr);
+	EXPECT_EQ(nullCursor.count({source}, config, requirements), 0);
+	EXPECT_EQ(nullCursor.forEach({source}, config, requirements, [](const RelationshipExpandRow &) { return true; }), 0U);
+
+	config.edgeTypeId = -1;
+	EXPECT_EQ(cursor.count({source}, config, requirements), 0);
+	EXPECT_EQ(cursor.forEach({source}, config, requirements, [](const RelationshipExpandRow &) { return true; }), 0U);
+}
+
+TEST_F(RelationshipAdjacencyCursorTest, TargetActiveCheckFiltersDeletedTargetsWhenEdgeActiveCheckIsSkipped) {
+	const int64_t source = addNode();
+	const int64_t activeTarget = addNode();
+	const int64_t inactiveTarget = addNode();
+	(void)addEdge(source, activeTarget, "FOLLOWS");
+	(void)addEdge(source, inactiveTarget, "FOLLOWS");
+
+	Node deleted = dm->getNode(inactiveTarget);
+	dm->deleteNode(deleted);
+
+	RelationshipExpandConfig config;
+	config.direction = "out";
+	config.edgeTypeId = followsType;
+	RelationshipExpandRequirements requirements;
+	requirements.needsEdgeActiveCheck = false;
+	requirements.needsTargetActiveCheck = true;
+	requirements.needsTargetLabels = false;
+	RelationshipAdjacencyCursor cursor(dm);
+
+	EXPECT_EQ(cursor.count({source}, config, requirements), 1);
+	const auto batch = cursor.expand({source}, config, requirements);
+	ASSERT_EQ(batch.rows.size(), 1U);
+	EXPECT_EQ(batch.rows[0].targetId, activeTarget);
+}
+
+TEST_F(RelationshipAdjacencyCursorTest, ParallelEstimateSamplesLargeSourceFrontier) {
+	std::vector<int64_t> sources;
+	sources.reserve(16);
+	for (size_t i = 0; i < 16; ++i) {
+		const int64_t source = addNode();
+		const int64_t target = addNode();
+		(void)addEdge(source, target, "FOLLOWS");
+		sources.push_back(source);
+	}
+
+	graph::concurrent::ThreadPool pool(2);
+	RelationshipExpandConfig config;
+	config.direction = "out";
+	config.edgeTypeId = followsType;
+	RelationshipExpandRequirements requirements;
+	requirements.needsTargetLabels = false;
+	RelationshipAdjacencyCursor cursor(dm, &pool);
+
+	EXPECT_EQ(cursor.count(sources, config, requirements), static_cast<int64_t>(sources.size()));
+	const auto batch = cursor.expand(sources, config, requirements);
+	EXPECT_EQ(batch.rows.size(), sources.size());
+}
+
+TEST_F(RelationshipAdjacencyCursorTest, ForEachStopsBeforeScanningLaterSources) {
+	const int64_t firstSource = addNode();
+	const int64_t firstTarget = addNode();
+	const int64_t secondSource = addNode();
+	const int64_t secondTarget = addNode();
+	(void)addEdge(firstSource, firstTarget, "FOLLOWS");
+	(void)addEdge(secondSource, secondTarget, "FOLLOWS");
+
+	RelationshipExpandConfig config;
+	config.direction = "out";
+	config.edgeTypeId = followsType;
+	RelationshipExpandRequirements requirements;
+	requirements.needsTargetLabels = false;
+	RelationshipAdjacencyCursor cursor(dm);
+
+	std::vector<int64_t> targets;
+	const size_t emitted = cursor.forEach({firstSource, secondSource}, config, requirements,
+	                                      [&](const RelationshipExpandRow &row) {
+		                                      targets.push_back(row.targetId);
+		                                      return false;
+	                                      });
+
+	EXPECT_EQ(emitted, 1U);
+	ASSERT_EQ(targets.size(), 1U);
+	EXPECT_EQ(targets[0], firstTarget);
+}
+
+TEST_F(RelationshipAdjacencyCursorTest, ForEachSkipsNonMatchingEdgesAndLabels) {
+	const int64_t source = addNode();
+	const int64_t matchingTarget = addNode();
+	const int64_t wrongLabelTarget = addNode("Post");
+	const int64_t wrongTypeTarget = addNode();
+	(void)addEdge(source, wrongLabelTarget, "FOLLOWS");
+	(void)addEdge(source, wrongTypeTarget, "LIKES");
+	(void)addEdge(source, matchingTarget, "FOLLOWS");
+
+	RelationshipExpandConfig config;
+	config.direction = "out";
+	config.edgeTypeId = followsType;
+	config.targetLabelIds = {userLabel};
+	RelationshipExpandRequirements requirements;
+	RelationshipAdjacencyCursor cursor(dm);
+
+	std::vector<int64_t> targets;
+	const size_t emitted = cursor.forEach({source}, config, requirements, [&](const RelationshipExpandRow &row) {
+		targets.push_back(row.targetId);
+		return true;
+	});
+
+	EXPECT_EQ(emitted, 1U);
+	ASSERT_EQ(targets.size(), 1U);
+	EXPECT_EQ(targets[0], matchingTarget);
 }

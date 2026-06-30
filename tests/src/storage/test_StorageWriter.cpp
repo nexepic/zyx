@@ -212,6 +212,18 @@ TEST_F(StorageWriterTest, WriteSegmentDataPropertyRoundtripUsesFixedLayout) {
 	EXPECT_EQ(readBack.getPropertyValues(), property.getPropertyValues());
 }
 
+TEST_F(StorageWriterTest, WriteSegmentDataPropertyRejectsOversizedInlinePayload) {
+	constexpr uint32_t capacity = itemsPerSegment<Property>();
+	uint64_t segOff = allocator->allocateSegment(Property::typeId, capacity);
+	ASSERT_NE(segOff, 0u);
+
+	Property property(1, 42, Node::typeId);
+	property.setProperties({{"too_large", PropertyValue(std::string(Property::TOTAL_PROPERTY_SIZE, 'x'))}});
+	std::vector<Property> properties = {property};
+
+	EXPECT_THROW(writer->writeSegmentData(segOff, properties, 0), std::runtime_error);
+}
+
 // ============================================================================
 // saveData allocates segments and writes entities
 // ============================================================================
@@ -364,10 +376,8 @@ TEST_F(StorageWriterTest, EdgeWriteSegmentDataRoundtrip) {
 }
 
 // ============================================================================
-// writeSegmentData with a single entity: exercises updateSegmentBitmap with
-// count=1 (the non-zero path) ensuring the guard logic is exercised normally.
-// The count=0 guard in updateSegmentBitmap is only reachable via direct call
-// which is private; we test the guarded public path instead.
+// writeSegmentData with a single entity: verifies that the segment tracker
+// receives the active range when appending a one-row batch.
 // ============================================================================
 
 TEST_F(StorageWriterTest, WriteSegmentDataSingleEntityBitmapSet) {
@@ -375,7 +385,6 @@ TEST_F(StorageWriterTest, WriteSegmentDataSingleEntityBitmapSet) {
 	uint64_t segOff = allocator->allocateSegment(Node::typeId, capacity);
 	ASSERT_NE(segOff, 0u);
 
-	// Write exactly one node — updateSegmentBitmap is called with count=1
 	std::vector<Node> nodes = {makeNode(5)};
 	writer->writeSegmentData(segOff, nodes, 0);
 
@@ -388,7 +397,7 @@ TEST_F(StorageWriterTest, WriteSegmentDataSingleEntityBitmapSet) {
 
 // ============================================================================
 // updateEntityInPlace: exercised through updateEntityInPlace(entity, segOff)
-// Also indirectly exercises updateBitmapForEntity for a valid segment offset.
+// and verifies that the validated slot index updates the segment bitmap.
 // ============================================================================
 
 TEST_F(StorageWriterTest, UpdateEntityInPlaceAndBitmapSetCorrectly) {
@@ -401,7 +410,7 @@ TEST_F(StorageWriterTest, UpdateEntityInPlaceAndBitmapSetCorrectly) {
 	// Verify bitmap bit is set for slot 0
 	EXPECT_TRUE(segmentTracker->getBitmapBit(segOff, 0));
 
-	// Now update with an inactive node — updateBitmapForEntity should clear the bit
+	// Now update with an inactive node; the validated slot update should clear the bit.
 	Node inactive = makeNode(10, false);
 	writer->updateEntityInPlace(inactive, segOff);
 

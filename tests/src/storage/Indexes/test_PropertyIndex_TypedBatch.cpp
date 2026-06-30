@@ -91,3 +91,16 @@ TEST_F(PropertyIndexTypedBatchTest, AddTypedPropertiesBatchSkipsUnsupportedUnreg
 	EXPECT_TRUE(propertyIndex->findExactMatch("missing", graph::PropertyValue(int64_t{30})).empty());
 	EXPECT_EQ(propertyIndex->getIndexedKeyType("payload"), graph::PropertyType::UNKNOWN);
 }
+
+TEST_F(PropertyIndexTypedBatchTest, EmptyTypedBatchPreservesRegisteredIndexDefinition) {
+	using Entry = graph::query::indexes::PropertyIndex::TypedPropertyEntry;
+
+	propertyIndex->createIndex("age");
+
+	std::vector<Entry> entries;
+	EXPECT_NO_THROW(propertyIndex->addTypedPropertiesBatch(std::move(entries)));
+
+	EXPECT_TRUE(propertyIndex->hasKeyIndexed("age"));
+	EXPECT_EQ(propertyIndex->getIndexedKeyType("age"), graph::PropertyType::UNKNOWN);
+	EXPECT_TRUE(propertyIndex->findExactMatch("age", graph::PropertyValue(int64_t{42})).empty());
+}

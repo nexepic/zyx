@@ -22,14 +22,25 @@
 
 #include <algorithm>
 #include <map>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 namespace {
 
+#if defined(_MSC_VER)
+#define ZYX_PROPERTY_TEST_NOINLINE __declspec(noinline)
+#else
+#define ZYX_PROPERTY_TEST_NOINLINE __attribute__((noinline))
+#endif
+
 	constexpr size_t kParallelPropertyReadSegmentsForDecisionTests =
 			(graph::concurrent::kDefaultMemoryScanBytesPerWorker / TOTAL_SEGMENT_SIZE) + 1;
+
+	ZYX_PROPERTY_TEST_NOINLINE bool runtimeBool(bool value) { return value; }
+
+	ZYX_PROPERTY_TEST_NOINLINE std::vector<std::string> runtimeEmptyPropertyKeys() { return {}; }
 
 	int64_t addNodeWithPropertyEntity(const std::shared_ptr<DataManager> &dataManager,
 									  const std::unordered_map<std::string, PropertyValue> &properties) {
@@ -54,6 +65,8 @@ namespace {
 		predicate.upperValue = std::move(upper);
 		return predicate;
 	}
+
+#undef ZYX_PROPERTY_TEST_NOINLINE
 
 } // namespace
 
@@ -1057,6 +1070,191 @@ TEST_F(DataManagerTest, OwnerTypePredicateCountScansOnlyMatchingPropertyOwners) 
 			  0U);
 	EXPECT_EQ(dataManager->bulkCountPropertyEntityPredicateSpecsByOwnerType(EntityType::Node, {}, nullptr).matchedCount,
 			  0U);
+}
+
+TEST_F(DataManagerTest, OwnerTypePredicateScansSkipPersistedInactivePropertyEntities) {
+	Node active = createTestNode(dataManager, "OwnerTypeInactivePropertyNode");
+	Node removed = createTestNode(dataManager, "OwnerTypeInactivePropertyNode");
+	dataManager->addNode(active);
+	dataManager->addNode(removed);
+	dataManager->addNodeProperties(active.getId(), {{"score", PropertyValue(int64_t{91})}});
+	dataManager->addNodeProperties(removed.getId(), {{"score", PropertyValue(int64_t{99})}});
+	const Node storedRemoved = dataManager->getNode(removed.getId());
+	ASSERT_TRUE(storedRemoved.hasPropertyEntity());
+	simulateSave();
+
+	Property removedProperties = dataManager->getProperty(storedRemoved.getPropertyEntityId());
+	dataManager->deleteProperty(removedProperties);
+	simulateSave();
+	dataManager->clearCache();
+
+	const std::vector<PropertyEntityPredicate> predicates{
+			pred("score", PropertyEntityPredicateOp::PEP_GE, PropertyValue(int64_t{90}))};
+	const auto count =
+			dataManager->bulkCountPropertyEntityPredicateSpecsByOwnerType(EntityType::Node, predicates, nullptr);
+	EXPECT_EQ(count.loadedCount, 1U);
+	EXPECT_EQ(count.matchedCount, 1U);
+
+	const auto owners = dataManager->bulkCollectPropertyPredicateOwnerIdsByOwnerType(EntityType::Node, predicates);
+	EXPECT_EQ(owners, (std::vector<int64_t>{active.getId()}));
+}
+
+TEST_F(DataManagerTest, OwnerTypeValueScansHandleEmptyKeysAndDedupDisabled) {
+	Node first = createTestNode(dataManager, "OwnerTypeValueNode");
+	Node second = createTestNode(dataManager, "OwnerTypeValueNode");
+	dataManager->addNode(first);
+	dataManager->addNode(second);
+	dataManager->addNodeProperties(first.getId(),
+								   {{"score", PropertyValue(int64_t{11})}, {"name", PropertyValue("first")}});
+	dataManager->addNodeProperties(second.getId(),
+								   {{"score", PropertyValue(int64_t{22})}, {"name", PropertyValue("second")}});
+	simulateSave();
+	dataManager->clearCache();
+
+	EXPECT_TRUE(dataManager->bulkCollectPropertyValuesByOwnerType(EntityType::Node, "").empty());
+	EXPECT_TRUE(dataManager->bulkCollectPropertyValuesByOwnerType(EntityType::Node, std::vector<std::string>{})
+						.empty());
+	EXPECT_TRUE(dataManager->bulkCollectPropertyValuesByOwnerType(EntityType::Node,
+																 std::vector<std::string>{"", ""})
+						.empty());
+
+	const auto keyValues = dataManager->bulkCollectPropertyValuesByOwnerType(
+			EntityType::Node, std::vector<std::string>{"score", "", "score", "name"});
+	EXPECT_EQ(keyValues.size(), 4U);
+
+	const std::vector<PropertyEntityPredicate> predicates{
+			pred("score", PropertyEntityPredicateOp::PEP_GE, PropertyValue(int64_t{0}))};
+	PropertyEntityOwnerPredicateScanOptions noDedup;
+	noDedup.deduplicateOwnerIds = false;
+	const auto owners =
+			dataManager->bulkCollectPropertyPredicateOwnerIdsByOwnerType(EntityType::Node, predicates, noDedup);
+	EXPECT_EQ(owners.size(), 2U);
+}
+
+TEST_F(DataManagerTest, InternalPropertyEntityScansHandleEmptyIdsAndUnknownPredicateResults) {
+	Node node = createTestNode(dataManager, "OwnerTypeNullPredicateNode");
+	dataManager->addNode(node);
+	dataManager->addNodeProperties(node.getId(), {{"score", PropertyValue(int64_t{11})}});
+	const Node stored = dataManager->getNode(node.getId());
+	ASSERT_TRUE(stored.hasPropertyEntity());
+	simulateSave();
+	dataManager->clearCache();
+
+	auto emptyTargetCount = countPropertyEntityMatches(
+			*dataManager,
+			std::vector<int64_t>{},
+			nullptr,
+			[](const char *) -> std::optional<bool> { return true; });
+	EXPECT_EQ(emptyTargetCount.loadedCount, 0U);
+	EXPECT_EQ(emptyTargetCount.matchedCount, 0U);
+
+	auto duplicateTargetCount = countPropertyEntityMatches(
+			*dataManager,
+			std::vector<int64_t>{0, stored.getPropertyEntityId(), stored.getPropertyEntityId()},
+			nullptr,
+			[](const char *) -> std::optional<bool> { return false; });
+	EXPECT_EQ(duplicateTargetCount.loadedCount, 2U);
+	EXPECT_EQ(duplicateTargetCount.matchedCount, 0U);
+
+	auto unknownOwnerCount = countPropertyEntityMatchesByOwnerType(
+			*dataManager,
+			EntityType::Node,
+			nullptr,
+			[](const char *) -> std::optional<bool> { return std::nullopt; });
+	EXPECT_EQ(unknownOwnerCount.loadedCount, 0U);
+	EXPECT_EQ(unknownOwnerCount.matchedCount, 0U);
+
+	PropertyEntityOwnerPredicateScanOptions invalidRange;
+	invalidRange.beginOwnerId = node.getId() + 10;
+	invalidRange.endOwnerId = node.getId();
+	const auto invalidRangeOwners = collectPropertyPredicateOwnerIdsByOwnerType(
+			*dataManager,
+			EntityType::Node,
+			invalidRange,
+			nullptr,
+			[](const char *) -> std::optional<bool> { return true; });
+	EXPECT_TRUE(invalidRangeOwners.empty());
+
+	PropertyEntityOwnerPredicateScanOptions validRange;
+	validRange.beginOwnerId = node.getId();
+	validRange.endOwnerId = node.getId();
+	const auto falsePredicateOwners = collectPropertyPredicateOwnerIdsByOwnerType(
+			*dataManager,
+			EntityType::Node,
+			validRange,
+			nullptr,
+			[](const char *) -> std::optional<bool> { return runtimeBool(false); });
+	EXPECT_TRUE(falsePredicateOwners.empty());
+
+	const auto unknownPredicateOwners = collectPropertyPredicateOwnerIdsByOwnerType(
+			*dataManager,
+			EntityType::Node,
+			validRange,
+			nullptr,
+			[](const char *) -> std::optional<bool> { return std::nullopt; });
+	EXPECT_TRUE(unknownPredicateOwners.empty());
+
+	const std::vector<int64_t> ownerIds{node.getId()};
+	EXPECT_TRUE(collectPropertyValuesByOwnerType(
+						*dataManager,
+						EntityType::Node,
+						runtimeEmptyPropertyKeys(),
+						std::span<const int64_t>(ownerIds.data(), ownerIds.size()),
+						nullptr)
+						.empty());
+}
+
+TEST_F(DataManagerTest, PropertyOwnerScansSkipNonMatchingOwnerTypesAndCorruptHeaders) {
+	Node source = createTestNode(dataManager, "PropertyOwnerScanSource");
+	Node target = createTestNode(dataManager, "PropertyOwnerScanTarget");
+	dataManager->addNode(source);
+	dataManager->addNode(target);
+	dataManager->addNodeProperties(source.getId(), {{"score", PropertyValue(int64_t{11})}});
+	Edge edge = createTestEdge(dataManager, source.getId(), target.getId(), "PROPERTY_OWNER_EDGE");
+	dataManager->addEdge(edge);
+	dataManager->addEdgeProperties(edge.getId(), {{"score", PropertyValue(int64_t{22})}});
+	simulateSave();
+	dataManager->clearCache();
+
+	PropertyEntityOwnerPredicateScanOptions options;
+	options.beginOwnerId = 1;
+	options.endOwnerId = edge.getId();
+	const auto nodeOwners = collectPropertyPredicateOwnerIdsByOwnerType(
+			*dataManager,
+			EntityType::Node,
+			options,
+			nullptr,
+			[](const char *) -> std::optional<bool> { return runtimeBool(true); });
+	ASSERT_EQ(nodeOwners.size(), 1U);
+	EXPECT_EQ(nodeOwners.front(), source.getId());
+
+	const auto &segments = dataManager->getSegmentIndexManager()->getPropertySegmentIndex();
+	ASSERT_FALSE(segments.empty());
+	const uint64_t offset = segments.front().segmentOffset;
+	const SegmentHeader originalHeader = dataManager->getSegmentTracker()->getSegmentHeaderCopy(offset);
+	SegmentHeader wrongType = originalHeader;
+	wrongType.data_type = Node::typeId;
+	dataManager->getSegmentTracker()->writeSegmentHeader(offset, wrongType);
+
+	EXPECT_TRUE(dataManager->bulkCollectPropertyValuesByOwnerType(EntityType::Node, "score").empty());
+	EXPECT_TRUE(dataManager->bulkCollectPropertyValuesByOwnerType(
+						EntityType::Node,
+						std::vector<std::string>{"score"})
+						.empty());
+	EXPECT_TRUE(collectPropertyPredicateOwnerIdsByOwnerType(
+						*dataManager,
+						EntityType::Node,
+						options,
+						nullptr,
+						[](const char *) -> std::optional<bool> { return runtimeBool(true); })
+						.empty());
+	const std::vector<PropertyEntityPredicate> predicates{
+			pred("score", PropertyEntityPredicateOp::PEP_GE, PropertyValue(int64_t{0}))};
+	EXPECT_EQ(dataManager->bulkCountPropertyEntityPredicateSpecsByOwnerType(EntityType::Node, predicates, nullptr)
+					  .loadedCount,
+			  0U);
+
+	dataManager->getSegmentTracker()->writeSegmentHeader(offset, originalHeader);
 }
 
 TEST_F(DataManagerTest, OwnerTypePredicateCountSupportsCompoundRangePredicates) {

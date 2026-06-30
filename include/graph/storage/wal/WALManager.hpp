@@ -128,7 +128,6 @@ namespace graph::storage::wal {
 		void appendEntityChangeRecordLocked(uint64_t txnId, uint8_t entityType, uint8_t changeType, int64_t entityId,
 											const uint8_t *data, uint32_t dataSize);
 		void ensureAppendCapacityLocked(size_t appendSize);
-		void appendBytesLocked(const uint8_t *data, size_t size);
 		void writeHeader(bool syncHeader = false);
 		[[nodiscard]] bool validateHeader();
 

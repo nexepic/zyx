@@ -240,3 +240,30 @@ TEST_F(NodeScanOperatorParallelEdgeCasesTest, ParallelManySegments) {
 	EXPECT_FALSE(op.next().has_value());
 	op.close();
 }
+
+TEST_F(NodeScanOperatorParallelEdgeCasesTest, ParallelFullScanMergesDirtyCandidatesAfterPersistedRead) {
+	static constexpr size_t kNodeCount = 4200;
+	auto nodes = addNodes("DirtyMerge", kNodeCount);
+
+	db->getStorage()->flush();
+	dm->clearCache();
+
+	dm->addNodeProperties(nodes[0].getId(), {{"dirty", PropertyValue(int64_t{1})}});
+	dm->deleteNode(nodes[1]);
+
+	NodeScanConfig cfg;
+	cfg.type = ScanType::FULL_SCAN;
+	cfg.variable = "n";
+	cfg.labels = {"DirtyMerge"};
+
+	NodeScanOperator op(dm, im, cfg);
+	concurrent::ThreadPool pool(4);
+	op.setThreadPool(&pool);
+
+	op.open();
+	auto batch = op.next();
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(batch->size(), kNodeCount - 1);
+	EXPECT_FALSE(op.next().has_value());
+	op.close();
+}

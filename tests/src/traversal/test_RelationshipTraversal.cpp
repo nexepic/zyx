@@ -114,6 +114,98 @@ TEST_F(RelationshipTraversalTest, LightweightAdjacencyRefsSupportTypeFilteringAn
 	EXPECT_EQ(traversal->countAdjacentEdgeRefs(node1.getId(), options), 1U);
 }
 
+TEST_F(RelationshipTraversalTest, LightweightAdjacencyRefsVisitIncomingDirectionAndHonorNullVisitors) {
+	graph::traversal::RelationshipTraversalOptions incoming;
+	incoming.direction = graph::traversal::RelationshipDirectionKind::RDK_IN;
+
+	std::vector<int64_t> incomingIds;
+	const size_t visitedIncoming = traversal->visitAdjacentEdgeRefs(
+			node2.getId(), incoming, [&](const graph::traversal::RelationshipEdgeRef &edgeRef) {
+				incomingIds.push_back(edgeRef.edgeId);
+				EXPECT_EQ(edgeRef.targetNodeId, node2.getId());
+				return true;
+			});
+	EXPECT_EQ(visitedIncoming, 1U);
+	ASSERT_EQ(incomingIds.size(), 1U);
+	EXPECT_EQ(incomingIds.front(), edge.getId());
+
+	EXPECT_EQ(traversal->visitAdjacentEdgeRefs(node2.getId(), incoming, {}), 0U);
+	EXPECT_EQ(traversal->countAdjacentEdgeRefs(999999, incoming), 0U);
+}
+
+TEST_F(RelationshipTraversalTest, LightweightAdjacencyRefsVisitBothDirectionsInStableOrder) {
+	graph::Edge reverseEdge(0, node2.getId(), node1.getId(), dataManager->getOrCreateTokenId("REVERSE_REF"));
+	dataManager->addEdge(reverseEdge);
+
+	graph::traversal::RelationshipTraversalOptions both;
+	both.direction = graph::traversal::RelationshipDirectionKind::RDK_BOTH;
+
+	std::vector<int64_t> edgeIds;
+	const size_t visited = traversal->visitAdjacentEdgeRefs(
+			node1.getId(), both, [&](const graph::traversal::RelationshipEdgeRef &edgeRef) {
+				edgeIds.push_back(edgeRef.edgeId);
+				return true;
+			});
+
+	EXPECT_EQ(visited, 2U);
+	ASSERT_EQ(edgeIds.size(), 2U);
+	EXPECT_EQ(edgeIds[0], edge.getId());
+	EXPECT_EQ(edgeIds[1], reverseEdge.getId());
+	EXPECT_EQ(traversal->countAdjacentEdgeRefs(node1.getId(), both), 2U);
+}
+
+TEST_F(RelationshipTraversalTest, LightweightAdjacencyRefsDetectCyclesWhenRequested) {
+	auto stored = dataManager->getEdge(edge.getId());
+	traversal->linkEdge(stored);
+
+	graph::traversal::RelationshipTraversalOptions options;
+	options.direction = graph::traversal::RelationshipDirectionKind::RDK_OUT;
+	options.integrity = graph::traversal::RelationshipTraversalIntegrity::RTI_DETECT_CYCLES;
+
+	EXPECT_THROW(
+			traversal->visitAdjacentEdgeRefs(
+					node1.getId(), options, [](const graph::traversal::RelationshipEdgeRef &) { return true; }),
+			std::runtime_error);
+}
+
+TEST_F(RelationshipTraversalTest, LightweightAdjacencyRefsDetectBoundedCycleWithoutVisitedSet) {
+	auto stored = dataManager->getEdge(edge.getId());
+	traversal->linkEdge(stored);
+
+	graph::traversal::RelationshipTraversalOptions options;
+	options.direction = graph::traversal::RelationshipDirectionKind::RDK_OUT;
+	options.integrity = graph::traversal::RelationshipTraversalIntegrity::RTI_BOUND_BY_EDGE_COUNT;
+
+	EXPECT_THROW(traversal->countAdjacentEdgeRefs(node1.getId(), options), std::runtime_error);
+}
+
+TEST_F(RelationshipTraversalTest, LightweightAdjacencyCountDetectsIncomingCyclesWhenRequested) {
+	auto stored = dataManager->getEdge(edge.getId());
+	traversal->linkEdge(stored);
+
+	graph::traversal::RelationshipTraversalOptions options;
+	options.direction = graph::traversal::RelationshipDirectionKind::RDK_IN;
+	options.integrity = graph::traversal::RelationshipTraversalIntegrity::RTI_DETECT_CYCLES;
+
+	EXPECT_THROW(traversal->countAdjacentEdgeRefs(node2.getId(), options), std::runtime_error);
+}
+
+TEST_F(RelationshipTraversalTest, VisitAllConnectedEdgesStopsBeforeIncomingWhenVisitorStops) {
+	graph::Edge reverseEdge(50, node2.getId(), node1.getId(), dataManager->getOrCreateTokenId("BACK"));
+	dataManager->addEdge(reverseEdge);
+
+	size_t calls = 0;
+	const size_t visited = traversal->visitAllConnectedEdges(node1.getId(), [&](const graph::Edge &seen) {
+		++calls;
+		EXPECT_EQ(seen.getId(), edge.getId());
+		return false;
+	});
+
+	EXPECT_EQ(visited, 1U);
+	EXPECT_EQ(calls, 1U);
+	EXPECT_EQ(traversal->visitAllConnectedEdges(node1.getId(), {}), 0U);
+}
+
 TEST_F(RelationshipTraversalTest, AddEdgesBatchPreservesLinkedListOrderAndProfilesPhases) {
 	const int64_t typeId = dataManager->getOrCreateTokenId("BATCH_RELATED_TO");
 	std::vector<graph::Edge> edges;
@@ -174,6 +266,14 @@ TEST_F(RelationshipTraversalTest, BatchLinkOperationsTreatEmptyInputAsNoOp) {
 	EXPECT_TRUE(updates.empty());
 	EXPECT_NO_THROW(traversal->applyBatchLinkUpdates(updates));
 	EXPECT_NO_THROW(traversal->linkEdgesBatch(edges));
+}
+
+TEST_F(RelationshipTraversalTest, BatchLinkUpdatesWithOldHeadEdgesAreNotEmpty) {
+	graph::traversal::RelationshipBatchLinkUpdates updates;
+	updates.oldHeadEdgesBefore.emplace_back(edge);
+	updates.oldHeadEdges.emplace_back(edge);
+	EXPECT_FALSE(updates.empty());
+	EXPECT_NO_THROW(traversal->applyBatchLinkUpdates(updates));
 }
 
 TEST_F(RelationshipTraversalTest, BatchLinkPlannerSkipsIdlessEdgesAndMissingEndpoints) {

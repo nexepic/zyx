@@ -35,6 +35,7 @@
 #include "graph/storage/indexes/EntityTypeIndexManager.hpp"
 #include "graph/storage/indexes/IndexBuilder.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
+#include "graph/storage/indexes/ScopedNodePropertyKey.hpp"
 
 namespace fs = std::filesystem;
 
@@ -434,6 +435,28 @@ TEST_F(IndexBuilderTest, BuildNodePropertyIndexWithMissingLabelKeepsScopedIndexE
 	EXPECT_TRUE(indexManager->findNodeIdsByProperty("code", int64_t{11}).empty());
 }
 
+TEST_F(IndexBuilderTest, BuildNodePropertyIndexForKnownEmptyLabelLeavesScopedIndexEmpty) {
+	(void) dataManager->getOrCreateTokenId("KnownEmptyLabel");
+	graph::Node otherNode(0, dataManager->getOrCreateTokenId("KnownOtherLabel"));
+	dataManager->addNode(otherNode);
+	dataManager->addNodeProperties(otherNode.getId(), {{"code", graph::PropertyValue(int64_t{15})}});
+
+	ASSERT_TRUE(indexBuilder->buildNodePropertyIndex("code", "KnownEmptyLabel"));
+
+	EXPECT_TRUE(indexManager->hasNodePropertyIndexForLabel("KnownEmptyLabel", "code"));
+	EXPECT_TRUE(indexManager->findNodeIdsByLabelAndProperty("KnownEmptyLabel", "code", int64_t{15}).empty());
+}
+
+TEST_F(IndexBuilderTest, BuildNodePropertyIndexRejectsEmptyPropertyKeyWithoutAddingEntries) {
+	graph::Node node(0, dataManager->getOrCreateTokenId("EmptyPropertyKeyNode"));
+	dataManager->addNode(node);
+	dataManager->addNodeProperties(node.getId(), {{"code", graph::PropertyValue(int64_t{19})}});
+
+	EXPECT_TRUE(indexBuilder->buildNodePropertyIndex(""));
+	EXPECT_FALSE(indexManager->hasPropertyIndex("node", ""));
+	EXPECT_TRUE(indexManager->findNodeIdsByProperty("", int64_t{19}).empty());
+}
+
 TEST_F(IndexBuilderTest, BuildNodePropertyIndexesGroupsScopedOwnersByLabel) {
 	graph::Node alphaNode(0, dataManager->getOrCreateTokenId("GroupedScopedAlpha"));
 	dataManager->addNode(alphaNode);
@@ -465,6 +488,75 @@ TEST_F(IndexBuilderTest, BuildNodePropertyIndexesGroupsScopedOwnersByLabel) {
 
 	EXPECT_TRUE(indexManager->findNodeIdsByLabelAndProperty("GroupedScopedGamma", "code", int64_t{13}).empty());
 	EXPECT_TRUE(indexManager->findNodeIdsByProperty("code", int64_t{13}).empty());
+}
+
+TEST_F(IndexBuilderTest, BuildNodePropertyIndexesIgnoresEmptySpecs) {
+	EXPECT_TRUE(indexBuilder->buildNodePropertyIndexes({}));
+	EXPECT_TRUE(indexBuilder->buildNodePropertyIndexes({{"", ""}, {"", "IgnoredLabel"}}));
+	EXPECT_FALSE(indexManager->hasPropertyIndex("node", ""));
+}
+
+TEST_F(IndexBuilderTest, BuildNodePropertyIndexDirectScopedOwnerScan) {
+	const int64_t labelId = dataManager->getOrCreateTokenId("DirectScoped");
+	graph::Node scopedNode(0, labelId);
+	dataManager->addNode(scopedNode);
+	dataManager->addNodeProperties(scopedNode.getId(), {{"code", graph::PropertyValue(int64_t{17})}});
+
+	graph::Node otherNode(0, dataManager->getOrCreateTokenId("DirectOther"));
+	dataManager->addNode(otherNode);
+	dataManager->addNodeProperties(otherNode.getId(), {{"code", graph::PropertyValue(int64_t{17})}});
+
+	ASSERT_TRUE(indexBuilder->buildNodePropertyIndex("code", "DirectScoped"));
+
+	const auto scopedKey = graph::query::indexes::makeScopedNodePropertyKey("DirectScoped", "code");
+	const auto results = indexManager->getNodeIndexManager()
+			->getPropertyIndex()
+			->findExactMatch(scopedKey, graph::PropertyValue(int64_t{17}));
+	ASSERT_EQ(results.size(), 1UL);
+	EXPECT_EQ(results.front(), scopedNode.getId());
+}
+
+TEST_F(IndexBuilderTest, BuildNodePropertyIndexesMergesDirtyNodesWithPersistedLabelIndex) {
+	const int64_t labelId = dataManager->getOrCreateTokenId("DirtyScoped");
+	graph::Node persistedNode(0, labelId);
+	dataManager->addNode(persistedNode);
+	dataManager->addNodeProperties(persistedNode.getId(), {{"code", graph::PropertyValue(int64_t{21})}});
+	fileStorage->flush();
+
+	indexManager->getNodeIndexManager()->getLabelIndex()->createIndex();
+	ASSERT_TRUE(indexBuilder->buildNodeLabelIndex());
+
+	graph::Node dirtyNode(0, labelId);
+	dataManager->addNode(dirtyNode);
+	dataManager->addNodeProperties(dirtyNode.getId(), {{"code", graph::PropertyValue(int64_t{21})}});
+
+	ASSERT_TRUE(indexBuilder->buildNodePropertyIndexes({{"code", "DirtyScoped"}}));
+
+	auto results = indexManager->findNodeIdsByLabelAndProperty("DirtyScoped", "code", int64_t{21});
+	std::ranges::sort(results);
+	ASSERT_EQ(results.size(), 2UL);
+	EXPECT_EQ(results[0], persistedNode.getId());
+	EXPECT_EQ(results[1], dirtyNode.getId());
+}
+
+TEST_F(IndexBuilderTest, BuildScopedNodePropertyIndexValidatesStaleLabelIndexCandidates) {
+	const int64_t labelId = dataManager->getOrCreateTokenId("StaleScopedLabel");
+	graph::Node active(0, labelId);
+	dataManager->addNode(active);
+	dataManager->addNodeProperties(active.getId(), {{"code", graph::PropertyValue(int64_t{31})}});
+	graph::Node deleted(0, labelId);
+	dataManager->addNode(deleted);
+	dataManager->addNodeProperties(deleted.getId(), {{"code", graph::PropertyValue(int64_t{31})}});
+	fileStorage->flush();
+
+	indexManager->getNodeIndexManager()->getLabelIndex()->createIndex();
+	ASSERT_TRUE(indexBuilder->buildNodeLabelIndex());
+
+	dataManager->deleteNode(deleted);
+	ASSERT_TRUE(indexBuilder->buildNodePropertyIndex("code", "StaleScopedLabel"));
+
+	EXPECT_EQ(indexManager->findNodeIdsByLabelAndProperty("StaleScopedLabel", "code", int64_t{31}),
+			  (std::vector<int64_t>{active.getId()}));
 }
 
 TEST_F(IndexBuilderTest, ProcessBatch_SkipInactive) {
@@ -649,6 +741,42 @@ TEST_F(IndexBuilderTest, BuildNodePropertyIndex_PropertyNotFound) {
 	EXPECT_TRUE(res.empty());
 }
 
+TEST_F(IndexBuilderTest, BuildSingleNodePropertyIndexIndexesPersistedBlobFallback) {
+	const std::string largeNote(700, 'n');
+	graph::Node node(0, dataManager->getOrCreateTokenId("PersistedBlobNode"));
+	dataManager->addNode(node);
+	dataManager->addNodeProperties(node.getId(), {{"note", graph::PropertyValue(largeNote)}});
+	fileStorage->flush();
+	dataManager->clearCache();
+
+	indexManager->getNodeIndexManager()->getPropertyIndex()->createIndex("note");
+	ASSERT_TRUE(indexBuilder->buildNodePropertyIndex("note"));
+
+	EXPECT_EQ(indexManager->findNodeIdsByProperty("note", graph::PropertyValue(largeNote)),
+			  (std::vector<int64_t>{node.getId()}));
+}
+
+TEST_F(IndexBuilderTest, BuildScopedNodePropertyIndexIndexesPersistedBlobFallback) {
+	const std::string largeNote(700, 's');
+	graph::Node scoped(0, dataManager->getOrCreateTokenId("PersistedBlobScoped"));
+	dataManager->addNode(scoped);
+	dataManager->addNodeProperties(scoped.getId(), {{"note", graph::PropertyValue(largeNote)}});
+	graph::Node other(0, dataManager->getOrCreateTokenId("PersistedBlobOther"));
+	dataManager->addNode(other);
+	dataManager->addNodeProperties(other.getId(), {{"note", graph::PropertyValue(largeNote)}});
+	fileStorage->flush();
+	dataManager->clearCache();
+
+	ASSERT_TRUE(indexBuilder->buildNodePropertyIndex("note", "PersistedBlobScoped"));
+
+	EXPECT_EQ(indexManager->findNodeIdsByLabelAndProperty(
+					  "PersistedBlobScoped", "note", graph::PropertyValue(largeNote)),
+			  (std::vector<int64_t>{scoped.getId()}));
+	EXPECT_TRUE(indexManager->findNodeIdsByLabelAndProperty(
+						 "PersistedBlobOther", "note", graph::PropertyValue(largeNote))
+						.empty());
+}
+
 TEST_F(IndexBuilderTest, BuildEdgePropertyIndex_PropertyNotFound) {
 	// Cover branch for edges: property not found
 	int64_t edgeLbl = dataManager->getOrCreateTokenId("NoEdgeProp");
@@ -673,6 +801,26 @@ TEST_F(IndexBuilderTest, BuildEdgePropertyIndex_PropertyNotFound) {
 	// Verify no results
 	auto res = indexManager->findEdgeIdsByProperty("missing_eprop", 999);
 	EXPECT_TRUE(res.empty());
+}
+
+TEST_F(IndexBuilderTest, BuildSingleEdgePropertyIndexIndexesPersistedBlobFallback) {
+	graph::Node source(1, 0);
+	graph::Node target(2, 0);
+	dataManager->addNode(source);
+	dataManager->addNode(target);
+
+	const std::string largeNote(700, 'e');
+	graph::Edge edge(0, source.getId(), target.getId(), dataManager->getOrCreateTokenId("PERSISTED_BLOB_EDGE"));
+	dataManager->addEdge(edge);
+	dataManager->addEdgeProperties(edge.getId(), {{"note", graph::PropertyValue(largeNote)}});
+	fileStorage->flush();
+	dataManager->clearCache();
+
+	indexManager->getEdgeIndexManager()->getPropertyIndex()->createIndex("note");
+	ASSERT_TRUE(indexBuilder->buildEdgePropertyIndex("note"));
+
+	EXPECT_EQ(indexManager->findEdgeIdsByProperty("note", graph::PropertyValue(largeNote)),
+			  (std::vector<int64_t>{edge.getId()}));
 }
 
 TEST_F(IndexBuilderTest, BuildLabelIndex_EmptyDatabase) {
@@ -960,4 +1108,260 @@ TEST_F(IndexBuilderTest, BuildNodePropertyIndex_EmptyDatabase) {
 TEST_F(IndexBuilderTest, BuildEdgePropertyIndex_EmptyDatabase) {
 	indexManager->getEdgeIndexManager()->getPropertyIndex()->createIndex("nonexistent");
 	EXPECT_TRUE(indexBuilder->buildEdgePropertyIndex("nonexistent"));
+}
+
+TEST_F(IndexBuilderTest, BuildEdgePropertyIndexRejectsEmptyPropertyKeyWithoutAddingEntries) {
+	graph::Node n1(1, 0);
+	graph::Node n2(2, 0);
+	dataManager->addNode(n1);
+	dataManager->addNode(n2);
+
+	graph::Edge edge(0, 1, 2, dataManager->getOrCreateTokenId("EmptyPropertyKeyEdge"));
+	dataManager->addEdge(edge);
+	dataManager->addEdgeProperties(edge.getId(), {{"code", graph::PropertyValue(int64_t{23})}});
+
+	EXPECT_TRUE(indexBuilder->buildEdgePropertyIndex(""));
+	EXPECT_FALSE(indexManager->hasPropertyIndex("edge", ""));
+	EXPECT_TRUE(indexManager->findEdgeIdsByProperty("", int64_t{23}).empty());
+}
+
+TEST_F(IndexBuilderTest, BuildEdgePropertyIndexesIgnoresEmptyAndDuplicateKeys) {
+	EXPECT_TRUE(indexBuilder->buildEdgePropertyIndexes({}));
+	EXPECT_TRUE(indexBuilder->buildEdgePropertyIndexes({"", "tag", "tag"}));
+	EXPECT_TRUE(indexManager->hasPropertyIndex("edge", "tag"));
+}
+
+TEST_F(IndexBuilderTest, BuildEdgePropertyIndexesHandlesActiveEdgesWithoutProperties) {
+	graph::Node n1(1, 0);
+	graph::Node n2(2, 0);
+	dataManager->addNode(n1);
+	dataManager->addNode(n2);
+
+	graph::Edge edge(0, 1, 2, dataManager->getOrCreateTokenId("NO_PROPS"));
+	dataManager->addEdge(edge);
+
+	ASSERT_TRUE(indexBuilder->buildEdgePropertyIndexes({"missing"}));
+	EXPECT_TRUE(indexManager->findEdgeIdsByProperty("missing", std::string("value")).empty());
+}
+
+TEST_F(IndexBuilderTest, BuildEdgePropertyIndexesIndexesBlobBackedScalarFallback) {
+	graph::Node n1(1, 0);
+	graph::Node n2(2, 0);
+	dataManager->addNode(n1);
+	dataManager->addNode(n2);
+
+	graph::Edge edge(0, 1, 2, dataManager->getOrCreateTokenId("BLOB_PROP"));
+	dataManager->addEdge(edge);
+	const std::string largeNote(600, 'x');
+	dataManager->addEdgeProperties(edge.getId(), {{"note", graph::PropertyValue(largeNote)}});
+
+	ASSERT_TRUE(indexBuilder->buildEdgePropertyIndexes({"note"}));
+
+	const auto results = indexManager->findEdgeIdsByProperty("note", largeNote);
+	ASSERT_EQ(results.size(), 1UL);
+	EXPECT_EQ(results.front(), edge.getId());
+}
+
+TEST_F(IndexBuilderTest, BuildNodePropertyIndexesUsesInlineFallbackForDirtyOwners) {
+	graph::Node first(0, dataManager->getOrCreateTokenId("InlineUser"));
+	first.setProperties({{"code", graph::PropertyValue("u1")}, {"score", graph::PropertyValue(int64_t{10})}});
+	dataManager->addNode(first);
+
+	graph::Node second(0, dataManager->getOrCreateTokenId("InlineOther"));
+	second.setProperties({{"code", graph::PropertyValue("u2")}, {"score", graph::PropertyValue(int64_t{20})}});
+	dataManager->addNode(second);
+
+	ASSERT_TRUE(indexBuilder->buildNodePropertyIndexes({
+			{"code", ""},
+			{"score", "InlineUser"},
+			{"code", ""},
+	}));
+
+	EXPECT_EQ(indexManager->findNodeIdsByProperty("code", graph::PropertyValue("u1")),
+			  (std::vector<int64_t>{first.getId()}));
+	EXPECT_EQ(indexManager->findNodeIdsByProperty("code", graph::PropertyValue("u2")),
+			  (std::vector<int64_t>{second.getId()}));
+	EXPECT_EQ(indexManager->findNodeIdsByLabelAndProperty("InlineUser", "score", graph::PropertyValue(int64_t{10})),
+			  (std::vector<int64_t>{first.getId()}));
+	EXPECT_TRUE(indexManager->findNodeIdsByLabelAndProperty("InlineUser", "score", graph::PropertyValue(int64_t{20}))
+						.empty());
+}
+
+TEST_F(IndexBuilderTest, BuildNodePropertyIndexesSkipsEmptyAndUnmatchedInlineFallbackEntries) {
+	graph::Node noProperty(0, dataManager->getOrCreateTokenId("InlineSparse"));
+	dataManager->addNode(noProperty);
+
+	graph::Node wrongProperty(0, dataManager->getOrCreateTokenId("InlineSparse"));
+	wrongProperty.setProperties({{"other", graph::PropertyValue("ignored")}});
+	dataManager->addNode(wrongProperty);
+
+	graph::Node valid(0, dataManager->getOrCreateTokenId("InlineSparse"));
+	valid.setProperties({{"needle", graph::PropertyValue("found")}});
+	dataManager->addNode(valid);
+
+	ASSERT_TRUE(indexBuilder->buildNodePropertyIndexes({{"", ""}, {"needle", ""}}));
+
+	EXPECT_EQ(indexManager->findNodeIdsByProperty("needle", graph::PropertyValue("found")),
+			  (std::vector<int64_t>{valid.getId()}));
+	EXPECT_TRUE(indexManager->findNodeIdsByProperty("needle", graph::PropertyValue("ignored")).empty());
+}
+
+TEST_F(IndexBuilderTest, BuildNodePropertyIndexesHandlesEmptyScopedOwnerGroup) {
+	(void) dataManager->getOrCreateTokenId("EmptyScopedMultiBuild");
+	graph::Node other(0, dataManager->getOrCreateTokenId("OtherScopedMultiBuild"));
+	dataManager->addNode(other);
+	dataManager->addNodeProperties(other.getId(), {{"needle", graph::PropertyValue("ignored")}});
+
+	ASSERT_TRUE(indexBuilder->buildNodePropertyIndexes({{"needle", "EmptyScopedMultiBuild"}}));
+
+	EXPECT_TRUE(indexManager->findNodeIdsByLabelAndProperty(
+			"EmptyScopedMultiBuild", "needle", graph::PropertyValue("ignored")).empty());
+	EXPECT_TRUE(indexManager->findNodeIdsByProperty("needle", graph::PropertyValue("ignored")).empty());
+}
+
+TEST_F(IndexBuilderTest, BuildNodePropertyIndexesFallbackSkipsPropertyEntityOwners) {
+	graph::Node propertyEntityNode(0, dataManager->getOrCreateTokenId("FallbackPropertyEntity"));
+	dataManager->addNode(propertyEntityNode);
+	dataManager->addNodeProperties(propertyEntityNode.getId(), {{"code", graph::PropertyValue("external")}});
+
+	graph::Node blobBackedNode(0, dataManager->getOrCreateTokenId("FallbackBlob"));
+	dataManager->addNode(blobBackedNode);
+	const std::string largeCode(700, 'b');
+	dataManager->addNodeProperties(blobBackedNode.getId(), {{"code", graph::PropertyValue(largeCode)}});
+
+	ASSERT_TRUE(indexBuilder->buildNodePropertyIndexes({{"code", ""}}));
+
+	EXPECT_EQ(indexManager->findNodeIdsByProperty("code", graph::PropertyValue("external")),
+			  (std::vector<int64_t>{propertyEntityNode.getId()}));
+	EXPECT_EQ(indexManager->findNodeIdsByProperty("code", graph::PropertyValue(largeCode)),
+			  (std::vector<int64_t>{blobBackedNode.getId()}));
+}
+
+TEST_F(IndexBuilderTest, BuildEdgePropertyIndexesUsesInlineFallbackForDirtyOwners) {
+	graph::Node source(1, 0);
+	graph::Node target(2, 0);
+	dataManager->addNode(source);
+	dataManager->addNode(target);
+
+	graph::Edge first(0, source.getId(), target.getId(), dataManager->getOrCreateTokenId("INLINE_EDGE"));
+	first.setProperties({{"weight", graph::PropertyValue(int64_t{7})}, {"rank", graph::PropertyValue(int64_t{1})}});
+	dataManager->addEdge(first);
+
+	graph::Edge second(0, target.getId(), source.getId(), dataManager->getOrCreateTokenId("INLINE_EDGE"));
+	second.setProperties({{"weight", graph::PropertyValue(int64_t{9})}});
+	dataManager->addEdge(second);
+
+	ASSERT_TRUE(indexBuilder->buildEdgePropertyIndexes({"", "weight", "weight", "rank"}));
+
+	EXPECT_EQ(indexManager->findEdgeIdsByProperty("weight", graph::PropertyValue(int64_t{7})),
+			  (std::vector<int64_t>{first.getId()}));
+	EXPECT_EQ(indexManager->findEdgeIdsByProperty("weight", graph::PropertyValue(int64_t{9})),
+			  (std::vector<int64_t>{second.getId()}));
+	EXPECT_EQ(indexManager->findEdgeIdsByProperty("rank", graph::PropertyValue(int64_t{1})),
+			  (std::vector<int64_t>{first.getId()}));
+}
+
+TEST_F(IndexBuilderTest, BuildEdgePropertyIndexesFallbackSkipsPropertyEntityOwners) {
+	graph::Node source(1, 0);
+	graph::Node target(2, 0);
+	dataManager->addNode(source);
+	dataManager->addNode(target);
+
+	graph::Edge propertyEntityEdge(0, source.getId(), target.getId(),
+								   dataManager->getOrCreateTokenId("FallbackPropertyEdge"));
+	dataManager->addEdge(propertyEntityEdge);
+	dataManager->addEdgeProperties(propertyEntityEdge.getId(), {{"code", graph::PropertyValue("external")}});
+
+	graph::Edge blobBackedEdge(0, target.getId(), source.getId(),
+							   dataManager->getOrCreateTokenId("FallbackBlobEdge"));
+	dataManager->addEdge(blobBackedEdge);
+	const std::string largeCode(700, 'e');
+	dataManager->addEdgeProperties(blobBackedEdge.getId(), {{"code", graph::PropertyValue(largeCode)}});
+
+	ASSERT_TRUE(indexBuilder->buildEdgePropertyIndexes({"code"}));
+
+	EXPECT_EQ(indexManager->findEdgeIdsByProperty("code", graph::PropertyValue("external")),
+			  (std::vector<int64_t>{propertyEntityEdge.getId()}));
+	EXPECT_EQ(indexManager->findEdgeIdsByProperty("code", graph::PropertyValue(largeCode)),
+			  (std::vector<int64_t>{blobBackedEdge.getId()}));
+}
+
+TEST_F(IndexBuilderTest, BuildPropertyIndexesFallbackAfterFlushWithoutPropertySegments) {
+	graph::Node node(0, dataManager->getOrCreateTokenId("NoPropertySegmentNode"));
+	dataManager->addNode(node);
+
+	graph::Node source(0, 0);
+	graph::Node target(0, 0);
+	dataManager->addNode(source);
+	dataManager->addNode(target);
+	graph::Edge edge(0, source.getId(), target.getId(), dataManager->getOrCreateTokenId("NO_PROPERTY_SEGMENT_EDGE"));
+	dataManager->addEdge(edge);
+
+	fileStorage->flush();
+	dataManager->clearCache();
+
+	EXPECT_TRUE(indexBuilder->buildNodePropertyIndexes({{"missing", ""}}));
+	EXPECT_TRUE(indexBuilder->buildEdgePropertyIndexes({"missing"}));
+	EXPECT_TRUE(indexManager->findNodeIdsByProperty("missing", graph::PropertyValue("value")).empty());
+	EXPECT_TRUE(indexManager->findEdgeIdsByProperty("missing", graph::PropertyValue("value")).empty());
+}
+
+TEST_F(IndexBuilderTest, BuildBatchPropertyIndexesHandleEmptyScannerInputs) {
+	fileStorage->flush();
+	dataManager->clearCache();
+
+	EXPECT_TRUE(indexBuilder->buildNodePropertyIndexes({{"missing", ""}, {"missing", "MissingScopedBatch"}}));
+	EXPECT_TRUE(indexBuilder->buildEdgePropertyIndexes({"missing", "missing", ""}));
+	EXPECT_TRUE(indexManager->findNodeIdsByProperty("missing", graph::PropertyValue("value")).empty());
+	EXPECT_TRUE(indexManager->findEdgeIdsByProperty("missing", graph::PropertyValue("value")).empty());
+}
+
+TEST_F(IndexBuilderTest, BuildNodePropertyIndexesLeavesKnownEmptyScopedLabelEmpty) {
+	const int64_t emptyLabel = dataManager->getOrCreateTokenId("KnownEmptyBatchLabel");
+	ASSERT_NE(emptyLabel, 0);
+
+	graph::Node otherNode(0, dataManager->getOrCreateTokenId("OtherBatchLabel"));
+	dataManager->addNode(otherNode);
+	dataManager->addNodeProperties(otherNode.getId(), {{"code", graph::PropertyValue("other")}});
+	fileStorage->flush();
+	dataManager->clearCache();
+
+	ASSERT_TRUE(indexBuilder->buildNodePropertyIndexes({{"code", "KnownEmptyBatchLabel"}}));
+	EXPECT_TRUE(indexManager->findNodeIdsByLabelAndProperty(
+						 "KnownEmptyBatchLabel", "code", graph::PropertyValue("other"))
+						.empty());
+}
+
+TEST_F(IndexBuilderTest, BuildTypeIndexesOnEmptyDatabaseAreNoOps) {
+	EXPECT_TRUE(indexBuilder->buildNodeLabelIndex());
+	EXPECT_TRUE(indexBuilder->buildEdgeTypeIndex());
+	EXPECT_TRUE(indexManager->findNodeIdsByLabel("missing").empty());
+	EXPECT_TRUE(indexManager->findEdgeIdsByType("MISSING_TYPE").empty());
+}
+
+TEST_F(IndexBuilderTest, LegacyPropertyBatchFallbackHandlesFullBatches) {
+	constexpr int kCount = 1001;
+	const int64_t nodeLabel = dataManager->getOrCreateTokenId("LegacyPropertyBatchNode");
+	for (int i = 0; i < kCount; ++i) {
+		graph::Node node(0, nodeLabel);
+		dataManager->addNode(node);
+	}
+
+	graph::Node source(0, 0);
+	graph::Node target(0, 0);
+	dataManager->addNode(source);
+	dataManager->addNode(target);
+	const int64_t edgeType = dataManager->getOrCreateTokenId("LEGACY_PROPERTY_BATCH_EDGE");
+	for (int i = 0; i < kCount; ++i) {
+		graph::Edge edge(0, source.getId(), target.getId(), edgeType);
+		dataManager->addEdge(edge);
+	}
+
+	fileStorage->flush();
+	dataManager->clearCache();
+
+	EXPECT_TRUE(indexBuilder->buildNodePropertyIndex(""));
+	EXPECT_TRUE(indexBuilder->buildEdgePropertyIndex(""));
+	EXPECT_TRUE(indexManager->findNodeIdsByProperty("", graph::PropertyValue("value")).empty());
+	EXPECT_TRUE(indexManager->findEdgeIdsByProperty("", graph::PropertyValue("value")).empty());
 }

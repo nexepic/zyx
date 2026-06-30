@@ -70,7 +70,6 @@ namespace graph::query::execution::operators {
 		[[nodiscard]] NodeScanRequirements makeSelectionRequirements() const;
 		void offerTopK(std::vector<Row> &heap, Row candidate) const;
 		void loadProjectionValues(std::vector<Row> &rows) const;
-		[[nodiscard]] bool comesBefore(const PropertyValue &left, const PropertyValue &right) const;
 		[[nodiscard]] bool comesBefore(const TypedOrderKey &left, const TypedOrderKey &right) const;
 		[[nodiscard]] Record makeRecord(const Row &row) const;
 		[[nodiscard]] static size_t normalizeLimit(int64_t limit);

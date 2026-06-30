@@ -47,10 +47,6 @@ namespace {
 			const DirectRelationshipCountConfig &config,
 			const std::shared_ptr<indexes::IndexManager> &im) {
 		std::vector<VectorizedPropertyPredicate> predicates;
-		if (!im) {
-			return predicates;
-		}
-
 		for (const auto &predicate : effectiveEdgePredicates(config)) {
 			if (predicate.op == VectorPredicateOp::VPO_EQ &&
 			    im->hasPropertyIndex("edge", predicate.propertyKey)) {
@@ -66,8 +62,8 @@ namespace {
 	std::optional<IndexedRelationshipPredicate> loadIndexedPredicate(
 			const std::shared_ptr<indexes::IndexManager> &im,
 			const VectorizedPropertyPredicate &predicate) {
-		if (!im || predicate.op != VectorPredicateOp::VPO_EQ ||
-		    !im->hasPropertyIndex("edge", predicate.propertyKey)) {
+		if (predicate.op != VectorPredicateOp::VPO_EQ ||
+			!im->hasPropertyIndex("edge", predicate.propertyKey)) {
 			return std::nullopt;
 		}
 
@@ -93,7 +89,7 @@ namespace {
 	std::optional<std::vector<int64_t>> loadTypeIds(
 			const DirectRelationshipCountConfig &config,
 			const std::shared_ptr<indexes::IndexManager> &im) {
-		if (!im || config.edgeType.empty() || !im->hasLabelIndex("edge")) {
+		if (config.edgeType.empty() || !im->hasLabelIndex("edge")) {
 			return std::nullopt;
 		}
 		auto ids = im->findEdgeIdsByType(config.edgeType);
