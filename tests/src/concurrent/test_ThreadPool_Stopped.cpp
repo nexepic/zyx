@@ -33,14 +33,23 @@
 using graph::concurrent::ThreadPool;
 
 #ifndef _WIN32
+namespace {
+int stoppedPoolReturnOne() {
+	return 1;
+}
+} // namespace
+
 TEST(ThreadPoolStoppedTest, SubmitThrowsWhenPoolHasBeenStopped) {
+	ThreadPool healthyPool(1);
+	EXPECT_EQ(healthyPool.submit(&stoppedPoolReturnOne).get(), 1);
+
 	ThreadPool pool(2);
 	{
 		std::unique_lock lock(pool.mutex_);
 		pool.stop_ = true;
 	}
 
-	EXPECT_THROW((void)pool.submit([] { return 1; }), std::runtime_error);
+	EXPECT_THROW((void)pool.submit(&stoppedPoolReturnOne), std::runtime_error);
 }
 #endif
 
