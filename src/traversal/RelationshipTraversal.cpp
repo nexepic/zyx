@@ -138,17 +138,10 @@ namespace graph::traversal {
 				if (sourceId <= 0 || targetId <= 0) {
 					return {};
 				}
-				if (sourceId > 0) {
-					minId = (std::min)(minId, sourceId);
-					maxId = (std::max)(maxId, sourceId);
-				}
-				if (targetId > 0) {
-					minId = (std::min)(minId, targetId);
-					maxId = (std::max)(maxId, targetId);
-				}
-			}
-			if (minId == std::numeric_limits<int64_t>::max() || maxId < minId) {
-				return {};
+				minId = (std::min)(minId, sourceId);
+				maxId = (std::max)(maxId, sourceId);
+				minId = (std::min)(minId, targetId);
+				maxId = (std::max)(maxId, targetId);
 			}
 
 			const auto span = static_cast<uint64_t>(maxId) - static_cast<uint64_t>(minId) + 1U;

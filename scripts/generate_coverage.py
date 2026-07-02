@@ -176,7 +176,7 @@ def apply_source_exclusions(file_coverage, source_path):
         return metrics
     return {
         "lines": _adjust_lines(file_coverage["segments"], summary["lines"], excluded_lines),
-        "regions": _adjust_regions(file_coverage["segments"], summary["regions"], excluded_lines),
+        "regions": _adjust_regions(file_coverage["segments"], summary["regions"], excluded_lines, source_path),
         "branches": _adjust_branches(file_coverage.get("branches", []), summary["branches"], excluded_lines),
         "functions": _adjust_functions(file_coverage["segments"], summary["functions"], source_path),
     }
@@ -194,15 +194,41 @@ def _adjust_lines(segments, raw, excluded_lines):
     return _metric(len(visible), len(covered & visible))
 
 
-def _adjust_regions(segments, raw, excluded_lines):
-    removed_count = 0
-    removed_covered = 0
+def _adjust_regions(segments, raw, excluded_lines, source_path=None):
+    if not _is_header_source(source_path):
+        removed_count = 0
+        removed_covered = 0
+        for line, _col, count, has_count, is_region_entry, _is_gap in segments:
+            if has_count and is_region_entry and line in excluded_lines:
+                removed_count += 1
+                if count > 0:
+                    removed_covered += 1
+        return _metric(raw["count"] - removed_count, raw["covered"] - removed_covered)
+
+    # LLVM emits region counters per template instantiation. Header-heavy code
+    # can therefore look uncovered when one call-site instantiation is compiled
+    # but intentionally not executed, even if the same source region is covered
+    # by another instantiation. Aggregate by source location so region coverage
+    # reports source behavior, matching the branch aggregation below.
+    sites = {}
+    saw_region = False
     for line, _col, count, has_count, is_region_entry, _is_gap in segments:
-        if has_count and is_region_entry and line in excluded_lines:
-            removed_count += 1
-            if count > 0:
-                removed_covered += 1
-    return _metric(raw["count"] - removed_count, raw["covered"] - removed_covered)
+        if not (has_count and is_region_entry):
+            continue
+        saw_region = True
+        if line in excluded_lines:
+            continue
+        key = (line, _col)
+        sites[key] = sites.get(key, False) or count > 0
+    if not sites:
+        return _metric(0, 0) if saw_region else _metric(raw["count"], raw["covered"])
+    return _metric(len(sites), sum(int(covered) for covered in sites.values()))
+
+
+def _is_header_source(source_path):
+    if source_path is None:
+        return False
+    return Path(source_path).suffix.lower() in {".h", ".hh", ".hpp", ".hxx"}
 
 
 def _adjust_branches(branches, raw, excluded_lines):
@@ -212,6 +238,10 @@ def _adjust_branches(branches, raw, excluded_lines):
     # source-level branch coverage by aggregating counters at each source location.
     sites = {}
     for line_start, _col_start, line_end, _col_end, true_count, false_count, *_rest in branches:
+        # LLVM can emit folded ignored branches with 0/0 counters. Raw summaries
+        # do not count these arcs, so skip them before source-level aggregation.
+        if true_count == 0 and false_count == 0:
+            continue
         if _branch_intersects_excluded_lines(line_start, line_end, excluded_lines):
             continue
         key = (line_start, _col_start, line_end, _col_end)

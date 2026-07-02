@@ -140,6 +140,65 @@ def test_source_exclusion_adjustment_treats_continued_marker_as_statement_prefix
     assert adjusted["lines"]["count"] == 1
 
 
+def test_branch_adjustment_ignores_folded_zero_count_branches(tmp_path):
+    repo_root = Path(__file__).resolve().parents[1]
+    sys.path.insert(0, str(repo_root / "scripts"))
+    import generate_coverage
+
+    source_file = tmp_path / "FoldedBranch.cpp"
+    source_file.write_text("bool guard(bool value) { return value; }\n")
+    file_coverage = {
+        "segments": [[1, 1, 1, True, True, False]],
+        "branches": [
+            [1, 12, 1, 17, 3, 2],
+            [1, 24, 1, 30, 0, 0, 0, 0, 4],
+        ],
+        "summary": {
+            "lines": {"count": 1, "covered": 1, "percent": 100.0},
+            "regions": {"count": 1, "covered": 1, "percent": 100.0},
+            "branches": {"count": 2, "covered": 2, "notcovered": 0, "percent": 100.0},
+            "functions": {"count": 1, "covered": 1, "percent": 100.0},
+        },
+    }
+
+    adjusted = generate_coverage.apply_source_exclusions(file_coverage, source_file)
+
+    assert adjusted["branches"] == {"count": 2, "covered": 2, "notcovered": 0, "percent": 100.0}
+
+
+def test_region_adjustment_aggregates_template_instantiations_by_source_site(tmp_path):
+    repo_root = Path(__file__).resolve().parents[1]
+    sys.path.insert(0, str(repo_root / "scripts"))
+    import generate_coverage
+
+    source_file = tmp_path / "TemplatedHeader.hpp"
+    source_file.write_text(
+        "template <typename T>\n"
+        "int value(T v) { return v ? 1 : 0; }\n"
+        "int defensive() { return 0; } // ZYX_COV_EXCL_LINE\n"
+    )
+    file_coverage = {
+        "segments": [
+            [2, 1, 4, True, True, False],
+            [2, 1, 0, True, True, False],
+            [2, 16, 0, True, True, False],
+            [2, 16, 3, True, True, False],
+            [3, 1, 0, True, True, False],
+        ],
+        "branches": [],
+        "summary": {
+            "lines": {"count": 2, "covered": 1, "percent": 50.0},
+            "regions": {"count": 5, "covered": 2, "percent": 40.0},
+            "branches": {"count": 0, "covered": 0, "notcovered": 0, "percent": 100.0},
+            "functions": {"count": 2, "covered": 1, "percent": 50.0},
+        },
+    }
+
+    adjusted = generate_coverage.apply_source_exclusions(file_coverage, source_file)
+
+    assert adjusted["regions"] == {"count": 2, "covered": 2, "notcovered": 0, "percent": 100.0}
+
+
 def test_driver_abi_coverage_summary_honors_source_exclusion_markers(tmp_path):
     repo_root = Path(__file__).resolve().parents[1]
     build_dir = repo_root / "buildDir"

@@ -133,6 +133,21 @@ TEST_F(RelationshipTraversalTest, LightweightAdjacencyRefsVisitIncomingDirection
 	EXPECT_EQ(traversal->countAdjacentEdgeRefs(999999, incoming), 0U);
 }
 
+TEST_F(RelationshipTraversalTest, DirectVisitorsHonorNullAndIncomingEarlyStop) {
+	EXPECT_EQ(traversal->visitOutgoingEdges(node1.getId(), {}), 0U);
+	EXPECT_EQ(traversal->visitIncomingEdges(node2.getId(), {}), 0U);
+
+	size_t calls = 0;
+	const size_t visited = traversal->visitIncomingEdges(node2.getId(), [&](const graph::Edge &seen) {
+		++calls;
+		EXPECT_EQ(seen.getId(), edge.getId());
+		return false;
+	});
+
+	EXPECT_EQ(visited, 1U);
+	EXPECT_EQ(calls, 1U);
+}
+
 TEST_F(RelationshipTraversalTest, LightweightAdjacencyRefsVisitBothDirectionsInStableOrder) {
 	graph::Edge reverseEdge(0, node2.getId(), node1.getId(), dataManager->getOrCreateTokenId("REVERSE_REF"));
 	dataManager->addEdge(reverseEdge);
@@ -152,6 +167,50 @@ TEST_F(RelationshipTraversalTest, LightweightAdjacencyRefsVisitBothDirectionsInS
 	EXPECT_EQ(edgeIds[0], edge.getId());
 	EXPECT_EQ(edgeIds[1], reverseEdge.getId());
 	EXPECT_EQ(traversal->countAdjacentEdgeRefs(node1.getId(), both), 2U);
+}
+
+TEST(RelationshipTraversalLifetimeTest, LightweightAdjacencyRefsHandleExpiredManager) {
+	std::shared_ptr<graph::storage::DataManager> nullDm;
+	graph::traversal::RelationshipTraversal traversal(nullDm);
+
+	graph::traversal::RelationshipTraversalOptions options;
+	options.direction = graph::traversal::RelationshipDirectionKind::RDK_OUT;
+
+	EXPECT_EQ(traversal.visitAdjacentEdgeRefs(
+					  1, options, [](const graph::traversal::RelationshipEdgeRef &) { return true; }),
+			  0U);
+	EXPECT_EQ(traversal.countAdjacentEdgeRefs(1, options), 0U);
+}
+
+TEST_F(RelationshipTraversalTest, LightweightAdjacencyRefsSkipInactiveNodesAndDanglingHeads) {
+	graph::traversal::RelationshipTraversalOptions out;
+	out.direction = graph::traversal::RelationshipDirectionKind::RDK_OUT;
+
+	graph::Node inactiveNode(30, dataManager->getOrCreateTokenId("InactiveAdjacencyNode"));
+	dataManager->addNode(inactiveNode);
+	dataManager->deleteNode(inactiveNode);
+	EXPECT_EQ(traversal->countAdjacentEdgeRefs(inactiveNode.getId(), out), 0U);
+
+	graph::Node danglingNode(31, dataManager->getOrCreateTokenId("DanglingAdjacencyNode"));
+	danglingNode.setFirstOutEdgeId(999999997);
+	dataManager->addNode(danglingNode);
+	EXPECT_EQ(traversal->countAdjacentEdgeRefs(danglingNode.getId(), out), 0U);
+}
+
+TEST_F(RelationshipTraversalTest, LightweightAdjacencyRefsRespectActiveOnlyForInactiveRefs) {
+	auto inactiveEdge = dataManager->getEdge(edge.getId());
+	inactiveEdge.markInactive();
+	graph::storage::DirtyEntityInfo<graph::Edge> dirtyInfo(
+			graph::storage::EntityChangeType::CHANGE_MODIFIED, inactiveEdge);
+	dataManager->setEntityDirty<graph::Edge>(dirtyInfo);
+
+	graph::traversal::RelationshipTraversalOptions activeOnly;
+	activeOnly.direction = graph::traversal::RelationshipDirectionKind::RDK_OUT;
+	activeOnly.activeOnly = true;
+	EXPECT_EQ(traversal->countAdjacentEdgeRefs(node1.getId(), activeOnly), 0U);
+
+	activeOnly.activeOnly = false;
+	EXPECT_EQ(traversal->countAdjacentEdgeRefs(node1.getId(), activeOnly), 1U);
 }
 
 TEST_F(RelationshipTraversalTest, LightweightAdjacencyRefsDetectCyclesWhenRequested) {
@@ -330,6 +389,44 @@ TEST_F(RelationshipTraversalTest, BatchLinkPlannerToleratesDanglingHeadPointers)
 	EXPECT_EQ(edges[0].getNextInEdgeId(), 777778);
 	EXPECT_TRUE(updates.oldHeadEdges.empty());
 	ASSERT_EQ(updates.nodes.size(), 2U);
+}
+
+TEST_F(RelationshipTraversalTest, BatchLinkPlannerRejectsInvalidDenseCandidates) {
+	const int64_t typeId = dataManager->getOrCreateTokenId("INVALID_DENSE_CANDIDATE");
+
+	std::vector<graph::Edge> invalidSourceEdges;
+	invalidSourceEdges.reserve(1024);
+	for (int64_t i = 0; i < 1024; ++i) {
+		invalidSourceEdges.emplace_back(10000 + i, 0, node2.getId(), typeId);
+	}
+	EXPECT_NO_THROW((void) traversal->buildBatchLinks(invalidSourceEdges));
+
+	std::vector<graph::Edge> invalidTargetEdges;
+	invalidTargetEdges.reserve(1024);
+	for (int64_t i = 0; i < 1024; ++i) {
+		invalidTargetEdges.emplace_back(20000 + i, node1.getId(), 0, typeId);
+	}
+	EXPECT_NO_THROW((void) traversal->buildBatchLinks(invalidTargetEdges));
+}
+
+TEST_F(RelationshipTraversalTest, BatchLinkPlannerFallsBackForSparsePositiveNodeRanges) {
+	const int64_t typeId = dataManager->getOrCreateTokenId("SPARSE_DENSE_CANDIDATE");
+
+	std::vector<graph::Edge> sparseEdges;
+	sparseEdges.reserve(1024);
+	for (int64_t i = 0; i < 1024; ++i) {
+		sparseEdges.emplace_back(30000 + i, node1.getId(), 100000 + i * 100, typeId);
+	}
+	auto sparseUpdates = traversal->buildBatchLinks(sparseEdges);
+	EXPECT_FALSE(sparseUpdates.empty());
+
+	std::vector<graph::Edge> wideEdges;
+	wideEdges.reserve(1024);
+	for (int64_t i = 0; i < 1024; ++i) {
+		wideEdges.emplace_back(40000 + i, node1.getId(), 2000000 + i, typeId);
+	}
+	auto wideUpdates = traversal->buildBatchLinks(wideEdges);
+	EXPECT_FALSE(wideUpdates.empty());
 }
 
 TEST_F(RelationshipTraversalTest, DenseBatchLinkingHandlesManyEdgesOverCompactNodeIds) {

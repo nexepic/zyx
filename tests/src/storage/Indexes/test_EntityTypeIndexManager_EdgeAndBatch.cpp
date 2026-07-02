@@ -441,6 +441,33 @@ TEST_F(EntityTypeIndexManagerEdgeAndBatchTest, ColumnarEntitiesAddedHandlesEmpty
 	EXPECT_TRUE(nodeIndexManager->getLabelIndex()->findNodes("ColumnarUnindexedNode").empty());
 }
 
+TEST_F(EntityTypeIndexManagerEdgeAndBatchTest, ColumnarEdgeBatchHandlesEmptyAndUnindexedInputs) {
+	EXPECT_NO_THROW(edgeIndexManager->onEntitiesAddedColumnar<graph::Edge>({}, {}));
+
+	const int64_t typeId = dataManager->getOrCreateTokenId("ColumnarUnindexedEdge");
+	std::vector<graph::Edge> edges;
+	edges.emplace_back(61, 1, 2, typeId);
+	EXPECT_NO_THROW(edgeIndexManager->onEntitiesAddedColumnar(edges, {}));
+	EXPECT_TRUE(edgeIndexManager->getLabelIndex()->findNodes("ColumnarUnindexedEdge").empty());
+}
+
+TEST_F(EntityTypeIndexManagerEdgeAndBatchTest, ColumnarNodeBatchSkipsIndexedKeyWithoutColumn) {
+	(void) nodeIndexManager->createPropertyIndex("missing_score", []() { return true; });
+
+	const int64_t labelId = dataManager->getOrCreateTokenId("ColumnarMissingPropertyNode");
+	std::vector<graph::Node> nodes;
+	nodes.emplace_back(62, labelId);
+	nodes.emplace_back(63, labelId);
+
+	std::vector<graph::storage::BulkPropertyColumn> columns{
+			{"other_score", {graph::PropertyValue(int64_t{1}), graph::PropertyValue(int64_t{2})}}};
+	nodeIndexManager->onEntitiesAddedColumnar(nodes, columns);
+
+	EXPECT_TRUE(nodeIndexManager->getPropertyIndex()->findExactMatch(
+			"missing_score",
+			graph::PropertyValue(int64_t{1})).empty());
+}
+
 TEST_F(EntityTypeIndexManagerEdgeAndBatchTest, ColumnarNodeBatchMaintainsLabelAndPropertyIndexes) {
 	(void) nodeIndexManager->createLabelIndex([]() { return true; });
 	(void) nodeIndexManager->createPropertyIndex("score", []() { return true; });
@@ -490,6 +517,98 @@ TEST_F(EntityTypeIndexManagerEdgeAndBatchTest, ColumnarEdgeBatchMaintainsTypeAnd
 	auto weightFive = edgeIndexManager->getPropertyIndex()->findExactMatch("weight", graph::PropertyValue(int64_t{5}));
 	ASSERT_EQ(weightFive.size(), 1U);
 	EXPECT_EQ(weightFive.front(), 81);
+}
+
+TEST_F(EntityTypeIndexManagerEdgeAndBatchTest, NodeSingleEntityPathsIgnoreZeroLabelSlots) {
+	(void) nodeIndexManager->createLabelIndex([]() { return true; });
+
+	const int64_t oldLabel = dataManager->getOrCreateTokenId("SparseOldLabel");
+	const int64_t newLabel = dataManager->getOrCreateTokenId("SparseNewLabel");
+
+	graph::Node oldNode(90, 0);
+	auto &oldMeta = oldNode.getMutableMetadata();
+	oldMeta.labelIds[0] = 0;
+	oldMeta.labelIds[1] = oldLabel;
+	oldMeta.labelCount = 2;
+
+	nodeIndexManager->onEntityAdded(oldNode);
+	auto labelIdx = nodeIndexManager->getLabelIndex();
+	ASSERT_EQ(labelIdx->findNodes("SparseOldLabel").size(), 1UL);
+
+	graph::Node newNode(90, 0);
+	auto &newMeta = newNode.getMutableMetadata();
+	newMeta.labelIds[0] = 0;
+	newMeta.labelIds[1] = newLabel;
+	newMeta.labelCount = 2;
+
+	nodeIndexManager->onEntityUpdated(oldNode, newNode);
+	EXPECT_TRUE(labelIdx->findNodes("SparseOldLabel").empty());
+	EXPECT_EQ(labelIdx->findNodes("SparseNewLabel").size(), 1UL);
+
+	nodeIndexManager->onEntityDeleted(newNode);
+	EXPECT_TRUE(labelIdx->findNodes("SparseNewLabel").empty());
+}
+
+TEST_F(EntityTypeIndexManagerEdgeAndBatchTest, NodeBatchSkipsZeroAndUnresolvableLabelIds) {
+	(void) nodeIndexManager->createLabelIndex([]() { return true; });
+
+	const int64_t validLabel = dataManager->getOrCreateTokenId("BatchSparseLabel");
+	graph::Node sparseNode(91, 0);
+	auto &sparseMeta = sparseNode.getMutableMetadata();
+	sparseMeta.labelIds[0] = 0;
+	sparseMeta.labelIds[1] = validLabel;
+	sparseMeta.labelCount = 2;
+
+	nodeIndexManager->onEntitiesAdded(std::vector<graph::Node>{sparseNode});
+	auto labelIdx = nodeIndexManager->getLabelIndex();
+	ASSERT_EQ(labelIdx->findNodes("BatchSparseLabel").size(), 1UL);
+
+	graph::Node staleTokenNode(92, 0);
+	auto &staleMeta = staleTokenNode.getMutableMetadata();
+	staleMeta.labelIds[0] = 999999999;
+	staleMeta.labelCount = 1;
+
+	EXPECT_NO_THROW(nodeIndexManager->onEntitiesAdded(std::vector<graph::Node>{staleTokenNode}));
+	EXPECT_EQ(labelIdx->findNodes("BatchSparseLabel").size(), 1UL);
+}
+
+TEST_F(EntityTypeIndexManagerEdgeAndBatchTest, ColumnarNodeBatchSkipsZeroAndUnresolvableLabelIds) {
+	(void) nodeIndexManager->createLabelIndex([]() { return true; });
+
+	const int64_t validLabel = dataManager->getOrCreateTokenId("ColumnarSparseLabel");
+	graph::Node sparseNode(93, 0);
+	auto &sparseMeta = sparseNode.getMutableMetadata();
+	sparseMeta.labelIds[0] = 0;
+	sparseMeta.labelIds[1] = validLabel;
+	sparseMeta.labelCount = 2;
+
+	nodeIndexManager->onEntitiesAddedColumnar(std::vector<graph::Node>{sparseNode}, {});
+	auto labelIdx = nodeIndexManager->getLabelIndex();
+	ASSERT_EQ(labelIdx->findNodes("ColumnarSparseLabel").size(), 1UL);
+
+	graph::Node staleTokenNode(94, 0);
+	auto &staleMeta = staleTokenNode.getMutableMetadata();
+	staleMeta.labelIds[0] = 999999998;
+	staleMeta.labelCount = 1;
+
+	EXPECT_NO_THROW(nodeIndexManager->onEntitiesAddedColumnar(std::vector<graph::Node>{staleTokenNode}, {}));
+	EXPECT_EQ(labelIdx->findNodes("ColumnarSparseLabel").size(), 1UL);
+}
+
+TEST_F(EntityTypeIndexManagerEdgeAndBatchTest, ColumnarEdgeBatchSkipsIndexedKeyWithoutColumn) {
+	(void) edgeIndexManager->createPropertyIndex("missing_weight", []() { return true; });
+
+	std::vector<graph::Edge> edges;
+	edges.emplace_back(95, 1, 2, 0);
+
+	std::vector<graph::storage::BulkPropertyColumn> columns{
+			{"other_weight", {graph::PropertyValue(int64_t{7})}}};
+
+	edgeIndexManager->onEntitiesAddedColumnar(edges, columns);
+
+	EXPECT_TRUE(edgeIndexManager->getPropertyIndex()
+						->findExactMatch("missing_weight", graph::PropertyValue(int64_t{7}))
+						.empty());
 }
 
 // ============================================================================
