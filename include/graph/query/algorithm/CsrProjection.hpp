@@ -26,9 +26,11 @@
 #include <cstdint>
 #include <memory>
 #include <span>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
+#include "graph/concurrent/ParallelOperatorExecutor.hpp"
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/query/algorithm/GraphProjection.hpp"
 
@@ -132,34 +134,43 @@ namespace graph::query::algorithm {
 			colIdx_.resize(rowPtr_[n]);
 			weights_.resize(rowPtr_[n], 1.0f);
 
-			// Fill phase. parallelFor dispatches per-index, so each call handles
-			// one source node. Writes to the source node's own row are disjoint
-			// per index, but mirror writes into a dst row can collide across
-			// nodes, so every write claims its slot via atomic fetch_add on a
-			// per-row cursor.
+			// Fill phase via the shared parallel executor: adaptive worker selection
+			// (small graphs fall back to serial, large ones parallelise) with
+			// profile telemetry under phase "leiden.csrBuild". Each partition
+			// fills a disjoint node range; writes go through per-row atomic
+			// cursors so mirror writes into a dst row never collide.
 			std::vector<std::atomic<uint32_t>> cursors(rowPtr_.size());
 			for (size_t i = 0; i < rowPtr_.size(); ++i) cursors[i].store(rowPtr_[i], std::memory_order_relaxed);
-			auto fillNode = [&](size_t i) {
-				int64_t srcId = nodeIds_[i];
-				const auto &edges = proj.getOutNeighbors(srcId);
-				for (const auto &e : edges) {
-					auto dstIt = idToIdx_.find(e.targetId);
-					if (dstIt == idToIdx_.end()) continue;
-					size_t dst = dstIt->second;
-					float w = static_cast<float>(e.weight);
-					uint32_t posSrc = cursors[i].fetch_add(1, std::memory_order_relaxed);
-					colIdx_[posSrc] = e.targetId;
-					weights_[posSrc] = w;
-					uint32_t posDst = cursors[dst].fetch_add(1, std::memory_order_relaxed);
-					colIdx_[posDst] = srcId;
-					weights_[posDst] = w;
-				}
+			struct CsrFillState {}; // no per-partition state; atomic cursors handle writes
+			const concurrent::ParallelOperatorOptions options{
+				.phase = std::string_view("leiden.csrBuild"),
+				.workloadKind = concurrent::ParallelWorkloadKind::PWK_ADJACENCY_TRAVERSAL,
+				.estimatedItems = n,
+				.minPartitions = 2,
+				.minItems = 1024,
+				.minItemsPerWorker = 256,
 			};
-			if (pool != nullptr && n > 1024) {
-				pool->parallelFor(0, n, fillNode);
-			} else {
-				for (size_t i = 0; i < n; ++i) fillNode(i);
-			}
+			concurrent::ParallelOperatorExecutor::runRangePartitions<CsrFillState>(
+				0, n, pool, options,
+				[&](const concurrent::ParallelRangePartition &range, CsrFillState &) {
+					for (size_t i = range.begin; i < range.end; ++i) {
+						int64_t srcId = nodeIds_[i];
+						const auto &edges = proj.getOutNeighbors(srcId);
+						for (const auto &e : edges) {
+							auto dstIt = idToIdx_.find(e.targetId);
+							if (dstIt == idToIdx_.end()) continue;
+							size_t dst = dstIt->second;
+							float w = static_cast<float>(e.weight);
+							uint32_t posSrc = cursors[i].fetch_add(1, std::memory_order_relaxed);
+							colIdx_[posSrc] = e.targetId;
+							weights_[posSrc] = w;
+							uint32_t posDst = cursors[dst].fetch_add(1, std::memory_order_relaxed);
+							colIdx_[posDst] = srcId;
+							weights_[posDst] = w;
+						}
+					}
+				},
+				[]([[maybe_unused]] size_t, CsrFillState &) {});
 		}
 
 		// Build from an in-memory undirected edge list over indices [0, nodeCount).
