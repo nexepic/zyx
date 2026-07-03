@@ -268,3 +268,32 @@ TEST_F(CypherGdsTest, ProjectWithWeightProperty) {
 
 	(void) execute("CALL gds.graph.drop('weighted')");
 }
+
+// ============================================================================
+// gds.leiden.stream
+// ============================================================================
+
+TEST_F(CypherGdsTest, LeidenStreamEndToEnd) {
+	// Two triangles bridged by one edge → 2 communities.
+	(void) execute("CREATE (a:Person {name: 'A'})-[:KNOWS]->(b:Person {name: 'B'})");
+	(void) execute("MATCH (b:Person {name: 'B'}) CREATE (b)-[:KNOWS]->(c:Person {name: 'C'})");
+	(void) execute("MATCH (a:Person {name: 'A'}), (c:Person {name: 'C'}) CREATE (a)-[:KNOWS]->(c)");
+	(void) execute("CREATE (d:Person {name: 'D'})-[:KNOWS]->(e:Person {name: 'E'})");
+	(void) execute("MATCH (e:Person {name: 'E'}) CREATE (e)-[:KNOWS]->(f:Person {name: 'F'})");
+	(void) execute("MATCH (d:Person {name: 'D'}), (f:Person {name: 'F'}) CREATE (d)-[:KNOWS]->(f)");
+	(void) execute("MATCH (a:Person {name: 'A'}), (d:Person {name: 'D'}) CREATE (a)-[:KNOWS]->(d)");
+
+	(void) execute("CALL gds.graph.project('lc', 'Person', 'KNOWS')");
+	auto res = execute("CALL gds.leiden.stream('lc')");
+	ASSERT_GE(res.rowCount(), 6UL);
+
+	std::set<int64_t> communities;
+	for (const auto &row : res.getRows()) communities.insert(getInt(row.at("communityId")));
+	EXPECT_EQ(communities.size(), 2UL);
+
+	(void) execute("CALL gds.graph.drop('lc')");
+}
+
+TEST_F(CypherGdsTest, LeidenStreamTooFewArgsThrows) {
+	EXPECT_THROW(execute("CALL gds.leiden.stream()"), std::exception);
+}

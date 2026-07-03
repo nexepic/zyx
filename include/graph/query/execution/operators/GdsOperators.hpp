@@ -21,9 +21,11 @@
 #pragma once
 
 #include "../PhysicalOperator.hpp"
+#include "graph/concurrent/ThreadPool.hpp"
 #include "graph/query/algorithm/GraphAlgorithm.hpp"
 #include "graph/query/algorithm/GraphProjection.hpp"
 #include "graph/query/algorithm/GraphProjectionManager.hpp"
+#include "graph/query/algorithm/LeidenEngine.hpp"
 
 namespace graph::query::execution::operators {
 
@@ -352,6 +354,67 @@ namespace graph::query::execution::operators {
 		std::shared_ptr<storage::DataManager> dm_;
 		std::shared_ptr<algorithm::GraphProjectionManager> pm_;
 		std::string graphName_;
+		bool executed_ = false;
+	};
+
+	// ============================================================
+	// gds.leiden.stream
+	// ============================================================
+	class GdsLeidenOperator : public PhysicalOperator {
+	public:
+		GdsLeidenOperator(std::shared_ptr<storage::DataManager> dm,
+						  std::shared_ptr<algorithm::GraphProjectionManager> pm,
+						  std::string graphName, int maxIterations = 20, double resolution = 1.0,
+						  size_t threadCount = 0)
+			: dm_(std::move(dm)), pm_(std::move(pm)), graphName_(std::move(graphName)),
+			  maxIterations_(maxIterations), resolution_(resolution), threadCount_(threadCount) {}
+
+		void open() override { executed_ = false; }
+
+		std::optional<RecordBatch> next() override {
+			if (executed_) return std::nullopt;
+
+			// Short-lived pool for this run; reused for both CSR build and the
+			// Leiden local-moving / refinement / aggregation pipeline.
+			std::unique_ptr<concurrent::ThreadPool> ownedPool;
+			concurrent::ThreadPool *pool = nullptr;
+			if (threadCount_ != 1) {
+				ownedPool = std::make_unique<concurrent::ThreadPool>(threadCount_);
+				pool = ownedPool.get();
+			}
+
+			auto csr = pm_->getOrBuildCsr(graphName_, pool);
+			algorithm::LeidenOptions opts;
+			opts.maxIterations = maxIterations_;
+			opts.resolution = resolution_;
+			auto communities = algorithm::LeidenEngine::run(*csr, opts, pool);
+
+			RecordBatch batch;
+			batch.reserve(communities.size());
+			for (const auto &nc : communities) {
+				Record r;
+				r.setValue("nodeId", PropertyValue(nc.nodeId));
+				r.setValue("communityId", PropertyValue(nc.communityId));
+				batch.push_back(std::move(r));
+			}
+
+			executed_ = true;
+			return batch;
+		}
+
+		void close() override {}
+		[[nodiscard]] std::vector<std::string> getOutputVariables() const override {
+			return {"nodeId", "communityId"};
+		}
+		[[nodiscard]] std::string toString() const override { return "GdsLeiden('" + graphName_ + "')"; }
+
+	private:
+		std::shared_ptr<storage::DataManager> dm_;
+		std::shared_ptr<algorithm::GraphProjectionManager> pm_;
+		std::string graphName_;
+		int maxIterations_;
+		double resolution_;
+		size_t threadCount_;
 		bool executed_ = false;
 	};
 

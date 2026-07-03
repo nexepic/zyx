@@ -24,6 +24,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include "CsrProjection.hpp"
 #include "GraphProjection.hpp"
 
 namespace graph::query::algorithm {
@@ -55,6 +56,7 @@ namespace graph::query::algorithm {
 
 		bool dropProjection(const std::string &name) {
 			std::lock_guard lock(mutex_);
+			csrProjections_.erase(name);
 			return projections_.erase(name) > 0;
 		}
 
@@ -63,9 +65,27 @@ namespace graph::query::algorithm {
 			return projections_.contains(name);
 		}
 
+		/// Cache or retrieve a compact CSR projection for algorithms that benefit
+		/// from a cache-friendly layout (e.g. Leiden). Built lazily from the
+		/// stored GraphProjection on first access; reused across subsequent runs.
+		std::shared_ptr<CsrProjection> getOrBuildCsr(const std::string &name,
+													 concurrent::ThreadPool *pool = nullptr) {
+			std::lock_guard lock(mutex_);
+			auto it = csrProjections_.find(name);
+			if (it != csrProjections_.end()) return it->second;
+			auto projIt = projections_.find(name);
+			if (projIt == projections_.end()) {
+				throw std::runtime_error("Graph projection '" + name + "' not found");
+			}
+			auto csr = CsrProjection::build(*projIt->second, pool);
+			csrProjections_[name] = csr;
+			return csr;
+		}
+
 	private:
 		mutable std::mutex mutex_;
 		std::unordered_map<std::string, std::shared_ptr<GraphProjection>> projections_;
+		std::unordered_map<std::string, std::shared_ptr<CsrProjection>> csrProjections_;
 	};
 
 } // namespace graph::query::algorithm
