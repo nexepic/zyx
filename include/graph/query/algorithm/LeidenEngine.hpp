@@ -119,7 +119,8 @@ namespace graph::query::algorithm {
 		static std::shared_ptr<CsrProjection>
 		buildSuperGraph(const CsrProjection &csr,
 						const std::vector<int64_t> &communityOf,
-						size_t communityCount);
+						size_t communityCount,
+						concurrent::ThreadPool *pool);
 	};
 
 } // namespace graph::query::algorithm

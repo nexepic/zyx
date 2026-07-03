@@ -25,8 +25,11 @@
 #include <cmath>
 #include <cstdint>
 #include <set>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
+
+#include "graph/concurrent/ParallelOperatorExecutor.hpp"
 
 namespace graph::query::algorithm {
 
@@ -89,47 +92,65 @@ namespace graph::query::algorithm {
 		while (changed && iter < opts.maxIterations) {
 			changed = false;
 			++iter;
-			std::atomic<size_t> movedCount{0};
 
+			// BSP snapshot: workers read a consistent sigmaTot view; write-back
+			// is via atomic fetch on the shared sigmaTot. communityOf writes are
+			// disjoint per node partition (each slot owned by one partition).
 			std::unordered_map<int64_t, double> sigmaTotSnap = acquireSigmaTot();
 
-			auto processNode = [&](size_t i) {
-				int64_t cur = communityOf[i];
-				std::unordered_map<int64_t, double> kic;
-				auto nbrs = csr.neighbors(i);
-				auto wnbrs = csr.neighborWeights(i);
-				for (size_t j = 0; j < nbrs.size(); ++j) {
-					size_t dst = csr.indexOf(nbrs[j]);
-					if (dst == SIZE_MAX || dst == i) continue;
-					kic[communityOf[dst]] += static_cast<double>(wnbrs[j]);
-				}
-				if (kic.empty()) return;
+			// Each partition counts its own moves; the merger aggregates them in a
+			// serial pass (no atomic on movedCount needed).
+			struct LocalMoveState {
+				size_t moved = 0;
+			};
+			size_t movedTotal = 0;
 
-				int64_t best = cur;
-				double bestGain = 0.0;
-				for (const auto &kv : kic) {
-					int64_t c = kv.first;
-					double totC = (c == cur) ? (sigmaTotSnap[c] - ki[i]) : sigmaTotSnap[c];
-					double gain = kv.second - opts.resolution * totC * ki[i] / m2;
-					if (gain > bestGain + 1e-12) {
-						bestGain = gain;
-						best = c;
-					}
-				}
-				if (best != cur) {
-					sigmaTot[cur].fetch_sub(ki[i], std::memory_order_relaxed);
-					sigmaTot[best].fetch_add(ki[i], std::memory_order_relaxed);
-					communityOf[i] = best;
-					movedCount.fetch_add(1, std::memory_order_relaxed);
-				}
+			const concurrent::ParallelOperatorOptions options{
+				.phase = std::string_view("leiden.localMove"),
+				.workloadKind = concurrent::ParallelWorkloadKind::PWK_CPU_BOUND,
+				.estimatedItems = n,
+				.minPartitions = 2,
+				.minItems = 1024, // below this the executor falls back to serial
+				.minItemsPerWorker = 64,
 			};
 
-			if (pool != nullptr && n > 1024) {
-				pool->parallelFor(0, n, processNode);
-			} else {
-				for (size_t i = 0; i < n; ++i) processNode(i);
-			}
-			if (movedCount.load(std::memory_order_relaxed) > convergenceThreshold) changed = true;
+			concurrent::ParallelOperatorExecutor::runRangePartitions<LocalMoveState>(
+				0, n, pool, options,
+				[&](const concurrent::ParallelRangePartition &range, LocalMoveState &state) {
+					for (size_t i = range.begin; i < range.end; ++i) {
+						int64_t cur = communityOf[i];
+						std::unordered_map<int64_t, double> kic;
+						auto nbrs = csr.neighbors(i);
+						auto wnbrs = csr.neighborWeights(i);
+						for (size_t j = 0; j < nbrs.size(); ++j) {
+							size_t dst = csr.indexOf(nbrs[j]);
+							if (dst == SIZE_MAX || dst == i) continue;
+							kic[communityOf[dst]] += static_cast<double>(wnbrs[j]);
+						}
+						if (kic.empty()) continue;
+
+						int64_t best = cur;
+						double bestGain = 0.0;
+						for (const auto &kv : kic) {
+							int64_t c = kv.first;
+							double totC = (c == cur) ? (sigmaTotSnap[c] - ki[i]) : sigmaTotSnap[c];
+							double gain = kv.second - opts.resolution * totC * ki[i] / m2;
+							if (gain > bestGain + 1e-12) {
+								bestGain = gain;
+								best = c;
+							}
+						}
+						if (best != cur) {
+							sigmaTot[cur].fetch_sub(ki[i], std::memory_order_relaxed);
+							sigmaTot[best].fetch_add(ki[i], std::memory_order_relaxed);
+							communityOf[i] = best;
+							++state.moved;
+						}
+					}
+				},
+				[&]([[maybe_unused]] size_t partition, LocalMoveState &state) { movedTotal += state.moved; });
+
+			if (movedTotal > convergenceThreshold) changed = true;
 		}
 
 		// Relabel to dense 0..C-1 so they can index the next level's super-nodes.
@@ -272,29 +293,55 @@ namespace graph::query::algorithm {
 	std::shared_ptr<CsrProjection>
 	LeidenEngine::buildSuperGraph(const CsrProjection &csr,
 								  const std::vector<int64_t> &communityOf,
-								  size_t communityCount) {
+								  size_t communityCount,
+								  concurrent::ThreadPool *pool) {
+		const size_t n = csr.nodeCount();
+		// Each partition aggregates its node-range's edges into a local map
+		// (no cross-partition contention); the merger serially folds the per-
+		// partition maps into the global aggregate.
+		struct SuperGraphState {
+			std::unordered_map<int64_t, double> localAgg;
+		};
 		std::unordered_map<int64_t, double> agg;
-		agg.reserve(csr.edgeCount() * 2);
-		for (size_t i = 0; i < csr.nodeCount(); ++i) {
-			int64_t sc = communityOf[i];
-			auto nbrs = csr.neighbors(i);
-			auto wnbrs = csr.neighborWeights(i);
-			for (size_t j = 0; j < nbrs.size(); ++j) {
-				size_t dst = csr.indexOf(nbrs[j]);
-				if (dst == SIZE_MAX) continue;
-				int64_t dc = communityOf[dst];
-				int64_t a = std::min(sc, dc), b = std::max(sc, dc);
-				int64_t key = a * static_cast<int64_t>(communityCount) + b;
-				agg[key] += static_cast<double>(wnbrs[j]);
-			}
-		}
+		agg.reserve(csr.edgeCount());
+
+		const concurrent::ParallelOperatorOptions options{
+			.phase = std::string_view("leiden.buildSuperGraph"),
+			.workloadKind = concurrent::ParallelWorkloadKind::PWK_MEMORY_SCAN,
+			.estimatedItems = n,
+			.minPartitions = 2,
+			.minItems = 4096,
+			.minItemsPerWorker = 512,
+		};
+
+		const int64_t cc = static_cast<int64_t>(communityCount);
+		concurrent::ParallelOperatorExecutor::runRangePartitions<SuperGraphState>(
+			0, n, pool, options,
+			[&](const concurrent::ParallelRangePartition &range, SuperGraphState &state) {
+				state.localAgg.reserve(range.size() * 4);
+				for (size_t i = range.begin; i < range.end; ++i) {
+					int64_t sc = communityOf[i];
+					auto nbrs = csr.neighbors(i);
+					auto wnbrs = csr.neighborWeights(i);
+					for (size_t j = 0; j < nbrs.size(); ++j) {
+						size_t dst = csr.indexOf(nbrs[j]);
+						if (dst == SIZE_MAX) continue;
+						int64_t dc = communityOf[dst];
+						int64_t a = std::min(sc, dc), b = std::max(sc, dc);
+						state.localAgg[a * cc + b] += static_cast<double>(wnbrs[j]);
+					}
+				}
+			},
+			[&]([[maybe_unused]] size_t partition, SuperGraphState &state) {
+				for (auto &kv : state.localAgg) agg[kv.first] += kv.second;
+			});
 
 		std::vector<CsrProjection::Edge> edges;
 		edges.reserve(agg.size());
 		for (const auto &kv : agg) {
 			int64_t key = kv.first;
-			int64_t a = key / static_cast<int64_t>(communityCount);
-			int64_t b = key % static_cast<int64_t>(communityCount);
+			int64_t a = key / cc;
+			int64_t b = key % cc;
 			float w = static_cast<float>(kv.second / 2.0);
 			edges.push_back({a, b, w});
 		}
@@ -343,7 +390,7 @@ namespace graph::query::algorithm {
 		for (int level = 1; level < opts.maxLevels; ++level) {
 			if (communityCount <= 1) break;
 
-			ownedSuper = buildSuperGraph(*curCsr, levels.back(), communityCount);
+			ownedSuper = buildSuperGraph(*curCsr, levels.back(), communityCount, pool);
 			const CsrProjection &super = *ownedSuper;
 			if (super.nodeCount() >= communityCount) break; // no shrinkage → stop
 
