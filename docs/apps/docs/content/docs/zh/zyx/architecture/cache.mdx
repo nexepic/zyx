@@ -107,12 +107,3 @@ graph LR
 ### 自动 Flush
 
 `PersistenceManager` 监控所有类型的脏实体总数。当超过可配置阈值（默认 10,000）时，调用注册的回调触发自动 flush。这防止长时间运行的写事务导致内存无限增长。
-
-## 源码定位
-
-| 组件 | 路径 |
-|------|------|
-| PageBufferPool | `include/graph/storage/PageBufferPool.hpp` |
-| PersistenceManager | `include/graph/storage/PersistenceManager.hpp` |
-| DirtyEntityRegistry | `include/graph/storage/DirtyEntityRegistry.hpp` |
-| VectorIndexRegistry | `include/graph/vector/VectorIndexRegistry.hpp` |

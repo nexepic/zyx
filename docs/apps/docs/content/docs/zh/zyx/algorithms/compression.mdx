@@ -75,10 +75,3 @@ sequenceDiagram
 | 状态链开销 | 每条链一个段（128 KB） |
 
 压缩在写入时执行，解压在读取时执行。由于状态链属于配置数据（而非查询结果数据），性能影响可以忽略不计——状态链仅在启动时读取，并在索引生命周期变更时写入。
-
-## 源码位置
-
-| 组件 | 路径 |
-|------|------|
-| CompressUtils | `include/graph/utils/CompressUtils.hpp` |
-| StateChainManager | `include/graph/core/StateChainManager.hpp` |

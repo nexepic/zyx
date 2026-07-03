@@ -107,15 +107,3 @@ graph LR
 ## 跨平台考量
 
 所有磁盘上的结构使用固定大小类型（`int64_t`、`uint32_t` 等）和显式的字节序。段头包含校验和，用于加载时的完整性验证。`StorageIO` 抽象层处理文件 I/O 中的平台差异（POSIX 上使用 `pread`/`pwrite`，其他平台使用 `fstream` 回退方案）。
-
-## 源码位置
-
-| 组件 | 路径 |
-|------|------|
-| SegmentAllocator | `include/graph/storage/SegmentAllocator.hpp` |
-| IDAllocator | `include/graph/core/IDAllocator.hpp` |
-| IntervalSet | `include/graph/core/IntervalSet.hpp` |
-| StorageHeaders | `include/graph/storage/StorageHeaders.hpp` |
-| File Header | `include/graph/storage/FileHeader.hpp` |
-| SegmentCompactor | `include/graph/storage/SegmentCompactor.hpp` |
-| SpaceManager | `include/graph/storage/SpaceManager.hpp` |

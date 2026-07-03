@@ -186,15 +186,3 @@ graph TD
 | Node | 图节点引用 |
 | Edge | 图边引用 |
 | Path | 节点和边的有序序列 |
-
-## 源码定位
-
-| 组件 | 路径 |
-|------|------|
-| CypherToPlanVisitor | `src/query/parser/cypher/CypherToPlanVisitor.cpp` |
-| 子句处理器 | `src/query/parser/cypher/clauses/` |
-| Optimizer | `src/query/optimizer/Optimizer.cpp` |
-| PhysicalPlanConverter | `src/query/planner/PhysicalPlanConverter.cpp` |
-| QueryExecutor | `src/query/executor/` |
-| LogicalOperator | `include/graph/query/logical/LogicalOperator.hpp` |
-| QueryEngine | `include/graph/query/api/QueryEngine.hpp` |

@@ -59,6 +59,14 @@ Algorithms for high-dimensional vector similarity search:
 - **[K-Means Clustering](kmeans)** — Lloyd's algorithm for PQ codebook training
 - **[DiskANN](diskann)** — Navigable small-world graph for approximate nearest neighbor search
 
+### Graph Analytics
+
+Algorithms for analyzing graph structure and topology:
+
+- **[Community Detection](community-detection)** — Leiden algorithm for discovering community structure with level lifting and refinement
+- **[PageRank](https://en.wikipedia.org/wiki/PageRank)** — Iterative centrality algorithm (via GDS)
+- **[Shortest Path](https://en.wikipedia.org/wiki/Shortest_path_problem)** — Dijkstra's algorithm for weighted paths (via GDS)
+
 ## Design Principles
 
 ```mermaid
@@ -98,6 +106,7 @@ All algorithms share these properties:
 | Property Index | Range query | O(log n + k) |
 | Relationship Traversal | Get outgoing/incoming edges | O(k) |
 | LRU Cache | Get / Put | O(1) |
+| Community Detection | Leiden per level | O(n + m) × iterations |
 | DiskANN Search | K-nearest neighbors | O(beamWidth × maxDegree × dim) |
 | PQ Distance | Approximate distance | O(numSubspaces) |
 

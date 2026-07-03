@@ -177,11 +177,3 @@ graph TD
 ## 校验和
 
 每个段携带 `segment_crc` 字段，对段数据（排除校验和字段本身）计算 CRC32。`FileStorage::verifyIntegrity()` 期间验证所有段校验和以检测文件损坏。
-
-## 源码定位
-
-| 组件 | 路径 |
-|------|------|
-| StorageHeaders | `include/graph/storage/StorageHeaders.hpp` |
-| SegmentTracker | `include/graph/storage/SegmentTracker.hpp` |
-| SegmentAllocator | `include/graph/storage/SegmentAllocator.hpp` |

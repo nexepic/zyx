@@ -277,11 +277,3 @@ auto plan = db.query()
 | `call_(procedure, args)` | 调用存储过程（如向量索引操作） |
 | `unwind(list, alias)` | 添加 UNWIND 子句 |
 | `build()` | 编译为 `unique_ptr<PhysicalOperator>` |
-
-## 源码定位
-
-| 组件 | 路径 |
-|------|------|
-| Public API | `include/zyx/zyx.hpp` |
-| 实现 | `src/api/DatabaseImpl.cpp` |
-| QueryBuilder | `include/graph/query/QueryBuilder.hpp` |

@@ -215,13 +215,3 @@ struct TemporalDuration {
 | `OpenMode` | `OPEN_CREATE_NEW_FILE`, `OPEN_EXISTING_FILE`, `OPEN_CREATE_OR_OPEN_FILE` | 数据库打开模式 |
 | `TxnState` | `TXN_ACTIVE`, `TXN_COMMITTED`, `TXN_ROLLED_BACK` | 事务状态 |
 | `Language` | `Cypher` | 查询语言（当前仅 Cypher） |
-
-## 源码定位
-
-| 组件 | 路径 |
-|------|------|
-| Value 类型 | `include/zyx/value.hpp` |
-| PropertyValue | `include/graph/query/types/PropertyValue.hpp` |
-| 时间类型 | `include/graph/core/TemporalTypes.hpp` |
-| ResultValue | `include/graph/query/types/ResultValue.hpp` |
-| EntityType | `include/graph/core/types.hpp` |

@@ -167,13 +167,3 @@ sequenceDiagram
 3. **Segment-based storage** — Fixed-size (128 KB) segments with linked-list chains per entity type.
 4. **Lazy initialization** — `QueryEngine`, `ThreadPool`, and `WAL` are created only when first accessed, keeping startup fast.
 5. **Double-buffered dirty tracking** — `PersistenceManager` maintains active and flushing dirty maps so reads can proceed during I/O.
-
-## Source Locations
-
-| Component | Header | Implementation |
-|-----------|--------|----------------|
-| Database | `include/graph/core/Database.hpp` | `src/core/Database.cpp` |
-| QueryEngine | `include/graph/query/api/QueryEngine.hpp` | `src/query/` |
-| FileStorage | `include/graph/storage/FileStorage.hpp` | `src/storage/` |
-| TransactionManager | `include/graph/core/TransactionManager.hpp` | `src/core/TransactionManager.cpp` |
-| WAL | `include/graph/storage/wal/WALManager.hpp` | `src/storage/wal/` |

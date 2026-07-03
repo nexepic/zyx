@@ -136,12 +136,3 @@ Three-layer read-only enforcement prevents any data mutation:
 1. **ExecMode** — The query engine rejects write operations in read-only mode.
 2. **QueryPlan flags** — The plan itself is marked read-only.
 3. **DataManager guard** — The data layer rejects any write calls from a read-only transaction.
-
-## Source Locations
-
-| Component | Path |
-|-----------|------|
-| Transaction | `include/graph/core/Transaction.hpp` |
-| TransactionManager | `include/graph/core/TransactionManager.hpp` |
-| CommittedSnapshot | `include/graph/storage/SnapshotManager.hpp` |
-| PersistenceManager | `include/graph/storage/PersistenceManager.hpp` |

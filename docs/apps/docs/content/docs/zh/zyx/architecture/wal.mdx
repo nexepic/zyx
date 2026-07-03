@@ -170,12 +170,3 @@ graph TD
 5. 回放完成后执行 checkpoint 截断 WAL。
 
 WAL 文件采用惰性创建 — 仅在首次写事务实际需要时创建。只读工作负载永远不会创建 WAL 文件。
-
-## 源码定位
-
-| 组件 | 路径 |
-|------|------|
-| WALManager | `include/graph/storage/wal/WALManager.hpp` |
-| WALRecord | `include/graph/storage/wal/WALRecord.hpp` |
-| WALRecovery | `src/storage/wal/WALRecovery.cpp` |
-| Database（WAL 初始化） | `src/core/Database.cpp` |

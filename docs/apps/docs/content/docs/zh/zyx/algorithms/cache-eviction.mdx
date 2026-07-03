@@ -21,12 +21,6 @@ ZYX 使用 LRU（Least Recently Used，最近最少使用）缓存淘汰策略�
 - **PageBufferPool** -- 段级 LRU 缓存，内部基于相同的哈希表加链表模式，将整个存储段作为原始字节页进行缓存
 - **DirtyEntityRegistry** -- 双缓冲注册表，通过两个映射（active 和 flushing）跟踪已修改（脏）实体，支持在 I/O 期间进行非阻塞并发写入
 
-源码位置：
-
-- `LRUCache`: `include/graph/storage/CacheManager.hpp`
-- `PageBufferPool`: `include/graph/storage/PageBufferPool.hpp`
-- `DirtyEntityRegistry`: `include/graph/storage/DirtyEntityRegistry.hpp`
-
 ## LRU 缓存数据结构
 
 `LRUCache<K, V>` 模板组合了两个标准容器：

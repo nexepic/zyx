@@ -75,10 +75,3 @@ On read, the process is reversed: State entities are read, their data concatenat
 | State chain overhead | One segment per chain (128 KB) |
 
 Compression is applied at write time and decompression at read time. Since state chains are configuration data (not query result data), the performance impact is negligible — state chains are read at startup and written during index lifecycle changes.
-
-## Source Locations
-
-| Component | Path |
-|-----------|------|
-| CompressUtils | `include/graph/utils/CompressUtils.hpp` |
-| StateChainManager | `include/graph/core/StateChainManager.hpp` |

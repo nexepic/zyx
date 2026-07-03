@@ -166,11 +166,3 @@ try {
 | `execute()` | 解析错误（返回失败的 `Result`，不抛异常） |
 
 查询执行错误被捕获在 `Result` 中 — 检查 `result.isSuccess()` 和 `result.getError()`，而非依赖异常。
-
-## 源码定位
-
-| 组件 | 路径 |
-|------|------|
-| Transaction | `include/graph/core/Transaction.hpp` |
-| TransactionManager | `include/graph/core/TransactionManager.hpp` |
-| Database API | `src/api/DatabaseImpl.cpp` |

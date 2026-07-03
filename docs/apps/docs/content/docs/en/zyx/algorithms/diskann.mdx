@@ -438,16 +438,6 @@ If memory is constrained, you can:
 3. Store only PQ codes, load raw vectors from external storage when needed
 :::
 
-## Source Locations
-
-| Component | Header | Implementation |
-|-----------|--------|----------------|
-| DiskANN Index | `include/graph/vector/index/DiskANNIndex.hpp` | `src/vector/index/DiskANNIndex.cpp` |
-| PQ Quantizer | `include/graph/vector/quantization/NativeProductQuantizer.hpp` | -- |
-| Vector Metrics | `include/graph/vector/core/VectorMetric.hpp` | -- |
-| BFloat16 | `include/graph/vector/core/BFloat16.hpp` | -- |
-| Index Config | `include/graph/vector/VectorIndexConfig.hpp` | -- |
-
 ## See Also
 
 - [Product Quantization](/en/docs/zyx/algorithms/product-quantization) - PQ algorithm details

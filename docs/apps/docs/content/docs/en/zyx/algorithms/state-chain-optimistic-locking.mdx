@@ -235,16 +235,6 @@ StateManager maintains an in-memory `stateKeyToIdMap` that maps string keys to h
 
 When a new State chain is created, the map is updated. When a State is deleted, the entry is removed. This allows `findByKey()` lookups in O(1) time without scanning the entire storage.
 
-## Source Locations
-
-| Component | Header |
-|---|---|
-| State entity | `include/graph/core/State.hpp` |
-| StateChainManager | `include/graph/core/StateChainManager.hpp` |
-| SystemStateManager | `include/graph/storage/state/SystemStateManager.hpp` |
-| StateManager | `include/graph/storage/data/StateManager.hpp` |
-| Compression utilities | `include/graph/utils/CompressUtils.hpp` |
-
 ## See Also
 
 - [Storage System](/en/docs/zyx/architecture/storage) - Persistent storage and segment format

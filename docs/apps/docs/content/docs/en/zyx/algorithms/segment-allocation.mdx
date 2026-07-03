@@ -107,15 +107,3 @@ Freed slots within a segment are reused by the `IDAllocator` before allocating n
 ## Cross-Platform Considerations
 
 All on-disk structures use fixed-size types (`int64_t`, `uint32_t`, etc.) and explicit byte ordering. Segment headers include a checksum for integrity verification on load. The `StorageIO` abstraction handles platform differences in file I/O (`pread`/`pwrite` on POSIX, `fstream` fallback elsewhere).
-
-## Source Locations
-
-| Component | Path |
-|-----------|------|
-| SegmentAllocator | `include/graph/storage/SegmentAllocator.hpp` |
-| IDAllocator | `include/graph/core/IDAllocator.hpp` |
-| IntervalSet | `include/graph/core/IntervalSet.hpp` |
-| StorageHeaders | `include/graph/storage/StorageHeaders.hpp` |
-| File Header | `include/graph/storage/FileHeader.hpp` |
-| SegmentCompactor | `include/graph/storage/SegmentCompactor.hpp` |
-| SpaceManager | `include/graph/storage/SpaceManager.hpp` |

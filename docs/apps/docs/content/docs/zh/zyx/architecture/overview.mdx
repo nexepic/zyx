@@ -80,13 +80,13 @@ graph TB
 
 ## 关键对象
 
-| 对象 | 职责 | 源码位置 |
-|------|------|----------|
-| `graph::Database` | 生命周期管理，QueryEngine / ThreadPool / WAL 惰性初始化 | `include/graph/core/Database.hpp` |
-| `graph::query::QueryEngine` | Cypher 解析、计划构建与执行 | `include/graph/query/api/QueryEngine.hpp` |
-| `graph::storage::FileStorage` | 段式文件布局，flush/save 协调 | `include/graph/storage/FileStorage.hpp` |
-| `graph::storage::DataManager` | Node / Edge / Property / Blob / Index / State 统一 I/O 入口 | `include/graph/storage/data/DataManager.hpp` |
-| `TransactionManager` | 单写锁、快照管理、commit/rollback 协调 | `include/graph/core/TransactionManager.hpp` |
+| 对象 | 职责 |
+|------|------|
+| `graph::Database` | 生命周期管理，QueryEngine / ThreadPool / WAL 惰性初始化 |
+| `graph::query::QueryEngine` | Cypher 解析、计划构建与执行 |
+| `graph::storage::FileStorage` | 段式文件布局，flush/save 协调 |
+| `graph::storage::DataManager` | Node / Edge / Property / Blob / Index / State 统一 I/O 入口 |
+| `TransactionManager` | 单写锁、快照管理，commit/rollback 协调 |
 
 ## 主执行路径
 
@@ -167,13 +167,3 @@ sequenceDiagram
 3. **段式存储** — 固定大小（128 KB）段，每实体类型独立链表。
 4. **惰性初始化** — `QueryEngine`、`ThreadPool`、`WAL` 仅在首次访问时创建，保持启动快速。
 5. **双缓冲脏跟踪** — `PersistenceManager` 维护 active/flushing 两组脏映射，使读取可在 I/O 期间继续。
-
-## 源码定位
-
-| 组件 | 头文件 | 实现 |
-|------|--------|------|
-| Database | `include/graph/core/Database.hpp` | `src/core/Database.cpp` |
-| QueryEngine | `include/graph/query/api/QueryEngine.hpp` | `src/query/` |
-| FileStorage | `include/graph/storage/FileStorage.hpp` | `src/storage/` |
-| TransactionManager | `include/graph/core/TransactionManager.hpp` | `src/core/TransactionManager.cpp` |
-| WAL | `include/graph/storage/wal/WALManager.hpp` | `src/storage/wal/` |

@@ -91,13 +91,3 @@ The segment-level LRU cache avoids redundant disk reads for hot segments. Target
 ### WAL Group Commit
 
 Multiple transaction commits are batched into a single `fsync` call, reducing the most expensive I/O operation from per-transaction to per-group. The default group window is 1 millisecond.
-
-## Source Locations
-
-| Component | Path |
-|-----------|------|
-| Optimizer | `src/query/optimizer/Optimizer.cpp` |
-| Optimizer rules | `include/graph/query/optimizer/Optimizer.hpp` |
-| PhysicalPlanConverter | `src/query/planner/PhysicalPlanConverter.cpp` |
-| StorageIO | `include/graph/storage/StorageIO.hpp` |
-| PageBufferPool | `include/graph/storage/PageBufferPool.hpp` |

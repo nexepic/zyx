@@ -350,14 +350,3 @@ with zyxdb.Database("/tmp/social.zyx") as db:
     count = db.execute("MATCH (n) RETURN count(n) AS c").scalar()
     print(f"Total nodes: {count}")
 ```
-
-## Source Locations
-
-| Component | Path |
-|-----------|------|
-| Python package | `bindings/python/src/zyxdb/` |
-| pybind11 bindings | `bindings/python/src/zyxdb/_core.cpp` |
-| Database wrapper | `bindings/python/src/zyxdb/database.py` |
-| Transaction wrapper | `bindings/python/src/zyxdb/transaction.py` |
-| Result/Record | `bindings/python/src/zyxdb/result.py` |
-| Types | `bindings/python/src/zyxdb/types.py` |
