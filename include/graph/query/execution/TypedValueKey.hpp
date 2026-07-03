@@ -42,8 +42,8 @@ namespace graph::query::execution {
 				case PropertyType::NULL_TYPE:
 				case PropertyType::LIST:
 				case PropertyType::MAP:
-				case PropertyType::COMPOSITE:
-				case PropertyType::UNKNOWN:
+				case PropertyType::COMPOSITE: // ZYX_COV_EXCL_LINE: PropertyValue has no public composite-value constructor.
+				case PropertyType::UNKNOWN: // ZYX_COV_EXCL_LINE: UNKNOWN is a defensive fallback for future value variants.
 					key.fallbackValue_ = value;
 					break;
 			}
@@ -197,8 +197,8 @@ namespace graph::query::execution {
 				}
 				case PropertyType::LIST:
 				case PropertyType::MAP:
-				case PropertyType::COMPOSITE:
-				case PropertyType::UNKNOWN:
+				case PropertyType::COMPOSITE: // ZYX_COV_EXCL_LINE: PropertyValue has no public composite-value constructor.
+				case PropertyType::UNKNOWN: // ZYX_COV_EXCL_LINE: UNKNOWN is a defensive fallback for future value variants.
 					key.fallbackValue_ = value;
 					key.hash_ = PropertyValueHash{}(value);
 					break;

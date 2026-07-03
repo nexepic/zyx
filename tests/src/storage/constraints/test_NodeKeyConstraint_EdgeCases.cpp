@@ -1,8 +1,6 @@
 /**
  * @file test_NodeKeyConstraint_EdgeCases.cpp
- * @brief Branch coverage tests for NodeKeyConstraint — covers missing property
- *        in checkCompositeUniqueness, single-property buildCompositeKey,
- *        and validateUpdate with unchanged composite key.
+ * @brief Edge-case tests for NodeKeyConstraint validation and global indexes.
  **/
 
 #include <boost/uuid/uuid.hpp>
@@ -127,4 +125,31 @@ TEST_F(NodeKeyConstraintEdgeCaseTest, ValidateUpdate_ChangedCompositeKey_NoDupli
 	EXPECT_NO_THROW(c.validateUpdate(1,
 		{{"key", PropertyValue("old")}},
 		{{"key", PropertyValue("new_unique")}}));
+}
+
+TEST_F(NodeKeyConstraintEdgeCaseTest, GlobalConstraintUsesPropertyIndexAcrossLabels) {
+	ASSERT_TRUE(im->createIndex("idx_global_slug_key", "node", "", "slug"));
+	auto first = createNode("Package", {{"slug", PropertyValue("zyx-core")}});
+	createNode("Module", {{"slug", PropertyValue("zyx-query")}});
+
+	NodeKeyConstraint c("nk_global_slug", "", {"slug"}, im);
+
+	EXPECT_THROW(c.validateInsert(100, {{"slug", PropertyValue("zyx-core")}}), std::runtime_error);
+	EXPECT_NO_THROW(c.validateInsert(first.getId(), {{"slug", PropertyValue("zyx-core")}}));
+	EXPECT_NO_THROW(c.validateInsert(101, {{"slug", PropertyValue("zyx-storage")}}));
+}
+
+TEST_F(NodeKeyConstraintEdgeCaseTest, ValidateUpdateHandlesMissingOldCompositeMember) {
+	ASSERT_TRUE(im->createIndex("idx_update_first", "node", "UpdatablePair", "first"));
+	ASSERT_TRUE(im->createIndex("idx_update_last", "node", "UpdatablePair", "last"));
+	createNode("UpdatablePair", {{"first", PropertyValue("Ada")}, {"last", PropertyValue("Lovelace")}});
+
+	NodeKeyConstraint c("nk_update_pair", "UpdatablePair", {"first", "last"}, im);
+
+	EXPECT_NO_THROW(c.validateUpdate(42,
+		{{"first", PropertyValue("Grace")}},
+		{{"first", PropertyValue("Grace")}, {"last", PropertyValue("Hopper")}}));
+	EXPECT_THROW(c.validateUpdate(42,
+		{{"first", PropertyValue("Grace")}},
+		{{"first", PropertyValue("Ada")}, {"last", PropertyValue("Lovelace")}}), std::runtime_error);
 }

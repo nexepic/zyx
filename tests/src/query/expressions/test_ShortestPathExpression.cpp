@@ -212,6 +212,14 @@ TEST(MapProjectionExpressionTest, ToString_MultipleItems) {
 	EXPECT_NE(str.find(", "), std::string::npos);
 }
 
+TEST(MapProjectionExpressionTest, ToString_InvalidItemTypeIsIgnored) {
+	std::vector<MapProjectionItem> items;
+	items.emplace_back(static_cast<MapProjectionItemType>(999), "bad");
+	MapProjectionExpression expr("n", std::move(items));
+
+	EXPECT_EQ(expr.toString(), "n {}");
+}
+
 TEST(MapProjectionExpressionTest, Clone) {
 	std::vector<MapProjectionItem> items;
 	items.emplace_back(MapProjectionItemType::MPROP_PROPERTY, "name");
@@ -270,6 +278,36 @@ TEST(MapProjectionExpressionTest, AcceptConstVisitor) {
 	TestVisitor visitor;
 	const auto& constExpr = static_cast<const Expression&>(expr);
 	constExpr.accept(visitor);
+	EXPECT_TRUE(visitor.visited);
+}
+
+TEST(MapProjectionExpressionTest, AcceptNonConstVisitor) {
+	struct TestVisitor : public ExpressionVisitor {
+		bool visited = false;
+		void visit(LiteralExpression*) override {}
+		void visit(VariableReferenceExpression*) override {}
+		void visit(BinaryOpExpression*) override {}
+		void visit(UnaryOpExpression*) override {}
+		void visit(FunctionCallExpression*) override {}
+		void visit(CaseExpression*) override {}
+		void visit(InExpression*) override {}
+		void visit(class ListSliceExpression*) override {}
+		void visit(class ListComprehensionExpression*) override {}
+		void visit(class ListLiteralExpression*) override {}
+		void visit(IsNullExpression*) override {}
+		void visit(class QuantifierFunctionExpression*) override {}
+		void visit(class ExistsExpression*) override {}
+		void visit(class PatternComprehensionExpression*) override {}
+		void visit(class ReduceExpression*) override {}
+		void visit(class ParameterExpression*) override {}
+		void visit(class ShortestPathExpression*) override {}
+		void visit(MapProjectionExpression*) override { visited = true; }
+	};
+
+	std::vector<MapProjectionItem> items;
+	MapProjectionExpression expr("n", std::move(items));
+	TestVisitor visitor;
+	expr.accept(visitor);
 	EXPECT_TRUE(visitor.visited);
 }
 

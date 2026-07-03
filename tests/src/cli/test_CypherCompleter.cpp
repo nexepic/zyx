@@ -46,6 +46,11 @@ TEST_F(CypherCompleterTest, KeywordAfterSpace) {
 	EXPECT_TRUE(containsCompletion(completions, "MATCH (n) RETURN"));
 }
 
+TEST_F(CypherCompleterTest, KeywordAfterTab) {
+	auto completions = complete("MATCH\tRET");
+	EXPECT_TRUE(containsCompletion(completions, "MATCH\tRETURN"));
+}
+
 TEST_F(CypherCompleterTest, MultipleMatches) {
 	// "DE" should match DELETE, DETACH, DESC, DESCENDING
 	auto completions = complete("DE");

@@ -232,6 +232,29 @@ TEST_F(NodeDistinctCountScanOperatorTest, ResidualPredicateFallbackHandlesMissin
 	EXPECT_EQ(readCount(*batch), 0);
 }
 
+TEST_F(NodeDistinctCountScanOperatorTest, MetadataPathReturnsZeroWhenNoRowsHavePropertyStorage) {
+	for (int64_t i = 0; i < 32; ++i) {
+		addPerson();
+	}
+	db->getStorage()->flush();
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "n";
+	config.labels = {"Person"};
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+	requirements.requiredProperties = {"missing"};
+	requirements.countOnly = true;
+
+	NodeDistinctCountScanOperator op(dm, im, config, requirements, {}, "missing", "count");
+	op.open();
+	auto batch = op.next();
+
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(readCount(*batch), 0);
+}
+
 TEST_F(NodeDistinctCountScanOperatorTest, DistinguishesTypedValuesWithoutStringifying) {
 	addPerson({{"code", PropertyValue(int64_t{1})}});
 	addPerson({{"code", PropertyValue(std::string("1"))}});
@@ -341,4 +364,51 @@ TEST_F(NodeDistinctCountScanOperatorTest, CountsBlobBackedDistinctValuesFromMeta
 
 	ASSERT_TRUE(batch.has_value());
 	EXPECT_EQ(readCount(*batch), 2);
+}
+
+TEST_F(NodeDistinctCountScanOperatorTest, BlobFallbackSkipsMissingAndNullDistinctValues) {
+	const std::string largeOther(600, 'o');
+	const std::string largeValue(600, 'v');
+	addPerson({{"payload", PropertyValue(largeValue)}});
+	addPerson({{"other", PropertyValue(largeOther)}});
+	addPerson({{"payload", PropertyValue()}, {"other", PropertyValue(largeOther)}});
+	db->getStorage()->flush();
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "n";
+	config.labels = {"Person"};
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+	requirements.requiredProperties = {"payload"};
+	requirements.countOnly = true;
+
+	NodeDistinctCountScanOperator op(dm, im, config, requirements, {}, "payload", "count");
+	op.open();
+	auto batch = op.next();
+
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(readCount(*batch), 1);
+}
+
+TEST_F(NodeDistinctCountScanOperatorTest, BlobFallbackIgnoresRowsWithoutDistinctProperty) {
+	const std::string largeOther(600, 'o');
+	addPerson({{"other", PropertyValue(largeOther)}});
+	db->getStorage()->flush();
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "n";
+	config.labels = {"Person"};
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+	requirements.requiredProperties = {"other"};
+	requirements.countOnly = true;
+
+	NodeDistinctCountScanOperator op(dm, im, config, requirements, {}, "payload", "count");
+	op.open();
+	auto batch = op.next();
+
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(readCount(*batch), 0);
 }

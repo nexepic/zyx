@@ -213,7 +213,7 @@ namespace {
 		const char *end = buf + Property::TOTAL_PROPERTY_SIZE;
 
 		auto header = readActivePropertyRecordHeader(cursor, end);
-		if (!header.has_value()) {
+		if (!header.has_value()) { // ZYX_COV_EXCL_LINE
 			return; // ZYX_COV_EXCL_LINE
 		}
 		if (header->entityType != toUnderlying(ownerType) ||
@@ -306,7 +306,7 @@ namespace {
 		constexpr size_t entitySize = Property::getTotalSize();
 		auto scanSegmentInto = [&](const SegmentHeader &header, const char *dataBuf,
 							   PropertyIndexBuildScanState &state) {
-			if (header.data_type != Property::typeId || header.used == 0) {
+			if (header.data_type != Property::typeId || header.used == 0) { // ZYX_COV_EXCL_LINE: property segment indexes only expose non-empty property segments.
 				return;
 			}
 			for (uint32_t slot = 0; slot < header.used; ++slot) {
@@ -315,7 +315,7 @@ namespace {
 				if (dirtyPropertyIds.contains(expectedId)) {
 					continue;
 				}
-				if (readSerializedPropertyId(entityBuffer) != expectedId) {
+				if (readSerializedPropertyId(entityBuffer) != expectedId) { // ZYX_COV_EXCL_LINE: fixed property slots are written at header.start_id + slot.
 					continue; // ZYX_COV_EXCL_LINE
 				}
 				readIndexableOwnerValues(

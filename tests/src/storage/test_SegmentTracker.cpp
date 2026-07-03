@@ -28,6 +28,11 @@
 #include <vector>
 
 #include "graph/core/Node.hpp"
+#include "graph/core/Blob.hpp"
+#include "graph/core/Edge.hpp"
+#include "graph/core/Index.hpp"
+#include "graph/core/Property.hpp"
+#include "graph/core/State.hpp"
 #include "graph/storage/SegmentIndexManager.hpp"
 #include "graph/storage/SegmentTracker.hpp"
 #include "graph/storage/StorageIO.hpp"
@@ -569,6 +574,69 @@ TEST_F(SegmentTrackerTest, WriteAndReadEntity) {
 	} catch (const std::exception &e) {
 		FAIL() << "Entity I/O failed: " << e.what();
 	}
+}
+
+TEST_F(SegmentTrackerTest, WriteAndReadAllFixedEntityKindsBeforeFlush) {
+	auto writeReadEdge = [&] {
+		const uint64_t segOffset = getSegmentOffset(1);
+		(void) createAndRegisterSegment(segOffset, static_cast<uint32_t>(EntityType::Edge), EDGES_PER_SEGMENT);
+		Edge edge(456, 12, 34, 56);
+		tracker->writeEntity<Edge>(segOffset, 0, edge, Edge::getTotalSize());
+		Edge result = tracker->readEntity<Edge>(segOffset, 0, Edge::getTotalSize());
+		EXPECT_EQ(result.getId(), 456);
+		EXPECT_EQ(result.getSourceNodeId(), 12);
+		EXPECT_EQ(result.getTargetNodeId(), 34);
+		EXPECT_EQ(result.getTypeId(), 56);
+	};
+
+	auto writeReadProperty = [&] {
+		const uint64_t segOffset = getSegmentOffset(2);
+		(void) createAndRegisterSegment(segOffset, static_cast<uint32_t>(EntityType::Property), PROPERTIES_PER_SEGMENT);
+		Property property(789, 456, static_cast<uint32_t>(EntityType::Edge));
+		property.setProperties({{"weight", PropertyValue(int64_t{7})}});
+		tracker->writeEntity<Property>(segOffset, 0, property, Property::getTotalSize());
+		Property result = tracker->readEntity<Property>(segOffset, 0, Property::getTotalSize());
+		EXPECT_EQ(result.getId(), 789);
+		EXPECT_TRUE(result.hasPropertyValue("weight"));
+	};
+
+	auto writeReadBlob = [&] {
+		const uint64_t segOffset = getSegmentOffset(3);
+		(void) createAndRegisterSegment(segOffset, static_cast<uint32_t>(EntityType::Blob), BLOBS_PER_SEGMENT);
+		Blob blob(321, "payload");
+		tracker->writeEntity<Blob>(segOffset, 0, blob, Blob::getTotalSize());
+		Blob result = tracker->readEntity<Blob>(segOffset, 0, Blob::getTotalSize());
+		EXPECT_EQ(result.getId(), 321);
+		EXPECT_EQ(result.getDataAsString(), "payload");
+	};
+
+	auto writeReadIndex = [&] {
+		const uint64_t segOffset = getSegmentOffset(4);
+		(void) createAndRegisterSegment(segOffset, static_cast<uint32_t>(EntityType::Index), INDEXES_PER_SEGMENT);
+		Index index(654, Index::NodeType::LEAF, 42);
+		tracker->writeEntity<Index>(segOffset, 0, index, Index::getTotalSize());
+		Index result = tracker->readEntity<Index>(segOffset, 0, Index::getTotalSize());
+		EXPECT_EQ(result.getId(), 654);
+		EXPECT_EQ(result.getIndexType(), 42U);
+		EXPECT_TRUE(result.isLeaf());
+	};
+
+	auto writeReadState = [&] {
+		const uint64_t segOffset = getSegmentOffset(5);
+		(void) createAndRegisterSegment(segOffset, static_cast<uint32_t>(EntityType::State), STATES_PER_SEGMENT);
+		State state(987, "setting", "value");
+		tracker->writeEntity<State>(segOffset, 0, state, State::getTotalSize());
+		State result = tracker->readEntity<State>(segOffset, 0, State::getTotalSize());
+		EXPECT_EQ(result.getId(), 987);
+		EXPECT_EQ(result.getKey(), "setting");
+		EXPECT_EQ(result.getDataAsString(), "value");
+	};
+
+	writeReadEdge();
+	writeReadProperty();
+	writeReadBlob();
+	writeReadIndex();
+	writeReadState();
 }
 
 TEST_F(SegmentTrackerTest, RegisterSegmentAutomaticallyUpdatesIndex) {

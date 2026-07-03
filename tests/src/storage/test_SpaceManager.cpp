@@ -16,6 +16,8 @@
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include <algorithm>
+#include <atomic>
 #include <filesystem>
 #include <fstream>
 #include <future>
@@ -218,6 +220,48 @@ TEST_F(SpaceManagerTest, SafeCompactSegments_SingleThreaded) {
 	// Verify two sequential calls both succeed (no stuck lock)
 	EXPECT_TRUE(spaceManager->safeCompactSegments());
 	EXPECT_TRUE(spaceManager->safeCompactSegments());
+}
+
+TEST_F(SpaceManagerTest, SafeCompactSegments_ReturnsFalseDuringConcurrentCompaction) {
+	for (int segment = 0; segment < 80; ++segment) {
+		uint64_t offset = segmentAllocator->allocateSegment(Node::typeId, 16);
+		for (uint32_t index = 0; index < 16; ++index) {
+			createActiveNode(offset, index, static_cast<int64_t>(segment * 100 + index + 1));
+		}
+		std::vector<bool> activity(16, true);
+		for (uint32_t index = 0; index < 16; index += 2) {
+			activity[index] = false;
+		}
+		segmentTracker->updateActivityBitmap(offset, activity);
+	}
+
+	constexpr int kThreadCount = 16;
+	std::atomic<int> ready{0};
+	std::atomic<bool> start{false};
+	std::vector<int> results(kThreadCount, -1);
+	std::vector<std::thread> threads;
+	threads.reserve(kThreadCount);
+
+	for (int i = 0; i < kThreadCount; ++i) {
+		threads.emplace_back([&, i]() {
+			ready.fetch_add(1, std::memory_order_release);
+			while (!start.load(std::memory_order_acquire)) {
+				std::this_thread::yield();
+			}
+			results[i] = spaceManager->safeCompactSegments() ? 1 : 0;
+		});
+	}
+
+	while (ready.load(std::memory_order_acquire) < kThreadCount) {
+		std::this_thread::yield();
+	}
+	start.store(true, std::memory_order_release);
+	for (auto &thread: threads) {
+		thread.join();
+	}
+
+	EXPECT_NE(std::ranges::find(results, 1), results.end());
+	EXPECT_NE(std::ranges::find(results, 0), results.end());
 }
 
 // =========================================================================

@@ -167,6 +167,26 @@ TEST_F(SegmentTrackerCrcTest, GetSegmentHeaderCopy_SlowPath) {
 	EXPECT_EQ(copy.used, 2u);
 }
 
+TEST_F(SegmentTrackerCrcTest, ReadEntityDetectsSegmentDataCrcMismatch) {
+	const uint64_t seg0 = getSegOff(0);
+	SegmentHeader header{};
+	header.data_type = Node::typeId;
+	header.capacity = NODES_PER_SEGMENT;
+	header.start_id = 1;
+	header.used = 1;
+	header.file_offset = seg0;
+	header.bitmap_size = bitmap::calculateBitmapSize(1);
+	bitmap::setBit(header.activity_bitmap, 0, true);
+	header.segment_crc = 0x12345678u;
+	writeSegmentHeader(seg0, header);
+	storageIO->flushStream();
+
+	fileHeader.node_segment_head = seg0;
+	tracker = std::make_shared<SegmentTracker>(storageIO, fileHeader);
+
+	EXPECT_THROW((void) tracker->readEntity<Node>(seg0, 0, Node::getTotalSize()), std::runtime_error);
+}
+
 TEST_F(SegmentTrackerCrcTest, SetEntityActiveRange_ActivateDeactivate) {
 	createTrackerWithChain();
 	uint64_t seg0 = getSegOff(0);

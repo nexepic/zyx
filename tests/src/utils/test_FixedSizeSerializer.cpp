@@ -330,6 +330,9 @@ namespace graph::utils::test {
 		output.write("", 0);
 		EXPECT_TRUE(output.good());
 		EXPECT_EQ(streamBuffer.bytesWritten(), 0U);
+		EXPECT_EQ(streamBuffer.overflow(std::char_traits<char>::to_int_type('A')),
+		          std::char_traits<char>::to_int_type('A'));
+		EXPECT_EQ(buffer[0], 'A');
 		EXPECT_NE(streamBuffer.overflow(std::char_traits<char>::eof()), std::char_traits<char>::eof());
 	}
 

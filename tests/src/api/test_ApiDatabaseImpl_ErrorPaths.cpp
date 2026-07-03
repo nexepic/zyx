@@ -396,3 +396,108 @@ TEST_F(CppApiTest, BeginReadOnlyTransactionOnOpenDb) {
 	EXPECT_TRUE(txn.isReadOnly());
 	txn.commit();
 }
+
+TEST_F(CppApiTest, BatchFallbacksHandleSparseAndEmptyPropertyShapes) {
+	EXPECT_TRUE(db->createNodesColumnar("ZeroColumnarNode", 0, {}).empty());
+	EXPECT_TRUE(db->createEdgesColumnar("ZeroColumnarEdge", {}, {}, {}).empty());
+
+	auto emptyKeyNodeIds = db->createNodes("FallbackEmptyKeyNode", {
+			{{"", int64_t{1}}, {"name", std::string("first")}},
+			{{"name", std::string("second")}},
+	});
+	ASSERT_EQ(emptyKeyNodeIds.size(), 2U);
+
+	auto mismatchedKeyNodeIds = db->createNodes("FallbackMismatchedKeyNode", {
+			{{"a", int64_t{1}}, {"b", int64_t{2}}},
+			{{"a", int64_t{3}}, {"c", int64_t{4}}},
+	});
+	ASSERT_EQ(mismatchedKeyNodeIds.size(), 2U);
+
+	auto endpoints = db->createNodes("FallbackEdgeEndpoint", {{{"id", int64_t{1}}}, {{"id", int64_t{2}}}});
+	ASSERT_EQ(endpoints.size(), 2U);
+
+	auto emptyKeyEdgeIds = db->createEdges("FALLBACK_EMPTY_KEY_EDGE", {
+			{endpoints[0], endpoints[1], {{"", int64_t{1}}, {"kind", std::string("empty-key")}}},
+			{endpoints[1], endpoints[0], {{"kind", std::string("second")}}},
+	});
+	ASSERT_EQ(emptyKeyEdgeIds.size(), 2U);
+
+	auto mismatchedKeyEdgeIds = db->createEdges("FALLBACK_MISMATCHED_KEY_EDGE", {
+			{endpoints[0], endpoints[1], {{"a", int64_t{1}}, {"b", int64_t{2}}}},
+			{endpoints[1], endpoints[0], {{"a", int64_t{3}}, {"c", int64_t{4}}}},
+	});
+	ASSERT_EQ(mismatchedKeyEdgeIds.size(), 2U);
+}
+
+TEST_F(CppApiTest, NodePropertyIndexValidationAndTransactionGuards) {
+	EXPECT_THROW((void)db->createNodePropertyIndexes("", {"id"}), std::invalid_argument);
+	EXPECT_TRUE(db->createNodePropertyIndexes("NoRequestedProperties", {}));
+	EXPECT_THROW((void)db->createNodePropertyIndexes("BadProperty", {""}), std::invalid_argument);
+
+	auto txn = db->beginTransaction();
+	ASSERT_TRUE(txn.isActive());
+	EXPECT_TRUE(db->hasActiveTransaction());
+	EXPECT_THROW((void)db->createNodePropertyIndexes("TxnGuarded", {"id"}), std::runtime_error);
+	txn.rollback();
+
+	auto begin = db->execute("BEGIN");
+	ASSERT_TRUE(begin.isSuccess()) << begin.getError();
+	EXPECT_TRUE(db->hasActiveTransaction());
+	EXPECT_THROW((void)db->createNodePropertyIndexes("CypherTxnGuarded", {"id"}), std::runtime_error);
+	auto rollback = db->execute("ROLLBACK");
+	EXPECT_TRUE(rollback.isSuccess()) << rollback.getError();
+}
+
+TEST_F(CppApiTest, ExplicitTransactionsAvoidImplicitBatchAndAlgorithmTransactions) {
+	auto txn = db->beginTransaction();
+	ASSERT_TRUE(txn.isActive());
+	EXPECT_FALSE(txn.isReadOnly());
+
+	auto ids = db->createNodes("ExplicitTxnBatchNode", {
+			{{"name", std::string("a")}, {"rank", int64_t{1}}},
+			{{"name", std::string("b")}, {"score", int64_t{2}}},
+			{{"name", std::string("c")}, {"rank", int64_t{3}}},
+	});
+	ASSERT_EQ(ids.size(), 3U);
+
+	auto edgeIds = db->createEdges("EXPLICIT_TXN_LINK", {
+			{ids[0], ids[1], {{"order", int64_t{1}}}},
+			{ids[1], ids[2], {{"order", int64_t{2}}}},
+	});
+	ASSERT_EQ(edgeIds.size(), 2U);
+
+	std::vector<zyx::Node> path;
+	EXPECT_NO_THROW(path = db->getShortestPath(ids[0], ids[2], 4));
+	EXPECT_GE(path.size(), 2U);
+
+	std::vector<int64_t> visited;
+	EXPECT_NO_THROW(db->bfs(ids[0], [&](const zyx::Node &node) {
+		visited.push_back(node.id);
+		return visited.size() < 4;
+	}));
+	EXPECT_FALSE(visited.empty());
+
+	txn.commit();
+}
+
+TEST_F(CppApiTest, BulkTransactionAutoOpensAndDefaultTransactionFlagsAreSafe) {
+	auto movableTxn = db->beginTransaction();
+	zyx::Transaction movedTxn = std::move(movableTxn);
+	EXPECT_FALSE(movableTxn.isReadOnly());
+	movedTxn.rollback();
+
+	auto tempDir = fs::temp_directory_path();
+	const std::string path = (tempDir / ("bulk_auto_open_" + std::to_string(std::rand()))).string();
+	{
+		zyx::Database freshDb(path);
+		auto txn = freshDb.beginBulkTransaction();
+		EXPECT_TRUE(txn.isActive());
+		EXPECT_TRUE(freshDb.hasActiveTransaction());
+		txn.commit();
+		freshDb.close();
+	}
+
+	std::error_code ec;
+	fs::remove_all(path, ec);
+	fs::remove(path + "-wal", ec);
+}

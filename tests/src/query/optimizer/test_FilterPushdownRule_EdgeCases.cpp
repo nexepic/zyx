@@ -117,6 +117,49 @@ TEST_F(FilterPushdownRuleEdgeCasesTest, ProjectWithoutGrandChildCannotBePushedTh
     EXPECT_EQ(f->getChildren()[0]->getType(), LogicalOpType::LOP_PROJECT);
 }
 
+class EmptyChildrenProject final : public LogicalProject {
+public:
+    explicit EmptyChildrenProject(std::vector<LogicalProjectItem> items)
+        : LogicalProject(nullptr, std::move(items)) {}
+
+    [[nodiscard]] std::vector<LogicalOperator *> getChildren() const override {
+        return {};
+    }
+};
+
+TEST_F(FilterPushdownRuleEdgeCasesTest, ProjectReportingNoChildrenLeavesFilterInPlace) {
+    std::vector<LogicalProjectItem> items;
+    items.emplace_back(varRef("n"), "n");
+    auto project = std::make_unique<EmptyChildrenProject>(std::move(items));
+    auto filter = std::make_unique<LogicalFilter>(std::move(project), varRef("n"));
+
+    auto result = rule.apply(std::move(filter), stats);
+
+    ASSERT_NE(result, nullptr);
+    EXPECT_EQ(result->getType(), LogicalOpType::LOP_FILTER);
+}
+
+TEST_F(FilterPushdownRuleEdgeCasesTest, NullPredicateFilterIsPreserved) {
+    auto scan = std::make_unique<LogicalNodeScan>("n");
+    auto filter = std::make_unique<LogicalFilter>(std::move(scan), nullptr);
+
+    auto result = rule.apply(std::move(filter), stats);
+
+    ASSERT_NE(result, nullptr);
+    EXPECT_EQ(result->getType(), LogicalOpType::LOP_FILTER);
+}
+
+TEST_F(FilterPushdownRuleEdgeCasesTest, JoinWithMissingSideDoesNotPushPredicate) {
+    auto right = std::make_unique<LogicalNodeScan>("m");
+    auto join = std::make_unique<LogicalJoin>(nullptr, std::move(right));
+    auto filter = std::make_unique<LogicalFilter>(std::move(join), propRef("n", "age"));
+
+    auto result = rule.apply(std::move(filter), stats);
+
+    ASSERT_NE(result, nullptr);
+    EXPECT_EQ(result->getType(), LogicalOpType::LOP_FILTER);
+}
+
 TEST_F(FilterPushdownRuleEdgeCasesTest, ReversedEqualityLiteralEqualsPropertyPushesIntoScan) {
     auto scan = std::make_unique<LogicalNodeScan>("n");
     auto pred = binaryExpr(litInt(42), BinaryOperatorType::BOP_EQUAL, propRef("n", "age"));
@@ -174,6 +217,31 @@ TEST_F(FilterPushdownRuleEdgeCasesTest, EqualityWithNullOperandIsRejected) {
     EXPECT_EQ(result->getType(), LogicalOpType::LOP_FILTER);
 }
 
+TEST_F(FilterPushdownRuleEdgeCasesTest, EqualityWithMissingLiteralSideIsRejected) {
+    auto scan = std::make_unique<LogicalNodeScan>("n");
+    auto pred = std::shared_ptr<Expression>(
+        std::make_unique<BinaryOpExpression>(
+            propRef("n", "age")->clone(), BinaryOperatorType::BOP_EQUAL, nullptr)
+            .release());
+    auto filter = std::make_unique<LogicalFilter>(std::move(scan), pred);
+
+    auto result = rule.apply(std::move(filter), stats);
+
+    ASSERT_NE(result, nullptr);
+    EXPECT_EQ(result->getType(), LogicalOpType::LOP_FILTER);
+}
+
+TEST_F(FilterPushdownRuleEdgeCasesTest, EqualityForDifferentScanVariableIsRejected) {
+    auto scan = std::make_unique<LogicalNodeScan>("n");
+    auto pred = binaryExpr(propRef("m", "age"), BinaryOperatorType::BOP_EQUAL, litInt(42));
+    auto filter = std::make_unique<LogicalFilter>(std::move(scan), pred);
+
+    auto result = rule.apply(std::move(filter), stats);
+
+    ASSERT_NE(result, nullptr);
+    EXPECT_EQ(result->getType(), LogicalOpType::LOP_FILTER);
+}
+
 TEST_F(FilterPushdownRuleEdgeCasesTest, RangeRejectsNullAndBooleanLiterals) {
     auto scan1 = std::make_unique<LogicalNodeScan>("n");
     auto nullRange = binaryExpr(propRef("n", "age"), BinaryOperatorType::BOP_GREATER, litNull());
@@ -188,6 +256,31 @@ TEST_F(FilterPushdownRuleEdgeCasesTest, RangeRejectsNullAndBooleanLiterals) {
     auto result2 = rule.apply(std::move(filter2), stats);
     ASSERT_NE(result2, nullptr);
     EXPECT_EQ(result2->getType(), LogicalOpType::LOP_FILTER);
+}
+
+TEST_F(FilterPushdownRuleEdgeCasesTest, RangeWithMissingLiteralSideIsRejected) {
+    auto scan = std::make_unique<LogicalNodeScan>("n");
+    auto pred = std::shared_ptr<Expression>(
+        std::make_unique<BinaryOpExpression>(
+            propRef("n", "age")->clone(), BinaryOperatorType::BOP_GREATER, nullptr)
+            .release());
+    auto filter = std::make_unique<LogicalFilter>(std::move(scan), pred);
+
+    auto result = rule.apply(std::move(filter), stats);
+
+    ASSERT_NE(result, nullptr);
+    EXPECT_EQ(result->getType(), LogicalOpType::LOP_FILTER);
+}
+
+TEST_F(FilterPushdownRuleEdgeCasesTest, RangeForDifferentScanVariableIsRejected) {
+    auto scan = std::make_unique<LogicalNodeScan>("n");
+    auto pred = binaryExpr(propRef("m", "age"), BinaryOperatorType::BOP_GREATER, litInt(42));
+    auto filter = std::make_unique<LogicalFilter>(std::move(scan), pred);
+
+    auto result = rule.apply(std::move(filter), stats);
+
+    ASSERT_NE(result, nullptr);
+    EXPECT_EQ(result->getType(), LogicalOpType::LOP_FILTER);
 }
 
 TEST_F(FilterPushdownRuleEdgeCasesTest, ReversedRangeOperatorsAreMappedAndPushed) {

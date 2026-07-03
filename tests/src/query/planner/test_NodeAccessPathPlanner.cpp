@@ -142,6 +142,18 @@ TEST(NodeAccessPathPlannerTest, PreferredConfigCoversRangeCompositeLabelAndFullS
 	EXPECT_EQ(chooseNodeAccessPathDecision(fullScan, nullptr).selected.config.type, execution::ScanType::FULL_SCAN);
 }
 
+TEST(NodeAccessPathPlannerTest, InvalidPreferredScanTypeIsReportedAsMalformed) {
+	auto scan = makeScan();
+	scan.setPreferredScanType(static_cast<execution::ScanType>(255));
+
+	auto decision = chooseNodeAccessPathDecision(scan, nullptr);
+
+	ASSERT_EQ(decision.candidates.size(), 1U);
+	EXPECT_EQ(decision.selected.kind, NodeAccessPathKind::NAP_FULL_SCAN);
+	EXPECT_FALSE(decision.selected.valid);
+	EXPECT_TRUE(decision.selectedRequiresConservativeFallback());
+}
+
 TEST(NodeAccessPathPlannerTest, PreferredDecisionMarksMalformedCandidateForConservativeFallback) {
 	auto scan = makeScan();
 	scan.setPreferredScanType(execution::ScanType::PROPERTY_SCAN);
@@ -231,6 +243,33 @@ TEST(NodeAccessPathPlannerTest, RangeResidualPredicatesPreserveInclusiveAndExclu
 	EXPECT_EQ(predicates[0].op, execution::VectorPredicateOp::VPO_GT);
 	EXPECT_EQ(predicates[1].op, execution::VectorPredicateOp::VPO_LT);
 	EXPECT_EQ(requirements.requiredProperties, (std::vector<std::string>{"age"}));
+}
+
+TEST(NodeAccessPathPlannerTest, RangeResidualCoversHalfOpenAndDifferentIndexKey) {
+	auto halfOpenScan = makeScan();
+	RangePredicate halfOpen;
+	halfOpen.key = "age";
+	halfOpen.minValue = PropertyValue(int64_t{18});
+	halfOpen.maxValue = PropertyValue(int64_t{65});
+	halfOpen.minInclusive = true;
+	halfOpen.maxInclusive = false;
+	halfOpenScan.setRangePredicates({halfOpen});
+
+	execution::NodeScanConfig differentKeyConfig;
+	differentKeyConfig.type = execution::ScanType::RANGE_SCAN;
+	differentKeyConfig.indexKey = "height";
+	differentKeyConfig.rangeMin = halfOpen.minValue;
+	differentKeyConfig.rangeMax = halfOpen.maxValue;
+	differentKeyConfig.minInclusive = halfOpen.minInclusive;
+	differentKeyConfig.maxInclusive = halfOpen.maxInclusive;
+
+	execution::NodeScanRequirements requirements;
+	std::vector<execution::VectorizedPropertyPredicate> predicates;
+	ASSERT_TRUE(appendResidualNodePredicates(halfOpenScan, differentKeyConfig, requirements, predicates));
+
+	ASSERT_EQ(predicates.size(), 2U);
+	EXPECT_EQ(predicates[0].op, execution::VectorPredicateOp::VPO_GE);
+	EXPECT_EQ(predicates[1].op, execution::VectorPredicateOp::VPO_LT);
 }
 
 TEST(NodeAccessPathPlannerTest, ResidualPredicatesSkipHandledCompositeAndAddSingleSidedRange) {
@@ -336,6 +375,107 @@ TEST(NodeAccessPathPlannerTest, IndexedDecisionPrioritizesCompositeAndKeepsFallb
 	});
 	EXPECT_TRUE(hasPropertyCandidate);
 	EXPECT_TRUE(hasLabelCandidate);
+
+	db.close();
+	std::error_code ec;
+	fs::remove_all(dbPath, ec);
+}
+
+TEST(NodeAccessPathPlannerTest, GlobalPropertyAndRangeIndexesAreValidAccessPaths) {
+	const auto dbPath = makeDbPath("test_node_access_path_planner_global_indexes");
+	Database db(dbPath.string());
+	db.open();
+	auto indexManager = db.getQueryEngine()->getIndexManager();
+	ASSERT_TRUE(indexManager->createIndex("idx_global_age", "node", "", "age"));
+
+	LogicalNodeScan propertyScan("n", {}, {{"age", PropertyValue(int64_t{42})}});
+	auto propertyDecision = chooseNodeAccessPathDecision(propertyScan, indexManager);
+	EXPECT_EQ(propertyDecision.selected.kind, NodeAccessPathKind::NAP_PROPERTY_INDEX);
+	EXPECT_EQ(propertyDecision.selected.config.indexKey, "age");
+
+	LogicalNodeScan rangeScan("n");
+	rangeScan.setRangePredicates({makeClosedRange()});
+	auto rangeDecision = chooseNodeAccessPathDecision(rangeScan, indexManager);
+	EXPECT_EQ(rangeDecision.selected.kind, NodeAccessPathKind::NAP_RANGE_INDEX);
+	EXPECT_EQ(rangeDecision.selected.config.indexKey, "age");
+
+	LogicalNodeScan fullScan("n");
+	auto fullDecision = chooseNodeAccessPathDecision(fullScan, indexManager);
+	EXPECT_EQ(fullDecision.selected.kind, NodeAccessPathKind::NAP_FULL_SCAN);
+
+	db.close();
+	std::error_code ec;
+	fs::remove_all(dbPath, ec);
+}
+
+TEST(NodeAccessPathPlannerTest, EmptyPropertyKeyIsNotConsideredAnIndexCandidate) {
+	const auto dbPath = makeDbPath("test_node_access_path_planner_empty_key");
+	Database db(dbPath.string());
+	db.open();
+	auto indexManager = db.getQueryEngine()->getIndexManager();
+	ASSERT_TRUE(indexManager->createIndex("idx_global_age_empty_key_guard", "node", "", "age"));
+
+	LogicalNodeScan scan("n", {}, {{"", PropertyValue(int64_t{42})}});
+	auto decision = chooseNodeAccessPathDecision(scan, indexManager);
+
+	EXPECT_EQ(decision.selected.kind, NodeAccessPathKind::NAP_FULL_SCAN);
+	const auto propertyCandidate = std::find_if(decision.candidates.begin(), decision.candidates.end(), [](const auto &candidate) {
+		return candidate.kind == NodeAccessPathKind::NAP_PROPERTY_INDEX;
+	});
+	EXPECT_EQ(propertyCandidate, decision.candidates.end());
+
+	db.close();
+	std::error_code ec;
+	fs::remove_all(dbPath, ec);
+}
+
+TEST(NodeAccessPathPlannerTest, CompositeAccessPathRequiresCompleteIndexedShape) {
+	const auto dbPath = makeDbPath("test_node_access_path_planner_composite_shape");
+	Database db(dbPath.string());
+	db.open();
+	auto indexManager = db.getQueryEngine()->getIndexManager();
+	ASSERT_TRUE(indexManager->createCompositeIndex("idx_country_age_shape", "node", "", {"country", "age"}));
+
+	LogicalNodeScan singleKey("n");
+	singleKey.setCompositeEquality({{"country"}, {PropertyValue("CN")}});
+	auto singleKeyDecision = chooseNodeAccessPathDecision(singleKey, indexManager);
+	EXPECT_EQ(singleKeyDecision.selected.kind, NodeAccessPathKind::NAP_FULL_SCAN);
+
+	LogicalNodeScan mismatchedValues("n");
+	mismatchedValues.setCompositeEquality({{"country", "age"}, {PropertyValue("CN")}});
+	auto mismatchedDecision = chooseNodeAccessPathDecision(mismatchedValues, indexManager);
+	EXPECT_EQ(mismatchedDecision.selected.kind, NodeAccessPathKind::NAP_FULL_SCAN);
+
+	LogicalNodeScan unindexedKeys("n");
+	unindexedKeys.setCompositeEquality({{"country", "city"}, {PropertyValue("CN"), PropertyValue("Shanghai")}});
+	auto unindexedDecision = chooseNodeAccessPathDecision(unindexedKeys, indexManager);
+	EXPECT_EQ(unindexedDecision.selected.kind, NodeAccessPathKind::NAP_FULL_SCAN);
+
+	db.close();
+	std::error_code ec;
+	fs::remove_all(dbPath, ec);
+}
+
+TEST(NodeAccessPathPlannerTest, EqualCostPropertyCandidatesTieBreakDeterministically) {
+	const auto dbPath = makeDbPath("test_node_access_path_planner_equal_cost");
+	Database db(dbPath.string());
+	db.open();
+	auto indexManager = db.getQueryEngine()->getIndexManager();
+	ASSERT_TRUE(indexManager->createIndex("idx_age", "node", "", "age"));
+	ASSERT_TRUE(indexManager->createIndex("idx_code", "node", "", "code"));
+
+	LogicalNodeScan scan("n", {}, {
+		{"age", PropertyValue(int64_t{42})},
+		{"code", PropertyValue("A")}
+	});
+	auto decision = chooseNodeAccessPathDecision(scan, indexManager);
+
+	const auto propertyCount = std::count_if(decision.candidates.begin(), decision.candidates.end(), [](const auto &candidate) {
+		return candidate.kind == NodeAccessPathKind::NAP_PROPERTY_INDEX;
+	});
+	EXPECT_EQ(propertyCount, 2);
+	EXPECT_TRUE(decision.selected.valid);
+	EXPECT_EQ(decision.selected.estimate.source, "index_count");
 
 	db.close();
 	std::error_code ec;

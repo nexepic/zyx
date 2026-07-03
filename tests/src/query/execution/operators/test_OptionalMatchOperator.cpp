@@ -177,6 +177,33 @@ TEST_F(OptionalMatchOperatorTest, HandlesMultipleInputRecords) {
 	op.close();
 }
 
+TEST_F(OptionalMatchOperatorTest, SplitsLargeNullExtendedOutputIntoBatches) {
+	std::vector<Record> inputRecords;
+	inputRecords.reserve(1005);
+	for (int i = 0; i < 1005; ++i) {
+		Record r;
+		r.setValue("input", PropertyValue(i));
+		inputRecords.push_back(r);
+	}
+
+	auto inputOp = std::make_unique<MockInputOperator>(inputRecords);
+	auto patternOp = std::make_unique<MockPatternOperator>(std::vector<Record>{}, false);
+
+	OptionalMatchOperator op(std::move(inputOp), std::move(patternOp), {"pattern"});
+	op.open();
+
+	auto first = op.next();
+	ASSERT_TRUE(first.has_value());
+	EXPECT_EQ(first->size(), 1000UL);
+
+	auto second = op.next();
+	ASSERT_TRUE(second.has_value());
+	EXPECT_EQ(second->size(), 5UL);
+	EXPECT_FALSE(op.next().has_value());
+
+	op.close();
+}
+
 /**
  * Test OptionalMatchOperator getOutputVariables
  */

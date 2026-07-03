@@ -251,6 +251,20 @@ TEST_F(DebugCommandHandlerTest, HandleNodesLargePage) {
 	EXPECT_FALSE(capturedOut_.str().empty());
 }
 
+TEST_F(DebugCommandHandlerTest, HandleNodesWithNonNumericPageUsesDefaultPage) {
+	DebugCommandHandler handler(*database);
+	handler.handle("debug nodes not_a_page");
+	EXPECT_FALSE(capturedOut_.str().empty());
+	EXPECT_TRUE(capturedErr_.str().empty());
+}
+
+TEST_F(DebugCommandHandlerTest, HandleWhitespaceAndSemicolonOnlyShowsHelp) {
+	DebugCommandHandler handler(*database);
+	handler.handle("   ;;;");
+	EXPECT_NE(capturedOut_.str().find("Debug Commands:"), std::string::npos);
+	EXPECT_TRUE(capturedErr_.str().empty());
+}
+
 // Test debug command with trailing whitespace only
 TEST_F(DebugCommandHandlerTest, HandleTrailingWhitespace) {
 	DebugCommandHandler handler(*database);

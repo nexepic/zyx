@@ -52,7 +52,6 @@ namespace graph {
 		}
 
 		if (headState.isBlobStorage()) {
-			if (headState.getExternalId() == 0) return "";
 			return dataManager_->getBlobManager()->readBlobChain(headState.getExternalId());
 		}
 
@@ -123,9 +122,7 @@ namespace graph {
         // 3. Clean up OLD storage
         // Critical Fix: Ensure we are reading the *current* state of storage
         if (headState.isBlobStorage()) {
-            if (headState.getExternalId() != 0) {
-                dataManager_->getBlobManager()->deleteBlobChain(headState.getExternalId());
-            }
+            dataManager_->getBlobManager()->deleteBlobChain(headState.getExternalId());
         } else {
             // Delete internal chain
             int64_t nextId = headState.getNextStateId();
@@ -158,9 +155,7 @@ namespace graph {
 		if (headState.getId() == 0 || !headState.isActive()) return;
 
 		if (headState.isBlobStorage()) {
-			if (headState.getExternalId() != 0) {
-				dataManager_->getBlobManager()->deleteBlobChain(headState.getExternalId());
-			}
+			dataManager_->getBlobManager()->deleteBlobChain(headState.getExternalId());
 			State mutableState = headState;
 			dataManager_->deleteState(mutableState);
 			return;

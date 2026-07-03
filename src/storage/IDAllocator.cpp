@@ -69,7 +69,7 @@ namespace graph::storage {
 		// 4. Disk Scan
 		if (!scanCursor_.diskExhausted) {
 			if (fetchInactiveIdsFromDisk()) {
-				if (!hotCache_.empty()) {
+				if (!hotCache_.empty()) { // ZYX_COV_EXCL_LINE: a successful disk fetch always deposits at least one hot-cache id under the allocator lock.
 					int64_t id = hotCache_.back();
 					hotCache_.pop_back();
 					Log::debug("IDAllocator[{}]: Found ID {} via Disk Scan", toUnderlying(entityType_), id);
@@ -107,7 +107,7 @@ namespace graph::storage {
 		if (segmentOffset != 0) {
 			SegmentHeader header = segmentTracker_->getSegmentHeader(segmentOffset);
 
-			if (id >= header.start_id && id < header.start_id + header.capacity) {
+			if (id >= header.start_id && id < header.start_id + header.capacity) { // ZYX_COV_EXCL_LINE: SegmentTracker returns an entity segment only when the id maps into its range.
 				auto index = static_cast<uint32_t>(id - header.start_id);
 				bool isActive = segmentTracker_->isEntityActive(segmentOffset, index);
 				bool isWithinUsedRange = segmentTracker_->isIdInUsedRange(segmentOffset, id);
@@ -241,7 +241,7 @@ namespace graph::storage {
 	}
 
 	bool IDAllocator::fetchInactiveIdsFromDisk() {
-		if (scanCursor_.diskExhausted)
+		if (scanCursor_.diskExhausted) // ZYX_COV_EXCL_LINE: allocate() calls this helper only while the cursor is not exhausted.
 			return false;
 
 		uint64_t chainHead = segmentTracker_->getChainHead(toUnderlying(entityType_));

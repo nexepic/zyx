@@ -193,6 +193,26 @@ TEST(PropertyEntityScanDetailTest, PersistedScanHelpersReturnEmptyWithoutPositio
 	EXPECT_EQ(ownerCount.matchedCount, 0U);
 }
 
+TEST(PropertyEntityScanDetailTest, SegmentWorkSkipsIdsBeforeFirstSegmentAndStopsAfterLastMatch) {
+	std::vector<int64_t> ids{1, 5, 6, 12, 30};
+	std::vector<SegmentIndexManager::SegmentIndex> segments{
+			{5, 8, 100},
+			{20, 25, 200},
+			{30, 35, 300}};
+
+	auto work = collectPropertyEntitySegmentWork(std::span<const int64_t>(ids.data(), ids.size()), segments);
+	ASSERT_EQ(work.size(), 2U);
+	EXPECT_EQ(work[0].segmentIndex, 0U);
+	EXPECT_EQ(work[0].idBegin, 1U);
+	EXPECT_EQ(work[0].idEnd, 3U);
+	EXPECT_EQ(work[1].segmentIndex, 2U);
+	EXPECT_EQ(work[1].idBegin, 4U);
+	EXPECT_EQ(work[1].idEnd, 5U);
+
+	auto indices = collectPropertyEntityWorkSegmentIndices(work);
+	EXPECT_EQ(indices, (std::vector<size_t>{0U, 2U}));
+}
+
 TEST_F(DataManagerTest, PersistedScanHelpersShareMatcherCoverageAcrossPositiveReads) {
 	Node node = createTestNode(dataManager, "DetailPositiveScanNode");
 	dataManager->addNode(node);

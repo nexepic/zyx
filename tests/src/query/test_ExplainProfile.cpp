@@ -120,6 +120,33 @@ TEST(ExplainOperatorTest, ToStringReturnsExplain) {
 	EXPECT_EQ(op.toString(), "Explain");
 }
 
+class ExplainNullableChildLogicalOperator final : public LogicalOperator {
+public:
+	[[nodiscard]] LogicalOpType getType() const override { return LogicalOpType::LOP_FILTER; }
+	[[nodiscard]] std::vector<LogicalOperator *> getChildren() const override { return {nullptr}; }
+	[[nodiscard]] std::vector<std::string> getOutputVariables() const override { return {"n"}; }
+	[[nodiscard]] std::unique_ptr<LogicalOperator> clone() const override {
+		return std::make_unique<ExplainNullableChildLogicalOperator>();
+	}
+	[[nodiscard]] std::string toString() const override { return "NullableChild"; }
+	void setChild(size_t, std::unique_ptr<LogicalOperator>) override {}
+	std::unique_ptr<LogicalOperator> detachChild(size_t) override { return nullptr; }
+};
+
+TEST(ExplainOperatorTest, SkipsNullChildrenInLogicalPlan) {
+	ExplainNullableChildLogicalOperator logicalPlan;
+	ExplainOperator op(&logicalPlan);
+	op.open();
+
+	auto batch = op.next();
+	ASSERT_TRUE(batch.has_value());
+	ASSERT_EQ(batch->size(), 1UL);
+	EXPECT_TRUE((*batch)[0].getValue("operator").has_value());
+	EXPECT_FALSE(op.next().has_value());
+
+	op.close();
+}
+
 // ============================================================================
 // ProfileOperator unit tests (using MockOperator)
 // ============================================================================

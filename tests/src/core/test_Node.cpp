@@ -68,6 +68,19 @@ TEST_F(NodeTest, SetGetLabelId) {
 	EXPECT_EQ(node.getLabelId(), testLabelId);
 }
 
+TEST_F(NodeTest, MultiLabelRejectsZeroDuplicateAndOverflow) {
+	graph::Node node;
+
+	EXPECT_FALSE(node.addLabelId(0));
+	EXPECT_TRUE(node.addLabelId(1));
+	EXPECT_TRUE(node.addLabelId(1));
+	for (int64_t label = 2; label <= static_cast<int64_t>(graph::Node::MAX_LABELS); ++label) {
+		EXPECT_TRUE(node.addLabelId(label));
+	}
+	EXPECT_FALSE(node.addLabelId(99));
+	EXPECT_EQ(node.getLabelCount(), graph::Node::MAX_LABELS);
+}
+
 // Removed: SetLabelTruncation
 
 TEST_F(NodeTest, EdgeRelationshipSetters) {

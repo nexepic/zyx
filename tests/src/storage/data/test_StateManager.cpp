@@ -30,6 +30,15 @@
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/data/StateManager.hpp"
 
+namespace graph::storage::testing {
+	class StateManagerAccess {
+	public:
+		static bool isChainHeadState(const graph::State &state) {
+			return StateManager::isChainHeadState(state);
+		}
+	};
+} // namespace graph::storage::testing
+
 class StateManagerTest : public ::testing::Test {
 protected:
 	std::filesystem::path testFilePath;
@@ -610,3 +619,23 @@ TEST_F(StateManagerTest, IsChainHeadState_InactiveStateReturnsFalse) {
 	EXPECT_NE(survivor.getId(), 0) << "Survivor state should be in key map";
 }
 
+TEST(StateManagerHeadStateClassificationTest, RejectsUnallocatedInactiveAndTailStates) {
+	using graph::storage::testing::StateManagerAccess;
+
+	graph::State unallocated;
+	EXPECT_FALSE(StateManagerAccess::isChainHeadState(unallocated));
+
+	graph::State inactive;
+	inactive.setId(10);
+	inactive.markInactive();
+	EXPECT_FALSE(StateManagerAccess::isChainHeadState(inactive));
+
+	graph::State tail;
+	tail.setId(11);
+	tail.setPrevStateId(10);
+	EXPECT_FALSE(StateManagerAccess::isChainHeadState(tail));
+
+	graph::State head;
+	head.setId(12);
+	EXPECT_TRUE(StateManagerAccess::isChainHeadState(head));
+}

@@ -352,6 +352,50 @@ TEST_F(NodeCountScanOperatorTest, CountsFullScanCandidatesDirectlyWhenChecksAreS
 	EXPECT_EQ(readCount(*batch), 2);
 }
 
+TEST_F(NodeCountScanOperatorTest, FullScanWithoutLabelsCountsCandidatesWhenLabelRequirementIsAlreadySatisfied) {
+	addPerson();
+	addLabeledNode({"Animal"});
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "n";
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_ID_ONLY;
+	requirements.countOnly = true;
+	requirements.needsActiveCheck = false;
+	requirements.needsLabels = true;
+
+	NodeCountScanOperator op(dm, im, config, requirements, {}, "count");
+	op.open();
+	auto batch = op.next();
+
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(readCount(*batch), 2);
+}
+
+TEST_F(NodeCountScanOperatorTest, SelectedPropertyMaterializationWithoutPredicatesUsesBatchCounting) {
+	addPerson({{"age", PropertyValue(int64_t{42})}});
+	addPerson({{"age", PropertyValue(int64_t{7})}});
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "n";
+	config.labels = {"Person"};
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+	requirements.requiredProperties = {"age"};
+	requirements.countOnly = true;
+	requirements.needsActiveCheck = true;
+	requirements.needsLabels = true;
+
+	NodeCountScanOperator op(dm, im, config, requirements, {}, "count");
+	op.open();
+	auto batch = op.next();
+
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(readCount(*batch), 2);
+}
+
 TEST_F(NodeCountScanOperatorTest, NonCountOnlyRequirementFallsBackToBatchCounting) {
 	addPerson();
 
@@ -428,6 +472,28 @@ TEST_F(NodeCountScanOperatorTest, CandidateCountingChecksResidualLabelsWhenActiv
 	config.type = ScanType::FULL_SCAN;
 	config.variable = "n";
 	config.labels = {"Person"};
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_ID_ONLY;
+	requirements.countOnly = true;
+	requirements.needsActiveCheck = false;
+	requirements.needsLabels = true;
+
+	NodeCountScanOperator op(dm, im, config, requirements, {}, "count");
+	op.open();
+	auto batch = op.next();
+
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(readCount(*batch), 1);
+}
+
+TEST_F(NodeCountScanOperatorTest, MultiLabelFullScanFallsBackWhenResidualLabelsAreUnsatisfied) {
+	addLabeledNode({"Person"});
+	addLabeledNode({"Person", "Employee"});
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "n";
+	config.labels = {"Person", "Employee"};
 	NodeScanRequirements requirements;
 	requirements.materialization = NodeMaterializationMode::NSM_ID_ONLY;
 	requirements.countOnly = true;

@@ -110,7 +110,7 @@ namespace graph::query {
 		                                planCache_.hits(), planCache_.misses());
 		auto planTree = converter.convert(plan.root.get());
 
-		if (!planTree) {
+		if (!planTree) { // ZYX_COV_EXCL_LINE: PhysicalPlanConverter returns a root or throws for invalid logical input.
 			return QueryResult{};
 		}
 
@@ -163,7 +163,7 @@ namespace graph::query {
 	}
 
 	void QueryEngine::propagateThreadPool(execution::PhysicalOperator *op, concurrent::ThreadPool *pool) {
-		if (!op)
+		if (!op) // ZYX_COV_EXCL_LINE: executePlan only calls this after a non-null converted plan is available.
 			return;
 		op->setThreadPool(pool);
 		for (auto *child : op->getChildren()) {

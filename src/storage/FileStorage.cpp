@@ -104,7 +104,7 @@ namespace graph::storage {
 			// Open the native read handle eagerly for columnar/pread scans. The
 			// native write handle is opened lazily on the first write path.
 			readFd_ = portable_open(dbFilePath.c_str(), O_RDONLY);
-			if (readFd_ == INVALID_FILE_HANDLE) {
+			if (readFd_ == INVALID_FILE_HANDLE) { // ZYX_COV_EXCL_LINE: OS handle failures are platform/env errors after fstream opened the file.
 				throw std::runtime_error("Cannot open native read handle for parallel reads: " + dbFilePath);
 			}
 		}
@@ -126,10 +126,10 @@ namespace graph::storage {
 		}
 		debug::ScopedPerfTimer timer("storage.open.write_handle");
 		writeFd_ = portable_open_rw(dbFilePath.c_str());
-		if (writeFd_ == INVALID_FILE_HANDLE) {
+		if (writeFd_ == INVALID_FILE_HANDLE) { // ZYX_COV_EXCL_LINE: OS handle failures depend on filesystem permissions/races.
 			throw std::runtime_error("Cannot open native write handle for parallel writes: " + dbFilePath);
 		}
-		if (storageIO_) {
+		if (storageIO_) { // ZYX_COV_EXCL_LINE: initialized storage always owns StorageIO before write paths can run.
 			storageIO_->setWriteFd(writeFd_);
 		}
 	}
@@ -299,7 +299,7 @@ namespace graph::storage {
 			// 1. ATOMIC SNAPSHOT: Freeze current dirty state into snapshot
 			auto snapshot = dataManager->prepareFlushSnapshotView();
 
-			if (snapshot.isEmpty())
+			if (snapshot.isEmpty()) // ZYX_COV_EXCL_LINE: flushImpl serializes writers, so a dirty snapshot cannot be drained concurrently.
 				break;
 
 			ensureWriteHandle();

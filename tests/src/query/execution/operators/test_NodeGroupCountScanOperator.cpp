@@ -368,3 +368,55 @@ TEST_F(NodeGroupCountScanOperatorTest, CountsBlobBackedAndMissingGroupsFromMetad
 	EXPECT_EQ(groups["<null>"], 1);
 	EXPECT_TRUE(snapshot.contains("node_scan.load_properties"));
 }
+
+TEST_F(NodeGroupCountScanOperatorTest, BlobFallbackMissingGroupPropertyCountsAsNull) {
+	const std::string payload(600, 'p');
+	for (int64_t i = 0; i < 8; ++i) {
+		addPerson({{"payload", PropertyValue(payload)}});
+	}
+	db->getStorage()->flush();
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "n";
+	config.labels = {"Person"};
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+	requirements.requiredProperties = {"missing"};
+	requirements.countOnly = true;
+
+	NodeGroupCountScanOperator op(dm, im, config, requirements, {}, "missing", "country", "count");
+	op.open();
+	auto batch = op.next();
+
+	ASSERT_TRUE(batch.has_value());
+	auto groups = readStringGroups(*batch);
+	EXPECT_EQ(groups.size(), 1U);
+	EXPECT_EQ(groups["<null>"], 8);
+}
+
+TEST_F(NodeGroupCountScanOperatorTest, BlobFallbackWithDifferentGroupPropertyCountsAsNull) {
+	const std::string payload(600, 'p');
+	for (int64_t i = 0; i < 8; ++i) {
+		addPerson({{"payload", PropertyValue(payload)}});
+	}
+	db->getStorage()->flush();
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "n";
+	config.labels = {"Person"};
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+	requirements.requiredProperties = {"payload"};
+	requirements.countOnly = true;
+
+	NodeGroupCountScanOperator op(dm, im, config, requirements, {}, "country", "country", "count");
+	op.open();
+	auto batch = op.next();
+
+	ASSERT_TRUE(batch.has_value());
+	auto groups = readStringGroups(*batch);
+	EXPECT_EQ(groups.size(), 1U);
+	EXPECT_EQ(groups["<null>"], 8);
+}

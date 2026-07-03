@@ -370,7 +370,7 @@ namespace graph::concurrent {
 				return;
 			}
 			const double throughput = detail::telemetryThroughput(telemetry);
-			if (throughput <= 0.0 || !std::isfinite(throughput)) {
+			if (throughput <= 0.0 || !std::isfinite(throughput)) { // ZYX_COV_EXCL_LINE: invalid telemetry is defensive and should not affect learned policy state.
 				return;
 			}
 

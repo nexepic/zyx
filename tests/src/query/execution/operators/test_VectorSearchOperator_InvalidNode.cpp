@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "graph/core/Database.hpp"
+#include "graph/core/Node.hpp"
 #include "graph/query/execution/operators/VectorSearchOperator.hpp"
 
 namespace fs = std::filesystem;
@@ -72,5 +73,33 @@ TEST_F(VectorSearchOperatorInvalidNodeTest, NextSkipsNodeResolvedAsInvalidFromSe
 	EXPECT_TRUE(firstBatch->empty());
 
 	EXPECT_FALSE(op.next().has_value());
+	op.close();
+}
+
+TEST_F(VectorSearchOperatorInvalidNodeTest, NextSkipsInactiveNodeFromSearchResults) {
+	const std::string indexName = "vec_skip_inactive_node";
+	ASSERT_TRUE(im->createVectorIndex(indexName, "Person", "embedding", 2, "L2"));
+
+	const int64_t personLabel = dm->getOrCreateTokenId("Person");
+	graph::Node node(987654, personLabel);
+	node.markInactive(false);
+	dm->addNode(node);
+	ASSERT_EQ(node.getId(), 987654);
+
+	auto diskann = im->getVectorIndexManager()->getIndex(indexName);
+	ASSERT_NE(diskann, nullptr);
+	diskann->insert(node.getId(), {1.0f, 2.0f});
+
+	ASSERT_EQ(dm->getNode(node.getId()).getId(), node.getId());
+	ASSERT_FALSE(dm->getNode(node.getId()).isActive());
+
+	VectorSearchOperator op(dm, im, indexName, 5, {1.0f, 2.0f});
+	op.open();
+
+	auto firstBatch = op.next();
+	ASSERT_TRUE(firstBatch.has_value());
+	EXPECT_TRUE(firstBatch->empty());
+	EXPECT_FALSE(op.next().has_value());
+
 	op.close();
 }

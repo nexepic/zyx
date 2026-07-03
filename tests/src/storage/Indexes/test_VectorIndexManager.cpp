@@ -95,6 +95,39 @@ TEST_F(ManagerPersistenceTest, CreateCosineIndex) {
 	EXPECT_NE(idx, nullptr);
 }
 
+TEST_F(ManagerPersistenceTest, DirectManagerWorksWithoutThreadPoolAndSkipsNonVectorMetadata) {
+	graph::Database db(dbPath.string());
+	db.open();
+	auto dm = db.getStorage()->getDataManager();
+	auto sm = db.getStorage()->getSystemStateManager();
+	auto im = db.getQueryEngine()->getIndexManager();
+
+	VectorIndexManager direct(dm, sm);
+	direct.createIndex("direct_l2", 4, "L2");
+	EXPECT_TRUE(direct.hasIndex("direct_l2"));
+	EXPECT_NE(direct.getIndex("direct_l2"), nullptr);
+
+	ASSERT_TRUE(im->createIndex("scalar_person_age", "node", "Person", "age"));
+	graph::Node node(1, dm->getOrCreateTokenId("Person"));
+	std::unordered_map<std::string, graph::PropertyValue> props;
+	props["age"] = graph::PropertyValue(int64_t(42));
+	EXPECT_NO_THROW(direct.updateIndex(node, "Person", props));
+}
+
+TEST_F(ManagerPersistenceTest, RemoveIndexIgnoresIndexesForOtherLabels) {
+	graph::Database db(dbPath.string());
+	db.open();
+	auto dm = db.getStorage()->getDataManager();
+	auto im = db.getQueryEngine()->getIndexManager();
+	auto vim = im->getVectorIndexManager();
+
+	im->createVectorIndex("person_vec_remove_skip", "Person", "embedding", 4, "L2");
+	vim->createIndex("person_vec_remove_skip", 4, "L2");
+
+	graph::Node node(1, dm->getOrCreateTokenId("Animal"));
+	EXPECT_NO_THROW(vim->removeIndex(node.getId(), "Animal"));
+}
+
 TEST_F(ManagerPersistenceTest, HasIndex_NonExistent) {
 	graph::Database db(dbPath.string());
 	db.open();

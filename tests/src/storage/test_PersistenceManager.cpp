@@ -585,6 +585,42 @@ TEST_F(PersistenceManagerTest, UpsertBatchIntermediateFlush) {
 	EXPECT_GT(flushCount, 0) << "Should have triggered intermediate flush during batch";
 }
 
+TEST_F(PersistenceManagerTest, EdgeBatchIntermediateFlushUsesTypedRegistryCounts) {
+	int flushCount = 0;
+	manager->setMaxDirtyEntities(1);
+	manager->setAutoFlushCallback([&flushCount]() { ++flushCount; });
+
+	std::vector<Edge> edges;
+	for (int i = 0; i < 2; ++i) {
+		Edge edge;
+		edge.setId(100 + i);
+		edges.push_back(edge);
+	}
+
+	manager->upsertBatch(edges, EntityChangeType::CHANGE_ADDED);
+
+	EXPECT_GE(flushCount, 1);
+	EXPECT_TRUE(manager->isDirty<Edge>(100));
+	EXPECT_TRUE(manager->isDirty<Edge>(101));
+}
+
+TEST_F(PersistenceManagerTest, BatchAutoFlushCallbackCanDeferFinalRecheck) {
+	int flushCount = 0;
+	manager->setMaxDirtyEntities(1);
+	manager->setAutoFlushCallback([&]() {
+		++flushCount;
+		manager->setTransactionActive(true);
+	});
+
+	Node node;
+	node.setId(77);
+	manager->upsertBatch(std::vector<Node>{node}, EntityChangeType::CHANGE_ADDED);
+
+	EXPECT_EQ(flushCount, 1);
+	EXPECT_TRUE(manager->isTransactionActive());
+	EXPECT_TRUE(manager->isDirty<Node>(77));
+}
+
 // Test isDirty returns false for non-existent entities
 TEST_F(PersistenceManagerTest, IsDirtyNonExistent) {
 	EXPECT_FALSE(manager->isDirty<Node>(999));

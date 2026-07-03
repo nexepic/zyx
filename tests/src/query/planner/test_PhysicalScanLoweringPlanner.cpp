@@ -32,6 +32,36 @@ std::shared_ptr<expressions::Expression> variable(std::string name) {
 	return std::make_shared<expressions::VariableReferenceExpression>(std::move(name));
 }
 
+class ProjectWithExtraChildren final : public LogicalProject {
+public:
+	ProjectWithExtraChildren(std::vector<LogicalProjectItem> items) :
+		LogicalProject(nullptr, std::move(items), false) {}
+
+	[[nodiscard]] std::vector<LogicalOperator *> getChildren() const override { return {nullptr, nullptr}; }
+};
+
+class LimitWithExtraChildren final : public LogicalLimit {
+public:
+	explicit LimitWithExtraChildren(int64_t limit) : LogicalLimit(nullptr, limit) {}
+
+	[[nodiscard]] std::vector<LogicalOperator *> getChildren() const override { return {nullptr, nullptr}; }
+};
+
+class FilterWithExtraChildren final : public LogicalFilter {
+public:
+	explicit FilterWithExtraChildren(std::shared_ptr<expressions::Expression> predicate) :
+		LogicalFilter(nullptr, std::move(predicate)) {}
+
+	[[nodiscard]] std::vector<LogicalOperator *> getChildren() const override { return {nullptr, nullptr}; }
+};
+
+class TraversalWithExtraChildren final : public LogicalTraversal {
+public:
+	TraversalWithExtraChildren() : LogicalTraversal(nullptr, "", "r", "v", "FOLLOWS", "out") {}
+
+	[[nodiscard]] std::vector<LogicalOperator *> getChildren() const override { return {nullptr, nullptr}; }
+};
+
 } // namespace
 
 TEST(PhysicalScanLoweringPlannerTest, LowersProjectSortLimitNodeScanToTopKScan) {
@@ -101,9 +131,16 @@ TEST(PhysicalScanLoweringPlannerTest, NodeProjectionPlannerRejectsUnsupportedSha
 	LogicalProject nullChildProject(nullptr, items);
 	EXPECT_FALSE(tryBuildNodeProjectionScanPlan(nullChildProject, nullptr).has_value());
 
+	ProjectWithExtraChildren extraProjectChildren(items);
+	EXPECT_FALSE(tryBuildNodeProjectionScanPlan(extraProjectChildren, nullptr).has_value());
+
 	auto nullLimit = std::make_unique<LogicalLimit>(nullptr, 1);
 	LogicalProject nullLimitedProject(std::move(nullLimit), items);
 	EXPECT_FALSE(tryBuildNodeProjectionScanPlan(nullLimitedProject, nullptr).has_value());
+
+	auto extraLimitChildren = std::make_unique<LimitWithExtraChildren>(1);
+	LogicalProject malformedLimitProject(std::move(extraLimitChildren), items);
+	EXPECT_FALSE(tryBuildNodeProjectionScanPlan(malformedLimitProject, nullptr).has_value());
 
 	std::vector<LogicalProjectItem> badProjectionItems;
 	badProjectionItems.emplace_back(variable("u"), "u");
@@ -214,6 +251,9 @@ TEST(PhysicalScanLoweringPlannerTest, RelationshipProjectionPlannerRejectsUnsupp
 	LogicalProject nullChildProject(nullptr, items);
 	EXPECT_FALSE(tryBuildRelationshipProjectionScanPlan(nullChildProject, nullptr).has_value());
 
+	ProjectWithExtraChildren extraProjectChildren(items);
+	EXPECT_FALSE(tryBuildRelationshipProjectionScanPlan(extraProjectChildren, nullptr).has_value());
+
 	LogicalProject nonTraversalProject(std::make_unique<LogicalSingleRow>(), items);
 	EXPECT_FALSE(tryBuildRelationshipProjectionScanPlan(nonTraversalProject, nullptr).has_value());
 
@@ -221,9 +261,22 @@ TEST(PhysicalScanLoweringPlannerTest, RelationshipProjectionPlannerRejectsUnsupp
 	LogicalProject nullLimitedProject(std::move(nullLimit), items);
 	EXPECT_FALSE(tryBuildRelationshipProjectionScanPlan(nullLimitedProject, nullptr).has_value());
 
+	auto extraLimitChildren = std::make_unique<LimitWithExtraChildren>(1);
+	LogicalProject extraLimitProject(std::move(extraLimitChildren), items);
+	EXPECT_FALSE(tryBuildRelationshipProjectionScanPlan(extraLimitProject, nullptr).has_value());
+
+	auto extraFilterChildren = std::make_unique<FilterWithExtraChildren>(
+		std::make_shared<expressions::LiteralExpression>(true));
+	LogicalProject extraFilterProject(std::move(extraFilterChildren), items);
+	EXPECT_FALSE(tryBuildRelationshipProjectionScanPlan(extraFilterProject, nullptr).has_value());
+
 	auto nullTraversalChild = std::make_unique<LogicalTraversal>(nullptr, "", "r", "v", "FOLLOWS", "out");
 	LogicalProject nullTraversalChildProject(std::move(nullTraversalChild), items);
 	EXPECT_FALSE(tryBuildRelationshipProjectionScanPlan(nullTraversalChildProject, nullptr).has_value());
+
+	auto extraTraversalChildren = std::make_unique<TraversalWithExtraChildren>();
+	LogicalProject extraTraversalChildProject(std::move(extraTraversalChildren), items);
+	EXPECT_FALSE(tryBuildRelationshipProjectionScanPlan(extraTraversalChildProject, nullptr).has_value());
 
 	auto inwardTraversal = std::make_unique<LogicalTraversal>(
 		std::make_unique<LogicalNodeScan>(""), "", "r", "v", "FOLLOWS", "in");

@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <iostream>
+#include <sstream>
 #include "inputxx/frontend/Editor.hpp"
 #include "../io/MockTerminal.hpp"
 
@@ -176,6 +178,18 @@ TEST_F(EditorTest, EnableRawModeFails) {
     // In test environment cin is not interactive, so it returns nullopt.
     auto result = editor->readLine("> ");
     EXPECT_FALSE(result.has_value());
+}
+
+TEST_F(EditorTest, EnableRawModeFallbackReadsLineFromStdin) {
+    std::istringstream input("MATCH (n) RETURN n\n");
+    auto* original = std::cin.rdbuf(input.rdbuf());
+    EXPECT_CALL(*terminal, enableRawMode()).WillOnce(Return(false));
+
+    auto result = editor->readLine("> ");
+
+    std::cin.rdbuf(original);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result.value(), "MATCH (n) RETURN n");
 }
 
 TEST_F(EditorTest, WordMovement) {
@@ -404,5 +418,16 @@ TEST_F(EditorTest, HistoryNavigationEmptyDoesNothing) {
 
     auto result = editor->readLine("> ");
     EXPECT_TRUE(result.has_value());
+    EXPECT_EQ(result.value(), "");
+}
+
+TEST_F(EditorTest, EmptyPromptRefreshKeepsCursorAtOrigin) {
+    Sequence seq;
+    EXPECT_CALL(*terminal, readKey()).InSequence(seq).WillOnce(Return(io::KeyEvent{io::KeyCode::CTRL_L, 0}));
+    EXPECT_CALL(*terminal, clearScreen()).Times(1);
+    EXPECT_CALL(*terminal, readKey()).InSequence(seq).WillOnce(Return(io::KeyEvent{io::KeyCode::ENTER, '\r'}));
+
+    auto result = editor->readLine("");
+    ASSERT_TRUE(result.has_value());
     EXPECT_EQ(result.value(), "");
 }

@@ -592,6 +592,18 @@ TEST_F(DatabaseTest, SetThreadPoolSizeBeforeLazyInitializationIsHonored) {
 	EXPECT_EQ(tp->getThreadCount(), 3UL);
 }
 
+TEST_F(DatabaseTest, SetThreadPoolSizeAfterThreadPoolBeforeQueryEngine) {
+	auto db = std::make_unique<Database>(testDbPath.string());
+	db->open();
+	ASSERT_NE(db->getThreadPool(), nullptr);
+
+	EXPECT_NO_THROW(db->setThreadPoolSize(2));
+	auto tp = db->getThreadPool();
+	ASSERT_NE(tp, nullptr);
+	EXPECT_EQ(tp->getThreadCount(), 2UL);
+	EXPECT_EQ(db->getStorage()->getThreadPool(), tp.get());
+}
+
 TEST_F(DatabaseTest, GetThreadPool_BeforeOpen) {
 	auto db = std::make_unique<Database>(testDbPath.string());
 	EXPECT_FALSE(db->isOpen());

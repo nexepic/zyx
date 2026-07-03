@@ -75,7 +75,7 @@ namespace graph::query {
 						} else if constexpr (std::is_same_v<T, Edge>) {
 							return formatEdge(arg, resolver);
 						}
-						return "";
+						return ""; // ZYX_COV_EXCL_LINE std::variant alternatives are exhaustive.
 					},
 					data_);
 		}

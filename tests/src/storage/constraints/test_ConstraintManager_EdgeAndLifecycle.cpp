@@ -114,6 +114,33 @@ TEST_F(ConstraintManagerEdgeAndLifecycleTest, EdgeConstraintValidationScansAndFi
 		"edge_score_not_null", "edge", "not_null", "REL", {"score"}, ""));
 }
 
+TEST_F(ConstraintManagerEdgeAndLifecycleTest, NodeConstraintValidationScansAndFiltersExistingNodes) {
+	Node validPerson(0, dataManager->getOrCreateTokenId("Person"));
+	dataManager->addNode(validPerson);
+	dataManager->addNodeProperties(validPerson.getId(), {{"name", PropertyValue("Ada")}});
+
+	Node otherLabel(0, dataManager->getOrCreateTokenId("Project"));
+	dataManager->addNode(otherLabel);
+
+	Node deletedPerson(0, dataManager->getOrCreateTokenId("Person"));
+	dataManager->addNode(deletedPerson);
+	dataManager->deleteNode(deletedPerson);
+
+	EXPECT_NO_THROW(manager->createConstraint(
+		"person_name_not_null", "node", "not_null", "Person", {"name"}, ""));
+}
+
+TEST_F(ConstraintManagerEdgeAndLifecycleTest, InitializeSkipsNonStringStateAndMalformedConstraintMetadata) {
+	dataManager->addStateProperties("sys.constraints", {
+		{"not_string", PropertyValue(int64_t{1})},
+		{"bad_props", PropertyValue("node|not_null|Person|name,,other|")}
+	});
+
+	auto freshManager = std::make_shared<ConstraintManager>(db->getStorage(), indexManager);
+	EXPECT_NO_THROW(freshManager->initialize());
+	EXPECT_TRUE(freshManager->listConstraints().empty());
+}
+
 TEST_F(ConstraintManagerEdgeAndLifecycleTest, ExistingPropertyIndexesAreReusedForUniqueAndNodeKey) {
 	ASSERT_TRUE(indexManager->createIndex("idx_person_email", "node", "Person", "email"));
 	ASSERT_NO_THROW(manager->createConstraint(

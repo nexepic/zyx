@@ -712,6 +712,15 @@ TEST_F(DeletionManagerTest, DeleteNodeConnectedEdges_EmptyResult) {
 	EXPECT_NO_THROW(deletionManager->deleteNode(node));
 }
 
+TEST_F(DeletionManagerTest, DeleteNodeConnectedEdgesDeduplicatesSelfLoop) {
+	Node node = createNode("SelfLoopNode");
+	Edge loop = createEdge(node.getId(), node.getId(), "LOOP");
+
+	EXPECT_NO_THROW(deletionManager->deleteNode(node));
+	EXPECT_TRUE(isNodeDeleted(node.getId()));
+	EXPECT_TRUE(isEdgeDeleted(loop.getId()));
+}
+
 TEST_F(DeletionManagerTest, FindSegmentForNonExistentId) {
 	// Test findSegment methods with non-existent IDs
 	EXPECT_EQ(deletionManager->findSegmentForNodeId(999999), 0ULL);

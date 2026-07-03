@@ -290,6 +290,7 @@ TEST_F(LogicalJoinTest, BasicConstruction) {
     LogicalJoin join(std::move(left), std::move(right));
 
     EXPECT_EQ(join.getType(), LogicalOpType::LOP_JOIN);
+    EXPECT_EQ(join.toString(), "Join");
     ASSERT_EQ(join.getChildren().size(), 2u);
     EXPECT_NE(join.getLeft(), nullptr);
     EXPECT_NE(join.getRight(), nullptr);

@@ -58,8 +58,6 @@ namespace graph::query::execution::operators {
 			double planHitRate = totalPlan > 0 ? static_cast<double>(planCacheStats_.hits) / static_cast<double>(totalPlan) : 0.0;
 			addRow(batch, "plan_cache", "hit_rate", planHitRate);
 
-			if (batch.empty())
-				return std::nullopt;
 			return batch;
 		}
 

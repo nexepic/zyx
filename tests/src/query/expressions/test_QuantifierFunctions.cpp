@@ -572,6 +572,24 @@ TEST_F(QuantifierFunctionsEvaluationTest, AnyFunction_DoubleCoercion) {
 	EXPECT_TRUE(std::get<bool>(evaluator.getResult().getVariant()));
 }
 
+TEST_F(QuantifierFunctionsEvaluationTest, AnyFunction_IntegerTruthiness) {
+	std::vector<PropertyValue> integerList = {
+		PropertyValue(int64_t(0)),
+		PropertyValue(int64_t(3))
+	};
+	PropertyValue listValue(integerList);
+	auto listExpr = std::make_unique<ListLiteralExpression>(listValue);
+	auto varExpr = std::make_unique<VariableReferenceExpression>("x");
+	auto quantExpr = std::make_unique<QuantifierFunctionExpression>(
+		"any", "x", std::move(listExpr), std::move(varExpr)
+	);
+
+	ExpressionEvaluator evaluator(*context_);
+	evaluator.visit(quantExpr.get());
+
+	EXPECT_TRUE(std::get<bool>(evaluator.getResult().getVariant()));
+}
+
 TEST_F(QuantifierFunctionsEvaluationTest, AllFunction_StringTruthiness) {
 	std::vector<PropertyValue> stringList = {
 		PropertyValue(std::string("hello")),
@@ -709,6 +727,25 @@ TEST_F(QuantifierFunctionsEvaluationTest, SingleFunction_DoubleCoercion) {
 
 	auto varExpr = std::make_unique<VariableReferenceExpression>("x");
 
+	auto quantExpr = std::make_unique<QuantifierFunctionExpression>(
+		"single", "x", std::move(listExpr), std::move(varExpr)
+	);
+
+	ExpressionEvaluator evaluator(*context_);
+	evaluator.visit(quantExpr.get());
+
+	EXPECT_TRUE(std::get<bool>(evaluator.getResult().getVariant()));
+}
+
+TEST_F(QuantifierFunctionsEvaluationTest, SingleFunction_IntegerTruthiness) {
+	std::vector<PropertyValue> integerList = {
+		PropertyValue(int64_t(0)),
+		PropertyValue(int64_t(5)),
+		PropertyValue(int64_t(0))
+	};
+	PropertyValue listValue(integerList);
+	auto listExpr = std::make_unique<ListLiteralExpression>(listValue);
+	auto varExpr = std::make_unique<VariableReferenceExpression>("x");
 	auto quantExpr = std::make_unique<QuantifierFunctionExpression>(
 		"single", "x", std::move(listExpr), std::move(varExpr)
 	);

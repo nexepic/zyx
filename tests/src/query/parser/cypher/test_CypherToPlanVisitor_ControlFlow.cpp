@@ -70,6 +70,15 @@ TEST_F(CypherToPlanVisitorControlFlowTest, VisitTxnBeginBuildsTransactionControl
 	EXPECT_NE(logical->toString().find("BEGIN"), std::string::npos);
 }
 
+TEST_F(CypherToPlanVisitorControlFlowTest, VisitTxnBeginConvertsToPhysicalPlan) {
+	graph::parser::cypher::CypherToPlanVisitor visitor(planner);
+
+	visitor.visitTxnBegin(nullptr);
+	auto physical = visitor.getPlan();
+	ASSERT_NE(physical, nullptr);
+	EXPECT_NE(physical->toString().find("BEGIN"), std::string::npos);
+}
+
 TEST_F(CypherToPlanVisitorControlFlowTest, VisitTxnCommitBuildsTransactionControlPlan) {
 	graph::parser::cypher::CypherToPlanVisitor visitor(planner);
 

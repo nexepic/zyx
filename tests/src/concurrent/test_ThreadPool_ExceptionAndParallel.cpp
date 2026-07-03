@@ -12,6 +12,7 @@
 #include <limits>
 #include <stdexcept>
 #include <thread>
+#include <utility>
 
 #include "graph/concurrent/ParallelExecutionPolicy.hpp"
 #include "graph/concurrent/ThreadPool.hpp"
@@ -215,6 +216,28 @@ TEST(ThreadPoolExceptionAndParallelTest, ParallelExecutionPolicyCoversDefaultWor
 		telemetry.setMergeNs(2);
 		telemetry.markCompleted();
 	}
+}
+
+TEST(ThreadPoolExceptionAndParallelTest, ScopedTelemetryMoveTransfersActiveRecorder) {
+	ThreadPool pool(4);
+	const auto estimate = ParallelWorkEstimate{
+			.workloadKind = ParallelWorkloadKind::PWK_CPU_BOUND,
+			.partitions = 8,
+			.estimatedItems = 10000,
+			.minPartitions = 2,
+			.minItems = 2};
+	const auto decision = decideParallelExecution(&pool, estimate);
+	ASSERT_TRUE(decision.useParallel);
+
+	{
+		ScopedParallelExecutionTelemetry telemetry(&pool, estimate, decision);
+		telemetry.setTaskNs(1);
+		telemetry.setMergeNs(1);
+		telemetry.markCompleted();
+		ScopedParallelExecutionTelemetry movedTelemetry(std::move(telemetry));
+	}
+
+	EXPECT_EQ(pool.adaptivePolicyState().statsFor(estimate, decision.workerCount).samples, 1U);
 }
 
 TEST(ThreadPoolExceptionAndParallelTest, ParallelExecutionDecisionUsesAllWorkersForGeneralWork) {
@@ -1025,8 +1048,12 @@ TEST(ThreadPoolExceptionAndParallelTest, AdaptivePolicyDetailHelpersClassifyBoun
 			.partitions = 8,
 			.estimatedBytes = 15,
 			.minBytesPerWorker = 8};
+	const auto partitionLimited = ParallelWorkEstimate{
+			.partitions = 2,
+			.estimatedItems = 1000};
 	EXPECT_FALSE(detail::hasEnoughGranularity(itemLimited, 2));
 	EXPECT_FALSE(detail::hasEnoughGranularity(byteLimited, 2));
+	EXPECT_FALSE(detail::hasEnoughGranularity(partitionLimited, 4));
 	EXPECT_TRUE(detail::hasEnoughGranularity(itemLimited, 1));
 
 	const auto openPartitionEstimate = ParallelWorkEstimate{.partitions = 0, .estimatedItems = 0, .minItemsPerWorker = 8};
@@ -1039,6 +1066,14 @@ TEST(ThreadPoolExceptionAndParallelTest, AdaptivePolicyDetailHelpersClassifyBoun
 	EXPECT_DOUBLE_EQ(detail::mergeRatio(ParallelExecutionTelemetry{.elapsedNs = 10, .mergeNs = 0}), 0.0);
 	EXPECT_FALSE(detail::hasReliableThroughput(ParallelAdaptiveStats{.samples = 2, .throughputEwma = 0.0},
 									  ParallelAdaptivePolicyConfig{}));
+
+	AdaptiveParallelPolicyState state;
+	state.record(ParallelExecutionTelemetry{
+			.estimate = ParallelWorkEstimate{},
+			.workerCount = 2,
+			.elapsedNs = 100,
+			.completed = true});
+	EXPECT_EQ(state.statsFor(ParallelWorkEstimate{}, 2).samples, 0U);
 }
 
 TEST(ThreadPoolExceptionAndParallelTest, AdaptivePolicyReturnsClampedBaselineForSingleWorkerLimits) {

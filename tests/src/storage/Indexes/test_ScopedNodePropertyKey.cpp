@@ -32,8 +32,10 @@ TEST(ScopedNodePropertyKeyTest, HandlesSeparatorTextInsideNames) {
 
 TEST(ScopedNodePropertyKeyTest, RejectsMalformedV2Keys) {
 	EXPECT_FALSE(decodeScopedNodePropertyKey("__zyx_scoped_node_property_v2__").has_value());
+	EXPECT_FALSE(decodeScopedNodePropertyKey("__zyx_scoped_node_property_v2__:id").has_value());
 	EXPECT_FALSE(decodeScopedNodePropertyKey("__zyx_scoped_node_property_v2__4Userid").has_value());
 	EXPECT_FALSE(decodeScopedNodePropertyKey("__zyx_scoped_node_property_v2__x:Userid").has_value());
+	EXPECT_FALSE(decodeScopedNodePropertyKey("__zyx_scoped_node_property_v2__4x:Userid").has_value());
 	EXPECT_FALSE(decodeScopedNodePropertyKey("__zyx_scoped_node_property_v2__0:id").has_value());
 	EXPECT_FALSE(decodeScopedNodePropertyKey("__zyx_scoped_node_property_v2__4:User").has_value());
 	EXPECT_FALSE(decodeScopedNodePropertyKey("__zyx_scoped_node_property_v2__99:Userid").has_value());

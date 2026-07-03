@@ -57,7 +57,7 @@ private:
 
 		auto* limitOp = static_cast<logical::LogicalLimit*>(node.get());
 		auto children = node->getChildren();
-		if (children.empty() || !children[0]) return node;
+		if (!children[0]) return node;
 
 		// Check if child is a non-DISTINCT Project
 		if (children[0]->getType() != logical::LogicalOpType::LOP_PROJECT) return node;

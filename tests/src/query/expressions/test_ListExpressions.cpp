@@ -494,6 +494,15 @@ TEST_F(ExpressionsTest, ListComprehensionExpression_CompleteCoverage) {
 		EXPECT_EQ(cloned->toString(), "reduce(total = [1, 2, 3])");
 	}
 
+	// Test clone preserves an absent list expression for malformed/partial IR nodes
+	{
+		ListComprehensionExpression original("x", nullptr, nullptr, nullptr, ListComprehensionExpression::ComprehensionType::COMP_FILTER);
+		auto cloned = original.clone();
+		auto *typedClone = dynamic_cast<ListComprehensionExpression *>(cloned.get());
+		ASSERT_NE(typedClone, nullptr);
+		EXPECT_EQ(typedClone->getListExpr(), nullptr);
+	}
+
 	// Test getters
 	{
 		auto listExpr = createList({1, 2, 3});
@@ -741,4 +750,3 @@ TEST_F(ExpressionsTest, ListComprehension_NonListValue_Throws) {
 	ExpressionEvaluator evaluator(*context_);
 	EXPECT_THROW((void)expr.accept(evaluator), ExpressionEvaluationException);
 }
-

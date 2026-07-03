@@ -214,6 +214,16 @@ TEST_F(SystemConfigManagerTest, CompactionConfigApplied) {
 			<< "Compaction configuration was not applied correctly.";
 }
 
+TEST_F(SystemConfigManagerTest, CompactionConfigCanDisableEnabledStorage) {
+	auto storage = database->getStorage();
+	storage->setCompactionEnabled(true);
+	stateManager->set<bool>(keys::SYS_CONFIG, keys::Config::STORAGE_COMPACTION_ENABLED, false);
+
+	configManager->loadAndApplyAll();
+
+	EXPECT_FALSE(storage->isCompactionEnabled());
+}
+
 // Test 9: Verify compaction config doesn't change when already set
 TEST_F(SystemConfigManagerTest, CompactionNoChangeWhenSame) {
 	// Arrange: Get the current status

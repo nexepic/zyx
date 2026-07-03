@@ -20,12 +20,22 @@
 
 #include "graph/vector/VectorIndexRegistry.hpp"
 #include <cstring>
+#include <stdexcept>
+#include <string>
 #include "graph/storage/data/BlobManager.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 #include "graph/storage/state/SystemStateManager.hpp"
 #include "graph/utils/Serializer.hpp"
 
 namespace graph::vector {
+	namespace {
+		int64_t requireBlobHeadId(const std::vector<Blob> &blobs, const char *operation) {
+			if (blobs.empty()) { // ZYX_COV_EXCL_LINE: BlobChainManager always creates a head blob; fail fast if the storage contract changes.
+				throw std::runtime_error(std::string(operation) + " did not create a blob head");
+			}
+			return blobs.front().getId();
+		}
+	} // namespace
 
 	VectorIndexRegistry::VectorIndexRegistry(std::shared_ptr<storage::DataManager> dm,
 											 std::shared_ptr<storage::state::SystemStateManager> sm,
@@ -134,15 +144,12 @@ namespace graph::vector {
 			(void) dataManager_->getBlobManager()->updateBlobChain(ids[0], nodeId, 0, data);
 		} else {
 			auto blobs = dataManager_->getBlobManager()->createBlobChain(nodeId, 0, data);
-			if (!blobs.empty()) {
-				// FIX: Capture new root ID
-				int64_t newRoot = mappingTree_->insert(config_.mappingIndexId, PropertyValue(nodeId), blobs[0].getId());
-
-				// Check and update if root changed
-				if (newRoot != config_.mappingIndexId) {
-					config_.mappingIndexId = newRoot;
-					saveConfig(); // Persist new root ID
-				}
+			const int64_t blobHeadId = requireBlobHeadId(blobs, "vector mapping");
+			// Capture and persist root changes when the mapping B+Tree splits.
+			int64_t newRoot = mappingTree_->insert(config_.mappingIndexId, PropertyValue(nodeId), blobHeadId);
+			if (newRoot != config_.mappingIndexId) {
+				config_.mappingIndexId = newRoot;
+				saveConfig();
 			}
 		}
 
@@ -155,7 +162,7 @@ namespace graph::vector {
 	int64_t VectorIndexRegistry::saveRawVector(const std::vector<BFloat16> &vec) const {
 		std::string data(reinterpret_cast<const char *>(vec.data()), vec.size() * sizeof(BFloat16));
 		auto blobs = dataManager_->getBlobManager()->createBlobChain(0, 0, data);
-		return blobs.empty() ? 0 : blobs[0].getId();
+		return requireBlobHeadId(blobs, "raw vector");
 	}
 
 	std::vector<BFloat16> VectorIndexRegistry::loadRawVector(int64_t blobId) const {
@@ -171,7 +178,7 @@ namespace graph::vector {
 	int64_t VectorIndexRegistry::savePQCodes(const std::vector<uint8_t> &codes) const {
 		std::string data(reinterpret_cast<const char *>(codes.data()), codes.size());
 		auto blobs = dataManager_->getBlobManager()->createBlobChain(0, 0, data);
-		return blobs.empty() ? 0 : blobs[0].getId();
+		return requireBlobHeadId(blobs, "PQ codes");
 	}
 
 	std::vector<uint8_t> VectorIndexRegistry::loadPQCodes(int64_t blobId) const {
@@ -194,7 +201,7 @@ namespace graph::vector {
 			std::memcpy(ptr, neighbors.data(), neighbors.size() * sizeof(int64_t));
 
 		auto blobs = dataManager_->getBlobManager()->createBlobChain(0, 0, data);
-		return blobs.empty() ? 0 : blobs[0].getId();
+		return requireBlobHeadId(blobs, "adjacency list");
 	}
 
 	std::vector<int64_t> VectorIndexRegistry::loadAdjacency(int64_t blobId) const {

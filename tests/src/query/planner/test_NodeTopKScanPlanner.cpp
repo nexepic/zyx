@@ -3,6 +3,8 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
+#include <utility>
+#include <vector>
 
 #include "graph/core/Database.hpp"
 #include "graph/query/expressions/Expression.hpp"
@@ -27,6 +29,29 @@ namespace {
 std::shared_ptr<expressions::Expression> property(std::string variable, std::string key) {
 	return std::make_shared<expressions::VariableReferenceExpression>(std::move(variable), std::move(key));
 }
+
+class ProjectWithExtraChildren final : public LogicalProject {
+public:
+	ProjectWithExtraChildren(std::vector<LogicalProjectItem> items) :
+		LogicalProject(nullptr, std::move(items), false) {}
+
+	[[nodiscard]] std::vector<LogicalOperator *> getChildren() const override { return {nullptr, nullptr}; }
+};
+
+class LimitWithExtraChildren final : public LogicalLimit {
+public:
+	explicit LimitWithExtraChildren(int64_t limit) : LogicalLimit(nullptr, limit) {}
+
+	[[nodiscard]] std::vector<LogicalOperator *> getChildren() const override { return {nullptr, nullptr}; }
+};
+
+class SortWithExtraChildren final : public LogicalSort {
+public:
+	explicit SortWithExtraChildren(std::vector<LogicalSortItem> items) :
+		LogicalSort(nullptr, std::move(items)) {}
+
+	[[nodiscard]] std::vector<LogicalOperator *> getChildren() const override { return {nullptr, nullptr}; }
+};
 
 std::unique_ptr<LogicalProject> makeTopKProject(std::unique_ptr<LogicalNodeScan> scan = nullptr,
                                                 bool ascending = false,
@@ -457,4 +482,22 @@ TEST(NodeTopKScanPlannerTest, RejectsNullLogicalChildren) {
 	auto limit = std::make_unique<LogicalLimit>(std::move(nullSort), 1);
 	LogicalProject nullSortChild(std::move(limit), projectItems);
 	EXPECT_FALSE(tryBuildNodeTopKScanPlan(nullSortChild).has_value());
+}
+
+TEST(NodeTopKScanPlannerTest, RejectsMalformedLogicalChildArity) {
+	std::vector<LogicalProjectItem> projectItems;
+	projectItems.emplace_back(property("u", "id"), "id");
+	ProjectWithExtraChildren extraProjectChildren(projectItems);
+	EXPECT_FALSE(tryBuildNodeTopKScanPlan(extraProjectChildren).has_value());
+
+	auto extraLimit = std::make_unique<LimitWithExtraChildren>(1);
+	LogicalProject projectWithBadLimit(std::move(extraLimit), projectItems);
+	EXPECT_FALSE(tryBuildNodeTopKScanPlan(projectWithBadLimit).has_value());
+
+	std::vector<LogicalSortItem> sortItems;
+	sortItems.emplace_back(property("u", "score"), false);
+	auto extraSort = std::make_unique<SortWithExtraChildren>(sortItems);
+	auto limit = std::make_unique<LogicalLimit>(std::move(extraSort), 1);
+	LogicalProject projectWithBadSort(std::move(limit), projectItems);
+	EXPECT_FALSE(tryBuildNodeTopKScanPlan(projectWithBadSort).has_value());
 }

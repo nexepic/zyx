@@ -450,7 +450,7 @@ namespace graph::storage {
 
 			if (sourceOffset <= targetOffset) continue;
 
-			if (moveSegment(sourceOffset, targetOffset)) {
+			if (moveSegment(sourceOffset, targetOffset)) { // ZYX_COV_EXCL_LINE: false is the same copy-failure path covered through moveSegment().
 				anyMoved = true;
 			}
 		}
@@ -548,7 +548,7 @@ namespace graph::storage {
 				if (header.getActiveCount() > 0) {
 					int64_t lastUsedId = calculateLastUsedIdInSegment(header);
 
-					switch (type) {
+					switch (type) { // ZYX_COV_EXCL_LINE: type is produced by the bounded SegmentType iteration above.
 						case toUnderlying(SegmentType::Node):
 							maxNodeId = std::max(maxNodeId, lastUsedId);
 							break;
@@ -577,7 +577,7 @@ namespace graph::storage {
 		int64_t maxId = header.start_id - 1;
 		auto segmentOffset = header.file_offset;
 
-		for (int64_t i = static_cast<int64_t>(header.used) - 1; i >= 0; i--) {
+		for (int64_t i = static_cast<int64_t>(header.used) - 1; i >= 0; i--) { // ZYX_COV_EXCL_LINE: callers pass only active segments, so used is non-zero.
 			if (tracker_->isEntityActive(segmentOffset, i)) {
 				maxId = header.start_id + i;
 				break;

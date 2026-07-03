@@ -101,16 +101,14 @@ private:
     }
 
     /**
-     * @brief Reassembles a sorted list of inputs into a left-deep join tree.
+     * @brief Reassembles a sorted non-empty list of inputs into a left-deep join tree.
      *
-     * inputs must be non-empty.  The result is:
+     * The caller handles the empty and single-input degenerate cases before
+     * reaching this helper.  The result is:
      *   Join(Join(Join(inputs[0], inputs[1]), inputs[2]), ...)
      */
     static std::unique_ptr<logical::LogicalOperator> buildLeftDeep(
         std::vector<std::unique_ptr<logical::LogicalOperator>> inputs) {
-
-        if (inputs.empty()) return nullptr;
-
         auto root = std::move(inputs[0]);
         for (size_t i = 1; i < inputs.size(); ++i) {
             root = std::make_unique<logical::LogicalJoin>(

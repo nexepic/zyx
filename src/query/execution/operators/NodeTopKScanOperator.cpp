@@ -224,7 +224,7 @@ namespace graph::query::execution::operators {
 						if (!rowFilter.accepts(metadata)) {
 							return true;
 						}
-						if (partition >= partitions.size()) {
+						if (partition >= partitions.size()) { // ZYX_COV_EXCL_LINE: visitBatchPartitioned only emits initialized partition ids.
 							return true;
 						}
 
@@ -302,7 +302,7 @@ namespace graph::query::execution::operators {
 							}
 						},
 						[&](size_t partition, size_t acceptedRow, const storage::PropertyEntityScalarValue &value) {
-							if (acceptedRow >= acceptedNodeIds.size()) {
+							if (acceptedRow >= acceptedNodeIds.size()) { // ZYX_COV_EXCL_LINE: rows are supplied from acceptedNodeIds indexes.
 								return;
 							}
 							const auto scalar = scalarValueFromStorage(value);

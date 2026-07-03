@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <optional>
 #include <string>
 #include <vector>
 #include "../PhysicalOperator.hpp"
@@ -43,11 +44,7 @@ namespace graph::query::execution::operators {
 			if (child_)
 				child_->open();
 
-			// Reset state
-			currentChildBatch_ = std::nullopt;
-			childRecordIndex_ = 0;
-			listIndex_ = 0;
-			currentList_.clear();
+			resetIterationState();
 		}
 
 		std::optional<RecordBatch> next() override {
@@ -59,16 +56,8 @@ namespace graph::query::execution::operators {
 			// UNWIND [1,2] AS x
 			// ====================================================
 			if (!child_) {
-				// For expression-based UNWIND without child, evaluate against empty record
-				if (listExpr_ && currentList_.empty() && listIndex_ == 0) {
-					Record emptyRecord;
-					PropertyValue result = graph::query::expressions::ExpressionEvaluationHelper::evaluate(
-						listExpr_.get(), emptyRecord);
-					if (result.getType() == PropertyType::LIST) {
-						currentList_ = result.getList();
-					}
-				} else if (!listExpr_ && currentList_.empty() && listIndex_ == 0) {
-					currentList_ = list_;
+				if (needsEval_) {
+					loadSourceList();
 				}
 
 				if (listIndex_ >= currentList_.size())
@@ -100,6 +89,14 @@ namespace graph::query::execution::operators {
 						return std::nullopt;
 					}
 
+					if (currentChildBatch_->empty()) {
+						currentList_.clear();
+						childRecordIndex_ = 0;
+						listIndex_ = 0;
+						needsEval_ = true;
+						continue;
+					}
+
 					// Reset counters for the new batch
 					childRecordIndex_ = 0;
 					listIndex_ = 0;
@@ -110,20 +107,8 @@ namespace graph::query::execution::operators {
 				const auto &inputRecord = (*currentChildBatch_)[childRecordIndex_];
 
 				// 3. Evaluate expression per input record if expression-based
-				if (needsEval_ || listIndex_ == 0) {
-					if (listExpr_) {
-						PropertyValue result = graph::query::expressions::ExpressionEvaluationHelper::evaluate(
-							listExpr_.get(), inputRecord);
-						if (result.getType() == PropertyType::LIST) {
-							currentList_ = result.getList();
-						} else {
-							// Non-list expression: treat as single-element list
-							currentList_ = {result};
-						}
-					} else if (currentList_.empty()) {
-						currentList_ = list_;
-					}
-					needsEval_ = false;
+				if (needsEval_) {
+					loadPipelineList(inputRecord);
 				}
 
 				// 4. Expand list for this record
@@ -185,6 +170,42 @@ namespace graph::query::execution::operators {
 		size_t childRecordIndex_ = 0; // Index in the input batch
 		size_t listIndex_ = 0; // Index in the UNWIND list
 		bool needsEval_ = true; // Whether expression needs re-evaluation
+
+		void resetIterationState() {
+			currentChildBatch_ = std::nullopt;
+			childRecordIndex_ = 0;
+			listIndex_ = 0;
+			currentList_.clear();
+			needsEval_ = true;
+		}
+
+		void loadSourceList() {
+			if (listExpr_) {
+				Record emptyRecord;
+				PropertyValue result = graph::query::expressions::ExpressionEvaluationHelper::evaluate(
+					listExpr_.get(), emptyRecord);
+				currentList_ = result.getType() == PropertyType::LIST ? result.getList() : std::vector<PropertyValue>{};
+			} else {
+				currentList_ = list_;
+			}
+			needsEval_ = false;
+		}
+
+		void loadPipelineList(const Record &inputRecord) {
+			if (listExpr_) {
+				PropertyValue result = graph::query::expressions::ExpressionEvaluationHelper::evaluate(
+					listExpr_.get(), inputRecord);
+				if (result.getType() == PropertyType::LIST) {
+					currentList_ = result.getList();
+				} else {
+					// Existing pipeline semantics treat scalar expressions as a single UNWIND item.
+					currentList_ = {result};
+				}
+			} else if (currentList_.empty()) {
+				currentList_ = list_;
+			}
+			needsEval_ = false;
+		}
 	};
 
 } // namespace graph::query::execution::operators

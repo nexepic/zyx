@@ -531,3 +531,28 @@ TEST_F(NodeTopKScanOperatorTest, EmptyCandidateSetUsesMetadataPathAndReturnsNoRo
 	op.open();
 	EXPECT_FALSE(op.next().has_value());
 }
+
+TEST_F(NodeTopKScanOperatorTest, NextBeforeOpenTreatsCandidateSetAsEmpty) {
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "u";
+	config.labels = {"Person"};
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+
+	NodeTopKScanOperator op(dm, im, config, requirements, {}, {{"score", "score"}}, "score", false, 5);
+	EXPECT_FALSE(op.next().has_value());
+	op.close();
+	EXPECT_FALSE(op.next().has_value());
+}
+
+TEST_F(NodeTopKScanOperatorTest, NextBeforeOpenHandlesMissingStorage) {
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "u";
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+
+	NodeTopKScanOperator op(nullptr, nullptr, config, requirements, {}, {{"score", "score"}}, "score", false, 5);
+	EXPECT_FALSE(op.next().has_value());
+}

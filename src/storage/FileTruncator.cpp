@@ -28,11 +28,7 @@ namespace graph::storage {
 
 		std::ranges::sort(truncatableSegments);
 
-		uint64_t newFileSize = truncatableSegments.front();
-
-		if (newFileSize < FILE_HEADER_SIZE) {
-			newFileSize = FILE_HEADER_SIZE;
-		}
+		uint64_t newFileSize = std::max<uint64_t>(truncatableSegments.front(), FILE_HEADER_SIZE);
 
 		io_->flushStream();
 

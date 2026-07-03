@@ -29,11 +29,6 @@ std::shared_ptr<Expression> litInt(int64_t value) {
 	return std::make_shared<LiteralExpression>(value);
 }
 
-std::shared_ptr<Expression> varRef(const std::string &name) {
-	return std::shared_ptr<Expression>(
-		std::make_unique<VariableReferenceExpression>(name).release());
-}
-
 std::shared_ptr<Expression> propRef(const std::string &var, const std::string &prop) {
 	return std::shared_ptr<Expression>(
 		std::make_unique<VariableReferenceExpression>(var, prop).release());
@@ -157,6 +152,29 @@ TEST_F(PredSimplShortCircuitTest, NotOfIntLiteralPreserved) {
 	EXPECT_EQ(result->getType(), LogicalOpType::LOP_FILTER);
 	auto out = boolFromFilter(result.get());
 	EXPECT_EQ(out->getExpressionType(), ExpressionType::UNARY_OP);
+}
+
+TEST_F(PredSimplShortCircuitTest, NotWithNullOperandIsPreserved) {
+	auto scan = std::make_unique<LogicalNodeScan>("n");
+	auto pred = std::shared_ptr<Expression>(
+		std::make_unique<UnaryOpExpression>(UnaryOperatorType::UOP_NOT, nullptr).release());
+	auto filter = std::make_unique<LogicalFilter>(std::move(scan), pred);
+
+	auto result = rule.apply(std::move(filter), stats);
+	ASSERT_NE(result, nullptr);
+	EXPECT_EQ(result->getType(), LogicalOpType::LOP_FILTER);
+}
+
+TEST_F(PredSimplShortCircuitTest, NotOfUnaryMinusIsPreserved) {
+	auto scan = std::make_unique<LogicalNodeScan>("n");
+	auto pred = unaryExpr(
+		UnaryOperatorType::UOP_NOT,
+		unaryExpr(UnaryOperatorType::UOP_MINUS, propRef("n", "age")));
+	auto filter = std::make_unique<LogicalFilter>(std::move(scan), pred);
+
+	auto result = rule.apply(std::move(filter), stats);
+	ASSERT_NE(result, nullptr);
+	EXPECT_EQ(result->getType(), LogicalOpType::LOP_FILTER);
 }
 
 // AND true LHS + null RHS: `isBoolLiteral(lhs, true) && lhsBool && rhs`

@@ -164,6 +164,12 @@ TEST_F(CostModelTest, PropertyIndexCostWithStats) {
     EXPECT_DOUBLE_EQ(cost, 100.0 * (1.0 / 50.0) * CostModel::INDEX_LOOKUP_COST);
 }
 
+TEST_F(CostModelTest, PropertyIndexCostUsesRangeSelectivityForNonEquality) {
+    auto stats = makeTestStats();
+    double cost = CostModel::propertyIndexCost(stats, "Person", "age", false);
+    EXPECT_DOUBLE_EQ(cost, 100.0 * PropertyStatistics::rangeSelectivity() * CostModel::INDEX_LOOKUP_COST);
+}
+
 TEST_F(CostModelTest, PropertyIndexCostWithoutStats) {
     auto stats = makeTestStats();
     double cost = CostModel::propertyIndexCost(stats, "Company", "name", true);
@@ -633,6 +639,36 @@ TEST_F(OptimizerTest, AddCustomRule) {
     EXPECT_EQ(customRule->getName(), "PredicateSimplificationRule");
     opt.addRule(std::move(customRule));
     // Should not crash
+}
+
+TEST_F(OptimizerTest, StopsAfterMaxIterationsWhenRulesKeepChangingPlan) {
+    class WrappingRule final : public OptimizerRule {
+    public:
+        [[nodiscard]] std::string getName() const override { return "WrappingRule"; }
+
+        std::unique_ptr<LogicalOperator> apply(std::unique_ptr<LogicalOperator> plan,
+                                               const Statistics &) override {
+            std::vector<LogicalProjectItem> items;
+            items.emplace_back(makeVarRef("n"), "iter_" + std::to_string(counter_++));
+            return std::make_unique<LogicalProject>(std::move(plan), std::move(items));
+        }
+
+        [[nodiscard]] int applications() const { return counter_; }
+
+    private:
+        int counter_ = 0;
+    };
+
+    auto rule = std::make_unique<WrappingRule>();
+    auto *rulePtr = rule.get();
+    Optimizer opt(nullptr);
+    opt.addRule(std::move(rule));
+
+    auto scan = std::make_unique<LogicalNodeScan>("n");
+    auto result = opt.optimize(std::move(scan), makeTestStats());
+
+    ASSERT_NE(result, nullptr);
+    EXPECT_EQ(rulePtr->applications(), Optimizer::MAX_ITERATIONS);
 }
 
 TEST_F(OptimizerTest, MaxIterationsConstant) {

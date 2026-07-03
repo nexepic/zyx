@@ -247,6 +247,19 @@ TEST(SortEliminationRuleTest, NullExpressionNotEliminated) {
 	EXPECT_EQ(result->getType(), LogicalOpType::LOP_SORT);
 }
 
+TEST(SortEliminationRuleTest, NullChildNotEliminated) {
+	rules::SortEliminationRule rule;
+	Statistics stats;
+
+	std::vector<LogicalSortItem> sortItems;
+	sortItems.emplace_back(propRef("n", "age"), true);
+	auto sort = std::make_unique<LogicalSort>(nullptr, std::move(sortItems));
+
+	auto result = rule.apply(std::move(sort), stats);
+	ASSERT_NE(result, nullptr);
+	EXPECT_EQ(result->getType(), LogicalOpType::LOP_SORT);
+}
+
 TEST(SortEliminationRuleTest, NonPropertyAccessNotEliminated) {
 	// Sort on a non-property expression (e.g., variable ref) → not eliminated
 	rules::SortEliminationRule rule;
