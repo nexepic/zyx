@@ -91,13 +91,3 @@ graph TD
 ### WAL 组提交
 
 多个事务提交被批量到一个 `fsync` 调用，将最昂贵的 I/O 操作从每事务降到每组。默认组窗口为 1 毫秒。
-
-## 源码定位
-
-| 组件 | 路径 |
-|------|------|
-| Optimizer | `src/query/optimizer/Optimizer.cpp` |
-| 优化规则 | `include/graph/query/optimizer/Optimizer.hpp` |
-| PhysicalPlanConverter | `src/query/planner/PhysicalPlanConverter.cpp` |
-| StorageIO | `include/graph/storage/StorageIO.hpp` |
-| PageBufferPool | `include/graph/storage/PageBufferPool.hpp` |

@@ -170,12 +170,3 @@ graph TD
 5. After replay, perform a checkpoint to truncate the WAL.
 
 The WAL file is created lazily — only when the first write transaction actually needs it. Read-only workloads never create a WAL file.
-
-## Source Locations
-
-| Component | Path |
-|-----------|------|
-| WALManager | `include/graph/storage/wal/WALManager.hpp` |
-| WALRecord | `include/graph/storage/wal/WALRecord.hpp` |
-| WALRecovery | `src/storage/wal/WALRecovery.cpp` |
-| Database (WAL init) | `src/core/Database.cpp` |

@@ -68,11 +68,3 @@ ZYX 在段内使用**首个可用**（first-available）槽位分配策略：
 - **恢复**：WAL 重放通过重新应用已提交的写入来重建槽位状态
 
 有关完整分配管道的详细信息，请参阅[段分配](segment-allocation)。
-
-## 源码位置
-
-| 组件 | 路径 |
-|------|------|
-| 段头 | `include/graph/storage/StorageHeaders.hpp` |
-| SegmentAllocator | `include/graph/storage/SegmentAllocator.hpp` |
-| IDAllocator | `include/graph/core/IDAllocator.hpp` |

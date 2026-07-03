@@ -136,12 +136,3 @@ graph TD
 1. **ExecMode** — 查询引擎在只读模式下拒绝写操作。
 2. **QueryPlan 标志** — 计划本身标记为只读。
 3. **DataManager 守卫** — 数据层拒绝来自只读事务的任何写调用。
-
-## 源码定位
-
-| 组件 | 路径 |
-|------|------|
-| Transaction | `include/graph/core/Transaction.hpp` |
-| TransactionManager | `include/graph/core/TransactionManager.hpp` |
-| CommittedSnapshot | `include/graph/storage/SnapshotManager.hpp` |
-| PersistenceManager | `include/graph/storage/PersistenceManager.hpp` |

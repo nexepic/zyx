@@ -235,16 +235,6 @@ StateManager 维护一个内存中的 `stateKeyToIdMap`，将字符串键映射�
 
 创建新的 State chain 时映射被更新。删除 State 时条目被移除。这使得 `findByKey()` 查找可以在 O(1) 时间内完成，无需扫描整个存储。
 
-## 源码位置
-
-| 组件 | 头文件 |
-|---|---|
-| State 实体 | `include/graph/core/State.hpp` |
-| StateChainManager | `include/graph/core/StateChainManager.hpp` |
-| SystemStateManager | `include/graph/storage/state/SystemStateManager.hpp` |
-| StateManager | `include/graph/storage/data/StateManager.hpp` |
-| 压缩工具 | `include/graph/utils/CompressUtils.hpp` |
-
 ## 相关文档
 
 - [存储系统](/zh/docs/zyx/architecture/storage) - 持久化存储与段格式

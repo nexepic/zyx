@@ -438,16 +438,6 @@ dist(A, B) = -(dot(A, B) / (||A|| * ||B||))
 3. 仅存储 PQ 码，需要时从外部存储加载原始向量
 :::
 
-## 源码定位
-
-| 组件 | 头文件 | 实现 |
-|------|--------|------|
-| DiskANN 索引 | `include/graph/vector/index/DiskANNIndex.hpp` | `src/vector/index/DiskANNIndex.cpp` |
-| PQ 量化器 | `include/graph/vector/quantization/NativeProductQuantizer.hpp` | -- |
-| 向量度量 | `include/graph/vector/core/VectorMetric.hpp` | -- |
-| BFloat16 | `include/graph/vector/core/BFloat16.hpp` | -- |
-| 索引配置 | `include/graph/vector/VectorIndexConfig.hpp` | -- |
-
 ## 另见
 
 - [Product Quantization](/zh/docs/zyx/algorithms/product-quantization) - PQ 算法详情

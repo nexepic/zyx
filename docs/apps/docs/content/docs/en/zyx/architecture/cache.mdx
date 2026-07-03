@@ -107,12 +107,3 @@ This double-buffer ensures that read operations can still serve data from the fl
 ### Auto-Flush
 
 `PersistenceManager` monitors the total dirty entity count across all types. When it exceeds a configurable threshold (default 10,000), it invokes a registered callback to trigger an automatic flush. This prevents unbounded memory growth during long-running write transactions.
-
-## Source Locations
-
-| Component | Path |
-|-----------|------|
-| PageBufferPool | `include/graph/storage/PageBufferPool.hpp` |
-| PersistenceManager | `include/graph/storage/PersistenceManager.hpp` |
-| DirtyEntityRegistry | `include/graph/storage/DirtyEntityRegistry.hpp` |
-| VectorIndexRegistry | `include/graph/vector/VectorIndexRegistry.hpp` |

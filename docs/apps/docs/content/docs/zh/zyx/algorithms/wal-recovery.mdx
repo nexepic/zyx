@@ -269,19 +269,6 @@ Checkpoint 是安全的，因为在执行时，所有已提交的事务数据已
 - **CRC32 完整性**：每条记录都进行校验和计算；损坏的记录使扫描在最后一个有效点停止
 - **无 undo 阶段**：与传统的 ARIES 风格恢复不同，ZYX 不执行 undo 阶段。未提交的事务在去重步骤中被简单丢弃，因为单写者模型确保未提交的变更对读不可见
 
-## 源码位置
-
-| 组件 | 文件 |
-|-----------|------|
-| WALManager（写入、读取、checkpoint） | `src/storage/wal/WALManager.cpp` |
-| WAL 记录序列化与 CRC32 | `src/storage/wal/WALRecord.cpp` |
-| WAL 恢复（4 阶段算法） | `src/storage/wal/WALRecovery.cpp` |
-| WAL 记录类型定义 | `include/graph/storage/wal/WALRecord.hpp` |
-| WALManager 类声明 | `include/graph/storage/wal/WALManager.hpp` |
-| WALRecovery 类声明 | `include/graph/storage/wal/WALRecovery.hpp` |
-| 延迟 WAL 创建逻辑 | `src/core/Database.cpp` |
-| 事务提交与组提交 | `src/core/TransactionManager.cpp` |
-
 ## 另见
 
 - [WAL 实现](/zh/docs/zyx/architecture/wal) -- WAL 架构详情

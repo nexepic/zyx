@@ -59,6 +59,14 @@ ZYX 在索引、存储、查询处理、向量搜索和并发控制等方面采�
 - **[K-Means 聚类](kmeans)** — Lloyd 算法，用于 PQ 码本训练
 - **[DiskANN](diskann)** — 可导航小世界图，用于近似最近邻搜索
 
+### 图分析
+
+用于分析图结构和拓扑的算法：
+
+- **[社区检测](community-detection)** — Leiden 算法，通过层级提升和精化发现社区结构
+- **[PageRank](https://en.wikipedia.org/wiki/PageRank)** — 迭代式中心性算法（通过 GDS）
+- **[最短路径](https://en.wikipedia.org/wiki/Shortest_path_problem)** — Dijkstra 加权最短路径算法（通过 GDS）
+
 ## 设计原则
 
 ```mermaid
@@ -98,6 +106,7 @@ graph TD
 | Property Index | Range query | O(log n + k) |
 | Relationship Traversal | Get outgoing/incoming edges | O(k) |
 | LRU Cache | Get / Put | O(1) |
+| 社区检测 | Leiden 每层 | O(n + m) × 迭代次数 |
 | DiskANN Search | K-nearest neighbors | O(beamWidth × maxDegree × dim) |
 | PQ Distance | Approximate distance | O(numSubspaces) |
 

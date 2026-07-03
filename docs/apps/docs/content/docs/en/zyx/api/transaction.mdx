@@ -167,11 +167,3 @@ Methods that can throw:
 | `execute()` | Parse errors (returned as failed `Result`, not thrown) |
 
 Query execution errors are captured in the `Result` — check `result.isSuccess()` and `result.getError()` rather than relying on exceptions.
-
-## Source Locations
-
-| Component | Path |
-|-----------|------|
-| Transaction | `include/graph/core/Transaction.hpp` |
-| TransactionManager | `include/graph/core/TransactionManager.hpp` |
-| Database API | `src/api/DatabaseImpl.cpp` |

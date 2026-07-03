@@ -269,19 +269,6 @@ Checkpointing is safe because by the time it runs, all committed transaction dat
 - **CRC32 integrity**: Every record is checksummed; corrupted records halt scanning at the last valid point
 - **No undo phase**: Unlike traditional ARIES-style recovery, ZYX does not perform an undo phase. Uncommitted transactions are simply discarded during the deduplication step, since the single-writer model ensures that uncommitted changes are never visible to readers
 
-## Source Locations
-
-| Component | File |
-|-----------|------|
-| WALManager (write, read, checkpoint) | `src/storage/wal/WALManager.cpp` |
-| WAL record serialization and CRC32 | `src/storage/wal/WALRecord.cpp` |
-| WAL recovery (4-phase algorithm) | `src/storage/wal/WALRecovery.cpp` |
-| WAL record type definitions | `include/graph/storage/wal/WALRecord.hpp` |
-| WALManager class declaration | `include/graph/storage/wal/WALManager.hpp` |
-| WALRecovery class declaration | `include/graph/storage/wal/WALRecovery.hpp` |
-| Deferred WAL creation logic | `src/core/Database.cpp` |
-| Transaction commit with group commit | `src/core/TransactionManager.cpp` |
-
 ## See Also
 
 - [WAL Implementation](/en/docs/zyx/architecture/wal) -- WAL architecture details

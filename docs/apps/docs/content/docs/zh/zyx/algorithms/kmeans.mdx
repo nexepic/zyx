@@ -293,12 +293,6 @@ K-Means 在 ZYX 中的唯一用途是训练 PQ 码本。每个子空间获得独
 - **球形簇假设**：假设各向同性（圆形）的簇形状
 - **离群值敏感**：均值对离群值敏感，可能将质心拉离簇中心
 
-## 源码位置
-
-- **KMeans**: `include/graph/vector/quantization/KMeans.hpp`
-- **VectorMetric** (L2 距离): `include/graph/vector/core/VectorMetric.hpp`
-- **ProductQuantizer** (调用方): `include/graph/vector/quantization/NativeProductQuantizer.hpp`
-
 ## 另见
 
 - [Product Quantization](/zh/docs/zyx/algorithms/product-quantization) - 使用 K-Means 的向量压缩

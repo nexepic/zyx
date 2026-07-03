@@ -139,15 +139,3 @@ After a successful compaction, `FileStorage` performs these cleanup steps:
 2. **Reset ID allocators** — Each `IDAllocator::resetAfterCompaction()` clears hot/cold vectors so they lazy-load from the new segment state
 3. **Rebuild segment indexes** — `SegmentIndexManager::buildSegmentIndexes()` reconstructs the entity-ID-to-segment mapping
 4. **Persist headers** — Segment headers are re-persisted, CRCs are recalculated, and the file header is flushed
-
-## Source Locations
-
-| Component | Path |
-|-----------|------|
-| SpaceManager | `include/graph/storage/SpaceManager.hpp` |
-| SegmentCompactor | `include/graph/storage/SegmentCompactor.hpp` |
-| EntityReferenceUpdater | `include/graph/storage/EntityReferenceUpdater.hpp` |
-| DeletionManager | `include/graph/storage/DeletionManager.hpp` |
-| FileTruncator | `include/graph/storage/FileTruncator.hpp` |
-| SystemStateKeys | `include/graph/storage/state/SystemStateKeys.hpp` |
-| FileStorage (trigger) | `src/storage/FileStorage.cpp` |

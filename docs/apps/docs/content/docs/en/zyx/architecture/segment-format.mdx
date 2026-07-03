@@ -177,11 +177,3 @@ graph TD
 ## Checksums
 
 Every segment carries a `segment_crc` field computed as CRC32 over the segment data (excluding the checksum field itself). During `FileStorage::verifyIntegrity()`, all segment checksums are validated to detect file corruption.
-
-## Source Locations
-
-| Component | Path |
-|-----------|------|
-| StorageHeaders | `include/graph/storage/StorageHeaders.hpp` |
-| SegmentTracker | `include/graph/storage/SegmentTracker.hpp` |
-| SegmentAllocator | `include/graph/storage/SegmentAllocator.hpp` |

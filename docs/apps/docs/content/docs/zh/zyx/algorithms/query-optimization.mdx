@@ -360,25 +360,6 @@ DISTINCT 检查至关重要：如果 project 是 `DISTINCT`，它可以减少行
 3. **统计信息时效性**：统计信息仅在显式失效时重新收集。过期统计信息产生次优但正确的计划。
 4. **固定点收敛**：编写新规则时，确保它们是幂等的（同一条规则应用两次产生相同结果），以保证收敛。
 
-## 源码定位
-
-| 组件 | 文件 |
-|------|------|
-| 优化器引擎 | `include/graph/query/optimizer/Optimizer.hpp` |
-| 规则注册 | `src/query/optimizer/Optimizer.cpp` |
-| 规则接口 | `include/graph/query/optimizer/OptimizerRule.hpp` |
-| FilterPushdown | `include/graph/query/optimizer/rules/FilterPushdownRule.hpp` |
-| LimitPushdown | `include/graph/query/optimizer/rules/LimitPushdownRule.hpp` |
-| IndexPushdown（遗留） | `include/graph/query/optimizer/rules/IndexPushdownRule.hpp` |
-| ProjectionPushdown | `include/graph/query/optimizer/rules/ProjectionPushdownRule.hpp` |
-| JoinReorder | `include/graph/query/optimizer/rules/JoinReorderRule.hpp` |
-| EnhancedIndexSelection | `include/graph/query/optimizer/rules/EnhancedIndexSelectionRule.hpp` |
-| PredicateSimplification | `include/graph/query/optimizer/rules/PredicateSimplificationRule.hpp` |
-| SortElimination | `include/graph/query/optimizer/rules/SortEliminationRule.hpp` |
-| Statistics | `include/graph/query/optimizer/Statistics.hpp` |
-| StatisticsCollector | `include/graph/query/optimizer/StatisticsCollector.hpp` |
-| CostModel | `include/graph/query/optimizer/CostModel.hpp` |
-
 ## 另见
 
 - [查询引擎](/zh/docs/zyx/architecture/query-engine) - 查询执行流水线

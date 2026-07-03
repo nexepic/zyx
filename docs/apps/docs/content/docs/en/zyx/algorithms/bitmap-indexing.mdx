@@ -68,11 +68,3 @@ The bitmap/slot tracking works together with `IDAllocator`:
 - **Recovery**: WAL replay rebuilds slot state by re-applying committed writes
 
 See [Segment Allocation](segment-allocation) for details on the full allocation pipeline.
-
-## Source Locations
-
-| Component | Path |
-|-----------|------|
-| Segment headers | `include/graph/storage/StorageHeaders.hpp` |
-| SegmentAllocator | `include/graph/storage/SegmentAllocator.hpp` |
-| IDAllocator | `include/graph/core/IDAllocator.hpp` |

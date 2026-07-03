@@ -360,25 +360,6 @@ Key cost estimation methods:
 3. **Statistics staleness**: Statistics are only re-collected on explicit invalidation. Stale statistics produce suboptimal but correct plans.
 4. **Fixed-point convergence**: When writing new rules, ensure they are idempotent (applying the same rule twice produces the same result) to guarantee convergence.
 
-## Source Locations
-
-| Component | File |
-|-----------|------|
-| Optimizer engine | `include/graph/query/optimizer/Optimizer.hpp` |
-| Rule registration | `src/query/optimizer/Optimizer.cpp` |
-| Rule interface | `include/graph/query/optimizer/OptimizerRule.hpp` |
-| FilterPushdown | `include/graph/query/optimizer/rules/FilterPushdownRule.hpp` |
-| LimitPushdown | `include/graph/query/optimizer/rules/LimitPushdownRule.hpp` |
-| IndexPushdown (legacy) | `include/graph/query/optimizer/rules/IndexPushdownRule.hpp` |
-| ProjectionPushdown | `include/graph/query/optimizer/rules/ProjectionPushdownRule.hpp` |
-| JoinReorder | `include/graph/query/optimizer/rules/JoinReorderRule.hpp` |
-| EnhancedIndexSelection | `include/graph/query/optimizer/rules/EnhancedIndexSelectionRule.hpp` |
-| PredicateSimplification | `include/graph/query/optimizer/rules/PredicateSimplificationRule.hpp` |
-| SortElimination | `include/graph/query/optimizer/rules/SortEliminationRule.hpp` |
-| Statistics | `include/graph/query/optimizer/Statistics.hpp` |
-| StatisticsCollector | `include/graph/query/optimizer/StatisticsCollector.hpp` |
-| CostModel | `include/graph/query/optimizer/CostModel.hpp` |
-
 ## See Also
 
 - [Query Engine](/en/docs/zyx/architecture/query-engine) - Query execution pipeline

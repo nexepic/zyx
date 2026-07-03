@@ -21,12 +21,6 @@ The cache system is built on three components:
 - **PageBufferPool** -- a segment-level LRU cache backed internally by the same hash-map-plus-list pattern, caching entire storage segments as raw byte pages
 - **DirtyEntityRegistry** -- a double-buffered registry that tracks modified (dirty) entities across two maps (active and flushing) to enable non-blocking concurrent writes during I/O
 
-Source locations:
-
-- `LRUCache`: `include/graph/storage/CacheManager.hpp`
-- `PageBufferPool`: `include/graph/storage/PageBufferPool.hpp`
-- `DirtyEntityRegistry`: `include/graph/storage/DirtyEntityRegistry.hpp`
-
 ## LRU Cache Data Structure
 
 The `LRUCache<K, V>` template combines two standard containers:
