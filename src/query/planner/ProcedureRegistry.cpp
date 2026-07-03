@@ -205,5 +205,17 @@ namespace graph::query::planner {
 			return std::make_unique<execution::operators::GdsClosenessOperator>(
 				ctx.dataManager, ctx.projectionManager, args[0].toString());
 		});
+
+		registerProcedure("gds.leiden.stream", [](const ProcedureContext &ctx, const auto &args) {
+			if (args.size() < 1)
+				throw std::runtime_error(
+					"gds.leiden.stream expects (graphName[, maxIterations, resolution[, threadCount]])");
+			std::string graphName = args[0].toString();
+			int maxIter = args.size() > 1 ? static_cast<int>(std::stoll(args[1].toString())) : 20;
+			double resolution = args.size() > 2 ? std::stod(args[2].toString()) : 1.0;
+			size_t threadCount = args.size() > 3 ? static_cast<size_t>(std::stoll(args[3].toString())) : 0;
+			return std::make_unique<execution::operators::GdsLeidenOperator>(
+				ctx.dataManager, ctx.projectionManager, graphName, maxIter, resolution, threadCount);
+		});
 	}
 } // namespace graph::query::planner

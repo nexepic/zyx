@@ -144,6 +144,8 @@ if(ZYX_BUILD_APPS AND NOT ZYX_WASM)
     add_executable(zyx_compare_bench apps/compare_benchmark/main.cpp)
     set_target_properties(zyx_compare_bench PROPERTIES OUTPUT_NAME zyx-compare-bench)
     target_link_libraries(zyx_compare_bench PRIVATE zyx::core)
+
+    add_subdirectory(benchmarks/leiden)
 endif()
 
 if(ZYX_BUILD_TESTS AND BUILD_TESTING AND NOT ZYX_WASM)
