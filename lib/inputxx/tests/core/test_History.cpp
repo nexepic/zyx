@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <string>
 #include <filesystem>
+#include <fstream>
 
 #ifdef _WIN32
 #include <process.h>
@@ -37,6 +38,12 @@ TEST(HistoryTest, AddEntry) {
 TEST(HistoryTest, AddEmptyEntryIsIgnored) {
     History h;
     h.add("");
+    EXPECT_TRUE(h.getEntries().empty());
+}
+
+TEST(HistoryTest, ZeroMaxSizeIgnoresEntries) {
+    History h(0);
+    h.add("MATCH (n) RETURN n");
     EXPECT_TRUE(h.getEntries().empty());
 }
 
@@ -116,6 +123,23 @@ TEST(HistoryTest, LoadRespectMaxSize) {
     EXPECT_EQ(h2.getEntries().size(), 3u);
     EXPECT_EQ(h2.getEntries()[0], "cmd3");
     EXPECT_EQ(h2.getEntries()[2], "cmd5");
+
+    std::remove(tmpfile.c_str());
+}
+
+TEST(HistoryTest, LoadSkipsEmptyLines) {
+    std::string tmpfile = getTempFilePath("zyx_test_history_empty_lines");
+    {
+        std::ofstream ofs(tmpfile, std::ios::trunc);
+        ASSERT_TRUE(ofs.is_open());
+        ofs << "cmd1\n\ncmd2\n";
+    }
+
+    History h(10);
+    ASSERT_TRUE(h.load(tmpfile));
+    ASSERT_EQ(h.getEntries().size(), 2u);
+    EXPECT_EQ(h.getEntries()[0], "cmd1");
+    EXPECT_EQ(h.getEntries()[1], "cmd2");
 
     std::remove(tmpfile.c_str());
 }

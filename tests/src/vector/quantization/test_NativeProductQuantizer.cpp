@@ -123,6 +123,21 @@ TEST_F(NativePQTest, ParallelTrainEncodeAndDistanceTablePath) {
 	EXPECT_EQ(table.size(), 64UL * 4UL);
 }
 
+TEST_F(NativePQTest, SingleThreadPoolUsesSequentialSubspacePaths) {
+	NativeProductQuantizer pq(16, 4, 8);
+	graph::concurrent::ThreadPool singleThreadPool(1);
+
+	pq.train(trainData, &singleThreadPool);
+	ASSERT_TRUE(pq.isTrained());
+
+	std::vector<float> query(16, 0.25f);
+	auto codes = pq.encode(query, &singleThreadPool);
+	EXPECT_EQ(codes.size(), 4UL);
+
+	auto table = pq.computeDistanceTable(query, &singleThreadPool);
+	EXPECT_EQ(table.size(), 4UL * 8UL);
+}
+
 TEST_F(NativePQTest, SerializeAndDeserializeUntrainedQuantizer) {
 	NativeProductQuantizer pq(16, 4, 8);
 

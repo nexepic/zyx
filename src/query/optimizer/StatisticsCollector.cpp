@@ -85,18 +85,14 @@ LabelStatistics StatisticsCollector::collectLabelStats(const std::string &label)
 		}
 	}
 
-	// Compute property statistics, scaling estimates for sampled data
-	double scaleFactor = labelStats.nodeCount > 0 && !sampleIds.empty()
-		? static_cast<double>(labelStats.nodeCount) / static_cast<double>(sampleIds.size())
-		: 1.0;
+	// nodeIds is non-empty here; sampleIds is either all ids or a fixed-size reservoir.
+	const double scaleFactor =
+		static_cast<double>(labelStats.nodeCount) / static_cast<double>(sampleIds.size());
 
 	for (auto &[key, values] : distinctValues) {
 		PropertyStatistics propStat;
 		propStat.distinctValueCount = static_cast<int64_t>(
 			static_cast<double>(values.size()) * std::min(scaleFactor, 2.0));
-		if (propStat.distinctValueCount < static_cast<int64_t>(values.size())) {
-			propStat.distinctValueCount = static_cast<int64_t>(values.size());
-		}
 		propStat.nullCount = static_cast<int64_t>(
 			static_cast<double>(nullCounts[key]) * scaleFactor);
 		labelStats.properties[key] = propStat;

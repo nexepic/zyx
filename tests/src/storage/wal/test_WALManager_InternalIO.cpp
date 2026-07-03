@@ -132,6 +132,37 @@ TEST_F(WALManagerInternalIOTest, ValidateHeaderReturnsFalseWhenFdIsInvalidEvenIf
 
 	EXPECT_FALSE(mgr.validateHeader());
 }
+
+TEST_F(WALManagerInternalIOTest, OpenStateMethodsSkipInvalidFdWithoutThrowing) {
+	WALFileHeader hdr;
+	writeRaw(walPath, serializeFileHeader(hdr));
+
+	WALManager mgr;
+	mgr.isOpen_ = true;
+	mgr.walPath_ = walPath;
+	mgr.walFd_ = graph::storage::INVALID_FILE_HANDLE;
+
+	EXPECT_NO_THROW(mgr.sync());
+	EXPECT_FALSE(mgr.needsRecovery());
+	EXPECT_TRUE(mgr.readRecords().records.empty());
+}
+
+TEST_F(WALManagerInternalIOTest, CheckpointCanRecreateWhenOpenFlagHasInvalidFd) {
+	WALFileHeader hdr;
+	writeRaw(walPath, serializeFileHeader(hdr));
+
+	WALManager mgr;
+	mgr.isOpen_ = true;
+	mgr.walPath_ = walPath;
+	mgr.walFd_ = graph::storage::INVALID_FILE_HANDLE;
+
+	ASSERT_NO_THROW(mgr.checkpoint());
+	EXPECT_TRUE(mgr.isOpen_);
+	EXPECT_TRUE(mgr.validateHeader());
+
+	mgr.close();
+}
+
 TEST_F(WALManagerInternalIOTest, ValidateHeaderReturnsFalseOnShortReadFromNonSeekableFd) {
 	WALFileHeader hdr;
 	writeRaw(walPath, serializeFileHeader(hdr));

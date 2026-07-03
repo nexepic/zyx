@@ -313,6 +313,27 @@ TEST_F(UnwindSourceModeTest, OpenResetsState) {
 	op->close();
 }
 
+TEST_F(UnwindSourceModeTest, OpenReevaluatesExpressionList) {
+	std::vector<PropertyValue> innerList = {PropertyValue(int64_t(7)), PropertyValue(int64_t(8))};
+	PropertyValue listVal(innerList);
+	auto listExpr = std::make_shared<ListLiteralExpression>(listVal);
+	auto op = std::make_unique<UnwindOperator>(nullptr, "x", listExpr);
+
+	op->open();
+	ASSERT_TRUE(op->next().has_value());
+	EXPECT_FALSE(op->next().has_value());
+
+	op->open();
+	auto batch = op->next();
+	ASSERT_TRUE(batch.has_value());
+	ASSERT_EQ(batch->size(), 2UL);
+	EXPECT_EQ(std::get<int64_t>((*batch)[0].getValue("x")->getVariant()), 7);
+	EXPECT_EQ(std::get<int64_t>((*batch)[1].getValue("x")->getVariant()), 8);
+	EXPECT_FALSE(op->next().has_value());
+
+	op->close();
+}
+
 // ============================================================================
 // Pipeline Mode Tests (with child operator) - CASE B
 // ============================================================================
@@ -371,6 +392,29 @@ TEST_F(UnwindPipelineModeTest, LiteralList_EmptyChild) {
 
 	auto batch = op->next();
 	EXPECT_FALSE(batch.has_value());
+
+	op->close();
+}
+
+TEST_F(UnwindPipelineModeTest, LiteralList_SkipsEmptyUpstreamBatch) {
+	Record r1;
+	r1.setValue("n", int64_t(11));
+
+	auto mock = std::make_unique<MockChildOperator>(std::vector<RecordBatch>{
+		{},
+		{r1}
+	});
+
+	std::vector<PropertyValue> list = {PropertyValue(int64_t(1)), PropertyValue(int64_t(2))};
+	auto op = std::make_unique<UnwindOperator>(std::move(mock), "x", list);
+	op->open();
+
+	auto batch = op->next();
+	ASSERT_TRUE(batch.has_value());
+	ASSERT_EQ(batch->size(), 2UL);
+	EXPECT_EQ(std::get<int64_t>((*batch)[0].getValue("n")->getVariant()), 11);
+	EXPECT_EQ(std::get<int64_t>((*batch)[1].getValue("x")->getVariant()), 2);
+	EXPECT_FALSE(op->next().has_value());
 
 	op->close();
 }

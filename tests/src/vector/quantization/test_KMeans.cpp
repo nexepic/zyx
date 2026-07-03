@@ -56,6 +56,44 @@ TEST(KMeansTest, EmptyData) {
 	EXPECT_TRUE(res.empty());
 }
 
+TEST(KMeansTest, ThreadPoolBelowThresholdUsesSequentialPath) {
+	std::vector<std::vector<float>> data;
+	data.reserve(64);
+	for (int i = 0; i < 64; ++i) {
+		data.push_back({static_cast<float>(i), static_cast<float>(i % 3)});
+	}
+
+	graph::concurrent::ThreadPool pool(4);
+	auto centroids = KMeans::run(data, 4, 3, &pool);
+
+	ASSERT_EQ(centroids.size(), 4UL);
+}
+
+TEST(KMeansTest, SingleThreadPoolUsesSequentialPath) {
+	std::vector<std::vector<float>> data;
+	data.reserve(256);
+	for (int i = 0; i < 256; ++i) {
+		data.push_back({static_cast<float>(i % 4), static_cast<float>(i % 11)});
+	}
+
+	graph::concurrent::ThreadPool pool(1);
+	auto centroids = KMeans::run(data, 4, 3, &pool);
+
+	ASSERT_EQ(centroids.size(), 4UL);
+}
+
+TEST(KMeansTest, ParallelPathStopsWhenAssignmentsAreStable) {
+	std::vector<std::vector<float>> data(256, std::vector<float>{1.0f, 1.0f});
+
+	graph::concurrent::ThreadPool pool(4);
+	auto centroids = KMeans::run(data, 3, 5, &pool);
+
+	ASSERT_EQ(centroids.size(), 3UL);
+	for (const auto &centroid : centroids) {
+		EXPECT_EQ(centroid.size(), 2UL);
+	}
+}
+
 TEST(KMeansTest, ParallelPathWithThreadPool) {
 	std::vector<std::vector<float>> data;
 	data.reserve(256);

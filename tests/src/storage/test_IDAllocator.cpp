@@ -139,6 +139,16 @@ TEST_F(IDAllocatorTest, DiskExhaustionOptimization) {
 	EXPECT_EQ(n2.getId(), 2);
 }
 
+TEST_F(IDAllocatorTest, InitializeIgnoresEmptyAllocatedSegments) {
+	const auto emptySegment = fileStorage->allocateSegment(graph::Node::typeId, 8);
+	ASSERT_NE(emptySegment, 0ULL);
+
+	nodeAllocator->initialize();
+
+	EXPECT_EQ(nodeAllocator->getCurrentMaxId(), 0);
+	EXPECT_EQ(nodeAllocator->allocate(), 1);
+}
+
 TEST_F(IDAllocatorTest, L1CacheOverflowToL2) {
 	// L1 = 100, L2 = 10
 	nodeAllocator->setCacheLimits(100, 10, 50000);

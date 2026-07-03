@@ -25,9 +25,11 @@
 #include <memory>
 
 #include "graph/core/Database.hpp"
+#include "graph/query/QueryContext.hpp"
 #include "graph/query/execution/operators/MergeNodeOperator.hpp"
 #include "graph/query/execution/Record.hpp"
 #include "graph/query/expressions/Expression.hpp"
+#include "graph/query/expressions/ParameterExpression.hpp"
 #include "graph/query/api/QueryEngine.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 #include "graph/core/Node.hpp"
@@ -685,6 +687,53 @@ TEST_F(MergeNodeOperatorTest, WithPropertyIndex_MatchExistingNode) {
 	op.close();
 }
 
+TEST_F(MergeNodeOperatorTest, WithGlobalPropertyIndex_MatchExistingNodeWithoutLabel) {
+	ASSERT_TRUE(im->createIndex("idx_merge_global_name", "node", "", "name"));
+
+	int64_t labelId = dm->getOrCreateTokenId("AnyGlobal");
+	Node n1(0, labelId);
+	dm->addNode(n1);
+	std::unordered_map<std::string, PropertyValue> props;
+	props["name"] = PropertyValue(std::string("GlobalName"));
+	dm->addNodeProperties(n1.getId(), props);
+
+	std::unordered_map<std::string, PropertyValue> matchProps;
+	matchProps["name"] = PropertyValue(std::string("GlobalName"));
+	MergeNodeOperator op(dm, im, "n", {}, matchProps, {}, {});
+
+	op.open();
+	auto batch = op.next();
+	ASSERT_TRUE(batch.has_value());
+	auto node = (*batch)[0].getNode("n");
+	ASSERT_NE(node, std::nullopt);
+	EXPECT_EQ(node->getId(), n1.getId());
+
+	op.close();
+}
+
+TEST_F(MergeNodeOperatorTest, OnCreate_ParameterExpressionUsesQueryContext) {
+	auto statusExpr = std::make_shared<graph::query::expressions::ParameterExpression>("status");
+	std::vector<SetItem> onCreateItems;
+	onCreateItems.emplace_back(SetActionType::PROPERTY, "n", "status", statusExpr);
+
+	graph::query::QueryContext context;
+	context.parameters["status"] = PropertyValue(std::string("from-parameter"));
+
+	MergeNodeOperator op(dm, im, "n", {"ParamCreate"}, {}, onCreateItems, {});
+	op.setQueryContext(&context);
+
+	op.open();
+	auto batch = op.next();
+	ASSERT_TRUE(batch.has_value());
+	auto node = (*batch)[0].getNode("n");
+	ASSERT_NE(node, std::nullopt);
+	auto props = node->getProperties();
+	ASSERT_TRUE(props.contains("status"));
+	EXPECT_EQ(std::get<std::string>(props["status"].getVariant()), "from-parameter");
+
+	op.close();
+}
+
 TEST_F(MergeNodeOperatorTest, GetOutputVariablesWithChild) {
 	// Cover MergeNodeOperator::getOutputVariables() when child_ is set (line 59 True branch)
 	auto child = std::make_unique<MergeNodeMockOperator>();
@@ -697,4 +746,3 @@ TEST_F(MergeNodeOperatorTest, GetOutputVariablesWithChild) {
 	EXPECT_EQ(vars[0], "n");
 	EXPECT_EQ(vars[1], "m");
 }
-

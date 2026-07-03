@@ -56,7 +56,7 @@ namespace graph::vector {
 				size_t offset = m * subDim_;
 
 				// Integrity check
-				if (offset + subDim_ > dim_) {
+				if (offset + subDim_ > dim_) { // ZYX_COV_EXCL_LINE: constructor enforces dim % subspaces and callers iterate valid subspace ids.
 					throw std::runtime_error("PQ Subspace offset out of bounds");
 				}
 

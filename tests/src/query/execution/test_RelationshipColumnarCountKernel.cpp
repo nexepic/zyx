@@ -139,6 +139,17 @@ TEST_F(RelationshipColumnarCountKernelTest, RejectsMissingAndShortRangesButCount
 	EXPECT_EQ(dirtyCount->count, 128);
 }
 
+TEST_F(RelationshipColumnarCountKernelTest, RejectsInvalidDirtyOverlayRange) {
+	for (int i = 0; i < 128; ++i) {
+		addRelationship(followsType);
+	}
+
+	RelationshipColumnarCountKernel kernel(dm);
+	auto invalidRange = request(1, followsType);
+	invalidRange.beginId = 10;
+	EXPECT_FALSE(kernel.count(invalidRange).has_value());
+}
+
 TEST_F(RelationshipColumnarCountKernelTest, CountsTypeOnlyRelationshipsFromMetadata) {
 	int64_t maxEdgeId = 0;
 	for (int i = 0; i < 130; ++i) {
@@ -178,6 +189,27 @@ TEST_F(RelationshipColumnarCountKernelTest, CountsTypeOnlyRelationshipsFromMetad
 	EXPECT_EQ(refreshedFollows->count, 121);
 	EXPECT_TRUE(snapshot.contains("relationship_count.load_edge_metadata"));
 	EXPECT_FALSE(snapshot.contains("relationship_count.type_cache"));
+}
+
+TEST_F(RelationshipColumnarCountKernelTest, AllTypePropertyPredicateSkipsFullRangeShortcutWhenEndBeforeMaxId) {
+	int64_t maxEdgeId = 0;
+	for (int i = 0; i < 130; ++i) {
+		maxEdgeId = addRelationshipWithProperties(
+							i % 2 == 0 ? followsType : likesType,
+							{{"weight", PropertyValue(i % 3 == 0 ? int64_t{7} : int64_t{3})}})
+							.getId();
+	}
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+
+	RelationshipColumnarCountKernel kernel(dm);
+	auto countRequest = request(maxEdgeId - 1, 0);
+	countRequest.propertyPredicates = {{"weight", PropertyValue(int64_t{7})}};
+
+	const auto result = kernel.count(countRequest);
+	ASSERT_TRUE(result.has_value());
+	EXPECT_GT(result->count, 0);
+	EXPECT_LT(result->count, maxEdgeId);
 }
 
 TEST_F(RelationshipColumnarCountKernelTest, CountsPropertyPredicatesWithoutMaterializingRows) {

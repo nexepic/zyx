@@ -91,6 +91,7 @@ TEST_F(RelationshipFrontierExecutorTest, FrontierStateRebuildsSparsePathStateLaz
 	Node source = addNode();
 	Node middle = addNode();
 	Node target = addNode();
+	Node alternate = addNode();
 
 	Record emptyRecord;
 	RelationshipFrontierState emptyState;
@@ -114,6 +115,15 @@ TEST_F(RelationshipFrontierExecutorTest, FrontierStateRebuildsSparsePathStateLaz
 	EXPECT_EQ(targetPath.nodeId, target.getId());
 	EXPECT_EQ(targetPath.visitedNodeIds,
 			  (std::vector<int64_t>{source.getId(), middle.getId(), target.getId()}));
+
+	Record alternateRecord;
+	alternateRecord.setNode("src", source);
+	state.addPath(alternateRecord, alternate.getId(), 1, {source.getId(), alternate.getId()});
+	state.filterFrontier([&](const RelationshipFrontierEntry &entry) {
+		return entry.nodeId == target.getId();
+	});
+	ASSERT_EQ(state.size(), 1U);
+	EXPECT_EQ(state.frontierEntry(0).nodeId, target.getId());
 
 	state.filterFrontier([](const RelationshipFrontierEntry &) { return false; });
 	EXPECT_TRUE(state.empty());

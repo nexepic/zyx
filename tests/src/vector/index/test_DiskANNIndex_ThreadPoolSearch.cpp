@@ -66,3 +66,51 @@ TEST_F(DiskANNThreadPoolSearchTest, SearchUsesParallelLoadAndDistancePaths) {
 	ASSERT_FALSE(results.empty());
 	EXPECT_LE(results.size(), 10UL);
 }
+
+TEST_F(DiskANNThreadPoolSearchTest, ParallelSearchSupportsInnerProductMetric) {
+	auto registry = std::make_shared<VectorIndexRegistry>(dm, sm, "tp_ip_idx");
+	VectorIndexConfig vCfg;
+	vCfg.dimension = 4;
+	registry->updateConfig(vCfg);
+
+	DiskANNConfig cfg;
+	cfg.dim = 4;
+	cfg.beamWidth = 100;
+	cfg.metric = "IP";
+	DiskANNIndex index(registry, cfg);
+
+	for (int i = 1; i <= 64; ++i) {
+		index.insert(i, {static_cast<float>(i), 1.0f, 0.0f, 0.0f});
+	}
+
+	graph::concurrent::ThreadPool pool(4);
+	index.setThreadPool(&pool);
+
+	const auto results = index.search({64.0f, 1.0f, 0.0f, 0.0f}, 10);
+	ASSERT_FALSE(results.empty());
+	EXPECT_LE(results.size(), 10UL);
+}
+
+TEST_F(DiskANNThreadPoolSearchTest, ParallelSearchSupportsCosineMetric) {
+	auto registry = std::make_shared<VectorIndexRegistry>(dm, sm, "tp_cosine_idx");
+	VectorIndexConfig vCfg;
+	vCfg.dimension = 4;
+	registry->updateConfig(vCfg);
+
+	DiskANNConfig cfg;
+	cfg.dim = 4;
+	cfg.beamWidth = 100;
+	cfg.metric = "Cosine";
+	DiskANNIndex index(registry, cfg);
+
+	for (int i = 1; i <= 64; ++i) {
+		index.insert(i, {static_cast<float>(i), 1.0f, 0.0f, 0.0f});
+	}
+
+	graph::concurrent::ThreadPool pool(4);
+	index.setThreadPool(&pool);
+
+	const auto results = index.search({64.0f, 1.0f, 0.0f, 0.0f}, 10);
+	ASSERT_FALSE(results.empty());
+	EXPECT_LE(results.size(), 10UL);
+}

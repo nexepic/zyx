@@ -142,7 +142,7 @@ size_t NodeProjectionScanOperator::remainingLimit() const {
 
 size_t NodeProjectionScanOperator::nextBatchSize() const {
 	const size_t remainingCandidates = candidateSet_.ids.size() - currentIdx_;
-	if (remainingCandidates == 0) {
+	if (remainingCandidates == 0) { // ZYX_COV_EXCL_LINE: next() checks exhaustion before asking for the next batch size.
 		return 0;
 	}
 	const size_t limitWindow = limit_.has_value()
@@ -155,9 +155,14 @@ Record NodeProjectionScanOperator::makeRecord(const NodeColumnBatch &batch, size
 	Record record;
 	for (const auto &projection : projections_) {
 		PropertyValue value;
-		if (auto columnIt = batch.propertyColumns.find(projection.property);
-		    columnIt != batch.propertyColumns.end() && row < columnIt->second.size() && columnIt->second[row].has_value()) {
-			value = *columnIt->second[row];
+		auto columnIt = batch.propertyColumns.find(projection.property);
+		if (columnIt != batch.propertyColumns.end()) { // ZYX_COV_EXCL_LINE: projection properties are added to scan requirements before loading.
+			const auto &column = columnIt->second;
+			if (row < column.size()) { // ZYX_COV_EXCL_LINE: columnar loaders preserve node batch row cardinality.
+				if (column[row].has_value()) {
+					value = *column[row];
+				}
+			}
 		}
 		record.setValue(projection.alias, std::move(value));
 	}

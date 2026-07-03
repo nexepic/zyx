@@ -391,6 +391,30 @@ TEST_F(RelationshipCandidateSourceTest, AutoKeepsFirstIndexedPredicateWhenLaterC
 	EXPECT_EQ(candidates.propertyKeysSatisfied, (std::vector<std::string>{"rank"}));
 }
 
+TEST_F(RelationshipCandidateSourceTest, AutoSwitchesToLaterIndexedPredicateWhenItIsSmaller) {
+	const int64_t a = addUser();
+	const int64_t b = addUser();
+	addEdge(a, b, followsType, {{"acommon", PropertyValue(int64_t{1})}, {"zrare", PropertyValue(int64_t{7})}});
+	addEdge(a, b, followsType, {{"acommon", PropertyValue(int64_t{1})}, {"zrare", PropertyValue(int64_t{8})}});
+	addEdge(b, a, followsType, {{"acommon", PropertyValue(int64_t{1})}, {"zrare", PropertyValue(int64_t{8})}});
+	ASSERT_TRUE(im->createIndex("edge_candidate_auto_later_common_idx", "edge", "", "acommon"));
+	ASSERT_TRUE(im->createIndex("edge_candidate_auto_later_rare_idx", "edge", "", "zrare"));
+
+	DirectRelationshipCountConfig config;
+	config.enabled = true;
+	config.edgeProperties = {
+		{"acommon", PropertyValue(int64_t{1})},
+		{"zrare", PropertyValue(int64_t{7})},
+	};
+
+	const RelationshipCandidateSource source(dm, im);
+	const auto candidates = source.collect(config);
+
+	EXPECT_TRUE(candidates.available);
+	EXPECT_EQ(candidates.ids.size(), 1U);
+	EXPECT_EQ(candidates.propertyKeysSatisfied, (std::vector<std::string>{"zrare"}));
+}
+
 TEST_F(RelationshipCandidateSourceTest, PlannedMissingPropertySourceDoesNotSilentlyFallBackToAuto) {
 	const int64_t a = addUser();
 	const int64_t b = addUser();

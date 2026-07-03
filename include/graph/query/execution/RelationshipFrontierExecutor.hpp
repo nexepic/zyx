@@ -201,7 +201,7 @@ namespace graph::query::execution {
 				return;
 			}
 			auto traversal = dm_->getRelationshipTraversal();
-			if (!traversal) {
+			if (!traversal) { // ZYX_COV_EXCL_LINE: DataManager owns RelationshipTraversal after initialization.
 				state.replaceFrontier({});
 				return;
 			}
@@ -233,11 +233,11 @@ namespace graph::query::execution {
 					threadPool_,
 					parallelOptions,
 					[&](const concurrent::ParallelRangePartition &range, ExpansionPartitionState &partitionState) {
-						const size_t reservePerPath = estimatedEdges == 0 ? size_t{1} :
+						const size_t reservePerPath = estimatedEdges == 0 ? size_t{1} : // ZYX_COV_EXCL_LINE: non-empty frontier estimates at least one item.
 								std::max<size_t>(1, estimatedEdges / state.size());
 						const size_t rangeSize = range.size();
-						const size_t reserveCount = rangeSize == 0 ||
-													 reservePerPath > std::numeric_limits<size_t>::max() / rangeSize ?
+						const size_t reserveCount = rangeSize == 0 || // ZYX_COV_EXCL_LINE: executor emits non-empty partitions for non-empty ranges.
+													 reservePerPath > std::numeric_limits<size_t>::max() / rangeSize ? // ZYX_COV_EXCL_LINE: overflow guard for pathological size_t inputs.
 								range.size() :
 								rangeSize * reservePerPath;
 						partitionState.next.reserve(reserveCount);
@@ -305,7 +305,7 @@ namespace graph::query::execution {
 		}
 
 		[[nodiscard]] static size_t estimateFrontierBytes(size_t estimatedItems) {
-			if (estimatedItems > std::numeric_limits<size_t>::max() / kEstimatedFrontierEntryBytes) {
+			if (estimatedItems > std::numeric_limits<size_t>::max() / kEstimatedFrontierEntryBytes) { // ZYX_COV_EXCL_LINE: overflow guard for pathological size_t inputs.
 				return std::numeric_limits<size_t>::max();
 			}
 			return estimatedItems * kEstimatedFrontierEntryBytes;

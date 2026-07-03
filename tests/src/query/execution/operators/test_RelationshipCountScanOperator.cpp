@@ -681,6 +681,31 @@ TEST_F(RelationshipCountScanOperatorTest, UnknownHopTokensAndEmptyExpandInputsRe
 	EXPECT_EQ(readCount(emptyHopsOp.next()), 0);
 }
 
+TEST_F(RelationshipCountScanOperatorTest, TwoHopMissingFirstHopStopsAfterEmptyFrontier) {
+	const int64_t source = addUser();
+	const int64_t middle = addUser();
+	const int64_t target = addUser();
+	addFollows(source, middle);
+	addFollows(middle, target);
+
+	NodeScanConfig seedConfig;
+	seedConfig.type = ScanType::FULL_SCAN;
+	seedConfig.variable = "u";
+	NodeScanRequirements seedRequirements;
+	seedRequirements.materialization = NodeMaterializationMode::NSM_ID_ONLY;
+	seedRequirements.countOnly = true;
+
+	RelationshipExpandConfig missingFirstHop = hop("u", "r1", "m");
+	missingFirstHop.edgeType = "MISSING";
+	missingFirstHop.edgeTypeId = 0;
+	std::vector<RelationshipExpandConfig> hops = {missingFirstHop, hop("m", "r2", "v")};
+
+	RelationshipCountScanOperator op(dm, im, seedConfig, seedRequirements, hops, "count");
+	op.open();
+	EXPECT_EQ(readCount(op.next()), 0);
+	op.close();
+}
+
 TEST_F(RelationshipCountScanOperatorTest, DirectFallbackSkipsInactiveAndEmptyPropertyCandidates) {
 	const int64_t source = addUser();
 	const int64_t first = addUser();
@@ -705,6 +730,31 @@ TEST_F(RelationshipCountScanOperatorTest, DirectFallbackSkipsInactiveAndEmptyPro
 	RelationshipCountScanOperator noCandidateOp(dm, im, seedConfig, seedRequirements, {}, {}, directCount, "count");
 	noCandidateOp.open();
 	EXPECT_EQ(readCount(noCandidateOp.next()), 0);
+}
+
+TEST_F(RelationshipCountScanOperatorTest, DirectCountFallsBackToScanWhenIndexManagerIsUnavailable) {
+	const int64_t source = addUser();
+	const int64_t first = addUser();
+	const int64_t second = addUser();
+	addFollowsWithProperties(source, first, {{"weight", PropertyValue(int64_t{1})}});
+	addFollowsWithProperties(source, second, {{"weight", PropertyValue(int64_t{2})}});
+
+	NodeScanConfig seedConfig;
+	NodeScanRequirements seedRequirements;
+	DirectRelationshipCountConfig directCount;
+	directCount.enabled = true;
+	directCount.edgeProperties = {{"weight", PropertyValue(int64_t{1})}};
+	debug::PerfTrace::setEnabled(true);
+	debug::PerfTrace::reset();
+
+	RelationshipCountScanOperator op(dm, nullptr, seedConfig, seedRequirements, {}, {}, directCount, "count");
+	op.open();
+	EXPECT_EQ(readCount(op.next()), 1);
+	op.close();
+
+	const auto snapshot = debug::PerfTrace::snapshotAndReset();
+	EXPECT_TRUE(snapshot.contains("relationship_count.direct_scan"));
+	EXPECT_FALSE(snapshot.contains("relationship_count.index_candidates"));
 }
 
 TEST_F(RelationshipCountScanOperatorTest, DirectPropertyFallbackSkipsWhenTypeFilterRejectsEveryEdge) {
@@ -1019,6 +1069,76 @@ TEST_F(RelationshipCountScanOperatorTest, PlannedPropertyIndexWithUnindexedKeyFa
 	EXPECT_TRUE(snapshot.contains("relationship_count.direct_scan"));
 }
 
+TEST_F(RelationshipCountScanOperatorTest, PlannedPropertyIndexWithEmptyKeysFallsBackToDirectScan) {
+	const int64_t source = addUser();
+	const int64_t target = addUser();
+	addFollowsWithProperties(source, target, {{"weight", PropertyValue(int64_t{1})}});
+	ASSERT_TRUE(im->createIndex("edge_weight_empty_planned_keys_idx", "edge", "", "weight"));
+
+	NodeScanConfig seedConfig;
+	NodeScanRequirements seedRequirements;
+	DirectRelationshipCountConfig directCount;
+	directCount.enabled = true;
+	directCount.edgeProperties = {{"weight", PropertyValue(int64_t{1})}};
+	directCount.candidateSource.type = DirectRelationshipCandidateSourceType::DRCS_PROPERTY_INDEX;
+
+	RelationshipCountScanOperator op(dm, im, seedConfig, seedRequirements, {}, {}, directCount, "count");
+	op.open();
+	EXPECT_EQ(readCount(op.next()), 1);
+}
+
+TEST_F(RelationshipCountScanOperatorTest, PlannedTypeIndexWithoutTypeFallsBackToDirectScan) {
+	const int64_t source = addUser();
+	const int64_t first = addUser();
+	const int64_t second = addUser();
+	addFollows(source, first);
+	addLikes(source, second);
+	ASSERT_TRUE(im->createIndex("edge_type_empty_type_idx", "edge", "", ""));
+
+	NodeScanConfig seedConfig;
+	NodeScanRequirements seedRequirements;
+	DirectRelationshipCountConfig directCount;
+	directCount.enabled = true;
+	directCount.candidateSource.type = DirectRelationshipCandidateSourceType::DRCS_TYPE_INDEX;
+	debug::PerfTrace::setEnabled(true);
+	debug::PerfTrace::reset();
+
+	RelationshipCountScanOperator op(dm, im, seedConfig, seedRequirements, {}, {}, directCount, "count");
+	op.open();
+	EXPECT_EQ(readCount(op.next()), 2);
+	op.close();
+
+	const auto snapshot = debug::PerfTrace::snapshotAndReset();
+	EXPECT_FALSE(snapshot.contains("relationship_count.index_count"));
+	EXPECT_TRUE(snapshot.contains("relationship_count.direct_scan"));
+}
+
+TEST_F(RelationshipCountScanOperatorTest, PlannedTypeIndexWithResidualPredicateUsesScanFallback) {
+	const int64_t source = addUser();
+	const int64_t first = addUser();
+	const int64_t second = addUser();
+	addFollowsWithProperties(source, first, {{"weight", PropertyValue(int64_t{1})}});
+	addFollowsWithProperties(source, second, {{"weight", PropertyValue(int64_t{2})}});
+	ASSERT_TRUE(im->createIndex("edge_type_with_residual_predicate_idx", "edge", "", ""));
+
+	VectorizedPropertyPredicate weightEqualsOne;
+	weightEqualsOne.propertyKey = "weight";
+	weightEqualsOne.op = VectorPredicateOp::VPO_EQ;
+	weightEqualsOne.value = PropertyValue(int64_t{1});
+
+	NodeScanConfig seedConfig;
+	NodeScanRequirements seedRequirements;
+	DirectRelationshipCountConfig directCount;
+	directCount.enabled = true;
+	directCount.edgeType = "FOLLOWS";
+	directCount.edgePredicates = {weightEqualsOne};
+	directCount.candidateSource.type = DirectRelationshipCandidateSourceType::DRCS_TYPE_INDEX;
+
+	RelationshipCountScanOperator op(dm, im, seedConfig, seedRequirements, {}, {}, directCount, "count");
+	op.open();
+	EXPECT_EQ(readCount(op.next()), 1);
+}
+
 TEST_F(RelationshipCountScanOperatorTest, DirectCountFiltersGlobalPropertyIndexCandidatesByType) {
 	const int64_t source = addUser();
 	const int64_t first = addUser();
@@ -1037,6 +1157,38 @@ TEST_F(RelationshipCountScanOperatorTest, DirectCountFiltersGlobalPropertyIndexC
 	RelationshipCountScanOperator op(dm, im, seedConfig, seedRequirements, {}, {}, directCount, "count");
 	op.open();
 	EXPECT_EQ(readCount(op.next()), 1);
+}
+
+TEST_F(RelationshipCountScanOperatorTest, TypePropertyIntersectionCandidateNeedsNoResidualVerification) {
+	const int64_t source = addUser();
+	const int64_t first = addUser();
+	const int64_t second = addUser();
+	addFollowsWithProperties(source, first, {{"weight", PropertyValue(int64_t{1})}});
+	addFollowsWithProperties(source, second, {{"weight", PropertyValue(int64_t{2})}});
+	addLikesWithProperties(source, second, {{"weight", PropertyValue(int64_t{1})}});
+	ASSERT_TRUE(im->createIndex("edge_type_property_intersection_type_idx", "edge", "", ""));
+	ASSERT_TRUE(im->createIndex("edge_type_property_intersection_weight_idx", "edge", "", "weight"));
+
+	NodeScanConfig seedConfig;
+	NodeScanRequirements seedRequirements;
+	DirectRelationshipCountConfig directCount;
+	directCount.enabled = true;
+	directCount.edgeType = "FOLLOWS";
+	directCount.edgeProperties = {{"weight", PropertyValue(int64_t{1})}};
+	directCount.candidateSource.type = DirectRelationshipCandidateSourceType::DRCS_TYPE_PROPERTY_INTERSECTION;
+	directCount.candidateSource.propertyKeys = {"weight"};
+	debug::PerfTrace::setEnabled(true);
+	debug::PerfTrace::reset();
+
+	RelationshipCountScanOperator op(dm, im, seedConfig, seedRequirements, {}, {}, directCount, "count");
+	op.open();
+	EXPECT_EQ(readCount(op.next()), 1);
+	op.close();
+
+	const auto snapshot = debug::PerfTrace::snapshotAndReset();
+	EXPECT_TRUE(snapshot.contains("relationship_count.index_candidates"));
+	EXPECT_FALSE(snapshot.contains("relationship_count.index_filter"));
+	EXPECT_FALSE(snapshot.contains("relationship_count.direct_scan"));
 }
 
 TEST_F(RelationshipCountScanOperatorTest, DirectCountReturnsZeroForEmptyPropertyIndexCandidates) {

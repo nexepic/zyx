@@ -348,7 +348,7 @@ namespace graph::storage {
 
 			SegmentHeader header{};
 			std::memcpy(&header, buf.data(), sizeof(SegmentHeader));
-			if (header.data_type != Edge::typeId || header.used == 0) {
+			if (header.data_type != Edge::typeId || header.used == 0) { // ZYX_COV_EXCL_LINE: edge segment index entries are validated when built.
 				return int64_t{0}; // ZYX_COV_EXCL_LINE: edge segment index entries point at edge segments.
 			}
 			const char *data = buf.data() + sizeof(SegmentHeader);

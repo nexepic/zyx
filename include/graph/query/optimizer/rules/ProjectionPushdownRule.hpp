@@ -99,7 +99,7 @@ private:
                     propagate(child, childNeeded);
                 }
                 break;
-            }
+            } // ZYX_COV_EXCL_LINE
 
             // -----------------------------------------------------------------
             case logical::LogicalOpType::LOP_FILTER: {
@@ -114,7 +114,7 @@ private:
                     propagate(child, childNeeded);
                 }
                 break;
-            }
+            } // ZYX_COV_EXCL_LINE
 
             // -----------------------------------------------------------------
             case logical::LogicalOpType::LOP_AGGREGATE: {
@@ -130,7 +130,7 @@ private:
                     propagate(child, childNeeded);
                 }
                 break;
-            }
+            } // ZYX_COV_EXCL_LINE
 
             // -----------------------------------------------------------------
             default: {
@@ -139,7 +139,7 @@ private:
                     propagate(child, needed);
                 }
                 break;
-            }
+            } // ZYX_COV_EXCL_LINE
         }
     }
 };

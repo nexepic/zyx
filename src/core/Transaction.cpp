@@ -30,7 +30,7 @@ namespace graph {
 		if (state_ == TxnState::TXN_ACTIVE) {
 			try {
 				manager_->rollbackTransaction(*this);
-			} catch (...) {
+			} catch (...) { // ZYX_COV_EXCL_LINE: rollback failures during destruction are defensive storage-failure handling.
 				// Suppress exceptions in destructor
 				// Release locks even if rollback fails
 				readLock_.reset();
@@ -55,7 +55,7 @@ namespace graph {
 			if (state_ == TxnState::TXN_ACTIVE) {
 				try {
 					manager_->rollbackTransaction(*this);
-				} catch (...) {
+				} catch (...) { // ZYX_COV_EXCL_LINE: move assignment preserves noexcept by suppressing rollback failures.
 				}
 			}
 

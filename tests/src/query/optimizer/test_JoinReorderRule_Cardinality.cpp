@@ -64,6 +64,16 @@ TEST_F(JoinReorderRuleCardinalityTest, NonScanInputEstimatesConservatively) {
 	ASSERT_NE(result, nullptr);
 }
 
+TEST_F(JoinReorderRuleCardinalityTest, NonScanInputWithNullChildUsesFallbackCardinality) {
+	auto filter = std::make_unique<LogicalFilter>(nullptr, nullptr);
+	auto scan = std::make_unique<LogicalNodeScan>("m", std::vector<std::string>{"City"});
+	auto join = std::make_unique<LogicalJoin>(std::move(filter), std::move(scan));
+
+	auto result = rule.apply(std::move(join), stats);
+	ASSERT_NE(result, nullptr);
+	EXPECT_EQ(result->getType(), LogicalOpType::LOP_JOIN);
+}
+
 // Covers: single-input degenerate case after flatten (inputs.size() <= 1)
 TEST_F(JoinReorderRuleCardinalityTest, SingleInputJoinReturnsSingleInput) {
 	// Create a join where one side is null

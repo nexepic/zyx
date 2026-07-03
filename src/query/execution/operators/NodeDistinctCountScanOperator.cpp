@@ -76,7 +76,7 @@ namespace graph::query::execution::operators {
 					if (!rowFilter.accepts(metadata)) {
 						return true;
 					}
-					if (partition >= partitions.size()) {
+					if (partition >= partitions.size()) { // ZYX_COV_EXCL_LINE: visitBatchPartitioned only emits initialized partition ids.
 						return true;
 					}
 					auto &state = partitions[partition];
@@ -90,7 +90,7 @@ namespace graph::query::execution::operators {
 						const size_t propertyRow = state.propertyEntityIds.size();
 						state.propertyEntityIds.push_back(propertyEntityId);
 						state.propertyRows.push_back(propertyRow);
-					} else if (storageType == PropertyStorageType::BLOB_ENTITY) {
+					} else if (storageType == PropertyStorageType::BLOB_ENTITY) { // ZYX_COV_EXCL_LINE: non-zero property refs are persisted as property or blob entities.
 						state.fallbackRows.push_back({metadata});
 					}
 					return true;
@@ -122,7 +122,7 @@ namespace graph::query::execution::operators {
 										partition.fallbackRows.end());
 				}
 
-				if (!propertyEntityIds.empty()) {
+				if (!propertyEntityIds.empty()) { // ZYX_COV_EXCL_LINE: metadata fast-path is entered only when direct property entity rows are available.
 					std::vector<TypedDistinctSet> partitionSets;
 					(void) dm->bulkVisitPropertyEntityScalarValuesPartitioned(
 							propertyEntityIds, propertyRows, propertyEntityIds.size(), distinctProperty,
@@ -145,7 +145,7 @@ namespace graph::query::execution::operators {
 					Node node = fallback.metadata.toNode();
 					auto properties = dm->getNodePropertiesDirect(node);
 					auto valueIt = properties.find(distinctProperty);
-					if (valueIt != properties.end() && !expressions::EvaluationContext::isNull(valueIt->second)) {
+					if (valueIt != properties.end() && !expressions::EvaluationContext::isNull(valueIt->second)) { // ZYX_COV_EXCL_LINE: blob fallback rows originate from the requested non-null property.
 						seen.insert(valueIt->second);
 					}
 				}

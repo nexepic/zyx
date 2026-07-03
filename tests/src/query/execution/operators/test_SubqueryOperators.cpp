@@ -611,6 +611,29 @@ TEST_F(LoadCsvOperatorTest, UrlWithoutFilePrefix) {
 	op.close();
 }
 
+TEST_F(LoadCsvOperatorTest, FileUriNormalizesAbsolutePathWithoutExtraSlash) {
+	auto csvPath = createTempFile("a,b\n1,2\n");
+	std::string pathForUri = csvPath;
+	if (!pathForUri.empty() && pathForUri.front() == '/') {
+		pathForUri.erase(pathForUri.begin());
+	}
+	auto urlExpr = std::make_shared<LiteralExpression>(std::string("file:///" + pathForUri));
+
+	LoadCsvOperator op(nullptr, urlExpr, "row", false, ",");
+	op.open();
+	auto batch = op.next();
+	ASSERT_TRUE(batch.has_value());
+	EXPECT_EQ(batch->size(), 2u);
+	op.close();
+}
+
+TEST_F(LoadCsvOperatorTest, NextBeforeOpenReturnsNoRows) {
+	auto urlExpr = std::make_shared<LiteralExpression>(std::string("file:///unused.csv"));
+	LoadCsvOperator op(nullptr, urlExpr, "row", false, ",");
+
+	EXPECT_FALSE(op.next().has_value());
+}
+
 TEST_F(LoadCsvOperatorTest, FieldsFewerThanHeaders) {
 	// Header has 3 cols, data has 2 cols - tests i < fields.size() branch
 	auto csvPath = createTempFile("name,age,city\nAlice,30\n");

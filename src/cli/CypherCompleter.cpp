@@ -32,7 +32,7 @@ CypherCompleter::CypherCompleter() {
 		auto sym = vocab.getSymbolicName(i);
 		if (sym.empty()) continue;
 		// Only include keyword tokens (K_ prefix)
-		if (sym.size() > 2 && sym[0] == 'K' && sym[1] == '_') {
+		if (sym.starts_with("K_")) {
 			auto lit = vocab.getLiteralName(i);
 			if (lit.size() >= 2) {
 				// Strip surrounding quotes

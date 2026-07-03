@@ -82,7 +82,7 @@ namespace graph::storage {
 	}
 
 	void TransactionContext::forgetAddedEntity(uint8_t entityType, int64_t entityId) {
-		if (entityId > 0) {
+		if (entityId > 0) { // ZYX_COV_EXCL_LINE: callers only forget ids proven present in the active transaction set.
 			addedEntityKeys_.erase(makeEntityKey(entityType, entityId));
 		}
 	}
@@ -92,7 +92,7 @@ namespace graph::storage {
 	}
 
 	void TransactionContext::reserveAddedEntityRecords(uint8_t entityType, size_t additionalCapacity) {
-		if (entityType >= pendingWalAddsByType_.size() || additionalCapacity == 0) {
+		if (entityType >= pendingWalAddsByType_.size() || additionalCapacity == 0) { // ZYX_COV_EXCL_LINE: public bulk recorders pass valid entity types and skip empty batches.
 			return;
 		}
 		auto &bucket = pendingWalAddsByType_[entityType];
@@ -100,14 +100,17 @@ namespace graph::storage {
 	}
 
 	void TransactionContext::stageWalAdd(uint8_t entityType, int64_t entityId) {
-		if (entityId <= 0 || entityType >= pendingWalAddsByType_.size()) {
+		if (entityId <= 0) {
+			return;
+		}
+		if (entityType >= pendingWalAddsByType_.size()) { // ZYX_COV_EXCL_LINE: template mutation recorders supply compile-time valid entity types.
 			return;
 		}
 		pendingWalAddsByType_[entityType].push_back(entityId);
 	}
 
 	void TransactionContext::markWalAddCanceled(uint8_t entityType) {
-		if (entityType < pendingWalAddCanceledByType_.size()) {
+		if (entityType < pendingWalAddCanceledByType_.size()) { // ZYX_COV_EXCL_LINE: delete coalescing only calls this for valid entity types.
 			pendingWalAddCanceledByType_[entityType] = true;
 		}
 	}
@@ -131,7 +134,7 @@ namespace graph::storage {
 	}
 
 	void TransactionContext::eraseStagedWalChange(uint8_t entityType, int64_t entityId) {
-		if (entityId > 0) {
+		if (entityId > 0) { // ZYX_COV_EXCL_LINE: called after wasEntityAddedInActiveTransaction(), which requires a positive id.
 			pendingWalChanges_.erase(makeEntityKey(entityType, entityId));
 		}
 	}

@@ -342,6 +342,14 @@ TEST_F(QueryBuilderTest, Match_WithKeyValue) {
 	ASSERT_NE(plan, nullptr);
 }
 
+TEST_F(QueryBuilderTest, Match_WithMultipleLabelsAndKeyValue) {
+	QueryBuilder qb(planner);
+	auto plan = qb.match_("n", std::vector<std::string>{"Person", "Employee"}, "name",
+	                      PropertyValue(std::string("Alice"))).build();
+	ASSERT_NE(plan, nullptr);
+	EXPECT_FALSE(plan->getOutputVariables().empty());
+}
+
 TEST_F(QueryBuilderTest, Delete_Detach) {
 	QueryBuilder qb(planner);
 	auto plan = qb.match_("n").delete_({"n"}, true).build();

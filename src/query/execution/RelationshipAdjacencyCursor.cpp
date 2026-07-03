@@ -40,7 +40,7 @@ namespace graph::query::execution {
 		}
 
 		size_t estimateFrontierBytes(size_t estimatedItems) {
-			if (estimatedItems > std::numeric_limits<size_t>::max() / kEstimatedFrontierEdgeBytes) {
+			if (estimatedItems > std::numeric_limits<size_t>::max() / kEstimatedFrontierEdgeBytes) { // ZYX_COV_EXCL_LINE: public callers cannot allocate a frontier this large; clamp protects overflow.
 				return std::numeric_limits<size_t>::max();
 			}
 			return estimatedItems * kEstimatedFrontierEdgeBytes;
@@ -98,7 +98,7 @@ namespace graph::query::execution {
 			}
 		}
 		Node target = dm_->getNode(targetId);
-		if (requirements.needsTargetActiveCheck && !target.isActive()) {
+		if (requirements.needsTargetActiveCheck && !target.isActive()) { // ZYX_COV_EXCL_LINE: node deletion cascades edges, so active-edge/inactive-target is a corruption guard.
 			return false;
 		}
 		return !requirements.needsTargetLabels || matchesTargetLabels(target, config);
@@ -124,7 +124,7 @@ namespace graph::query::execution {
 			return batch;
 		}
 		auto traversal = dm_->getRelationshipTraversal();
-		if (!traversal) {
+		if (!traversal) { // ZYX_COV_EXCL_LINE: DataManager initializes traversal; this is a defensive construction guard.
 			return batch;
 		}
 		const auto options = traversalOptions(config, requirements);
@@ -174,7 +174,7 @@ namespace graph::query::execution {
 			return total;
 		}
 		auto traversal = dm_->getRelationshipTraversal();
-		if (!traversal) {
+		if (!traversal) { // ZYX_COV_EXCL_LINE: DataManager initializes traversal; this is a defensive construction guard.
 			return total;
 		}
 		const auto options = traversalOptions(config, requirements);
@@ -227,7 +227,7 @@ namespace graph::query::execution {
 		size_t emitted = 0;
 		bool keepGoing = true;
 		auto traversal = dm_->getRelationshipTraversal();
-		if (!traversal) {
+		if (!traversal) { // ZYX_COV_EXCL_LINE: DataManager initializes traversal; this is a defensive construction guard.
 			return emitted;
 		}
 		const auto options = traversalOptions(config, requirements);

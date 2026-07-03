@@ -33,8 +33,16 @@ TEST(EntityPropertyTraitsTest, NodeSupportsProperties) {
 	graph::Node node;
 	EXPECT_TRUE(EntityPropertyTraits<graph::Node>::supportsProperties);
 	EXPECT_TRUE(EntityPropertyTraits<graph::Node>::supportsExternalProperties);
+	EntityPropertyTraits<graph::Node>::setPropertyEntityId(node, 42, graph::PropertyStorageType::PROPERTY_ENTITY);
+	EXPECT_TRUE(EntityPropertyTraits<graph::Node>::hasPropertyEntity(node));
+	EXPECT_EQ(EntityPropertyTraits<graph::Node>::getPropertyEntityId(node), 42);
+	EXPECT_EQ(EntityPropertyTraits<graph::Node>::getPropertyStorageType(node), graph::PropertyStorageType::PROPERTY_ENTITY);
 	EXPECT_NO_THROW(EntityPropertyTraits<graph::Node>::addProperty(node, "k", graph::PropertyValue(1)));
 	EXPECT_TRUE(EntityPropertyTraits<graph::Node>::hasProperty(node, "k"));
+	auto nodeProps = EntityPropertyTraits<graph::Node>::takeProperties(node);
+	EXPECT_EQ(nodeProps.size(), 1U);
+	EXPECT_FALSE(EntityPropertyTraits<graph::Node>::hasProperty(node, "k"));
+	EXPECT_NO_THROW(EntityPropertyTraits<graph::Node>::addProperty(node, "k", graph::PropertyValue(1)));
 	EXPECT_NO_THROW(EntityPropertyTraits<graph::Node>::removeProperty(node, "k"));
 	EXPECT_FALSE(EntityPropertyTraits<graph::Node>::hasProperty(node, "k"));
 	EXPECT_NO_THROW(EntityPropertyTraits<graph::Node>::clearProperties(node));
@@ -45,12 +53,40 @@ TEST(EntityPropertyTraitsTest, EdgeSupportsProperties) {
 	graph::Edge edge;
 	EXPECT_TRUE(EntityPropertyTraits<graph::Edge>::supportsProperties);
 	EXPECT_TRUE(EntityPropertyTraits<graph::Edge>::supportsExternalProperties);
+	EntityPropertyTraits<graph::Edge>::setPropertyEntityId(edge, 84, graph::PropertyStorageType::BLOB_ENTITY);
+	EXPECT_TRUE(EntityPropertyTraits<graph::Edge>::hasPropertyEntity(edge));
+	EXPECT_EQ(EntityPropertyTraits<graph::Edge>::getPropertyEntityId(edge), 84);
+	EXPECT_EQ(EntityPropertyTraits<graph::Edge>::getPropertyStorageType(edge), graph::PropertyStorageType::BLOB_ENTITY);
 	EXPECT_NO_THROW(EntityPropertyTraits<graph::Edge>::addProperty(edge, "k", graph::PropertyValue(2)));
 	EXPECT_TRUE(EntityPropertyTraits<graph::Edge>::hasProperty(edge, "k"));
+	auto edgeProps = EntityPropertyTraits<graph::Edge>::takeProperties(edge);
+	EXPECT_EQ(edgeProps.size(), 1U);
+	EXPECT_FALSE(EntityPropertyTraits<graph::Edge>::hasProperty(edge, "k"));
+	EXPECT_NO_THROW(EntityPropertyTraits<graph::Edge>::addProperty(edge, "k", graph::PropertyValue(2)));
 	EXPECT_NO_THROW(EntityPropertyTraits<graph::Edge>::removeProperty(edge, "k"));
 	EXPECT_FALSE(EntityPropertyTraits<graph::Edge>::hasProperty(edge, "k"));
 	EXPECT_NO_THROW(EntityPropertyTraits<graph::Edge>::clearProperties(edge));
 	EXPECT_NO_THROW(EntityPropertyTraits<graph::Edge>::getProperties(edge));
+}
+
+TEST(EntityPropertyTraitsTest, NonPropertyEntitiesIgnoreExternalPropertyEntityMutators) {
+	graph::Property prop;
+	graph::Blob blob;
+	graph::Index idx;
+	graph::State state;
+
+	EXPECT_NO_THROW(EntityPropertyTraits<graph::Property>::setPropertyEntityId(
+			prop, 1, graph::PropertyStorageType::PROPERTY_ENTITY));
+	EXPECT_NO_THROW(EntityPropertyTraits<graph::Blob>::setPropertyEntityId(
+			blob, 2, graph::PropertyStorageType::BLOB_ENTITY));
+	EXPECT_NO_THROW(EntityPropertyTraits<graph::Index>::setPropertyEntityId(
+			idx, 3, graph::PropertyStorageType::PROPERTY_ENTITY));
+	EXPECT_NO_THROW(EntityPropertyTraits<graph::State>::setPropertyEntityId(
+			state, 4, graph::PropertyStorageType::BLOB_ENTITY));
+	EXPECT_FALSE(EntityPropertyTraits<graph::Property>::hasPropertyEntity(prop));
+	EXPECT_FALSE(EntityPropertyTraits<graph::Blob>::hasPropertyEntity(blob));
+	EXPECT_FALSE(EntityPropertyTraits<graph::Index>::hasPropertyEntity(idx));
+	EXPECT_FALSE(EntityPropertyTraits<graph::State>::hasPropertyEntity(state));
 }
 
 TEST(EntityPropertyTraitsTest, PropertyDoesNotSupportProperties) {

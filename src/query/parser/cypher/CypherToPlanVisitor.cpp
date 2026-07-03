@@ -73,7 +73,7 @@ query::QueryPlan CypherToPlanVisitor::getQueryPlan() {
 
 	if (isOptimizable) {
 		auto *opt = planner_->getOptimizer();
-		if (opt) {
+		if (opt) { // ZYX_COV_EXCL_LINE: QueryPlanner constructs and owns an Optimizer for its lifetime.
 			rootOp_ = opt->optimize(std::move(rootOp_));
 		}
 	}
@@ -422,7 +422,7 @@ std::any CypherToPlanVisitor::visitLoadCsvStatement(CypherParser::LoadCsvStateme
 	std::string fieldTerminator = ",";
 	if (ctx->K_FIELDTERMINATOR()) {
 		std::string ft = ctx->StringLiteral()->getText();
-		if (ft.size() >= 2) {
+		if (ft.size() >= 2) { // ZYX_COV_EXCL_LINE: grammar supplies FIELDTERMINATOR as a quoted string literal.
 			ft = ft.substr(1, ft.size() - 2);
 		}
 		if (ft == "\\t") ft = "\t";

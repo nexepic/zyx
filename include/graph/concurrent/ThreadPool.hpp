@@ -249,10 +249,10 @@ namespace graph::concurrent {
 							runChunk(start, chunkEnd);
 							completeWorkerChunk();
 						});
-					} catch (...) {
+					} catch (...) { // ZYX_COV_EXCL_START: enqueue can only fail if callers race parallelFor with pool destruction.
 						rememberException(std::current_exception());
 						completeWorkerChunk();
-					}
+					} // ZYX_COV_EXCL_STOP
 				}
 				start = chunkEnd;
 			}

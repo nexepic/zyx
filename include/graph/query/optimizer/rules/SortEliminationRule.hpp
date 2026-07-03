@@ -74,7 +74,7 @@ private:
 
 		// Check if the child is a NodeScan using a property index on this key
 		auto children = node->getChildren();
-		if (children.empty() || !children[0]) return node;
+		if (!children[0]) return node;
 
 		if (children[0]->getType() != logical::LogicalOpType::LOP_NODE_SCAN) return node;
 

@@ -202,6 +202,20 @@ TEST_F(QueryEngineTest, ExecutePlan_ReadWrite_MutatesSchema_Throws) {
 	EXPECT_THROW(engine->executePlan(std::move(plan), ctx), std::runtime_error);
 }
 
+TEST_F(QueryEngineTest, ExecutePlan_ReadWrite_AllowsDataMutatingPlan) {
+	QueryPlan plan;
+	plan.root = std::make_unique<logical::LogicalSingleRow>();
+	plan.mutatesData = true;
+
+	QueryContext ctx;
+	ctx.execMode = ExecMode::EM_READ_WRITE;
+
+	EXPECT_NO_THROW({
+		auto result = engine->executePlan(std::move(plan), ctx);
+		EXPECT_TRUE(result.getRows().empty());
+	});
+}
+
 TEST_F(QueryEngineTest, ExecutePlan_NullRoot_ReturnsEmptyResult) {
 	// A plan with no root node returns an empty QueryResult without error
 	QueryPlan plan;
@@ -236,4 +250,14 @@ TEST_F(QueryEngineTest, Execute_DirectPlan_WithThreadPool) {
 		count++;
 	}
 	EXPECT_EQ(count, 2);
+}
+
+TEST_F(QueryEngineTest, Execute_NullPhysicalPlanWithThreadPool_ReturnsEmptyResult) {
+	graph::concurrent::ThreadPool pool(2);
+	engine->setThreadPool(&pool);
+
+	std::unique_ptr<execution::PhysicalOperator> plan;
+	auto result = engine->execute(std::move(plan));
+
+	EXPECT_TRUE(result.getRows().empty());
 }

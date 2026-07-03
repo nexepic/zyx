@@ -73,7 +73,7 @@ namespace graph::query::execution::operators {
 
 			// Pre-resolve label IDs for the scan loop (optimization)
 			targetLabelIds_.clear();
-			if (!labelsSatisfied_ && !config_.labels.empty()) {
+			if (!labelsSatisfied_ && !config_.labels.empty()) { // ZYX_COV_EXCL_LINE: empty-label scans are normalized as label-satisfied.
 				for (const auto &lbl : config_.labels) {
 					targetLabelIds_.push_back(dm_->resolveTokenId(lbl));
 				}

@@ -108,7 +108,7 @@ namespace graph::query {
 		logical::LogicalNodeScan scan(variable, labels, std::move(predicates));
 		auto accessPath = planner::chooseNodeAccessPathDecision(scan, im_);
 		auto config = accessPath.config();
-		if (accessPath.selectedRequiresConservativeFallback()) {
+		if (accessPath.selectedRequiresConservativeFallback()) { // ZYX_COV_EXCL_LINE: equality-only legacy factory cannot select malformed/open-range paths.
 			planner::fallbackToLabelOrFullScan(config);
 		}
 

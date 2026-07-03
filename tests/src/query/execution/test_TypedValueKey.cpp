@@ -109,9 +109,11 @@ namespace {
 
 TEST(TypedOrderKeyTest, OrdersScalarValuesLikePropertyValue) {
 	EXPECT_LT(compareValues(PropertyValue(), PropertyValue(false)), 0);
+	EXPECT_GT(compareValues(PropertyValue(false), PropertyValue()), 0);
 	EXPECT_LT(compareValues(PropertyValue(false), PropertyValue(true)), 0);
 	EXPECT_LT(compareValues(PropertyValue(int64_t{1}), PropertyValue(int64_t{2})), 0);
 	EXPECT_GT(compareValues(PropertyValue(2.5), PropertyValue(1.5)), 0);
+	EXPECT_GT(compareValues(PropertyValue("z"), PropertyValue(int64_t{1})), 0);
 	EXPECT_LT(compareValues(PropertyValue("a"), PropertyValue("b")), 0);
 	EXPECT_EQ(compareValues(PropertyValue("same"), PropertyValue("same")), 0);
 }
@@ -121,6 +123,12 @@ TEST(TypedOrderKeyTest, OrdersTemporalValuesWithoutGenericVariantCompare) {
 	EXPECT_GT(compareValues(PropertyValue(TemporalDateTime{20}), PropertyValue(TemporalDateTime{10})), 0);
 	EXPECT_LT(
 			compareValues(PropertyValue(TemporalDuration{0, 1, 0}), PropertyValue(TemporalDuration{0, 2, 0})),
+			0);
+	EXPECT_GT(
+			compareValues(PropertyValue(TemporalDuration{0, 2, 0}), PropertyValue(TemporalDuration{0, 1, 0})),
+			0);
+	EXPECT_EQ(
+			compareValues(PropertyValue(TemporalDuration{1, 0, 0}), PropertyValue(TemporalDuration{1, 0, 0})),
 			0);
 }
 
@@ -209,7 +217,10 @@ TEST(TypedGroupCounterTest, MergeFromCombinesTypedPartitions) {
 	right.addNull(3);
 	right.addInteger(7);
 	right.addBoolean(true, 4);
+	right.addDouble(1.25, 2);
 	right.addString("CN", 2);
+	right.addDateEpochDays(42, 3);
+	right.addDateTimeEpochMillis(84, 6);
 	right.add(PropertyValue(duration), 5);
 
 	left.mergeFrom(right);
@@ -217,7 +228,10 @@ TEST(TypedGroupCounterTest, MergeFromCombinesTypedPartitions) {
 	EXPECT_EQ(groups.at("null"), 4);
 	EXPECT_EQ(groups.at("true"), 4);
 	EXPECT_EQ(groups.at("int:7"), 3);
+	EXPECT_EQ(groups.at("double:1.250000"), 2);
 	EXPECT_EQ(groups.at("string:CN"), 3);
+	EXPECT_EQ(groups.at("date:42"), 3);
+	EXPECT_EQ(groups.at("datetime:84"), 6);
 	EXPECT_EQ(groups.at("fallback"), 6);
 }
 
@@ -306,6 +320,25 @@ TEST(TypedGroupCounterTest, CompactMapIgnoresNonPositiveCounts) {
 	EXPECT_EQ(dateMap.size(), 1U);
 }
 
+TEST(TypedGroupCounterTest, GenericCompactMapPromotesStringKeys) {
+	CompactGroupMap<std::string> map;
+	for (int i = 0; i < 24; ++i) {
+		map.add("key-" + std::to_string(i), 1);
+	}
+	map.add("key-7", 4);
+
+	EXPECT_EQ(map.size(), 24U);
+	std::unordered_map<std::string, int64_t> counts;
+	map.forEach([&](const std::string &value, int64_t count) {
+		counts[value] = count;
+	});
+	EXPECT_EQ(counts.at("key-7"), 5);
+	EXPECT_EQ(counts.at("key-23"), 1);
+
+	map.clear();
+	EXPECT_EQ(map.size(), 0U);
+}
+
 TEST(TypedGroupCounterTest, CountsFallbackGroupsByTypedEquality) {
 	TypedGroupCounter counter;
 	PropertyValue::MapType left{{"a", PropertyValue(int64_t{1})}};
@@ -353,6 +386,10 @@ TEST(TypedEqualityKeyTest, ComparesEverySpecializedStorageType) {
 			  TypedEqualityKey::from(PropertyValue(TemporalDuration{1, 2, 3})));
 	EXPECT_FALSE(TypedEqualityKey::from(PropertyValue(TemporalDuration{1, 2, 3})) ==
 				 TypedEqualityKey::from(PropertyValue(TemporalDuration{1, 2, 4})));
+	EXPECT_EQ(TypedEqualityKey::from(PropertyValue(TemporalDateTime{123})),
+			  TypedEqualityKey::from(PropertyValue(TemporalDateTime{123})));
+	EXPECT_FALSE(TypedEqualityKey::from(PropertyValue(TemporalDateTime{123})) ==
+				 TypedEqualityKey::from(PropertyValue(TemporalDateTime{124})));
 }
 
 TEST(TypedDistinctSetTest, TracksAllFastScalarKindsAndFallbackKinds) {
@@ -399,6 +436,7 @@ TEST(TypedDistinctSetTest, MergeFromCombinesDistinctPartitions) {
 	left.insert(PropertyValue("CN"));
 
 	right.insert(PropertyValue());
+	right.insert(PropertyValue(false));
 	right.insert(PropertyValue(true));
 	right.insert(PropertyValue(int64_t{7}));
 	right.insert(PropertyValue(2.5));

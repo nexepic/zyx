@@ -24,7 +24,7 @@ zyx_driver_status_t assignParamValue(zyx_driver_params_t *params, const char *ke
     try {
         assign(params->values[key]);
         return ZYX_DRIVER_OK;
-    } catch (...) {
+    } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
         return catchAbiExceptionAs(out_error, ZYX_DRIVER_INVALID_ARGUMENT);
     }
 }
@@ -51,7 +51,7 @@ zyx_driver_status_t zyx_driver_params_create(zyx_driver_params_t **out_params, z
     try {
         *out_params = new zyx_driver_params_t();
         return ZYX_DRIVER_OK;
-    } catch (...) {
+    } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
         return catchAbiException(out_error);
     }
 }
@@ -96,7 +96,7 @@ zyx_driver_status_t zyx_driver_params_set_string(zyx_driver_params_t *params, co
     try {
         params->values[key] = std::string(value);
         return ZYX_DRIVER_OK;
-    } catch (...) {
+    } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
         return catchAbiExceptionAs(out_error, ZYX_DRIVER_INVALID_ARGUMENT);
     }
 }
@@ -125,7 +125,7 @@ zyx_driver_status_t zyx_driver_params_set_string_list(zyx_driver_params_t *param
         }
         params->values[key] = std::move(list);
         return ZYX_DRIVER_OK;
-    } catch (...) {
+    } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
         return catchAbiExceptionAs(out_error, ZYX_DRIVER_INVALID_ARGUMENT);
     }
 }
@@ -151,7 +151,7 @@ zyx_driver_status_t zyx_driver_params_set_float_list(zyx_driver_params_t *params
         }
         params->values[key] = std::move(list);
         return ZYX_DRIVER_OK;
-    } catch (...) {
+    } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
         return catchAbiExceptionAs(out_error, ZYX_DRIVER_INVALID_ARGUMENT);
     }
 }
@@ -172,7 +172,7 @@ zyx_driver_status_t zyx_driver_params_set_value(zyx_driver_params_t *params, con
         }
         params->values[key] = deepCopyValue(value->value);
         return ZYX_DRIVER_OK;
-    } catch (...) {
+    } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
         return catchAbiException(out_error);
     }
 }

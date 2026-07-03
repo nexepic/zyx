@@ -611,6 +611,33 @@ TEST_F(IndexTest, FindValuesOnEmptyLeaf) {
 	EXPECT_TRUE(results.empty());
 }
 
+TEST_F(IndexTest, CountValuesRejectsInternalNodeAndHandlesEmptyLeaf) {
+	EXPECT_THROW(
+		(void)internalNode_.countValues(PropertyValue("key"), dataManager_, stringComparator),
+		std::logic_error);
+	EXPECT_EQ(leafNode_.countValues(PropertyValue("missing"), dataManager_, stringComparator), 0UL);
+}
+
+TEST_F(IndexTest, CountValuesInRangeRejectsInternalNodeAndHonorsExclusiveMin) {
+	bool continueScan = true;
+	EXPECT_THROW(
+		(void)internalNode_.countValuesInRange(
+			PropertyValue("a"), PropertyValue("z"), true, true, continueScan, dataManager_, stringComparator),
+		std::logic_error);
+
+	EXPECT_EQ(leafNode_.countValuesInRange(
+		PropertyValue("a"), PropertyValue("z"), true, true, continueScan, dataManager_, stringComparator), 0UL);
+
+	leafNode_.insertEntry(PropertyValue("a"), 1, dataManager_, stringComparator);
+	leafNode_.insertEntry(PropertyValue("b"), 2, dataManager_, stringComparator);
+	leafNode_.insertEntry(PropertyValue("c"), 3, dataManager_, stringComparator);
+
+	continueScan = true;
+	EXPECT_EQ(leafNode_.countValuesInRange(
+		PropertyValue("b"), PropertyValue("c"), false, true, continueScan, dataManager_, stringComparator), 1UL);
+	EXPECT_TRUE(continueScan);
+}
+
 TEST_F(IndexTest, SetAllEntriesOverflowThrows) {
 	// Create entries that will exceed DATA_SIZE when serialized
 	std::vector<Index::Entry> entries;

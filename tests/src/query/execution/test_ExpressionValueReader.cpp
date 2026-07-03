@@ -176,6 +176,41 @@ TEST(ExpressionValueReaderTest, ReadsTemporalComponents) {
 	          4'000'000'000LL);
 }
 
+TEST(ExpressionValueReaderTest, ReadsDateTimeCalendarComponentsAndUnknownTemporalComponentAsNull) {
+	Record record;
+	record.setValue("datetime", PropertyValue(TemporalDateTime::fromComponents(2030, 11, 12, 13, 14, 15, 16)));
+	record.setValue("date", PropertyValue(TemporalDate::fromYMD(2030, 11, 12)));
+	record.setValue("duration", PropertyValue(TemporalDuration{1, 2, 3'000'000'004LL}));
+
+	EXPECT_EQ(std::get<int64_t>(
+	                  ExpressionValueReader::compile(std::make_shared<VariableReferenceExpression>("datetime", "year"))
+	                          .evaluate(record)
+	                          .getVariant()),
+	          2030);
+	EXPECT_EQ(std::get<int64_t>(
+	                  ExpressionValueReader::compile(std::make_shared<VariableReferenceExpression>("datetime", "month"))
+	                          .evaluate(record)
+	                          .getVariant()),
+	          11);
+	EXPECT_EQ(std::get<int64_t>(
+	                  ExpressionValueReader::compile(std::make_shared<VariableReferenceExpression>("datetime", "day"))
+	                          .evaluate(record)
+	                          .getVariant()),
+	          12);
+	EXPECT_EQ(ExpressionValueReader::compile(std::make_shared<VariableReferenceExpression>("datetime", "timezone"))
+	                  .evaluate(record)
+	                  .getType(),
+	          PropertyType::NULL_TYPE);
+	EXPECT_EQ(ExpressionValueReader::compile(std::make_shared<VariableReferenceExpression>("date", "timezone"))
+	                  .evaluate(record)
+	                  .getType(),
+	          PropertyType::NULL_TYPE);
+	EXPECT_EQ(ExpressionValueReader::compile(std::make_shared<VariableReferenceExpression>("duration", "weeks"))
+	                  .evaluate(record)
+	                  .getType(),
+	          PropertyType::NULL_TYPE);
+}
+
 TEST(ExpressionValueReaderTest, FallsBackForComplexExpressions) {
 	auto left = std::make_unique<VariableReferenceExpression>("x");
 	auto right = std::make_unique<LiteralExpression>(int64_t{2});

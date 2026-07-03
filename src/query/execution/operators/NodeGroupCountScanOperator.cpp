@@ -68,7 +68,7 @@ namespace graph::query::execution::operators {
 								partitionRowsWithGroupValue.assign(partitionCount, 0);
 							},
 							[&](size_t partition, size_t row, const storage::PropertyEntityScalarValue &value) {
-								if (row < candidates->propertyRowCount()) {
+								if (row < candidates->propertyRowCount()) { // ZYX_COV_EXCL_LINE: visitor rows are bounded by propertyRowCount().
 									partitionGroups[partition].addScalar(scalarValueFromStorage(value));
 									++partitionRowsWithGroupValue[partition];
 								}

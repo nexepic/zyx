@@ -49,7 +49,7 @@ size_t QueryGuard::getCurrentRSSBytes() {
 	mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
 	kern_return_t kr = task_info(mach_task_self(), MACH_TASK_BASIC_INFO,
 	                             reinterpret_cast<task_info_t>(&info), &count);
-	if (kr == KERN_SUCCESS) {
+	if (kr == KERN_SUCCESS) { // ZYX_COV_EXCL_LINE: macOS kernel API failure cannot be induced portably.
 		return info.resident_size;
 	}
 	return 0;

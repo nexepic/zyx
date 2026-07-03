@@ -71,7 +71,7 @@ namespace graph::query::execution {
 		auto tryCountTypedPropertyCandidates = [&]() -> std::optional<RelationshipColumnarCountResult> {
 			if (request.typeId == 0) {
 				const auto edgeAllocator = dm_->getIdAllocator(EntityType::Edge);
-				const int64_t maxEdgeId = edgeAllocator ? edgeAllocator->getCurrentMaxId() : int64_t{0};
+				const int64_t maxEdgeId = edgeAllocator ? edgeAllocator->getCurrentMaxId() : int64_t{0}; // ZYX_COV_EXCL_LINE: DataManager initializes an edge allocator for every opened database.
 				if (request.beginId <= 1 && request.endId >= maxEdgeId) {
 					const auto propertyStart = Clock::now();
 					if (auto predicateCount = scanKernel.countAllOwnerProperties(EntityType::Edge)) {

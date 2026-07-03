@@ -93,6 +93,12 @@ TEST_F(WALManagerTest, CloseWhenNotOpenIsNoop) {
 	EXPECT_NO_THROW(mgr.close());
 }
 
+TEST_F(WALManagerTest, CloseRemoveFileBeforeOpenIsNoop) {
+	WALManager mgr;
+	EXPECT_NO_THROW(mgr.close(WALManager::CloseMode::WCM_REMOVE_FILE));
+	EXPECT_FALSE(fs::exists(walPath));
+}
+
 TEST_F(WALManagerTest, CloseRemoveFileCanUseFlushOnlyAfterCheckpoint) {
 	WALManager mgr;
 	mgr.open(testDbPath.string());
@@ -137,6 +143,35 @@ TEST_F(WALManagerTest, WriteEntityChange) {
 
 	mgr.writeCommit(1);
 	mgr.sync();
+	mgr.close();
+}
+
+TEST_F(WALManagerTest, WriteEntityChangeViewWithNullZeroPayloadWritesOnlyEntityHeader) {
+	WALManager mgr;
+	mgr.open(testDbPath.string());
+
+	const uint8_t ignoredPayloadByte = 0xA5;
+	const std::array<WALEntityChangeView, 1> changes{
+			WALEntityChangeView{3, 2, 99, &ignoredPayloadByte, 0},
+	};
+
+	mgr.writeBegin(12);
+	EXPECT_NO_THROW(mgr.writeEntityChangeViews(12, std::span<const WALEntityChangeView>(changes)));
+	mgr.writeCommit(12);
+	mgr.sync();
+
+	auto result = mgr.readRecords();
+	ASSERT_FALSE(result.corrupted);
+	ASSERT_EQ(result.records.size(), 3U);
+	const auto &entityRecord = result.records[1];
+	EXPECT_EQ(entityRecord.header.type, WALRecordType::WAL_ENTITY_WRITE);
+	ASSERT_EQ(entityRecord.data.size(), sizeof(WALEntityPayload));
+	const auto payload = deserializeEntityPayload(entityRecord.data.data());
+	EXPECT_EQ(payload.entityType, changes[0].entityType);
+	EXPECT_EQ(payload.changeType, changes[0].changeType);
+	EXPECT_EQ(payload.entityId, changes[0].entityId);
+	EXPECT_EQ(payload.dataSize, 0U);
+
 	mgr.close();
 }
 

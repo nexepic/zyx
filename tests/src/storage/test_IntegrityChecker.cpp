@@ -212,6 +212,18 @@ TEST_F(IntegrityCheckerTest, VerifyIntegrity_SegmentWithBadCrc) {
 	EXPECT_FALSE(result.segments[0].passed);
 }
 
+TEST_F(IntegrityCheckerTest, VerifyIntegrity_MissingDataRegionFailsSegment) {
+	uint64_t offset = getSegmentOffset(10);
+	createAndRegisterSegment(offset, static_cast<uint32_t>(EntityType::Node), 100, 1);
+
+	auto result = checker->verifyIntegrity();
+
+	ASSERT_EQ(result.segments.size(), 1u);
+	EXPECT_FALSE(result.allPassed);
+	EXPECT_FALSE(result.segments[0].passed);
+	EXPECT_EQ(result.segments[0].offset, offset);
+}
+
 TEST_F(IntegrityCheckerTest, VerifyIntegrity_MultipleSegments) {
 	uint64_t off1 = getSegmentOffset(0);
 	uint64_t off2 = getSegmentOffset(1);

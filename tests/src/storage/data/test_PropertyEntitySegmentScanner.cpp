@@ -174,6 +174,46 @@ TEST_F(PropertyEntitySegmentScannerTest, ScansAllAndTargetedPropertySegments) {
 	EXPECT_GT(targetedVisited, 0U);
 }
 
+TEST_F(PropertyEntitySegmentScannerTest, IgnoresNonPropertySegmentsInInjectedIndex) {
+	Node node(0, labelId);
+	dm->addNode(node);
+	db->getStorage()->flush();
+	ASSERT_FALSE(dm->hasUnsavedChanges());
+
+	auto segmentIndexManager = dm->getSegmentIndexManager();
+	const auto &nodeSegments = segmentIndexManager->getNodeSegmentIndex();
+	ASSERT_FALSE(nodeSegments.empty());
+	segmentIndexManager->setSegmentIndex(Property::typeId, {nodeSegments.front()});
+
+	size_t allVisited = 0;
+	EXPECT_TRUE((detail::scanAllPropertyEntitySegments<ScannerTestState>(
+			*dm,
+			nullptr,
+			"test.property_segments.non_property_all",
+			[](const SegmentHeader &, const char *, ScannerTestState &state) {
+				++state.visitedSegments;
+			},
+			[&](size_t, ScannerTestState &state) {
+				allVisited += state.visitedSegments;
+			})));
+	EXPECT_EQ(allVisited, 0U);
+
+	const std::vector<SegmentWorkItem> work{{0}};
+	size_t targetedVisited = 0;
+	EXPECT_TRUE((detail::scanPropertyEntitySegmentWork<ScannerTestState>(
+			*dm,
+			nullptr,
+			"test.property_segments.non_property_work",
+			work,
+			[](size_t, size_t, const SegmentWorkItem &, const SegmentHeader &, const char *, ScannerTestState &state) {
+				++state.visitedSegments;
+			},
+			[&](size_t, ScannerTestState &state) {
+				targetedVisited += state.visitedSegments;
+			})));
+	EXPECT_EQ(targetedVisited, 0U);
+}
+
 TEST_F(PropertyEntitySegmentScannerTest, ToleratesShortSequentialCoalescedReads) {
 	addUserWithProperty("id", PropertyValue("u0"));
 	db->getStorage()->flush();

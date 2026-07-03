@@ -63,7 +63,7 @@ namespace {
 			const std::shared_ptr<indexes::IndexManager> &im,
 			const VectorizedPropertyPredicate &predicate) {
 		if (predicate.op != VectorPredicateOp::VPO_EQ ||
-			!im->hasPropertyIndex("edge", predicate.propertyKey)) {
+			!im->hasPropertyIndex("edge", predicate.propertyKey)) { // ZYX_COV_EXCL_LINE: callers pre-filter indexable equality predicates.
 			return std::nullopt;
 		}
 

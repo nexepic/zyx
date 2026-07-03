@@ -58,7 +58,7 @@ zyx_driver_status_t openDatabase(const char *path, zyx_driver_db_t **out_db, zyx
 
         *out_db = handle.release();
         return ZYX_DRIVER_OK;
-    } catch (...) {
+    } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
         return catchAbiExceptionAs(out_error, ZYX_DRIVER_OPEN_FAILED);
     }
 }
@@ -90,7 +90,7 @@ zyx_driver_status_t zyx_driver_db_close(zyx_driver_db_t *db, zyx_driver_error_t 
         }
         delete db;
         return ZYX_DRIVER_OK;
-    } catch (...) {
+    } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
         return catchAbiException(out_error);
     }
 }
@@ -105,7 +105,7 @@ zyx_driver_status_t zyx_driver_db_save(zyx_driver_db_t *db, zyx_driver_error_t *
     try {
         db->db->save();
         return ZYX_DRIVER_OK;
-    } catch (...) {
+    } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
         return catchAbiException(out_error);
     }
 }
@@ -124,7 +124,7 @@ zyx_driver_status_t zyx_driver_db_has_active_transaction(zyx_driver_db_t *db, bo
     try {
         *out_value = db->db->hasActiveTransaction();
         return ZYX_DRIVER_OK;
-    } catch (...) {
+    } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
         return catchAbiException(out_error);
     }
 }
@@ -140,7 +140,7 @@ zyx_driver_status_t zyx_driver_db_set_thread_pool_size(zyx_driver_db_t *db, uint
     try {
         db->db->setThreadPoolSize(static_cast<size_t>(size));
         return ZYX_DRIVER_OK;
-    } catch (...) {
+    } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
         return catchAbiException(out_error);
     }
 }
@@ -167,7 +167,7 @@ zyx_driver_status_t zyx_driver_db_create_node(zyx_driver_db_t *db, const char *l
         const auto &values = paramsMapOrEmpty(properties);
         *out_node_id = db->db->createNode(label, values);
         return ZYX_DRIVER_OK;
-    } catch (...) {
+    } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
         return catchAbiExceptionAs(out_error, ZYX_DRIVER_EXECUTION_ERROR);
     }
 }
@@ -207,7 +207,7 @@ zyx_driver_status_t zyx_driver_db_create_node_with_labels(zyx_driver_db_t *db, c
         const auto &values = paramsMapOrEmpty(properties);
         *out_node_id = db->db->createNode(labelValues, values);
         return ZYX_DRIVER_OK;
-    } catch (...) {
+    } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
         return catchAbiExceptionAs(out_error, ZYX_DRIVER_EXECUTION_ERROR);
     }
 }
@@ -234,7 +234,7 @@ zyx_driver_status_t zyx_driver_db_create_edge(zyx_driver_db_t *db, int64_t sourc
         const auto &values = paramsMapOrEmpty(properties);
         *out_edge_id = db->db->createEdge(source_id, target_id, edge_type, values);
         return ZYX_DRIVER_OK;
-    } catch (...) {
+    } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
         return catchAbiExceptionAs(out_error, ZYX_DRIVER_EXECUTION_ERROR);
     }
 }
@@ -263,7 +263,7 @@ zyx_driver_status_t zyx_driver_db_execute(zyx_driver_db_t *db, const char *cyphe
         registerResultHandle(handle.get());
         *out_result = handle.release();
         return ZYX_DRIVER_OK;
-    } catch (...) {
+    } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
         return catchAbiExceptionAs(out_error, ZYX_DRIVER_EXECUTION_ERROR);
     }
 }

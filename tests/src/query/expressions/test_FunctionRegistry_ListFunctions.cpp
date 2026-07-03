@@ -592,3 +592,45 @@ TEST_F(FunctionRegistryTest, RelationshipsFunction_EmptyList) {
 	auto result = func->evaluate(args, *context_);
 	EXPECT_TRUE(std::get<std::vector<PropertyValue>>(result.getVariant()).empty());
 }
+
+TEST_F(FunctionRegistryTest, NodesFunction_HandlesEmptyArgsAndMalformedPathEntries) {
+	const ScalarFunction* func = registry->lookupScalarFunction("nodes");
+	ASSERT_NE(func, nullptr);
+	EXPECT_EQ(func->evaluate({}, *context_).getType(), PropertyType::NULL_TYPE);
+
+	PropertyValue::MapType missingType;
+	missingType["name"] = PropertyValue(std::string("Alice"));
+	PropertyValue::MapType numericType;
+	numericType["_type"] = PropertyValue(static_cast<int64_t>(1));
+	PropertyValue::MapType wrongType;
+	wrongType["_type"] = PropertyValue(std::string("relationship"));
+
+	std::vector<PropertyValue> pathList{
+			PropertyValue(missingType),
+			PropertyValue(numericType),
+			PropertyValue(wrongType)};
+	auto result = func->evaluate({PropertyValue(pathList)}, *context_);
+	ASSERT_EQ(result.getType(), PropertyType::LIST);
+	EXPECT_TRUE(std::get<std::vector<PropertyValue>>(result.getVariant()).empty());
+}
+
+TEST_F(FunctionRegistryTest, RelationshipsFunction_HandlesEmptyArgsAndMalformedPathEntries) {
+	const ScalarFunction* func = registry->lookupScalarFunction("relationships");
+	ASSERT_NE(func, nullptr);
+	EXPECT_EQ(func->evaluate({}, *context_).getType(), PropertyType::NULL_TYPE);
+
+	PropertyValue::MapType missingType;
+	missingType["name"] = PropertyValue(std::string("CALLS"));
+	PropertyValue::MapType numericType;
+	numericType["_type"] = PropertyValue(static_cast<int64_t>(1));
+	PropertyValue::MapType wrongType;
+	wrongType["_type"] = PropertyValue(std::string("node"));
+
+	std::vector<PropertyValue> pathList{
+			PropertyValue(missingType),
+			PropertyValue(numericType),
+			PropertyValue(wrongType)};
+	auto result = func->evaluate({PropertyValue(pathList)}, *context_);
+	ASSERT_EQ(result.getType(), PropertyType::LIST);
+	EXPECT_TRUE(std::get<std::vector<PropertyValue>>(result.getVariant()).empty());
+}

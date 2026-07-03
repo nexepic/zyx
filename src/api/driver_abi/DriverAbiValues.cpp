@@ -75,7 +75,7 @@ zyx_driver_status_t createValue(zyx::Value value, zyx_driver_value_t **out_value
         *out_value = nullptr;
         *out_value = new zyx_driver_value_t{std::move(value)};
         return ZYX_DRIVER_OK;
-    } catch (...) {
+    } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
         return catchAbiException(out_error);
     }
 }
@@ -89,7 +89,7 @@ zyx_driver_status_t appendListValue(zyx_driver_value_t *list, zyx::Value value, 
         return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, ex.what());
     } catch (const std::domain_error &ex) {
         return setError(out_error, ZYX_DRIVER_TYPE_MISMATCH, ex.what());
-    } catch (...) {
+    } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
         return catchAbiException(out_error);
     }
 }
@@ -107,7 +107,7 @@ zyx_driver_status_t setMapValue(zyx_driver_value_t *map, const char *key, zyx::V
         return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, ex.what());
     } catch (const std::domain_error &ex) {
         return setError(out_error, ZYX_DRIVER_TYPE_MISMATCH, ex.what());
-    } catch (...) {
+    } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
         return catchAbiException(out_error);
     }
 }
@@ -150,7 +150,7 @@ zyx_driver_status_t zyx_driver_value_string_create(const char *value, zyx_driver
 
         *out_value = new zyx_driver_value_t{std::string(value)};
         return ZYX_DRIVER_OK;
-    } catch (...) {
+    } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
         return catchAbiException(out_error);
     }
 }
@@ -165,7 +165,7 @@ zyx_driver_status_t zyx_driver_value_list_create(zyx_driver_value_t **out_value,
         *out_value = nullptr;
         *out_value = new zyx_driver_value_t{makeListValue()};
         return ZYX_DRIVER_OK;
-    } catch (...) {
+    } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
         return catchAbiException(out_error);
     }
 }
@@ -180,7 +180,7 @@ zyx_driver_status_t zyx_driver_value_map_create(zyx_driver_value_t **out_value,
         *out_value = nullptr;
         *out_value = new zyx_driver_value_t{makeMapValue()};
         return ZYX_DRIVER_OK;
-    } catch (...) {
+    } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
         return catchAbiException(out_error);
     }
 }
@@ -224,7 +224,7 @@ zyx_driver_status_t zyx_driver_value_list_append_string(zyx_driver_value_t *list
         return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, ex.what());
     } catch (const std::domain_error &ex) {
         return setError(out_error, ZYX_DRIVER_TYPE_MISMATCH, ex.what());
-    } catch (...) {
+    } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
         return catchAbiException(out_error);
     }
 }
@@ -243,7 +243,7 @@ zyx_driver_status_t zyx_driver_value_list_append_value(zyx_driver_value_t *list,
         return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, ex.what());
     } catch (const std::domain_error &ex) {
         return setError(out_error, ZYX_DRIVER_TYPE_MISMATCH, ex.what());
-    } catch (...) {
+    } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
         return catchAbiException(out_error);
     }
 }
@@ -285,7 +285,7 @@ zyx_driver_status_t zyx_driver_value_map_set_string(zyx_driver_value_t *map, con
         return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, ex.what());
     } catch (const std::domain_error &ex) {
         return setError(out_error, ZYX_DRIVER_TYPE_MISMATCH, ex.what());
-    } catch (...) {
+    } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
         return catchAbiException(out_error);
     }
 }
@@ -307,7 +307,7 @@ zyx_driver_status_t zyx_driver_value_map_set_value(zyx_driver_value_t *map, cons
         return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, ex.what());
     } catch (const std::domain_error &ex) {
         return setError(out_error, ZYX_DRIVER_TYPE_MISMATCH, ex.what());
-    } catch (...) {
+    } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
         return catchAbiException(out_error);
     }
 }

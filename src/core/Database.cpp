@@ -188,7 +188,7 @@ namespace graph {
 		threadPool_ = std::make_shared<concurrent::ThreadPool>(poolSize);
 
 		// Re-wire the new pool to all subsystems
-		if (storage)
+		if (storage) // ZYX_COV_EXCL_LINE: Database constructs storage eagerly and keeps it for its lifetime.
 			storage->setThreadPool(threadPool_.get());
 		if (queryEngine) {
 			queryEngine->setThreadPool(threadPool_.get());

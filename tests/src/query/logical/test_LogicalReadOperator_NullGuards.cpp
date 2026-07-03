@@ -127,3 +127,15 @@ TEST(LogicalUnwindNullGuardTest, OutputAndCloneHandleNullChildInLiteralMode) {
 	EXPECT_EQ(clonedUnwind->getAlias(), "x");
 }
 
+TEST(LogicalUnwindNullGuardTest, CloneHandlesNullChildInExpressionMode) {
+	auto expr = std::make_shared<LiteralExpression>(int64_t(1));
+	LogicalUnwind unwind(nullptr, "item", expr);
+
+	auto cloned = unwind.clone();
+	auto *clonedUnwind = dynamic_cast<LogicalUnwind *>(cloned.get());
+	ASSERT_NE(clonedUnwind, nullptr);
+	ASSERT_EQ(clonedUnwind->getChildren().size(), 1UL);
+	EXPECT_EQ(clonedUnwind->getChildren()[0], nullptr);
+	EXPECT_FALSE(clonedUnwind->hasLiteralList());
+	EXPECT_EQ(clonedUnwind->getAlias(), "item");
+}

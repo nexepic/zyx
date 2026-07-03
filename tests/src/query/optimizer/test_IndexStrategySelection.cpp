@@ -137,6 +137,18 @@ TEST_F(OptimizerIndexStrategyTest, IndexPushdownRuleCoversGlobalPropertyAndNonCo
 
 	IndexPushdownRule rule(im);
 
+	CompositeEqualityPredicate missingComposite;
+	missingComposite.keys = {"email", "missing"};
+	missingComposite.values = {PropertyValue("a@example.test"), PropertyValue("x")};
+	auto noCompositeCfg = rule.apply(
+			"n",
+			{},
+			"missing",
+			PropertyValue("x"),
+			{},
+			missingComposite);
+	EXPECT_EQ(noCompositeCfg.type, execution::ScanType::FULL_SCAN);
+
 	CompositeEqualityPredicate singleKeyComposite;
 	singleKeyComposite.keys = {"email"};
 	singleKeyComposite.values = {PropertyValue("a@example.test")};
@@ -275,6 +287,32 @@ TEST(EnhancedIndexSelectionRuleTest, NullIndexManagerIsNoOp) {
 	ASSERT_NE(optimized, nullptr);
 }
 
+TEST(EnhancedIndexSelectionRuleTest, NullPlanIsNoOp) {
+	EnhancedIndexSelectionRule rule(nullptr);
+	Statistics stats = makeStats();
+
+	auto optimized = rule.apply(nullptr, stats);
+	EXPECT_EQ(optimized, nullptr);
+}
+
+TEST_F(OptimizerIndexStrategyTest, EnhancedIndexSelectionRule_UsesGlobalPropertyIndexCandidate) {
+	ASSERT_TRUE(im->createIndex("idx_global_age", "node", "", "age"));
+
+	EnhancedIndexSelectionRule rule(im);
+	Statistics stats = makeStats();
+	auto scan = std::make_unique<LogicalNodeScan>(
+		"n",
+		std::vector<std::string>{},
+		std::vector<std::pair<std::string, PropertyValue>>{{"age", PropertyValue(int64_t(30))}});
+
+	std::unique_ptr<LogicalOperator> plan = std::move(scan);
+	auto optimized = rule.apply(std::move(plan), stats);
+	ASSERT_NE(optimized, nullptr);
+	auto *s = dynamic_cast<LogicalNodeScan *>(optimized.get());
+	ASSERT_NE(s, nullptr);
+	EXPECT_EQ(s->getPreferredScanType(), execution::ScanType::PROPERTY_SCAN);
+}
+
 // Cover: non-NodeScan root causes recursive walk into children (no-op, no scan).
 TEST_F(OptimizerIndexStrategyTest, EnhancedIndexSelectionRule_NonScanRootWalksChildren) {
 	EnhancedIndexSelectionRule rule(im);
@@ -362,5 +400,23 @@ TEST_F(OptimizerIndexStrategyTest, EnhancedIndexSelectionRule_CompositeEqOnlyOne
 	auto *s = dynamic_cast<LogicalNodeScan *>(optimized.get());
 	ASSERT_NE(s, nullptr);
 	// Single-key composite eq cannot be a composite scan.
+	EXPECT_NE(s->getPreferredScanType(), execution::ScanType::COMPOSITE_SCAN);
+}
+
+TEST_F(OptimizerIndexStrategyTest, EnhancedIndexSelectionRule_ExplicitCompositeEqWithoutIndexIsSkipped) {
+	EnhancedIndexSelectionRule rule(im);
+	Statistics stats = makeStats();
+
+	auto scan = std::make_unique<LogicalNodeScan>("n", std::vector<std::string>{"Person"});
+	CompositeEqualityPredicate compositeEq;
+	compositeEq.keys = {"city", "age"};
+	compositeEq.values = {PropertyValue(std::string("A")), PropertyValue(int64_t(30))};
+	scan->setCompositeEquality(std::move(compositeEq));
+
+	std::unique_ptr<LogicalOperator> plan = std::move(scan);
+	auto optimized = rule.apply(std::move(plan), stats);
+	ASSERT_NE(optimized, nullptr);
+	auto *s = dynamic_cast<LogicalNodeScan *>(optimized.get());
+	ASSERT_NE(s, nullptr);
 	EXPECT_NE(s->getPreferredScanType(), execution::ScanType::COMPOSITE_SCAN);
 }

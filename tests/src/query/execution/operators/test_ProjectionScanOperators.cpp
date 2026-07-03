@@ -179,6 +179,59 @@ TEST_F(ProjectionScanOperatorsTest, NodeProjectionScanReturnsEmptyForEmptyCandid
 	EXPECT_FALSE(op.next().has_value());
 }
 
+TEST_F(ProjectionScanOperatorsTest, NodeProjectionScanProfilesEmptyPredicateResult) {
+	for (int64_t i = 0; i < 3; ++i) {
+		addNode(userLabel, {{"score", PropertyValue(i)}});
+	}
+	db->getStorage()->flush();
+
+	VectorizedPropertyPredicate rejectAll;
+	rejectAll.propertyKey = "score";
+	rejectAll.op = VectorPredicateOp::VPO_GT;
+	rejectAll.value = PropertyValue(int64_t{99});
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "u";
+	config.labels = {"User"};
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+
+	NodeProjectionScanOperator op(dm, im, config, requirements, {rejectAll}, {{"score", "score"}}, 10);
+	debug::PerfTrace::setEnabled(true);
+	debug::PerfTrace::reset();
+	op.open();
+	EXPECT_FALSE(op.next().has_value());
+	const auto profile = debug::PerfTrace::snapshotAndReset();
+	debug::PerfTrace::setEnabled(false);
+
+	ASSERT_TRUE(profile.contains("node_projection_scan"));
+	EXPECT_EQ(profile.at("node_projection_scan").calls, 1U);
+}
+
+TEST_F(ProjectionScanOperatorsTest, NodeProjectionScanEmitsNullForRowsMissingProjectedProperty) {
+	addNode(userLabel, {{"id", PropertyValue("user-0")}});
+	addNode(userLabel, {});
+	db->getStorage()->flush();
+
+	NodeScanConfig config;
+	config.type = ScanType::FULL_SCAN;
+	config.variable = "u";
+	config.labels = {"User"};
+	NodeScanRequirements requirements;
+	requirements.materialization = NodeMaterializationMode::NSM_SELECTED_PROPERTIES;
+	requirements.requiredProperties = {"id"};
+
+	NodeProjectionScanOperator op(dm, im, config, requirements, {}, {{"id", "id"}}, 10);
+	op.open();
+	auto batch = op.next();
+
+	ASSERT_TRUE(batch.has_value());
+	ASSERT_EQ(batch->size(), 2U);
+	EXPECT_EQ(valueAt((*batch)[0], "id"), PropertyValue("user-0"));
+	EXPECT_EQ(valueAt((*batch)[1], "id").getType(), PropertyType::NULL_TYPE);
+}
+
 TEST_F(ProjectionScanOperatorsTest, RelationshipProjectionScanFiltersAndProjectsScalars) {
 	const int64_t a = addNode(userLabel, {{"id", PropertyValue("a")}});
 	const int64_t b = addNode(userLabel, {{"id", PropertyValue("b")}});
@@ -342,6 +395,45 @@ TEST_F(ProjectionScanOperatorsTest, RelationshipProjectionScanUsesUnboundedIndex
 	ASSERT_EQ(batch->size(), 2U);
 	EXPECT_EQ(valueAt((*batch)[0], "weight"), PropertyValue(int64_t{5}));
 	EXPECT_EQ(valueAt((*batch)[1], "weight"), PropertyValue(int64_t{5}));
+	EXPECT_FALSE(op.next().has_value());
+}
+
+TEST_F(ProjectionScanOperatorsTest, RelationshipProjectionScanFiltersTypeAfterPropertyCandidateSource) {
+	const int64_t a = addNode(userLabel, {{"id", PropertyValue("a")}});
+	const int64_t b = addNode(userLabel, {{"id", PropertyValue("b")}});
+	const int64_t c = addNode(userLabel, {{"id", PropertyValue("c")}});
+	addFollows(a, b, 5);
+	const int64_t likesType = dm->getOrCreateTokenId("LIKES");
+	Edge likes(0, a, c, likesType);
+	dm->addEdge(likes);
+	dm->addEdgeProperties(likes.getId(), {{"weight", PropertyValue(int64_t{5})}});
+	db->getStorage()->flush();
+	ASSERT_TRUE(im->createIndex("projection_edge_weight_mixed_type", "edge", "", "weight"));
+
+	VectorizedPropertyPredicate weightIsFive;
+	weightIsFive.propertyKey = "weight";
+	weightIsFive.op = VectorPredicateOp::VPO_EQ;
+	weightIsFive.value = PropertyValue(int64_t{5});
+
+	DirectRelationshipCountConfig config;
+	config.enabled = true;
+	config.edgeType = "FOLLOWS";
+	config.direction = "out";
+	config.edgePredicates = {weightIsFive};
+	config.candidateSource.type = DirectRelationshipCandidateSourceType::DRCS_PROPERTY_INDEX;
+	config.candidateSource.propertyKeys = {"weight"};
+
+	RelationshipProjectionScanOperator op(
+		dm, im, config, "v", {"User"},
+		{{RelationshipProjectionSource::RPS_EDGE, "weight", "weight"},
+		 {RelationshipProjectionSource::RPS_TARGET_NODE, "id", "id"}});
+	op.open();
+	auto batch = op.next();
+
+	ASSERT_TRUE(batch.has_value());
+	ASSERT_EQ(batch->size(), 1U);
+	EXPECT_EQ(valueAt((*batch)[0], "id"), PropertyValue("b"));
+	EXPECT_EQ(valueAt((*batch)[0], "weight"), PropertyValue(int64_t{5}));
 	EXPECT_FALSE(op.next().has_value());
 }
 
@@ -521,6 +613,42 @@ TEST_F(ProjectionScanOperatorsTest, RelationshipProjectionScanSkipsInvalidAndIna
 		 {RelationshipProjectionSource::RPS_EDGE, "weight", "weight"}},
 		10);
 	op.setQueryContext(&context);
+	op.open();
+	auto batch = op.next();
+
+	ASSERT_TRUE(batch.has_value());
+	ASSERT_EQ(batch->size(), 1U);
+	EXPECT_EQ(valueAt((*batch)[0], "id"), PropertyValue("live"));
+	EXPECT_EQ(valueAt((*batch)[0], "weight"), PropertyValue(int64_t{3}));
+	EXPECT_FALSE(op.next().has_value());
+}
+
+TEST_F(ProjectionScanOperatorsTest, RelationshipProjectionScanSkipsMissingAndDeletedTargetNodes) {
+	const int64_t source = addNode(userLabel, {{"id", PropertyValue("source")}});
+	const int64_t deletedTarget = addNode(userLabel, {{"id", PropertyValue("deleted")}});
+	const int64_t liveTarget = addNode(userLabel, {{"id", PropertyValue("live")}});
+
+	Edge missingTargetEdge(0, source, 999999, followsType);
+	dm->addEdge(missingTargetEdge);
+	dm->addEdgeProperties(missingTargetEdge.getId(), {{"weight", PropertyValue(int64_t{1})}});
+
+	addFollows(source, deletedTarget, 2);
+	addFollows(source, liveTarget, 3);
+
+	Node deletedNode = dm->getNode(deletedTarget);
+	dm->deleteNode(deletedNode);
+	db->getStorage()->flush();
+
+	DirectRelationshipCountConfig config;
+	config.enabled = true;
+	config.edgeType = "FOLLOWS";
+	config.direction = "out";
+
+	RelationshipProjectionScanOperator op(
+		dm, im, config, "v", {"User"},
+		{{RelationshipProjectionSource::RPS_TARGET_NODE, "id", "id"},
+		 {RelationshipProjectionSource::RPS_EDGE, "weight", "weight"}},
+		10);
 	op.open();
 	auto batch = op.next();
 

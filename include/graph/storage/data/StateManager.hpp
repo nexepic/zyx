@@ -31,6 +31,9 @@ namespace graph {
 }
 
 namespace graph::storage {
+	namespace testing {
+		class StateManagerAccess;
+	}
 
 	class StateManager final : public BaseEntityManager<State> {
 	public:
@@ -69,6 +72,8 @@ namespace graph::storage {
 		void doRemove(State &state) override;
 
 	private:
+		friend class testing::StateManagerAccess;
+
 		void populateKeyToIdMap();
 
 		static bool isChainHeadState(const State &state);

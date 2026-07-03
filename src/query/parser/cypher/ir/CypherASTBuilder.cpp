@@ -644,7 +644,7 @@ std::vector<SetItemAST> CypherASTBuilder::extractSetItems(void* ctx) {
 			// Find mapLiteral by traversing the parse tree
 			CypherParser::MapLiteralContext* mapLit = nullptr;
 			std::function<void(antlr4::tree::ParseTree*)> findMap = [&](antlr4::tree::ParseTree* tree) {
-				if (!tree || mapLit) return;
+				if (!tree || mapLit) return; // ZYX_COV_EXCL_LINE: recursive traversal guard; parser supplies non-null descendants and stops after first map.
 				if (auto* m = dynamic_cast<CypherParser::MapLiteralContext*>(tree)) {
 					mapLit = m;
 					return;

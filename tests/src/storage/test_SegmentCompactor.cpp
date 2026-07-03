@@ -1375,3 +1375,128 @@ TEST_F(SegmentCompactorTest, MergeSegments_Phase2_EmptyFrontSegmentFreed) {
 		EXPECT_NE(h.file_offset, seg0) << "seg0 (empty front segment) should have been freed";
 	}
 }
+
+TEST_F(SegmentCompactorTest, CompactLowFragmentationNonNodeTypesSkipsInternalCompaction) {
+	auto exerciseType = [this]<typename Entity>() {
+		const auto type = Entity::typeId;
+		const uint64_t seg = segmentAllocator->allocateSegment(type, 10);
+		const SegmentHeader h = segmentTracker->getSegmentHeader(seg);
+
+		for (uint32_t i = 0; i < 10; ++i) {
+			createActiveEntity<Entity>(seg, i, h.start_id + static_cast<int64_t>(i));
+		}
+		segmentTracker->setEntityActive(seg, 8, false);
+		segmentTracker->setEntityActive(seg, 9, false);
+		segmentTracker->updateSegmentUsage(seg, 10, 2);
+
+		compactor->compactSegments(type, 0.1);
+
+		const SegmentHeader after = segmentTracker->getSegmentHeader(seg);
+		EXPECT_EQ(after.used, 10U);
+		EXPECT_EQ(after.inactive_count, 2U);
+	};
+
+	exerciseType.template operator()<Edge>();
+	exerciseType.template operator()<Property>();
+	exerciseType.template operator()<Blob>();
+	exerciseType.template operator()<Index>();
+	exerciseType.template operator()<State>();
+}
+
+TEST_F(SegmentCompactorTest, MergeIntoSegmentSkipsInactiveSourceSlotsAndAppendsOnlyActiveEntities) {
+	const auto type = Node::typeId;
+	const uint64_t target = segmentAllocator->allocateSegment(type, 10);
+	const uint64_t source = segmentAllocator->allocateSegment(type, 10);
+
+	const SegmentHeader targetHeader = segmentTracker->getSegmentHeader(target);
+	createActiveNode(target, 0, targetHeader.start_id);
+	segmentTracker->updateSegmentUsage(target, 1, 0);
+
+	const SegmentHeader sourceHeader = segmentTracker->getSegmentHeader(source);
+	createActiveNode(source, 0, sourceHeader.start_id);
+	createActiveNode(source, 1, sourceHeader.start_id + 1);
+	createActiveNode(source, 2, sourceHeader.start_id + 2);
+	segmentTracker->setEntityActive(source, 1, false);
+	segmentTracker->updateSegmentUsage(source, 3, 1);
+
+	ASSERT_TRUE(compactor->mergeIntoSegment(target, source, type));
+
+	const SegmentHeader merged = segmentTracker->getSegmentHeader(target);
+	EXPECT_EQ(merged.used, 3U);
+	EXPECT_EQ(merged.getActiveCount(), 3U);
+}
+
+TEST_F(SegmentCompactorTest, RelocateSegmentsStopsCleanlyWhenFreeSlotsAreExhausted) {
+	const auto type = Node::typeId;
+	std::vector<uint64_t> segments;
+	for (int i = 0; i < 10; ++i) {
+		const uint64_t seg = segmentAllocator->allocateSegment(type, 10);
+		const SegmentHeader h = segmentTracker->getSegmentHeader(seg);
+		createActiveNode(seg, 0, h.start_id);
+		segmentTracker->updateSegmentUsage(seg, 1, 0);
+		segments.push_back(seg);
+	}
+
+	segmentAllocator->deallocateSegment(segments.front());
+
+	const bool relocated = compactor->relocateSegmentsFromEnd();
+	EXPECT_TRUE(relocated);
+}
+
+TEST_F(SegmentCompactorTest, CompactSegmentWithReferenceUpdaterMovesActiveEntities) {
+	const auto type = Node::typeId;
+	const uint64_t seg = segmentAllocator->allocateSegment(type, 10);
+	const SegmentHeader h = segmentTracker->getSegmentHeader(seg);
+
+	for (uint32_t i = 0; i < 4; ++i) {
+		createActiveNode(seg, i, h.start_id + static_cast<int64_t>(i));
+	}
+	segmentTracker->setEntityActive(seg, 0, false);
+	segmentTracker->setEntityActive(seg, 1, false);
+	segmentTracker->updateSegmentUsage(seg, 4, 2);
+
+	compactor->compactSegments(type, 0.1);
+
+	const SegmentHeader after = segmentTracker->getSegmentHeader(seg);
+	EXPECT_EQ(after.used, 2U);
+	EXPECT_EQ(after.inactive_count, 0U);
+}
+
+TEST_F(SegmentCompactorTest, MergeIntoSegmentRejectsMismatchedTargetTypeBeforeSourceType) {
+	const uint64_t target = segmentAllocator->allocateSegment(Edge::typeId, 10);
+	const uint64_t source = segmentAllocator->allocateSegment(Node::typeId, 10);
+
+	EXPECT_FALSE(compactor->mergeIntoSegment(target, source, Node::typeId));
+}
+
+TEST_F(SegmentCompactorTest, RelocateSegmentsSkipsWhenOnlyFreeSlotIsAfterSource) {
+	const auto type = Node::typeId;
+	std::vector<uint64_t> segments;
+	for (int i = 0; i < 8; ++i) {
+		const uint64_t seg = segmentAllocator->allocateSegment(type, 10);
+		const SegmentHeader h = segmentTracker->getSegmentHeader(seg);
+		createActiveNode(seg, 0, h.start_id);
+		segmentTracker->updateSegmentUsage(seg, 1, 0);
+		segments.push_back(seg);
+	}
+
+	segmentAllocator->deallocateSegment(segments.back());
+
+	const bool relocated = compactor->relocateSegmentsFromEnd();
+	EXPECT_FALSE(relocated);
+}
+
+TEST_F(SegmentCompactorTest, MoveSegmentReturnsFalseWhenSourceDataCannotBeCopied) {
+	const auto type = Node::typeId;
+	const uint64_t source = segmentAllocator->allocateSegment(type, 10);
+	const uint64_t destination = segmentAllocator->allocateSegment(type, 10);
+
+	const SegmentHeader h = segmentTracker->getSegmentHeader(source);
+	createActiveNode(source, 0, h.start_id);
+	segmentTracker->updateSegmentUsage(source, 1, 0);
+	segmentAllocator->deallocateSegment(destination);
+
+	file->close();
+
+	EXPECT_FALSE(compactor->moveSegment(source, destination));
+}

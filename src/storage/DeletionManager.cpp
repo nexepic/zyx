@@ -153,7 +153,7 @@ namespace graph::storage {
 		std::unordered_set<int64_t> deletedEdgeIds;
 		deletedEdgeIds.reserve(edges.size());
 		for (auto &edge: edges) {
-			if (edge.getId() == 0 || !deletedEdgeIds.insert(edge.getId()).second) {
+			if (edge.getId() == 0 || !deletedEdgeIds.insert(edge.getId()).second) { // ZYX_COV_EXCL_LINE: traversal returns active persisted edge IDs once.
 				continue;
 			}
 			dataManager_->getRelationshipTraversal()->unlinkEdge(edge);

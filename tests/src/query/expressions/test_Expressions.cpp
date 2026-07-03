@@ -687,6 +687,16 @@ TEST_F(ExpressionsTest, ResultValue_ToString_EdgeNoProps) {
 	EXPECT_TRUE(result.find("]") != std::string::npos);
 }
 
+TEST_F(ExpressionsTest, ResultValue_ToString_NodeAndEdgeWithoutTokenIds) {
+	Node node(1, 0);
+	graph::query::ResultValue nodeValue(node);
+	EXPECT_EQ(nodeValue.toString(), "()");
+
+	Edge edge(2, 1, 3, 0);
+	graph::query::ResultValue edgeValue(edge);
+	EXPECT_EQ(edgeValue.toString(), "[]");
+}
+
 // ============================================================================
 // ResultValue coverage: Node toString with multi-label and resolver
 // ============================================================================

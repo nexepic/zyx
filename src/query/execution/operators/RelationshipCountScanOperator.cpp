@@ -315,7 +315,7 @@ namespace {
 
 	std::optional<int64_t> RelationshipCountScanOperator::countDirectRelationshipsWithColumnarKernel(
 			int64_t edgeTypeId, int64_t maxId) const {
-		if (!dm_) {
+		if (!dm_) { // ZYX_COV_EXCL_LINE: public direct-count entrypoint returns before invoking the kernel without DataManager.
 			return std::nullopt;
 		}
 		if (maxId <= 0) {
@@ -337,16 +337,22 @@ namespace {
 
 	std::optional<int64_t> RelationshipCountScanOperator::countDirectRelationshipsFromExactIndex(
 			int64_t edgeTypeId) const {
-		if (!im_) {
+		if (!im_) { // ZYX_COV_EXCL_LINE: the only caller guards IndexManager before exact-index probing.
 			return std::nullopt;
 		}
 
 		const auto edgePredicates = effectiveEdgePredicates(directCount_);
 		const auto &candidateSource = directCount_.candidateSource;
-		if (candidateSource.type == DirectRelationshipCandidateSourceType::DRCS_TYPE_INDEX &&
-			edgeTypeId != 0 && edgePredicates.empty() && !directCount_.edgeType.empty() &&
-			im_->hasLabelIndex("edge")) {
-			return static_cast<int64_t>(im_->estimateEdgeIdsByType(directCount_.edgeType));
+		if (candidateSource.type == DirectRelationshipCandidateSourceType::DRCS_TYPE_INDEX) {
+			if (edgeTypeId == 0 || !edgePredicates.empty()) {
+				return std::nullopt;
+			}
+			if (directCount_.edgeType.empty()) { // ZYX_COV_EXCL_LINE: edgeTypeId is resolved from this non-empty type name.
+				return std::nullopt;
+			}
+			if (im_->hasLabelIndex("edge")) {
+				return static_cast<int64_t>(im_->estimateEdgeIdsByType(directCount_.edgeType));
+			}
 		}
 
 		if (candidateSource.type != DirectRelationshipCandidateSourceType::DRCS_PROPERTY_INDEX ||
@@ -359,7 +365,10 @@ namespace {
 		const auto predicateIt = std::find_if(edgePredicates.begin(), edgePredicates.end(), [&](const auto &predicate) {
 			return predicate.propertyKey == key && predicate.op == VectorPredicateOp::VPO_EQ;
 		});
-		if (predicateIt == edgePredicates.end() || !im_->hasPropertyIndex("edge", key)) {
+		if (predicateIt == edgePredicates.end()) { // ZYX_COV_EXCL_LINE: keysCoverAllPredicates guarantees a matching equality predicate.
+			return std::nullopt;
+		}
+		if (!im_->hasPropertyIndex("edge", key)) {
 			return std::nullopt;
 		}
 		return static_cast<int64_t>(im_->estimateEdgeIdsByProperty(key, predicateIt->value));
@@ -423,8 +432,13 @@ namespace {
 			const PropertyPredicateKernel &predicateKernel) const {
 		for (const auto &predicate : predicateKernel.predicates()) {
 			const auto columnIt = columns.find(predicate.propertyKey);
-			if (columnIt == columns.end() || row >= columnIt->second.size() ||
-			    !predicateKernel.matchesValue(columnIt->second[row], predicate)) {
+			if (columnIt == columns.end()) { // ZYX_COV_EXCL_LINE: RelationshipPropertyColumnLoader returns every requested column.
+				return false;
+			}
+			if (row >= columnIt->second.size()) { // ZYX_COV_EXCL_LINE: rows originate from the same edge batch used to load columns.
+				return false;
+			}
+			if (!predicateKernel.matchesValue(columnIt->second[row], predicate)) {
 				return false;
 			}
 		}

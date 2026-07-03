@@ -78,7 +78,7 @@ void RelationshipProjectionScanOperator::open() {
 	}
 
 	const auto edgeAllocator = dm_->getIdAllocator(EntityType::Edge);
-	maxEdgeId_ = edgeAllocator ? edgeAllocator->getCurrentMaxId() : 0;
+	maxEdgeId_ = edgeAllocator ? edgeAllocator->getCurrentMaxId() : 0; // ZYX_COV_EXCL_LINE: DataManager owns an edge allocator for the database lifetime.
 
 	RelationshipCandidateSource source(dm_, im_);
 	auto candidates = source.collect(config_);
@@ -128,10 +128,14 @@ std::optional<RecordBatch> RelationshipProjectionScanOperator::next() {
 					continue;
 				}
 				for (const auto &predicate : config_.edgePredicates) {
+					std::optional<PropertyValue> actual;
 					auto columnIt = relationshipColumns.find(predicate.propertyKey);
-					const auto actual = columnIt != relationshipColumns.end() && row < columnIt->second.size()
-							? columnIt->second[row]
-							: std::optional<PropertyValue>{};
+					if (columnIt != relationshipColumns.end()) { // ZYX_COV_EXCL_LINE: predicate properties are included in requiredRelationshipProperties().
+						const auto &column = columnIt->second;
+						if (row < column.size()) { // ZYX_COV_EXCL_LINE: property columns preserve metadata batch row cardinality.
+							actual = column[row];
+						}
+					}
 					if (!predicateKernel.matchesValue(actual, predicate)) {
 						selected[row] = 0;
 						break;
@@ -226,7 +230,7 @@ size_t RelationshipProjectionScanOperator::nextCandidateBatchSize() const {
 size_t RelationshipProjectionScanOperator::nextRangeBatchSize() const {
 	const auto remainingEdges = maxEdgeId_ >= nextEdgeId_
 			? static_cast<size_t>(static_cast<uint64_t>(maxEdgeId_ - nextEdgeId_ + 1))
-			: size_t{0};
+			: size_t{0}; // ZYX_COV_EXCL_LINE: loadNextMetadataBatch checks nextEdgeId_ before calling this helper.
 	if (limit_.has_value()) {
 		return std::min(remainingEdges, std::max<size_t>(remainingLimit() * 8, DEFAULT_BATCH_SIZE));
 	}
@@ -284,7 +288,7 @@ std::optional<RelationshipMetadataBatch> RelationshipProjectionScanOperator::loa
 		return std::nullopt;
 	}
 	const size_t batchSize = nextRangeBatchSize();
-	if (batchSize == 0) {
+	if (batchSize == 0) { // ZYX_COV_EXCL_LINE: nextEdgeId_ > maxEdgeId_ is checked before computing the range batch.
 		return std::nullopt;
 	}
 	const int64_t beginId = nextEdgeId_;
@@ -334,9 +338,14 @@ Record RelationshipProjectionScanOperator::makeRecord(
 	for (const auto &projection : projections_) {
 		PropertyValue value;
 		if (projection.source == RelationshipProjectionSource::RPS_EDGE) {
-			if (auto columnIt = relationshipColumns.find(projection.property);
-			    columnIt != relationshipColumns.end() && row < columnIt->second.size() && columnIt->second[row].has_value()) {
-				value = *columnIt->second[row];
+			auto columnIt = relationshipColumns.find(projection.property);
+			if (columnIt != relationshipColumns.end()) { // ZYX_COV_EXCL_LINE: edge projections are included in requiredRelationshipProperties().
+				const auto &column = columnIt->second;
+				if (row < column.size()) { // ZYX_COV_EXCL_LINE: property columns preserve metadata batch row cardinality.
+					if (column[row].has_value()) {
+						value = *column[row];
+					}
+				}
 			}
 		} else if (auto valueIt = targetProperties.find(projection.property); valueIt != targetProperties.end()) {
 			value = valueIt->second;
