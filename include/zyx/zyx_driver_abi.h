@@ -3,6 +3,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "zyx/arrow_c_data.h"
+
 #if defined(_WIN32) && defined(ZYX_DRIVER_ABI_EXPORTS)
 #define ZYX_DRIVER_API __declspec(dllexport)
 #else
@@ -19,6 +21,8 @@ typedef struct zyx_driver_result_t zyx_driver_result_t;
 typedef struct zyx_driver_params_t zyx_driver_params_t;
 typedef struct zyx_driver_error_t zyx_driver_error_t;
 typedef struct zyx_driver_value_t zyx_driver_value_t;
+typedef struct zyx_driver_ingest_t zyx_driver_ingest_t;
+typedef struct zyx_driver_edge_ingestor_t zyx_driver_edge_ingestor_t;
 
 typedef enum zyx_driver_status_t {
     ZYX_DRIVER_OK = 0,
@@ -57,6 +61,11 @@ typedef struct zyx_driver_value_ref_t {
     uint64_t slot;
 } zyx_driver_value_ref_t;
 
+typedef struct zyx_driver_id_range_t {
+    int64_t first_id;
+    int64_t count;
+} zyx_driver_id_range_t;
+
 ZYX_DRIVER_API uint32_t zyx_driver_abi_version_major(void);
 ZYX_DRIVER_API uint32_t zyx_driver_abi_version_minor(void);
 ZYX_DRIVER_API uint32_t zyx_driver_abi_version_patch(void);
@@ -64,6 +73,10 @@ ZYX_DRIVER_API const char *zyx_driver_runtime_version(void);
 
 ZYX_DRIVER_API zyx_driver_status_t zyx_driver_error_code(const zyx_driver_error_t *error);
 ZYX_DRIVER_API const char *zyx_driver_error_message(const zyx_driver_error_t *error);
+/* Returns -1 when an error is not associated with one input row. */
+ZYX_DRIVER_API int64_t zyx_driver_error_row_index(const zyx_driver_error_t *error);
+/* Returns an empty string when an error is not associated with one input field. */
+ZYX_DRIVER_API const char *zyx_driver_error_field_path(const zyx_driver_error_t *error);
 ZYX_DRIVER_API void zyx_driver_error_free(zyx_driver_error_t *error);
 
 ZYX_DRIVER_API zyx_driver_status_t zyx_driver_db_open(const char *path, zyx_driver_db_t **out_db, zyx_driver_error_t **out_error);
@@ -74,6 +87,37 @@ ZYX_DRIVER_API zyx_driver_status_t zyx_driver_db_has_active_transaction(zyx_driv
                                                          zyx_driver_error_t **out_error);
 ZYX_DRIVER_API zyx_driver_status_t zyx_driver_db_set_thread_pool_size(zyx_driver_db_t *db, uint32_t size,
                                                        zyx_driver_error_t **out_error);
+
+/* High-throughput Arrow C Data ingestion. Ingest and edge-ingestor handles are
+ * not thread-safe. zyx_driver_ingest_close rolls back an active or failed
+ * session. Arrow schemas are compiled during prepare; Arrow array buffers are
+ * borrowed only for the duration of zyx_driver_edge_ingestor_write.
+ * Callers must provide buffers that satisfy the Arrow C Data Interface sizes;
+ * ArrowArray does not carry physical buffer byte lengths for ZYX to verify.
+ *
+ * Edge schemas must be struct<source_id:int64, target_id:int64,
+ * properties:struct<...>>. A prepared ingestor accepts any number of record
+ * batches with that schema. A write failure poisons the ingest session: it can
+ * only be rolled back or closed afterward. One batch is limited to 10,000,000
+ * rows and 512 MiB of adapter-side decoded memory.
+ */
+ZYX_DRIVER_API zyx_driver_status_t zyx_driver_ingest_begin(zyx_driver_db_t *db, zyx_driver_ingest_t **out_ingest,
+												   zyx_driver_error_t **out_error);
+ZYX_DRIVER_API zyx_driver_status_t zyx_driver_ingest_prepare_edges(zyx_driver_ingest_t *ingest, const char *edge_type,
+													   const struct ArrowSchema *schema,
+													   zyx_driver_edge_ingestor_t **out_ingestor,
+													   zyx_driver_error_t **out_error);
+ZYX_DRIVER_API zyx_driver_status_t zyx_driver_edge_ingestor_write(zyx_driver_edge_ingestor_t *ingestor,
+													  const struct ArrowArray *record_batch,
+													  zyx_driver_id_range_t *out_ids,
+													  zyx_driver_error_t **out_error);
+ZYX_DRIVER_API zyx_driver_status_t zyx_driver_ingest_commit(zyx_driver_ingest_t *ingest,
+													zyx_driver_error_t **out_error);
+ZYX_DRIVER_API zyx_driver_status_t zyx_driver_ingest_rollback(zyx_driver_ingest_t *ingest,
+													  zyx_driver_error_t **out_error);
+ZYX_DRIVER_API zyx_driver_status_t zyx_driver_edge_ingestor_close(zyx_driver_edge_ingestor_t *ingestor,
+													  zyx_driver_error_t **out_error);
+ZYX_DRIVER_API zyx_driver_status_t zyx_driver_ingest_close(zyx_driver_ingest_t *ingest, zyx_driver_error_t **out_error);
 
 /* Transaction handles are opaque and must be released with zyx_driver_txn_close.
  * Commit and rollback finalize transaction state. Closing an active transaction rolls back.

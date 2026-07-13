@@ -19,7 +19,7 @@ zyx_driver_status_t resultErrorStatus(const zyx::Result &result) {
 zyx_driver_status_t validateNoActiveTransaction(zyx_driver_db_t *db, zyx_driver_error_t **out_error) {
     {
         std::lock_guard lock(db->mutex);
-        if (!db->active_txns.empty()) {
+        if (!db->active_txns.empty() || !db->active_ingests.empty()) {
             return setError(out_error, ZYX_DRIVER_TRANSACTION_ERROR, "database has active transactions");
         }
     }

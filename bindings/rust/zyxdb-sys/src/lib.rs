@@ -31,6 +31,16 @@ pub struct zyx_driver_value_t {
 }
 
 #[repr(C)]
+pub struct zyx_driver_ingest_t {
+    _private: [u8; 0],
+}
+
+#[repr(C)]
+pub struct zyx_driver_edge_ingestor_t {
+    _private: [u8; 0],
+}
+
+#[repr(C)]
 pub struct zyx_driver_error_t {
     _private: [u8; 0],
 }
@@ -74,6 +84,40 @@ pub struct zyx_driver_value_ref_t {
     pub slot: u64,
 }
 
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct zyx_driver_id_range_t {
+    pub first_id: i64,
+    pub count: i64,
+}
+
+#[repr(C)]
+pub struct ArrowSchema {
+    pub format: *const c_char,
+    pub name: *const c_char,
+    pub metadata: *const c_char,
+    pub flags: i64,
+    pub n_children: i64,
+    pub children: *mut *mut ArrowSchema,
+    pub dictionary: *mut ArrowSchema,
+    pub release: Option<unsafe extern "C" fn(*mut ArrowSchema)>,
+    pub private_data: *mut std::ffi::c_void,
+}
+
+#[repr(C)]
+pub struct ArrowArray {
+    pub length: i64,
+    pub null_count: i64,
+    pub offset: i64,
+    pub n_buffers: i64,
+    pub n_children: i64,
+    pub buffers: *mut *const std::ffi::c_void,
+    pub children: *mut *mut ArrowArray,
+    pub dictionary: *mut ArrowArray,
+    pub release: Option<unsafe extern "C" fn(*mut ArrowArray)>,
+    pub private_data: *mut std::ffi::c_void,
+}
+
 extern "C" {
     pub fn zyx_driver_abi_version_major() -> u32;
     pub fn zyx_driver_abi_version_minor() -> u32;
@@ -82,6 +126,8 @@ extern "C" {
 
     pub fn zyx_driver_error_code(error: *const zyx_driver_error_t) -> zyx_driver_status_t;
     pub fn zyx_driver_error_message(error: *const zyx_driver_error_t) -> *const c_char;
+    pub fn zyx_driver_error_row_index(error: *const zyx_driver_error_t) -> i64;
+    pub fn zyx_driver_error_field_path(error: *const zyx_driver_error_t) -> *const c_char;
     pub fn zyx_driver_error_free(error: *mut zyx_driver_error_t);
 
     pub fn zyx_driver_db_open(
@@ -110,6 +156,41 @@ extern "C" {
     pub fn zyx_driver_db_set_thread_pool_size(
         db: *mut zyx_driver_db_t,
         size: u32,
+        out_error: *mut *mut zyx_driver_error_t,
+    ) -> zyx_driver_status_t;
+
+    pub fn zyx_driver_ingest_begin(
+        db: *mut zyx_driver_db_t,
+        out_ingest: *mut *mut zyx_driver_ingest_t,
+        out_error: *mut *mut zyx_driver_error_t,
+    ) -> zyx_driver_status_t;
+    pub fn zyx_driver_ingest_prepare_edges(
+        ingest: *mut zyx_driver_ingest_t,
+        edge_type: *const c_char,
+        schema: *const ArrowSchema,
+        out_ingestor: *mut *mut zyx_driver_edge_ingestor_t,
+        out_error: *mut *mut zyx_driver_error_t,
+    ) -> zyx_driver_status_t;
+    pub fn zyx_driver_edge_ingestor_write(
+        ingestor: *mut zyx_driver_edge_ingestor_t,
+        record_batch: *const ArrowArray,
+        out_ids: *mut zyx_driver_id_range_t,
+        out_error: *mut *mut zyx_driver_error_t,
+    ) -> zyx_driver_status_t;
+    pub fn zyx_driver_ingest_commit(
+        ingest: *mut zyx_driver_ingest_t,
+        out_error: *mut *mut zyx_driver_error_t,
+    ) -> zyx_driver_status_t;
+    pub fn zyx_driver_ingest_rollback(
+        ingest: *mut zyx_driver_ingest_t,
+        out_error: *mut *mut zyx_driver_error_t,
+    ) -> zyx_driver_status_t;
+    pub fn zyx_driver_edge_ingestor_close(
+        ingestor: *mut zyx_driver_edge_ingestor_t,
+        out_error: *mut *mut zyx_driver_error_t,
+    ) -> zyx_driver_status_t;
+    pub fn zyx_driver_ingest_close(
+        ingest: *mut zyx_driver_ingest_t,
         out_error: *mut *mut zyx_driver_error_t,
     ) -> zyx_driver_status_t;
 
@@ -616,7 +697,6 @@ extern "C" {
         out_error: *mut *mut zyx_driver_error_t,
     ) -> zyx_driver_status_t;
 }
-
 
 #[cfg(test)]
 mod tests {

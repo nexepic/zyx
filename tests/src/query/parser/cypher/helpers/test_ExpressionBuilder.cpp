@@ -896,11 +896,16 @@ TEST_F(ExpressionBuilderUnitTest, MapLiteralExpression) {
 }
 
 TEST_F(ExpressionBuilderUnitTest, EvaluateLiteralExpression_MapLiteral) {
-	// evaluateLiteralExpression calls buildExpression which throws for MAP literals
-	// The throw propagates because it occurs at line 76 (outside the try/catch at line 101)
+	// Literal-only map expressions are parsed directly for procedure arguments
+	// and property maps, without requiring a runtime expression wrapper.
 	auto* expr = parseReturnExpr("RETURN {name: 'Alice', age: 30}");
 	ASSERT_NE(expr, nullptr);
-	EXPECT_THROW(ExpressionBuilder::evaluateLiteralExpression(expr), std::runtime_error);
+	auto value = ExpressionBuilder::evaluateLiteralExpression(expr);
+	ASSERT_EQ(value.getType(), graph::PropertyType::MAP);
+	const auto &map = value.getMap();
+	ASSERT_EQ(map.size(), 2UL);
+	EXPECT_EQ(map.at("name").toString(), "Alice");
+	EXPECT_EQ(map.at("age").toString(), "30");
 }
 
 TEST_F(ExpressionBuilderUnitTest, MapLiteralEmpty) {

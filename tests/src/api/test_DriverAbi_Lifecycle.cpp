@@ -32,7 +32,7 @@ protected:
 
 TEST_F(DriverAbiLifecycleTest, VersionIsStableV1) {
     EXPECT_EQ(zyx_driver_abi_version_major(), 1u);
-    EXPECT_EQ(zyx_driver_abi_version_minor(), 0u);
+    EXPECT_EQ(zyx_driver_abi_version_minor(), 1u);
     EXPECT_GE(zyx_driver_abi_version_patch(), 0u);
     ASSERT_NE(zyx_driver_runtime_version(), nullptr);
     EXPECT_NE(std::string(zyx_driver_runtime_version()).empty(), true);

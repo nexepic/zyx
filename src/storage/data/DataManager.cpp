@@ -295,6 +295,7 @@ namespace graph::storage {
 		nodeManager_->add(node);
 		txnContext_.recordAdd(node);
 		observerManager_.notifyNodeAdded(node);
+		markGraphMutated();
 	}
 
 	void DataManager::addNodes(std::vector<Node> &nodes) const {
@@ -337,6 +338,7 @@ namespace graph::storage {
 			debug::ScopedPerfTimer timer("datamanager.add_nodes.txn_record");
 			txnContext_.recordAdds(nodes);
 		}
+		markGraphMutated();
 	}
 
 	void DataManager::updateNode(const Node &node) {
@@ -345,6 +347,7 @@ namespace graph::storage {
 		txnContext_.recordUpdate<Node>(node, oldNode);
 		nodeManager_->update(node);
 		observerManager_.notifyNodeUpdated(oldNode, node);
+		markGraphMutated();
 	}
 
 	void DataManager::updateNodes(const std::vector<Node> &nodes) {
@@ -364,6 +367,7 @@ namespace graph::storage {
 		for (size_t index = 0; index < nodes.size(); ++index) {
 			observerManager_.notifyNodeUpdated(oldNodes[index], nodes[index]);
 		}
+		markGraphMutated();
 	}
 
 	void DataManager::updateNodesWithBeforeImages(const std::vector<Node> &nodes, const std::vector<Node> &oldNodes) {
@@ -380,12 +384,14 @@ namespace graph::storage {
 		for (size_t index = 0; index < nodes.size(); ++index) {
 			observerManager_.notifyNodeUpdated(oldNodes[index], nodes[index]);
 		}
+		markGraphMutated();
 	}
 
 	void DataManager::deleteNode(Node &node) const {
 		guardReadOnly();
 		nodeManager_->remove(node);
 		observerManager_.notifyNodeDeleted(node);
+		markGraphMutated();
 	}
 
 	Node DataManager::getNode(int64_t id) const { return nodeManager_->get(id); }
@@ -536,6 +542,7 @@ namespace graph::storage {
 		edgeManager_->add(edge);
 		txnContext_.recordAdd(edge);
 		observerManager_.notifyEdgeAdded(edge);
+		markGraphMutated();
 	}
 
 	void DataManager::addEdges(std::vector<Edge> &edges) const {
@@ -582,6 +589,7 @@ namespace graph::storage {
 			debug::ScopedPerfTimer timer("datamanager.add_edges.txn_record");
 			txnContext_.recordAdds(edges);
 		}
+		markGraphMutated();
 	}
 
 	void DataManager::updateEdge(const Edge &edge) {
@@ -590,6 +598,7 @@ namespace graph::storage {
 		txnContext_.recordUpdate<Edge>(edge, oldEdge);
 		edgeManager_->update(edge);
 		observerManager_.notifyEdgeUpdated(oldEdge, edge);
+		markGraphMutated();
 	}
 
 	void DataManager::updateEdges(const std::vector<Edge> &edges) {
@@ -609,6 +618,7 @@ namespace graph::storage {
 		for (size_t index = 0; index < edges.size(); ++index) {
 			observerManager_.notifyEdgeUpdated(oldEdges[index], edges[index]);
 		}
+		markGraphMutated();
 	}
 
 	void DataManager::updateEdgesWithBeforeImages(const std::vector<Edge> &edges, const std::vector<Edge> &oldEdges) {
@@ -625,12 +635,14 @@ namespace graph::storage {
 		for (size_t index = 0; index < edges.size(); ++index) {
 			observerManager_.notifyEdgeUpdated(oldEdges[index], edges[index]);
 		}
+		markGraphMutated();
 	}
 
 	void DataManager::deleteEdge(Edge &edge) const {
 		guardReadOnly();
 		edgeManager_->remove(edge);
 		observerManager_.notifyEdgeDeleted(edge);
+		markGraphMutated();
 	}
 
 	Edge DataManager::getEdge(int64_t id) const { return edgeManager_->get(id); }
@@ -722,6 +734,9 @@ namespace graph::storage {
 		auto newProps = manager.getProperties(entityId);
 		newEntity.setProperties(newProps);
 		notify(oldEntity, newEntity);
+		if constexpr (std::is_same_v<EntityType, Node> || std::is_same_v<EntityType, Edge>) {
+			markGraphMutated();
+		}
 	}
 
 	template<typename EntityType, typename ManagerType>
@@ -748,6 +763,9 @@ namespace graph::storage {
 		auto newProps = manager.getProperties(entityId);
 		newEntity.setProperties(newProps);
 		notify(oldEntity, newEntity);
+		if constexpr (std::is_same_v<EntityType, Node> || std::is_same_v<EntityType, Edge>) {
+			markGraphMutated();
+		}
 	}
 
 	// --- Property Entity Operations ---

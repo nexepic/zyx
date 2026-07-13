@@ -39,6 +39,34 @@ namespace {
 		return properties;
 	}
 
+	void validateEdgeEndpoints(
+			const DataManager &dataManager,
+			const std::vector<int64_t> &sourceIds,
+			const std::vector<int64_t> &targetIds) {
+		std::unordered_map<int64_t, bool> activeEndpoints;
+		activeEndpoints.reserve(sourceIds.size() + targetIds.size());
+		const auto isActiveEndpoint = [&](int64_t nodeId) {
+			if (const auto it = activeEndpoints.find(nodeId); it != activeEndpoints.end()) {
+				return it->second;
+			}
+			const auto node = dataManager.getNode(nodeId);
+			const bool active = node.getId() != 0 && node.isActive();
+			activeEndpoints.emplace(nodeId, active);
+			return active;
+		};
+
+		for (size_t row = 0; row < sourceIds.size(); ++row) {
+			if (!isActiveEndpoint(sourceIds[row])) {
+				throw BulkInputError(row, "source_id",
+						"source node " + std::to_string(sourceIds[row]) + " does not exist or is inactive");
+			}
+			if (!isActiveEndpoint(targetIds[row])) {
+				throw BulkInputError(row, "target_id",
+						"target node " + std::to_string(targetIds[row]) + " does not exist or is inactive");
+			}
+		}
+	}
+
 } // namespace
 
 	std::vector<int64_t> DataManager::addNodesColumnar(
@@ -98,6 +126,7 @@ namespace {
 		for (const auto &node: nodes) {
 			ids.push_back(node.getId());
 		}
+		markGraphMutated();
 		return ids;
 	}
 
@@ -115,6 +144,7 @@ namespace {
 		if (count == 0) {
 			return {};
 		}
+		validateEdgeEndpoints(*this, sourceIds, targetIds);
 
 		std::vector<Edge> edges;
 		edges.reserve(count);
@@ -164,6 +194,7 @@ namespace {
 		for (const auto &edge: edges) {
 			ids.push_back(edge.getId());
 		}
+		markGraphMutated();
 		return ids;
 	}
 

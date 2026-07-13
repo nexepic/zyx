@@ -124,13 +124,20 @@ GDS (Graph Data Science) procedures use a named projection pattern: project a su
 
 | Procedure | Parameters | Description |
 |---|---|---|
-| `gds.graph.project(name, label, type, weight?)` | Projection name, node label, edge type, optional weight property | Create graph projection |
+| `gds.graph.project(name, config)` | Projection name, node/relationship selection, orientation, and weights | Create a named graph projection |
 | `gds.graph.drop(name)` | Projection name | Drop graph projection |
+| `gds.graph.dropAll()` | None | Drop all graph projections |
+| `gds.graph.exists(name)` | Projection name | Check whether a projection exists |
+| `gds.graph.list(name?)` | Optional projection name | List catalog descriptors |
+| `gds.graph.schema(name)` | Projection name | Inspect normalized projection schema |
 | `gds.pageRank.stream(name, maxIter?, damping?)` | Projection name, optional iterations, optional damping factor | PageRank |
 | `gds.wcc.stream(name)` | Projection name | Weakly Connected Components |
 | `gds.betweenness.stream(name, samplingSize?)` | Projection name, optional sampling size | Betweenness Centrality |
 | `gds.closeness.stream(name)` | Projection name | Closeness Centrality |
 | `gds.shortestPath.dijkstra.stream(name, startId, endId)` | Projection name, source ID, target ID | Dijkstra shortest path |
+| `gds.leiden.stream(name, options?)` | Projection name, optional Leiden options map | Leiden community detection |
+
+See [GDS Graph Projections](/en/docs/zyx/algorithms/graph-projections) for the structured projection schema and catalog lifecycle, and [Leiden Community Detection](/en/docs/zyx/algorithms/community-detection) for algorithm options.
 
 ## EXPLAIN / PROFILE
 

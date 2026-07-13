@@ -64,11 +64,14 @@ PropertyValue ExpressionBuilder::evaluateLiteralExpression(CypherParser::Express
 		return PropertyValue();
 	}
 
-	// Special case: Check if it's a list literal BEFORE calling buildExpression()
-	// buildListLiteral() throws an error for non-IN contexts, so we need to handle it here
+	// Special case: parse collection literals directly before buildExpression().
+	// The expression AST still has narrower literal wrappers, while procedure
+	// arguments and property maps need the full PropertyValue representation.
 	auto atom = getAtomFromExpression(expr);
+	if (atom && atom->literal() && atom->literal()->mapLiteral()) {
+		return parseValue(atom->literal());
+	}
 	if (atom && atom->listLiteral()) {
-		// It's a list literal - parse directly into PropertyValue
 		return parseListLiteral(atom->listLiteral());
 	}
 

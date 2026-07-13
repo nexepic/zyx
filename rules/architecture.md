@@ -394,6 +394,8 @@ All browser-visible runtime functions are listed in `build_wasm.sh` `-sEXPORTED_
 **When adding new Driver ABI functions**: Update `include/zyx/zyx_driver_abi.h`, the focused implementation files under
 `src/api/driver_abi/`, relevant binding declarations, and `scripts/build_wasm.sh` `-sEXPORTED_FUNCTIONS` when browser access is needed.
 
+The write-side Arrow ingest functions are intentionally not exported by the browser WASM target. The Playground always executes through read-only Driver ABI transactions.
+
 ### Key files
 
 | File | Purpose |
