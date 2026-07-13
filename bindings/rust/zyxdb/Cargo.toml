@@ -1,6 +1,6 @@
 [package]
 name = "zyxdb"
-version = "0.1.25"
+version = "0.1.26"
 edition = "2021"
 description = "Rust bindings for the ZYX embedded graph database"
 license = "Apache-2.0"
@@ -17,7 +17,7 @@ bundled = ["zyxdb-sys/bundled"]
 system = ["zyxdb-sys/system"]
 
 [dependencies]
-zyxdb-sys = { path = "../zyxdb-sys", version = "0.1.25", default-features = false }
+zyxdb-sys = { path = "../zyxdb-sys", version = "0.1.26", default-features = false }
 
 [dev-dependencies]
 tempfile = "3"

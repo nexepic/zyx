@@ -1,6 +1,6 @@
 [package]
 name = "zyx-src"
-version = "0.1.24"
+version = "0.1.26"
 edition = "2021"
 description = "Vendored native source for the ZYX embedded graph database"
 license = "Apache-2.0"
