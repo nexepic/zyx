@@ -40,7 +40,7 @@ std::string uniquePath(const std::string &prefix) {
 } // namespace
 
 TEST(DriverAbiErrorHandlingTest, PublicErrorAccessorsHandleFallbackAndStaticStorage) {
-    zyx_driver_error_t staticError{ZYX_DRIVER_IO_ERROR, {}, "fallback I/O error", true};
+    zyx_driver_error_t staticError{ZYX_DRIVER_IO_ERROR, {}, "fallback I/O error", true, -1, {}};
 
     EXPECT_EQ(zyx_driver_error_code(&staticError), ZYX_DRIVER_IO_ERROR);
     EXPECT_STREQ(zyx_driver_error_message(&staticError), "fallback I/O error");

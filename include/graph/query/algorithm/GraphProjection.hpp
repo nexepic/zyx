@@ -20,14 +20,20 @@
 
 #pragma once
 
+#include <cstddef>
 #include <memory>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
+#include "graph/query/algorithm/ProjectionSpec.hpp"
+
 namespace graph::storage {
 	class DataManager;
+}
+namespace graph {
+	class Edge;
 }
 
 namespace graph::query::algorithm {
@@ -35,6 +41,8 @@ namespace graph::query::algorithm {
 	struct ProjectedEdge {
 		int64_t targetId;
 		double weight;
+		int64_t relationshipId = 0;
+		bool syntheticReverse = false;
 	};
 
 	/**
@@ -59,6 +67,15 @@ namespace graph::query::algorithm {
 									 const std::string &edgeType = "",
 									 const std::string &weightProperty = "");
 
+		/**
+		 * @brief Build a projection from a structured GDS projection spec.
+		 *
+		 * Supports multiple node labels, multiple relationship types,
+		 * relationship-specific orientation, and constant/property weights.
+		 */
+		static GraphProjection build(const std::shared_ptr<storage::DataManager> &dm,
+									 const ProjectionSpec &spec);
+
 		[[nodiscard]] const std::unordered_set<int64_t> &getNodeIds() const { return nodeIds_; }
 
 		[[nodiscard]] const std::vector<ProjectedEdge> &getOutNeighbors(int64_t nodeId) const;
@@ -67,6 +84,7 @@ namespace graph::query::algorithm {
 		[[nodiscard]] size_t nodeCount() const { return nodeIds_.size(); }
 		[[nodiscard]] size_t edgeCount() const { return edgeCount_; }
 		[[nodiscard]] bool isWeighted() const { return isWeighted_; }
+		[[nodiscard]] size_t estimatedMemoryBytes() const;
 
 	private:
 		std::unordered_set<int64_t> nodeIds_;
@@ -74,6 +92,17 @@ namespace graph::query::algorithm {
 		std::unordered_map<int64_t, std::vector<ProjectedEdge>> inAdj_;
 		size_t edgeCount_ = 0;
 		bool isWeighted_ = false;
+
+		static void addArc(GraphProjection &proj,
+						   int64_t sourceId,
+						   int64_t targetId,
+						   double weight,
+						   int64_t relationshipId,
+						   bool syntheticReverse);
+		static void addProjectedRelationship(GraphProjection &proj,
+											 const Edge &edge,
+											 const RelationshipProjectionSpec &spec,
+											 double weight);
 
 		static const std::vector<ProjectedEdge> EMPTY_EDGES;
 	};

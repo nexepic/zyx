@@ -284,6 +284,26 @@ namespace {
 		EXPECT_EQ(distinctCommunities(res), 2u);
 	}
 
+	TEST_F(LeidenTest, CsrProjectionPreservesSelfLoopsInSuperGraph) {
+		using Edge = graph::query::algorithm::CsrProjection::Edge;
+		std::vector<Edge> edges{{0, 0, 3.0f}, {0, 1, 2.0f}};
+		auto csr = graph::query::algorithm::CsrProjection::buildFromEdgeList(2, edges);
+
+		ASSERT_EQ(csr->nodeCount(), 2u);
+		EXPECT_EQ(csr->edgeCount(), 4u);
+
+		double selfLoopWeight = 0.0;
+		double linkWeight = 0.0;
+		auto neighbors = csr->neighbors(0);
+		auto weights = csr->neighborWeights(0);
+		for (size_t i = 0; i < neighbors.size(); ++i) {
+			if (neighbors[i] == 0) selfLoopWeight += weights[i];
+			if (neighbors[i] == 1) linkWeight += weights[i];
+		}
+		EXPECT_DOUBLE_EQ(selfLoopWeight, 6.0);
+		EXPECT_DOUBLE_EQ(linkWeight, 2.0);
+	}
+
 	TEST_F(LeidenTest, LiftingParallelConsistentCommunityCount) {
 		std::vector<int64_t> firsts;
 		buildCliqueChain(6, 6, firsts);

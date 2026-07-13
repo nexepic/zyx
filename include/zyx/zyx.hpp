@@ -31,9 +31,11 @@
 
 namespace zyx {
 
+	class Database;
 	class Result;
 
 	namespace detail {
+		class DatabaseBulkInternal;
 		Value getTypedResultValue(const Result &result, int index);
 	}
 
@@ -247,6 +249,7 @@ namespace zyx {
 
 	private:
 		std::unique_ptr<DatabaseImpl> impl_;
+		friend class detail::DatabaseBulkInternal;
 	};
 
 } // namespace zyx

@@ -34,10 +34,8 @@ namespace graph::query::algorithm {
 		int maxIterations = 20;          ///< max local-moving iterations per level
 		int maxLevels = 10;              ///< max level-lifting levels (1 = single level)
 		double resolution = 1.0;
-		/// Refinement threshold (theta). The Leiden refinement phase moves a node
-		/// out of its community only when the modularity gain exceeds this value,
-		/// which is typically negative — allowing small modularity decreases to
-		/// break disconnected communities apart. 0 disables refinement.
+		/// Refinement threshold (theta). Positive values require a disconnected
+		/// component split to clear this modularity-gain gate; 0 disables refinement.
 		double refinementThreshold = 0.01;
 	};
 
@@ -64,10 +62,10 @@ namespace graph::query::algorithm {
 	 * back to the original node ids.
 	 *
 	 * Design notes:
-	 *  - `communityOf` is a plain vector; in the parallel path each worker owns
-	 *    a disjoint, contiguous node-index range so writes never collide.
-	 *  - `sigmaTotal` (per-community degree sum) is the only true contention
-	 *    point in the parallel path and uses atomic updates there.
+	 *  - Local moving uses atomic community labels internally so parallel workers
+	 *    can read fresh neighbor assignments without data races.
+	 *  - `sigmaTotal` (per-community degree sum) is the other contention point
+	 *    in the parallel path and uses atomic updates there.
 	 *  - Super-node graphs rebuild a fresh CsrProjection per level via
 	 *    CsrProjection::buildFromEdgeList — no storage I/O.
 	 *  - Refinement finds connected components inside each community via a

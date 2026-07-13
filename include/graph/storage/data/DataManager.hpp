@@ -207,6 +207,9 @@ namespace graph::storage {
 		[[nodiscard]] FileHeader getFileHeader() const { return fileHeader_; }
 		FileHeader &getFileHeaderRef() const { return fileHeader_; }
 		[[nodiscard]] uint32_t getFileVersion() const { return fileHeader_.version; }
+		[[nodiscard]] uint64_t getGraphRevision() const noexcept {
+			return graphRevision_.load(std::memory_order_acquire);
+		}
 
 		void registerObserver(std::shared_ptr<IEntityObserver> observer) {
 			observerManager_.registerObserver(std::move(observer));
@@ -627,6 +630,10 @@ namespace graph::storage {
 			}
 		}
 
+		void markGraphMutated() const noexcept {
+			graphRevision_.fetch_add(1, std::memory_order_acq_rel);
+		}
+
 		// Core file and state
 		std::shared_ptr<std::fstream> file_; // Persistent file handle
 		FileHeader &fileHeader_; // Cached file header
@@ -640,6 +647,7 @@ namespace graph::storage {
 		// Transaction bookkeeping (mutable: logically separate from entity state,
 		// needs to be modifiable from const entity mutation methods)
 		mutable TransactionContext txnContext_;
+		mutable std::atomic<uint64_t> graphRevision_{0};
 
 		// Flag for deletion tracking
 		std::atomic<bool> *deleteOperationPerformedFlag_ = nullptr;

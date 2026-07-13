@@ -19,7 +19,12 @@
  **/
 
 #include "graph/query/planner/ProcedureRegistry.hpp"
+#include <cmath>
+#include <initializer_list>
 #include <limits>
+#include <optional>
+#include <utility>
+#include <variant>
 #include "graph/query/execution/operators/AlgoShortestPathOperator.hpp"
 #include "graph/query/execution/operators/CreateIndexOperator.hpp"
 #include "graph/query/execution/operators/DropIndexOperator.hpp"
@@ -30,6 +35,106 @@
 #include "graph/query/execution/operators/ShowStatsOperator.hpp"
 #include "graph/query/execution/operators/TrainVectorIndexOperator.hpp"
 #include "graph/query/execution/operators/VectorSearchOperator.hpp"
+#include "graph/query/planner/ProjectionSpecParser.hpp"
+
+namespace {
+
+using graph::PropertyType;
+using graph::PropertyValue;
+
+struct LeidenProcedureOptions {
+	int maxIterations = 20;
+	double resolution = 1.0;
+	size_t threadCount = 0;
+	int maxLevels = 10;
+	double refinementThreshold = 0.01;
+};
+
+const PropertyValue *findOption(const PropertyValue::MapType &options,
+                                std::initializer_list<const char *> keys) {
+	for (const char *key : keys) {
+		auto it = options.find(key);
+		if (it != options.end()) return &it->second;
+	}
+	return nullptr;
+}
+
+int parsePositiveIntOption(const PropertyValue &value, const char *name) {
+	if (value.getType() != PropertyType::INTEGER) {
+		throw std::runtime_error(std::string("gds.leiden.stream option '") + name + "' must be an integer");
+	}
+	const int64_t parsed = std::get<int64_t>(value.getVariant());
+	if (parsed <= 0 || parsed > std::numeric_limits<int>::max()) {
+		throw std::runtime_error(std::string("gds.leiden.stream option '") + name + "' must be a positive integer");
+	}
+	return static_cast<int>(parsed);
+}
+
+size_t parseNonNegativeSizeOption(const PropertyValue &value, const char *name) {
+	if (value.getType() != PropertyType::INTEGER) {
+		throw std::runtime_error(std::string("gds.leiden.stream option '") + name + "' must be an integer");
+	}
+	const int64_t parsed = std::get<int64_t>(value.getVariant());
+	if (parsed < 0) {
+		throw std::runtime_error(std::string("gds.leiden.stream option '") + name + "' must be a non-negative integer");
+	}
+	return static_cast<size_t>(parsed);
+}
+
+double parseFiniteDoubleOption(const PropertyValue &value, const char *name, bool requirePositive) {
+	double parsed = 0.0;
+	if (value.getType() == PropertyType::INTEGER) {
+		parsed = static_cast<double>(std::get<int64_t>(value.getVariant()));
+	} else if (value.getType() == PropertyType::DOUBLE) {
+		parsed = std::get<double>(value.getVariant());
+	} else {
+		throw std::runtime_error(std::string("gds.leiden.stream option '") + name + "' must be numeric");
+	}
+	if (!std::isfinite(parsed) || (requirePositive && parsed <= 0.0) || (!requirePositive && parsed < 0.0)) {
+		throw std::runtime_error(
+			std::string("gds.leiden.stream option '") + name +
+			(requirePositive ? "' must be a positive finite number" : "' must be a non-negative finite number"));
+	}
+	return parsed;
+}
+
+LeidenProcedureOptions parseLeidenOptions(const std::vector<PropertyValue> &args) {
+	if (args.size() < 1) {
+		throw std::runtime_error(
+			"gds.leiden.stream expects (graphName[, options]) or (graphName[, maxIterations, resolution[, threadCount[, maxLevels[, refinementThreshold]]]])");
+	}
+	if (args.size() > 6) {
+		throw std::runtime_error("gds.leiden.stream received too many arguments");
+	}
+
+	LeidenProcedureOptions options;
+	if (args.size() > 1 && args[1].getType() == PropertyType::MAP) {
+		if (args.size() > 2) {
+			throw std::runtime_error("gds.leiden.stream options map must be the final argument");
+		}
+		const auto &map = args[1].getMap();
+		if (const auto *value = findOption(map, {"maxIterations", "max_iterations"}))
+			options.maxIterations = parsePositiveIntOption(*value, "maxIterations");
+		if (const auto *value = findOption(map, {"resolution"}))
+			options.resolution = parseFiniteDoubleOption(*value, "resolution", true);
+		if (const auto *value = findOption(map, {"threadCount", "thread_count", "concurrency"}))
+			options.threadCount = parseNonNegativeSizeOption(*value, "threadCount");
+		if (const auto *value = findOption(map, {"maxLevels", "max_levels"}))
+			options.maxLevels = parsePositiveIntOption(*value, "maxLevels");
+		if (const auto *value = findOption(map, {"refinementThreshold", "refinement_threshold"}))
+			options.refinementThreshold = parseFiniteDoubleOption(*value, "refinementThreshold", false);
+		return options;
+	}
+
+	if (args.size() > 1) options.maxIterations = parsePositiveIntOption(args[1], "maxIterations");
+	if (args.size() > 2) options.resolution = parseFiniteDoubleOption(args[2], "resolution", true);
+	if (args.size() > 3) options.threadCount = parseNonNegativeSizeOption(args[3], "threadCount");
+	if (args.size() > 4) options.maxLevels = parsePositiveIntOption(args[4], "maxLevels");
+	if (args.size() > 5) options.refinementThreshold = parseFiniteDoubleOption(args[5], "refinementThreshold", false);
+	return options;
+}
+
+} // namespace
 
 namespace graph::query::planner {
 
@@ -145,21 +250,47 @@ namespace graph::query::planner {
 
 		// --- GDS Graph Projection ---
 		registerProcedure("gds.graph.project", [](const ProcedureContext &ctx, const auto &args) {
-			if (args.size() < 3)
-				throw std::runtime_error("gds.graph.project expects (name, nodeLabel, edgeType[, weightProperty])");
-			std::string name = args[0].toString();
-			std::string nodeLabel = args[1].toString();
-			std::string edgeType = args[2].toString();
-			std::string weightProp = args.size() > 3 ? args[3].toString() : "";
+			auto spec = ProjectionSpecParser::parseGraphProjectArgs(args);
 			return std::make_unique<execution::operators::GdsGraphProjectOperator>(
-				ctx.dataManager, ctx.projectionManager, name, nodeLabel, edgeType, weightProp);
+				ctx.dataManager, ctx.projectionManager, std::move(spec));
 		}, /*mutatesData=*/false);
 
 		registerProcedure("gds.graph.drop", [](const ProcedureContext &ctx, const auto &args) {
-			if (args.size() < 1)
+			if (args.size() != 1)
 				throw std::runtime_error("gds.graph.drop expects (name)");
 			return std::make_unique<execution::operators::GdsGraphDropOperator>(
 				ctx.projectionManager, args[0].toString());
+		}, /*mutatesData=*/false);
+
+		registerProcedure("gds.graph.dropAll", [](const ProcedureContext &ctx, const auto &args) {
+			if (!args.empty())
+				throw std::runtime_error("gds.graph.dropAll expects no arguments");
+			return std::make_unique<execution::operators::GdsGraphDropAllOperator>(ctx.projectionManager);
+		}, /*mutatesData=*/false);
+
+		registerProcedure("gds.graph.exists", [](const ProcedureContext &ctx, const auto &args) {
+			if (args.size() != 1)
+				throw std::runtime_error("gds.graph.exists expects (name)");
+			return std::make_unique<execution::operators::GdsGraphExistsOperator>(
+				ctx.projectionManager, args[0].toString());
+		}, /*mutatesData=*/false);
+
+		registerProcedure("gds.graph.list", [](const ProcedureContext &ctx, const auto &args) {
+			if (args.size() > 1)
+				throw std::runtime_error("gds.graph.list expects ([name])");
+			std::optional<std::string> name;
+			if (!args.empty()) {
+				name = args[0].toString();
+			}
+			return std::make_unique<execution::operators::GdsGraphListOperator>(
+				ctx.dataManager, ctx.projectionManager, std::move(name));
+		}, /*mutatesData=*/false);
+
+		registerProcedure("gds.graph.schema", [](const ProcedureContext &ctx, const auto &args) {
+			if (args.size() != 1)
+				throw std::runtime_error("gds.graph.schema expects (name)");
+			return std::make_unique<execution::operators::GdsGraphSchemaOperator>(
+				ctx.dataManager, ctx.projectionManager, args[0].toString());
 		}, /*mutatesData=*/false);
 
 		// --- GDS Algorithms ---
@@ -207,15 +338,12 @@ namespace graph::query::planner {
 		});
 
 		registerProcedure("gds.leiden.stream", [](const ProcedureContext &ctx, const auto &args) {
-			if (args.size() < 1)
-				throw std::runtime_error(
-					"gds.leiden.stream expects (graphName[, maxIterations, resolution[, threadCount]])");
+			const auto options = parseLeidenOptions(args);
 			std::string graphName = args[0].toString();
-			int maxIter = args.size() > 1 ? static_cast<int>(std::stoll(args[1].toString())) : 20;
-			double resolution = args.size() > 2 ? std::stod(args[2].toString()) : 1.0;
-			size_t threadCount = args.size() > 3 ? static_cast<size_t>(std::stoll(args[3].toString())) : 0;
 			return std::make_unique<execution::operators::GdsLeidenOperator>(
-				ctx.dataManager, ctx.projectionManager, graphName, maxIter, resolution, threadCount);
+				ctx.dataManager, ctx.projectionManager, graphName, options.maxIterations,
+				options.resolution, options.threadCount, options.maxLevels,
+				options.refinementThreshold);
 		});
 	}
 } // namespace graph::query::planner

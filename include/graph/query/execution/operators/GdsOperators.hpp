@@ -20,14 +20,130 @@
 
 #pragma once
 
+#include <chrono>
+#include <limits>
+#include <optional>
+#include <type_traits>
+#include <utility>
+
 #include "../PhysicalOperator.hpp"
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/query/algorithm/GraphAlgorithm.hpp"
 #include "graph/query/algorithm/GraphProjection.hpp"
 #include "graph/query/algorithm/GraphProjectionManager.hpp"
 #include "graph/query/algorithm/LeidenEngine.hpp"
+#include "graph/query/algorithm/ProjectionSpec.hpp"
+#include "graph/storage/data/DataManager.hpp"
 
 namespace graph::query::execution::operators {
+
+	namespace detail {
+		template<typename Integer>
+		inline int64_t toCatalogInteger(Integer value) noexcept {
+			static_assert(std::is_integral_v<Integer>, "Catalog integers must be integral");
+			if constexpr (std::is_signed_v<Integer>) {
+				if (value < 0) {
+					return static_cast<int64_t>(value);
+				}
+			}
+			using Unsigned = std::make_unsigned_t<Integer>;
+			const auto unsignedValue = static_cast<Unsigned>(value);
+			constexpr auto maxValue = static_cast<Unsigned>((std::numeric_limits<int64_t>::max)());
+			return unsignedValue > maxValue ? (std::numeric_limits<int64_t>::max)() : static_cast<int64_t>(value);
+		}
+
+		inline std::string orientationToString(algorithm::ProjectionOrientation orientation) {
+			switch (orientation) {
+				case algorithm::ProjectionOrientation::GPO_NATURAL:
+					return "NATURAL";
+				case algorithm::ProjectionOrientation::GPO_REVERSE:
+					return "REVERSE";
+				case algorithm::ProjectionOrientation::GPO_UNDIRECTED:
+					return "UNDIRECTED";
+			}
+			return "NATURAL";
+		}
+
+		inline std::string weightKindToString(algorithm::ProjectionWeightKind kind) {
+			switch (kind) {
+				case algorithm::ProjectionWeightKind::GPWK_NONE:
+					return "NONE";
+				case algorithm::ProjectionWeightKind::GPWK_CONSTANT:
+					return "CONSTANT";
+				case algorithm::ProjectionWeightKind::GPWK_PROPERTY:
+					return "PROPERTY";
+			}
+			return "NONE";
+		}
+
+		inline PropertyValue stringListValue(const std::vector<std::string> &values) {
+			std::vector<PropertyValue> list;
+			list.reserve(values.size());
+			for (const auto &value : values) {
+				list.emplace_back(value);
+			}
+			return PropertyValue(std::move(list));
+		}
+
+		inline std::vector<algorithm::RelationshipProjectionSpec>
+		effectiveRelationships(const algorithm::ProjectionSpec &spec) {
+			if (!spec.relationships.empty()) {
+				return spec.relationships;
+			}
+			algorithm::RelationshipProjectionSpec allRelationships;
+			allRelationships.orientation = spec.defaultOrientation;
+			return {std::move(allRelationships)};
+		}
+
+		inline PropertyValue relationshipSpecValue(const algorithm::RelationshipProjectionSpec &relationship) {
+			PropertyValue::MapType map;
+			map.emplace("type", relationship.type);
+			map.emplace("orientation", orientationToString(relationship.orientation));
+			map.emplace("weightKind", weightKindToString(relationship.weight.kind));
+			map.emplace("weightProperty", relationship.weight.propertyName);
+			map.emplace("constantWeight", relationship.weight.constantWeight);
+			map.emplace("defaultWeight", relationship.weight.defaultWeight);
+			return PropertyValue(std::move(map));
+		}
+
+		inline PropertyValue relationshipListValue(const algorithm::ProjectionSpec &spec) {
+			auto relationships = effectiveRelationships(spec);
+			std::vector<PropertyValue> list;
+			list.reserve(relationships.size());
+			for (const auto &relationship : relationships) {
+				list.push_back(relationshipSpecValue(relationship));
+			}
+			return PropertyValue(std::move(list));
+		}
+
+		inline Record descriptorRecord(const algorithm::GraphProjectionDescriptor &descriptor) {
+			Record r;
+			r.setValue("name", PropertyValue(descriptor.name));
+			r.setValue("nodeCount", PropertyValue(toCatalogInteger(descriptor.nodeCount)));
+			r.setValue("edgeCount", PropertyValue(toCatalogInteger(descriptor.edgeCount)));
+			r.setValue("isWeighted", PropertyValue(descriptor.isWeighted));
+			r.setValue("createdAtMillis", PropertyValue(descriptor.createdAtEpochMillis));
+			r.setValue("buildMillis", PropertyValue(descriptor.buildMillis));
+			r.setValue("memoryBytes", PropertyValue(toCatalogInteger(descriptor.memoryBytes)));
+			r.setValue("hasCsr", PropertyValue(descriptor.hasCsr));
+			r.setValue("csrMemoryBytes", PropertyValue(toCatalogInteger(descriptor.csrMemoryBytes)));
+			r.setValue("sourceRevision", PropertyValue(toCatalogInteger(descriptor.sourceRevision)));
+			r.setValue("currentRevision", PropertyValue(toCatalogInteger(descriptor.currentRevision)));
+			r.setValue("stale", PropertyValue(descriptor.stale));
+			r.setValue("nodeLabels", stringListValue(descriptor.spec.nodeLabels));
+			r.setValue("relationships", relationshipListValue(descriptor.spec));
+			return r;
+		}
+
+		inline Record schemaRecord(const algorithm::GraphProjectionDescriptor &descriptor) {
+			Record r;
+			r.setValue("name", PropertyValue(descriptor.name));
+			r.setValue("nodeLabels", stringListValue(descriptor.spec.nodeLabels));
+			r.setValue("relationships", relationshipListValue(descriptor.spec));
+			r.setValue("stale", PropertyValue(descriptor.stale));
+			return r;
+		}
+	} // namespace detail
 
 	// ============================================================
 	// gds.graph.project
@@ -38,25 +154,35 @@ namespace graph::query::execution::operators {
 								std::shared_ptr<algorithm::GraphProjectionManager> pm,
 								std::string name, std::string nodeLabel,
 								std::string edgeType, std::string weightProperty)
-			: dm_(std::move(dm)), pm_(std::move(pm)), name_(std::move(name)),
-			  nodeLabel_(std::move(nodeLabel)), edgeType_(std::move(edgeType)),
-			  weightProperty_(std::move(weightProperty)) {}
+			: GdsGraphProjectOperator(
+				std::move(dm), std::move(pm),
+				algorithm::ProjectionSpec::legacy(
+					std::move(name), std::move(nodeLabel), std::move(edgeType), std::move(weightProperty))) {}
+
+		GdsGraphProjectOperator(std::shared_ptr<storage::DataManager> dm,
+								std::shared_ptr<algorithm::GraphProjectionManager> pm,
+								algorithm::ProjectionSpec spec)
+			: dm_(std::move(dm)), pm_(std::move(pm)), spec_(std::move(spec)) {}
 
 		void open() override { executed_ = false; }
 
 		std::optional<RecordBatch> next() override {
 			if (executed_) return std::nullopt;
 
+			const auto sourceRevision = dm_->getGraphRevision();
+			const auto buildStart = std::chrono::steady_clock::now();
 			auto projection = std::make_shared<algorithm::GraphProjection>(
-				algorithm::GraphProjection::build(dm_, nodeLabel_, edgeType_, weightProperty_));
+				algorithm::GraphProjection::build(dm_, spec_));
+			const auto buildTime = std::chrono::steady_clock::now() - buildStart;
 
 			size_t nodeCount = projection->nodeCount();
 			size_t edgeCount = projection->edgeCount();
-			pm_->createProjection(name_, std::move(projection));
+			pm_->createProjection(spec_, std::move(projection), sourceRevision,
+								  std::chrono::duration_cast<std::chrono::nanoseconds>(buildTime));
 
 			RecordBatch batch;
 			Record r;
-			r.setValue("name", PropertyValue(name_));
+			r.setValue("name", PropertyValue(spec_.name));
 			r.setValue("nodeCount", PropertyValue(static_cast<int64_t>(nodeCount)));
 			r.setValue("edgeCount", PropertyValue(static_cast<int64_t>(edgeCount)));
 			batch.push_back(std::move(r));
@@ -70,13 +196,13 @@ namespace graph::query::execution::operators {
 			return {"name", "nodeCount", "edgeCount"};
 		}
 		[[nodiscard]] std::string toString() const override {
-			return "GdsGraphProject('" + name_ + "')";
+			return "GdsGraphProject('" + spec_.name + "')";
 		}
 
 	private:
 		std::shared_ptr<storage::DataManager> dm_;
 		std::shared_ptr<algorithm::GraphProjectionManager> pm_;
-		std::string name_, nodeLabel_, edgeType_, weightProperty_;
+		algorithm::ProjectionSpec spec_;
 		bool executed_ = false;
 	};
 
@@ -111,6 +237,158 @@ namespace graph::query::execution::operators {
 		[[nodiscard]] std::string toString() const override { return "GdsGraphDrop('" + name_ + "')"; }
 
 	private:
+		std::shared_ptr<algorithm::GraphProjectionManager> pm_;
+		std::string name_;
+		bool executed_ = false;
+	};
+
+	// ============================================================
+	// gds.graph.dropAll
+	// ============================================================
+	class GdsGraphDropAllOperator : public PhysicalOperator {
+	public:
+		explicit GdsGraphDropAllOperator(std::shared_ptr<algorithm::GraphProjectionManager> pm)
+			: pm_(std::move(pm)) {}
+
+		void open() override { executed_ = false; }
+
+		std::optional<RecordBatch> next() override {
+			if (executed_) return std::nullopt;
+
+			const size_t dropped = pm_->dropAll();
+			RecordBatch batch;
+			Record r;
+			r.setValue("droppedCount", PropertyValue(detail::toCatalogInteger(dropped)));
+			batch.push_back(std::move(r));
+
+			executed_ = true;
+			return batch;
+		}
+
+		void close() override {}
+		[[nodiscard]] std::vector<std::string> getOutputVariables() const override { return {"droppedCount"}; }
+		[[nodiscard]] std::string toString() const override { return "GdsGraphDropAll"; }
+
+	private:
+		std::shared_ptr<algorithm::GraphProjectionManager> pm_;
+		bool executed_ = false;
+	};
+
+	// ============================================================
+	// gds.graph.exists
+	// ============================================================
+	class GdsGraphExistsOperator : public PhysicalOperator {
+	public:
+		GdsGraphExistsOperator(std::shared_ptr<algorithm::GraphProjectionManager> pm, std::string name)
+			: pm_(std::move(pm)), name_(std::move(name)) {}
+
+		void open() override { executed_ = false; }
+
+		std::optional<RecordBatch> next() override {
+			if (executed_) return std::nullopt;
+
+			RecordBatch batch;
+			Record r;
+			r.setValue("name", PropertyValue(name_));
+			r.setValue("exists", PropertyValue(pm_->exists(name_)));
+			batch.push_back(std::move(r));
+
+			executed_ = true;
+			return batch;
+		}
+
+		void close() override {}
+		[[nodiscard]] std::vector<std::string> getOutputVariables() const override { return {"name", "exists"}; }
+		[[nodiscard]] std::string toString() const override { return "GdsGraphExists('" + name_ + "')"; }
+
+	private:
+		std::shared_ptr<algorithm::GraphProjectionManager> pm_;
+		std::string name_;
+		bool executed_ = false;
+	};
+
+	// ============================================================
+	// gds.graph.list
+	// ============================================================
+	class GdsGraphListOperator : public PhysicalOperator {
+	public:
+		GdsGraphListOperator(std::shared_ptr<storage::DataManager> dm,
+							 std::shared_ptr<algorithm::GraphProjectionManager> pm,
+							 std::optional<std::string> name)
+			: dm_(std::move(dm)), pm_(std::move(pm)), name_(std::move(name)) {}
+
+		void open() override { executed_ = false; }
+
+		std::optional<RecordBatch> next() override {
+			if (executed_) return std::nullopt;
+
+			RecordBatch batch;
+			const auto currentRevision = dm_->getGraphRevision();
+			if (name_.has_value()) {
+				if (auto descriptor = pm_->describe(*name_, currentRevision)) {
+					batch.push_back(detail::descriptorRecord(*descriptor));
+				}
+			} else {
+				for (const auto &descriptor : pm_->list(currentRevision)) {
+					batch.push_back(detail::descriptorRecord(descriptor));
+				}
+			}
+
+			executed_ = true;
+			return batch;
+		}
+
+		void close() override {}
+		[[nodiscard]] std::vector<std::string> getOutputVariables() const override {
+			return {"name", "nodeCount", "edgeCount", "isWeighted", "createdAtMillis", "buildMillis",
+					"memoryBytes", "hasCsr", "csrMemoryBytes", "sourceRevision", "currentRevision",
+					"stale", "nodeLabels", "relationships"};
+		}
+		[[nodiscard]] std::string toString() const override {
+			return name_.has_value() ? "GdsGraphList('" + *name_ + "')" : "GdsGraphList";
+		}
+
+	private:
+		std::shared_ptr<storage::DataManager> dm_;
+		std::shared_ptr<algorithm::GraphProjectionManager> pm_;
+		std::optional<std::string> name_;
+		bool executed_ = false;
+	};
+
+	// ============================================================
+	// gds.graph.schema
+	// ============================================================
+	class GdsGraphSchemaOperator : public PhysicalOperator {
+	public:
+		GdsGraphSchemaOperator(std::shared_ptr<storage::DataManager> dm,
+							   std::shared_ptr<algorithm::GraphProjectionManager> pm,
+							   std::string name)
+			: dm_(std::move(dm)), pm_(std::move(pm)), name_(std::move(name)) {}
+
+		void open() override { executed_ = false; }
+
+		std::optional<RecordBatch> next() override {
+			if (executed_) return std::nullopt;
+
+			auto descriptor = pm_->describe(name_, dm_->getGraphRevision());
+			if (!descriptor.has_value()) {
+				throw std::runtime_error("Graph projection '" + name_ + "' not found");
+			}
+
+			RecordBatch batch;
+			batch.push_back(detail::schemaRecord(*descriptor));
+			executed_ = true;
+			return batch;
+		}
+
+		void close() override {}
+		[[nodiscard]] std::vector<std::string> getOutputVariables() const override {
+			return {"name", "nodeLabels", "relationships", "stale"};
+		}
+		[[nodiscard]] std::string toString() const override { return "GdsGraphSchema('" + name_ + "')"; }
+
+	private:
+		std::shared_ptr<storage::DataManager> dm_;
 		std::shared_ptr<algorithm::GraphProjectionManager> pm_;
 		std::string name_;
 		bool executed_ = false;
@@ -365,9 +643,11 @@ namespace graph::query::execution::operators {
 		GdsLeidenOperator(std::shared_ptr<storage::DataManager> dm,
 						  std::shared_ptr<algorithm::GraphProjectionManager> pm,
 						  std::string graphName, int maxIterations = 20, double resolution = 1.0,
-						  size_t threadCount = 0)
+						  size_t threadCount = 0, int maxLevels = 10,
+						  double refinementThreshold = 0.01)
 			: dm_(std::move(dm)), pm_(std::move(pm)), graphName_(std::move(graphName)),
-			  maxIterations_(maxIterations), resolution_(resolution), threadCount_(threadCount) {}
+			  maxIterations_(maxIterations), resolution_(resolution), threadCount_(threadCount),
+			  maxLevels_(maxLevels), refinementThreshold_(refinementThreshold) {}
 
 		void open() override { executed_ = false; }
 
@@ -386,7 +666,9 @@ namespace graph::query::execution::operators {
 			auto csr = pm_->getOrBuildCsr(graphName_, pool);
 			algorithm::LeidenOptions opts;
 			opts.maxIterations = maxIterations_;
+			opts.maxLevels = maxLevels_;
 			opts.resolution = resolution_;
+			opts.refinementThreshold = refinementThreshold_;
 			auto communities = algorithm::LeidenEngine::run(*csr, opts, pool);
 
 			RecordBatch batch;
@@ -415,6 +697,8 @@ namespace graph::query::execution::operators {
 		int maxIterations_;
 		double resolution_;
 		size_t threadCount_;
+		int maxLevels_;
+		double refinementThreshold_;
 		bool executed_ = false;
 	};
 

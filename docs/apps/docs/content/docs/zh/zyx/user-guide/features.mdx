@@ -164,6 +164,7 @@ RETURN node.title, score
 
 | 算法 | 过程 | 说明 |
 |------|------|------|
+| 图投影 Catalog | `gds.graph.*` | 命名筛选图、生命周期、schema 与内存指标 |
 | PageRank | `gds.pageRank.stream` | 迭代式重要性评分 |
 | Leiden 社区检测 | `gds.leiden.stream` | 带精化和层级提升的 Leiden 算法 |
 | 连通分量 | `gds.wcc.stream` | Union-Find 弱连通分量 |
@@ -174,13 +175,21 @@ RETURN node.title, score
 
 ```cypher
 // 投影图、运行 PageRank、返回排名最高的节点
-CALL gds.graph.project("social", "Person", "KNOWS")
-YIELD graphName
+CALL gds.graph.project('social', {
+    nodeLabels: 'Person',
+    relationships: {KNOWS: {orientation: 'NATURAL'}}
+})
+YIELD name, nodeCount, edgeCount
+RETURN name, nodeCount, edgeCount
+```
 
-CALL gds.pageRank.stream("social", {maxIterations: 20, dampingFactor: 0.85})
+```cypher
+CALL gds.pageRank.stream('social', 20, 0.85)
 YIELD nodeId, score
 RETURN nodeId, score ORDER BY score DESC LIMIT 10
 ```
+
+投影配置与 catalog 生命周期见 [GDS 图投影](/zh/docs/zyx/algorithms/graph-projections)。
 
 ### ACID 事务
 

@@ -28,6 +28,7 @@
 #include <span>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "graph/concurrent/ParallelOperatorExecutor.hpp"
@@ -85,6 +86,16 @@ namespace graph::query::algorithm {
 		[[nodiscard]] size_t nodeCount() const noexcept { return nodeIds_.size(); }
 		[[nodiscard]] size_t edgeCount() const noexcept { return colIdx_.size(); }
 		[[nodiscard]] bool isWeighted() const noexcept { return isWeighted_; }
+		[[nodiscard]] size_t estimatedMemoryBytes() const noexcept {
+			constexpr size_t kHashNodeOverhead = 32;
+			return sizeof(*this) +
+				(nodeIds_.capacity() * sizeof(int64_t)) +
+				(rowPtr_.capacity() * sizeof(uint32_t)) +
+				(colIdx_.capacity() * sizeof(int64_t)) +
+				(weights_.capacity() * sizeof(float)) +
+				(idToIdx_.bucket_count() * sizeof(void *)) +
+				(idToIdx_.size() * (sizeof(std::pair<const int64_t, size_t>) + kHashNodeOverhead));
+		}
 
 		/// Original nodeId at CSR index.
 		[[nodiscard]] int64_t nodeIdAt(size_t idx) const { return nodeIds_[idx]; }
@@ -116,16 +127,17 @@ namespace graph::query::algorithm {
 			idToIdx_.reserve(n * 2);
 			for (size_t i = 0; i < n; ++i) idToIdx_.emplace(nodeIds_[i], i);
 
-			// Undirected degree: each out-edge (src,dst) contributes one slot to
-			// src's row and one to dst's row. Reciprocal edges (a->b and b->a)
-			// yield weight 2 between a,b, which is the correct undirected sum.
+			// Undirected degree: each stored relationship contributes one slot to
+			// src's row and one to dst's row. Projection-generated reverse arcs
+			// are skipped here because the original arc is mirrored below.
 			std::vector<uint32_t> degrees(n, 0);
 			for (size_t i = 0; i < n; ++i) {
 				const auto &edges = proj.getOutNeighbors(nodeIds_[i]);
-				degrees[i] += static_cast<uint32_t>(edges.size());
 				for (const auto &e : edges) {
+					if (e.syntheticReverse) continue;
 					auto it = idToIdx_.find(e.targetId);
-					if (it != idToIdx_.end()) ++degrees[it->second];
+					++degrees[i];
+					++degrees[it->second];
 				}
 			}
 			rowPtr_.resize(n + 1, 0);
@@ -157,8 +169,8 @@ namespace graph::query::algorithm {
 						int64_t srcId = nodeIds_[i];
 						const auto &edges = proj.getOutNeighbors(srcId);
 						for (const auto &e : edges) {
+							if (e.syntheticReverse) continue;
 							auto dstIt = idToIdx_.find(e.targetId);
-							if (dstIt == idToIdx_.end()) continue;
 							size_t dst = dstIt->second;
 							float w = static_cast<float>(e.weight);
 							uint32_t posSrc = cursors[i].fetch_add(1, std::memory_order_relaxed);
@@ -187,9 +199,15 @@ namespace graph::query::algorithm {
 
 			std::vector<uint32_t> degrees(n, 0);
 			for (const auto &e : edges) {
-				if (e.src == e.dst) continue; // self-loop: contributes to its own row only
-				degrees[static_cast<size_t>(e.src)] += 1;
-				degrees[static_cast<size_t>(e.dst)] += 1;
+				const size_t s = static_cast<size_t>(e.src);
+				const size_t d = static_cast<size_t>(e.dst);
+				if (s == d) {
+					// Undirected self-loops contribute twice to the node degree.
+					degrees[s] += 2;
+					continue;
+				}
+				degrees[s] += 1;
+				degrees[d] += 1;
 			}
 			rowPtr_.resize(n + 1, 0);
 			for (size_t i = 0; i < n; ++i) rowPtr_[i + 1] = rowPtr_[i] + degrees[i];
@@ -201,9 +219,17 @@ namespace graph::query::algorithm {
 				cursors[i].store(rowPtr_[i], std::memory_order_relaxed);
 
 			for (const auto &e : edges) {
-				if (e.src == e.dst) continue;
 				size_t s = static_cast<size_t>(e.src);
 				size_t d = static_cast<size_t>(e.dst);
+				if (s == d) {
+					uint32_t first = cursors[s].fetch_add(1, std::memory_order_relaxed);
+					colIdx_[first] = e.dst;
+					weights_[first] = e.weight;
+					uint32_t second = cursors[s].fetch_add(1, std::memory_order_relaxed);
+					colIdx_[second] = e.dst;
+					weights_[second] = e.weight;
+					continue;
+				}
 				uint32_t ps = cursors[s].fetch_add(1, std::memory_order_relaxed);
 				colIdx_[ps] = e.dst;
 				weights_[ps] = e.weight;

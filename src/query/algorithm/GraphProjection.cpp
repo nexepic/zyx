@@ -22,29 +22,150 @@
 #include "graph/storage/IDAllocator.hpp"
 #include "graph/storage/data/DataManager.hpp"
 
+#include <cmath>
+#include <stdexcept>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+#include <variant>
+
 namespace graph::query::algorithm {
 
 	const std::vector<ProjectedEdge> GraphProjection::EMPTY_EDGES;
+
+	namespace {
+		bool nodeMatchesLabels(const Node &node,
+							   const std::unordered_set<int64_t> &labelIds,
+							   bool includeAllLabels) {
+			if (includeAllLabels) return true;
+			for (const int64_t labelId : node.getLabelIds()) {
+				if (labelIds.contains(labelId)) return true;
+			}
+			return false;
+		}
+
+		double readNumericPropertyWeight(const PropertyValue &value, const std::string &propertyName) {
+			double weight = 0.0;
+			if (value.getType() == PropertyType::DOUBLE) {
+				weight = std::get<double>(value.getVariant());
+			} else if (value.getType() == PropertyType::INTEGER) {
+				weight = static_cast<double>(std::get<int64_t>(value.getVariant()));
+			} else {
+				throw std::runtime_error("Projection weight property '" + propertyName + "' must be numeric");
+			}
+			if (!std::isfinite(weight) || weight < 0.0) {
+				throw std::runtime_error("Projection weight property '" + propertyName +
+										 "' must be a non-negative finite number");
+			}
+			return weight;
+		}
+
+		double resolveWeight(const std::shared_ptr<storage::DataManager> &dm,
+							 const Edge &edge,
+							 const ProjectionWeightSpec &weightSpec) {
+			auto validateWeight = [](double weight, const std::string &context) {
+				if (!std::isfinite(weight) || weight < 0.0) {
+					throw std::runtime_error(context + " must be a non-negative finite number");
+				}
+				return weight;
+			};
+			switch (weightSpec.kind) {
+				case ProjectionWeightKind::GPWK_NONE:
+					return 1.0;
+				case ProjectionWeightKind::GPWK_CONSTANT:
+					return validateWeight(weightSpec.constantWeight, "Projection constant weight");
+				case ProjectionWeightKind::GPWK_PROPERTY: {
+					if (weightSpec.propertyName.empty()) {
+						throw std::runtime_error("Projection weight property name must not be empty");
+					}
+					validateWeight(weightSpec.defaultWeight, "Projection default weight");
+					auto props = dm->getEdgeProperties(edge.getId());
+					auto it = props.find(weightSpec.propertyName);
+					if (it == props.end() || it->second.getType() == PropertyType::NULL_TYPE) {
+						return weightSpec.defaultWeight;
+					}
+					return readNumericPropertyWeight(it->second, weightSpec.propertyName);
+				}
+			}
+			return 1.0;
+		}
+
+	} // namespace
+
+	void GraphProjection::addArc(GraphProjection &proj,
+								 int64_t sourceId,
+								 int64_t targetId,
+								 double weight,
+								 int64_t relationshipId,
+								 bool syntheticReverse) {
+		proj.outAdj_[sourceId].push_back({targetId, weight, relationshipId, syntheticReverse});
+		proj.inAdj_[targetId].push_back({sourceId, weight, relationshipId, syntheticReverse});
+		++proj.edgeCount_;
+	}
+
+	void GraphProjection::addProjectedRelationship(GraphProjection &proj,
+												  const Edge &edge,
+												  const RelationshipProjectionSpec &spec,
+												  double weight) {
+		const int64_t sourceId = edge.getSourceNodeId();
+		const int64_t targetId = edge.getTargetNodeId();
+		switch (spec.orientation) {
+			case ProjectionOrientation::GPO_NATURAL:
+				addArc(proj, sourceId, targetId, weight, edge.getId(), false);
+				break;
+			case ProjectionOrientation::GPO_REVERSE:
+				addArc(proj, targetId, sourceId, weight, edge.getId(), false);
+				break;
+			case ProjectionOrientation::GPO_UNDIRECTED:
+				addArc(proj, sourceId, targetId, weight, edge.getId(), false);
+				if (sourceId != targetId) {
+					addArc(proj, targetId, sourceId, weight, edge.getId(), true);
+				}
+				break;
+		}
+	}
 
 	GraphProjection GraphProjection::build(const std::shared_ptr<storage::DataManager> &dm,
 										   const std::string &nodeLabel,
 										   const std::string &edgeType,
 										   const std::string &weightProperty) {
+		return build(dm, ProjectionSpec::legacy("", nodeLabel, edgeType, weightProperty));
+	}
+
+	GraphProjection GraphProjection::build(const std::shared_ptr<storage::DataManager> &dm,
+										   const ProjectionSpec &spec) {
 		GraphProjection proj;
-		proj.isWeighted_ = !weightProperty.empty();
+		proj.isWeighted_ = spec.usesWeights();
 
 		int64_t maxNodeId = dm->getIdAllocator(EntityType::Node)->getCurrentMaxId();
 
-		// Resolve label IDs once
-		int64_t nodeLabelId = 0;
-		if (!nodeLabel.empty()) {
-			nodeLabelId = dm->resolveTokenId(nodeLabel);
-			if (nodeLabelId == 0) nodeLabelId = -1; // non-existent label — match nothing
+		const bool includeAllLabels = spec.nodeLabels.empty();
+		std::unordered_set<int64_t> nodeLabelIds;
+		for (const auto &label : spec.nodeLabels) {
+			const int64_t id = dm->resolveTokenId(label);
+			if (id != 0) nodeLabelIds.insert(id);
 		}
-		int64_t edgeTypeId = 0;
-		if (!edgeType.empty()) {
-			edgeTypeId = dm->resolveTokenId(edgeType);
-			if (edgeTypeId == 0) edgeTypeId = -1; // non-existent type — match nothing
+
+		std::vector<RelationshipProjectionSpec> defaultRelationships;
+		const std::vector<RelationshipProjectionSpec> *relationships = &spec.relationships;
+		if (spec.relationships.empty()) {
+			RelationshipProjectionSpec allTypes;
+			allTypes.orientation = spec.defaultOrientation;
+			defaultRelationships.push_back(std::move(allTypes));
+			relationships = &defaultRelationships;
+		}
+
+		std::unordered_map<int64_t, const RelationshipProjectionSpec *> relationshipsByType;
+		const RelationshipProjectionSpec *allRelationshipTypes = nullptr;
+		for (const auto &relationship : *relationships) {
+			if (relationship.type.empty()) {
+				allRelationshipTypes = &relationship;
+				continue;
+			}
+			const int64_t typeId = dm->resolveTokenId(relationship.type);
+			if (typeId != 0) {
+				relationshipsByType.emplace(typeId, &relationship);
+			}
 		}
 
 		// Phase 1: Collect active nodes matching label filter
@@ -53,7 +174,7 @@ namespace graph::query::algorithm {
 			if (node.getId() == 0 || !node.isActive()) {
 				continue;
 			}
-			if (nodeLabelId != 0 && node.getLabelId() != nodeLabelId) {
+			if (!nodeMatchesLabels(node, nodeLabelIds, includeAllLabels)) {
 				continue;
 			}
 			proj.nodeIds_.insert(id);
@@ -63,36 +184,21 @@ namespace graph::query::algorithm {
 		for (int64_t nodeId : proj.nodeIds_) {
 			auto edges = dm->findEdgesByNode(nodeId, "out");
 			for (const auto &edge : edges) {
-				int64_t targetId = edge.getTargetNodeId();
-
-				// Target must be in the projection
-				if (!proj.nodeIds_.contains(targetId)) {
+				if (!proj.nodeIds_.contains(edge.getTargetNodeId())) {
 					continue;
 				}
 
-				// Filter by edge type
-				if (edgeTypeId != 0 && edge.getTypeId() != edgeTypeId) {
+				const RelationshipProjectionSpec *relationship = allRelationshipTypes;
+				if (const auto it = relationshipsByType.find(edge.getTypeId());
+					it != relationshipsByType.end()) {
+					relationship = it->second;
+				}
+				if (!relationship) {
 					continue;
 				}
 
-				// Resolve weight
-				double weight = 1.0;
-				if (proj.isWeighted_) {
-					auto props = dm->getEdgeProperties(edge.getId());
-					auto it = props.find(weightProperty);
-					if (it != props.end()) {
-						const auto &val = it->second;
-						if (val.getType() == PropertyType::DOUBLE) {
-							weight = std::get<double>(val.getVariant());
-						} else if (val.getType() == PropertyType::INTEGER) {
-							weight = static_cast<double>(std::get<int64_t>(val.getVariant()));
-						}
-					}
-				}
-
-				proj.outAdj_[nodeId].push_back({targetId, weight});
-				proj.inAdj_[targetId].push_back({nodeId, weight});
-				proj.edgeCount_++;
+				const double weight = resolveWeight(dm, edge, relationship->weight);
+				addProjectedRelationship(proj, edge, *relationship, weight);
 			}
 		}
 
@@ -107,6 +213,28 @@ namespace graph::query::algorithm {
 	const std::vector<ProjectedEdge> &GraphProjection::getInNeighbors(int64_t nodeId) const {
 		auto it = inAdj_.find(nodeId);
 		return it != inAdj_.end() ? it->second : EMPTY_EDGES;
+	}
+
+	size_t GraphProjection::estimatedMemoryBytes() const {
+		constexpr size_t kHashNodeOverhead = 32;
+		constexpr size_t kAdjacencyEntryOverhead = sizeof(std::pair<const int64_t, std::vector<ProjectedEdge>>) +
+			kHashNodeOverhead;
+
+		auto estimateAdjacency = [&](const std::unordered_map<int64_t, std::vector<ProjectedEdge>> &adjacency) {
+			size_t bytes = adjacency.bucket_count() * sizeof(void *);
+			bytes += adjacency.size() * kAdjacencyEntryOverhead;
+			for (const auto &[_, edges] : adjacency) {
+				bytes += edges.capacity() * sizeof(ProjectedEdge);
+			}
+			return bytes;
+		};
+
+		size_t bytes = sizeof(*this);
+		bytes += nodeIds_.bucket_count() * sizeof(void *);
+		bytes += nodeIds_.size() * (sizeof(int64_t) + kHashNodeOverhead);
+		bytes += estimateAdjacency(outAdj_);
+		bytes += estimateAdjacency(inAdj_);
+		return bytes;
 	}
 
 } // namespace graph::query::algorithm

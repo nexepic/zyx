@@ -164,6 +164,7 @@ Built-in graph algorithms accessible through Cypher procedures:
 
 | Algorithm | Procedure | Description |
 |-----------|-----------|-------------|
+| Graph Projection Catalog | `gds.graph.*` | Named filtered graphs, lifecycle, schema, and memory metrics |
 | PageRank | `gds.pageRank.stream` | Iterative importance scoring |
 | Leiden Community Detection | `gds.leiden.stream` | Leiden algorithm with refinement and level lifting |
 | Connected Components | `gds.wcc.stream` | Union-Find weakly connected components |
@@ -174,13 +175,21 @@ Built-in graph algorithms accessible through Cypher procedures:
 
 ```cypher
 // Project a graph, run PageRank, and return top nodes
-CALL gds.graph.project("social", "Person", "KNOWS")
-YIELD graphName
+CALL gds.graph.project('social', {
+    nodeLabels: 'Person',
+    relationships: {KNOWS: {orientation: 'NATURAL'}}
+})
+YIELD name, nodeCount, edgeCount
+RETURN name, nodeCount, edgeCount
+```
 
-CALL gds.pageRank.stream("social", {maxIterations: 20, dampingFactor: 0.85})
+```cypher
+CALL gds.pageRank.stream('social', 20, 0.85)
 YIELD nodeId, score
 RETURN nodeId, score ORDER BY score DESC LIMIT 10
 ```
+
+See [GDS Graph Projections](/en/docs/zyx/algorithms/graph-projections) for projection configuration and catalog lifecycle.
 
 ### ACID Transactions
 

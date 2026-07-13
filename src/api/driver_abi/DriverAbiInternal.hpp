@@ -19,12 +19,15 @@ struct zyx_driver_error_t {
     std::string message;
     const char *fallback_message = nullptr;
     bool static_storage = false;
+    int64_t row_index = -1;
+    std::string field_path;
 };
 
 struct zyx_driver_db_t {
     std::unique_ptr<zyx::Database> db;
     std::mutex mutex;
     std::unordered_set<zyx_driver_txn_t *> active_txns;
+    std::unordered_set<zyx_driver_ingest_t *> active_ingests;
 };
 
 struct zyx_driver_txn_t {
@@ -53,6 +56,11 @@ struct zyx_driver_value_t {
 void clearError(zyx_driver_error_t **out_error);
 zyx_driver_status_t setError(zyx_driver_error_t **out_error, zyx_driver_status_t code, const char *message) noexcept;
 zyx_driver_status_t setError(zyx_driver_error_t **out_error, zyx_driver_status_t code, std::string message) noexcept;
+zyx_driver_status_t setErrorAt(zyx_driver_error_t **out_error,
+                               zyx_driver_status_t code,
+                               std::string message,
+                               int64_t row_index,
+                               std::string field_path) noexcept;
 zyx_driver_status_t catchAbiException(zyx_driver_error_t **out_error) noexcept;
 zyx_driver_status_t catchAbiExceptionAs(zyx_driver_error_t **out_error,
                                         zyx_driver_status_t exception_status) noexcept;

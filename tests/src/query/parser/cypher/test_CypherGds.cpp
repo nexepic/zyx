@@ -36,6 +36,10 @@ protected:
 	static double getDouble(const graph::query::ResultValue &rv) {
 		return std::get<double>(rv.asPrimitive().getVariant());
 	}
+
+	static bool getBool(const graph::query::ResultValue &rv) {
+		return std::get<bool>(rv.asPrimitive().getVariant());
+	}
 };
 
 // ============================================================================
@@ -67,6 +71,81 @@ TEST_F(CypherGdsTest, ProjectDuplicateNameThrows) {
 
 TEST_F(CypherGdsTest, DropNonExistentThrows) {
 	EXPECT_THROW(execute("CALL gds.graph.drop('missing')"), std::exception);
+}
+
+TEST_F(CypherGdsTest, ProjectionCatalogExistsListSchemaAndDropAll) {
+	createSocialGraph();
+
+	auto missing = execute("CALL gds.graph.exists('catalog')");
+	ASSERT_EQ(missing.rowCount(), 1UL);
+	EXPECT_FALSE(getBool(missing.getRows()[0].at("exists")));
+
+	(void) execute(
+		"CALL gds.graph.project('catalog', {"
+		"nodeLabels: ['Person'], "
+		"relationships: {KNOWS: {weight: 1.5}}, "
+		"orientation: 'UNDIRECTED'"
+		"})");
+
+	auto exists = execute("CALL gds.graph.exists('catalog')");
+	ASSERT_EQ(exists.rowCount(), 1UL);
+	EXPECT_TRUE(getBool(exists.getRows()[0].at("exists")));
+
+	auto listOne = execute("CALL gds.graph.list('catalog')");
+	ASSERT_EQ(listOne.rowCount(), 1UL);
+	const auto &catalogRow = listOne.getRows()[0];
+	EXPECT_EQ(catalogRow.at("name").toString(), "catalog");
+	EXPECT_EQ(getInt(catalogRow.at("nodeCount")), 4);
+	EXPECT_EQ(getInt(catalogRow.at("edgeCount")), 8);
+	EXPECT_TRUE(getBool(catalogRow.at("isWeighted")));
+	EXPECT_FALSE(getBool(catalogRow.at("stale")));
+	EXPECT_GT(getInt(catalogRow.at("memoryBytes")), 0);
+	EXPECT_EQ(catalogRow.at("nodeLabels").asPrimitive().getList().size(), 1UL);
+	ASSERT_EQ(catalogRow.at("relationships").asPrimitive().getList().size(), 1UL);
+
+	auto schema = execute("CALL gds.graph.schema('catalog')");
+	ASSERT_EQ(schema.rowCount(), 1UL);
+	const auto relationships = schema.getRows()[0].at("relationships").asPrimitive().getList();
+	ASSERT_EQ(relationships.size(), 1UL);
+	const auto &relationshipMap = relationships[0].getMap();
+	EXPECT_EQ(relationshipMap.at("type").toString(), "KNOWS");
+	EXPECT_EQ(relationshipMap.at("orientation").toString(), "UNDIRECTED");
+	EXPECT_EQ(relationshipMap.at("weightKind").toString(), "CONSTANT");
+
+	auto listAll = execute("CALL gds.graph.list()");
+	ASSERT_EQ(listAll.rowCount(), 1UL);
+
+	auto dropAll = execute("CALL gds.graph.dropAll()");
+	ASSERT_EQ(dropAll.rowCount(), 1UL);
+	EXPECT_EQ(getInt(dropAll.getRows()[0].at("droppedCount")), 1);
+	EXPECT_FALSE(getBool(execute("CALL gds.graph.exists('catalog')").getRows()[0].at("exists")));
+	EXPECT_EQ(execute("CALL gds.graph.list('catalog')").rowCount(), 0UL);
+}
+
+TEST_F(CypherGdsTest, ProjectionCatalogReportsStaleAfterGraphMutation) {
+	createSocialGraph();
+	(void) execute("CALL gds.graph.project('stale_graph', 'Person', 'KNOWS')");
+
+	auto fresh = execute("CALL gds.graph.list('stale_graph')");
+	ASSERT_EQ(fresh.rowCount(), 1UL);
+	EXPECT_FALSE(getBool(fresh.getRows()[0].at("stale")));
+
+	(void) execute("CREATE (:Person {name: 'Erin'})");
+	auto stale = execute("CALL gds.graph.list('stale_graph')");
+	ASSERT_EQ(stale.rowCount(), 1UL);
+	EXPECT_TRUE(getBool(stale.getRows()[0].at("stale")));
+	EXPECT_LT(getInt(stale.getRows()[0].at("sourceRevision")),
+			  getInt(stale.getRows()[0].at("currentRevision")));
+
+	(void) execute("CALL gds.graph.drop('stale_graph')");
+}
+
+TEST_F(CypherGdsTest, ProjectionCatalogRejectsInvalidIntrospectionArguments) {
+	EXPECT_THROW(execute("CALL gds.graph.exists()"), std::exception);
+	EXPECT_THROW(execute("CALL gds.graph.list('a', 'b')"), std::exception);
+	EXPECT_THROW(execute("CALL gds.graph.dropAll('x')"), std::exception);
+	EXPECT_THROW(execute("CALL gds.graph.schema()"), std::exception);
+	EXPECT_THROW(execute("CALL gds.graph.schema('missing')"), std::exception);
 }
 
 // ============================================================================
@@ -269,6 +348,73 @@ TEST_F(CypherGdsTest, ProjectWithWeightProperty) {
 	(void) execute("CALL gds.graph.drop('weighted')");
 }
 
+TEST_F(CypherGdsTest, ProjectWithConfigMapSupportsMultiLabelsTypesWeightsAndOrientation) {
+	(void) execute("CREATE (a:Function {name: 'A'})-[:CALLS]->(b:Method {name: 'B'})");
+	(void) execute("MATCH (b:Method {name: 'B'}) CREATE (b)-[:IMPORTS]->(c:Class {name: 'C'})");
+	(void) execute("MATCH (c:Class {name: 'C'}), (a:Function {name: 'A'}) CREATE (c)-[:DECLARES]->(a)");
+	(void) execute("CREATE (:ExternalSymbol {name: 'X'})-[:CALLS]->(:Package {name: 'P'})");
+
+	auto project = execute(
+		"CALL gds.graph.project('code_analysis', {"
+		"nodeLabels: ['Function', 'Method', 'Class'], "
+		"relationships: {"
+		"CALLS: {weight: 8.0}, "
+		"IMPORTS: {weight: 2.0}, "
+		"DECLARES: {weight: 4.0}"
+		"}, "
+		"orientation: 'UNDIRECTED'"
+		"})");
+	ASSERT_EQ(project.rowCount(), 1UL);
+	EXPECT_EQ(getInt(project.getRows()[0].at("nodeCount")), 3);
+	EXPECT_EQ(getInt(project.getRows()[0].at("edgeCount")), 6);
+
+	int64_t idA = execute("MATCH (n:Function {name: 'A'}) RETURN n").getRows()[0].at("n").asNode().getId();
+	int64_t idB = execute("MATCH (n:Method {name: 'B'}) RETURN n").getRows()[0].at("n").asNode().getId();
+	auto path = execute("CALL gds.shortestPath.dijkstra.stream('code_analysis', " +
+						std::to_string(idB) + ", " + std::to_string(idA) + ")");
+	ASSERT_EQ(path.rowCount(), 3UL);
+	EXPECT_DOUBLE_EQ(getDouble(path.getRows()[0].at("totalCost")), 6.0);
+
+	auto wcc = execute("CALL gds.wcc.stream('code_analysis')");
+	EXPECT_EQ(wcc.rowCount(), 3UL);
+
+	(void) execute("CALL gds.graph.drop('code_analysis')");
+}
+
+TEST_F(CypherGdsTest, ProjectWithNeo4jStyleNativeSignature) {
+	(void) execute("CREATE (a:Function {name: 'A'})-[:CALLS {score: 5.0}]->(b:Method {name: 'B'})");
+	(void) execute("MATCH (b:Method {name: 'B'}) CREATE (b)-[:IMPORTS]->(c:Class {name: 'C'})");
+
+	auto project = execute(
+		"CALL gds.graph.project("
+		"'native_code', "
+		"['Function', 'Method', 'Class'], "
+		"{CALLS: {}, IMPORTS: {weight: 2.0}}, "
+		"{orientation: 'UNDIRECTED', relationshipWeightProperty: 'score', defaultWeight: 1.0}"
+		")");
+	ASSERT_EQ(project.rowCount(), 1UL);
+	EXPECT_EQ(getInt(project.getRows()[0].at("nodeCount")), 3);
+	EXPECT_EQ(getInt(project.getRows()[0].at("edgeCount")), 4);
+
+	int64_t idA = execute("MATCH (n:Function {name: 'A'}) RETURN n").getRows()[0].at("n").asNode().getId();
+	int64_t idC = execute("MATCH (n:Class {name: 'C'}) RETURN n").getRows()[0].at("n").asNode().getId();
+	auto path = execute("CALL gds.shortestPath.dijkstra.stream('native_code', " +
+						std::to_string(idA) + ", " + std::to_string(idC) + ")");
+	ASSERT_EQ(path.rowCount(), 3UL);
+	EXPECT_DOUBLE_EQ(getDouble(path.getRows()[0].at("totalCost")), 7.0);
+
+	(void) execute("CALL gds.graph.drop('native_code')");
+}
+
+TEST_F(CypherGdsTest, ProjectWithConfigMapRejectsInvalidOptions) {
+	EXPECT_THROW(
+		execute("CALL gds.graph.project('bad', {nodeLabels: ['Person'], relationships: {KNOWS: {badOption: 1}}})"),
+		std::exception);
+	EXPECT_THROW(
+		execute("CALL gds.graph.project('bad2', {nodeLabels: ['Person'], relationships: {KNOWS: {orientation: 'SIDEWAYS'}}})"),
+		std::exception);
+}
+
 // ============================================================================
 // gds.leiden.stream
 // ============================================================================
@@ -292,6 +438,37 @@ TEST_F(CypherGdsTest, LeidenStreamEndToEnd) {
 	EXPECT_EQ(communities.size(), 2UL);
 
 	(void) execute("CALL gds.graph.drop('lc')");
+}
+
+TEST_F(CypherGdsTest, LeidenStreamWithOptionsMap) {
+	// Same topology as LeidenStreamEndToEnd, but using the documented map API.
+	(void) execute("CREATE (a:Person {name: 'A'})-[:KNOWS]->(b:Person {name: 'B'})");
+	(void) execute("MATCH (b:Person {name: 'B'}) CREATE (b)-[:KNOWS]->(c:Person {name: 'C'})");
+	(void) execute("MATCH (a:Person {name: 'A'}), (c:Person {name: 'C'}) CREATE (a)-[:KNOWS]->(c)");
+	(void) execute("CREATE (d:Person {name: 'D'})-[:KNOWS]->(e:Person {name: 'E'})");
+	(void) execute("MATCH (e:Person {name: 'E'}) CREATE (e)-[:KNOWS]->(f:Person {name: 'F'})");
+	(void) execute("MATCH (d:Person {name: 'D'}), (f:Person {name: 'F'}) CREATE (d)-[:KNOWS]->(f)");
+	(void) execute("MATCH (a:Person {name: 'A'}), (d:Person {name: 'D'}) CREATE (a)-[:KNOWS]->(d)");
+
+	(void) execute("CALL gds.graph.project('lc_opts', 'Person', 'KNOWS')");
+	auto res = execute("CALL gds.leiden.stream('lc_opts', {maxIterations: 12, maxLevels: 4, resolution: 1.0, refinementThreshold: 0.01, concurrency: 1})");
+	ASSERT_GE(res.rowCount(), 6UL);
+
+	std::set<int64_t> communities;
+	for (const auto &row : res.getRows()) communities.insert(getInt(row.at("communityId")));
+	EXPECT_EQ(communities.size(), 2UL);
+
+	(void) execute("CALL gds.graph.drop('lc_opts')");
+}
+
+TEST_F(CypherGdsTest, LeidenStreamRejectsInvalidOptions) {
+	(void) execute("CREATE (:Person {name: 'A'})-[:KNOWS]->(:Person {name: 'B'})");
+	(void) execute("CALL gds.graph.project('lc_invalid', 'Person', 'KNOWS')");
+	EXPECT_THROW(execute("CALL gds.leiden.stream('lc_invalid', {maxIterations: 0})"), std::exception);
+	EXPECT_THROW(execute("CALL gds.leiden.stream('lc_invalid', {maxIterations: 1.5})"), std::exception);
+	EXPECT_THROW(execute("CALL gds.leiden.stream('lc_invalid', {resolution: 0.0})"), std::exception);
+	EXPECT_THROW(execute("CALL gds.leiden.stream('lc_invalid', {concurrency: -1})"), std::exception);
+	(void) execute("CALL gds.graph.drop('lc_invalid')");
 }
 
 TEST_F(CypherGdsTest, LeidenStreamTooFewArgsThrows) {

@@ -40,6 +40,7 @@
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 #include "zyx/zyx.hpp"
+#include "DatabaseBulkInternal.hpp"
 
 namespace zyx {
 
@@ -1188,16 +1189,30 @@ namespace zyx {
 		if (count == 0) {
 			return {};
 		}
+		const auto internalColumns = toInternalPropertyColumns(columns);
+		return detail::DatabaseBulkInternal::createEdgesColumnar(*this, edgeType, sourceIds, targetIds,
+																 internalColumns);
+	}
 
-		impl_->ensureOpen();
-		std::optional<graph::Transaction> implicitTxn;
-		if (impl_->needsImplicitTransaction()) {
-			implicitTxn.emplace(impl_->db_.beginTransaction());
+	std::vector<int64_t> detail::DatabaseBulkInternal::createEdgesColumnar(
+			const Database &database, const std::string &edgeType, const std::vector<int64_t> &sourceIds,
+			const std::vector<int64_t> &targetIds, const std::vector<graph::storage::BulkPropertyColumn> &columns) {
+		if (sourceIds.size() != targetIds.size()) {
+			throw std::invalid_argument("createEdgesColumnar requires matching source and target counts");
+		}
+		if (sourceIds.empty()) {
+			return {};
 		}
 
-		auto dm = impl_->db_.getStorage()->getDataManager();
+		database.impl_->ensureOpen();
+		std::optional<graph::Transaction> implicitTxn;
+		if (database.impl_->needsImplicitTransaction()) {
+			implicitTxn.emplace(database.impl_->db_.beginTransaction());
+		}
+
+		auto dm = database.impl_->db_.getStorage()->getDataManager();
 		const int64_t typeId = dm->getOrCreateTokenId(edgeType);
-		auto ids = dm->addEdgesColumnar(typeId, sourceIds, targetIds, toInternalPropertyColumns(columns));
+		auto ids = dm->addEdgesColumnar(typeId, sourceIds, targetIds, columns);
 
 		if (implicitTxn) {
 			implicitTxn->commit();

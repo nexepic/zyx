@@ -41,12 +41,15 @@ ZYX 暴露现代 C++ API，并通过稳定的 Driver ABI 支撑各语言绑定�
 
 Driver ABI 是语言绑定和 WASM 使用的稳定 C-facing 运行时边界。公共契约位于 `include/zyx/zyx_driver_abi.h`，导出符号统一使用 `zyx_driver_*` 前缀。新的 C 集成应直接使用 Driver ABI，多数应用代码仍应优先使用上方的 C++、Node.js 或 Python API。
 
+- [Arrow 导入](driver-abi-ingest) — 通过 Arrow C Data Interface 执行 prepared、WAL 持久化的关系批量导入
+
 ## 设计约定
 
 - 查询执行统一返回 `Result` 或 Driver ABI 结果句柄，由调用方显式迭代结果集。
 - 事务支持四种形式：
   - **API 级显式事务** — `beginTransaction()` / `zyx_driver_txn_begin()`
   - **批量直接 API 事务** — `beginBulkTransaction()`，用于大型 C++ 直接写入，通常搭配 `createNodesColumnar()` / `createEdgesColumnar()`
+  - **Driver ABI 导入 Session** — `zyx_driver_ingest_begin()` 搭配 prepared Arrow edge ingestor
   - **只读事务** — `beginReadOnlyTransaction()` / `zyx_driver_txn_begin_read_only()`
   - **Cypher 事务语句** — 在 `execute()` 中使用 `BEGIN` / `COMMIT` / `ROLLBACK`
 - 无显式事务时，`execute()` 对写查询自动提交，对读查询走只读快速路径。

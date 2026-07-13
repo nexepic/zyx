@@ -124,13 +124,20 @@ GDS（Graph Data Science）过程使用命名投影模式：先投影子图，�
 
 | 过程 | 参数 | 说明 |
 |---|---|---|
-| `gds.graph.project(name, label, type, weight?)` | 投影名、节点标签、边类型、可选权重属性 | 创建图投影 |
+| `gds.graph.project(name, config)` | 投影名、节点/关系选择、方向和权重 | 创建命名图投影 |
 | `gds.graph.drop(name)` | 投影名 | 删除图投影 |
+| `gds.graph.dropAll()` | 无 | 删除全部图投影 |
+| `gds.graph.exists(name)` | 投影名 | 检查投影是否存在 |
+| `gds.graph.list(name?)` | 可选投影名 | 列出 catalog descriptor |
+| `gds.graph.schema(name)` | 投影名 | 检查规范化后的投影 schema |
 | `gds.pageRank.stream(name, maxIter?, damping?)` | 投影名、可选迭代次数、可选阻尼系数 | PageRank |
 | `gds.wcc.stream(name)` | 投影名 | 弱连通分量 |
 | `gds.betweenness.stream(name, samplingSize?)` | 投影名、可选采样数 | 介数中心性 |
 | `gds.closeness.stream(name)` | 投影名 | 接近中心性 |
 | `gds.shortestPath.dijkstra.stream(name, startId, endId)` | 投影名、起点 ID、终点 ID | Dijkstra 最短路径 |
+| `gds.leiden.stream(name, options?)` | 投影名、可选 Leiden options Map | Leiden 社区检测 |
+
+结构化投影 schema 和 catalog 生命周期见 [GDS 图投影](/zh/docs/zyx/algorithms/graph-projections)，算法参数见 [Leiden 社区检测](/zh/docs/zyx/algorithms/community-detection)。
 
 ## EXPLAIN / PROFILE
 

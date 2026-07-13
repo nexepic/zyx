@@ -86,6 +86,10 @@ namespace graph::query::algorithm {
 			return snap;
 		};
 
+		std::vector<std::atomic<int64_t>> communityAtomic(n);
+		for (size_t i = 0; i < n; ++i)
+			communityAtomic[i].store(communityOf[i], std::memory_order_relaxed);
+
 		const size_t convergenceThreshold = (n < 100) ? 0 : n / 100;
 		int iter = 0;
 		bool changed = true;
@@ -93,9 +97,9 @@ namespace graph::query::algorithm {
 			changed = false;
 			++iter;
 
-			// BSP snapshot: workers read a consistent sigmaTot view; write-back
-			// is via atomic fetch on the shared sigmaTot. communityOf writes are
-			// disjoint per node partition (each slot owned by one partition).
+			// Workers read the latest community labels through atomics. This keeps
+			// the local-moving phase asynchronous like Louvain/Leiden, while
+			// avoiding undefined behaviour from concurrent vector reads/writes.
 			std::unordered_map<int64_t, double> sigmaTotSnap = acquireSigmaTot();
 
 			// Each partition counts its own moves; the merger aggregates them in a
@@ -118,14 +122,14 @@ namespace graph::query::algorithm {
 				0, n, pool, options,
 				[&](const concurrent::ParallelRangePartition &range, LocalMoveState &state) {
 					for (size_t i = range.begin; i < range.end; ++i) {
-						int64_t cur = communityOf[i];
+						int64_t cur = communityAtomic[i].load(std::memory_order_relaxed);
 						std::unordered_map<int64_t, double> kic;
 						auto nbrs = csr.neighbors(i);
 						auto wnbrs = csr.neighborWeights(i);
 						for (size_t j = 0; j < nbrs.size(); ++j) {
 							size_t dst = csr.indexOf(nbrs[j]);
 							if (dst == SIZE_MAX || dst == i) continue;
-							kic[communityOf[dst]] += static_cast<double>(wnbrs[j]);
+							kic[communityAtomic[dst].load(std::memory_order_relaxed)] += static_cast<double>(wnbrs[j]);
 						}
 						if (kic.empty()) continue;
 
@@ -143,7 +147,7 @@ namespace graph::query::algorithm {
 						if (best != cur) {
 							sigmaTot[cur].fetch_sub(ki[i], std::memory_order_relaxed);
 							sigmaTot[best].fetch_add(ki[i], std::memory_order_relaxed);
-							communityOf[i] = best;
+							communityAtomic[i].store(best, std::memory_order_relaxed);
 							++state.moved;
 						}
 					}
@@ -152,6 +156,9 @@ namespace graph::query::algorithm {
 
 			if (movedTotal > convergenceThreshold) changed = true;
 		}
+
+		for (size_t i = 0; i < n; ++i)
+			communityOf[i] = communityAtomic[i].load(std::memory_order_relaxed);
 
 		// Relabel to dense 0..C-1 so they can index the next level's super-nodes.
 		std::unordered_map<int64_t, int64_t> relabel;
@@ -203,7 +210,6 @@ namespace graph::query::algorithm {
 		for (size_t i = 0; i < n; ++i) {
 			int64_t ci = communityOf[i];
 			auto nbrs = csr.neighbors(i);
-			auto wnbrs = csr.neighborWeights(i);
 			for (size_t j = 0; j < nbrs.size(); ++j) {
 				size_t dst = csr.indexOf(nbrs[j]);
 				if (dst == SIZE_MAX) continue;
@@ -252,7 +258,6 @@ namespace graph::query::algorithm {
 				if (cp.first == largestRoot) continue;
 				// Sum weights from component to its own parent community vs internal.
 				double internalW = 0.0; // edges within component (counted twice)
-				double toParent = 0.0;  // edges from component to largest/parent comp
 				double compKi = 0.0;
 				for (size_t idx : cp.second) {
 					compKi += ki[idx];
@@ -263,7 +268,6 @@ namespace graph::query::algorithm {
 						if (d == SIZE_MAX) continue;
 						bool inComp = (newComm[d] == -1) && (communityOf[d] == oldC) && (find(d) == cp.first);
 						if (inComp) internalW += ownbrs[j];
-						else if (newComm[d] == keepId) toParent += ownbrs[j];
 					}
 				}
 				internalW /= 2.0;
