@@ -1,6 +1,6 @@
 {
   "name": "@nexepic/zyxdb-darwin-arm64",
-  "version": "0.1.26",
+  "version": "0.1.27",
   "description": "ZYX graph database native addon for macOS ARM64",
   "os": [
     "darwin"
