@@ -29,6 +29,7 @@
 #include "graph/query/algorithm/CsrProjection.hpp"
 
 namespace graph::query::algorithm {
+	struct LeidenEngineTestAccess;
 
 	struct LeidenOptions {
 		int maxIterations = 20;          ///< max local-moving iterations per level
@@ -88,6 +89,8 @@ namespace graph::query::algorithm {
 								 double resolution = 1.0);
 
 	private:
+		friend struct LeidenEngineTestAccess;
+
 		LeidenEngine() = delete;
 
 		/// One level of local moving. Mutates communityOf/sigmaTot in place.

@@ -54,7 +54,7 @@ namespace graph::query::algorithm {
 				double w = wnbrs[j];
 				sigmaTot[c] += w;
 				size_t dst = csr.indexOf(nbrs[j]);
-				if (dst != SIZE_MAX && dst != i && communityOf[dst] == c) sigmaIn[c] += w;
+				if (dst != i && communityOf[dst] == c) sigmaIn[c] += w;
 			}
 		}
 		for (auto &kv : sigmaIn) kv.second /= 2.0;
@@ -128,7 +128,7 @@ namespace graph::query::algorithm {
 						auto wnbrs = csr.neighborWeights(i);
 						for (size_t j = 0; j < nbrs.size(); ++j) {
 							size_t dst = csr.indexOf(nbrs[j]);
-							if (dst == SIZE_MAX || dst == i) continue;
+							if (dst == i) continue;
 							kic[communityAtomic[dst].load(std::memory_order_relaxed)] += static_cast<double>(wnbrs[j]);
 						}
 						if (kic.empty()) continue;
@@ -212,7 +212,6 @@ namespace graph::query::algorithm {
 			auto nbrs = csr.neighbors(i);
 			for (size_t j = 0; j < nbrs.size(); ++j) {
 				size_t dst = csr.indexOf(nbrs[j]);
-				if (dst == SIZE_MAX) continue;
 				if (communityOf[dst] == ci && dst != i) unite(i, dst);
 			}
 		}
@@ -265,8 +264,7 @@ namespace graph::query::algorithm {
 					auto ownbrs = csr.neighborWeights(idx);
 					for (size_t j = 0; j < onbrs.size(); ++j) {
 						size_t d = csr.indexOf(onbrs[j]);
-						if (d == SIZE_MAX) continue;
-						bool inComp = (newComm[d] == -1) && (communityOf[d] == oldC) && (find(d) == cp.first);
+						bool inComp = communityOf[d] == oldC;
 						if (inComp) internalW += ownbrs[j];
 					}
 				}
@@ -329,7 +327,6 @@ namespace graph::query::algorithm {
 					auto wnbrs = csr.neighborWeights(i);
 					for (size_t j = 0; j < nbrs.size(); ++j) {
 						size_t dst = csr.indexOf(nbrs[j]);
-						if (dst == SIZE_MAX) continue;
 						int64_t dc = communityOf[dst];
 						int64_t a = std::min(sc, dc), b = std::max(sc, dc);
 						state.localAgg[a * cc + b] += static_cast<double>(wnbrs[j]);
@@ -393,10 +390,10 @@ namespace graph::query::algorithm {
 
 		for (int level = 1; level < opts.maxLevels; ++level) {
 			if (communityCount <= 1) break;
+			if (communityCount >= curCsr->nodeCount()) break; // local moving did not contract this level
 
 			ownedSuper = buildSuperGraph(*curCsr, levels.back(), communityCount, pool);
 			const CsrProjection &super = *ownedSuper;
-			if (super.nodeCount() >= communityCount) break; // no shrinkage → stop
 
 			const size_t sn = super.nodeCount();
 			std::vector<double> superKi(sn, 0.0);
