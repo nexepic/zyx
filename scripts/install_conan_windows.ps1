@@ -1,18 +1,57 @@
 $ErrorActionPreference = "Stop"
 
-$vsPath = & "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
-if (-not $vsPath) {
-    Write-Error "Visual Studio not found."
+$vswherePath = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
+if (-not (Test-Path $vswherePath)) {
+    Write-Error "Visual Studio Installer (vswhere.exe) was not found."
 }
 
+# Select the newest stable Visual Studio installation with the C++ toolchain.
+$vsPath = (& $vswherePath -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath).Trim()
+$vsInstallationVersion = (& $vswherePath -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationVersion).Trim()
+if (-not $vsPath -or -not $vsInstallationVersion) {
+    Write-Error "No Visual Studio installation with the C++ build tools was found."
+}
+
+try {
+    $vsMajorVersion = ([version]$vsInstallationVersion).Major
+} catch {
+    Write-Error "Could not parse the Visual Studio version '$vsInstallationVersion'."
+}
+
+if ($vsMajorVersion -lt 17) {
+    Write-Error "Visual Studio $vsInstallationVersion is unsupported; Visual Studio 2022 or newer is required."
+}
+
+Write-Host "Using Visual Studio $vsInstallationVersion at $vsPath"
+
 Write-Host "Activating MSVC environment..."
-cmd /c "`"$vsPath\VC\Auxiliary\Build\vcvarsall.bat`" x64 && set" | ForEach-Object {
+$vcvarsallPath = Join-Path $vsPath "VC\Auxiliary\Build\vcvarsall.bat"
+if (-not (Test-Path $vcvarsallPath)) {
+    Write-Error "Visual Studio C++ environment script was not found: $vcvarsallPath"
+}
+
+$vcvarsEnvironment = cmd /c "`"$vcvarsallPath`" x64 && set"
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Failed to activate the Visual Studio C++ environment."
+}
+
+$vcvarsEnvironment | ForEach-Object {
     if ($_ -match "^([^=]+)=(.*)$") {
         [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2])
     }
 }
 
-# GUARANTEE CC and CXX point to clang-cl for Conan profile detection
+$clOutput = (& cl.exe 2>&1 | Out-String)
+$clVersionMatch = [regex]::Match($clOutput, "Version\\s+(\\d+)\\.(\\d+)")
+if (-not $clVersionMatch.Success) {
+    Write-Error "Could not determine the MSVC version from cl.exe."
+}
+
+# Conan identifies MSVC ABI versions as 193, 194, 195, ... for cl 19.3x, 19.4x, 19.5x, ... .
+$msvcAbiVersion = "$($clVersionMatch.Groups[1].Value)$($clVersionMatch.Groups[2].Value.Substring(0, 1))"
+Write-Host "Detected MSVC ABI version: $msvcAbiVersion"
+
+# Ensure the generated CMake toolchain uses clang-cl with the detected MSVC ABI.
 $env:CC = "clang-cl"
 $env:CXX = "clang-cl"
 
@@ -26,7 +65,10 @@ Write-Host "Removed VS-bundled LLVM from PATH."
 
 # Ensure choco-installed LLVM is in PATH (for clang-cl, lld-link)
 $llvmBin = "C:\Program Files\LLVM\bin"
-if ((Test-Path $llvmBin) -and ($env:PATH -notlike "*$llvmBin*")) {
+if (-not (Test-Path (Join-Path $llvmBin "clang-cl.exe"))) {
+    Write-Error "clang-cl was not found in $llvmBin. Install LLVM before running Conan."
+}
+if ($env:PATH -notlike "*$llvmBin*") {
     $env:PATH = "$llvmBin;$env:PATH"
     Write-Host "Added LLVM to PATH: $llvmBin"
 }
@@ -54,12 +96,13 @@ os=Windows
 arch=x86_64
 build_type=$buildType
 compiler=msvc
-compiler.version=194
+compiler.version=$msvcAbiVersion
 compiler.cppstd=20
 compiler.runtime=dynamic
 
 [conf]
 tools.cmake.cmaketoolchain:generator=Ninja
+tools.microsoft.msbuild:vs_version=$vsMajorVersion
 "@
 
 $profilePath = "conan_windows_profile"

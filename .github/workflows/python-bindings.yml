@@ -67,16 +67,16 @@ jobs:
           conan profile detect
           conan install . --output-folder=buildDir --build=missing --build="antlr4-cppruntime/*" -s build_type=Release -s compiler.cppstd=20 -o with_tests=False
 
-      - name: Install Conan dependencies (Windows)
-        if: runner.os == 'Windows'
-        run: pwsh scripts/install_conan_windows.ps1 Release -o with_tests=False
-
       - name: Install LLVM (Windows)
         if: runner.os == 'Windows'
         run: |
           choco install llvm --version=20.1.4 --force
           echo "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
         shell: pwsh
+
+      - name: Install Conan dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: pwsh scripts/install_conan_windows.ps1 Release -o with_tests=False
 
       - name: Install zyxdb (Unix)
         if: runner.os != 'Windows'
@@ -136,8 +136,8 @@ jobs:
           CIBW_BEFORE_ALL_WINDOWS: >
             pip install conan ninja &&
             set "CONAN_OUTPUT_DIR=C:\conan-deps" &&
-            pwsh scripts/install_conan_windows.ps1 Release -o with_tests=False &&
-            choco install llvm --version=20.1.4 --force
+            choco install llvm --version=20.1.4 --force &&
+            pwsh scripts/install_conan_windows.ps1 Release -o with_tests=False
           CIBW_ENVIRONMENT_LINUX: CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=/project/buildDir/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release"
           CIBW_ENVIRONMENT_MACOS: CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=/tmp/conan-deps/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release" MACOSX_DEPLOYMENT_TARGET=13.3
           CIBW_ENVIRONMENT_WINDOWS: CC=clang-cl CXX=clang-cl CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=C:/conan-deps/conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release"

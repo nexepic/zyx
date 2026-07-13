@@ -81,16 +81,16 @@ jobs:
           CC: ${{ runner.os == 'Linux' && 'clang-20' || '' }}
           CXX: ${{ runner.os == 'Linux' && 'clang++-20' || '' }}
 
-      - name: Install Conan dependencies (Windows)
-        if: runner.os == 'Windows'
-        run: pwsh scripts/install_conan_windows.ps1 Release -o with_tests=False
-
       - name: Install LLVM (Windows)
         if: runner.os == 'Windows'
         run: |
           choco install llvm --version=20.1.4 --force
           echo "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
         shell: pwsh
+
+      - name: Install Conan dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: pwsh scripts/install_conan_windows.ps1 Release -o with_tests=False
 
       - name: Install npm dependencies
         working-directory: bindings/nodejs
@@ -172,16 +172,16 @@ jobs:
           CC: ${{ runner.os == 'Linux' && 'clang-20' || '' }}
           CXX: ${{ runner.os == 'Linux' && 'clang++-20' || '' }}
 
-      - name: Install Conan dependencies (Windows)
-        if: runner.os == 'Windows'
-        run: pwsh scripts/install_conan_windows.ps1 Release -o with_tests=False
-
       - name: Install LLVM (Windows)
         if: runner.os == 'Windows'
         run: |
           choco install llvm --version=20.1.4 --force
           echo "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
         shell: pwsh
+
+      - name: Install Conan dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: pwsh scripts/install_conan_windows.ps1 Release -o with_tests=False
 
       - name: Install npm dependencies
         working-directory: bindings/nodejs
