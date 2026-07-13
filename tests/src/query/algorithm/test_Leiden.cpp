@@ -18,9 +18,11 @@
  * limitations under the License.
  **/
 
+#include <atomic>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include <cmath>
 #include <filesystem>
 #include <gtest/gtest.h>
 #include <set>
@@ -34,7 +36,53 @@
 
 namespace fs = std::filesystem;
 
+namespace graph::query::algorithm {
+	struct LeidenEngineTestAccess {
+		static size_t localMoveOnce(const CsrProjection &csr,
+									const LeidenOptions &opts,
+									std::vector<double> &ki,
+									double m2,
+									std::vector<int64_t> &communityOf,
+									std::vector<std::atomic<double>> &sigmaTot,
+									concurrent::ThreadPool *pool) {
+			return LeidenEngine::localMoveOnce(csr, opts, ki, m2, communityOf, sigmaTot, pool);
+		}
+
+		static std::pair<size_t, std::vector<double>>
+		refineCommunities(const CsrProjection &csr,
+						  const LeidenOptions &opts,
+						  double m2,
+						  const std::vector<double> &ki,
+						  std::vector<int64_t> &communityOf,
+						  const std::vector<std::atomic<double>> &sigmaTot) {
+			return LeidenEngine::refineCommunities(csr, opts, m2, ki, communityOf, sigmaTot);
+		}
+	};
+} // namespace graph::query::algorithm
+
 namespace {
+	using CsrProjection = graph::query::algorithm::CsrProjection;
+	using LeidenEngine = graph::query::algorithm::LeidenEngine;
+	using LeidenOptions = graph::query::algorithm::LeidenOptions;
+	using LeidenTestAccess = graph::query::algorithm::LeidenEngineTestAccess;
+
+	struct RefinementInput {
+		std::vector<double> degrees;
+		double totalDegree = 0.0;
+		std::vector<std::atomic<double>> communityDegree;
+
+		explicit RefinementInput(const CsrProjection &csr,
+							 const std::vector<int64_t> &communityOf)
+			: degrees(csr.nodeCount(), 0.0), communityDegree(csr.nodeCount()) {
+			for (auto &degree : communityDegree) degree.store(0.0, std::memory_order_relaxed);
+			for (size_t i = 0; i < csr.nodeCount(); ++i) {
+				for (float weight : csr.neighborWeights(i)) degrees[i] += static_cast<double>(weight);
+				totalDegree += degrees[i];
+				communityDegree[static_cast<size_t>(communityOf[i])].fetch_add(
+					degrees[i], std::memory_order_relaxed);
+			}
+		}
+	};
 
 	class LeidenTest : public ::testing::Test {
 	protected:
@@ -114,6 +162,188 @@ namespace {
 		std::vector<int64_t> out(csr.nodeCount());
 		for (size_t i = 0; i < csr.nodeCount(); ++i) out[i] = m[csr.nodeIdAt(i)];
 		return out;
+	}
+
+	TEST(LeidenEngineUnitTest, ModularityIsZeroForEmptyAndEdgelessGraphs) {
+		auto empty = CsrProjection::buildFromEdgeList(0, {});
+		EXPECT_DOUBLE_EQ(LeidenEngine::modularity(*empty, {}), 0.0);
+
+		auto edgeless = CsrProjection::buildFromEdgeList(3, {});
+		EXPECT_DOUBLE_EQ(LeidenEngine::modularity(*edgeless, {0, 1, 2}), 0.0);
+
+		auto selfLoop = CsrProjection::buildFromEdgeList(1, {{0, 0, 2.0f}});
+		EXPECT_TRUE(std::isfinite(LeidenEngine::modularity(*selfLoop, {0})));
+	}
+
+	TEST(LeidenEngineUnitTest, EmptyPrivatePhasesReturnWithoutMutation) {
+		auto empty = CsrProjection::buildFromEdgeList(0, {});
+		std::vector<double> degrees;
+		std::vector<int64_t> communities;
+		std::vector<std::atomic<double>> totals;
+		LeidenOptions options;
+
+		EXPECT_EQ(LeidenTestAccess::localMoveOnce(
+			*empty, options, degrees, 0.0, communities, totals, nullptr), 0u);
+		auto [count, refinedTotals] = LeidenTestAccess::refineCommunities(
+			*empty, options, 0.0, degrees, communities, totals);
+		EXPECT_EQ(count, 0u);
+		EXPECT_TRUE(refinedTotals.empty());
+	}
+
+	TEST(LeidenEngineUnitTest, DisabledRefinementPreservesAssignmentsAndDegreeTotals) {
+		using Edge = CsrProjection::Edge;
+		auto csr = CsrProjection::buildFromEdgeList(4, {
+			Edge{0, 1, 2.0f}, Edge{2, 3, 3.0f},
+		});
+		std::vector<int64_t> communities{0, 0, 1, 1};
+		const auto original = communities;
+		RefinementInput input(*csr, communities);
+		LeidenOptions options;
+		options.refinementThreshold = 0.0;
+
+		auto [count, totals] = LeidenTestAccess::refineCommunities(
+			*csr, options, input.totalDegree, input.degrees, communities, input.communityDegree);
+
+		EXPECT_EQ(count, 2u);
+		EXPECT_EQ(communities, original);
+		ASSERT_EQ(totals.size(), 2u);
+		EXPECT_DOUBLE_EQ(totals[0], 4.0);
+		EXPECT_DOUBLE_EQ(totals[1], 6.0);
+	}
+
+	TEST(LeidenEngineUnitTest, RefinementSplitsHighGainDisconnectedComponent) {
+		using Edge = CsrProjection::Edge;
+		auto csr = CsrProjection::buildFromEdgeList(6, {
+			Edge{0, 1, 1.0f}, Edge{1, 2, 1.0f}, Edge{2, 0, 1.0f},
+			Edge{3, 4, 10.0f}, Edge{4, 5, 1.0f},
+		});
+		std::vector<int64_t> communities{0, 0, 0, 0, 0, 1};
+		RefinementInput input(*csr, communities);
+		LeidenOptions options;
+		options.refinementThreshold = 0.01;
+
+		auto [count, totals] = LeidenTestAccess::refineCommunities(
+			*csr, options, input.totalDegree, input.degrees, communities, input.communityDegree);
+
+		EXPECT_EQ(count, 3u);
+		EXPECT_EQ(totals.size(), count);
+		EXPECT_EQ(communities[0], communities[1]);
+		EXPECT_EQ(communities[1], communities[2]);
+		EXPECT_EQ(communities[3], communities[4]);
+		EXPECT_NE(communities[0], communities[3]);
+		EXPECT_NE(communities[3], communities[5]);
+	}
+
+	TEST(LeidenEngineUnitTest, RefinementKeepsDisconnectedComponentBelowThreshold) {
+		using Edge = CsrProjection::Edge;
+		auto csr = CsrProjection::buildFromEdgeList(6, {
+			Edge{0, 1, 1.0f}, Edge{1, 2, 1.0f}, Edge{2, 0, 1.0f},
+			Edge{3, 4, 10.0f}, Edge{4, 5, 1.0f},
+		});
+		std::vector<int64_t> communities{0, 0, 0, 0, 0, 1};
+		RefinementInput input(*csr, communities);
+		LeidenOptions options;
+		options.refinementThreshold = 1.0;
+
+		auto [count, totals] = LeidenTestAccess::refineCommunities(
+			*csr, options, input.totalDegree, input.degrees, communities, input.communityDegree);
+
+		EXPECT_EQ(count, 2u);
+		EXPECT_EQ(totals.size(), count);
+		for (size_t i = 1; i < 5; ++i) EXPECT_EQ(communities[0], communities[i]);
+		EXPECT_NE(communities[0], communities[5]);
+	}
+
+	TEST(LeidenEngineUnitTest, IsolatedNodeRemainsSeparateFromConnectedPair) {
+		using Edge = CsrProjection::Edge;
+		auto csr = CsrProjection::buildFromEdgeList(3, {Edge{0, 1, 1.0f}});
+		auto result = LeidenEngine::run(*csr);
+		auto communities = toMap(result);
+
+		EXPECT_EQ(communities[0], communities[1]);
+		EXPECT_NE(communities[0], communities[2]);
+	}
+
+	TEST(LeidenEngineUnitTest, HighResolutionStopsWhenNoCommunityContracts) {
+		using Edge = CsrProjection::Edge;
+		auto csr = CsrProjection::buildFromEdgeList(3, {
+			Edge{0, 1, 1.0f}, Edge{1, 2, 1.0f},
+		});
+		LeidenOptions options;
+		options.resolution = 1e6;
+		auto result = LeidenEngine::run(*csr, options);
+
+		EXPECT_EQ(distinctCommunities(result), 3u);
+	}
+
+	TEST(LeidenEngineUnitTest, ConnectedPairContractsToSingleCommunity) {
+		using Edge = CsrProjection::Edge;
+		auto csr = CsrProjection::buildFromEdgeList(2, {Edge{0, 1, 1.0f}});
+		auto result = LeidenEngine::run(*csr);
+
+		ASSERT_EQ(result.size(), 2u);
+		EXPECT_EQ(distinctCommunities(result), 1u);
+	}
+
+	TEST(LeidenEngineUnitTest, HierarchicalLevelContractsSuperCommunities) {
+		using Edge = CsrProjection::Edge;
+		auto csr = CsrProjection::buildFromEdgeList(8, {
+			Edge{0, 3, 4.0f}, Edge{0, 4, 4.0f}, Edge{0, 6, 4.0f},
+			Edge{1, 2, 8.0f}, Edge{1, 3, 1.0f}, Edge{1, 4, 8.0f},
+			Edge{2, 3, 2.0f}, Edge{3, 5, 4.0f}, Edge{3, 7, 4.0f},
+			Edge{4, 5, 4.0f}, Edge{5, 6, 1.0f}, Edge{5, 7, 8.0f},
+		});
+		LeidenOptions singleLevel;
+		singleLevel.maxLevels = 1;
+		singleLevel.resolution = 0.1;
+		LeidenOptions twoLevels = singleLevel;
+		twoLevels.maxLevels = 2;
+
+		auto firstLevel = LeidenEngine::run(*csr, singleLevel);
+		auto secondLevel = LeidenEngine::run(*csr, twoLevels);
+
+		EXPECT_EQ(distinctCommunities(firstLevel), 3u);
+		EXPECT_EQ(distinctCommunities(secondLevel), 1u);
+		ASSERT_EQ(secondLevel.size(), csr->nodeCount());
+		for (const auto &entry : secondLevel) EXPECT_EQ(entry.communityId, secondLevel.front().communityId);
+	}
+
+	TEST(LeidenEngineUnitTest, IterationLimitStillReturnsDenseCommunities) {
+		using Edge = CsrProjection::Edge;
+		auto csr = CsrProjection::buildFromEdgeList(4, {
+			Edge{0, 1, 1.0f}, Edge{1, 2, 1.0f}, Edge{2, 3, 1.0f},
+		});
+		LeidenOptions options;
+		options.maxIterations = 1;
+		options.maxLevels = 1;
+		auto result = LeidenEngine::run(*csr, options);
+
+		std::set<int64_t> labels;
+		for (const auto &entry : result) labels.insert(entry.communityId);
+		int64_t expected = 0;
+		for (int64_t label : labels) EXPECT_EQ(label, expected++);
+	}
+
+	TEST(LeidenEngineUnitTest, ParallelLargeGraphKeepsDisjointPairsSeparate) {
+		using Edge = CsrProjection::Edge;
+		constexpr size_t nodeCount = 4096;
+		std::vector<Edge> edges;
+		edges.reserve(nodeCount / 2);
+		for (int64_t node = 0; node < static_cast<int64_t>(nodeCount); node += 2) {
+			edges.push_back({node, node + 1, 1.0f});
+		}
+		auto csr = CsrProjection::buildFromEdgeList(nodeCount, edges);
+		graph::concurrent::ThreadPool pool(4);
+		LeidenOptions options;
+		options.maxLevels = 2;
+		auto result = LeidenEngine::run(*csr, options, &pool);
+
+		ASSERT_EQ(result.size(), nodeCount);
+		EXPECT_EQ(distinctCommunities(result), nodeCount / 2);
+		auto communities = toMap(result);
+		for (int64_t node = 0; node < static_cast<int64_t>(nodeCount); node += 2) {
+			EXPECT_EQ(communities[node], communities[node + 1]);
+		}
 	}
 
 	TEST_F(LeidenTest, TwoTrianglesYieldTwoCommunities) {
