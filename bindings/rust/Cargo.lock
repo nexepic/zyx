@@ -442,11 +442,11 @@ checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
 
 [[package]]
 name = "zyx-src"
-version = "0.1.27"
+version = "0.1.28"
 
 [[package]]
 name = "zyxdb"
-version = "0.1.27"
+version = "0.1.28"
 dependencies = [
  "tempfile",
  "zyxdb-sys",
@@ -454,7 +454,7 @@ dependencies = [
 
 [[package]]
 name = "zyxdb-sys"
-version = "0.1.27"
+version = "0.1.28"
 dependencies = [
  "zyx-src",
 ]
