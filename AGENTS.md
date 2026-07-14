@@ -15,6 +15,8 @@ cross-platform compatibility.
 ./scripts/run_tests.sh --quick --file xxx.cpp  # Coverage report for specific file
 cmake --build buildDir --target zyx_test_suite && ./buildDir/zyx_test_suite --gtest_filter="DriverAbi*" # Driver ABI tests
 cmake --build buildDir --target zyx && cd bindings/rust && cargo test # Rust SDK tests after building libzyx
+./scripts/test_bindings.sh             # Build (from current source) + test all language bindings (Node/Python/Rust)
+./scripts/test_bindings.sh --node      # Node.js binding only; --python / --rust / --all / --skip-conan also supported
 cmake --build buildDir --target zyx_test_suite && ./buildDir/zyx_test_suite --gtest_filter="SuiteName.*" # Compile and run specific test suite
 cmake --build buildDir --target zyx_test_suite && ./buildDir/zyx_test_suite --gtest_filter="SuiteName.TestName" # Compile and run specific test case
 ./scripts/build_release.sh          # Release build
