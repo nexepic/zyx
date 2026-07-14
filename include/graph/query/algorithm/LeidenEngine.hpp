@@ -83,7 +83,7 @@ namespace graph::query::algorithm {
 											  const LeidenOptions &opts = {},
 											  concurrent::ThreadPool *pool = nullptr);
 
-		/// Compute modularity of the current community assignment (Q in [-0.5, 1]).
+		/// Compute modularity of the current community assignment (Q in [-1, 1]).
 		static double modularity(const CsrProjection &csr,
 								 const std::vector<int64_t> &communityOf,
 								 double resolution = 1.0);

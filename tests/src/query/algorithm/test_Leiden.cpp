@@ -19,6 +19,7 @@
  **/
 
 #include <atomic>
+#include <array>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
@@ -172,7 +173,7 @@ namespace {
 		EXPECT_DOUBLE_EQ(LeidenEngine::modularity(*edgeless, {0, 1, 2}), 0.0);
 
 		auto selfLoop = CsrProjection::buildFromEdgeList(1, {{0, 0, 2.0f}});
-		EXPECT_TRUE(std::isfinite(LeidenEngine::modularity(*selfLoop, {0})));
+		EXPECT_DOUBLE_EQ(LeidenEngine::modularity(*selfLoop, {0}), 0.0);
 	}
 
 	TEST(LeidenEngineUnitTest, EmptyPrivatePhasesReturnWithoutMutation) {
@@ -283,6 +284,29 @@ namespace {
 
 		ASSERT_EQ(result.size(), 2u);
 		EXPECT_EQ(distinctCommunities(result), 1u);
+	}
+
+	TEST(LeidenEngineUnitTest, TrianglePartitionIsStableAcrossEdgeOrders) {
+		using Edge = CsrProjection::Edge;
+		const std::array<Edge, 7> edges{{
+			Edge{0, 1, 1.0f}, Edge{1, 2, 1.0f}, Edge{2, 0, 1.0f},
+			Edge{3, 4, 1.0f}, Edge{4, 5, 1.0f}, Edge{5, 3, 1.0f},
+			Edge{0, 3, 1.0f},
+		}};
+		std::array<size_t, edges.size()> order{0, 1, 2, 3, 4, 5, 6};
+		do {
+			std::vector<Edge> orderedEdges;
+			orderedEdges.reserve(edges.size());
+			for (size_t index : order) orderedEdges.push_back(edges[index]);
+			auto csr = CsrProjection::buildFromEdgeList(6, orderedEdges);
+
+			std::vector<int64_t> initial{0, 1, 2, 3, 4, 5};
+			const double initialModularity = LeidenEngine::modularity(*csr, initial);
+			auto result = LeidenEngine::run(*csr);
+
+			EXPECT_EQ(distinctCommunities(result), 2u);
+			EXPECT_GE(LeidenEngine::modularity(*csr, toMapRes(result, *csr)), initialModularity - 1e-12);
+		} while (std::next_permutation(order.begin(), order.end()));
 	}
 
 	TEST(LeidenEngineUnitTest, HierarchicalLevelContractsSuperCommunities) {
