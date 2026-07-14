@@ -54,7 +54,7 @@ namespace graph::query::algorithm {
 				double w = wnbrs[j];
 				sigmaTot[c] += w;
 				size_t dst = csr.indexOf(nbrs[j]);
-				if (dst != i && communityOf[dst] == c) sigmaIn[c] += w;
+				if (communityOf[dst] == c) sigmaIn[c] += w;
 			}
 		}
 		for (auto &kv : sigmaIn) kv.second /= 2.0;
@@ -63,7 +63,7 @@ namespace graph::query::algorithm {
 		for (const auto &kv : sigmaTot) {
 			double tot = kv.second;
 			double in = sigmaIn.count(kv.first) ? sigmaIn[kv.first] : 0.0;
-			q += in / m2 - resolution * (tot * tot) / (m2 * m2);
+			q += 2.0 * in / m2 - resolution * (tot * tot) / (m2 * m2);
 		}
 		return q;
 	}
@@ -78,14 +78,6 @@ namespace graph::query::algorithm {
 		const size_t n = csr.nodeCount();
 		if (n == 0) return 0;
 
-		auto acquireSigmaTot = [&]() {
-			std::unordered_map<int64_t, double> snap;
-			snap.reserve(n);
-			for (size_t i = 0; i < n; ++i)
-				snap[static_cast<int64_t>(i)] = sigmaTot[i].load(std::memory_order_relaxed);
-			return snap;
-		};
-
 		std::vector<std::atomic<int64_t>> communityAtomic(n);
 		for (size_t i = 0; i < n; ++i)
 			communityAtomic[i].store(communityOf[i], std::memory_order_relaxed);
@@ -96,11 +88,6 @@ namespace graph::query::algorithm {
 		while (changed && iter < opts.maxIterations) {
 			changed = false;
 			++iter;
-
-			// Workers read the latest community labels through atomics. This keeps
-			// the local-moving phase asynchronous like Louvain/Leiden, while
-			// avoiding undefined behaviour from concurrent vector reads/writes.
-			std::unordered_map<int64_t, double> sigmaTotSnap = acquireSigmaTot();
 
 			// Each partition counts its own moves; the merger aggregates them in a
 			// serial pass (no atomic on movedCount needed).
@@ -133,18 +120,30 @@ namespace graph::query::algorithm {
 						}
 						if (kic.empty()) continue;
 
+						const auto currentIt = kic.find(cur);
+						const double currentInternalWeight =
+							currentIt == kic.end() ? 0.0 : currentIt->second;
+						const double currentTotal =
+							sigmaTot[cur].load(std::memory_order_relaxed) - ki[i];
+						// Compare every candidate against the current community. Testing a
+						// candidate only against zero permits modularity-decreasing moves.
+						const double currentScore = currentInternalWeight -
+							opts.resolution * currentTotal * ki[i] / m2;
 						int64_t best = cur;
-						double bestGain = 0.0;
+						double bestScore = currentScore;
 						for (const auto &kv : kic) {
 							int64_t c = kv.first;
-							double totC = (c == cur) ? (sigmaTotSnap[c] - ki[i]) : sigmaTotSnap[c];
-							double gain = kv.second - opts.resolution * totC * ki[i] / m2;
-							if (gain > bestGain + 1e-12) {
-								bestGain = gain;
+							double total = c == cur
+								? currentTotal
+								: sigmaTot[c].load(std::memory_order_relaxed);
+							double score = kv.second - opts.resolution * total * ki[i] / m2;
+							if (score > bestScore + 1e-12 ||
+								(std::abs(score - bestScore) <= 1e-12 && c < best)) {
+								bestScore = score;
 								best = c;
 							}
 						}
-						if (best != cur) {
+						if (best != cur && bestScore > currentScore + 1e-12) {
 							sigmaTot[cur].fetch_sub(ki[i], std::memory_order_relaxed);
 							sigmaTot[best].fetch_add(ki[i], std::memory_order_relaxed);
 							communityAtomic[i].store(best, std::memory_order_relaxed);
@@ -270,12 +269,13 @@ namespace graph::query::algorithm {
 				}
 				internalW /= 2.0;
 				// Modularity gain of this component becoming its own community
-				// (leaving the parent): R = internalW/m - resolution*(compKi*totParent)/m^2 ...
+				// (leaving the parent): 2*internalW/m2 - resolution*(compKi*totParent)/m2^2 ...
 				// Leiden's refinement accepts the split when it does not decrease
 				// modularity by more than theta. Equivalent gate used here:
 				//   gain_in - resolution * compKi*(parentTot - compKi)/m2 >= theta
 				double parentTot = sigmaTotSnap[oldC];
-				double gain = internalW / m2 - opts.resolution * compKi * (parentTot - compKi) / (m2 * m2);
+				double gain = 2.0 * internalW / m2 -
+					opts.resolution * compKi * (parentTot - compKi) / (m2 * m2);
 				if (gain >= opts.refinementThreshold) {
 					int64_t newId = nextId++;
 					for (size_t idx : cp.second) newComm[idx] = newId;
