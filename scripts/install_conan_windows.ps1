@@ -41,15 +41,22 @@ $vcvarsEnvironment | ForEach-Object {
     }
 }
 
-$clOutput = (& cl.exe 2>&1 | Out-String)
-$clVersionMatch = [regex]::Match($clOutput, "Version\\s+(\\d+)\\.(\\d+)")
-if (-not $clVersionMatch.Success) {
-    Write-Error "Could not determine the MSVC version from cl.exe."
+try {
+    $clPath = (Get-Command cl.exe -CommandType Application -ErrorAction Stop).Source
+    $clVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($clPath)
+} catch {
+    Write-Error "Could not locate cl.exe in the activated Visual Studio environment."
 }
 
-# Conan identifies MSVC ABI versions as 193, 194, 195, ... for cl 19.3x, 19.4x, 19.5x, ... .
-$msvcAbiVersion = "$($clVersionMatch.Groups[1].Value)$($clVersionMatch.Groups[2].Value.Substring(0, 1))"
-Write-Host "Detected MSVC ABI version: $msvcAbiVersion"
+if ($clVersion.FileMajorPart -lt 19 -or $clVersion.FileMinorPart -lt 0) {
+    Write-Error "Unsupported cl.exe file version: $($clVersion.FileVersion)"
+}
+
+# Conan identifies cl 19.3x, 19.4x, 19.5x, ... as MSVC ABI 193, 194, 195, ... .
+$msvcAbiVersion = [int](
+    ($clVersion.FileMajorPart * 10) + [math]::Floor($clVersion.FileMinorPart / 10)
+)
+Write-Host "Detected cl.exe $($clVersion.FileVersion) at $clPath (Conan MSVC ABI $msvcAbiVersion)"
 
 # Ensure the generated CMake toolchain uses clang-cl with the detected MSVC ABI.
 $env:CC = "clang-cl"
