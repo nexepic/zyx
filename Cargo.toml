@@ -15,6 +15,7 @@ include = [
     "/cmake/**",
     "/include/**",
     "/src/**",
+    "!/src/query/parser/cypher/antlr-*-complete.jar",
     "/lib/inputxx/include/**",
     "/lib/inputxx/src/**",
     "/bindings/rust/zyx-src/lib.rs",
