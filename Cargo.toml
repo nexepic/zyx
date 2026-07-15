@@ -7,6 +7,7 @@ license = "Apache-2.0"
 repository = "https://github.com/nexepic/zyx"
 homepage = "https://try-zyx.github.io/zyx"
 documentation = "https://try-zyx.github.io/zyx/en/docs/zyx/api"
+readme = "crates/zyx-src/README.md"
 include = [
     "/Cargo.toml",
     "/README.md",
@@ -18,6 +19,7 @@ include = [
     "!/src/query/parser/cypher/antlr-*-complete.jar",
     "/lib/inputxx/include/**",
     "/lib/inputxx/src/**",
+    "/crates/zyx-src/README.md",
     "/crates/zyx-src/src/lib.rs",
 ]
 
