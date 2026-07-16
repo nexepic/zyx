@@ -221,7 +221,10 @@ TEST_F(VectorRegistryPathsTest, UpdateBlobPtrs) {
 	VectorBlobPtrs ptrs2 = {400, 500, 600};
 	registry->setBlobPtrs(42, ptrs2);
 
-	auto loaded = registry->getBlobPtrs(42);
+	// A fresh registry bypasses the in-memory cache and verifies that the
+	// B+Tree now points at the replacement metadata chain.
+	auto freshRegistry = std::make_unique<VectorIndexRegistry>(dm, sm, "test_vec");
+	auto loaded = freshRegistry->getBlobPtrs(42);
 	EXPECT_EQ(loaded.rawBlob, 400);
 	EXPECT_EQ(loaded.pqBlob, 500);
 	EXPECT_EQ(loaded.adjBlob, 600);
@@ -316,9 +319,28 @@ TEST_F(VectorRegistryPathsTest, LoadAdjacencyTruncatedData) {
 	auto blobs = dm->getBlobManager()->createBlobChain(0, 0, shortData);
 	ASSERT_FALSE(blobs.empty());
 
-	auto adj = registry->loadAdjacency(blobs[0].getId());
-	EXPECT_TRUE(adj.empty());
+	EXPECT_THROW((void) registry->loadAdjacency(blobs[0].getId()), std::runtime_error);
 
+	txn.commit();
+}
+
+TEST_F(VectorRegistryPathsTest, LoadRawVectorRejectsPartialElement) {
+	createRegistry();
+	auto txn = database->beginTransaction();
+	auto blobs = dm->getBlobManager()->createBlobChain(0, 0, std::string("x"));
+	ASSERT_FALSE(blobs.empty());
+	EXPECT_THROW((void) registry->loadRawVector(blobs.front().getId()), std::runtime_error);
+	txn.commit();
+}
+
+TEST_F(VectorRegistryPathsTest, LoadAdjacencyRejectsCountPayloadMismatch) {
+	createRegistry();
+	auto txn = database->beginTransaction();
+	std::string malformed(sizeof(uint32_t), '\0');
+	malformed[0] = '\1';
+	auto blobs = dm->getBlobManager()->createBlobChain(0, 0, malformed);
+	ASSERT_FALSE(blobs.empty());
+	EXPECT_THROW((void) registry->loadAdjacency(blobs.front().getId()), std::runtime_error);
 	txn.commit();
 }
 

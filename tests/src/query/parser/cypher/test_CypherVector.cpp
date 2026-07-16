@@ -115,13 +115,12 @@ TEST_F(CypherVectorTest, SearchNonExistentIndex) {
 TEST_F(CypherVectorTest, InsertBadDimension) {
 	(void) execute("CREATE VECTOR INDEX idx_dim ON :N(v) OPTIONS {dim: 4}");
 
-	// Insert dim 2
-	(void) execute("CREATE (:N {v: [1.0, 1.0]})");
-
-	// Search should not find it (or return it).
-	// The insert logs an error but doesn't crash. The node exists in DB but not in Index.
-	auto res = execute("CALL db.index.vector.queryNodes('idx_dim', 5, [1.0, 1.0, 1.0, 1.0])");
-	EXPECT_TRUE(res.isEmpty() || res.rowCount() == 0);
+	// A vector-index write failure must be visible to the transaction rather than
+	// committing a graph node whose derived index update was silently skipped.
+	EXPECT_THROW((void) execute("CREATE (:N {v: [1.0, 1.0]})"), std::invalid_argument);
+	auto count = execute("MATCH (n:N) RETURN count(n)");
+	ASSERT_EQ(count.rowCount(), 1UL);
+	EXPECT_EQ(count.getRows()[0].at("count(n)").toString(), "0");
 }
 
 // --- Additional Vector Index Tests ---
