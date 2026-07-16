@@ -564,7 +564,7 @@ TEST_F(RegistryTest, GetAllNodeIds_NoMappingIndex) {
 // ============================================================================
 
 TEST_F(RegistryTest, LoadAdjacency_BlobTooSmallTwoBytes) {
-	// Cover: line 203 - data.size() < sizeof(uint32_t) -> return {}
+	// Malformed persisted adjacency data must fail before it can be decoded.
 	// Write a blob with less than 4 bytes, then call loadAdjacency on it.
 	auto registry = std::make_shared<VectorIndexRegistry>(dm, sm, "small_adj_idx");
 	VectorIndexConfig cfg;
@@ -579,13 +579,11 @@ TEST_F(RegistryTest, LoadAdjacency_BlobTooSmallTwoBytes) {
 	int64_t tinyBlobId = blobs[0].getId();
 	EXPECT_GT(tinyBlobId, 0);
 
-	// loadAdjacency should hit the data.size() < sizeof(uint32_t) branch
-	auto neighbors = registry->loadAdjacency(tinyBlobId);
-	EXPECT_TRUE(neighbors.empty());
+	EXPECT_THROW((void) registry->loadAdjacency(tinyBlobId), std::runtime_error);
 }
 
 TEST_F(RegistryTest, LoadAdjacency_BlobExactlyThreeBytes) {
-	// Cover: line 203 - exactly 3 bytes (still < sizeof(uint32_t) = 4)
+	// Three bytes cannot contain the required count field.
 	auto registry = std::make_shared<VectorIndexRegistry>(dm, sm, "threebyte_adj_idx");
 	VectorIndexConfig cfg;
 	cfg.dimension = 4;
@@ -595,12 +593,11 @@ TEST_F(RegistryTest, LoadAdjacency_BlobExactlyThreeBytes) {
 	auto blobs = dm->getBlobManager()->createBlobChain(0, 0, threeBytes);
 	ASSERT_FALSE(blobs.empty());
 
-	auto neighbors = registry->loadAdjacency(blobs[0].getId());
-	EXPECT_TRUE(neighbors.empty());
+	EXPECT_THROW((void) registry->loadAdjacency(blobs[0].getId()), std::runtime_error);
 }
 
 TEST_F(RegistryTest, LoadAdjacency_BlobOneByteOnly) {
-	// Cover: line 203 - 1 byte blob (edge case, < sizeof(uint32_t))
+	// One byte cannot contain the required count field.
 	auto registry = std::make_shared<VectorIndexRegistry>(dm, sm, "onebyte_adj_idx");
 	VectorIndexConfig cfg;
 	cfg.dimension = 4;
@@ -610,8 +607,7 @@ TEST_F(RegistryTest, LoadAdjacency_BlobOneByteOnly) {
 	auto blobs = dm->getBlobManager()->createBlobChain(0, 0, oneByte);
 	ASSERT_FALSE(blobs.empty());
 
-	auto neighbors = registry->loadAdjacency(blobs[0].getId());
-	EXPECT_TRUE(neighbors.empty());
+	EXPECT_THROW((void) registry->loadAdjacency(blobs[0].getId()), std::runtime_error);
 }
 
 TEST_F(RegistryTest, GetBlobPtrs_CorruptedMetaBlobSize) {

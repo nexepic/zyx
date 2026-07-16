@@ -70,6 +70,12 @@ namespace graph::query::indexes {
 						 const std::unordered_map<std::string, PropertyValue> &props);
 
 		/**
+		 * Synchronize only vector-indexed properties that changed between two node images.
+		 * Missing indexed properties remove their vector mapping.
+		 */
+		void updateIndexDelta(const Node &oldNode, const Node &newNode, const std::string &label);
+
+		/**
 		 * @brief Batch update vector indexes for multiple nodes.
 		 * More efficient than calling updateIndex() for each node individually
 		 * as it batches inserts per index to reduce graph construction overhead.

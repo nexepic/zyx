@@ -55,6 +55,8 @@ namespace graph::vector {
 		// Core Access
 		VectorBlobPtrs getBlobPtrs(int64_t nodeId);
 		void setBlobPtrs(int64_t nodeId, const VectorBlobPtrs &ptrs);
+		bool removeBlobPtrs(int64_t nodeId);
+		void deleteBlobChain(int64_t blobId) const;
 
 		// Config & PQ State Management
 		const VectorIndexConfig &getConfig() const { return config_; }

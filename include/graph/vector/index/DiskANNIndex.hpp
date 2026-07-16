@@ -25,6 +25,7 @@
 #include <string>
 #include <unordered_set>
 #include <vector>
+#include "graph/vector/core/BFloat16.hpp"
 
 namespace graph::concurrent {
 	class ThreadPool;
@@ -59,7 +60,7 @@ namespace graph::vector {
 		bool isPQTrained() const;
 		size_t size() const; // Helper to check current node count
 
-		void remove(int64_t nodeId) const;
+		void remove(int64_t nodeId);
 
 		// Sampling for training
 		std::vector<std::vector<float>> sampleVectors(size_t n) const;
@@ -75,6 +76,8 @@ namespace graph::vector {
 
 		// Cache node count to avoid expensive B-Tree scans
 		mutable size_t cachedCount_ = 0;
+
+		bool upsertExistingVector(int64_t nodeId, const std::vector<BFloat16> &encodedVector);
 
 		// --- Distance Calculation ---
 

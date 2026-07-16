@@ -294,7 +294,19 @@ namespace graph::storage {
 		}
 		nodeManager_->add(node);
 		txnContext_.recordAdd(node);
-		observerManager_.notifyNodeAdded(node);
+		try {
+			observerManager_.notifyNodeAdded(node);
+		} catch (...) {
+			// Observers maintain derived state. Compensate the primary write before
+			// exposing their failure so an invalid vector cannot leave an unindexed node.
+			try {
+				nodeManager_->remove(node);
+				observerManager_.notifyNodeDeleted(node);
+			} catch (...) {
+				throw std::runtime_error("Node insert failed and its derived-index compensation also failed");
+			}
+			throw;
+		}
 		markGraphMutated();
 	}
 

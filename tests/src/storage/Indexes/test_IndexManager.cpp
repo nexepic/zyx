@@ -35,6 +35,8 @@
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/indexes/EntityTypeIndexManager.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
+#include "graph/storage/indexes/VectorIndexManager.hpp"
+#include "graph/vector/index/DiskANNIndex.hpp"
 #include "graph/storage/indexes/IndexMeta.hpp"
 #include "graph/storage/state/SystemStateKeys.hpp"
 
@@ -686,14 +688,12 @@ TEST_F(IndexManagerTest, VectorIndex_EdgeCases) {
 	int64_t labelId = dataManager->getOrCreateTokenId("Item");
 	graph::Node node(200, labelId);
 
-	// Case A: Property Type Mismatch (Not a LIST)
-	// Covers VectorIndexManager.cpp: log::Log::warn("Type mismatch...")
+	// Case A: Property Type Mismatch (Not a LIST) must be visible to the caller.
 	std::unordered_map<std::string, graph::PropertyValue> badProps;
 	badProps["emb"] = graph::PropertyValue(std::string("not a vector"));
 	node.setProperties(badProps);
 
-	// Should log warning but not crash
-	indexManager->onNodeAdded(node);
+	EXPECT_THROW(indexManager->onNodeAdded(node), std::invalid_argument);
 
 	// Case B: Label Mismatch (No index for this label)
 	// Covers VectorIndexManager.cpp: if (it != indexMap_.end()) else branch
@@ -704,6 +704,35 @@ TEST_F(IndexManagerTest, VectorIndex_EdgeCases) {
 	otherNode.setProperties(goodProps);
 
 	indexManager->onNodeAdded(otherNode);
+}
+
+TEST_F(IndexManagerTest, VectorIndexUpdateIgnoresUnrelatedPropertiesAndUpsertsChangedVectors) {
+	ASSERT_TRUE(indexManager->createVectorIndex("vec_delta", "Item", "embedding", 3, "L2"));
+	const int64_t labelId = dataManager->getOrCreateTokenId("Item");
+
+	graph::Node original(300, labelId);
+	original.setProperties({
+			{"embedding", PropertyValue(std::vector<PropertyValue>{1.0, 2.0, 3.0})},
+			{"status", PropertyValue("draft")},
+	});
+	indexManager->onNodeAdded(original);
+	auto vectorIndex = indexManager->getVectorIndexManager()->getIndex("vec_delta");
+	ASSERT_EQ(vectorIndex->size(), 1U);
+
+	graph::Node unrelatedChange = original;
+	unrelatedChange.addProperty("status", PropertyValue("published"));
+	indexManager->onNodeUpdated(original, unrelatedChange);
+	EXPECT_EQ(vectorIndex->size(), 1U);
+
+	graph::Node vectorChange = unrelatedChange;
+	vectorChange.addProperty("embedding", PropertyValue(std::vector<PropertyValue>{4.0, 5.0, 6.0}));
+	indexManager->onNodeUpdated(unrelatedChange, vectorChange);
+	EXPECT_EQ(vectorIndex->size(), 1U);
+
+	graph::Node removedVector = vectorChange;
+	removedVector.removeProperty("embedding");
+	indexManager->onNodeUpdated(vectorChange, removedVector);
+	EXPECT_EQ(vectorIndex->size(), 0U);
 }
 
 TEST_F(IndexManagerTest, GetVectorIndexName_Coverage) {

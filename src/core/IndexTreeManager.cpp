@@ -692,6 +692,32 @@ namespace graph::query::indexes {
 		return rootId;
 	}
 
+	bool IndexTreeManager::replaceUniqueValue(const int64_t rootId, const PropertyValue &key,
+											const int64_t expectedValue, const int64_t replacementValue) {
+		std::unique_lock lock(mutex_);
+		if (rootId == 0)
+			return false;
+
+		const int64_t leafId = findLeafNode(rootId, key);
+		if (leafId == 0)
+			return false;
+
+		auto leaf = dataManager_->getIndex(leafId);
+		auto entries = leaf.getAllEntries(dataManager_);
+		auto it = std::lower_bound(entries.begin(), entries.end(), key,
+							   [&](const Index::Entry &entry, const PropertyValue &candidate) {
+								   return keyComparator_(entry.key, candidate);
+							   });
+		const bool keyMatches = it != entries.end() && !keyComparator_(key, it->key) && !keyComparator_(it->key, key);
+		if (!keyMatches || it->values.size() != 1 || it->values.front() != expectedValue)
+			return false;
+
+		it->values.front() = replacementValue;
+		leaf.setAllEntries(entries, dataManager_);
+		dataManager_->updateIndexEntity(leaf);
+		return true;
+	}
+
 	bool IndexTreeManager::remove(int64_t &rootId, const PropertyValue &key, int64_t value) {
 		std::unique_lock lock(mutex_);
 		if (rootId == 0)

@@ -19,6 +19,8 @@
  **/
 
 #include "graph/storage/indexes/VectorIndexManager.hpp"
+#include <stdexcept>
+#include <unordered_map>
 #include "graph/log/Log.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/indexes/IndexMeta.hpp"
@@ -28,6 +30,26 @@
 #include "graph/vector/index/DiskANNIndex.hpp"
 
 namespace graph::query::indexes {
+	namespace {
+		std::vector<float> toVectorValues(const PropertyValue &value, const std::string &propertyName) {
+			if (value.getType() != PropertyType::LIST)
+				throw std::invalid_argument("Vector-indexed property '" + propertyName + "' must be a numeric list");
+
+			const auto &propertyVector = value.getList();
+			std::vector<float> vector;
+			vector.reserve(propertyVector.size());
+			for (const auto &element: propertyVector) {
+				if (element.getType() == PropertyType::DOUBLE)
+					vector.push_back(static_cast<float>(std::get<double>(element.getVariant())));
+				else if (element.getType() == PropertyType::INTEGER)
+					vector.push_back(static_cast<float>(std::get<int64_t>(element.getVariant())));
+				else
+					throw std::invalid_argument("Vector-indexed property '" + propertyName +
+											"' contains a non-numeric element");
+			}
+			return vector;
+		}
+	} // namespace
 
 	VectorIndexManager::VectorIndexManager(std::shared_ptr<storage::DataManager> dm,
 										   std::shared_ptr<storage::state::SystemStateManager> sm) :
@@ -124,55 +146,45 @@ namespace graph::query::indexes {
 										 const std::unordered_map<std::string, PropertyValue> &props) {
 		std::lock_guard<std::recursive_mutex> lock(mutex_);
 
-		// Force reload for debugging
-		// indexMapLoaded_ = false;
-		if (!indexMapLoaded_) {
+		if (!indexMapLoaded_)
 			loadIndexMap();
-			if (!indexMap_.empty()) {
-				log::Log::info("Loaded Index Map. Count: {}", indexMap_.size());
-				for (const auto &[k, v]: indexMap_)
-					log::Log::info("Map: {} -> {}", k, v);
-			}
-		}
 
 		if (label.empty())
 			return;
 
 		for (const auto &[key, val]: props) {
-			std::string mapKey = label + ":" + key;
+			const auto mapIt = indexMap_.find(label + ":" + key);
+			if (mapIt == indexMap_.end())
+				continue;
+			getIndex(mapIt->second)->insert(node.getId(), toVectorValues(val, key));
+		}
+	}
 
-			if (indexMap_.find(mapKey) != indexMap_.end()) {
-				std::string indexName = indexMap_[mapKey];
+	void VectorIndexManager::updateIndexDelta(const Node &oldNode, const Node &newNode, const std::string &label) {
+		std::lock_guard<std::recursive_mutex> lock(mutex_);
+		if (!indexMapLoaded_)
+			loadIndexMap();
+		if (label.empty())
+			return;
 
-				if (val.getType() == PropertyType::LIST) {
-					try {
-						const auto &propVec = val.getList();
-						auto index = getIndex(indexName);
+		const auto &oldProperties = oldNode.getProperties();
+		const auto &newProperties = newNode.getProperties();
+		const std::string prefix = label + ":";
+		for (const auto &[mapKey, indexName]: indexMap_) {
+			if (!mapKey.starts_with(prefix))
+				continue;
+			const std::string propertyName = mapKey.substr(prefix.size());
+			const auto oldIt = oldProperties.find(propertyName);
+			const auto newIt = newProperties.find(propertyName);
+			if (oldIt != oldProperties.end() && newIt != newProperties.end() && oldIt->second == newIt->second)
+				continue;
 
-						// Convert std::vector<PropertyValue> to std::vector<float> for vector index
-						std::vector<float> vec;
-						vec.reserve(propVec.size());
-						for (const auto &elem : propVec) {
-							if (elem.getType() == PropertyType::DOUBLE) {
-								vec.push_back(static_cast<float>(std::get<double>(elem.getVariant())));
-							} else if (elem.getType() == PropertyType::INTEGER) {
-								vec.push_back(static_cast<float>(std::get<int64_t>(elem.getVariant())));
-							} else {
-								throw std::runtime_error("Vector index requires numeric values only");
-							}
-						}
-
-						index->insert(node.getId(), vec);
-
-						// DEBUG LOG
-						// log::Log::info("Inserted node {} into vector index {}", node.getId(), indexName);
-					} catch (const std::exception &e) {
-						log::Log::error("Insert failed: {}", e.what());
-					}
-				} else {
-					log::Log::warn("Type mismatch for {}: Expected LIST, got {}", key, (int) val.getType());
-				}
+			auto index = getIndex(indexName);
+			if (newIt == newProperties.end()) {
+				index->remove(newNode.getId());
+				continue;
 			}
+			index->insert(newNode.getId(), toVectorValues(newIt->second, propertyName));
 		}
 	}
 
@@ -187,7 +199,7 @@ namespace graph::query::indexes {
 		if (label.empty() || nodesWithProps.empty())
 			return;
 
-		// Group vectors by index name
+		// Validate and group all vectors before mutating any index.
 		std::unordered_map<std::string, std::vector<std::pair<int64_t, std::vector<float>>>> batchByIndex;
 
 		for (const auto &[node, props]: nodesWithProps) {
@@ -197,36 +209,13 @@ namespace graph::query::indexes {
 				if (it == indexMap_.end())
 					continue;
 
-				if (val.getType() != PropertyType::LIST)
-					continue;
-
-				try {
-					const auto &propVec = val.getList();
-					std::vector<float> vec;
-					vec.reserve(propVec.size());
-					for (const auto &elem: propVec) {
-						if (elem.getType() == PropertyType::DOUBLE)
-							vec.push_back(static_cast<float>(std::get<double>(elem.getVariant())));
-						else if (elem.getType() == PropertyType::INTEGER)
-							vec.push_back(static_cast<float>(std::get<int64_t>(elem.getVariant())));
-						else
-							throw std::runtime_error("Vector index requires numeric values only");
-					}
-					batchByIndex[it->second].push_back({node.getId(), std::move(vec)});
-				} catch (const std::exception &e) {
-					log::Log::error("Batch vector conversion failed: {}", e.what());
-				}
+				batchByIndex[it->second].push_back({node.getId(), toVectorValues(val, key)});
 			}
 		}
 
 		// Execute batch inserts per index
 		for (auto &[indexName, batch]: batchByIndex) {
-			try {
-				auto index = getIndex(indexName);
-				index->batchInsert(batch);
-			} catch (const std::exception &e) {
-				log::Log::error("Batch insert failed for index {}: {}", indexName, e.what());
-			}
+			getIndex(indexName)->batchInsert(batch);
 		}
 	}
 
@@ -241,12 +230,7 @@ namespace graph::query::indexes {
 
 		for (const auto &[key, indexName]: indexMap_) {
 			if (key.starts_with(label + ":")) {
-				try {
-					auto index = getIndex(indexName);
-					index->remove(nodeId);
-					// log::Log::info("Removed Node {} from Vector Index {}", nodeId, indexName);
-				} catch (...) {
-				}
+				getIndex(indexName)->remove(nodeId);
 			}
 		}
 	}

@@ -191,10 +191,10 @@ TEST_F(ManagerPersistenceTest, UpdateIndex_NonListProperty) {
 	dm->addNode(node);
 
 	std::unordered_map<std::string, graph::PropertyValue> props;
-	// Non-list property for a vector-indexed field -> should log warning
+	// An indexed vector property with an incompatible type must abort the write.
 	props["embedding"] = graph::PropertyValue(int64_t(42));
 
-	EXPECT_NO_THROW(vim->updateIndex(node, "Person", props));
+	EXPECT_THROW(vim->updateIndex(node, "Person", props), std::invalid_argument);
 }
 
 TEST_F(ManagerPersistenceTest, UpdateIndex_IntegerVectorElements) {
@@ -221,6 +221,52 @@ TEST_F(ManagerPersistenceTest, UpdateIndex_IntegerVectorElements) {
 	EXPECT_NO_THROW(vim->updateIndex(node, "Item", props));
 }
 
+TEST_F(ManagerPersistenceTest, UpdateIndexSameVectorIsIdempotent) {
+	graph::Database db(dbPath.string());
+	db.open();
+	auto dm = db.getStorage()->getDataManager();
+	auto vim = db.getQueryEngine()->getIndexManager()->getVectorIndexManager();
+
+	db.getQueryEngine()->getIndexManager()->createVectorIndex("emb_idempotent", "Item", "vec", 3, "L2");
+	vim->createIndex("emb_idempotent", 3, "L2");
+
+	graph::Node node(1, dm->getOrCreateTokenId("Item"));
+	dm->addNode(node);
+	std::unordered_map<std::string, graph::PropertyValue> props;
+	props["vec"] = graph::PropertyValue(std::vector<graph::PropertyValue>{1.0, 2.0, 3.0});
+
+	vim->updateIndex(node, "Item", props);
+	auto index = vim->getIndex("emb_idempotent");
+	ASSERT_EQ(index->size(), 1U);
+
+	vim->updateIndex(node, "Item", props);
+	EXPECT_EQ(index->size(), 1U);
+}
+
+TEST_F(ManagerPersistenceTest, UpdateIndexBatchCoalescesDuplicateNodeIds) {
+	graph::Database db(dbPath.string());
+	db.open();
+	auto dm = db.getStorage()->getDataManager();
+	auto vim = db.getQueryEngine()->getIndexManager()->getVectorIndexManager();
+
+	db.getQueryEngine()->getIndexManager()->createVectorIndex("emb_batch_dedup", "Item", "vec", 3, "L2");
+	vim->createIndex("emb_batch_dedup", 3, "L2");
+	graph::Node node(1, dm->getOrCreateTokenId("Item"));
+	dm->addNode(node);
+
+	const auto makeProperties = [](std::vector<graph::PropertyValue> values) {
+		return std::unordered_map<std::string, graph::PropertyValue>{
+				{"vec", graph::PropertyValue(std::move(values))},
+		};
+	};
+	std::vector<std::pair<graph::Node, std::unordered_map<std::string, graph::PropertyValue>>> batch;
+	batch.push_back({node, makeProperties({1.0, 2.0, 3.0})});
+	batch.push_back({node, makeProperties({4.0, 5.0, 6.0})});
+
+	vim->updateIndexBatch(batch, "Item");
+	EXPECT_EQ(vim->getIndex("emb_batch_dedup")->size(), 1U);
+}
+
 TEST_F(ManagerPersistenceTest, UpdateIndex_NonNumericVectorElement) {
 	graph::Database db(dbPath.string());
 	db.open();
@@ -233,7 +279,7 @@ TEST_F(ManagerPersistenceTest, UpdateIndex_NonNumericVectorElement) {
 	graph::Node node(1, dm->getOrCreateTokenId("Thing"));
 	dm->addNode(node);
 
-	// String element in vector -> should throw and be caught
+	// Invalid vector elements must propagate instead of leaving a stale index.
 	std::unordered_map<std::string, graph::PropertyValue> props;
 	std::vector<graph::PropertyValue> embedding;
 	embedding.emplace_back(1.0);
@@ -241,8 +287,7 @@ TEST_F(ManagerPersistenceTest, UpdateIndex_NonNumericVectorElement) {
 	embedding.emplace_back(0.0);
 	props["vec"] = graph::PropertyValue(embedding);
 
-	// Should not throw (error is caught internally and logged)
-	EXPECT_NO_THROW(vim->updateIndex(node, "Thing", props));
+	EXPECT_THROW(vim->updateIndex(node, "Thing", props), std::invalid_argument);
 }
 
 TEST_F(ManagerPersistenceTest, RemoveIndex_Basic) {
@@ -357,8 +402,7 @@ TEST_F(ManagerPersistenceTest, UpdateIndexBatch_NonNumericElement) {
 	std::vector<std::pair<graph::Node, std::unordered_map<std::string, graph::PropertyValue>>> nodesWithProps;
 	nodesWithProps.push_back({node, props});
 
-	// Should not throw (error is caught internally)
-	EXPECT_NO_THROW(vim->updateIndexBatch(nodesWithProps, "Item"));
+	EXPECT_THROW(vim->updateIndexBatch(nodesWithProps, "Item"), std::invalid_argument);
 }
 
 TEST_F(ManagerPersistenceTest, UpdateIndexBatch_NonListProperty) {
@@ -380,7 +424,7 @@ TEST_F(ManagerPersistenceTest, UpdateIndexBatch_NonListProperty) {
 	std::vector<std::pair<graph::Node, std::unordered_map<std::string, graph::PropertyValue>>> nodesWithProps;
 	nodesWithProps.push_back({node, props});
 
-	EXPECT_NO_THROW(vim->updateIndexBatch(nodesWithProps, "Item"));
+	EXPECT_THROW(vim->updateIndexBatch(nodesWithProps, "Item"), std::invalid_argument);
 }
 
 TEST_F(ManagerPersistenceTest, UpdateIndexBatch_IntegerElements) {

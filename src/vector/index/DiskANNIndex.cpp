@@ -35,6 +35,17 @@
 #include "graph/vector/core/VectorMetric.hpp"
 
 namespace graph::vector {
+	namespace {
+		bool sameEncodedVector(const std::vector<BFloat16> &lhs, const std::vector<BFloat16> &rhs) {
+			if (lhs.size() != rhs.size())
+				return false;
+			for (size_t index = 0; index < lhs.size(); ++index) {
+				if (lhs[index].data != rhs[index].data)
+					return false;
+			}
+			return true;
+		}
+	} // namespace
 
 	DiskANNIndex::DiskANNIndex(std::shared_ptr<VectorIndexRegistry> registry, const DiskANNConfig &config) :
 		registry_(std::move(registry)), config_(config) {
@@ -46,11 +57,43 @@ namespace graph::vector {
 
 	size_t DiskANNIndex::size() const { return cachedCount_; }
 
-	void DiskANNIndex::insert(int64_t nodeId, const std::vector<float> &vec) {
-		if (vec.size() != config_.dim) {
-			log::Log::error("Insert skipped: Vector dimension mismatch. Expected {}, got {}", config_.dim, vec.size());
-			return; // Skip insertion
+	bool DiskANNIndex::upsertExistingVector(const int64_t nodeId, const std::vector<BFloat16> &encodedVector) {
+		const VectorBlobPtrs existing = registry_->getBlobPtrs(nodeId);
+		if (existing.rawBlob == 0) {
+			if (existing.pqBlob != 0 || existing.adjBlob != 0)
+				throw std::runtime_error("Vector mapping has graph data without a raw vector");
+			return false;
 		}
+
+		if (sameEncodedVector(registry_->loadRawVector(existing.rawBlob), encodedVector))
+			return true;
+
+		const int64_t replacementRawBlob = registry_->saveRawVector(encodedVector);
+		int64_t replacementPqBlob = 0;
+		try {
+			if (isPQTrained())
+				replacementPqBlob = registry_->savePQCodes(quantizer_->encode(toFloat(encodedVector)));
+
+			registry_->setBlobPtrs(nodeId, {replacementRawBlob, replacementPqBlob, existing.adjBlob});
+		} catch (...) {
+			registry_->deleteBlobChain(replacementRawBlob);
+			registry_->deleteBlobChain(replacementPqBlob);
+			throw;
+		}
+
+		registry_->deleteBlobChain(existing.rawBlob);
+		registry_->deleteBlobChain(existing.pqBlob);
+		return true;
+	}
+
+	void DiskANNIndex::insert(int64_t nodeId, const std::vector<float> &vec) {
+		if (vec.size() != config_.dim)
+			throw std::invalid_argument("Vector dimension mismatch. Expected " + std::to_string(config_.dim) +
+											", got " + std::to_string(vec.size()));
+
+		const auto encodedVector = toBFloat16(vec);
+		if (upsertExistingVector(nodeId, encodedVector))
+			return;
 
 		// --- 1. Auto-Training Logic ---
 		// If not trained and threshold reached, trigger training synchronously.
@@ -66,7 +109,7 @@ namespace graph::vector {
 		}
 
 		// --- 2. Save Data ---
-		const auto rawBlob = registry_->saveRawVector(toBFloat16(vec));
+		const auto rawBlob = registry_->saveRawVector(encodedVector);
 
 		log::Log::debug("[DEBUG] Saved RawBlob ID: {} for Node {}", rawBlob, nodeId);
 
@@ -144,47 +187,69 @@ namespace graph::vector {
 		if (batch.empty())
 			return;
 
-		// Phase 1: Auto-training check with entire batch
-		if (!isPQTrained()) {
-			cachedCount_ += batch.size();
-			if (cachedCount_ >= config_.autoTrainThreshold) {
-				log::Log::info("Vector Index Auto-Training Triggered (Count: {})", cachedCount_);
-				auto samples = sampleVectors(config_.autoTrainThreshold);
-				for (const auto &[id, vec]: batch)
-					samples.push_back(vec);
-				train(samples);
-			}
+		struct BatchItem {
+			int64_t nodeId;
+			const std::vector<float> *vector;
+		};
+		std::vector<BatchItem> effectiveBatch;
+		effectiveBatch.reserve(batch.size());
+		std::unordered_map<int64_t, size_t> positions;
+		positions.reserve(batch.size());
+		for (const auto &[nodeId, vec]: batch) {
+			if (vec.size() != config_.dim)
+				throw std::invalid_argument("Vector dimension mismatch in batch for node " + std::to_string(nodeId));
+
+			const auto [it, inserted] = positions.emplace(nodeId, effectiveBatch.size());
+			if (inserted)
+				effectiveBatch.push_back({nodeId, &vec});
+			else
+				effectiveBatch[it->second].vector = &vec;
 		}
 
-		// Phase 2: Batch save all raw vectors and PQ codes
+		// Phase 1: Collapse duplicate node IDs and update existing mappings in place.
 		struct InsertEntry {
 			int64_t nodeId;
 			const std::vector<float> *vec; // Pointer to original vector (avoids copy)
 			VectorBlobPtrs ptrs{};
 		};
 		std::vector<InsertEntry> entries;
-		entries.reserve(batch.size());
+		entries.reserve(effectiveBatch.size());
 
-		for (const auto &[nodeId, vec]: batch) {
-			if (vec.size() != config_.dim) {
-				log::Log::error("Batch insert skipped node {}: dimension mismatch", nodeId);
+		for (const auto &item: effectiveBatch) {
+			const auto encodedVector = toBFloat16(*item.vector);
+			if (upsertExistingVector(item.nodeId, encodedVector))
 				continue;
-			}
-
 			InsertEntry entry;
-			entry.nodeId = nodeId;
-			entry.vec = &vec;
-			entry.ptrs.rawBlob = registry_->saveRawVector(toBFloat16(vec));
-			entry.ptrs.pqBlob = isPQTrained() ? registry_->savePQCodes(quantizer_->encode(vec)) : 0;
-			entry.ptrs.adjBlob = 0;
-			registry_->setBlobPtrs(nodeId, entry.ptrs);
+			entry.nodeId = item.nodeId;
+			entry.vec = item.vector;
 			entries.push_back(entry);
 		}
 
 		if (entries.empty())
 			return;
 
-		// Phase 3: Graph construction
+		// Phase 2: Train only on new vectors; idempotent upserts do not inflate the count.
+		if (!isPQTrained()) {
+			cachedCount_ += entries.size();
+			if (cachedCount_ >= config_.autoTrainThreshold) {
+				log::Log::info("Vector Index Auto-Training Triggered (Count: {})", cachedCount_);
+				auto samples = sampleVectors(config_.autoTrainThreshold);
+				for (const auto &entry: entries)
+					samples.push_back(*entry.vec);
+				train(samples);
+			}
+		}
+
+		// Phase 3: Persist new vector payloads after training determines whether
+		// the newly inserted records receive PQ codes.
+		for (auto &entry: entries) {
+			entry.ptrs.rawBlob = registry_->saveRawVector(toBFloat16(*entry.vec));
+			entry.ptrs.pqBlob = isPQTrained() ? registry_->savePQCodes(quantizer_->encode(*entry.vec)) : 0;
+			entry.ptrs.adjBlob = 0;
+			registry_->setBlobPtrs(entry.nodeId, entry.ptrs);
+		}
+
+		// Phase 4: Graph construction
 		int64_t entryPoint = registry_->getConfig().entryPointNodeId;
 
 		size_t startIdx = 0;
@@ -568,10 +633,19 @@ namespace graph::vector {
 		return NativeProductQuantizer::computeDistance(codes, pqTable, M, K);
 	}
 
-	void DiskANNIndex::remove(int64_t nodeId) const {
-		// Logical deletion: Remove from Registry Mapping
-		// This effectively makes getBlobPtrs(nodeId) return {0,0,0}
-		registry_->setBlobPtrs(nodeId, {0, 0, 0});
+	void DiskANNIndex::remove(const int64_t nodeId) {
+		const VectorBlobPtrs ptrs = registry_->getBlobPtrs(nodeId);
+		if (!registry_->removeBlobPtrs(nodeId))
+			return;
+
+		if (registry_->getConfig().entryPointNodeId == nodeId)
+			registry_->updateEntryPoint(0);
+
+		registry_->deleteBlobChain(ptrs.rawBlob);
+		registry_->deleteBlobChain(ptrs.pqBlob);
+		registry_->deleteBlobChain(ptrs.adjBlob);
+		if (cachedCount_ > 0)
+			--cachedCount_;
 	}
 
 } // namespace graph::vector

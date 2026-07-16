@@ -568,12 +568,13 @@ namespace {
 		removeCompositeIndexForNode(oldNode);
 		updateCompositeIndexForNode(newNode);
 
-		// Update Vector Index
+		// Update only the vector-indexed properties that changed. This avoids
+		// rebuilding a vector entry for unrelated property mutations.
 		std::string labelStr;
 		if (newNode.getLabelId() != 0) {
 			labelStr = dataManager_->resolveTokenName(newNode.getLabelId());
 		}
-		vectorIndexManager_->updateIndex(newNode, labelStr, newNode.getProperties());
+		vectorIndexManager_->updateIndexDelta(oldNode, newNode, labelStr);
 	}
 
 	void IndexManager::onNodeDeleted(const Node &node) {

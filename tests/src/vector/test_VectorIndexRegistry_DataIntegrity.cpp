@@ -92,10 +92,8 @@ TEST_F(VectorRegistryDataIntegrityTest, GetBlobPtrsCorruptedBlobSize) {
 	// Create a fresh registry (bypasses cache) to force read from B+Tree
 	auto registry2 = std::make_shared<VectorIndexRegistry>(dm, sm, "corrupt_blob_test");
 
-	// getBlobPtrs should hit the size mismatch branch and return {0,0,0}
-	auto ptrs = registry2->getBlobPtrs(nodeId);
-	EXPECT_EQ(ptrs.rawBlob, 0);
-	EXPECT_EQ(ptrs.pqBlob, 0);
-	EXPECT_EQ(ptrs.adjBlob, 0);
+	// The B+Tree still points at the retired chain, so corruption must be
+	// surfaced instead of being silently treated as an absent vector.
+	EXPECT_THROW((void) registry2->getBlobPtrs(nodeId), std::runtime_error);
 }
 #endif // _WIN32

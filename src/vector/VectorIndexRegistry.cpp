@@ -19,7 +19,9 @@
  **/
 
 #include "graph/vector/VectorIndexRegistry.hpp"
+#include <array>
 #include <cstring>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include "graph/storage/data/BlobManager.hpp"
@@ -29,11 +31,53 @@
 
 namespace graph::vector {
 	namespace {
+		constexpr size_t VECTOR_BLOB_PTRS_ENCODED_SIZE = sizeof(int64_t) * 3;
+
 		int64_t requireBlobHeadId(const std::vector<Blob> &blobs, const char *operation) {
 			if (blobs.empty()) { // ZYX_COV_EXCL_LINE: BlobChainManager always creates a head blob; fail fast if the storage contract changes.
 				throw std::runtime_error(std::string(operation) + " did not create a blob head");
 			}
 			return blobs.front().getId();
+		}
+
+		void writeInt64LittleEndian(std::array<char, VECTOR_BLOB_PTRS_ENCODED_SIZE> &bytes, size_t &offset,
+									int64_t value) {
+			const uint64_t unsignedValue = static_cast<uint64_t>(value);
+			for (size_t index = 0; index < sizeof(uint64_t); ++index)
+				bytes[offset++] = static_cast<char>((unsignedValue >> (index * 8U)) & 0xFFU);
+		}
+
+		int64_t readInt64LittleEndian(const std::string &bytes, size_t &offset) {
+			uint64_t value = 0;
+			for (size_t index = 0; index < sizeof(uint64_t); ++index)
+				value |= static_cast<uint64_t>(static_cast<unsigned char>(bytes[offset++])) << (index * 8U);
+			if (value > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
+				throw std::runtime_error("Vector blob pointer is outside the supported ID range");
+			return static_cast<int64_t>(value);
+		}
+
+		std::string serializeBlobPtrs(const VectorBlobPtrs &ptrs) {
+			if (ptrs.rawBlob < 0 || ptrs.pqBlob < 0 || ptrs.adjBlob < 0)
+				throw std::invalid_argument("Vector blob pointers must be non-negative");
+
+			std::array<char, VECTOR_BLOB_PTRS_ENCODED_SIZE> bytes{};
+			size_t offset = 0;
+			writeInt64LittleEndian(bytes, offset, ptrs.rawBlob);
+			writeInt64LittleEndian(bytes, offset, ptrs.pqBlob);
+			writeInt64LittleEndian(bytes, offset, ptrs.adjBlob);
+			return {bytes.data(), bytes.size()};
+		}
+
+		VectorBlobPtrs deserializeBlobPtrs(const std::string &data) {
+			if (data.size() != VECTOR_BLOB_PTRS_ENCODED_SIZE)
+				throw std::runtime_error("Invalid vector blob-pointer payload size");
+
+			size_t offset = 0;
+			VectorBlobPtrs ptrs;
+			ptrs.rawBlob = readInt64LittleEndian(data, offset);
+			ptrs.pqBlob = readInt64LittleEndian(data, offset);
+			ptrs.adjBlob = readInt64LittleEndian(data, offset);
+			return ptrs;
 		}
 	} // namespace
 
@@ -120,14 +164,12 @@ namespace graph::vector {
 		std::vector<int64_t> ids = mappingTree_->find(config_.mappingIndexId, PropertyValue(nodeId));
 		if (ids.empty())
 			return {0, 0, 0};
+		if (ids.size() != 1)
+			throw std::runtime_error("Vector mapping contains multiple metadata blobs for one node");
 
 		// Read MetaBlob (Indirection)
 		std::string data = dataManager_->getBlobManager()->readBlobChain(ids[0]);
-		if (data.size() != sizeof(VectorBlobPtrs))
-			return {0, 0, 0};
-
-		VectorBlobPtrs ptrs;
-		std::memcpy(&ptrs, data.data(), sizeof(VectorBlobPtrs));
+		VectorBlobPtrs ptrs = deserializeBlobPtrs(data);
 
 		{
 			std::unique_lock lock(cacheMutex_);
@@ -137,11 +179,26 @@ namespace graph::vector {
 	}
 
 	void VectorIndexRegistry::setBlobPtrs(int64_t nodeId, const VectorBlobPtrs &ptrs) {
-		std::string data(reinterpret_cast<const char *>(&ptrs), sizeof(VectorBlobPtrs));
+		std::string data = serializeBlobPtrs(ptrs);
 		std::vector<int64_t> ids = mappingTree_->find(config_.mappingIndexId, PropertyValue(nodeId));
 
 		if (!ids.empty()) {
-			(void) dataManager_->getBlobManager()->updateBlobChain(ids[0], nodeId, 0, data);
+			if (ids.size() != 1)
+				throw std::runtime_error("Vector mapping contains multiple metadata blobs for one node");
+
+			auto replacement = dataManager_->getBlobManager()->createBlobChain(nodeId, 0, data);
+			const int64_t replacementHeadId = requireBlobHeadId(replacement, "vector mapping replacement");
+			const int64_t oldHeadId = ids.front();
+			try {
+				if (!mappingTree_->replaceUniqueValue(config_.mappingIndexId, PropertyValue(nodeId), oldHeadId,
+														 replacementHeadId)) {
+					throw std::runtime_error("Vector mapping changed before its metadata replacement could be published");
+				}
+			} catch (...) {
+				dataManager_->getBlobManager()->deleteBlobChain(replacementHeadId);
+				throw;
+			}
+			dataManager_->getBlobManager()->deleteBlobChain(oldHeadId);
 		} else {
 			auto blobs = dataManager_->getBlobManager()->createBlobChain(nodeId, 0, data);
 			const int64_t blobHeadId = requireBlobHeadId(blobs, "vector mapping");
@@ -159,8 +216,40 @@ namespace graph::vector {
 		}
 	}
 
+	bool VectorIndexRegistry::removeBlobPtrs(const int64_t nodeId) {
+		const auto ids = mappingTree_->find(config_.mappingIndexId, PropertyValue(nodeId));
+		if (ids.empty()) {
+			std::unique_lock lock(cacheMutex_);
+			mappingCache_.remove(nodeId);
+			return false;
+		}
+		if (ids.size() != 1)
+			throw std::runtime_error("Vector mapping contains multiple metadata blobs for one node");
+
+		const int64_t metadataBlobId = ids.front();
+		int64_t rootId = config_.mappingIndexId;
+		if (!mappingTree_->remove(rootId, PropertyValue(nodeId), metadataBlobId))
+			throw std::runtime_error("Vector mapping disappeared before it could be removed");
+		if (rootId != config_.mappingIndexId) {
+			config_.mappingIndexId = rootId;
+			saveConfig();
+		}
+		dataManager_->getBlobManager()->deleteBlobChain(metadataBlobId);
+
+		std::unique_lock lock(cacheMutex_);
+		mappingCache_.remove(nodeId);
+		return true;
+	}
+
+	void VectorIndexRegistry::deleteBlobChain(const int64_t blobId) const {
+		if (blobId != 0)
+			dataManager_->getBlobManager()->deleteBlobChain(blobId);
+	}
+
 	int64_t VectorIndexRegistry::saveRawVector(const std::vector<BFloat16> &vec) const {
-		std::string data(reinterpret_cast<const char *>(vec.data()), vec.size() * sizeof(BFloat16));
+		std::string data(vec.size() * sizeof(BFloat16), '\0');
+		if (!vec.empty())
+			std::memcpy(data.data(), vec.data(), data.size());
 		auto blobs = dataManager_->getBlobManager()->createBlobChain(0, 0, data);
 		return requireBlobHeadId(blobs, "raw vector");
 	}
@@ -169,6 +258,8 @@ namespace graph::vector {
 		if (blobId == 0)
 			return {};
 		std::string data = dataManager_->getBlobManager()->readBlobChain(blobId);
+		if (data.size() % sizeof(BFloat16) != 0)
+			throw std::runtime_error("Raw vector blob has an invalid byte length");
 		size_t n = data.size() / sizeof(BFloat16);
 		std::vector<BFloat16> vec(n);
 		std::memcpy(vec.data(), data.data(), data.size());
@@ -176,7 +267,9 @@ namespace graph::vector {
 	}
 
 	int64_t VectorIndexRegistry::savePQCodes(const std::vector<uint8_t> &codes) const {
-		std::string data(reinterpret_cast<const char *>(codes.data()), codes.size());
+		std::string data(codes.size(), '\0');
+		if (!codes.empty())
+			std::memcpy(data.data(), codes.data(), data.size());
 		auto blobs = dataManager_->getBlobManager()->createBlobChain(0, 0, data);
 		return requireBlobHeadId(blobs, "PQ codes");
 	}
@@ -189,6 +282,10 @@ namespace graph::vector {
 	}
 
 	int64_t VectorIndexRegistry::saveAdjacency(const std::vector<int64_t> &neighbors) const {
+		if (neighbors.size() > std::numeric_limits<uint32_t>::max() ||
+			neighbors.size() > (std::numeric_limits<size_t>::max() - sizeof(uint32_t)) / sizeof(int64_t)) {
+			throw std::length_error("Adjacency list exceeds the supported serialized size");
+		}
 		const size_t dataSize = sizeof(uint32_t) + neighbors.size() * sizeof(int64_t);
 		std::string data(dataSize, '\0');
 		char *ptr = data.data();
@@ -209,12 +306,18 @@ namespace graph::vector {
 			return {};
 		std::string data = dataManager_->getBlobManager()->readBlobChain(blobId);
 		if (data.size() < sizeof(uint32_t))
-			return {};
+			throw std::runtime_error("Adjacency blob is missing its neighbor count");
 
 		const char *ptr = data.data();
 		uint32_t count;
 		std::memcpy(&count, ptr, sizeof(uint32_t));
 		ptr += sizeof(uint32_t);
+
+		const size_t availableBytes = data.size() - sizeof(uint32_t);
+		if (count > availableBytes / sizeof(int64_t) ||
+			static_cast<size_t>(count) * sizeof(int64_t) != availableBytes) {
+			throw std::runtime_error("Adjacency blob has an invalid neighbor payload length");
+		}
 
 		std::vector<int64_t> res(count);
 		if (count > 0)

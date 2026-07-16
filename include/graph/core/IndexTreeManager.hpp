@@ -77,6 +77,13 @@ namespace graph::query::indexes {
 		int64_t insertBatch(int64_t rootId, const std::vector<std::pair<PropertyValue, int64_t>> &entries);
 
 		/**
+		 * Replace the sole value associated with a key without removing and reinserting the key.
+		 * Returns false when the key/value pair is no longer the expected unique mapping.
+		 */
+		bool replaceUniqueValue(int64_t rootId, const PropertyValue &key, int64_t expectedValue,
+							int64_t replacementValue);
+
+		/**
 		 * Removes a key-value pair from the tree
 		 *
 		 * @param rootId Reference to the ID of the root node (may change due to collapse)
