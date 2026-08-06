@@ -30,7 +30,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include "graph/concurrent/ThreadPool.hpp"
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/query/algorithm/CsrProjection.hpp"
 #include "graph/query/algorithm/GraphProjection.hpp"
 #include "graph/query/algorithm/LeidenEngine.hpp"
@@ -90,9 +90,9 @@ namespace {
 		void SetUp() override {
 			auto uuid = boost::uuids::random_generator()();
 			testFilePath = fs::temp_directory_path() / ("test_leiden_" + to_string(uuid) + ".dat");
-			database = std::make_unique<graph::Database>(testFilePath.string());
+			database = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testFilePath.string());
 			database->open();
-			dataManager = database->getStorage()->getDataManager();
+			dataManager = database->storage()->getDataManager();
 		}
 
 		void TearDown() override {
@@ -116,10 +116,10 @@ namespace {
 		}
 
 		void reload() {
-			database->getStorage()->flush();
+			database->storage()->flush();
 			database->close();
 			database->open();
-			dataManager = database->getStorage()->getDataManager();
+			dataManager = database->storage()->getDataManager();
 		}
 
 		// Helper: build N cliques of size K, each clique connected to the next by a
@@ -139,7 +139,7 @@ namespace {
 		}
 
 		fs::path testFilePath;
-		std::unique_ptr<graph::Database> database;
+		std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> database;
 		std::shared_ptr<graph::storage::DataManager> dataManager;
 	};
 

@@ -20,25 +20,30 @@
 
 #pragma once
 
+#include <atomic>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
 
 #include "graph/concurrent/ThreadPool.hpp"
-#include "graph/config/SystemConfigManager.hpp"
 #include "graph/core/Transaction.hpp"
-#include "graph/core/TransactionManager.hpp"
 #include "graph/query/api/QueryEngine.hpp"
-#include "graph/storage/FileStorage.hpp"
-#include "graph/storage/wal/WALManager.hpp"
+#include "graph/storage/LogicalGraphWrite.hpp"
+#include "graph/storage/StorageBackend.hpp"
+#include "graph/storage/StorageBackendFactory.hpp"
+
+namespace graph::storage {
+	class RelocatableStorageBackend;
+}
 
 namespace graph {
 
 	class Database {
 	public:
-		explicit Database(const std::string &dbPath, storage::OpenMode mode = storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE,
-						  size_t cacheSize = 10000);
+		explicit Database(const std::string &dbPath,
+						  storage::OpenMode mode = storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE,
+						  size_t cacheSize = 64U * 1024U * 1024U);
 		~Database();
 
 		void open();
@@ -50,21 +55,25 @@ namespace graph {
 		[[nodiscard]] bool isOpen() const;
 
 		Transaction beginTransaction();
-		// WAL-durable write transaction that defers the main database-file checkpoint
-		// until an explicit flush or clean close.
+		// Logical write transaction. Publication is deferred until commit.
 		Transaction beginBulkTransaction();
 		Transaction beginReadOnlyTransaction();
 
 		// Query engine access (lazy-initialized on first call)
 		std::shared_ptr<query::QueryEngine> getQueryEngine();
 
-		// Access to storage for advanced operations
-		[[nodiscard]] std::shared_ptr<storage::FileStorage> getStorage() const { return storage; }
+		// The generic backend preserves the format boundary. It is the only
+		// storage accessor available to the native public database.
+		[[nodiscard]] std::shared_ptr<storage::StorageBackend> getStorageBackend() const { return backend_; }
+		// The logical write adapter keeps direct writes transaction-scoped without
+		// exposing physical storage internals through the public database API.
+		[[nodiscard]] std::shared_ptr<storage::LogicalGraphWriteBackend> getLogicalGraphWriteBackend() const;
+		[[nodiscard]] std::shared_ptr<storage::LogicalGraphTransactionalBackend>
+		getLogicalGraphTransactionalBackend() const;
+		[[nodiscard]] bool usesLogicalBackend() const { return static_cast<bool>(relocatableStorage_); }
 
 		// Check if there is an active transaction
 		[[nodiscard]] bool hasActiveTransaction() const;
-
-		[[nodiscard]] std::shared_ptr<config::SystemConfigManager> getConfigManager() const { return configManager_; }
 
 		[[nodiscard]] const std::string &getPath() const { return dbPath; }
 
@@ -75,25 +84,25 @@ namespace graph {
 		void setThreadPoolSize(size_t poolSize);
 
 	private:
-		std::shared_ptr<storage::FileStorage> storage;
+		std::shared_ptr<storage::StorageBackend> backend_;
+		std::shared_ptr<storage::RelocatableStorageBackend> relocatableStorage_;
 		std::shared_ptr<query::QueryEngine> queryEngine;
 		std::string dbPath;
-		std::shared_ptr<config::SystemConfigManager> configManager_;
-		std::shared_ptr<storage::wal::WALManager> walManager_;
-		std::unique_ptr<TransactionManager> transactionManager_;
+		storage::OpenMode openMode_;
+		size_t cacheSize_;
+		std::atomic<uint64_t> nextLogicalTransactionId_{1U};
+		std::shared_ptr<std::atomic<size_t>> activeLogicalWriteTransactions_ =
+				std::make_shared<std::atomic<size_t>>(0U);
 		std::shared_ptr<concurrent::ThreadPool> threadPool_;
 		std::optional<size_t> configuredThreadPoolSize_;
 
 		// Lazy initialization flags
 		mutable std::once_flag threadPoolInitFlag_;
 		mutable std::once_flag queryEngineInitFlag_;
-		mutable std::once_flag walInitFlag_;
-		mutable std::once_flag walWriteInitFlag_;
 
 		void ensureThreadPool();
 		void ensureQueryEngine();
-		void ensureWALAndTransactionManager();
-		void ensureWALForWrites();
+		Transaction beginLogicalTransaction(bool readOnly);
 	};
 
 } // namespace graph

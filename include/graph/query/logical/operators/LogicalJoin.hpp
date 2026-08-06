@@ -13,6 +13,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace graph::query::logical {
@@ -46,13 +47,22 @@ public:
 
     [[nodiscard]] std::vector<std::string> getOutputVariables() const override {
         std::vector<std::string> vars;
+        std::unordered_set<std::string> seen;
         if (left_) {
             auto lv = left_->getOutputVariables();
-            vars.insert(vars.end(), lv.begin(), lv.end());
+            for (std::string &variable : lv) {
+                if (seen.insert(variable).second) {
+                    vars.push_back(std::move(variable));
+                }
+            }
         }
         if (right_) {
             auto rv = right_->getOutputVariables();
-            vars.insert(vars.end(), rv.begin(), rv.end());
+            for (std::string &variable : rv) {
+                if (seen.insert(variable).second) {
+                    vars.push_back(std::move(variable));
+                }
+            }
         }
         return vars;
     }

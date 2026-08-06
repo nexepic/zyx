@@ -6,7 +6,7 @@
 #include <filesystem>
 #include <unordered_map>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/query/expressions/Expression.hpp"
 #include "graph/query/planner/NodeAccessPathPlanner.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
@@ -349,9 +349,9 @@ TEST(NodeAccessPathPlannerTest, CandidateConfigValidationIdentifiesUsableAccessS
 
 TEST(NodeAccessPathPlannerTest, IndexedDecisionPrioritizesCompositeAndKeepsFallbackCandidate) {
 	const auto dbPath = makeDbPath("test_node_access_path_planner_indexes");
-	Database db(dbPath.string());
+	graph::storage::testing::LegacyPhysicalStorageTestHarness db(dbPath.string());
 	db.open();
-	auto indexManager = db.getQueryEngine()->getIndexManager();
+	auto indexManager = db.indexManager();
 	ASSERT_TRUE(indexManager->createIndex("idx_person_age", "node", "Person", "age"));
 	ASSERT_TRUE(indexManager->createCompositeIndex("idx_person_country_age", "node", "Person", {"country", "age"}));
 	ASSERT_TRUE(indexManager->createIndex("idx_person_label", "node", "Person", ""));
@@ -383,9 +383,9 @@ TEST(NodeAccessPathPlannerTest, IndexedDecisionPrioritizesCompositeAndKeepsFallb
 
 TEST(NodeAccessPathPlannerTest, GlobalPropertyAndRangeIndexesAreValidAccessPaths) {
 	const auto dbPath = makeDbPath("test_node_access_path_planner_global_indexes");
-	Database db(dbPath.string());
+	graph::storage::testing::LegacyPhysicalStorageTestHarness db(dbPath.string());
 	db.open();
-	auto indexManager = db.getQueryEngine()->getIndexManager();
+	auto indexManager = db.indexManager();
 	ASSERT_TRUE(indexManager->createIndex("idx_global_age", "node", "", "age"));
 
 	LogicalNodeScan propertyScan("n", {}, {{"age", PropertyValue(int64_t{42})}});
@@ -410,9 +410,9 @@ TEST(NodeAccessPathPlannerTest, GlobalPropertyAndRangeIndexesAreValidAccessPaths
 
 TEST(NodeAccessPathPlannerTest, EmptyPropertyKeyIsNotConsideredAnIndexCandidate) {
 	const auto dbPath = makeDbPath("test_node_access_path_planner_empty_key");
-	Database db(dbPath.string());
+	graph::storage::testing::LegacyPhysicalStorageTestHarness db(dbPath.string());
 	db.open();
-	auto indexManager = db.getQueryEngine()->getIndexManager();
+	auto indexManager = db.indexManager();
 	ASSERT_TRUE(indexManager->createIndex("idx_global_age_empty_key_guard", "node", "", "age"));
 
 	LogicalNodeScan scan("n", {}, {{"", PropertyValue(int64_t{42})}});
@@ -431,9 +431,9 @@ TEST(NodeAccessPathPlannerTest, EmptyPropertyKeyIsNotConsideredAnIndexCandidate)
 
 TEST(NodeAccessPathPlannerTest, CompositeAccessPathRequiresCompleteIndexedShape) {
 	const auto dbPath = makeDbPath("test_node_access_path_planner_composite_shape");
-	Database db(dbPath.string());
+	graph::storage::testing::LegacyPhysicalStorageTestHarness db(dbPath.string());
 	db.open();
-	auto indexManager = db.getQueryEngine()->getIndexManager();
+	auto indexManager = db.indexManager();
 	ASSERT_TRUE(indexManager->createCompositeIndex("idx_country_age_shape", "node", "", {"country", "age"}));
 
 	LogicalNodeScan singleKey("n");
@@ -458,9 +458,9 @@ TEST(NodeAccessPathPlannerTest, CompositeAccessPathRequiresCompleteIndexedShape)
 
 TEST(NodeAccessPathPlannerTest, EqualCostPropertyCandidatesTieBreakDeterministically) {
 	const auto dbPath = makeDbPath("test_node_access_path_planner_equal_cost");
-	Database db(dbPath.string());
+	graph::storage::testing::LegacyPhysicalStorageTestHarness db(dbPath.string());
 	db.open();
-	auto indexManager = db.getQueryEngine()->getIndexManager();
+	auto indexManager = db.indexManager();
 	ASSERT_TRUE(indexManager->createIndex("idx_age", "node", "", "age"));
 	ASSERT_TRUE(indexManager->createIndex("idx_code", "node", "", "code"));
 
@@ -484,10 +484,10 @@ TEST(NodeAccessPathPlannerTest, EqualCostPropertyCandidatesTieBreakDeterministic
 
 TEST(NodeAccessPathPlannerTest, CostedDecisionChoosesMostSelectivePropertyIndexWithoutRuntimeStats) {
 	const auto dbPath = makeDbPath("test_node_access_path_planner_costed_indexes");
-	Database db(dbPath.string());
+	graph::storage::testing::LegacyPhysicalStorageTestHarness db(dbPath.string());
 	db.open();
-	auto dm = db.getStorage()->getDataManager();
-	auto indexManager = db.getQueryEngine()->getIndexManager();
+	auto dm = db.storage()->getDataManager();
+	auto indexManager = db.indexManager();
 	const auto personLabel = dm->getOrCreateTokenId("Person");
 
 	for (int64_t id = 1; id <= 10; ++id) {
@@ -526,9 +526,9 @@ TEST(NodeAccessPathPlannerTest, CostedDecisionChoosesMostSelectivePropertyIndexW
 
 TEST(NodeAccessPathPlannerTest, OpenRangeIndexRequiresExplicitAccessPathOption) {
 	const auto dbPath = makeDbPath("test_node_access_path_planner_open_range");
-	Database db(dbPath.string());
+	graph::storage::testing::LegacyPhysicalStorageTestHarness db(dbPath.string());
 	db.open();
-	auto indexManager = db.getQueryEngine()->getIndexManager();
+	auto indexManager = db.indexManager();
 	ASSERT_TRUE(indexManager->createIndex("idx_person_age", "node", "Person", "age"));
 
 	auto scan = makeScan();

@@ -15,7 +15,7 @@
 #include <utility>
 #include <vector>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/query/logical/operators/LogicalFilter.hpp"
 #include "graph/query/logical/operators/LogicalNodeScan.hpp"
 #include "graph/query/optimizer/CostModel.hpp"
@@ -60,7 +60,7 @@ Statistics makeStats() {
 
 class OptimizerIndexStrategyTest : public ::testing::Test {
 protected:
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<storage::DataManager> dm;
 	std::shared_ptr<indexes::IndexManager> im;
 	fs::path dbPath;
@@ -72,10 +72,10 @@ protected:
 			fs::remove(dbPath);
 		}
 
-		db = std::make_unique<Database>(dbPath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(dbPath.string());
 		db->open();
-		dm = db->getStorage()->getDataManager();
-		im = db->getQueryEngine()->getIndexManager();
+		dm = db->storage()->getDataManager();
+		im = db->indexManager();
 	}
 
 	void TearDown() override {

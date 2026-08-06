@@ -32,7 +32,6 @@
 #include <unordered_set>
 #include <vector>
 
-#include "graph/core/Database.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/IDAllocator.hpp"
 
@@ -43,10 +42,24 @@ protected:
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath = std::filesystem::temp_directory_path() / ("test_id_alloc_" + to_string(uuid) + ".dat");
 
-		// Initialize Database and components
-		database = std::make_unique<graph::Database>(testFilePath.string());
-		database->open();
-		fileStorage = database->getStorage();
+		fileStorage = std::make_shared<graph::storage::FileStorage>(
+				testFilePath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
+		fileStorage->open();
+		dataManager = fileStorage->getDataManager();
+		nodeAllocator = fileStorage->getIDAllocator(graph::EntityType::Node);
+		edgeAllocator = fileStorage->getIDAllocator(graph::EntityType::Edge);
+	}
+
+	void reopenFileStorage() {
+		nodeAllocator.reset();
+		edgeAllocator.reset();
+		dataManager.reset();
+		if (fileStorage) {
+			fileStorage->close();
+		}
+		fileStorage = std::make_shared<graph::storage::FileStorage>(
+				testFilePath.string(), 10'000U, graph::storage::OpenMode::OPEN_EXISTING_FILE);
+		fileStorage->open();
 		dataManager = fileStorage->getDataManager();
 		nodeAllocator = fileStorage->getIDAllocator(graph::EntityType::Node);
 		edgeAllocator = fileStorage->getIDAllocator(graph::EntityType::Edge);
@@ -56,11 +69,10 @@ protected:
 		nodeAllocator.reset();
 		edgeAllocator.reset();
 		dataManager.reset();
-		fileStorage.reset();
-		if (database) {
-			database->close();
-			database.reset();
+		if (fileStorage) {
+			fileStorage->close();
 		}
+		fileStorage.reset();
 		std::error_code ec;
 		std::filesystem::remove(testFilePath, ec);
 	}
@@ -90,7 +102,6 @@ protected:
 	}
 
 	std::filesystem::path testFilePath;
-	std::unique_ptr<graph::Database> database;
 	std::shared_ptr<graph::storage::FileStorage> fileStorage;
 	std::shared_ptr<graph::storage::DataManager> dataManager;
 	std::shared_ptr<graph::storage::IDAllocator> nodeAllocator;

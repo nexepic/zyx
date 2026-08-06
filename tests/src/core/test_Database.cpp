@@ -8,13 +8,17 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
-#include <fstream>
 #include <gtest/gtest.h>
 
 #include "graph/core/Database.hpp"
 
 namespace fs = std::filesystem;
 using namespace graph;
+
+template<typename T>
+concept HasLegacyStorageAccessor = requires(T &database) { database.getStorage(); };
+
+static_assert(!HasLegacyStorageAccessor<Database>);
 
 /**
  * @class DatabaseTest
@@ -151,7 +155,9 @@ TEST_F(DatabaseTest, OpenIfExists_MultipleCalls) {
 
 	// Create database
 	db->open();
-	auto txn = db->beginTransaction();
+	{
+		auto txn = db->beginTransaction();
+	}
 	db->close();
 
 	// File exists now
@@ -481,35 +487,26 @@ TEST_F(DatabaseTest, HasActiveTransaction_WithActiveTransaction) {
 }
 
 // ============================================================================
-// Close with WAL Manager Tests (Database.cpp lines 86-88)
+// Native backend close and reopen tests
 // ============================================================================
 
-TEST_F(DatabaseTest, Close_WithWALManager) {
-	// Test close() when walManager_ is initialized (line 86-88)
+TEST_F(DatabaseTest, CloseAndReopenNativeBackend) {
 	auto db = std::make_unique<Database>(testDbPath.string());
 	db->open();
-	// WAL manager is created during open()
 	db->close();
 	EXPECT_FALSE(db->isOpen());
-	// Opening again should reinitialize WAL
+	// Opening again restores the native backend lifecycle.
 	db->open();
 	EXPECT_TRUE(db->isOpen());
 }
 
-// ============================================================================
-// Open with WAL Recovery Tests (Database.cpp lines 53-57)
-// ============================================================================
-
-TEST_F(DatabaseTest, Open_WithWALRecovery) {
-	// Test open path where WAL recovery might be needed
-	// First open creates WAL
+TEST_F(DatabaseTest, ReopenAfterLogicalTransaction) {
 	{
 		auto db1 = std::make_unique<Database>(testDbPath.string());
 		db1->open();
 		auto txn = db1->beginTransaction();
-		// Don't commit - just let it close
+		txn.commit();
 	}
-	// Re-open should trigger WAL recovery check (line 53)
 	{
 		auto db2 = std::make_unique<Database>(testDbPath.string());
 		EXPECT_NO_THROW(db2->open());
@@ -537,23 +534,22 @@ TEST_F(DatabaseTest, BeginTransaction_FlushesBeforeStart) {
 }
 
 // ============================================================================
-// GetStorage Tests
+// Storage-backend Tests
 // ============================================================================
 
-TEST_F(DatabaseTest, GetStorage_AfterOpen) {
+TEST_F(DatabaseTest, StorageBackend_AfterOpen) {
 	auto db = std::make_unique<Database>(testDbPath.string());
 	db->open();
-	auto storage = db->getStorage();
-	EXPECT_NE(storage, nullptr);
-	EXPECT_TRUE(storage->isOpen());
+	auto backend = db->getStorageBackend();
+	ASSERT_NE(backend, nullptr);
+	EXPECT_TRUE(backend->isOpen());
+	EXPECT_TRUE(db->usesLogicalBackend());
 }
 
-TEST_F(DatabaseTest, GetStorage_BeforeOpen) {
+TEST_F(DatabaseTest, StorageBackend_BeforeOpen) {
 	auto db = std::make_unique<Database>(testDbPath.string());
-	auto storage = db->getStorage();
-	// Storage object exists but file isn't open
-	EXPECT_NE(storage, nullptr);
-	EXPECT_FALSE(storage->isOpen());
+	// Backend selection is format-dependent and therefore happens only at open.
+	EXPECT_EQ(db->getStorageBackend(), nullptr);
 }
 
 // ============================================================================
@@ -601,7 +597,7 @@ TEST_F(DatabaseTest, SetThreadPoolSizeAfterThreadPoolBeforeQueryEngine) {
 	auto tp = db->getThreadPool();
 	ASSERT_NE(tp, nullptr);
 	EXPECT_EQ(tp->getThreadCount(), 2UL);
-	EXPECT_EQ(db->getStorage()->getThreadPool(), tp.get());
+	EXPECT_NE(db->getStorageBackend(), nullptr);
 }
 
 TEST_F(DatabaseTest, GetThreadPool_BeforeOpen) {
@@ -636,82 +632,20 @@ TEST_F(DatabaseTest, DefaultThreadPoolUsesAutoDetectedConfiguration) {
 }
 
 // ============================================================================
-// Close with WAL manager initialized via beginTransaction
+// Close after a native logical transaction
 // ============================================================================
 
-TEST_F(DatabaseTest, Close_AfterBeginTransaction_WALInitialized) {
-	// Ensure close() hits the walManager_->close() path (line 77)
+TEST_F(DatabaseTest, CloseAfterLogicalTransaction) {
 	auto db = std::make_unique<Database>(testDbPath.string());
 	db->open();
 
 	{
 		auto txn = db->beginTransaction();
-		// walManager_ is now initialized
+		txn.commit();
 	}
 
-	// close() should call walManager_->close()
 	EXPECT_NO_THROW(db->close());
 	EXPECT_FALSE(db->isOpen());
-}
-
-// ============================================================================
-// WAL deferred initialization: ensureWALForWrites skips when WAL already
-// exists from recovery
-// ============================================================================
-
-TEST_F(DatabaseTest, WALRecoveryThenWriteTransactionReusesExistingWAL) {
-	std::string walPath = testDbPath.string() + "-wal";
-
-	// Phase 1: Create a database with a WAL file left behind (simulate crash).
-	// Since close() now deletes the WAL, we read the WAL content before the
-	// destructor runs, then restore it to simulate an unclean shutdown.
-	{
-		auto db1 = std::make_unique<Database>(testDbPath.string());
-		db1->open();
-		{
-			auto txn = db1->beginTransaction();
-			// Don't commit — destructor auto-rolls back, but we want the WAL
-			// to persist to simulate a crash.
-		}
-
-		// Read WAL content before db1 goes out of scope (destructor calls close
-		// which deletes the WAL)
-		std::vector<uint8_t> walContent;
-		{
-			std::ifstream walIn(walPath, std::ios::binary);
-			if (walIn.is_open()) {
-				walContent.assign(std::istreambuf_iterator<char>(walIn),
-								  std::istreambuf_iterator<char>());
-			}
-		}
-
-		// Let db1 destruct (this deletes the WAL)
-		db1.reset();
-
-		// Restore the WAL to simulate a process crash (no clean shutdown)
-		if (!walContent.empty()) {
-			std::ofstream walOut(walPath, std::ios::binary | std::ios::trunc);
-			walOut.write(reinterpret_cast<const char *>(walContent.data()),
-						 static_cast<std::streamsize>(walContent.size()));
-		}
-	}
-	EXPECT_TRUE(fs::exists(walPath));
-
-	// Phase 2: Reopen — ensureWALAndTransactionManager detects WAL, opens it for recovery.
-	// Then beginTransaction calls ensureWALForWrites — should early-return since
-	// walManager_ was already created during recovery.
-	{
-		auto db2 = std::make_unique<Database>(testDbPath.string());
-		db2->open();
-
-		// First write transaction: WAL already exists from recovery path
-		auto txn = db2->beginTransaction();
-		EXPECT_TRUE(txn.isActive());
-		EXPECT_TRUE(fs::exists(walPath));
-		txn.commit();
-
-		db2->close();
-	}
 }
 
 TEST_F(DatabaseTest, BeginReadOnlyTransaction_AutoOpensClosedDb) {
@@ -726,20 +660,20 @@ TEST_F(DatabaseTest, BeginReadOnlyTransaction_AutoOpensClosedDb) {
 	txn.commit();
 }
 
-TEST_F(DatabaseTest, ReadOnlyTransactionDoesNotCreateWALFile) {
-	std::string walPath = testDbPath.string() + "-wal";
+TEST_F(DatabaseTest, ReadOnlyTransactionDoesNotCreateLegacyWALFile) {
+	const std::string legacyWalPath = testDbPath.string() + "-wal";
 
 	auto db = std::make_unique<Database>(testDbPath.string());
 	db->open();
-	EXPECT_FALSE(fs::exists(walPath));
+	EXPECT_FALSE(fs::exists(legacyWalPath));
 
-	// Multiple read-only transactions should not create a WAL file
+	// Read-only logical transactions never create the retired legacy WAL sidecar.
 	for (int i = 0; i < 3; ++i) {
 		auto roTxn = db->beginReadOnlyTransaction();
 		EXPECT_TRUE(roTxn.isReadOnly());
 		roTxn.commit();
 	}
 
-	EXPECT_FALSE(fs::exists(walPath));
+	EXPECT_FALSE(fs::exists(legacyWalPath));
 	db->close();
 }

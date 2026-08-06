@@ -960,9 +960,9 @@ TEST_F(ReadingClauseHandlerTest, Yield_ProcedureResultField_WithNamespace) {
 }
 
 TEST_F(ReadingClauseHandlerTest, Yield_WithAllRenamedFields) {
-	// Tests YIELD where all fields are renamed
-	auto res = execute("CALL dbms.listConfig() YIELD key AS configKey");
-	EXPECT_GE(res.rowCount(), 0UL);
+	// Configuration procedures are intentionally unavailable until they have a
+	// native metadata transaction boundary; they must not fall back to legacy State.
+	EXPECT_THROW((void)execute("CALL dbms.listConfig() YIELD key AS configKey"), std::runtime_error);
 }
 
 TEST_F(ReadingClauseHandlerTest, Yield_WithFieldRenaming_AndWhere) {
@@ -987,22 +987,15 @@ TEST_F(ReadingClauseHandlerTest, Yield_WithFieldRenaming_MixedCase) {
 }
 
 TEST_F(ReadingClauseHandlerTest, Yield_WithFieldRenaming_MultipleFields) {
-	// Tests CALL ... YIELD field1 AS new1, field2 AS new2
-	auto res = execute("CALL dbms.listConfig() YIELD key AS myKey, value AS myValue");
-	EXPECT_GE(res.rowCount(), 0UL);
+	EXPECT_THROW((void)execute("CALL dbms.listConfig() YIELD key AS myKey, value AS myValue"), std::runtime_error);
 }
 
 TEST_F(ReadingClauseHandlerTest, Yield_WithFieldRenaming_Return) {
-	// Tests YIELD with field renaming and RETURN
-	auto res = execute("CALL dbms.listConfig() YIELD key AS myKey RETURN myKey");
-	EXPECT_GE(res.rowCount(), 0UL);
+	EXPECT_THROW((void)execute("CALL dbms.listConfig() YIELD key AS myKey RETURN myKey"), std::runtime_error);
 }
 
 TEST_F(ReadingClauseHandlerTest, Yield_WithFieldRenaming_SingleField) {
-	// Tests CALL ... YIELD field AS newname
-	// This triggers Line 91 True branch
-	auto res = execute("CALL dbms.listConfig() YIELD key AS myKey");
-	EXPECT_GE(res.rowCount(), 0UL);
+	EXPECT_THROW((void)execute("CALL dbms.listConfig() YIELD key AS myKey"), std::runtime_error);
 }
 
 TEST_F(ReadingClauseHandlerTest, Yield_WithFieldRenaming_ThreeFields) {
@@ -1040,4 +1033,3 @@ TEST_F(ReadingClauseHandlerTest, Yield_WithoutFieldRenaming_SingleField) {
 		(void)execute("CALL unknown.proc() YIELD result");
 	}, std::exception);
 }
-

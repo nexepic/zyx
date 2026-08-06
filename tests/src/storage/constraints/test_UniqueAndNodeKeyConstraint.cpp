@@ -14,7 +14,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/storage/constraints/NodeKeyConstraint.hpp"
 #include "graph/storage/constraints/UniqueConstraint.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
@@ -25,7 +25,7 @@ using namespace graph::storage::constraints;
 
 class ConstraintImplementationTest : public ::testing::Test {
 protected:
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<storage::DataManager> dm;
 	std::shared_ptr<query::indexes::IndexManager> im;
 	fs::path dbPath;
@@ -37,10 +37,10 @@ protected:
 			fs::remove(dbPath);
 		}
 
-		db = std::make_unique<Database>(dbPath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(dbPath.string());
 		db->open();
-		dm = db->getStorage()->getDataManager();
-		im = db->getQueryEngine()->getIndexManager();
+		dm = db->storage()->getDataManager();
+		im = db->indexManager();
 	}
 
 	void TearDown() override {

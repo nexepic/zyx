@@ -661,11 +661,10 @@ TEST_F(DataManagerTest, RelationshipTypeCountsDoNotPersistLegacyTotalStatsState)
 
 	observer.reset();
 	dataManager.reset();
+	fileStorage->close();
 	fileStorage.reset();
-	database->close();
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-	fileStorage = database->getStorage();
+	fileStorage = std::make_shared<graph::storage::FileStorage>(testFilePath.string(), 10'000U);
+	fileStorage->open();
 	dataManager = fileStorage->getDataManager();
 
 	EXPECT_TRUE(fileStorage->getSystemStateManager()->getAll(kRelationshipTypeTotalStatsStateKey).empty());

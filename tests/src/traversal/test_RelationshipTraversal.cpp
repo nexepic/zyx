@@ -24,7 +24,7 @@
 #include <filesystem>
 #include <gtest/gtest.h>
 #include <random>
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/data/DataManager.hpp"
@@ -40,9 +40,9 @@ protected:
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath = std::filesystem::temp_directory_path() / ("test_db_" + boost::uuids::to_string(uuid) + ".dat");
 
-		database = std::make_unique<graph::Database>(testFilePath.string());
+		database = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testFilePath.string());
 		database->open();
-		fileStorage = database->getStorage();
+		fileStorage = database->storage();
 		dataManager = fileStorage->getDataManager();
 		traversal = dataManager->getRelationshipTraversal();
 
@@ -68,7 +68,7 @@ protected:
 	}
 
 	std::filesystem::path testFilePath;
-	std::unique_ptr<graph::Database> database;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> database;
 	std::shared_ptr<graph::storage::FileStorage> fileStorage;
 	std::shared_ptr<graph::storage::DataManager> dataManager;
 	std::shared_ptr<graph::traversal::RelationshipTraversal> traversal;
@@ -603,9 +603,9 @@ protected:
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath =
 				std::filesystem::temp_directory_path() / ("test_db_adv_" + boost::uuids::to_string(uuid) + ".dat");
-		database = std::make_unique<graph::Database>(testFilePath.string());
+		database = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testFilePath.string());
 		database->open();
-		dataManager = database->getStorage()->getDataManager();
+		dataManager = database->storage()->getDataManager();
 		traversal = dataManager->getRelationshipTraversal();
 
 		// Create nodes: n1, n2, n3, n4
@@ -642,7 +642,7 @@ protected:
 	}
 
 	std::filesystem::path testFilePath;
-	std::unique_ptr<graph::Database> database;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> database;
 	std::shared_ptr<graph::storage::DataManager> dataManager;
 	std::shared_ptr<graph::traversal::RelationshipTraversal> traversal;
 	graph::Node n1, n2, n3, n4;

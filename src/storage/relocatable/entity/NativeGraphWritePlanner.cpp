@@ -1,0 +1,3075 @@
+/**
+ * @file NativeGraphWritePlanner.cpp
+ * @brief Snapshot-pinned native Entity/Page graph write planning.
+ *
+ * @copyright Copyright (c) 2026 Nexepic
+ * @license Apache-2.0
+ **/
+
+#include "graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp"
+
+#include <algorithm>
+#include <array>
+#include <limits>
+#include <map>
+#include <mutex>
+#include <set>
+#include <stdexcept>
+#include <tuple>
+#include <type_traits>
+#include <unordered_set>
+#include <utility>
+
+#include "graph/core/Edge.hpp"
+#include "graph/core/Node.hpp"
+#include "graph/storage/relocatable/adjacency/GlobalAdjacencyIndex.hpp"
+#include "graph/storage/relocatable/index/BTreeIndex.hpp"
+#include "graph/storage/relocatable/index/BulkBTreeBuilder.hpp"
+#include "graph/storage/relocatable/property/LargeValueStore.hpp"
+#include "graph/storage/relocatable/property/PropertyCollectionRootStore.hpp"
+#include "graph/storage/relocatable/vector/VectorDeltaMapping.hpp"
+#include "graph/storage/relocatable/vector/VectorManifestStore.hpp"
+#include "graph/storage/relocatable/vector/VectorNodeMapping.hpp"
+#include "graph/storage/relocatable/vector/VectorPageStore.hpp"
+#include "graph/storage/relocatable/vector/VectorSemanticCodec.hpp"
+
+namespace graph::storage {
+
+	struct NativeGraphWritePlannerContext {
+		RelocatableMetadataStore *metadata = nullptr;
+		EntityPageStore *entities = nullptr;
+		EntityLabelSetStore *labels = nullptr;
+		PropertyCollectionRootStore *properties = nullptr;
+		BTreePageStore *indexes = nullptr;
+		NativeGraphWritePlannerOptions options;
+		std::mutex publication_mutex;
+	};
+
+	namespace {
+
+		[[noreturn]] void fail(FormatError error, const char *message) { throw FormatException(error, message); }
+
+		[[nodiscard]] LogSequenceNumber nextCheckpointLsn(const Superblock &base) {
+			if (!base.checkpoint_lsn.isValid() || base.checkpoint_lsn.value() == std::numeric_limits<uint64_t>::max()) {
+				fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "native graph write cannot advance the checkpoint LSN");
+			}
+			return LogSequenceNumber(base.checkpoint_lsn.value() + 1U);
+		}
+
+		[[nodiscard]] bool isLogicalIdLeaseOnlyAdvance(const Superblock &base, const Superblock &current) {
+			const auto advancedOrExhausted = [](uint64_t before, uint64_t after) {
+				return before != 0U && (after == before || after == 0U || after > before);
+			};
+			if (current.generation <= base.generation || current.checkpoint_lsn <= base.checkpoint_lsn ||
+				!advancedOrExhausted(base.next_logical_node_id, current.next_logical_node_id) ||
+				!advancedOrExhausted(base.next_logical_edge_id, current.next_logical_edge_id)) {
+				return false;
+			}
+			return current.database_id == base.database_id && current.flags == base.flags &&
+				   current.data_region_offset == base.data_region_offset && current.catalog_root == base.catalog_root &&
+				   current.page_directory_root == base.page_directory_root &&
+				   current.extent_directory_root == base.extent_directory_root &&
+				   current.allocator_root == base.allocator_root &&
+				   current.node_entity_directory_root == base.node_entity_directory_root &&
+				   current.edge_entity_directory_root == base.edge_entity_directory_root &&
+				   current.entity_property_directory_root == base.entity_property_directory_root &&
+				   current.index_root_directory_root == base.index_root_directory_root &&
+				   current.vector_location_directory_root == base.vector_location_directory_root &&
+				   current.vector_manifest_directory_root == base.vector_manifest_directory_root &&
+				   current.large_value_manifest_directory_root == base.large_value_manifest_directory_root &&
+				   current.state_directory_root == base.state_directory_root &&
+				   current.retire_queue_root == base.retire_queue_root &&
+				   current.metadata_emergency_reserve == base.metadata_emergency_reserve &&
+				   current.next_logical_page_id == base.next_logical_page_id &&
+				   current.next_logical_segment_id == base.next_logical_segment_id &&
+				   current.next_logical_vector_id == base.next_logical_vector_id &&
+				   current.next_large_value_id == base.next_large_value_id &&
+				   current.next_property_key_token == base.next_property_key_token &&
+				   current.next_schema_token_id == base.next_schema_token_id;
+		}
+
+		void validateLabels(std::span<const uint64_t> labels) {
+			if (labels.size() > RSS_ENTITY_MAX_LABELS ||
+				std::ranges::any_of(labels, [](uint64_t value) { return value == 0U; }) ||
+				!std::ranges::is_sorted(labels) || std::ranges::adjacent_find(labels) != labels.end()) {
+				fail(FormatError::FERR_INVALID_HEADER,
+					 "native graph write requires a bounded, strictly ordered, nonzero label set");
+			}
+		}
+
+		[[nodiscard]] constexpr bool isReservedInternalIndexId(uint64_t indexId) {
+			return indexId == RSS_LARGE_VALUE_CONTENT_INDEX_ID || indexId == RSS_GLOBAL_ADJACENCY_INDEX_ID;
+		}
+
+		void validatePlannerOptions(const NativeGraphWritePlannerOptions &options) {
+			const uint8_t invalid =
+					static_cast<uint8_t>(!options.first_slot.isValid()) |
+					static_cast<uint8_t>(!options.last_slot.isValid()) |
+					static_cast<uint8_t>(options.first_slot > options.last_slot) |
+					static_cast<uint8_t>(options.entity_pool_owner_id == 0U) |
+					static_cast<uint8_t>(options.maximum_adjacency_read_edges == 0U) |
+					static_cast<uint8_t>(options.maximum_adjacency_read_edges == std::numeric_limits<size_t>::max()) |
+					static_cast<uint8_t>(options.maximum_global_adjacency_tree_pages == 0U) |
+					static_cast<uint8_t>(options.maximum_global_adjacency_tree_pages ==
+										 std::numeric_limits<size_t>::max()) |
+					static_cast<uint8_t>(options.maximum_global_adjacency_write_entries == 0U) |
+					static_cast<uint8_t>(options.maximum_global_adjacency_write_entries ==
+										 std::numeric_limits<size_t>::max()) |
+					static_cast<uint8_t>(options.logical_id_lease_block_size == 0U) |
+					static_cast<uint8_t>(options.logical_id_lease_block_size == std::numeric_limits<size_t>::max()) |
+					static_cast<uint8_t>(options.maximum_logical_id_reservation == 0U) |
+					static_cast<uint8_t>(options.maximum_logical_id_reservation == std::numeric_limits<size_t>::max()) |
+					static_cast<uint8_t>(!options.property_roots.first_slot.isValid()) |
+					static_cast<uint8_t>(!options.property_roots.last_slot.isValid()) |
+					static_cast<uint8_t>(options.property_roots.first_slot > options.property_roots.last_slot) |
+					static_cast<uint8_t>(options.property_roots.page_owner_id == 0U);
+			if (invalid != 0U) {
+				throw std::invalid_argument(
+						"native graph write planner requires bounded Entity, Property, and adjacency pool options");
+			}
+		}
+
+		void requireAdjacencyOperationCapacity(size_t stagedOperationCount, size_t additionalOperationCount,
+											   size_t maximumOperationCount) {
+			if (additionalOperationCount > maximumOperationCount ||
+				stagedOperationCount > maximumOperationCount - additionalOperationCount) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph global adjacency mutation exceeds its configured entry bound");
+			}
+		}
+
+		[[nodiscard]] std::vector<NativeGraphLogicalIdLeaseRange>
+		leaseLogicalIds(NativeGraphWritePlannerContext &context, bool nodes, uint64_t count) {
+			if (count == 0U) {
+				return {};
+			}
+			if (count > static_cast<uint64_t>(context.options.maximum_logical_id_reservation)) {
+				fail(FormatError::FERR_INVALID_HEADER,
+					 "native graph logical-ID reservation exceeds its configured transaction work bound");
+			}
+			NativeGraphLogicalIdReservation reservation = context.metadata->acquireNativeGraphLogicalIds(
+					nodes ? count : 0U, nodes ? 0U : count,
+					static_cast<uint64_t>(context.options.logical_id_lease_block_size));
+			return nodes ? std::move(reservation.node_ranges) : std::move(reservation.edge_ranges);
+		}
+
+		void appendLogicalIdRanges(std::vector<NativeGraphLogicalIdLeaseRange> &target,
+								   std::vector<NativeGraphLogicalIdLeaseRange> source, size_t maximumCount) {
+			uint64_t total = 0U;
+			for (const NativeGraphLogicalIdLeaseRange &range: target) {
+				if (range.first_id == 0U || range.count == 0U ||
+					range.count > std::numeric_limits<uint64_t>::max() - total) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native graph transaction retained an invalid logical-ID lease");
+				}
+				total += range.count;
+			}
+			if (total > static_cast<uint64_t>(maximumCount)) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph transaction retained more logical-ID reservations than its configured bound");
+			}
+			for (const NativeGraphLogicalIdLeaseRange &range: source) {
+				if (range.first_id == 0U || range.count == 0U ||
+					range.count > static_cast<uint64_t>(maximumCount) - total) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native graph logical-ID reservations exceed their configured transaction work bound");
+				}
+				// Keep acquisition boundaries exact. The metadata-store capability
+				// registry validates one returned range at a time, so coalescing two
+				// adjacent acquisitions would erase their ownership boundary.
+				target.push_back(range);
+				total += range.count;
+			}
+		}
+
+		void appendAuxiliary(EntityPageAuxiliaryMutationBatch &target, EntityPageAuxiliaryMutationBatch source) {
+			target.replacements.insert(target.replacements.end(), std::make_move_iterator(source.replacements.begin()),
+									   std::make_move_iterator(source.replacements.end()));
+			target.appends.insert(target.appends.end(), std::make_move_iterator(source.appends.begin()),
+								  std::make_move_iterator(source.appends.end()));
+			target.new_pools.insert(target.new_pools.end(), std::make_move_iterator(source.new_pools.begin()),
+									std::make_move_iterator(source.new_pools.end()));
+			target.node_update_bindings.insert(target.node_update_bindings.end(),
+											   std::make_move_iterator(source.node_update_bindings.begin()),
+											   std::make_move_iterator(source.node_update_bindings.end()));
+			target.node_insertion_bindings.insert(target.node_insertion_bindings.end(),
+												  std::make_move_iterator(source.node_insertion_bindings.begin()),
+												  std::make_move_iterator(source.node_insertion_bindings.end()));
+		}
+
+		struct FreshEntityPool {
+			SegmentId segment_id{};
+			uint64_t owner_id = 0U;
+			Generation generation{1U};
+			PhysicalSlotId first_slot{};
+			PhysicalSlotId last_slot{};
+			size_t initial_frame_count = 0U;
+			size_t replacement_frame_count = 0U;
+
+			[[nodiscard]] size_t reservedFrameCount() const { return initial_frame_count + replacement_frame_count; }
+
+			[[nodiscard]] EntityPageFreshPoolDestination replacementDestination() const {
+				return {segment_id, owner_id, generation, first_slot, last_slot};
+			}
+		};
+
+		struct EntityPageReplacementDestination {
+			CatalogEntry current_pool;
+			std::optional<EntityPageFreshPoolDestination> fresh_pool;
+		};
+
+		[[nodiscard]] bool isCurrentPool(const CatalogEntry &pool) {
+			return pool.kind == SegmentKind::SGK_ENTITY_PAGE_POOL && pool.state == SegmentState::SGS_SEALED &&
+				   pool.segment_id.isValid() && pool.generation.isValid();
+		}
+
+	} // namespace
+
+	NativeGraphWriteTransaction::NativeGraphWriteTransaction(std::shared_ptr<NativeGraphWritePlannerContext> context,
+															 MetadataSnapshotPin snapshot) :
+		context_(std::move(context)), snapshot_(std::move(snapshot)),
+		state_(NativeGraphWriteTransactionState::NGWTS_ACTIVE) {
+		if (context_ == nullptr || context_->metadata == nullptr || context_->entities == nullptr ||
+			context_->labels == nullptr || context_->properties == nullptr || context_->indexes == nullptr ||
+			!snapshot_.isValid()) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph write transaction requires an attached planner and active metadata snapshot");
+		}
+		next_vector_id_ = snapshot_.superblock().next_logical_vector_id;
+		if (snapshot_.superblock().next_logical_node_id == 0U || snapshot_.superblock().next_logical_edge_id == 0U ||
+			next_vector_id_ == 0U) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph write transaction received an invalid logical ID high-water mark");
+		}
+	}
+
+	NativeGraphWriteTransaction::~NativeGraphWriteTransaction() { rollback(); }
+
+	NativeGraphWriteTransaction::NativeGraphWriteTransaction(NativeGraphWriteTransaction &&other) noexcept :
+		context_(std::move(other.context_)), snapshot_(std::move(other.snapshot_)), state_(other.state_),
+		next_vector_id_(other.next_vector_id_), node_id_ranges_(std::move(other.node_id_ranges_)),
+		edge_id_ranges_(std::move(other.edge_id_ranges_)), nodes_(std::move(other.nodes_)),
+		edges_(std::move(other.edges_)), global_adjacency_operations_(std::move(other.global_adjacency_operations_)),
+		global_adjacency_plan_(std::move(other.global_adjacency_plan_)),
+		global_adjacency_retirement_plan_(std::move(other.global_adjacency_retirement_plan_)),
+		global_adjacency_initial_plan_(std::move(other.global_adjacency_initial_plan_)),
+		properties_(std::move(other.properties_)), scalar_index_mutations_(std::move(other.scalar_index_mutations_)),
+		initial_scalar_index_mutations_(std::move(other.initial_scalar_index_mutations_)),
+		vector_bootstraps_(std::move(other.vector_bootstraps_)), vector_deltas_(std::move(other.vector_deltas_)) {
+		other.state_ = NativeGraphWriteTransactionState::NGWTS_ROLLED_BACK;
+		other.next_vector_id_ = 0U;
+	}
+
+	NativeGraphWriteTransaction &NativeGraphWriteTransaction::operator=(NativeGraphWriteTransaction &&other) noexcept {
+		if (this == &other) {
+			return *this;
+		}
+		// A live target owns snapshot and logical-ID capabilities that must be
+		// abandoned before replacement; default move assignment would leak them.
+		rollback();
+		context_ = std::move(other.context_);
+		snapshot_ = std::move(other.snapshot_);
+		state_ = other.state_;
+		next_vector_id_ = other.next_vector_id_;
+		node_id_ranges_ = std::move(other.node_id_ranges_);
+		edge_id_ranges_ = std::move(other.edge_id_ranges_);
+		nodes_ = std::move(other.nodes_);
+		edges_ = std::move(other.edges_);
+		global_adjacency_operations_ = std::move(other.global_adjacency_operations_);
+		global_adjacency_plan_ = std::move(other.global_adjacency_plan_);
+		global_adjacency_retirement_plan_ = std::move(other.global_adjacency_retirement_plan_);
+		global_adjacency_initial_plan_ = std::move(other.global_adjacency_initial_plan_);
+		properties_ = std::move(other.properties_);
+		scalar_index_mutations_ = std::move(other.scalar_index_mutations_);
+		initial_scalar_index_mutations_ = std::move(other.initial_scalar_index_mutations_);
+		vector_bootstraps_ = std::move(other.vector_bootstraps_);
+		vector_deltas_ = std::move(other.vector_deltas_);
+		other.state_ = NativeGraphWriteTransactionState::NGWTS_ROLLED_BACK;
+		other.next_vector_id_ = 0U;
+		return *this;
+	}
+
+	bool NativeGraphWriteTransaction::isActive() const {
+		return state_ == NativeGraphWriteTransactionState::NGWTS_ACTIVE && context_ != nullptr && snapshot_.isValid();
+	}
+
+	const Superblock &NativeGraphWriteTransaction::baseSuperblock() const {
+		requireActive("inspect its base Superblock");
+		return snapshot_.superblock();
+	}
+
+	const MetadataSnapshotPin &NativeGraphWriteTransaction::baseSnapshot() const {
+		requireActive("inspect its pinned metadata snapshot");
+		return snapshot_;
+	}
+
+	void NativeGraphWriteTransaction::requireActive(const char *operation) const {
+		if (!isActive() || context_->metadata == nullptr || context_->entities == nullptr ||
+			context_->labels == nullptr || context_->properties == nullptr || context_->indexes == nullptr) {
+			fail(FormatError::FERR_INVALID_STATE, "native graph write transaction is no longer active");
+		}
+		static_cast<void>(operation);
+	}
+
+	NativeGraphWriteTransaction::NodeChange &NativeGraphWriteTransaction::mutableNode(uint64_t nodeId) {
+		requireActive("modify a Node");
+		if (nodeId == 0U) {
+			fail(FormatError::FERR_INVALID_HEADER, "native graph write requires a nonzero Node ID");
+		}
+		const auto existing = nodes_.find(nodeId);
+		if (existing != nodes_.end()) {
+			if (existing->second.erased) {
+				fail(FormatError::FERR_INVALID_STATE, "native graph write cannot modify an erased Node");
+			}
+			return existing->second;
+		}
+		NodeChange change;
+		change.record = context_->entities->readNode(snapshot_, nodeId);
+		auto [iterator, inserted] = nodes_.emplace(nodeId, std::move(change));
+		static_cast<void>(inserted);
+		return iterator->second;
+	}
+
+	NativeGraphWriteTransaction::EdgeChange &NativeGraphWriteTransaction::mutableEdge(uint64_t edgeId) {
+		requireActive("modify an Edge");
+		if (edgeId == 0U) {
+			fail(FormatError::FERR_INVALID_HEADER, "native graph write requires a nonzero Edge ID");
+		}
+		const auto existing = edges_.find(edgeId);
+		if (existing != edges_.end()) {
+			if (existing->second.erased) {
+				fail(FormatError::FERR_INVALID_STATE, "native graph write cannot modify an erased Edge");
+			}
+			return existing->second;
+		}
+		EdgeChange change;
+		change.record = context_->entities->readEdge(snapshot_, edgeId);
+		auto [iterator, inserted] = edges_.emplace(edgeId, std::move(change));
+		static_cast<void>(inserted);
+		return iterator->second;
+	}
+
+	uint64_t NativeGraphWriteTransaction::createNode(std::span<const uint64_t> labels) {
+		requireActive("create a Node");
+		validateLabels(labels);
+		std::vector<NativeGraphLogicalIdLeaseRange> ranges = leaseLogicalIds(*context_, true, 1U);
+		const uint64_t nodeId = ranges.front().first_id;
+		appendLogicalIdRanges(node_id_ranges_, std::move(ranges), context_->options.maximum_logical_id_reservation);
+		NodeChange change;
+		change.inserted = true;
+		change.labels = std::vector<uint64_t>(labels.begin(), labels.end());
+		const bool inserted = nodes_.emplace(nodeId, std::move(change)).second;
+		if (!inserted) {
+			fail(FormatError::FERR_INVALID_STATE, "native graph write allocated a duplicate Node ID");
+		}
+		return nodeId;
+	}
+
+	uint64_t NativeGraphWriteTransaction::createEdge(uint64_t sourceNodeId, uint64_t targetNodeId, uint64_t typeId) {
+		requireActive("create an Edge");
+		// Reserve both directions before changing any staged Entity state. This keeps
+		// a rejected bounded write from leaving a one-direction adjacency mutation.
+		requireAdjacencyOperationCapacity(global_adjacency_operations_.size(), 2U,
+										  context_->options.maximum_global_adjacency_write_entries);
+		static_cast<void>(mutableNode(sourceNodeId));
+		if (sourceNodeId != targetNodeId) {
+			static_cast<void>(mutableNode(targetNodeId));
+		}
+		std::vector<NativeGraphLogicalIdLeaseRange> ranges = leaseLogicalIds(*context_, false, 1U);
+		const uint64_t edgeId = ranges.front().first_id;
+		appendLogicalIdRanges(edge_id_ranges_, std::move(ranges), context_->options.maximum_logical_id_reservation);
+		EdgeChange change;
+		change.inserted = true;
+		change.record.source_node_id = sourceNodeId;
+		change.record.target_node_id = targetNodeId;
+		change.record.type_id = typeId;
+		const bool inserted = edges_.emplace(edgeId, std::move(change)).second;
+		if (!inserted) {
+			fail(FormatError::FERR_INVALID_STATE, "native graph write allocated a duplicate Edge ID");
+		}
+		stageGlobalAdjacencyMutation(GlobalAdjacencyDirection::GAD_OUT, sourceNodeId, edgeId,
+									 BTreeScalarIndexOperationKind::BSIOP_UPSERT);
+		stageGlobalAdjacencyMutation(GlobalAdjacencyDirection::GAD_IN, targetNodeId, edgeId,
+									 BTreeScalarIndexOperationKind::BSIOP_UPSERT);
+		return edgeId;
+	}
+
+	void NativeGraphWriteTransaction::adoptLogicalIdReservation(NativeGraphLogicalIdReservation reservation) {
+		requireActive("adopt logical-ID reservations");
+		if (!nodes_.empty() || !edges_.empty() || !node_id_ranges_.empty() || !edge_id_ranges_.empty()) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph logical-ID reservations must be adopted before staging Entity mutations");
+		}
+		appendLogicalIdRanges(node_id_ranges_, std::move(reservation.node_ranges),
+							  context_->options.maximum_logical_id_reservation);
+		appendLogicalIdRanges(edge_id_ranges_, std::move(reservation.edge_ranges),
+							  context_->options.maximum_logical_id_reservation);
+	}
+
+	uint64_t NativeGraphWriteTransaction::createNodeWithReservedId(uint64_t nodeId, std::span<const uint64_t> labels) {
+		requireActive("create a Node with a logical-ID reservation");
+		validateLabels(labels);
+		if (nodeId == 0U ||
+			!std::ranges::any_of(node_id_ranges_, [nodeId](const NativeGraphLogicalIdLeaseRange &range) {
+				return range.contains(nodeId);
+			})) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph write attempted to create a Node outside its adopted logical-ID lease");
+		}
+		NodeChange change;
+		change.inserted = true;
+		change.labels = std::vector<uint64_t>(labels.begin(), labels.end());
+		if (!nodes_.emplace(nodeId, std::move(change)).second) {
+			fail(FormatError::FERR_INVALID_STATE, "native graph write adopted a duplicate Node ID");
+		}
+		return nodeId;
+	}
+
+	uint64_t NativeGraphWriteTransaction::createEdgeWithReservedId(uint64_t edgeId, uint64_t sourceNodeId,
+																   uint64_t targetNodeId, uint64_t typeId) {
+		requireActive("create an Edge with a logical-ID reservation");
+		requireAdjacencyOperationCapacity(global_adjacency_operations_.size(), 2U,
+										  context_->options.maximum_global_adjacency_write_entries);
+		if (edgeId == 0U ||
+			!std::ranges::any_of(edge_id_ranges_, [edgeId](const NativeGraphLogicalIdLeaseRange &range) {
+				return range.contains(edgeId);
+			})) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph write attempted to create an Edge outside its adopted logical-ID lease");
+		}
+		static_cast<void>(mutableNode(sourceNodeId));
+		if (sourceNodeId != targetNodeId) {
+			static_cast<void>(mutableNode(targetNodeId));
+		}
+		EdgeChange change;
+		change.inserted = true;
+		change.record.source_node_id = sourceNodeId;
+		change.record.target_node_id = targetNodeId;
+		change.record.type_id = typeId;
+		if (!edges_.emplace(edgeId, std::move(change)).second) {
+			fail(FormatError::FERR_INVALID_STATE, "native graph write adopted a duplicate Edge ID");
+		}
+		stageGlobalAdjacencyMutation(GlobalAdjacencyDirection::GAD_OUT, sourceNodeId, edgeId,
+									 BTreeScalarIndexOperationKind::BSIOP_UPSERT);
+		stageGlobalAdjacencyMutation(GlobalAdjacencyDirection::GAD_IN, targetNodeId, edgeId,
+									 BTreeScalarIndexOperationKind::BSIOP_UPSERT);
+		return edgeId;
+	}
+
+	void NativeGraphWriteTransaction::reserveNodeIds(uint64_t count) {
+		requireActive("reserve Node IDs");
+		if (count == 0U) {
+			return;
+		}
+		std::vector<NativeGraphLogicalIdLeaseRange> ranges = leaseLogicalIds(*context_, true, count);
+		appendLogicalIdRanges(node_id_ranges_, std::move(ranges), context_->options.maximum_logical_id_reservation);
+	}
+
+	void NativeGraphWriteTransaction::reserveEdgeIds(uint64_t count) {
+		requireActive("reserve Edge IDs");
+		if (count == 0U) {
+			return;
+		}
+		std::vector<NativeGraphLogicalIdLeaseRange> ranges = leaseLogicalIds(*context_, false, count);
+		appendLogicalIdRanges(edge_id_ranges_, std::move(ranges), context_->options.maximum_logical_id_reservation);
+	}
+
+	std::vector<uint64_t> NativeGraphWriteTransaction::collectIncidentEdgeIds(uint64_t nodeId,
+																			  size_t maximumEdges) const {
+		requireActive("enumerate a Node's incident Edges");
+		if (nodeId == 0U || maximumEdges == 0U) {
+			fail(FormatError::FERR_INVALID_HEADER,
+				 "native graph incident Edge enumeration requires a Node ID and positive bound");
+		}
+		const auto validateNode = [this, nodeId] {
+			const auto staged = nodes_.find(nodeId);
+			if (staged != nodes_.end()) {
+				if (staged->second.erased) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native graph incident Edge enumeration references an erased Node");
+				}
+				return;
+			}
+			static_cast<void>(context_->entities->readNode(snapshot_, nodeId));
+		};
+		validateNode();
+		if (context_->indexes == nullptr || !context_->indexes->usesMetadataStore(*context_->metadata)) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph incident Edge enumeration requires the global adjacency B+Tree");
+		}
+		std::set<uint64_t> incident;
+		const auto collectDirection = [this, nodeId, maximumEdges, &incident](GlobalAdjacencyDirection direction) {
+			const GlobalAdjacencyRange range = GlobalAdjacencyIndex(*context_->indexes, *context_->metadata)
+													   .scan(snapshot_, direction, nodeId, maximumEdges);
+			for (const uint64_t edgeId: range.edge_ids) {
+				if (!incident.contains(edgeId) && incident.size() == maximumEdges) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native graph incident Edge enumeration exceeded its caller-supplied adjacency bound");
+				}
+				incident.insert(edgeId);
+			}
+			if (range.continuation.has_value()) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph incident Edge enumeration exceeded its caller-supplied adjacency bound");
+			}
+			for (const BTreeScalarIndexOperation &operation: global_adjacency_operations_) {
+				const GlobalAdjacencyKey key = AdjacencyKeyCodec::decode(operation.key);
+				if (key.direction != direction || key.node_id != nodeId) {
+					continue;
+				}
+				if (operation.kind == BTreeScalarIndexOperationKind::BSIOP_UPSERT) {
+					if (!incident.contains(key.edge_id) && incident.size() == maximumEdges) {
+						fail(FormatError::FERR_INVALID_STATE,
+							 "native graph incident Edge enumeration exceeded its caller-supplied adjacency bound");
+					}
+					incident.insert(key.edge_id);
+				} else if (operation.kind == BTreeScalarIndexOperationKind::BSIOP_ERASE) {
+					incident.erase(key.edge_id);
+				} else {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native graph global adjacency stream has an unknown operation");
+				}
+			}
+		};
+		collectDirection(GlobalAdjacencyDirection::GAD_OUT);
+		collectDirection(GlobalAdjacencyDirection::GAD_IN);
+		return {incident.begin(), incident.end()};
+	}
+
+	bool NativeGraphWriteTransaction::nodeHasIncidentEdges(uint64_t nodeId) const {
+		requireActive("inspect a Node's relationship heads");
+		if (nodeId == 0U) {
+			fail(FormatError::FERR_INVALID_HEADER, "native graph relationship-head inspection requires a Node ID");
+		}
+		return !collectIncidentEdgeIds(nodeId, context_->options.maximum_adjacency_read_edges).empty();
+	}
+
+	void NativeGraphWriteTransaction::replaceNodeLabels(uint64_t nodeId, std::span<const uint64_t> labels) {
+		requireActive("replace Node labels");
+		validateLabels(labels);
+		NodeChange &change = mutableNode(nodeId);
+		change.labels = std::vector<uint64_t>(labels.begin(), labels.end());
+	}
+
+	void NativeGraphWriteTransaction::replaceNodeProperty(PropertyCollectionRoot root) {
+		requireActive("replace Node Properties");
+			if (root.owner_entity_type != Node::typeId || root.owner_entity_id == 0U) {
+				fail(FormatError::FERR_INVALID_HEADER,
+					 "native graph write Node Property roots require a direct owner");
+		}
+		const auto nodeChange = nodes_.find(root.owner_entity_id);
+		if (nodeChange != nodes_.end()) {
+			if (nodeChange->second.erased) {
+				fail(FormatError::FERR_INVALID_STATE, "native graph write cannot attach Properties to an erased Node");
+			}
+		} else {
+			// Property-only writes do not COW an unchanged fixed Entity record.
+			static_cast<void>(context_->entities->readNode(snapshot_, root.owner_entity_id));
+		}
+		const EntityPropertyKey key{EntityPropertyOwnerKind::EPOK_NODE, root.owner_entity_id};
+		properties_.insert_or_assign(key.directoryId(), std::move(root));
+	}
+
+	void NativeGraphWriteTransaction::replaceEdgeProperty(PropertyCollectionRoot root) {
+		requireActive("replace Edge Properties");
+			if (root.owner_entity_type != Edge::typeId || root.owner_entity_id == 0U) {
+				fail(FormatError::FERR_INVALID_HEADER,
+					 "native graph write Edge Property roots require a direct owner");
+		}
+		const auto edgeChange = edges_.find(root.owner_entity_id);
+		if (edgeChange != edges_.end()) {
+			if (edgeChange->second.erased) {
+				fail(FormatError::FERR_INVALID_STATE, "native graph write cannot attach Properties to an erased Edge");
+			}
+		} else {
+			// Property-only writes do not COW an unchanged fixed Entity record.
+			static_cast<void>(context_->entities->readEdge(snapshot_, root.owner_entity_id));
+		}
+		const EntityPropertyKey key{EntityPropertyOwnerKind::EPOK_EDGE, root.owner_entity_id};
+		properties_.insert_or_assign(key.directoryId(), std::move(root));
+	}
+
+	void NativeGraphWriteTransaction::stageScalarIndexUpsert(BTreePageStore &index, uint64_t indexId,
+															 std::span<const std::byte> key, uint64_t value) {
+		requireActive("stage a scalar Index upsert");
+		if (indexId == 0U || isReservedInternalIndexId(indexId) || !index.usesMetadataStore(*context_->metadata)) {
+			fail(FormatError::FERR_INVALID_HEADER,
+				 "native graph staged scalar Index upsert requires a non-reserved Index in this metadata domain");
+		}
+		const auto initial =
+				std::lower_bound(initial_scalar_index_mutations_.begin(), initial_scalar_index_mutations_.end(),
+								 indexId, [](const StagedInitialScalarIndexMutation &mutation, uint64_t value) {
+									 return mutation.index_id < value;
+								 });
+		if (initial != initial_scalar_index_mutations_.end() && initial->index_id == indexId) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph cannot mutate a scalar Index staged for first publication");
+		}
+		auto existing = std::lower_bound(
+				scalar_index_mutations_.begin(), scalar_index_mutations_.end(), indexId,
+				[](const StagedScalarIndexMutation &mutation, uint64_t value) { return mutation.index_id < value; });
+		if (existing == scalar_index_mutations_.end() || existing->index_id != indexId) {
+			existing = scalar_index_mutations_.insert(existing, {&index, indexId, {}, std::nullopt, std::nullopt});
+		}
+		if (existing->index != &index) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph staged scalar Index mutation changed its page-store identity");
+		}
+		if (existing->retirement_plan.has_value()) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph cannot mutate a scalar Index staged for whole-tree retirement");
+		}
+		existing->operations.push_back(
+				{BTreeScalarIndexOperationKind::BSIOP_UPSERT, std::vector<std::byte>(key.begin(), key.end()), value});
+		existing->plan.reset();
+	}
+
+	void NativeGraphWriteTransaction::stageScalarIndexErase(BTreePageStore &index, uint64_t indexId,
+															std::span<const std::byte> key) {
+		requireActive("stage a scalar Index erase");
+		if (indexId == 0U || isReservedInternalIndexId(indexId) || !index.usesMetadataStore(*context_->metadata)) {
+			fail(FormatError::FERR_INVALID_HEADER,
+				 "native graph staged scalar Index erase requires a non-reserved Index in this metadata domain");
+		}
+		const auto initial =
+				std::lower_bound(initial_scalar_index_mutations_.begin(), initial_scalar_index_mutations_.end(),
+								 indexId, [](const StagedInitialScalarIndexMutation &mutation, uint64_t value) {
+									 return mutation.index_id < value;
+								 });
+		if (initial != initial_scalar_index_mutations_.end() && initial->index_id == indexId) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph cannot mutate a scalar Index staged for first publication");
+		}
+		auto existing = std::lower_bound(
+				scalar_index_mutations_.begin(), scalar_index_mutations_.end(), indexId,
+				[](const StagedScalarIndexMutation &mutation, uint64_t value) { return mutation.index_id < value; });
+		if (existing == scalar_index_mutations_.end() || existing->index_id != indexId) {
+			existing = scalar_index_mutations_.insert(existing, {&index, indexId, {}, std::nullopt, std::nullopt});
+		}
+		if (existing->index != &index) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph staged scalar Index mutation changed its page-store identity");
+		}
+		if (existing->retirement_plan.has_value()) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph cannot mutate a scalar Index staged for whole-tree retirement");
+		}
+		existing->operations.push_back(
+				{BTreeScalarIndexOperationKind::BSIOP_ERASE, std::vector<std::byte>(key.begin(), key.end()), 0U});
+		existing->plan.reset();
+	}
+
+	void NativeGraphWriteTransaction::stageScalarIndexCreate(BTreePageStore &index, uint64_t indexId,
+															 std::span<const BTreePageEntry> entries) {
+		requireActive("stage a scalar Index creation");
+		if (indexId == 0U || isReservedInternalIndexId(indexId) || !index.usesMetadataStore(*context_->metadata)) {
+			fail(FormatError::FERR_INVALID_HEADER,
+				 "native graph staged scalar Index creation requires a non-reserved Index in this metadata domain");
+		}
+		const auto existingMutation = std::lower_bound(
+				scalar_index_mutations_.begin(), scalar_index_mutations_.end(), indexId,
+				[](const StagedScalarIndexMutation &mutation, uint64_t value) { return mutation.index_id < value; });
+		if (existingMutation != scalar_index_mutations_.end() && existingMutation->index_id == indexId) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph cannot create and mutate the same scalar Index in one transaction");
+		}
+		auto existingCreation =
+				std::lower_bound(initial_scalar_index_mutations_.begin(), initial_scalar_index_mutations_.end(),
+								 indexId, [](const StagedInitialScalarIndexMutation &mutation, uint64_t value) {
+									 return mutation.index_id < value;
+								 });
+		if (existingCreation != initial_scalar_index_mutations_.end() && existingCreation->index_id == indexId) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph staged scalar Index creation duplicates one logical Index ID");
+		}
+		BTreeInitialTreeMutationPlan plan = index.planInitialTreeMutation(snapshot_, indexId, entries);
+		stageScalarIndexCreate(index, std::move(plan));
+	}
+
+	void NativeGraphWriteTransaction::stageScalarIndexCreate(BTreePageStore &index, BTreeInitialTreeMutationPlan plan) {
+		requireActive("stage a scalar Index creation plan");
+		if (plan.index_id == 0U || isReservedInternalIndexId(plan.index_id) || !plan.preparer ||
+			plan.new_pool_mutations.empty() || !index.usesMetadataStore(*context_->metadata)) {
+			fail(FormatError::FERR_INVALID_HEADER, "native graph staged scalar Index creation plan is invalid, "
+												   "reserved, or belongs to another metadata domain");
+		}
+		auto existingMutation = std::lower_bound(
+				scalar_index_mutations_.begin(), scalar_index_mutations_.end(), plan.index_id,
+				[](const StagedScalarIndexMutation &mutation, uint64_t value) { return mutation.index_id < value; });
+		if (existingMutation != scalar_index_mutations_.end() && existingMutation->index_id == plan.index_id) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph cannot create and mutate the same scalar Index in one transaction");
+		}
+		auto existingCreation =
+				std::lower_bound(initial_scalar_index_mutations_.begin(), initial_scalar_index_mutations_.end(),
+								 plan.index_id, [](const StagedInitialScalarIndexMutation &mutation, uint64_t value) {
+									 return mutation.index_id < value;
+								 });
+		if (existingCreation != initial_scalar_index_mutations_.end() && existingCreation->index_id == plan.index_id) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph staged scalar Index creation duplicates one logical Index ID");
+		}
+		initial_scalar_index_mutations_.insert(existingCreation, {&index, plan.index_id, std::move(plan)});
+	}
+
+	void NativeGraphWriteTransaction::stageScalarIndexDrop(BTreePageStore &index, uint64_t indexId,
+														   size_t maximumPages) {
+		requireActive("stage a scalar Index whole-tree retirement");
+		if (indexId == 0U || isReservedInternalIndexId(indexId) || maximumPages == 0U ||
+			!index.usesMetadataStore(*context_->metadata)) {
+			fail(FormatError::FERR_INVALID_HEADER,
+				 "native graph staged scalar Index retirement requires a non-reserved local Index, ID, and page bound");
+		}
+		const auto initial =
+				std::lower_bound(initial_scalar_index_mutations_.begin(), initial_scalar_index_mutations_.end(),
+								 indexId, [](const StagedInitialScalarIndexMutation &mutation, uint64_t value) {
+									 return mutation.index_id < value;
+								 });
+		if (initial != initial_scalar_index_mutations_.end() && initial->index_id == indexId) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph cannot retire a scalar Index staged for first publication");
+		}
+		auto existing = std::lower_bound(
+				scalar_index_mutations_.begin(), scalar_index_mutations_.end(), indexId,
+				[](const StagedScalarIndexMutation &mutation, uint64_t value) { return mutation.index_id < value; });
+		if (existing != scalar_index_mutations_.end() && existing->index_id == indexId) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph cannot retire and mutate the same scalar Index in one transaction");
+		}
+		BTreeTreeRetirementPlan plan = index.planTreeRetirement(snapshot_, indexId, maximumPages);
+		scalar_index_mutations_.insert(existing, {&index, indexId, {}, std::nullopt, std::move(plan)});
+	}
+
+	void NativeGraphWriteTransaction::stageVectorIndexBootstrap(
+			BTreePageStore &mappingTrees, VectorPageStore &rawPages, VectorManifestStore &manifests,
+			const IndexDefinition &definition, std::span<const NativeGraphVectorBootstrapRecord> records,
+			NativeGraphVectorBootstrapOptions options) {
+		requireActive("stage a Vector Index bootstrap");
+		static_cast<void>(IndexDefinitionCodec::encode(definition));
+		if (definition.kind != IndexDefinitionKind::IDK_VECTOR ||
+			definition.entity_kind != IndexDefinitionEntityKind::IDEK_NODE || definition.index_id == 0U ||
+			records.empty() || options.maximum_vectors == 0U || records.size() > options.maximum_vectors ||
+			options.maximum_pages == 0U || !options.first_slot.isValid() || !options.last_slot.isValid() ||
+			options.first_slot > options.last_slot || !mappingTrees.usesMetadataStore(*context_->metadata) ||
+			!rawPages.usesMetadataStore(*context_->metadata) || !manifests.usesMetadataStore(*context_->metadata) ||
+			definition.vector_dimensions > RSS_VECTOR_SEMANTIC_MAX_DIMENSIONS) {
+			fail(FormatError::FERR_INVALID_HEADER,
+				 "native graph Vector bootstrap requires a bounded complete schema and one metadata domain");
+		}
+		if (context_->metadata->findIndexRootOptional(snapshot_, definition.index_id).has_value() ||
+			context_->metadata->findVectorManifestOptional(snapshot_, definition.index_id).has_value()) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph Vector bootstrap refuses to overwrite an existing physical Index state");
+		}
+		if (next_vector_id_ == 0U || records.size() - 1U > std::numeric_limits<uint64_t>::max() - next_vector_id_) {
+			fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
+				 "native graph Vector bootstrap exhausts the logical Vector-ID namespace");
+		}
+
+		const VectorDistanceMetric metric = VectorSemanticCodec::metricFor(definition);
+		const size_t expectedEncodedBytes = static_cast<size_t>(definition.vector_dimensions) * sizeof(uint16_t);
+		std::vector<const NativeGraphVectorBootstrapRecord *> ordered;
+		ordered.reserve(records.size());
+		for (const NativeGraphVectorBootstrapRecord &record: records) {
+			if (record.node_id == 0U || record.encoded_bfloat16.size() != expectedEncodedBytes) {
+				fail(FormatError::FERR_INVALID_HEADER,
+					 "native graph Vector bootstrap record has an invalid Node identity or BF16 width");
+			}
+			const auto stagedNode = nodes_.find(record.node_id);
+			if (stagedNode != nodes_.end()) {
+				if (stagedNode->second.erased) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native graph Vector bootstrap cannot map a Node erased by this transaction");
+				}
+			} else {
+				// A native mapping is part of the graph generation, so it must not
+				// introduce a durable reference to a non-existent logical Node.
+				static_cast<void>(context_->entities->readNode(snapshot_, record.node_id));
+			}
+			const bool nonzeroFiniteNorm = VectorSemanticCodec::hasNonZeroFiniteL2Norm(record.encoded_bfloat16);
+			if (metric == VectorDistanceMetric::VDM_COSINE && !nonzeroFiniteNorm) {
+				fail(FormatError::FERR_INVALID_HEADER,
+					 "native graph Vector bootstrap rejects a zero-norm cosine Vector record");
+			}
+			ordered.push_back(&record);
+		}
+		std::ranges::sort(ordered, {}, [](const NativeGraphVectorBootstrapRecord *record) { return record->node_id; });
+		if (std::ranges::adjacent_find(ordered, {}, [](const NativeGraphVectorBootstrapRecord *record) {
+				return record->node_id;
+			}) != ordered.end()) {
+			fail(FormatError::FERR_INVALID_HEADER, "native graph Vector bootstrap has duplicate Node mappings");
+		}
+
+		if (expectedEncodedBytes > std::numeric_limits<uint32_t>::max() - sizeof(uint64_t)) {
+			fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
+				 "native graph Vector bootstrap record stride exceeds the persisted width");
+		}
+		const uint32_t rawRecordBytes = static_cast<uint32_t>(sizeof(uint64_t) + expectedEncodedBytes);
+		const uint16_t rawCapacity = VectorPageStore::rawSlotCapacity(rawRecordBytes);
+		if (rawCapacity == 0U) {
+			fail(FormatError::FERR_INVALID_HEADER,
+				 "native graph Vector bootstrap record does not fit a Raw Vector page");
+		}
+		const size_t rawPageCount = (ordered.size() - 1U) / static_cast<size_t>(rawCapacity) + 1U;
+		if (rawPageCount > std::numeric_limits<uint32_t>::max()) {
+			fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
+				 "native graph Vector bootstrap Raw-page count exceeds its persisted width");
+		}
+
+		const uint64_t mappingIndexId =
+				VectorNodeMapping::selectMappingIndexId(snapshot_, *context_->metadata, definition.index_id);
+		if (std::ranges::any_of(vector_bootstraps_,
+								[&](const StagedVectorBootstrap &staged) {
+									return staged.mutation.index_id == definition.index_id ||
+										   staged.mutation.vector_node_mapping_index_id == mappingIndexId;
+								}) ||
+			std::ranges::any_of(initial_scalar_index_mutations_, [&](const StagedInitialScalarIndexMutation &staged) {
+				return staged.index_id == definition.index_id || staged.index_id == mappingIndexId;
+			})) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph transaction has overlapping Vector bootstrap mapping identities");
+		}
+
+		std::vector<BTreePageEntry> nodeMappingEntries;
+		std::vector<BTreePageEntry> vectorNodeMappingEntries;
+		nodeMappingEntries.reserve(ordered.size());
+		vectorNodeMappingEntries.reserve(ordered.size());
+		StagedVectorBootstrap staged;
+		staged.mapping_trees = &mappingTrees;
+		staged.raw_pages = &rawPages;
+		staged.manifests = &manifests;
+		staged.maximum_pages = options.maximum_pages;
+		staged.records.reserve(ordered.size());
+		const uint64_t firstVectorId = next_vector_id_;
+		for (size_t ordinal = 0U; ordinal < ordered.size(); ++ordinal) {
+			const NativeGraphVectorBootstrapRecord &record = *ordered[ordinal];
+			const uint64_t vectorId = firstVectorId + static_cast<uint64_t>(ordinal);
+			nodeMappingEntries.push_back({VectorSemanticCodec::nodeMappingKey(record.node_id), vectorId});
+			vectorNodeMappingEntries.push_back({VectorNodeMapping::key(vectorId), record.node_id});
+			staged.records.push_back(
+					{record.node_id, vectorId, VectorSemanticCodec::rawRecord(vectorId, record.encoded_bfloat16)});
+		}
+		const BTreeInitialTreeMutationPlan nodeMappingPlan =
+				mappingTrees.planInitialTreeMutation(snapshot_, definition.index_id, nodeMappingEntries);
+		const BTreeInitialTreeMutationPlan vectorNodeMappingPlan =
+				mappingTrees.planInitialTreeMutation(snapshot_, mappingIndexId, vectorNodeMappingEntries);
+		const auto planPageCount = [](const BTreeInitialTreeMutationPlan &plan) {
+			size_t count = 0U;
+			for (const BTreeNewIndexTreePoolMutation &pool: plan.new_pool_mutations) {
+				if (pool.appended_page_count > std::numeric_limits<size_t>::max() - count) {
+					fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
+						 "native graph Vector bootstrap mapping-page count overflows host address space");
+				}
+				count += pool.appended_page_count;
+			}
+			return count;
+		};
+		const size_t nodeMappingPageCount = planPageCount(nodeMappingPlan);
+		const size_t vectorNodeMappingPageCount = planPageCount(vectorNodeMappingPlan);
+		if (nodeMappingPageCount == 0U || vectorNodeMappingPageCount == 0U ||
+			nodeMappingPageCount > options.maximum_pages ||
+			vectorNodeMappingPageCount > options.maximum_pages - nodeMappingPageCount ||
+			rawPageCount > options.maximum_pages - nodeMappingPageCount - vectorNodeMappingPageCount ||
+			options.maximum_pages - nodeMappingPageCount - vectorNodeMappingPageCount - rawPageCount < 1U) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph Vector bootstrap exceeds its configured typed-page work bound");
+		}
+
+		stageScalarIndexCreate(mappingTrees, nodeMappingPlan);
+		stageScalarIndexCreate(mappingTrees, vectorNodeMappingPlan);
+		staged.mutation = {definition.index_id,
+						   mappingIndexId,
+						   firstVectorId,
+						   static_cast<uint64_t>(ordered.size()),
+						   definition.vector_dimensions,
+						   metric,
+						   static_cast<uint32_t>(rawPageCount),
+						   options.first_slot,
+						   options.last_slot};
+		vector_bootstraps_.push_back(std::move(staged));
+		const uint64_t lastVectorId = firstVectorId + static_cast<uint64_t>(ordered.size()) - 1U;
+		next_vector_id_ = lastVectorId == std::numeric_limits<uint64_t>::max() ? 0U : lastVectorId + 1U;
+	}
+
+	void NativeGraphWriteTransaction::stageVectorIndexDelta(BTreePageStore &mappingTrees, VectorPageStore &rawPages,
+															VectorManifestStore &manifests,
+															const IndexDefinition &definition,
+															std::span<const NativeVectorMutation> mutations,
+															NativeGraphVectorDeltaOptions options) {
+		requireActive("stage a Vector Index delta");
+		static_cast<void>(IndexDefinitionCodec::encode(definition));
+		if (definition.kind != IndexDefinitionKind::IDK_VECTOR ||
+			definition.entity_kind != IndexDefinitionEntityKind::IDEK_NODE || definition.index_id == 0U ||
+			mutations.empty() || options.maximum_records == 0U || mutations.size() > options.maximum_records ||
+			options.maximum_raw_pages == 0U || !options.first_slot.isValid() || !options.last_slot.isValid() ||
+			options.rebuild_threshold == 0U || options.rebuild_threshold == std::numeric_limits<size_t>::max() ||
+			options.rebuild_threshold > std::numeric_limits<uint32_t>::max() || options.maximum_overlay_entries == 0U ||
+			options.maximum_overlay_entries == std::numeric_limits<size_t>::max() ||
+			options.maximum_overlay_entries > std::numeric_limits<uint32_t>::max() ||
+			options.rebuild_threshold > options.maximum_overlay_entries || options.maximum_delta_pages == 0U ||
+			options.maximum_delta_pages == std::numeric_limits<size_t>::max() ||
+			options.maximum_overlay_entries >
+					VectorDeltaMapping::maximumEntriesForPageBudget(options.maximum_delta_pages) ||
+			options.first_slot > options.last_slot || !mappingTrees.usesMetadataStore(*context_->metadata) ||
+			!rawPages.usesMetadataStore(*context_->metadata) || !manifests.usesMetadataStore(*context_->metadata) ||
+			definition.vector_dimensions == 0U || definition.vector_dimensions > RSS_VECTOR_SEMANTIC_MAX_DIMENSIONS) {
+			fail(FormatError::FERR_INVALID_HEADER,
+				 "native graph Vector delta requires bounded canonical input in one metadata domain");
+		}
+		if (mutations.size() > std::numeric_limits<size_t>::max() / 2U) {
+			fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
+				 "native graph Vector delta mapping work exceeds host address space");
+		}
+		if (std::ranges::any_of(vector_bootstraps_,
+								[&](const StagedVectorBootstrap &staged) {
+									return staged.mutation.index_id == definition.index_id;
+								}) ||
+			std::ranges::any_of(vector_deltas_, [&](const StagedVectorDelta &staged) {
+				return staged.mutation.index_id == definition.index_id;
+			})) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph transaction cannot stage more than one Vector publication shape per Index");
+		}
+
+		const VectorDistanceMetric metric = VectorSemanticCodec::metricFor(definition);
+		const std::optional<IndexRootLocation> nodeMappingRoot =
+				context_->metadata->findIndexRootOptional(snapshot_, definition.index_id);
+		const std::optional<VectorManifestLocation> manifestDirectory =
+				context_->metadata->findVectorManifestOptional(snapshot_, definition.index_id);
+		if (!nodeMappingRoot.has_value() || !manifestDirectory.has_value()) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph Vector delta requires an already published mapping root and Manifest");
+		}
+		const VectorManifest sourceManifest = manifests.read(snapshot_, definition.index_id).manifest();
+		const std::optional<IndexRootLocation> reverseMappingRoot =
+				sourceManifest.vector_node_mapping_index_id == 0U
+						? std::nullopt
+						: context_->metadata->findIndexRootOptional(snapshot_,
+																	sourceManifest.vector_node_mapping_index_id);
+		const bool hasSourceDelta = sourceManifest.delta_mapping_index_id != 0U;
+		const std::optional<IndexRootLocation> sourceDeltaRoot =
+				hasSourceDelta
+						? context_->metadata->findIndexRootOptional(snapshot_, sourceManifest.delta_mapping_index_id)
+						: std::nullopt;
+		const PageLocation manifestLocation = context_->metadata->findPageLocation(snapshot_, sourceManifest.page_id);
+		const CatalogEntry manifestPool = context_->metadata->findCatalog(snapshot_, manifestLocation.segment_id);
+		const uint8_t invalidManifest =
+				static_cast<uint8_t>(sourceManifest.index_id != definition.index_id) |
+				static_cast<uint8_t>(sourceManifest.dimensions != definition.vector_dimensions) |
+				static_cast<uint8_t>(sourceManifest.metric != metric) |
+				static_cast<uint8_t>(sourceManifest.node_mapping_root_page_id != nodeMappingRoot->root_page_id) |
+				static_cast<uint8_t>(sourceManifest.node_mapping_root_generation != nodeMappingRoot->root_generation) |
+				static_cast<uint8_t>(
+						!VectorNodeMapping::isMappingIndexId(sourceManifest.vector_node_mapping_index_id)) |
+				static_cast<uint8_t>(!reverseMappingRoot.has_value()) |
+				static_cast<uint8_t>(reverseMappingRoot.has_value() &&
+									 sourceManifest.vector_node_mapping_root_page_id !=
+											 reverseMappingRoot->root_page_id) |
+				static_cast<uint8_t>(reverseMappingRoot.has_value() &&
+									 sourceManifest.vector_node_mapping_root_generation !=
+											 reverseMappingRoot->root_generation) |
+				static_cast<uint8_t>(hasSourceDelta &&
+									 !VectorDeltaMapping::isMappingIndexId(sourceManifest.delta_mapping_index_id)) |
+				static_cast<uint8_t>(hasSourceDelta != sourceManifest.delta_mapping_root_page_id.isValid()) |
+				static_cast<uint8_t>(hasSourceDelta != sourceManifest.delta_mapping_root_generation.isValid()) |
+				static_cast<uint8_t>(hasSourceDelta != (sourceManifest.delta_entry_count != 0U)) |
+				static_cast<uint8_t>(hasSourceDelta != sourceDeltaRoot.has_value()) |
+				static_cast<uint8_t>(sourceDeltaRoot.has_value() &&
+									 sourceManifest.delta_mapping_root_page_id != sourceDeltaRoot->root_page_id) |
+				static_cast<uint8_t>(sourceDeltaRoot.has_value() &&
+									 sourceManifest.delta_mapping_root_generation != sourceDeltaRoot->root_generation) |
+				static_cast<uint8_t>(manifestDirectory->manifest_page_id != sourceManifest.page_id) |
+				static_cast<uint8_t>(manifestDirectory->generation != sourceManifest.generation) |
+				static_cast<uint8_t>(manifestPool.kind != SegmentKind::SGK_VECTOR_MANIFEST_POOL) |
+				static_cast<uint8_t>(manifestPool.owner_id != definition.index_id) |
+				static_cast<uint8_t>(manifestPool.state != SegmentState::SGS_SEALED) |
+				static_cast<uint8_t>(manifestPool.generation != manifestLocation.generation) |
+				static_cast<uint8_t>(!manifestPool.committed_lsn.isValid()) |
+				static_cast<uint8_t>(!sourceManifest.committed_lsn.isValid());
+		if (invalidManifest != 0U) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph Vector delta found an inconsistent mapping or Manifest fence");
+		}
+
+		const size_t encodedBytes = static_cast<size_t>(definition.vector_dimensions) * sizeof(uint16_t);
+		if (encodedBytes > std::numeric_limits<uint32_t>::max() - sizeof(uint64_t)) {
+			fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
+				 "native graph Vector delta raw record stride exceeds persisted width");
+		}
+		const uint32_t rawRecordBytes = static_cast<uint32_t>(sizeof(uint64_t) + encodedBytes);
+		const uint16_t rawCapacity = VectorPageStore::rawSlotCapacity(rawRecordBytes);
+		if (rawCapacity == 0U) {
+			fail(FormatError::FERR_INVALID_HEADER, "native graph Vector delta record does not fit a Raw Vector page");
+		}
+		std::map<uint64_t, VectorDeltaEntry> originalDeltaOperations;
+		if (hasSourceDelta) {
+			// The threshold schedules maintenance, while the independently bounded
+			// overlay limit remains a hard safety ceiling for retained exact state.
+			const size_t sourceDeltaEntries = static_cast<size_t>(sourceManifest.delta_entry_count);
+			if (sourceDeltaEntries > options.maximum_overlay_entries) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph Vector delta exceeds its configured durable overlay bound");
+			}
+			const size_t scanLimit = std::max(options.rebuild_threshold, sourceDeltaEntries);
+			const std::vector<VectorDeltaEntry> sourceEntries = VectorDeltaMapping::scan(
+					snapshot_, mappingTrees, *context_->metadata, sourceManifest.delta_mapping_index_id, scanLimit);
+			if (sourceEntries.size() != sourceManifest.delta_entry_count) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph Vector delta Manifest count disagrees with its typed overlay tree");
+			}
+			for (const VectorDeltaEntry &entry: sourceEntries) {
+				if (!originalDeltaOperations.emplace(entry.vector_id, entry).second) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native graph Vector delta overlay contains a duplicate Vector-ID entry");
+				}
+			}
+		}
+		std::map<uint64_t, VectorDeltaEntry> deltaOperations = originalDeltaOperations;
+
+		std::vector<const NativeVectorMutation *> ordered;
+		ordered.reserve(mutations.size());
+		for (const NativeVectorMutation &mutation: mutations) {
+			const bool insert = mutation.kind == NativeVectorMutationKind::NVMK_INSERT;
+			const bool erase = mutation.kind == NativeVectorMutationKind::NVMK_ERASE;
+			const uint8_t invalid = static_cast<uint8_t>(!insert && !erase) |
+									static_cast<uint8_t>(mutation.index_id != definition.index_id) |
+									static_cast<uint8_t>(mutation.node_id == 0U) |
+									static_cast<uint8_t>(mutation.dimensions != definition.vector_dimensions) |
+									static_cast<uint8_t>(mutation.metric != metric) |
+									static_cast<uint8_t>(insert && mutation.encoded_bfloat16.size() != encodedBytes) |
+									static_cast<uint8_t>(erase && !mutation.encoded_bfloat16.empty());
+			if (invalid != 0U) {
+				fail(FormatError::FERR_INVALID_HEADER, "native graph Vector delta has an invalid semantic mutation");
+			}
+			if (insert) {
+				const auto stagedNode = nodes_.find(mutation.node_id);
+				if (stagedNode != nodes_.end()) {
+					if (stagedNode->second.erased) {
+						fail(FormatError::FERR_INVALID_STATE,
+							 "native graph Vector delta cannot insert a mapping for a Node erased by this transaction");
+					}
+				} else {
+					static_cast<void>(context_->entities->readNode(snapshot_, mutation.node_id));
+				}
+				const bool nonzeroFiniteNorm = VectorSemanticCodec::hasNonZeroFiniteL2Norm(mutation.encoded_bfloat16);
+				if (metric == VectorDistanceMetric::VDM_COSINE && !nonzeroFiniteNorm) {
+					fail(FormatError::FERR_INVALID_HEADER,
+						 "native graph Vector delta rejects a zero-norm cosine Vector record");
+				}
+			}
+			ordered.push_back(&mutation);
+		}
+		std::ranges::sort(ordered, {}, [](const NativeVectorMutation *mutation) {
+			return std::tuple<uint64_t, uint8_t>{mutation->node_id, static_cast<uint8_t>(mutation->kind)};
+		});
+		for (size_t ordinal = 1U; ordinal < ordered.size(); ++ordinal) {
+			const NativeVectorMutation &previous = *ordered[ordinal - 1U];
+			const NativeVectorMutation &current = *ordered[ordinal];
+			if (previous.node_id == current.node_id && previous.kind == current.kind) {
+				fail(FormatError::FERR_INVALID_HEADER, "native graph Vector delta has duplicate Node transition kinds");
+			}
+		}
+
+		StagedVectorDelta staged;
+		staged.mapping_trees = &mappingTrees;
+		staged.raw_pages = &rawPages;
+		staged.manifests = &manifests;
+		staged.source_manifest = sourceManifest;
+		staged.maximum_raw_pages = options.maximum_raw_pages;
+		staged.mutation.index_id = definition.index_id;
+		staged.mutation.vector_node_mapping_index_id = sourceManifest.vector_node_mapping_index_id;
+		staged.mutation.expected_delta_mapping_index_id = sourceManifest.delta_mapping_index_id;
+		staged.mutation.expected_delta_mapping_root = sourceDeltaRoot;
+		staged.mutation.expected_node_mapping_root = *nodeMappingRoot;
+		staged.mutation.expected_vector_node_mapping_root = *reverseMappingRoot;
+		staged.mutation.expected_manifest_pool = manifestPool;
+		staged.mutation.expected_manifest_location = manifestLocation;
+		staged.mutation.expected_manifest = *manifestDirectory;
+		staged.mutation.expected_manifest_owner_lsn = sourceManifest.committed_lsn;
+		staged.mutation.dimensions = definition.vector_dimensions;
+		staged.mutation.metric = sourceManifest.metric;
+		staged.mutation.first_slot = options.first_slot;
+		staged.mutation.last_slot = options.last_slot;
+		staged.mutation.manifest_in_new_pool = !manifests.hasReplacementFrameCapacity(manifestPool, 1U);
+
+		std::set<uint64_t> erasedNodes;
+		std::set<uint64_t> insertedNodes;
+		struct MappingOperation {
+			bool erase = false;
+			uint64_t index_id = 0U;
+			std::vector<std::byte> key;
+			uint64_t value = 0U;
+		};
+		std::vector<MappingOperation> mappingOperations;
+		mappingOperations.reserve(mutations.size() * 2U);
+		for (const NativeVectorMutation *mutation: ordered) {
+			if (mutation->kind != NativeVectorMutationKind::NVMK_ERASE) {
+				continue;
+			}
+			const std::vector<std::byte> key = VectorSemanticCodec::nodeMappingKey(mutation->node_id);
+			const std::optional<uint64_t> vectorId =
+					BTreeIndex(definition.index_id, mappingTrees, *context_->metadata).find(snapshot_, key);
+			const std::optional<uint64_t> reverseNode =
+					vectorId.has_value()
+							? VectorNodeMapping::findNode(snapshot_, mappingTrees, *context_->metadata,
+														  sourceManifest.vector_node_mapping_index_id, *vectorId)
+							: std::nullopt;
+			if (!vectorId.has_value() || *vectorId == 0U || !reverseNode.has_value() ||
+				*reverseNode != mutation->node_id ||
+				!context_->metadata->findVectorLocationOptional(snapshot_, *vectorId).has_value() ||
+				!erasedNodes.insert(mutation->node_id).second) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph Vector delta erase found an inconsistent semantic mapping");
+			}
+			mappingOperations.push_back({true, definition.index_id, key, 0U});
+			mappingOperations.push_back(
+					{true, sourceManifest.vector_node_mapping_index_id, VectorNodeMapping::key(*vectorId), 0U});
+			staged.records.push_back({NativeVectorMutationKind::NVMK_ERASE, mutation->node_id, *vectorId, {}});
+			staged.mutation.erased_vector_ids.push_back(*vectorId);
+			const auto delta = deltaOperations.find(*vectorId);
+			if (delta == deltaOperations.end()) {
+				deltaOperations.emplace(
+						*vectorId, VectorDeltaEntry{*vectorId, mutation->node_id, VectorDeltaOperation::VDO_ERASE});
+			} else if (delta->second.operation == VectorDeltaOperation::VDO_INSERT) {
+				if (delta->second.node_id != mutation->node_id) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native graph Vector delta erase changed the Node identity of an inserted Vector");
+				}
+				deltaOperations.erase(delta);
+			} else {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph Vector delta found a live semantic mapping hidden by an overlay tombstone");
+			}
+		}
+
+		const size_t insertCount =
+				static_cast<size_t>(std::ranges::count_if(ordered, [](const NativeVectorMutation *mutation) {
+					return mutation->kind == NativeVectorMutationKind::NVMK_INSERT;
+				}));
+		uint64_t nextVectorId = next_vector_id_;
+		if (insertCount != 0U &&
+			(nextVectorId == 0U || insertCount - 1U > std::numeric_limits<uint64_t>::max() - nextVectorId)) {
+			fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
+				 "native graph Vector delta exhausts the logical Vector-ID namespace");
+		}
+		staged.mutation.first_vector_id = insertCount == 0U ? 0U : nextVectorId;
+		staged.mutation.inserted_vector_count = static_cast<uint64_t>(insertCount);
+		for (const NativeVectorMutation *mutation: ordered) {
+			if (mutation->kind != NativeVectorMutationKind::NVMK_INSERT) {
+				continue;
+			}
+			const std::vector<std::byte> key = VectorSemanticCodec::nodeMappingKey(mutation->node_id);
+			const std::optional<uint64_t> existing =
+					BTreeIndex(definition.index_id, mappingTrees, *context_->metadata).find(snapshot_, key);
+			if ((existing.has_value() && !erasedNodes.contains(mutation->node_id)) ||
+				!insertedNodes.insert(mutation->node_id).second) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph Vector delta insert found a duplicate Node mapping");
+			}
+			const uint64_t vectorId = nextVectorId;
+			nextVectorId = vectorId == std::numeric_limits<uint64_t>::max() ? 0U : vectorId + 1U;
+			mappingOperations.push_back({false, definition.index_id, key, vectorId});
+			mappingOperations.push_back({false, sourceManifest.vector_node_mapping_index_id,
+										 VectorNodeMapping::key(vectorId), mutation->node_id});
+			staged.records.push_back({NativeVectorMutationKind::NVMK_INSERT, mutation->node_id, vectorId,
+									  VectorSemanticCodec::rawRecord(vectorId, mutation->encoded_bfloat16)});
+			if (!deltaOperations
+						 .emplace(vectorId,
+								  VectorDeltaEntry{vectorId, mutation->node_id, VectorDeltaOperation::VDO_INSERT})
+						 .second) {
+				fail(FormatError::FERR_INVALID_STATE, "native graph Vector delta reused an existing overlay Vector ID");
+			}
+		}
+
+		const LogSequenceNumber checkpointLsn = nextCheckpointLsn(snapshot_.superblock());
+		std::vector<size_t> insertRecordOrdinals;
+		for (size_t ordinal = 0U; ordinal < staged.records.size(); ++ordinal) {
+			if (staged.records[ordinal].kind == NativeVectorMutationKind::NVMK_INSERT) {
+				insertRecordOrdinals.push_back(ordinal);
+			}
+		}
+		if (!insertRecordOrdinals.empty()) {
+			if (!sourceManifest.raw_write_tail_page_id.isValid()) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph Vector delta has inserts but no current Raw write tail");
+			}
+			const PageLocation tailLocation =
+					context_->metadata->findPageLocation(snapshot_, sourceManifest.raw_write_tail_page_id);
+			const CatalogEntry tailPool = context_->metadata->findCatalog(snapshot_, tailLocation.segment_id);
+			const VectorPage tail = rawPages.read(snapshot_, tailLocation.page_id);
+			const VectorPageHeader tailHeader = tail.header();
+			const uint8_t invalidTail = static_cast<uint8_t>(tailPool.kind != SegmentKind::SGK_VECTOR_RAW_POOL) |
+										static_cast<uint8_t>(tailPool.owner_id != definition.index_id) |
+										static_cast<uint8_t>(tailPool.state != SegmentState::SGS_SEALED) |
+										static_cast<uint8_t>(tailPool.generation != tailLocation.generation) |
+										static_cast<uint8_t>(tailHeader.kind != VectorStorageKind::VSK_RAW) |
+										static_cast<uint8_t>(tailHeader.index_id != definition.index_id) |
+										static_cast<uint8_t>(tailHeader.page_id != tailLocation.page_id) |
+										static_cast<uint8_t>(tailHeader.generation != tailLocation.generation) |
+										static_cast<uint8_t>(tailHeader.record_bytes != rawRecordBytes) |
+										static_cast<uint8_t>(tailHeader.slot_capacity != rawCapacity) |
+										static_cast<uint8_t>(!tailHeader.committed_lsn.isValid());
+			if (invalidTail != 0U) {
+				fail(FormatError::FERR_INVALID_STATE, "native graph Vector delta found an invalid Raw write tail");
+			}
+			size_t nextRecord = 0U;
+			const size_t tailFree = static_cast<size_t>(tailHeader.slot_capacity - tailHeader.live_count);
+			if (tailFree != 0U && rawPages.hasReplacementFrameCapacity(tailPool, 1U)) {
+				const PageOwnerHeader owner{tailLocation.page_id,
+											definition.index_id,
+											PageOwnerKind::POK_VECTOR_RAW,
+											0U,
+											RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES,
+											tailLocation.generation,
+											checkpointLsn};
+				VectorPage image = tail.rebindOwner(owner);
+				const size_t count = std::min(tailFree, insertRecordOrdinals.size());
+				StagedVectorDeltaRawPage rawPage;
+				rawPage.mutation = {NativeGraphVectorDeltaRawPlacement::NGVDRP_COW_TAIL,
+									tailPool,
+									tailLocation,
+									tailHeader.committed_lsn,
+									0U,
+									0U,
+									static_cast<uint32_t>(count)};
+				rawPage.record_ordinals.insert(rawPage.record_ordinals.end(), insertRecordOrdinals.begin(),
+											   insertRecordOrdinals.begin() + static_cast<std::ptrdiff_t>(count));
+				for (const size_t recordOrdinal: rawPage.record_ordinals) {
+					static_cast<void>(image.insert(staged.records[recordOrdinal].raw_record));
+				}
+				rawPage.tail_image.emplace(std::move(image));
+				staged.raw_page_images.push_back(std::move(rawPage));
+				nextRecord = count;
+			}
+			const size_t remaining = insertRecordOrdinals.size() - nextRecord;
+			if (remaining != 0U) {
+				const size_t freshPageCount = (remaining - 1U) / static_cast<size_t>(rawCapacity) + 1U;
+				if (staged.raw_page_images.size() + freshPageCount > options.maximum_raw_pages) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native graph Vector delta exceeds its configured Raw-page work bound");
+				}
+				const bool appendCurrent =
+						rawPages.hasReplacementFrameCapacity(tailPool, freshPageCount + (nextRecord != 0U ? 1U : 0U));
+				for (size_t pageOrdinal = 0U; pageOrdinal < freshPageCount; ++pageOrdinal) {
+					const size_t first = nextRecord + pageOrdinal * static_cast<size_t>(rawCapacity);
+					const size_t count =
+							std::min(static_cast<size_t>(rawCapacity), insertRecordOrdinals.size() - first);
+					StagedVectorDeltaRawPage rawPage;
+					rawPage.mutation.placement =
+							appendCurrent ? NativeGraphVectorDeltaRawPlacement::NGVDRP_APPEND_TO_CURRENT_POOL
+										  : NativeGraphVectorDeltaRawPlacement::NGVDRP_NEW_POOL;
+					rawPage.mutation.expected_pool = appendCurrent ? tailPool : CatalogEntry{};
+					rawPage.mutation.page_ordinal = static_cast<uint32_t>(staged.raw_page_images.size());
+					rawPage.mutation.new_pool_ordinal =
+							appendCurrent ? 0U
+										  : static_cast<uint32_t>(pageOrdinal / RSS_PAGE_POOL_DATA_FRAME_COUNT + 1U);
+					rawPage.mutation.inserted_record_count = static_cast<uint32_t>(count);
+					rawPage.record_ordinals.insert(rawPage.record_ordinals.end(),
+												   insertRecordOrdinals.begin() + static_cast<std::ptrdiff_t>(first),
+												   insertRecordOrdinals.begin() +
+														   static_cast<std::ptrdiff_t>(first + count));
+					staged.raw_page_images.push_back(std::move(rawPage));
+				}
+			}
+		}
+		if (staged.raw_page_images.size() > options.maximum_raw_pages) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph Vector delta exceeds its configured Raw-page work bound");
+		}
+		staged.mutation.raw_pages.reserve(staged.raw_page_images.size());
+		for (const StagedVectorDeltaRawPage &rawPage: staged.raw_page_images) {
+			staged.mutation.raw_pages.push_back(rawPage.mutation);
+		}
+		// Semantic operations are ordered by Node ID so mapping updates are
+		// deterministic; directory erasures instead require Vector-ID order.
+		std::ranges::sort(staged.mutation.erased_vector_ids);
+		if (std::ranges::adjacent_find(staged.mutation.erased_vector_ids) != staged.mutation.erased_vector_ids.end()) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph Vector delta resolved one logical Vector ID more than once");
+		}
+		// Crossing the configured threshold schedules a base rebuild after this
+		// transaction publishes. Keeping the overlay visible until the rebuild
+		// completes preserves the `base - tombstones + exact inserts` invariant.
+		if (deltaOperations.size() > std::numeric_limits<uint32_t>::max()) {
+			fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
+				 "native graph Vector delta entry count exceeds its persisted width");
+		}
+		if (deltaOperations.size() > options.maximum_overlay_entries) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph Vector delta exceeds its configured durable overlay bound");
+		}
+		staged.mutation.maintenance_rebuild_required = deltaOperations.size() > options.rebuild_threshold;
+		staged.mutation.delta_entry_count = static_cast<uint32_t>(deltaOperations.size());
+		if (!deltaOperations.empty()) {
+			const uint64_t deltaMappingIndexId =
+					hasSourceDelta ? sourceManifest.delta_mapping_index_id
+								   : VectorDeltaMapping::selectMappingIndexId(snapshot_, *context_->metadata,
+																			  definition.index_id);
+			staged.mutation.delta_mapping_index_id = deltaMappingIndexId;
+			if (hasSourceDelta) {
+				for (const auto &[vectorId, original]: originalDeltaOperations) {
+					const auto updated = deltaOperations.find(vectorId);
+					if (updated == deltaOperations.end()) {
+						stageScalarIndexErase(mappingTrees, deltaMappingIndexId,
+											  VectorDeltaMapping::key(vectorId, original.operation));
+					} else if (updated->second != original) {
+						stageScalarIndexErase(mappingTrees, deltaMappingIndexId,
+											  VectorDeltaMapping::key(vectorId, original.operation));
+						stageScalarIndexUpsert(mappingTrees, deltaMappingIndexId,
+											   VectorDeltaMapping::key(vectorId, updated->second.operation),
+											   updated->second.node_id);
+					}
+				}
+				for (const auto &[vectorId, updated]: deltaOperations) {
+					if (!originalDeltaOperations.contains(vectorId)) {
+						stageScalarIndexUpsert(mappingTrees, deltaMappingIndexId,
+											   VectorDeltaMapping::key(vectorId, updated.operation), updated.node_id);
+					}
+				}
+			} else {
+				std::vector<BTreePageEntry> entries;
+				entries.reserve(deltaOperations.size());
+				for (const auto &[vectorId, entry]: deltaOperations) {
+					entries.push_back({VectorDeltaMapping::key(vectorId, entry.operation), entry.node_id});
+				}
+				stageScalarIndexCreate(mappingTrees, deltaMappingIndexId, entries);
+			}
+		} else if (hasSourceDelta) {
+			stageScalarIndexDrop(mappingTrees, sourceManifest.delta_mapping_index_id, options.maximum_delta_pages);
+		}
+		for (const MappingOperation &operation: mappingOperations) {
+			if (operation.erase) {
+				stageScalarIndexErase(mappingTrees, operation.index_id, operation.key);
+			} else {
+				stageScalarIndexUpsert(mappingTrees, operation.index_id, operation.key, operation.value);
+			}
+		}
+		next_vector_id_ = nextVectorId;
+		vector_deltas_.push_back(std::move(staged));
+	}
+
+	void NativeGraphWriteTransaction::stageGlobalAdjacencyMutation(GlobalAdjacencyDirection direction, uint64_t nodeId,
+																   uint64_t edgeId,
+																   BTreeScalarIndexOperationKind kind) {
+		if ((direction != GlobalAdjacencyDirection::GAD_OUT && direction != GlobalAdjacencyDirection::GAD_IN) ||
+			nodeId == 0U || edgeId == 0U ||
+			(kind != BTreeScalarIndexOperationKind::BSIOP_UPSERT &&
+			 kind != BTreeScalarIndexOperationKind::BSIOP_ERASE)) {
+			fail(FormatError::FERR_INVALID_HEADER,
+				 "native graph global adjacency mutation requires canonical key and operation identities");
+		}
+		requireAdjacencyOperationCapacity(global_adjacency_operations_.size(), 1U,
+										  context_->options.maximum_global_adjacency_write_entries);
+		global_adjacency_operations_.push_back({kind, AdjacencyKeyCodec::encode({direction, nodeId, edgeId}), 0U});
+		global_adjacency_plan_.reset();
+		global_adjacency_retirement_plan_.reset();
+		global_adjacency_initial_plan_.reset();
+	}
+
+	std::vector<BTreeScalarIndexOperation> NativeGraphWriteTransaction::canonicalGlobalAdjacencyOperations() const {
+		std::map<std::vector<std::byte>, BTreeScalarIndexOperation> finalOperations;
+		for (const BTreeScalarIndexOperation &operation: global_adjacency_operations_) {
+			if (operation.value != 0U || operation.key.empty() ||
+				(operation.kind != BTreeScalarIndexOperationKind::BSIOP_UPSERT &&
+				 operation.kind != BTreeScalarIndexOperationKind::BSIOP_ERASE)) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph global adjacency operation stream is not key-only and canonical");
+			}
+			static_cast<void>(AdjacencyKeyCodec::decode(operation.key));
+			auto current = finalOperations.find(operation.key);
+			if (current == finalOperations.end()) {
+				finalOperations.emplace(operation.key, operation);
+				continue;
+			}
+			if (current->second.kind == BTreeScalarIndexOperationKind::BSIOP_UPSERT &&
+				operation.kind == BTreeScalarIndexOperationKind::BSIOP_ERASE) {
+				// A provisional Edge created and removed in one transaction leaves no
+				// durable adjacency key or empty-root publication behind.
+				finalOperations.erase(current);
+				continue;
+			}
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph transaction stages contradictory duplicate global adjacency keys");
+		}
+		std::vector<BTreeScalarIndexOperation> result;
+		result.reserve(finalOperations.size());
+		for (auto &[key, operation]: finalOperations) {
+			static_cast<void>(key);
+			result.push_back(std::move(operation));
+		}
+		return result;
+	}
+
+	void NativeGraphWriteTransaction::prepareGlobalAdjacencyMutationPlan() {
+		global_adjacency_plan_.reset();
+		global_adjacency_retirement_plan_.reset();
+		global_adjacency_initial_plan_.reset();
+		if (global_adjacency_operations_.empty()) {
+			return;
+		}
+		if (context_->indexes == nullptr || !context_->indexes->usesMetadataStore(*context_->metadata)) {
+			fail(FormatError::FERR_INVALID_STATE, "native graph global adjacency requires a local B+Tree page store");
+		}
+		std::vector<BTreeScalarIndexOperation> operations = canonicalGlobalAdjacencyOperations();
+		if (operations.empty()) {
+			return;
+		}
+		if (operations.size() > context_->options.maximum_global_adjacency_write_entries) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph global adjacency mutation exceeds its configured entry bound");
+		}
+		if (context_->metadata->findIndexRootOptional(snapshot_, RSS_GLOBAL_ADJACENCY_INDEX_ID).has_value()) {
+			global_adjacency_plan_ = context_->indexes->planScalarIndexTransactionMutation(
+					snapshot_, RSS_GLOBAL_ADJACENCY_INDEX_ID, operations, true, false,
+					BTreeLeafValueLayout::BLVL_EMPTY);
+			if (global_adjacency_plan_->final_tree_empty) {
+				global_adjacency_retirement_plan_ =
+						context_->indexes->planTreeRetirement(snapshot_, RSS_GLOBAL_ADJACENCY_INDEX_ID,
+															  context_->options.maximum_global_adjacency_tree_pages);
+				global_adjacency_plan_.reset();
+			}
+			return;
+		}
+		auto entries = std::make_shared<std::vector<BTreePageEntry>>();
+		entries->reserve(operations.size());
+		for (const BTreeScalarIndexOperation &operation: operations) {
+			if (operation.kind != BTreeScalarIndexOperationKind::BSIOP_UPSERT) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph cannot erase a global adjacency key from an absent tree");
+			}
+			entries->push_back({operation.key, 0U});
+		}
+		const OrderedBTreeEntrySource source = [entries] {
+			auto ordinal = std::make_shared<size_t>(0U);
+			return [entries, ordinal]() -> std::optional<BTreePageEntry> {
+				if (*ordinal == entries->size()) {
+					return std::nullopt;
+				}
+				return (*entries)[(*ordinal)++];
+			};
+		};
+		BulkBTreeBuildOptions options;
+		options.first_slot = context_->options.first_slot;
+		options.last_slot = context_->options.last_slot;
+		options.pool_owner_id = RSS_GLOBAL_ADJACENCY_INDEX_ID;
+		options.maximum_entries = context_->options.maximum_global_adjacency_write_entries;
+		options.maximum_pages = context_->options.maximum_global_adjacency_tree_pages;
+		options.leaf_value_layout = BTreeLeafValueLayout::BLVL_EMPTY;
+		global_adjacency_initial_plan_ = BulkBTreeBuilder::planNativeTree(
+				*context_->indexes, *context_->metadata, snapshot_, RSS_GLOBAL_ADJACENCY_INDEX_ID, source, options);
+	}
+
+	bool NativeGraphWriteTransaction::rebaseAdjacencyOnly(MetadataSnapshotPin &current) {
+		if (!current.isValid() || next_vector_id_ != snapshot_.superblock().next_logical_vector_id ||
+			!scalar_index_mutations_.empty() || !initial_scalar_index_mutations_.empty() ||
+			!vector_bootstraps_.empty() || !vector_deltas_.empty()) {
+			return false;
+		}
+
+		size_t erasedEdgeCount = 0U;
+		for (const auto &[nodeId, change]: nodes_) {
+			if (change.erased || (change.labels.has_value() && !change.inserted)) {
+				return false;
+			}
+			if (change.inserted) {
+				if (context_->metadata->findNodePageLocationOptional(current, nodeId).has_value()) {
+					return false;
+				}
+			} else if (!context_->metadata->findNodePageLocationOptional(current, nodeId).has_value() ||
+					   context_->entities->readNode(current, nodeId) != change.record) {
+				return false;
+			}
+		}
+		for (const auto &[edgeId, change]: edges_) {
+			const EntityPropertyKey propertyKey{EntityPropertyOwnerKind::EPOK_EDGE, edgeId};
+			const auto property = properties_.find(propertyKey.directoryId());
+			if (change.inserted) {
+				if (property != properties_.end() ||
+					context_->metadata->findEdgePageLocationOptional(current, edgeId).has_value()) {
+					return false;
+				}
+				continue;
+			}
+			if (!change.erased || property == properties_.end() || property->second.owner_entity_id != edgeId ||
+				property->second.owner_entity_type != Edge::typeId ||
+				!property->second.entries.empty() ||
+				!context_->metadata->findEdgePageLocationOptional(current, edgeId).has_value() ||
+				context_->entities->readEdge(current, edgeId) != change.record) {
+				return false;
+			}
+			++erasedEdgeCount;
+		}
+		if (properties_.size() != erasedEdgeCount) {
+			return false;
+		}
+
+		const std::vector<BTreeScalarIndexOperation> operations = canonicalGlobalAdjacencyOperations();
+		if (operations.size() != edges_.size() * 2U ||
+			std::ranges::any_of(operations, [](const BTreeScalarIndexOperation &operation) {
+				return (operation.kind != BTreeScalarIndexOperationKind::BSIOP_UPSERT &&
+						operation.kind != BTreeScalarIndexOperationKind::BSIOP_ERASE) ||
+					   operation.value != 0U;
+			})) {
+			return false;
+		}
+
+		// All source fences have been revalidated before changing the transaction's
+		// planning snapshot. Subsequent COW plans therefore target the current root.
+		snapshot_.release();
+		snapshot_ = std::move(current);
+		return true;
+	}
+
+	void NativeGraphWriteTransaction::eraseEdge(uint64_t edgeId) {
+		requireActive("erase an Edge");
+		const auto staged = edges_.find(edgeId);
+		if (staged != edges_.end() && staged->second.inserted) {
+			const EdgeEntityRecord record = staged->second.record;
+			const std::array<std::vector<std::byte>, 2U> provisionalKeys = {
+					AdjacencyKeyCodec::encode({GlobalAdjacencyDirection::GAD_OUT, record.source_node_id, edgeId}),
+					AdjacencyKeyCodec::encode({GlobalAdjacencyDirection::GAD_IN, record.target_node_id, edgeId})};
+			const auto eraseProvisionalKey = [this](const std::vector<std::byte> &key) {
+				const auto operation = std::ranges::find_if(
+						global_adjacency_operations_, [&key](const BTreeScalarIndexOperation &candidate) {
+							return candidate.kind == BTreeScalarIndexOperationKind::BSIOP_UPSERT &&
+								   candidate.value == 0U && candidate.key == key;
+						});
+				if (operation == global_adjacency_operations_.end()) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native graph write lost a provisional global adjacency key for a newly created Edge");
+				}
+				global_adjacency_operations_.erase(operation);
+			};
+			eraseProvisionalKey(provisionalKeys[0U]);
+			eraseProvisionalKey(provisionalKeys[1U]);
+			global_adjacency_plan_.reset();
+			global_adjacency_retirement_plan_.reset();
+			global_adjacency_initial_plan_.reset();
+			properties_.erase(EntityPropertyKey{EntityPropertyOwnerKind::EPOK_EDGE, edgeId}.directoryId());
+			edges_.erase(staged);
+			return;
+		}
+		// Removing an Edge must stage both exact keys or neither key. Check before
+		// mutableEdge records an erase candidate in the transaction overlay.
+		requireAdjacencyOperationCapacity(global_adjacency_operations_.size(), 2U,
+										  context_->options.maximum_global_adjacency_write_entries);
+		EdgeChange &change = mutableEdge(edgeId);
+		const EdgeEntityRecord record = change.record;
+		stageGlobalAdjacencyMutation(GlobalAdjacencyDirection::GAD_OUT, record.source_node_id, edgeId,
+									 BTreeScalarIndexOperationKind::BSIOP_ERASE);
+		stageGlobalAdjacencyMutation(GlobalAdjacencyDirection::GAD_IN, record.target_node_id, edgeId,
+									 BTreeScalarIndexOperationKind::BSIOP_ERASE);
+		change.erased = true;
+		// Keep deletion in the owner-keyed Property batch. Removing only the
+		// directory entry would leave the root slot reachable in its Property page.
+		properties_.insert_or_assign(EntityPropertyKey{EntityPropertyOwnerKind::EPOK_EDGE, edgeId}.directoryId(),
+									 PropertyCollectionRoot{edgeId, Edge::typeId, {}});
+	}
+
+	bool NativeGraphWriteTransaction::hasRemainingIncidentEdge(uint64_t nodeId) const {
+		return nodeHasIncidentEdges(nodeId);
+	}
+
+	void NativeGraphWriteTransaction::eraseNode(uint64_t nodeId) {
+		requireActive("erase a Node");
+		NodeChange &change = mutableNode(nodeId);
+		if (change.inserted) {
+			if (hasRemainingIncidentEdge(nodeId)) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph write rejects Node deletion while an incident Edge remains");
+			}
+			properties_.erase(EntityPropertyKey{EntityPropertyOwnerKind::EPOK_NODE, nodeId}.directoryId());
+			nodes_.erase(nodeId);
+			return;
+		}
+		if (hasRemainingIncidentEdge(nodeId)) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph write rejects Node deletion while an incident Edge remains");
+		}
+		change.erased = true;
+		// An empty root is an explicit page-local erase plan, published atomically
+		// with the Entity Map deletion rather than leaving an orphaned page slot.
+		properties_.insert_or_assign(EntityPropertyKey{EntityPropertyOwnerKind::EPOK_NODE, nodeId}.directoryId(),
+									 PropertyCollectionRoot{nodeId, Node::typeId, {}});
+	}
+
+	void NativeGraphWriteTransaction::prepareScalarIndexMutationPlans() {
+		struct PoolDemand {
+			BTreePageStore *reclaimer = nullptr;
+			SegmentId segment_id{};
+			size_t required_frames = 0U;
+		};
+		using PoolKey = uint64_t;
+		std::map<PoolKey, PoolDemand> demands;
+		std::map<PoolKey, std::vector<std::pair<size_t, size_t>>> contributions;
+		for (size_t stagedOrdinal = 0U; stagedOrdinal < scalar_index_mutations_.size(); ++stagedOrdinal) {
+			StagedScalarIndexMutation &staged = scalar_index_mutations_[stagedOrdinal];
+			if (staged.index == nullptr || staged.index_id == 0U ||
+				!staged.index->usesMetadataStore(*context_->metadata)) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph staged scalar Index operation stream is incomplete or foreign");
+			}
+			if (staged.retirement_plan.has_value()) {
+				const BTreeTreeRetirementPlan &retirement = *staged.retirement_plan;
+				if (!staged.operations.empty() || staged.plan.has_value() || !retirement.preparer ||
+					retirement.expected_root.index_id != staged.index_id || retirement.pool_requests.empty()) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native graph staged scalar Index retirement plan is incomplete or contradictory");
+				}
+				continue;
+			}
+			if (staged.operations.empty()) {
+				fail(FormatError::FERR_INVALID_STATE, "native graph staged scalar Index operation stream is empty");
+			}
+			staged.plan =
+					staged.index->planScalarIndexTransactionMutation(snapshot_, staged.index_id, staged.operations);
+			const BTreeStructuralMutationPlan &structuralPlan = *staged.plan;
+			for (const IndexTreeMutationPoolRequest &pool: structuralPlan.pool_requests) {
+				const size_t requiredFrames = pool.expected_replacements.size() + pool.appended_page_count;
+				if (requiredFrames == 0U) {
+					continue;
+				}
+				auto [position, inserted] =
+						demands.try_emplace(pool.segment_id.value(), PoolDemand{staged.index, pool.segment_id, 0U});
+				static_cast<void>(inserted);
+				if (requiredFrames > std::numeric_limits<size_t>::max() - position->second.required_frames) {
+					fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
+						 "native graph staged scalar Index frame demand overflows host address space");
+				}
+				position->second.required_frames += requiredFrames;
+				contributions[pool.segment_id.value()].push_back({stagedOrdinal, requiredFrames});
+			}
+		}
+
+		std::map<PoolKey, size_t> availableFrames;
+		for (const auto &[key, demand]: demands) {
+			const CatalogEntry currentPool = context_->metadata->findCatalog(snapshot_, demand.segment_id);
+			if (demand.reclaimer->hasReplacementFrameCapacity(currentPool, demand.required_frames)) {
+				availableFrames.emplace(key, demand.required_frames);
+				continue;
+			}
+			// Reclaim only retired frames invisible to every active snapshot before
+			// selecting the immutable fresh-pool fallback.
+			demand.reclaimer->reclaimRetiredFrames(demand.segment_id);
+			size_t available = 0U;
+			while (available < RSS_PAGE_POOL_DATA_FRAME_COUNT &&
+				   demand.reclaimer->hasReplacementFrameCapacity(currentPool, available + 1U)) {
+				++available;
+			}
+			availableFrames.emplace(key, available);
+		}
+
+		std::set<size_t> forceFreshRebuilds;
+		for (const auto &[poolKey, poolContributions]: contributions) {
+			static_cast<void>(poolKey);
+			// Candidate frames are allocated by a typed page preparer, not by
+			// metadata. Two independent overlays must therefore never reserve the
+			// same current pool in one publication; keep the first deterministic
+			// plan in place and rebuild later plans into immutable fresh pools.
+			for (size_t ordinal = 1U; ordinal < poolContributions.size(); ++ordinal) {
+				forceFreshRebuilds.insert(poolContributions[ordinal].first);
+			}
+		}
+		bool selected = true;
+		while (selected) {
+			selected = false;
+			for (const auto &[key, demand]: demands) {
+				static_cast<void>(demand);
+				const auto available = availableFrames.find(key);
+				if (available == availableFrames.end()) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native graph scalar Index capacity scan lost a pool availability result");
+				}
+				size_t remainingDemand = 0U;
+				for (const auto &[stagedOrdinal, requiredFrames]: contributions.at(key)) {
+					if (!forceFreshRebuilds.contains(stagedOrdinal)) {
+						if (requiredFrames > std::numeric_limits<size_t>::max() - remainingDemand) {
+							fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
+								 "native graph staged scalar Index shared-pool demand overflows host address space");
+						}
+						remainingDemand += requiredFrames;
+					}
+				}
+				if (remainingDemand <= available->second) {
+					continue;
+				}
+				std::optional<size_t> selectedOrdinal;
+				size_t selectedFrames = 0U;
+				for (const auto &[stagedOrdinal, requiredFrames]: contributions.at(key)) {
+					if (forceFreshRebuilds.contains(stagedOrdinal)) {
+						continue;
+					}
+					if (!selectedOrdinal.has_value() || requiredFrames > selectedFrames) {
+						selectedOrdinal = stagedOrdinal;
+						selectedFrames = requiredFrames;
+					}
+				}
+				if (!selectedOrdinal.has_value()) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native graph scalar Index cannot reduce an exhausted shared-pool demand");
+				}
+				forceFreshRebuilds.insert(*selectedOrdinal);
+				selected = true;
+			}
+		}
+		for (const size_t stagedOrdinal: forceFreshRebuilds) {
+			StagedScalarIndexMutation &staged = scalar_index_mutations_[stagedOrdinal];
+			staged.plan = staged.index->planScalarIndexTransactionMutation(snapshot_, staged.index_id,
+																		   staged.operations, false, true);
+			for (const IndexTreeMutationPoolRequest &pool: staged.plan->pool_requests) {
+				if (!pool.expected_replacements.empty() || pool.appended_page_count != 0U) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native graph scalar Index fresh rebuild retained a current-pool frame mutation");
+				}
+			}
+		}
+		for (const StagedInitialScalarIndexMutation &staged: initial_scalar_index_mutations_) {
+			if (staged.index == nullptr || staged.index_id == 0U || !staged.plan.has_value() ||
+				!staged.index->usesMetadataStore(*context_->metadata) || staged.plan->index_id != staged.index_id ||
+				staged.plan->new_pool_mutations.empty() || !staged.plan->preparer) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph staged initial scalar Index plan is incomplete or foreign");
+			}
+		}
+	}
+
+	NativeGraphWriteCommitResult NativeGraphWriteTransaction::commit(const MetadataPublishOptions &publishOptions) {
+		requireActive("commit");
+		const bool hasGraphWork = !nodes_.empty() || !edges_.empty() || !properties_.empty() ||
+								  !scalar_index_mutations_.empty() || !initial_scalar_index_mutations_.empty() ||
+								  !vector_bootstraps_.empty() || !vector_deltas_.empty();
+		if (!hasGraphWork && node_id_ranges_.empty() && edge_id_ranges_.empty()) {
+			fail(FormatError::FERR_INVALID_STATE, "native graph write transaction cannot commit without staged work");
+		}
+		NativeGraphLogicalIdReservation logicalIds;
+		logicalIds.node_ranges = node_id_ranges_;
+		logicalIds.edge_ranges = edge_id_ranges_;
+		std::lock_guard publicationLock(context_->publication_mutex);
+		if (!hasGraphWork) {
+			// Logical-ID leasing is already durable. A reservation-only transaction
+			// must not publish a second, empty metadata generation just to acknowledge
+			// IDs that are intentionally allowed to remain unused.
+			if (!context_->metadata->claimNativeGraphLogicalIdReservation(logicalIds)) {
+				snapshot_.release();
+				state_ = NativeGraphWriteTransactionState::NGWTS_CONFLICTED;
+				return {NativeGraphWriteCommitOutcome::NGWCO_CONFLICTED, {}, {}};
+			}
+			MetadataSnapshotPin current = context_->metadata->openSnapshot();
+			const Superblock committed = current.superblock();
+			current.release();
+			snapshot_.release();
+			state_ = NativeGraphWriteTransactionState::NGWTS_COMMITTED;
+			return {NativeGraphWriteCommitOutcome::NGWCO_COMMITTED, committed, {}};
+		}
+		MetadataSnapshotPin current = context_->metadata->openSnapshot();
+		if (current.superblock() != snapshot_.superblock()) {
+			if (isLogicalIdLeaseOnlyAdvance(snapshot_.superblock(), current.superblock())) {
+				snapshot_.release();
+				snapshot_ = std::move(current);
+			} else if (!rebaseAdjacencyOnly(current)) {
+				current.release();
+				context_->metadata->abandonNativeGraphLogicalIdReservation(logicalIds);
+				snapshot_.release();
+				state_ = NativeGraphWriteTransactionState::NGWTS_CONFLICTED;
+				return {NativeGraphWriteCommitOutcome::NGWCO_CONFLICTED, {}, {}};
+			}
+		} else {
+			current.release();
+		}
+		// Finish scalar overlays before allocating graph placement. A malformed
+		// logical Index operation therefore leaves this transaction retryable.
+		prepareScalarIndexMutationPlans();
+		prepareGlobalAdjacencyMutationPlan();
+
+		const LogSequenceNumber checkpointLsn = nextCheckpointLsn(snapshot_.superblock());
+		uint64_t nextSegmentId = snapshot_.superblock().next_logical_segment_id;
+		uint64_t nextPageId = snapshot_.superblock().next_logical_page_id;
+		if (nextSegmentId == 0U || nextPageId == 0U) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph write received invalid logical Segment or Page high-water marks");
+		}
+		const auto nextSegment = [&nextSegmentId] {
+			if (nextSegmentId == std::numeric_limits<uint64_t>::max()) {
+				fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "native graph write exhausted logical Segment IDs");
+			}
+			return SegmentId(nextSegmentId);
+		};
+		const auto reserveSegment = [&nextSegmentId, &nextSegment] {
+			const SegmentId segmentId = nextSegment();
+			++nextSegmentId;
+			return segmentId;
+		};
+		const auto nextPage = [&nextPageId] {
+			if (nextPageId == std::numeric_limits<uint64_t>::max()) {
+				fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "native graph write exhausted logical Page IDs");
+			}
+			return PageId(nextPageId);
+		};
+		const auto reservePage = [&nextPageId, &nextPage] {
+			const PageId pageId = nextPage();
+			++nextPageId;
+			return pageId;
+		};
+
+		const std::vector<CatalogEntry> currentPools = context_->entities->currentPools(snapshot_);
+		// Fresh pools can receive either initial logical pages or COW images of
+		// existing PageIds. Both uses consume the same bounded frame budget and
+		// become visible through this transaction's single metadata publication.
+		std::vector<FreshEntityPool> labelPools;
+		std::map<uint64_t, uint8_t> freeFrames;
+		for (const CatalogEntry &pool: currentPools) {
+			freeFrames.emplace(pool.segment_id.value(), context_->entities->availableFrameCount(snapshot_, pool));
+		}
+		std::map<uint64_t, uint8_t> reservedFrames;
+		const auto tryReserveCurrentFrame = [&](const CatalogEntry &pool) {
+			const auto available = freeFrames.find(pool.segment_id.value());
+			if (available == freeFrames.end()) {
+				return false;
+			}
+			if (reservedFrames[pool.segment_id.value()] >= available->second) {
+				// Reclaim only frames absent from every active snapshot before declaring
+				// the pool full. Consecutive short writes must not exhaust a finite
+				// COW pool merely because their retired frames were never revisited.
+				context_->entities->reclaimRetiredFrames(pool.segment_id);
+				available->second = context_->entities->availableFrameCount(snapshot_, pool);
+				if (reservedFrames[pool.segment_id.value()] >= available->second) {
+					return false;
+				}
+			}
+			++reservedFrames[pool.segment_id.value()];
+			return true;
+		};
+		const auto reserveCurrentFrame = [&tryReserveCurrentFrame](const CatalogEntry &pool) {
+			if (!tryReserveCurrentFrame(pool)) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph write has no COW frame capacity in the selected Entity pool");
+			}
+		};
+		const auto reserveReplacementFrame = [&currentPools, &tryReserveCurrentFrame, &labelPools, &reserveSegment,
+											  this](const CatalogEntry &source) {
+			const auto compatible = [&source](const CatalogEntry &candidate) {
+				return candidate.kind == SegmentKind::SGK_ENTITY_PAGE_POOL &&
+					   candidate.state == SegmentState::SGS_SEALED && candidate.owner_id == source.owner_id &&
+					   candidate.generation.isValid();
+			};
+			if (compatible(source) && tryReserveCurrentFrame(source)) {
+				return EntityPageReplacementDestination{source, std::nullopt};
+			}
+			for (const CatalogEntry &candidate: currentPools) {
+				if (candidate.segment_id != source.segment_id && compatible(candidate) &&
+					tryReserveCurrentFrame(candidate)) {
+					return EntityPageReplacementDestination{candidate, std::nullopt};
+				}
+			}
+			for (FreshEntityPool &candidate: labelPools) {
+				if (candidate.owner_id == source.owner_id && candidate.generation.isValid() &&
+					candidate.reservedFrameCount() < RSS_PAGE_POOL_DATA_FRAME_COUNT) {
+					++candidate.replacement_frame_count;
+					return EntityPageReplacementDestination{{}, candidate.replacementDestination()};
+				}
+			}
+			FreshEntityPool destination{reserveSegment(),
+										source.owner_id,
+										Generation(1U),
+										context_->options.first_slot,
+										context_->options.last_slot,
+										0U,
+										1U};
+			const EntityPageFreshPoolDestination fresh = destination.replacementDestination();
+			labelPools.push_back(std::move(destination));
+			return EntityPageReplacementDestination{{}, fresh};
+		};
+		const auto findAppendPool = [&]() -> std::optional<CatalogEntry> {
+			for (const CatalogEntry &pool: currentPools) {
+				if (reservedFrames[pool.segment_id.value()] < freeFrames[pool.segment_id.value()]) {
+					return pool;
+				}
+			}
+			return std::nullopt;
+		};
+
+		// A fresh pool is only reserved after a LabelSet plan materializes it. A
+		// plan that overwrites an existing slot must not consume an unused logical
+		// PageId or SegmentId from the durable high-water marks.
+		EntityPageAuxiliaryMutationBatch auxiliary;
+		std::set<uint64_t> auxiliaryReplacementPages;
+		std::set<uint64_t> auxiliaryAppendPages;
+		std::set<uint64_t> auxiliaryNewPages;
+		const auto accountAuxiliary = [&](EntityPageAuxiliaryMutationBatch plan) {
+			for (EntityPageAuxiliaryReplacement &replacement: plan.replacements) {
+				if (!auxiliaryReplacementPages.insert(replacement.expected_location.page_id.value()).second) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native graph write cannot replace one auxiliary Entity page twice in one transaction");
+				}
+				// Retirement drops the old frame through the metadata publication; it
+				// does not consume a second COW frame in the source pool.
+				if (!replacement.retire_page) {
+					const EntityPageReplacementDestination destination =
+							reserveReplacementFrame(replacement.expected_pool);
+					replacement.replacement_pool = destination.current_pool;
+					replacement.replacement_new_pool = destination.fresh_pool;
+				}
+			}
+			for (const EntityPageAuxiliaryAppend &append: plan.appends) {
+				if (!auxiliaryAppendPages.insert(append.page_id.value()).second) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native graph write allocated a duplicate LabelSet append Page ID");
+				}
+				reserveCurrentFrame(append.expected_pool);
+			}
+			for (const EntityPageAuxiliaryNewPool &pool: plan.new_pools) {
+				if (!auxiliaryNewPages.insert(pool.page_id.value()).second) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native graph write allocated a duplicate LabelSet new-pool Page ID");
+				}
+			}
+			appendAuxiliary(auxiliary, std::move(plan));
+		};
+
+		// Build all LabelSet pages before Entity placement. The auxiliary frames
+		// retain exact Node bindings and remain unreachable until the final batch.
+		for (auto &[nodeId, change]: nodes_) {
+			if (change.erased || !change.labels.has_value()) {
+				continue;
+			}
+			const std::span<const uint64_t> labels(*change.labels);
+			EntityLabelSetWritePlan labelPlan;
+			if (change.inserted) {
+				labelPlan.excluded_page_ids.reserve(auxiliaryReplacementPages.size());
+				for (const uint64_t pageId: auxiliaryReplacementPages) {
+					labelPlan.excluded_page_ids.emplace_back(pageId);
+				}
+			}
+			FreshEntityPool candidateNewPool;
+			FreshEntityPool *sharedNewPool = nullptr;
+			bool createsNewPool = false;
+			PageId candidatePageId{};
+			if (labels.size() > RSS_ENTITY_INLINE_LABEL_CAPACITY) {
+				candidatePageId = nextPage();
+				if (const std::optional<CatalogEntry> appendPool = findAppendPool(); appendPool.has_value()) {
+					labelPlan.append_page = EntityLabelSetAppendRequest{appendPool->segment_id, candidatePageId};
+				} else {
+					for (FreshEntityPool &pool: labelPools) {
+						if (pool.reservedFrameCount() < RSS_PAGE_POOL_DATA_FRAME_COUNT) {
+							sharedNewPool = &pool;
+							break;
+						}
+					}
+					if (sharedNewPool == nullptr) {
+						candidateNewPool = {nextSegment(),
+											context_->options.entity_pool_owner_id,
+											Generation(1U),
+											context_->options.first_slot,
+											context_->options.last_slot,
+											0U,
+											0U};
+						sharedNewPool = &candidateNewPool;
+						createsNewPool = true;
+					}
+					labelPlan.new_pool = EntityLabelSetNewPoolRequest{
+							sharedNewPool->segment_id, sharedNewPool->owner_id,	  sharedNewPool->generation,
+							candidatePageId,		   sharedNewPool->first_slot, sharedNewPool->last_slot};
+				}
+			}
+
+			if (change.inserted) {
+				EntityLabelSetInitialNodePlan labelResult = context_->labels->planInitialNodeLabels(
+						snapshot_, change.record, labels, labelPlan, checkpointLsn);
+				change.record = std::move(labelResult.node);
+				if (!labelResult.overflow.isEmpty()) {
+					auxiliary.node_insertion_bindings.push_back({nodeId, change.record});
+				}
+				const bool appended = !labelResult.auxiliary_pages.appends.empty();
+				const bool created = !labelResult.auxiliary_pages.new_pools.empty();
+				if (appended || created) {
+					static_cast<void>(reservePage());
+				}
+				if (created) {
+					if (createsNewPool) {
+						static_cast<void>(reserveSegment());
+						candidateNewPool.initial_frame_count = labelResult.auxiliary_pages.new_pools.size();
+						labelPools.push_back(candidateNewPool);
+					} else {
+						sharedNewPool->initial_frame_count += labelResult.auxiliary_pages.new_pools.size();
+					}
+				}
+				accountAuxiliary(std::move(labelResult.auxiliary_pages));
+			} else {
+				EntityLabelSetMutationPlan labelResult =
+						context_->labels->planNodeLabels(snapshot_, nodeId, labels, labelPlan, checkpointLsn);
+				change.record = std::move(labelResult.replacement_node);
+				const bool appended = !labelResult.auxiliary_pages.appends.empty();
+				const bool created = !labelResult.auxiliary_pages.new_pools.empty();
+				if (appended || created) {
+					static_cast<void>(reservePage());
+				}
+				if (created) {
+					if (createsNewPool) {
+						static_cast<void>(reserveSegment());
+						candidateNewPool.initial_frame_count = labelResult.auxiliary_pages.new_pools.size();
+						labelPools.push_back(candidateNewPool);
+					} else {
+						sharedNewPool->initial_frame_count += labelResult.auxiliary_pages.new_pools.size();
+					}
+				}
+				accountAuxiliary(std::move(labelResult.auxiliary_pages));
+			}
+		}
+
+		std::vector<EntityPageBatchMutation> mutations;
+		std::vector<EntityPageBatchAppend> appends;
+		std::vector<EntityPageBatchNewPool> newPools;
+		std::map<uint64_t, size_t> mutationOrdinals;
+		std::map<uint64_t, uint16_t> remainingSlots;
+		struct ExistingInsertCandidate {
+			PageId page_id{};
+			EntityPageRecordKind kind = EntityPageRecordKind::EPRK_NODE;
+			CatalogEntry pool;
+			uint16_t remaining = 0U;
+			bool planned = false;
+		};
+		std::map<uint64_t, EntityPageRecordKind> currentEntityPageKinds;
+		context_->metadata->visitNodePageLocations(snapshot_, [&](const EntityPageLocation &location) {
+			const auto [iterator, inserted] =
+					currentEntityPageKinds.emplace(location.page_id.value(), EntityPageRecordKind::EPRK_NODE);
+			if (!inserted && iterator->second != EntityPageRecordKind::EPRK_NODE) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph write found one Page ID in both Node and Edge maps");
+			}
+		});
+		context_->metadata->visitEdgePageLocations(snapshot_, [&](const EntityPageLocation &location) {
+			const auto [iterator, inserted] =
+					currentEntityPageKinds.emplace(location.page_id.value(), EntityPageRecordKind::EPRK_EDGE);
+			if (!inserted && iterator->second != EntityPageRecordKind::EPRK_EDGE) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph write found one Page ID in both Node and Edge maps");
+			}
+		});
+		std::vector<ExistingInsertCandidate> existingInsertCandidates;
+		existingInsertCandidates.reserve(currentEntityPageKinds.size());
+		for (const auto &[pageValue, kind]: currentEntityPageKinds) {
+			const PageId pageId(pageValue);
+			const PageLocation location = context_->metadata->findPageLocation(snapshot_, pageId);
+			const CatalogEntry pool = context_->metadata->findCatalog(snapshot_, location.segment_id);
+			if (!isCurrentPool(pool) || location.generation != pool.generation) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph write found an Entity Map page outside a current Entity pool");
+			}
+			const uint16_t remaining = context_->entities->freeSlotCount(snapshot_, pageId, kind);
+			if (remaining != 0U) {
+				existingInsertCandidates.push_back({pageId, kind, pool, remaining, false});
+			}
+		}
+
+		const auto ensureMutation = [&](PageId pageId, EntityPageRecordKind kind) -> EntityPageBatchMutation & {
+			const auto existing = mutationOrdinals.find(pageId.value());
+			if (existing != mutationOrdinals.end()) {
+				EntityPageBatchMutation &mutation = mutations[existing->second];
+				if (mutation.record_kind != kind) {
+					fail(FormatError::FERR_INVALID_STATE, "native graph write mixed Entity record kinds in one page");
+				}
+				return mutation;
+			}
+			const PageLocation location = context_->metadata->findPageLocation(snapshot_, pageId);
+			const CatalogEntry pool = context_->metadata->findCatalog(snapshot_, location.segment_id);
+			if (!isCurrentPool(pool) || location.generation != pool.generation) {
+				fail(FormatError::FERR_INVALID_STATE, "native graph write selected a stale Entity page pool");
+			}
+			const EntityPageReplacementDestination replacement = reserveReplacementFrame(pool);
+			remainingSlots.emplace(pageId.value(), context_->entities->freeSlotCount(snapshot_, pageId, kind));
+			const size_t ordinal = mutations.size();
+			EntityPageBatchMutation mutation;
+			mutation.page_id = pageId;
+			mutation.record_kind = kind;
+			mutation.replacement_pool = replacement.current_pool;
+			mutation.replacement_new_pool = replacement.fresh_pool;
+			mutations.push_back(std::move(mutation));
+			mutationOrdinals.emplace(pageId.value(), ordinal);
+			return mutations.back();
+		};
+
+		for (const auto &[nodeId, change]: nodes_) {
+			if (change.inserted) {
+				continue;
+			}
+			const EntityPageLocation location = context_->metadata->findNodePageLocation(snapshot_, nodeId);
+			EntityPageBatchMutation &mutation = ensureMutation(location.page_id, EntityPageRecordKind::EPRK_NODE);
+			if (change.erased) {
+				mutation.erased_node_ids.push_back(nodeId);
+			} else {
+				mutation.node_updates.push_back({nodeId, change.record});
+			}
+		}
+		for (const auto &[edgeId, change]: edges_) {
+			if (change.inserted) {
+				continue;
+			}
+			const EntityPageLocation location = context_->metadata->findEdgePageLocation(snapshot_, edgeId);
+			EntityPageBatchMutation &mutation = ensureMutation(location.page_id, EntityPageRecordKind::EPRK_EDGE);
+			if (change.erased) {
+				mutation.erased_edge_ids.push_back(edgeId);
+			} else {
+				mutation.edge_updates.push_back({edgeId, change.record});
+			}
+		}
+
+		// The target kind keeps append and fresh-pool ordinals disjoint. Their
+		// vectors both start at zero, so a bool is insufficient to identify one.
+		enum class OpenTargetStorage : uint8_t {
+			OTS_MUTATION = 1,
+			OTS_APPEND = 2,
+			OTS_NEW_POOL = 3,
+		};
+		struct OpenTarget {
+			EntityPageRecordKind kind = EntityPageRecordKind::EPRK_NODE;
+			OpenTargetStorage storage = OpenTargetStorage::OTS_MUTATION;
+			size_t ordinal = 0U;
+			uint16_t remaining = 0U;
+		};
+		std::vector<OpenTarget> targets;
+		for (const auto &[pageValue, ordinal]: mutationOrdinals) {
+			const EntityPageBatchMutation &mutation = mutations[ordinal];
+			const uint16_t remaining = remainingSlots.at(pageValue);
+			if (remaining != 0U) {
+				targets.push_back({mutation.record_kind, OpenTargetStorage::OTS_MUTATION, ordinal, remaining});
+			}
+		}
+		// LabelSet pages allocated above are initial frames of the same physical
+		// Entity pool namespace. New Node/Edge pages may fill their remaining
+		// frames instead of allocating a second pool for one transaction.
+		std::vector<std::pair<SegmentId, size_t>> freshPoolPageCounts;
+		freshPoolPageCounts.reserve(labelPools.size());
+		for (const FreshEntityPool &pool: labelPools) {
+			if (pool.reservedFrameCount() == 0U || pool.reservedFrameCount() > RSS_PAGE_POOL_DATA_FRAME_COUNT) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph write recorded an invalid fresh LabelSet pool frame count");
+			}
+			freshPoolPageCounts.emplace_back(pool.segment_id, pool.reservedFrameCount());
+		}
+		const auto createNewEntityPage = [&](EntityPageRecordKind kind) -> OpenTarget {
+			for (const auto &[segmentId, count]: freshPoolPageCounts) {
+				if (count < RSS_PAGE_POOL_DATA_FRAME_COUNT) {
+					const size_t ordinal = newPools.size();
+					EntityPageNewPoolRequest request{
+							segmentId,	   context_->options.entity_pool_owner_id, Generation(1U),
+							reservePage(), context_->options.first_slot,		   context_->options.last_slot};
+					newPools.push_back({request, kind, {}, {}});
+					for (auto &entry: freshPoolPageCounts) {
+						if (entry.first == segmentId) {
+							++entry.second;
+							break;
+						}
+					}
+					return {kind, OpenTargetStorage::OTS_NEW_POOL, ordinal, EntityPage::recordCapacity(kind)};
+				}
+			}
+			const SegmentId segmentId = reserveSegment();
+			freshPoolPageCounts.push_back({segmentId, 1U});
+			const size_t ordinal = newPools.size();
+			EntityPageNewPoolRequest request{
+					segmentId,	   context_->options.entity_pool_owner_id, Generation(1U),
+					reservePage(), context_->options.first_slot,		   context_->options.last_slot};
+			newPools.push_back({request, kind, {}, {}});
+			return {kind, OpenTargetStorage::OTS_NEW_POOL, ordinal, EntityPage::recordCapacity(kind)};
+		};
+		const auto createAppendEntityPage = [&](EntityPageRecordKind kind) -> OpenTarget {
+			const std::optional<CatalogEntry> pool = findAppendPool();
+			if (!pool.has_value()) {
+				return createNewEntityPage(kind);
+			}
+			reserveCurrentFrame(*pool);
+			const size_t ordinal = appends.size();
+			appends.push_back({{*pool, reservePage()}, kind, {}, {}});
+			return {kind, OpenTargetStorage::OTS_APPEND, ordinal, EntityPage::recordCapacity(kind)};
+		};
+		const auto insertNew = [&](uint64_t entityId, const auto &record, EntityPageRecordKind kind) {
+			OpenTarget *target = nullptr;
+			for (OpenTarget &candidate: targets) {
+				if (candidate.kind == kind && candidate.remaining != 0U &&
+					(target == nullptr || candidate.remaining < target->remaining)) {
+					target = &candidate;
+				}
+			}
+			if (target == nullptr) {
+				auto candidate = std::min_element(
+						existingInsertCandidates.begin(), existingInsertCandidates.end(),
+						[&](const ExistingInsertCandidate &left, const ExistingInsertCandidate &right) {
+							const bool leftEligible = left.kind == kind && !left.planned && left.remaining != 0U &&
+													  reservedFrames[left.pool.segment_id.value()] <
+															  freeFrames[left.pool.segment_id.value()];
+							const bool rightEligible = right.kind == kind && !right.planned && right.remaining != 0U &&
+													   reservedFrames[right.pool.segment_id.value()] <
+															   freeFrames[right.pool.segment_id.value()];
+							if (leftEligible != rightEligible) {
+								return leftEligible;
+							}
+							return leftEligible && left.remaining < right.remaining;
+						});
+				const bool candidateEligible = candidate != existingInsertCandidates.end() && candidate->kind == kind &&
+											   !candidate->planned && candidate->remaining != 0U &&
+											   reservedFrames[candidate->pool.segment_id.value()] <
+													   freeFrames[candidate->pool.segment_id.value()];
+				if (candidateEligible) {
+					static_cast<void>(ensureMutation(candidate->page_id, kind));
+					const size_t ordinal = mutationOrdinals.at(candidate->page_id.value());
+					candidate->planned = true;
+					targets.push_back({kind, OpenTargetStorage::OTS_MUTATION, ordinal, candidate->remaining});
+					target = &targets.back();
+				} else {
+					targets.push_back(createAppendEntityPage(kind));
+					target = &targets.back();
+				}
+			}
+			if constexpr (std::is_same_v<std::decay_t<decltype(record)>, NodeEntityRecord>) {
+				if (target->storage == OpenTargetStorage::OTS_MUTATION) {
+					mutations[target->ordinal].node_insertions.push_back({entityId, record});
+				} else if (target->storage == OpenTargetStorage::OTS_APPEND) {
+					appends[target->ordinal].node_insertions.push_back({entityId, record});
+				} else {
+					newPools[target->ordinal].node_insertions.push_back({entityId, record});
+				}
+			} else {
+				if (target->storage == OpenTargetStorage::OTS_MUTATION) {
+					mutations[target->ordinal].edge_insertions.push_back({entityId, record});
+				} else if (target->storage == OpenTargetStorage::OTS_APPEND) {
+					appends[target->ordinal].edge_insertions.push_back({entityId, record});
+				} else {
+					newPools[target->ordinal].edge_insertions.push_back({entityId, record});
+				}
+			}
+			--target->remaining;
+		};
+
+		for (const auto &[nodeId, change]: nodes_) {
+			if (change.inserted && !change.erased) {
+				insertNew(nodeId, change.record, EntityPageRecordKind::EPRK_NODE);
+			}
+		}
+		for (const auto &[edgeId, change]: edges_) {
+			if (change.inserted && !change.erased) {
+				insertNew(edgeId, change.record, EntityPageRecordKind::EPRK_EDGE);
+			}
+		}
+
+		std::vector<EntityPropertyRootMutationPlan> propertyPlans;
+		propertyPlans.reserve(properties_.size());
+		std::vector<PropertyCollectionRoot> propertyRoots;
+		propertyRoots.reserve(properties_.size());
+		for (const auto &[directoryId, root]: properties_) {
+			static_cast<void>(directoryId);
+			propertyRoots.push_back(root);
+		}
+		propertyPlans = context_->properties->planEntityRootReplacements(snapshot_, propertyRoots,
+																		 context_->options.property_roots);
+
+		struct PendingDerivedIndexBinding {
+			NativeGraphIndexTreeMutation mutation;
+			size_t expected_pool_count = 0U;
+			BTreeStructuralMutationPreparer preparer;
+		};
+		std::vector<PendingDerivedIndexBinding> pendingDerivedBindings;
+		pendingDerivedBindings.reserve(scalar_index_mutations_.size() + initial_scalar_index_mutations_.size());
+		for (const StagedScalarIndexMutation &staged: scalar_index_mutations_) {
+			if (staged.index == nullptr || staged.index_id == 0U ||
+				!staged.index->usesMetadataStore(*context_->metadata)) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph staged scalar Index operation stream has no valid finalized overlay plan");
+			}
+			if (staged.retirement_plan.has_value()) {
+				const BTreeTreeRetirementPlan &plan = *staged.retirement_plan;
+				if (staged.plan.has_value() || !staged.operations.empty() || !plan.preparer ||
+					plan.expected_root.index_id != staged.index_id || plan.pool_requests.empty()) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native graph staged scalar Index retirement lost its pinned root or frame preparer");
+				}
+				NativeGraphIndexTreeMutation mutation;
+				mutation.index_id = staged.index_id;
+				mutation.expected_root = plan.expected_root;
+				mutation.pool_requests = plan.pool_requests;
+				mutation.retire_root = true;
+				pendingDerivedBindings.push_back({std::move(mutation), plan.pool_requests.size(), plan.preparer});
+				continue;
+			}
+			if (!staged.plan.has_value()) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph staged scalar Index operation stream has no finalized overlay plan");
+			}
+			const BTreeStructuralMutationPlan &plan = *staged.plan;
+			if (plan.expected_root.index_id != staged.index_id || !plan.preparer) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph staged scalar Index plan lost its root identity or frame preparer");
+			}
+			NativeGraphIndexTreeMutation mutation;
+			mutation.index_id = staged.index_id;
+			mutation.expected_root = plan.expected_root;
+			mutation.pool_requests = plan.pool_requests;
+			if (plan.new_pool_mutation.has_value()) {
+				mutation.new_pool_requests.push_back({context_->options.first_slot, context_->options.last_slot,
+													  plan.new_pool_mutation->owner_id,
+													  plan.new_pool_mutation->appended_page_count});
+			}
+			for (const BTreeNewIndexTreePoolMutation &fresh: plan.additional_new_pool_mutations) {
+				mutation.new_pool_requests.push_back({context_->options.first_slot, context_->options.last_slot,
+													  fresh.owner_id, fresh.appended_page_count});
+			}
+			if (plan.replacement_root.has_value()) {
+				const IndexTreeMutationAppendedPageReference reference = *plan.replacement_root;
+				const bool newlyReserved = reference.pool_ordinal >= plan.pool_requests.size();
+				const size_t poolOrdinal =
+						newlyReserved ? reference.pool_ordinal - plan.pool_requests.size() : reference.pool_ordinal;
+				const size_t poolCount =
+						newlyReserved ? mutation.new_pool_requests.size() : mutation.pool_requests.size();
+				if (poolOrdinal >= poolCount) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native graph staged scalar Index root references a missing appended page pool");
+				}
+				mutation.replacement_root = {poolOrdinal, reference.appended_page_ordinal, newlyReserved};
+			}
+			mutation.stable_replacement_root = plan.stable_replacement_root;
+			const size_t freshPoolCount =
+					static_cast<size_t>(plan.new_pool_mutation.has_value()) + plan.additional_new_pool_mutations.size();
+			pendingDerivedBindings.push_back(
+					{std::move(mutation), plan.pool_requests.size() + freshPoolCount, plan.preparer});
+		}
+		for (const StagedInitialScalarIndexMutation &staged: initial_scalar_index_mutations_) {
+			if (staged.index == nullptr || staged.index_id == 0U || !staged.plan.has_value() ||
+				!staged.index->usesMetadataStore(*context_->metadata)) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph staged initial scalar Index has no valid finalized tree plan");
+			}
+			const BTreeInitialTreeMutationPlan &plan = *staged.plan;
+			if (plan.index_id != staged.index_id || plan.new_pool_mutations.empty() || !plan.preparer ||
+				plan.root_page.pool_ordinal >= plan.new_pool_mutations.size() ||
+				plan.root_page.appended_page_ordinal >=
+						plan.new_pool_mutations[plan.root_page.pool_ordinal].appended_page_count) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph staged initial scalar Index plan lost its root or page-preparation identity");
+			}
+			NativeGraphIndexTreeMutation mutation;
+			mutation.index_id = plan.index_id;
+			for (const BTreeNewIndexTreePoolMutation &pool: plan.new_pool_mutations) {
+				mutation.new_pool_requests.push_back({context_->options.first_slot, context_->options.last_slot,
+													  pool.owner_id, pool.appended_page_count});
+			}
+			mutation.replacement_root = {plan.root_page.pool_ordinal, plan.root_page.appended_page_ordinal, true};
+			pendingDerivedBindings.push_back({std::move(mutation), plan.new_pool_mutations.size(), plan.preparer});
+		}
+		if (global_adjacency_plan_.has_value()) {
+			const BTreeStructuralMutationPlan &plan = *global_adjacency_plan_;
+			if (plan.expected_root.index_id != RSS_GLOBAL_ADJACENCY_INDEX_ID || !plan.preparer) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph global adjacency overlay lost its pinned root or frame preparer");
+			}
+			NativeGraphIndexTreeMutation mutation;
+			mutation.index_id = RSS_GLOBAL_ADJACENCY_INDEX_ID;
+			mutation.expected_root = plan.expected_root;
+			mutation.pool_requests = plan.pool_requests;
+			if (plan.new_pool_mutation.has_value()) {
+				mutation.new_pool_requests.push_back({context_->options.first_slot, context_->options.last_slot,
+													  plan.new_pool_mutation->owner_id,
+													  plan.new_pool_mutation->appended_page_count});
+			}
+			for (const BTreeNewIndexTreePoolMutation &fresh: plan.additional_new_pool_mutations) {
+				mutation.new_pool_requests.push_back({context_->options.first_slot, context_->options.last_slot,
+													  fresh.owner_id, fresh.appended_page_count});
+			}
+			if (plan.replacement_root.has_value()) {
+				const IndexTreeMutationAppendedPageReference reference = *plan.replacement_root;
+				const bool newlyReserved = reference.pool_ordinal >= plan.pool_requests.size();
+				const size_t poolOrdinal =
+						newlyReserved ? reference.pool_ordinal - plan.pool_requests.size() : reference.pool_ordinal;
+				const size_t poolCount =
+						newlyReserved ? mutation.new_pool_requests.size() : mutation.pool_requests.size();
+				if (poolOrdinal >= poolCount) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native graph global adjacency root references a missing appended page pool");
+				}
+				mutation.replacement_root = {poolOrdinal, reference.appended_page_ordinal, newlyReserved};
+			}
+			mutation.stable_replacement_root = plan.stable_replacement_root;
+			const size_t freshPoolCount =
+					static_cast<size_t>(plan.new_pool_mutation.has_value()) + plan.additional_new_pool_mutations.size();
+			pendingDerivedBindings.push_back(
+					{std::move(mutation), plan.pool_requests.size() + freshPoolCount, plan.preparer});
+		}
+		if (global_adjacency_retirement_plan_.has_value()) {
+			const BTreeTreeRetirementPlan &plan = *global_adjacency_retirement_plan_;
+			if (plan.expected_root.index_id != RSS_GLOBAL_ADJACENCY_INDEX_ID || !plan.preparer) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph global adjacency retirement lost its pinned root or frame preparer");
+			}
+			NativeGraphIndexTreeMutation mutation;
+			mutation.index_id = RSS_GLOBAL_ADJACENCY_INDEX_ID;
+			mutation.expected_root = plan.expected_root;
+			mutation.pool_requests = plan.pool_requests;
+			mutation.retire_root = true;
+			pendingDerivedBindings.push_back({std::move(mutation), plan.pool_requests.size(), plan.preparer});
+		}
+		if (global_adjacency_initial_plan_.has_value()) {
+			const BTreeInitialTreeMutationPlan &plan = *global_adjacency_initial_plan_;
+			if (plan.index_id != RSS_GLOBAL_ADJACENCY_INDEX_ID || plan.new_pool_mutations.empty() || !plan.preparer ||
+				plan.root_page.pool_ordinal >= plan.new_pool_mutations.size() ||
+				plan.root_page.appended_page_ordinal >=
+						plan.new_pool_mutations[plan.root_page.pool_ordinal].appended_page_count) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph initial global adjacency tree lost its root or page-preparation identity");
+			}
+			NativeGraphIndexTreeMutation mutation;
+			mutation.index_id = RSS_GLOBAL_ADJACENCY_INDEX_ID;
+			for (const BTreeNewIndexTreePoolMutation &pool: plan.new_pool_mutations) {
+				mutation.new_pool_requests.push_back({context_->options.first_slot, context_->options.last_slot,
+													  pool.owner_id, pool.appended_page_count});
+			}
+			mutation.replacement_root = {plan.root_page.pool_ordinal, plan.root_page.appended_page_ordinal, true};
+			pendingDerivedBindings.push_back({std::move(mutation), plan.new_pool_mutations.size(), plan.preparer});
+		}
+		// A new graph-owned LargeValue cannot become reachable without its full
+		// content-identity entry. Publish this reserved B+Tree mutation in the
+		// same native graph generation as the Property reference and Manifest.
+		std::vector<BTreeScalarIndexOperation> contentIndexOperations;
+		LargeValueStore *contentValues = context_->properties->largeValueStore();
+		for (const EntityPropertyRootMutationPlan &propertyPlan: propertyPlans) {
+			for (const NativeGraphLargeValueMutation &value: propertyPlan.large_values) {
+				if (contentValues == nullptr || !contentValues->usesMetadataStore(*context_->metadata)) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native graph LargeValue materialization has no local persistent content index");
+				}
+				contentIndexOperations.push_back({BTreeScalarIndexOperationKind::BSIOP_UPSERT,
+												  contentValues->contentIndexKey(value.reference),
+												  value.reference.value_id.value()});
+			}
+		}
+		if (!contentIndexOperations.empty()) {
+			const bool conflictsWithUserMutation =
+					std::ranges::any_of(scalar_index_mutations_,
+										[](const StagedScalarIndexMutation &mutation) {
+											return mutation.index_id == RSS_LARGE_VALUE_CONTENT_INDEX_ID;
+										}) ||
+					std::ranges::any_of(initial_scalar_index_mutations_,
+										[](const StagedInitialScalarIndexMutation &mutation) {
+											return mutation.index_id == RSS_LARGE_VALUE_CONTENT_INDEX_ID;
+										});
+			if (conflictsWithUserMutation) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph transaction cannot modify the reserved LargeValue content index directly");
+			}
+			BTreePageStore &contentIndex = contentValues->contentIndex();
+			if (context_->metadata->findIndexRootOptional(snapshot_, RSS_LARGE_VALUE_CONTENT_INDEX_ID).has_value()) {
+				BTreeStructuralMutationPlan plan = contentIndex.planScalarIndexTransactionMutation(
+						snapshot_, RSS_LARGE_VALUE_CONTENT_INDEX_ID, contentIndexOperations, true);
+				if (plan.expected_root.index_id != RSS_LARGE_VALUE_CONTENT_INDEX_ID || !plan.preparer) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native graph LargeValue content-index mutation lost its pinned root or preparer");
+				}
+				NativeGraphIndexTreeMutation mutation;
+				mutation.index_id = RSS_LARGE_VALUE_CONTENT_INDEX_ID;
+				mutation.expected_root = plan.expected_root;
+				mutation.pool_requests = std::move(plan.pool_requests);
+				if (plan.new_pool_mutation.has_value()) {
+					mutation.new_pool_requests.push_back({context_->options.first_slot, context_->options.last_slot,
+														  plan.new_pool_mutation->owner_id,
+														  plan.new_pool_mutation->appended_page_count});
+				}
+				for (const BTreeNewIndexTreePoolMutation &fresh: plan.additional_new_pool_mutations) {
+					mutation.new_pool_requests.push_back({context_->options.first_slot, context_->options.last_slot,
+														  fresh.owner_id, fresh.appended_page_count});
+				}
+				if (plan.replacement_root.has_value()) {
+					const IndexTreeMutationAppendedPageReference root = *plan.replacement_root;
+					const bool newlyReserved = root.pool_ordinal >= mutation.pool_requests.size();
+					const size_t poolOrdinal =
+							newlyReserved ? root.pool_ordinal - mutation.pool_requests.size() : root.pool_ordinal;
+					const size_t poolCount =
+							newlyReserved ? mutation.new_pool_requests.size() : mutation.pool_requests.size();
+					if (poolOrdinal >= poolCount) {
+						fail(FormatError::FERR_INVALID_STATE,
+							 "native graph LargeValue content-index root references an absent pool");
+					}
+					mutation.replacement_root = {poolOrdinal, root.appended_page_ordinal, newlyReserved};
+				}
+				mutation.stable_replacement_root = plan.stable_replacement_root;
+				const size_t poolCount = mutation.pool_requests.size() + mutation.new_pool_requests.size();
+				pendingDerivedBindings.push_back({std::move(mutation), poolCount, std::move(plan.preparer)});
+			} else {
+				std::vector<BTreePageEntry> entries;
+				entries.reserve(contentIndexOperations.size());
+				for (const BTreeScalarIndexOperation &operation: contentIndexOperations) {
+					entries.push_back({operation.key, operation.value});
+				}
+				std::ranges::sort(entries, {}, &BTreePageEntry::key);
+				if (std::ranges::adjacent_find(entries, {}, &BTreePageEntry::key) != entries.end()) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native graph transaction materializes duplicate LargeValue content identities");
+				}
+				BTreeInitialTreeMutationPlan plan =
+						contentIndex.planInitialTreeMutation(snapshot_, RSS_LARGE_VALUE_CONTENT_INDEX_ID, entries);
+				if (plan.index_id != RSS_LARGE_VALUE_CONTENT_INDEX_ID || plan.new_pool_mutations.empty() ||
+					!plan.preparer || plan.root_page.pool_ordinal >= plan.new_pool_mutations.size() ||
+					plan.root_page.appended_page_ordinal >=
+							plan.new_pool_mutations[plan.root_page.pool_ordinal].appended_page_count) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native graph LargeValue content-index initial tree lost its root or preparer");
+				}
+				NativeGraphIndexTreeMutation mutation;
+				mutation.index_id = RSS_LARGE_VALUE_CONTENT_INDEX_ID;
+				for (const BTreeNewIndexTreePoolMutation &pool: plan.new_pool_mutations) {
+					mutation.new_pool_requests.push_back({context_->options.first_slot, context_->options.last_slot,
+														  pool.owner_id, pool.appended_page_count});
+				}
+				mutation.replacement_root = {plan.root_page.pool_ordinal, plan.root_page.appended_page_ordinal, true};
+				pendingDerivedBindings.push_back(
+						{std::move(mutation), plan.new_pool_mutations.size(), std::move(plan.preparer)});
+			}
+		}
+		std::ranges::sort(pendingDerivedBindings, {},
+						  [](const PendingDerivedIndexBinding &binding) { return binding.mutation.index_id; });
+		if (std::ranges::adjacent_find(pendingDerivedBindings, {}, [](const PendingDerivedIndexBinding &binding) {
+				return binding.mutation.index_id;
+			}) != pendingDerivedBindings.end()) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph transaction has overlapping existing and initial scalar Index mutations");
+		}
+		NativeGraphDerivedStateMutation derivedState;
+		derivedState.index_tree_mutations.reserve(pendingDerivedBindings.size());
+		for (const EntityPropertyRootMutationPlan &propertyPlan: propertyPlans) {
+			derivedState.reused_large_values.insert(derivedState.reused_large_values.end(),
+													propertyPlan.reused_large_values.begin(),
+													propertyPlan.reused_large_values.end());
+		}
+		std::ranges::sort(derivedState.reused_large_values, {}, &LargeValueRef::value_id);
+		derivedState.reused_large_values.erase(std::unique(derivedState.reused_large_values.begin(),
+														   derivedState.reused_large_values.end(),
+														   [](const LargeValueRef &left, const LargeValueRef &right) {
+															   return left.value_id == right.value_id && left == right;
+														   }),
+											   derivedState.reused_large_values.end());
+		for (size_t ordinal = 1U; ordinal < derivedState.reused_large_values.size(); ++ordinal) {
+			if (derivedState.reused_large_values[ordinal - 1U].value_id ==
+				derivedState.reused_large_values[ordinal].value_id) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph Property plans reused one LargeValue ID with conflicting references");
+			}
+		}
+		struct DerivedIndexBinding {
+			size_t expected_pool_count = 0U;
+			BTreeStructuralMutationPreparer preparer;
+		};
+		std::vector<DerivedIndexBinding> derivedBindings;
+		derivedBindings.reserve(pendingDerivedBindings.size());
+		for (PendingDerivedIndexBinding &binding: pendingDerivedBindings) {
+			derivedState.index_tree_mutations.push_back(std::move(binding.mutation));
+			derivedBindings.push_back({binding.expected_pool_count, std::move(binding.preparer)});
+		}
+		NativeGraphDerivedStatePreparer derivedStatePreparer;
+		if (!derivedBindings.empty()) {
+			derivedStatePreparer = [bindings = std::move(derivedBindings),
+									checkpointLsn](std::vector<std::vector<IndexTreeMutationPoolBatch>> &batches) {
+				if (batches.size() != bindings.size()) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native graph scalar Index publication changed its immutable tree cardinality");
+				}
+				for (size_t ordinal = 0U; ordinal < bindings.size(); ++ordinal) {
+					const DerivedIndexBinding &binding = bindings[ordinal];
+					if (!binding.preparer || batches[ordinal].size() != binding.expected_pool_count) {
+						fail(FormatError::FERR_INVALID_STATE,
+							 "native graph scalar Index publication changed its immutable pool plan");
+					}
+					binding.preparer(batches[ordinal], checkpointLsn);
+				}
+			};
+		} else if (!derivedState.empty()) {
+			derivedStatePreparer = [](std::vector<std::vector<IndexTreeMutationPoolBatch>> &batches) {
+				if (!batches.empty()) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native graph reused LargeValue publication unexpectedly prepared Index pages");
+				}
+			};
+		}
+
+		std::vector<StagedVectorBootstrap> vectorBootstrapBindings;
+		vectorBootstrapBindings.reserve(vector_bootstraps_.size());
+		for (StagedVectorBootstrap &staged: vector_bootstraps_) {
+			const NativeGraphVectorBootstrapMutation &mutation = staged.mutation;
+			const uint8_t invalid =
+					static_cast<uint8_t>(staged.mapping_trees == nullptr || staged.raw_pages == nullptr ||
+										 staged.manifests == nullptr) |
+					static_cast<uint8_t>(!staged.mapping_trees->usesMetadataStore(*context_->metadata)) |
+					static_cast<uint8_t>(!staged.raw_pages->usesMetadataStore(*context_->metadata)) |
+					static_cast<uint8_t>(!staged.manifests->usesMetadataStore(*context_->metadata)) |
+					static_cast<uint8_t>(mutation.index_id == 0U || mutation.vector_node_mapping_index_id == 0U ||
+										 mutation.vector_count == 0U || mutation.first_vector_id == 0U ||
+										 mutation.dimensions == 0U || staged.records.size() != mutation.vector_count ||
+										 staged.maximum_pages == 0U);
+			if (invalid != 0U) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph staged Vector bootstrap lost its typed stores or immutable record plan");
+			}
+			for (size_t ordinal = 0U; ordinal < staged.records.size(); ++ordinal) {
+				const StagedVectorBootstrapRecord &record = staged.records[ordinal];
+				if (record.node_id == 0U || record.vector_id != mutation.first_vector_id + ordinal ||
+					record.raw_record.size() !=
+							sizeof(uint64_t) + static_cast<size_t>(mutation.dimensions) * sizeof(uint16_t) ||
+					LittleEndianCodec::readU64(record.raw_record, 0U) != record.vector_id ||
+					(ordinal != 0U && record.node_id <= staged.records[ordinal - 1U].node_id)) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native graph staged Vector bootstrap lost canonical Node or Vector identities");
+				}
+			}
+			vectorBootstrapBindings.push_back(std::move(staged));
+		}
+		std::ranges::sort(vectorBootstrapBindings, {},
+						  [](const StagedVectorBootstrap &staged) { return staged.mutation.index_id; });
+		if (std::ranges::adjacent_find(vectorBootstrapBindings, {}, [](const StagedVectorBootstrap &staged) {
+				return staged.mutation.index_id;
+			}) != vectorBootstrapBindings.end()) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "native graph transaction staged duplicate Vector bootstrap Index IDs");
+		}
+		derivedState.vector_bootstraps.reserve(vectorBootstrapBindings.size());
+		for (const StagedVectorBootstrap &staged: vectorBootstrapBindings) {
+			derivedState.vector_bootstraps.push_back(staged.mutation);
+		}
+
+		NativeGraphVectorBootstrapPreparer vectorBootstrapPreparer;
+		if (!vectorBootstrapBindings.empty()) {
+			vectorBootstrapPreparer = [bindings = std::move(vectorBootstrapBindings),
+									   checkpointLsn](std::vector<NativeGraphVectorBootstrapMaterialization>
+															  &materializations) {
+				if (materializations.size() != bindings.size()) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native graph Vector bootstrap publication changed its immutable Index cardinality");
+				}
+				for (size_t ordinal = 0U; ordinal < bindings.size(); ++ordinal) {
+					const StagedVectorBootstrap &staged = bindings[ordinal];
+					NativeGraphVectorBootstrapMaterialization &materialization = materializations[ordinal];
+					const NativeGraphVectorBootstrapMutation &mutation = staged.mutation;
+					const uint32_t recordBytes = static_cast<uint32_t>(
+							sizeof(uint64_t) + static_cast<size_t>(mutation.dimensions) * sizeof(uint16_t));
+					const uint16_t capacity = VectorPageStore::rawSlotCapacity(recordBytes);
+					const uint8_t invalid =
+							static_cast<uint8_t>(staged.raw_pages == nullptr || staged.manifests == nullptr) |
+							static_cast<uint8_t>(capacity == 0U) |
+							static_cast<uint8_t>(materialization.mutation.index_id != mutation.index_id) |
+							static_cast<uint8_t>(materialization.mutation.vector_node_mapping_index_id !=
+												 mutation.vector_node_mapping_index_id) |
+							static_cast<uint8_t>(materialization.mutation.first_vector_id != mutation.first_vector_id) |
+							static_cast<uint8_t>(materialization.mutation.vector_count != mutation.vector_count) |
+							static_cast<uint8_t>(materialization.mutation.dimensions != mutation.dimensions) |
+							static_cast<uint8_t>(materialization.mutation.metric != mutation.metric) |
+							static_cast<uint8_t>(materialization.node_mapping_root.index_id != mutation.index_id) |
+							static_cast<uint8_t>(materialization.vector_node_mapping_root.index_id !=
+												 mutation.vector_node_mapping_index_id) |
+							static_cast<uint8_t>(!materialization.node_mapping_root.root_page_id.isValid()) |
+							static_cast<uint8_t>(!materialization.vector_node_mapping_root.root_page_id.isValid()) |
+							static_cast<uint8_t>(materialization.raw_pages.size() != mutation.raw_page_count) |
+							static_cast<uint8_t>(materialization.raw_pools.empty()) |
+							static_cast<uint8_t>(staged.records.size() != mutation.vector_count);
+					if (invalid != 0U) {
+						fail(FormatError::FERR_INVALID_STATE,
+							 "native graph Vector bootstrap materialization changed its metadata-owned identity");
+					}
+					const size_t expectedRawPoolCount =
+							(materialization.raw_pages.size() - 1U) / RSS_PAGE_POOL_DATA_FRAME_COUNT + 1U;
+					if (materialization.raw_pools.size() != expectedRawPoolCount) {
+						fail(FormatError::FERR_INVALID_STATE,
+							 "native graph Vector bootstrap has a noncanonical Raw-pool cardinality");
+					}
+
+					std::vector<VectorPage> rawPages;
+					rawPages.reserve(materialization.raw_pages.size());
+					materialization.vector_locations.clear();
+					materialization.vector_locations.reserve(staged.records.size());
+					size_t firstRecord = 0U;
+					for (size_t pageOrdinal = 0U; pageOrdinal < materialization.raw_pages.size(); ++pageOrdinal) {
+						PageLocation &location = materialization.raw_pages[pageOrdinal];
+						const CatalogEntry &pool =
+								materialization.raw_pools[pageOrdinal / RSS_PAGE_POOL_DATA_FRAME_COUNT];
+						if (location.segment_id != pool.segment_id || location.generation != pool.generation ||
+							location.page_index != 0U || location.free_bytes != 0U) {
+							fail(FormatError::FERR_INVALID_STATE,
+								 "native graph Vector bootstrap assigned a Raw page to the wrong pool");
+						}
+						VectorPageHeader header;
+						header.index_id = mutation.index_id;
+						header.page_id = location.page_id;
+						header.generation = pool.generation;
+						header.kind = VectorStorageKind::VSK_RAW;
+						header.record_bytes = recordBytes;
+						header.slot_capacity = capacity;
+						header.bitmap_bytes = static_cast<uint16_t>((static_cast<uint32_t>(capacity) + 7U) / 8U);
+						header.committed_lsn = checkpointLsn;
+						const PageOwnerHeader owner{header.page_id,
+													mutation.index_id,
+													PageOwnerKind::POK_VECTOR_RAW,
+													0U,
+													RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES,
+													header.generation,
+													checkpointLsn};
+						VectorPage page = VectorPage::create(owner, header);
+						const size_t pageEnd =
+								std::min(firstRecord + static_cast<size_t>(capacity), staged.records.size());
+						for (size_t recordOrdinal = firstRecord; recordOrdinal < pageEnd; ++recordOrdinal) {
+							const StagedVectorBootstrapRecord &record = staged.records[recordOrdinal];
+							if (record.vector_id != mutation.first_vector_id + recordOrdinal ||
+								record.raw_record.size() != recordBytes ||
+								LittleEndianCodec::readU64(record.raw_record, 0U) != record.vector_id) {
+								fail(FormatError::FERR_INVALID_STATE,
+									 "native graph Vector bootstrap changed a canonical Raw record");
+							}
+							const uint16_t slot = page.insert(record.raw_record);
+							materialization.vector_locations.push_back(
+									{record.vector_id, location.page_id, slot, page.slotGeneration(slot)});
+						}
+						firstRecord = pageEnd;
+						rawPages.push_back(std::move(page));
+					}
+					if (firstRecord != staged.records.size()) {
+						fail(FormatError::FERR_INVALID_STATE,
+							 "native graph Vector bootstrap Raw-page plan does not cover every Vector record");
+					}
+					for (size_t poolOrdinal = 0U; poolOrdinal < materialization.raw_pools.size(); ++poolOrdinal) {
+						const size_t firstPage = poolOrdinal * RSS_PAGE_POOL_DATA_FRAME_COUNT;
+						const size_t pageCount = std::min(static_cast<size_t>(RSS_PAGE_POOL_DATA_FRAME_COUNT),
+														  rawPages.size() - firstPage);
+						staged.raw_pages->prepareRawNewPoolPages(
+								materialization.raw_pools[poolOrdinal],
+								std::span<const VectorPage>(rawPages).subspan(firstPage, pageCount),
+								std::span<PageLocation>(materialization.raw_pages).subspan(firstPage, pageCount),
+								checkpointLsn);
+					}
+
+					VectorManifest manifest;
+					manifest.index_id = mutation.index_id;
+					manifest.page_id = materialization.manifest_page.page_id;
+					manifest.generation = materialization.manifest_pool.generation;
+					manifest.committed_lsn = checkpointLsn;
+					manifest.dimensions = mutation.dimensions;
+					manifest.metric = mutation.metric;
+					manifest.node_mapping_root_page_id = materialization.node_mapping_root.root_page_id;
+					manifest.node_mapping_root_generation = materialization.node_mapping_root.root_generation;
+					manifest.vector_node_mapping_index_id = mutation.vector_node_mapping_index_id;
+					manifest.vector_node_mapping_root_page_id = materialization.vector_node_mapping_root.root_page_id;
+					manifest.vector_node_mapping_root_generation =
+							materialization.vector_node_mapping_root.root_generation;
+					manifest.raw_write_tail_page_id = materialization.raw_pages.back().page_id;
+					manifest.entries.reserve(rawPages.size());
+					for (const VectorPage &page: rawPages) {
+						manifest.entries.push_back(
+								{page.header().page_id, VectorStorageKind::VSK_RAW, page.header().live_count});
+					}
+					const PageOwnerHeader manifestOwner{manifest.page_id,
+														mutation.index_id,
+														PageOwnerKind::POK_VECTOR_MANIFEST,
+														0U,
+														RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES,
+														manifest.generation,
+														checkpointLsn};
+					staged.manifests->prepareNewPoolInitial(materialization.manifest_pool,
+															VectorManifestPage::create(manifestOwner, manifest),
+															checkpointLsn, materialization.manifest_page);
+					materialization.manifest_location = {mutation.index_id, manifest.page_id, manifest.generation};
+				}
+			};
+		}
+
+		std::vector<StagedVectorDelta> vectorDeltaBindings;
+		vectorDeltaBindings.reserve(vector_deltas_.size());
+		for (StagedVectorDelta &staged: vector_deltas_) {
+			const NativeGraphVectorDeltaMutation &mutation = staged.mutation;
+			const uint8_t invalid =
+					static_cast<uint8_t>(staged.mapping_trees == nullptr || staged.raw_pages == nullptr ||
+										 staged.manifests == nullptr) |
+					static_cast<uint8_t>(!staged.mapping_trees->usesMetadataStore(*context_->metadata)) |
+					static_cast<uint8_t>(!staged.raw_pages->usesMetadataStore(*context_->metadata)) |
+					static_cast<uint8_t>(!staged.manifests->usesMetadataStore(*context_->metadata)) |
+					static_cast<uint8_t>(mutation.index_id == 0U || mutation.vector_node_mapping_index_id == 0U ||
+										 mutation.dimensions == 0U || staged.maximum_raw_pages == 0U);
+			if (invalid != 0U) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph staged Vector delta lost its typed stores or immutable source fence");
+			}
+			vectorDeltaBindings.push_back(std::move(staged));
+		}
+		std::ranges::sort(vectorDeltaBindings, {},
+						  [](const StagedVectorDelta &staged) { return staged.mutation.index_id; });
+		if (std::ranges::adjacent_find(vectorDeltaBindings, {}, [](const StagedVectorDelta &staged) {
+				return staged.mutation.index_id;
+			}) != vectorDeltaBindings.end()) {
+			fail(FormatError::FERR_INVALID_STATE, "native graph transaction staged duplicate Vector delta Index IDs");
+		}
+		derivedState.vector_deltas.reserve(vectorDeltaBindings.size());
+		for (const StagedVectorDelta &staged: vectorDeltaBindings) {
+			derivedState.vector_deltas.push_back(staged.mutation);
+		}
+
+		NativeGraphVectorDeltaPreparer vectorDeltaPreparer;
+		if (!vectorDeltaBindings.empty()) {
+			auto bindings = std::make_shared<std::vector<StagedVectorDelta>>(std::move(vectorDeltaBindings));
+			vectorDeltaPreparer = [bindings = std::move(bindings), checkpointLsn](
+										  std::vector<NativeGraphVectorDeltaMaterialization> &materializations) {
+				if (materializations.size() != bindings->size()) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native graph Vector delta publication changed its immutable Index cardinality");
+				}
+				for (size_t ordinal = 0U; ordinal < bindings->size(); ++ordinal) {
+					const StagedVectorDelta &staged = (*bindings)[ordinal];
+					NativeGraphVectorDeltaMaterialization &materialization = materializations[ordinal];
+					const NativeGraphVectorDeltaMutation &mutation = staged.mutation;
+					const uint32_t recordBytes = static_cast<uint32_t>(
+							sizeof(uint64_t) + static_cast<size_t>(mutation.dimensions) * sizeof(uint16_t));
+					const uint16_t capacity = VectorPageStore::rawSlotCapacity(recordBytes);
+					if (capacity == 0U || materialization.mutation.index_id != mutation.index_id ||
+						materialization.mutation.raw_pages.size() != staged.raw_page_images.size() ||
+						materialization.node_mapping_root.index_id != mutation.index_id ||
+						materialization.vector_node_mapping_root.index_id != mutation.vector_node_mapping_index_id ||
+						(materialization.delta_mapping_root.index_id != mutation.delta_mapping_index_id) ||
+						(mutation.delta_mapping_index_id != 0U &&
+						 (!materialization.delta_mapping_root.root_page_id.isValid() ||
+						  !materialization.delta_mapping_root.root_generation.isValid()))) {
+						fail(FormatError::FERR_INVALID_STATE,
+							 "native graph Vector delta materialization changed its source or mapping identity");
+					}
+					materialization.vector_locations.clear();
+					materialization.vector_locations.reserve(static_cast<size_t>(mutation.inserted_vector_count));
+					VectorManifest manifest = staged.source_manifest;
+					manifest.page_id = materialization.manifest_replacement.page_id;
+					manifest.generation = materialization.manifest_replacement.generation;
+					manifest.committed_lsn = checkpointLsn;
+					manifest.node_mapping_root_page_id = materialization.node_mapping_root.root_page_id;
+					manifest.node_mapping_root_generation = materialization.node_mapping_root.root_generation;
+					manifest.vector_node_mapping_root_page_id = materialization.vector_node_mapping_root.root_page_id;
+					manifest.vector_node_mapping_root_generation =
+							materialization.vector_node_mapping_root.root_generation;
+					manifest.delta_mapping_index_id = mutation.delta_mapping_index_id;
+					manifest.delta_mapping_root_page_id = materialization.delta_mapping_root.root_page_id;
+					manifest.delta_mapping_root_generation = materialization.delta_mapping_root.root_generation;
+					manifest.delta_entry_count = mutation.delta_entry_count;
+					std::vector<std::vector<VectorPage>> freshPages(materialization.raw_new_pools.size());
+					std::vector<std::vector<size_t>> freshPageOrdinals(materialization.raw_new_pools.size());
+					for (size_t rawOrdinal = 0U; rawOrdinal < staged.raw_page_images.size(); ++rawOrdinal) {
+						const StagedVectorDeltaRawPage &stagedRaw = staged.raw_page_images[rawOrdinal];
+						NativeGraphVectorDeltaRawPageMaterialization &raw = materialization.raw_pages[rawOrdinal];
+						if (raw.mutation.placement != stagedRaw.mutation.placement ||
+							raw.mutation.inserted_record_count != stagedRaw.mutation.inserted_record_count ||
+							raw.mutation.page_ordinal != stagedRaw.mutation.page_ordinal) {
+							fail(FormatError::FERR_INVALID_STATE,
+								 "native graph Vector delta Raw-page identity changed during materialization");
+						}
+						const bool cow = raw.mutation.placement == NativeGraphVectorDeltaRawPlacement::NGVDRP_COW_TAIL;
+						VectorPage page = [&]() {
+							if (cow) {
+								if (!stagedRaw.tail_image.has_value()) {
+									fail(FormatError::FERR_INVALID_STATE,
+										 "native graph Vector delta COW tail lost its retained page image");
+								}
+								const PageOwnerHeader owner{raw.location.page_id,
+															mutation.index_id,
+															PageOwnerKind::POK_VECTOR_RAW,
+															0U,
+															RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES,
+															raw.location.generation,
+															checkpointLsn};
+								return stagedRaw.tail_image->rebindOwner(owner);
+							}
+							VectorPageHeader header;
+							header.index_id = mutation.index_id;
+							header.page_id = raw.location.page_id;
+							header.generation = raw.pool.generation;
+							header.kind = VectorStorageKind::VSK_RAW;
+							header.record_bytes = recordBytes;
+							header.slot_capacity = capacity;
+							header.bitmap_bytes = static_cast<uint16_t>((static_cast<uint32_t>(capacity) + 7U) / 8U);
+							header.committed_lsn = checkpointLsn;
+							const PageOwnerHeader owner{header.page_id,
+														mutation.index_id,
+														PageOwnerKind::POK_VECTOR_RAW,
+														0U,
+														RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES,
+														header.generation,
+														checkpointLsn};
+							VectorPage created = VectorPage::create(owner, header);
+							for (const size_t recordOrdinal: stagedRaw.record_ordinals) {
+								if (recordOrdinal >= staged.records.size() ||
+									staged.records[recordOrdinal].kind != NativeVectorMutationKind::NVMK_INSERT ||
+									staged.records[recordOrdinal].raw_record.size() != recordBytes ||
+									LittleEndianCodec::readU64(staged.records[recordOrdinal].raw_record, 0U) !=
+											staged.records[recordOrdinal].vector_id) {
+									fail(FormatError::FERR_INVALID_STATE,
+										 "native graph Vector delta lost a canonical inserted Raw record");
+								}
+								static_cast<void>(created.insert(staged.records[recordOrdinal].raw_record));
+							}
+							return created;
+						}();
+						for (const size_t recordOrdinal: stagedRaw.record_ordinals) {
+							const StagedVectorDeltaRecord &record = staged.records[recordOrdinal];
+							const std::optional<uint16_t> slot = page.findVectorId(record.vector_id);
+							if (!slot.has_value()) {
+								fail(FormatError::FERR_INVALID_STATE,
+									 "native graph Vector delta Raw page lost an inserted Vector ID");
+							}
+							materialization.vector_locations.push_back(
+									{record.vector_id, raw.location.page_id, *slot, page.slotGeneration(*slot)});
+						}
+						const VectorManifestEntry updatedEntry{raw.location.page_id, VectorStorageKind::VSK_RAW,
+															   static_cast<uint32_t>(page.header().live_count)};
+						auto entry = std::lower_bound(
+								manifest.entries.begin(), manifest.entries.end(), updatedEntry,
+								[](const VectorManifestEntry &left, const VectorManifestEntry &right) {
+									return std::tuple<uint16_t, uint64_t>{static_cast<uint16_t>(left.storage_kind),
+																		  left.page_id.value()} <
+										   std::tuple<uint16_t, uint64_t>{static_cast<uint16_t>(right.storage_kind),
+																		  right.page_id.value()};
+								});
+						const bool matchingEntry = entry != manifest.entries.end() &&
+												   entry->page_id == updatedEntry.page_id &&
+												   entry->storage_kind == updatedEntry.storage_kind;
+						if (cow) {
+							if (!matchingEntry) {
+								fail(FormatError::FERR_INVALID_STATE,
+									 "native graph Vector delta COW tail is absent from its source Manifest");
+							}
+							*entry = updatedEntry;
+						} else if (matchingEntry) {
+							fail(FormatError::FERR_INVALID_STATE, "native graph Vector delta assigned a new Raw page "
+																  "that already exists in its Manifest");
+						} else {
+							manifest.entries.insert(entry, updatedEntry);
+						}
+						if (cow) {
+							staged.raw_pages->prepareRawReplacement(raw.pool, raw.mutation.expected_location,
+																	raw.mutation.expected_owner_lsn, page,
+																	checkpointLsn, raw.location);
+						} else if (raw.mutation.placement ==
+								   NativeGraphVectorDeltaRawPlacement::NGVDRP_APPEND_TO_CURRENT_POOL) {
+							staged.raw_pages->prepareRawAppend(raw.pool, page, checkpointLsn, raw.location);
+						} else {
+							const size_t poolOrdinal = static_cast<size_t>(raw.mutation.new_pool_ordinal - 1U);
+							if (poolOrdinal >= freshPages.size() ||
+								raw.pool.segment_id != materialization.raw_new_pools[poolOrdinal].segment_id ||
+								raw.pool.physical_slot != materialization.raw_new_pools[poolOrdinal].physical_slot ||
+								raw.pool.generation != materialization.raw_new_pools[poolOrdinal].generation) {
+								fail(FormatError::FERR_INVALID_STATE,
+									 "native graph Vector delta fresh Raw page lost its assigned pool identity");
+							}
+							freshPages[poolOrdinal].push_back(std::move(page));
+							freshPageOrdinals[poolOrdinal].push_back(rawOrdinal);
+						}
+					}
+					for (size_t poolOrdinal = 0U; poolOrdinal < freshPages.size(); ++poolOrdinal) {
+						if (freshPages[poolOrdinal].empty() ||
+							freshPages[poolOrdinal].size() > RSS_PAGE_POOL_DATA_FRAME_COUNT) {
+							fail(FormatError::FERR_INVALID_STATE,
+								 "native graph Vector delta has an invalid fresh Raw-pool page group");
+						}
+						std::vector<PageLocation> locations;
+						for (const size_t rawOrdinal: freshPageOrdinals[poolOrdinal]) {
+							locations.push_back(materialization.raw_pages[rawOrdinal].location);
+						}
+						staged.raw_pages->prepareRawNewPoolPages(materialization.raw_new_pools[poolOrdinal],
+																 freshPages[poolOrdinal], locations, checkpointLsn);
+						for (size_t index = 0U; index < locations.size(); ++index) {
+							materialization.raw_pages[freshPageOrdinals[poolOrdinal][index]].location =
+									locations[index];
+						}
+					}
+					if (!materialization.raw_pages.empty()) {
+						manifest.raw_write_tail_page_id = materialization.raw_pages.back().location.page_id;
+					}
+					const PageOwnerHeader owner{manifest.page_id,
+												mutation.index_id,
+												PageOwnerKind::POK_VECTOR_MANIFEST,
+												0U,
+												RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES,
+												manifest.generation,
+												checkpointLsn};
+					const VectorManifestPage page = VectorManifestPage::create(owner, manifest);
+					if (mutation.manifest_in_new_pool) {
+						staged.manifests->prepareNewPoolReplacement(materialization.manifest_new_pool, page,
+																	checkpointLsn,
+																	materialization.manifest_replacement);
+					} else {
+						staged.manifests->prepareReplacement(mutation.expected_manifest_pool,
+															 mutation.expected_manifest_location,
+															 mutation.expected_manifest_owner_lsn, page, checkpointLsn,
+															 materialization.manifest_replacement);
+					}
+					materialization.manifest_location = {mutation.index_id, manifest.page_id, manifest.generation};
+				}
+			};
+		}
+
+		try {
+			std::vector<uint64_t> vectorRebuildIndexIds;
+			for (const StagedVectorDelta &staged: vector_deltas_) {
+				if (staged.mutation.maintenance_rebuild_required) {
+					vectorRebuildIndexIds.push_back(staged.mutation.index_id);
+				}
+			}
+			std::ranges::sort(vectorRebuildIndexIds);
+			const EntityPageBatchResult published = context_->entities->applyNativeGraphBatchTransaction(
+					snapshot_, mutations, appends, newPools, propertyPlans, *context_->properties,
+					context_->options.property_roots, auxiliary, derivedState, derivedStatePreparer, checkpointLsn,
+					publishOptions, logicalIds, vectorBootstrapPreparer, vectorDeltaPreparer);
+			snapshot_.release();
+			state_ = NativeGraphWriteTransactionState::NGWTS_COMMITTED;
+			return {NativeGraphWriteCommitOutcome::NGWCO_COMMITTED, published.superblock,
+					std::move(vectorRebuildIndexIds)};
+		} catch (...) {
+			snapshot_.release();
+			state_ = NativeGraphWriteTransactionState::NGWTS_INDETERMINATE;
+			throw;
+		}
+	}
+
+	void NativeGraphWriteTransaction::rollback() {
+		if (state_ == NativeGraphWriteTransactionState::NGWTS_ACTIVE) {
+			NativeGraphLogicalIdReservation logicalIds;
+			logicalIds.node_ranges = node_id_ranges_;
+			logicalIds.edge_ranges = edge_id_ranges_;
+			if (context_ != nullptr && context_->metadata != nullptr) {
+				context_->metadata->abandonNativeGraphLogicalIdReservation(logicalIds);
+			}
+			snapshot_.release();
+			state_ = NativeGraphWriteTransactionState::NGWTS_ROLLED_BACK;
+		}
+	}
+
+	NativeGraphWritePlanner::NativeGraphWritePlanner(RelocatableMetadataStore &metadata, EntityPageStore &entities,
+													 EntityLabelSetStore &labels,
+													 PropertyCollectionRootStore &properties, BTreePageStore &indexes,
+													 NativeGraphWritePlannerOptions options) :
+		context_(std::make_shared<NativeGraphWritePlannerContext>()) {
+		validatePlannerOptions(options);
+		if (!entities.usesMetadataStore(metadata) || !labels.usesMetadataStore(metadata) ||
+			!properties.usesMetadataStore(metadata) || !indexes.usesMetadataStore(metadata)) {
+			throw std::invalid_argument("native graph write planner requires one metadata storage domain");
+		}
+		context_->metadata = &metadata;
+		context_->entities = &entities;
+		context_->labels = &labels;
+		context_->properties = &properties;
+		context_->indexes = &indexes;
+		context_->options = options;
+	}
+
+	NativeGraphWriteTransaction NativeGraphWritePlanner::beginTransaction() {
+		if (context_ == nullptr || context_->metadata == nullptr || context_->entities == nullptr ||
+			context_->labels == nullptr || context_->properties == nullptr || context_->indexes == nullptr) {
+			fail(FormatError::FERR_INVALID_STATE, "native graph write planner is detached from storage");
+		}
+		return NativeGraphWriteTransaction(context_, context_->metadata->openSnapshot());
+	}
+
+	NativeGraphLogicalIdReservation NativeGraphWritePlanner::reserveLogicalIds(uint64_t nodeCount, uint64_t edgeCount) {
+		if (context_ == nullptr || context_->metadata == nullptr || (nodeCount == 0U && edgeCount == 0U) ||
+			nodeCount > static_cast<uint64_t>(context_->options.maximum_logical_id_reservation) ||
+			edgeCount > static_cast<uint64_t>(context_->options.maximum_logical_id_reservation)) {
+			fail(FormatError::FERR_INVALID_HEADER,
+				 "native graph logical transaction identity reservation exceeds its configured work bound");
+		}
+		return context_->metadata->acquireNativeGraphLogicalIds(
+				nodeCount, edgeCount, static_cast<uint64_t>(context_->options.logical_id_lease_block_size));
+	}
+
+} // namespace graph::storage

@@ -23,7 +23,7 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/vector/index/DiskANNIndex.hpp"
 #include "graph/vector/VectorIndexRegistry.hpp"
 
@@ -34,10 +34,10 @@ protected:
     void SetUp() override {
         boost::uuids::uuid uuid = boost::uuids::random_generator()();
         dbPath = std::filesystem::temp_directory_path() / ("ann_test_" + to_string(uuid) + ".zyx");
-        database = std::make_unique<graph::Database>(dbPath.string());
+        database = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(dbPath.string());
         database->open();
-        dm = database->getStorage()->getDataManager();
-        sm = database->getStorage()->getSystemStateManager();
+        dm = database->storage()->getDataManager();
+        sm = database->storage()->getSystemStateManager();
     }
 
     void TearDown() override {
@@ -50,7 +50,7 @@ protected:
     }
 
     std::filesystem::path dbPath;
-    std::unique_ptr<graph::Database> database;
+    std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> database;
     std::shared_ptr<graph::storage::DataManager> dm;
     std::shared_ptr<graph::storage::state::SystemStateManager> sm;
 };
@@ -192,7 +192,7 @@ TEST_F(DiskANNTest, CosineMetric_InsertSearch) {
 	EXPECT_EQ(results[0].first, 1);
 }
 
-TEST_F(DiskANNTest, DimensionMismatch_InsertSkipped) {
+TEST_F(DiskANNTest, DimensionMismatch_InsertThrowsWithoutMutatingIndex) {
 	auto registry = std::make_shared<VectorIndexRegistry>(dm, sm, "dim_idx");
 	DiskANNConfig config;
 	config.dim = 4;
@@ -202,10 +202,10 @@ TEST_F(DiskANNTest, DimensionMismatch_InsertSkipped) {
 
 	DiskANNIndex index(registry, config);
 
-	// Insert with wrong dimension - should be silently skipped
-	index.insert(1, {1.0, 0.0}); // dim=2, expected 4
+	// A malformed vector must be rejected instead of silently losing a write.
+	EXPECT_THROW(index.insert(1, {1.0, 0.0}), std::invalid_argument);
 
-	// Search should return empty since no valid vectors inserted
+	// Rejection happens before persistence, so the index remains unchanged.
 	auto results = index.search({1.0, 0.0, 0.0, 0.0}, 1);
 	EXPECT_TRUE(results.empty());
 }
@@ -262,7 +262,7 @@ TEST_F(DiskANNTest, BatchInsert_Empty) {
 	EXPECT_NO_THROW(index.batchInsert(emptyBatch));
 }
 
-TEST_F(DiskANNTest, BatchInsert_DimensionMismatch) {
+TEST_F(DiskANNTest, BatchInsert_DimensionMismatchIsAtomic) {
 	auto registry = std::make_shared<VectorIndexRegistry>(dm, sm, "batch_dim_idx");
 	DiskANNConfig config;
 	config.dim = 4;
@@ -272,17 +272,17 @@ TEST_F(DiskANNTest, BatchInsert_DimensionMismatch) {
 
 	DiskANNIndex index(registry, config);
 
-	// Mix of valid and invalid dimensions
+	// Validate the complete batch before writing any valid prefix.
 	std::vector<std::pair<int64_t, std::vector<float>>> batch = {
 		{1, {1.0, 0.0, 0.0, 0.0}},  // valid
 		{2, {1.0, 0.0}},             // invalid - wrong dimension
 		{3, {0.0, 1.0, 0.0, 0.0}},  // valid
 	};
-	index.batchInsert(batch);
+	EXPECT_THROW(index.batchInsert(batch), std::invalid_argument);
 
-	// Only valid vectors should be searchable
+	// No partial batch is persisted when one vector is malformed.
 	auto results = index.search({1.0, 0.0, 0.0, 0.0}, 3);
-	ASSERT_GE(results.size(), 1UL);
+	EXPECT_TRUE(results.empty());
 }
 
 TEST_F(DiskANNTest, BatchInsert_AutoTrain) {
@@ -456,9 +456,8 @@ TEST_F(DiskANNTest, HybridMode_ComputeDistanceFallbackToRaw) {
 	EXPECT_EQ(results[0].first, 1);
 }
 
-TEST_F(DiskANNTest, BatchInsert_AllDimensionMismatch) {
-	// Tests batchInsert where all entries have wrong dimensions,
-	// resulting in entries.empty() after filtering (line 177)
+TEST_F(DiskANNTest, BatchInsert_AllDimensionMismatchThrowsWithoutMutatingIndex) {
+	// Every malformed entry is rejected before the batch changes persistent state.
 	auto registry = std::make_shared<VectorIndexRegistry>(dm, sm, "batch_alldim_idx");
 	DiskANNConfig config;
 	config.dim = 4;
@@ -474,7 +473,7 @@ TEST_F(DiskANNTest, BatchInsert_AllDimensionMismatch) {
 		{2, {1.0}},             // wrong dim
 		{3, {1.0, 0.0, 0.0}},  // wrong dim
 	};
-	EXPECT_NO_THROW(index.batchInsert(batch));
+	EXPECT_THROW(index.batchInsert(batch), std::invalid_argument);
 
 	// Nothing should be searchable
 	auto results = index.search({1.0, 0.0, 0.0, 0.0}, 1);

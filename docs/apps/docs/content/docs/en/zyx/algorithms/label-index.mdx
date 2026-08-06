@@ -1,6 +1,6 @@
 ---
 title: Label Index
-description: ZYX implements a high-performance label index using B+Tree structure to efficiently map node labels to their corresponding node IDs. This enables fast
+description: The clean native Label Index is a snapshot-pinned key-only Packed B+Tree from schema token to NodeId.
 category: Indexing
 categoryOrder: 3
 order: 12
@@ -9,281 +9,79 @@ projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
+
 # Label Index
 
-ZYX implements a high-performance label index using B+Tree structure to efficiently map node labels to their corresponding node IDs. This enables fast label-based queries in Cypher such as `MATCH (n:Person) RETURN n`.
+> This page specifies the target native Label Index. It replaces the retired `IndexTreeManager`, mutable root map, state-chain root record, duplicate-value list, and Blob-overflow representation. Old database files are not a supported input to the clean format.
 
-## Overview
+## Model
 
-The label index provides:
+Labels have a canonical schema identity. The System Catalog maps a UTF-8 label name to a `SchemaTokenId` and maps that token back to its canonical definition. Node records and label index entries store only the token; they never repeat the label name.
 
-- **B+Tree-based indexing**: Efficient label-to-node-IDs mapping using a single B+Tree via IndexTreeManager
-- **Multi-label support**: Nodes can have multiple labels indexed simultaneously
-- **Batch operations**: Optimized bulk insertion for efficient index building
-- **Concurrent access**: Thread-safe operations with shared mutex
-- **State persistence**: Automatic persistence of index state across restarts
-- **Dynamic enable/disable**: Runtime index management without data loss
+The Label Index is a key-only Packed B+Tree with the logical schema:
 
-## Architecture
+```text
+(labelTokenId, NodeId) -> empty
+```
 
-### Label Index Structure
+Each Node-label association produces one key. `NodeId` is necessary to give equal label tokens a deterministic, unique order and exact deletion. A label scan seeks the lower bound for `labelTokenId` and streams until the token prefix changes. It does not read or materialize one value vector for the whole label.
 
 ```mermaid
-graph TD
-    A[LabelIndex] --> B[IndexTreeManager]
-    B --> C[B+Tree Root]
-    C --> D[Internal Node 1]
-    C --> E[Internal Node 2]
-    D --> F[Leaf Node: Person]
-    D --> G[Leaf Node: Company]
-    E --> H[Leaf Node: Location]
-    F --> I[Node IDs: 1, 5, 9]
-    G --> J[Node IDs: 2, 6, 10]
-    H --> K[Node IDs: 3, 7, 11]
+flowchart LR
+    N["Cypher label name"] --> C["System Catalog"]
+    C --> T["SchemaTokenId"]
+    T --> R["Label Index root"]
+    R --> K["(labelTokenId, NodeId) keys"]
+    K --> E["Node Entity Store"]
 ```
 
-LabelIndex owns a single IndexTreeManager instance, which manages one B+Tree. The tree uses label strings as keys and node IDs as values. Because the B+Tree supports duplicate keys, multiple node IDs can be stored under the same label. Each label-to-node-ID mapping is independent: adding or removing a node from one label has no effect on other labels.
+The canonical Node label set is authoritative. A fixed Node record retains a small sorted inline prefix, while any remaining sorted token IDs reside in one referenced `EntityLabelSet` record. The Label Index is derived state. Its entries must exactly equal the union of every live Node's inline and overflow token IDs.
 
-### Query Flow
+## Storage and Root Ownership
 
-```mermaid
-sequenceDiagram
-    participant Q as Cypher Query
-    participant P as Query Planner
-    participant E as Query Executor
-    participant LI as LabelIndex
-    participant B as B+Tree
-    participant DM as DataManager
+The index uses the shared Packed B+Tree codec with `BLVL_EMPTY` leaves, 4 KiB Index pages, a stable logical `IndexId`, and a snapshot-pinned root-directory entry. It shares neither a page nor an owner identity with Node records, `EntityLabelSet` records, properties, ordinary adjacency, or Vector ANN data.
 
-    Q->>P: MATCH (n:Person) RETURN n
-    P->>E: Plan execution
-    E->>LI: findNodes("Person")
-    LI->>B: Traverse B+Tree
-    B->>B: Search for "Person" key
-    B-->>LI: Return [1, 5, 9, ...]
-    LI-->>E: Node IDs
-    E->>DM: Fetch nodes by IDs
-    DM-->>E: Node data
-    E-->>Q: Results
+The Index Root Directory maps the label IndexId to the current root PageId and generation. The Superblock publishes that directory root, so it remains fixed size. Relocation changes a Page Directory route, not a Node reference, token, root identity, or cursor continuation. When no Node has a label association, the index has no root-directory entry and no permanent empty root page.
+
+## Read Semantics
+
+For `MATCH (n:Person)`, the planner resolves `Person` to its token in the same pinned snapshot used for the index scan. It scans `(token, NodeId)` in sorted NodeId order, resolves Node records through the Entity Map only when query output or predicates require them, and validates that each resolved live Node still carries the token.
+
+The cursor retains a pinned snapshot, target token, last returned NodeId, bounded page-search state, and at most one leaf pin. It resumes strictly after the last NodeId and never exports PageId, slot, offset, or sibling state. Cache admission follows the common Packed B+Tree policy: routing pages are hot point-read state; long label scans use sequential leaf admission and bounded prefetch.
+
+Lookup complexity is `O(log L + matches)`, where `L` is the number of label associations. Memory is bounded independently of label cardinality.
+
+## Atomic Mutation
+
+Creating a Node or adding a label computes the canonical old/new token sets and derives exact key additions/removals. Removing a label, deleting a Node, and replacing a label set use the same comparison. A transaction publishes all of the following in one metadata generation:
+
+1. Node fixed-record replacement and any `EntityLabelSet` changes.
+2. Entity Map and Page Directory changes required by those records.
+3. The Label Index Packed B+Tree replacement root.
+4. Catalog/metadata roots and the inactive A/B Superblock.
+
+Candidate pages are durable before root publication. A reader sees either the complete old Node/Label Index relation or the complete new one. It cannot observe a label index entry for a Node that is absent from that snapshot, nor a committed label on a Node missing from the index.
+
+`DETACH DELETE` and Edge mutation do not have special Label Index state. Index deletion is an exact key erase; it does not create label tombstones, stale value vectors, or an asynchronous per-label merge debt.
+
+## Bulk Build and Maintenance
+
+Bulk construction reads canonical Node label sets, emits `(token, NodeId)` keys, canonicalizes and sorts them, then constructs a dense key-only tree through the shared bulk builder. It must use the same comparator, page layout, root publication, and integrity rules as online mutation.
+
+Online insertion/deletion is copy-on-write. Byte-aware redistribution and merge keep the tree healthy; displaced pages enter the common snapshot-safe Retire Queue. A measured bounded rebuild may repack low-occupancy pages, but no background compaction is needed for query correctness.
+
+## Integrity and Test Gates
+
+The integrity scanner verifies canonical token ordering, unique nonzero keys, valid key-only page layout, tree ordering/reachability, root ownership, snapshot-safe retirement, and this bidirectional invariant:
+
+```text
+Node canonical label set == all Label Index tokens for that Node
 ```
 
-When the query planner encounters a label filter such as `MATCH (n:Person)`, it checks whether the label index is available and enabled. If so, the executor calls `findNodes("Person")` to retrieve matching node IDs directly from the B+Tree, then fetches the full node data from storage. Without the index, a full node scan with a label filter would be required.
-
-## Index Lifecycle
-
-The label index transitions through several states during its lifetime. State is persisted via `SystemStateManager`, which stores the B+Tree root ID and an enabled flag as key-value pairs.
-
-### Lifecycle State Diagram
-
-```mermaid
-stateDiagram-v2
-    [*] --> Uninitialized
-    Uninitialized --> Disabled: construct LabelIndex
-    Disabled --> Active: createIndex()
-    Active --> Active: addNode / removeNode / findNodes
-    Active --> Cleared: clear()
-    Cleared --> Active: addNode (auto-reinitializes)
-    Active --> Dropped: drop()
-    Cleared --> Dropped: drop()
-    Dropped --> [*]
-```
-
-### Initialization
-
-When a `LabelIndex` is constructed, it calls `initialize()` automatically. This method loads two pieces of persistent state from `SystemStateManager`:
-
-1. **Root ID** -- the segment ID of the B+Tree root node. A value of 0 means no B+Tree has been created yet.
-2. **Enabled flag** -- stored under a config key derived from the state key with a config suffix. Defaults to false if absent.
-
-A safety fallback prevents data drift: if the root ID is non-zero but the enabled flag is false, the index forces `enabled_` to true. This ensures that any physical B+Tree data present on disk is never orphaned by a stale enabled flag.
-
-### createIndex()
-
-Calling `createIndex()` sets `enabled_` to true and immediately persists the enabled flag to `SystemStateManager`. This guarantees that after a restart, `initialize()` will read the flag as true and the index will be active.
-
-### clear()
-
-The `clear()` method removes all B+Tree data by delegating to `IndexTreeManager::clear(rootId_)`, then resets the in-memory root ID to 0. Importantly, the enabled flag remains true. This makes `clear()` suitable for index rebuild scenarios where the index will be repopulated immediately.
-
-### drop()
-
-The `drop()` method performs a full teardown: it calls `clear()` to remove all B+Tree data, sets `enabled_` to false, and removes both the config key and the root ID key from `SystemStateManager`. After `drop()`, the index is in a clean state as if it never existed.
-
-### saveState()
-
-During normal operation, `saveState()` persists the current root ID (if non-zero) and the enabled flag (if true) to `SystemStateManager`. It uses a sparse persistence strategy: only non-default values are written, minimizing state storage overhead. The `flush()` method delegates directly to `saveState()`.
-
-## Core Operations
-
-### addNode
-
-Adds a single node-to-label mapping to the index. The operation acquires an exclusive lock, initializes the B+Tree on first use (when root ID is 0), then inserts the label-to-node-ID pair via `IndexTreeManager::insert()`. If the B+Tree root splits during insertion, the in-memory root ID is updated to the new root.
-
-- **Time complexity**: O(log n) where n is the number of unique labels
-- **Space complexity**: O(1) amortized per insertion (B+Tree growth)
-- **Concurrency**: Exclusive lock
-
-### addNodesBatch
-
-Accepts a map of label strings to vectors of node IDs and inserts them in bulk. The operation acquires a single exclusive lock for the entire batch, initializes the B+Tree if needed, then iterates over each label group. For each label, it prepares a vector of `PropertyValue`-to-node-ID pairs and calls `IndexTreeManager::insertBatch()`.
-
-This grouping by label is important for B+Tree efficiency: all entries sharing the same key are inserted together, reducing the number of tree traversals and node splits.
-
-### Batch Insert Flow
-
-```mermaid
-sequenceDiagram
-    participant Caller
-    participant LI as LabelIndex
-    participant ITM as IndexTreeManager
-    participant BPT as B+Tree
-
-    Caller->>LI: addNodesBatch({Person: [1,2,3], Company: [10,20]})
-    LI->>LI: Acquire exclusive lock
-    LI->>LI: Initialize B+Tree if rootId_ == 0
-    loop For each label group
-        LI->>LI: Prepare batch entries for label
-        LI->>ITM: insertBatch(rootId_, entries)
-        ITM->>BPT: Bulk insert entries
-        BPT-->>ITM: New root ID (if split)
-        ITM-->>LI: Updated root ID
-    end
-    LI-->>Caller: Batch complete
-```
-
-**Optimizations**:
-
-- **Single lock acquisition**: Reduces contention compared to individual inserts
-- **Grouped by label**: Minimizes B+Tree traversals and node splits
-- **Pre-allocated vectors**: Batch entry vectors are reserved to the exact size needed
-
-### removeNode
-
-Removes a node-to-label mapping. If the B+Tree has not been initialized (root ID is 0), the operation returns immediately. Otherwise it delegates to `IndexTreeManager::remove()`, which handles underflow automatically through redistribution or merging of B+Tree nodes.
-
-- **Time complexity**: O(log n)
-- **Automatic rebalancing**: B+Tree handles underflow via merge or redistribute
-
-### findNodes
-
-Retrieves all node IDs associated with a given label. Returns an empty vector if the B+Tree has not been initialized. The operation acquires a shared lock, allowing concurrent reads from multiple threads.
-
-- **Time complexity**: O(log n + k) where k is the number of nodes with the label
-- **Concurrency**: Shared lock
-- **Return**: Vector of node IDs
-
-### hasLabel
-
-Checks whether a specific node ID is associated with a given label. Internally it calls `findNodes()` and searches the result for the target ID. Returns false if the B+Tree has not been initialized.
-
-- **Time complexity**: O(log n + k) where k is the number of nodes with the label
-- **Concurrency**: Shared lock
-- **Use case**: Fast label existence check without fetching full node data
-
-## B+Tree Integration
-
-LabelIndex delegates all B+Tree operations to `IndexTreeManager` (source: `include/graph/core/IndexTreeManager.hpp`). The manager provides the following capabilities:
-
-| Method | Description |
-|--------|-------------|
-| `initialize()` | Creates a new empty B+Tree root node and returns its ID |
-| `insert(rootId, key, value)` | Inserts a single key-value pair; returns the (possibly new) root ID |
-| `insertBatch(rootId, entries)` | Bulk-inserts multiple key-value pairs; returns the (possibly new) root ID |
-| `remove(rootId, key, value)` | Removes a specific key-value pair; handles rebalancing automatically |
-| `find(rootId, key)` | Returns all values associated with the given key |
-| `clear(rootId)` | Deletes the entire B+Tree rooted at the given ID |
-| `findLeafNode(rootId, key)` | Locates the leaf node that would contain the given key |
-
-Key features of the B+Tree layer:
-
-1. **Duplicate key support**: Multiple node IDs can share the same label key
-2. **Automatic rebalancing**: Split and merge operations maintain tree balance
-3. **Blob storage**: Large value lists are stored externally when they exceed node capacity
-4. **Type safety**: LabelIndex configures the tree with `PropertyType::STRING` keys and `int64_t` values for node IDs
-
-## Concurrency Control
-
-LabelIndex uses `std::shared_mutex` for thread-safe access:
-
-| Lock Type | Operations | Behavior |
-|-----------|-----------|----------|
-| Shared lock | `findNodes`, `hasLabel`, `isEmpty`, `isEnabled`, `hasPhysicalData`, `saveState` | Multiple readers can proceed concurrently |
-| Exclusive lock | `addNode`, `addNodesBatch`, `removeNode`, `createIndex`, `clear`, `drop`, `initialize` | Only one writer at a time; blocks all readers |
-
-This allows high read concurrency: multiple threads can query the index simultaneously. Write operations are serialized, and a writer blocks all readers until it completes.
-
-## Status Queries
-
-LabelIndex exposes three methods for inspecting index state:
-
-| Method | Description |
-|--------|-------------|
-| `isEmpty()` | Returns true if the index is not enabled (checks the enabled flag, not physical data) |
-| `isEnabled()` | Returns the enabled flag directly |
-| `hasPhysicalData()` | Returns true if the root ID is non-zero (B+Tree exists on disk) |
-
-Note that `isEmpty()` and `hasPhysicalData()` can return different results. An index that has been `clear()`ed is still enabled (so `isEmpty()` returns false) but has no physical data (so `hasPhysicalData()` returns false).
-
-## Multi-Label Support
-
-Nodes can have multiple labels indexed simultaneously. Each label-to-node-ID mapping is stored as an independent entry in the B+Tree. Adding a node under the "Person" label, then under the "Employee" label, creates two separate entries. Querying by either label returns the node. Removing a node from one label does not affect its presence under other labels.
-
-## Performance Characteristics
-
-### Time Complexity
-
-| Operation | Average Case | Worst Case |
-|-----------|-------------|------------|
-| addNode | O(log n) | O(log n) |
-| addNodesBatch | O(m log n) | O(m log n) |
-| removeNode | O(log n) | O(log n) |
-| findNodes | O(log n + k) | O(log n + k) |
-| hasLabel | O(log n + k) | O(log n + k) |
-
-Where:
-
-- n = number of unique labels in the B+Tree
-- m = number of nodes in the batch
-- k = number of nodes with the specified label
-
-### Space Complexity
-
-| Component | Space | Description |
-|-----------|-------|-------------|
-| B+Tree Nodes | O(n x b) | n labels, b = branch factor |
-| Leaf Entries | O(N) | All node ID references |
-| State Metadata | O(1) | Root ID + enabled flag |
-
-Total: **O(N)** where N = total number of node-label associations
-
-### Memory Overhead
-
-```
-For 1 million nodes with 2 labels each:
-
-B+Tree Structure:
-- Internal nodes: ~100 nodes x 256 bytes = 25.6 KB
-- Leaf nodes: ~500 nodes x 256 bytes = 128 KB
-- Node ID references: 2M x 8 bytes = 16 MB
-
-Total Index Size: ~16.15 MB
-Overhead per Node-Label: ~8 bytes
-
-State Storage:
-- Root ID: 8 bytes
-- Enabled flag: 1 byte (if true)
-```
-
-## Limitations
-
-1. **No partial matches**: Labels must match exactly (no wildcards or prefix searches)
-2. **No range queries**: Labels are categorical, not ordered
-3. **Memory bound**: Entire index structure must fit in memory during operations
-4. **Write serialization**: Only one concurrent writer at a time
+Tests cover inline-only and overflow label sets, first/final root transitions, multi-label updates, deletion, stale snapshots, split/merge, relocation, bulk/online equivalence, catalog-token mismatch, malformed keys/pages, before/after-publication crash points, ENOSPC, short I/O, and randomized Node-label oracles. Every coverage dimension must reach 95% or higher on macOS, Linux, and Windows.
 
 ## See Also
 
-- [B+Tree Indexing](/en/docs/zyx/algorithms/btree-indexing) - B+Tree structure details
-- [Property Index](/en/docs/zyx/algorithms/property-index) - Property-based indexing
-- [Query Optimization](/en/docs/zyx/algorithms/query-optimization) - Index usage in queries
-- [Storage System](/en/docs/zyx/architecture/storage) - Overall storage architecture
+- [Packed B+Tree Indexing](/en/docs/zyx/algorithms/btree-indexing)
+- [Native Single-File Storage Plan](/en/docs/zyx/architecture/native-single-file-storage-plan)
+- [Relationship Traversal](/en/docs/zyx/algorithms/relationship-traversal)

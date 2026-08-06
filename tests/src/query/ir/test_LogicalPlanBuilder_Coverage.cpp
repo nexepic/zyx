@@ -25,6 +25,7 @@
 #include "graph/query/logical/operators/LogicalSingleRow.hpp"
 #include "graph/query/logical/operators/LogicalNodeScan.hpp"
 #include "graph/query/logical/operators/LogicalProject.hpp"
+#include "graph/query/logical/operators/LogicalTraversal.hpp"
 #include "graph/query/logical/operators/LogicalAggregate.hpp"
 #include "graph/query/logical/operators/LogicalFilter.hpp"
 #include "graph/query/logical/operators/LogicalSort.hpp"
@@ -411,6 +412,26 @@ TEST_F(LogicalPlanBuilderCoverageTest, MatchWithWhere) {
 	ASSERT_NE(result, nullptr);
 }
 
+TEST_F(LogicalPlanBuilderCoverageTest, MatchMaterializesAnonymousNodeAndEdgeVariables) {
+	MatchClause clause;
+	PatternPartAST part;
+	PatternChainAST chain;
+	chain.relationship.type = "KNOWS";
+	chain.relationship.direction = "out";
+	part.element.chain.push_back(chain);
+	clause.patterns.push_back(part);
+
+	auto result = builder.buildMatch(clause, nullptr);
+	auto *traversal = dynamic_cast<LogicalTraversal *>(result.get());
+	ASSERT_NE(traversal, nullptr);
+	EXPECT_TRUE(graph::query::isAnonymousVariable(traversal->getSourceVar()));
+	EXPECT_TRUE(graph::query::isAnonymousVariable(traversal->getEdgeVar()));
+	EXPECT_TRUE(graph::query::isAnonymousVariable(traversal->getTargetVar()));
+	auto *scan = dynamic_cast<LogicalNodeScan *>(traversal->getChildren().front());
+	ASSERT_NE(scan, nullptr);
+	EXPECT_EQ(scan->getVariable(), traversal->getSourceVar());
+}
+
 // ============================================================================
 // CREATE clause
 // ============================================================================
@@ -638,6 +659,23 @@ TEST_F(LogicalPlanBuilderCoverageTest, CallWithYield) {
 
 	auto result = builder.buildCall(clause, nullptr);
 	ASSERT_NE(result, nullptr);
+}
+
+TEST_F(LogicalPlanBuilderCoverageTest, CallWithYieldPredicate) {
+	CallClause clause;
+	clause.procedureName = "db.indexes";
+	clause.yieldItems.push_back({"name", "indexName"});
+	clause.yieldWhere = varRef("indexName");
+
+	auto result = builder.buildCall(clause, nullptr);
+	ASSERT_NE(result, nullptr);
+	ASSERT_EQ(result->getType(), LogicalOpType::LOP_FILTER);
+	const auto *filter = dynamic_cast<const LogicalFilter *>(result.get());
+	ASSERT_NE(filter, nullptr);
+	EXPECT_EQ(filter->getPredicate(), clause.yieldWhere);
+	ASSERT_EQ(filter->getChildren().size(), 1U);
+	ASSERT_NE(filter->getChildren().front(), nullptr);
+	EXPECT_EQ(filter->getChildren().front()->getType(), LogicalOpType::LOP_PROJECT);
 }
 
 TEST_F(LogicalPlanBuilderCoverageTest, CallWithoutYield) {

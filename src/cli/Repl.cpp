@@ -21,11 +21,11 @@
 #include "graph/cli/Repl.hpp"
 #include "graph/cli/CypherCompleter.hpp"
 #include <chrono>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include "inputxx/Session.hpp"
-#include "graph/storage/data/DataManager.hpp"
 #include "ProjectConfig.hpp"
 
 // For isatty() and debugger detection
@@ -449,11 +449,11 @@ namespace graph {
 		}
 
 		if (trimmed == "save") {
-			if (auto storage = db.getStorage()) {
-				storage->flush();
+			try {
+				db.flush();
 				std::cout << ansi::green("Database flushed to disk.") << "\n";
-			} else {
-				std::cerr << ansi::boldRed("Error: Storage not accessible.") << "\n";
+			} catch (const std::exception &e) {
+				std::cerr << ansi::boldRed("Error: " + std::string(e.what())) << "\n";
 			}
 			return;
 		}
@@ -470,16 +470,8 @@ namespace graph {
 			auto result = db.getQueryEngine()->execute(command);
 			auto elapsed = std::chrono::steady_clock::now() - start;
 
-			// Build token resolver from DataManager for human-readable output
-			query::ResultValue::TokenResolver resolver = nullptr;
-			if (auto storage = db.getStorage()) {
-				auto dm = storage->getDataManager();
-				resolver = [dm](int64_t id) -> std::string {
-					return dm->resolveTokenName(id);
-				};
-			}
-
-			printResult(result, resolver, elapsed);
+			// Logical result values already carry resolved labels and relationship types.
+			printResult(result, {}, elapsed);
 		} catch (const std::exception &e) {
 			std::cerr << ansi::boldRed("Error: " + std::string(e.what())) << "\n";
 		}

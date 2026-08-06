@@ -24,7 +24,6 @@
 #include <filesystem>
 #include <gtest/gtest.h>
 #include <memory>
-#include "graph/core/Database.hpp"
 #include "graph/core/Index.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/data/DataManager.hpp"
@@ -33,7 +32,6 @@
 class IndexEntityManagerTest : public ::testing::Test {
 protected:
 	std::filesystem::path testFilePath;
-	std::unique_ptr<graph::Database> db;
 	std::shared_ptr<graph::storage::FileStorage> storage;
 	std::shared_ptr<graph::storage::DataManager> dataManager;
 	std::shared_ptr<graph::storage::IndexEntityManager> indexEntityManager;
@@ -44,10 +42,10 @@ protected:
 		// Create a unique temporary database file for each test
 		testFilePath = std::filesystem::temp_directory_path() / ("test_indexEntityManager_" + to_string(uuid) + ".dat");
 
-		// Initialize database and get the necessary manager
-		db = std::make_unique<graph::Database>(testFilePath.string());
-		db->open();
-		storage = db->getStorage();
+		// This suite exercises the legacy physical index entity manager directly.
+		storage = std::make_shared<graph::storage::FileStorage>(
+				testFilePath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
+		storage->open();
 		dataManager = storage->getDataManager();
 		deletionManager = dataManager->getDeletionManager();
 		// Get the manager instance that was created by the DataManager
@@ -55,16 +53,15 @@ protected:
 	}
 
 	void TearDown() override {
-		// Release shared_ptrs before closing database
+		// Release entity managers before closing legacy physical storage.
 		indexEntityManager.reset();
 		deletionManager.reset();
 		dataManager.reset();
-		storage.reset();
 
-		if (db) {
-			db->close();
+		if (storage) {
+			storage->close();
 		}
-		db.reset();
+		storage.reset();
 
 		std::error_code ec;
 		std::filesystem::remove(testFilePath, ec);

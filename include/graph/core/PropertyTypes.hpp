@@ -22,7 +22,9 @@
 
 #include <algorithm>
 #include <concepts>
+#include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -45,7 +47,11 @@ namespace graph {
 		COMPOSITE = 8, // Multi-property composite key
 		DATE = 9,
 		DATETIME = 10,
-		DURATION = 11
+		DURATION = 11,
+		// Binary payloads are equality-only values. Large payloads are
+		// externalized by the native Property writer rather than embedded in a
+		// slotted Property page.
+		BYTES = 12
 	};
 
 	// CompositeKey is defined after PropertyValue (uses PropertyValue in components)
@@ -56,13 +62,14 @@ namespace graph {
 	 */
 	struct PropertyValue {
 		using MapType = std::unordered_map<std::string, PropertyValue>;
+		using Bytes = std::vector<std::byte>;
 
 	private:
 		// The actual data storage.
 		// Order matters for default comparison: null < bool < int < double < string
 		using VariantType = std::variant<std::monostate, bool, int64_t, double, std::string,
 		                                std::vector<PropertyValue>, MapType,
-		                                TemporalDate, TemporalDateTime, TemporalDuration>;
+		                                TemporalDate, TemporalDateTime, TemporalDuration, Bytes>;
 		VariantType data;
 
 	public:
@@ -95,6 +102,7 @@ namespace graph {
 		PropertyValue(TemporalDate d) : data(d) {}
 		PropertyValue(TemporalDateTime dt) : data(dt) {}
 		PropertyValue(TemporalDuration dur) : data(dur) {}
+		explicit PropertyValue(Bytes bytes) : data(std::move(bytes)) {}
 
 		// Expose the underlying variant for pattern matching with std::visit.
 		const VariantType &getVariant() const { return data; }
@@ -114,6 +122,10 @@ namespace graph {
 			return std::visit([&other]<typename T>(const T& val) -> bool {
 				if constexpr (std::is_same_v<std::decay_t<T>, MapType>) {
 					return false;
+				} else if constexpr (std::is_same_v<std::decay_t<T>, Bytes>) {
+					return std::lexicographical_compare(val.begin(), val.end(),
+											   std::get<Bytes>(other.data).begin(),
+											   std::get<Bytes>(other.data).end());
 				} else if constexpr (std::is_same_v<std::decay_t<T>, TemporalDuration>) {
 					return val < std::get<T>(other.data);
 				} else {
@@ -169,6 +181,16 @@ namespace graph {
 							return value.toISO();
 						} else if constexpr (std::is_same_v<T, TemporalDuration>) {
 							return value.toISO();
+						} else if constexpr (std::is_same_v<T, Bytes>) {
+							static constexpr char digits[] = "0123456789abcdef";
+							std::string result = "0x";
+							result.reserve(2U + value.size() * 2U);
+							for (const std::byte byte: value) {
+								const uint8_t number = std::to_integer<uint8_t>(byte);
+								result.push_back(digits[number >> 4U]);
+								result.push_back(digits[number & 0x0FU]);
+							}
+							return result;
 						} else {
 							return "";
 						}
@@ -201,6 +223,8 @@ namespace graph {
 							return "DATETIME";
 						else if constexpr (std::is_same_v<T, TemporalDuration>)
 							return "DURATION";
+						else if constexpr (std::is_same_v<T, Bytes>)
+							return "BYTES";
 						else
 							return "UNKNOWN";
 					},
@@ -231,6 +255,8 @@ namespace graph {
 				return PropertyType::DATETIME;
 			if (std::holds_alternative<TemporalDuration>(data))
 				return PropertyType::DURATION;
+			if (std::holds_alternative<Bytes>(data))
+				return PropertyType::BYTES;
 			return PropertyType::UNKNOWN;
 		}
 
@@ -250,6 +276,13 @@ namespace graph {
 				return *val;
 			}
 			throw std::runtime_error("PropertyValue is not a Map");
+		}
+
+		const Bytes &getBytes() const {
+			if (auto *val = std::get_if<Bytes>(&data)) {
+				return *val;
+			}
+			throw std::runtime_error("PropertyValue is not binary data");
 		}
 	};
 
@@ -318,6 +351,8 @@ namespace graph {
 						type = PropertyType::DATETIME;
 					} else if constexpr (std::is_same_v<T, TemporalDuration>) {
 						type = PropertyType::DURATION;
+					} else if constexpr (std::is_same_v<T, PropertyValue::Bytes>) {
+						type = PropertyType::BYTES;
 					}
 				},
 				value.getVariant());
@@ -368,6 +403,13 @@ namespace graph {
 						durationSeed ^= std::hash<int64_t>{}(arg.nanos) + 0x9e3779b9 +
 						                (durationSeed << 6) + (durationSeed >> 2);
 						return durationSeed;
+					} else if constexpr (std::is_same_v<T, PropertyValue::Bytes>) {
+						size_t bytesSeed = arg.size();
+						for (const std::byte byte: arg) {
+							bytesSeed ^= static_cast<size_t>(std::to_integer<uint8_t>(byte)) +
+									 0x9e3779b9 + (bytesSeed << 6U) + (bytesSeed >> 2U);
+						}
+						return bytesSeed;
 					} else {
 						return 0;
 					}

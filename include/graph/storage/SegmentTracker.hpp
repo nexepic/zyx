@@ -29,6 +29,7 @@
 #include <vector>
 
 #include "PwriteHelper.hpp"
+#include "SegmentMetrics.hpp"
 #include "SegmentTypeRegistry.hpp"
 #include "StorageHeaders.hpp"
 #include "StorageIO.hpp"
@@ -55,6 +56,18 @@ namespace graph::storage {
 		std::vector<SegmentHeader> getSegmentsByType(uint32_t type) const;
 		std::vector<SegmentHeader> getSegmentsNeedingCompaction(uint32_t type, double threshold) const;
 		double calculateFragmentationRatio(uint32_t type) const;
+
+		// Stage 0 current-format measurements. This takes a consistent in-memory
+		// snapshot and never reads or modifies persistent segment bytes.
+		[[nodiscard]] SegmentStorageMetrics getStorageMetrics() const;
+
+		// Instrumentation hooks for writes whose subtype ownership is known. They
+		// are used by storage components only and intentionally exclude file-header
+		// and WAL writes, which cannot be attributed to a segment subtype today.
+		void recordSegmentDataWrite(uint64_t segmentOffset, uint64_t bytes);
+		void recordSegmentMetadataWrite(uint32_t type, uint64_t bytes);
+		void recordSegmentAllocationWrite(uint32_t type, uint64_t bytes);
+		void recordSegmentRelocationWrite(uint32_t type, uint64_t bytes);
 
 		uint64_t getChainHead(uint32_t type) const;
 		void updateChainHead(uint32_t type, uint64_t newHead);
@@ -133,6 +146,9 @@ namespace graph::storage {
 		std::unordered_map<uint64_t, uint32_t> pendingCrcs_; // Pre-computed CRCs from write path
 		std::weak_ptr<SegmentIndexManager> segmentIndexManager_;
 
+		mutable std::mutex metricsMutex_;
+		std::array<SegmentWriteMetrics, SEGMENT_METRICS_TYPE_COUNT> writeMetrics_{};
+
 		SegmentTypeRegistry registry_;
 
 		void initializeRegistry();
@@ -150,6 +166,8 @@ namespace graph::storage {
 
 		// Mark a segment as dirty (caller must hold unique lock)
 		void markSegmentDirty(uint64_t offset);
+		void recordSegmentDataWriteForType(uint32_t type, uint64_t bytes);
+		static void validateMetricsType(uint32_t type);
 	};
 
 } // namespace graph::storage

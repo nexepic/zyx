@@ -1,0 +1,9 @@
+# Frozen smoke-only input for exercising the vector calibration pipeline.
+vector-0001	0.0,0.0
+vector-0002	1.0,0.0
+vector-0003	0.0,1.0
+vector-0004	1.0,1.0
+vector-0005	2.0,0.0
+vector-0006	0.0,2.0
+vector-0007	2.0,2.0
+vector-0008	3.0,0.0

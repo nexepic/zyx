@@ -222,6 +222,25 @@ TEST_F(DriverAbiTransactionsTest, DirectGraphCreationRejectsActiveTransaction) {
     EXPECT_EQ(countPeopleNamed("Person"), 0);
 }
 
+TEST_F(DriverAbiTransactionsTest, DatabaseExecuteRejectsActiveTransaction) {
+    zyx_driver_txn_t *txn = nullptr;
+    zyx_driver_result_t *result = nullptr;
+    ASSERT_EQ(zyx_driver_txn_begin(db, &txn, &error), ZYX_DRIVER_OK);
+    ASSERT_NE(txn, nullptr);
+
+    EXPECT_EQ(zyx_driver_db_execute(db, "CREATE (:Person {name:'outside-transaction'})", nullptr, &result, &error),
+              ZYX_DRIVER_TRANSACTION_ERROR);
+    EXPECT_EQ(result, nullptr);
+    ASSERT_NE(error, nullptr);
+    EXPECT_EQ(zyx_driver_error_code(error), ZYX_DRIVER_TRANSACTION_ERROR);
+    zyx_driver_error_free(error);
+    error = nullptr;
+
+    EXPECT_EQ(zyx_driver_txn_rollback(txn, &error), ZYX_DRIVER_OK);
+    EXPECT_EQ(zyx_driver_txn_close(txn, &error), ZYX_DRIVER_OK);
+    EXPECT_EQ(countPeopleNamed("outside-transaction"), 0);
+}
+
 TEST_F(DriverAbiTransactionsTest, DirectGraphCreationRejectsCypherBeginTransaction) {
     zyx_driver_result_t *result = nullptr;
     int64_t nodeId = 0;

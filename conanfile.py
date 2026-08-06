@@ -10,6 +10,8 @@ class ProjectConan(ConanFile):
     def requirements(self):
         self.requires("boost/1.87.0")
         self.requires("zlib/1.3.1")
+        self.requires("lz4/1.10.0")
+        self.requires("zstd/1.5.7")
         self.requires("cli11/2.6.0")
         # ANTLR4 exposes STL types in public headers. Always build from source
         # with this project's C++ standard to avoid ABI mismatches.
@@ -20,6 +22,8 @@ class ProjectConan(ConanFile):
     def configure(self):
         self.options["boost"].shared = False
         self.options["zlib"].shared = False
+        self.options["lz4"].shared = False
+        self.options["zstd"].shared = False
         self.options["cli11"].shared = False
         if self.options.with_tests:
             self.options["gtest"].shared = False

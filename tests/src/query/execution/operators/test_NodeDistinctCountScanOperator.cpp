@@ -7,7 +7,7 @@
 #include <string>
 #include <unordered_map>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/execution/operators/NodeDistinctCountScanOperator.hpp"
 
@@ -18,7 +18,7 @@ using namespace graph::query::execution::operators;
 
 class NodeDistinctCountScanOperatorTest : public ::testing::Test {
 protected:
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<storage::DataManager> dm;
 	std::shared_ptr<query::indexes::IndexManager> im;
 	fs::path testFilePath;
@@ -27,10 +27,10 @@ protected:
 		const auto uuid = boost::uuids::random_generator()();
 		testFilePath = fs::temp_directory_path() /
 					   ("test_node_distinct_count_scan_path_" + boost::uuids::to_string(uuid) + ".dat");
-		db = std::make_unique<Database>(testFilePath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testFilePath.string());
 		db->open();
-		dm = db->getStorage()->getDataManager();
-		im = db->getQueryEngine()->getIndexManager();
+		dm = db->storage()->getDataManager();
+		im = db->indexManager();
 		debug::PerfTrace::reset();
 		debug::PerfTrace::setEnabled(false);
 	}
@@ -79,7 +79,7 @@ TEST_F(NodeDistinctCountScanOperatorTest, CountsDistinctSelectedPropertyValues) 
 	addPerson({{"country", PropertyValue(std::monostate{})}});
 	addPerson();
 	addLabeledNode({"Animal"}, {{"country", PropertyValue("CN")}});
-	db->getStorage()->flush();
+	db->storage()->flush();
 	debug::PerfTrace::setEnabled(true);
 	debug::PerfTrace::reset();
 
@@ -112,7 +112,7 @@ TEST_F(NodeDistinctCountScanOperatorTest, SkipsRedundantChecksForLabelIndexCandi
 		addPerson({{"country", PropertyValue(i % 2 == 0 ? "CN" : "US")}});
 	}
 	addLabeledNode({"Animal"}, {{"country", PropertyValue("JP")}});
-	db->getStorage()->flush();
+	db->storage()->flush();
 	debug::PerfTrace::setEnabled(true);
 	debug::PerfTrace::reset();
 
@@ -140,7 +140,7 @@ TEST_F(NodeDistinctCountScanOperatorTest, RepeatsDistinctCountsWithoutResultCach
 	for (int64_t i = 0; i < 300; ++i) {
 		addPerson({{"country", PropertyValue(i % 2 == 0 ? "CN" : "US")}});
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	NodeScanConfig config;
@@ -178,7 +178,7 @@ TEST_F(NodeDistinctCountScanOperatorTest, AppliesResidualPropertyPredicatesBefor
 	}
 	addPerson({{"country", PropertyValue(std::monostate{})}, {"age", PropertyValue(int64_t{1})}});
 	addPerson({{"age", PropertyValue(int64_t{2})}});
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	NodeScanConfig config;
 	config.type = ScanType::FULL_SCAN;
@@ -207,7 +207,7 @@ TEST_F(NodeDistinctCountScanOperatorTest, ResidualPredicateFallbackHandlesMissin
 	for (int64_t i = 0; i < 300; ++i) {
 		addPerson({{"age", PropertyValue(i)}});
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	NodeScanConfig config;
 	config.type = ScanType::FULL_SCAN;
@@ -236,7 +236,7 @@ TEST_F(NodeDistinctCountScanOperatorTest, MetadataPathReturnsZeroWhenNoRowsHaveP
 	for (int64_t i = 0; i < 32; ++i) {
 		addPerson();
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	NodeScanConfig config;
 	config.type = ScanType::FULL_SCAN;
@@ -259,7 +259,7 @@ TEST_F(NodeDistinctCountScanOperatorTest, DistinguishesTypedValuesWithoutStringi
 	addPerson({{"code", PropertyValue(int64_t{1})}});
 	addPerson({{"code", PropertyValue(std::string("1"))}});
 	addPerson({{"code", PropertyValue(int64_t{1})}});
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	NodeScanConfig config;
 	config.type = ScanType::FULL_SCAN;
@@ -288,7 +288,7 @@ TEST_F(NodeDistinctCountScanOperatorTest, MetadataPathCountsTypedScalarDistinctV
 	addPerson({{"code", PropertyValue(TemporalDuration{0, 1, 2})}});
 	addPerson({{"code", PropertyValue(std::monostate{})}});
 	addPerson();
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	NodeScanConfig config;
 	config.type = ScanType::FULL_SCAN;
@@ -343,7 +343,7 @@ TEST_F(NodeDistinctCountScanOperatorTest, CountsBlobBackedDistinctValuesFromMeta
 	}
 	addPerson();
 	addPerson({{"payload", PropertyValue(std::monostate{})}});
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 	debug::PerfTrace::setEnabled(true);
 	debug::PerfTrace::reset();
@@ -372,7 +372,7 @@ TEST_F(NodeDistinctCountScanOperatorTest, BlobFallbackSkipsMissingAndNullDistinc
 	addPerson({{"payload", PropertyValue(largeValue)}});
 	addPerson({{"other", PropertyValue(largeOther)}});
 	addPerson({{"payload", PropertyValue()}, {"other", PropertyValue(largeOther)}});
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	NodeScanConfig config;
 	config.type = ScanType::FULL_SCAN;
@@ -394,7 +394,7 @@ TEST_F(NodeDistinctCountScanOperatorTest, BlobFallbackSkipsMissingAndNullDistinc
 TEST_F(NodeDistinctCountScanOperatorTest, BlobFallbackIgnoresRowsWithoutDistinctProperty) {
 	const std::string largeOther(600, 'o');
 	addPerson({{"other", PropertyValue(largeOther)}});
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	NodeScanConfig config;
 	config.type = ScanType::FULL_SCAN;

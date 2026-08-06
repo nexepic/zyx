@@ -22,7 +22,6 @@
 
 #include <memory>
 #include <string>
-#include "../../../../include/graph/query/planner/QueryPlanner.hpp"
 #include "query/parser/common/IQueryParser.hpp"
 
 // Forward declarations to avoid including ANTLR headers here
@@ -44,8 +43,7 @@ namespace graph::parser::cypher {
 	 * It orchestrates the parsing process:
 	 * 1. Sets up the ANTLR input stream and lexer.
 	 * 2. Invokes the parser rules.
-	 * 3. Uses CypherToPlanVisitor (which uses QueryPlanner) to traverse the AST
-	 *    and build the Physical Operator Tree.
+	 * 3. Uses CypherToPlanVisitor to traverse the AST and build the logical plan.
 	 *
 	 * The ANTLR4 lexer and parser are kept alive across calls to avoid
 	 * DFA cache corruption that occurs when the ATN simulator is destroyed
@@ -54,30 +52,16 @@ namespace graph::parser::cypher {
 	class CypherParserImpl : public IQueryParser {
 	public:
 		/**
-		 * @brief Constructs the parser with a reference to the planner factory.
-		 *
-		 * @param planner The factory used to create physical operators (Scan, Filter, etc.).
+		 * @brief Constructs a parser for the native logical execution pipeline.
 		 */
-		explicit CypherParserImpl(std::shared_ptr<query::QueryPlanner> planner);
+		CypherParserImpl();
 
 		~CypherParserImpl() override;
-
-		/**
-		 * @brief Parses a raw Cypher query string into an executable pipeline.
-		 *
-		 * @param query The raw Cypher string (e.g., "MATCH (n:User) RETURN n").
-		 * @return std::unique_ptr<query::execution::PhysicalOperator> The root of the executable operator tree.
-		 * @throws std::runtime_error If syntax errors occur or plan generation fails.
-		 */
-		[[nodiscard]] std::unique_ptr<query::execution::PhysicalOperator>
-		parse(const std::string &query) const override;
 
 		[[nodiscard]] query::QueryPlan
 		parseToLogical(const std::string &query) const override;
 
 	private:
-		std::shared_ptr<query::QueryPlanner> planner_;
-
 		// Persistent ANTLR4 objects — kept alive to preserve DFA cache integrity.
 		// ANTLR4's static DFA cache retains pointers into the ATN simulator owned
 		// by each Lexer/Parser instance.  Destroying and recreating these objects

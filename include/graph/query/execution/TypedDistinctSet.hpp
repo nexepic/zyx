@@ -48,6 +48,8 @@ namespace graph::query::execution {
 					return insertDateTimeEpochMillis(value.intValue);
 				case PropertyType::DURATION:
 					return insertDuration(value.durationValue);
+				case PropertyType::BYTES:
+					return insert(value.fallbackValue != nullptr ? *value.fallbackValue : PropertyValue());
 				case PropertyType::LIST:
 				case PropertyType::MAP:
 				case PropertyType::COMPOSITE:
@@ -74,6 +76,7 @@ namespace graph::query::execution {
 				case PropertyType::DATETIME:
 					return insertDateTimeEpochMillis(std::get<TemporalDateTime>(value.getVariant()).epochMillis);
 				case PropertyType::DURATION:
+				case PropertyType::BYTES:
 				case PropertyType::LIST:
 				case PropertyType::MAP:
 				case PropertyType::COMPOSITE:

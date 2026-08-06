@@ -56,6 +56,9 @@ protected:
 	}
 
 	query::QueryResult execute(const std::string &query) const { return db->getQueryEngine()->execute(query); }
+	query::QueryResult execute(Transaction &transaction, const std::string &query) const {
+		return transaction.execute(*db->getQueryEngine(), query);
+	}
 
 	std::filesystem::path testDbPath;
 	std::unique_ptr<Database> db;
@@ -66,8 +69,8 @@ protected:
  */
 TEST_F(IntegrationTransactionTest, Atomicity_Commit) {
 	auto txn = db->beginTransaction();
-	(void) execute("CREATE (n:Person {name: 'Alice', age: 30})");
-	(void) execute("CREATE (n:Person {name: 'Bob', age: 25})");
+	(void) execute(txn, "CREATE (n:Person {name: 'Alice', age: 30})");
+	(void) execute(txn, "CREATE (n:Person {name: 'Bob', age: 25})");
 	txn.commit();
 
 	auto result = execute("MATCH (n:Person) RETURN n.name ORDER BY n.name");
@@ -81,7 +84,7 @@ TEST_F(IntegrationTransactionTest, Atomicity_Rollback) {
 	// Pre-existing data
 	{
 		auto txn = db->beginTransaction();
-		(void) execute("CREATE (n:Person {name: 'Charlie', age: 35})");
+		(void) execute(txn, "CREATE (n:Person {name: 'Charlie', age: 35})");
 		txn.commit();
 	}
 
@@ -91,8 +94,8 @@ TEST_F(IntegrationTransactionTest, Atomicity_Rollback) {
 	// Transaction that will be rolled back
 	{
 		auto txn = db->beginTransaction();
-		(void) execute("CREATE (n:Person {name: 'Alice', age: 30})");
-		(void) execute("CREATE (n:Person {name: 'Bob', age: 25})");
+		(void) execute(txn, "CREATE (n:Person {name: 'Alice', age: 30})");
+		(void) execute(txn, "CREATE (n:Person {name: 'Bob', age: 25})");
 		txn.rollback();
 	}
 
@@ -106,8 +109,8 @@ TEST_F(IntegrationTransactionTest, Atomicity_Rollback) {
  */
 TEST_F(IntegrationTransactionTest, Consistency_AfterCommit) {
 	auto txn = db->beginTransaction();
-	(void) execute("CREATE (a:Person {name: 'Alice'})-[:KNOWS]->(b:Person {name: 'Bob'})");
-	(void) execute("CREATE (b:Person {name: 'Bob'})-[:KNOWS]->(c:Person {name: 'Charlie'})");
+	(void) execute(txn, "CREATE (a:Person {name: 'Alice'})-[:KNOWS]->(b:Person {name: 'Bob'})");
+	(void) execute(txn, "CREATE (b:Person {name: 'Bob'})-[:KNOWS]->(c:Person {name: 'Charlie'})");
 	txn.commit();
 
 	// Verify Alice knows Bob
@@ -125,13 +128,13 @@ TEST_F(IntegrationTransactionTest, Consistency_AfterCommit) {
 TEST_F(IntegrationTransactionTest, Isolation_SequentialTransactions) {
 	{
 		auto txn1 = db->beginTransaction();
-		(void) execute("CREATE (n:Person {name: 'Alice', age: 30})");
+		(void) execute(txn1, "CREATE (n:Person {name: 'Alice', age: 30})");
 		txn1.commit();
 	}
 
 	{
 		auto txn2 = db->beginTransaction();
-		(void) execute("CREATE (n:Person {name: 'Bob', age: 25})");
+		(void) execute(txn2, "CREATE (n:Person {name: 'Bob', age: 25})");
 		txn2.commit();
 	}
 
@@ -145,8 +148,8 @@ TEST_F(IntegrationTransactionTest, Isolation_SequentialTransactions) {
 TEST_F(IntegrationTransactionTest, Durability_PersistAfterReopen) {
 	{
 		auto txn = db->beginTransaction();
-		(void) execute("CREATE (n:Person {name: 'Alice', age: 30})");
-		(void) execute("CREATE (n:Person {name: 'Bob', age: 25})");
+		(void) execute(txn, "CREATE (n:Person {name: 'Alice', age: 30})");
+		(void) execute(txn, "CREATE (n:Person {name: 'Bob', age: 25})");
 		txn.commit();
 		db->close();
 	}
@@ -166,9 +169,9 @@ TEST_F(IntegrationTransactionTest, Durability_PersistAfterReopen) {
  */
 TEST_F(IntegrationTransactionTest, TransactionWithCreate) {
 	auto txn = db->beginTransaction();
-	(void) execute("CREATE (n:Person {name: 'Alice'})");
-	(void) execute("CREATE (n:Person {name: 'Bob'})");
-	(void) execute("CREATE (n:Person {name: 'Charlie'})");
+	(void) execute(txn, "CREATE (n:Person {name: 'Alice'})");
+	(void) execute(txn, "CREATE (n:Person {name: 'Bob'})");
+	(void) execute(txn, "CREATE (n:Person {name: 'Charlie'})");
 	txn.commit();
 
 	auto result = execute("MATCH (n:Person) RETURN n.name ORDER BY n.name");
@@ -181,14 +184,14 @@ TEST_F(IntegrationTransactionTest, TransactionWithCreate) {
 TEST_F(IntegrationTransactionTest, TransactionWithUpdate) {
 	{
 		auto txn = db->beginTransaction();
-		(void) execute("CREATE (n:Person {name: 'Alice', age: 30})");
-		(void) execute("CREATE (n:Person {name: 'Bob', age: 25})");
+		(void) execute(txn, "CREATE (n:Person {name: 'Alice', age: 30})");
+		(void) execute(txn, "CREATE (n:Person {name: 'Bob', age: 25})");
 		txn.commit();
 	}
 
 	{
 		auto txn = db->beginTransaction();
-		(void) execute("MATCH (n:Person {name: 'Alice'}) SET n.age = 35");
+		(void) execute(txn, "MATCH (n:Person {name: 'Alice'}) SET n.age = 35");
 		txn.commit();
 	}
 
@@ -202,15 +205,15 @@ TEST_F(IntegrationTransactionTest, TransactionWithUpdate) {
 TEST_F(IntegrationTransactionTest, TransactionWithDelete) {
 	{
 		auto txn = db->beginTransaction();
-		(void) execute("CREATE (n:Person {name: 'Alice', active: false})");
-		(void) execute("CREATE (n:Person {name: 'Bob', active: false})");
-		(void) execute("CREATE (n:Person {name: 'Charlie', active: true})");
+		(void) execute(txn, "CREATE (n:Person {name: 'Alice', active: false})");
+		(void) execute(txn, "CREATE (n:Person {name: 'Bob', active: false})");
+		(void) execute(txn, "CREATE (n:Person {name: 'Charlie', active: true})");
 		txn.commit();
 	}
 
 	{
 		auto txn = db->beginTransaction();
-		(void) execute("MATCH (n:Person) WHERE n.active = false DELETE n");
+		(void) execute(txn, "MATCH (n:Person) WHERE n.active = false DELETE n");
 		txn.commit();
 	}
 
@@ -223,9 +226,9 @@ TEST_F(IntegrationTransactionTest, TransactionWithDelete) {
  */
 TEST_F(IntegrationTransactionTest, TransactionWithRelationships) {
 	auto txn = db->beginTransaction();
-	(void) execute("CREATE (a:Person {name: 'Alice'})");
-	(void) execute("CREATE (b:Person {name: 'Bob'})");
-	(void) execute("MATCH (a:Person {name: 'Alice'}) MATCH (b:Person {name: 'Bob'}) CREATE (a)-[:KNOWS]->(b)");
+	(void) execute(txn, "CREATE (a:Person {name: 'Alice'})");
+	(void) execute(txn, "CREATE (b:Person {name: 'Bob'})");
+	(void) execute(txn, "MATCH (a:Person {name: 'Alice'}) MATCH (b:Person {name: 'Bob'}) CREATE (a)-[:KNOWS]->(b)");
 	txn.commit();
 
 	auto result = execute("MATCH (a:Person {name: 'Alice'})-[:KNOWS]->(b:Person) RETURN b.name");
@@ -238,19 +241,19 @@ TEST_F(IntegrationTransactionTest, TransactionWithRelationships) {
 TEST_F(IntegrationTransactionTest, MultipleSequentialTransactions) {
 	{
 		auto txn1 = db->beginTransaction();
-		(void) execute("CREATE (n:Person {name: 'Alice'})");
+		(void) execute(txn1, "CREATE (n:Person {name: 'Alice'})");
 		txn1.commit();
 	}
 
 	{
 		auto txn2 = db->beginTransaction();
-		(void) execute("CREATE (n:Person {name: 'Bob'})");
+		(void) execute(txn2, "CREATE (n:Person {name: 'Bob'})");
 		txn2.commit();
 	}
 
 	{
 		auto txn3 = db->beginTransaction();
-		(void) execute("CREATE (n:Person {name: 'Charlie'})");
+		(void) execute(txn3, "CREATE (n:Person {name: 'Charlie'})");
 		txn3.commit();
 	}
 
@@ -265,14 +268,14 @@ TEST_F(IntegrationTransactionTest, AutoRollbackOnScopeExit) {
 	// Pre-existing data
 	{
 		auto txn = db->beginTransaction();
-		(void) execute("CREATE (n:Person {name: 'Alice'})");
+		(void) execute(txn, "CREATE (n:Person {name: 'Alice'})");
 		txn.commit();
 	}
 
 	// This transaction should be auto-rolled back
 	{
 		auto txn = db->beginTransaction();
-		(void) execute("CREATE (n:Person {name: 'Bob'})");
+		(void) execute(txn, "CREATE (n:Person {name: 'Bob'})");
 		// No commit() - destructor auto-rollback
 	}
 
@@ -286,9 +289,9 @@ TEST_F(IntegrationTransactionTest, AutoRollbackOnScopeExit) {
  */
 TEST_F(IntegrationTransactionTest, CommitThenQuery) {
 	auto txn = db->beginTransaction();
-	(void) execute("CREATE (n:Animal {name: 'Dog', legs: 4})");
-	(void) execute("CREATE (n:Animal {name: 'Cat', legs: 4})");
-	(void) execute("CREATE (n:Animal {name: 'Spider', legs: 8})");
+	(void) execute(txn, "CREATE (n:Animal {name: 'Dog', legs: 4})");
+	(void) execute(txn, "CREATE (n:Animal {name: 'Cat', legs: 4})");
+	(void) execute(txn, "CREATE (n:Animal {name: 'Spider', legs: 8})");
 	txn.commit();
 
 	auto result = execute("MATCH (n:Animal) WHERE n.legs = 4 RETURN n.name ORDER BY n.name");
@@ -340,10 +343,10 @@ TEST_F(BulkApiTransactionTest, BulkApiWithImplicitTransaction) {
 }
 
 TEST_F(BulkApiTransactionTest, BulkApiWithExplicitTransaction) {
-	// Begin explicit transaction, use bulk API, commit
+	// Transaction-bound direct writes are explicitly scoped to this transaction.
 	auto txn = db->beginTransaction();
 
-	int64_t nodeId = db->createNode("BulkTest", {{"name", std::string("Alice")}});
+	int64_t nodeId = txn.createNode("BulkTest", {{"name", std::string("Alice")}});
 	EXPECT_GT(nodeId, 0);
 
 	txn.commit();
@@ -354,10 +357,13 @@ TEST_F(BulkApiTransactionTest, BulkApiWithExplicitTransaction) {
 }
 
 TEST_F(BulkApiTransactionTest, BulkApiRollback) {
-	// Begin explicit transaction, use bulk API, rollback
+	// A transaction-local direct write remains invisible until commit.
 	auto txn = db->beginTransaction();
 
-	(void) db->createNode("BulkTest", {{"name", std::string("Bob")}});
+	(void) txn.createNode("BulkTest", {{"name", std::string("Bob")}});
+	auto staged = txn.execute("MATCH (n:BulkTest) RETURN n.name");
+	ASSERT_TRUE(staged.isSuccess()) << staged.getError();
+	EXPECT_TRUE(staged.hasNext());
 
 	txn.rollback();
 

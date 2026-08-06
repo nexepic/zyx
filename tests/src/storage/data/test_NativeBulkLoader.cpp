@@ -9,8 +9,8 @@
 #include <string>
 #include <vector>
 
-#include "graph/core/Database.hpp"
 #include "graph/query/api/QueryEngine.hpp"
+#include "graph/storage/FileStorage.hpp"
 #include "graph/storage/data/NativeBulkLoader.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 
@@ -39,11 +39,10 @@ namespace {
 } // namespace
 
 TEST_F(NativeBulkLoaderTest, LoadsColumnarNodesEdgesAndBuildsDeferredIndexes) {
-	graph::Database db(dbPath.string());
-	db.open();
-
-	auto loadTxn = db.beginBulkTransaction();
-	auto dm = db.getStorage()->getDataManager();
+	auto storage = std::make_shared<graph::storage::FileStorage>(
+			dbPath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
+	storage->open();
+	auto dm = storage->getDataManager();
 	graph::storage::NativeBulkLoader loader(dm);
 
 	std::vector<graph::storage::BulkPropertyColumn> nodeColumns{
@@ -65,38 +64,34 @@ TEST_F(NativeBulkLoaderTest, LoadsColumnarNodesEdgesAndBuildsDeferredIndexes) {
 	ASSERT_EQ(edgeIds.size(), 2U);
 	EXPECT_EQ(loader.stats().nodeRows, 4U);
 	EXPECT_EQ(loader.stats().edgeRows, 2U);
-	loadTxn.commit();
 
-	db.flush();
-	auto queryEngine = db.getQueryEngine();
-	ASSERT_NE(queryEngine, nullptr);
+	storage->flush();
+	graph::query::QueryEngine queryEngine(storage);
 
 	loader.deferNodePropertyIndexes("NativeBulkUser", {"id", "score", "id"});
 	loader.deferEdgePropertyIndexes({"weight", "weight"});
 	EXPECT_TRUE(loader.hasDeferredIndexes());
 	EXPECT_EQ(loader.stats().deferredIndexRequests, 3U);
 
-	auto schemaTxn = db.beginBulkTransaction();
-	const auto results = loader.buildDeferredIndexes(*queryEngine->getIndexManager());
+	const auto results = loader.buildDeferredIndexes(*queryEngine.getIndexManager());
 	ASSERT_EQ(results.size(), 3U);
 	EXPECT_TRUE(results[0].success);
 	EXPECT_TRUE(results[1].success);
 	EXPECT_TRUE(results[2].success);
-	schemaTxn.commit();
 	EXPECT_FALSE(loader.hasDeferredIndexes());
 	EXPECT_EQ(loader.stats().deferredIndexRequests, 0U);
 
-	const auto idMatches = queryEngine->getIndexManager()->findNodeIdsByLabelAndProperty(
+	const auto idMatches = queryEngine.getIndexManager()->findNodeIdsByLabelAndProperty(
 			"NativeBulkUser", "id", graph::PropertyValue("u2"));
 	ASSERT_EQ(idMatches.size(), 1U);
 	EXPECT_EQ(idMatches.front(), nodeIds[1]);
 
-	const auto scoreMatches = queryEngine->getIndexManager()->findNodeIdsByLabelAndProperty(
+	const auto scoreMatches = queryEngine.getIndexManager()->findNodeIdsByLabelAndProperty(
 			"NativeBulkUser", "score", graph::PropertyValue(int64_t{30}));
 	ASSERT_EQ(scoreMatches.size(), 1U);
 	EXPECT_EQ(scoreMatches.front(), nodeIds[2]);
 
-	const auto edgeMatches = queryEngine->getIndexManager()->findEdgeIdsByProperty(
+	const auto edgeMatches = queryEngine.getIndexManager()->findEdgeIdsByProperty(
 			"weight", graph::PropertyValue(int64_t{11}));
 	ASSERT_EQ(edgeMatches.size(), 1U);
 	EXPECT_EQ(edgeMatches.front(), edgeIds[1]);
@@ -106,35 +101,37 @@ TEST_F(NativeBulkLoaderTest, LoadsColumnarNodesEdgesAndBuildsDeferredIndexes) {
 	EXPECT_EQ(storedEdge.getSourceNodeId(), nodeIds[0]);
 	EXPECT_EQ(storedEdge.getTargetNodeId(), nodeIds[1]);
 
-	db.close();
+	storage->close();
 }
 
 TEST_F(NativeBulkLoaderTest, RejectsInvalidConstructionAndDeferredIndexRequests) {
 	EXPECT_THROW((void) graph::storage::NativeBulkLoader(nullptr), std::invalid_argument);
 
-	graph::Database db(dbPath.string());
-	db.open();
-	graph::storage::NativeBulkLoader loader(db.getStorage()->getDataManager());
+	auto storage = std::make_shared<graph::storage::FileStorage>(
+			dbPath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
+	storage->open();
+	graph::query::QueryEngine queryEngine(storage);
+	graph::storage::NativeBulkLoader loader(storage->getDataManager());
 
 	EXPECT_THROW((void) loader.addNodes("", 0, {}), std::invalid_argument);
 	EXPECT_THROW(loader.deferNodePropertyIndexes("", {"id"}), std::invalid_argument);
 	EXPECT_THROW(loader.deferNodePropertyIndexes("User", {""}), std::invalid_argument);
 	EXPECT_THROW(loader.deferEdgePropertyIndexes({""}), std::invalid_argument);
-	EXPECT_TRUE(loader.buildDeferredIndexes(*db.getQueryEngine()->getIndexManager()).empty());
+	EXPECT_TRUE(loader.buildDeferredIndexes(*queryEngine.getIndexManager()).empty());
 
-	db.close();
+	storage->close();
 }
 
 TEST_F(NativeBulkLoaderTest, KeepsDeferredIndexesWhenBuildReportsFailures) {
-	graph::Database db(dbPath.string());
-	db.open();
-	auto queryEngine = db.getQueryEngine();
-	ASSERT_NE(queryEngine, nullptr);
-	ASSERT_TRUE(queryEngine->getIndexManager()->createIndex("existing_user_id", "node", "User", "id"));
+	auto storage = std::make_shared<graph::storage::FileStorage>(
+			dbPath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
+	storage->open();
+	graph::query::QueryEngine queryEngine(storage);
+	ASSERT_TRUE(queryEngine.getIndexManager()->createIndex("existing_user_id", "node", "User", "id"));
 
-	graph::storage::NativeBulkLoader loader(db.getStorage()->getDataManager());
+	graph::storage::NativeBulkLoader loader(storage->getDataManager());
 	loader.deferNodePropertyIndexes("User", {"id"});
-	const auto results = loader.buildDeferredIndexes(*queryEngine->getIndexManager());
+	const auto results = loader.buildDeferredIndexes(*queryEngine.getIndexManager());
 
 	ASSERT_EQ(results.size(), 1U);
 	EXPECT_FALSE(results.front().success);
@@ -142,5 +139,5 @@ TEST_F(NativeBulkLoaderTest, KeepsDeferredIndexesWhenBuildReportsFailures) {
 	EXPECT_TRUE(loader.hasDeferredIndexes());
 	EXPECT_EQ(loader.stats().deferredIndexRequests, 1U);
 
-	db.close();
+	storage->close();
 }

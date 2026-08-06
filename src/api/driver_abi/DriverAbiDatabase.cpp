@@ -28,6 +28,13 @@ zyx_driver_status_t validateNoActiveTransaction(zyx_driver_db_t *db, zyx_driver_
     }
     return ZYX_DRIVER_OK;
 }
+zyx_driver_status_t validateNoActiveDriverHandle(zyx_driver_db_t *db, zyx_driver_error_t **out_error) {
+    std::lock_guard lock(db->mutex);
+    if (!db->active_txns.empty() || !db->active_ingests.empty()) {
+        return setError(out_error, ZYX_DRIVER_TRANSACTION_ERROR, "database has active transactions");
+    }
+    return ZYX_DRIVER_OK;
+}
 zyx_driver_status_t openDatabase(const char *path, zyx_driver_db_t **out_db, zyx_driver_error_t **out_error,
                                  bool require_exists) {
     clearError(out_error);
@@ -255,6 +262,9 @@ zyx_driver_status_t zyx_driver_db_execute(zyx_driver_db_t *db, const char *cyphe
     }
 
     try {
+        if (auto status = validateNoActiveDriverHandle(db, out_error); status != ZYX_DRIVER_OK) {
+            return status;
+        }
         auto handle = std::make_unique<zyx_driver_result_t>();
         handle->result = params != nullptr ? db->db->execute(cypher, params->values) : db->db->execute(cypher);
         if (!handle->result.isSuccess()) {

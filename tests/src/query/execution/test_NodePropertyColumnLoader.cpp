@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/query/execution/NodePropertyColumnLoader.hpp"
 
@@ -156,9 +156,9 @@ protected:
 		if (fs::exists(testDbPath)) {
 			fs::remove_all(testDbPath);
 		}
-		db = std::make_unique<Database>(testDbPath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testDbPath.string());
 		db->open();
-		dm = db->getStorage()->getDataManager();
+		dm = db->storage()->getDataManager();
 	}
 
 	void TearDown() override {
@@ -174,7 +174,7 @@ protected:
 	}
 
 	fs::path testDbPath;
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<storage::DataManager> dm;
 };
 

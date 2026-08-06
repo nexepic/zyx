@@ -26,7 +26,6 @@
 #include <gtest/gtest.h>
 #include <memory>
 #include <stdexcept>
-#include "graph/core/Database.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/core/PropertyTypes.hpp"
@@ -44,10 +43,10 @@ protected:
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath = std::filesystem::temp_directory_path() / ("test_baseEntityManager_" + to_string(uuid) + ".dat");
 
-		// Initialize Database and FileStorage
-		database = std::make_unique<graph::Database>(testFilePath.string());
-		database->open();
-		fileStorage = database->getStorage();
+		// This suite exercises the legacy physical entity managers directly.
+		fileStorage = std::make_shared<graph::storage::FileStorage>(
+				testFilePath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
+		fileStorage->open();
 		dataManager = fileStorage->getDataManager();
 
 		// Get the entity managers
@@ -56,16 +55,15 @@ protected:
 	}
 
 	void TearDown() override {
-		// Release shared_ptrs before closing database
+		// Release entity managers before closing legacy physical storage.
 		edgeManager.reset();
 		nodeManager.reset();
 		dataManager.reset();
-		fileStorage.reset();
 
-		if (database) {
-			database->close();
+		if (fileStorage) {
+			fileStorage->close();
 		}
-		database.reset();
+		fileStorage.reset();
 
 		std::error_code ec;
 		std::filesystem::remove(testFilePath, ec);
@@ -101,7 +99,6 @@ protected:
 	}
 
 	std::filesystem::path testFilePath;
-	std::unique_ptr<graph::Database> database;
 	std::shared_ptr<graph::storage::FileStorage> fileStorage;
 	std::shared_ptr<graph::storage::DataManager> dataManager;
 	std::shared_ptr<graph::storage::NodeManager> nodeManager;

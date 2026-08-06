@@ -10,7 +10,7 @@
 #include <gtest/gtest.h>
 #include <memory>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/query/api/QueryEngine.hpp"
 #include "graph/query/execution/operators/ShowIndexesOperator.hpp"
 
@@ -21,7 +21,7 @@ using namespace graph::query::execution::operators;
 
 class ShowIndexesOperatorTest : public ::testing::Test {
 protected:
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<storage::DataManager> dm;
 	std::shared_ptr<query::indexes::IndexManager> im;
 	fs::path testFilePath;
@@ -31,10 +31,10 @@ protected:
 		testFilePath = fs::temp_directory_path() /
 					   ("test_show_indexes_" + boost::uuids::to_string(uuid) + ".dat");
 		if (fs::exists(testFilePath)) fs::remove_all(testFilePath);
-		db = std::make_unique<Database>(testFilePath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testFilePath.string());
 		db->open();
-		dm = db->getStorage()->getDataManager();
-		im = db->getQueryEngine()->getIndexManager();
+		dm = db->storage()->getDataManager();
+		im = db->indexManager();
 	}
 
 	void TearDown() override {

@@ -27,7 +27,6 @@
 #include <string>
 #include <vector>
 
-#include "graph/core/Database.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/storage/FileStorage.hpp"
@@ -45,19 +44,17 @@ protected:
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath = fs::temp_directory_path() / ("test_entityTypeIndex_" + boost::uuids::to_string(uuid) + ".dat");
 
-		// Initialize Database and FileStorage
-		// Note: Database::open() initializes FileStorage, DataManager, and the internal IndexManager.
-		database = std::make_unique<graph::Database>(testFilePath.string());
-		database->open();
-
-		fileStorage = database->getStorage();
+		// This suite exercises the legacy physical index manager directly.
+		fileStorage = std::make_shared<graph::storage::FileStorage>(
+				testFilePath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
+		fileStorage->open();
 		dataManager = fileStorage->getDataManager();
 
 		// Ensure TokenRegistry is ready (Critical for resolveTokenName to work in tests)
 		// With the previous fix, this should happen automatically in DataManager initialization.
 
 		// Manually instantiate EntityTypeIndexManager for white-box testing.
-		// NOTE: This instance is SEPARATE from the one inside database->indexManager.
+		// This instance is intentionally separate from query-layer index management.
 		// They share the underlying DataManager and SystemStateManager (and thus the KV storage keys),
 		// but they maintain their own in-memory cache of 'rootId_'.
 		// Since we only operate on this instance in the tests, it should be self-consistent.
@@ -76,23 +73,21 @@ protected:
 	}
 
 	void TearDown() override {
-		// Reset managers before closing DB to release shared_ptrs
+		// Reset managers before closing legacy physical storage.
 		nodeIndexManager.reset();
 		edgeIndexManager.reset();
 		dataManager.reset();
-		fileStorage.reset();
 
-		if (database) {
-			database->close();
+		if (fileStorage) {
+			fileStorage->close();
 		}
-		database.reset();
+		fileStorage.reset();
 
 		std::error_code ec;
 		fs::remove(testFilePath, ec);
 	}
 
 	fs::path testFilePath;
-	std::unique_ptr<graph::Database> database;
 	std::shared_ptr<graph::storage::FileStorage> fileStorage;
 	std::shared_ptr<graph::storage::DataManager> dataManager;
 	std::shared_ptr<graph::query::indexes::EntityTypeIndexManager> nodeIndexManager;

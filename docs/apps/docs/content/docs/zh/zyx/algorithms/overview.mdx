@@ -35,7 +35,7 @@ ZYX 在索引、存储、查询处理、向量搜索和并发控制等方面采�
 
 用于快速数据查找的算法：
 
-- **[B+Tree 索引](btree-indexing)** — 用于标签索引和属性索引的 B+Tree 结构
+- **[Packed B+Tree 索引](btree-indexing)** — 为标量、标签和 adjacency access path 提供不可变 4 KiB 有序 index page
 - **[标签索引](label-index)** — 使用 B+Tree 的标签到节点 ID 映射
 - **[属性索引](property-index)** — 针对属性值的类型特定 B+Tree 索引
 
@@ -44,7 +44,7 @@ ZYX 在索引、存储、查询处理、向量搜索和并发控制等方面采�
 用于高效查询执行的算法：
 
 - **[查询优化](query-optimization)** — 基于固定点迭代的多规则优化器
-- **[关系遍历](relationship-traversal)** — 用于边遍历的双向链表邻接表
+- **[关系遍历](relationship-traversal)** — 使用全局 Packed B+Tree range cursor 遍历出边和入边
 
 ### 缓存
 
@@ -105,7 +105,7 @@ graph TD
 | Label Index | Find nodes by label | O(log n + k) |
 | Property Index | Exact match | O(log n + k) |
 | Property Index | Range query | O(log n + k) |
-| Relationship Traversal | Get outgoing/incoming edges | O(k) |
+| Relationship Traversal | Get outgoing/incoming edges | O(log E + degree) |
 | LRU Cache | Get / Put | O(1) |
 | 社区检测 | Leiden 每层 | O(n + m) × 迭代次数 |
 | DiskANN Search | K-nearest neighbors | O(beamWidth × maxDegree × dim) |

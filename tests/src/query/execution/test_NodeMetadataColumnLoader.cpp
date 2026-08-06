@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "graph/concurrent/ThreadPool.hpp"
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/execution/NodeMetadataColumnLoader.hpp"
 #include "graph/query/execution/NodeMetadataFilter.hpp"
@@ -30,9 +30,9 @@ namespace {
 			const auto uuid = boost::uuids::random_generator()();
 			testDbPath = fs::temp_directory_path() /
 						 ("test_node_metadata_column_loader_" + boost::uuids::to_string(uuid) + ".zyx");
-			db = std::make_unique<Database>(testDbPath.string());
+			db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testDbPath.string());
 			db->open();
-			dm = db->getStorage()->getDataManager();
+			dm = db->storage()->getDataManager();
 			userLabel = dm->getOrCreateTokenId("User");
 		}
 
@@ -63,7 +63,7 @@ namespace {
 		}
 
 		fs::path testDbPath;
-		std::unique_ptr<Database> db;
+		std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 		std::shared_ptr<storage::DataManager> dm;
 		int64_t userLabel = 0;
 	};
@@ -149,7 +149,7 @@ TEST_F(NodeMetadataColumnLoaderStorageTest, RejectsUnsafeOrUnhelpfulLoads) {
 	auto ids = addUsers(128);
 	NodeMetadataColumnLoader loader(dm);
 	EXPECT_FALSE(loader.loadBatch(ids, 0, ids.size()).has_value());
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	EXPECT_FALSE(loader.loadBatch(ids, 1, 1).has_value());
@@ -174,7 +174,7 @@ TEST_F(NodeMetadataColumnLoaderStorageTest, RejectsUnsafeOrUnhelpfulLoads) {
 
 TEST_F(NodeMetadataColumnLoaderStorageTest, RejectsReadOnlySnapshotsWithNodeOverlays) {
 	auto ids = addUsers(128);
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	NodeMetadataColumnLoader loader(dm);
@@ -193,7 +193,7 @@ TEST_F(NodeMetadataColumnLoaderStorageTest, RejectsReadOnlySnapshotsWithNodeOver
 
 TEST_F(NodeMetadataColumnLoaderStorageTest, RejectsReadOnlySnapshotsWithPropertyOrBlobOverlays) {
 	auto ids = addUsers(128);
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	NodeMetadataColumnLoader loader(dm);
@@ -218,7 +218,7 @@ TEST_F(NodeMetadataColumnLoaderStorageTest, RejectsReadOnlySnapshotsWithProperty
 
 TEST_F(NodeMetadataColumnLoaderStorageTest, LoadsSortedMetadataBatchAndNodesFromDisk) {
 	auto ids = addUsers(130);
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	NodeMetadataColumnLoader loader(dm);
@@ -241,7 +241,7 @@ TEST_F(NodeMetadataColumnLoaderStorageTest, LoadsSortedMetadataBatchAndNodesFrom
 
 TEST_F(NodeMetadataColumnLoaderStorageTest, VisitsSortedMetadataRowsFromDisk) {
 	auto ids = addUsers(130);
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	NodeMetadataColumnLoader loader(dm);
@@ -267,7 +267,7 @@ TEST_F(NodeMetadataColumnLoaderStorageTest, VisitsSortedMetadataRowsFromDisk) {
 
 TEST_F(NodeMetadataColumnLoaderStorageTest, VisitBatchCanStopEarlyAndPartitionWithoutInitializer) {
 	auto ids = addUsers(130);
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	NodeMetadataColumnLoader loader(dm);
@@ -296,7 +296,7 @@ TEST_F(NodeMetadataColumnLoaderStorageTest, VisitBatchCanStopEarlyAndPartitionWi
 
 TEST_F(NodeMetadataColumnLoaderStorageTest, PartitionedVisitRejectsOutOfRangeWorkWithTrace) {
 	auto ids = addUsers(130);
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	std::vector<int64_t> outOfRangeIds;
@@ -327,7 +327,7 @@ TEST_F(NodeMetadataColumnLoaderStorageTest, PartitionedVisitRejectsOutOfRangeWor
 
 TEST_F(NodeMetadataColumnLoaderStorageTest, VisitBatchPartitionedScansMultipleNodeMetadataTasks) {
 	auto ids = addUsers(kParallelNodeMetadataUserCount);
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	graph::concurrent::ThreadPool pool(4);
@@ -360,7 +360,7 @@ TEST_F(NodeMetadataColumnLoaderStorageTest, VisitBatchPartitionedScansMultipleNo
 
 TEST_F(NodeMetadataColumnLoaderStorageTest, VisitBatchPartitionedStopsEarlyAcrossParallelTasks) {
 	auto ids = addUsers(kParallelNodeMetadataUserCount);
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	graph::concurrent::ThreadPool pool(4);
@@ -390,7 +390,7 @@ TEST_F(NodeMetadataColumnLoaderStorageTest, CollectsPropertyCandidatesWithParall
 	dm->addNodeProperties(ids[2048], {{"id", PropertyValue("second")}});
 	const std::string largePayload(5000, 'p');
 	dm->addNodeProperties(ids[4096], {{"payload", PropertyValue(largePayload)}});
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	NodeScanConfig config;
@@ -428,7 +428,7 @@ TEST_F(NodeMetadataColumnLoaderStorageTest, FullScanPropertyCandidatesUseParalle
 	dm->addNodeProperties(ids[4096], {{"payload", PropertyValue(largePayload)}});
 	Node deleted = dm->getNode(ids[8192]);
 	dm->deleteNode(deleted);
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	NodeScanConfig config;
@@ -460,7 +460,7 @@ TEST_F(NodeMetadataColumnLoaderStorageTest, FullScanPropertyCandidatesUseParalle
 
 TEST_F(NodeMetadataColumnLoaderStorageTest, FullScanPropertyCandidatesRejectDirtySnapshotsAndLabelRequirements) {
 	auto ids = addUsers(130);
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	NodeScanConfig config;
@@ -499,7 +499,7 @@ TEST_F(NodeMetadataColumnLoaderStorageTest, FullScanPropertyCandidatesRejectDirt
 }
 
 TEST_F(NodeMetadataColumnLoaderStorageTest, FullScanPropertyCandidatesHandleEmptyStoreAndInvalidInputs) {
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	NodeScanConfig config;
@@ -525,7 +525,7 @@ TEST_F(NodeMetadataColumnLoaderStorageTest, FullScanPropertyCandidatesHandleEmpt
 
 TEST_F(NodeMetadataColumnLoaderStorageTest, VisitBatchSupportsProjectedMetadataRows) {
 	auto ids = addUsers(130);
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	NodeMetadataColumnLoader loader(dm);
@@ -563,7 +563,7 @@ TEST_F(NodeMetadataColumnLoaderStorageTest, CollectsPropertyCountCandidatesWithL
 	dm->addNodeProperties(ids[2], {{"payload", PropertyValue(largePayload)}});
 	Node deleted = dm->getNode(ids[3]);
 	dm->deleteNode(deleted);
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	NodeScanConfig config;
@@ -598,7 +598,7 @@ TEST_F(NodeMetadataColumnLoaderStorageTest, CollectsPropertyCountCandidatesWitho
 	auto ids = addUsers(130);
 	const std::string largePayload(5000, 'b');
 	dm->addNodeProperties(ids[2], {{"payload", PropertyValue(largePayload)}});
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	NodeScanConfig config;
@@ -626,7 +626,7 @@ TEST_F(NodeMetadataColumnLoaderStorageTest, FullScanPropertyCandidatesAvoidCandi
 	dm->addNodeProperties(ids[2], {{"payload", PropertyValue(largePayload)}});
 	Node deleted = dm->getNode(ids[3]);
 	dm->deleteNode(deleted);
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	NodeScanConfig config;
@@ -667,7 +667,7 @@ TEST_F(NodeMetadataColumnLoaderStorageTest, LoadsInactiveRowsAndRecordsTrace) {
 	auto ids = addUsers(130);
 	Node deleted = dm->getNode(ids[1]);
 	dm->deleteNode(deleted);
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 	graph::debug::PerfTrace::setEnabled(true);
 	graph::debug::PerfTrace::reset();

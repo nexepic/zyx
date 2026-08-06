@@ -181,6 +181,14 @@ namespace graph::concurrent {
 											 .completed = completed});
 	}
 
+	namespace detail {
+		// A completed scope can be shorter than the platform clock's resolution. Keep
+		// that valid observation distinct from an explicitly invalid zero duration.
+		inline uint64_t minimumMeasuredElapsedNs(std::chrono::nanoseconds elapsed) noexcept {
+			return elapsed.count() > 0 ? static_cast<uint64_t>(elapsed.count()) : uint64_t{1};
+		}
+	} // namespace detail
+
 	class ScopedParallelExecutionTelemetry {
 	public:
 		ScopedParallelExecutionTelemetry(ThreadPool *pool,
@@ -227,8 +235,8 @@ namespace graph::concurrent {
 		using Clock = std::chrono::steady_clock;
 
 		[[nodiscard]] uint64_t elapsedNs() const {
-			return static_cast<uint64_t>(
-					std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start_).count());
+			return detail::minimumMeasuredElapsedNs(
+					std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start_));
 		}
 
 		ThreadPool *pool_ = nullptr;

@@ -19,11 +19,12 @@
  **/
 
 #include "../ExpressionBuilder.hpp"
+
+#include <limits>
+
 #include "generated/CypherLexer.h"
 #include "graph/query/expressions/Expression.hpp"
 #include "graph/query/expressions/ExpressionUtils.hpp"
-#include "graph/query/expressions/ExpressionEvaluator.hpp"
-#include "graph/query/expressions/EvaluationContext.hpp"
 #include "graph/query/expressions/ListSliceExpression.hpp"
 #include "graph/query/expressions/ListComprehensionExpression.hpp"
 #include "graph/query/expressions/ListLiteralExpression.hpp"
@@ -35,9 +36,32 @@
 #include "graph/query/expressions/ParameterExpression.hpp"
 #include "graph/query/expressions/ShortestPathExpression.hpp"
 #include "graph/query/expressions/MapProjectionExpression.hpp"
-#include "graph/query/execution/Record.hpp"
 
 namespace graph::parser::cypher::helpers {
+
+namespace {
+
+// Cypher permits escaped symbolic names in backticks.  Keep the logical name
+// independent from its source spelling so a projected alias can be referenced
+// consistently in a later clause.
+std::string normalizeSymbolicName(std::string value) {
+	if (value.size() < 2U || value.front() != '`' || value.back() != '`') {
+		return value;
+	}
+	std::string normalized;
+	normalized.reserve(value.size() - 2U);
+	for (size_t index = 1U; index + 1U < value.size(); ++index) {
+		if (value[index] == '`' && index + 1U < value.size() - 1U && value[index + 1U] == '`') {
+			normalized.push_back('`');
+			++index;
+		} else {
+			normalized.push_back(value[index]);
+		}
+	}
+	return normalized;
+}
+
+} // namespace
 using namespace graph::query::expressions;
 
 // ============================================================================
@@ -98,21 +122,26 @@ PropertyValue ExpressionBuilder::evaluateLiteralExpression(CypherParser::Express
 		}
 	}
 
-	// If it's a more complex expression (unary minus on literal, etc.)
-	// Try to evaluate with an empty record context
-	// This will work for literals and literal-only expressions
-	try {
-		// Create an empty record for evaluation
-		graph::query::execution::Record emptyRecord;
-		graph::query::expressions::EvaluationContext context(emptyRecord);
-		graph::query::expressions::ExpressionEvaluator evaluator(context);
-		return evaluator.evaluate(ast.get());
-	} catch (const std::exception& e) {
-		// Non-literal expressions (variables, function calls) are not supported in pattern properties
-		// Return empty PropertyValue to maintain backward compatibility
-		// These will be handled by runtime filters in the WHERE clause
-		return PropertyValue();
+	if (const auto *list = dynamic_cast<const ListLiteralExpression *>(ast.get())) {
+		return list->getValue();
 	}
+	if (const auto *unary = dynamic_cast<const UnaryOpExpression *>(ast.get());
+		unary != nullptr && unary->getOperator() == UnaryOperatorType::UOP_MINUS) {
+		const auto *operand = dynamic_cast<const LiteralExpression *>(unary->getOperand());
+		if (operand != nullptr && operand->isInteger()) {
+			const int64_t value = operand->getIntegerValue();
+			if (value != std::numeric_limits<int64_t>::min()) {
+				return PropertyValue(-value);
+			}
+		}
+		if (operand != nullptr && operand->isDouble()) {
+			return PropertyValue(-operand->getDoubleValue());
+		}
+	}
+
+	// Properties and procedure arguments remain expressions when they depend on
+	// a row. Do not route them through the discarded physical evaluator.
+	return PropertyValue();
 }
 
 std::unique_ptr<Expression> ExpressionBuilder::buildOrExpression(CypherParser::OrExpressionContext *ctx) {
@@ -593,7 +622,7 @@ std::unique_ptr<Expression> ExpressionBuilder::buildVariableOrProperty(CypherPar
 		throw std::runtime_error("Expected variable in expression");
 	}
 
-	std::string varName = atom->variable()->getText();
+	std::string varName = normalizeSymbolicName(atom->variable()->getText());
 
 	// Check for property accessors: n.prop or n.prop[index]
 	if (!ctx->accessor().empty()) {
@@ -604,7 +633,7 @@ std::unique_ptr<Expression> ExpressionBuilder::buildVariableOrProperty(CypherPar
 		for (auto* accessor : ctx->accessor()) {
 			// Property access: .prop
 			if (accessor->DOT()) {
-				std::string propName = accessor->propertyKeyName()->getText();
+				std::string propName = normalizeSymbolicName(accessor->propertyKeyName()->getText());
 
 				// Check if there's a list indexing accessor after this property
 				// We need to look ahead to see if the next accessor is a list bracket
@@ -1140,6 +1169,7 @@ std::unique_ptr<Expression> ExpressionBuilder::buildPatternComprehension(CypherP
 	// Parse the pattern to extract structured info
 	std::string sourceVar;
 	std::string targetVar;
+	std::string relationshipVar;
 	std::string relType;
 	std::string targetLabel;
 	PatternDirection direction = PatternDirection::PAT_BOTH;
@@ -1169,6 +1199,9 @@ std::unique_ptr<Expression> ExpressionBuilder::buildPatternComprehension(CypherP
 
 			// Get relationship type
 			auto relDetail = relPattern->relationshipDetail();
+			if (relDetail != nullptr && relDetail->variable() != nullptr) {
+				relationshipVar = relDetail->variable()->getText();
+			}
 			if (relDetail && relDetail->relationshipTypes()) {
 				auto relTypes = relDetail->relationshipTypes()->relTypeName();
 				if (!relTypes.empty()) {
@@ -1202,7 +1235,8 @@ std::unique_ptr<Expression> ExpressionBuilder::buildPatternComprehension(CypherP
 		targetLabel,
 		direction,
 		std::move(mapExpr),
-		nullptr  // no WHERE clause in basic pattern comprehension syntax
+		std::move(whereExpr),
+		std::move(relationshipVar)
 	);
 }
 
@@ -1312,8 +1346,13 @@ std::unique_ptr<Expression> ExpressionBuilder::buildShortestPathExpression(Cyphe
 	int maxHops = 15;
 
 	auto chains = patternElem->patternElementChain();
-	if (!chains.empty()) {
-		auto chain = chains.back();
+	if (chains.size() != 1U) {
+		// The logical shortest-path runtime models one typed relationship pattern.
+		// Reject a longer chain instead of silently discarding earlier hops.
+		throw std::runtime_error("shortestPath requires exactly one relationship pattern");
+	}
+	{
+		auto chain = chains.front();
 
 		// Parse relationship
 		auto relPattern = chain->relationshipPattern();
@@ -1327,7 +1366,10 @@ std::unique_ptr<Expression> ExpressionBuilder::buildShortestPathExpression(Cyphe
 			if (relDetail) {
 				if (relDetail->relationshipTypes()) {
 					auto relTypes = relDetail->relationshipTypes()->relTypeName();
-					if (!relTypes.empty()) {
+					if (relTypes.size() > 1U) {
+						throw std::runtime_error("shortestPath does not support multiple relationship types");
+					}
+					if (relTypes.size() == 1U) {
 						relType = relTypes[0]->getText();
 					}
 				}
@@ -1339,8 +1381,17 @@ std::unique_ptr<Expression> ExpressionBuilder::buildShortestPathExpression(Cyphe
 							minHops = std::stoi(ints[0]->getText());
 							maxHops = std::stoi(ints[1]->getText());
 						} else if (ints.size() == 1) {
-							maxHops = std::stoi(ints[0]->getText());
+							const std::string rangeText = range->getText();
+							if (rangeText.find("..") < rangeText.find(ints[0]->getText())) {
+								maxHops = std::stoi(ints[0]->getText());
+							} else {
+								minHops = std::stoi(ints[0]->getText());
+							}
 						}
+					} else if (!ints.empty()) {
+						// A literal without '..' is an exact hop count, e.g. [*2].
+						minHops = std::stoi(ints[0]->getText());
+						maxHops = minHops;
 					}
 				}
 			}

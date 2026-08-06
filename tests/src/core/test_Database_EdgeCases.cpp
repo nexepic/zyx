@@ -3,8 +3,7 @@
  * @brief Tests targeting uncovered branches in Database.cpp:
  *        - openIfExists catch(...) block (line 67)
  *        - setThreadPoolSize with VIM null (line 128-129)
- *        - close() with walManager_ null vs non-null
- *        - ensureWALForWrites when walManager_ already exists
+ *        - close() lifecycle with the native logical backend
  */
 
 #include <gtest/gtest.h>
@@ -58,15 +57,14 @@ TEST_F(DatabaseEdgeCaseTest, OpenIfExistsExceptionInOpen) {
 }
 
 // ============================================================================
-// close() when walManager_ is null (database never had a transaction)
+// Native backend close before any logical transaction
 // ============================================================================
 
-TEST_F(DatabaseEdgeCaseTest, CloseWithoutWAL) {
+TEST_F(DatabaseEdgeCaseTest, CloseBeforeLogicalTransaction) {
 	auto db = std::make_unique<Database>(testDbPath.string());
 	db->open();
 	EXPECT_TRUE(db->isOpen());
 
-	// Don't create any transactions, so walManager_ stays null
 	db->close();
 	EXPECT_FALSE(db->isOpen());
 }
@@ -83,20 +81,18 @@ TEST_F(DatabaseEdgeCaseTest, FlushIsNoopWhenClosedAndWorksBeforeWalInitializatio
 }
 
 // ============================================================================
-// close() when walManager_ is initialized (after transaction)
+// Native backend close after a logical transaction
 // ============================================================================
 
-TEST_F(DatabaseEdgeCaseTest, CloseWithWALManager) {
+TEST_F(DatabaseEdgeCaseTest, CloseAfterLogicalTransaction) {
 	auto db = std::make_unique<Database>(testDbPath.string());
 	db->open();
 
-	// Create a transaction to initialize WAL
 	{
 		auto txn = db->beginTransaction();
 		txn.commit();
 	}
 
-	// close() should call walManager_->close() (line 78-79)
 	db->close();
 	EXPECT_FALSE(db->isOpen());
 }
@@ -220,56 +216,6 @@ TEST_F(DatabaseEdgeCaseTest, HasActiveTransactionBeforeAnyTransaction) {
 	db->open();
 	// After open but before any transaction
 	EXPECT_FALSE(db->hasActiveTransaction());
-}
-
-// ============================================================================
-// WAL recovery then write transaction (ensureWALForWrites early return)
-// ============================================================================
-
-TEST_F(DatabaseEdgeCaseTest, WALRecoveryThenWriteReusesWAL) {
-	std::string walPath = testDbPath.string() + "-wal";
-
-	// Phase 1: Create database with WAL
-	{
-		auto db1 = std::make_unique<Database>(testDbPath.string());
-		db1->open();
-		{
-			auto txn = db1->beginTransaction();
-			// auto-rollback
-		}
-
-		// Read WAL before destructor deletes it
-		std::vector<uint8_t> walContent;
-		{
-			std::ifstream walIn(walPath, std::ios::binary);
-			if (walIn.is_open()) {
-				walContent.assign(std::istreambuf_iterator<char>(walIn),
-								  std::istreambuf_iterator<char>());
-			}
-		}
-
-		db1.reset();
-
-		// Restore WAL to simulate crash
-		if (!walContent.empty()) {
-			std::ofstream walOut(walPath, std::ios::binary | std::ios::trunc);
-			walOut.write(reinterpret_cast<const char *>(walContent.data()),
-						 static_cast<std::streamsize>(walContent.size()));
-		}
-	}
-
-	// Phase 2: Reopen with WAL file present
-	if (fs::exists(walPath)) {
-		auto db2 = std::make_unique<Database>(testDbPath.string());
-		db2->open();
-
-		// This should reuse the WAL from recovery (ensureWALForWrites early return)
-		auto txn = db2->beginTransaction();
-		EXPECT_TRUE(txn.isActive());
-		txn.commit();
-
-		db2->close();
-	}
 }
 
 // ============================================================================

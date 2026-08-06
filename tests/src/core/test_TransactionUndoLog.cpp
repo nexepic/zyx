@@ -24,7 +24,7 @@
 #include <filesystem>
 #include <optional>
 #include <sstream>
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/storage/data/TransactionContext.hpp"
@@ -55,7 +55,7 @@ protected:
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testDbPath = fs::temp_directory_path() / ("test_undo_" + boost::uuids::to_string(uuid) + ".zyx");
 		fs::remove_all(testDbPath);
-		db = std::make_unique<Database>(testDbPath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testDbPath.string());
 		db->open();
 	}
 
@@ -68,13 +68,13 @@ protected:
 	}
 
 	fs::path testDbPath;
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 };
 
 // --- UndoLog population tests ---
 
 TEST_F(TransactionUndoLogTest, AddNodeRecordsUndoEntry) {
-	auto &dm = *db->getStorage()->getDataManager();
+	auto &dm = *db->storage()->getDataManager();
 	auto txn = db->beginTransaction();
 
 	// After beginTransaction, txnContext should be active
@@ -101,7 +101,7 @@ TEST_F(TransactionUndoLogTest, AddNodeRollbackRestoresState) {
 	Node preNode(0, 0);
 	{
 		auto txn0 = db->beginTransaction();
-		db->getStorage()->getDataManager()->addNode(preNode);
+		db->storage()->getDataManager()->addNode(preNode);
 		txn0.commit();
 	}
 	int64_t preId = preNode.getId();
@@ -112,14 +112,14 @@ TEST_F(TransactionUndoLogTest, AddNodeRollbackRestoresState) {
 	{
 		auto txn = db->beginTransaction();
 		Node newNode(0, 0);
-		db->getStorage()->getDataManager()->addNode(newNode);
+		db->storage()->getDataManager()->addNode(newNode);
 		newNodeId = newNode.getId();
 		ASSERT_GT(newNodeId, 0);
 		txn.rollback();
 	}
 
 	// After rollback, the new node should not be visible
-	auto &dm = *db->getStorage()->getDataManager();
+	auto &dm = *db->storage()->getDataManager();
 	Node retrieved = dm.getNode(newNodeId);
 	EXPECT_FALSE(retrieved.isActive()) << "Rolled-back node should be inactive";
 }
@@ -129,13 +129,13 @@ TEST_F(TransactionUndoLogTest, UpdateNodeRecordsUndoEntryWithBeforeImage) {
 	Node node(0, 0);
 	{
 		auto txn = db->beginTransaction();
-		db->getStorage()->getDataManager()->addNode(node);
+		db->storage()->getDataManager()->addNode(node);
 		txn.commit();
 	}
 	ASSERT_GT(node.getId(), 0);
 
 	// Now update it and check undo log
-	auto &dm = *db->getStorage()->getDataManager();
+	auto &dm = *db->storage()->getDataManager();
 	auto txn = db->beginTransaction();
 
 	const auto &undoLog = dm.getTransactionContext().undoLog();
@@ -158,14 +158,14 @@ TEST_F(TransactionUndoLogTest, UpdateNodeRollbackRestoresOriginal) {
 	Node node(0, 42);
 	{
 		auto txn = db->beginTransaction();
-		db->getStorage()->getDataManager()->addNode(node);
+		db->storage()->getDataManager()->addNode(node);
 		txn.commit();
 	}
 	ASSERT_GT(node.getId(), 0);
 
 	// Update label to 99 then rollback
 	{
-		auto &dm = *db->getStorage()->getDataManager();
+		auto &dm = *db->storage()->getDataManager();
 		auto txn = db->beginTransaction();
 		Node toUpdate = dm.getNode(node.getId());
 		toUpdate.setLabelId(99);
@@ -174,7 +174,7 @@ TEST_F(TransactionUndoLogTest, UpdateNodeRollbackRestoresOriginal) {
 	}
 
 	// After rollback, label should be restored to 42
-	Node afterRollback = db->getStorage()->getDataManager()->getNode(node.getId());
+	Node afterRollback = db->storage()->getDataManager()->getNode(node.getId());
 	EXPECT_EQ(afterRollback.getLabelId(), 42) << "Label should be restored to original after rollback";
 }
 
@@ -183,13 +183,13 @@ TEST_F(TransactionUndoLogTest, DeleteNodeRecordsUndoEntryWithBeforeImage) {
 	Node node(0, 0);
 	{
 		auto txn = db->beginTransaction();
-		db->getStorage()->getDataManager()->addNode(node);
+		db->storage()->getDataManager()->addNode(node);
 		txn.commit();
 	}
 	ASSERT_GT(node.getId(), 0);
 
 	// Start transaction, delete node, check undo log
-	auto &dm = *db->getStorage()->getDataManager();
+	auto &dm = *db->storage()->getDataManager();
 	auto txn = db->beginTransaction();
 
 	const auto &undoLog = dm.getTransactionContext().undoLog();
@@ -211,14 +211,14 @@ TEST_F(TransactionUndoLogTest, DeleteNodeRollbackRestoresEntity) {
 	Node node(0, 55);
 	{
 		auto txn = db->beginTransaction();
-		db->getStorage()->getDataManager()->addNode(node);
+		db->storage()->getDataManager()->addNode(node);
 		txn.commit();
 	}
 	ASSERT_GT(node.getId(), 0);
 
 	// Delete then rollback
 	{
-		auto &dm = *db->getStorage()->getDataManager();
+		auto &dm = *db->storage()->getDataManager();
 		auto txn = db->beginTransaction();
 		Node toDelete = dm.getNode(node.getId());
 		dm.deleteNode(toDelete);
@@ -226,12 +226,12 @@ TEST_F(TransactionUndoLogTest, DeleteNodeRollbackRestoresEntity) {
 	}
 
 	// After rollback, node should still be visible
-	Node afterRollback = db->getStorage()->getDataManager()->getNode(node.getId());
+	Node afterRollback = db->storage()->getDataManager()->getNode(node.getId());
 	EXPECT_TRUE(afterRollback.isActive()) << "Deleted-then-rolled-back node should be active";
 }
 
 TEST_F(TransactionUndoLogTest, UndoLogClearedAfterCommit) {
-	auto &dm = *db->getStorage()->getDataManager();
+	auto &dm = *db->storage()->getDataManager();
 	auto txn = db->beginTransaction();
 
 	Node node(0, 0);
@@ -246,7 +246,7 @@ TEST_F(TransactionUndoLogTest, UndoLogClearedAfterCommit) {
 }
 
 TEST_F(TransactionUndoLogTest, UndoLogClearedAfterRollback) {
-	auto &dm = *db->getStorage()->getDataManager();
+	auto &dm = *db->storage()->getDataManager();
 	auto txn = db->beginTransaction();
 
 	Node node(0, 0);
@@ -265,7 +265,7 @@ TEST_F(TransactionUndoLogTest, MixedOperationsRollback) {
 	Node node1(0, 1), node2(0, 2);
 	{
 		auto txn = db->beginTransaction();
-		auto &dm = *db->getStorage()->getDataManager();
+		auto &dm = *db->storage()->getDataManager();
 		dm.addNode(node1);
 		dm.addNode(node2);
 		txn.commit();
@@ -274,7 +274,7 @@ TEST_F(TransactionUndoLogTest, MixedOperationsRollback) {
 	// Start transaction: update node1, add node3, delete node2
 	int64_t node3Id = 0;
 	{
-		auto &dm = *db->getStorage()->getDataManager();
+		auto &dm = *db->storage()->getDataManager();
 		auto txn = db->beginTransaction();
 
 		// Update node1 label
@@ -300,7 +300,7 @@ TEST_F(TransactionUndoLogTest, MixedOperationsRollback) {
 		txn.rollback();
 	}
 
-	auto &dm = *db->getStorage()->getDataManager();
+	auto &dm = *db->storage()->getDataManager();
 
 	// node1 should have original label 1
 	Node n1After = dm.getNode(node1.getId());
@@ -322,13 +322,13 @@ TEST_F(TransactionUndoLogTest, AddEdgeRecordsUndoEntry) {
 	Node src(0, 0), tgt(0, 0);
 	{
 		auto txn = db->beginTransaction();
-		auto &dm = *db->getStorage()->getDataManager();
+		auto &dm = *db->storage()->getDataManager();
 		dm.addNode(src);
 		dm.addNode(tgt);
 		txn.commit();
 	}
 
-	auto &dm = *db->getStorage()->getDataManager();
+	auto &dm = *db->storage()->getDataManager();
 	auto txn = db->beginTransaction();
 
 	Edge edge(0, src.getId(), tgt.getId(), 0);
@@ -361,14 +361,14 @@ TEST_F(TransactionUndoLogTest, AddNodeWritesSerializedDataToWAL) {
 	// (WAL should have records with non-zero dataSize after this test)
 	auto txn = db->beginTransaction();
 	Node node(0, 42);
-	db->getStorage()->getDataManager()->addNode(node);
+	db->storage()->getDataManager()->addNode(node);
 	txn.commit();
 	EXPECT_GT(node.getId(), 0);
 	// If we get here without throw, WAL write with serialized data succeeded
 }
 
 TEST_F(TransactionUndoLogTest, CommitCoalescesAddThenUpdateIntoSingleNodeWalRecord) {
-	auto &dm = *db->getStorage()->getDataManager();
+	auto &dm = *db->storage()->getDataManager();
 	int64_t nodeId = 0;
 	{
 		auto txn = db->beginTransaction();
@@ -411,7 +411,7 @@ TEST_F(TransactionUndoLogTest, CommitCoalescesAddThenUpdateIntoSingleNodeWalReco
 }
 
 TEST_F(TransactionUndoLogTest, CommitOmitsWalEntityRecordForAddThenDeleteNoOp) {
-	auto &dm = *db->getStorage()->getDataManager();
+	auto &dm = *db->storage()->getDataManager();
 	int64_t nodeId = 0;
 	{
 		auto txn = db->beginTransaction();
@@ -438,7 +438,7 @@ TEST_F(TransactionUndoLogTest, CommitOmitsWalEntityRecordForAddThenDeleteNoOp) {
 }
 
 TEST_F(TransactionUndoLogTest, DeleteOfDeferredCommittedAddWritesWalTombstone) {
-	auto &dm = *db->getStorage()->getDataManager();
+	auto &dm = *db->storage()->getDataManager();
 	int64_t nodeId = 0;
 	{
 		auto txn = db->beginTransaction();
@@ -486,7 +486,7 @@ TEST_F(TransactionUndoLogTest, DeleteOfDeferredCommittedAddWritesWalTombstone) {
 TEST_F(TransactionUndoLogTest, ConstUndoLogOverloadIsCallable) {
 	// Cover the const overload of TransactionContext::undoLog()
 	// by binding a const reference to the non-const TransactionContext.
-	auto &dm = *db->getStorage()->getDataManager();
+	auto &dm = *db->storage()->getDataManager();
 	auto txn = db->beginTransaction();
 
 	Node node(0, 0);
@@ -503,7 +503,7 @@ TEST_F(TransactionUndoLogTest, ConstUndoLogOverloadIsCallable) {
 TEST_F(TransactionUndoLogTest, ConstGetWALManagerOverloadIsCallable) {
 	// Cover the const overload of TransactionContext::getWALManager()
 	// by binding a const reference to the non-const TransactionContext.
-	auto &dm = *db->getStorage()->getDataManager();
+	auto &dm = *db->storage()->getDataManager();
 
 	// Binding via const ref forces the const overload: wal::WALManager* getWALManager() const
 	const TransactionContext &constCtx = dm.getTransactionContext();

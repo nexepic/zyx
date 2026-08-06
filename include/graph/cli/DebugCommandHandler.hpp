@@ -40,8 +40,6 @@ namespace graph::cli {
 		void handle(const std::string &commandLine) const;
 
 	private:
-		Database &db_;
-
 		static void printHelp();
 	};
 

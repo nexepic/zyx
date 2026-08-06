@@ -25,7 +25,7 @@
 #include <memory>
 #include <stdexcept>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/query/execution/operators/DeleteOperator.hpp"
 #include "graph/query/execution/Record.hpp"
 
@@ -54,7 +54,7 @@ public:
 
 class DeleteOperatorDetachTest : public ::testing::Test {
 protected:
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<storage::DataManager> dm;
 	fs::path testFilePath;
 
@@ -62,9 +62,9 @@ protected:
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath = fs::temp_directory_path() / ("test_delete_branch_" + boost::uuids::to_string(uuid) + ".dat");
 		if (fs::exists(testFilePath)) fs::remove_all(testFilePath);
-		db = std::make_unique<Database>(testFilePath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testFilePath.string());
 		db->open();
-		dm = db->getStorage()->getDataManager();
+		dm = db->storage()->getDataManager();
 	}
 
 	void TearDown() override {
@@ -125,7 +125,7 @@ TEST_F(DeleteOperatorDetachTest, DeleteNode_WithRelationships_NonDetach_Throws) 
 	Edge e1(0, 1, 2, edgeTypeId);
 	dm->addEdge(e1);
 
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	Record r1;
 	r1.setNode("n", dm->getNode(1));
@@ -152,7 +152,7 @@ TEST_F(DeleteOperatorDetachTest, DetachDeleteNode_WithRelationships) {
 	Edge e1(0, 1, 2, edgeTypeId);
 	dm->addEdge(e1);
 
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	Record r1;
 	r1.setNode("n", dm->getNode(1));
@@ -185,7 +185,7 @@ TEST_F(DeleteOperatorDetachTest, DeleteEdge) {
 	Edge e1(0, 1, 2, edgeTypeId);
 	dm->addEdge(e1);
 
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	Record r1;
 	r1.setEdge("e", dm->getEdge(1));
@@ -329,7 +329,7 @@ TEST_F(DeleteOperatorDetachTest, DetachDeleteNode_MultipleRelationships) {
 	dm->addEdge(e2);
 	dm->addEdge(e3);
 
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	Record r1;
 	r1.setNode("n", dm->getNode(1));

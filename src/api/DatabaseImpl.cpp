@@ -19,28 +19,31 @@
  **/
 
 #include <algorithm>
-#include <array>
+#include <atomic>
 #include <cctype>
 #include <chrono>
+#include <deque>
+#include <limits>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <stdexcept>
 #include <string_view>
+#include <unordered_map>
 #include <unordered_set>
+#include <vector>
+#include "DatabaseBulkInternal.hpp"
 #include "graph/core/Database.hpp"
-#include "graph/core/Transaction.hpp"
 #include "graph/debug/PerfTrace.hpp"
-#include "graph/log/Log.hpp"
 #include "graph/query/QueryContext.hpp"
 #include "graph/query/QueryPlan.hpp"
-#include "graph/query/algorithm/GraphAlgorithm.hpp"
-#include "graph/query/api/QueryBuilder.hpp"
 #include "graph/query/api/QueryEngine.hpp"
 #include "graph/query/api/QueryResult.hpp"
-#include "graph/storage/data/DataManager.hpp"
-#include "graph/storage/indexes/IndexManager.hpp"
+#include "graph/storage/LogicalGraphRead.hpp"
+#include "graph/storage/LogicalGraphSchema.hpp"
+#include "graph/storage/LogicalGraphTransactionOverlay.hpp"
+#include "graph/storage/LogicalGraphWrite.hpp"
 #include "zyx/zyx.hpp"
-#include "DatabaseBulkInternal.hpp"
 
 namespace zyx {
 
@@ -99,58 +102,40 @@ namespace zyx {
 	} // namespace
 
 	// Forward declaration
-	Value toPublicValue(const graph::query::ResultValue &v, const std::shared_ptr<graph::storage::DataManager> &dm);
+	Value toPublicValue(const graph::query::ResultValue &v);
 	Value toPublicValue(const graph::PropertyValue &v);
-	Value toDriverAbiValue(const graph::query::ResultValue &v, const std::shared_ptr<graph::storage::DataManager> &dm);
-	Value toDriverAbiValue(const graph::PropertyValue &v, const std::shared_ptr<graph::storage::DataManager> &dm);
+	Value toDriverAbiValue(const graph::query::ResultValue &v);
+	Value toDriverAbiValue(const graph::PropertyValue &v);
 	Value toStringListValue(const std::vector<graph::PropertyValue> &values);
 
-	// Convert Internal Node to Public Node Pointer (For shared_ptr usage in Value)
-	std::shared_ptr<Node> toPublicNodePtr(const graph::Node &internalNode,
-										  const std::shared_ptr<graph::storage::DataManager> &dm) {
-		auto pubNode = std::make_shared<Node>();
-		pubNode->id = internalNode.getId();
-
-		// RESOLVE: All label IDs -> Strings using DataManager
-		if (dm) {
-			for (int64_t lid: internalNode.getLabelIds()) {
-				if (lid != 0) {
-					pubNode->labels.push_back(dm->resolveTokenName(lid));
-				}
-			}
-			// Backward compat: first label
-			pubNode->label = pubNode->labels.empty() ? "" : pubNode->labels[0];
+	int64_t checkedPublicEntityId(uint64_t id, const char *entityName) {
+		if (id > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+			throw std::overflow_error(std::string("logical ") + entityName + " ID exceeds the public API range");
 		}
+		return static_cast<int64_t>(id);
+	}
 
-		for (const auto &[key, val]: internalNode.getProperties()) {
-			pubNode->properties[key] = toPublicValue(val);
+	std::shared_ptr<Node> toPublicLogicalNodePtr(const graph::query::LogicalNodeResult &internalNode) {
+		auto pubNode = std::make_shared<Node>();
+		pubNode->id = checkedPublicEntityId(internalNode.node_id, "Node");
+		pubNode->labels = internalNode.labels;
+		pubNode->label = pubNode->labels.empty() ? "" : pubNode->labels.front();
+		for (const auto &[key, value]: internalNode.properties) {
+			pubNode->properties.emplace(key, toPublicValue(value));
 		}
 		return pubNode;
 	}
 
-	// Convert Internal Edge to Public Edge Pointer
-	std::shared_ptr<Edge> toPublicEdgePtr(const graph::Edge &internalEdge,
-										  const std::shared_ptr<graph::storage::DataManager> &dm) {
+	std::shared_ptr<Edge> toPublicLogicalEdgePtr(const graph::query::LogicalEdgeResult &internalEdge) {
 		auto pubEdge = std::make_shared<Edge>();
-		pubEdge->id = internalEdge.getId();
-		pubEdge->sourceId = internalEdge.getSourceNodeId();
-		pubEdge->targetId = internalEdge.getTargetNodeId();
-
-		// RESOLVE: ID -> String using DataManager
-		if (dm) {
-			pubEdge->type = dm->resolveTokenName(internalEdge.getTypeId());
-		}
-
-		for (const auto &[key, val]: internalEdge.getProperties()) {
-			pubEdge->properties[key] = toPublicValue(val);
+		pubEdge->id = checkedPublicEntityId(internalEdge.edge_id, "Edge");
+		pubEdge->sourceId = checkedPublicEntityId(internalEdge.source_node_id, "Edge source Node");
+		pubEdge->targetId = checkedPublicEntityId(internalEdge.target_node_id, "Edge target Node");
+		pubEdge->type = internalEdge.type;
+		for (const auto &[key, value]: internalEdge.properties) {
+			pubEdge->properties.emplace(key, toPublicValue(value));
 		}
 		return pubEdge;
-	}
-
-	// Convert Internal Node to Public Node (Value Copy for Algorithms)
-	Node toPublicNode(const graph::Node &internalNode, const std::shared_ptr<graph::storage::DataManager> &dm) {
-		auto ptr = toPublicNodePtr(internalNode, dm);
-		return *ptr; // Copy the struct
 	}
 
 	// Convert internal PropertyValue to public Value variant
@@ -174,6 +159,13 @@ namespace zyx {
 					} else if constexpr (std::is_same_v<T, graph::PropertyValue::MapType>) {
 						graph::PropertyValue pv(arg);
 						return pv.toString();
+					} else if constexpr (std::is_same_v<T, graph::PropertyValue::Bytes>) {
+						zyx::Bytes bytes;
+						bytes.reserve(arg.size());
+						for (const std::byte byte: arg) {
+							bytes.push_back(std::to_integer<std::uint8_t>(byte));
+						}
+						return bytes;
 					} else if constexpr (std::is_same_v<T, graph::TemporalDate> ||
 										 std::is_same_v<T, graph::TemporalDateTime> ||
 										 std::is_same_v<T, graph::TemporalDuration>) {
@@ -186,9 +178,9 @@ namespace zyx {
 				v.getVariant());
 	}
 
-	Value toDriverAbiValue(const graph::PropertyValue &v, const std::shared_ptr<graph::storage::DataManager> &dm) {
+	Value toDriverAbiValue(const graph::PropertyValue &v) {
 		return std::visit(
-				[&dm]<typename T0>(T0 &&arg) -> Value {
+				[]<typename T0>(T0 &&arg) -> Value {
 					using T = std::decay_t<T0>;
 					if constexpr (std::is_same_v<T, std::monostate>) {
 						return std::monostate{};
@@ -196,15 +188,22 @@ namespace zyx {
 						auto list = std::make_shared<ValueList>();
 						list->elements.reserve(arg.size());
 						for (const auto &val: arg) {
-							list->elements.push_back(toDriverAbiValue(val, dm));
+							list->elements.push_back(toDriverAbiValue(val));
 						}
 						return list;
 					} else if constexpr (std::is_same_v<T, graph::PropertyValue::MapType>) {
 						auto map = std::make_shared<ValueMap>();
 						for (const auto &[key, val]: arg) {
-							map->entries.emplace(key, toDriverAbiValue(val, dm));
+							map->entries.emplace(key, toDriverAbiValue(val));
 						}
 						return map;
+					} else if constexpr (std::is_same_v<T, graph::PropertyValue::Bytes>) {
+						zyx::Bytes bytes;
+						bytes.reserve(arg.size());
+						for (const std::byte byte: arg) {
+							bytes.push_back(std::to_integer<std::uint8_t>(byte));
+						}
+						return bytes;
 					} else if constexpr (std::is_same_v<T, graph::TemporalDate> ||
 										 std::is_same_v<T, graph::TemporalDateTime> ||
 										 std::is_same_v<T, graph::TemporalDuration>) {
@@ -217,15 +216,15 @@ namespace zyx {
 	}
 
 	// Main conversion entry point for ResultValue
-	Value toPublicValue(const graph::query::ResultValue &v, const std::shared_ptr<graph::storage::DataManager> &dm) {
+	Value toPublicValue(const graph::query::ResultValue &v) {
 		return std::visit(
-				[&dm]<typename T0>(T0 &&arg) -> Value {
+				[]<typename T0>(T0 &&arg) -> Value {
 					using T = std::decay_t<T0>;
 
-					if constexpr (std::is_same_v<T, graph::Node>) {
-						return toPublicNodePtr(arg, dm);
-					} else if constexpr (std::is_same_v<T, graph::Edge>) {
-						return toPublicEdgePtr(arg, dm);
+					if constexpr (std::is_same_v<T, graph::query::LogicalNodeResult>) {
+						return toPublicLogicalNodePtr(arg);
+					} else if constexpr (std::is_same_v<T, graph::query::LogicalEdgeResult>) {
+						return toPublicLogicalEdgePtr(arg);
 					} else if constexpr (std::is_same_v<T, graph::PropertyValue>) {
 						return toPublicValue(arg);
 					} else {
@@ -235,17 +234,17 @@ namespace zyx {
 				v.getVariant());
 	}
 
-	Value toDriverAbiValue(const graph::query::ResultValue &v, const std::shared_ptr<graph::storage::DataManager> &dm) {
+	Value toDriverAbiValue(const graph::query::ResultValue &v) {
 		return std::visit(
-				[&dm]<typename T0>(T0 &&arg) -> Value {
+				[]<typename T0>(T0 &&arg) -> Value {
 					using T = std::decay_t<T0>;
 
-					if constexpr (std::is_same_v<T, graph::Node>) {
-						return toPublicNodePtr(arg, dm);
-					} else if constexpr (std::is_same_v<T, graph::Edge>) {
-						return toPublicEdgePtr(arg, dm);
+					if constexpr (std::is_same_v<T, graph::query::LogicalNodeResult>) {
+						return toPublicLogicalNodePtr(arg);
+					} else if constexpr (std::is_same_v<T, graph::query::LogicalEdgeResult>) {
+						return toPublicLogicalEdgePtr(arg);
 					} else if constexpr (std::is_same_v<T, graph::PropertyValue>) {
-						return toDriverAbiValue(arg, dm);
+						return toDriverAbiValue(arg);
 					} else {
 						return std::monostate{};
 					}
@@ -314,6 +313,13 @@ namespace zyx {
 							map.emplace(k, toInternal(v));
 						}
 						return graph::PropertyValue(std::move(map));
+					} else if constexpr (std::is_same_v<T, zyx::Bytes>) {
+						graph::PropertyValue::Bytes bytes;
+						bytes.reserve(arg.size());
+						for (const std::uint8_t byte: arg) {
+							bytes.push_back(static_cast<std::byte>(byte));
+						}
+						return graph::PropertyValue(std::move(bytes));
 					} else if constexpr (std::is_same_v<T, std::shared_ptr<Node>> ||
 										 std::is_same_v<T, std::shared_ptr<Edge>>) {
 						return {};
@@ -324,7 +330,46 @@ namespace zyx {
 				v);
 	}
 
-	void validatePropertyColumns(const std::vector<PropertyColumn> &columns, size_t rowCount, std::string_view context) {
+	std::vector<graph::storage::LogicalGraphWriteProperty>
+	toLogicalWriteProperties(const std::unordered_map<std::string, Value> &properties) {
+		std::vector<graph::storage::LogicalGraphWriteProperty> result;
+		result.reserve(properties.size());
+		for (const auto &[key, value]: properties) {
+			result.push_back({key, toInternal(value)});
+		}
+		std::ranges::sort(result, {}, &graph::storage::LogicalGraphWriteProperty::key);
+		return result;
+	}
+
+	std::vector<std::string> singleLogicalLabel(const std::string &label) {
+		return label.empty() ? std::vector<std::string>{} : std::vector<std::string>{label};
+	}
+
+	int64_t checkedDirectWriteId(uint64_t id, const char *entityName) {
+		if (id > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+			throw std::overflow_error(std::string("logical ") + entityName + " ID exceeds the public API range");
+		}
+		return static_cast<int64_t>(id);
+	}
+
+	uint64_t checkedDirectWriteEndpoint(int64_t id, const char *endpointName) {
+		if (id <= 0) {
+			throw std::invalid_argument(std::string("createEdge requires a positive ") + endpointName + " ID");
+		}
+		return static_cast<uint64_t>(id);
+	}
+
+	std::vector<int64_t> checkedDirectWriteIds(const std::vector<uint64_t> &ids, const char *entityName) {
+		std::vector<int64_t> result;
+		result.reserve(ids.size());
+		for (const uint64_t id: ids) {
+			result.push_back(checkedDirectWriteId(id, entityName));
+		}
+		return result;
+	}
+
+	void validatePropertyColumns(const std::vector<PropertyColumn> &columns, size_t rowCount,
+								 std::string_view context) {
 		std::unordered_set<std::string> seenNames;
 		seenNames.reserve(columns.size());
 
@@ -333,9 +378,9 @@ namespace zyx {
 				throw std::invalid_argument(std::string(context) + " requires non-empty property column names");
 			}
 			if (column.values.size() != rowCount) {
-				throw std::invalid_argument(std::string(context) + " property column '" + column.name +
-											"' has " + std::to_string(column.values.size()) +
-											" values for " + std::to_string(rowCount) + " rows");
+				throw std::invalid_argument(std::string(context) + " property column '" + column.name + "' has " +
+											std::to_string(column.values.size()) + " values for " +
+											std::to_string(rowCount) + " rows");
 			}
 			auto [_, inserted] = seenNames.insert(column.name);
 			if (!inserted) {
@@ -344,12 +389,12 @@ namespace zyx {
 		}
 	}
 
-	std::vector<graph::storage::BulkPropertyColumn>
+	std::vector<detail::BulkPropertyColumn>
 	toInternalPropertyColumns(const std::vector<PropertyColumn> &columns) {
-		std::vector<graph::storage::BulkPropertyColumn> internalColumns;
+		std::vector<detail::BulkPropertyColumn> internalColumns;
 		internalColumns.reserve(columns.size());
 		for (const auto &column: columns) {
-			graph::storage::BulkPropertyColumn internalColumn;
+			detail::BulkPropertyColumn internalColumn;
 			internalColumn.key = column.name;
 			internalColumn.values.reserve(column.values.size());
 			for (const auto &value: column.values) {
@@ -360,95 +405,85 @@ namespace zyx {
 		return internalColumns;
 	}
 
-	bool buildHomogeneousPropertyColumns(
-			const std::vector<std::unordered_map<std::string, Value>> &rows,
-			std::vector<graph::storage::BulkPropertyColumn> &columns) {
-		columns.clear();
-		if (rows.empty()) {
-			return true;
-		}
-
-		std::vector<std::string> keys;
-		keys.reserve(rows.front().size());
-		for (const auto &entry: rows.front()) {
-			const auto &key = entry.first;
-			if (key.empty()) {
-				return false;
+	void validateInternalPropertyColumns(const std::vector<detail::BulkPropertyColumn> &columns,
+												  const size_t rowCount, const std::string_view context) {
+		std::unordered_set<std::string> keys;
+		keys.reserve(columns.size());
+		for (const detail::BulkPropertyColumn &column: columns) {
+			if (column.key.empty()) {
+				throw std::invalid_argument(std::string(context) + " requires non-empty property column names");
 			}
-			keys.push_back(key);
-		}
-		std::sort(keys.begin(), keys.end());
-
-		columns.reserve(keys.size());
-		for (const auto &key: keys) {
-			graph::storage::BulkPropertyColumn column;
-			column.key = key;
-			column.values.reserve(rows.size());
-			columns.push_back(std::move(column));
-		}
-
-		for (const auto &row: rows) {
-			if (row.size() != keys.size()) {
-				columns.clear();
-				return false;
+			if (column.values.size() != rowCount) {
+				throw std::invalid_argument(std::string(context) + " property column values must match row count");
 			}
-			for (size_t index = 0; index < keys.size(); ++index) {
-				auto valueIt = row.find(keys[index]);
-				if (valueIt == row.end()) {
-					columns.clear();
-					return false;
-				}
-				columns[index].values.push_back(toInternal(valueIt->second));
+			if (!keys.insert(column.key).second) {
+				throw std::invalid_argument(std::string(context) + " requires unique property column names");
 			}
 		}
-		return true;
 	}
 
-	bool buildHomogeneousEdgePropertyColumns(
-			const std::vector<std::tuple<int64_t, int64_t, std::unordered_map<std::string, Value>>> &rows,
-			std::vector<graph::storage::BulkPropertyColumn> &columns) {
-		columns.clear();
-		if (rows.empty()) {
-			return true;
+		[[nodiscard]] std::vector<graph::storage::LogicalGraphEdgeCreateRequest>
+		makeLogicalColumnarEdgeRequests(const std::string &edgeType, const std::vector<int64_t> &sourceIds,
+									  const std::vector<int64_t> &targetIds,
+									  const std::vector<detail::BulkPropertyColumn> &columns,
+									  const std::string_view context) {
+		if (sourceIds.size() != targetIds.size()) {
+			throw std::invalid_argument(std::string(context) + " requires matching source and target counts");
 		}
-
-		const auto &firstProps = std::get<2>(rows.front());
-		std::vector<std::string> keys;
-		keys.reserve(firstProps.size());
-		for (const auto &entry: firstProps) {
-			const auto &key = entry.first;
-			if (key.empty()) {
-				return false;
+		validateInternalPropertyColumns(columns, sourceIds.size(), context);
+		std::vector<graph::storage::LogicalGraphEdgeCreateRequest> requests(sourceIds.size());
+		for (size_t row = 0U; row < requests.size(); ++row) {
+			requests[row].source_node_id = checkedDirectWriteEndpoint(sourceIds[row], "source");
+			requests[row].target_node_id = checkedDirectWriteEndpoint(targetIds[row], "target");
+			requests[row].type = edgeType;
+			requests[row].properties.reserve(columns.size());
+		}
+		for (const detail::BulkPropertyColumn &column: columns) {
+			for (size_t row = 0U; row < requests.size(); ++row) {
+				requests[row].properties.push_back({column.key, column.values[row]});
 			}
-			keys.push_back(key);
 		}
-		std::sort(keys.begin(), keys.end());
-
-		columns.reserve(keys.size());
-		for (const auto &key: keys) {
-			graph::storage::BulkPropertyColumn column;
-			column.key = key;
-			column.values.reserve(rows.size());
-			columns.push_back(std::move(column));
+			return requests;
 		}
 
-		for (const auto &row: rows) {
-			const auto &props = std::get<2>(row);
-			if (props.size() != keys.size()) {
-				columns.clear();
-				return false;
+		void validateLogicalColumnarEdgeEndpoints(graph::storage::LogicalGraphReadBackend &readBackend,
+											 const std::vector<int64_t> &sourceIds,
+											 const std::vector<int64_t> &targetIds) {
+			if (sourceIds.size() != targetIds.size()) {
+				throw std::invalid_argument("logical columnar Edge endpoint counts must match");
 			}
-			for (size_t index = 0; index < keys.size(); ++index) {
-				auto valueIt = props.find(keys[index]);
-				if (valueIt == props.end()) {
-					columns.clear();
+			std::unique_ptr<graph::storage::LogicalGraphReadSnapshot> snapshot =
+					readBackend.openLogicalGraphReadSnapshot();
+			if (!snapshot) {
+				throw std::runtime_error("logical columnar Edge ingest could not open its validation snapshot");
+			}
+			std::unordered_map<int64_t, bool> visibleEndpoints;
+			visibleEndpoints.reserve(sourceIds.size() + targetIds.size());
+			const auto isVisibleEndpoint = [&visibleEndpoints, &snapshot](int64_t nodeId) {
+				if (nodeId <= 0) {
 					return false;
 				}
-				columns[index].values.push_back(toInternal(valueIt->second));
+				if (const auto found = visibleEndpoints.find(nodeId); found != visibleEndpoints.end()) {
+					return found->second;
+				}
+				const bool visible = snapshot->containsNode(static_cast<uint64_t>(nodeId));
+				visibleEndpoints.emplace(nodeId, visible);
+				return visible;
+			};
+
+			for (size_t row = 0U; row < sourceIds.size(); ++row) {
+				if (!isVisibleEndpoint(sourceIds[row])) {
+				throw detail::BulkInputError(
+							row, "source_id", "source node " + std::to_string(sourceIds[row]) +
+													 " does not exist or is inactive");
+				}
+				if (!isVisibleEndpoint(targetIds[row])) {
+				throw detail::BulkInputError(
+							row, "target_id", "target node " + std::to_string(targetIds[row]) +
+													 " does not exist or is inactive");
+				}
 			}
 		}
-		return true;
-	}
 
 	// Convert public Value params to internal PropertyValue params
 	graph::query::QueryContext toQueryContext(const std::unordered_map<std::string, Value> &params) {
@@ -459,19 +494,284 @@ namespace zyx {
 		return ctx;
 	}
 
+	namespace {
+
+		// These mirror the production logical-query limits. The public traversal
+		// APIs have no caller-provided resource budget, so they must not turn a
+		// damaged or unexpectedly dense graph into unbounded backend work.
+		constexpr size_t LOGICAL_ALGORITHM_MAXIMUM_NODES = 1'000'000U;
+		constexpr size_t LOGICAL_ALGORITHM_MAXIMUM_EDGES_PER_NODE = 100'000U;
+		constexpr size_t LOGICAL_ALGORITHM_ADJACENCY_PAGE_RECORDS = 1'024U;
+		constexpr size_t LOGICAL_ALGORITHM_MAXIMUM_PROPERTY_ENTRIES = 10'000U;
+		constexpr size_t LOGICAL_ALGORITHM_MAXIMUM_METADATA_PAGES = 4'096U;
+
+		void validateLogicalAlgorithmNode(const graph::storage::LogicalGraphNode &node) {
+			if (node.node_id == 0U) {
+				throw std::runtime_error("logical graph backend returned an invalid Node");
+			}
+			std::unordered_set<std::string_view> labels;
+			labels.reserve(node.labels.size());
+			for (const std::string &label: node.labels) {
+				if (label.empty() || !labels.insert(label).second) {
+					throw std::runtime_error("logical graph backend returned an invalid Node label set");
+				}
+			}
+		}
+
+		void validateLogicalAlgorithmEdge(const graph::storage::LogicalGraphEdge &edge, uint64_t sourceNodeId) {
+			if (edge.edge_id == 0U || edge.source_node_id != sourceNodeId || edge.target_node_id == 0U) {
+				throw std::runtime_error("logical graph backend returned an invalid outgoing Edge");
+			}
+		}
+
+		[[nodiscard]] std::optional<graph::storage::LogicalGraphNode>
+		findLogicalAlgorithmNode(const graph::storage::LogicalGraphReadSnapshot &snapshot, uint64_t nodeId) {
+			if (nodeId == 0U) {
+				return std::nullopt;
+			}
+			const graph::storage::LogicalGraphNodePage page =
+					snapshot.scanNodesAfter(nodeId - 1U, 1U, LOGICAL_ALGORITHM_MAXIMUM_METADATA_PAGES);
+			if (page.nodes.size() > 1U || page.metadata_pages_visited > LOGICAL_ALGORITHM_MAXIMUM_METADATA_PAGES) {
+				throw std::runtime_error("logical graph backend returned an invalid bounded Node page");
+			}
+			if (page.nodes.empty()) {
+				if (page.may_have_more) {
+					throw std::runtime_error("logical graph backend returned an empty nonterminal Node page");
+				}
+				return std::nullopt;
+			}
+			const graph::storage::LogicalGraphNode &node = page.nodes.front();
+			if (node.node_id <= nodeId - 1U) {
+				throw std::runtime_error("logical graph backend returned an unordered Node page");
+			}
+			validateLogicalAlgorithmNode(node);
+			return node.node_id == nodeId ? std::optional<graph::storage::LogicalGraphNode>(node) : std::nullopt;
+		}
+
+		[[nodiscard]] Node toPublicLogicalAlgorithmNode(const graph::storage::LogicalGraphNode &node) {
+			validateLogicalAlgorithmNode(node);
+			Node result;
+			result.id = checkedPublicEntityId(node.node_id, "Node");
+			result.labels = node.labels;
+			result.label = result.labels.empty() ? "" : result.labels.front();
+			if (node.properties.size() > LOGICAL_ALGORITHM_MAXIMUM_PROPERTY_ENTRIES) {
+				throw std::runtime_error("logical graph backend returned oversized Node properties");
+			}
+			result.properties.reserve(node.properties.size());
+			for (const graph::storage::LogicalGraphPropertyEntry &entry: node.properties) {
+				if (entry.key.empty() || !result.properties.emplace(entry.key, toPublicValue(entry.value)).second) {
+					throw std::runtime_error("logical graph backend returned an invalid Node Property entry set");
+				}
+			}
+			return result;
+		}
+
+		[[nodiscard]] graph::storage::LogicalGraphNode
+		readRequiredLogicalAlgorithmNode(const graph::storage::LogicalGraphReadSnapshot &snapshot, uint64_t nodeId) {
+			const graph::storage::LogicalGraphNode node = snapshot.readNode(nodeId);
+			if (node.node_id != nodeId) {
+				throw std::runtime_error("logical graph backend resolved a mismatched Node identity");
+			}
+			validateLogicalAlgorithmNode(node);
+			return node;
+		}
+
+		template<typename EdgeVisitor>
+		[[nodiscard]] bool visitLogicalAlgorithmOutgoingEdges(const graph::storage::LogicalGraphReadSnapshot &snapshot,
+																	 uint64_t sourceNodeId, EdgeVisitor &&visitor) {
+			std::optional<graph::storage::LogicalGraphAdjacencyContinuation> continuation;
+			std::unordered_set<uint64_t> edgeIds;
+			edgeIds.reserve(LOGICAL_ALGORITHM_ADJACENCY_PAGE_RECORDS);
+			size_t visited = 0U;
+			while (true) {
+				const size_t remaining = LOGICAL_ALGORITHM_MAXIMUM_EDGES_PER_NODE - visited;
+				const size_t pageRecords = std::min(LOGICAL_ALGORITHM_ADJACENCY_PAGE_RECORDS, remaining);
+				const graph::storage::LogicalGraphAdjacencyPage page = snapshot.scanAdjacentEdges(
+						sourceNodeId, graph::storage::LogicalGraphReadDirection::LGRD_OUTGOING, continuation, pageRecords);
+				if (page.edges.size() > pageRecords || (page.edges.empty() && page.continuation.has_value())) {
+					throw std::runtime_error("logical graph backend returned an invalid adjacency page");
+				}
+				for (const graph::storage::LogicalGraphEdge &edge: page.edges) {
+					validateLogicalAlgorithmEdge(edge, sourceNodeId);
+					if (!edgeIds.insert(edge.edge_id).second) {
+						throw std::runtime_error("logical graph backend returned a duplicate Edge during traversal");
+					}
+					++visited;
+					if (!visitor(edge)) {
+						return false;
+					}
+				}
+				if (!page.continuation.has_value()) {
+					return true;
+				}
+				const graph::storage::LogicalGraphAdjacencyContinuation &next = *page.continuation;
+				if (next.previous_edge_id != page.edges.back().edge_id || next.next_edge_id == 0U ||
+					next.previous_edge_id == next.next_edge_id) {
+					throw std::runtime_error("logical graph backend returned an invalid adjacency continuation");
+				}
+				if (visited == LOGICAL_ALGORITHM_MAXIMUM_EDGES_PER_NODE) {
+					throw std::runtime_error("logical graph traversal exceeded its per-Node Edge bound");
+				}
+				continuation = next;
+			}
+		}
+
+		[[nodiscard]] std::vector<Node>
+		materializeLogicalAlgorithmPath(const graph::storage::LogicalGraphReadSnapshot &snapshot,
+															 const std::unordered_map<uint64_t, uint64_t> &parents, uint64_t endNodeId) {
+			std::vector<uint64_t> reverseIds;
+			reverseIds.reserve(parents.size());
+			uint64_t current = endNodeId;
+			while (current != 0U) {
+				if (reverseIds.size() == parents.size()) {
+					throw std::runtime_error("logical graph shortest-path parent chain contains a cycle");
+				}
+				reverseIds.push_back(current);
+				const auto parent = parents.find(current);
+				if (parent == parents.end()) {
+					throw std::runtime_error("logical graph shortest-path parent chain is incomplete");
+				}
+				current = parent->second;
+			}
+			std::reverse(reverseIds.begin(), reverseIds.end());
+
+			std::vector<Node> path;
+			path.reserve(reverseIds.size());
+			for (const uint64_t nodeId: reverseIds) {
+				const graph::storage::LogicalGraphNode node = readRequiredLogicalAlgorithmNode(snapshot, nodeId);
+				path.push_back(toPublicLogicalAlgorithmNode(node));
+			}
+			return path;
+		}
+
+		[[nodiscard]] std::vector<Node>
+		findLogicalShortestPath(const graph::storage::LogicalGraphReadBackend &backend, int64_t startId, int64_t endId,
+								int maxDepth) {
+			if (startId <= 0 || endId <= 0) {
+				return {};
+			}
+			std::unique_ptr<graph::storage::LogicalGraphReadSnapshot> snapshot = backend.openLogicalGraphReadSnapshot();
+			if (!snapshot) {
+				throw std::runtime_error("logical graph backend returned no read snapshot");
+			}
+			const uint64_t startNodeId = static_cast<uint64_t>(startId);
+			const uint64_t endNodeId = static_cast<uint64_t>(endId);
+			const std::optional<graph::storage::LogicalGraphNode> start =
+					findLogicalAlgorithmNode(*snapshot, startNodeId);
+			if (!start.has_value()) {
+				return {};
+			}
+			if (startNodeId == endNodeId) {
+				return {toPublicLogicalAlgorithmNode(*start)};
+			}
+			if (maxDepth <= 0) {
+				return {};
+			}
+
+			struct QueueEntry {
+				uint64_t node_id = 0U;
+				int depth = 0;
+			};
+			std::deque<QueueEntry> queue;
+			std::unordered_map<uint64_t, uint64_t> parents;
+			parents.reserve(1'024U);
+			parents.emplace(startNodeId, 0U);
+			queue.push_back({startNodeId, 0});
+
+			while (!queue.empty()) {
+				const QueueEntry current = queue.front();
+				queue.pop_front();
+				if (current.node_id != startNodeId) {
+					static_cast<void>(readRequiredLogicalAlgorithmNode(*snapshot, current.node_id));
+				}
+				if (current.depth >= maxDepth) {
+					continue;
+				}
+
+				bool found = false;
+				static_cast<void>(visitLogicalAlgorithmOutgoingEdges(*snapshot, current.node_id,
+																					  [&](const graph::storage::LogicalGraphEdge &edge) {
+					if (parents.contains(edge.target_node_id)) {
+						return true;
+					}
+					if (parents.size() == LOGICAL_ALGORITHM_MAXIMUM_NODES) {
+						throw std::runtime_error("logical graph shortest-path traversal exceeded its Node bound");
+					}
+					parents.emplace(edge.target_node_id, current.node_id);
+					if (edge.target_node_id == endNodeId) {
+						found = true;
+						return false;
+					}
+					queue.push_back({edge.target_node_id, current.depth + 1});
+					return true;
+				}));
+				if (found) {
+					return materializeLogicalAlgorithmPath(*snapshot, parents, endNodeId);
+				}
+			}
+			return {};
+		}
+
+		void breadthFirstLogicalTraversal(const graph::storage::LogicalGraphReadBackend &backend, int64_t startId,
+												 const std::function<bool(const Node &)> &visitor) {
+			if (!visitor) {
+				throw std::invalid_argument("bfs requires a visitor");
+			}
+			if (startId <= 0) {
+				return;
+			}
+			std::unique_ptr<graph::storage::LogicalGraphReadSnapshot> snapshot = backend.openLogicalGraphReadSnapshot();
+			if (!snapshot) {
+				throw std::runtime_error("logical graph backend returned no read snapshot");
+			}
+			const uint64_t startNodeId = static_cast<uint64_t>(startId);
+			const std::optional<graph::storage::LogicalGraphNode> start =
+					findLogicalAlgorithmNode(*snapshot, startNodeId);
+			if (!start.has_value()) {
+				return;
+			}
+
+			std::deque<uint64_t> queue;
+			std::unordered_set<uint64_t> visited;
+			visited.reserve(1'024U);
+			visited.insert(startNodeId);
+			queue.push_back(startNodeId);
+			while (!queue.empty()) {
+				const uint64_t currentNodeId = queue.front();
+				queue.pop_front();
+				const graph::storage::LogicalGraphNode current =
+						currentNodeId == startNodeId ? *start : readRequiredLogicalAlgorithmNode(*snapshot, currentNodeId);
+				if (!visitor(toPublicLogicalAlgorithmNode(current))) {
+					return;
+				}
+				static_cast<void>(visitLogicalAlgorithmOutgoingEdges(
+						*snapshot, currentNodeId, [&](const graph::storage::LogicalGraphEdge &edge) {
+						if (visited.contains(edge.target_node_id)) {
+							return true;
+						}
+						if (visited.size() == LOGICAL_ALGORITHM_MAXIMUM_NODES) {
+							throw std::runtime_error("logical graph breadth-first traversal exceeded its Node bound");
+						}
+						visited.insert(edge.target_node_id);
+						queue.push_back(edge.target_node_id);
+						return true;
+					}));
+			}
+		}
+
+	} // namespace
+
 	// ========================================================================
 	// 2. Result Implementation
 	// ========================================================================
 
 	class ResultImpl {
 	public:
-		explicit ResultImpl(graph::query::QueryResult internalRes, std::shared_ptr<graph::storage::DataManager> dm) :
-			result_(std::move(internalRes)), dataManager_(std::move(dm)) {
+		explicit ResultImpl(graph::query::QueryResult internalRes) : result_(std::move(internalRes)) {
 			prepareMetadata();
 		}
 
 		graph::query::QueryResult result_;
-		std::shared_ptr<graph::storage::DataManager> dataManager_;
 
 		// Cursor State
 		size_t cursor_ = 0;
@@ -497,9 +797,9 @@ namespace zyx {
 			// This preserves legacy "stream" behavior for single-entity queries
 			if (columnNames_.size() == 1 && !result_.getRows().empty()) {
 				const auto &firstVal = result_.getRows()[0].at(columnNames_[0]);
-				if (firstVal.isNode()) {
+				if (firstVal.isGraphNode()) {
 					mode_ = 1; // Node Stream
-				} else if (firstVal.isEdge()) {
+				} else if (firstVal.isGraphEdge()) {
 					mode_ = 2; // Edge Stream
 				}
 			} else {
@@ -554,17 +854,17 @@ namespace zyx {
 			// 1. Exact Match
 			auto it = row.find(key);
 			if (it != row.end())
-				return toPublicValue(it->second, impl_->dataManager_);
+				return toPublicValue(it->second);
 
 			// 2. Fuzzy Match (User asks "name", DB has "n.name")
 			for (const auto &[dbKey, dbVal]: row) {
 				if (key.find('.') == std::string::npos && dbKey.size() > key.size()) {
 					if (dbKey.ends_with("." + key))
-						return toPublicValue(dbVal, impl_->dataManager_);
+						return toPublicValue(dbVal);
 				}
 				if (dbKey.find('.') == std::string::npos && key.size() > dbKey.size()) {
 					if (key.ends_with("." + dbKey))
-						return toPublicValue(dbVal, impl_->dataManager_);
+						return toPublicValue(dbVal);
 				}
 			}
 			return std::monostate{};
@@ -578,7 +878,7 @@ namespace zyx {
 
 			// If requesting the entity itself (key empty or standard aliases)
 			if (key.empty() || key == colName) {
-				return toPublicValue(entityVal, impl_->dataManager_);
+				return toPublicValue(entityVal);
 			}
 
 			// If requesting a property inside the entity
@@ -587,8 +887,18 @@ namespace zyx {
 				auto it = props.find(key);
 				if (it != props.end())
 					return toPublicValue(it->second);
+			} else if (entityVal.isLogicalNode()) {
+				const auto &props = entityVal.asLogicalNode().properties;
+				auto it = props.find(key);
+				if (it != props.end())
+					return toPublicValue(it->second);
 			} else if (entityVal.isEdge()) {
 				const auto &props = entityVal.asEdge().getProperties();
+				auto it = props.find(key);
+				if (it != props.end())
+					return toPublicValue(it->second);
+			} else if (entityVal.isLogicalEdge()) {
+				const auto &props = entityVal.asLogicalEdge().properties;
 				auto it = props.find(key);
 				if (it != props.end())
 					return toPublicValue(it->second);
@@ -624,7 +934,7 @@ namespace zyx {
 			if (it == row.end()) {
 				return std::monostate{};
 			}
-			return toDriverAbiValue(it->second, result.impl_->dataManager_);
+			return toDriverAbiValue(it->second);
 		}
 	} // namespace detail
 
@@ -654,17 +964,20 @@ namespace zyx {
 	public:
 		explicit DatabaseImpl(const std::string &path) : db_(path) {}
 		graph::Database db_;
-		std::optional<graph::Transaction> cypherTxn_;
+		std::optional<Transaction> cypherTxn_;
+		std::atomic<size_t> active_public_transactions_{0U};
 
-		[[nodiscard]] bool needsImplicitTransaction() const {
-			return !db_.hasActiveTransaction() && !cypherTxn_.has_value();
-		}
+		void registerPublicTransaction(TransactionImpl *transaction);
+		void unregisterPublicTransaction(TransactionImpl *transaction) noexcept;
+		[[nodiscard]] graph::storage::LogicalGraphReadBackend &resolveLogicalReadTarget() const;
+		[[nodiscard]] graph::storage::LogicalGraphWriteBackend &resolveLogicalWriteTarget() const;
 
 		void ensureOpen() {
 			if (!db_.isOpen()) {
 				db_.open();
 			}
 		}
+
 	};
 
 	// ========================================================================
@@ -673,12 +986,141 @@ namespace zyx {
 
 	class TransactionImpl {
 	public:
-		explicit TransactionImpl(graph::Transaction internalTxn, DatabaseImpl *dbImpl) :
-			txn_(std::move(internalTxn)), dbImpl_(dbImpl) {}
+		explicit TransactionImpl(std::unique_ptr<graph::storage::LogicalGraphTransaction> logicalTxn,
+										 DatabaseImpl *dbImpl) :
+			logical_txn_(std::move(logicalTxn)), dbImpl_(dbImpl) {
+			if (!logical_txn_) {
+				throw std::invalid_argument("logical public transaction requires an inner transaction");
+			}
+			logical_overlay_ = std::make_unique<graph::storage::LogicalGraphTransactionOverlay>(*logical_txn_);
+			registerTransaction();
+		}
+		~TransactionImpl() { unregisterTransaction(); }
 
-		graph::Transaction txn_;
+		[[nodiscard]] bool isActive() const {
+			return logical_txn_ && logical_txn_->state() == graph::storage::LogicalGraphTransactionState::LGTTS_ACTIVE;
+		}
+		[[nodiscard]] bool isReadOnly() const { return logical_txn_ && logical_txn_->isReadOnly(); }
+		[[nodiscard]] graph::storage::LogicalGraphTransactionOverlay &requireLogicalWriteOverlay() {
+			if (!isActive()) {
+				throw std::logic_error("transaction-bound direct write requires an active transaction");
+			}
+			if (logical_overlay_ == nullptr) {
+				throw std::logic_error("transaction-bound direct writes require a logical transaction");
+			}
+			if (isReadOnly()) {
+				throw std::logic_error("transaction-bound direct write requires a read-write transaction");
+			}
+			return *logical_overlay_;
+		}
+		[[nodiscard]] graph::storage::LogicalGraphTransactionOverlay &requireLogicalReadOverlay() {
+			if (!isActive()) {
+				throw std::logic_error("transaction-bound read requires an active transaction");
+			}
+			if (logical_overlay_ == nullptr) {
+				throw std::logic_error("transaction-bound reads require a logical transaction");
+			}
+			return *logical_overlay_;
+		}
+		void commit() {
+			if (!isActive()) {
+				throw std::runtime_error("Cannot commit: transaction is not active");
+			}
+			try {
+				static_cast<void>(logical_txn_->commit());
+			} catch (...) {
+				if (!isActive()) {
+					unregisterTransaction();
+				}
+				throw;
+			}
+			unregisterTransaction();
+		}
+		void rollback() {
+			if (!isActive()) {
+				throw std::runtime_error("Cannot rollback: transaction is not active");
+			}
+			try {
+				logical_txn_->rollback();
+			} catch (...) {
+				if (!isActive()) {
+					unregisterTransaction();
+				}
+				throw;
+			}
+			unregisterTransaction();
+		}
+
+	private:
+		void registerTransaction() {
+			if (dbImpl_ == nullptr) {
+				throw std::invalid_argument("public transaction requires an owning Database");
+			}
+			dbImpl_->registerPublicTransaction(this);
+			registered_ = true;
+		}
+		void unregisterTransaction() noexcept {
+			if (registered_ && dbImpl_ != nullptr) {
+				dbImpl_->unregisterPublicTransaction(this);
+				registered_ = false;
+			}
+		}
+
+	public:
+
+		std::unique_ptr<graph::storage::LogicalGraphTransaction> logical_txn_;
+		std::unique_ptr<graph::storage::LogicalGraphTransactionOverlay> logical_overlay_;
 		DatabaseImpl *dbImpl_; // Non-owning reference to parent database
+		bool registered_ = false;
 	};
+
+	void DatabaseImpl::registerPublicTransaction(TransactionImpl *transaction) {
+		if (transaction == nullptr) {
+			throw std::invalid_argument("public transaction registration requires a transaction");
+		}
+		size_t current = active_public_transactions_.load(std::memory_order_acquire);
+		for (;;) {
+			if (current == std::numeric_limits<size_t>::max()) {
+				throw std::overflow_error("public transaction counter overflowed");
+			}
+			if (active_public_transactions_.compare_exchange_weak(current, current + 1U, std::memory_order_acq_rel,
+																	 std::memory_order_acquire)) {
+				return;
+			}
+		}
+	}
+
+	void DatabaseImpl::unregisterPublicTransaction(TransactionImpl *transaction) noexcept {
+		if (transaction == nullptr) {
+			return;
+		}
+		size_t current = active_public_transactions_.load(std::memory_order_acquire);
+		while (current != 0U &&
+			   !active_public_transactions_.compare_exchange_weak(current, current - 1U, std::memory_order_acq_rel,
+																			 std::memory_order_acquire)) {
+		}
+	}
+
+	graph::storage::LogicalGraphReadBackend &DatabaseImpl::resolveLogicalReadTarget() const {
+		const auto logicalReads =
+				std::dynamic_pointer_cast<graph::storage::LogicalGraphReadBackend>(db_.getStorageBackend());
+		if (!logicalReads) {
+			throw std::logic_error("logical backend does not provide a logical read interface");
+		}
+		return *logicalReads;
+	}
+
+	graph::storage::LogicalGraphWriteBackend &DatabaseImpl::resolveLogicalWriteTarget() const {
+		if (active_public_transactions_.load(std::memory_order_acquire) != 0U) {
+			throw std::logic_error("direct public API writes are not allowed while a transaction is active");
+		}
+
+		const auto logicalWrites = db_.getLogicalGraphWriteBackend();
+		if (!logicalWrites) {
+			throw std::logic_error("logical backend was opened read-only and cannot perform public API writes");
+		}
+		return *logicalWrites;
+	}
 
 	Transaction::Transaction() = default;
 	Transaction::~Transaction() = default;
@@ -688,9 +1130,9 @@ namespace zyx {
 	Result Transaction::execute(const std::string &cypher) const { return execute(cypher, {}); }
 
 	Result Transaction::execute(const std::string &cypher, const std::unordered_map<std::string, Value> &params) const {
-		if (!impl_ || !impl_->txn_.isActive()) {
+		if (!impl_ || !impl_->isActive()) {
 			Result res;
-			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult(), nullptr);
+			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult());
 			res.impl_->error_msg = "Transaction is not active";
 			return res;
 		}
@@ -700,48 +1142,196 @@ namespace zyx {
 
 			auto ctx = toQueryContext(params);
 			// Propagate read-only mode from internal transaction
-			if (impl_->txn_.isReadOnly()) {
+			if (impl_->isReadOnly()) {
 				ctx.execMode = graph::query::ExecMode::EM_READ_ONLY;
 			}
-			auto internalRes = impl_->dbImpl_->db_.getQueryEngine()->execute(cypher, ctx);
+			auto queryEngine = impl_->dbImpl_->db_.getQueryEngine();
+			auto plan = queryEngine->buildPlan(cypher);
+			graph::query::QueryResult internalRes = queryEngine->executePlanWithLogicalTransactionOverlay(
+					std::move(plan), ctx, *impl_->logical_overlay_, *impl_->logical_overlay_);
 
 			auto end = std::chrono::high_resolution_clock::now();
 			std::chrono::duration<double, std::milli> elapsed = end - start;
 			internalRes.setDuration(elapsed.count());
 
-			auto dm = impl_->dbImpl_->db_.getStorage()->getDataManager();
-
 			Result res;
-			res.impl_ = std::make_unique<ResultImpl>(std::move(internalRes), std::move(dm));
+			res.impl_ = std::make_unique<ResultImpl>(std::move(internalRes));
 			return res;
 		} catch (const std::exception &e) {
 			Result res;
-			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult(), nullptr);
+			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult());
 			res.impl_->error_msg = e.what();
 			return res;
 		} catch (...) {
 			Result res;
-			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult(), nullptr);
+			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult());
 			res.impl_->error_msg = "Unknown error";
 			return res;
 		}
 	}
 
+	int64_t Transaction::createNode(const std::string &label,
+									 const std::unordered_map<std::string, Value> &props) const {
+		if (!impl_) {
+			throw std::logic_error("transaction-bound direct write requires an initialized transaction");
+		}
+		auto &overlay = impl_->requireLogicalWriteOverlay();
+		graph::storage::LogicalGraphNodeCreateRequest request;
+		request.labels = singleLogicalLabel(label);
+		request.properties = toLogicalWriteProperties(props);
+		const std::vector<uint64_t> ids = overlay.createLogicalNodes({std::move(request)});
+		if (ids.size() != 1U) {
+			throw std::logic_error("logical Node creation returned an unexpected result count");
+		}
+		return checkedDirectWriteId(ids.front(), "Node");
+	}
+
+	int64_t Transaction::createNode(const std::vector<std::string> &labels,
+									 const std::unordered_map<std::string, Value> &props) const {
+		if (!impl_) {
+			throw std::logic_error("transaction-bound direct write requires an initialized transaction");
+		}
+		auto &overlay = impl_->requireLogicalWriteOverlay();
+		graph::storage::LogicalGraphNodeCreateRequest request;
+		request.labels = labels;
+		request.properties = toLogicalWriteProperties(props);
+		const std::vector<uint64_t> ids = overlay.createLogicalNodes({std::move(request)});
+		if (ids.size() != 1U) {
+			throw std::logic_error("logical Node creation returned an unexpected result count");
+		}
+		return checkedDirectWriteId(ids.front(), "Node");
+	}
+
+	std::vector<int64_t> Transaction::createNodes(
+			const std::string &label, const std::vector<std::unordered_map<std::string, Value>> &propsList) const {
+		if (propsList.empty()) {
+			return {};
+		}
+		if (!impl_) {
+			throw std::logic_error("transaction-bound direct write requires an initialized transaction");
+		}
+		auto &overlay = impl_->requireLogicalWriteOverlay();
+		std::vector<graph::storage::LogicalGraphNodeCreateRequest> requests;
+		requests.reserve(propsList.size());
+		for (const auto &properties: propsList) {
+			requests.push_back({singleLogicalLabel(label), toLogicalWriteProperties(properties)});
+		}
+		return checkedDirectWriteIds(overlay.createLogicalNodes(requests), "Node");
+	}
+
+	std::vector<int64_t> Transaction::createNodesColumnar(const std::string &label, const size_t count,
+																 const std::vector<PropertyColumn> &columns) const {
+		validatePropertyColumns(columns, count, "Transaction::createNodesColumnar");
+		if (count == 0U) {
+			return {};
+		}
+		if (!impl_) {
+			throw std::logic_error("transaction-bound direct write requires an initialized transaction");
+		}
+		auto &overlay = impl_->requireLogicalWriteOverlay();
+		std::vector<graph::storage::LogicalGraphNodeCreateRequest> requests(count);
+		for (auto &request: requests) {
+			request.labels = singleLogicalLabel(label);
+			request.properties.reserve(columns.size());
+		}
+		for (const PropertyColumn &column: columns) {
+			for (size_t row = 0U; row < count; ++row) {
+				requests[row].properties.push_back({column.name, toInternal(column.values[row])});
+			}
+		}
+		return checkedDirectWriteIds(overlay.createLogicalNodes(requests), "Node");
+	}
+
+	int64_t Transaction::createEdge(const int64_t sourceId, const int64_t targetId, const std::string &edgeType,
+									 const std::unordered_map<std::string, Value> &props) const {
+		if (!impl_) {
+			throw std::logic_error("transaction-bound direct write requires an initialized transaction");
+		}
+		auto &overlay = impl_->requireLogicalWriteOverlay();
+		graph::storage::LogicalGraphEdgeCreateRequest request;
+		request.source_node_id = checkedDirectWriteEndpoint(sourceId, "source");
+		request.target_node_id = checkedDirectWriteEndpoint(targetId, "target");
+		request.type = edgeType;
+		request.properties = toLogicalWriteProperties(props);
+		const std::vector<uint64_t> ids = overlay.createLogicalEdges({std::move(request)});
+		if (ids.size() != 1U) {
+			throw std::logic_error("logical Edge creation returned an unexpected result count");
+		}
+		return checkedDirectWriteId(ids.front(), "Edge");
+	}
+
+	std::vector<int64_t> Transaction::createEdges(
+			const std::string &edgeType,
+			const std::vector<std::tuple<int64_t, int64_t, std::unordered_map<std::string, Value>>> &edgesList) const {
+		if (edgesList.empty()) {
+			return {};
+		}
+		if (!impl_) {
+			throw std::logic_error("transaction-bound direct write requires an initialized transaction");
+		}
+		auto &overlay = impl_->requireLogicalWriteOverlay();
+		std::vector<graph::storage::LogicalGraphEdgeCreateRequest> requests;
+		requests.reserve(edgesList.size());
+		for (const auto &[sourceId, targetId, properties]: edgesList) {
+			requests.push_back({checkedDirectWriteEndpoint(sourceId, "source"),
+								checkedDirectWriteEndpoint(targetId, "target"), edgeType,
+								toLogicalWriteProperties(properties)});
+		}
+		return checkedDirectWriteIds(overlay.createLogicalEdges(requests), "Edge");
+	}
+
+	std::vector<int64_t> Transaction::createEdgesColumnar(const std::string &edgeType,
+														 const std::vector<int64_t> &sourceIds,
+														 const std::vector<int64_t> &targetIds,
+														 const std::vector<PropertyColumn> &columns) const {
+		if (sourceIds.size() != targetIds.size()) {
+			throw std::invalid_argument("createEdgesColumnar requires matching source and target counts");
+		}
+		validatePropertyColumns(columns, sourceIds.size(), "Transaction::createEdgesColumnar");
+		if (sourceIds.empty()) {
+			return {};
+		}
+		if (!impl_) {
+			throw std::logic_error("transaction-bound direct write requires an initialized transaction");
+		}
+		auto &overlay = impl_->requireLogicalWriteOverlay();
+		const std::vector<detail::BulkPropertyColumn> internalColumns = toInternalPropertyColumns(columns);
+		validateLogicalColumnarEdgeEndpoints(overlay, sourceIds, targetIds);
+		const std::vector<graph::storage::LogicalGraphEdgeCreateRequest> requests =
+				makeLogicalColumnarEdgeRequests(edgeType, sourceIds, targetIds, internalColumns,
+																	 "Transaction::createEdgesColumnar");
+		return checkedDirectWriteIds(overlay.createLogicalEdges(requests), "Edge");
+	}
+
+	std::vector<Node> Transaction::getShortestPath(const int64_t startId, const int64_t endId, const int maxDepth) const {
+		if (!impl_) {
+			throw std::logic_error("transaction-bound read requires an initialized transaction");
+		}
+		return findLogicalShortestPath(impl_->requireLogicalReadOverlay(), startId, endId, maxDepth);
+	}
+
+	void Transaction::bfs(const int64_t startNodeId, const std::function<bool(const Node &)> &visitor) const {
+		if (!impl_) {
+			throw std::logic_error("transaction-bound read requires an initialized transaction");
+		}
+		breadthFirstLogicalTraversal(impl_->requireLogicalReadOverlay(), startNodeId, visitor);
+	}
+
 	void Transaction::commit() {
 		if (!impl_)
 			throw std::runtime_error("Transaction not initialized");
-		impl_->txn_.commit();
+		impl_->commit();
 	}
 
 	void Transaction::rollback() {
 		if (!impl_)
 			throw std::runtime_error("Transaction not initialized");
-		impl_->txn_.rollback();
+		impl_->rollback();
 	}
 
-	bool Transaction::isActive() const { return impl_ && impl_->txn_.isActive(); }
+	bool Transaction::isActive() const { return impl_ && impl_->isActive(); }
 
-	bool Transaction::isReadOnly() const { return impl_ && impl_->txn_.isReadOnly(); }
+	bool Transaction::isReadOnly() const { return impl_ && impl_->isReadOnly(); }
 
 	// ========================================================================
 	// 5. Database API Methods
@@ -760,10 +1350,12 @@ namespace zyx {
 			impl_->db_.open();
 		}
 
-		auto internalTxn = impl_->db_.beginTransaction();
-
+		const auto logicalTransactions = impl_->db_.getLogicalGraphTransactionalBackend();
+		if (!logicalTransactions) {
+			throw std::logic_error("public Database requires a logical transaction backend");
+		}
 		Transaction txn;
-		txn.impl_ = std::make_unique<TransactionImpl>(std::move(internalTxn), impl_.get());
+		txn.impl_ = std::make_unique<TransactionImpl>(logicalTransactions->beginLogicalGraphTransaction(false), impl_.get());
 		return txn;
 	}
 
@@ -772,10 +1364,12 @@ namespace zyx {
 			impl_->db_.open();
 		}
 
-		auto internalTxn = impl_->db_.beginBulkTransaction();
-
+		const auto logicalTransactions = impl_->db_.getLogicalGraphTransactionalBackend();
+		if (!logicalTransactions) {
+			throw std::logic_error("public Database requires a logical transaction backend");
+		}
 		Transaction txn;
-		txn.impl_ = std::make_unique<TransactionImpl>(std::move(internalTxn), impl_.get());
+		txn.impl_ = std::make_unique<TransactionImpl>(logicalTransactions->beginLogicalGraphTransaction(false), impl_.get());
 		return txn;
 	}
 
@@ -784,15 +1378,18 @@ namespace zyx {
 			impl_->db_.open();
 		}
 
-		auto internalTxn = impl_->db_.beginReadOnlyTransaction();
-
+		const auto logicalTransactions = impl_->db_.getLogicalGraphTransactionalBackend();
+		if (!logicalTransactions) {
+			throw std::logic_error("public Database requires a logical transaction backend");
+		}
 		Transaction txn;
-		txn.impl_ = std::make_unique<TransactionImpl>(std::move(internalTxn), impl_.get());
+		txn.impl_ = std::make_unique<TransactionImpl>(logicalTransactions->beginLogicalGraphTransaction(true), impl_.get());
 		return txn;
 	}
 
 	bool Database::hasActiveTransaction() const {
-		return impl_->db_.hasActiveTransaction() || impl_->cypherTxn_.has_value();
+		return impl_->db_.hasActiveTransaction() || impl_->cypherTxn_.has_value() ||
+			   impl_->active_public_transactions_.load(std::memory_order_acquire) != 0U;
 	}
 
 	void Database::setThreadPoolSize(size_t poolSize) const { impl_->db_.setThreadPoolSize(poolSize); }
@@ -805,7 +1402,6 @@ namespace zyx {
 				graph::debug::ScopedPerfTimer timer("api.ensure_open");
 				impl_->ensureOpen();
 			}
-
 			// Intercept transaction control statements (BEGIN/COMMIT/ROLLBACK)
 			auto txnKind = CypherTxnKind::NONE;
 			{
@@ -822,7 +1418,7 @@ namespace zyx {
 							throw std::runtime_error(
 									"Nested transactions are not supported: transaction already active");
 						}
-						impl_->cypherTxn_.emplace(impl_->db_.beginTransaction());
+						impl_->cypherTxn_.emplace(const_cast<Database *>(this)->beginTransaction());
 						txnResult.addRow(
 								{{"result", graph::query::ResultValue(graph::PropertyValue("Transaction started"))}});
 						break;
@@ -839,7 +1435,8 @@ namespace zyx {
 						if (!impl_->cypherTxn_.has_value()) {
 							throw std::runtime_error("No active transaction to rollback");
 						}
-						impl_->cypherTxn_.reset(); // destructor auto-rolls back
+						impl_->cypherTxn_->rollback();
+						impl_->cypherTxn_.reset();
 						txnResult.addRow({{"result", graph::query::ResultValue(
 															 graph::PropertyValue("Transaction rolled back"))}});
 						break;
@@ -852,8 +1449,12 @@ namespace zyx {
 				txnResult.setDuration(elapsed.count());
 
 				Result res;
-				res.impl_ = std::make_unique<ResultImpl>(std::move(txnResult), nullptr);
+				res.impl_ = std::make_unique<ResultImpl>(std::move(txnResult));
 				return res;
+			}
+
+			if (impl_->cypherTxn_.has_value()) {
+				return impl_->cypherTxn_->execute(cypher, params);
 			}
 
 			// Build the plan first to determine if the query mutates data
@@ -866,23 +1467,8 @@ namespace zyx {
 				graph::debug::ScopedPerfTimer timer("api.build_plan");
 				return queryEngine->buildPlan(cypher);
 			}();
-			bool isReadOnly = !plan.mutatesData && !plan.mutatesSchema;
-
-			// Implicit transaction wrapping:
-			// - If explicit/cypher transaction exists, execute within it.
-			// - If no explicit transaction: wrap writes in implicit write txn,
-			//   wrap reads in implicit read-only txn (for snapshot isolation).
-			std::optional<graph::Transaction> implicitTxn;
-
-			{
-				graph::debug::ScopedPerfTimer timer("api.begin_implicit_txn");
-				if (impl_->needsImplicitTransaction()) {
-					if (isReadOnly) {
-						implicitTxn.emplace(impl_->db_.beginReadOnlyTransaction());
-					} else {
-						implicitTxn.emplace(impl_->db_.beginTransaction());
-					}
-				}
+			if ((plan.mutatesData || plan.mutatesSchema) && !impl_->db_.getLogicalGraphWriteBackend()) {
+				throw std::runtime_error("relocatable backend was opened read-only and cannot execute Cypher mutations");
 			}
 
 			auto start = std::chrono::high_resolution_clock::now();
@@ -891,9 +1477,6 @@ namespace zyx {
 				graph::debug::ScopedPerfTimer timer("api.to_query_context");
 				return toQueryContext(params);
 			}();
-			if (implicitTxn && implicitTxn->isReadOnly()) {
-				ctx.execMode = graph::query::ExecMode::EM_READ_ONLY;
-			}
 			auto internalRes = [&]() {
 				graph::debug::ScopedPerfTimer timer("api.execute_plan");
 				return queryEngine->executePlan(std::move(plan), ctx);
@@ -904,36 +1487,18 @@ namespace zyx {
 
 			internalRes.setDuration(elapsed.count());
 
-			// Slow query logging
-			if (auto cm = impl_->db_.getConfigManager(); cm && cm->isSlowLogEnabled()) {
-				if (elapsed.count() > static_cast<double>(cm->getSlowLogThresholdMs())) {
-					graph::log::Log::warn("Slow query ({}ms): {}", static_cast<int64_t>(elapsed.count()), cypher);
-				}
-			}
-
-			{
-				graph::debug::ScopedPerfTimer timer("api.commit_implicit_txn");
-				if (implicitTxn) {
-					implicitTxn->commit();
-				}
-			}
-
-			// We MUST inject DataManager into ResultImpl to allow label resolution later
-			auto dm = impl_->db_.getStorage()->getDataManager();
-
 			graph::debug::ScopedPerfTimer resultTimer("api.result_wrap");
 			Result res;
-			res.impl_ = std::make_unique<ResultImpl>(std::move(internalRes), std::move(dm));
+			res.impl_ = std::make_unique<ResultImpl>(std::move(internalRes));
 			return res;
 		} catch (const std::exception &e) {
-			// Implicit transaction auto-rolls back via destructor
 			Result res;
-			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult(), nullptr);
+			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult());
 			res.impl_->error_msg = e.what();
 			return res;
 		} catch (...) {
 			Result res;
-			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult(), nullptr);
+			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult());
 			res.impl_->error_msg = "Unknown error";
 			return res;
 		}
@@ -941,67 +1506,29 @@ namespace zyx {
 
 	int64_t Database::createNode(const std::string &label, const std::unordered_map<std::string, Value> &props) const {
 		impl_->ensureOpen();
-		std::optional<graph::Transaction> implicitTxn;
-		if (impl_->needsImplicitTransaction()) {
-			implicitTxn.emplace(impl_->db_.beginTransaction());
+		auto &logicalWrites = impl_->resolveLogicalWriteTarget();
+		graph::storage::LogicalGraphNodeCreateRequest request;
+		request.labels = singleLogicalLabel(label);
+		request.properties = toLogicalWriteProperties(props);
+		const std::vector<uint64_t> ids = logicalWrites.createLogicalNodes({std::move(request)});
+		if (ids.size() != 1U) {
+			throw std::logic_error("logical Node creation returned an unexpected result count");
 		}
-
-		auto dm = impl_->db_.getStorage()->getDataManager();
-
-		int64_t labelId = dm->getOrCreateTokenId(label);
-		graph::Node node(0, labelId);
-		dm->addNode(node);
-		int64_t newId = node.getId();
-
-		if (!props.empty()) {
-			std::unordered_map<std::string, graph::PropertyValue> internalProps;
-			internalProps.reserve(props.size());
-			for (const auto &[k, v]: props)
-				internalProps.emplace(k, toInternal(v));
-			dm->addNodeProperties(newId, internalProps);
-		}
-
-		if (implicitTxn) {
-			implicitTxn->commit();
-		}
-		return newId;
+		return checkedDirectWriteId(ids.front(), "Node");
 	}
 
 	int64_t Database::createNode(const std::vector<std::string> &labels,
 								 const std::unordered_map<std::string, Value> &props) const {
 		impl_->ensureOpen();
-		std::optional<graph::Transaction> implicitTxn;
-		if (impl_->needsImplicitTransaction()) {
-			implicitTxn.emplace(impl_->db_.beginTransaction());
+		auto &logicalWrites = impl_->resolveLogicalWriteTarget();
+		graph::storage::LogicalGraphNodeCreateRequest request;
+		request.labels = labels;
+		request.properties = toLogicalWriteProperties(props);
+		const std::vector<uint64_t> ids = logicalWrites.createLogicalNodes({std::move(request)});
+		if (ids.size() != 1U) {
+			throw std::logic_error("logical Node creation returned an unexpected result count");
 		}
-
-		auto dm = impl_->db_.getStorage()->getDataManager();
-
-		std::vector<int64_t> labelIds;
-		for (const auto &lbl: labels) {
-			labelIds.push_back(dm->getOrCreateTokenId(lbl));
-		}
-
-		int64_t firstLabelId = labelIds.empty() ? 0 : labelIds[0];
-		graph::Node node(0, firstLabelId);
-		for (size_t i = 1; i < labelIds.size(); ++i) {
-			node.addLabelId(labelIds[i]);
-		}
-		dm->addNode(node);
-		int64_t newId = node.getId();
-
-		if (!props.empty()) {
-			std::unordered_map<std::string, graph::PropertyValue> internalProps;
-			internalProps.reserve(props.size());
-			for (const auto &[k, v]: props)
-				internalProps[k] = toInternal(v);
-			dm->addNodeProperties(newId, internalProps);
-		}
-
-		if (implicitTxn) {
-			implicitTxn->commit();
-		}
-		return newId;
+		return checkedDirectWriteId(ids.front(), "Node");
 	}
 
 	std::vector<int64_t>
@@ -1011,106 +1538,51 @@ namespace zyx {
 			return {};
 
 		impl_->ensureOpen();
-		std::optional<graph::Transaction> implicitTxn;
-		if (impl_->needsImplicitTransaction()) {
-			implicitTxn.emplace(impl_->db_.beginTransaction());
+		auto &logicalWrites = impl_->resolveLogicalWriteTarget();
+		std::vector<graph::storage::LogicalGraphNodeCreateRequest> requests;
+		requests.reserve(propsList.size());
+		for (const auto &properties: propsList) {
+			requests.push_back({singleLogicalLabel(label), toLogicalWriteProperties(properties)});
 		}
-
-		auto storage = impl_->db_.getStorage();
-		auto dm = storage->getDataManager();
-
-		int64_t labelId = dm->getOrCreateTokenId(label);
-
-		std::vector<graph::storage::BulkPropertyColumn> columnarProperties;
-		if (buildHomogeneousPropertyColumns(propsList, columnarProperties)) {
-			auto ids = dm->addNodesColumnar(labelId, propsList.size(), columnarProperties);
-			if (implicitTxn) {
-				implicitTxn->commit();
-			}
-			return ids;
-		}
-
-		std::vector<graph::Node> nodes;
-		nodes.reserve(propsList.size());
-
-		for (const auto &props: propsList) {
-			graph::Node n(0, labelId);
-			std::unordered_map<std::string, graph::PropertyValue> internalProps;
-			internalProps.reserve(props.size());
-			for (const auto &[k, v]: props)
-				internalProps.emplace(k, toInternal(v));
-			n.setProperties(std::move(internalProps));
-			nodes.push_back(std::move(n));
-		}
-
-		dm->addNodes(nodes);
-
-		std::vector<int64_t> ids;
-		ids.reserve(nodes.size());
-		for (const auto &n: nodes) {
-			ids.push_back(n.getId());
-		}
-
-		if (implicitTxn) {
-			implicitTxn->commit();
-		}
-		return ids;
+		return checkedDirectWriteIds(logicalWrites.createLogicalNodes(requests), "Node");
 	}
 
-	std::vector<int64_t>
-	Database::createNodesColumnar(const std::string &label,
-								  size_t count,
-								  const std::vector<PropertyColumn> &columns) const {
+	std::vector<int64_t> Database::createNodesColumnar(const std::string &label, size_t count,
+													   const std::vector<PropertyColumn> &columns) const {
 		validatePropertyColumns(columns, count, "createNodesColumnar");
 		if (count == 0) {
 			return {};
 		}
 
 		impl_->ensureOpen();
-		std::optional<graph::Transaction> implicitTxn;
-		if (impl_->needsImplicitTransaction()) {
-			implicitTxn.emplace(impl_->db_.beginTransaction());
+		auto &logicalWrites = impl_->resolveLogicalWriteTarget();
+		std::vector<graph::storage::LogicalGraphNodeCreateRequest> requests(count);
+		for (graph::storage::LogicalGraphNodeCreateRequest &request: requests) {
+			request.labels = singleLogicalLabel(label);
+			request.properties.reserve(columns.size());
 		}
-
-		auto storage = impl_->db_.getStorage();
-		auto dm = storage->getDataManager();
-
-		const int64_t labelId = dm->getOrCreateTokenId(label);
-		auto ids = dm->addNodesColumnar(labelId, count, toInternalPropertyColumns(columns));
-
-		if (implicitTxn) {
-			implicitTxn->commit();
+		for (const PropertyColumn &column: columns) {
+			for (size_t row = 0U; row < count; ++row) {
+				requests[row].properties.push_back({column.name, toInternal(column.values[row])});
+			}
 		}
-		return ids;
+		return checkedDirectWriteIds(logicalWrites.createLogicalNodes(requests), "Node");
 	}
 
 	int64_t Database::createEdge(int64_t sourceId, int64_t targetId, const std::string &edgeType,
 								 const std::unordered_map<std::string, Value> &props) const {
 		impl_->ensureOpen();
-		std::optional<graph::Transaction> implicitTxn;
-		if (impl_->needsImplicitTransaction()) {
-			implicitTxn.emplace(impl_->db_.beginTransaction());
+		auto &logicalWrites = impl_->resolveLogicalWriteTarget();
+		graph::storage::LogicalGraphEdgeCreateRequest request;
+		request.source_node_id = checkedDirectWriteEndpoint(sourceId, "source");
+		request.target_node_id = checkedDirectWriteEndpoint(targetId, "target");
+		request.type = edgeType;
+		request.properties = toLogicalWriteProperties(props);
+		const std::vector<uint64_t> ids = logicalWrites.createLogicalEdges({std::move(request)});
+		if (ids.size() != 1U) {
+			throw std::logic_error("logical Edge creation returned an unexpected result count");
 		}
-
-		auto dm = impl_->db_.getStorage()->getDataManager();
-
-		int64_t typeId = dm->getOrCreateTokenId(edgeType);
-		graph::Edge edge(0, sourceId, targetId, typeId);
-		dm->addEdge(edge);
-		int64_t edgeId = edge.getId();
-
-		if (!props.empty()) {
-			std::unordered_map<std::string, graph::PropertyValue> internalProps;
-			internalProps.reserve(props.size());
-			for (const auto &[k, v]: props)
-				internalProps.emplace(k, toInternal(v));
-			dm->addEdgeProperties(edgeId, internalProps);
-		}
-
-		if (implicitTxn) {
-			implicitTxn->commit();
-		}
-		return edgeId;
+		return checkedDirectWriteId(ids.front(), "Edge");
 	}
 
 	std::vector<int64_t> Database::createEdges(
@@ -1120,66 +1592,21 @@ namespace zyx {
 			return {};
 
 		impl_->ensureOpen();
-		std::optional<graph::Transaction> implicitTxn;
-		if (impl_->needsImplicitTransaction()) {
-			implicitTxn.emplace(impl_->db_.beginTransaction());
+		auto &logicalWrites = impl_->resolveLogicalWriteTarget();
+		std::vector<graph::storage::LogicalGraphEdgeCreateRequest> requests;
+		requests.reserve(edgesList.size());
+		for (const auto &[sourceId, targetId, properties]: edgesList) {
+			requests.push_back({checkedDirectWriteEndpoint(sourceId, "source"),
+								checkedDirectWriteEndpoint(targetId, "target"), edgeType,
+								toLogicalWriteProperties(properties)});
 		}
-
-		auto dm = impl_->db_.getStorage()->getDataManager();
-		int64_t typeId = dm->getOrCreateTokenId(edgeType);
-
-		std::vector<graph::storage::BulkPropertyColumn> columnarProperties;
-		if (buildHomogeneousEdgePropertyColumns(edgesList, columnarProperties)) {
-			std::vector<int64_t> sourceIds;
-			std::vector<int64_t> targetIds;
-			sourceIds.reserve(edgesList.size());
-			targetIds.reserve(edgesList.size());
-			for (const auto &edgeRow: edgesList) {
-				sourceIds.push_back(std::get<0>(edgeRow));
-				targetIds.push_back(std::get<1>(edgeRow));
-			}
-
-			auto ids = dm->addEdgesColumnar(typeId, sourceIds, targetIds, columnarProperties);
-			if (implicitTxn) {
-				implicitTxn->commit();
-			}
-			return ids;
-		}
-
-		std::vector<graph::Edge> edges;
-		edges.reserve(edgesList.size());
-
-		for (const auto &[srcId, dstId, props]: edgesList) {
-			graph::Edge e(0, srcId, dstId, typeId);
-			if (!props.empty()) {
-				std::unordered_map<std::string, graph::PropertyValue> internalProps;
-				internalProps.reserve(props.size());
-				for (const auto &[k, v]: props)
-					internalProps.emplace(k, toInternal(v));
-				e.setProperties(std::move(internalProps));
-			}
-			edges.push_back(std::move(e));
-		}
-
-		dm->addEdges(edges);
-
-		std::vector<int64_t> ids;
-		ids.reserve(edges.size());
-		for (const auto &e: edges) {
-			ids.push_back(e.getId());
-		}
-
-		if (implicitTxn) {
-			implicitTxn->commit();
-		}
-		return ids;
+		return checkedDirectWriteIds(logicalWrites.createLogicalEdges(requests), "Edge");
 	}
 
-	std::vector<int64_t> Database::createEdgesColumnar(
-			const std::string &edgeType,
-			const std::vector<int64_t> &sourceIds,
-			const std::vector<int64_t> &targetIds,
-			const std::vector<PropertyColumn> &columns) const {
+	std::vector<int64_t> Database::createEdgesColumnar(const std::string &edgeType,
+													   const std::vector<int64_t> &sourceIds,
+													   const std::vector<int64_t> &targetIds,
+													   const std::vector<PropertyColumn> &columns) const {
 		if (sourceIds.size() != targetIds.size()) {
 			throw std::invalid_argument("createEdgesColumnar requires matching source and target counts");
 		}
@@ -1189,35 +1616,40 @@ namespace zyx {
 		if (count == 0) {
 			return {};
 		}
-		const auto internalColumns = toInternalPropertyColumns(columns);
-		return detail::DatabaseBulkInternal::createEdgesColumnar(*this, edgeType, sourceIds, targetIds,
-																 internalColumns);
+		impl_->ensureOpen();
+		const std::vector<detail::BulkPropertyColumn> internalColumns = toInternalPropertyColumns(columns);
+		auto &logicalWrites = impl_->resolveLogicalWriteTarget();
+		auto &logicalReads = impl_->resolveLogicalReadTarget();
+		validateLogicalColumnarEdgeEndpoints(logicalReads, sourceIds, targetIds);
+		const std::vector<graph::storage::LogicalGraphEdgeCreateRequest> requests =
+				makeLogicalColumnarEdgeRequests(edgeType, sourceIds, targetIds, internalColumns, "createEdgesColumnar");
+		return checkedDirectWriteIds(logicalWrites.createLogicalEdges(requests), "Edge");
 	}
 
 	std::vector<int64_t> detail::DatabaseBulkInternal::createEdgesColumnar(
-			const Database &database, const std::string &edgeType, const std::vector<int64_t> &sourceIds,
-			const std::vector<int64_t> &targetIds, const std::vector<graph::storage::BulkPropertyColumn> &columns) {
+			const Database &database, Transaction &transaction, const std::string &edgeType,
+			const std::vector<int64_t> &sourceIds, const std::vector<int64_t> &targetIds,
+			const std::vector<BulkPropertyColumn> &columns) {
 		if (sourceIds.size() != targetIds.size()) {
 			throw std::invalid_argument("createEdgesColumnar requires matching source and target counts");
 		}
 		if (sourceIds.empty()) {
 			return {};
 		}
-
 		database.impl_->ensureOpen();
-		std::optional<graph::Transaction> implicitTxn;
-		if (database.impl_->needsImplicitTransaction()) {
-			implicitTxn.emplace(database.impl_->db_.beginTransaction());
+		if (transaction.impl_ == nullptr || transaction.impl_->dbImpl_ != database.impl_.get()) {
+			throw std::invalid_argument("columnar Edge ingest transaction does not belong to its Database");
 		}
-
-		auto dm = database.impl_->db_.getStorage()->getDataManager();
-		const int64_t typeId = dm->getOrCreateTokenId(edgeType);
-		auto ids = dm->addEdgesColumnar(typeId, sourceIds, targetIds, columns);
-
-		if (implicitTxn) {
-			implicitTxn->commit();
+		if (!transaction.impl_->isActive()) {
+			throw std::logic_error("columnar Edge ingest requires an active transaction");
 		}
-		return ids;
+		if (transaction.impl_->isReadOnly() || transaction.impl_->logical_overlay_ == nullptr) {
+			throw std::logic_error("columnar Edge ingest cannot write through a read-only logical transaction");
+		}
+		validateLogicalColumnarEdgeEndpoints(*transaction.impl_->logical_overlay_, sourceIds, targetIds);
+		const std::vector<graph::storage::LogicalGraphEdgeCreateRequest> requests =
+				makeLogicalColumnarEdgeRequests(edgeType, sourceIds, targetIds, columns, "createEdgesColumnar");
+		return checkedDirectWriteIds(transaction.impl_->logical_overlay_->createLogicalEdges(requests), "Edge");
 	}
 
 	bool Database::createNodePropertyIndexes(const std::string &label,
@@ -1229,95 +1661,48 @@ namespace zyx {
 		if (properties.empty()) {
 			return true;
 		}
-		if (impl_->db_.hasActiveTransaction() || impl_->cypherTxn_.has_value()) {
+		if (impl_->db_.hasActiveTransaction() || impl_->cypherTxn_.has_value() ||
+			impl_->active_public_transactions_.load(std::memory_order_acquire) != 0U) {
 			throw std::runtime_error("Schema operations cannot run inside an active transaction");
 		}
 
-		std::vector<graph::query::indexes::IndexManager::IndexCreateRequest> requests;
-		requests.reserve(properties.size());
+		std::vector<graph::storage::LogicalGraphNodeIndexCreateRequest> logicalRequests;
+		logicalRequests.reserve(properties.size());
 		for (const auto &property: properties) {
 			if (property.empty()) {
 				throw std::invalid_argument("createNodePropertyIndexes requires non-empty property names");
 			}
-			requests.push_back({"", "node", label, property});
+			logicalRequests.push_back({"", label, {property}});
 		}
-
-		auto queryEngine = impl_->db_.getQueryEngine();
-		if (!queryEngine) {
-			throw std::runtime_error("Query engine is not available");
+		const auto logicalSchema = std::dynamic_pointer_cast<graph::storage::LogicalGraphSchemaBackend>(
+				impl_->db_.getStorageBackend());
+		if (!logicalSchema) {
+			throw std::logic_error("public Database requires a logical schema backend");
 		}
-		if (auto storage = impl_->db_.getStorage()) {
-			if (auto dm = storage->getDataManager(); dm && dm->hasUnsavedChanges()) {
-				impl_->db_.flush();
+		const std::vector<graph::storage::LogicalGraphIndexDefinition> created =
+				logicalSchema->createLogicalNodeIndexes(logicalRequests);
+		if (created.size() != logicalRequests.size()) {
+			throw std::runtime_error("logical schema backend returned an incomplete node-index batch");
+		}
+		for (size_t index = 0U; index < created.size(); ++index) {
+			const graph::storage::LogicalGraphIndexDefinition &definition = created[index];
+			if (definition.index_id == 0U || definition.kind != graph::storage::LogicalGraphIndexKind::LGIK_PROPERTY ||
+				definition.label != label || definition.property_keys != logicalRequests[index].property_keys) {
+				throw std::runtime_error("logical schema backend returned an inconsistent node-index definition");
 			}
 		}
-		auto schemaTxn = impl_->db_.beginBulkTransaction();
-		auto results = queryEngine->getIndexManager()->createIndexes(requests);
-		const bool success = std::all_of(results.begin(), results.end(),
-										 [](const auto &result) { return result.success; });
-		if (success) {
-			queryEngine->getPlanCache().clear();
-			schemaTxn.commit();
-		} else {
-			schemaTxn.rollback();
-		}
-		return success;
+		impl_->db_.getQueryEngine()->getPlanCache().clear();
+		return true;
 	}
 
 	std::vector<Node> Database::getShortestPath(int64_t startId, int64_t endId, int maxDepth) const {
 		impl_->ensureOpen();
-
-		std::optional<graph::Transaction> implicitTxn;
-		if (impl_->needsImplicitTransaction()) {
-			implicitTxn.emplace(impl_->db_.beginReadOnlyTransaction());
-		}
-
-		auto storage = impl_->db_.getStorage();
-		if (!storage) // ZYX_COV_EXCL_LINE: ensureOpen initializes storage before graph algorithms run.
-			throw std::runtime_error("Storage not available");
-		auto dm = storage->getDataManager();
-
-		graph::query::algorithm::GraphAlgorithm algo(dm);
-		auto internalPath = algo.findShortestPath(startId, endId, "out", maxDepth);
-
-		std::vector<Node> publicPath;
-		publicPath.reserve(internalPath.size());
-		for (const auto &n: internalPath) {
-			graph::Node fullNode = dm->getNode(n.getId());
-			fullNode.setProperties(dm->getNodeProperties(n.getId()));
-			publicPath.push_back(toPublicNode(fullNode, dm));
-		}
-
-		if (implicitTxn) {
-			implicitTxn->commit();
-		}
-		return publicPath;
+		return findLogicalShortestPath(impl_->resolveLogicalReadTarget(), startId, endId, maxDepth);
 	}
 
 	void Database::bfs(int64_t startNodeId, const std::function<bool(const Node &)> &visitor) const {
 		impl_->ensureOpen();
-
-		std::optional<graph::Transaction> implicitTxn;
-		if (impl_->needsImplicitTransaction()) {
-			implicitTxn.emplace(impl_->db_.beginReadOnlyTransaction());
-		}
-
-		auto storage = impl_->db_.getStorage();
-		if (!storage) // ZYX_COV_EXCL_LINE: ensureOpen initializes storage before graph algorithms run.
-			throw std::runtime_error("Storage not available");
-		auto dm = storage->getDataManager();
-
-		graph::query::algorithm::GraphAlgorithm algo(dm);
-		auto internalVisitor = [&](int64_t nodeId, [[maybe_unused]] int depth) -> bool {
-			graph::Node internalNode = dm->getNode(nodeId);
-			internalNode.setProperties(dm->getNodeProperties(nodeId));
-			return visitor(toPublicNode(internalNode, dm));
-		};
-		algo.breadthFirstTraversal(startNodeId, internalVisitor, "out");
-
-		if (implicitTxn) {
-			implicitTxn->commit();
-		}
+		breadthFirstLogicalTraversal(impl_->resolveLogicalReadTarget(), startNodeId, visitor);
 	}
 
 } // namespace zyx

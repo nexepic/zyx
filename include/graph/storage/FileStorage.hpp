@@ -39,21 +39,22 @@
 #include "graph/core/Node.hpp"
 #include "graph/storage/IntegrityChecker.hpp"
 #include "graph/storage/PwriteHelper.hpp"
+#include "graph/storage/StorageBackend.hpp"
 #include "graph/storage/StorageIO.hpp"
 #include "graph/storage/StorageWriter.hpp"
 #include "state/SystemStateManager.hpp"
 
 namespace graph::storage {
 
-	class FileStorage {
+	class FileStorage final : public StorageBackend {
 	public:
 		FileStorage(std::string path, size_t cacheSize, OpenMode mode = OpenMode::OPEN_CREATE_OR_OPEN_FILE);
 		~FileStorage();
 
-		void open();
+		void open() override;
 		void save();
-		void close();
-		void flush();
+		void close() override;
+		void flush() override;
 		void flushOrThrow();
 
 		void initializeComponents();
@@ -75,7 +76,12 @@ namespace graph::storage {
 		void deleteEntityOnDisk(const T &entity);
 
 		// isFileOpen getter
-		[[nodiscard]] bool isOpen() const { return isFileOpen; }
+		[[nodiscard]] bool isOpen() const override { return isFileOpen; }
+		[[nodiscard]] bool isReadOnly() const override { return openMode_ == OpenMode::OPEN_READ_ONLY_EXISTING_FILE; }
+		[[nodiscard]] StorageFormatKind formatKind() const override { return StorageFormatKind::SFM_LEGACY; }
+		[[nodiscard]] StorageBackendCapabilities capabilities() const override {
+			return {true, true, true, true, true, !isReadOnly()};
+		}
 
 		// Verify bitmap consistency for debugging purposes
 		bool verifyBitmapConsistency(uint64_t segmentOffset) const;
@@ -123,6 +129,7 @@ namespace graph::storage {
 		[[nodiscard]] IntegrityResult verifyIntegrity() const;
 
 	private:
+		void ensureWritable() const;
 		void ensureWriteHandle();
 		void flushImpl();
 

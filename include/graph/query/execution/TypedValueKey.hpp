@@ -39,6 +39,9 @@ namespace graph::query::execution {
 				case PropertyType::DURATION:
 					key.durationValue_ = std::get<TemporalDuration>(value.getVariant());
 					break;
+				case PropertyType::BYTES:
+					key.fallbackValue_ = value;
+					break;
 				case PropertyType::NULL_TYPE:
 				case PropertyType::LIST:
 				case PropertyType::MAP:
@@ -195,6 +198,10 @@ namespace graph::query::execution {
 					key.hash_ = combine(key.variantIndex_, hash);
 					break;
 				}
+				case PropertyType::BYTES:
+					key.fallbackValue_ = value;
+					key.hash_ = PropertyValueHash{}(value);
+					break;
 				case PropertyType::LIST:
 				case PropertyType::MAP:
 				case PropertyType::COMPOSITE: // ZYX_COV_EXCL_LINE: PropertyValue has no public composite-value constructor.

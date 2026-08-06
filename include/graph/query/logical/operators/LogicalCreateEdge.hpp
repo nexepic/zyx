@@ -9,6 +9,7 @@
 
 #include "graph/query/logical/LogicalOperator.hpp"
 #include "graph/core/PropertyTypes.hpp"
+#include "graph/query/expressions/Expression.hpp"
 
 #include <memory>
 #include <stdexcept>
@@ -40,6 +41,22 @@ public:
 		, targetVar_(std::move(targetVar))
 		, child_(std::move(child)) {}
 
+	LogicalCreateEdge(
+		std::string variable,
+		std::string type,
+		std::unordered_map<std::string, graph::PropertyValue> properties,
+		std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> propertyExprs,
+		std::string sourceVar,
+		std::string targetVar,
+		std::unique_ptr<LogicalOperator> child = nullptr)
+		: variable_(std::move(variable))
+		, type_(std::move(type))
+		, properties_(std::move(properties))
+		, propertyExprs_(std::move(propertyExprs))
+		, sourceVar_(std::move(sourceVar))
+		, targetVar_(std::move(targetVar))
+		, child_(std::move(child)) {}
+
 	[[nodiscard]] LogicalOpType getType() const override { return LogicalOpType::LOP_CREATE_EDGE; }
 
 	[[nodiscard]] std::vector<LogicalOperator *> getChildren() const override {
@@ -58,10 +75,15 @@ public:
 	}
 
 	[[nodiscard]] std::unique_ptr<LogicalOperator> clone() const override {
+		std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> exprsCopy;
+		for (const auto &[key, expression]: propertyExprs_) {
+			exprsCopy[key] = expression ? expression->clone() : nullptr;
+		}
 		return std::make_unique<LogicalCreateEdge>(
 			variable_,
 			type_,
 			properties_,
+			std::move(exprsCopy),
 			sourceVar_,
 			targetVar_,
 			child_ ? child_->clone() : nullptr);
@@ -84,6 +106,10 @@ public:
 	[[nodiscard]] const std::string &getVariable() const { return variable_; }
 	[[nodiscard]] const std::string &getEdgeType() const { return type_; }
 	[[nodiscard]] const std::unordered_map<std::string, graph::PropertyValue> &getProperties() const { return properties_; }
+	[[nodiscard]] const std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> &
+	getPropertyExprs() const {
+		return propertyExprs_;
+	}
 	[[nodiscard]] const std::string &getSourceVar() const { return sourceVar_; }
 	[[nodiscard]] const std::string &getTargetVar() const { return targetVar_; }
 
@@ -91,6 +117,7 @@ private:
 	std::string variable_;
 	std::string type_;
 	std::unordered_map<std::string, graph::PropertyValue> properties_;
+	std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> propertyExprs_;
 	std::string sourceVar_;
 	std::string targetVar_;
 	std::unique_ptr<LogicalOperator> child_;

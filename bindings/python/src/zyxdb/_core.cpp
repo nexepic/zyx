@@ -82,6 +82,11 @@ DriverValue buildDriverValue(const py::handle &value) {
         throwIfNotOk(zyx_driver_value_int64_create(value.cast<int64_t>(), &raw, error.out()), error);
     } else if (py::isinstance<py::float_>(value)) {
         throwIfNotOk(zyx_driver_value_double_create(value.cast<double>(), &raw, error.out()), error);
+    } else if (py::isinstance<py::bytes>(value)) {
+        const std::string bytes = value.cast<py::bytes>();
+        throwIfNotOk(zyx_driver_value_bytes_create(reinterpret_cast<const uint8_t *>(bytes.data()),
+                                                    static_cast<uint32_t>(bytes.size()), &raw, error.out()),
+                   error);
     } else if (py::isinstance<py::str>(value)) {
         const std::string text = value.cast<std::string>();
         throwIfNotOk(zyx_driver_value_string_create(text.c_str(), &raw, error.out()), error);
@@ -288,6 +293,7 @@ private:
             case ZYX_DRIVER_VALUE_INT64: return "int64";
             case ZYX_DRIVER_VALUE_DOUBLE: return "double";
             case ZYX_DRIVER_VALUE_STRING: return "string";
+            case ZYX_DRIVER_VALUE_BYTES: return "bytes";
             case ZYX_DRIVER_VALUE_NODE: return "node";
             case ZYX_DRIVER_VALUE_EDGE: return "edge";
             case ZYX_DRIVER_VALUE_LIST: return "list";
@@ -380,6 +386,18 @@ private:
                 const char *value = nullptr;
                 throwIfNotOk(zyx_driver_value_ref_get_string(result_, &ref, &value, error.out()), error);
                 return py::str(value == nullptr ? "" : value);
+            }
+            case ZYX_DRIVER_VALUE_BYTES: {
+                const uint8_t *value = nullptr;
+                uint32_t size = 0U;
+                throwIfNotOk(zyx_driver_value_ref_get_bytes(&ref, &value, &size, error.out()), error);
+                if (size == 0U) {
+                    return py::bytes();
+                }
+                if (value == nullptr) {
+                    throw std::runtime_error("Driver ABI returned a null non-empty bytes buffer");
+                }
+                return py::bytes(reinterpret_cast<const char *>(value), size);
             }
             case ZYX_DRIVER_VALUE_NODE:
                 return nodeRefToPy(ref);

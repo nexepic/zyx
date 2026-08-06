@@ -24,7 +24,7 @@
 #include <gtest/gtest.h>
 #include <memory>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/query/api/QueryEngine.hpp"
 #include "graph/query/execution/operators/DeleteOperator.hpp"
 #include "graph/query/execution/operators/RemoveOperator.hpp"
@@ -68,7 +68,7 @@ public:
 
 class SetOperatorTest : public ::testing::Test {
 protected:
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<storage::DataManager> dm;
 	fs::path testFilePath;
 
@@ -77,9 +77,9 @@ protected:
 		testFilePath = fs::temp_directory_path() / ("test_setop_" + boost::uuids::to_string(uuid) + ".dat");
 
 		if (fs::exists(testFilePath)) fs::remove_all(testFilePath);
-		db = std::make_unique<Database>(testFilePath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testFilePath.string());
 		db->open();
-		dm = db->getStorage()->getDataManager();
+		dm = db->storage()->getDataManager();
 	}
 
 	void TearDown() override {
@@ -409,7 +409,7 @@ TEST_F(SetOperatorTest, Set_LabelOnUnknownVariable) {
 
 class RemoveOperatorTest : public ::testing::Test {
 protected:
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<storage::DataManager> dm;
 	fs::path testFilePath;
 
@@ -418,9 +418,9 @@ protected:
 		testFilePath = fs::temp_directory_path() / ("test_remop_" + boost::uuids::to_string(uuid) + ".dat");
 
 		if (fs::exists(testFilePath)) fs::remove_all(testFilePath);
-		db = std::make_unique<Database>(testFilePath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testFilePath.string());
 		db->open();
-		dm = db->getStorage()->getDataManager();
+		dm = db->storage()->getDataManager();
 	}
 
 	void TearDown() override {
@@ -587,7 +587,7 @@ TEST_F(RemoveOperatorTest, Remove_MultipleItems) {
 
 class TraversalOperatorTest : public ::testing::Test {
 protected:
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<storage::DataManager> dm;
 	fs::path testFilePath;
 
@@ -596,9 +596,9 @@ protected:
 		testFilePath = fs::temp_directory_path() / ("test_travop_" + boost::uuids::to_string(uuid) + ".dat");
 
 		if (fs::exists(testFilePath)) fs::remove_all(testFilePath);
-		db = std::make_unique<Database>(testFilePath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testFilePath.string());
 		db->open();
-		dm = db->getStorage()->getDataManager();
+		dm = db->storage()->getDataManager();
 	}
 
 	void TearDown() override {
@@ -628,7 +628,7 @@ TEST_F(TraversalOperatorTest, Traversal_Outgoing) {
 	dm->addEdge(e1);
 
 	// Flush to ensure edges are linked
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	// Create record with source node
 	Record r1;
@@ -674,7 +674,7 @@ TEST_F(TraversalOperatorTest, Traversal_WithEdgeLabelFilter) {
 	dm->addEdge(e1);
 	dm->addEdge(e2);
 
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	Record r1;
 	r1.setNode("a", n1);
@@ -708,7 +708,7 @@ TEST_F(TraversalOperatorTest, Traversal_WithEmptyEdgeLabel) {
 	Edge e1(10, 1, 2, edgeTypeId);
 	dm->addEdge(e1);
 
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	Record r1;
 	r1.setNode("a", n1);
@@ -769,7 +769,7 @@ TEST_F(TraversalOperatorTest, Traversal_GetOutputVariables) {
 
 class VarLengthTraversalOperatorTest : public ::testing::Test {
 protected:
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<storage::DataManager> dm;
 	fs::path testFilePath;
 
@@ -778,9 +778,9 @@ protected:
 		testFilePath = fs::temp_directory_path() / ("test_varlen_" + boost::uuids::to_string(uuid) + ".dat");
 
 		if (fs::exists(testFilePath)) fs::remove_all(testFilePath);
-		db = std::make_unique<Database>(testFilePath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testFilePath.string());
 		db->open();
-		dm = db->getStorage()->getDataManager();
+		dm = db->storage()->getDataManager();
 	}
 
 	void TearDown() override {
@@ -815,7 +815,7 @@ TEST_F(VarLengthTraversalOperatorTest, VarLengthTraversal_Basic) {
 	dm->addEdge(e1);
 	dm->addEdge(e2);
 
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	// Create record with source node
 	Record r1;
@@ -852,7 +852,7 @@ TEST_F(VarLengthTraversalOperatorTest, VarLengthTraversal_WithEdgeLabelFilter) {
 	dm->addEdge(e1);
 	dm->addEdge(e2);
 
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	Record r1;
 	r1.setNode("a", n1);
@@ -902,7 +902,7 @@ TEST_F(VarLengthTraversalOperatorTest, VarLengthTraversal_MinHopsZero) {
 	Edge e1(10, 1, 2, edgeTypeId);
 	dm->addEdge(e1);
 
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	Record r1;
 	r1.setNode("a", n1);
@@ -986,7 +986,7 @@ TEST_F(RemoveOperatorTest, DeleteOperator_SetChild_ReplacesChildOperator) {
 TEST_F(RemoveOperatorTest, ShowIndexesOperator_EmptyIndexListReturnsNullopt) {
 	using graph::query::execution::operators::ShowIndexesOperator;
 
-	auto indexManager = db->getQueryEngine()->getIndexManager();
+	auto indexManager = db->indexManager();
 	auto op = std::make_unique<ShowIndexesOperator>(indexManager);
 	op->open();
 
@@ -1001,7 +1001,7 @@ TEST_F(RemoveOperatorTest, ShowIndexesOperator_EmptyIndexListReturnsNullopt) {
 TEST_F(RemoveOperatorTest, ShowIndexesOperator_SecondCallAfterDataReturnsNullopt) {
 	using graph::query::execution::operators::ShowIndexesOperator;
 
-	auto indexManager = db->getQueryEngine()->getIndexManager();
+	auto indexManager = db->indexManager();
 	// Create at least one index so the first call returns a non-empty batch.
 	indexManager->createIndex("test_label_idx", "node", "Person", "");
 

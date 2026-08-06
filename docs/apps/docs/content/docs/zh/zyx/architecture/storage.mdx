@@ -1,6 +1,6 @@
 ---
-title: 存储系统
-description: FileStorage + DataManager 驱动的段式持久化与实体管理。
+title: 旧存储系统
+description: 仅作为原生格式重构期间的实现背景保留的历史 segment-chain 持久化设计。
 category: 核心组件
 categoryOrder: 2
 order: 2
@@ -9,7 +9,9 @@ projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
-# 存储系统
+# 旧存储系统
+
+> 本页记录的是已经退役的 segment-chain 存储设计，不能作为 clean native format 的实现指南，也不能继续在此基础上增加功能。新的存储工作必须遵循[原生单文件存储重构方案](/zh/docs/zyx/architecture/native-single-file-storage-plan)：逻辑 identity 经由 directory 解析，mutation 发布 COW metadata generation，普通图 adjacency 是一棵全局 key-only Packed B+Tree。新格式不会为了兼容而保留 segment chain、外置 durable WAL 行为或 Node/Edge adjacency link。
 
 存储层由 `FileStorage` 统筹，`DataManager` 负责实体读写，`SegmentTracker` / `SpaceManager` 负责空间管理。
 

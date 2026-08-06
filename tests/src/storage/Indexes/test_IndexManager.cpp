@@ -28,7 +28,6 @@
 #include <tuple>
 #include <vector>
 
-#include "graph/core/Database.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/storage/FileStorage.hpp"
@@ -51,28 +50,36 @@ protected:
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath = fs::temp_directory_path() / ("test_indexManager_" + to_string(uuid) + ".dat");
 
-		// Initialize Database
-		database = std::make_unique<graph::Database>(testFilePath.string());
-		database->open();
-
-		fileStorage = database->getStorage();
-		dataManager = fileStorage->getDataManager();
-		indexManager = database->getQueryEngine()->getIndexManager();
+		openStorage(graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
 	}
 
 	void TearDown() override {
-		// Release shared_ptrs before closing database
-		indexManager.reset();
-		dataManager.reset();
-		fileStorage.reset();
-
-		if (database) {
-			database->close();
-		}
-		database.reset();
+		closeStorage();
 
 		std::error_code ec;
 		fs::remove(testFilePath, ec);
+	}
+
+	void closeStorage() {
+		indexManager.reset();
+		dataManager.reset();
+		if (fileStorage) {
+			fileStorage->close();
+		}
+		fileStorage.reset();
+	}
+
+	void reopenStorage() {
+		closeStorage();
+		openStorage(graph::storage::OpenMode::OPEN_EXISTING_FILE);
+	}
+
+	void openStorage(graph::storage::OpenMode mode) {
+		fileStorage = std::make_shared<graph::storage::FileStorage>(testFilePath.string(), 10'000U, mode);
+		fileStorage->open();
+		dataManager = fileStorage->getDataManager();
+		indexManager = std::make_shared<graph::query::indexes::IndexManager>(fileStorage);
+		indexManager->initialize();
 	}
 
 	// Helper to check if a specific index exists in the detailed list
@@ -95,7 +102,6 @@ protected:
 	}
 
 	fs::path testFilePath;
-	std::unique_ptr<graph::Database> database;
 	std::shared_ptr<graph::storage::FileStorage> fileStorage;
 	std::shared_ptr<graph::storage::DataManager> dataManager;
 	std::shared_ptr<graph::query::indexes::IndexManager> indexManager;
@@ -404,12 +410,8 @@ TEST_F(IndexManagerTest, PersistenceAfterRestart) {
 	fileStorage->flush();
 
 	// 3. Restart DB
-	database->close();
-	database.reset();
-
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-	auto newIndexMgr = database->getQueryEngine()->getIndexManager();
+	reopenStorage();
+	auto newIndexMgr = indexManager;
 
 	// 4. Verify Metadata Loaded
 	auto list = newIndexMgr->listIndexesDetailed();
@@ -462,12 +464,8 @@ TEST_F(IndexManagerTest, Bootstrap_NodeLabelIndex_OnRestart) {
 	fileStorage->flush();
 
 	// 3. Restart Database
-	database->close();
-	database.reset();
-
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-	auto newIndexMgr = database->getQueryEngine()->getIndexManager();
+	reopenStorage();
+	auto newIndexMgr = indexManager;
 
 	// 4. Verify Bootstrapping ran
 	// The initialize() method should have detected Enabled=True, Root=0, and Data>0.
@@ -496,12 +494,8 @@ TEST_F(IndexManagerTest, Bootstrap_EdgeLabelIndex_OnRestart) {
 	fileStorage->flush();
 
 	// Restart
-	database->close();
-	database.reset();
-
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-	auto newIndexMgr = database->getQueryEngine()->getIndexManager();
+	reopenStorage();
+	auto newIndexMgr = indexManager;
 
 	// Verify
 	auto res = newIndexMgr->findEdgeIdsByType("BootstrapEdge");
@@ -603,12 +597,8 @@ TEST_F(IndexManagerTest, EnsureMetadata_CreatedOnInitialize) {
 
 	// Just verify they exist after restart
 	fileStorage->flush();
-	database->close();
-	database.reset();
-
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-	auto newIndexMgr = database->getQueryEngine()->getIndexManager();
+	reopenStorage();
+	auto newIndexMgr = indexManager;
 
 	auto list = newIndexMgr->listIndexesDetailed();
 	bool foundNode = false, foundEdge = false;
@@ -1186,15 +1176,11 @@ TEST_F(IndexManagerTest, Bootstrap_NodeLabelIndex_NoData_SkipsRebuild) {
 	sysState->set<bool>(configKey, graph::storage::state::keys::Fields::ENABLED, true);
 	fileStorage->flush();
 
-	// Restart - should NOT attempt rebuild since no nodes exist
-	database->close();
-	database.reset();
-
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	EXPECT_NO_THROW(database->open());
+	// Restart - should NOT attempt rebuild since no nodes exist.
+	EXPECT_NO_THROW(reopenStorage());
 
 	// The index should still be registered but with no data
-	auto newIndexMgr = database->getQueryEngine()->getIndexManager();
+	auto newIndexMgr = indexManager;
 	auto res = newIndexMgr->findNodeIdsByLabel("NonExistent");
 	EXPECT_TRUE(res.empty());
 }
@@ -1213,13 +1199,8 @@ TEST_F(IndexManagerTest, Bootstrap_EdgeLabelIndex_NoData_SkipsRebuild) {
 	fileStorage->flush();
 
 	// Restart - no edges, so getCurrentMaxEdgeId() <= 0
-	database->close();
-	database.reset();
-
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	EXPECT_NO_THROW(database->open());
-
-	auto newIndexMgr = database->getQueryEngine()->getIndexManager();
+	reopenStorage();
+	auto newIndexMgr = indexManager;
 	auto res = newIndexMgr->findEdgeIdsByType("NonExistent");
 	EXPECT_TRUE(res.empty());
 }
@@ -1236,13 +1217,8 @@ TEST_F(IndexManagerTest, Initialize_NodeLabelEnabled_WithPhysicalData_SkipsRebui
 	fileStorage->flush();
 
 	// Restart WITHOUT corrupting state - physical data should exist
-	database->close();
-	database.reset();
-
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	EXPECT_NO_THROW(database->open());
-
-	auto newIndexMgr = database->getQueryEngine()->getIndexManager();
+	reopenStorage();
+	auto newIndexMgr = indexManager;
 	auto res = newIndexMgr->findNodeIdsByLabel("TestNode");
 	EXPECT_EQ(res.size(), 1UL);
 }
@@ -1263,13 +1239,8 @@ TEST_F(IndexManagerTest, Initialize_EdgeLabelEnabled_WithPhysicalData_SkipsRebui
 	fileStorage->flush();
 
 	// Restart WITHOUT corrupting state
-	database->close();
-	database.reset();
-
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	EXPECT_NO_THROW(database->open());
-
-	auto newIndexMgr = database->getQueryEngine()->getIndexManager();
+	reopenStorage();
+	auto newIndexMgr = indexManager;
 	auto res = newIndexMgr->findEdgeIdsByType("CONNECTS");
 	EXPECT_EQ(res.size(), 1UL);
 }
@@ -1277,20 +1248,18 @@ TEST_F(IndexManagerTest, Initialize_EdgeLabelEnabled_WithPhysicalData_SkipsRebui
 TEST_F(IndexManagerTest, Initialize_NodeLabelNotEnabled_SkipsAll) {
 	// Cover branch: nodeLabelIdx->isEnabled() -> FALSE (line 80)
 	// When label index is NOT enabled, initialize should skip entirely.
-	// Just open a fresh database without creating any label index
+	// Just open fresh physical storage without creating any label index
 	// and verify initialization succeeds without issues.
 
-	// Close and reopen fresh database
-	database->close();
-	database.reset();
+	// Close and reopen fresh physical storage.
+	closeStorage();
 
 	// Remove existing file to start fresh
 	if (fs::exists(testFilePath)) fs::remove(testFilePath);
 
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	EXPECT_NO_THROW(database->open());
+	EXPECT_NO_THROW(openStorage(graph::storage::OpenMode::OPEN_CREATE_NEW_FILE));
 
-	auto newIndexMgr = database->getQueryEngine()->getIndexManager();
+	auto newIndexMgr = indexManager;
 	// No label index should be present
 	EXPECT_FALSE(newIndexMgr->hasLabelIndex("node"));
 	EXPECT_FALSE(newIndexMgr->hasLabelIndex("edge"));
@@ -1409,12 +1378,8 @@ TEST_F(IndexManagerTest, EnsureMetadata_NewEntryCreated) {
 	fileStorage->flush();
 
 	// 3. Restart - initialize() should detect enabled indexes and recreate metadata
-	database->close();
-	database.reset();
-
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-	auto newIndexMgr = database->getQueryEngine()->getIndexManager();
+	reopenStorage();
+	auto newIndexMgr = indexManager;
 
 	// 4. Verify metadata was recreated by ensureMetadata
 	auto list = newIndexMgr->listIndexesDetailed();
@@ -1458,12 +1423,8 @@ TEST_F(IndexManagerTest, Bootstrap_EdgeLabelIndex_WithData_Rebuilds) {
 	fileStorage->flush();
 
 	// Restart - should bootstrap edge label index since enabled=true but no physical data
-	database->close();
-	database.reset();
-
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-	auto newIndexMgr = database->getQueryEngine()->getIndexManager();
+	reopenStorage();
+	auto newIndexMgr = indexManager;
 
 	// Verify edge data is searchable (bootstrap rebuilt the index)
 	auto res = newIndexMgr->findEdgeIdsByType("BootEdge");
@@ -1504,12 +1465,8 @@ TEST_F(IndexManagerTest, Bootstrap_NodeLabelIndex_EnabledWithData_Rebuilds) {
 	fileStorage->flush();
 
 	// Restart the database - should trigger bootstrap of node label index
-	database->close();
-	database.reset();
-
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-	auto newIndexMgr = database->getQueryEngine()->getIndexManager();
+	reopenStorage();
+	auto newIndexMgr = indexManager;
 
 	// Verify the node can be found via label index (bootstrap built it)
 	auto res = newIndexMgr->findNodeIdsByLabel("BootNode");

@@ -1,7 +1,6 @@
 #include "DriverAbiInternal.hpp"
 
 #include "../DatabaseBulkInternal.hpp"
-#include "graph/storage/data/ColumnarBulkInput.hpp"
 
 #include <charconv>
 #include <cstddef>
@@ -795,7 +794,7 @@ namespace {
 			throw;
 		} catch (const ArrowInputError &error) {
 			return setErrorAt(outError, error.status(), error.what(), error.row(), error.fieldPath());
-		} catch (const graph::storage::BulkInputError &error) {
+		} catch (const zyx::detail::BulkInputError &error) {
 			return setErrorAt(outError, ZYX_DRIVER_NOT_FOUND, error.what(), static_cast<int64_t>(error.rowIndex()),
 							  error.fieldPath());
 		} catch (const std::bad_alloc &) {
@@ -935,15 +934,15 @@ zyx_driver_status_t zyx_driver_edge_ingestor_write(zyx_driver_edge_ingestor_t *i
 			targetIds.push_back(readIntegral(targetPlan.kind, targetArray, row, "target_id"));
 		}
 
-		std::vector<graph::storage::BulkPropertyColumn> columns;
-		decodeBudget.consumeElements(propertiesPlan.children.size(), sizeof(graph::storage::BulkPropertyColumn), -1,
+		std::vector<zyx::detail::BulkPropertyColumn> columns;
+		decodeBudget.consumeElements(propertiesPlan.children.size(), sizeof(zyx::detail::BulkPropertyColumn), -1,
 									 "properties");
 		columns.reserve(propertiesPlan.children.size());
 		for (size_t columnIndex = 0; columnIndex < propertiesPlan.children.size(); ++columnIndex) {
 			const auto &propertyPlan = propertiesPlan.children[columnIndex];
 			const auto &propertyArray = *propertiesArray.children[columnIndex];
 			const std::string propertyPath = "properties." + propertyPlan.name;
-			graph::storage::BulkPropertyColumn column;
+			zyx::detail::BulkPropertyColumn column;
 			column.key = propertyPlan.name;
 			decodeBudget.consume(propertyPlan.name.size(), -1, propertyPath);
 			decodeBudget.ensureElements(static_cast<uint64_t>(rowCount), sizeof(graph::PropertyValue), -1,
@@ -960,8 +959,8 @@ zyx_driver_status_t zyx_driver_edge_ingestor_write(zyx_driver_edge_ingestor_t *i
 			columns.push_back(std::move(column));
 		}
 
-		auto ids = zyx::detail::DatabaseBulkInternal::createEdgesColumnar(*ingest->owner->db, ingestor->edgeType,
-																		  sourceIds, targetIds, columns);
+		auto ids = zyx::detail::DatabaseBulkInternal::createEdgesColumnar(*ingest->owner->db, ingest->txn,
+																  ingestor->edgeType, sourceIds, targetIds, columns);
 		if (ids.size() != static_cast<size_t>(rowCount)) {
 			throw std::runtime_error("bulk edge writer returned an unexpected ID count");
 		}

@@ -11,7 +11,7 @@
 #include <filesystem>
 #include <gtest/gtest.h>
 
-#include "graph/core/Database.hpp"
+#include "graph/storage/FileStorage.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 
 namespace fs = std::filesystem;
@@ -21,7 +21,7 @@ using namespace graph::query::indexes;
 
 class EntityTypeIndexEdgeUpdateTest : public ::testing::Test {
 protected:
-	std::unique_ptr<Database> db;
+	std::shared_ptr<FileStorage> storage;
 	std::shared_ptr<DataManager> dm;
 	std::shared_ptr<IndexManager> im;
 	fs::path dbPath;
@@ -29,15 +29,19 @@ protected:
 	void SetUp() override {
 		auto uuid = boost::uuids::random_generator()();
 		dbPath = fs::temp_directory_path() / ("test_etim_edge_" + boost::uuids::to_string(uuid) + ".dat");
-		db = std::make_unique<Database>(dbPath.string());
-		db->open();
-		dm = db->getStorage()->getDataManager();
-		im = db->getQueryEngine()->getIndexManager();
+		storage = std::make_shared<FileStorage>(
+				dbPath.string(), 10'000U, OpenMode::OPEN_CREATE_NEW_FILE);
+		storage->open();
+		dm = storage->getDataManager();
+		im = std::make_shared<IndexManager>(storage);
+		im->initialize();
 	}
 
 	void TearDown() override {
-		if (db) db->close();
-		db.reset();
+		im.reset();
+		dm.reset();
+		if (storage) storage->close();
+		storage.reset();
 		std::error_code ec;
 		fs::remove(dbPath, ec);
 	}
@@ -67,7 +71,7 @@ TEST_F(EntityTypeIndexEdgeUpdateTest, EdgeTypeIndex_AddAndDelete) {
 	Node n2 = createNode("Person");
 	Edge e = createEdge(n1.getId(), n2.getId(), "KNOWS");
 
-	db->getStorage()->flush();
+	storage->flush();
 
 	// Delete the edge
 	dm->deleteEdge(e);
@@ -85,7 +89,7 @@ TEST_F(EntityTypeIndexEdgeUpdateTest, EdgeTypeChange_UpdateIndex) {
 	Node n1 = createNode("Person");
 	Node n2 = createNode("Person");
 	Edge e = createEdge(n1.getId(), n2.getId(), "KNOWS");
-	db->getStorage()->flush();
+	storage->flush();
 
 	// Update the edge type
 	e.setTypeId(dm->getOrCreateTokenId("LIKES"));
@@ -115,7 +119,7 @@ TEST_F(EntityTypeIndexEdgeUpdateTest, NodeMultiLabel_AddAndRemoveLabel) {
 	Node n;
 	n.addLabelId(dm->getOrCreateTokenId("Person"));
 	dm->addNode(n);
-	db->getStorage()->flush();
+	storage->flush();
 
 	// Add a second label
 	n.addLabelId(dm->getOrCreateTokenId("Student"));
@@ -139,7 +143,7 @@ TEST_F(EntityTypeIndexEdgeUpdateTest, NodeMultiLabel_Delete) {
 	Node n;
 	n.addLabelId(dm->getOrCreateTokenId("Worker"));
 	dm->addNode(n);
-	db->getStorage()->flush();
+	storage->flush();
 
 	// Delete the node
 	dm->deleteNode(n);
@@ -159,7 +163,7 @@ TEST_F(EntityTypeIndexEdgeUpdateTest, PropertyIndex_ValueChange) {
 	n.setLabelId(dm->getOrCreateTokenId("Item"));
 	dm->addNode(n);
 	dm->addNodeProperties(n.getId(), {{"name", PropertyValue("old_name")}});
-	db->getStorage()->flush();
+	storage->flush();
 
 	// Update property value
 	dm->addNodeProperties(n.getId(), {{"name", PropertyValue("new_name")}});
@@ -183,7 +187,7 @@ TEST_F(EntityTypeIndexEdgeUpdateTest, PropertyIndex_PropertyRemoval) {
 	n.setLabelId(dm->getOrCreateTokenId("Doc"));
 	dm->addNode(n);
 	dm->addNodeProperties(n.getId(), {{"title", PropertyValue("Hello")}});
-	db->getStorage()->flush();
+	storage->flush();
 
 	// Remove the property
 	dm->removeNodeProperty(n.getId(), "title");
@@ -201,7 +205,7 @@ TEST_F(EntityTypeIndexEdgeUpdateTest, EdgePropertyIndex_AddAndRemove) {
 	Node n2 = createNode("Device");
 	Edge e = createEdge(n1.getId(), n2.getId(), "CONNECTS");
 	dm->addEdgeProperties(e.getId(), {{"weight", PropertyValue(10)}});
-	db->getStorage()->flush();
+	storage->flush();
 
 	// Remove edge property
 	dm->removeEdgeProperty(e.getId(), "weight");
@@ -238,7 +242,7 @@ TEST_F(EntityTypeIndexEdgeUpdateTest, BatchNodeAddition_MultipleLabels) {
 		nodes.push_back(n);
 	}
 	dm->addNodes(nodes);
-	db->getStorage()->flush();
+	storage->flush();
 
 	auto result = im->findNodeIdsByLabel("Cat");
 	EXPECT_GE(result.size(), 5u);

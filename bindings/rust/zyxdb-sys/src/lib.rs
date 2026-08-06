@@ -74,6 +74,7 @@ pub const ZYX_DRIVER_VALUE_NODE: zyx_driver_value_type_t = 5;
 pub const ZYX_DRIVER_VALUE_EDGE: zyx_driver_value_type_t = 6;
 pub const ZYX_DRIVER_VALUE_LIST: zyx_driver_value_type_t = 7;
 pub const ZYX_DRIVER_VALUE_MAP: zyx_driver_value_type_t = 8;
+pub const ZYX_DRIVER_VALUE_BYTES: zyx_driver_value_type_t = 9;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -261,6 +262,13 @@ extern "C" {
         value: *const c_char,
         out_error: *mut *mut zyx_driver_error_t,
     ) -> zyx_driver_status_t;
+    pub fn zyx_driver_params_set_bytes(
+        params: *mut zyx_driver_params_t,
+        key: *const c_char,
+        value: *const u8,
+        size: u32,
+        out_error: *mut *mut zyx_driver_error_t,
+    ) -> zyx_driver_status_t;
     pub fn zyx_driver_params_set_string_list(
         params: *mut zyx_driver_params_t,
         key: *const c_char,
@@ -306,6 +314,12 @@ extern "C" {
         out_value: *mut *mut zyx_driver_value_t,
         out_error: *mut *mut zyx_driver_error_t,
     ) -> zyx_driver_status_t;
+    pub fn zyx_driver_value_bytes_create(
+        value: *const u8,
+        size: u32,
+        out_value: *mut *mut zyx_driver_value_t,
+        out_error: *mut *mut zyx_driver_error_t,
+    ) -> zyx_driver_status_t;
     pub fn zyx_driver_value_list_create(
         out_value: *mut *mut zyx_driver_value_t,
         out_error: *mut *mut zyx_driver_error_t,
@@ -343,6 +357,12 @@ extern "C" {
         value: *const c_char,
         out_error: *mut *mut zyx_driver_error_t,
     ) -> zyx_driver_status_t;
+    pub fn zyx_driver_value_list_append_bytes(
+        list: *mut zyx_driver_value_t,
+        value: *const u8,
+        size: u32,
+        out_error: *mut *mut zyx_driver_error_t,
+    ) -> zyx_driver_status_t;
     pub fn zyx_driver_value_list_append_value(
         list: *mut zyx_driver_value_t,
         value: *const zyx_driver_value_t,
@@ -376,6 +396,13 @@ extern "C" {
         map: *mut zyx_driver_value_t,
         key: *const c_char,
         value: *const c_char,
+        out_error: *mut *mut zyx_driver_error_t,
+    ) -> zyx_driver_status_t;
+    pub fn zyx_driver_value_map_set_bytes(
+        map: *mut zyx_driver_value_t,
+        key: *const c_char,
+        value: *const u8,
+        size: u32,
         out_error: *mut *mut zyx_driver_error_t,
     ) -> zyx_driver_status_t;
     pub fn zyx_driver_value_map_set_value(
@@ -455,6 +482,13 @@ extern "C" {
         out_value: *mut *const c_char,
         out_error: *mut *mut zyx_driver_error_t,
     ) -> zyx_driver_status_t;
+    pub fn zyx_driver_result_get_bytes(
+        result: *mut zyx_driver_result_t,
+        column: u32,
+        out_value: *mut *const u8,
+        out_size: *mut u32,
+        out_error: *mut *mut zyx_driver_error_t,
+    ) -> zyx_driver_status_t;
     pub fn zyx_driver_result_get_list_count(
         result: *const zyx_driver_result_t,
         column: u32,
@@ -494,6 +528,14 @@ extern "C" {
         out_value: *mut *const c_char,
         out_error: *mut *mut zyx_driver_error_t,
     ) -> zyx_driver_status_t;
+    pub fn zyx_driver_result_get_list_bytes(
+        result: *mut zyx_driver_result_t,
+        column: u32,
+        index: u32,
+        out_value: *mut *const u8,
+        out_size: *mut u32,
+        out_error: *mut *mut zyx_driver_error_t,
+    ) -> zyx_driver_status_t;
     pub fn zyx_driver_result_get_value(
         result: *const zyx_driver_result_t,
         column: u32,
@@ -522,6 +564,12 @@ extern "C" {
         result: *mut zyx_driver_result_t,
         value: *const zyx_driver_value_ref_t,
         out_value: *mut *const c_char,
+        out_error: *mut *mut zyx_driver_error_t,
+    ) -> zyx_driver_status_t;
+    pub fn zyx_driver_value_ref_get_bytes(
+        value: *const zyx_driver_value_ref_t,
+        out_value: *mut *const u8,
+        out_size: *mut u32,
         out_error: *mut *mut zyx_driver_error_t,
     ) -> zyx_driver_status_t;
     pub fn zyx_driver_value_ref_list_count(
@@ -558,6 +606,13 @@ extern "C" {
         value: *const zyx_driver_value_ref_t,
         index: u32,
         out_value: *mut *const c_char,
+        out_error: *mut *mut zyx_driver_error_t,
+    ) -> zyx_driver_status_t;
+    pub fn zyx_driver_value_ref_list_get_bytes(
+        value: *const zyx_driver_value_ref_t,
+        index: u32,
+        out_value: *mut *const u8,
+        out_size: *mut u32,
         out_error: *mut *mut zyx_driver_error_t,
     ) -> zyx_driver_status_t;
     pub fn zyx_driver_value_ref_map_count(
@@ -601,6 +656,13 @@ extern "C" {
         value: *const zyx_driver_value_ref_t,
         key: *const c_char,
         out_value: *mut *const c_char,
+        out_error: *mut *mut zyx_driver_error_t,
+    ) -> zyx_driver_status_t;
+    pub fn zyx_driver_value_ref_map_get_bytes(
+        value: *const zyx_driver_value_ref_t,
+        key: *const c_char,
+        out_value: *mut *const u8,
+        out_size: *mut u32,
         out_error: *mut *mut zyx_driver_error_t,
     ) -> zyx_driver_status_t;
     pub fn zyx_driver_value_ref_get_node_id(

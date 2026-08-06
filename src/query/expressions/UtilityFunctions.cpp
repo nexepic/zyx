@@ -20,7 +20,9 @@
 
 #include "BuiltinFunctions.hpp"
 #include <chrono>
+#include <cctype>
 #include <random>
+#include <stdexcept>
 
 namespace graph::query::expressions {
 
@@ -59,9 +61,63 @@ static PropertyValue randomUUIDImpl(
 	return PropertyValue(uuid);
 }
 
+[[nodiscard]] uint8_t hexDigit(char value) {
+	if (value >= '0' && value <= '9') {
+		return static_cast<uint8_t>(value - '0');
+	}
+	const char lower = static_cast<char>(std::tolower(static_cast<unsigned char>(value)));
+	if (lower >= 'a' && lower <= 'f') {
+		return static_cast<uint8_t>(lower - 'a' + 10);
+	}
+	throw std::invalid_argument("bytes() expects an even-length hexadecimal string");
+}
+
+static PropertyValue bytesImpl(const std::vector<PropertyValue> &args,
+								[[maybe_unused]] const EvaluationContext &context) {
+	if (args.empty() || EvaluationContext::isNull(args.front())) {
+		return PropertyValue();
+	}
+	if (args.front().getType() == PropertyType::BYTES) {
+		return PropertyValue(PropertyValue::Bytes(args.front().getBytes()));
+	}
+	if (args.front().getType() == PropertyType::STRING) {
+		std::string hex = std::get<std::string>(args.front().getVariant());
+		if (hex.size() >= 2U && hex[0] == '0' && (hex[1] == 'x' || hex[1] == 'X')) {
+			hex.erase(0U, 2U);
+		}
+		if ((hex.size() & 1U) != 0U) {
+			throw std::invalid_argument("bytes() expects an even-length hexadecimal string");
+		}
+		PropertyValue::Bytes result;
+		result.reserve(hex.size() / 2U);
+		for (size_t index = 0U; index < hex.size(); index += 2U) {
+			result.push_back(static_cast<std::byte>((hexDigit(hex[index]) << 4U) | hexDigit(hex[index + 1U])));
+		}
+		return PropertyValue(std::move(result));
+	}
+	if (args.front().getType() == PropertyType::LIST) {
+		PropertyValue::Bytes result;
+		const auto &values = args.front().getList();
+		result.reserve(values.size());
+		for (const PropertyValue &value: values) {
+			if (value.getType() != PropertyType::INTEGER) {
+				throw std::invalid_argument("bytes() list elements must be integers in [0, 255]");
+			}
+			const int64_t number = std::get<int64_t>(value.getVariant());
+			if (number < 0 || number > 255) {
+				throw std::invalid_argument("bytes() list elements must be integers in [0, 255]");
+			}
+			result.push_back(static_cast<std::byte>(number));
+		}
+		return PropertyValue(std::move(result));
+	}
+	throw std::invalid_argument("bytes() expects bytes, a hexadecimal string, or a byte list");
+}
+
 void registerUtilityFunctions(FunctionRegistry& registry) {
 	registry.registerFunction(makeFn("timestamp", 0, 0, &timestampImpl));
 	registry.registerFunction(makeFn("randomUUID", 0, 0, &randomUUIDImpl));
+	registry.registerFunction(makeFn("bytes", 1, 1, &bytesImpl));
 }
 
 } // namespace graph::query::expressions

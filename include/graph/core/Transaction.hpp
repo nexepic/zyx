@@ -20,31 +20,26 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
-
-#include "graph/concurrent/AtomicRWLock.hpp"
+#include <string>
 
 namespace graph::storage {
-	class FileStorage;
-	struct CommittedSnapshot;
+	class LogicalGraphTransaction;
+	class LogicalGraphTransactionOverlay;
+}
+
+namespace graph::query {
+	class QueryEngine;
+	class QueryResult;
 }
 
 namespace graph {
 
-	class TransactionManager;
-
 	class Transaction {
 	public:
 		enum class TxnState { TXN_ACTIVE, TXN_COMMITTED, TXN_ROLLED_BACK };
-		enum class CheckpointPolicy { TCP_AUTO, TCP_DEFER_CHECKPOINT };
-
-		struct TxnOperation {
-			enum OpType : uint8_t { OP_ADD, OP_UPDATE, OP_DELETE };
-			OpType opType;
-			uint8_t entityType; // graph::EntityType value
-			int64_t entityId;
-		};
 
 		~Transaction();
 
@@ -57,33 +52,34 @@ namespace graph {
 		void commit();
 		void rollback();
 
+		// Executes through this transaction's explicitly owned logical overlay.
+		// Database-scoped QueryEngine execution remains an independent operation.
+		[[nodiscard]] query::QueryResult execute(query::QueryEngine &engine, const std::string &query);
+
 		[[nodiscard]] uint64_t getId() const { return txnId_; }
 		[[nodiscard]] TxnState getState() const { return state_; }
 		[[nodiscard]] bool isActive() const { return state_ == TxnState::TXN_ACTIVE; }
 		[[nodiscard]] bool isReadOnly() const { return readOnly_; }
-		[[nodiscard]] CheckpointPolicy getCheckpointPolicy() const { return checkpointPolicy_; }
-
-		[[nodiscard]] const storage::CommittedSnapshot *getSnapshot() const { return snapshot_.get(); }
 
 	private:
-		friend class TransactionManager;
-		Transaction(uint64_t txnId, TransactionManager &mgr, std::shared_ptr<storage::FileStorage> storage);
+		friend class Database;
+		Transaction(uint64_t txnId, std::unique_ptr<storage::LogicalGraphTransaction> logicalTransaction,
+					std::shared_ptr<std::atomic<size_t>> activeWriteTransactionCount);
+
+		void finishLogicalTransaction() noexcept;
+		void rollbackActiveLogicalTransactionNoexcept() noexcept;
 
 		uint64_t txnId_ = 0;
 		TxnState state_ = TxnState::TXN_ACTIVE;
 		bool readOnly_ = false;
-		CheckpointPolicy checkpointPolicy_ = CheckpointPolicy::TCP_AUTO;
-		TransactionManager *manager_ = nullptr; // Non-owning
-		std::shared_ptr<storage::FileStorage> storage_;
 
-		// Shared lock held for read-only transaction's lifetime (RAII)
-		concurrent::ReadLockGuard readLock_;
-
-		// Write lock held for write transaction's lifetime (RAII, moves with Transaction)
-		concurrent::WriteLockGuard writeLock_;
-
-		// Snapshot for read-only transactions (immutable once acquired)
-		std::shared_ptr<storage::CommittedSnapshot> snapshot_;
+		// Native logical transactions own their snapshot and a read-your-writes
+		// overlay. API transaction calls route to the overlay explicitly, so an
+		// ordinary Database query cannot inherit another transaction's state.
+		std::unique_ptr<storage::LogicalGraphTransaction> logicalTransaction_;
+		std::unique_ptr<storage::LogicalGraphTransactionOverlay> logicalOverlay_;
+		std::shared_ptr<std::atomic<size_t>> activeLogicalWriteTransactionCount_;
+		bool logicalWriteTransactionCounted_ = false;
 	};
 
 } // namespace graph

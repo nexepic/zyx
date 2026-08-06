@@ -14,7 +14,7 @@
 #include <vector>
 
 #include "graph/concurrent/ThreadPool.hpp"
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/query/execution/operators/NodeScanOperator.hpp"
 
 namespace fs = std::filesystem;
@@ -24,7 +24,7 @@ using namespace graph::query::execution::operators;
 
 class NodeScanOperatorParallelEdgeCasesTest : public ::testing::Test {
 protected:
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<storage::DataManager> dm;
 	std::shared_ptr<query::indexes::IndexManager> im;
 	fs::path testFilePath;
@@ -34,10 +34,10 @@ protected:
 		testFilePath = fs::temp_directory_path() /
 					   ("test_nodescan_pedge_" + boost::uuids::to_string(uuid) + ".dat");
 		if (fs::exists(testFilePath)) fs::remove_all(testFilePath);
-		db = std::make_unique<Database>(testFilePath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testFilePath.string());
 		db->open();
-		dm = db->getStorage()->getDataManager();
-		im = db->getQueryEngine()->getIndexManager();
+		dm = db->storage()->getDataManager();
+		im = db->indexManager();
 	}
 
 	void TearDown() override {
@@ -71,7 +71,7 @@ TEST_F(NodeScanOperatorParallelEdgeCasesTest, ParallelInactiveNodeSkipped) {
 		dm->deleteNode(nodes[i]);
 	}
 
-	db->getStorage()->flush();
+	db->storage()->flush();
 	dm->clearCache();
 
 	NodeScanConfig cfg;
@@ -98,7 +98,7 @@ TEST_F(NodeScanOperatorParallelEdgeCasesTest, ParallelLabelMismatch) {
 	(void)addNodes("Wrong", kWrongCount);
 	(void)addNodes("Right", kRightCount);
 
-	db->getStorage()->flush();
+	db->storage()->flush();
 	dm->clearCache();
 
 	NodeScanConfig cfg;
@@ -132,7 +132,7 @@ TEST_F(NodeScanOperatorParallelEdgeCasesTest, ParallelWithCandidateSet) {
 	// candidate-set scan path, not label-scoped index selection semantics.
 	ASSERT_TRUE(im->createIndex("idx_item_val", "node", "", "val"));
 
-	db->getStorage()->flush();
+	db->storage()->flush();
 	dm->clearCache();
 
 	// RANGE_SCAN produces a candidateSet of 5000 nodes (>= 4096 for parallel)
@@ -169,7 +169,7 @@ TEST_F(NodeScanOperatorParallelEdgeCasesTest, ParallelLoadEmptySegment) {
 		dm->deleteNode(nodes[i]);
 	}
 
-	db->getStorage()->flush();
+	db->storage()->flush();
 	dm->clearCache();
 
 	NodeScanConfig cfg;
@@ -194,7 +194,7 @@ TEST_F(NodeScanOperatorParallelEdgeCasesTest, ParallelAllFilteredReturnsNullopt)
 	static constexpr size_t kNodeCount = 4200;
 	(void)addNodes("OnlyLabel", kNodeCount);
 
-	db->getStorage()->flush();
+	db->storage()->flush();
 	dm->clearCache();
 
 	NodeScanConfig cfg;
@@ -222,7 +222,7 @@ TEST_F(NodeScanOperatorParallelEdgeCasesTest, ParallelManySegments) {
 		dm->addNodeProperties(nodes[i].getId(), {{"k", PropertyValue(int64_t(i))}});
 	}
 
-	db->getStorage()->flush();
+	db->storage()->flush();
 	dm->clearCache();
 
 	NodeScanConfig cfg;
@@ -245,7 +245,7 @@ TEST_F(NodeScanOperatorParallelEdgeCasesTest, ParallelFullScanMergesDirtyCandida
 	static constexpr size_t kNodeCount = 4200;
 	auto nodes = addNodes("DirtyMerge", kNodeCount);
 
-	db->getStorage()->flush();
+	db->storage()->flush();
 	dm->clearCache();
 
 	dm->addNodeProperties(nodes[0].getId(), {{"dirty", PropertyValue(int64_t{1})}});

@@ -192,10 +192,15 @@ TEST_F(IntegrationQueryTest, MergeQuery) {
  * Test query with multiple MATCH patterns
  */
 TEST_F(IntegrationQueryTest, MultipleMatchPatterns) {
-	setupSocialGraph();
+	// The shared `b` variable must denote one physical Node in both patterns.
+	// Build the two relationships in one CREATE chain rather than creating two
+	// unrelated Nodes that merely have the same `name` Property.
+	(void) execute(
+			"CREATE (a:MultiMatchPerson {name: 'Alice'})-[:KNOWS]->(b:MultiMatchPerson {name: 'Bob'})"
+			"-[:KNOWS]->(c:MultiMatchPerson {name: 'Charlie'})");
 
-	auto result = execute("MATCH (a:Person {name: 'Alice'})-[:KNOWS]->(b:Person), "
-						  "(b:Person)-[:KNOWS]->(c:Person) "
+	auto result = execute("MATCH (a:MultiMatchPerson {name: 'Alice'})-[:KNOWS]->(b:MultiMatchPerson), "
+						  "(b:MultiMatchPerson)-[:KNOWS]->(c:MultiMatchPerson) "
 						  "RETURN a.name, b.name, c.name");
 	EXPECT_GT(result.rowCount(), 0UL);
 }

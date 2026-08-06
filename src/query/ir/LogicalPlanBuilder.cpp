@@ -8,6 +8,7 @@
 #include "graph/query/ir/LogicalPlanBuilder.hpp"
 #include "graph/query/expressions/Expression.hpp"
 #include "graph/query/expressions/ExpressionUtils.hpp"
+#include "graph/query/expressions/ParameterExpression.hpp"
 #include "graph/query/logical/operators/LogicalProject.hpp"
 #include "graph/query/logical/operators/LogicalSort.hpp"
 #include "graph/query/logical/operators/LogicalLimit.hpp"
@@ -40,6 +41,7 @@
 #include "graph/query/planner/PipelineValidator.hpp"
 #include "graph/query/planner/ProcedureRegistry.hpp"
 #include <algorithm>
+#include <unordered_set>
 
 namespace graph::query::ir {
 
@@ -167,7 +169,18 @@ std::unique_ptr<LogicalOperator> appendSortSkipLimit(
 	if (!body.orderBy.empty()) {
 		std::vector<LogicalSortItem> sortItems;
 		for (const auto& si : body.orderBy) {
-			sortItems.emplace_back(si.expression, si.ascending);
+			if (!si.expression) {
+				throw std::invalid_argument("aggregate ORDER BY has an empty expression");
+			}
+			std::shared_ptr<Expression> sortExpression = si.expression;
+			for (const ProjectionItem &item: body.items) {
+				if (item.expression && !item.alias.empty() &&
+					item.expression->toString() == si.expression->toString()) {
+					sortExpression = std::make_shared<VariableReferenceExpression>(item.alias);
+					break;
+				}
+			}
+			sortItems.emplace_back(std::move(sortExpression), si.ascending);
 		}
 		input = std::make_unique<LogicalSort>(std::move(input), std::move(sortItems));
 	}
@@ -287,10 +300,14 @@ namespace {
 void addPropertyExpressionFilters(
 	std::unique_ptr<LogicalOperator>& rootOp,
 	const std::string& variable,
-	const std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>>& propExprs)
+	const std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>>& propExprs,
+	const std::unordered_set<std::string>& pushedParameterKeys = {})
 {
 	using namespace graph::query::expressions;
 	for (const auto& [key, expr] : propExprs) {
+		if (pushedParameterKeys.contains(key)) {
+			continue;
+		}
 		auto lhs = std::make_unique<VariableReferenceExpression>(variable, key);
 		auto rhs = expr->clone();
 		auto cmp = std::make_unique<BinaryOpExpression>(
@@ -302,6 +319,29 @@ void addPropertyExpressionFilters(
 	}
 }
 
+[[nodiscard]] std::unordered_set<std::string> pushParameterPropertyPredicates(
+	LogicalNodeScan& scan,
+	const std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>>& propExprs)
+{
+	std::vector<ParameterPropertyPredicate> predicates;
+	predicates.reserve(propExprs.size());
+	std::unordered_set<std::string> pushedKeys;
+	for (const auto& [key, expression] : propExprs) {
+		const auto* parameter = expression == nullptr
+			? nullptr
+			: dynamic_cast<const graph::query::expressions::ParameterExpression*>(expression.get());
+		if (parameter == nullptr || key.empty() || parameter->getParameterName().empty()) {
+			continue;
+		}
+		if (!pushedKeys.emplace(key).second) {
+			throw std::logic_error("MATCH inline Property expressions contain a duplicate parameter key");
+		}
+		predicates.push_back({key, parameter->getParameterName()});
+	}
+	scan.setParameterPropertyPredicates(std::move(predicates));
+	return pushedKeys;
+}
+
 std::unique_ptr<LogicalOperator> buildMatchElement(
 	const PatternElementAST& element,
 	std::unique_ptr<LogicalOperator> rootOp)
@@ -311,6 +351,8 @@ std::unique_ptr<LogicalOperator> buildMatchElement(
 		element.headNode.variable,
 		element.headNode.labels,
 		element.headNode.properties);
+	const std::unordered_set<std::string> pushedParameterKeys =
+		pushParameterPropertyPredicates(*currentOp, element.headNode.propertyExpressions);
 
 	if (!rootOp) {
 		rootOp = std::move(currentOp);
@@ -318,8 +360,10 @@ std::unique_ptr<LogicalOperator> buildMatchElement(
 		rootOp = std::make_unique<LogicalJoin>(std::move(rootOp), std::move(currentOp));
 	}
 
-	// Add expression-based filters for parameterized head node properties
-	addPropertyExpressionFilters(rootOp, element.headNode.variable, element.headNode.propertyExpressions);
+	// Parameter equality predicates execute in the Node scan, allowing a backend
+	// with an exact support tree to avoid materializing unrelated Property roots.
+	addPropertyExpressionFilters(rootOp, element.headNode.variable, element.headNode.propertyExpressions,
+		pushedParameterKeys);
 
 	// Traversal chains
 	std::string var = element.headNode.variable;
@@ -356,6 +400,26 @@ std::unique_ptr<LogicalOperator> buildMatchElement(
 	}
 
 	return rootOp;
+}
+
+PatternElementAST materializeAnonymousMatchVariables(PatternElementAST element, size_t& nextAnonymousVariable) {
+	const auto nextVariable = [&nextAnonymousVariable] {
+		return std::string(query::ANONYMOUS_VAR_PREFIX) + std::to_string(nextAnonymousVariable++);
+	};
+	if (element.headNode.variable.empty()) {
+		element.headNode.variable = nextVariable();
+	}
+	for (PatternChainAST& chain : element.chain) {
+		// Variable-length traversal deliberately represents its relationship as
+		// an unbound path rather than one scalar Edge binding.
+		if (chain.relationship.variable.empty() && !chain.relationship.isVarLength) {
+			chain.relationship.variable = nextVariable();
+		}
+		if (chain.targetNode.variable.empty()) {
+			chain.targetNode.variable = nextVariable();
+		}
+	}
+	return element;
 }
 
 /**
@@ -396,8 +460,9 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildMatch(
 		std::vector<std::string> requiredVariables;
 
 		for (const auto& part : clause.patterns) {
-			collectPatternVariables(part.element, requiredVariables);
-			patternOp = buildMatchElement(part.element, std::move(patternOp));
+			PatternElementAST element = materializeAnonymousMatchVariables(part.element, next_anonymous_variable_);
+			collectPatternVariables(element, requiredVariables);
+			patternOp = buildMatchElement(element, std::move(patternOp));
 		}
 
 		// Apply WHERE
@@ -411,12 +476,13 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildMatch(
 
 	// Regular MATCH
 	for (const auto& part : clause.patterns) {
+		PatternElementAST element = materializeAnonymousMatchVariables(part.element, next_anonymous_variable_);
 		if (!input) {
-			input = buildMatchElement(part.element, nullptr);
+			input = buildMatchElement(element, nullptr);
 		} else if (clause.patterns.size() == 1) {
-			input = buildMatchElement(part.element, std::move(input));
+			input = buildMatchElement(element, std::move(input));
 		} else {
-			auto partOp = buildMatchElement(part.element, nullptr);
+			auto partOp = buildMatchElement(element, nullptr);
 			input = std::make_unique<LogicalJoin>(std::move(input), std::move(partOp));
 		}
 
@@ -425,10 +491,10 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildMatch(
 			std::vector<std::string> nodeVars;
 			std::vector<std::string> edgeVars;
 
-			if (!part.element.headNode.variable.empty()) {
-				nodeVars.push_back(part.element.headNode.variable);
+			if (!element.headNode.variable.empty()) {
+				nodeVars.push_back(element.headNode.variable);
 			}
-			for (const auto& chain : part.element.chain) {
+			for (const auto& chain : element.chain) {
 				if (!chain.relationship.variable.empty()) {
 					edgeVars.push_back(chain.relationship.variable);
 				}
@@ -500,6 +566,9 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildCall(
 		result = std::make_unique<LogicalProject>(
 			std::move(result), std::move(projItems));
 	}
+	if (clause.yieldWhere) {
+		result = std::make_unique<LogicalFilter>(std::move(result), clause.yieldWhere);
+	}
 
 	return result;
 }
@@ -540,12 +609,20 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildCreate(
 	std::unique_ptr<LogicalOperator> input)
 {
 	mutatesData_ = true;
-	// Counter for generating unique anonymous variable names.
-	// Anonymous nodes (no user-specified variable) all get variable == "".
-	// Without unique names, chained CreateNodeOperators would collide:
-	// the outer operator finds the inner's node via record.getNode("")
-	// and skips creation. E.g. CREATE (:A), (:B) would only create 1 node.
-	int anonCounter = 0;
+	const auto isBound = [&input](const std::string &variable) {
+		if (variable.empty() || !input) {
+			return false;
+		}
+		const std::vector<std::string> output = input->getOutputVariables();
+		return std::ranges::find(output, variable) != output.end();
+	};
+	const auto requireUndecoratedBoundNode = [](bool bound, const std::vector<std::string> &labels,
+															const auto &properties, const auto &propertyExpressions) {
+		if (bound && (!labels.empty() || !properties.empty() || !propertyExpressions.empty())) {
+			throw std::runtime_error(
+					"CREATE cannot redeclare a bound Node with labels or Properties in the logical write pipeline");
+		}
+	};
 
 	for (const auto& part : clause.patterns) {
 		const auto& elem = part.element;
@@ -553,17 +630,20 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildCreate(
 		// Head node — assign unique anonymous variable if empty
 		std::string headVar = elem.headNode.variable;
 		if (headVar.empty()) {
-			headVar = query::ANONYMOUS_VAR_PREFIX + std::to_string(anonCounter++);
+			headVar = query::ANONYMOUS_VAR_PREFIX + std::to_string(next_anonymous_variable_++);
 		}
 
 		std::unordered_map<std::string, PropertyValue> headProps;
 		for (const auto& [k, v] : elem.headNode.properties) {
 			headProps[k] = v;
 		}
-		auto headOp = std::make_unique<LogicalCreateNode>(
-			headVar, elem.headNode.labels,
-			headProps, elem.headNode.propertyExpressions);
-		input = chainWriteOp(std::move(input), std::move(headOp));
+		const bool headBound = isBound(headVar);
+		requireUndecoratedBoundNode(headBound, elem.headNode.labels, headProps, elem.headNode.propertyExpressions);
+		if (!headBound) {
+			auto headOp = std::make_unique<LogicalCreateNode>(
+				headVar, elem.headNode.labels, headProps, elem.headNode.propertyExpressions);
+			input = chainWriteOp(std::move(input), std::move(headOp));
+		}
 
 		std::string prevVar = headVar;
 
@@ -571,28 +651,34 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildCreate(
 			// Target node — assign unique anonymous variable if empty
 			std::string targetVar = chain.targetNode.variable;
 			if (targetVar.empty()) {
-				targetVar = query::ANONYMOUS_VAR_PREFIX + std::to_string(anonCounter++);
+				targetVar = query::ANONYMOUS_VAR_PREFIX + std::to_string(next_anonymous_variable_++);
 			}
 
 			std::unordered_map<std::string, PropertyValue> targetProps;
 			for (const auto& [k, v] : chain.targetNode.properties) {
 				targetProps[k] = v;
 			}
-			std::unordered_map<std::string, std::shared_ptr<Expression>> emptyPropExprs;
-			auto targetOp = std::make_unique<LogicalCreateNode>(
-				targetVar, chain.targetNode.labels,
-				targetProps, emptyPropExprs);
-			input = chainWriteOp(std::move(input), std::move(targetOp));
+			const bool targetBound = isBound(targetVar);
+			requireUndecoratedBoundNode(targetBound, chain.targetNode.labels, targetProps,
+												  chain.targetNode.propertyExpressions);
+			if (!targetBound) {
+				auto targetOp = std::make_unique<LogicalCreateNode>(
+					targetVar, chain.targetNode.labels, targetProps, chain.targetNode.propertyExpressions);
+				input = chainWriteOp(std::move(input), std::move(targetOp));
+			}
 
 			// Edge — assign unique anonymous variable if empty
 			std::string edgeVar = chain.relationship.variable;
 			if (edgeVar.empty()) {
-				edgeVar = query::ANONYMOUS_VAR_PREFIX + std::to_string(anonCounter++);
+				edgeVar = query::ANONYMOUS_VAR_PREFIX + std::to_string(next_anonymous_variable_++);
+			}
+			if (isBound(edgeVar)) {
+				throw std::runtime_error("CREATE cannot rebind an existing relationship variable");
 			}
 
 			auto edgeOp = std::make_unique<LogicalCreateEdge>(
 				edgeVar, chain.relationship.type,
-				chain.relationship.properties, prevVar, targetVar);
+				chain.relationship.properties, chain.relationship.propertyExpressions, prevVar, targetVar);
 			input = chainWriteOp(std::move(input), std::move(edgeOp));
 
 			prevVar = targetVar;
@@ -685,7 +771,7 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildRemove(
 
 std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildMerge(
 	const MergeClause& clause,
-	std::unique_ptr<LogicalOperator> /*input*/)
+	std::unique_ptr<LogicalOperator> input)
 {
 	mutatesData_ = true;
 	const auto& elem = clause.pattern.element;
@@ -713,7 +799,7 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildMerge(
 	if (elem.chain.empty()) {
 		return std::make_unique<LogicalMergeNode>(
 			elem.headNode.variable, elem.headNode.labels, headProps,
-			std::move(onCreateActions), std::move(onMatchActions));
+			std::move(onCreateActions), std::move(onMatchActions), std::move(input));
 	}
 
 	// Edge MERGE
@@ -722,7 +808,7 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildMerge(
 	std::unique_ptr<LogicalOperator> rootOp =
 		std::make_unique<LogicalMergeNode>(
 			elem.headNode.variable, elem.headNode.labels, headProps,
-			emptyActions, emptyActions);
+			emptyActions, emptyActions, std::move(input));
 
 	std::string prevVar = elem.headNode.variable;
 

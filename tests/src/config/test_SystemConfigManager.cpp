@@ -27,8 +27,8 @@
 #include <string>
 
 #include "graph/config/SystemConfigManager.hpp"
-#include "graph/core/Database.hpp"
 #include "graph/log/Log.hpp"
+#include "graph/storage/FileStorage.hpp"
 #include "graph/storage/state/SystemStateKeys.hpp"
 #include "graph/storage/state/SystemStateManager.hpp"
 
@@ -43,23 +43,27 @@ protected:
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath = std::filesystem::temp_directory_path() / ("test_configMgr_" + to_string(uuid) + ".dat");
 
-		// 2. Initialize Database and infrastructure
-		database = std::make_unique<Database>(testFilePath.string());
-		database->open();
+		// 2. Legacy configuration is a FileStorage unit concern. Native Database
+		// intentionally exposes no legacy storage handle.
+		fileStorage = std::make_shared<storage::FileStorage>(
+				testFilePath.string(), 10'000U, storage::OpenMode::OPEN_CREATE_NEW_FILE);
+		fileStorage->open();
 
 		// 3. Create the SystemStateManager helper
-		stateManager = std::make_shared<SystemStateManager>(database->getStorage()->getDataManager());
+		stateManager = std::make_shared<SystemStateManager>(fileStorage->getDataManager());
 
 		// 4. Create the SystemConfigManager instance under test
-		configManager = std::make_shared<SystemConfigManager>(stateManager, database->getStorage());
+		configManager = std::make_shared<SystemConfigManager>(stateManager, fileStorage);
 
 		// 5. Ensure Log is in a known state (INFO/False) before each test
 		log::Log::setDebug(false);
 	}
 
 	void TearDown() override {
-		database->close();
-		database.reset();
+		if (fileStorage) {
+			fileStorage->close();
+		}
+		fileStorage.reset();
 		std::error_code ec;
 		if (std::filesystem::exists(testFilePath)) {
 			std::filesystem::remove(testFilePath, ec);
@@ -69,7 +73,7 @@ protected:
 	}
 
 	std::filesystem::path testFilePath;
-	std::unique_ptr<Database> database;
+	std::shared_ptr<storage::FileStorage> fileStorage;
 	std::shared_ptr<SystemStateManager> stateManager;
 	std::shared_ptr<SystemConfigManager> configManager;
 };
@@ -179,27 +183,30 @@ TEST_F(SystemConfigManagerTest, PersistenceThroughRestart) {
 	// 1. Write Config
 	stateManager->set<std::string>(keys::SYS_CONFIG, keys::Config::LOG_LEVEL, "DEBUG");
 	// Flush to disk
-	database->getStorage()->flush();
-	database->close();
+	fileStorage->flush();
+	fileStorage->close();
 
 	// Reset Log state to prove the new DB instance sets it
 	log::Log::setDebug(false);
 
-	// 2. Reopen DB (Simulate Application Restart)
-	auto newDatabase = std::make_unique<Database>(testFilePath.string());
-
-	// Act: Database::open() should internally create SystemConfigManager and load configs.
-	newDatabase->open();
+	// 2. Reopen the isolated legacy storage unit and explicitly load its config.
+	auto reopened = std::make_shared<storage::FileStorage>(
+			testFilePath.string(), 10'000U, storage::OpenMode::OPEN_EXISTING_FILE);
+	reopened->open();
+	auto reopenedStateManager = std::make_shared<SystemStateManager>(reopened->getDataManager());
+	auto reopenedConfigManager = std::make_shared<SystemConfigManager>(reopenedStateManager, reopened);
+	reopenedConfigManager->loadAndApplyAll();
 
 	// Assert
 	EXPECT_TRUE(graph::log::Log::isDebugEnabled())
-			<< "Configuration was not automatically applied on database startup.";
+			<< "Configuration was not applied after reopening the legacy storage unit.";
+	reopened->close();
 }
 
 // Test 8: Verify compaction configuration is applied
 TEST_F(SystemConfigManagerTest, CompactionConfigApplied) {
 	// Arrange: Get the current compaction status
-	auto storage = database->getStorage();
+	auto storage = fileStorage;
 	bool initialStatus = storage->isCompactionEnabled();
 
 	// Set the opposite value in config
@@ -215,7 +222,7 @@ TEST_F(SystemConfigManagerTest, CompactionConfigApplied) {
 }
 
 TEST_F(SystemConfigManagerTest, CompactionConfigCanDisableEnabledStorage) {
-	auto storage = database->getStorage();
+	auto storage = fileStorage;
 	storage->setCompactionEnabled(true);
 	stateManager->set<bool>(keys::SYS_CONFIG, keys::Config::STORAGE_COMPACTION_ENABLED, false);
 
@@ -227,7 +234,7 @@ TEST_F(SystemConfigManagerTest, CompactionConfigCanDisableEnabledStorage) {
 // Test 9: Verify compaction config doesn't change when already set
 TEST_F(SystemConfigManagerTest, CompactionNoChangeWhenSame) {
 	// Arrange: Get the current status
-	auto storage = database->getStorage();
+	auto storage = fileStorage;
 	bool currentStatus = storage->isCompactionEnabled();
 
 	// Set config to the same value
@@ -248,7 +255,7 @@ TEST_F(SystemConfigManagerTest, CompactionDefaultConfig) {
 
 	// Assert: Should apply default (false as per source code comment)
 	// The actual default value is false based on the source code
-	auto storage = database->getStorage();
+	auto storage = fileStorage;
 	EXPECT_NO_THROW(storage->isCompactionEnabled());
 }
 

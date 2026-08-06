@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include "graph/query/logical/LogicalOperator.hpp"
 
 #include <memory>
@@ -56,7 +57,11 @@ public:
         }
         if (optionalPattern_) {
             auto ov = optionalPattern_->getOutputVariables();
-            vars.insert(vars.end(), ov.begin(), ov.end());
+            for (std::string &variable : ov) {
+                if (std::find(vars.begin(), vars.end(), variable) == vars.end()) {
+                    vars.push_back(std::move(variable));
+                }
+            }
         }
         return vars;
     }

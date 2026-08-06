@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <iomanip>
 #include <iterator>
+#include <limits>
 #include <sstream>
 #include <variant>
 
@@ -41,6 +42,40 @@ zyx_driver_status_t typeMismatch(zyx_driver_error_t **out_error, zyx_driver_valu
     std::ostringstream message;
     message << "type mismatch: expected " << typeName(expected) << ", got " << typeName(valueType(actual));
     return setError(out_error, ZYX_DRIVER_TYPE_MISMATCH, message.str());
+}
+
+zyx_driver_status_t exposeBytes(const zyx::Bytes &bytes, const uint8_t **out_value, uint32_t *out_size,
+                                zyx_driver_error_t **out_error) {
+    if (out_value == nullptr || out_size == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_value and out_size must not be null");
+    }
+    if (bytes.size() > std::numeric_limits<uint32_t>::max()) { // ZYX_COV_EXCL_LINE: ABI input constructors cap binary lengths at uint32_t.
+        return setError(out_error, ZYX_DRIVER_OUT_OF_RANGE, "binary value exceeds the Driver ABI length limit");
+    }
+    *out_value = bytes.empty() ? nullptr : bytes.data();
+    *out_size = static_cast<uint32_t>(bytes.size());
+    return ZYX_DRIVER_OK;
+}
+
+zyx_driver_status_t openBytesStream(const zyx::Value &value, uint64_t offset, uint64_t length,
+                                    zyx_driver_bytes_stream_t **out_stream, zyx_driver_error_t **out_error) {
+    if (out_stream == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_stream must not be null");
+    }
+    *out_stream = nullptr;
+    const auto *bytes = std::get_if<zyx::Bytes>(&value);
+    if (bytes == nullptr) {
+        return typeMismatch(out_error, ZYX_DRIVER_VALUE_BYTES, value);
+    }
+    if (offset > bytes->size() || length > bytes->size() - static_cast<size_t>(offset)) {
+        return setError(out_error, ZYX_DRIVER_OUT_OF_RANGE, "binary stream range is out of bounds");
+    }
+    auto stream = std::make_unique<zyx_driver_bytes_stream_t>();
+    stream->bytes = *bytes;
+    stream->position = static_cast<size_t>(offset);
+    stream->end = stream->position + static_cast<size_t>(length);
+    *out_stream = stream.release();
+    return ZYX_DRIVER_OK;
 }
 
 const zyx::ValueList *valueAsList(const zyx::Value &value) {
@@ -397,6 +432,13 @@ void appendJsonValue(std::ostringstream &out, const zyx::Value &value) {
         out << *typed;
     } else if (const auto *typed = std::get_if<std::string>(&value)) { // ZYX_COV_EXCL_LINE: JSON scalar property tests cover string properties
         appendJsonString(out, *typed);
+    } else if (const auto *typed = std::get_if<zyx::Bytes>(&value)) {
+        static constexpr char hex[] = "0123456789abcdef";
+        out << "{\"$zyx_bytes\":\"";
+        for (const uint8_t byte : *typed) {
+            out << hex[byte >> 4U] << hex[byte & 0x0FU];
+        }
+        out << "\"}";
     } else if (const auto *typed = std::get_if<std::vector<float>>(&value)) { // ZYX_COV_EXCL_START: toDriverAbiValue normalizes vector variants to ValueList; unreachable through query results.
         out << '[';
         for (size_t i = 0; i < typed->size(); ++i) {
@@ -501,6 +543,7 @@ zyx_driver_value_type_t valueType(const zyx::Value &value) {
     if (std::holds_alternative<int64_t>(value)) return ZYX_DRIVER_VALUE_INT64;
     if (std::holds_alternative<double>(value)) return ZYX_DRIVER_VALUE_DOUBLE;
     if (std::holds_alternative<std::string>(value)) return ZYX_DRIVER_VALUE_STRING;
+	if (std::holds_alternative<zyx::Bytes>(value)) return ZYX_DRIVER_VALUE_BYTES;
     if (std::holds_alternative<std::shared_ptr<zyx::Node>>(value)) return ZYX_DRIVER_VALUE_NODE;
     if (std::holds_alternative<std::shared_ptr<zyx::Edge>>(value)) return ZYX_DRIVER_VALUE_EDGE; // ZYX_COV_EXCL_LINE: optional graph-value type branch depends on query shape
     if (std::holds_alternative<std::vector<float>>(value) || std::holds_alternative<std::vector<std::string>>(value) || // ZYX_COV_EXCL_START: list/map variants are optional execution-path outputs.
@@ -522,6 +565,7 @@ std::string typeName(zyx_driver_value_type_t type) {
         case ZYX_DRIVER_VALUE_EDGE: return "edge";
         case ZYX_DRIVER_VALUE_LIST: return "list"; // ZYX_COV_EXCL_START: defensive names for optional/unknown ABI value variants.
         case ZYX_DRIVER_VALUE_MAP: return "map";
+		case ZYX_DRIVER_VALUE_BYTES: return "bytes";
     }
     return "unknown"; // ZYX_COV_EXCL_STOP
 }
@@ -642,6 +686,55 @@ zyx_driver_status_t zyx_driver_result_get_string(zyx_driver_result_t *result, ui
         std::ostringstream message;
         message << "type mismatch: expected string, got " << typeName(valueType(value));
         return setError(out_error, ZYX_DRIVER_TYPE_MISMATCH, message.str());
+    } catch (...) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
+        return catchAbiException(out_error);
+    }
+}
+
+zyx_driver_status_t zyx_driver_result_get_bytes(zyx_driver_result_t *result, uint32_t column,
+                                                const uint8_t **out_value, uint32_t *out_size,
+                                                zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (out_value != nullptr) {
+        *out_value = nullptr;
+    }
+    if (out_size != nullptr) {
+        *out_size = 0U;
+    }
+    try {
+        if (out_value == nullptr || out_size == nullptr) {
+            return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_value and out_size must not be null");
+        }
+        if (auto status = validateColumn(result, column, out_error); status != ZYX_DRIVER_OK) {
+            return status;
+        }
+        zyx::Value value = resultValue(result, column);
+        if (const auto *typed = std::get_if<zyx::Bytes>(&value)) {
+            const size_t slot = appendValueRefBuffer(result, *typed);
+            return exposeBytes(std::get<zyx::Bytes>(result->value_buffers[slot]), out_value, out_size, out_error);
+        }
+        return typeMismatch(out_error, ZYX_DRIVER_VALUE_BYTES, value);
+    } catch (...) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
+        return catchAbiException(out_error);
+    }
+}
+
+zyx_driver_status_t zyx_driver_result_open_bytes_stream(zyx_driver_result_t *result, uint32_t column,
+                                                         uint64_t offset, uint64_t length,
+                                                         zyx_driver_bytes_stream_t **out_stream,
+                                                         zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (out_stream != nullptr) {
+        *out_stream = nullptr;
+    }
+    try {
+        if (out_stream == nullptr) {
+            return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_stream must not be null");
+        }
+        if (auto status = validateColumn(result, column, out_error); status != ZYX_DRIVER_OK) {
+            return status;
+        }
+        return openBytesStream(resultValue(result, column), offset, length, out_stream, out_error);
     } catch (...) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
         return catchAbiException(out_error);
     }
@@ -868,6 +961,42 @@ zyx_driver_status_t zyx_driver_result_get_list_string(zyx_driver_result_t *resul
     }
 }
 
+zyx_driver_status_t zyx_driver_result_get_list_bytes(zyx_driver_result_t *result,
+                                                     uint32_t column, uint32_t index,
+                                                     const uint8_t **out_value, uint32_t *out_size,
+                                                     zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (out_value != nullptr) {
+        *out_value = nullptr;
+    }
+    if (out_size != nullptr) {
+        *out_size = 0U;
+    }
+    try {
+        if (out_value == nullptr || out_size == nullptr) {
+            return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_value and out_size must not be null");
+        }
+        if (auto status = validateColumn(result, column, out_error); status != ZYX_DRIVER_OK) {
+            return status;
+        }
+        zyx::Value value = resultValue(result, column);
+        const zyx::ValueList *list = valueAsList(value);
+        if (list == nullptr) {
+            return typeMismatch(out_error, ZYX_DRIVER_VALUE_LIST, value);
+        }
+        if (index >= list->elements.size()) {
+            return setError(out_error, ZYX_DRIVER_OUT_OF_RANGE, "list index is out of range");
+        }
+        if (const auto *typed = std::get_if<zyx::Bytes>(&list->elements[index])) {
+            const size_t slot = appendValueRefBuffer(result, *typed);
+            return exposeBytes(std::get<zyx::Bytes>(result->value_buffers[slot]), out_value, out_size, out_error);
+        }
+        return typeMismatch(out_error, ZYX_DRIVER_VALUE_BYTES, list->elements[index]);
+    } catch (...) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
+        return catchAbiException(out_error);
+    }
+}
+
 zyx_driver_status_t zyx_driver_result_get_value(const zyx_driver_result_t *result, uint32_t column,
                                                 zyx_driver_value_ref_t *out_value,
                                                 zyx_driver_error_t **out_error) {
@@ -942,6 +1071,54 @@ zyx_driver_status_t zyx_driver_value_ref_get_string(zyx_driver_result_t *result,
         }
         return typeMismatch(out_error, ZYX_DRIVER_VALUE_STRING, *ref);
     } catch (...) {
+        return catchAbiException(out_error);
+    }
+}
+
+zyx_driver_status_t zyx_driver_value_ref_get_bytes(const zyx_driver_value_ref_t *value,
+                                                   const uint8_t **out_value, uint32_t *out_size,
+                                                   zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (out_value != nullptr) {
+        *out_value = nullptr;
+    }
+    if (out_size != nullptr) {
+        *out_size = 0U;
+    }
+    try {
+        if (out_value == nullptr || out_size == nullptr) {
+            return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_value and out_size must not be null");
+        }
+        if (auto status = validateValueRef(value, out_error); status != ZYX_DRIVER_OK) {
+            return status;
+        }
+        const zyx::Value *ref = refValueUnchecked(value);
+        if (const auto *typed = std::get_if<zyx::Bytes>(ref)) {
+            return exposeBytes(*typed, out_value, out_size, out_error);
+        }
+        return typeMismatch(out_error, ZYX_DRIVER_VALUE_BYTES, *ref);
+    } catch (...) {
+        return catchAbiException(out_error);
+    }
+}
+
+zyx_driver_status_t zyx_driver_value_ref_open_bytes_stream(const zyx_driver_value_ref_t *value,
+                                                            uint64_t offset, uint64_t length,
+                                                            zyx_driver_bytes_stream_t **out_stream,
+                                                            zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (out_stream != nullptr) {
+        *out_stream = nullptr;
+    }
+    try {
+        if (out_stream == nullptr) {
+            return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_stream must not be null");
+        }
+        if (auto status = validateValueRef(value, out_error); status != ZYX_DRIVER_OK) {
+            return status;
+        }
+        return openBytesStream(*refValueUnchecked(value), offset, length, out_stream, out_error);
+    } catch (...) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
         return catchAbiException(out_error);
     }
 }
@@ -1061,6 +1238,38 @@ zyx_driver_status_t zyx_driver_value_ref_list_get_string(zyx_driver_result_t *re
             return ZYX_DRIVER_OK;
         }
         return typeMismatch(out_error, ZYX_DRIVER_VALUE_STRING, *item);
+    } catch (...) {
+        return catchAbiException(out_error);
+    }
+}
+
+zyx_driver_status_t zyx_driver_value_ref_list_get_bytes(const zyx_driver_value_ref_t *value,
+                                                        uint32_t index,
+                                                        const uint8_t **out_value, uint32_t *out_size,
+                                                        zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (out_value != nullptr) {
+        *out_value = nullptr;
+    }
+    if (out_size != nullptr) {
+        *out_size = 0U;
+    }
+    try {
+        if (out_value == nullptr || out_size == nullptr) {
+            return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_value and out_size must not be null");
+        }
+        if (auto status = validateValueRef(value, out_error); status != ZYX_DRIVER_OK) {
+            return status;
+        }
+        zyx_driver_status_t status = ZYX_DRIVER_OK;
+        const zyx::Value *item = listItem(value, index, out_error, &status);
+        if (status != ZYX_DRIVER_OK) {
+            return status;
+        }
+        if (const auto *typed = std::get_if<zyx::Bytes>(item)) {
+            return exposeBytes(*typed, out_value, out_size, out_error);
+        }
+        return typeMismatch(out_error, ZYX_DRIVER_VALUE_BYTES, *item);
     } catch (...) {
         return catchAbiException(out_error);
     }
@@ -1211,6 +1420,76 @@ zyx_driver_status_t zyx_driver_value_ref_map_get_string(zyx_driver_result_t *res
         return typeMismatch(out_error, ZYX_DRIVER_VALUE_STRING, *item);
     } catch (...) {
         return catchAbiException(out_error);
+    }
+}
+
+zyx_driver_status_t zyx_driver_value_ref_map_get_bytes(const zyx_driver_value_ref_t *value,
+                                                       const char *key,
+                                                       const uint8_t **out_value, uint32_t *out_size,
+                                                       zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (out_value != nullptr) {
+        *out_value = nullptr;
+    }
+    if (out_size != nullptr) {
+        *out_size = 0U;
+    }
+    try {
+        if (out_value == nullptr || out_size == nullptr) {
+            return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_value and out_size must not be null");
+        }
+        if (auto status = validateValueRef(value, out_error); status != ZYX_DRIVER_OK) {
+            return status;
+        }
+        zyx_driver_status_t status = ZYX_DRIVER_OK;
+        const zyx::Value *item = mapItem(value, key, out_error, &status);
+        if (status != ZYX_DRIVER_OK) {
+            return status;
+        }
+        if (const auto *typed = std::get_if<zyx::Bytes>(item)) {
+            return exposeBytes(*typed, out_value, out_size, out_error);
+        }
+        return typeMismatch(out_error, ZYX_DRIVER_VALUE_BYTES, *item);
+    } catch (...) {
+        return catchAbiException(out_error);
+    }
+}
+
+zyx_driver_status_t zyx_driver_bytes_stream_read(zyx_driver_bytes_stream_t *stream, uint8_t *buffer,
+                                                  uint32_t capacity, uint32_t *out_read,
+                                                  zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (out_read != nullptr) {
+        *out_read = 0U;
+    }
+    try {
+        if (stream == nullptr || out_read == nullptr || (capacity != 0U && buffer == nullptr)) {
+            return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT,
+                            "stream, out_read, and a buffer for nonzero capacity are required");
+        }
+        if (stream->position == stream->end) {
+            return ZYX_DRIVER_DONE;
+        }
+        const size_t remaining = stream->end - stream->position;
+        const size_t count = std::min(remaining, static_cast<size_t>(capacity));
+        if (count == 0U) {
+            return ZYX_DRIVER_OK;
+        }
+        std::copy_n(stream->bytes.data() + stream->position, count, buffer);
+        stream->position += count;
+        *out_read = static_cast<uint32_t>(count);
+        return ZYX_DRIVER_ROW;
+    } catch (...) { // ZYX_COV_EXCL_LINE: defensive C ABI exception boundary.
+        return catchAbiException(out_error);
+    }
+}
+
+void zyx_driver_bytes_stream_close(zyx_driver_bytes_stream_t *stream, zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    try {
+        delete stream;
+    } catch (...) { // ZYX_COV_EXCL_LINE: delete is non-throwing; retain an ABI boundary for toolchains.
+        static_cast<void>(catchAbiException(out_error));
     }
 }
 

@@ -44,6 +44,11 @@ MATCH (p:Person {name: 'Alice'}), (c:Company {name: 'ZYX'})
 CREATE (p)-[:WORKS_AT {since: 2026}]->(c);
 ```
 
+Relationship types are optional. `CREATE (p)-->(c)` creates an untyped relationship; `MERGE` supports the same form.
+The relationship is returned with `type(r) = ''`, is found by an untyped pattern such as `MATCH (p)-->(c)`, and does not
+match a named-type pattern such as `MATCH (p)-[:WORKS_AT]->(c)`. This preserves the Cypher distinction without creating a
+synthetic schema token or relationship-type index entry.
+
 :::tip Idempotent Writes
 For "create if not exists, update if exists" semantics, use `MERGE` instead of `CREATE`. See [Cypher Basics](cypher-basics).
 :::
@@ -100,6 +105,15 @@ OPTIONS {dimension: 4, metric: 'COSINE'};
 
 CALL db.index.vector.queryNodes('doc_vec_idx', 5, [0.1, 0.2, 0.3, 0.4])
 YIELD node, score
+RETURN node, score;
+```
+
+`WHERE` may follow `YIELD` to filter the yielded rows; its aliases are already in scope:
+
+```cypher
+CALL db.index.vector.queryNodes('doc_vec_idx', 5, [0.1, 0.2, 0.3, 0.4])
+YIELD node, score
+WHERE node.status = 'published'
 RETURN node, score;
 ```
 

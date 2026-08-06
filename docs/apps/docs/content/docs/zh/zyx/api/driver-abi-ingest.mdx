@@ -25,7 +25,11 @@ struct<
 >
 ```
 
-关系类型在 prepare ingestor 时单独传入。属性字段支持 Arrow Boolean、有符号与无符号整数、Float32、Float64、UTF-8、List、FixedSizeList、Struct、Map 和 Dictionary 布局。输入 array buffer 始终由调用方持有，只需在 `zyx_driver_edge_ingestor_write()` 调用期间保持有效。
+关系类型在 prepare ingestor 时单独传入。属性字段支持 Arrow Boolean、有符号与无符号整数、Float32、Float64、UTF-8、binary、List、FixedSizeList、Struct、Map 和 Dictionary 布局。输入 array buffer 始终由调用方持有，只需在 `zyx_driver_edge_ingestor_write()` 调用期间保持有效。
+
+对于非 Arrow 的参数和结果值，可以使用 Driver ABI 的 bytes value 函数（`zyx_driver_params_set_bytes`、
+`zyx_driver_value_bytes_create` 以及 list/map bytes setter）。输入会被复制。结果 bytes buffer 是借用的，直到其所属
+result 被释放前有效；调用方必须在释放 result 前复制它。
 
 Map key 必须是非 NULL 的 UTF-8 值，并且在每一行内唯一。所有受支持的属性类型都可以使用 Dictionary 编码，Map key 也可以使用。
 
@@ -44,7 +48,7 @@ flowchart LR
     E --> F
 ```
 
-一个 ingest session 持有一个 bulk write transaction。commit 保证 WAL 持久化，主数据库 checkpoint 可以延迟到 `zyx_driver_db_save()` 或正常关闭数据库时执行。关闭仍处于 active 状态的 session 会自动回滚。
+一个 ingest session 在 native relocatable database 上持有一个原子写入边界：快照固定的 logical transaction 及其 read-your-writes overlay。正常 Driver ABI 打开路径会拒绝 legacy 文件，必须先完成 offline migration。只有成功 commit 并完成持久化后 session 才会返回成功；主数据库 checkpoint 可以延迟到 `zyx_driver_db_save()` 或正常关闭数据库时执行。关闭仍处于 active 状态的 session 会自动回滚。
 
 任何 write 失败都会将整个 session 标记为失败，之后禁止 commit，只能 rollback 或 close。Schema prepare 错误发生在 writer 创建之前，不会污染 session。
 
@@ -69,6 +73,6 @@ const char *field = zyx_driver_error_field_path(error);
 
 单个 batch 最多包含 10,000,000 行，Arrow adapter 内部最多物化 512 MiB 数据。Prepared schema 的所有嵌套层级合计最多包含 4,096 个字段，复制的 schema 文本总量最多为 1 MiB，嵌套深度最多为 64 层。超过限制时会在图写入开始前返回 `ZYX_DRIVER_OUT_OF_RANGE`。
 
-写入路径将 Arrow 值直接解码为 storage-native 属性列，不构造逐行 Map，也不构造中间的公开 `zyx::Value` 对象图。端点校验同样在 ID 分配前完成，因此非法 batch 不会产生部分 ID 区间。
+写入路径解码 Arrow 值时不构造逐行 Map，也不构造中间的公开 `zyx::Value` 对象图。它将有界的解码 batch 转换为内部 `LogicalGraphEdgeCreateRequest`，并暂存在 ingest session 的 transaction overlay 中，绝不会跳出到独立的 auto-commit 写入。端点校验同样在 ID 分配前完成，因此非法 batch 不会产生部分 ID 区间。
 
 浏览器 Playground 有意不导出写入侧 ingest 符号，仍然只使用 Driver ABI 只读事务。

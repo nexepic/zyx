@@ -10,7 +10,6 @@
 #include <filesystem>
 #include <thread>
 #include <gtest/gtest.h>
-#include "graph/core/Database.hpp"
 #include "graph/storage/FileStorage.hpp"
 
 namespace fs = std::filesystem;
@@ -30,6 +29,13 @@ protected:
 		std::error_code ec;
 		fs::remove(testFilePath, ec);
 	}
+
+	[[nodiscard]] std::shared_ptr<FileStorage> openLegacyStorage(
+			OpenMode mode = OpenMode::OPEN_CREATE_NEW_FILE) const {
+		auto storage = std::make_shared<FileStorage>(testFilePath.string(), 16U, mode);
+		storage->open();
+		return storage;
+	}
 };
 
 TEST_F(FileStorageOpenModeTest, OpenExistingFile_FileDoesNotExist_Throws) {
@@ -39,9 +45,8 @@ TEST_F(FileStorageOpenModeTest, OpenExistingFile_FileDoesNotExist_Throws) {
 
 TEST_F(FileStorageOpenModeTest, CreateNewFile_FileAlreadyExists_Throws) {
 	{
-		Database db(testFilePath.string());
-		db.open();
-		db.close();
+		auto storage = openLegacyStorage();
+		storage->close();
 	}
 	ASSERT_TRUE(fs::exists(testFilePath));
 
@@ -50,35 +55,27 @@ TEST_F(FileStorageOpenModeTest, CreateNewFile_FileAlreadyExists_Throws) {
 }
 
 TEST_F(FileStorageOpenModeTest, OpenAlreadyOpen_ReturnsEarly) {
-	Database db(testFilePath.string());
-	db.open();
-	auto storage = db.getStorage();
+	auto storage = openLegacyStorage();
 	EXPECT_TRUE(storage->isOpen());
 	EXPECT_NO_THROW(storage->open());
 	EXPECT_TRUE(storage->isOpen());
-	db.close();
+	storage->close();
 }
 
 TEST_F(FileStorageOpenModeTest, SaveOnClosedStorage_Throws) {
-	Database db(testFilePath.string());
-	db.open();
-	auto storage = db.getStorage();
-	db.close();
+	auto storage = openLegacyStorage();
+	storage->close();
 	EXPECT_THROW(storage->save(), std::runtime_error);
 }
 
 TEST_F(FileStorageOpenModeTest, SaveNoUnsavedChanges_ReturnsEarly) {
-	Database db(testFilePath.string());
-	db.open();
-	auto storage = db.getStorage();
+	auto storage = openLegacyStorage();
 	EXPECT_NO_THROW(storage->save());
-	db.close();
+	storage->close();
 }
 
 TEST_F(FileStorageOpenModeTest, FlushConcurrency_SecondFlushReturnsEarly) {
-	Database db(testFilePath.string());
-	db.open();
-	auto storage = db.getStorage();
+	auto storage = openLegacyStorage();
 	auto dm = storage->getDataManager();
 
 	Node n(0, 0);
@@ -89,13 +86,11 @@ TEST_F(FileStorageOpenModeTest, FlushConcurrency_SecondFlushReturnsEarly) {
 	t1.join();
 	t2.join();
 
-	db.close();
+	storage->close();
 }
 
 TEST_F(FileStorageOpenModeTest, FlushWithDeleteAndCompaction) {
-	Database db(testFilePath.string());
-	db.open();
-	auto storage = db.getStorage();
+	auto storage = openLegacyStorage();
 	auto dm = storage->getDataManager();
 
 	for (int i = 0; i < 10; ++i) {
@@ -112,13 +107,11 @@ TEST_F(FileStorageOpenModeTest, FlushWithDeleteAndCompaction) {
 	Node loaded = dm->getNode(1);
 	EXPECT_FALSE(loaded.isActive());
 
-	db.close();
+	storage->close();
 }
 
 TEST_F(FileStorageOpenModeTest, CompactionDisabledSkipsCompaction) {
-	Database db(testFilePath.string());
-	db.open();
-	auto storage = db.getStorage();
+	auto storage = openLegacyStorage();
 	auto dm = storage->getDataManager();
 
 	storage->setCompactionEnabled(false);
@@ -130,5 +123,5 @@ TEST_F(FileStorageOpenModeTest, CompactionDisabledSkipsCompaction) {
 	dm->deleteNode(n);
 	storage->flush();
 
-	db.close();
+	storage->close();
 }

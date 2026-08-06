@@ -25,7 +25,8 @@
 #include <memory>
 
 #include "graph/config/SystemConfigManager.hpp"
-#include "graph/core/Database.hpp"
+#include "graph/query/api/QueryEngine.hpp"
+#include "graph/storage/FileStorage.hpp"
 #include "graph/storage/state/SystemStateKeys.hpp"
 #include "graph/storage/state/SystemStateManager.hpp"
 
@@ -40,16 +41,20 @@ protected:
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath = fs::temp_directory_path() / ("test_slowlog_" + to_string(uuid) + ".dat");
 
-		database = std::make_unique<Database>(testFilePath.string());
-		database->open();
+		fileStorage = std::make_shared<storage::FileStorage>(
+				testFilePath.string(), 10'000U, storage::OpenMode::OPEN_CREATE_NEW_FILE);
+		fileStorage->open();
 
-		stateManager = std::make_shared<SystemStateManager>(database->getStorage()->getDataManager());
-		configManager = std::make_shared<SystemConfigManager>(stateManager, database->getStorage());
+		stateManager = std::make_shared<SystemStateManager>(fileStorage->getDataManager());
+		configManager = std::make_shared<SystemConfigManager>(stateManager, fileStorage);
+		fileStorage->getDataManager()->registerObserver(configManager);
 	}
 
 	void TearDown() override {
-		database->close();
-		database.reset();
+		if (fileStorage) {
+			fileStorage->close();
+		}
+		fileStorage.reset();
 		std::error_code ec;
 		if (fs::exists(testFilePath)) {
 			fs::remove(testFilePath, ec);
@@ -57,7 +62,7 @@ protected:
 	}
 
 	fs::path testFilePath;
-	std::unique_ptr<Database> database;
+	std::shared_ptr<storage::FileStorage> fileStorage;
 	std::shared_ptr<SystemStateManager> stateManager;
 	std::shared_ptr<SystemConfigManager> configManager;
 };
@@ -105,15 +110,13 @@ TEST_F(SlowQueryLogTest, LargeThreshold) {
 	EXPECT_EQ(configManager->getSlowLogThresholdMs(), 60000);
 }
 
-// Test 8: Slow log config accessible via Database::getConfigManager
-TEST_F(SlowQueryLogTest, AccessibleViaDatabase) {
+// Test 8: Slow log config remains readable after updates through the storage observer.
+TEST_F(SlowQueryLogTest, AccessibleViaStorageObserver) {
 	stateManager->set<bool>(keys::SYS_CONFIG, keys::Config::SLOW_LOG_ENABLED, true);
 	stateManager->set<int64_t>(keys::SYS_CONFIG, keys::Config::SLOW_LOG_THRESHOLD_MS, 200);
 
-	auto cm = database->getConfigManager();
-	ASSERT_NE(cm, nullptr);
-	EXPECT_TRUE(cm->isSlowLogEnabled());
-	EXPECT_EQ(cm->getSlowLogThresholdMs(), 200);
+	EXPECT_TRUE(configManager->isSlowLogEnabled());
+	EXPECT_EQ(configManager->getSlowLogThresholdMs(), 200);
 }
 
 // Test 9: Stats enabled by default
@@ -132,26 +135,27 @@ TEST_F(SlowQueryLogTest, PersistenceThroughRestart) {
 	stateManager->set<bool>(keys::SYS_CONFIG, keys::Config::SLOW_LOG_ENABLED, true);
 	stateManager->set<int64_t>(keys::SYS_CONFIG, keys::Config::SLOW_LOG_THRESHOLD_MS, 250);
 
-	database->getStorage()->flush();
-	database->close();
+	fileStorage->flush();
+	fileStorage->close();
 
-	auto newDatabase = std::make_unique<Database>(testFilePath.string());
-	newDatabase->open();
+	auto reopened = std::make_shared<storage::FileStorage>(
+			testFilePath.string(), 10'000U, storage::OpenMode::OPEN_EXISTING_FILE);
+	reopened->open();
 
-	auto newStateManager = std::make_shared<SystemStateManager>(newDatabase->getStorage()->getDataManager());
-	auto newConfigManager = std::make_shared<SystemConfigManager>(newStateManager, newDatabase->getStorage());
+	auto newStateManager = std::make_shared<SystemStateManager>(reopened->getDataManager());
+	auto newConfigManager = std::make_shared<SystemConfigManager>(newStateManager, reopened);
 
 	EXPECT_TRUE(newConfigManager->isSlowLogEnabled());
 	EXPECT_EQ(newConfigManager->getSlowLogThresholdMs(), 250);
 
-	newDatabase->close();
+	reopened->close();
 }
 
 // Test 12: Slow log config via CALL dbms.setConfig Cypher
 TEST_F(SlowQueryLogTest, SetConfigViaCypher) {
-	auto qe = database->getQueryEngine();
+	query::QueryEngine qe(fileStorage);
 
-	auto result = qe->execute("CALL dbms.setConfig('query.slow_log.enabled', true)");
+	auto result = qe.execute("CALL dbms.setConfig('query.slow_log.enabled', true)");
 	EXPECT_FALSE(result.isEmpty());
 
 	EXPECT_TRUE(configManager->isSlowLogEnabled());

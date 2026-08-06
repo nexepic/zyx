@@ -20,30 +20,63 @@
 
 #pragma once
 
+#include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
-#include "QueryBuilder.hpp"
+#include <unordered_map>
 #include "QueryResult.hpp"
 #include "graph/concurrent/ThreadPool.hpp"
-#include "graph/config/SystemConfigManager.hpp"
 #include "graph/query/QueryContext.hpp"
 #include "graph/query/QueryPlan.hpp"
 #include "graph/query/cache/PlanCache.hpp"
-#include "graph/query/execution/QueryExecutor.hpp"
-#include "graph/storage/FileStorage.hpp"
+#include "graph/query/execution/LogicalPlanMutationRuntime.hpp"
+#include "graph/query/execution/LogicalPlanProcedureRuntime.hpp"
+#include "graph/query/execution/LogicalPlanReadRuntime.hpp"
+#include "graph/query/execution/LogicalPlanSchemaRuntime.hpp"
+#include "graph/storage/LogicalGraphRead.hpp"
+#include "graph/storage/LogicalGraphSchema.hpp"
+#include "graph/storage/LogicalGraphWrite.hpp"
 #include "query/parser/common/IQueryParser.hpp"
-
-namespace graph::storage::constraints {
-	class ConstraintManager;
-}
 
 namespace graph::query {
 
 	enum class Language { Cypher };
 
+	// Bounded defaults for the first production read-only logical backend path.
+	// Callers that need different operational limits can supply explicit values.
+	struct LogicalReadExecutionOptions {
+		execution::LogicalPlanReadRuntimeBounds bounds{
+				.maximum_node_records = 1'000'000U,
+				.maximum_node_page_records = 1'024U,
+				.maximum_metadata_pages_per_node_page = 4'096U,
+				.maximum_edges_per_node = 100'000U,
+				.maximum_adjacency_page_records = 1'024U,
+				.maximum_property_entries = 10'000U,
+				.maximum_rows = 1'000'000U,
+				.maximum_distinct_rows = 100'000U,
+		};
+		size_t maximum_vector_mapping_entries = 100'000U;
+		size_t maximum_raw_vector_reads = 100'000U;
+		size_t vector_candidate_search_budget = 1'024U;
+		size_t vector_candidate_refinement_budget = 256U;
+		// Training is an explicit write-side maintenance operation. Its independent
+		// bounds prevent one CALL from turning a large graph into unbounded RAM or
+		// derived-page allocation work.
+		size_t maximum_vector_training_records = 100'000U;
+		size_t maximum_vector_training_pages = 4'096U;
+		// Empty means disabled. Database wires a canonical database-directory
+		// root; embedders can instead provide a narrower dedicated import root.
+		std::optional<std::filesystem::path> csv_import_root;
+	};
+
 	class QueryEngine {
 	public:
-		explicit QueryEngine(std::shared_ptr<storage::FileStorage> storage);
+		explicit QueryEngine(std::shared_ptr<storage::LogicalGraphReadBackend> logicalBackend,
+							 LogicalReadExecutionOptions options = {});
+		QueryEngine(std::shared_ptr<storage::LogicalGraphReadBackend> logicalReadBackend,
+					std::shared_ptr<storage::LogicalGraphWriteBackend> logicalWriteBackend,
+					LogicalReadExecutionOptions options = {});
 		~QueryEngine();
 
 		// --- Main Execution ---
@@ -62,41 +95,30 @@ namespace graph::query {
 		 * @throws std::runtime_error if the plan violates the execution mode.
 		 */
 		QueryResult executePlan(QueryPlan plan, const QueryContext &ctx);
-
-		/**
-		 * @brief Executes a pre-built physical plan directly.
-		 *        Useful for internal API calls or optimized paths bypassing the parser.
-		 */
-		[[nodiscard]] QueryResult execute(std::unique_ptr<execution::PhysicalOperator> plan) const;
-
-		// Returns a builder to construct queries programmatically
-		[[nodiscard]] QueryBuilder query() const { return QueryBuilder(queryPlanner_); }
-
-		[[nodiscard]] std::shared_ptr<indexes::IndexManager> getIndexManager() const { return indexManager_; }
-		[[nodiscard]] std::shared_ptr<storage::constraints::ConstraintManager> getConstraintManager() const { return constraintManager_; }
-
+		// Executes through one caller-owned logical transaction overlay. Reads see
+		// its staged final state and writes remain unpublished until that owner
+		// commits, rather than opening an independent auto-commit snapshot.
+		QueryResult executePlanWithLogicalTransactionOverlay(QueryPlan plan, const QueryContext &ctx,
+															 storage::LogicalGraphReadBackend &readBackend,
+															 storage::LogicalGraphWriteBackend &writeBackend);
 		void setThreadPool(concurrent::ThreadPool *pool) { threadPool_ = pool; }
-		void setConfigManager(config::SystemConfigManager *cfg) { configManager_ = cfg; }
 
 		[[nodiscard]] cache::PlanCache &getPlanCache() { return planCache_; }
 		[[nodiscard]] const cache::PlanCache &getPlanCache() const { return planCache_; }
 
 	private:
-		std::shared_ptr<storage::FileStorage> storage_;
-		std::shared_ptr<indexes::IndexManager> indexManager_;
-		std::shared_ptr<storage::constraints::ConstraintManager> constraintManager_;
-		std::shared_ptr<QueryPlanner> queryPlanner_; // Shared so Builder can use it
-		std::unique_ptr<QueryExecutor> queryExecutor_;
-
+		std::shared_ptr<storage::LogicalGraphReadBackend> logicalBackend_;
+		std::shared_ptr<storage::LogicalGraphWriteBackend> logicalWriteBackend_;
+		std::shared_ptr<storage::LogicalGraphSchemaBackend> logicalSchemaBackend_;
+		std::shared_ptr<storage::LogicalGraphVectorSearchBackend> logicalVectorSearchBackend_;
+		std::shared_ptr<storage::LogicalGraphVectorMaintenanceBackend> logicalVectorMaintenanceBackend_;
+		LogicalReadExecutionOptions logicalReadOptions_;
 		std::unordered_map<Language, std::shared_ptr<parser::IQueryParser>> parsers_;
 		concurrent::ThreadPool *threadPool_ = nullptr;
-		config::SystemConfigManager *configManager_ = nullptr;
 		cache::PlanCache planCache_;
 
 		std::shared_ptr<parser::IQueryParser> getParser(Language lang);
 
-		static void propagateThreadPool(execution::PhysicalOperator *op, concurrent::ThreadPool *pool);
-		static void propagateQueryContext(execution::PhysicalOperator *op, const QueryContext *ctx);
 	};
 
 } // namespace graph::query

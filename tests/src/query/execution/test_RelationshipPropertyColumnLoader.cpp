@@ -11,7 +11,7 @@
 #include <vector>
 
 #include "graph/concurrent/ThreadPool.hpp"
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/execution/RelationshipMetadataColumnLoader.hpp"
 #include "graph/query/execution/RelationshipPropertyColumnLoader.hpp"
@@ -189,9 +189,9 @@ protected:
 		if (fs::exists(testDbPath)) {
 			fs::remove_all(testDbPath);
 		}
-		db = std::make_unique<Database>(testDbPath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testDbPath.string());
 		db->open();
-		dm = db->getStorage()->getDataManager();
+		dm = db->storage()->getDataManager();
 		userLabel = dm->getOrCreateTokenId("User");
 		followsType = dm->getOrCreateTokenId("FOLLOWS");
 	}
@@ -232,7 +232,7 @@ protected:
 	}
 
 	fs::path testDbPath;
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<storage::DataManager> dm;
 	int64_t userLabel = 0;
 	int64_t followsType = 0;
@@ -258,7 +258,7 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, ExternalPropertyEntityValues
 TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataBatchExternalPropertiesPopulateRequestedColumns) {
 	Edge stored = addFollowsWithProperties({{"weight", PropertyValue(int64_t{5})}, {"kind", PropertyValue("fast")}});
 	ASSERT_TRUE(stored.hasPropertyEntity());
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	RelationshipMetadataColumnLoader metadataLoader(dm);
@@ -285,7 +285,7 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataBatchHandlesSelectio
 			addFollowsWithProperties({{"payload", PropertyValue(largeValue)}, {"weight", PropertyValue(int64_t{9})}});
 	Edge unselected = addFollowsWithProperties({{"weight", PropertyValue(int64_t{11})}});
 	(void) unselected;
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	RelationshipMetadataColumnLoader metadataLoader(dm);
@@ -336,7 +336,7 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataCandidateScanKeepsOn
 	ASSERT_EQ(propertyBacked.getPropertyStorageType(), PropertyStorageType::PROPERTY_ENTITY);
 	ASSERT_EQ(blobBacked.getPropertyStorageType(), PropertyStorageType::BLOB_ENTITY);
 	ASSERT_EQ(withoutProperties.getPropertyStorageType(), PropertyStorageType::NONE);
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	RelationshipMetadataColumnLoader loader(dm);
@@ -411,7 +411,7 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderRejectsUnsafeO
 
 	RelationshipMetadataColumnLoader loader(dm);
 	EXPECT_FALSE(loader.loadRange(1, 128).has_value());
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	EXPECT_FALSE(loader.loadRange(0, 128).has_value());
@@ -436,7 +436,7 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderStopsWhenSegme
 		Edge edge(0, source, target, followsType);
 		dm->addEdge(edge);
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	auto patchedIndex = dm->getSegmentIndexManager()->getEdgeSegmentIndex();
@@ -457,7 +457,7 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderRejectsReadOnl
 	for (int i = 0; i < 127; ++i) {
 		addFollowsWithoutProperties();
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	RelationshipMetadataColumnLoader loader(dm);
@@ -478,7 +478,7 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderRejectsReadOnl
 	for (int i = 0; i < 128; ++i) {
 		addFollowsWithoutProperties();
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	RelationshipMetadataColumnLoader loader(dm);
@@ -513,7 +513,7 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderCountsAndLoads
 	}
 	Edge other(0, source, target, dm->getOrCreateTokenId("LIKES"));
 	dm->addEdge(other);
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	RelationshipMetadataColumnLoader loader(dm);
@@ -559,7 +559,7 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderCountsAndColle
 			dm->deleteEdge(edge);
 		}
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	graph::concurrent::ThreadPool pool(4);
@@ -604,7 +604,7 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderSkipsEmptyOrNo
 		Edge edge(0, source, target, followsType);
 		dm->addEdge(edge);
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	const auto originalIndex = dm->getSegmentIndexManager()->getEdgeSegmentIndex();
@@ -641,7 +641,7 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, RelationshipTypeSegmentStats
 			followsIds.push_back(edge.getId());
 		}
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	EXPECT_FALSE(dm->hasCachedRelationshipSegmentTypeStats());
@@ -700,7 +700,7 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, RelationshipTypeSegmentStats
 	EXPECT_EQ(*unsavedAddCount, 131);
 		auto unsavedAddLoaderCount = metadataLoader.countActiveByType(1, unsaved.getId(), followsType);
 		EXPECT_FALSE(unsavedAddLoaderCount.has_value());
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	ASSERT_FALSE(followsIds.empty());
@@ -711,7 +711,7 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, RelationshipTypeSegmentStats
 	EXPECT_EQ(*unsavedDeleteCount, 129);
 		auto unsavedDeleteLoaderCount = metadataLoader.countActiveByType(1, 260, followsType);
 		EXPECT_FALSE(unsavedDeleteLoaderCount.has_value());
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	auto countAfterInvalidation = dm->countActiveEdgesByTypeFromSegmentStats(1, 260, followsType);
@@ -731,7 +731,7 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, RelationshipTypeSegmentScanC
 		Edge edge(0, source, target, (i % 3 == 0) ? followsType : likesType);
 		dm->addEdge(edge);
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	auto followsFullRange = dm->countActiveEdgesByTypeFromSegmentStats(1, 4096, followsType);
@@ -771,7 +771,7 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderScansPartialSe
 			followsIds.push_back(edge.getId());
 		}
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	RelationshipMetadataColumnLoader loader(dm);
@@ -806,12 +806,12 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataLoaderReadsInactiveR
 		dm->addEdge(edge);
 		edgeIds.push_back(edge.getId());
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	Edge deleted = dm->getEdge(edgeIds[1]);
 	dm->deleteEdge(deleted);
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	RelationshipMetadataColumnLoader loader(dm);
@@ -869,7 +869,7 @@ TEST_F(RelationshipPropertyColumnLoaderStorageTest, MetadataCandidateCountFallba
 	for (int i = 0; i < 130; ++i) {
 		addFollowsWithoutProperties();
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 	ASSERT_EQ(propertyBacked.getId(), 1);
 	ASSERT_EQ(blobBacked.getId(), 2);

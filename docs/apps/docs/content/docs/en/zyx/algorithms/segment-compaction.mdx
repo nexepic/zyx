@@ -1,6 +1,6 @@
 ---
 title: Segment Compaction
-description: Multi-phase compaction that reclaims fragmented space by removing empty segments, defragmenting slots, merging under-utilized segments, and relocating tail segments.
+description: Snapshot-safe relocation and reclamation for the native logical storage format.
 category: Storage
 categoryOrder: 2
 order: 3
@@ -9,133 +9,107 @@ projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
+
 # Segment Compaction
 
-When entities are deleted, their slots are marked inactive but the segment space is not immediately reclaimed. Over time this creates fragmentation. ZYX provides a multi-phase compaction system that reclaims this space when fragmentation exceeds a configurable threshold.
+The native logical storage format reclaims space without changing a Node ID, Edge ID, `SegmentId`, `PageId`, or external property reference. Compaction changes only a directory binding from a stable logical identity to a new physical location. This is fundamentally different from the retired physical segment-chain implementation, which moved records and then rewrote references.
 
-## Architecture
+The old `FileStorage` / `DataManager` compactor is not the compaction mechanism for a native logical database. In particular, no native logical query may enable compaction through `dbms.setConfigValue`, `dbms.setConfig`, or a System State key. Runtime configuration procedures intentionally fail closed until configuration changes can participate in the same metadata WAL publication as graph writes.
 
-Compaction is coordinated by `SpaceManager`, which orchestrates `SegmentCompactor` and `FileTruncator`. The trigger logic lives in `FileStorage::flush()`.
+## Storage Identities
+
+The file allocator owns fixed 128 KiB physical slots. Logical references never persist a raw file offset:
+
+| Object | Stable logical identity | Directory that resolves the current physical location |
+|---|---|---|
+| Fixed Node or Edge segment | `SegmentId` | Catalog and Entity Location Directory |
+| Property or State slotted page | `PageId` plus slot and generation | Page Directory |
+| Scalar or ordinary-adjacency Packed B+Tree page | `PageId` | Page Directory and Index Root Directory |
+| Raw or PQ vector page | `PageId` | Page Directory |
+| Vector manifest | manifest `PageId` | Page Directory and Vector Manifest Directory |
+| Large object or codebook extent | object/extent identity | Extent Directory and Catalog |
 
 ```mermaid
-graph TD
-    FS[FileStorage] -->|flush| SM[SpaceManager]
-    SM --> SC[SegmentCompactor]
-    SM --> FT[FileTruncator]
-    SC --> ST[SegmentTracker]
-    SC --> SA[SegmentAllocator]
-    SC --> ERU[EntityReferenceUpdater]
-    ERU --> DM[DataManager]
+flowchart LR
+    L["Stable logical identity"] --> D["Snapshot-pinned directory root"]
+    D --> C["Catalog entry or location entry"]
+    C --> P["Current physical slot or page frame"]
+    O["Older snapshot"] --> OD["Older directory root"]
+    OD --> OP["Retired physical generation"]
 ```
 
-## Trigger Conditions
+A relocation publishes a new directory generation atomically. Readers that begin after publication resolve the new location; an older reader continues through its pinned directory root and can safely read the former generation. The source cannot be released until every snapshot that can resolve it has drained.
 
-Compaction runs automatically after a flush when **all three** conditions are met:
+## Supported Compaction Operations
 
-1. **Delete flag set** — At least one delete operation occurred since the last check (`deleteOperationPerformed` atomic flag, set by `DeletionManager`)
-2. **Compaction enabled** — The `storage.compaction.enabled` system state key is set to `true` (default: disabled)
-3. **Fragmentation threshold exceeded** — `SpaceManager::shouldCompact()` returns `true` when the weighted average fragmentation ratio across all entity types exceeds 30%
+`RelocatableCompactionCoordinator` provides bounded, typed operations. It never raw-copies a format that requires type-specific reconstruction.
+
+| Data layout | Operation | Stable references after compaction |
+|---|---|---|
+| Property, State, and vector-adjacency slotted pools | Evacuate up to a caller-provided page budget into a compatible destination pool | `PageId`, slot ID, and slot generation |
+| Scalar or ordinary-adjacency Packed B+Tree pool | Rebuild typed pages and switch a root-directory binding when needed | `PageId` and index root identity |
+| Raw and PQ vector pools | Rebuild typed vector pages | vector page identity and vector-location binding |
+| Vector-manifest pool | Rebuild immutable manifests and publish both directory bindings | manifest `PageId` |
+| Fixed Node and Edge segments | Relocate the complete fixed-record segment | Node and Edge IDs; the logical `SegmentId` remains unchanged |
+| Large-object and codebook extents | Rebuild the validated immutable extent at a destination range | object / codebook extent identity |
+
+Property payload defragmentation inside one slotted page is separate from pool evacuation. It may move payload bytes and update only the owning slot-directory offset; the external page/slot reference remains unchanged. A small property update must not trigger a whole-file relocation.
+
+## Bounded Evacuation Protocol
+
+Each operation is intentionally bounded by destination capacity and an explicit LSN range. A caller selects a source, a compatible destination, a page budget for pooled data, and the first LSN to reserve. The coordinator performs the following sequence:
+
+1. Open a metadata snapshot and validate that source and destination are sealed, compatible, current, and backed by allocated physical slots.
+2. Collect and order source pages, then verify that the destination has enough frames for the requested bounded move. If it does not, return `VCS_NO_DESTINATION_CAPACITY` without changing the source.
+3. Revalidate each planned page against a fresh snapshot immediately before its typed evacuation. A stale directory binding fails closed instead of moving an unexpected page.
+4. Prepare the new bytes, make data durable, then publish the Catalog and relevant directory COW roots through the metadata WAL and Superblock publication boundary.
+5. When the source becomes empty, retire it. Reclaim its physical slot only after the snapshot-retention check succeeds.
 
 ```mermaid
 sequenceDiagram
-    participant FS as FileStorage
-    participant SM as SpaceManager
+    participant S as Scheduler or host
+    participant M as Metadata store
+    participant P as Typed page or extent store
+    participant A as Physical allocator
 
-    FS->>FS: flush() — save dirty data
-    FS->>FS: Check deleteOperationPerformed
-    FS->>FS: Check compactionEnabled
-    FS->>SM: shouldCompact()
-    SM->>SM: getTotalFragmentationRatio()
-    SM-->>FS: ratio > 0.3
-    FS->>SM: safeCompactSegments()
-    SM->>SM: try_lock compactionMutex
-    SM->>SM: compactSegments()
-    SM-->>FS: success
-    FS->>FS: Post-compaction cleanup
+    S->>M: Open planning snapshot
+    S->>M: Validate source, destination, and capacity
+    S->>P: Prepare typed replacement
+    P->>A: Make destination bytes durable
+    A->>M: Publish Catalog and directory COW roots through WAL
+    M-->>S: New generation visible
+    S->>M: Retire empty source
+    M-->>S: Release source only after snapshots drain
 ```
 
-`safeCompactSegments()` uses `try_lock` on a dedicated mutex. If another compaction is already in progress, the call returns `false` immediately without blocking.
+The result distinguishes normal completion, unavailable destination capacity, and `VCS_SOURCE_RETIRED_AWAITING_SNAPSHOTS`. The latter is not an error: a later maintenance run retries source release using the same segment generation after the last old snapshot closes.
 
-## Compaction Phases
+## Reference, Cache, and Recovery Guarantees
 
-`SpaceManager::compactSegments()` executes five phases in order:
+Compaction does not change logical graph references. Node and Edge IDs do not need graph-wide repair after a fixed-segment move, and a page relocation does not require rewriting property, adjacency, B+Tree, or vector references that use the stable directory identity.
 
-### Phase 1: Empty Segment Removal
+Caches must key their validity on the logical identity and resolved generation, not a raw file offset. Publication makes a new mapping visible only to new snapshots; an old snapshot keeps the former mapping and its physical generation pinned. This prevents a cache or reader from observing a directory entry that points to bytes not yet durable.
 
-```cpp
-compactor_->processAllEmptySegments();
-```
+Durability follows the same ordering as normal native writes:
 
-Scans every entity type's segment chain and removes segments that contain zero active slots. The segment is unlinked from its chain and the file header is updated.
+1. validate the type-specific source and destination;
+2. write and synchronize complete destination bytes;
+3. persist the WAL metadata publication;
+4. publish the Superblock root;
+5. make the old source reclaimable only after snapshot retention permits it.
 
-### Phase 2: Intra-Segment Defragmentation
+An interruption before a durable metadata publication leaves prepared destination bytes unreachable. An interruption after the WAL publication is recovered as the complete directory generation. Recovery never exposes a half-moved logical object.
 
-```cpp
-compactor_->compactSegments(type, threshold);
-```
+## Scheduling and Capacity Policy
 
-For each entity type, walks the segment chain and defragments segments whose fragmentation exceeds the threshold. Active slots are packed toward the beginning of the segment, eliminating gaps left by deleted entities. When an entity's slot position changes within the segment, `EntityReferenceUpdater` updates all references pointing to the old entity ID.
+The native coordinator deliberately does not run an unbounded automatic "compact after every flush" policy. A host scheduler must supply the work budget, choose compatible destinations, reserve LSN capacity, and observe snapshot pressure. This keeps tail latency predictable and makes a no-capacity condition non-destructive.
 
-### Phase 3: Inter-Segment Merge
+The following policy is safe for a future scheduler:
 
-```cpp
-compactor_->mergeSegments(type, threshold);
-```
+- evacuate a bounded number of pages or one whole fixed segment per maintenance slice;
+- prefer pools with the largest reclaimable physical capacity, subject to destination-frame availability;
+- retry retired-source release after snapshot pins drain;
+- perform file-tail truncation only after Catalog and free-space metadata no longer reference tail slots;
+- measure reclaimed bytes, source-retention time, directory publication latency, and read/write tail latency before increasing a budget.
 
-Finds pairs of under-utilized segments (below the usage threshold) and merges them. `findCandidatesForMerge()` identifies candidates, then `mergeIntoSegment()` copies active slots from the source segment into the target segment. The source segment is removed from the chain after a successful merge.
-
-### Phase 4: Tail Relocation
-
-```cpp
-compactor_->relocateSegmentsFromEnd();
-```
-
-Moves segments from the end of the file into free slots earlier in the file. This allows `FileTruncator` to shrink the file afterward. `moveSegment()` copies the segment data and updates the chain pointers via `updateSegmentChain()`.
-
-### Phase 5: Max ID Recalculation
-
-```cpp
-compactor_->recalculateMaxIds();
-```
-
-After entities have been moved and merged, the maximum allocated ID for each entity type may have changed. This phase scans each chain's last segment to recompute the correct max ID, ensuring that `IDAllocator` assigns new IDs correctly.
-
-## Entity Reference Updates
-
-When compaction moves an entity to a new slot (changing its ID), all references to the old ID must be updated. `EntityReferenceUpdater` handles this per entity type:
-
-| Entity Type | References Updated |
-|-------------|-------------------|
-| Node | Properties pointing to the node, edges connected to the node |
-| Edge | Properties pointing to the edge, source/target node adjacency lists |
-| Property | Parent entity's property pointer |
-| Blob | Blob chain links (next/prev pointers) |
-| Index | Parent/child/sibling pointers in the B+Tree |
-| State | State chain next/prev pointers |
-
-The updater operates through `DataManager` to ensure consistency with the caching and transaction layers.
-
-## Configuration
-
-Compaction is controlled by the `storage.compaction.enabled` system state key:
-
-```cypher
-// Enable compaction
-CALL dbms.setConfigValue('storage.compaction.enabled', true)
-
-// Disable compaction (default)
-CALL dbms.setConfigValue('storage.compaction.enabled', false)
-```
-
-The key is defined in `SystemStateKeys.hpp` as `Config::STORAGE_COMPACTION_ENABLED`. The `compactionEnabled_` atomic flag in `FileStorage` reflects this value at runtime.
-
-Compaction is disabled by default because it involves entity ID reassignment, which can be expensive on large databases. Enable it for workloads with frequent deletions where disk space reclamation is important.
-
-## Post-Compaction Cleanup
-
-After a successful compaction, `FileStorage` performs these cleanup steps:
-
-1. **Clear cache** — `DataManager::clearCache()` invalidates all cached entities since IDs may have changed
-2. **Reset ID allocators** — Each `IDAllocator::resetAfterCompaction()` clears hot/cold vectors so they lazy-load from the new segment state
-3. **Rebuild segment indexes** — `SegmentIndexManager::buildSegmentIndexes()` reconstructs the entity-ID-to-segment mapping
-4. **Persist headers** — Segment headers are re-persisted, CRCs are recalculated, and the file header is flushed
+There is currently no public Cypher command for native logical compaction. Applications should not depend on legacy configuration procedures or on physical file offsets. Maintenance integration belongs at the native storage-host boundary so it can use the same snapshot, WAL, and publication guarantees described here.

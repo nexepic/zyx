@@ -4,14 +4,13 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
 
-#include "graph/core/Database.hpp"
 #include "graph/query/expressions/Expression.hpp"
 #include "graph/query/logical/operators/LogicalAggregate.hpp"
 #include "graph/query/logical/operators/LogicalNodeScan.hpp"
 #include "graph/query/planner/NodeAggregateScanPlanner.hpp"
 #include "graph/query/planner/PhysicalPlanConverter.hpp"
-#include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 
 using namespace graph;
 using namespace graph::query;
@@ -247,9 +246,11 @@ TEST(NodeAggregateScanPlannerTest, DistinctPropertyCountAddsResidualPredicates) 
 TEST(NodeAggregateScanPlannerTest, DistinctPropertyCountUsesAvailableIndexes) {
 	auto uuid = boost::uuids::random_generator()();
 	auto path = fs::temp_directory_path() / ("test_distinct_count_planner_" + boost::uuids::to_string(uuid) + ".dat");
-	auto db = std::make_unique<Database>(path.string());
-	db->open();
-	auto indexManager = db->getQueryEngine()->getIndexManager();
+	storage::testing::LegacyPhysicalStorageTestHarness database(
+			path.string(), storage::OpenMode::OPEN_CREATE_NEW_FILE);
+	database.open();
+	auto indexManager = database.indexManager();
+	ASSERT_NE(indexManager, nullptr);
 	ASSERT_TRUE(indexManager->createIndex("idx_country_distinct", "node", "Person", "country"));
 	ASSERT_TRUE(indexManager->createIndex("idx_age_distinct", "node", "Person", "age"));
 	ASSERT_TRUE(indexManager->createCompositeIndex("idx_country_age_distinct", "node", "Person", {"country", "age"}));
@@ -304,8 +305,7 @@ TEST(NodeAggregateScanPlannerTest, DistinctPropertyCountUsesAvailableIndexes) {
 	ASSERT_TRUE(labelPlan.has_value());
 	EXPECT_EQ(labelPlan->config.type, execution::ScanType::LABEL_SCAN);
 
-	db->close();
-	db.reset();
+	database.close();
 	std::error_code ec;
 	fs::remove(path, ec);
 }
@@ -710,9 +710,11 @@ TEST(NodeAggregateScanPlannerTest, PreferredCandidateSourcesWithoutPredicatesFal
 TEST(NodeAggregateScanPlannerTest, ChoosesIndexedPropertyRangeCompositeAndLabelCandidateSources) {
 	const auto dbPath = fs::temp_directory_path() /
 	                    ("test_node_count_planner_indexes_" + boost::uuids::to_string(boost::uuids::random_generator()()) + ".zyx");
-	Database db(dbPath.string());
-	db.open();
-	auto indexManager = db.getQueryEngine()->getIndexManager();
+	storage::testing::LegacyPhysicalStorageTestHarness database(
+			dbPath.string(), storage::OpenMode::OPEN_CREATE_NEW_FILE);
+	database.open();
+	auto indexManager = database.indexManager();
+	ASSERT_NE(indexManager, nullptr);
 	ASSERT_TRUE(indexManager->createIndex("idx_person_age", "node", "Person", "age"));
 	ASSERT_TRUE(indexManager->createCompositeIndex("idx_person_country_age", "node", "Person", {"country", "age"}));
 	ASSERT_TRUE(indexManager->createIndex("idx_person_label", "node", "Person", ""));
@@ -747,7 +749,7 @@ TEST(NodeAggregateScanPlannerTest, ChoosesIndexedPropertyRangeCompositeAndLabelC
 	ASSERT_TRUE(labelPlan.has_value());
 	EXPECT_EQ(labelPlan->config.type, execution::ScanType::LABEL_SCAN);
 
-	db.close();
+	database.close();
 	std::error_code ec;
 	fs::remove_all(dbPath, ec);
 }
@@ -869,9 +871,11 @@ TEST(NodeAggregateScanPlannerTest, GroupCountRejectsMalformedFilterPredicates) {
 TEST(NodeAggregateScanPlannerTest, GroupCountChoosesAvailableIndexesAndAbsorbsHandledPredicates) {
 	const auto dbPath = fs::temp_directory_path() /
 	                    ("test_group_count_planner_indexes_" + boost::uuids::to_string(boost::uuids::random_generator()()) + ".zyx");
-	Database db(dbPath.string());
-	db.open();
-	auto indexManager = db.getQueryEngine()->getIndexManager();
+	storage::testing::LegacyPhysicalStorageTestHarness database(
+			dbPath.string(), storage::OpenMode::OPEN_CREATE_NEW_FILE);
+	database.open();
+	auto indexManager = database.indexManager();
+	ASSERT_NE(indexManager, nullptr);
 	ASSERT_TRUE(indexManager->createIndex("idx_group_status", "node", "User", "status"));
 	ASSERT_TRUE(indexManager->createIndex("idx_group_age", "node", "User", "age"));
 	ASSERT_TRUE(indexManager->createCompositeIndex("idx_group_status_age", "node", "User", {"status", "age"}));
@@ -903,7 +907,7 @@ TEST(NodeAggregateScanPlannerTest, GroupCountChoosesAvailableIndexesAndAbsorbsHa
 	EXPECT_EQ(compositePlan->config.type, execution::ScanType::COMPOSITE_SCAN);
 	EXPECT_TRUE(compositePlan->predicates.empty());
 
-	db.close();
+	database.close();
 	std::error_code ec;
 	fs::remove_all(dbPath, ec);
 }

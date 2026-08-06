@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/storage/constraints/ConstraintManager.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 
@@ -22,7 +22,7 @@ using namespace graph::storage::constraints;
 
 class ConstraintManagerValidationTest : public ::testing::Test {
 protected:
-	std::unique_ptr<graph::Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<ConstraintManager> manager;
 	std::shared_ptr<graph::query::indexes::IndexManager> indexManager;
 	fs::path dbPath;
@@ -32,10 +32,10 @@ protected:
 		dbPath = fs::temp_directory_path() / ("test_constraint_mgr_" + boost::uuids::to_string(uuid) + ".dat");
 		if (fs::exists(dbPath)) fs::remove(dbPath);
 
-		db = std::make_unique<graph::Database>(dbPath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(dbPath.string());
 		db->open();
-		indexManager = db->getQueryEngine()->getIndexManager();
-		manager = std::make_shared<ConstraintManager>(db->getStorage(), indexManager);
+		indexManager = db->indexManager();
+		manager = std::make_shared<ConstraintManager>(db->storage(), indexManager);
 		manager->initialize();
 	}
 

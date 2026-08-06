@@ -549,6 +549,8 @@ TEST_F(SegmentCompactorTest, MoveSegment_UpdatesChainLinks) {
 
 	// Deallocate seg1 to create a free slot, then move seg2 to seg1's position
 	segmentAllocator->deallocateSegment(seg1);
+	const auto relocationBytesBefore =
+			segmentTracker->getStorageMetrics().by_type.at(Node::typeId).writes.relocation_write_bytes;
 
 	bool moved = compactor->moveSegment(seg2, seg1);
 	EXPECT_TRUE(moved);
@@ -557,6 +559,8 @@ TEST_F(SegmentCompactorTest, MoveSegment_UpdatesChainLinks) {
 	SegmentHeader movedHeader = segmentTracker->getSegmentHeader(seg1);
 	EXPECT_EQ(movedHeader.data_type, type);
 	EXPECT_GE(movedHeader.used, 1u);
+	EXPECT_EQ(segmentTracker->getStorageMetrics().by_type.at(Node::typeId).writes.relocation_write_bytes,
+			  relocationBytesBefore + TOTAL_SEGMENT_SIZE);
 }
 
 // =========================================================================

@@ -23,16 +23,6 @@
 #include <memory>
 #include <string>
 
-namespace graph::query {
-
-// Forward declarations
-class QueryPlanner;
-namespace execution {
-class PhysicalOperator;
-}
-
-} // namespace graph::query
-
 namespace graph::query::logical {
 class LogicalOperator;
 }
@@ -47,20 +37,20 @@ namespace graph::query {
  * eliminating code duplication and ensuring uniform error messages.
  *
  * **Validation Modes:**
- * - ALLOW_EMPTY: Automatically injects singleRowOp if pipeline is empty
+ * - ALLOW_EMPTY: Automatically injects LogicalSingleRow if pipeline is empty
  * - REQUIRE_PRECEDING: Throws error if pipeline is empty (requires preceding clause)
  *
  * **Usage:**
  * @code
  * // ALLOW_EMPTY mode (for RETURN, UNWIND)
- * rootOp = PipelineValidator::ensureValidPipeline(
- *     std::move(rootOp), planner, "RETURN",
+ * rootOp = PipelineValidator::ensureValidLogicalPipeline(
+ *     std::move(rootOp), "RETURN",
  *     PipelineValidator::ValidationMode::ALLOW_EMPTY
  * );
  *
  * // REQUIRE_PRECEDING mode (for SET, DELETE, WITH)
- * rootOp = PipelineValidator::ensureValidPipeline(
- *     std::move(rootOp), planner, "SET",
+ * rootOp = PipelineValidator::ensureValidLogicalPipeline(
+ *     std::move(rootOp), "SET",
  *     PipelineValidator::ValidationMode::REQUIRE_PRECEDING
  * );
  * @endcode
@@ -73,7 +63,7 @@ public:
 	enum class ValidationMode {
 		/**
 		 * Allow empty pipeline.
-		 * If rootOp is null, automatically injects singleRowOp.
+		 * If rootOp is null, automatically injects LogicalSingleRow.
 		 * Used by: RETURN, UNWIND
 		 */
 		ALLOW_EMPTY,
@@ -85,22 +75,6 @@ public:
 		 */
 		REQUIRE_PRECEDING
 	};
-
-	/**
-	 * @brief Ensure physical pipeline is valid according to the specified mode.
-	 *
-	 * @param rootOp The current pipeline root (may be null)
-	 * @param planner The query planner (for singleRowOp injection)
-	 * @param clauseName The name of the clause (for error messages)
-	 * @param mode The validation mode to apply
-	 * @return Validated (possibly injected) pipeline root
-	 * @throws std::runtime_error if validation fails in REQUIRE_PRECEDING mode
-	 */
-	[[nodiscard]] static std::unique_ptr<execution::PhysicalOperator> ensureValidPipeline(
-	    std::unique_ptr<execution::PhysicalOperator> rootOp,
-	    const std::shared_ptr<QueryPlanner> &planner,
-	    const std::string &clauseName,
-	    ValidationMode mode = ValidationMode::REQUIRE_PRECEDING);
 
 	/**
 	 * @brief Ensure logical pipeline is valid according to the specified mode.

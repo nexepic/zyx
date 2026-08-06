@@ -6,7 +6,7 @@
 #include <utility>
 #include <vector>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/query/expressions/Expression.hpp"
 #include "graph/query/logical/operators/LogicalLimit.hpp"
 #include "graph/query/logical/operators/LogicalNodeScan.hpp"
@@ -116,9 +116,9 @@ TEST(NodeTopKScanPlannerTest, RejectsUnsupportedShapes) {
 TEST(NodeTopKScanPlannerTest, AddsResidualPredicatesAndUsesIndexes) {
 	auto uuid = boost::uuids::random_generator()();
 	auto path = fs::temp_directory_path() / ("test_topk_planner_" + boost::uuids::to_string(uuid) + ".dat");
-	auto db = std::make_unique<Database>(path.string());
+	auto db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(path.string());
 	db->open();
-	auto indexManager = db->getQueryEngine()->getIndexManager();
+	auto indexManager = db->indexManager();
 	ASSERT_TRUE(indexManager->createIndex("idx_country_topk", "node", "User", "country"));
 
 	std::vector<std::pair<std::string, PropertyValue>> predicates = {{"country", PropertyValue("CN")}};
@@ -147,10 +147,10 @@ TEST(NodeTopKScanPlannerTest, AddsResidualPredicatesAndUsesIndexes) {
 TEST(NodeTopKScanPlannerTest, PhysicalPlanConverterUsesTopKScanPath) {
 	auto uuid = boost::uuids::random_generator()();
 	auto path = fs::temp_directory_path() / ("test_topk_converter_" + boost::uuids::to_string(uuid) + ".dat");
-	auto db = std::make_unique<Database>(path.string());
+	auto db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(path.string());
 	db->open();
-	auto dm = db->getStorage()->getDataManager();
-	auto im = db->getQueryEngine()->getIndexManager();
+	auto dm = db->storage()->getDataManager();
+	auto im = db->indexManager();
 
 	PhysicalPlanConverter converter(dm, im);
 	auto logical = makeTopKProject();
@@ -222,9 +222,9 @@ TEST(NodeTopKScanPlannerTest, RejectsAdditionalUnsupportedShapes) {
 TEST(NodeTopKScanPlannerTest, BuildsRangeAndCompositeIndexPlans) {
 	auto uuid = boost::uuids::random_generator()();
 	auto path = fs::temp_directory_path() / ("test_topk_index_shapes_" + boost::uuids::to_string(uuid) + ".dat");
-	auto db = std::make_unique<Database>(path.string());
+	auto db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(path.string());
 	db->open();
-	auto indexManager = db->getQueryEngine()->getIndexManager();
+	auto indexManager = db->indexManager();
 	ASSERT_TRUE(indexManager->createIndex("idx_age_topk", "node", "User", "age"));
 	ASSERT_TRUE(indexManager->createCompositeIndex("idx_country_age_topk", "node", "User", {"country", "age"}));
 
@@ -419,9 +419,9 @@ TEST(NodeTopKScanPlannerTest, HandlesOpenRangeFallbackAndUpperInclusivePredicate
 TEST(NodeTopKScanPlannerTest, HandlesIndexSelectionFallbackBranches) {
 	auto uuid = boost::uuids::random_generator()();
 	auto path = fs::temp_directory_path() / ("test_topk_fallback_shapes_" + boost::uuids::to_string(uuid) + ".dat");
-	auto db = std::make_unique<Database>(path.string());
+	auto db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(path.string());
 	db->open();
-	auto indexManager = db->getQueryEngine()->getIndexManager();
+	auto indexManager = db->indexManager();
 	ASSERT_TRUE(indexManager->createIndex("idx_age_topk_fallback", "node", "User", "age"));
 
 	auto compositeNoIndexScan = std::make_unique<LogicalNodeScan>("u", std::vector<std::string>{"User"});

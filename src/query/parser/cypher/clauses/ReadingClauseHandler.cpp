@@ -26,6 +26,7 @@
 #include "graph/query/planner/PipelineValidator.hpp"
 #include "graph/query/expressions/Expression.hpp"
 #include "graph/query/logical/operators/LogicalCallProcedure.hpp"
+#include "graph/query/logical/operators/LogicalFilter.hpp"
 #include "graph/query/logical/operators/LogicalProject.hpp"
 #include "graph/query/logical/operators/LogicalUnwind.hpp"
 
@@ -104,6 +105,11 @@ std::unique_ptr<query::logical::LogicalOperator> ReadingClauseHandler::handleInQ
 		// When yieldItems exists, projItems is guaranteed to have at least one element
 		result = std::make_unique<query::logical::LogicalProject>(
 			std::move(result), std::move(projItems));
+		if (items->where()) {
+			auto predicate = helpers::ExpressionBuilder::buildExpression(items->where()->expression());
+			result = std::make_unique<query::logical::LogicalFilter>(
+					std::move(result), std::shared_ptr<graph::query::expressions::Expression>(predicate.release()));
+		}
 	}
 
 	return result;

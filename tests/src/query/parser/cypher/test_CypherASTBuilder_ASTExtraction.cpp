@@ -70,6 +70,15 @@ protected:
 		return nullptr;
 	}
 
+	CypherParser::InQueryCallStatementContext* inQueryCallStatement(const std::string& query) {
+		auto* sq = singleQuery(query);
+		if (!sq) return nullptr;
+		for (auto* clause : sq->readingClause()) {
+			if (clause->inQueryCallStatement()) return clause->inQueryCallStatement();
+		}
+		return nullptr;
+	}
+
 	CypherParser::SetStatementContext* setStatement(const std::string& query) {
 		auto* sq = singleQuery(query);
 		if (!sq) return nullptr;
@@ -196,4 +205,16 @@ TEST_F(CypherASTBuilderExtractionTest, NodeConstraintBodiesExtractUniqueTypeAndN
 	ASSERT_EQ(key.properties.size(), 2u);
 	EXPECT_EQ(key.properties[0], "id");
 	EXPECT_EQ(key.properties[1], "email");
+}
+
+TEST_F(CypherASTBuilderExtractionTest, InQueryCallExtractsYieldPredicate) {
+	auto* ctx = inQueryCallStatement(
+			"CALL db.index.vector.queryNodes('idx', 2, [1.0, 2.0]) YIELD node, score "
+			"WHERE score < 1.0 RETURN node");
+	ASSERT_NE(ctx, nullptr);
+
+	auto clause = CypherASTBuilder::buildInQueryCallClause(ctx);
+	ASSERT_EQ(clause.yieldItems.size(), 2U);
+	ASSERT_NE(clause.yieldWhere, nullptr);
+	EXPECT_EQ(clause.yieldWhere->toString(), "(score < 1)");
 }

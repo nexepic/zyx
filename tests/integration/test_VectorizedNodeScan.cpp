@@ -6,7 +6,6 @@
 #include <string>
 
 #include "graph/core/Database.hpp"
-#include "graph/debug/PerfTrace.hpp"
 #include "graph/query/api/QueryResult.hpp"
 
 namespace fs = std::filesystem;
@@ -39,11 +38,21 @@ protected:
 		if (fs::exists(testDbPath)) {
 			fs::remove_all(testDbPath, ec);
 		}
-		debug::PerfTrace::reset();
-		debug::PerfTrace::setEnabled(false);
 	}
 
 	query::QueryResult execute(const std::string &query) const { return db->getQueryEngine()->execute(query); }
+
+	query::QueryResult executeProfiled(const std::string &query) const { return execute("PROFILE " + query); }
+
+	bool hasLogicalProfileSummary(const query::QueryResult &result, size_t resultRowCount) const {
+		if (result.rowCount() != resultRowCount + 1U) {
+			return false;
+		}
+
+		const auto &summary = result.getRows().back();
+		return summary.contains("phase") && summary.contains("total_time_ms") && summary.contains("calls") &&
+			   summary.at("phase").asPrimitive().toString() == "logical_plan";
+	}
 
 	int64_t runCount(const std::string &query) const {
 		auto result = execute(query);
@@ -65,156 +74,85 @@ protected:
 	std::unique_ptr<Database> db;
 };
 
-TEST_F(VectorizedNodeScanIntegrationTest, CountsLabelNodesWithScanProfilePhase) {
-	debug::PerfTrace::setEnabled(true);
-	debug::PerfTrace::reset();
-
+TEST_F(VectorizedNodeScanIntegrationTest, CountsLabelNodesWithLogicalProfileSummary) {
 	EXPECT_EQ(runCount("MATCH (n:Person) RETURN count(n) AS count"), 4);
-
-	const auto snapshot = debug::PerfTrace::snapshotAndReset();
-	EXPECT_TRUE(snapshot.contains("node_scan.count"));
+	EXPECT_TRUE(hasLogicalProfileSummary(executeProfiled("MATCH (n:Person) RETURN count(n) AS count"), 1U));
 }
 
-TEST_F(VectorizedNodeScanIntegrationTest, CountsPropertyEqualityNodesWithScanProfilePhase) {
-	debug::PerfTrace::setEnabled(true);
-	debug::PerfTrace::reset();
-
+TEST_F(VectorizedNodeScanIntegrationTest, CountsPropertyEqualityNodesWithLogicalProfileSummary) {
 	EXPECT_EQ(runCount("MATCH (n:Person {age: 42}) RETURN count(n) AS count"), 1);
-
-	const auto snapshot = debug::PerfTrace::snapshotAndReset();
-	EXPECT_TRUE(snapshot.contains("node_scan.count"));
+	EXPECT_TRUE(hasLogicalProfileSummary(executeProfiled("MATCH (n:Person {age: 42}) RETURN count(n) AS count"), 1U));
 }
 
-TEST_F(VectorizedNodeScanIntegrationTest, IndexedEqualityCountAvoidsPropertyMaterialization) {
+TEST_F(VectorizedNodeScanIntegrationTest, IndexedEqualityCountPreservesQuerySemantics) {
 	auto indexResult = execute("CREATE INDEX ON :Person(age)");
 	ASSERT_EQ(indexResult.rowCount(), 1U);
-	debug::PerfTrace::setEnabled(true);
-	debug::PerfTrace::reset();
 
 	EXPECT_EQ(runCount("MATCH (n:Person {age: 42}) RETURN count(n) AS count"), 1);
-
-	const auto snapshot = debug::PerfTrace::snapshotAndReset();
-	EXPECT_TRUE(snapshot.contains("node_scan.count"));
-	EXPECT_TRUE(snapshot.contains("node_scan.candidates"));
-	EXPECT_FALSE(snapshot.contains("node_scan.load_nodes"));
-	EXPECT_FALSE(snapshot.contains("node_scan.label_check"));
-	EXPECT_FALSE(snapshot.contains("node_scan.load_properties"));
-	EXPECT_FALSE(snapshot.contains("node_scan.load_property_entities"));
+	EXPECT_TRUE(hasLogicalProfileSummary(executeProfiled("MATCH (n:Person {age: 42}) RETURN count(n) AS count"), 1U));
 }
 
-TEST_F(VectorizedNodeScanIntegrationTest, IndexedInclusiveRangeCountAvoidsPropertyMaterialization) {
+TEST_F(VectorizedNodeScanIntegrationTest, IndexedInclusiveRangeCountPreservesQuerySemantics) {
 	auto indexResult = execute("CREATE INDEX ON :Person(age)");
 	ASSERT_EQ(indexResult.rowCount(), 1U);
-	debug::PerfTrace::setEnabled(true);
-	debug::PerfTrace::reset();
 
 	EXPECT_EQ(runCount("MATCH (n:Person) WHERE n.age >= 30 AND n.age <= 65 RETURN count(n) AS count"), 2);
-
-	const auto snapshot = debug::PerfTrace::snapshotAndReset();
-	EXPECT_TRUE(snapshot.contains("node_scan.count"));
-	EXPECT_TRUE(snapshot.contains("node_scan.candidates"));
-	EXPECT_FALSE(snapshot.contains("node_scan.load_nodes"));
-	EXPECT_FALSE(snapshot.contains("node_scan.label_check"));
-	EXPECT_FALSE(snapshot.contains("node_scan.load_properties"));
-	EXPECT_FALSE(snapshot.contains("node_scan.load_property_entities"));
+	EXPECT_TRUE(hasLogicalProfileSummary(executeProfiled(
+				"MATCH (n:Person) WHERE n.age >= 30 AND n.age <= 65 RETURN count(n) AS count"),
+				1U));
 }
 
-TEST_F(VectorizedNodeScanIntegrationTest, IndexedExclusiveRangeCountAvoidsPropertyMaterialization) {
+TEST_F(VectorizedNodeScanIntegrationTest, IndexedExclusiveRangeCountPreservesQuerySemantics) {
 	auto indexResult = execute("CREATE INDEX ON :Person(age)");
 	ASSERT_EQ(indexResult.rowCount(), 1U);
-	debug::PerfTrace::setEnabled(true);
-	debug::PerfTrace::reset();
 
 	EXPECT_EQ(runCount("MATCH (n:Person) WHERE n.age >= 30 AND n.age < 65 RETURN count(n) AS count"), 1);
-
-	const auto snapshot = debug::PerfTrace::snapshotAndReset();
-	EXPECT_TRUE(snapshot.contains("node_scan.count"));
-	EXPECT_TRUE(snapshot.contains("node_scan.candidates"));
-	EXPECT_FALSE(snapshot.contains("node_scan.load_nodes"));
-	EXPECT_FALSE(snapshot.contains("node_scan.label_check"));
-	EXPECT_FALSE(snapshot.contains("node_scan.load_properties"));
-	EXPECT_FALSE(snapshot.contains("node_scan.load_property_entities"));
+	EXPECT_TRUE(hasLogicalProfileSummary(
+			executeProfiled("MATCH (n:Person) WHERE n.age >= 30 AND n.age < 65 RETURN count(n) AS count"), 1U));
 }
 
-TEST_F(VectorizedNodeScanIntegrationTest, ScopedIndexDoesNotServeUnlabeledCount) {
+TEST_F(VectorizedNodeScanIntegrationTest, ScopedIndexDoesNotChangeUnlabeledQuerySemantics) {
 	auto indexResult = execute("CREATE INDEX ON :Person(age)");
 	ASSERT_EQ(indexResult.rowCount(), 1U);
-	debug::PerfTrace::setEnabled(true);
-	debug::PerfTrace::reset();
 
 	EXPECT_EQ(runCount("MATCH (n {age: 42}) RETURN count(n) AS count"), 2);
-
-	const auto snapshot = debug::PerfTrace::snapshotAndReset();
-	EXPECT_TRUE(snapshot.contains("node_scan.count"));
-	EXPECT_TRUE(snapshot.contains("node_scan.candidates"));
-	EXPECT_TRUE(snapshot.contains("node_scan.load_nodes"));
-	EXPECT_TRUE(snapshot.contains("node_scan.load_properties"));
+	EXPECT_TRUE(hasLogicalProfileSummary(executeProfiled("MATCH (n {age: 42}) RETURN count(n) AS count"), 1U));
 }
 
-TEST_F(VectorizedNodeScanIntegrationTest, CountsWhereLowerBoundPropertyFilterWithScanProfilePhase) {
-	debug::PerfTrace::setEnabled(true);
-	debug::PerfTrace::reset();
-
+TEST_F(VectorizedNodeScanIntegrationTest, CountsWhereLowerBoundPropertyFilterWithLogicalProfileSummary) {
 	EXPECT_EQ(runCount("MATCH (n) WHERE n.age >= 30 RETURN count(n) AS count"), 3);
-
-	const auto snapshot = debug::PerfTrace::snapshotAndReset();
-	EXPECT_TRUE(snapshot.contains("node_scan.count"));
+	EXPECT_TRUE(hasLogicalProfileSummary(executeProfiled("MATCH (n) WHERE n.age >= 30 RETURN count(n) AS count"), 1U));
 }
 
-TEST_F(VectorizedNodeScanIntegrationTest, CountsWhereUpperBoundPropertyFilterWithScanProfilePhase) {
-	debug::PerfTrace::setEnabled(true);
-	debug::PerfTrace::reset();
-
+TEST_F(VectorizedNodeScanIntegrationTest, CountsWhereUpperBoundPropertyFilterWithLogicalProfileSummary) {
 	EXPECT_EQ(runCount("MATCH (n) WHERE n.score < 20 RETURN count(n) AS count"), 2);
-
-	const auto snapshot = debug::PerfTrace::snapshotAndReset();
-	EXPECT_TRUE(snapshot.contains("node_scan.count"));
+	EXPECT_TRUE(hasLogicalProfileSummary(executeProfiled("MATCH (n) WHERE n.score < 20 RETURN count(n) AS count"), 1U));
 }
 
-TEST_F(VectorizedNodeScanIntegrationTest, CountsWhereEqualityAndRangeFilterWithScanProfilePhase) {
-	debug::PerfTrace::setEnabled(true);
-	debug::PerfTrace::reset();
-
+TEST_F(VectorizedNodeScanIntegrationTest, CountsWhereEqualityAndRangeFilterWithLogicalProfileSummary) {
 	EXPECT_EQ(runCount("MATCH (u:Person) WHERE u.country = 'CN' AND u.age >= 30 RETURN count(u) AS count"), 1);
-
-	const auto snapshot = debug::PerfTrace::snapshotAndReset();
-	EXPECT_TRUE(snapshot.contains("node_scan.count"));
+	EXPECT_TRUE(hasLogicalProfileSummary(
+			executeProfiled("MATCH (u:Person) WHERE u.country = 'CN' AND u.age >= 30 RETURN count(u) AS count"), 1U));
 }
 
-TEST_F(VectorizedNodeScanIntegrationTest, CountsDistinctPropertyWithColumnarScanPath) {
-	debug::PerfTrace::setEnabled(true);
-	debug::PerfTrace::reset();
-
+TEST_F(VectorizedNodeScanIntegrationTest, CountsDistinctPropertyWithLogicalProfileSummary) {
 	EXPECT_EQ(runCount("MATCH (u:Person) RETURN count(DISTINCT u.country) AS count"), 1);
-
-	const auto snapshot = debug::PerfTrace::snapshotAndReset();
-	EXPECT_TRUE(snapshot.contains("node_scan.distinct_count"));
-	EXPECT_FALSE(snapshot.contains("scan.sequential"));
+	EXPECT_TRUE(hasLogicalProfileSummary(executeProfiled("MATCH (u:Person) RETURN count(DISTINCT u.country) AS count"), 1U));
 }
 
-TEST_F(VectorizedNodeScanIntegrationTest, ReturningNodesUsesLegacyPath) {
-	debug::PerfTrace::setEnabled(true);
-	debug::PerfTrace::reset();
-
+TEST_F(VectorizedNodeScanIntegrationTest, ReturningNodesUsesLogicalProfileSummary) {
 	auto result = execute("MATCH (n:Person) RETURN n");
 	EXPECT_EQ(result.rowCount(), 4U);
-
-	const auto snapshot = debug::PerfTrace::snapshotAndReset();
-	EXPECT_FALSE(snapshot.contains("node_scan.count"));
+	EXPECT_TRUE(hasLogicalProfileSummary(executeProfiled("MATCH (n:Person) RETURN n"), 4U));
 }
 
-TEST_F(VectorizedNodeScanIntegrationTest, TopKPropertySortUsesColumnarScanPath) {
-	debug::PerfTrace::setEnabled(true);
-	debug::PerfTrace::reset();
-
+TEST_F(VectorizedNodeScanIntegrationTest, TopKPropertySortUsesLogicalProfileSummary) {
 	auto result = execute("MATCH (u:Person) RETURN u.name AS name ORDER BY u.score DESC LIMIT 2");
 	ASSERT_EQ(result.rowCount(), 2U);
 	ASSERT_TRUE(result.getRows()[0].contains("name"));
 	ASSERT_TRUE(result.getRows()[1].contains("name"));
 	EXPECT_EQ(result.getRows()[0].at("name").asPrimitive().toString(), "Bob");
 	EXPECT_EQ(result.getRows()[1].at("name").asPrimitive().toString(), "Alice");
-
-	const auto snapshot = debug::PerfTrace::snapshotAndReset();
-	EXPECT_TRUE(snapshot.contains("node_scan.topk"));
-	EXPECT_FALSE(snapshot.contains("scan.sequential"));
+	EXPECT_TRUE(hasLogicalProfileSummary(
+			executeProfiled("MATCH (u:Person) RETURN u.name AS name ORDER BY u.score DESC LIMIT 2"), 2U));
 }

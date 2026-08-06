@@ -24,7 +24,6 @@
 #include "boost/uuid/uuid.hpp"
 #include "boost/uuid/uuid_generators.hpp"
 #include "boost/uuid/uuid_io.hpp"
-#include "graph/core/Database.hpp"
 #include "graph/core/State.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/data/DataManager.hpp"
@@ -42,7 +41,6 @@ namespace graph::storage::testing {
 class StateManagerTest : public ::testing::Test {
 protected:
 	std::filesystem::path testFilePath;
-	std::unique_ptr<graph::Database> db;
 	std::shared_ptr<graph::storage::FileStorage> storage;
 	std::shared_ptr<graph::storage::DataManager> dataManager;
 	std::shared_ptr<graph::storage::StateManager> stateManager;
@@ -52,28 +50,38 @@ protected:
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath = std::filesystem::temp_directory_path() / ("test_stateManager_" + to_string(uuid) + ".zyx");
 
-		// Initialize database and get managers from the DataManager
-		db = std::make_unique<graph::Database>(testFilePath.string());
-		db->open();
-		storage = db->getStorage();
+		// This suite exercises the legacy physical state manager directly.
+		storage = std::make_shared<graph::storage::FileStorage>(
+				testFilePath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
+		storage->open();
 		dataManager = storage->getDataManager();
 		// Get the manager instance that was created by the DataManager
 		stateManager = dataManager->getStateManager();
 	}
 
 	void TearDown() override {
-		// Release shared_ptrs before closing database
+		// Release entity managers before closing legacy physical storage.
 		stateManager.reset();
 		dataManager.reset();
-		storage.reset();
 
-		if (db) {
-			db->close();
+		if (storage) {
+			storage->close();
 		}
-		db.reset();
+		storage.reset();
 
 		std::error_code ec;
 		std::filesystem::remove(testFilePath, ec);
+	}
+
+	void reopenStorage() {
+		stateManager.reset();
+		dataManager.reset();
+		storage->close();
+		storage = std::make_shared<graph::storage::FileStorage>(
+				testFilePath.string(), 10'000U, graph::storage::OpenMode::OPEN_EXISTING_FILE);
+		storage->open();
+		dataManager = storage->getDataManager();
+		stateManager = dataManager->getStateManager();
 	}
 };
 
@@ -493,11 +501,7 @@ TEST_F(StateManagerTest, PopulateKeyToIdMapAfterRestart) {
 
 	// Flush and restart database to test populateKeyToIdMap
 	storage->flush();
-	db->close();
-	db->open();
-	storage = db->getStorage();
-	dataManager = storage->getDataManager();
-	stateManager = dataManager->getStateManager();
+	reopenStorage();
 
 	// After restart, populateKeyToIdMap should have rebuilt the key mapping
 	graph::State found1 = stateManager->findByKey(key1);
@@ -537,11 +541,7 @@ TEST_F(StateManagerTest, PopulateKeyToIdMap_SkipsNonHeadStates) {
 	storage->flush();
 
 	// Restart database to trigger populateKeyToIdMap
-	db->close();
-	db->open();
-	storage = db->getStorage();
-	dataManager = storage->getDataManager();
-	stateManager = dataManager->getStateManager();
+	reopenStorage();
 
 	// After restart, populateKeyToIdMap should have:
 	// - Found head state (isChainHeadState returns true) -> added to map
@@ -565,11 +565,7 @@ TEST_F(StateManagerTest, PopulateKeyToIdMap_SkipsEmptyKeyHeadStates) {
 
 	// Flush and restart
 	storage->flush();
-	db->close();
-	db->open();
-	storage = db->getStorage();
-	dataManager = storage->getDataManager();
-	stateManager = dataManager->getStateManager();
+	reopenStorage();
 
 	// The empty key state should NOT be in the key-to-id map
 	// (isChainHeadState returns true but key is empty, so it's skipped)
@@ -604,11 +600,7 @@ TEST_F(StateManagerTest, IsChainHeadState_InactiveStateReturnsFalse) {
 
 	// Restart - populateKeyToIdMap scans disk, finding both active and inactive states
 	// Inactive states should fail isChainHeadState (isActive() returns false)
-	db->close();
-	db->open();
-	storage = db->getStorage();
-	dataManager = storage->getDataManager();
-	stateManager = dataManager->getStateManager();
+	reopenStorage();
 
 	// The removed state should not be found
 	graph::State removed = stateManager->findByKey(key);

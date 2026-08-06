@@ -355,6 +355,10 @@ CallClause CypherASTBuilder::buildInQueryCallClause(void* ctx) {
 			}
 			clause.yieldItems.push_back(std::move(yi));
 		}
+		if (callCtx->yieldItems()->where()) {
+			auto expression = ExpressionBuilder::buildExpression(callCtx->yieldItems()->where()->expression());
+			clause.yieldWhere = std::shared_ptr<graph::query::expressions::Expression>(expression.release());
+		}
 	}
 
 	return clause;
@@ -379,17 +383,8 @@ CreateClause CypherASTBuilder::buildCreateClause(void* ctx) {
 		for (auto* chain : element->patternElementChain()) {
 			PatternChainAST chainAST;
 			chainAST.relationship = extractRelationshipPattern(chain->relationshipPattern());
-			// For CREATE target nodes, use literal extraction only
-			auto targetNodePat = chain->nodePattern();
-			chainAST.targetNode.variable = AstExtractor::extractVariable(targetNodePat->variable());
-			chainAST.targetNode.labels = AstExtractor::extractLabels(targetNodePat->nodeLabels());
-			auto targetProps = AstExtractor::extractProperties(targetNodePat->properties(),
-				[](CypherParser::ExpressionContext* expr) {
-					return ExpressionBuilder::evaluateLiteralExpression(expr);
-				});
-			for (const auto& [k, v] : targetProps) {
-				chainAST.targetNode.properties.emplace_back(k, v);
-			}
+			// CREATE Properties are expressions for both the head and target Nodes.
+			chainAST.targetNode = extractCreateNodePattern(chain->nodePattern());
 			elemAST.chain.push_back(std::move(chainAST));
 		}
 

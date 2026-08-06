@@ -14,6 +14,7 @@
 #include <cstddef>
 #include <cstring>
 #include <future>
+#include <stdexcept>
 #include <sstream>
 #include <type_traits>
 #include <vector>
@@ -116,6 +117,8 @@ namespace graph::storage {
 							writer.writePod(arg.months);
 							writer.writePod(arg.days);
 							writer.writePod(arg.nanos);
+						} else if constexpr (std::is_same_v<ValueType, PropertyValue::Bytes>) {
+							throw std::runtime_error("binary PropertyValue requires the native property codec");
 						}
 					},
 					value.getVariant());
@@ -655,6 +658,7 @@ namespace graph::storage {
 				// Single pwrite for the batch
 				uint64_t offset = segmentOffset + sizeof(SegmentHeader) + startIndex * itemSize;
 				io_->writeAt(offset, buf.data(), buf.size());
+				tracker_->recordSegmentDataWrite(segmentOffset, buf.size());
 				markTouchedSegment(segmentOffset);
 				invalidatePendingSegmentCrc(segmentOffset);
 
@@ -792,6 +796,7 @@ namespace graph::storage {
 			std::fill(segBuf.begin() + static_cast<std::ptrdiff_t>(writeEnd), segBuf.end(), 0);
 		}
 		io_->writeAt(dataOffset, segBuf.data() + bufOffset, totalSize);
+		tracker_->recordSegmentDataWrite(segmentOffset, totalSize);
 		markTouchedSegmentWithCrc(segmentOffset, utils::calculateCrc(segBuf.data(), SEGMENT_SIZE));
 		tracker_->appendEntityRange(segmentOffset, entityAt(0).getId(), baseUsed, static_cast<uint32_t>(count));
 	}
@@ -829,6 +834,7 @@ namespace graph::storage {
 		std::array<char, T::getTotalSize()> buf{};
 		serializeFixedEntityInto(buf.data(), entity, buf.size());
 		io_->writeAt(entityOffset, buf.data(), buf.size());
+		tracker_->recordSegmentDataWrite(segmentOffset, buf.size());
 		markTouchedSegment(segmentOffset);
 		invalidatePendingSegmentCrc(segmentOffset);
 

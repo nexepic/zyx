@@ -10,7 +10,7 @@
 #include <gtest/gtest.h>
 #include <memory>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/query/execution/operators/NamedPathOperator.hpp"
 
 namespace fs = std::filesystem;
@@ -245,15 +245,15 @@ TEST(NamedPathOperatorTest, MultipleBatches) {
 class NamedPathOperatorDMTest : public ::testing::Test {
 protected:
 	fs::path dbPath;
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<storage::DataManager> dm;
 
 	void SetUp() override {
 		const auto uuid = boost::uuids::random_generator()();
 		dbPath = fs::temp_directory_path() / ("test_namedpath_" + boost::uuids::to_string(uuid) + ".zyx");
-		db = std::make_unique<Database>(dbPath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(dbPath.string());
 		db->open();
-		dm = db->getStorage()->getDataManager();
+		dm = db->storage()->getDataManager();
 	}
 
 	void TearDown() override {

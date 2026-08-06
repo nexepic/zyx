@@ -105,6 +105,7 @@ TEST_F(CypherToPlanVisitorControlFlowTest, VisitTxnRollbackBuildsTransactionCont
 
 #include "graph/core/Database.hpp"
 #include "graph/query/api/QueryResult.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 
 class CypherToPlanVisitorEndToEndTest : public ::testing::Test {
 protected:
@@ -211,8 +212,9 @@ TEST_F(CypherToPlanVisitorEndToEndTest, ShowConstraintsSkipsOptimizer) {
 }
 
 TEST_F(CypherToPlanVisitorEndToEndTest, CallProcedureSkipsOptimizer) {
-	// Standalone CALL procedure — exercises LOP_CALL_PROCEDURE root type
-	EXPECT_NO_THROW(execute("CALL dbms.listConfig()"));
+	// Standalone CALL still exercises the LOP_CALL_PROCEDURE root, but native
+	// storage cannot dispatch configuration procedures through legacy State.
+	EXPECT_THROW(static_cast<void>(execute("CALL dbms.listConfig()")), std::runtime_error);
 }
 
 // ============================================================================
@@ -221,14 +223,33 @@ TEST_F(CypherToPlanVisitorEndToEndTest, CallProcedureSkipsOptimizer) {
 
 TEST_F(CypherToPlanVisitorEndToEndTest, CallSubquery_InTransactions) {
 	(void) execute("CREATE (n:TxSub {val: 1})");
-	EXPECT_NO_THROW(
-		execute("MATCH (n:TxSub) CALL { WITH n CREATE (:TxResult {v: n.val}) } IN TRANSACTIONS RETURN n.val AS v"));
+	const std::string statement =
+			"MATCH (n:TxSub) CALL { WITH n CREATE (:TxResult {v: n.val}) } IN TRANSACTIONS RETURN n.val AS v";
+	// Native execution must fail closed instead of dispatching the statement
+	// through the retired physical mutation path.
+	EXPECT_THROW(static_cast<void>(execute(statement)), std::runtime_error);
+
+	const fs::path legacyPath = testFilePath.string() + ".legacy";
+	{
+		graph::storage::testing::LegacyPhysicalStorageTestHarness legacy(legacyPath.string());
+		legacy.open();
+		auto legacyEngine = legacy.queryEngine();
+		ASSERT_NO_THROW((void) legacyEngine->execute("CREATE (n:TxSub {val: 1})"));
+		EXPECT_NO_THROW((void) legacyEngine->execute(statement));
+	}
+	std::error_code error;
+	fs::remove_all(legacyPath, error);
+	fs::remove_all(legacyPath.string() + "-wal", error);
 }
 
 TEST_F(CypherToPlanVisitorEndToEndTest, CallSubquery_InTransactionsOfNRows) {
 	(void) execute("CREATE (n:TxBatch {val: 1})");
-	EXPECT_NO_THROW(
-		execute("MATCH (n:TxBatch) CALL { WITH n CREATE (:TxBatchResult {v: n.val}) } IN TRANSACTIONS OF 10 ROWS RETURN n.val AS v"));
+	// Batching does not make this legacy-only mutation execution shape safe for
+	// the native logical backend; it must fail closed just like the unbatched form.
+	EXPECT_THROW(static_cast<void>(execute(
+				 "MATCH (n:TxBatch) CALL { WITH n CREATE (:TxBatchResult {v: n.val}) } "
+				 "IN TRANSACTIONS OF 10 ROWS RETURN n.val AS v")),
+			 std::runtime_error);
 }
 
 // ============================================================================

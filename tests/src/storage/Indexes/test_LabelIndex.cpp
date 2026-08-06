@@ -24,7 +24,6 @@
 #include <filesystem>
 #include <gtest/gtest.h>
 #include <memory>
-#include "graph/core/Database.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/indexes/EntityTypeIndexManager.hpp"
@@ -38,28 +37,45 @@ protected:
 	void SetUp() override {
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath = std::filesystem::temp_directory_path() / ("test_labelIndex_" + to_string(uuid) + ".dat");
-		database = std::make_unique<graph::Database>(testFilePath.string());
-		database->open();
-		fileStorage = database->getStorage();
-		dataManager = fileStorage->getDataManager();
-
-		// Updated: Explicitly get the LabelIndex for nodes to make the test target clear.
-		labelIndex = database->getQueryEngine()->getIndexManager()->getNodeIndexManager()->getLabelIndex();
+		openStorage(graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
 	}
 
 	void TearDown() override {
-		database->close();
-		database.reset();
+		labelIndex.reset();
+		indexManager.reset();
+		dataManager.reset();
+		if (fileStorage) {
+			fileStorage->close();
+		}
+		fileStorage.reset();
 		std::error_code ec;
 		if (std::filesystem::exists(testFilePath)) {
 			std::filesystem::remove(testFilePath, ec);
 		}
 	}
 
+	void reopenStorage() {
+		labelIndex.reset();
+		indexManager.reset();
+		dataManager.reset();
+		fileStorage->close();
+		fileStorage.reset();
+		openStorage(graph::storage::OpenMode::OPEN_EXISTING_FILE);
+	}
+
+	void openStorage(graph::storage::OpenMode mode) {
+		fileStorage = std::make_shared<graph::storage::FileStorage>(testFilePath.string(), 10'000U, mode);
+		fileStorage->open();
+		dataManager = fileStorage->getDataManager();
+		indexManager = std::make_shared<graph::query::indexes::IndexManager>(fileStorage);
+		indexManager->initialize();
+		labelIndex = indexManager->getNodeIndexManager()->getLabelIndex();
+	}
+
 	std::filesystem::path testFilePath;
-	std::unique_ptr<graph::Database> database;
 	std::shared_ptr<graph::storage::FileStorage> fileStorage;
 	std::shared_ptr<graph::storage::DataManager> dataManager;
+	std::shared_ptr<graph::query::indexes::IndexManager> indexManager;
 	std::shared_ptr<graph::query::indexes::LabelIndex> labelIndex;
 };
 
@@ -126,15 +142,9 @@ TEST_F(LabelIndexTest, SaveAndLoadState) {
 
 	labelIndex->flush();
 
-	// Close and reopen the database to simulate a restart.
-	database->close();
-	database.reset();
-
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-
-	// Get the new index instance after reloading.
-	auto labelIndexNew = database->getQueryEngine()->getIndexManager()->getNodeIndexManager()->getLabelIndex();
+	// Close and reopen the legacy physical storage to simulate a restart.
+	reopenStorage();
+	auto labelIndexNew = labelIndex;
 
 	// Assert: The reloaded index should contain the persisted data.
 	EXPECT_FALSE(labelIndexNew->isEmpty());
@@ -261,12 +271,8 @@ TEST_F(LabelIndexTest, SaveState_WithDataAndEnabled) {
 	EXPECT_NO_THROW(labelIndex->saveState());
 
 	// Verify persistence by re-creating
-	database->close();
-	database.reset();
-
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-	auto newIndex = database->getQueryEngine()->getIndexManager()->getNodeIndexManager()->getLabelIndex();
+	reopenStorage();
+	auto newIndex = labelIndex;
 	EXPECT_TRUE(newIndex->hasLabel(1, "SaveStateTest"));
 }
 
@@ -298,13 +304,9 @@ TEST_F(LabelIndexTest, Initialize_EnabledFallback_WithPhysicalData) {
 		+ graph::storage::state::keys::SUFFIX_CONFIG;
 	sysState->remove(configKey);
 
-	// Re-open database - initialize should detect rootId != 0 and force enable
-	database->close();
-	database.reset();
-
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-	auto newIndex = database->getQueryEngine()->getIndexManager()->getNodeIndexManager()->getLabelIndex();
+	// Re-open storage - initialization should detect rootId != 0 and force enable.
+	reopenStorage();
+	auto newIndex = labelIndex;
 
 	// Should be enabled due to fallback
 	EXPECT_FALSE(newIndex->isEmpty());
@@ -509,13 +511,9 @@ TEST_F(LabelIndexTest, AddNodesBatch_PersistAfterRootSplit) {
 	labelIndex->addNodesBatch(batchData);
 	labelIndex->saveState();
 
-	// Reload and verify
-	database->close();
-	database.reset();
-
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-	auto newIndex = database->getQueryEngine()->getIndexManager()->getNodeIndexManager()->getLabelIndex();
+	// Reload and verify.
+	reopenStorage();
+	auto newIndex = labelIndex;
 
 	EXPECT_FALSE(newIndex->isEmpty());
 	auto results = newIndex->findNodes("SplitLabel");

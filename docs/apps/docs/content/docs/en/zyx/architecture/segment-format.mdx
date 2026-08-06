@@ -1,6 +1,6 @@
 ---
-title: Segment Format
-description: FileHeader, SegmentHeader, activity bitmaps, and linked-list chain structure.
+title: Historical Segment Format
+description: Retired FileHeader, SegmentHeader, activity bitmaps, and linked-list chain structure.
 category: Storage Format
 categoryOrder: 3
 order: 8
@@ -9,11 +9,13 @@ projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
-# Segment Format
+# Historical Segment Format
 
 The underlying storage format is defined in `StorageHeaders.hpp`. The database file is divided into fixed-size segments organized as linked-list chains, one per entity type.
 
-This page documents the current format. The proposed replacement is recorded separately in [Segment Storage vNext Design](segment-storage-vnext) and is not yet implemented.
+This page is historical reference material only. The legacy format is not accepted by the native storage backend and
+there is no migration, cutover, or compatibility path. New databases use the format specified by the
+[Native Single-File Storage Re-architecture Plan](native-single-file-storage-plan).
 
 ## Constants
 

@@ -136,12 +136,15 @@ def test_train_on_nonexistent_index_is_rejected(vec_db):
     assert "not found" in str(r.error or "").lower()
 
 
-def test_dimension_mismatch_on_insert_is_tolerated(vec_db):
-    # A wrong-dimension insert is logged and skipped from the index; the node
-    # itself is still created in the graph but not searchable.
+def test_dimension_mismatch_rejects_graph_write_atomically(vec_db):
+    # A malformed vector must not create a graph Node that is absent from the
+    # index; the complete write fails before it becomes visible.
     vec_db.execute("CREATE VECTOR INDEX vec_dim ON :V(embedding) OPTIONS {dimension: 2, metric: 'L2'}")
     vec_db.execute("CREATE (:V {id: 1, embedding: [1.0, 0.0]})")
-    vec_db.execute("CREATE (:V {id: 2, embedding: [1.0, 0.0, 0.0, 0.0]})")
+    invalid = vec_db.execute("CREATE (:V {id: 2, embedding: [1.0, 0.0, 0.0, 0.0]})")
+    assert not invalid.is_success
+    assert "dimension mismatch" in str(invalid.error or "").lower()
+    assert list(vec_db.execute("MATCH (n:V {id: 2}) RETURN n")) == []
     q = f"CALL db.index.vector.queryNodes('vec_dim', 5, [{_query_vector([1.0, 0.0])}]) YIELD node, score RETURN node.id AS id"
     rows = list(vec_db.execute(q))
     ids = [r["id"] for r in rows]

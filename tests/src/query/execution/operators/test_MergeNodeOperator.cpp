@@ -24,7 +24,7 @@
 #include <gtest/gtest.h>
 #include <memory>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/query/QueryContext.hpp"
 #include "graph/query/execution/operators/MergeNodeOperator.hpp"
 #include "graph/query/execution/Record.hpp"
@@ -60,17 +60,17 @@ public:
 class MergeNodeOperatorTest : public ::testing::Test {
 protected:
 	fs::path dbPath;
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<storage::DataManager> dm;
 	std::shared_ptr<query::indexes::IndexManager> im;
 
 	void SetUp() override {
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		dbPath = fs::temp_directory_path() / ("test_merge_node_" + to_string(uuid) + ".zyx");
-		db = std::make_unique<Database>(dbPath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(dbPath.string());
 		db->open();
-		dm = db->getStorage()->getDataManager();
-		im = db->getQueryEngine()->getIndexManager();
+		dm = db->storage()->getDataManager();
+		im = db->indexManager();
 	}
 
 	void TearDown() override {

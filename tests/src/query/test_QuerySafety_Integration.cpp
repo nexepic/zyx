@@ -9,7 +9,7 @@
 #include <filesystem>
 #include <gtest/gtest.h>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/core/Transaction.hpp"
 #include "graph/query/QueryGuard.hpp"
 #include "graph/query/api/QueryResult.hpp"
@@ -25,7 +25,7 @@ protected:
 		testDbPath = fs::temp_directory_path() / ("test_safety_" + boost::uuids::to_string(uuid) + ".zyx");
 		if (fs::exists(testDbPath))
 			fs::remove_all(testDbPath);
-		db = std::make_unique<graph::Database>(testDbPath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testDbPath.string());
 		db->open();
 	}
 
@@ -40,21 +40,21 @@ protected:
 
 	void setConfig(const std::string &key, int64_t value) {
 		auto stateManager = std::make_shared<graph::storage::state::SystemStateManager>(
-			db->getStorage()->getDataManager());
+			db->storage()->getDataManager());
 		stateManager->set<int64_t>(graph::storage::state::keys::SYS_CONFIG, key, value);
 	}
 
 	graph::query::QueryResult execute(const std::string &query) const {
-		return db->getQueryEngine()->execute(query);
+		return db->queryEngine()->execute(query);
 	}
 
 	fs::path testDbPath;
-	std::unique_ptr<graph::Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 };
 
 // Build a linear chain: n0 -> n1 -> n2 -> ... -> nN
-void buildLinearChain(graph::Database &db, int length) {
-	auto qe = db.getQueryEngine();
+void buildLinearChain(graph::storage::testing::LegacyPhysicalStorageTestHarness &db, int length) {
+	auto qe = db.queryEngine();
 	auto txn = db.beginTransaction();
 
 	qe->execute("CREATE (n:Start {idx: 0})");
@@ -70,8 +70,8 @@ void buildLinearChain(graph::Database &db, int length) {
 }
 
 // Build a cycle: n0 -> n1 -> n2 -> n0
-void buildCyclicGraph(graph::Database &db) {
-	auto qe = db.getQueryEngine();
+void buildCyclicGraph(graph::storage::testing::LegacyPhysicalStorageTestHarness &db) {
+	auto qe = db.queryEngine();
 	auto txn = db.beginTransaction();
 
 	qe->execute("CREATE (a:Node {name: 'A'})");
@@ -89,7 +89,7 @@ TEST_F(QuerySafetyTest, QueryTimeout_LongRunningQueryThrows) {
 
 	// Create enough nodes so that a cartesian product generates significant work
 	{
-		auto qe = db->getQueryEngine();
+		auto qe = db->queryEngine();
 		auto txn = db->beginTransaction();
 		for (int i = 0; i < 100; ++i) {
 			qe->execute("CREATE (n:Item {idx: " + std::to_string(i) + "})");
@@ -108,7 +108,7 @@ TEST_F(QuerySafetyTest, QueryTimeout_LongRunningQueryThrows) {
 
 TEST_F(QuerySafetyTest, QueryTimeout_NormalQuerySucceeds) {
 	// Default timeout (30s) — simple query should succeed
-	auto qe = db->getQueryEngine();
+	auto qe = db->queryEngine();
 	auto txn = db->beginTransaction();
 	qe->execute("CREATE (n:Person {name: 'Test'})");
 	txn.commit();
@@ -173,7 +173,7 @@ TEST_F(QuerySafetyTest, MemoryLimit_NormalQuerySucceeds) {
 	// Set generous memory limit (10 GB)
 	setConfig(graph::storage::state::keys::Config::QUERY_MAX_MEMORY_MB, 10000);
 
-	auto qe = db->getQueryEngine();
+	auto qe = db->queryEngine();
 	auto txn = db->beginTransaction();
 	qe->execute("CREATE (n:Person {name: 'Test'})");
 	txn.commit();

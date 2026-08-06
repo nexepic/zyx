@@ -6,17 +6,44 @@
  * @license Apache-2.0
  **/
 
-#include <gtest/gtest.h>
 #include <algorithm>
+#include <array>
+#include <atomic>
+#include <barrier>
+#include <cerrno>
 #include <cstring>
+#include <exception>
 #include <filesystem>
 #include <fstream>
+#include <gtest/gtest.h>
+#include <limits>
+#include <mutex>
+#include <thread>
 #include <vector>
 #include "graph/storage/PreadHelper.hpp"
 #include "graph/storage/PwriteHelper.hpp"
 #include "graph/storage/StorageIO.hpp"
 
 using namespace graph::storage;
+
+namespace graph::storage {
+
+	class StorageIOTestAccess final {
+	public:
+		static void saturatingAdd(std::atomic<uint64_t> &counter, uint64_t value) noexcept {
+			StorageIO::saturatingAdd(counter, value);
+		}
+
+		static void writeAtUncached(StorageIO &io, uint64_t offset, const void *buffer, size_t size) {
+			io.writeAtUncached(offset, buffer, size);
+		}
+
+		[[nodiscard]] static size_t readAtUncached(const StorageIO &io, uint64_t offset, void *buffer, size_t size) {
+			return io.readAtUncached(offset, buffer, size);
+		}
+	};
+
+} // namespace graph::storage
 
 class StorageIOTest : public ::testing::Test {
 protected:
@@ -32,13 +59,18 @@ protected:
 	}
 
 	void TearDown() override {
+		for (const file_handle_t readFd: read_handles_) {
+			static_cast<void>(portable_close(readFd));
+		}
+		for (const file_handle_t writeFd: write_handles_) {
+			static_cast<void>(portable_close_rw(writeFd));
+		}
 		std::error_code ec;
 		std::filesystem::remove(testFile_, ec);
 	}
 
 	std::shared_ptr<StorageIO> createIO(bool withNativeFds = true) {
-		auto stream = std::make_shared<std::fstream>(
-				testFile_, std::ios::binary | std::ios::in | std::ios::out);
+		auto stream = std::make_shared<std::fstream>(testFile_, std::ios::binary | std::ios::in | std::ios::out);
 		EXPECT_TRUE(stream->good());
 
 		file_handle_t wfd = INVALID_FILE_HANDLE;
@@ -46,10 +78,21 @@ protected:
 		if (withNativeFds) {
 			wfd = portable_open_rw(testFile_.c_str());
 			rfd = portable_open(testFile_.c_str(), O_RDONLY);
+			EXPECT_NE(wfd, INVALID_FILE_HANDLE);
+			EXPECT_NE(rfd, INVALID_FILE_HANDLE);
+			if (wfd != INVALID_FILE_HANDLE) {
+				write_handles_.push_back(wfd);
+			}
+			if (rfd != INVALID_FILE_HANDLE) {
+				read_handles_.push_back(rfd);
+			}
 		}
 
 		return std::make_shared<StorageIO>(stream, wfd, rfd);
 	}
+
+	std::vector<file_handle_t> write_handles_;
+	std::vector<file_handle_t> read_handles_;
 };
 
 // ============================================================================
@@ -68,7 +111,111 @@ TEST_F(StorageIOTest, WriteAtReadAtRoundtrip_NativeFd) {
 	size_t bytesRead = io->readAt(100, buffer, sizeof(buffer));
 	EXPECT_EQ(bytesRead, sizeof(data));
 	EXPECT_EQ(std::memcmp(data, buffer, sizeof(data)), 0);
+	const StorageIOStats stats = io->stats();
+	EXPECT_EQ(stats.write_bytes, sizeof(data));
+	EXPECT_EQ(stats.read_bytes, sizeof(data));
+	EXPECT_EQ(stats.write_calls, 1U);
+	EXPECT_EQ(stats.read_calls, 1U);
+	io->resetStats();
+	EXPECT_EQ(io->stats(), StorageIOStats{});
 }
+
+TEST_F(StorageIOTest, CounterSaturationNeverWraps) {
+	std::atomic<uint64_t> counter{std::numeric_limits<uint64_t>::max()};
+	StorageIOTestAccess::saturatingAdd(counter, 1U);
+	EXPECT_EQ(counter.load(std::memory_order_relaxed), std::numeric_limits<uint64_t>::max());
+
+	counter.store(std::numeric_limits<uint64_t>::max() - 1U, std::memory_order_relaxed);
+	StorageIOTestAccess::saturatingAdd(counter, 2U);
+	EXPECT_EQ(counter.load(std::memory_order_relaxed), std::numeric_limits<uint64_t>::max());
+}
+
+TEST_F(StorageIOTest, ConstructorRejectsUnknownAccessMode) {
+	auto stream = std::make_shared<std::fstream>(testFile_, std::ios::binary | std::ios::in | std::ios::out);
+	ASSERT_TRUE(stream->is_open());
+
+	EXPECT_THROW(static_cast<void>(std::make_shared<StorageIO>(
+				 stream, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE, static_cast<StorageIOAccessMode>(0U))),
+			 std::invalid_argument);
+}
+
+TEST_F(StorageIOTest, PositionedOperationsRejectUnaddressableRangesBeforeIo) {
+	auto io = createIO(true);
+	const char byte = 0;
+	char output = 0;
+
+	EXPECT_THROW(io->writeAt(std::numeric_limits<uint64_t>::max(), &byte, 1U), std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(io->readAt(std::numeric_limits<uint64_t>::max(), &output, 1U)),
+			 std::invalid_argument);
+	const uint64_t unrepresentableOffset = static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) + 1U;
+	EXPECT_THROW(io->writeAt(unrepresentableOffset, &byte, 1U), std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(io->readAt(unrepresentableOffset, &output, 1U)), std::invalid_argument);
+	EXPECT_THROW(io->writeAt(0U, &byte, std::numeric_limits<size_t>::max()), std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(io->readAt(0U, &output, std::numeric_limits<size_t>::max())),
+			 std::invalid_argument);
+}
+
+TEST_F(StorageIOTest, UncachedSafetyGuardsRejectEmptyBuffersBeforeNativeIo) {
+	auto io = createIO(true);
+	char byte = 0;
+
+	StorageIOTestAccess::writeAtUncached(*io, 0U, nullptr, 1U);
+	StorageIOTestAccess::writeAtUncached(*io, 0U, &byte, 0U);
+	EXPECT_EQ(StorageIOTestAccess::readAtUncached(*io, 0U, nullptr, 1U), 0U);
+	EXPECT_EQ(StorageIOTestAccess::readAtUncached(*io, 0U, &byte, 0U), 0U);
+	EXPECT_EQ(io->stats(), StorageIOStats{});
+}
+
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+TEST_F(StorageIOTest, NativeFaultHooksRejectEmptyAndNestedScopes) {
+	EXPECT_THROW(static_cast<void>(StorageIO::ScopedNativeWriteHookForTesting(
+				 StorageIO::NativeWriteHookForTesting{})),
+			 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(StorageIO::ScopedNativeSyncHookForTesting(
+				 StorageIO::NativeSyncHookForTesting{})),
+			 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(StorageIO::ScopedNativeReadHookForTesting(
+				 StorageIO::NativeReadHookForTesting{})),
+			 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(StorageIO::ScopedNativeTruncateHookForTesting(
+				 StorageIO::NativeTruncateHookForTesting{})),
+			 std::invalid_argument);
+
+	const StorageIO::NativeWriteHookForTesting writeHook =
+			[](file_handle_t, const void *, size_t, pwrite_off_t) -> pwrite_ssize_t { return 0; };
+	StorageIO::ScopedNativeWriteHookForTesting activeWriteHook(writeHook);
+	EXPECT_THROW(static_cast<void>(StorageIO::ScopedNativeWriteHookForTesting(writeHook)), std::logic_error);
+
+	const StorageIO::NativeSyncHookForTesting syncHook = [](file_handle_t) { return 0; };
+	StorageIO::ScopedNativeSyncHookForTesting activeSyncHook(syncHook);
+	EXPECT_THROW(static_cast<void>(StorageIO::ScopedNativeSyncHookForTesting(syncHook)), std::logic_error);
+
+	const StorageIO::NativeReadHookForTesting readHook =
+			[](file_handle_t, void *, size_t, pwrite_off_t) -> pwrite_ssize_t { return 0; };
+	StorageIO::ScopedNativeReadHookForTesting activeReadHook(readHook);
+	EXPECT_THROW(static_cast<void>(StorageIO::ScopedNativeReadHookForTesting(readHook)), std::logic_error);
+
+	const StorageIO::NativeTruncateHookForTesting truncateHook = [](file_handle_t, uint64_t) { return 0; };
+	StorageIO::ScopedNativeTruncateHookForTesting activeTruncateHook(truncateHook);
+	EXPECT_THROW(static_cast<void>(StorageIO::ScopedNativeTruncateHookForTesting(truncateHook)), std::logic_error);
+}
+
+TEST_F(StorageIOTest, NativeWriteFailureWithoutPlatformErrorUsesGenericIoError) {
+	auto io = createIO(true);
+	const char byte = 0;
+	StorageIO::ScopedNativeWriteHookForTesting writeFailure(
+			[](file_handle_t, const void *, size_t, pwrite_off_t) -> pwrite_ssize_t {
+#ifdef _WIN32
+				SetLastError(ERROR_SUCCESS);
+#else
+				errno = 0;
+#endif
+				return -1;
+			});
+
+	EXPECT_THROW(io->writeAt(0U, &byte, 1U), std::system_error);
+}
+#endif
 
 // ============================================================================
 // writeAt / readAt roundtrip with fstream fallback
@@ -86,6 +233,59 @@ TEST_F(StorageIOTest, WriteAtReadAtRoundtrip_FstreamFallback) {
 	size_t bytesRead = io->readAt(200, buffer, sizeof(buffer));
 	EXPECT_EQ(bytesRead, sizeof(data));
 	EXPECT_EQ(std::memcmp(data, buffer, sizeof(data)), 0);
+}
+
+TEST_F(StorageIOTest, FstreamFallbackSerializesConcurrentPositionedReadsAndWrites) {
+	auto io = createIO(/*withNativeFds=*/false);
+	const std::array<char, 64> stableBytes = [] {
+		std::array<char, 64> bytes{};
+		bytes.fill(static_cast<char>(0x5A));
+		return bytes;
+	}();
+	io->writeAt(0, stableBytes.data(), stableBytes.size());
+	io->sync();
+
+	std::barrier start{2};
+	std::atomic<bool> stableRead{true};
+	std::exception_ptr workerFailure;
+	std::mutex failureMutex;
+	const auto recordFailure = [&](std::exception_ptr error) {
+		std::lock_guard lock(failureMutex);
+		if (!workerFailure) {
+			workerFailure = std::move(error);
+		}
+	};
+	std::thread writer([&] {
+		try {
+			start.arrive_and_wait();
+			std::array<char, 64> bytes{};
+			for (uint32_t iteration = 0; iteration < 512U; ++iteration) {
+				bytes.fill(static_cast<char>(iteration));
+				io->writeAt(512, bytes.data(), bytes.size());
+			}
+		} catch (...) {
+			recordFailure(std::current_exception());
+		}
+	});
+	std::thread reader([&] {
+		try {
+			start.arrive_and_wait();
+			std::array<char, 64> bytes{};
+			for (uint32_t iteration = 0; iteration < 512U; ++iteration) {
+				if (io->readAt(0, bytes.data(), bytes.size()) != bytes.size() || bytes != stableBytes) {
+					stableRead.store(false, std::memory_order_relaxed);
+					break;
+				}
+			}
+		} catch (...) {
+			recordFailure(std::current_exception());
+		}
+	});
+	writer.join();
+	reader.join();
+
+	EXPECT_EQ(workerFailure, nullptr);
+	EXPECT_TRUE(stableRead.load(std::memory_order_relaxed));
 }
 
 // ============================================================================
@@ -117,18 +317,18 @@ TEST_F(StorageIOTest, WriteAtMiddleOfFile) {
 // ============================================================================
 
 TEST_F(StorageIOTest, AppendReturnsCorrectOffset) {
-	auto io = createIO(false);  // append uses fstream
+	auto io = createIO(false); // append uses fstream
 
 	const char data1[] = "first append";
 	uint64_t offset1 = io->append(data1, sizeof(data1));
-	EXPECT_EQ(offset1, testSize_);  // Should be at end of existing file
+	EXPECT_EQ(offset1, testSize_); // Should be at end of existing file
 
 	const char data2[] = "second append";
 	uint64_t offset2 = io->append(data2, sizeof(data2));
 	EXPECT_EQ(offset2, testSize_ + sizeof(data1));
 
 	// Verify data can be read back
-	io->flushStream();  // Ensure fstream writes are visible to reads
+	io->flushStream(); // Ensure fstream writes are visible to reads
 	char buffer[sizeof(data1)] = {};
 	size_t bytesRead = io->readAt(offset1, buffer, sizeof(data1));
 	EXPECT_EQ(bytesRead, sizeof(data1));
@@ -150,6 +350,10 @@ TEST_F(StorageIOTest, ReserveAppendSpaceExtendsWithZeroReadableGap) {
 	const char data[] = "after reserve";
 	uint64_t appendOffset = io->append(data, sizeof(data));
 	EXPECT_EQ(appendOffset, testSize_ + 128);
+	const StorageIOStats stats = io->stats();
+	EXPECT_EQ(stats.reserved_bytes, 128U);
+	EXPECT_EQ(stats.reserve_calls, 1U);
+	EXPECT_EQ(stats.write_bytes, 1U + sizeof(data));
 }
 
 TEST_F(StorageIOTest, ReserveAppendSpaceNativeExtendsWithZeroReadableGap) {
@@ -163,6 +367,61 @@ TEST_F(StorageIOTest, ReserveAppendSpaceNativeExtendsWithZeroReadableGap) {
 	size_t bytesRead = io->readAt(offset, buffer.data(), buffer.size());
 	EXPECT_EQ(bytesRead, buffer.size());
 	EXPECT_TRUE(std::all_of(buffer.begin(), buffer.end(), [](char c) { return c == 0; }));
+}
+
+TEST_F(StorageIOTest, FileSizeUsesNativeAndFstreamPaths) {
+	auto nativeIo = createIO(true);
+	EXPECT_EQ(nativeIo->fileSize(), testSize_);
+	nativeIo->reserveAppendSpace(128);
+	EXPECT_EQ(nativeIo->fileSize(), testSize_ + 128U);
+
+	auto streamIo = createIO(false);
+	EXPECT_EQ(streamIo->fileSize(), testSize_ + 128U);
+}
+
+TEST_F(StorageIOTest, FileSizeRejectsAnIoWithoutFileAccess) {
+	auto io = std::make_shared<StorageIO>(nullptr, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+	EXPECT_THROW(static_cast<void>(io->fileSize()), std::runtime_error);
+}
+
+TEST_F(StorageIOTest, FallbackOperationsRejectAnIoWithoutAStream) {
+	auto io = std::make_shared<StorageIO>(nullptr, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+	const char data[] = "missing stream";
+	char buffer[sizeof(data)] = {};
+	EXPECT_THROW(io->writeAt(0, data, sizeof(data)), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(io->readAt(0, buffer, sizeof(buffer))), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(io->append(data, sizeof(data))), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(io->reserveAppendSpace(sizeof(data))), std::runtime_error);
+}
+
+TEST_F(StorageIOTest, FileSizeReportsClosedNativeHandle) {
+	auto stream = std::make_shared<std::fstream>(testFile_, std::ios::binary | std::ios::in | std::ios::out);
+	ASSERT_TRUE(stream->is_open());
+	file_handle_t writeFd = portable_open_rw(testFile_.c_str());
+	ASSERT_NE(writeFd, INVALID_FILE_HANDLE);
+	portable_close_rw(writeFd);
+	auto io = std::make_shared<StorageIO>(stream, writeFd, INVALID_FILE_HANDLE);
+
+	EXPECT_THROW(static_cast<void>(io->fileSize()), std::runtime_error);
+}
+
+TEST_F(StorageIOTest, FileSizeReportsClosedFstream) {
+	auto stream = std::make_shared<std::fstream>(testFile_, std::ios::binary | std::ios::in | std::ios::out);
+	ASSERT_TRUE(stream->is_open());
+	auto io = std::make_shared<StorageIO>(stream, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+	stream->close();
+
+	EXPECT_THROW(static_cast<void>(io->fileSize()), std::runtime_error);
+}
+
+TEST_F(StorageIOTest, WriteAtReportsClosedFstream) {
+	auto stream = std::make_shared<std::fstream>(testFile_, std::ios::binary | std::ios::in | std::ios::out);
+	ASSERT_TRUE(stream->is_open());
+	auto io = std::make_shared<StorageIO>(stream, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+	stream->close();
+
+	const char data[] = "closed fstream";
+	EXPECT_THROW(io->writeAt(0, data, sizeof(data)), std::runtime_error);
 }
 
 TEST_F(StorageIOTest, AppendNativeUsesEndAfterReserve) {
@@ -264,6 +523,28 @@ TEST_F(StorageIOTest, SyncDoesNotThrow) {
 	EXPECT_NO_THROW(io->sync());
 }
 
+TEST_F(StorageIOTest, SyncReportsClosedNativeWriteHandle) {
+	file_handle_t writeFd = portable_open_rw(testFile_.c_str());
+	ASSERT_NE(writeFd, INVALID_FILE_HANDLE);
+	auto io = std::make_shared<StorageIO>(nullptr, writeFd, INVALID_FILE_HANDLE);
+	ASSERT_EQ(portable_close_rw(writeFd), 0);
+
+	EXPECT_THROW(io->sync(), std::runtime_error);
+	EXPECT_EQ(io->stats().sync_calls, 0U);
+}
+
+TEST_F(StorageIOTest, SyncReportsFailedFstreamFlush) {
+	auto stream = std::make_shared<std::fstream>(testFile_, std::ios::binary | std::ios::in | std::ios::out);
+	ASSERT_TRUE(stream->is_open());
+	auto io = std::make_shared<StorageIO>(stream, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+	// A closed fstream can accept a no-op flush on some standard libraries; a
+	// badbit models the portable observable contract of an underlying I/O fault.
+	stream->setstate(std::ios::badbit);
+
+	EXPECT_THROW(io->sync(), std::runtime_error);
+	EXPECT_EQ(io->stats().sync_calls, 0U);
+}
+
 // ============================================================================
 // flushStream does not throw
 // ============================================================================
@@ -271,6 +552,32 @@ TEST_F(StorageIOTest, SyncDoesNotThrow) {
 TEST_F(StorageIOTest, FlushStreamDoesNotThrow) {
 	auto io = createIO(true);
 	EXPECT_NO_THROW(io->flushStream());
+}
+
+TEST_F(StorageIOTest, BufferPoolHelpersAreNoOpsWithoutCacheAndFlushCachedWrites) {
+	auto io = createIO(true);
+	const std::array<BufferPoolPageKey, 1U> keys{{{0U, 0U}}};
+	const std::array<BufferPoolPageKey, 0U> emptyKeys{};
+
+	// These helpers deliberately avoid speculative I/O until native storage has
+	// configured its cache; callers may safely issue best-effort prefetch hints.
+	io->prefetchPages(keys);
+	io->prefetchPages(emptyKeys);
+	EXPECT_EQ(io->bufferPoolStats(), BufferPoolStats{});
+	EXPECT_NO_THROW(io->resetBufferPoolStats());
+
+	io->enableBufferPool(RSS_BUFFER_POOL_PAGE_BYTES);
+	EXPECT_THROW(io->enableBufferPool(RSS_BUFFER_POOL_PAGE_BYTES), std::logic_error);
+	io->prefetchPages(emptyKeys);
+	EXPECT_EQ(io->bufferPoolStats().prefetch_requests, 0U);
+
+	const char byte = static_cast<char>(0x71);
+	io->writeAt(0U, &byte, 1U);
+	EXPECT_EQ(io->bufferPoolStats().dirty_bytes, RSS_BUFFER_POOL_PAGE_BYTES);
+	io->flushStream();
+	EXPECT_EQ(io->bufferPoolStats().dirty_bytes, 0U);
+	io->disableBufferPool();
+	EXPECT_EQ(io->bufferPoolStats(), BufferPoolStats{});
 }
 
 // ============================================================================
@@ -390,14 +697,13 @@ TEST_F(StorageIOTest, ReadAtPartialRead_FstreamFallback) {
 
 TEST_F(StorageIOTest, WriteAtPwriteError_InvalidFd) {
 	// Create IO with a valid fstream but a bogus write fd
-	auto stream = std::make_shared<std::fstream>(
-			testFile_, std::ios::binary | std::ios::in | std::ios::out);
+	auto stream = std::make_shared<std::fstream>(testFile_, std::ios::binary | std::ios::in | std::ios::out);
 	ASSERT_TRUE(stream->good());
 
 	// Open a real fd then close it to make it invalid
 	file_handle_t wfd = portable_open_rw(testFile_.c_str());
 	ASSERT_NE(wfd, INVALID_FILE_HANDLE);
-	portable_close_rw(wfd);  // Now wfd is closed/invalid
+	portable_close_rw(wfd); // Now wfd is closed/invalid
 
 	file_handle_t rfd = portable_open(testFile_.c_str(), O_RDONLY);
 	auto io = std::make_shared<StorageIO>(stream, wfd, rfd);
@@ -406,25 +712,26 @@ TEST_F(StorageIOTest, WriteAtPwriteError_InvalidFd) {
 	const char data[] = "fail";
 	EXPECT_THROW(io->writeAt(0, data, sizeof(data)), std::runtime_error);
 
-	if (rfd != INVALID_FILE_HANDLE) portable_close(rfd);
+	if (rfd != INVALID_FILE_HANDLE)
+		portable_close(rfd);
 }
 
 TEST_F(StorageIOTest, ReadAtPreadError_InvalidFd) {
-	auto stream = std::make_shared<std::fstream>(
-			testFile_, std::ios::binary | std::ios::in | std::ios::out);
+	auto stream = std::make_shared<std::fstream>(testFile_, std::ios::binary | std::ios::in | std::ios::out);
 	ASSERT_TRUE(stream->good());
 
 	file_handle_t wfd = portable_open_rw(testFile_.c_str());
 	file_handle_t rfd = portable_open(testFile_.c_str(), O_RDONLY);
 	ASSERT_NE(rfd, INVALID_FILE_HANDLE);
-	portable_close(rfd);  // Now rfd is closed/invalid
+	portable_close(rfd); // Now rfd is closed/invalid
 
 	auto io = std::make_shared<StorageIO>(stream, wfd, rfd);
 
 	char buffer[16] = {};
 	EXPECT_THROW(io->readAt(0, buffer, sizeof(buffer)), std::runtime_error);
 
-	if (wfd != INVALID_FILE_HANDLE) portable_close_rw(wfd);
+	if (wfd != INVALID_FILE_HANDLE)
+		portable_close_rw(wfd);
 }
 
 // ============================================================================

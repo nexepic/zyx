@@ -72,16 +72,22 @@ TEST_F(ApiTransactionEdgeCasesTest, TransactionWithMixedOperations) {
 	auto tx = db->beginTransaction();
 
 	// CREATE 3 nodes
-	tx.execute("CREATE (n:Mix {id: 1, val: 'a'})");
-	tx.execute("CREATE (n:Mix {id: 2, val: 'b'})");
-	tx.execute("CREATE (n:Mix {id: 3, val: 'c'})");
+	auto createOne = tx.execute("CREATE (n:Mix {id: 1, val: 'a'})");
+	ASSERT_TRUE(createOne.isSuccess()) << createOne.getError();
+	auto createTwo = tx.execute("CREATE (n:Mix {id: 2, val: 'b'})");
+	ASSERT_TRUE(createTwo.isSuccess()) << createTwo.getError();
+	auto createThree = tx.execute("CREATE (n:Mix {id: 3, val: 'c'})");
+	ASSERT_TRUE(createThree.isSuccess()) << createThree.getError();
 
 	// SET 2 properties
-	tx.execute("MATCH (n:Mix) WHERE n.id = 1 SET n.val = 'updated'");
-	tx.execute("MATCH (n:Mix) WHERE n.id = 2 SET n.val = 'updated'");
+	auto setOne = tx.execute("MATCH (n:Mix) WHERE n.id = 1 SET n.val = 'updated'");
+	ASSERT_TRUE(setOne.isSuccess()) << setOne.getError();
+	auto setTwo = tx.execute("MATCH (n:Mix) WHERE n.id = 2 SET n.val = 'updated'");
+	ASSERT_TRUE(setTwo.isSuccess()) << setTwo.getError();
 
 	// DELETE 1 node
-	tx.execute("MATCH (n:Mix) WHERE n.id = 3 DELETE n");
+	auto erase = tx.execute("MATCH (n:Mix) WHERE n.id = 3 DELETE n");
+	ASSERT_TRUE(erase.isSuccess()) << erase.getError();
 
 	// Verify within txn
 	auto r = tx.execute("MATCH (n:Mix) RETURN count(n) AS cnt");

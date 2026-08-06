@@ -19,7 +19,6 @@ namespace graph::query::logical {
 			case LogicalOpType::LOP_MERGE_NODE:
 			case LogicalOpType::LOP_MERGE_EDGE:
 			case LogicalOpType::LOP_FOREACH:
-			case LogicalOpType::LOP_LOAD_CSV:
 			case LogicalOpType::LOP_SET_CONFIG:
 			case LogicalOpType::LOP_TRAIN_VECTOR_INDEX:
 				return true;

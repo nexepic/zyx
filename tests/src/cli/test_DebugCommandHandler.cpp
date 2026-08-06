@@ -30,10 +30,6 @@
 
 #include "graph/cli/DebugCommandHandler.hpp"
 #include "graph/core/Database.hpp"
-#include "graph/core/Node.hpp"
-#include "graph/storage/FileStorage.hpp"
-#include "graph/storage/data/DataManager.hpp"
-#include "graph/storage/data/NodeManager.hpp"
 
 using namespace graph::cli;
 using namespace graph;
@@ -71,17 +67,11 @@ protected:
 		}
 	}
 
-	// Helper to populate DB with a node so debug commands display data
-	void addDummyNode() const {
-		auto dm = database->getStorage()->getDataManager();
-		auto nm = dm->getNodeManager();
-
-		Node node;
-		node.setLabelId(dm->getOrCreateTokenId("TestNode"));
-		nm->add(node);
-
-		(void) dm->prepareFlushSnapshot();
-		dm->commitFlushSnapshot();
+	void expectLegacyInspectorUnavailable(const std::string &command) {
+		DebugCommandHandler handler(*database);
+		handler.handle(command);
+		EXPECT_TRUE(capturedOut_.str().empty());
+		EXPECT_NE(capturedErr_.str().find("legacy segment inspector is unavailable"), std::string::npos);
 	}
 
 	std::filesystem::path testFilePath;
@@ -95,83 +85,57 @@ protected:
 
 // Test 'debug summary'
 TEST_F(DebugCommandHandlerTest, HandleSummary) {
-	DebugCommandHandler handler(*database);
-	handler.handle("debug summary");
-	EXPECT_FALSE(capturedOut_.str().empty());
+	expectLegacyInspectorUnavailable("debug summary");
 }
 
 // Test 'debug nodes'
 TEST_F(DebugCommandHandlerTest, HandleNodes) {
-	addDummyNode();
-	DebugCommandHandler handler(*database);
-	handler.handle("debug nodes");
-	EXPECT_FALSE(capturedOut_.str().empty());
+	expectLegacyInspectorUnavailable("debug nodes");
 }
 
 // Test 'debug nodes' with page
 TEST_F(DebugCommandHandlerTest, HandleNodesWithPage) {
-	DebugCommandHandler handler(*database);
-	handler.handle("debug nodes 0");
-	EXPECT_FALSE(capturedOut_.str().empty());
+	expectLegacyInspectorUnavailable("debug nodes 0");
 }
 
 // Test 'debug edges'
 TEST_F(DebugCommandHandlerTest, HandleEdges) {
-	DebugCommandHandler handler(*database);
-	handler.handle("debug edges");
-	EXPECT_FALSE(capturedOut_.str().empty());
+	expectLegacyInspectorUnavailable("debug edges");
 }
 
 // Test 'debug props'
 TEST_F(DebugCommandHandlerTest, HandleProps) {
-	DebugCommandHandler handler(*database);
-	handler.handle("debug props");
-	EXPECT_FALSE(capturedOut_.str().empty());
+	expectLegacyInspectorUnavailable("debug props");
 }
 
 // Test 'debug blobs'
 TEST_F(DebugCommandHandlerTest, HandleBlobs) {
-	DebugCommandHandler handler(*database);
-	handler.handle("debug blobs");
-	EXPECT_FALSE(capturedOut_.str().empty());
+	expectLegacyInspectorUnavailable("debug blobs");
 }
 
 // Test 'debug indexes'
 TEST_F(DebugCommandHandlerTest, HandleIndexes) {
-	DebugCommandHandler handler(*database);
-	handler.handle("debug indexes");
-	EXPECT_FALSE(capturedOut_.str().empty());
+	expectLegacyInspectorUnavailable("debug indexes");
 }
 
 // Test 'debug state <key>' (String key)
 TEST_F(DebugCommandHandlerTest, HandleStateKey) {
-	DebugCommandHandler handler(*database);
-	handler.handle("debug state sys.config");
-	EXPECT_FALSE(capturedOut_.str().empty());
+	expectLegacyInspectorUnavailable("debug state sys.config");
 }
 
 // Test 'debug states' (Alias coverage)
 TEST_F(DebugCommandHandlerTest, HandleStatesAlias) {
-	DebugCommandHandler handler(*database);
-	handler.handle("debug states");
-	EXPECT_FALSE(capturedOut_.str().empty());
+	expectLegacyInspectorUnavailable("debug states");
 }
 
 // Test 'debug state <page>' (Numeric page)
 TEST_F(DebugCommandHandlerTest, HandleStateNumericPage) {
-	DebugCommandHandler handler(*database);
-	// Passing "0" triggers the inspectStateSegments path instead of inspectStateData
-	handler.handle("debug state 0");
-	EXPECT_FALSE(capturedOut_.str().empty());
+	expectLegacyInspectorUnavailable("debug state 0");
 }
 
 // Test Unknown Target
 TEST_F(DebugCommandHandlerTest, HandleUnknownTarget) {
-	DebugCommandHandler handler(*database);
-	handler.handle("debug invalid_target");
-
-	std::string err = capturedErr_.str();
-	EXPECT_NE(err.find("Unknown debug target"), std::string::npos);
+	expectLegacyInspectorUnavailable("debug invalid_target");
 }
 
 // Test Storage Not Active (Database Closed)
@@ -182,8 +146,11 @@ TEST_F(DebugCommandHandlerTest, HandleStorageNotActive) {
 	handler.handle("debug summary");
 
 	std::string err = capturedErr_.str();
-	// Expect error about storage not active OR inspector not initialized
-	bool hasError = (err.find("not active") != std::string::npos) || (err.find("not initialized") != std::string::npos);
+	// A closed native database remains an incompatible format for the legacy
+	// inspector; a legacy database instead reports its inactive storage state.
+	bool hasError = (err.find("not active") != std::string::npos) ||
+					(err.find("not initialized") != std::string::npos) ||
+					(err.find("legacy segment inspector is unavailable") != std::string::npos);
 
 	EXPECT_TRUE(hasError) << "Expected strict error message not found. stderr: " << err;
 }
@@ -199,24 +166,13 @@ TEST_F(DebugCommandHandlerTest, HandleHelp) {
 
 // Test Empty/Formatting resilience
 TEST_F(DebugCommandHandlerTest, HandleFormattingResilience) {
-	DebugCommandHandler handler(*database);
-	handler.handle("debug  nodes ; ; ");
-	EXPECT_FALSE(capturedOut_.str().empty());
-	EXPECT_TRUE(capturedErr_.str().empty());
+	expectLegacyInspectorUnavailable("debug  nodes ; ; ");
 }
 
 // Test Exception Handling (Argument out of range)
 TEST_F(DebugCommandHandlerTest, HandleExceptionOutOfRange) {
-	DebugCommandHandler handler(*database);
-
-	// Provide a number strictly containing digits but too large for std::stoi/int.
-	// This passes the `all_of(isdigit)` check but throws std::out_of_range during conversion.
-	// 99999999999999999999 is larger than UINT64_MAX, definitely larger than int.
-	handler.handle("debug nodes 99999999999999999999");
-
-	std::string err = capturedErr_.str();
-	// Expect the catch block to print "Debug Error: ..."
-	EXPECT_NE(err.find("Debug Error:"), std::string::npos);
+	// Native databases reject legacy inspection before parsing a page number.
+	expectLegacyInspectorUnavailable("debug nodes 99999999999999999999");
 }
 
 // ============================================================================
@@ -225,37 +181,26 @@ TEST_F(DebugCommandHandlerTest, HandleExceptionOutOfRange) {
 
 // Test debug command with various extra semicolons
 TEST_F(DebugCommandHandlerTest, HandleExtraSemicolons) {
-	DebugCommandHandler handler(*database);
-	handler.handle("debug;;; nodes;;");
-	EXPECT_FALSE(capturedOut_.str().empty());
+	expectLegacyInspectorUnavailable("debug;;; nodes;;");
 }
 
 // Test debug command with tabs instead of spaces
 TEST_F(DebugCommandHandlerTest, HandleTabsInCommand) {
-	DebugCommandHandler handler(*database);
-	handler.handle("debug	nodes	0");
-	EXPECT_FALSE(capturedOut_.str().empty());
+	expectLegacyInspectorUnavailable("debug	nodes	0");
 }
 
 // Test debug state with numeric argument
 TEST_F(DebugCommandHandlerTest, HandleStateWithNumericArg) {
-	DebugCommandHandler handler(*database);
-	handler.handle("debug state 1");
-	EXPECT_FALSE(capturedOut_.str().empty());
+	expectLegacyInspectorUnavailable("debug state 1");
 }
 
 // Test debug nodes with large page number
 TEST_F(DebugCommandHandlerTest, HandleNodesLargePage) {
-	DebugCommandHandler handler(*database);
-	handler.handle("debug nodes 99999");
-	EXPECT_FALSE(capturedOut_.str().empty());
+	expectLegacyInspectorUnavailable("debug nodes 99999");
 }
 
 TEST_F(DebugCommandHandlerTest, HandleNodesWithNonNumericPageUsesDefaultPage) {
-	DebugCommandHandler handler(*database);
-	handler.handle("debug nodes not_a_page");
-	EXPECT_FALSE(capturedOut_.str().empty());
-	EXPECT_TRUE(capturedErr_.str().empty());
+	expectLegacyInspectorUnavailable("debug nodes not_a_page");
 }
 
 TEST_F(DebugCommandHandlerTest, HandleWhitespaceAndSemicolonOnlyShowsHelp) {
@@ -267,7 +212,5 @@ TEST_F(DebugCommandHandlerTest, HandleWhitespaceAndSemicolonOnlyShowsHelp) {
 
 // Test debug command with trailing whitespace only
 TEST_F(DebugCommandHandlerTest, HandleTrailingWhitespace) {
-	DebugCommandHandler handler(*database);
-	handler.handle("debug nodes    ");
-	EXPECT_FALSE(capturedOut_.str().empty());
+	expectLegacyInspectorUnavailable("debug nodes    ");
 }

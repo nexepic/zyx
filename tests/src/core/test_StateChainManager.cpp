@@ -24,7 +24,7 @@
 #include <filesystem>
 #include <gtest/gtest.h>
 #include <memory>
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/core/State.hpp"
 #include "graph/core/StateChainManager.hpp"
 #include "graph/storage/FileStorage.hpp"
@@ -37,10 +37,10 @@ protected:
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath = std::filesystem::temp_directory_path() / ("test_stateChain_" + to_string(uuid) + ".dat");
 
-		// Initialize Database and FileStorage
-		database = std::make_unique<graph::Database>(testFilePath.string());
+		// Initialize graph::storage::testing::LegacyPhysicalStorageTestHarness and FileStorage
+		database = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testFilePath.string());
 		database->open();
-		fileStorage = database->getStorage();
+		fileStorage = database->storage();
 		dataManager = fileStorage->getDataManager();
 
 		stateChainManager = std::make_unique<graph::StateChainManager>(dataManager);
@@ -54,7 +54,7 @@ protected:
 	}
 
 	std::filesystem::path testFilePath;
-	std::unique_ptr<graph::Database> database;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> database;
 	std::shared_ptr<graph::storage::FileStorage> fileStorage;
 	std::shared_ptr<graph::storage::DataManager> dataManager;
 	std::unique_ptr<graph::StateChainManager> stateChainManager;

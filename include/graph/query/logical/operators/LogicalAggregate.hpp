@@ -70,9 +70,14 @@ public:
 
     [[nodiscard]] std::vector<std::string> getOutputVariables() const override {
         std::vector<std::string> vars;
-        // Include group-by variable names (toString of each group-by expression)
-        for (const auto &expr : groupByExprs_) {
-            if (expr) vars.push_back(expr->toString());
+        for (size_t index = 0U; index < groupByExprs_.size(); ++index) {
+            const auto &expr = groupByExprs_[index];
+            if (!expr) continue;
+            if (index < groupByAliases_.size() && !groupByAliases_[index].empty()) {
+                vars.push_back(groupByAliases_[index]);
+            } else {
+                vars.push_back(expr->toString());
+            }
         }
         // Include aliases from aggregation items
         for (const auto &agg : aggregations_) {

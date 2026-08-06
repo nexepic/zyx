@@ -93,6 +93,8 @@ namespace {
 						appendPod(buffer, arg.months);
 						appendPod(buffer, arg.days);
 						appendPod(buffer, arg.nanos);
+					} else if constexpr (std::is_same_v<ValueType, PropertyValue::Bytes>) {
+						throw std::runtime_error("binary PropertyValue requires the native property codec");
 					}
 				},
 				value.getVariant());

@@ -22,7 +22,7 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/storage/CommittedSnapshot.hpp"
@@ -38,7 +38,7 @@ protected:
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testDbPath = fs::temp_directory_path() / ("test_snapshot_" + boost::uuids::to_string(uuid) + ".zyx");
 		fs::remove_all(testDbPath);
-		db = std::make_unique<Database>(testDbPath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testDbPath.string());
 		db->open();
 	}
 
@@ -51,7 +51,7 @@ protected:
 	}
 
 	fs::path testDbPath;
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 };
 
 TEST_F(SnapshotIsolationTest, ReadOnlyTransactionReadsCommittedNodeFromDeferredOverlay) {
@@ -59,7 +59,7 @@ TEST_F(SnapshotIsolationTest, ReadOnlyTransactionReadsCommittedNodeFromDeferredO
 	Node node(0, 42);
 	{
 		auto txn = db->beginTransaction();
-		db->getStorage()->getDataManager()->addNode(node);
+		db->storage()->getDataManager()->addNode(node);
 		txn.commit();
 	}
 	ASSERT_GT(node.getId(), 0);
@@ -67,7 +67,7 @@ TEST_F(SnapshotIsolationTest, ReadOnlyTransactionReadsCommittedNodeFromDeferredO
 	// WAL-first commits publish a committed dirty overlay until checkpoint.
 	auto txn = db->beginReadOnlyTransaction();
 
-	auto *dm = db->getStorage()->getDataManager().get();
+	auto *dm = db->storage()->getDataManager().get();
 	const auto *snapshot = dm->getCurrentSnapshot();
 	ASSERT_NE(snapshot, nullptr);
 	EXPECT_TRUE(snapshot->nodes.contains(node.getId()));
@@ -85,7 +85,7 @@ TEST_F(SnapshotIsolationTest, ReadOnlyTransactionReadsCommittedEdgeFromDeferredO
 	Node src(0, 0), tgt(0, 0);
 	{
 		auto txn = db->beginTransaction();
-		auto &dm = *db->getStorage()->getDataManager();
+		auto &dm = *db->storage()->getDataManager();
 		dm.addNode(src);
 		dm.addNode(tgt);
 		txn.commit();
@@ -94,13 +94,13 @@ TEST_F(SnapshotIsolationTest, ReadOnlyTransactionReadsCommittedEdgeFromDeferredO
 	Edge edge(0, src.getId(), tgt.getId(), 0);
 	{
 		auto txn = db->beginTransaction();
-		db->getStorage()->getDataManager()->addEdge(edge);
+		db->storage()->getDataManager()->addEdge(edge);
 		txn.commit();
 	}
 	ASSERT_GT(edge.getId(), 0);
 
 	auto txn = db->beginReadOnlyTransaction();
-	auto *dm = db->getStorage()->getDataManager().get();
+	auto *dm = db->storage()->getDataManager().get();
 	const auto *snapshot = dm->getCurrentSnapshot();
 	ASSERT_NE(snapshot, nullptr);
 	EXPECT_TRUE(snapshot->edges.contains(edge.getId()));
@@ -119,13 +119,13 @@ TEST_F(SnapshotIsolationTest, ReadOnlyTransactionReadsModifiedNodeFromDeferredOv
 	Node node(0, 10);
 	{
 		auto txn = db->beginTransaction();
-		db->getStorage()->getDataManager()->addNode(node);
+		db->storage()->getDataManager()->addNode(node);
 		txn.commit();
 	}
 
 	// Update label to 99
 	{
-		auto &dm = *db->getStorage()->getDataManager();
+		auto &dm = *db->storage()->getDataManager();
 		auto txn = db->beginTransaction();
 		Node toUpdate = dm.getNode(node.getId());
 		toUpdate.setLabelId(99);
@@ -134,7 +134,7 @@ TEST_F(SnapshotIsolationTest, ReadOnlyTransactionReadsModifiedNodeFromDeferredOv
 	}
 
 	auto txn = db->beginReadOnlyTransaction();
-	auto *dm = db->getStorage()->getDataManager().get();
+	auto *dm = db->storage()->getDataManager().get();
 	const auto *snapshot = dm->getCurrentSnapshot();
 	ASSERT_NE(snapshot, nullptr);
 	EXPECT_TRUE(snapshot->nodes.contains(node.getId()));
@@ -152,12 +152,12 @@ TEST_F(SnapshotIsolationTest, ReadOnlyTransactionReadsDeletedNodeFromDeferredOve
 	Node node(0, 0);
 	{
 		auto txn = db->beginTransaction();
-		db->getStorage()->getDataManager()->addNode(node);
+		db->storage()->getDataManager()->addNode(node);
 		txn.commit();
 	}
 
 	{
-		auto &dm = *db->getStorage()->getDataManager();
+		auto &dm = *db->storage()->getDataManager();
 		auto txn = db->beginTransaction();
 		Node toDelete = dm.getNode(node.getId());
 		dm.deleteNode(toDelete);
@@ -165,7 +165,7 @@ TEST_F(SnapshotIsolationTest, ReadOnlyTransactionReadsDeletedNodeFromDeferredOve
 	}
 
 	auto txn = db->beginReadOnlyTransaction();
-	auto *dm = db->getStorage()->getDataManager().get();
+	auto *dm = db->storage()->getDataManager().get();
 	const auto *snapshot = dm->getCurrentSnapshot();
 	ASSERT_NE(snapshot, nullptr);
 	EXPECT_TRUE(snapshot->nodes.empty());
@@ -182,13 +182,13 @@ TEST_F(SnapshotIsolationTest, ReadOnlyTransactionUsesCleanSnapshotOverlayAndDisk
 	Node node(0, 77);
 	{
 		auto txn = db->beginTransaction();
-		db->getStorage()->getDataManager()->addNode(node);
+		db->storage()->getDataManager()->addNode(node);
 		txn.commit();
 	}
 
 	// Start a read-only transaction and read the node through normal API
 	auto txn = db->beginReadOnlyTransaction();
-	Node readNode = db->getStorage()->getDataManager()->getNode(node.getId());
+	Node readNode = db->storage()->getDataManager()->getNode(node.getId());
 	EXPECT_EQ(readNode.getId(), node.getId());
 	EXPECT_TRUE(readNode.isActive());
 	EXPECT_EQ(readNode.getLabelId(), 77);
@@ -197,7 +197,7 @@ TEST_F(SnapshotIsolationTest, ReadOnlyTransactionUsesCleanSnapshotOverlayAndDisk
 
 TEST_F(SnapshotIsolationTest, PersistenceManagerCaptureCommittedSnapshot) {
 	// Direct unit test of captureCommittedSnapshot
-	auto &dm = *db->getStorage()->getDataManager();
+	auto &dm = *db->storage()->getDataManager();
 	auto pm = dm.getPersistenceManager();
 
 	// Add a node in a write transaction (this marks it dirty)
@@ -223,7 +223,7 @@ TEST_F(SnapshotIsolationTest, EmptyTransactionProducesEmptySnapshot) {
 	}
 
 	auto txn = db->beginReadOnlyTransaction();
-	auto *dm = db->getStorage()->getDataManager().get();
+	auto *dm = db->storage()->getDataManager().get();
 	const auto *snapshot = dm->getCurrentSnapshot();
 	ASSERT_NE(snapshot, nullptr);
 	EXPECT_TRUE(snapshot->nodes.empty());

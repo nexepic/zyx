@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/execution/RelationshipColumnarCountKernel.hpp"
 #include "src/query/execution/RelationshipColumnarCountKernelDetail.hpp"
@@ -23,9 +23,9 @@ protected:
 		const auto uuid = boost::uuids::random_generator()();
 		testDbPath = fs::temp_directory_path() /
 					 ("test_relationship_columnar_count_kernel_" + boost::uuids::to_string(uuid) + ".zyx");
-		db = std::make_unique<Database>(testDbPath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testDbPath.string());
 		db->open();
-		dm = db->getStorage()->getDataManager();
+		dm = db->storage()->getDataManager();
 		userLabel = dm->getOrCreateTokenId("User");
 		followsType = dm->getOrCreateTokenId("FOLLOWS");
 		likesType = dm->getOrCreateTokenId("LIKES");
@@ -74,7 +74,7 @@ protected:
 	}
 
 	fs::path testDbPath;
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<storage::DataManager> dm;
 	int64_t userLabel = 0;
 	int64_t followsType = 0;
@@ -100,7 +100,7 @@ TEST_F(RelationshipColumnarCountKernelTest, DetailCountsFallbackEdgesAndRows) {
 			followsType, {{"weight", PropertyValue(int64_t{10})}});
 	const auto second = addRelationshipWithProperties(
 			followsType, {{"weight", PropertyValue(int64_t{20})}});
-	db->getStorage()->flush();
+	db->storage()->flush();
 	dm->clearCache();
 
 	VectorizedPropertyPredicate predicate;
@@ -156,7 +156,7 @@ TEST_F(RelationshipColumnarCountKernelTest, CountsTypeOnlyRelationshipsFromMetad
 		const int64_t typeId = i < 120 ? followsType : likesType;
 		maxEdgeId = addRelationship(typeId).getId();
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	RelationshipColumnarCountKernel kernel(dm);
@@ -180,7 +180,7 @@ TEST_F(RelationshipColumnarCountKernelTest, CountsTypeOnlyRelationshipsFromMetad
 	EXPECT_FALSE(snapshot.contains("relationship_count.type_cache"));
 
 	maxEdgeId = addRelationship(followsType).getId();
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 	graph::debug::PerfTrace::reset();
 	auto refreshedFollows = kernel.count(request(maxEdgeId, followsType));
@@ -199,7 +199,7 @@ TEST_F(RelationshipColumnarCountKernelTest, AllTypePropertyPredicateSkipsFullRan
 							{{"weight", PropertyValue(i % 3 == 0 ? int64_t{7} : int64_t{3})}})
 							.getId();
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	RelationshipColumnarCountKernel kernel(dm);
@@ -228,7 +228,7 @@ TEST_F(RelationshipColumnarCountKernelTest, CountsPropertyPredicatesWithoutMater
 	for (int i = 0; i < 125; ++i) {
 		maxEdgeId = addRelationship(i % 2 == 0 ? followsType : likesType).getId();
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	RelationshipColumnarCountKernel kernel(dm);
@@ -270,7 +270,7 @@ TEST_F(RelationshipColumnarCountKernelTest, CountsPropertyPredicatesWithoutMater
 	EXPECT_EQ(noMatches->count, 0);
 
 	maxEdgeId = addRelationshipWithProperties(followsType, {{"weight", PropertyValue(int64_t{7})}}).getId();
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	weightRequest = request(maxEdgeId, followsType);
@@ -303,7 +303,7 @@ TEST_F(RelationshipColumnarCountKernelTest, CountsScalarEqualityPredicatesWithTy
 	for (int i = 0; i < 128; ++i) {
 		addRelationship(i % 2 == 0 ? followsType : likesType);
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	RelationshipColumnarCountKernel kernel(dm);
@@ -347,7 +347,7 @@ TEST_F(RelationshipColumnarCountKernelTest, CountsLargeTypedPropertyPredicatesWi
 			}
 		}
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	RelationshipColumnarCountKernel kernel(dm);
@@ -390,7 +390,7 @@ TEST_F(RelationshipColumnarCountKernelTest, CountsAllTypesByOwnerScanForPartialL
 			++expectedMatches;
 		}
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	RelationshipColumnarCountKernel kernel(dm);
@@ -435,7 +435,7 @@ TEST_F(RelationshipColumnarCountKernelTest, TypedOwnerScanFiltersLargeFallbackCa
 	firstMatchingFollows.setPropertyEntityId(
 			firstMatchingFollows.getPropertyEntityId() + 1000000, PropertyStorageType::PROPERTY_ENTITY);
 	dm->updateEdge(firstMatchingFollows);
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	RelationshipColumnarCountKernel kernel(dm);
@@ -455,7 +455,7 @@ TEST_F(RelationshipColumnarCountKernelTest, TypedOwnerScanFiltersLargeFallbackCa
 
 TEST_F(RelationshipColumnarCountKernelTest, PropertyPredicateRejectsInvalidOwnerRange) {
 	auto edge = addRelationshipWithProperties(followsType, {{"weight", PropertyValue(int64_t{7})}});
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	RelationshipColumnarCountKernel kernel(dm);
@@ -481,7 +481,7 @@ TEST_F(RelationshipColumnarCountKernelTest, CountsAllTypesWithBlobFallbackAfterM
 	for (int i = 0; i < 125; ++i) {
 		maxEdgeId = addRelationship(i % 2 == 0 ? followsType : likesType).getId();
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	RelationshipColumnarCountKernel kernel(dm);
@@ -524,7 +524,7 @@ TEST_F(RelationshipColumnarCountKernelTest, CountsVectorComparisonPredicatesWith
 	for (int i = 0; i < 128; ++i) {
 		maxEdgeId = addRelationship(i % 2 == 0 ? followsType : likesType).getId();
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	VectorizedPropertyPredicate lower;
@@ -582,7 +582,7 @@ TEST_F(RelationshipColumnarCountKernelTest, CountsGroupedVectorPredicatesByKey) 
 	for (int i = 0; i < 128; ++i) {
 		maxEdgeId = addRelationship(i % 2 == 0 ? followsType : likesType).getId();
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	VectorizedPropertyPredicate lower;
@@ -636,7 +636,7 @@ TEST_F(RelationshipColumnarCountKernelTest, CountsVectorEqualityPredicatesViaEqu
 	for (int i = 0; i < 128; ++i) {
 		maxEdgeId = addRelationship(i % 2 == 0 ? followsType : likesType).getId();
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	VectorizedPropertyPredicate weight;

@@ -24,7 +24,6 @@
 #include "boost/uuid/uuid.hpp"
 #include "boost/uuid/uuid_generators.hpp"
 #include "boost/uuid/uuid_io.hpp"
-#include "graph/core/Database.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/data/DataManager.hpp"
@@ -33,7 +32,6 @@
 class NodeManagerTest : public ::testing::Test {
 protected:
 	std::filesystem::path testFilePath;
-	std::unique_ptr<graph::Database> db;
 	std::shared_ptr<graph::storage::FileStorage> storage;
 	std::shared_ptr<graph::storage::DataManager> dataManager;
 	std::shared_ptr<graph::storage::NodeManager> nodeManager;
@@ -43,25 +41,24 @@ protected:
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath = std::filesystem::temp_directory_path() / ("test_nodeManager_" + to_string(uuid) + ".dat");
 
-		// Initialize database and get managers from the DataManager
-		db = std::make_unique<graph::Database>(testFilePath.string());
-		db->open();
-		storage = db->getStorage();
+		// This suite exercises the legacy physical node manager directly.
+		storage = std::make_shared<graph::storage::FileStorage>(
+				testFilePath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
+		storage->open();
 		dataManager = storage->getDataManager();
 		// Get the manager instance that was created by the DataManager
 		nodeManager = dataManager->getNodeManager();
 	}
 
 	void TearDown() override {
-		// Release shared_ptrs before closing database
+		// Release entity managers before closing legacy physical storage.
 		nodeManager.reset();
 		dataManager.reset();
-		storage.reset();
 
-		if (db) {
-			db->close();
+		if (storage) {
+			storage->close();
 		}
-		db.reset();
+		storage.reset();
 
 		std::error_code ec;
 		std::filesystem::remove(testFilePath, ec);

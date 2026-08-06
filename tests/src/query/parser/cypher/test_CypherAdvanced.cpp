@@ -706,7 +706,22 @@ TEST_F(CypherAdvancedTest, TraversalNoRelDetail) {
 TEST_F(CypherAdvancedTest, CreateWithRelNoDetail) {
 	// CREATE with relationship that has no detail (no variable, no type)
 	auto res = execute("CREATE (a:CreateNoRel)-->(b:CreateNoRel) RETURN a, b");
-	EXPECT_GE(res.rowCount(), 1UL);
+	ASSERT_EQ(res.rowCount(), 1UL);
+
+	res = execute("MATCH (a:CreateNoRel)-[r]->(b:CreateNoRel) RETURN r");
+	ASSERT_EQ(res.rowCount(), 1UL);
+	EXPECT_TRUE(res.getRows()[0].at("r").asEdge().getType().empty());
+
+	EXPECT_EQ(execute("MATCH (:CreateNoRel)-[:NAMED_ONLY]->(:CreateNoRel) RETURN 1").rowCount(), 0UL);
+}
+
+TEST_F(CypherAdvancedTest, MergeWithRelNoDetail) {
+	(void) execute("MERGE (a:MergeNoRel {id: 1})-->(b:MergeNoRel {id: 2})");
+	(void) execute("MERGE (a:MergeNoRel {id: 1})-->(b:MergeNoRel {id: 2})");
+
+	auto res = execute("MATCH (a:MergeNoRel {id: 1})-[r]->(b:MergeNoRel {id: 2}) RETURN r");
+	ASSERT_EQ(res.rowCount(), 1UL);
+	EXPECT_TRUE(res.getRows()[0].at("r").asEdge().getType().empty());
 }
 
 // ============================================================================

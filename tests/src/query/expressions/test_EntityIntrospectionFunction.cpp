@@ -28,7 +28,7 @@
 #include "graph/query/execution/Record.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/core/Edge.hpp"
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/data/DataManager.hpp"
 
@@ -632,9 +632,9 @@ protected:
 		testFilePath_ = std::filesystem::temp_directory_path() /
 			("test_entity_introspection_" + to_string(uuid) + ".dat");
 
-		database_ = std::make_unique<graph::Database>(testFilePath_.string());
+		database_ = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testFilePath_.string());
 		database_->open();
-		auto storage = database_->getStorage();
+		auto storage = database_->storage();
 		dataManager_ = storage->getDataManager().get();
 	}
 
@@ -649,7 +649,7 @@ protected:
 
 	FunctionRegistry* registry_;
 	std::filesystem::path testFilePath_;
-	std::unique_ptr<graph::Database> database_;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> database_;
 	graph::storage::DataManager* dataManager_ = nullptr;
 };
 

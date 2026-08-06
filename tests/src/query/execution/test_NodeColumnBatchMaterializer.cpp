@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/execution/NodeColumnBatch.hpp"
 #include "graph/query/execution/NodeColumnBatchMaterializer.hpp"
@@ -18,16 +18,16 @@ using namespace graph::query::execution;
 
 class NodeColumnBatchMaterializerTest : public ::testing::Test {
 protected:
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<storage::DataManager> dm;
 	fs::path testFilePath;
 
 	void SetUp() override {
 		const auto uuid = boost::uuids::random_generator()();
 		testFilePath = fs::temp_directory_path() / ("test_node_column_batch_materializer_" + boost::uuids::to_string(uuid) + ".dat");
-		db = std::make_unique<Database>(testFilePath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testFilePath.string());
 		db->open();
-		dm = db->getStorage()->getDataManager();
+		dm = db->storage()->getDataManager();
 	}
 
 	void TearDown() override {

@@ -24,7 +24,7 @@
 #include <filesystem>
 #include <gtest/gtest.h>
 #include <memory>
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/state/SystemStateManager.hpp"
 
@@ -34,12 +34,12 @@ protected:
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath = std::filesystem::temp_directory_path() / ("test_stateMgr_" + to_string(uuid) + ".dat");
 
-		database = std::make_unique<graph::Database>(testFilePath.string());
+		database = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testFilePath.string());
 		database->open();
 
 		// Initialize the manager under test
 		stateManager =
-				std::make_unique<graph::storage::state::SystemStateManager>(database->getStorage()->getDataManager());
+				std::make_unique<graph::storage::state::SystemStateManager>(database->storage()->getDataManager());
 	}
 
 	void TearDown() override {
@@ -52,7 +52,7 @@ protected:
 	}
 
 	std::filesystem::path testFilePath;
-	std::unique_ptr<graph::Database> database;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> database;
 	std::unique_ptr<graph::storage::state::SystemStateManager> stateManager;
 };
 
@@ -162,14 +162,14 @@ TEST_F(SystemStateManagerTest, Persistence) {
 	stateManager->set<int64_t>(key, field, val);
 
 	// Flush to disk
-	database->getStorage()->flush();
+	database->storage()->flush();
 	database->close();
 
 	// Reload
-	auto newDb = std::make_unique<graph::Database>(testFilePath.string());
+	auto newDb = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testFilePath.string());
 	newDb->open();
 	auto newManager =
-			std::make_unique<graph::storage::state::SystemStateManager>(newDb->getStorage()->getDataManager());
+			std::make_unique<graph::storage::state::SystemStateManager>(newDb->storage()->getDataManager());
 
 	// Verify
 	EXPECT_EQ(newManager->get<int64_t>(key, field, 0), val);
@@ -237,32 +237,32 @@ TEST_F(SystemStateManagerTest, Optimization_NoWriteIfSame) {
 	stateManager->set<int64_t>(key, "val", 100);
 
 	// Flush to clear dirty flags in DataManager/PersistenceManager
-	database->getStorage()->flush();
-	ASSERT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges());
+	database->storage()->flush();
+	ASSERT_FALSE(database->storage()->getDataManager()->hasUnsavedChanges());
 
 	// 2. Set SAME value (Scalar)
 	// Should be optimized out
 	stateManager->set<int64_t>(key, "val", 100);
-	EXPECT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges())
+	EXPECT_FALSE(database->storage()->getDataManager()->hasUnsavedChanges())
 			<< "Optimization Failed: Setting same scalar value triggered a dirty state.";
 
 	// 3. Set DIFFERENT value
 	stateManager->set<int64_t>(key, "val", 101);
-	EXPECT_TRUE(database->getStorage()->getDataManager()->hasUnsavedChanges());
+	EXPECT_TRUE(database->storage()->getDataManager()->hasUnsavedChanges());
 
 	// Flush again
-	database->getStorage()->flush();
+	database->storage()->flush();
 
 	// 4. Test Map Optimization (MERGE mode)
 	std::unordered_map<std::string, int64_t> sameMap = {{"val", 101}};
 	stateManager->setMap(key, sameMap, graph::storage::state::UpdateMode::MERGE);
-	EXPECT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges())
+	EXPECT_FALSE(database->storage()->getDataManager()->hasUnsavedChanges())
 			<< "Optimization Failed: Merging identical map triggered a dirty state.";
 
 	// 5. Test Map Optimization (REPLACE mode)
 	// In REPLACE mode, same content should also be optimized
 	stateManager->setMap(key, sameMap, graph::storage::state::UpdateMode::REPLACE);
-	EXPECT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges())
+	EXPECT_FALSE(database->storage()->getDataManager()->hasUnsavedChanges())
 			<< "Optimization Failed: Replacing with identical map triggered a dirty state.";
 }
 
@@ -368,14 +368,14 @@ TEST_F(SystemStateManagerTest, ReplaceMode_SameContentSameSize) {
 	stateManager->setMap(key, std::unordered_map<std::string, int64_t>{{"A", 1}, {"B", 2}},
 						 graph::storage::state::UpdateMode::REPLACE);
 
-	database->getStorage()->flush();
-	ASSERT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges());
+	database->storage()->flush();
+	ASSERT_FALSE(database->storage()->getDataManager()->hasUnsavedChanges());
 
 	// Replace with same size but different content
 	stateManager->setMap(key, std::unordered_map<std::string, int64_t>{{"A", 1}, {"B", 99}},
 						 graph::storage::state::UpdateMode::REPLACE);
 
-	EXPECT_TRUE(database->getStorage()->getDataManager()->hasUnsavedChanges());
+	EXPECT_TRUE(database->storage()->getDataManager()->hasUnsavedChanges());
 }
 
 // Test 18: Replace with empty existing state (noop)
@@ -432,12 +432,12 @@ TEST_F(SystemStateManagerTest, BoolMergeNoop) {
 	stateManager->set<bool>(key, field, true);
 
 	// Flush to clear dirty state
-	database->getStorage()->flush();
-	ASSERT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges());
+	database->storage()->flush();
+	ASSERT_FALSE(database->storage()->getDataManager()->hasUnsavedChanges());
 
 	// Set same value again - should be a no-op (covers the it->second != newVal false branch)
 	stateManager->set<bool>(key, field, true);
-	EXPECT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges())
+	EXPECT_FALSE(database->storage()->getDataManager()->hasUnsavedChanges())
 			<< "Setting same bool value should not trigger dirty state.";
 }
 
@@ -450,12 +450,12 @@ TEST_F(SystemStateManagerTest, DoubleMergeNoop) {
 	stateManager->set<double>(key, field, 2.718);
 
 	// Flush
-	database->getStorage()->flush();
-	ASSERT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges());
+	database->storage()->flush();
+	ASSERT_FALSE(database->storage()->getDataManager()->hasUnsavedChanges());
 
 	// Set same value again
 	stateManager->set<double>(key, field, 2.718);
-	EXPECT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges())
+	EXPECT_FALSE(database->storage()->getDataManager()->hasUnsavedChanges())
 			<< "Setting same double value should not trigger dirty state.";
 }
 
@@ -465,11 +465,11 @@ TEST_F(SystemStateManagerTest, DoubleMergeDetectsChange) {
 	const std::string field = "ratio";
 
 	stateManager->set<double>(key, field, 1.0);
-	database->getStorage()->flush();
+	database->storage()->flush();
 
 	// Set a different value
 	stateManager->set<double>(key, field, 2.0);
-	EXPECT_TRUE(database->getStorage()->getDataManager()->hasUnsavedChanges());
+	EXPECT_TRUE(database->storage()->getDataManager()->hasUnsavedChanges());
 
 	// Verify new value
 	EXPECT_DOUBLE_EQ(stateManager->get<double>(key, field, 0.0), 2.0);
@@ -555,7 +555,7 @@ TEST_F(SystemStateManagerTest, StringMapReplaceSameSizeDifferentContent) {
 	map1["k2"] = "v2";
 	stateManager->setMap(key, map1, graph::storage::state::UpdateMode::REPLACE);
 
-	database->getStorage()->flush();
+	database->storage()->flush();
 
 	// Replace with same size but different values - triggers the REPLACE comparison loop
 	std::unordered_map<std::string, std::string> map2;
@@ -563,7 +563,7 @@ TEST_F(SystemStateManagerTest, StringMapReplaceSameSizeDifferentContent) {
 	map2["k2"] = "changed";
 	stateManager->setMap(key, map2, graph::storage::state::UpdateMode::REPLACE);
 
-	EXPECT_TRUE(database->getStorage()->getDataManager()->hasUnsavedChanges());
+	EXPECT_TRUE(database->storage()->getDataManager()->hasUnsavedChanges());
 	auto result = stateManager->getMap<std::string>(key);
 	EXPECT_EQ(result["k2"], "changed");
 }
@@ -576,12 +576,12 @@ TEST_F(SystemStateManagerTest, StringMapReplaceSameContentNoop) {
 	map1["k1"] = "v1";
 	stateManager->setMap(key, map1, graph::storage::state::UpdateMode::REPLACE);
 
-	database->getStorage()->flush();
-	ASSERT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges());
+	database->storage()->flush();
+	ASSERT_FALSE(database->storage()->getDataManager()->hasUnsavedChanges());
 
 	// Replace with identical content
 	stateManager->setMap(key, map1, graph::storage::state::UpdateMode::REPLACE);
-	EXPECT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges())
+	EXPECT_FALSE(database->storage()->getDataManager()->hasUnsavedChanges())
 			<< "Replacing with identical string map should not trigger dirty state.";
 }
 
@@ -665,13 +665,13 @@ TEST_F(SystemStateManagerTest, ReplaceModeMissingKeyInExisting) {
 	stateManager->setMap(key, std::unordered_map<std::string, int64_t>{{"A", 1}, {"B", 2}},
 						 graph::storage::state::UpdateMode::REPLACE);
 
-	database->getStorage()->flush();
+	database->storage()->flush();
 
 	// Replace with same size map but different keys - triggers key-not-found branch
 	stateManager->setMap(key, std::unordered_map<std::string, int64_t>{{"A", 1}, {"C", 2}},
 						 graph::storage::state::UpdateMode::REPLACE);
 
-	EXPECT_TRUE(database->getStorage()->getDataManager()->hasUnsavedChanges());
+	EXPECT_TRUE(database->storage()->getDataManager()->hasUnsavedChanges());
 	auto result = stateManager->getMap<int64_t>(key);
 	EXPECT_EQ(result.size(), 2UL);
 	EXPECT_TRUE(result.contains("A"));
@@ -691,12 +691,12 @@ TEST_F(SystemStateManagerTest, PropVecReplaceNoop) {
 	map1["data"] = vec1;
 	stateManager->setMap(key, map1, graph::storage::state::UpdateMode::REPLACE);
 
-	database->getStorage()->flush();
-	ASSERT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges());
+	database->storage()->flush();
+	ASSERT_FALSE(database->storage()->getDataManager()->hasUnsavedChanges());
 
 	// Replace with identical content
 	stateManager->setMap(key, map1, graph::storage::state::UpdateMode::REPLACE);
-	EXPECT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges());
+	EXPECT_FALSE(database->storage()->getDataManager()->hasUnsavedChanges());
 }
 
 // Test 36: PropVec empty REPLACE clears existing
@@ -815,12 +815,12 @@ TEST_F(SystemStateManagerTest, PropertyValueMapReplaceSameContentNoop) {
 	map1["b"] = graph::PropertyValue(std::string("two"));
 	stateManager->setMap(key, map1, graph::storage::state::UpdateMode::REPLACE);
 
-	database->getStorage()->flush();
-	ASSERT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges());
+	database->storage()->flush();
+	ASSERT_FALSE(database->storage()->getDataManager()->hasUnsavedChanges());
 
 	// Replace with identical content - should be no-op
 	stateManager->setMap(key, map1, graph::storage::state::UpdateMode::REPLACE);
-	EXPECT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges())
+	EXPECT_FALSE(database->storage()->getDataManager()->hasUnsavedChanges())
 			<< "Replacing PropertyValue map with identical content should not trigger dirty state.";
 }
 
@@ -833,7 +833,7 @@ TEST_F(SystemStateManagerTest, PropertyValueMapReplaceSameSizeDifferent) {
 	map1["b"] = graph::PropertyValue(static_cast<int64_t>(2));
 	stateManager->setMap(key, map1, graph::storage::state::UpdateMode::REPLACE);
 
-	database->getStorage()->flush();
+	database->storage()->flush();
 
 	// Replace with same size but different value
 	std::unordered_map<std::string, graph::PropertyValue> map2;
@@ -841,7 +841,7 @@ TEST_F(SystemStateManagerTest, PropertyValueMapReplaceSameSizeDifferent) {
 	map2["b"] = graph::PropertyValue(static_cast<int64_t>(99));
 	stateManager->setMap(key, map2, graph::storage::state::UpdateMode::REPLACE);
 
-	EXPECT_TRUE(database->getStorage()->getDataManager()->hasUnsavedChanges());
+	EXPECT_TRUE(database->storage()->getDataManager()->hasUnsavedChanges());
 }
 
 // Test 44: PropertyValue map REPLACE different size triggers write
@@ -916,7 +916,7 @@ TEST_F(SystemStateManagerTest, PropVecReplaceSameSizeDifferent) {
 	map1["a"] = vec1;
 	stateManager->setMap(key, map1, graph::storage::state::UpdateMode::REPLACE);
 
-	database->getStorage()->flush();
+	database->storage()->flush();
 
 	// Replace with same size but different content
 	PropVec vec2;
@@ -926,7 +926,7 @@ TEST_F(SystemStateManagerTest, PropVecReplaceSameSizeDifferent) {
 	map2["a"] = vec2;
 	stateManager->setMap(key, map2, graph::storage::state::UpdateMode::REPLACE);
 
-	EXPECT_TRUE(database->getStorage()->getDataManager()->hasUnsavedChanges());
+	EXPECT_TRUE(database->storage()->getDataManager()->hasUnsavedChanges());
 }
 
 // Test 48: PropVec empty MERGE is no-op
@@ -961,12 +961,12 @@ TEST_F(SystemStateManagerTest, PropVecMergeNoop) {
 	map1["data"] = vec1;
 	stateManager->setMap(key, map1, graph::storage::state::UpdateMode::REPLACE);
 
-	database->getStorage()->flush();
-	ASSERT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges());
+	database->storage()->flush();
+	ASSERT_FALSE(database->storage()->getDataManager()->hasUnsavedChanges());
 
 	// Merge same content
 	stateManager->setMap(key, map1, graph::storage::state::UpdateMode::MERGE);
-	EXPECT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges())
+	EXPECT_FALSE(database->storage()->getDataManager()->hasUnsavedChanges())
 			<< "Merging PropVec with same content should not trigger dirty state.";
 }
 
@@ -978,12 +978,12 @@ TEST_F(SystemStateManagerTest, PropertyValueMapMergeNoop) {
 	map1["a"] = graph::PropertyValue(static_cast<int64_t>(42));
 	stateManager->setMap(key, map1, graph::storage::state::UpdateMode::REPLACE);
 
-	database->getStorage()->flush();
-	ASSERT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges());
+	database->storage()->flush();
+	ASSERT_FALSE(database->storage()->getDataManager()->hasUnsavedChanges());
 
 	// Merge same content
 	stateManager->setMap(key, map1, graph::storage::state::UpdateMode::MERGE);
-	EXPECT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges())
+	EXPECT_FALSE(database->storage()->getDataManager()->hasUnsavedChanges())
 			<< "Merging PropertyValue map with same content should not trigger dirty state.";
 }
 
@@ -996,7 +996,7 @@ TEST_F(SystemStateManagerTest, PropertyValueMapReplaceMissingKey) {
 	map1["b"] = graph::PropertyValue(static_cast<int64_t>(2));
 	stateManager->setMap(key, map1, graph::storage::state::UpdateMode::REPLACE);
 
-	database->getStorage()->flush();
+	database->storage()->flush();
 
 	// Replace with same size but different keys
 	std::unordered_map<std::string, graph::PropertyValue> map2;
@@ -1004,7 +1004,7 @@ TEST_F(SystemStateManagerTest, PropertyValueMapReplaceMissingKey) {
 	map2["c"] = graph::PropertyValue(static_cast<int64_t>(2));
 	stateManager->setMap(key, map2, graph::storage::state::UpdateMode::REPLACE);
 
-	EXPECT_TRUE(database->getStorage()->getDataManager()->hasUnsavedChanges());
+	EXPECT_TRUE(database->storage()->getDataManager()->hasUnsavedChanges());
 	auto all = stateManager->getAll(key);
 	EXPECT_EQ(all.size(), 2UL);
 	EXPECT_TRUE(all.contains("a"));
@@ -1019,12 +1019,12 @@ TEST_F(SystemStateManagerTest, Int64MapReplaceSameContentNoop) {
 	std::unordered_map<std::string, int64_t> map1 = {{"A", 1}, {"B", 2}};
 	stateManager->setMap(key, map1, graph::storage::state::UpdateMode::REPLACE);
 
-	database->getStorage()->flush();
-	ASSERT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges());
+	database->storage()->flush();
+	ASSERT_FALSE(database->storage()->getDataManager()->hasUnsavedChanges());
 
 	// Replace with same content
 	stateManager->setMap(key, map1, graph::storage::state::UpdateMode::REPLACE);
-	EXPECT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges())
+	EXPECT_FALSE(database->storage()->getDataManager()->hasUnsavedChanges())
 			<< "Replacing int64 map with identical content should not trigger dirty state.";
 }
 
@@ -1033,12 +1033,12 @@ TEST_F(SystemStateManagerTest, Int64MergeSameValueNoop) {
 	const std::string key = "int64.merge.noop";
 
 	stateManager->set<int64_t>(key, "val", 100);
-	database->getStorage()->flush();
-	ASSERT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges());
+	database->storage()->flush();
+	ASSERT_FALSE(database->storage()->getDataManager()->hasUnsavedChanges());
 
 	// Set same value
 	stateManager->set<int64_t>(key, "val", 100);
-	EXPECT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges());
+	EXPECT_FALSE(database->storage()->getDataManager()->hasUnsavedChanges());
 }
 
 // Test 54: String MERGE same value no-op
@@ -1046,12 +1046,12 @@ TEST_F(SystemStateManagerTest, StringMergeSameValueNoop) {
 	const std::string key = "string.merge.noop";
 
 	stateManager->set<std::string>(key, "val", "hello");
-	database->getStorage()->flush();
-	ASSERT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges());
+	database->storage()->flush();
+	ASSERT_FALSE(database->storage()->getDataManager()->hasUnsavedChanges());
 
 	// Set same value
 	stateManager->set<std::string>(key, "val", "hello");
-	EXPECT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges());
+	EXPECT_FALSE(database->storage()->getDataManager()->hasUnsavedChanges());
 }
 
 // Test 55: Empty map REPLACE when no existing state (covers getStateProperties empty + REPLACE empty branch)
@@ -1395,12 +1395,12 @@ TEST_F(SystemStateManagerTest, VectorFloatMergeSameValueNoop) {
 	map1["emb"] = {1.0f, 2.0f, 3.0f};
 	stateManager->setMap(key, map1, graph::storage::state::UpdateMode::REPLACE);
 
-	database->getStorage()->flush();
-	ASSERT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges());
+	database->storage()->flush();
+	ASSERT_FALSE(database->storage()->getDataManager()->hasUnsavedChanges());
 
 	// Merge with same content
 	stateManager->setMap(key, map1, graph::storage::state::UpdateMode::MERGE);
-	EXPECT_FALSE(database->getStorage()->getDataManager()->hasUnsavedChanges())
+	EXPECT_FALSE(database->storage()->getDataManager()->hasUnsavedChanges())
 			<< "Merging vector<float> with same content should not trigger dirty state.";
 }
 

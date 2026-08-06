@@ -22,11 +22,11 @@
 #include <CLI/CLI.hpp>
 #include <filesystem>
 #include <iostream>
+#include "ProjectConfig.hpp"
 #include "graph/cli/ImportCommand.hpp"
 #include "graph/cli/Repl.hpp"
 #include "graph/core/Database.hpp"
 #include "graph/log/Log.hpp"
-#include "ProjectConfig.hpp"
 
 namespace graph::cli {
 
@@ -105,9 +105,7 @@ namespace graph::cli {
 				const REPL repl(db);
 				repl.runScript(scriptPath);
 
-				if (auto storage = db.getStorage()) {
-					storage->flush();
-				}
+				db.flush();
 				db.close();
 			} catch (const std::exception &e) {
 				std::cerr << "Execution Error: " << e.what() << std::endl;

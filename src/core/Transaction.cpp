@@ -19,58 +19,82 @@
  **/
 
 #include "graph/core/Transaction.hpp"
-#include "graph/core/TransactionManager.hpp"
+#include "graph/query/api/QueryEngine.hpp"
+#include "graph/storage/LogicalGraphTransactionOverlay.hpp"
+#include "graph/storage/LogicalGraphWrite.hpp"
+
+#include <stdexcept>
 
 namespace graph {
 
-	Transaction::Transaction(uint64_t txnId, TransactionManager &mgr, std::shared_ptr<storage::FileStorage> storage) :
-		txnId_(txnId), manager_(&mgr), storage_(std::move(storage)) {}
+	Transaction::Transaction(uint64_t txnId, std::unique_ptr<storage::LogicalGraphTransaction> logicalTransaction,
+							 std::shared_ptr<std::atomic<size_t>> activeWriteTransactionCount) :
+		txnId_(txnId), readOnly_(logicalTransaction && logicalTransaction->isReadOnly()),
+		logicalTransaction_(std::move(logicalTransaction)),
+		activeLogicalWriteTransactionCount_(std::move(activeWriteTransactionCount)) {
+		if (!logicalTransaction_) {
+			throw std::invalid_argument("logical core transaction requires a transaction");
+		}
+		if (!readOnly_ && !activeLogicalWriteTransactionCount_) {
+			throw std::invalid_argument("logical write transaction requires an active-transaction counter");
+		}
+
+		logicalOverlay_ = std::make_unique<storage::LogicalGraphTransactionOverlay>(*logicalTransaction_);
+		if (!readOnly_) {
+			activeLogicalWriteTransactionCount_->fetch_add(1U, std::memory_order_acq_rel);
+			logicalWriteTransactionCounted_ = true;
+		}
+	}
+
+	void Transaction::finishLogicalTransaction() noexcept {
+		if (logicalWriteTransactionCounted_ && activeLogicalWriteTransactionCount_) {
+			activeLogicalWriteTransactionCount_->fetch_sub(1U, std::memory_order_acq_rel);
+			logicalWriteTransactionCounted_ = false;
+		}
+	}
+
+	void Transaction::rollbackActiveLogicalTransactionNoexcept() noexcept {
+		if (state_ != TxnState::TXN_ACTIVE) {
+			return;
+		}
+
+		try {
+			logicalTransaction_->rollback();
+		} catch (...) { // ZYX_COV_EXCL_LINE: destructors and move assignment must remain noexcept on I/O failure.
+			// The transaction object owns the failed overlay and is being retired.
+		}
+		state_ = TxnState::TXN_ROLLED_BACK;
+		finishLogicalTransaction();
+	}
 
 	Transaction::~Transaction() {
-		if (state_ == TxnState::TXN_ACTIVE) {
-			try {
-				manager_->rollbackTransaction(*this);
-			} catch (...) { // ZYX_COV_EXCL_LINE: rollback failures during destruction are defensive storage-failure handling.
-				// Suppress exceptions in destructor
-				// Release locks even if rollback fails
-				readLock_.reset();
-				writeLock_.reset();
-			}
-		}
+		rollbackActiveLogicalTransactionNoexcept();
 	}
 
 	Transaction::Transaction(Transaction &&other) noexcept :
 		txnId_(other.txnId_), state_(other.state_), readOnly_(other.readOnly_),
-		checkpointPolicy_(other.checkpointPolicy_), manager_(other.manager_), storage_(std::move(other.storage_)),
-		readLock_(std::move(other.readLock_)),
-		writeLock_(std::move(other.writeLock_)),
-		snapshot_(std::move(other.snapshot_)) {
+		logicalTransaction_(std::move(other.logicalTransaction_)),
+		logicalOverlay_(std::move(other.logicalOverlay_)),
+		activeLogicalWriteTransactionCount_(std::move(other.activeLogicalWriteTransactionCount_)),
+		logicalWriteTransactionCounted_(other.logicalWriteTransactionCounted_) {
 		other.state_ = TxnState::TXN_ROLLED_BACK; // Prevent other's destructor from rolling back
-		other.manager_ = nullptr;
+		other.logicalWriteTransactionCounted_ = false;
 	}
 
 	Transaction &Transaction::operator=(Transaction &&other) noexcept {
 		if (this != &other) {
-			// If this transaction is still active, roll it back
-			if (state_ == TxnState::TXN_ACTIVE) {
-				try {
-					manager_->rollbackTransaction(*this);
-				} catch (...) { // ZYX_COV_EXCL_LINE: move assignment preserves noexcept by suppressing rollback failures.
-				}
-			}
+			rollbackActiveLogicalTransactionNoexcept();
 
 			txnId_ = other.txnId_;
 			state_ = other.state_;
 			readOnly_ = other.readOnly_;
-			checkpointPolicy_ = other.checkpointPolicy_;
-			manager_ = other.manager_;
-			storage_ = std::move(other.storage_);
-			readLock_ = std::move(other.readLock_);
-			writeLock_ = std::move(other.writeLock_);
-			snapshot_ = std::move(other.snapshot_);
+			logicalTransaction_ = std::move(other.logicalTransaction_);
+			logicalOverlay_ = std::move(other.logicalOverlay_);
+			activeLogicalWriteTransactionCount_ = std::move(other.activeLogicalWriteTransactionCount_);
+			logicalWriteTransactionCounted_ = other.logicalWriteTransactionCounted_;
 
 			other.state_ = TxnState::TXN_ROLLED_BACK;
-			other.manager_ = nullptr;
+			other.logicalWriteTransactionCounted_ = false;
 		}
 		return *this;
 	}
@@ -79,14 +103,49 @@ namespace graph {
 		if (state_ != TxnState::TXN_ACTIVE) {
 			throw std::runtime_error("Cannot commit: transaction is not active");
 		}
-		manager_->commitTransaction(*this);
+		try {
+			static_cast<void>(logicalTransaction_->commit());
+			state_ = TxnState::TXN_COMMITTED;
+			finishLogicalTransaction();
+		} catch (...) {
+			if (logicalTransaction_->state() != storage::LogicalGraphTransactionState::LGTTS_ACTIVE) {
+				state_ = TxnState::TXN_ROLLED_BACK;
+				finishLogicalTransaction();
+			}
+			throw;
+		}
 	}
 
 	void Transaction::rollback() {
 		if (state_ != TxnState::TXN_ACTIVE) {
 			throw std::runtime_error("Cannot rollback: transaction is not active");
 		}
-		manager_->rollbackTransaction(*this);
+		try {
+			logicalTransaction_->rollback();
+			state_ = TxnState::TXN_ROLLED_BACK;
+			finishLogicalTransaction();
+		} catch (...) {
+			if (logicalTransaction_->state() != storage::LogicalGraphTransactionState::LGTTS_ACTIVE) {
+				state_ = TxnState::TXN_ROLLED_BACK;
+				finishLogicalTransaction();
+			}
+			throw;
+		}
+	}
+
+	query::QueryResult Transaction::execute(query::QueryEngine &engine, const std::string &query) {
+		if (state_ != TxnState::TXN_ACTIVE) {
+			throw std::runtime_error("Cannot execute: transaction is not active");
+		}
+		query::QueryContext context;
+		if (readOnly_) {
+			context.execMode = query::ExecMode::EM_READ_ONLY;
+		}
+		if (!logicalOverlay_) {
+			throw std::logic_error("logical transaction has no execution overlay");
+		}
+		return engine.executePlanWithLogicalTransactionOverlay(
+				engine.buildPlan(query), context, *logicalOverlay_, *logicalOverlay_);
 	}
 
 } // namespace graph

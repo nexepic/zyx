@@ -19,11 +19,13 @@ PatternComprehensionExpression::PatternComprehensionExpression(
 	std::string targetLabel,
 	PatternDirection direction,
 	std::unique_ptr<Expression> mapExpr,
-	std::unique_ptr<Expression> whereExpr
+	std::unique_ptr<Expression> whereExpr,
+	std::string relationshipVar
 )
 	: pattern_(std::move(pattern))
 	, sourceVar_(std::move(sourceVar))
 	, targetVar_(std::move(targetVar))
+	, relationshipVar_(std::move(relationshipVar))
 	, relType_(std::move(relType))
 	, targetLabel_(std::move(targetLabel))
 	, direction_(direction)
@@ -61,7 +63,8 @@ std::unique_ptr<Expression> PatternComprehensionExpression::clone() const {
 		targetLabel_,
 		direction_,
 		mapExpr_ ? mapExpr_->clone() : nullptr,
-		whereExpr_ ? whereExpr_->clone() : nullptr
+		whereExpr_ ? whereExpr_->clone() : nullptr,
+		relationshipVar_
 	);
 }
 
@@ -75,6 +78,7 @@ PatternComprehensionExpression::PatternComprehensionExpression(
 	: pattern_(std::move(pattern))
 	, sourceVar_()
 	, targetVar_(std::move(variable))
+	, relationshipVar_()
 	, relType_()
 	, targetLabel_()
 	, direction_(PatternDirection::PAT_BOTH)

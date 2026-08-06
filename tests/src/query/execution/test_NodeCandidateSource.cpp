@@ -13,7 +13,7 @@
 #include <memory>
 #include <vector>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/query/api/QueryEngine.hpp"
 #include "graph/query/execution/NodeCandidateSource.hpp"
 #include "graph/query/execution/ScanConfigs.hpp"
@@ -29,10 +29,10 @@ protected:
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath = fs::temp_directory_path() / ("test_node_candidate_source_" + boost::uuids::to_string(uuid) + ".dat");
 
-		database = std::make_unique<Database>(testFilePath.string());
+		database = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testFilePath.string());
 		database->open();
-		dataManager = database->getStorage()->getDataManager();
-		indexManager = database->getQueryEngine()->getIndexManager();
+		dataManager = database->storage()->getDataManager();
+		indexManager = database->indexManager();
 	}
 
 	void TearDown() override {
@@ -52,7 +52,7 @@ protected:
 	}
 
 	fs::path testFilePath;
-	std::unique_ptr<Database> database;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> database;
 	std::shared_ptr<storage::DataManager> dataManager;
 	std::shared_ptr<query::indexes::IndexManager> indexManager;
 };

@@ -19,10 +19,6 @@
  **/
 
 #include "graph/query/expressions/FunctionRegistry.hpp"
-#include "graph/query/expressions/AllFunction.hpp"
-#include "graph/query/expressions/AnyFunction.hpp"
-#include "graph/query/expressions/NoneFunction.hpp"
-#include "graph/query/expressions/SingleFunction.hpp"
 #include "BuiltinFunctions.hpp"
 #include <algorithm>
 #include <cctype>
@@ -87,12 +83,6 @@ void FunctionRegistry::initializeBuiltinFunctions() {
 	registerTypeConversionFunctions(*this);
 	registerTemporalFunctions(*this);
 	registerUtilityFunctions(*this);
-
-	// Quantifier functions (keep as separate classes — they have special dispatch)
-	registerFunction(std::make_unique<AllFunction>());
-	registerFunction(std::make_unique<AnyFunction>());
-	registerFunction(std::make_unique<NoneFunction>());
-	registerFunction(std::make_unique<SingleFunction>());
 
 	// Entity introspection functions
 	registerFunction(makeIdFunction());

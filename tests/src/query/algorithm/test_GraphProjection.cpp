@@ -26,7 +26,7 @@
 #include <gtest/gtest.h>
 #include <limits>
 #include <utility>
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/query/algorithm/GraphProjection.hpp"
 #include "graph/query/algorithm/GraphProjectionManager.hpp"
 #include "graph/query/algorithm/CsrProjection.hpp"
@@ -40,9 +40,9 @@ protected:
 		auto uuid = boost::uuids::random_generator()();
 		testFilePath = fs::temp_directory_path() / ("test_projection_" + to_string(uuid) + ".dat");
 
-		database = std::make_unique<graph::Database>(testFilePath.string());
+		database = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testFilePath.string());
 		database->open();
-		dataManager = database->getStorage()->getDataManager();
+		dataManager = database->storage()->getDataManager();
 	}
 
 	void TearDown() override {
@@ -53,14 +53,14 @@ protected:
 	}
 
 	void flushAndReopen() {
-		database->getStorage()->flush();
+		database->storage()->flush();
 		database->close();
 		database->open();
-		dataManager = database->getStorage()->getDataManager();
+		dataManager = database->storage()->getDataManager();
 	}
 
 	fs::path testFilePath;
-	std::unique_ptr<graph::Database> database;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> database;
 	std::shared_ptr<graph::storage::DataManager> dataManager;
 };
 

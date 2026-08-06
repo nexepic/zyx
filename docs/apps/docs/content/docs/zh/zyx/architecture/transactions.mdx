@@ -1,6 +1,6 @@
 ---
-title: 事务管理
-description: 事务状态机、并发控制与提交/回滚流程。
+title: 旧事务管理
+description: 仅作为原生格式重构期间背景资料保留的历史事务与 WAL 行为。
 category: 核心组件
 categoryOrder: 2
 order: 6
@@ -9,7 +9,9 @@ projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
-# 事务管理
+# 旧事务管理
+
+> 本页描述的是向 segment chain 与外置 WAL 写入的已退役事务路径，仅供理解历史实现。clean native format 以[原生单文件存储重构方案](/zh/docs/zyx/architecture/native-single-file-storage-plan)为准：事务先写入全部 candidate page，再在同一个数据库文件内通过 A/B Superblock 原子发布一个 metadata generation。尤其是，一条 Edge record 与它在全局 Packed B+Tree 中的两个 adjacency key 必须同时可见或同时不可见。不得使用下文流程设计新的存储 mutation。
 
 事务由 `TransactionManager` 管理，`Transaction` 提供外部句柄，具有 RAII 语义。
 

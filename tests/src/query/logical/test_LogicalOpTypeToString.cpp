@@ -82,7 +82,6 @@ TEST(LogicalOpTypeMutationTest, DataMutatingOps_ReturnTrue) {
     EXPECT_TRUE(isDataMutatingOp(LogicalOpType::LOP_MERGE_NODE));
     EXPECT_TRUE(isDataMutatingOp(LogicalOpType::LOP_MERGE_EDGE));
     EXPECT_TRUE(isDataMutatingOp(LogicalOpType::LOP_FOREACH));
-    EXPECT_TRUE(isDataMutatingOp(LogicalOpType::LOP_LOAD_CSV));
     EXPECT_TRUE(isDataMutatingOp(LogicalOpType::LOP_SET_CONFIG));
     EXPECT_TRUE(isDataMutatingOp(LogicalOpType::LOP_TRAIN_VECTOR_INDEX));
 }
@@ -91,6 +90,7 @@ TEST(LogicalOpTypeMutationTest, NonDataMutatingOps_ReturnFalse) {
     EXPECT_FALSE(isDataMutatingOp(LogicalOpType::LOP_NODE_SCAN));
     EXPECT_FALSE(isDataMutatingOp(LogicalOpType::LOP_FILTER));
     EXPECT_FALSE(isDataMutatingOp(LogicalOpType::LOP_PROJECT));
+	EXPECT_FALSE(isDataMutatingOp(LogicalOpType::LOP_LOAD_CSV));
     EXPECT_FALSE(isDataMutatingOp(LogicalOpType::LOP_CREATE_INDEX));
     EXPECT_FALSE(isDataMutatingOp(LogicalOpType::LOP_EXPLAIN));
 }

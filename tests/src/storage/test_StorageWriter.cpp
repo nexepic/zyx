@@ -416,3 +416,18 @@ TEST_F(StorageWriterTest, UpdateEntityInPlaceAndBitmapSetCorrectly) {
 
 	EXPECT_FALSE(segmentTracker->getBitmapBit(segOff, 0));
 }
+
+TEST_F(StorageWriterTest, WritesAreReportedAsLogicalSegmentData) {
+	const uint64_t segOff = allocator->allocateSegment(Node::typeId, itemsPerSegment<Node>());
+	std::vector<Node> nodes = {makeNode(1), makeNode(2)};
+	writer->writeSegmentData(segOff, nodes, 0);
+
+	Node updated = makeNode(1);
+	updated.addLabelId(99);
+	writer->updateEntityInPlace(updated, segOff);
+
+	const auto metrics = segmentTracker->getStorageMetrics();
+	const auto &nodeMetrics = metrics.by_type.at(Node::typeId);
+	EXPECT_EQ(nodeMetrics.writes.logical_payload_bytes, 3u * Node::getTotalSize());
+	EXPECT_EQ(nodeMetrics.writes.data_write_bytes, 3u * Node::getTotalSize());
+}

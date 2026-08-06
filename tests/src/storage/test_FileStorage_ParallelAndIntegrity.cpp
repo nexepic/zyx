@@ -10,7 +10,6 @@
 #include <filesystem>
 #include <gtest/gtest.h>
 #include "graph/concurrent/ThreadPool.hpp"
-#include "graph/core/Database.hpp"
 #include "graph/storage/FileStorage.hpp"
 
 class FileStorageParallelTest : public ::testing::Test {
@@ -20,21 +19,30 @@ protected:
 		testFilePath = std::filesystem::temp_directory_path() /
 			("test_fs_parallel_" + to_string(uuid) + ".dat");
 
-		database = std::make_unique<graph::Database>(testFilePath.string());
-		database->open();
-		fileStorage = database->getStorage();
+		fileStorage = std::make_shared<graph::storage::FileStorage>(
+				testFilePath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
+		fileStorage->open();
+	}
+
+	void reopenFileStorage() {
+		if (fileStorage) {
+			fileStorage->close();
+		}
+		fileStorage = std::make_shared<graph::storage::FileStorage>(
+				testFilePath.string(), 10'000U, graph::storage::OpenMode::OPEN_EXISTING_FILE);
+		fileStorage->open();
 	}
 
 	void TearDown() override {
+		if (fileStorage) {
+			fileStorage->close();
+		}
 		fileStorage.reset();
-		database->close();
-		database.reset();
 		std::error_code ec;
 		std::filesystem::remove(testFilePath, ec);
 	}
 
 	std::filesystem::path testFilePath;
-	std::unique_ptr<graph::Database> database;
 	std::shared_ptr<graph::storage::FileStorage> fileStorage;
 };
 
@@ -376,10 +384,7 @@ TEST_F(FileStorageParallelTest, ParallelSave_ThenReopenAndVerify) {
 	fileStorage->setThreadPool(nullptr);
 
 	// Close and reopen
-	database->close();
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-	fileStorage = database->getStorage();
+	reopenFileStorage();
 	dm = fileStorage->getDataManager();
 
 	// Verify data persisted correctly

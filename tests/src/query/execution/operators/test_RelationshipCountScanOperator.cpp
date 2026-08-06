@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include <variant>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/execution/VectorizedPredicate.hpp"
 #include "graph/query/execution/operators/RelationshipCountScanOperator.hpp"
@@ -49,10 +49,10 @@ protected:
 	void SetUp() override {
 		const auto uuid = boost::uuids::random_generator()();
 		testDbPath = fs::temp_directory_path() / ("test_relationship_count_scan_path_" + boost::uuids::to_string(uuid) + ".zyx");
-		db = std::make_unique<Database>(testDbPath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testDbPath.string());
 		db->open();
-		dm = db->getStorage()->getDataManager();
-		im = db->getQueryEngine()->getIndexManager();
+		dm = db->storage()->getDataManager();
+		im = db->indexManager();
 		userLabel = dm->getOrCreateTokenId("User");
 		followsType = dm->getOrCreateTokenId("FOLLOWS");
 	}
@@ -148,7 +148,7 @@ protected:
 	}
 
 	fs::path testDbPath;
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<storage::DataManager> dm;
 	std::shared_ptr<query::indexes::IndexManager> im;
 	int64_t userLabel = 0;
@@ -492,7 +492,7 @@ TEST_F(RelationshipCountScanOperatorTest, CleanDirectRelationshipCountWithoutPro
 		addFollows(source, (i % 2 == 0) ? first : second);
 	}
 	addLikes(source, first);
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 	ASSERT_TRUE(im->createIndex("edge_type_metadata_preferred_idx", "edge", "", ""));
 
@@ -553,7 +553,7 @@ TEST_F(RelationshipCountScanOperatorTest, CleanDirectRelationshipCountUsesMetada
 	for (int i = 0; i < 128; ++i) {
 		addFollows(source, (i % 2 == 0) ? first : second, i == 0 ? 1 : 2);
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	NodeScanConfig seedConfig;
@@ -591,7 +591,7 @@ TEST_F(RelationshipCountScanOperatorTest, CleanDirectRelationshipCountTreatsInac
 		}
 	}
 	ASSERT_NE(inactivePropertyId, 0);
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	const auto &segIndex = dm->getSegmentIndexManager()->getPropertySegmentIndex();
 	auto segIt = std::find_if(segIndex.begin(), segIndex.end(), [inactivePropertyId](const auto &seg) {
@@ -604,10 +604,10 @@ TEST_F(RelationshipCountScanOperatorTest, CleanDirectRelationshipCountTreatsInac
 	db->close();
 	db.reset();
 	writePropertyActiveFlag(testDbPath, segmentOffset, segmentStartId, inactivePropertyId, false);
-	db = std::make_unique<Database>(testDbPath.string());
+	db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testDbPath.string());
 	db->open();
-	dm = db->getStorage()->getDataManager();
-	im = db->getQueryEngine()->getIndexManager();
+	dm = db->storage()->getDataManager();
+	im = db->indexManager();
 
 	NodeScanConfig seedConfig;
 	NodeScanRequirements seedRequirements;
@@ -1218,7 +1218,7 @@ TEST_F(RelationshipCountScanOperatorTest, CleanDirectRelationshipCountFallsBackF
 		dm->addEdge(edge);
 		dm->addEdgeProperties(edge.getId(), {{"payload", PropertyValue(payload)}, {"weight", PropertyValue(int64_t{i == 0 ? 7 : 9})}});
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	NodeScanConfig seedConfig;

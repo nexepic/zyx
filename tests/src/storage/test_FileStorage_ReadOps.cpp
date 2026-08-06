@@ -236,16 +236,10 @@ TEST_F(FileStorageTest, Flush_WithCompactionEnabled) {
 }
 
 TEST_F(FileStorageTest, Open_CreateOrOpen_ExistingFile) {
-	// Close the current database first
-	database->close();
-	database.reset();
-
+	// Close the current legacy store first.
 	// Reopen the same file with OPEN_CREATE_OR_OPEN_FILE mode (existing file)
-	database = std::make_unique<graph::Database>(testFilePath.string(),
-												 graph::storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
-	EXPECT_NO_THROW(database->open());
-	EXPECT_TRUE(database->isOpen());
-	fileStorage = database->getStorage();
+	EXPECT_NO_THROW(reopenFileStorage(graph::storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE));
+	EXPECT_TRUE(fileStorage->isOpen());
 }
 
 TEST_F(FileStorageTest, Open_CreateNewFile_InvalidPath_Throws) {
@@ -435,10 +429,7 @@ TEST_F(FileStorageTest, MultipleFlushCloseReopenCycles) {
 		fileStorage->flush();
 
 		// Close and reopen
-		database->close();
-		database = std::make_unique<graph::Database>(testFilePath.string());
-		database->open();
-		fileStorage = database->getStorage();
+		reopenFileStorage();
 	}
 
 	// After 3 cycles, verify we can read nodes
@@ -546,12 +537,11 @@ TEST_F(FileStorageTest, Open_CreateNewFile_Success) {
 	std::filesystem::remove(newPath);
 
 	{
-		auto newDb = std::make_unique<graph::Database>(
-			newPath.string(), graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
-		EXPECT_NO_THROW(newDb->open());
-		auto storage = newDb->getStorage();
+		auto storage = std::make_shared<graph::storage::FileStorage>(
+				newPath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
+		EXPECT_NO_THROW(storage->open());
 		EXPECT_TRUE(storage->isOpen());
-		newDb->close();
+		storage->close();
 	}
 
 	{ std::error_code ec; std::filesystem::remove(newPath, ec); }
@@ -559,19 +549,8 @@ TEST_F(FileStorageTest, Open_CreateNewFile_Success) {
 
 TEST_F(FileStorageTest, Open_ExistingFile_Success) {
 	// Test OPEN_EXISTING_FILE mode with a file that exists
-	database->close();
-
-	auto db2 = std::make_unique<graph::Database>(
-		testFilePath.string(), graph::storage::OpenMode::OPEN_EXISTING_FILE);
-	EXPECT_NO_THROW(db2->open());
-	auto storage = db2->getStorage();
-	EXPECT_TRUE(storage->isOpen());
-	db2->close();
-
-	// Re-create the original database for TearDown
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-	fileStorage = database->getStorage();
+	EXPECT_NO_THROW(reopenFileStorage(graph::storage::OpenMode::OPEN_EXISTING_FILE));
+	EXPECT_TRUE(fileStorage->isOpen());
 }
 
 TEST_F(FileStorageTest, Flush_HighFragmentation_TriggersCompaction) {
@@ -607,13 +586,11 @@ TEST_F(FileStorageTest, Close_FlushesAndTruncates) {
 	fileStorage->flush();
 
 	// Close should flush and truncate
-	EXPECT_NO_THROW(database->close());
+	EXPECT_NO_THROW(fileStorage->close());
 	EXPECT_FALSE(fileStorage->isOpen());
 
 	// Reopen for TearDown
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-	fileStorage = database->getStorage();
+	reopenFileStorage();
 }
 
 TEST_F(FileStorageTest, Open_OPEN_EXISTING_FILE_NonExistent_Throws) {
@@ -621,25 +598,21 @@ TEST_F(FileStorageTest, Open_OPEN_EXISTING_FILE_NonExistent_Throws) {
 	boost::uuids::uuid uuid = boost::uuids::random_generator()();
 	auto nonExistentPath = std::filesystem::temp_directory_path() / ("nonexistent_" + to_string(uuid) + ".dat");
 
-	auto db = std::make_unique<graph::Database>(nonExistentPath.string(),
-		graph::storage::OpenMode::OPEN_EXISTING_FILE);
-	EXPECT_THROW(db->open(), std::runtime_error);
+	auto storage = std::make_shared<graph::storage::FileStorage>(
+			nonExistentPath.string(), 10'000U, graph::storage::OpenMode::OPEN_EXISTING_FILE);
+	EXPECT_THROW(storage->open(), std::runtime_error);
 }
 
 TEST_F(FileStorageTest, Open_OPEN_CREATE_NEW_FILE_ExistingFile_Throws) {
 	// Covers line 54: OPEN_CREATE_NEW_FILE with already-existing file
 	// testFilePath already exists from SetUp
-	database->close();
-	database.reset();
-
-	auto db = std::make_unique<graph::Database>(testFilePath.string(),
-		graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
-	EXPECT_THROW(db->open(), std::runtime_error);
+	fileStorage->close();
+	auto storage = std::make_shared<graph::storage::FileStorage>(
+			testFilePath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
+	EXPECT_THROW(storage->open(), std::runtime_error);
 
 	// Reopen for TearDown
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-	fileStorage = database->getStorage();
+	reopenFileStorage();
 }
 
 TEST_F(FileStorageTest, Open_ExistingFile_ReadsBackData) {
@@ -651,11 +624,7 @@ TEST_F(FileStorageTest, Open_ExistingFile_ReadsBackData) {
 	fileStorage->flush();
 
 	// Close and reopen to exercise the "open existing" path
-	database->close();
-	database = std::make_unique<graph::Database>(testFilePath.string(),
-		graph::storage::OpenMode::OPEN_EXISTING_FILE);
-	database->open();
-	fileStorage = database->getStorage();
+	reopenFileStorage(graph::storage::OpenMode::OPEN_EXISTING_FILE);
 
 	EXPECT_TRUE(fileStorage->isOpen());
 }

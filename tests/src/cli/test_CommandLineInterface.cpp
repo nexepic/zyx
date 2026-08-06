@@ -163,7 +163,7 @@ TEST_F(CommandLineInterfaceTest, ExecuteScriptSuccessfully) {
 	auto res = db.getQueryEngine()->execute("MATCH (n:CliNode) RETURN n");
 
 	ASSERT_EQ(res.rowCount(), 1UL);
-	EXPECT_EQ(res.getRows()[0].at("n").asNode().getProperties().at("id").toString(), "999");
+	EXPECT_EQ(res.getRows()[0].at("n").asLogicalNode().properties.at("id").toString(), "999");
 }
 
 // Verify 'exec' command with missing script file

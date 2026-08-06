@@ -327,8 +327,9 @@ TEST_F(CypherASTBuilderClausesTest, DropConstraintIfExists) {
 // ============================================================================
 
 TEST_F(CypherASTBuilderClausesTest, StandaloneCall) {
-	auto res = execute("CALL dbms.listConfig()");
-	EXPECT_GE(res.rowCount(), 0UL);
+	// The parser must construct the CALL plan, while native execution rejects
+	// this retired State-manager procedure at the public procedure boundary.
+	EXPECT_THROW((void)execute("CALL dbms.listConfig()"), std::runtime_error);
 }
 
 // ============================================================================
@@ -336,8 +337,7 @@ TEST_F(CypherASTBuilderClausesTest, StandaloneCall) {
 // ============================================================================
 
 TEST_F(CypherASTBuilderClausesTest, InQueryCallWithYield) {
-	auto res = execute("CALL dbms.listConfig() YIELD key RETURN key");
-	EXPECT_GE(res.rowCount(), 0UL);
+	EXPECT_THROW((void)execute("CALL dbms.listConfig() YIELD key RETURN key"), std::runtime_error);
 }
 
 // ============================================================================

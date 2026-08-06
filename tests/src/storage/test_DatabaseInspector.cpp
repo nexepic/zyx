@@ -28,7 +28,7 @@
 #include <string>
 #include <vector>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/storage/DatabaseInspector.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
@@ -46,7 +46,7 @@ protected:
 		testFilePath = std::filesystem::temp_directory_path() / ("test_inspect_" + to_string(uuid) + ".dat");
 
 		// 2. Open DB
-		database = std::make_unique<Database>(testFilePath.string());
+		database = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testFilePath.string());
 		database->open();
 
 		// 3. Populate
@@ -54,7 +54,7 @@ protected:
 
 		// 4. Flush to disk to ensure data is inspectable.
 		// We accept that compaction might run, so our tests must scan for data.
-		database->getStorage()->flush();
+		database->storage()->flush();
 	}
 
 	void TearDown() override {
@@ -69,8 +69,8 @@ protected:
 	}
 
 	void populateDiverseData() const {
-		auto dm = database->getStorage()->getDataManager();
-		auto sm = database->getStorage()->getSystemStateManager();
+		auto dm = database->storage()->getDataManager();
+		auto sm = database->storage()->getSystemStateManager();
 
 		// 1. Nodes: Add enough to fill at least one full segment and start a second one.
 		// This ensures Page 0 is full and Page 1 is partially empty (good for testing UNUSED slots).
@@ -100,7 +100,7 @@ protected:
 		dm->addEdgeProperties(e2.getId(), {{"weight", static_cast<int64_t>(50)}, {"label", std::string("test_edge")}});
 
 		// 6. Indexes
-		(void) database->getQueryEngine()->getIndexManager()->createIndex("idx_status", "node", "InspectNode",
+		(void) database->indexManager()->createIndex("idx_status", "node", "InspectNode",
 																		  "status");
 
 		// 7. States
@@ -145,7 +145,7 @@ protected:
 	}
 
 	std::filesystem::path testFilePath;
-	std::unique_ptr<Database> database;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> database;
 };
 
 // ============================================================================
@@ -153,7 +153,7 @@ protected:
 // ============================================================================
 
 TEST_F(DatabaseInspectorTest, InspectSummary) {
-	auto inspector = database->getStorage()->getInspector();
+	auto inspector = database->storage()->getInspector();
 	std::string output = captureOutput([&]() { inspector->inspectSummary(); });
 
 	EXPECT_NE(output.find("Database Summary"), std::string::npos);
@@ -161,7 +161,7 @@ TEST_F(DatabaseInspectorTest, InspectSummary) {
 }
 
 TEST_F(DatabaseInspectorTest, InspectNodeSegments) {
-	auto inspector = database->getStorage()->getInspector();
+	auto inspector = database->storage()->getInspector();
 
 	// We look for the label "InspectNode" which we inserted many times.
 	bool found = contentExistsInAnyPage([&](uint32_t p) { inspector->inspectNodeSegments(p); }, "InspectNode");
@@ -169,21 +169,21 @@ TEST_F(DatabaseInspectorTest, InspectNodeSegments) {
 }
 
 TEST_F(DatabaseInspectorTest, InspectEdgeSegments) {
-	auto inspector = database->getStorage()->getInspector();
+	auto inspector = database->storage()->getInspector();
 
 	bool found = contentExistsInAnyPage([&](uint32_t p) { inspector->inspectEdgeSegments(p); }, "CONNECTS");
 	EXPECT_TRUE(found) << "Failed to find 'CONNECTS' label in Edge segments.";
 }
 
 TEST_F(DatabaseInspectorTest, InspectPropertySegments) {
-	auto inspector = database->getStorage()->getInspector();
+	auto inspector = database->storage()->getInspector();
 
 	bool found = contentExistsInAnyPage([&](uint32_t p) { inspector->inspectPropertySegments(p); }, "status");
 	EXPECT_TRUE(found) << "Failed to find property key 'status'.";
 }
 
 TEST_F(DatabaseInspectorTest, InspectBlobSegments) {
-	auto inspector = database->getStorage()->getInspector();
+	auto inspector = database->storage()->getInspector();
 
 	// Blobs don't have labels, but they should be marked ACTIVE
 	bool found = contentExistsInAnyPage([&](uint32_t p) { inspector->inspectBlobSegments(p); }, "ACTIVE");
@@ -191,21 +191,21 @@ TEST_F(DatabaseInspectorTest, InspectBlobSegments) {
 }
 
 TEST_F(DatabaseInspectorTest, InspectIndexSegments) {
-	auto inspector = database->getStorage()->getInspector();
+	auto inspector = database->storage()->getInspector();
 
 	bool found = contentExistsInAnyPage([&](uint32_t p) { inspector->inspectIndexSegments(p); }, "ACTIVE");
 	EXPECT_TRUE(found) << "Failed to find any ACTIVE Index node.";
 }
 
 TEST_F(DatabaseInspectorTest, InspectStateSegments) {
-	auto inspector = database->getStorage()->getInspector();
+	auto inspector = database->storage()->getInspector();
 
 	bool found = contentExistsInAnyPage([&](uint32_t p) { inspector->inspectStateSegments(p); }, "test.config.key");
 	EXPECT_TRUE(found) << "Failed to find 'test.config.key' in State segments.";
 }
 
 TEST_F(DatabaseInspectorTest, PaginationOutOfBounds) {
-	auto inspector = database->getStorage()->getInspector();
+	auto inspector = database->storage()->getInspector();
 
 	// Node (already covered)
 	std::string output = captureOutput([&]() { inspector->inspectNodeSegments(999); });
@@ -233,7 +233,7 @@ TEST_F(DatabaseInspectorTest, PaginationOutOfBounds) {
 }
 
 TEST_F(DatabaseInspectorTest, ShowUnusedSlots) {
-	auto inspector = database->getStorage()->getInspector();
+	auto inspector = database->storage()->getInspector();
 
 	// We populated NODES_PER_SEGMENT + 1 nodes.
 	// Page 0 is full. Page 1 has 1 node, so it MUST have unused slots (assuming capacity > 1).
@@ -250,12 +250,12 @@ TEST_F(DatabaseInspectorTest, InspectEmptyDatabase) {
 	boost::uuids::uuid uuid = boost::uuids::random_generator()();
 	auto emptyPath = std::filesystem::temp_directory_path() / ("empty_db_" + to_string(uuid) + ".dat");
 	{
-		Database db(emptyPath.string());
+		graph::storage::testing::LegacyPhysicalStorageTestHarness db(emptyPath.string());
 		db.open();
 		// Flush empty DB to write header
-		db.getStorage()->flush();
+		db.storage()->flush();
 
-		auto inspector = db.getStorage()->getInspector();
+		auto inspector = db.storage()->getInspector();
 		std::string output = captureOutput([&]() { inspector->inspectNodeSegments(0); });
 
 		bool handled =
@@ -266,7 +266,7 @@ TEST_F(DatabaseInspectorTest, InspectEmptyDatabase) {
 }
 
 TEST_F(DatabaseInspectorTest, InspectEdgeWithProperties) {
-	auto inspector = database->getStorage()->getInspector();
+	auto inspector = database->storage()->getInspector();
 
 	// Look for edge properties (covers entityType == 1 branch in line 254)
 	bool found = contentExistsInAnyPage([&](uint32_t p) { inspector->inspectPropertySegments(p); }, "weight");
@@ -274,7 +274,7 @@ TEST_F(DatabaseInspectorTest, InspectEdgeWithProperties) {
 }
 
 TEST_F(DatabaseInspectorTest, InspectStateData_ValidKey) {
-	auto inspector = database->getStorage()->getInspector();
+	auto inspector = database->storage()->getInspector();
 
 	// Test inspectStateData with a valid state key (covers lines 402-443)
 	std::string output = captureOutput([&]() { inspector->inspectStateData("test.with.props"); });
@@ -287,7 +287,7 @@ TEST_F(DatabaseInspectorTest, InspectStateData_ValidKey) {
 }
 
 TEST_F(DatabaseInspectorTest, InspectStateData_InvalidKey) {
-	auto inspector = database->getStorage()->getInspector();
+	auto inspector = database->storage()->getInspector();
 
 	// Test inspectStateData with an invalid state key (already covered, but explicit)
 	std::string output = captureOutput([&]() { inspector->inspectStateData("nonexistent.key"); });
@@ -302,7 +302,7 @@ TEST_F(DatabaseInspectorTest, InspectStateData_InvalidKey) {
 TEST_F(DatabaseInspectorTest, InspectStateData_EmptyProperties) {
 	// Test inspectStateData when state key does not exist
 	// Covers the key-not-found branch
-	auto inspector = database->getStorage()->getInspector();
+	auto inspector = database->storage()->getInspector();
 
 	std::string output = captureOutput([&]() { inspector->inspectStateData("nonexistent.key.that.does.not.exist"); });
 
@@ -313,7 +313,7 @@ TEST_F(DatabaseInspectorTest, InspectStateData_EmptyProperties) {
 TEST_F(DatabaseInspectorTest, FormatPropertiesCompact_LongProperty) {
 	// Test formatPropertiesCompact truncation (line 49: if (ss.tellp() > 50))
 	// Create a node with many properties to trigger truncation
-	auto dm = database->getStorage()->getDataManager();
+	auto dm = database->storage()->getDataManager();
 
 	// Add many properties to a node to make formatted output > 50 chars
 	std::unordered_map<std::string, graph::PropertyValue> manyProps;
@@ -321,9 +321,9 @@ TEST_F(DatabaseInspectorTest, FormatPropertiesCompact_LongProperty) {
 	manyProps["another_long_property_key"] = std::string("another_long_value_here");
 	manyProps["third_property_key_name"] = std::string("third_value");
 	dm->addNodeProperties(3, manyProps);
-	database->getStorage()->flush();
+	database->storage()->flush();
 
-	auto inspector = database->getStorage()->getInspector();
+	auto inspector = database->storage()->getInspector();
 
 	// Inspect nodes - should contain truncated property display with "..."
 	bool found = contentExistsInAnyPage(
@@ -337,7 +337,7 @@ TEST_F(DatabaseInspectorTest, FormatPropertiesCompact_LongProperty) {
 TEST_F(DatabaseInspectorTest, NavigateToSegment_ReadError) {
 	// Test navigateToSegment when file read fails (line 65-66: read error returns 0)
 	// We test by navigating to a page that doesn't exist
-	auto inspector = database->getStorage()->getInspector();
+	auto inspector = database->storage()->getInspector();
 
 	// Very high page index that won't exist
 	std::string output = captureOutput([&]() { inspector->inspectNodeSegments(9999); });
@@ -347,7 +347,7 @@ TEST_F(DatabaseInspectorTest, NavigateToSegment_ReadError) {
 TEST_F(DatabaseInspectorTest, InspectAllSegmentTypes_Page0) {
 	// Ensure all segment types are inspectable at page 0
 	// This covers the active entity display paths for all types
-	auto inspector = database->getStorage()->getInspector();
+	auto inspector = database->storage()->getInspector();
 
 	// Node - page 0
 	std::string nodeOutput = captureOutput([&]() { inspector->inspectNodeSegments(0); });
@@ -369,12 +369,12 @@ TEST_F(DatabaseInspectorTest, InspectAllSegmentTypes_Page0) {
 TEST_F(DatabaseInspectorTest, NodeWithEmptyLabel_ShowsNoLabel) {
 	// Covers Branch (145:32) True path: labelStr.empty() => "<No Label>" for nodes
 	// Create a node with labelId=0 (no label assigned)
-	auto dm = database->getStorage()->getDataManager();
+	auto dm = database->storage()->getDataManager();
 	Node noLabelNode(0, 0); // labelId = 0 means no label
 	dm->addNode(noLabelNode);
-	database->getStorage()->flush();
+	database->storage()->flush();
 
-	auto inspector = database->getStorage()->getInspector();
+	auto inspector = database->storage()->getInspector();
 
 	// Scan pages to find the "<No Label>" display
 	bool found = contentExistsInAnyPage(
@@ -385,12 +385,12 @@ TEST_F(DatabaseInspectorTest, NodeWithEmptyLabel_ShowsNoLabel) {
 TEST_F(DatabaseInspectorTest, EdgeWithEmptyLabel_ShowsNoLabel) {
 	// Covers Branch (200:32) True path: labelStr.empty() => "<No Label>" for edges
 	// Create an edge with labelId=0 (no label assigned)
-	auto dm = database->getStorage()->getDataManager();
+	auto dm = database->storage()->getDataManager();
 	Edge noLabelEdge(0, 1, 2, 0); // labelId = 0 means no label
 	dm->addEdge(noLabelEdge);
-	database->getStorage()->flush();
+	database->storage()->flush();
 
-	auto inspector = database->getStorage()->getInspector();
+	auto inspector = database->storage()->getInspector();
 
 	// Scan pages to find the "<No Label>" display
 	bool found = contentExistsInAnyPage(
@@ -401,16 +401,16 @@ TEST_F(DatabaseInspectorTest, EdgeWithEmptyLabel_ShowsNoLabel) {
 TEST_F(DatabaseInspectorTest, InspectStateData_StateExistsButNoProperties) {
 	// Covers Branch (425:7) True path: properties.empty() after finding the state
 	// Create a state with properly serialized empty properties map
-	auto dm = database->getStorage()->getDataManager();
+	auto dm = database->storage()->getDataManager();
 
 	// First create the state entity
 	State emptyPropState(0, "test.empty.props.key", "");
 	dm->addStateEntity(emptyPropState);
 	// Write an empty property map to this state key
 	dm->addStateProperties("test.empty.props.key", {});
-	database->getStorage()->flush();
+	database->storage()->flush();
 
-	auto inspector = database->getStorage()->getInspector();
+	auto inspector = database->storage()->getInspector();
 
 	std::string output = captureOutput([&]() { inspector->inspectStateData("test.empty.props.key"); });
 
@@ -423,7 +423,7 @@ TEST_F(DatabaseInspectorTest, InspectStateData_StateExistsButNoProperties) {
 TEST_F(DatabaseInspectorTest, StateSegment_InactiveSlot) {
 	// Covers Branch (383:8) False path: inactive state slot in state segment
 	// Create additional states, then remove some to produce inactive slots
-	auto dm = database->getStorage()->getDataManager();
+	auto dm = database->storage()->getDataManager();
 
 	// Add several extra states
 	for (int i = 0; i < 3; ++i) {
@@ -433,14 +433,14 @@ TEST_F(DatabaseInspectorTest, StateSegment_InactiveSlot) {
 		// Store as empty serialized properties so they are valid
 		dm->addStateProperties(key, {{"k", std::string("v")}});
 	}
-	database->getStorage()->flush();
+	database->storage()->flush();
 
 	// Now remove some states to create inactive slots
 	dm->removeState("temp.state.0");
 	dm->removeState("temp.state.1");
-	database->getStorage()->flush();
+	database->storage()->flush();
 
-	auto inspector = database->getStorage()->getInspector();
+	auto inspector = database->storage()->getInspector();
 
 	// Scan state pages looking for "UNUSED" slot
 	bool found = contentExistsInAnyPage(
@@ -451,7 +451,7 @@ TEST_F(DatabaseInspectorTest, StateSegment_InactiveSlot) {
 TEST_F(DatabaseInspectorTest, IndexSegment_InternalNode) {
 	// Covers Branch (342:10) False path: idx.isLeaf() == false => "INTERNAL"
 	// Create enough index entries to force a B-tree split, producing an INTERNAL node
-	auto dm = database->getStorage()->getDataManager();
+	auto dm = database->storage()->getDataManager();
 	int64_t labelId = dm->getOrCreateTokenId("IndexTestNode");
 
 	// Create many nodes with a property to force B-tree index splits
@@ -462,12 +462,12 @@ TEST_F(DatabaseInspectorTest, IndexSegment_InternalNode) {
 	}
 
 	// Create the index on this property to build a B-tree with internal nodes
-	(void) database->getQueryEngine()->getIndexManager()->createIndex(
+	(void) database->indexManager()->createIndex(
 		"idx_internal_test", "node", "IndexTestNode", "idx_key");
 
-	database->getStorage()->flush();
+	database->storage()->flush();
 
-	auto inspector = database->getStorage()->getInspector();
+	auto inspector = database->storage()->getInspector();
 
 	// Scan index pages looking for "INTERNAL" node type
 	bool found = contentExistsInAnyPage(

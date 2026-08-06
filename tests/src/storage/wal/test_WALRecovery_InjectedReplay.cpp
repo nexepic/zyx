@@ -14,7 +14,7 @@
 #include "storage/wal/WALReplayTestFixture.hpp"
 
 // Helper: copy WAL file before mgr.close(), restore it after
-// so that the subsequent Database::open() triggers WAL recovery.
+// so that the subsequent LegacyWALTestDatabase::open() triggers WAL recovery.
 static void preserveWAL(WALManager &mgr, const std::string &walPath) {
 	std::string walBackup = walPath + ".bak";
 	fs::copy_file(walPath, walBackup, fs::copy_options::overwrite_existing);
@@ -35,11 +35,11 @@ static void preserveWAL(WALManager &mgr, const std::string &walPath) {
 
 TEST_F(WALReplayTest, BuildFinalStateMap_SmallDataRecordSkipped) {
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 		auto txn = db.beginTransaction();
 		Node n(0, 1);
-		db.getStorage()->getDataManager()->addNode(n);
+		db.storage()->getDataManager()->addNode(n);
 		txn.commit();
 		db.close();
 	}
@@ -94,7 +94,7 @@ TEST_F(WALReplayTest, BuildFinalStateMap_SmallDataRecordSkipped) {
 
 	// Reopen — recovery should skip the small record gracefully without throwing
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		EXPECT_NO_THROW(db2.open());
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
 		db2.close();
@@ -108,9 +108,9 @@ TEST_F(WALReplayTest, BuildFinalStateMap_SmallDataRecordSkipped) {
 TEST_F(WALReplayTest, InjectedModifyExistingNodeRecovery) {
 	int64_t nodeId = 0;
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 		auto txn = db.beginTransaction();
 		Node n(0, 42);
 		dm->addNode(n);
@@ -142,10 +142,10 @@ TEST_F(WALReplayTest, InjectedModifyExistingNodeRecovery) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		EXPECT_NO_THROW(db2.open());
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
-		auto dm = db2.getStorage()->getDataManager();
+		auto dm = db2.storage()->getDataManager();
 		Node retrieved = dm->getNode(nodeId);
 		EXPECT_TRUE(retrieved.isActive()) << "Modified node should still be active";
 		db2.close();
@@ -159,9 +159,9 @@ TEST_F(WALReplayTest, InjectedModifyExistingNodeRecovery) {
 TEST_F(WALReplayTest, InjectedModifyExistingEdgeRecovery) {
 	int64_t nodeId1 = 0, nodeId2 = 0, edgeId = 0;
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 		auto txn = db.beginTransaction();
 		Node n1(0, 1);
 		dm->addNode(n1);
@@ -199,10 +199,10 @@ TEST_F(WALReplayTest, InjectedModifyExistingEdgeRecovery) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		EXPECT_NO_THROW(db2.open());
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
-		auto dm = db2.getStorage()->getDataManager();
+		auto dm = db2.storage()->getDataManager();
 		Edge retrieved = dm->getEdge(edgeId);
 		EXPECT_TRUE(retrieved.isActive()) << "Modified edge should still be active";
 		db2.close();
@@ -215,11 +215,11 @@ TEST_F(WALReplayTest, InjectedModifyExistingEdgeRecovery) {
 
 TEST_F(WALReplayTest, InjectedAddNewNodeRecovery) {
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 		auto txn = db.beginTransaction();
 		Node n(0, 1);
-		db.getStorage()->getDataManager()->addNode(n);
+		db.storage()->getDataManager()->addNode(n);
 		txn.commit();
 		db.close();
 	}
@@ -247,7 +247,7 @@ TEST_F(WALReplayTest, InjectedAddNewNodeRecovery) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		EXPECT_NO_THROW(db2.open());
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
 		db2.close();
@@ -261,9 +261,9 @@ TEST_F(WALReplayTest, InjectedAddNewNodeRecovery) {
 TEST_F(WALReplayTest, InjectedAddNewEdgeRecovery) {
 	int64_t nodeId1 = 0, nodeId2 = 0;
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 		auto txn = db.beginTransaction();
 		Node n1(0, 1);
 		dm->addNode(n1);
@@ -298,7 +298,7 @@ TEST_F(WALReplayTest, InjectedAddNewEdgeRecovery) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		EXPECT_NO_THROW(db2.open());
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
 		db2.close();
@@ -312,9 +312,9 @@ TEST_F(WALReplayTest, InjectedAddNewEdgeRecovery) {
 TEST_F(WALReplayTest, InjectedDeleteExistingNodeRecovery) {
 	int64_t nodeId = 0;
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 		auto txn = db.beginTransaction();
 		Node n(0, 42);
 		dm->addNode(n);
@@ -346,10 +346,10 @@ TEST_F(WALReplayTest, InjectedDeleteExistingNodeRecovery) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		EXPECT_NO_THROW(db2.open());
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
-		auto dm = db2.getStorage()->getDataManager();
+		auto dm = db2.storage()->getDataManager();
 		Node retrieved = dm->getNode(nodeId);
 		EXPECT_FALSE(retrieved.isActive()) << "Injected-deleted node should be inactive";
 		db2.close();
@@ -363,9 +363,9 @@ TEST_F(WALReplayTest, InjectedDeleteExistingNodeRecovery) {
 TEST_F(WALReplayTest, InjectedDeleteExistingEdgeRecovery) {
 	int64_t nodeId1 = 0, nodeId2 = 0, edgeId = 0;
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 		auto txn = db.beginTransaction();
 		Node n1(0, 1);
 		dm->addNode(n1);
@@ -403,10 +403,10 @@ TEST_F(WALReplayTest, InjectedDeleteExistingEdgeRecovery) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		EXPECT_NO_THROW(db2.open());
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
-		auto dm = db2.getStorage()->getDataManager();
+		auto dm = db2.storage()->getDataManager();
 		Edge retrieved = dm->getEdge(edgeId);
 		EXPECT_FALSE(retrieved.isActive()) << "Injected-deleted edge should be inactive";
 		db2.close();
@@ -420,9 +420,9 @@ TEST_F(WALReplayTest, InjectedDeleteExistingEdgeRecovery) {
 TEST_F(WALReplayTest, InjectedMultiTxnFullRecoverPath) {
 	int64_t nodeId = 0;
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 		auto txn = db.beginTransaction();
 		Node n(0, 1);
 		dm->addNode(n);
@@ -463,7 +463,7 @@ TEST_F(WALReplayTest, InjectedMultiTxnFullRecoverPath) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		EXPECT_NO_THROW(db2.open());
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
 		db2.close();
@@ -477,11 +477,11 @@ TEST_F(WALReplayTest, InjectedMultiTxnFullRecoverPath) {
 
 TEST_F(WALReplayTest, NonEntityWriteRecordsSkippedInBuildFinalStateMap) {
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 		auto txn = db.beginTransaction();
 		Node n(0, 1);
-		db.getStorage()->getDataManager()->addNode(n);
+		db.storage()->getDataManager()->addNode(n);
 		txn.commit();
 		db.close();
 	}
@@ -502,7 +502,7 @@ TEST_F(WALReplayTest, NonEntityWriteRecordsSkippedInBuildFinalStateMap) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		EXPECT_NO_THROW(db2.open());
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
 		db2.close();
@@ -516,9 +516,9 @@ TEST_F(WALReplayTest, NonEntityWriteRecordsSkippedInBuildFinalStateMap) {
 TEST_F(WALReplayTest, InjectedDeleteExistingPropertyRecovery) {
 	int64_t propId = 0;
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 		auto txn = db.beginTransaction();
 		Node n(0, 1);
 		dm->addNode(n);
@@ -552,10 +552,10 @@ TEST_F(WALReplayTest, InjectedDeleteExistingPropertyRecovery) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		EXPECT_NO_THROW(db2.open());
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
-		auto dm = db2.getStorage()->getDataManager();
+		auto dm = db2.storage()->getDataManager();
 		Property retrieved = dm->getProperty(propId);
 		EXPECT_FALSE(retrieved.isActive()) << "Injected-deleted property should be inactive";
 		db2.close();
@@ -569,9 +569,9 @@ TEST_F(WALReplayTest, InjectedDeleteExistingPropertyRecovery) {
 TEST_F(WALReplayTest, InjectedDeleteExistingBlobRecovery) {
 	int64_t blobId = 0;
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 		auto txn = db.beginTransaction();
 		Blob blob(0, "blob for injected delete test");
 		dm->addBlobEntity(blob);
@@ -603,10 +603,10 @@ TEST_F(WALReplayTest, InjectedDeleteExistingBlobRecovery) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		EXPECT_NO_THROW(db2.open());
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
-		auto dm = db2.getStorage()->getDataManager();
+		auto dm = db2.storage()->getDataManager();
 		Blob retrieved = dm->getBlob(blobId);
 		EXPECT_FALSE(retrieved.isActive()) << "Injected-deleted blob should be inactive";
 		db2.close();
@@ -622,9 +622,9 @@ TEST_F(WALReplayTest, InjectedDeleteExistingBlobRecovery) {
 TEST_F(WALReplayTest, UncommittedTxnSkippedInBuildFinalStateMap) {
 	int64_t nodeId = 0;
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 		auto txn = db.beginTransaction();
 		Node n(0, 5);
 		dm->addNode(n);
@@ -671,11 +671,11 @@ TEST_F(WALReplayTest, UncommittedTxnSkippedInBuildFinalStateMap) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		EXPECT_NO_THROW(db2.open());
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
 		// The committed modification must have been replayed
-		auto dm = db2.getStorage()->getDataManager();
+		auto dm = db2.storage()->getDataManager();
 		Node retrieved = dm->getNode(nodeId);
 		EXPECT_TRUE(retrieved.isActive()) << "Committed node modification should be replayed";
 		db2.close();
@@ -690,9 +690,9 @@ TEST_F(WALReplayTest, UncommittedTxnSkippedInBuildFinalStateMap) {
 TEST_F(WALReplayTest, InjectedDeleteExistingIndexRecovery) {
 	int64_t indexId = 0;
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 		auto txn = db.beginTransaction();
 		Index idx(0, Index::NodeType::LEAF, 7);
 		dm->addIndexEntity(idx);
@@ -724,10 +724,10 @@ TEST_F(WALReplayTest, InjectedDeleteExistingIndexRecovery) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		EXPECT_NO_THROW(db2.open());
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
-		auto dm = db2.getStorage()->getDataManager();
+		auto dm = db2.storage()->getDataManager();
 		Index retrieved = dm->getIndex(indexId);
 		EXPECT_FALSE(retrieved.isActive()) << "Injected-deleted index should be inactive";
 		db2.close();
@@ -742,9 +742,9 @@ TEST_F(WALReplayTest, InjectedDeleteExistingIndexRecovery) {
 TEST_F(WALReplayTest, InjectedDeleteExistingStateRecovery) {
 	int64_t stateId = 0;
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 		auto txn = db.beginTransaction();
 		State st(0, "state_injected_del", "state_data");
 		dm->addStateEntity(st);
@@ -780,7 +780,7 @@ TEST_F(WALReplayTest, InjectedDeleteExistingStateRecovery) {
 		// (populateKeyToIdMap runs before WAL recovery). The WAL recovery writes
 		// the inactive state to disk but the stale pool entry may still be served.
 		// We therefore only verify that recovery completes without throwing.
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		EXPECT_NO_THROW(db2.open());
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
 		db2.close();
@@ -796,9 +796,9 @@ TEST_F(WALReplayTest, InjectedModifyExistingPropertyRecovery) {
 	int64_t propId = 0;
 	int64_t nodeId = 0;
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 		auto txn = db.beginTransaction();
 		Node n(0, 1);
 		dm->addNode(n);
@@ -833,10 +833,10 @@ TEST_F(WALReplayTest, InjectedModifyExistingPropertyRecovery) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		EXPECT_NO_THROW(db2.open());
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
-		auto dm = db2.getStorage()->getDataManager();
+		auto dm = db2.storage()->getDataManager();
 		Property retrieved = dm->getProperty(propId);
 		EXPECT_TRUE(retrieved.isActive()) << "Modified property should still be active";
 		db2.close();
@@ -851,9 +851,9 @@ TEST_F(WALReplayTest, InjectedModifyExistingPropertyRecovery) {
 TEST_F(WALReplayTest, InjectedModifyExistingBlobRecovery) {
 	int64_t blobId = 0;
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 		auto txn = db.beginTransaction();
 		Blob blob(0, "original blob data for modify test");
 		dm->addBlobEntity(blob);
@@ -885,10 +885,10 @@ TEST_F(WALReplayTest, InjectedModifyExistingBlobRecovery) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		EXPECT_NO_THROW(db2.open());
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
-		auto dm = db2.getStorage()->getDataManager();
+		auto dm = db2.storage()->getDataManager();
 		Blob retrieved = dm->getBlob(blobId);
 		EXPECT_TRUE(retrieved.isActive()) << "Modified blob should still be active";
 		db2.close();

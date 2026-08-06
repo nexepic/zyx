@@ -40,6 +40,7 @@
 #include "graph/storage/PreadHelper.hpp"
 #include "graph/storage/PwriteHelper.hpp"
 #include "graph/storage/StorageBootstrap.hpp"
+#include "graph/storage/StorageFormat.hpp"
 #include "graph/storage/data/EntityTraits.hpp"
 #include "graph/utils/ChecksumUtils.hpp"
 #include "graph/utils/FixedSizeSerializer.hpp"
@@ -60,7 +61,9 @@ namespace graph::storage {
 		bool fileExists = std::filesystem::exists(dbFilePath);
 
 		// --- Strict Mode Validation ---
-		if (openMode_ == OpenMode::OPEN_EXISTING_FILE && !fileExists) {
+		if ((openMode_ == OpenMode::OPEN_EXISTING_FILE ||
+			 openMode_ == OpenMode::OPEN_READ_ONLY_EXISTING_FILE) &&
+			!fileExists) {
 			throw std::runtime_error("Database file does not exist: " + dbFilePath);
 		}
 		if (openMode_ == OpenMode::OPEN_CREATE_NEW_FILE && fileExists) {
@@ -87,11 +90,19 @@ namespace graph::storage {
 			}
 			// Logic for OPENING existing database
 			else {
-				fileStream =
-						std::make_shared<std::fstream>(dbFilePath, std::ios::binary | std::ios::in | std::ios::out);
+				const std::ios::openmode mode = std::ios::binary | std::ios::in |
+													   (isReadOnly() ? std::ios::openmode{} : std::ios::out);
+				fileStream = std::make_shared<std::fstream>(dbFilePath, mode);
 
 				if (!*fileStream) {
 					throw std::runtime_error("Cannot open database file: " + dbFilePath);
+				}
+				const StorageFormatInfo format =
+						StorageFormatProbe::inspect(StorageIO(fileStream, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE));
+				if (!format.isLegacy()) {
+					throw std::runtime_error("Legacy FileStorage refuses a " +
+											 std::string(StorageFormatProbe::describe(format.kind)) +
+											 " database file");
 				}
 
 				fileHeaderManager = std::make_shared<FileHeaderManager>(fileStream, fileHeader);
@@ -120,7 +131,14 @@ namespace graph::storage {
 		isFileOpen = true;
 	}
 
+	void FileStorage::ensureWritable() const {
+		if (isReadOnly()) {
+			throw std::runtime_error("Cannot modify a read-only database file: " + dbFilePath);
+		}
+	}
+
 	void FileStorage::ensureWriteHandle() {
+		ensureWritable();
 		if (writeFd_ != INVALID_FILE_HANDLE) {
 			return;
 		}
@@ -227,16 +245,16 @@ namespace graph::storage {
 			debug::ScopedPerfTimer totalTimer("storage.close.total");
 			const bool mayHaveTruncatableSegments = deleteOperationPerformed.load();
 
-			{
-				debug::ScopedPerfTimer flushTimer("storage.close.flush");
-				flush(); // Ensure any pending changes are written
-			}
+			if (!isReadOnly()) {
+				{
+					debug::ScopedPerfTimer flushTimer("storage.close.flush");
+					flush(); // Ensure any pending changes are written
+				}
 
-			// Flush header-only changes such as ID allocations without forcing
-			// a redundant write on read-only open/query/close cycles.
-			if (fileHeaderManager->hasPendingChanges()) {
-				debug::ScopedPerfTimer headerTimer("storage.close.flush_header");
-				fileHeaderManager->flushFileHeader();
+				if (fileHeaderManager->hasPendingChanges()) {
+					debug::ScopedPerfTimer headerTimer("storage.close.flush_header");
+					fileHeaderManager->flushFileHeader();
+				}
 			}
 
 			{
@@ -249,7 +267,7 @@ namespace graph::storage {
 			// Pass the native fd so truncation uses portable_ftruncate()
 			// instead of the close-reopen pattern (which leaves a leaked handle
 			// on Windows and causes "file in use" errors on deletion).
-			if (mayHaveTruncatableSegments) {
+			if (!isReadOnly() && mayHaveTruncatableSegments) {
 				debug::ScopedPerfTimer truncateTimer("storage.close.truncate");
 				(void) fileTruncator->truncateFile(writeFd_);
 			}
@@ -276,7 +294,9 @@ namespace graph::storage {
 			storageIO_.reset();
 
 			// Close the fstream
-			fileStream->flush();
+			if (!isReadOnly()) {
+				fileStream->flush();
+			}
 			fileStream->close();
 			fileStream.reset();
 
@@ -290,6 +310,7 @@ namespace graph::storage {
 
 		if (!isFileOpen)
 			throw std::runtime_error("Database must be open before saving");
+		ensureWritable();
 		if (!dataManager->hasUnsavedChanges())
 			return;
 
@@ -381,6 +402,7 @@ namespace graph::storage {
 	}
 
 	uint64_t FileStorage::allocateSegment(uint32_t type, uint32_t capacity) const {
+		ensureWritable();
 		return segmentAllocator->allocateSegment(type, capacity);
 	}
 
@@ -419,6 +441,7 @@ namespace graph::storage {
 	}
 
 	void FileStorage::persistSegmentHeaders() const {
+		ensureWritable();
 		// Simply delegate to the SegmentTracker to flush all dirty segments
 		segmentTracker->flushDirtySegments();
 	}
@@ -430,6 +453,9 @@ namespace graph::storage {
 
 	// TODO: Subsequent flush operations should be executed in a queue
 	void FileStorage::flushImpl() {
+		if (isReadOnly()) {
+			return;
+		}
 		// Acquire lock to ensure atomic operation
 		std::unique_lock<std::mutex> lock(flushMutex, std::try_to_lock);
 

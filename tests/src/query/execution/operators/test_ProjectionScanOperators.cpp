@@ -6,7 +6,7 @@
 #include <string>
 #include <unordered_map>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/QueryContext.hpp"
 #include "graph/query/execution/operators/NodeProjectionScanOperator.hpp"
@@ -25,10 +25,10 @@ protected:
 		const auto uuid = boost::uuids::random_generator()();
 		dbPath = fs::temp_directory_path() /
 		         ("test_projection_scan_operators_" + boost::uuids::to_string(uuid) + ".zyx");
-		db = std::make_unique<Database>(dbPath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(dbPath.string());
 		db->open();
-		dm = db->getStorage()->getDataManager();
-		im = db->getQueryEngine()->getIndexManager();
+		dm = db->storage()->getDataManager();
+		im = db->indexManager();
 		userLabel = dm->getOrCreateTokenId("User");
 		postLabel = dm->getOrCreateTokenId("Post");
 		followsType = dm->getOrCreateTokenId("FOLLOWS");
@@ -72,7 +72,7 @@ protected:
 	}
 
 	fs::path dbPath;
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<storage::DataManager> dm;
 	std::shared_ptr<query::indexes::IndexManager> im;
 	int64_t userLabel = 0;
@@ -85,7 +85,7 @@ TEST_F(ProjectionScanOperatorsTest, NodeProjectionScanReturnsBoundedScalarRows) 
 		addNode(userLabel, {{"id", PropertyValue("user-" + std::to_string(i))}, {"score", PropertyValue(i)}});
 	}
 	addNode(postLabel, {{"id", PropertyValue("post")}, {"score", PropertyValue(int64_t{99})}});
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	NodeScanConfig config;
 	config.type = ScanType::FULL_SCAN;
@@ -111,7 +111,7 @@ TEST_F(ProjectionScanOperatorsTest, NodeProjectionScanHonorsSmallerRuntimeLimitH
 	for (int64_t i = 0; i < 3; ++i) {
 		addNode(userLabel, {{"id", PropertyValue("user-" + std::to_string(i))}});
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	NodeScanConfig config;
 	config.type = ScanType::FULL_SCAN;
@@ -140,7 +140,7 @@ TEST_F(ProjectionScanOperatorsTest, NodeProjectionScanUsesRuntimeLimitWhenConstr
 	for (int64_t i = 0; i < 4; ++i) {
 		addNode(userLabel, {{"id", PropertyValue("user-" + std::to_string(i))}});
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	NodeScanConfig config;
 	config.type = ScanType::FULL_SCAN;
@@ -183,7 +183,7 @@ TEST_F(ProjectionScanOperatorsTest, NodeProjectionScanProfilesEmptyPredicateResu
 	for (int64_t i = 0; i < 3; ++i) {
 		addNode(userLabel, {{"score", PropertyValue(i)}});
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	VectorizedPropertyPredicate rejectAll;
 	rejectAll.propertyKey = "score";
@@ -212,7 +212,7 @@ TEST_F(ProjectionScanOperatorsTest, NodeProjectionScanProfilesEmptyPredicateResu
 TEST_F(ProjectionScanOperatorsTest, NodeProjectionScanEmitsNullForRowsMissingProjectedProperty) {
 	addNode(userLabel, {{"id", PropertyValue("user-0")}});
 	addNode(userLabel, {});
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	NodeScanConfig config;
 	config.type = ScanType::FULL_SCAN;
@@ -239,7 +239,7 @@ TEST_F(ProjectionScanOperatorsTest, RelationshipProjectionScanFiltersAndProjects
 	addFollows(a, b, 1);
 	addFollows(b, a, 2);
 	addFollows(a, c, 1);
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	VectorizedPropertyPredicate weightIsOne;
 	weightIsOne.propertyKey = "weight";
@@ -274,7 +274,7 @@ TEST_F(ProjectionScanOperatorsTest, RelationshipProjectionScanProjectsTargetOnly
 	const int64_t c = addNode(userLabel, {{"id", PropertyValue("c")}});
 	addFollows(a, b, 1);
 	addFollows(a, c, 2);
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	DirectRelationshipCountConfig config;
 	config.enabled = true;
@@ -299,7 +299,7 @@ TEST_F(ProjectionScanOperatorsTest, RelationshipProjectionScanRecordsTraceWhenUn
 	const int64_t a = addNode(userLabel, {{"id", PropertyValue("a")}});
 	const int64_t b = addNode(userLabel, {{"id", PropertyValue("b")}});
 	addFollows(a, b, 4);
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	DirectRelationshipCountConfig config;
 	config.enabled = true;
@@ -331,7 +331,7 @@ TEST_F(ProjectionScanOperatorsTest, RelationshipProjectionScanUsesIndexedCandida
 	const int64_t c = addNode(userLabel, {{"id", PropertyValue("c")}});
 	addFollows(a, b, 7);
 	addFollows(c, b, 8);
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_TRUE(im->createIndex("projection_edge_weight", "edge", "FOLLOWS", "weight"));
 
 	VectorizedPropertyPredicate weightIsSeven;
@@ -368,7 +368,7 @@ TEST_F(ProjectionScanOperatorsTest, RelationshipProjectionScanUsesUnboundedIndex
 	const int64_t c = addNode(userLabel, {{"id", PropertyValue("c")}});
 	addFollows(a, b, 5);
 	addFollows(a, c, 5);
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_TRUE(im->createIndex("projection_edge_weight_unbounded", "edge", "FOLLOWS", "weight"));
 
 	VectorizedPropertyPredicate weightIsFive;
@@ -407,7 +407,7 @@ TEST_F(ProjectionScanOperatorsTest, RelationshipProjectionScanFiltersTypeAfterPr
 	Edge likes(0, a, c, likesType);
 	dm->addEdge(likes);
 	dm->addEdgeProperties(likes.getId(), {{"weight", PropertyValue(int64_t{5})}});
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_TRUE(im->createIndex("projection_edge_weight_mixed_type", "edge", "", "weight"));
 
 	VectorizedPropertyPredicate weightIsFive;
@@ -441,7 +441,7 @@ TEST_F(ProjectionScanOperatorsTest, RelationshipProjectionScanReturnsNullForMiss
 	const int64_t a = addNode(userLabel, {{"id", PropertyValue("a")}});
 	const int64_t b = addNode(userLabel, {});
 	addFollows(a, b, 1);
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	DirectRelationshipCountConfig config;
 	config.enabled = true;
@@ -471,7 +471,7 @@ TEST_F(ProjectionScanOperatorsTest, RelationshipProjectionScanSkipsInactiveEdges
 
 	Edge deleted = dm->getEdge(deletedId);
 	dm->deleteEdge(deleted);
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	DirectRelationshipCountConfig config;
 	config.enabled = true;
@@ -497,7 +497,7 @@ TEST_F(ProjectionScanOperatorsTest, RelationshipProjectionScanScansAllTypesWhenT
 	const int64_t a = addNode(userLabel, {{"id", PropertyValue("a")}});
 	const int64_t b = addNode(userLabel, {{"id", PropertyValue("b")}});
 	addFollows(a, b, 3);
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	DirectRelationshipCountConfig config;
 	config.enabled = true;
@@ -530,7 +530,7 @@ TEST_F(ProjectionScanOperatorsTest, RelationshipProjectionScanConvertsEqualityPr
 	const int64_t b = addNode(userLabel, {{"id", PropertyValue("b")}});
 	addFollows(a, b, 2);
 	addFollows(b, a, 2);
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	DirectRelationshipCountConfig config;
 	config.enabled = true;
@@ -559,7 +559,7 @@ TEST_F(ProjectionScanOperatorsTest, RelationshipProjectionScanRejectsUnknownType
 	const int64_t a = addNode(userLabel, {{"id", PropertyValue("a")}});
 	const int64_t b = addNode(userLabel, {{"id", PropertyValue("b")}});
 	addFollows(a, b, 1);
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	DirectRelationshipCountConfig missingType;
 	missingType.enabled = true;
@@ -599,7 +599,7 @@ TEST_F(ProjectionScanOperatorsTest, RelationshipProjectionScanSkipsInvalidAndIna
 
 	Node deletedNode = dm->getNode(deletedTarget);
 	dm->deleteNode(deletedNode);
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	DirectRelationshipCountConfig config;
 	config.enabled = true;
@@ -637,7 +637,7 @@ TEST_F(ProjectionScanOperatorsTest, RelationshipProjectionScanSkipsMissingAndDel
 
 	Node deletedNode = dm->getNode(deletedTarget);
 	dm->deleteNode(deletedNode);
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	DirectRelationshipCountConfig config;
 	config.enabled = true;

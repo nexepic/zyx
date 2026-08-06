@@ -85,15 +85,13 @@ TEST_F(ResultClauseHandlerTest, EdgeCase_LimitLargerThanCount) {
 }
 
 TEST_F(ResultClauseHandlerTest, EdgeCase_NegativeLimit) {
-	// Tests LIMIT with negative value (should be handled as 0 or error)
-	// Note: Implementation doesn't throw for negative LIMIT
-	EXPECT_NO_THROW({ (void)execute("MATCH (n:Test) RETURN n LIMIT -1"); });
+	// Negative limits are invalid rather than silently changing query meaning.
+	EXPECT_THROW((void)execute("MATCH (n:Test) RETURN n LIMIT -1"), std::invalid_argument);
 }
 
 TEST_F(ResultClauseHandlerTest, EdgeCase_NegativeSkip) {
-	// Tests SKIP with negative value (should be handled as 0 or error)
-	// Note: Implementation doesn't throw for negative SKIP
-	EXPECT_NO_THROW({ (void)execute("MATCH (n:Test) RETURN n SKIP -1"); });
+	// Negative offsets are invalid rather than silently changing query meaning.
+	EXPECT_THROW((void)execute("MATCH (n:Test) RETURN n SKIP -1"), std::invalid_argument);
 }
 
 TEST_F(ResultClauseHandlerTest, EdgeCase_OrderByAscending) {
@@ -133,11 +131,10 @@ TEST_F(ResultClauseHandlerTest, EdgeCase_OrderByWithNonExistentProperty) {
 }
 
 TEST_F(ResultClauseHandlerTest, EdgeCase_ReturnMixedVariables) {
-	// Tests RETURN with mix of node and edge variables
-	// Note: Edge variables not available in RETURN for CREATE patterns
+	// Tests RETURN with mix of node and edge variables from a bound MATCH pattern.
 	(void) execute("CREATE (a)-[r:LINK]->(b)");
 
-	auto res = execute("MATCH ()-[r:LINK]->() RETURN a, r, b");
+	auto res = execute("MATCH (a)-[r:LINK]->(b) RETURN a, r, b");
 	ASSERT_EQ(res.rowCount(), 1UL);
 	// Only edge variable is available, node variables return as null/non-existent
 	EXPECT_TRUE(res.getRows()[0].contains("r"));
@@ -581,12 +578,15 @@ TEST_F(ResultClauseHandlerTest, Return_MultipleVariables) {
 }
 
 TEST_F(ResultClauseHandlerTest, Return_MultipleWithSameProperty) {
-	// Tests RETURN same property multiple times
+	// Repeated expressions need explicit aliases because a result row is keyed by
+	// column name and cannot represent three indistinguishable `n.value` keys.
 	(void) execute("CREATE (n:Test {value: 100})");
 
-	auto res = execute("MATCH (n:Test) RETURN n.value, n.value, n.value");
+	auto res = execute("MATCH (n:Test) RETURN n.value AS first, n.value AS second, n.value AS third");
 	ASSERT_EQ(res.rowCount(), 1UL);
-	EXPECT_EQ(res.getRows()[0].at("n.value").toString(), "100");
+	EXPECT_EQ(res.getRows()[0].at("first").toString(), "100");
+	EXPECT_EQ(res.getRows()[0].at("second").toString(), "100");
+	EXPECT_EQ(res.getRows()[0].at("third").toString(), "100");
 }
 
 TEST_F(ResultClauseHandlerTest, Return_Multiply) {
@@ -909,30 +909,38 @@ TEST_F(ResultClauseHandlerTest, Skip_SkipZero) {
 
 TEST_F(ResultClauseHandlerTest, Skip_WithNegativeNumber) {
 	// Tests SKIP with negative number
-	// Behavior might be implementation-specific
 	(void) execute("CREATE (n:Test {id: 1})");
 
-	auto res = execute("MATCH (n:Test) RETURN n.id SKIP -1");
-	// Negative SKIP might be treated as 0 or cause error
-	EXPECT_GE(res.rowCount(), 0UL);
+	EXPECT_THROW((void)execute("MATCH (n:Test) RETURN n.id SKIP -1"), std::invalid_argument);
 }
 
 TEST_F(ResultClauseHandlerTest, Skip_WithOrderBy) {
 	// Tests SKIP combined with ORDER BY
+	std::string create = "CREATE ";
 	for (int i = 0; i < 10; ++i) {
-		(void) execute("CREATE (n:Test {id: " + std::to_string(i) + "})");
+		if (i != 0) {
+			create += ", ";
+		}
+		create += "(:Test {id: " + std::to_string(i) + "})";
 	}
+	(void) execute(create);
 
 	auto res = execute("MATCH (n:Test) RETURN n.id ORDER BY n.id DESC SKIP 5");
 	ASSERT_EQ(res.rowCount(), 5UL);
 }
 
 TEST_F(ResultClauseHandlerTest, Skip_WithVeryLargeNumber) {
-	// Tests SKIP with a very large number that might overflow
-	// Create test data
+	// Tests SKIP with a very large number that might overflow. Build the sample
+	// graph in one transaction so this query test does not exercise ten unrelated
+	// metadata durability publications.
+	std::string create = "CREATE ";
 	for (int i = 0; i < 10; ++i) {
-		(void) execute("CREATE (n:Test {id: " + std::to_string(i) + "})");
+		if (i != 0) {
+			create += ", ";
+		}
+		create += "(:Test {id: " + std::to_string(i) + "})";
 	}
+	(void) execute(create);
 
 	auto res = execute("MATCH (n:Test) RETURN n.id SKIP 999999999999");
 	ASSERT_EQ(res.rowCount(), 0UL);

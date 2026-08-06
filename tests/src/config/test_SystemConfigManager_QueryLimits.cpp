@@ -12,7 +12,7 @@
 #include <string>
 
 #include "graph/config/SystemConfigManager.hpp"
-#include "graph/core/Database.hpp"
+#include "graph/storage/FileStorage.hpp"
 #include "graph/storage/state/SystemStateKeys.hpp"
 #include "graph/storage/state/SystemStateManager.hpp"
 
@@ -26,16 +26,19 @@ protected:
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath = std::filesystem::temp_directory_path() / ("test_queryLimits_" + to_string(uuid) + ".dat");
 
-		database = std::make_unique<Database>(testFilePath.string());
-		database->open();
+		fileStorage = std::make_shared<storage::FileStorage>(
+				testFilePath.string(), 10'000U, storage::OpenMode::OPEN_CREATE_NEW_FILE);
+		fileStorage->open();
 
-		stateManager = std::make_shared<SystemStateManager>(database->getStorage()->getDataManager());
-		configManager = std::make_shared<SystemConfigManager>(stateManager, database->getStorage());
+		stateManager = std::make_shared<SystemStateManager>(fileStorage->getDataManager());
+		configManager = std::make_shared<SystemConfigManager>(stateManager, fileStorage);
 	}
 
 	void TearDown() override {
-		database->close();
-		database.reset();
+		if (fileStorage) {
+			fileStorage->close();
+		}
+		fileStorage.reset();
 		std::error_code ec;
 		if (std::filesystem::exists(testFilePath)) {
 			std::filesystem::remove(testFilePath, ec);
@@ -43,7 +46,7 @@ protected:
 	}
 
 	std::filesystem::path testFilePath;
-	std::unique_ptr<Database> database;
+	std::shared_ptr<storage::FileStorage> fileStorage;
 	std::shared_ptr<SystemStateManager> stateManager;
 	std::shared_ptr<SystemConfigManager> configManager;
 };

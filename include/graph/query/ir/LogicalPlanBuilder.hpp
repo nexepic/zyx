@@ -10,6 +10,7 @@
 #include "graph/query/ir/QueryAST.hpp"
 #include "graph/query/logical/LogicalOperator.hpp"
 #include "graph/query/QueryPlan.hpp"
+#include <cstddef>
 #include <memory>
 
 namespace graph::query::planner {
@@ -109,6 +110,9 @@ private:
 	const planner::ProcedureRegistry *procedureRegistry_ = nullptr;
 	bool mutatesData_ = false;
 	bool mutatesSchema_ = false;
+	// One plan-wide sequence prevents anonymous bindings from colliding across
+	// MATCH and CREATE clauses that share a pipeline.
+	size_t next_anonymous_variable_ = 0U;
 };
 
 } // namespace graph::query::ir

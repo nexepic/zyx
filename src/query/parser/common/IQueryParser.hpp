@@ -7,9 +7,7 @@
 
 #pragma once
 
-#include <memory>
 #include <string>
-#include "graph/query/execution/PhysicalOperator.hpp"
 #include "graph/query/QueryPlan.hpp"
 
 namespace graph::parser {
@@ -23,13 +21,7 @@ namespace graph::parser {
 		virtual ~IQueryParser() = default;
 
 		/**
-		 * @brief Parses a raw query string into an executable Operator Tree.
-		 */
-		[[nodiscard]] virtual std::unique_ptr<query::execution::PhysicalOperator>
-		parse(const std::string &query) const = 0;
-
-		/**
-		 * @brief Parses and optimizes a query, returning a QueryPlan (cacheable).
+		 * @brief Parses a query into its format-independent logical plan.
 		 */
 		[[nodiscard]] virtual query::QueryPlan
 		parseToLogical(const std::string &query) const = 0;

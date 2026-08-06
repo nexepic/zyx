@@ -25,7 +25,6 @@
 #include <gtest/gtest.h>
 #include <random>
 #include "graph/core/Blob.hpp"
-#include "graph/core/Database.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Index.hpp"
 #include "graph/core/Node.hpp"
@@ -41,7 +40,7 @@ using namespace graph::storage;
 
 /**
  * Test fixture for EntityTraits tests
- * Sets up a Database instance with FileStorage and DataManager
+ * Sets up a legacy FileStorage instance and DataManager directly.
  */
 class EntityTraitsTest : public ::testing::Test {
 protected:
@@ -50,22 +49,20 @@ protected:
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath = std::filesystem::temp_directory_path() / ("test_entityTraits_" + to_string(uuid) + ".dat");
 
-		// Initialize Database and get the DataManager instance
-		database = std::make_unique<graph::Database>(testFilePath.string());
-		database->open();
-		fileStorage = database->getStorage();
+		fileStorage = std::make_shared<FileStorage>(
+				testFilePath.string(), 10'000U, OpenMode::OPEN_CREATE_NEW_FILE);
+		fileStorage->open();
 		dataManager = fileStorage->getDataManager();
 	}
 
 	void TearDown() override {
-		// Release shared_ptrs before closing database
+		// Release DataManager before closing legacy physical storage.
 		dataManager.reset();
-		fileStorage.reset();
 
-		if (database) {
-			database->close();
+		if (fileStorage) {
+			fileStorage->close();
 		}
-		database.reset();
+		fileStorage.reset();
 
 		std::error_code ec;
 		std::filesystem::remove(testFilePath, ec);
@@ -127,7 +124,6 @@ protected:
 	}
 
 	std::filesystem::path testFilePath;
-	std::unique_ptr<graph::Database> database;
 	std::shared_ptr<FileStorage> fileStorage;
 	std::shared_ptr<DataManager> dataManager;
 };

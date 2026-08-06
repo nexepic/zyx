@@ -68,6 +68,11 @@ namespace graph::query {
 
 	class QueryPlanner {
 	public:
+		// Builds logical Cypher plans without creating a DataManager-backed
+		// optimizer or a legacy physical plan. Format-independent backends use
+		// this factory while their own physical runtime is being selected.
+		[[nodiscard]] static std::shared_ptr<QueryPlanner> createLogicalOnly();
+
 		/**
 		 * @brief Constructs the planner and initializes the internal Optimizer.
 		 */
@@ -272,8 +277,12 @@ namespace graph::query {
 		[[nodiscard]] std::shared_ptr<storage::constraints::ConstraintManager> getConstraintManager() const { return cm_; }
 		[[nodiscard]] std::shared_ptr<algorithm::GraphProjectionManager> getProjectionManager() const { return pm_; }
 		[[nodiscard]] optimizer::Optimizer* getOptimizer() const { return optimizer_.get(); }
+		[[nodiscard]] bool supportsLegacyPhysicalPlanning() const { return supportsLegacyPhysicalPlanning_; }
 
 	private:
+		struct LogicalOnlyTag {};
+		explicit QueryPlanner(LogicalOnlyTag);
+
 		std::shared_ptr<storage::DataManager> dm_;
 		std::shared_ptr<indexes::IndexManager> im_;
 		std::shared_ptr<storage::constraints::ConstraintManager> cm_;
@@ -281,6 +290,7 @@ namespace graph::query {
 
 		// The Brain: Handles logic for selecting the best scan strategy
 		std::unique_ptr<optimizer::Optimizer> optimizer_;
+		bool supportsLegacyPhysicalPlanning_ = true;
 	};
 
 } // namespace graph::query

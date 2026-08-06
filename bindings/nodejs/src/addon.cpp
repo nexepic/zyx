@@ -72,13 +72,23 @@ struct EdgeData {
 };
 
 struct JsValue {
-    using Variant = std::variant<std::monostate, bool, int64_t, double, std::string, JsArray, JsObject, NodeData, EdgeData>;
+    using Variant = std::variant<std::monostate, bool, int64_t, double, std::string, std::vector<uint8_t>, JsArray, JsObject, NodeData, EdgeData>;
     Variant value;
 
     JsValue() : value(std::monostate{}) {}
     template <typename T>
     explicit JsValue(T v) : value(std::move(v)) {}
 };
+
+std::vector<uint8_t> CopyBytes(const uint8_t *data, uint32_t size) {
+    if (size == 0U) {
+        return {};
+    }
+    if (data == nullptr) {
+        throw std::runtime_error("Driver ABI returned a null non-empty bytes buffer");
+    }
+    return std::vector<uint8_t>(data, data + size);
+}
 
 class JsonParser {
 public:
@@ -329,6 +339,11 @@ Napi::Value ValueToNapi(Napi::Env env, const JsValue &value) {
                 return Napi::Number::New(env, arg);
             } else if constexpr (std::is_same_v<T, std::string>) {
                 return Napi::String::New(env, arg);
+            } else if constexpr (std::is_same_v<T, std::vector<uint8_t>>) {
+                if (arg.empty()) {
+                    return Napi::Buffer<uint8_t>::New(env, 0U);
+                }
+                return Napi::Buffer<uint8_t>::Copy(env, arg.data(), arg.size());
             } else if constexpr (std::is_same_v<T, JsArray>) {
                 Napi::Array array = Napi::Array::New(env, arg.size());
                 for (size_t i = 0; i < arg.size(); ++i) {
@@ -398,6 +413,8 @@ DriverValue BuildDriverValue(const JsValue &value) {
         ThrowIfNotOk(zyx_driver_value_double_create(*typed, &raw, error.out()), error);
     } else if (const auto *typed = std::get_if<std::string>(&value.value)) {
         ThrowIfNotOk(zyx_driver_value_string_create(typed->c_str(), &raw, error.out()), error);
+    } else if (const auto *typed = std::get_if<std::vector<uint8_t>>(&value.value)) {
+        ThrowIfNotOk(zyx_driver_value_bytes_create(typed->data(), static_cast<uint32_t>(typed->size()), &raw, error.out()), error);
     } else if (const auto *typed = std::get_if<JsArray>(&value.value)) {
         ThrowIfNotOk(zyx_driver_value_list_create(&raw, error.out()), error);
         DriverValue list(raw);
@@ -469,6 +486,10 @@ JsValue NapiToValue(const Napi::Value &value) {
     }
     if (value.IsString()) {
         return JsValue(value.As<Napi::String>().Utf8Value());
+    }
+    if (value.IsBuffer()) {
+        const auto buffer = value.As<Napi::Buffer<uint8_t>>();
+        return JsValue(std::vector<uint8_t>(buffer.Data(), buffer.Data() + buffer.Length()));
     }
     if (value.IsArray()) {
         Napi::Array input = value.As<Napi::Array>();
@@ -615,6 +636,12 @@ JsValue ValueRefToJsValue(zyx_driver_result_t *result, const zyx_driver_value_re
             const char *value = nullptr;
             ThrowIfNotOk(zyx_driver_value_ref_get_string(result, &ref, &value, error.out()), error);
             return JsValue(std::string(value == nullptr ? "" : value));
+        }
+        case ZYX_DRIVER_VALUE_BYTES: {
+            const uint8_t *value = nullptr;
+            uint32_t size = 0U;
+            ThrowIfNotOk(zyx_driver_value_ref_get_bytes(&ref, &value, &size, error.out()), error);
+            return JsValue(CopyBytes(value, size));
         }
         case ZYX_DRIVER_VALUE_NODE:
             return NodeRefToJsValue(result, ref);

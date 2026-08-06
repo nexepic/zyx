@@ -10,7 +10,6 @@
 #include <filesystem>
 #include <thread>
 #include <gtest/gtest.h>
-#include "graph/core/Database.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/FileStorage.hpp"
 
@@ -33,6 +32,13 @@ protected:
 		std::error_code ec;
 		fs::remove(testFilePath, ec);
 	}
+
+	[[nodiscard]] std::shared_ptr<FileStorage> openLegacyStorage(
+			OpenMode mode = OpenMode::OPEN_CREATE_NEW_FILE) const {
+		auto storage = std::make_shared<FileStorage>(testFilePath.string(), 10'000U, mode);
+		storage->open();
+		return storage;
+	}
 };
 
 // Test listener notification and expired listener cleanup during flush
@@ -43,9 +49,7 @@ public:
 };
 
 TEST_F(FileStorageFlushTest, FlushNotifiesListeners) {
-	Database db(testFilePath.string());
-	db.open();
-	auto storage = db.getStorage();
+	auto storage = openLegacyStorage();
 	auto dm = storage->getDataManager();
 
 	auto listener = std::make_shared<TestStorageEventListener>();
@@ -56,13 +60,11 @@ TEST_F(FileStorageFlushTest, FlushNotifiesListeners) {
 	storage->flush();
 
 	EXPECT_GE(listener->flushCount, 1);
-	db.close();
+	storage->close();
 }
 
 TEST_F(FileStorageFlushTest, FlushRemovesExpiredListeners) {
-	Database db(testFilePath.string());
-	db.open();
-	auto storage = db.getStorage();
+	auto storage = openLegacyStorage();
 	auto dm = storage->getDataManager();
 
 	{
@@ -75,13 +77,11 @@ TEST_F(FileStorageFlushTest, FlushRemovesExpiredListeners) {
 	dm->addNode(n);
 	// Should not crash when the listener weak_ptr has expired
 	EXPECT_NO_THROW(storage->flush());
-	db.close();
+	storage->close();
 }
 
 TEST_F(FileStorageFlushTest, FlushIgnoresReentrantListenerFlush) {
-	Database db(testFilePath.string());
-	db.open();
-	auto storage = db.getStorage();
+	auto storage = openLegacyStorage();
 	auto dm = storage->getDataManager();
 
 	class ReentrantFlushListener : public IStorageEventListener {
@@ -103,13 +103,11 @@ TEST_F(FileStorageFlushTest, FlushIgnoresReentrantListenerFlush) {
 	dm->addNode(n);
 	EXPECT_NO_THROW(storage->flush());
 	EXPECT_EQ(listener->flushCount, 1);
-	db.close();
+	storage->close();
 }
 
 TEST_F(FileStorageFlushTest, FlushWithCompactionAfterDelete) {
-	Database db(testFilePath.string());
-	db.open();
-	auto storage = db.getStorage();
+	auto storage = openLegacyStorage();
 	auto dm = storage->getDataManager();
 
 	// Add many nodes and flush to disk
@@ -128,48 +126,43 @@ TEST_F(FileStorageFlushTest, FlushWithCompactionAfterDelete) {
 	// Compaction is enabled by default, so flush after delete triggers compaction path
 	storage->flush();
 
-	db.close();
+	storage->close();
 }
 
 TEST_F(FileStorageFlushTest, CloseFlushesFileHeader) {
 	{
-		Database db(testFilePath.string());
-		db.open();
-		auto storage = db.getStorage();
+		auto storage = openLegacyStorage();
 		auto dm = storage->getDataManager();
 
 		Node n(0, 0);
 		dm->addNode(n);
 		// close() should flush pending changes + file header
-		db.close();
+		storage->close();
 	}
 
 	// Reopen and verify data persisted
-	Database db2(testFilePath.string());
-	db2.open();
-	auto dm2 = db2.getStorage()->getDataManager();
+	auto storage2 = openLegacyStorage(OpenMode::OPEN_EXISTING_FILE);
+	auto dm2 = storage2->getDataManager();
 	Node loaded = dm2->getNode(1);
 	EXPECT_TRUE(loaded.isActive());
-	db2.close();
+	storage2->close();
 }
 
 TEST_F(FileStorageFlushTest, ReadOnlyCloseSkipsHeaderRewriteAndTruncation) {
 	{
-		Database db(testFilePath.string());
-		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto storage = openLegacyStorage();
+		auto dm = storage->getDataManager();
 		Node n(0, 0);
 		dm->addNode(n);
-		db.close();
+		storage->close();
 	}
 
 	graph::debug::PerfTrace::setEnabled(true);
 	graph::debug::PerfTrace::reset();
 	{
-		Database db(testFilePath.string());
-		db.open();
-		EXPECT_FALSE(db.getStorage()->getStorageIO()->hasPwriteSupport());
-		db.close();
+		auto storage = openLegacyStorage(OpenMode::OPEN_READ_ONLY_EXISTING_FILE);
+		EXPECT_FALSE(storage->getStorageIO()->hasPwriteSupport());
+		storage->close();
 	}
 
 	auto snapshot = graph::debug::PerfTrace::snapshotAndReset();
@@ -178,9 +171,7 @@ TEST_F(FileStorageFlushTest, ReadOnlyCloseSkipsHeaderRewriteAndTruncation) {
 }
 
 TEST_F(FileStorageFlushTest, VerifyIntegrity) {
-	Database db(testFilePath.string());
-	db.open();
-	auto storage = db.getStorage();
+	auto storage = openLegacyStorage();
 	auto dm = storage->getDataManager();
 
 	Node n(0, 0);
@@ -189,7 +180,7 @@ TEST_F(FileStorageFlushTest, VerifyIntegrity) {
 
 	auto result = storage->verifyIntegrity();
 	EXPECT_TRUE(result.allPassed);
-	db.close();
+	storage->close();
 }
 
 TEST_F(FileStorageFlushTest, FlushAfterMinimalDeleteSkipsCompaction) {
@@ -235,9 +226,7 @@ TEST_F(FileStorageFlushTest, FlushAfterMinimalDeleteSkipsCompaction) {
 
 TEST_F(FileStorageFlushTest, ConcurrentFlushReturnsEarly) {
 	// Exercise the flush lock contention path (!lock.owns_lock())
-	Database db(testFilePath.string());
-	db.open();
-	auto storage = db.getStorage();
+	auto storage = openLegacyStorage();
 	auto dm = storage->getDataManager();
 
 	// Add some data so flush has work to do
@@ -255,13 +244,11 @@ TEST_F(FileStorageFlushTest, ConcurrentFlushReturnsEarly) {
 		t.join();
 	}
 
-	db.close();
+	storage->close();
 }
 
 TEST_F(FileStorageFlushTest, VerifyBitmapConsistency) {
-	Database db(testFilePath.string());
-	db.open();
-	auto storage = db.getStorage();
+	auto storage = openLegacyStorage();
 	auto dm = storage->getDataManager();
 
 	Node n(0, 0);
@@ -272,5 +259,5 @@ TEST_F(FileStorageFlushTest, VerifyBitmapConsistency) {
 	auto segments = storage->getSegmentTracker()->getSegmentsByType(Node::typeId);
 	ASSERT_FALSE(segments.empty());
 	EXPECT_TRUE(storage->verifyBitmapConsistency(segments[0].file_offset));
-	db.close();
+	storage->close();
 }

@@ -13,7 +13,7 @@
 #include <vector>
 
 #include "graph/concurrent/ThreadPool.hpp"
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/execution/operators/VarLengthTraversalOperator.hpp"
 #include "graph/query/execution/Record.hpp"
@@ -88,7 +88,7 @@ private:
 
 class VarLengthTraversalOperatorTest : public ::testing::Test {
 protected:
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<storage::DataManager> dm;
 	fs::path testFilePath;
 
@@ -97,9 +97,9 @@ protected:
 		testFilePath = fs::temp_directory_path() /
 					   ("test_varlen_" + boost::uuids::to_string(uuid) + ".dat");
 		if (fs::exists(testFilePath)) fs::remove_all(testFilePath);
-		db = std::make_unique<Database>(testFilePath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testFilePath.string());
 		db->open();
-		dm = db->getStorage()->getDataManager();
+		dm = db->storage()->getDataManager();
 	}
 
 	void TearDown() override {
@@ -847,7 +847,7 @@ TEST_F(VarLengthTraversalOperatorTest, IndexedTargetPropertyEnablesDeepFrontierP
 		dm->addEdge(edge);
 	}
 
-	auto indexManager = db->getQueryEngine()->getIndexManager();
+	auto indexManager = db->indexManager();
 	ASSERT_TRUE(indexManager->createIndex("", "node", "Node", "id"));
 
 	auto source = std::make_unique<MockSourceOperator>("src", std::vector<Node>{sourceNode});
@@ -911,7 +911,7 @@ TEST_F(VarLengthTraversalOperatorTest, IndexedTargetPropertyPrunesDfsDeadBranche
 		dm->addEdge(deadEdge);
 	}
 
-	auto indexManager = db->getQueryEngine()->getIndexManager();
+	auto indexManager = db->indexManager();
 	ASSERT_TRUE(indexManager->createIndex("", "node", "", "id"));
 
 	auto source = std::make_unique<MockSourceOperator>("src", std::vector<Node>{sourceNode});
@@ -957,7 +957,7 @@ TEST_F(VarLengthTraversalOperatorTest, IndexedTargetPropertyUsesGlobalIndexWitho
 	Edge e2(0, sourceNode.getId(), other.getId(), typeId);
 	dm->addEdge(e2);
 
-	auto indexManager = db->getQueryEngine()->getIndexManager();
+	auto indexManager = db->indexManager();
 	ASSERT_TRUE(indexManager->createIndex("", "node", "", "id"));
 
 	auto source = std::make_unique<MockSourceOperator>("src", std::vector<Node>{sourceNode});
@@ -1013,7 +1013,7 @@ TEST_F(VarLengthTraversalOperatorTest, IndexedTargetPropertyStillChecksAllPredic
 	Edge e2(0, sourceNode.getId(), sameIndexedValue.getId(), typeId);
 	dm->addEdge(e2);
 
-	auto indexManager = db->getQueryEngine()->getIndexManager();
+	auto indexManager = db->indexManager();
 	ASSERT_TRUE(indexManager->createIndex("", "node", "", "country"));
 
 	auto source = std::make_unique<MockSourceOperator>("src", std::vector<Node>{sourceNode});
@@ -1110,7 +1110,7 @@ TEST_F(VarLengthTraversalOperatorTest, IndexedTargetPropertyEmptyCandidateShortC
 	Edge edge(0, sourceNode.getId(), reachable.getId(), typeId);
 	dm->addEdge(edge);
 
-	auto indexManager = db->getQueryEngine()->getIndexManager();
+	auto indexManager = db->indexManager();
 	ASSERT_TRUE(indexManager->createIndex("", "node", "", "id"));
 
 	auto source = std::make_unique<MockSourceOperator>("src", std::vector<Node>{sourceNode});
@@ -1152,7 +1152,7 @@ TEST_F(VarLengthTraversalOperatorTest, IndexedTargetPropertyFallsBackWhenNoUsefu
 	Edge edge(0, sourceNode.getId(), target.getId(), typeId);
 	dm->addEdge(edge);
 
-	auto indexManager = db->getQueryEngine()->getIndexManager();
+	auto indexManager = db->indexManager();
 	auto source = std::make_unique<MockSourceOperator>("src", std::vector<Node>{sourceNode});
 	auto op = std::make_unique<VarLengthTraversalOperator>(
 			dm,
@@ -1201,7 +1201,7 @@ TEST_F(VarLengthTraversalOperatorTest, IndexedTargetPropertySelectsMostSelective
 	Edge sameCountryEdge(0, sourceNode.getId(), sameCountry.getId(), typeId);
 	dm->addEdge(sameCountryEdge);
 
-	auto indexManager = db->getQueryEngine()->getIndexManager();
+	auto indexManager = db->indexManager();
 	ASSERT_TRUE(indexManager->createIndex("", "node", "", "country"));
 	ASSERT_TRUE(indexManager->createIndex("", "node", "", "id"));
 
@@ -1254,7 +1254,7 @@ TEST_F(VarLengthTraversalOperatorTest, IndexedTargetPropertyKeepsMoreSelectiveEa
 	Edge sameCountryEdge(0, sourceNode.getId(), sameCountry.getId(), typeId);
 	dm->addEdge(sameCountryEdge);
 
-	auto indexManager = db->getQueryEngine()->getIndexManager();
+	auto indexManager = db->indexManager();
 	ASSERT_TRUE(indexManager->createIndex("scoped_id", "node", "Node", "id"));
 	ASSERT_TRUE(indexManager->createIndex("scoped_country", "node", "Node", "country"));
 	ASSERT_TRUE(indexManager->createIndex("global_id", "node", "", "id"));
@@ -1311,7 +1311,7 @@ TEST_F(VarLengthTraversalOperatorTest, IndexedReversePruningHandlesBothDirection
 	Edge toB(0, sourceNode.getId(), targetB.getId(), typeId);
 	dm->addEdge(toB);
 
-	auto indexManager = db->getQueryEngine()->getIndexManager();
+	auto indexManager = db->indexManager();
 	ASSERT_TRUE(indexManager->createIndex("", "node", "", "group"));
 
 	auto source = std::make_unique<MockSourceOperator>("src", std::vector<Node>{sourceNode});
@@ -1359,7 +1359,7 @@ TEST_F(VarLengthTraversalOperatorTest, IndexedReversePruningSupportsIncomingTrav
 	Edge second(0, middle.getId(), sourceNode.getId(), typeId);
 	dm->addEdge(second);
 
-	auto indexManager = db->getQueryEngine()->getIndexManager();
+	auto indexManager = db->indexManager();
 	ASSERT_TRUE(indexManager->createIndex("", "node", "", "id"));
 
 	auto source = std::make_unique<MockSourceOperator>("src", std::vector<Node>{sourceNode});
@@ -1652,7 +1652,7 @@ TEST_F(VarLengthTraversalOperatorTest, IndexedTargetCandidateSetSkipsReversePrun
 	Edge reachable(0, middle.getId(), candidates.front().getId(), typeId);
 	dm->addEdge(reachable);
 
-	auto indexManager = db->getQueryEngine()->getIndexManager();
+	auto indexManager = db->indexManager();
 	ASSERT_TRUE(indexManager->createIndex("", "node", "", "group"));
 
 	auto source = std::make_unique<MockSourceOperator>("src", std::vector<Node>{sourceNode});

@@ -260,10 +260,16 @@ void collectVarsImpl(const Expression* expr, SetType& out) {
 			if (!patComp->getSourceVar().empty()) {
 				out.insert(patComp->getSourceVar());
 			}
-			collectVarsImpl(patComp->getMapExpression(), out);
+			std::unordered_set<std::string> expressionVars;
+			collectVarsImpl(patComp->getMapExpression(), expressionVars);
 			if (patComp->hasWhereClause()) {
-				collectVarsImpl(patComp->getWhereExpression(), out);
+				collectVarsImpl(patComp->getWhereExpression(), expressionVars);
 			}
+			// Target and relationship variables belong to the local pattern scope;
+			// they are bound per candidate rather than required from the input row.
+			expressionVars.erase(patComp->getTargetVar());
+			expressionVars.erase(patComp->getRelationshipVar());
+			out.insert(expressionVars.begin(), expressionVars.end());
 			break;
 		}
 		case ExpressionType::MAP_PROJECTION: {

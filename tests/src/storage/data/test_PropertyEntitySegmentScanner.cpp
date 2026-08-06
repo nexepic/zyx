@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "graph/concurrent/ThreadPool.hpp"
-#include "graph/core/Database.hpp"
+#include "graph/storage/FileStorage.hpp"
 #include "graph/storage/IDAllocator.hpp"
 #include "graph/storage/SegmentIndexManager.hpp"
 #include "graph/storage/SegmentTracker.hpp"
@@ -43,18 +43,19 @@ protected:
 		const auto uuid = boost::uuids::random_generator()();
 		dbPath = fs::temp_directory_path() /
 				 ("test_property_entity_segment_scanner_" + boost::uuids::to_string(uuid) + ".zyx");
-		db = std::make_unique<Database>(dbPath.string());
-		db->open();
-		dm = db->getStorage()->getDataManager();
+		storage = std::make_shared<storage::FileStorage>(
+				dbPath.string(), 10'000U, storage::OpenMode::OPEN_CREATE_NEW_FILE);
+		storage->open();
+		dm = storage->getDataManager();
 		labelId = dm->getOrCreateTokenId("User");
 	}
 
 	void TearDown() override {
 		dm.reset();
-		if (db) {
-			db->close();
+		if (storage) {
+			storage->close();
 		}
-		db.reset();
+		storage.reset();
 		std::error_code ec;
 		fs::remove_all(dbPath, ec);
 	}
@@ -67,7 +68,7 @@ protected:
 	}
 
 	fs::path dbPath;
-	std::unique_ptr<Database> db;
+	std::shared_ptr<storage::FileStorage> storage;
 	std::shared_ptr<storage::DataManager> dm;
 	int64_t labelId = 0;
 };
@@ -128,7 +129,7 @@ TEST_F(PropertyEntitySegmentScannerTest, RejectsNonPositionalReadStorage) {
 TEST_F(PropertyEntitySegmentScannerTest, ScansAllAndTargetedPropertySegments) {
 	addUserWithProperty("id", PropertyValue("u0"));
 	addUserWithProperty("score", PropertyValue(int64_t{7}));
-	db->getStorage()->flush();
+	storage->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	size_t allVisited = 0;
@@ -177,7 +178,7 @@ TEST_F(PropertyEntitySegmentScannerTest, ScansAllAndTargetedPropertySegments) {
 TEST_F(PropertyEntitySegmentScannerTest, IgnoresNonPropertySegmentsInInjectedIndex) {
 	Node node(0, labelId);
 	dm->addNode(node);
-	db->getStorage()->flush();
+	storage->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	auto segmentIndexManager = dm->getSegmentIndexManager();
@@ -216,7 +217,7 @@ TEST_F(PropertyEntitySegmentScannerTest, IgnoresNonPropertySegmentsInInjectedInd
 
 TEST_F(PropertyEntitySegmentScannerTest, ToleratesShortSequentialCoalescedReads) {
 	addUserWithProperty("id", PropertyValue("u0"));
-	db->getStorage()->flush();
+	storage->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	const uint64_t missingOffset =
@@ -257,7 +258,7 @@ TEST_F(PropertyEntitySegmentScannerTest, ToleratesShortSequentialCoalescedReads)
 
 TEST_F(PropertyEntitySegmentScannerTest, IgnoresStaleTargetedSegmentReferences) {
 	addUserWithProperty("id", PropertyValue("u0"));
-	db->getStorage()->flush();
+	storage->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	const auto &segments = dm->getSegmentIndexManager()->getPropertySegmentIndex();
@@ -281,7 +282,7 @@ TEST_F(PropertyEntitySegmentScannerTest, IgnoresStaleTargetedSegmentReferences) 
 
 TEST_F(PropertyEntitySegmentScannerTest, ReportsShortParallelCoalescedReads) {
 	addUserWithProperty("id", PropertyValue("u0"));
-	db->getStorage()->flush();
+	storage->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	const uint64_t missingOffset =

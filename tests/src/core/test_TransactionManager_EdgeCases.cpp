@@ -12,7 +12,7 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
 #include <thread>
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/core/TransactionManager.hpp"
 #include "graph/storage/wal/WALManager.hpp"
 
@@ -25,7 +25,7 @@ protected:
 		testDbPath = fs::temp_directory_path() / ("test_txnmgr_edge_" + boost::uuids::to_string(uuid) + ".zyx");
 		fs::remove_all(testDbPath);
 
-		db = std::make_unique<graph::Database>(testDbPath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testDbPath.string());
 		db->open();
 	}
 
@@ -40,7 +40,7 @@ protected:
 	}
 
 	fs::path testDbPath;
-	std::unique_ptr<graph::Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 };
 
 // ============================================================================
@@ -53,9 +53,9 @@ TEST(TransactionManagerRollbackEdge, RollbackWithClosedStorageSkipsDataManager) 
 	auto testPath = fs::temp_directory_path() / ("test_txnmgr_rb_edge_" + boost::uuids::to_string(uuid) + ".zyx");
 	fs::remove_all(testPath);
 
-	auto testDb = std::make_unique<graph::Database>(testPath.string());
+	auto testDb = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testPath.string());
 	testDb->open();
-	auto storage = testDb->getStorage();
+	auto storage = testDb->storage();
 	graph::TransactionManager txnMgr(storage, nullptr);
 
 	auto txn = txnMgr.begin();
@@ -80,7 +80,7 @@ TEST(TransactionManagerRollbackEdge, RollbackWithClosedStorageSkipsDataManager) 
 // ============================================================================
 
 TEST_F(TransactionManagerEdgeCaseTest, ReadOnlyRollbackClearsSnapshot) {
-	auto storage = db->getStorage();
+	auto storage = db->storage();
 	graph::TransactionManager txnMgr(storage, nullptr);
 
 	auto txn = txnMgr.beginReadOnly();
@@ -98,7 +98,7 @@ TEST_F(TransactionManagerEdgeCaseTest, ReadOnlyRollbackClearsSnapshot) {
 // ============================================================================
 
 TEST_F(TransactionManagerEdgeCaseTest, ReadOnlyCommitClearsSnapshot) {
-	auto storage = db->getStorage();
+	auto storage = db->storage();
 	graph::TransactionManager txnMgr(storage, nullptr);
 
 	auto txn = txnMgr.beginReadOnly();
@@ -116,7 +116,7 @@ TEST_F(TransactionManagerEdgeCaseTest, ReadOnlyCommitClearsSnapshot) {
 // ============================================================================
 
 TEST_F(TransactionManagerEdgeCaseTest, SetWALManagerAfterConstruction) {
-	auto storage = db->getStorage();
+	auto storage = db->storage();
 
 	// Create TransactionManager without WAL
 	graph::TransactionManager txnMgr(storage, nullptr);
@@ -143,7 +143,7 @@ TEST_F(TransactionManagerEdgeCaseTest, SetWALManagerAfterConstruction) {
 // ============================================================================
 
 TEST_F(TransactionManagerEdgeCaseTest, SequentialReadOnlyTransactions) {
-	auto storage = db->getStorage();
+	auto storage = db->storage();
 	graph::TransactionManager txnMgr(storage, nullptr);
 
 	for (int i = 0; i < 5; ++i) {
@@ -165,7 +165,7 @@ TEST_F(TransactionManagerEdgeCaseTest, SequentialReadOnlyTransactions) {
 // ============================================================================
 
 TEST_F(TransactionManagerEdgeCaseTest, WriteFollowedByReadOnly) {
-	auto storage = db->getStorage();
+	auto storage = db->storage();
 	graph::TransactionManager txnMgr(storage, nullptr);
 
 	// Write
@@ -191,7 +191,7 @@ TEST_F(TransactionManagerEdgeCaseTest, WriteFollowedByReadOnly) {
 // ============================================================================
 
 TEST_F(TransactionManagerEdgeCaseTest, CommitAlreadyCommittedIsNoOp) {
-	auto storage = db->getStorage();
+	auto storage = db->storage();
 	graph::TransactionManager txnMgr(storage, nullptr);
 
 	auto txn = txnMgr.begin();
@@ -208,7 +208,7 @@ TEST_F(TransactionManagerEdgeCaseTest, CommitAlreadyCommittedIsNoOp) {
 // ============================================================================
 
 TEST_F(TransactionManagerEdgeCaseTest, RollbackAlreadyRolledBackIsNoOp) {
-	auto storage = db->getStorage();
+	auto storage = db->storage();
 	graph::TransactionManager txnMgr(storage, nullptr);
 
 	auto txn = txnMgr.begin();
@@ -226,7 +226,7 @@ TEST_F(TransactionManagerEdgeCaseTest, RollbackAlreadyRolledBackIsNoOp) {
 // ============================================================================
 
 TEST_F(TransactionManagerEdgeCaseTest, CommitWithWALCheckpoint) {
-	auto storage = db->getStorage();
+	auto storage = db->storage();
 
 	auto walMgr = std::make_shared<graph::storage::wal::WALManager>();
 	walMgr->open(testDbPath.string());
@@ -251,7 +251,7 @@ TEST_F(TransactionManagerEdgeCaseTest, CommitWithWALCheckpoint) {
 // ============================================================================
 
 TEST_F(TransactionManagerEdgeCaseTest, RollbackWithWALWritesRollbackRecord) {
-	auto storage = db->getStorage();
+	auto storage = db->storage();
 
 	auto walMgr = std::make_shared<graph::storage::wal::WALManager>();
 	walMgr->open(testDbPath.string());
@@ -279,7 +279,7 @@ TEST_F(TransactionManagerEdgeCaseTest, RollbackWithWALWritesRollbackRecord) {
 // ============================================================================
 
 TEST_F(TransactionManagerEdgeCaseTest, CommitWithWALExercisesFullPath) {
-	auto storage = db->getStorage();
+	auto storage = db->storage();
 
 	auto walMgr = std::make_shared<graph::storage::wal::WALManager>();
 	walMgr->open(testDbPath.string());
@@ -301,7 +301,7 @@ TEST_F(TransactionManagerEdgeCaseTest, CommitWithWALExercisesFullPath) {
 // ============================================================================
 
 TEST_F(TransactionManagerEdgeCaseTest, HasActiveTransactionLifecycle) {
-	auto storage = db->getStorage();
+	auto storage = db->storage();
 	graph::TransactionManager txnMgr(storage, nullptr);
 
 	EXPECT_FALSE(txnMgr.hasActiveTransaction());
@@ -318,7 +318,7 @@ TEST_F(TransactionManagerEdgeCaseTest, HasActiveTransactionLifecycle) {
 // ============================================================================
 
 TEST_F(TransactionManagerEdgeCaseTest, BeginWithWALWritesBeginRecord) {
-	auto storage = db->getStorage();
+	auto storage = db->storage();
 
 	auto walMgr = std::make_shared<graph::storage::wal::WALManager>();
 	walMgr->open(testDbPath.string());

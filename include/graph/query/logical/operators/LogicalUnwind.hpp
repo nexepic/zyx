@@ -44,10 +44,12 @@ public:
      */
     LogicalUnwind(std::unique_ptr<LogicalOperator> child,
                   std::string alias,
-                  std::shared_ptr<graph::query::expressions::Expression> listExpr)
+                  std::shared_ptr<graph::query::expressions::Expression> listExpr,
+                  bool scalarAsSingleRow = true)
         : child_(std::move(child))
         , alias_(std::move(alias))
-        , listExpr_(std::move(listExpr)) {}
+        , listExpr_(std::move(listExpr))
+        , scalar_as_single_row_(scalarAsSingleRow) {}
 
     // -------------------------------------------------------------------------
     // LogicalOperator interface
@@ -80,7 +82,8 @@ public:
             return std::make_unique<LogicalUnwind>(
                 child_ ? child_->clone() : nullptr,
                 alias_,
-                std::move(clonedExpr));
+                std::move(clonedExpr),
+                scalar_as_single_row_);
         }
         return std::make_unique<LogicalUnwind>(
             child_ ? child_->clone() : nullptr,
@@ -106,12 +109,14 @@ public:
     [[nodiscard]] const std::vector<graph::PropertyValue> &getListValues() const { return listValues_; }
     [[nodiscard]] const std::shared_ptr<graph::query::expressions::Expression> &getListExpr() const { return listExpr_; }
     [[nodiscard]] bool hasLiteralList() const { return listExpr_ == nullptr; }
+    [[nodiscard]] bool scalarAsSingleRow() const { return scalar_as_single_row_; }
 
 private:
     std::unique_ptr<LogicalOperator> child_;
     std::string alias_;
     std::vector<graph::PropertyValue> listValues_;
     std::shared_ptr<graph::query::expressions::Expression> listExpr_;
+    bool scalar_as_single_row_ = true;
 };
 
 } // namespace graph::query::logical

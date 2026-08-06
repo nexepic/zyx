@@ -18,6 +18,7 @@ extern "C" {
 typedef struct zyx_driver_db_t zyx_driver_db_t;
 typedef struct zyx_driver_txn_t zyx_driver_txn_t;
 typedef struct zyx_driver_result_t zyx_driver_result_t;
+typedef struct zyx_driver_bytes_stream_t zyx_driver_bytes_stream_t;
 typedef struct zyx_driver_params_t zyx_driver_params_t;
 typedef struct zyx_driver_error_t zyx_driver_error_t;
 typedef struct zyx_driver_value_t zyx_driver_value_t;
@@ -51,7 +52,8 @@ typedef enum zyx_driver_value_type_t {
     ZYX_DRIVER_VALUE_NODE = 5,
     ZYX_DRIVER_VALUE_EDGE = 6,
     ZYX_DRIVER_VALUE_LIST = 7,
-    ZYX_DRIVER_VALUE_MAP = 8
+    ZYX_DRIVER_VALUE_MAP = 8,
+    ZYX_DRIVER_VALUE_BYTES = 9
 } zyx_driver_value_type_t;
 
 typedef struct zyx_driver_value_ref_t {
@@ -145,6 +147,10 @@ ZYX_DRIVER_API zyx_driver_status_t zyx_driver_params_set_double(zyx_driver_param
                                                  zyx_driver_error_t **out_error);
 ZYX_DRIVER_API zyx_driver_status_t zyx_driver_params_set_string(zyx_driver_params_t *params, const char *key, const char *value,
                                                  zyx_driver_error_t **out_error);
+/* `value` may be null only when `size` is zero. The input is copied. */
+ZYX_DRIVER_API zyx_driver_status_t zyx_driver_params_set_bytes(zyx_driver_params_t *params, const char *key,
+                                                const uint8_t *value, uint32_t size,
+                                                zyx_driver_error_t **out_error);
 ZYX_DRIVER_API zyx_driver_status_t zyx_driver_params_set_string_list(zyx_driver_params_t *params, const char *key,
                                                       const char *const *values, uint32_t count,
                                                       zyx_driver_error_t **out_error);
@@ -165,6 +171,10 @@ ZYX_DRIVER_API zyx_driver_status_t zyx_driver_value_double_create(double value, 
                                                    zyx_driver_error_t **out_error);
 ZYX_DRIVER_API zyx_driver_status_t zyx_driver_value_string_create(const char *value, zyx_driver_value_t **out_value,
                                                    zyx_driver_error_t **out_error);
+/* `value` may be null only when `size` is zero. The input is copied. */
+ZYX_DRIVER_API zyx_driver_status_t zyx_driver_value_bytes_create(const uint8_t *value, uint32_t size,
+                                                  zyx_driver_value_t **out_value,
+                                                  zyx_driver_error_t **out_error);
 ZYX_DRIVER_API zyx_driver_status_t zyx_driver_value_list_create(zyx_driver_value_t **out_value,
                                                  zyx_driver_error_t **out_error);
 ZYX_DRIVER_API zyx_driver_status_t zyx_driver_value_map_create(zyx_driver_value_t **out_value,
@@ -181,6 +191,10 @@ ZYX_DRIVER_API zyx_driver_status_t zyx_driver_value_list_append_double(zyx_drive
                                                         zyx_driver_error_t **out_error);
 ZYX_DRIVER_API zyx_driver_status_t zyx_driver_value_list_append_string(zyx_driver_value_t *list, const char *value,
                                                         zyx_driver_error_t **out_error);
+/* `value` may be null only when `size` is zero. The input is copied. */
+ZYX_DRIVER_API zyx_driver_status_t zyx_driver_value_list_append_bytes(zyx_driver_value_t *list,
+                                                       const uint8_t *value, uint32_t size,
+                                                       zyx_driver_error_t **out_error);
 ZYX_DRIVER_API zyx_driver_status_t zyx_driver_value_list_append_value(zyx_driver_value_t *list,
                                                        const zyx_driver_value_t *value,
                                                        zyx_driver_error_t **out_error);
@@ -195,6 +209,10 @@ ZYX_DRIVER_API zyx_driver_status_t zyx_driver_value_map_set_double(zyx_driver_va
                                                     zyx_driver_error_t **out_error);
 ZYX_DRIVER_API zyx_driver_status_t zyx_driver_value_map_set_string(zyx_driver_value_t *map, const char *key,
                                                     const char *value, zyx_driver_error_t **out_error);
+/* `value` may be null only when `size` is zero. The input is copied. */
+ZYX_DRIVER_API zyx_driver_status_t zyx_driver_value_map_set_bytes(zyx_driver_value_t *map, const char *key,
+                                                   const uint8_t *value, uint32_t size,
+                                                   zyx_driver_error_t **out_error);
 ZYX_DRIVER_API zyx_driver_status_t zyx_driver_value_map_set_value(zyx_driver_value_t *map, const char *key,
                                                    const zyx_driver_value_t *value,
                                                    zyx_driver_error_t **out_error);
@@ -227,6 +245,16 @@ ZYX_DRIVER_API zyx_driver_status_t zyx_driver_result_get_bool(const zyx_driver_r
                                                zyx_driver_error_t **out_error);
 ZYX_DRIVER_API zyx_driver_status_t zyx_driver_result_get_string(zyx_driver_result_t *result, uint32_t column, const char **out_value,
                                                  zyx_driver_error_t **out_error);
+/* The returned buffer is valid until zyx_driver_result_free(result). */
+ZYX_DRIVER_API zyx_driver_status_t zyx_driver_result_get_bytes(zyx_driver_result_t *result, uint32_t column,
+                                                const uint8_t **out_value, uint32_t *out_size,
+                                                zyx_driver_error_t **out_error);
+/* Opens a bounded pull stream over a binary result value. `length` may be zero;
+ * the stream owns its immutable byte snapshot and may outlive the source result. */
+ZYX_DRIVER_API zyx_driver_status_t zyx_driver_result_open_bytes_stream(zyx_driver_result_t *result, uint32_t column,
+                                                         uint64_t offset, uint64_t length,
+                                                         zyx_driver_bytes_stream_t **out_stream,
+                                                         zyx_driver_error_t **out_error);
 ZYX_DRIVER_API zyx_driver_status_t zyx_driver_result_get_list_count(const zyx_driver_result_t *result, uint32_t column,
                                                      uint32_t *out_value, zyx_driver_error_t **out_error);
 ZYX_DRIVER_API zyx_driver_value_type_t zyx_driver_result_get_list_value_type(const zyx_driver_result_t *result,
@@ -243,6 +271,11 @@ ZYX_DRIVER_API zyx_driver_status_t zyx_driver_result_get_list_bool(const zyx_dri
 ZYX_DRIVER_API zyx_driver_status_t zyx_driver_result_get_list_string(zyx_driver_result_t *result,
                                                       uint32_t column, uint32_t index, const char **out_value,
                                                       zyx_driver_error_t **out_error);
+/* The returned buffer is valid until zyx_driver_result_free(result). */
+ZYX_DRIVER_API zyx_driver_status_t zyx_driver_result_get_list_bytes(zyx_driver_result_t *result,
+                                                     uint32_t column, uint32_t index,
+                                                     const uint8_t **out_value, uint32_t *out_size,
+                                                     zyx_driver_error_t **out_error);
 ZYX_DRIVER_API zyx_driver_status_t zyx_driver_result_get_value(const zyx_driver_result_t *result, uint32_t column,
                                                 zyx_driver_value_ref_t *out_value,
                                                 zyx_driver_error_t **out_error);
@@ -257,6 +290,14 @@ ZYX_DRIVER_API zyx_driver_status_t zyx_driver_value_ref_get_string(zyx_driver_re
                                                     const zyx_driver_value_ref_t *value,
                                                     const char **out_value,
                                                     zyx_driver_error_t **out_error);
+/* The returned buffer is valid until its owning result is freed. */
+ZYX_DRIVER_API zyx_driver_status_t zyx_driver_value_ref_get_bytes(const zyx_driver_value_ref_t *value,
+                                                   const uint8_t **out_value, uint32_t *out_size,
+                                                   zyx_driver_error_t **out_error);
+ZYX_DRIVER_API zyx_driver_status_t zyx_driver_value_ref_open_bytes_stream(const zyx_driver_value_ref_t *value,
+                                                         uint64_t offset, uint64_t length,
+                                                         zyx_driver_bytes_stream_t **out_stream,
+                                                         zyx_driver_error_t **out_error);
 ZYX_DRIVER_API zyx_driver_status_t zyx_driver_value_ref_list_count(const zyx_driver_value_ref_t *value,
                                                     uint32_t *out_value,
                                                     zyx_driver_error_t **out_error);
@@ -277,6 +318,11 @@ ZYX_DRIVER_API zyx_driver_status_t zyx_driver_value_ref_list_get_string(zyx_driv
                                                          uint32_t index,
                                                          const char **out_value,
                                                          zyx_driver_error_t **out_error);
+/* The returned buffer is valid until its owning result is freed. */
+ZYX_DRIVER_API zyx_driver_status_t zyx_driver_value_ref_list_get_bytes(const zyx_driver_value_ref_t *value,
+                                                        uint32_t index,
+                                                        const uint8_t **out_value, uint32_t *out_size,
+                                                        zyx_driver_error_t **out_error);
 ZYX_DRIVER_API zyx_driver_status_t zyx_driver_value_ref_map_count(const zyx_driver_value_ref_t *value,
                                                    uint32_t *out_value,
                                                    zyx_driver_error_t **out_error);
@@ -306,6 +352,19 @@ ZYX_DRIVER_API zyx_driver_status_t zyx_driver_value_ref_map_get_string(zyx_drive
                                                         const char *key,
                                                         const char **out_value,
                                                         zyx_driver_error_t **out_error);
+/* The returned buffer is valid until its owning result is freed. */
+ZYX_DRIVER_API zyx_driver_status_t zyx_driver_value_ref_map_get_bytes(const zyx_driver_value_ref_t *value,
+                                                       const char *key,
+                                                       const uint8_t **out_value, uint32_t *out_size,
+                                                       zyx_driver_error_t **out_error);
+/* Reads at most `capacity` bytes. It returns ZYX_DRIVER_DONE after the bounded
+ * range is exhausted. The caller owns `buffer`; a nonzero capacity requires a
+ * non-null buffer. */
+ZYX_DRIVER_API zyx_driver_status_t zyx_driver_bytes_stream_read(zyx_driver_bytes_stream_t *stream,
+                                                   uint8_t *buffer, uint32_t capacity, uint32_t *out_read,
+                                                   zyx_driver_error_t **out_error);
+ZYX_DRIVER_API void zyx_driver_bytes_stream_close(zyx_driver_bytes_stream_t *stream,
+                                                   zyx_driver_error_t **out_error);
 ZYX_DRIVER_API zyx_driver_status_t zyx_driver_value_ref_get_node_id(const zyx_driver_value_ref_t *value,
                                                             int64_t *out_value,
                                                             zyx_driver_error_t **out_error);

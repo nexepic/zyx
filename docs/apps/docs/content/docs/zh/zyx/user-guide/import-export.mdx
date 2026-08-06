@@ -16,7 +16,7 @@ projectOrder: 1
 
 | 任务 | 内置路径 | 说明 |
 |---|---|---|
-| 查询内 CSV 导入 | `LOAD CSV` / `LOAD CSV WITH HEADERS` | 支持 `FIELDTERMINATOR` |
+| 查询内 CSV 导入 | `LOAD CSV` / `LOAD CSV WITH HEADERS` | 受限的本地 `file:///` 数据源；支持 `FIELDTERMINATOR` |
 | 文件批量导入 | CLI `import` 命令 | 支持 CSV 与 JSONL |
 | 结果导出 | API 迭代结果集 | 由应用层写出 CSV/JSON/Parquet |
 | 物理备份 | `save` + 复制数据库文件 | 快照时应无活跃写事务 |
@@ -33,13 +33,15 @@ flowchart LR
 
 ## 路径 1：LOAD CSV
 
-在 Cypher 查询管线内导入 CSV，适合小到中等文件：
+在 Cypher 查询管线内导入受限的本地 CSV，适合小到中等文件。数据库位于 `/srv/graphs/demo.zyx` 时，导入根目录为 `/srv/graphs`，因此数据源必须位于该目录之下：
 
 ```cypher
-LOAD CSV WITH HEADERS FROM 'file:///tmp/users.csv' AS row
+LOAD CSV WITH HEADERS FROM 'file:///srv/graphs/users.csv' AS row
 MERGE (:User {name: row.name})
 RETURN count(*) AS imported;
 ```
+
+`LOAD CSV` 仅接受不含 host、query 或 fragment 的本地 `file:///` URI。规范化会阻止 `..` 和百分号编码的路径遍历逃逸导入根目录；不会发起远程 URL 请求。文件大小、行数、记录长度、列数和字段长度均受限。直接构造的 logical `QueryEngine` 默认禁用导入，只有显式配置 `csv_import_root` 后才会启用。
 
 ## 路径 2：CLI 批量导入
 

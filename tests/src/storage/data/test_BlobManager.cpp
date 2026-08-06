@@ -26,7 +26,6 @@
 #include <gtest/gtest.h>
 #include <memory>
 #include <random>
-#include "graph/core/Database.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/data/BlobManager.hpp"
 #include "graph/storage/data/DataManager.hpp"
@@ -38,10 +37,10 @@ protected:
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath = std::filesystem::temp_directory_path() / ("test_blobManager_" + to_string(uuid) + ".dat");
 
-		// Initialize Database and FileStorage
-		database = std::make_unique<graph::Database>(testFilePath.string());
-		database->open();
-		fileStorage = database->getStorage();
+		// This suite exercises the legacy physical blob manager directly.
+		fileStorage = std::make_shared<graph::storage::FileStorage>(
+				testFilePath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
+		fileStorage->open();
 		dataManager = fileStorage->getDataManager();
 
 		// Get the BlobManager that was created and initialized by the DataManager
@@ -49,15 +48,14 @@ protected:
 	}
 
 	void TearDown() override {
-		// Release shared_ptrs before closing database
+		// Release entity managers before closing legacy physical storage.
 		blobManager.reset();
 		dataManager.reset();
-		fileStorage.reset();
 
-		if (database) {
-			database->close();
+		if (fileStorage) {
+			fileStorage->close();
 		}
-		database.reset();
+		fileStorage.reset();
 
 		std::error_code ec;
 		std::filesystem::remove(testFilePath, ec);
@@ -85,7 +83,6 @@ protected:
 	}
 
 	std::filesystem::path testFilePath;
-	std::unique_ptr<graph::Database> database;
 	std::shared_ptr<graph::storage::FileStorage> fileStorage;
 	std::shared_ptr<graph::storage::DataManager> dataManager;
 	std::shared_ptr<graph::storage::BlobManager> blobManager;

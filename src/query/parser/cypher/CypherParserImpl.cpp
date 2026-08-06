@@ -24,7 +24,6 @@
 #include "CypherParser.h"
 #include "CypherToPlanVisitor.hpp"
 #include "antlr4-runtime.h"
-#include "graph/query/planner/PhysicalPlanConverter.hpp"
 
 class ThrowingErrorListener final : public antlr4::BaseErrorListener {
 public:
@@ -72,9 +71,7 @@ private:
 
 namespace graph::parser::cypher {
 
-	CypherParserImpl::CypherParserImpl(std::shared_ptr<query::QueryPlanner> planner) :
-		planner_(std::move(planner)),
-		input_(std::make_unique<antlr4::ANTLRInputStream>("")),
+	CypherParserImpl::CypherParserImpl() : input_(std::make_unique<antlr4::ANTLRInputStream>("")),
 		lexer_(std::make_unique<CypherLexer>(input_.get())),
 		tokens_(std::make_unique<antlr4::CommonTokenStream>(lexer_.get())),
 		parser_(std::make_unique<CypherParser>(tokens_.get())),
@@ -95,18 +92,6 @@ namespace graph::parser::cypher {
 		input_.reset();
 	}
 
-	std::unique_ptr<query::execution::PhysicalOperator> CypherParserImpl::parse(const std::string &query) const {
-		auto plan = parseToLogical(query);
-
-		// Convert logical plan to physical plan using managers from the planner
-		auto dm = planner_->getDataManager();
-		auto im = planner_->getIndexManager();
-		auto cm = planner_->getConstraintManager();
-
-		query::PhysicalPlanConverter converter(dm, im, cm);
-		return converter.convert(plan.root.get());
-	}
-
 	query::QueryPlan CypherParserImpl::parseToLogical(const std::string &query) const {
 		// Reset the input stream and re-feed the pipeline
 		input_->load(query);
@@ -117,7 +102,7 @@ namespace graph::parser::cypher {
 
 		CypherParser::CypherContext *tree = parser_->cypher();
 
-		CypherToPlanVisitor visitor(planner_);
+		CypherToPlanVisitor visitor;
 
 		try {
 			visitor.visit(tree);

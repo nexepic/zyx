@@ -1,9 +1,4 @@
 #include "graph/debug/PerfTrace.hpp"
-#include "graph/core/Database.hpp"
-#include "graph/query/api/QueryEngine.hpp"
-#include "graph/storage/data/DataManager.hpp"
-#include "graph/storage/data/NativeBulkLoader.hpp"
-#include "graph/storage/indexes/IndexManager.hpp"
 #include "zyx/zyx.hpp"
 
 #include <algorithm>
@@ -446,8 +441,9 @@ namespace {
 		return requireReachableWithinTarget(queryDb, depth, targetUserIdForDepth(depth, scale));
 	}
 
-	void executeOk(zyx::Database &db, const std::string &query) {
-		auto result = db.execute(query);
+	template<typename Executor>
+	void executeOk(Executor &executor, const std::string &query) {
+		auto result = executor.execute(query);
 		if (!result.isSuccess()) {
 			throw std::runtime_error(result.getError());
 		}
@@ -514,10 +510,12 @@ namespace {
 		}
 	}
 
-	[[maybe_unused]] LoadedGraph loadGraph(zyx::Database &db, const std::filesystem::path &dataset) {
-		std::optional<zyx::Transaction> loadTxn;
-		if (!db.hasActiveTransaction()) {
-			loadTxn.emplace(db.beginBulkTransaction());
+	LoadedGraph loadGraph(zyx::Transaction &writer, const std::filesystem::path &dataset) {
+		if (!writer.isActive()) {
+			throw std::runtime_error("loadGraph requires an active write transaction");
+		}
+		if (writer.isReadOnly()) {
+			throw std::runtime_error("loadGraph cannot write through a read-only transaction");
 		}
 
 		LoadedGraph graph;
@@ -550,9 +548,9 @@ namespace {
 			}
 		});
 
-		const auto nodeIds =
-				tracePhase("load.users.create_nodes",
-						   [&]() { return db.createNodesColumnar("User", userExternalIds.size(), userColumns); });
+		const auto nodeIds = tracePhase("load.users.create_nodes", [&]() {
+			return writer.createNodesColumnar("User", userExternalIds.size(), userColumns);
+		});
 		for (size_t i = 0; i < userExternalIds.size() && i < nodeIds.size(); ++i) { // ZYX_COV_EXCL_LINE: bulk API returns one node id per input row.
 			graph.usersByExternalId.emplace(userExternalIds[i], nodeIds[i]);
 		}
@@ -585,9 +583,9 @@ namespace {
 			}
 		});
 
-		const auto postNodeIds =
-				tracePhase("load.posts.create_nodes",
-						   [&]() { return db.createNodesColumnar("Post", postExternalIds.size(), postColumns); });
+		const auto postNodeIds = tracePhase("load.posts.create_nodes", [&]() {
+			return writer.createNodesColumnar("Post", postExternalIds.size(), postColumns);
+		});
 		for (size_t i = 0; i < postExternalIds.size() && i < postNodeIds.size(); ++i) { // ZYX_COV_EXCL_LINE: bulk API returns one node id per input row.
 			graph.postsByExternalId.emplace(postExternalIds[i], postNodeIds[i]);
 		}
@@ -618,9 +616,9 @@ namespace {
 			}
 		});
 
-		const auto tagNodeIds =
-				tracePhase("load.tags.create_nodes",
-						   [&]() { return db.createNodesColumnar("Tag", tagExternalIds.size(), tagColumns); });
+		const auto tagNodeIds = tracePhase("load.tags.create_nodes", [&]() {
+			return writer.createNodesColumnar("Tag", tagExternalIds.size(), tagColumns);
+		});
 		for (size_t i = 0; i < tagExternalIds.size() && i < tagNodeIds.size(); ++i) { // ZYX_COV_EXCL_LINE: bulk API returns one node id per input row.
 			graph.tagsByExternalId.emplace(tagExternalIds[i], tagNodeIds[i]);
 		}
@@ -656,9 +654,9 @@ namespace {
 				followColumns[0].values.emplace_back(toInt64(reader.fieldAt(fields, weightColumn, "weight")));
 			}
 		});
-		const auto followEdgeIds =
-				tracePhase("load.follows.create_edges",
-						   [&]() { return db.createEdgesColumnar("FOLLOWS", followSources, followTargets, followColumns); });
+		const auto followEdgeIds = tracePhase("load.follows.create_edges", [&]() {
+			return writer.createEdgesColumnar("FOLLOWS", followSources, followTargets, followColumns);
+		});
 		graph.loadedRows += static_cast<int64_t>(followEdgeIds.size());
 
 		std::vector<int64_t> authoredSources;
@@ -691,9 +689,9 @@ namespace {
 				authoredColumns[0].values.emplace_back(toInt64(reader.fieldAt(fields, weightColumn, "weight")));
 			}
 		});
-		const auto authoredEdgeIds =
-				tracePhase("load.authored.create_edges",
-						   [&]() { return db.createEdgesColumnar("AUTHORED", authoredSources, authoredTargets, authoredColumns); });
+		const auto authoredEdgeIds = tracePhase("load.authored.create_edges", [&]() {
+			return writer.createEdgesColumnar("AUTHORED", authoredSources, authoredTargets, authoredColumns);
+		});
 		graph.loadedRows += static_cast<int64_t>(authoredEdgeIds.size());
 
 		std::vector<int64_t> hasTagSources;
@@ -726,250 +724,26 @@ namespace {
 				hasTagColumns[0].values.emplace_back(toInt64(reader.fieldAt(fields, weightColumn, "weight")));
 			}
 		});
-		const auto hasTagEdgeIds =
-				tracePhase("load.has_tag.create_edges",
-						   [&]() { return db.createEdgesColumnar("HAS_TAG", hasTagSources, hasTagTargets, hasTagColumns); });
-		graph.loadedRows += static_cast<int64_t>(hasTagEdgeIds.size());
-
-		if (loadTxn) {
-			tracePhase("load.commit", [&]() { loadTxn->commit(); });
-		}
-
-		return graph;
-	}
-
-	LoadedGraph loadGraphNative(graph::Database &db, const std::filesystem::path &dataset) {
-		std::optional<graph::Transaction> loadTxn;
-		if (!db.hasActiveTransaction()) {
-			loadTxn.emplace(db.beginBulkTransaction());
-		}
-
-		auto storage = db.getStorage();
-		if (!storage) {
-			throw std::runtime_error("storage is not available for native bulk load");
-		}
-		auto dm = storage->getDataManager();
-		if (!dm) {
-			throw std::runtime_error("data manager is not available for native bulk load");
-		}
-		graph::storage::NativeBulkLoader loader(dm);
-
-		LoadedGraph graph;
-		std::vector<graph::storage::BulkPropertyColumn> userColumns{
-				{"id", {}}, {"age", {}}, {"country", {}}, {"score", {}}};
-		std::vector<std::string> userExternalIds;
-		const auto usersPath = dataset / "users.csv";
-		tracePhase("load.users.prepare", [&]() {
-			const size_t estimate = estimateCsvRows(usersPath, 48);
-			reserveColumnValues(userColumns, estimate);
-			userExternalIds.reserve(estimate);
-			graph.usersByExternalId.reserve(estimate);
-		});
-		tracePhase("load.users.csv_read", [&]() {
-			CsvStreamReader reader(usersPath);
-			if (!reader.hasHeader()) {
-				return;
-			}
-			const size_t idColumn = reader.requireColumn("id");
-			const size_t ageColumn = reader.requireColumn("age");
-			const size_t countryColumn = reader.requireColumn("country");
-			const size_t scoreColumn = reader.requireColumn("score");
-			std::vector<std::string> fields;
-			while (reader.next(fields)) {
-				const std::string id = reader.fieldAt(fields, idColumn, "id");
-				userExternalIds.push_back(id);
-				userColumns[0].values.emplace_back(id);
-				userColumns[1].values.emplace_back(toInt64(reader.fieldAt(fields, ageColumn, "age")));
-				userColumns[2].values.emplace_back(reader.fieldAt(fields, countryColumn, "country"));
-				userColumns[3].values.emplace_back(toDouble(reader.fieldAt(fields, scoreColumn, "score")));
-			}
-		});
-		const auto nodeIds = tracePhase("load.users.create_nodes", [&]() {
-			return loader.addNodes("User", userExternalIds.size(), userColumns);
-		});
-		for (size_t i = 0; i < userExternalIds.size() && i < nodeIds.size(); ++i) { // ZYX_COV_EXCL_LINE: native bulk API returns one node id per input row.
-			graph.usersByExternalId.emplace(userExternalIds[i], nodeIds[i]);
-		}
-		graph.loadedRows += static_cast<int64_t>(nodeIds.size());
-
-		std::vector<graph::storage::BulkPropertyColumn> postColumns{{"id", {}}, {"created_at", {}}, {"score", {}}};
-		std::vector<std::string> postExternalIds;
-		const auto postsPath = dataset / "posts.csv";
-		tracePhase("load.posts.prepare", [&]() {
-			const size_t estimate = estimateCsvRows(postsPath, 40);
-			reserveColumnValues(postColumns, estimate);
-			postExternalIds.reserve(estimate);
-			graph.postsByExternalId.reserve(estimate);
-		});
-		tracePhase("load.posts.csv_read", [&]() {
-			CsvStreamReader reader(postsPath);
-			if (!reader.hasHeader()) {
-				return;
-			}
-			const size_t idColumn = reader.requireColumn("id");
-			const size_t createdAtColumn = reader.requireColumn("created_at");
-			const size_t scoreColumn = reader.requireColumn("score");
-			std::vector<std::string> fields;
-			while (reader.next(fields)) {
-				const std::string id = reader.fieldAt(fields, idColumn, "id");
-				postExternalIds.push_back(id);
-				postColumns[0].values.emplace_back(id);
-				postColumns[1].values.emplace_back(toInt64(reader.fieldAt(fields, createdAtColumn, "created_at")));
-				postColumns[2].values.emplace_back(toDouble(reader.fieldAt(fields, scoreColumn, "score")));
-			}
-		});
-		const auto postNodeIds = tracePhase("load.posts.create_nodes", [&]() {
-			return loader.addNodes("Post", postExternalIds.size(), postColumns);
-		});
-		for (size_t i = 0; i < postExternalIds.size() && i < postNodeIds.size(); ++i) { // ZYX_COV_EXCL_LINE: native bulk API returns one node id per input row.
-			graph.postsByExternalId.emplace(postExternalIds[i], postNodeIds[i]);
-		}
-		graph.loadedRows += static_cast<int64_t>(postNodeIds.size());
-
-		std::vector<graph::storage::BulkPropertyColumn> tagColumns{{"id", {}}, {"rank", {}}};
-		std::vector<std::string> tagExternalIds;
-		const auto tagsPath = dataset / "tags.csv";
-		tracePhase("load.tags.prepare", [&]() {
-			const size_t estimate = estimateCsvRows(tagsPath, 32);
-			reserveColumnValues(tagColumns, estimate);
-			tagExternalIds.reserve(estimate);
-			graph.tagsByExternalId.reserve(estimate);
-		});
-		tracePhase("load.tags.csv_read", [&]() {
-			CsvStreamReader reader(tagsPath);
-			if (!reader.hasHeader()) {
-				return;
-			}
-			const size_t idColumn = reader.requireColumn("id");
-			const size_t rankColumn = reader.requireColumn("rank");
-			std::vector<std::string> fields;
-			while (reader.next(fields)) {
-				const std::string id = reader.fieldAt(fields, idColumn, "id");
-				tagExternalIds.push_back(id);
-				tagColumns[0].values.emplace_back(id);
-				tagColumns[1].values.emplace_back(toInt64(reader.fieldAt(fields, rankColumn, "rank")));
-			}
-		});
-		const auto tagNodeIds = tracePhase("load.tags.create_nodes", [&]() {
-			return loader.addNodes("Tag", tagExternalIds.size(), tagColumns);
-		});
-		for (size_t i = 0; i < tagExternalIds.size() && i < tagNodeIds.size(); ++i) { // ZYX_COV_EXCL_LINE: native bulk API returns one node id per input row.
-			graph.tagsByExternalId.emplace(tagExternalIds[i], tagNodeIds[i]);
-		}
-		graph.loadedRows += static_cast<int64_t>(tagNodeIds.size());
-
-		std::vector<int64_t> followSources;
-		std::vector<int64_t> followTargets;
-		std::vector<graph::storage::BulkPropertyColumn> followColumns{{"weight", {}}};
-		const auto followsPath = dataset / "follows.csv";
-		tracePhase("load.follows.prepare", [&]() {
-			const size_t estimate = estimateCsvRows(followsPath, 40);
-			followSources.reserve(estimate);
-			followTargets.reserve(estimate);
-			reserveColumnValues(followColumns, estimate);
-		});
-		tracePhase("load.follows.csv_read", [&]() {
-			CsvStreamReader reader(followsPath);
-			if (!reader.hasHeader()) {
-				return;
-			}
-			const size_t srcColumn = reader.requireColumn("src");
-			const size_t dstColumn = reader.requireColumn("dst");
-			const size_t weightColumn = reader.requireColumn("weight");
-			std::vector<std::string> fields;
-			while (reader.next(fields)) {
-				auto src = graph.usersByExternalId.find(reader.fieldAt(fields, srcColumn, "src"));
-				auto dst = graph.usersByExternalId.find(reader.fieldAt(fields, dstColumn, "dst"));
-				if (src == graph.usersByExternalId.end() || dst == graph.usersByExternalId.end()) {
-					throw std::runtime_error("follows.csv references unknown user");
-				}
-				followSources.push_back(src->second);
-				followTargets.push_back(dst->second);
-				followColumns[0].values.emplace_back(toInt64(reader.fieldAt(fields, weightColumn, "weight")));
-			}
-		});
-		const auto followEdgeIds = tracePhase("load.follows.create_edges", [&]() {
-			return loader.addEdges("FOLLOWS", followSources, followTargets, followColumns);
-		});
-		graph.loadedRows += static_cast<int64_t>(followEdgeIds.size());
-
-		std::vector<int64_t> authoredSources;
-		std::vector<int64_t> authoredTargets;
-		std::vector<graph::storage::BulkPropertyColumn> authoredColumns{{"weight", {}}};
-		const auto authoredPath = dataset / "authored.csv";
-		tracePhase("load.authored.prepare", [&]() {
-			const size_t estimate = estimateCsvRows(authoredPath, 40);
-			authoredSources.reserve(estimate);
-			authoredTargets.reserve(estimate);
-			reserveColumnValues(authoredColumns, estimate);
-		});
-		tracePhase("load.authored.csv_read", [&]() {
-			CsvStreamReader reader(authoredPath);
-			if (!reader.hasHeader()) {
-				return;
-			}
-			const size_t srcColumn = reader.requireColumn("src");
-			const size_t dstColumn = reader.requireColumn("dst");
-			const size_t weightColumn = reader.requireColumn("weight");
-			std::vector<std::string> fields;
-			while (reader.next(fields)) {
-				auto src = graph.usersByExternalId.find(reader.fieldAt(fields, srcColumn, "src"));
-				auto dst = graph.postsByExternalId.find(reader.fieldAt(fields, dstColumn, "dst"));
-				if (src == graph.usersByExternalId.end() || dst == graph.postsByExternalId.end()) {
-					throw std::runtime_error("authored.csv references unknown user or post");
-				}
-				authoredSources.push_back(src->second);
-				authoredTargets.push_back(dst->second);
-				authoredColumns[0].values.emplace_back(toInt64(reader.fieldAt(fields, weightColumn, "weight")));
-			}
-		});
-		const auto authoredEdgeIds = tracePhase("load.authored.create_edges", [&]() {
-			return loader.addEdges("AUTHORED", authoredSources, authoredTargets, authoredColumns);
-		});
-		graph.loadedRows += static_cast<int64_t>(authoredEdgeIds.size());
-
-		std::vector<int64_t> hasTagSources;
-		std::vector<int64_t> hasTagTargets;
-		std::vector<graph::storage::BulkPropertyColumn> hasTagColumns{{"weight", {}}};
-		const auto hasTagPath = dataset / "has_tag.csv";
-		tracePhase("load.has_tag.prepare", [&]() {
-			const size_t estimate = estimateCsvRows(hasTagPath, 40);
-			hasTagSources.reserve(estimate);
-			hasTagTargets.reserve(estimate);
-			reserveColumnValues(hasTagColumns, estimate);
-		});
-		tracePhase("load.has_tag.csv_read", [&]() {
-			CsvStreamReader reader(hasTagPath);
-			if (!reader.hasHeader()) {
-				return;
-			}
-			const size_t srcColumn = reader.requireColumn("src");
-			const size_t dstColumn = reader.requireColumn("dst");
-			const size_t weightColumn = reader.requireColumn("weight");
-			std::vector<std::string> fields;
-			while (reader.next(fields)) {
-				auto src = graph.postsByExternalId.find(reader.fieldAt(fields, srcColumn, "src"));
-				auto dst = graph.tagsByExternalId.find(reader.fieldAt(fields, dstColumn, "dst"));
-				if (src == graph.postsByExternalId.end() || dst == graph.tagsByExternalId.end()) {
-					throw std::runtime_error("has_tag.csv references unknown post or tag");
-				}
-				hasTagSources.push_back(src->second);
-				hasTagTargets.push_back(dst->second);
-				hasTagColumns[0].values.emplace_back(toInt64(reader.fieldAt(fields, weightColumn, "weight")));
-			}
-		});
 		const auto hasTagEdgeIds = tracePhase("load.has_tag.create_edges", [&]() {
-			return loader.addEdges("HAS_TAG", hasTagSources, hasTagTargets, hasTagColumns);
+			return writer.createEdgesColumnar("HAS_TAG", hasTagSources, hasTagTargets, hasTagColumns);
 		});
 		graph.loadedRows += static_cast<int64_t>(hasTagEdgeIds.size());
 
-		if (loadTxn) {
-			tracePhase("load.commit", [&]() { loadTxn->commit(); });
-		}
 		return graph;
 	}
 
-	[[maybe_unused]] void createBenchmarkIndexes(zyx::Database &db, const Options &options) {
+	LoadedGraph loadGraph(zyx::Database &db, const std::filesystem::path &dataset) {
+		if (db.hasActiveTransaction()) {
+			throw std::runtime_error("loadGraph requires an explicit transaction when one is already active");
+		}
+
+		auto transaction = db.beginBulkTransaction();
+		LoadedGraph graph = loadGraph(transaction, dataset);
+		tracePhase("load.commit", [&]() { transaction.commit(); });
+		return graph;
+	}
+
+	void createBenchmarkIndexes(zyx::Database &db, const Options &options) {
 		std::vector<std::string> userIndexes{"id"};
 		if (options.profile == kProfileIndexed || options.profile == kProfileOperationalDynamic ||
 			options.profile == kProfileRetrieval) {
@@ -983,45 +757,6 @@ namespace {
 		});
 	}
 
-	void createBenchmarkIndexesNative(graph::Database &db, const Options &options) {
-		std::vector<std::string> userIndexes{"id"};
-		if (options.profile == kProfileIndexed || options.profile == kProfileOperationalDynamic ||
-			options.profile == kProfileRetrieval) {
-			userIndexes.push_back("country");
-			userIndexes.push_back("age");
-		}
-
-		tracePhase("load.index.user_properties", [&]() {
-			if (db.hasActiveTransaction()) {
-				throw std::runtime_error("native benchmark index build requires no active transaction");
-			}
-			auto queryEngine = db.getQueryEngine();
-			if (!queryEngine) {
-				throw std::runtime_error("query engine is not available for native index build");
-			}
-			if (auto storage = db.getStorage()) {
-				if (auto dm = storage->getDataManager(); dm && dm->hasUnsavedChanges()) {
-					db.flush();
-				}
-			}
-
-			graph::storage::NativeBulkLoader indexLoader(db.getStorage()->getDataManager());
-			indexLoader.deferNodePropertyIndexes("User", userIndexes);
-
-			auto schemaTxn = db.beginBulkTransaction();
-			auto results = indexLoader.buildDeferredIndexes(*queryEngine->getIndexManager());
-			const bool success = std::all_of(results.begin(), results.end(),
-											 [](const auto &result) { return result.success; });
-			if (success) {
-				queryEngine->getPlanCache().clear();
-				schemaTxn.commit();
-				return;
-			}
-			schemaTxn.rollback();
-			throw std::runtime_error("failed to create benchmark User property indexes");
-		});
-	}
-
 	std::filesystem::path suffixedDbPath(const std::filesystem::path &base, const std::string &suffix) {
 		return std::filesystem::path(base.string() + suffix);
 	}
@@ -1029,16 +764,19 @@ namespace {
 	void removeDatabaseArtifacts(const std::filesystem::path &dbPath) {
 		std::error_code ignored;
 		std::filesystem::remove_all(dbPath, ignored);
+		// Native storage keeps its metadata WAL beside the data file with the
+		// relocatable `.wal` suffix; preserve `-wal` cleanup for legacy benchmark data.
+		std::filesystem::remove_all(std::filesystem::path(dbPath.string() + ".wal"), ignored);
 		std::filesystem::remove_all(std::filesystem::path(dbPath.string() + "-wal"), ignored);
 	}
 
 	LoadedGraph loadDatabase(const Options &options, const std::filesystem::path &dbPath) {
 		tracePhase("load.remove_existing_db", [&]() { removeDatabaseArtifacts(dbPath); });
-		graph::Database db(dbPath.string());
+		zyx::Database db(dbPath.string());
 		configureThreadPool(db, options);
 		tracePhase("load.db_open", [&]() { db.open(); });
-		LoadedGraph loaded = tracePhase("load.graph", [&]() { return loadGraphNative(db, options.dataset); });
-		tracePhase("load.indexes", [&]() { createBenchmarkIndexesNative(db, options); });
+		LoadedGraph loaded = tracePhase("load.graph", [&]() { return loadGraph(db, options.dataset); });
+		tracePhase("load.indexes", [&]() { createBenchmarkIndexes(db, options); });
 		tracePhase("load.db_close", [&]() { db.close(); });
 		return loaded;
 	}
@@ -1638,12 +1376,13 @@ namespace {
 											  "(dst:User {id: 'user-000001'}) "
 											  "CREATE (src)-[:FOLLOWS {weight: 1}]->(dst) RETURN 1")));
 			});
-			runQueryWorkload(options, db, loaded, workloadName("point_update_node_property"), [&updateNodeId](zyx::Database &queryDb) {
+			 runQueryWorkload(options, db, loaded, workloadName("point_update_node_property"), [&updateNodeId](zyx::Database &queryDb) {
 				++updateNodeId;
 				std::ostringstream query;
 				query << "MATCH (u:User {id: 'user-000001'}) SET u.score = "
-					  << 1000.0 + static_cast<double>(updateNodeId) << " RETURN count(u)";
-				return requireExactlyOne("point_update_node_property", scalarInt(queryDb.execute(query.str())));
+					  << 1000.0 + static_cast<double>(updateNodeId) << " RETURN u.score AS score";
+				return requireExactlyOne("point_update_node_property",
+									 materializedRowCount(queryDb.execute(query.str())));
 			});
 			runQueryWorkload(options, db, loaded, workloadName("point_update_edge_property"),
 							 [&updateEdgeId, updateTarget](zyx::Database &queryDb) {
@@ -1651,9 +1390,9 @@ namespace {
 								 std::ostringstream query;
 								 query << "MATCH (:User {id: 'user-000001'})-[r:FOLLOWS]->(:User {id: '"
 									   << updateTarget << "'}) SET r.weight = " << 10'000 + updateEdgeId
-									   << " RETURN count(r)";
+									   << " RETURN r.weight AS weight";
 								 return requireExactlyOne("point_update_edge_property",
-														  scalarInt(queryDb.execute(query.str())));
+																	 materializedRowCount(queryDb.execute(query.str())));
 							 });
 			runQueryWorkload(options, db, loaded, workloadName("point_create_delete_edge"), [&createDeleteEdgeId](zyx::Database &queryDb) {
 				++createDeleteEdgeId;
