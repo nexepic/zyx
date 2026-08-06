@@ -2,6 +2,8 @@
 .DS_Store
 buildDir/
 buildDir_*/
+/build_*/
+/libzyx_core.a
 build_release/
 build_bench_release/
 build_wasm/
