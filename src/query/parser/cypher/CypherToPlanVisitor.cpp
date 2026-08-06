@@ -27,8 +27,6 @@
 #include "graph/query/logical/operators/LogicalSingleRow.hpp"
 #include "graph/query/logical/operators/LogicalTransactionControl.hpp"
 #include "graph/query/logical/operators/LogicalUnion.hpp"
-#include "graph/query/optimizer/Optimizer.hpp"
-#include "graph/query/planner/PhysicalPlanConverter.hpp"
 #include "graph/query/planner/ProcedureRegistry.hpp"
 #include "graph/query/ir/CypherASTBuilder.hpp"
 #include "graph/query/ir/SemanticAnalyzer.hpp"
@@ -37,29 +35,17 @@
 
 namespace graph::parser::cypher {
 
-CypherToPlanVisitor::CypherToPlanVisitor(std::shared_ptr<query::QueryPlanner> planner) :
-	planner_(std::move(planner)),
-	builder_(&query::planner::ProcedureRegistry::instance()) {}
+CypherToPlanVisitor::CypherToPlanVisitor() : builder_(&query::planner::ProcedureRegistry::instance()) {}
 
 query::QueryPlan CypherToPlanVisitor::getQueryPlan() {
 	if (!rootOp_) {
 		return {};
 	}
 
-	// Determine optimizable from root type
+	// The native logical runtime currently has no storage-bound optimizer.
+	// Its plan shape remains deterministic until a logical statistics provider
+	// replaces the discarded DataManager optimizer path.
 	auto rootType = rootOp_->getType();
-	bool isOptimizable = (rootType != query::logical::LogicalOpType::LOP_TRANSACTION_CONTROL &&
-	                      rootType != query::logical::LogicalOpType::LOP_CREATE_INDEX &&
-	                      rootType != query::logical::LogicalOpType::LOP_DROP_INDEX &&
-	                      rootType != query::logical::LogicalOpType::LOP_SHOW_INDEXES &&
-	                      rootType != query::logical::LogicalOpType::LOP_CREATE_VECTOR_INDEX &&
-	                      rootType != query::logical::LogicalOpType::LOP_CREATE_CONSTRAINT &&
-	                      rootType != query::logical::LogicalOpType::LOP_DROP_CONSTRAINT &&
-	                      rootType != query::logical::LogicalOpType::LOP_SHOW_CONSTRAINTS &&
-	                      rootType != query::logical::LogicalOpType::LOP_EXPLAIN &&
-	                      rootType != query::logical::LogicalOpType::LOP_PROFILE &&
-	                      rootType != query::logical::LogicalOpType::LOP_CALL_PROCEDURE);
-
 	bool isCacheable = (rootType != query::logical::LogicalOpType::LOP_TRANSACTION_CONTROL &&
 	                    rootType != query::logical::LogicalOpType::LOP_CREATE_INDEX &&
 	                    rootType != query::logical::LogicalOpType::LOP_DROP_INDEX &&
@@ -71,40 +57,18 @@ query::QueryPlan CypherToPlanVisitor::getQueryPlan() {
 	                    rootType != query::logical::LogicalOpType::LOP_EXPLAIN &&
 	                    rootType != query::logical::LogicalOpType::LOP_PROFILE);
 
-	if (isOptimizable) {
-		auto *opt = planner_->getOptimizer();
-		if (opt) { // ZYX_COV_EXCL_LINE: QueryPlanner constructs and owns an Optimizer for its lifetime.
-			rootOp_ = opt->optimize(std::move(rootOp_));
-		}
-	}
-
 	query::QueryPlan plan;
 	plan.root = std::move(rootOp_);
 	plan.mutatesData = builder_.mutatesData();
 	plan.mutatesSchema = builder_.mutatesSchema();
 	plan.cacheable = isCacheable;
-	plan.optimizable = isOptimizable;
+	plan.optimizable = false;
 	return plan;
 }
 
 std::unique_ptr<query::logical::LogicalOperator> CypherToPlanVisitor::getLogicalPlan() {
 	auto plan = getQueryPlan();
 	return std::move(plan.root);
-}
-
-std::unique_ptr<query::execution::PhysicalOperator> CypherToPlanVisitor::getPlan() {
-	auto plan = getQueryPlan();
-	if (!plan.root) {
-		return nullptr;
-	}
-
-	// Convert logical plan to physical plan using managers from the planner
-	auto dm = planner_->getDataManager();
-	auto im = planner_->getIndexManager();
-	auto cm = planner_->getConstraintManager();
-
-	query::PhysicalPlanConverter converter(dm, im, cm);
-	return converter.convert(plan.root.get());
 }
 
 // --- Entry Points ---
@@ -363,7 +327,9 @@ std::any CypherToPlanVisitor::visitCallSubquery(CypherParser::CallSubqueryContex
 	auto subqueryOp = std::move(rootOp_);
 
 	std::vector<std::string> returnedVars;
-	if (subqueryOp) {
+	// A write-only subquery's update operators carry pipeline bindings, but those
+	// bindings are not exported by CALL unless the body has an explicit RETURN.
+	if (ctx->singleQuery()->returnStatement() != nullptr && subqueryOp) {
 		returnedVars = subqueryOp->getOutputVariables();
 	}
 
@@ -412,7 +378,6 @@ std::any CypherToPlanVisitor::visitCallSubquery(CypherParser::CallSubqueryContex
 
 // --- LOAD CSV ---
 std::any CypherToPlanVisitor::visitLoadCsvStatement(CypherParser::LoadCsvStatementContext *ctx) {
-	builder_.markDataMutation();
 	std::string rowVar = helpers::AstExtractor::extractVariable(ctx->variable());
 	auto urlExpr = std::shared_ptr<query::expressions::Expression>(
 		helpers::ExpressionBuilder::buildExpression(ctx->expression()).release());

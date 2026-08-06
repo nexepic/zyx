@@ -1,6 +1,6 @@
 ---
 title: Relationship Traversal
-description: ZYX implements a high-performance relationship traversal system using a linked-list based adjacency structure. This enables efficient navigation of gr
+description: Target relationship traversal architecture based on one global Packed B+Tree adjacency index.
 category: Query
 categoryOrder: 4
 order: 10
@@ -9,416 +9,226 @@ projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
+
 # Relationship Traversal
 
-ZYX implements a high-performance relationship traversal system using a linked-list based adjacency structure. This enables efficient navigation of graph relationships for Cypher queries like `MATCH (a)-[:KNOWS]->(b)` and provides O(1) access to connected nodes and edges.
+> This page defines the target ordinary-graph traversal architecture. The transition is staged; until Stage 8 of the [native single-file storage plan](/en/docs/zyx/architecture/native-single-file-storage-plan) is complete, parts of the source tree may still implement the retired adjacency format. The target format does not preserve compatibility with old database files.
 
 ## Overview
 
-Relationship traversal provides:
+ZYX stores ordinary graph adjacency in one global Packed B+Tree. The Edge Entity Store remains authoritative, and the tree provides the ordered access path from a Node and direction to EdgeIds.
 
-- **Linked-list adjacency structure**: Efficient edge storage using doubly-linked lists
-- **Bidirectional traversal**: Fast access to both outgoing and incoming edges
-- **Connected node retrieval**: Direct access to neighbors without full graph scans
-- **Cycle detection**: Automatic detection of corrupted edge chains
-- **Active edge filtering**: Automatically skips deleted/inactive edges during traversal
-- **O(1) edge linking**: Constant time edge insertion and deletion
+The design optimizes for:
 
-## Architecture
+- shared 4 KiB leaves for low-degree Nodes instead of a page tail per Node;
+- bounded, sequential leaf scans for supernodes;
+- no adjacency pointers in Node or Edge records;
+- atomic visibility of the Edge and both adjacency directions;
+- one Packed B+Tree implementation for online mutation, bulk ingest, caching, recovery, and reclamation;
+- logical cursors that remain valid independently of physical page relocation.
 
-### Adjacency Structure
+Ordinary graph adjacency is unrelated to the ANN graph stored for Vector search. They use different owner identities, roots, codecs, and maintenance policies.
 
-ZYX uses a linked-list based adjacency structure where each node maintains pointers to its first outgoing and incoming edges:
+## Storage Model
 
-```mermaid
-graph TD
-    A[Node 1] -->|firstOutEdgeId| B[Edge 101]
-    B -->|nextOutEdgeId| C[Edge 102]
-    C -->|nextOutEdgeId| D[Edge 103]
-    D -->|nextOutEdgeId| E[null: 0]
+### Authoritative Edge Store
 
-    B -->|prevOutEdgeId| F[null: 0]
-    C -->|prevOutEdgeId| B
-    D -->|prevOutEdgeId| C
+Each live directed relationship has one authoritative Edge record:
+
+```text
+EdgeId -> sourceNodeId + targetNodeId + relationshipTypeId + state
 ```
 
-### Bidirectional Edge Linking
+Node records do not own outgoing or incoming roots. Edge records do not contain `next` or `previous` links. Updating adjacency therefore never rewrites neighboring Edge records.
 
-Each edge maintains four pointers for traversal in both directions:
+### Global Adjacency Index
 
-```mermaid
-graph LR
-    A[Node A] -->|firstOut| B[Edge 1]
-    B -->|nextOut| C[Edge 2]
-    C -->|nextOut| D[Edge 3]
+The built-in adjacency index has this logical schema:
 
-    E[Node B] -->|firstIn| C
-    C -->|nextIn| F[Edge 4]
+```text
+(direction, NodeId, EdgeId) -> empty
 ```
 
-**Bidirectional Edge Linking:**
-- Node A (Source): outgoing edges list
-- Node B (Target): incoming edges list
-- Edge 2 appears in both lists for efficient bidirectional traversal
+Each live Edge contributes exactly two entries:
 
-**Key Point**: The same edge (Edge 2) appears in both Node A's outgoing list and Node B's incoming list, enabling efficient bidirectional traversal.
-
-## Data Structures
-
-The traversal system builds on two core data structures stored in `include/graph/storage/Node.hpp` and `include/graph/storage/Edge.hpp`.
-
-### Node Structure
-
-Each node maintains two 8-byte pointers that serve as the heads of its edge lists:
-
-| Field | Type | Purpose |
-|-------|------|---------|
-| `firstOutEdgeId` | int64_t | Head of the outgoing edge linked list |
-| `firstInEdgeId` | int64_t | Head of the incoming edge linked list |
-
-A value of 0 indicates an empty list (no edges in that direction). Together these two pointers account for 16 bytes of per-node traversal overhead.
-
-### Edge Structure
-
-Each edge stores four 8-byte pointers that thread it into two separate doubly-linked lists -- one for the source node's outgoing edges, and one for the target node's incoming edges:
-
-| Field | Type | Purpose |
-|-------|------|---------|
-| `sourceNodeId` | int64_t | Source node of the relationship |
-| `targetNodeId` | int64_t | Target node of the relationship |
-| `nextOutEdgeId` | int64_t | Next edge in source's outgoing list |
-| `prevOutEdgeId` | int64_t | Previous edge in source's outgoing list |
-| `nextInEdgeId` | int64_t | Next edge in target's incoming list |
-| `prevInEdgeId` | int64_t | Previous edge in target's incoming list |
-
-The four link pointers (`nextOut`, `prevOut`, `nextIn`, `prevIn`) total 32 bytes of per-edge traversal overhead.
-
-## Edge Lifecycle
-
-An edge moves through a well-defined lifecycle from creation to deletion:
-
-```mermaid
-stateDiagram-v2
-    state "Created" as Created
-    state "Linked" as Linked
-    state "Active" as Active
-    state "Unlinked" as Unlinked
-    state "Deleted" as Deleted
-
-    [*] --> Created: Edge allocated
-    Created --> Linked: linkEdge()
-    Linked --> Active: isActive = true
-    Active --> Unlinked: unlinkEdge()
-    Unlinked --> Deleted: isActive = false
-    Deleted --> [*]: Garbage collected
+```text
+(ADJ_OUT, sourceNodeId, EdgeId) -> empty
+(ADJ_IN,  targetNodeId, EdgeId) -> empty
 ```
 
-1. **Created**: The edge object is allocated with source and target node IDs assigned, but it is not yet reachable from either node's edge lists.
-2. **Linked**: `linkEdge()` inserts the edge into both the source node's outgoing list and the target node's incoming list at head position in O(1) time.
-3. **Active**: While `isActive` is true, the edge is returned by traversal operations. It participates normally in queries.
-4. **Unlinked**: `unlinkEdge()` removes the edge from both linked lists by bypassing it in the doubly-linked structure in O(1) time, and clears all four link pointers.
-5. **Deleted**: The edge is marked inactive (`isActive = false`). It will no longer appear in traversal results and is eligible for garbage collection.
+These are two ordered ranges in one reserved tree, not two direction-specific trees and not a per-Node index family. The direction prefix makes both access paths seekable while preserving one root, codec, COW publication unit, and snapshot-retirement lifecycle.
 
-## Core Operations
+The value is deliberately empty. The routing NodeId is necessarily part of the access key, but the tree stores neither the other endpoint nor relationship type/state as an Edge payload. The Edge record remains the authoritative complete relationship representation. This first design is not a covering index.
 
-The `RelationshipTraversal` class (defined in `include/graph/query/RelationshipTraversal.hpp`) provides all traversal and linking operations. It holds a weak reference to the `DataManager` for fetching nodes and edges.
+### Storage Boundary
 
-### Get Outgoing Edges
+The global index is an access path, not a new mixed Node/Edge container. Keeping these responsibilities separate makes the layout compact without creating a second authoritative representation.
 
-Retrieves all active outgoing edges from a node by traversing the outgoing edge chain:
+| Durable structure | Stored data | Does not store |
+|---|---|---|
+| Node Entity page | Node identity, state, labels, and Node-owned references | adjacency root, adjacency keys, or edge-chain links |
+| Edge Entity page | `EdgeId`, endpoints, relationship type, state, and Edge-owned references | B+Tree page/slot/offset, `next`/`previous` adjacency links, or duplicated adjacency payload |
+| Global adjacency B+Tree leaf | Sorted `(direction, NodeId, EdgeId)` keys with an empty value | Node or Edge records, the opposite endpoint, type, state, or properties |
+| Global adjacency B+Tree internal page | Separators and logical child `PageId` values | Entity records or adjacency keys as payload |
 
-1. Fetch the node by ID from the `DataManager`.
-2. Read the node's `firstOutEdgeId` as the starting point.
-3. While the current edge ID is not 0:
-   - Check if this edge ID has already been visited. If so, throw a runtime error to signal a corrupted chain (cycle detection).
-   - Record the edge ID in a visited set.
-   - Fetch the edge from the `DataManager`.
-   - If the edge is active (`isActive()`), add it to the result.
-   - Advance to `nextOutEdgeId`.
-4. Return the collected active edges.
+Consequently, a leaf can contain consecutive key ranges for several low-degree Nodes; this does not mean their Node or Edge records are co-located in that leaf. Conversely, a high-degree Node may occupy consecutive leaves, but it never gains a private root, chain, or permanently reserved tail page.
 
-**Characteristics**:
-- **Time Complexity**: O(k) where k = number of outgoing edges
-- **Space Complexity**: O(k) for the result vector plus O(k) for the cycle detection set
-- **Cycle Detection**: Prevents infinite loops on corrupted data
-- **Active Filtering**: Automatically excludes deleted edges
+The persisted direction enum uses prefixed members such as `ADJ_OUT` and `ADJ_IN` to remain safe from Windows macro collisions. Unknown directions, zero IDs, and malformed key widths fail closed.
 
-### Get Incoming Edges
+### Ordering and Page Sharing
 
-Retrieves all active incoming edges to a node. The algorithm is identical to `getOutgoingEdges` except it starts from `firstInEdgeId` and follows `nextInEdgeId` pointers instead of `nextOutEdgeId` pointers.
-
-**Characteristics**: Same as `getOutgoingEdges` -- O(k) time and space, with cycle detection and active filtering.
-
-### Get All Connected Edges
-
-Combines outgoing and incoming edges into a single result:
-
-1. Call `getOutgoingEdges(nodeId)` to collect outgoing edges.
-2. Call `getIncomingEdges(nodeId)` to collect incoming edges.
-3. Concatenate the two vectors and return.
-
-**Use Case**: Finding all relationships connected to a node regardless of direction.
-
-### Get Connected Target Nodes
-
-Retrieves all nodes reachable via outgoing edges:
-
-1. Call `getOutgoingEdges(nodeId)` to get all active outgoing edges.
-2. For each edge, read its `targetNodeId` and fetch the corresponding node from the `DataManager`.
-3. Return the collected target nodes.
-
-**Use Case**: Cypher queries like `MATCH (a)-[:KNOWS]->(b) RETURN b`.
-
-### Get Connected Source Nodes
-
-Retrieves all nodes that point to this node via incoming edges:
-
-1. Call `getIncomingEdges(nodeId)` to get all active incoming edges.
-2. For each edge, read its `sourceNodeId` and fetch the corresponding node from the `DataManager`.
-3. Return the collected source nodes.
-
-**Use Case**: Cypher queries like `MATCH (a)-[:KNOWS]->(b) RETURN a` where `b` is fixed.
-
-### Get All Connected Nodes
-
-Retrieves all neighbors from both directions with deduplication:
-
-1. Create an empty `unordered_set<int64_t>` of visited node IDs.
-2. For each outgoing edge, extract `targetNodeId`. If the ID has not been seen before, insert it into the set and fetch the node.
-3. For each incoming edge, extract `sourceNodeId`. If the ID has not been seen before, insert it into the set and fetch the node.
-4. Return all unique neighbor nodes.
-
-**Key Feature**: Deduplication via `unordered_set` ensures that nodes connected by both an outgoing and an incoming edge appear only once in the result.
-
-**Use Case**: Finding all neighbors of a node in undirected traversals.
-
-### Query Flow Diagram
-
-The following diagram shows how the traversal operations compose during a typical Cypher query:
+The canonical comparator orders direction first, then unsigned NodeId, then unsigned EdgeId. All entries for one `(direction, NodeId)` are one ordered range.
 
 ```mermaid
-sequenceDiagram
-    participant Q as Cypher Query
-    participant P as Query Planner
-    participant E as Query Executor
-    participant RT as RelationshipTraversal
-    participant DM as DataManager
-
-    Q->>P: MATCH (a)-[:KNOWS]->(b)
-    P->>E: Plan execution
-
-    E->>DM: Get node 'a'
-    DM-->>E: Node object
-
-    E->>RT: getOutgoingEdges(a.id)
-    RT->>DM: Traverse edge list
-    DM-->>RT: Edge objects
-    RT-->>E: Filtered edges
-
-    E->>RT: getConnectedTargetNodes()
-    RT->>DM: Fetch target nodes
-    DM-->>RT: Node objects
-    RT-->>E: Connected nodes
-
-    E-->>Q: Results
+flowchart LR
+    ROOT["Global adjacency B+Tree root"] --> INTERNAL["Packed internal pages"]
+    INTERNAL --> L1["Leaf: entries for several low-degree Nodes"]
+    INTERNAL --> L2["Leaf: continuation of a high-degree Node"]
+    L2 --> L3["Right sibling: same high-degree Node"]
+    L3 --> L4["Right sibling: next Node ranges"]
 ```
 
-## Edge Linking Operations
+One leaf may contain entries from many Nodes. A supernode may span any number of consecutive leaves. Neither case allocates a dedicated page to one Node. Prefix compression encodes the repeated direction and NodeId efficiently, while restart points retain bounded random search within a leaf.
 
-### Link Edge
+Leaf capacity, internal fan-out, restart interval, and split thresholds are derived from encoded byte sizes and the page-layout solver. Documentation, tests, and callers must not copy a derived entries-per-page number as a format constant.
 
-Inserts a new edge into the adjacency structure in O(1) time by always placing it at the head of both the source's outgoing list and the target's incoming list.
+### Root and Physical Location
 
-**Algorithm**:
-
-For the source node's outgoing list:
-1. Fetch the source node and read its current `firstOutEdgeId`.
-2. If the list is empty (`firstOutEdgeId` is 0), set `firstOutEdgeId` to the new edge's ID.
-3. If the list is non-empty, insert the new edge at the head: set the new edge's `nextOutEdgeId` to the current head, set the current head's `prevOutEdgeId` to the new edge's ID, and update the source node's `firstOutEdgeId` to the new edge.
-4. Persist the modified source node and any updated existing edge.
-
-For the target node's incoming list:
-1. Fetch the target node and read its current `firstInEdgeId`.
-2. If the list is empty, set `firstInEdgeId` to the new edge's ID.
-3. If the list is non-empty, insert at the head using the same pattern: wire the new edge's `nextInEdgeId` to the current head, update the current head's `prevInEdgeId`, and set the target's `firstInEdgeId` to the new edge.
-4. Persist the modified target node and any updated existing edge.
-
-Finally, persist the new edge itself.
-
-**Characteristics**:
-- **Time Complexity**: O(1) -- constant time regardless of graph size
-- **Insertion Strategy**: Always insert at head of list (no traversal needed)
-- **Doubly-Linked**: Maintains both next and prev pointers for efficient deletion
-
-**Visual Example**:
+The tree owns one reserved built-in `IndexId`. A snapshot resolves the root through the Index Root Directory:
 
 ```mermaid
-sequenceDiagram
-    participant L as LinkEdge
-    participant S as Source Node
-    participant T as Target Node
-    participant E as New Edge
-    participant DM as DataManager
-
-    L->>S: Get firstOutEdgeId
-    S-->>L: Returns null (0)
-
-    L->>S: Set firstOutEdgeId = edgeId
-    L->>DM: Update source node
-
-    L->>T: Get firstInEdgeId
-    T-->>L: Returns existing edge (50)
-
-    L->>DM: Get edge 50
-    DM-->>L: Edge 50
-
-    L->>E: Set nextInEdgeId = 50
-    L->>E50: Set prevInEdgeId = edgeId
-    L->>T: Set firstInEdgeId = edgeId
-
-    L->>DM: Update all modified entities
+flowchart LR
+    S["A/B Superblock generation"] --> D["Index Root Directory"]
+    D --> R["RSS_GLOBAL_ADJACENCY_INDEX_ID and root PageId"]
+    R --> T["Packed B+Tree pages in SGK_INDEX_PAGE_POOL"]
+    T --> E["EdgeIds"]
+    E --> ES["Edge Entity Store"]
 ```
 
-### Unlink Edge
+Node and Edge pages use Entity pools. Adjacency internal and leaf pages use Index pools. They never share a 4 KiB page: the B+Tree stores access keys, not Edge records. Multiple logical page types may occupy frames in their compatible 128 KiB pools, and an empty physical Segment can later be reclaimed for another SegmentKind.
 
-Removes an edge from both the source's outgoing list and the target's incoming list in O(1) time by taking advantage of the doubly-linked structure.
+All tree references use logical PageIds. Evacuating a page changes its Page Directory route, not its PageId; parent references, cursors, Node records, and Edge records do not contain physical offsets and therefore require no relocation rewrite.
 
-**Algorithm**:
+## Traversal Operations
 
-For the source node's outgoing list:
-1. Read the edge's `prevOutEdgeId` and `nextOutEdgeId`.
-2. If `prevOutEdgeId` is 0 (the edge is at the head of the list): update the source node's `firstOutEdgeId` to `nextOutEdgeId`.
-3. If `prevOutEdgeId` is non-zero (the edge is in the middle or tail): update the previous edge's `nextOutEdgeId` to bypass the removed edge.
-4. If `nextOutEdgeId` is non-zero: update the next edge's `prevOutEdgeId` to `prevOutEdgeId`.
+### Directed Expansion
 
-For the target node's incoming list, repeat the same bypass logic using `prevInEdgeId` and `nextInEdgeId`:
-1. If at head, update the target's `firstInEdgeId`.
-2. If in the middle, update the previous edge's `nextInEdgeId`.
-3. If a next edge exists, update its `prevInEdgeId`.
+Outgoing expansion seeks to the lower bound for `(ADJ_OUT, NodeId)` and advances until the direction or NodeId changes. Incoming expansion does the same with `ADJ_IN`.
 
-Finally, clear all four link pointers on the removed edge to zero.
+The cursor:
 
-**Characteristics**:
-- **Time Complexity**: O(1) -- constant time
-- **Doubly-Linked Benefit**: No traversal needed to find the previous edge
-- **Safe Unlinking**: Properly handles head, middle, and tail positions
+- pins one metadata snapshot for its lifetime;
+- keeps the logical prefix and last returned EdgeId;
+- decodes keys directly from validated page views;
+- retains at most the current leaf plus bounded prefetch state;
+- never materializes a complete leaf or all edges of a supernode;
+- resumes strictly after the last EdgeId and never exposes PageId or physical offset.
 
-**Visual Example**:
+The seek plus scan complexity is `O(log E + degree)`. Output materialization remains proportional to the requested result.
 
-```mermaid
-graph LR
-    A[Edge to Remove] -->|prev| B[Previous Edge]
-    A -->|next| C[Next Edge]
+### Undirected Expansion and Self-Loops
 
-    B -.->|bypass| C
-```
+Undirected expansion opens one outgoing range and one incoming range. Parallel Edges remain distinct because EdgeId is part of the key. A self-loop has one outgoing and one incoming entry; the query operator deduplicates that EdgeId only when the Cypher operator's semantics require one relationship result.
 
-**Edge Unlinking:**
-- Bypass the edge to remove by connecting previous to next
-- O(1) operation thanks to doubly-linked list structure
+### Edge and Neighbor Materialization
 
-## Integration with Cypher Queries
+An adjacency-only count can count keys without reading Edge records. Operations that return Edge fields resolve EdgeIds through the snapshot-pinned Edge Entity Map. The reader validates that every resolved Edge is live and that the scanned direction/NodeId matches its authoritative endpoint.
 
-### Pattern Matching
+Relationship-type filters initially inspect the authoritative Edge record. The executor batches these reads by Entity page and applies existing query limits; it must not degrade into an unbounded independent random read for every key. A future type-qualified derived index is permitted only after workload evidence justifies its extra write and space cost.
 
-Relationship traversal is used extensively in Cypher query execution. The direction of the pattern in the query determines which traversal method is used:
+### Buffer Pool Policy
 
-**Outgoing traversal** -- `MATCH (a)-[:KNOWS]->(b) RETURN b`:
-1. Get node `a`.
-2. Call `getOutgoingEdges(a.id)`.
-3. Filter edges by type = KNOWS.
-4. Collect target nodes from matching edges.
+Root and internal routing pages use normal admission. A point probe normally admits its final leaf. Leaves consumed by a range scan use sequential admission, and bounded right-sibling prefetch carries the same hint. This keeps reusable routing state hot while preventing a supernode scan from evicting the point-read working set.
 
-**Incoming traversal** -- `MATCH (a)<-[:KNOWS]-(b) RETURN b`:
-1. Get node `a`.
-2. Call `getIncomingEdges(a.id)`.
-3. Filter edges by type = KNOWS.
-4. Collect source nodes from matching edges.
+Every page is still validated after cache lookup: owner identity, page subtype, generation, LSN, checksum, key order, restart table, separators, and sibling relationships are mandatory invariants.
 
-**Bidirectional traversal** -- `MATCH (a)-[:KNOWS]-(b) RETURN b`:
-1. Get node `a`.
-2. Call `getAllConnectedEdges(a.id)`.
-3. Filter edges by type = KNOWS.
-4. Extract connected nodes from both directions.
+## Mutation Semantics
 
-## Performance Characteristics
+### Create Edge
 
-### Time Complexity
+One transaction plans all of the following against the same pinned generation:
 
-| Operation | Time Complexity | Description |
-|-----------|----------------|-------------|
-| getOutgoingEdges | O(k) | k = number of outgoing edges |
-| getIncomingEdges | O(k) | k = number of incoming edges |
-| getAllConnectedEdges | O(k1 + k2) | k1 = outgoing, k2 = incoming |
-| getConnectedTargetNodes | O(k) | k = outgoing edges |
-| getConnectedSourceNodes | O(k) | k = incoming edges |
-| getAllConnectedNodes | O(k1 + k2) | With deduplication |
-| linkEdge | O(1) | Constant time insertion |
-| unlinkEdge | O(1) | Constant time removal |
+1. Insert the authoritative Edge record and Entity Map entry.
+2. Insert the outgoing adjacency key.
+3. Insert the incoming adjacency key.
+4. Publish the replacement B+Tree root and metadata roots.
+5. Publish the inactive A/B Superblock as the new generation.
 
-### Space Complexity
+The two keys use one transaction-local sorted B+Tree overlay. Data pages are durable before the root becomes visible. Recovery selects either the complete old generation or the complete new generation; an Edge can never become visible in only one direction.
 
-| Component | Space | Description |
-|-----------|-------|-------------|
-| Node metadata | 2 x 8 bytes | `firstOutEdgeId`, `firstInEdgeId` |
-| Edge metadata | 4 x 8 bytes | `nextOut`, `prevOut`, `nextIn`, `prevIn` |
-| Cycle detection | O(k) | `unordered_set` during traversal |
-| Result vectors | O(k) | Output edge/node collections |
+The shared root is not a reason to expose spurious write conflicts. At commit, the transaction layer revalidates and, when needed, retries/rebases the bounded sorted final-state overlay against the latest root. It rejects semantic conflicts (for example, a conflicting Edge identity or changed authoritative endpoint), not a disjoint writer merely because that writer published a newer adjacency root.
 
-**Total Per Edge**: 32 bytes for traversal pointers (4 x int64_t)
+### Delete Edge
 
-### Memory Overhead
+Deletion reads the authoritative old endpoints, erases both exact keys, removes the Edge record and Entity Map entry, and publishes the final state atomically. Ordinary relationship deletion does not append a Tombstone and does not update adjacent Edges.
 
-For a graph with 1 million edges and 100K nodes:
+Retired COW pages enter the common generation-aware Retire Queue. Older snapshots continue to resolve their old root; physical frames become reusable only after those snapshots drain.
 
-- **Node pointers**: 100K nodes x 2 pointers x 8 bytes = 1.6 MB
-- **Edge pointers**: 1M edges x 4 pointers x 8 bytes = 32 MB
-- **Total traversal overhead**: approximately 33.6 MB (33.6 bytes per edge on average)
+### DETACH DELETE
 
-### Strengths and Trade-offs
+`DETACH DELETE` scans both bounded ranges for the Node, deduplicates EdgeIds including self-loops, validates resource limits, and builds one final-state batch. Every Edge and both of its adjacency entries are removed exactly once. The operation fails before publication if a key contradicts the authoritative Edge record or the configured transaction bound is exceeded.
 
-**Strengths**:
-1. **O(1) Edge Operations**: Insertion and deletion are constant time
-2. **No Global Scans**: Direct access to connected nodes
-3. **Cache Friendly**: Sequential traversal of edge lists
-4. **Memory Efficient**: Only 32 bytes per edge for traversal
-5. **Scalable**: Performance independent of total graph size
+### Bulk Edge Ingest
 
-**Trade-offs**:
-1. **Pointer Overhead**: 32 bytes per edge for traversal pointers
-2. **Dereferencing Cost**: Each edge access requires a pointer chase through the DataManager
-3. **No Type Indexing**: Must scan all edges to filter by relationship type
-4. **Cycle Detection Overhead**: Adds O(k) space during traversal
+Bulk creation validates endpoints first, emits the outgoing and incoming keys, sorts and deduplicates them with the canonical comparator, and merges ordered runs through the shared Packed B+Tree bulk/overlay builder. It does not execute an independent root-to-leaf insertion for every entry.
 
-### Comparison with Alternatives
+Online and bulk writers share page fill, prefix/restart, separator, split/merge, checksum, owner, and publication invariants. Memory use is bounded by ingest limits. Any future external run storage must honor the one-database-file durability model and cannot become a second persistent database file.
 
-| Approach | Edge Access | Memory | Use Case |
-|----------|------------|--------|----------|
-| **Linked List** (ZYX) | O(k) traversal | 32 bytes/edge | General-purpose graphs |
-| Adjacency Matrix | O(1) lookup | O(V squared) | Dense graphs |
-| Adjacency Array | O(k) scan | O(V + E) | Static graphs |
-| Edge Type Index | O(log n + k) | Additional index | Type-filtered queries |
+Bulk work is a final-state operation. It validates the complete batch before publication, coalesces duplicate or cancelling mutations by the canonical key, constructs ordered runs, and applies the resulting changes through the same COW root replacement as online writes. It must never expose a partially built range, a newly created Edge with only one direction, or a replacement root whose Entity changes were not published in the same generation.
 
-## Best Practices
+## Deletion, Occupancy, and Reclamation
 
-1. **Batch Edge Creation**: Create all nodes first, then link edges to minimize updates
-2. **Avoid Manual Pointer Manipulation**: Never directly modify edge pointers; always use `linkEdge` and `unlinkEdge`
-3. **Filter Early**: Apply edge type filters before fetching connected nodes
-4. **Check Active State**: Use `edge.isActive()` to skip deleted edges
-5. **Deduplicate**: Use `getAllConnectedNodes()` for undirected traversals
+Packed B+Tree deletion performs byte-aware redistribution or merge in COW candidate pages. Empty leaves and collapsed internal roots are retired through the same reclamation path as other Index pages. An empty graph has no adjacency root entry and therefore owns no permanent empty tree page.
 
-## Limitations
+The steady-state implementation has no per-Node Root pages, Base chains, Delta chains, logical Tombstones, or adjacency merge worker. A bounded whole-tree repack may be scheduled when measured byte occupancy falls below policy, but it is an optimization, not part of normal read correctness.
 
-1. **No Edge Type Index**: Must scan all edges to filter by relationship type
-2. **Pointer Overhead**: 32 bytes per edge for traversal metadata
-3. **Cycle Detection Cost**: Adds runtime overhead during traversal
-4. **Sequential Access Only**: No random access to specific edges within a list
-5. **Memory Locality**: Edge pointer chasing can cause cache misses
+The first production implementation uses the plain Packed B+Tree. A bounded global write buffer may be considered only if recorded benchmarks show that isolated Edge COW amplification misses an agreed threshold. Such a buffer must preserve the same logical ordering, cursor, atomicity, memory bounds, crash recovery, and single-file behavior. Per-Node delta hierarchies are not a fallback.
+
+## Cypher Integration
+
+| Cypher pattern or operation | Adjacency access |
+|---|---|
+| `MATCH (a)-[r]->(b)` | Outgoing range for `a` |
+| `MATCH (a)<-[r]-(b)` | Incoming range for `a` |
+| `MATCH (a)-[r]-(b)` | Outgoing and incoming ranges with semantic deduplication |
+| `degree(a)` or relationship count | Count bounded adjacency entries when no Edge fields are required |
+| Variable-length expansion | One bounded cursor per frontier Node, subject to traversal limits |
+| `DETACH DELETE a` | Scan both ranges, deduplicate EdgeIds, publish one bulk erase |
+
+The query layer receives a logical continuation, not a page chain. Relocation, leaf split/merge, and a new committed generation cannot leak physical storage details into the Cypher DSL.
+
+## Complexity and Space
+
+| Operation | Time | Additional cursor memory |
+|---|---|---|
+| Seek outgoing or incoming range | `O(log E)` | Tree height and one leaf pin |
+| Stream one direction | `O(log E + degree)` | Bounded, independent of degree |
+| Count one direction | `O(log E + degree)` | Bounded |
+| Create/delete one Edge | `O(log E)` logical tree work | COW path and bounded split/merge state |
+| Sorted bulk ingest | Linear in input plus ordered tree construction/merge work | Configured run bound |
+
+Each directed Edge contributes two compact keys and no values. The cost replaces Node head pointers, four Edge link pointers, per-Node root records, and partially empty adjacency-tail pages. Exact bytes per Edge are measured from encoded pages because prefix compression and occupancy make a handwritten constant misleading.
+
+## Integrity and Test Gates
+
+The full integrity scanner verifies:
+
+- exactly two correctly directed entries for every live Edge;
+- every entry resolves to a live Edge with matching endpoints;
+- no duplicate, missing, foreign, zero-ID, or unknown-direction key;
+- canonical ordering and valid prefix/restart, separator, sibling, owner, generation, LSN, and CRC data;
+- one reserved root identity with no collision with user indexes;
+- complete reachability and correct snapshot-safe retirement.
+
+Tests cover empty/first/final root transitions, low-degree leaf sharing, supernodes across many leaves, self-loops, parallel Edges, create/delete rollback, `DETACH DELETE`, bulk equivalence, cursor continuation, stale snapshots, page relocation, split/merge/root collapse, ENOSPC, short writes, corruption, and before/after-Superblock crash points.
+
+They also cover a rebase after a concurrent disjoint adjacency publication: both final Edge records and all four directional keys must be visible, while no reader can observe either writer with only one direction.
+
+Line, branch, function, and region coverage must each reach at least 95% on macOS, Linux, and Windows. Performance evidence records COW bytes per Edge mutation, pages read per expansion, bulk throughput, post-churn byte occupancy, Buffer Pool pollution, cursor peak memory, and supernode tail latency.
 
 ## See Also
 
-- [Storage System](/en/docs/zyx/architecture/storage) - Overall storage architecture
-- [Label Index](/en/docs/zyx/algorithms/label-index) - Node label indexing
-- [Property Index](/en/docs/zyx/algorithms/property-index) - Property-based indexing
-- [Query Optimization](/en/docs/zyx/algorithms/query-optimization) - Query planning and optimization
-- [B+Tree Indexing](/en/docs/zyx/algorithms/btree-indexing) - B+Tree structure details
+- [Native Single-File Storage Plan](/en/docs/zyx/architecture/native-single-file-storage-plan)
+- [B+Tree Indexing](/en/docs/zyx/algorithms/btree-indexing)
+- [Query Optimization](/en/docs/zyx/algorithms/query-optimization)
+- [Segment Compaction](/en/docs/zyx/algorithms/segment-compaction)

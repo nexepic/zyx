@@ -10,11 +10,10 @@
 #include <gtest/gtest.h>
 #include <memory>
 
-#include "graph/core/Database.hpp"
-#include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/indexes/EntityTypeIndexManager.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 #include "graph/storage/indexes/PropertyIndex.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 
 namespace fs = std::filesystem;
 
@@ -23,9 +22,10 @@ protected:
 	void SetUp() override {
 		const boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath = fs::temp_directory_path() / ("test_propertyIndex_typed_" + to_string(uuid) + ".dat");
-		database = std::make_unique<graph::Database>(testFilePath.string());
+		database = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(
+				testFilePath.string(), graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
 		database->open();
-		propertyIndex = database->getQueryEngine()->getIndexManager()->getNodeIndexManager()->getPropertyIndex();
+		propertyIndex = database->indexManager()->getNodeIndexManager()->getPropertyIndex();
 	}
 
 	void TearDown() override {
@@ -43,7 +43,7 @@ protected:
 	}
 
 	fs::path testFilePath;
-	std::unique_ptr<graph::Database> database;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> database;
 	std::shared_ptr<graph::query::indexes::PropertyIndex> propertyIndex;
 };
 

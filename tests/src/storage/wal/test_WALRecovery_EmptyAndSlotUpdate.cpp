@@ -6,7 +6,7 @@
  *        - replayAddOrModify<Index> existing slot update (line 168)
  *        - replayAddOrModify<State> existing slot update (line 168)
  *
- * IMPORTANT: Database::open() does NOT trigger WAL recovery.
+ * IMPORTANT: LegacyWALTestDatabase::open() does NOT trigger WAL recovery.
  * Recovery is deferred to beginTransaction() / beginReadOnlyTransaction().
  * Each test must call beginReadOnlyTransaction() to trigger recovery.
  **/
@@ -27,10 +27,10 @@ static void preserveWAL(WALManager &mgr, const std::string &walPath) {
 TEST_F(WALReplayTest, ReplayModifyIndex_ExistingSlot) {
 	int64_t indexId = 0;
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 		auto txn = db.beginTransaction();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 
 		Node n(0, 1);
 		dm->addNode(n);
@@ -65,7 +65,7 @@ TEST_F(WALReplayTest, ReplayModifyIndex_ExistingSlot) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
 		db2.close();
@@ -79,10 +79,10 @@ TEST_F(WALReplayTest, ReplayModifyIndex_ExistingSlot) {
 TEST_F(WALReplayTest, ReplayModifyState_ExistingSlot) {
 	int64_t stateId = 0;
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 		auto txn = db.beginTransaction();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 
 		Node n(0, 1);
 		dm->addNode(n);
@@ -117,7 +117,7 @@ TEST_F(WALReplayTest, ReplayModifyState_ExistingSlot) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
 		db2.close();
@@ -130,11 +130,11 @@ TEST_F(WALReplayTest, ReplayModifyState_ExistingSlot) {
 
 TEST_F(WALReplayTest, ReplayAddIndex_EmptyData_ReturnsEarly) {
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 		auto txn = db.beginTransaction();
 		Node n(0, 1);
-		db.getStorage()->getDataManager()->addNode(n);
+		db.storage()->getDataManager()->addNode(n);
 		txn.commit();
 		db.close();
 	}
@@ -156,7 +156,7 @@ TEST_F(WALReplayTest, ReplayAddIndex_EmptyData_ReturnsEarly) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
 		db2.close();
@@ -165,11 +165,11 @@ TEST_F(WALReplayTest, ReplayAddIndex_EmptyData_ReturnsEarly) {
 
 TEST_F(WALReplayTest, ReplayAddState_EmptyData_ReturnsEarly) {
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 		auto txn = db.beginTransaction();
 		Node n(0, 1);
-		db.getStorage()->getDataManager()->addNode(n);
+		db.storage()->getDataManager()->addNode(n);
 		txn.commit();
 		db.close();
 	}
@@ -191,7 +191,7 @@ TEST_F(WALReplayTest, ReplayAddState_EmptyData_ReturnsEarly) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
 		db2.close();
@@ -200,11 +200,11 @@ TEST_F(WALReplayTest, ReplayAddState_EmptyData_ReturnsEarly) {
 
 TEST_F(WALReplayTest, ReplayAddBlob_EmptyData_ReturnsEarly) {
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 		auto txn = db.beginTransaction();
 		Node n(0, 1);
-		db.getStorage()->getDataManager()->addNode(n);
+		db.storage()->getDataManager()->addNode(n);
 		txn.commit();
 		db.close();
 	}
@@ -226,7 +226,7 @@ TEST_F(WALReplayTest, ReplayAddBlob_EmptyData_ReturnsEarly) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
 		db2.close();
@@ -235,11 +235,11 @@ TEST_F(WALReplayTest, ReplayAddBlob_EmptyData_ReturnsEarly) {
 
 TEST_F(WALReplayTest, ReplayAddProperty_EmptyData_ReturnsEarly) {
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 		auto txn = db.beginTransaction();
 		Node n(0, 1);
-		db.getStorage()->getDataManager()->addNode(n);
+		db.storage()->getDataManager()->addNode(n);
 		txn.commit();
 		db.close();
 	}
@@ -261,7 +261,7 @@ TEST_F(WALReplayTest, ReplayAddProperty_EmptyData_ReturnsEarly) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
 		db2.close();
@@ -270,11 +270,11 @@ TEST_F(WALReplayTest, ReplayAddProperty_EmptyData_ReturnsEarly) {
 
 TEST_F(WALReplayTest, ReplayAddEdge_EmptyData_ReturnsEarly) {
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 		auto txn = db.beginTransaction();
 		Node n(0, 1);
-		db.getStorage()->getDataManager()->addNode(n);
+		db.storage()->getDataManager()->addNode(n);
 		txn.commit();
 		db.close();
 	}
@@ -296,7 +296,7 @@ TEST_F(WALReplayTest, ReplayAddEdge_EmptyData_ReturnsEarly) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
 		db2.close();
@@ -305,11 +305,11 @@ TEST_F(WALReplayTest, ReplayAddEdge_EmptyData_ReturnsEarly) {
 
 TEST_F(WALReplayTest, ReplayAddNode_EmptyData_ReturnsEarly) {
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 		auto txn = db.beginTransaction();
 		Node n(0, 1);
-		db.getStorage()->getDataManager()->addNode(n);
+		db.storage()->getDataManager()->addNode(n);
 		txn.commit();
 		db.close();
 	}
@@ -331,7 +331,7 @@ TEST_F(WALReplayTest, ReplayAddNode_EmptyData_ReturnsEarly) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
 		db2.close();
@@ -344,11 +344,11 @@ TEST_F(WALReplayTest, ReplayAddNode_EmptyData_ReturnsEarly) {
 
 TEST_F(WALReplayTest, ReplayDeleteIndex_EmptyData_ReturnsEarly) {
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 		auto txn = db.beginTransaction();
 		Node n(0, 1);
-		db.getStorage()->getDataManager()->addNode(n);
+		db.storage()->getDataManager()->addNode(n);
 		txn.commit();
 		db.close();
 	}
@@ -370,7 +370,7 @@ TEST_F(WALReplayTest, ReplayDeleteIndex_EmptyData_ReturnsEarly) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
 		db2.close();
@@ -379,11 +379,11 @@ TEST_F(WALReplayTest, ReplayDeleteIndex_EmptyData_ReturnsEarly) {
 
 TEST_F(WALReplayTest, ReplayDeleteState_EmptyData_ReturnsEarly) {
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 		auto txn = db.beginTransaction();
 		Node n(0, 1);
-		db.getStorage()->getDataManager()->addNode(n);
+		db.storage()->getDataManager()->addNode(n);
 		txn.commit();
 		db.close();
 	}
@@ -405,7 +405,7 @@ TEST_F(WALReplayTest, ReplayDeleteState_EmptyData_ReturnsEarly) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
 		db2.close();
@@ -414,11 +414,11 @@ TEST_F(WALReplayTest, ReplayDeleteState_EmptyData_ReturnsEarly) {
 
 TEST_F(WALReplayTest, ReplayDeleteNode_EmptyData_ReturnsEarly) {
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 		auto txn = db.beginTransaction();
 		Node n(0, 1);
-		db.getStorage()->getDataManager()->addNode(n);
+		db.storage()->getDataManager()->addNode(n);
 		txn.commit();
 		db.close();
 	}
@@ -440,7 +440,7 @@ TEST_F(WALReplayTest, ReplayDeleteNode_EmptyData_ReturnsEarly) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
 		db2.close();
@@ -449,11 +449,11 @@ TEST_F(WALReplayTest, ReplayDeleteNode_EmptyData_ReturnsEarly) {
 
 TEST_F(WALReplayTest, ReplayDeleteEdge_EmptyData_ReturnsEarly) {
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 		auto txn = db.beginTransaction();
 		Node n(0, 1);
-		db.getStorage()->getDataManager()->addNode(n);
+		db.storage()->getDataManager()->addNode(n);
 		txn.commit();
 		db.close();
 	}
@@ -475,7 +475,7 @@ TEST_F(WALReplayTest, ReplayDeleteEdge_EmptyData_ReturnsEarly) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
 		db2.close();
@@ -484,11 +484,11 @@ TEST_F(WALReplayTest, ReplayDeleteEdge_EmptyData_ReturnsEarly) {
 
 TEST_F(WALReplayTest, ReplayDeleteBlob_EmptyData_ReturnsEarly) {
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 		auto txn = db.beginTransaction();
 		Node n(0, 1);
-		db.getStorage()->getDataManager()->addNode(n);
+		db.storage()->getDataManager()->addNode(n);
 		txn.commit();
 		db.close();
 	}
@@ -510,7 +510,7 @@ TEST_F(WALReplayTest, ReplayDeleteBlob_EmptyData_ReturnsEarly) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
 		db2.close();
@@ -519,11 +519,11 @@ TEST_F(WALReplayTest, ReplayDeleteBlob_EmptyData_ReturnsEarly) {
 
 TEST_F(WALReplayTest, ReplayDeleteProperty_EmptyData_ReturnsEarly) {
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 		auto txn = db.beginTransaction();
 		Node n(0, 1);
-		db.getStorage()->getDataManager()->addNode(n);
+		db.storage()->getDataManager()->addNode(n);
 		txn.commit();
 		db.close();
 	}
@@ -545,7 +545,7 @@ TEST_F(WALReplayTest, ReplayDeleteProperty_EmptyData_ReturnsEarly) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
 		db2.close();

@@ -1,6 +1,7 @@
 #include "DriverAbiInternal.hpp"
 
 #include <new>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -96,6 +97,26 @@ zyx_driver_status_t zyx_driver_params_set_string(zyx_driver_params_t *params, co
     try {
         params->values[key] = std::string(value);
         return ZYX_DRIVER_OK;
+    } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
+        return catchAbiExceptionAs(out_error, ZYX_DRIVER_INVALID_ARGUMENT);
+    }
+}
+
+zyx_driver_status_t zyx_driver_params_set_bytes(zyx_driver_params_t *params, const char *key,
+                                                const uint8_t *value, uint32_t size,
+                                                zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    if (params == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "params must not be null");
+    }
+    if (key == nullptr) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "key must not be null");
+    }
+    try {
+        params->values[key] = copyAbiBytes(value, size);
+        return ZYX_DRIVER_OK;
+    } catch (const std::invalid_argument &ex) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, ex.what());
     } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
         return catchAbiExceptionAs(out_error, ZYX_DRIVER_INVALID_ARGUMENT);
     }

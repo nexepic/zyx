@@ -20,12 +20,25 @@
 
 #include "QueryTestFixture.hpp"
 
-class CypherBasicTest : public QueryTestFixture {
-protected:
-	[[nodiscard]] std::string resolveTokenName(int64_t labelId) const {
-		return db->getStorage()->getDataManager()->resolveTokenName(labelId);
-	}
-};
+class CypherBasicTest : public QueryTestFixture {};
+
+TEST_F(CypherBasicTest, BytesFunctionAcceptsHexAndByteListLiterals) {
+	(void) execute("CREATE (n:BinaryLiteral {hex: bytes('0x00ff'), list: bytes([1, 128, 255])})");
+	const auto rows = execute("MATCH (n:BinaryLiteral) RETURN n").getRows();
+	ASSERT_EQ(rows.size(), 1U);
+	const auto &properties = rows.front().at("n").asNode().getProperties();
+	ASSERT_TRUE(properties.contains("hex"));
+	ASSERT_TRUE(properties.contains("list"));
+	EXPECT_EQ(properties.at("hex").getBytes(), (graph::PropertyValue::Bytes{std::byte{0x00}, std::byte{0xFF}}));
+	EXPECT_EQ(properties.at("list").getBytes(),
+			  (graph::PropertyValue::Bytes{std::byte{0x01}, std::byte{0x80}, std::byte{0xFF}}));
+}
+
+TEST_F(CypherBasicTest, BytesFunctionRejectsMalformedHexAndOutOfRangeListValues) {
+	EXPECT_THROW((void) execute("RETURN bytes('0')"), std::runtime_error);
+	EXPECT_THROW((void) execute("RETURN bytes('zz')"), std::runtime_error);
+	EXPECT_THROW((void) execute("RETURN bytes([256])"), std::runtime_error);
+}
 
 // --- Basic CRUD ---
 
@@ -33,7 +46,7 @@ TEST_F(CypherBasicTest, CreateAndMatchNode) {
 	auto res1 = execute("CREATE (n:User {name: 'Alice', age: 30}) RETURN n");
 	ASSERT_EQ(res1.rowCount(), 1UL);
 	const auto &node1 = res1.getRows()[0].at("n").asNode();
-	EXPECT_EQ(resolveTokenName(node1.getLabelId()), "User");
+	EXPECT_EQ(node1.getLabelCount(), 1U);
 	EXPECT_EQ(node1.getProperties().at("name").toString(), "Alice");
 
 	auto res2 = execute("MATCH (n:User) RETURN n");
@@ -42,13 +55,13 @@ TEST_F(CypherBasicTest, CreateAndMatchNode) {
 
 TEST_F(CypherBasicTest, CreateAndMatchChain) {
 	(void) execute("CREATE (a:Person {name: 'A'})-[r:KNOWS {since: 2020}]->(b:Person {name: 'B'})");
-	auto res = execute("MATCH (n:Person)-[r]->(m) RETURN n, r, m");
+	auto res = execute("MATCH (n:Person)-[r:KNOWS]->(m:Person) RETURN n, r, m");
 	ASSERT_EQ(res.rowCount(), 1UL);
 	const auto &row = res.getRows()[0];
 	EXPECT_TRUE(row.at("n").isNode());
 	EXPECT_TRUE(row.at("m").isNode());
 	EXPECT_TRUE(row.at("r").isEdge());
-	EXPECT_EQ(resolveTokenName(row.at("r").asEdge().getTypeId()), "KNOWS");
+	EXPECT_EQ(row.at("r").asEdge().getType(), "KNOWS");
 }
 
 // --- Updates (SET/REMOVE/DELETE) ---
@@ -135,7 +148,7 @@ TEST_F(CypherBasicTest, FilterTraversalTarget) {
 	(void) execute("CREATE (a:Node)-[:LINK]->(c:Other {id: 2})");
 	auto res = execute("MATCH (n:Node)-[r]->(t:Target) RETURN t");
 	ASSERT_EQ(res.rowCount(), 1UL);
-	EXPECT_EQ(resolveTokenName(res.getRows()[0].at("t").asNode().getLabelId()), "Target");
+	EXPECT_EQ(res.getRows()[0].at("t").asNode().getLabelCount(), 1U);
 }
 
 // --- MERGE ---
@@ -490,4 +503,3 @@ TEST_F(CypherBasicTest, UnionAllKeepsDuplicateRows) {
 	auto res = execute("MATCH (n:UnionAllDupX) RETURN n.name AS name UNION ALL MATCH (n:UnionAllDupY) RETURN n.name AS name");
 	ASSERT_EQ(res.rowCount(), 2UL);
 }
-

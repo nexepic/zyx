@@ -1,6 +1,6 @@
 ---
-title: 段格式
-description: FileHeader、SegmentHeader、activity bitmap 与链表结构。
+title: 历史段格式
+description: 已退役的 FileHeader、SegmentHeader、activity bitmap 与链表结构。
 category: 存储格式
 categoryOrder: 3
 order: 8
@@ -9,11 +9,12 @@ projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
-# 段格式
+# 历史段格式
 
 底层存储格式定义在 `StorageHeaders.hpp`。数据库文件被划分为固定大小的段，以链表形式组织，每种实体类型各一条链。
 
-本文描述当前格式。规划中的替代架构单独记录在[下一代 Segment 存储设计](segment-storage-vnext)中，尚未实现。
+本文仅作为历史参考。native storage backend 不接受旧格式，也不存在 migration、cutover 或兼容路径。
+新建数据库使用[原生单文件存储重构计划](native-single-file-storage-plan)定义的格式。
 
 ## 常量
 

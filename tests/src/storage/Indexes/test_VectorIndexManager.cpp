@@ -20,7 +20,7 @@
 
 #include <filesystem>
 #include <gtest/gtest.h>
-#include "graph/core/Database.hpp"
+#include "graph/storage/FileStorage.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 #include "graph/storage/indexes/VectorIndexManager.hpp"
 #include "graph/vector/index/DiskANNIndex.hpp"
@@ -46,22 +46,31 @@ protected:
 TEST_F(ManagerPersistenceTest, ReloadFromDisk) {
 	// 1. Session A: Create Indexes
 	{
-		graph::Database db(dbPath.string());
-		db.open();
-		auto vim = db.getQueryEngine()->getIndexManager()->getVectorIndexManager();
+		auto storage = std::make_shared<graph::storage::FileStorage>(
+				dbPath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
+		storage->open();
+		auto indexManager = std::make_shared<graph::query::indexes::IndexManager>(storage);
+		indexManager->initialize();
+		auto vim = indexManager->getVectorIndexManager();
 
 		vim->createIndex("idx_l2", 4, "L2");
 		vim->createIndex("idx_ip", 8, "IP"); // Hits metricType == 1 logic
 
 		// Verify in-memory state
 		EXPECT_TRUE(vim->hasIndex("idx_l2"));
+		// The storage listener is weak. Persist while IndexManager still owns the
+		// vector manager instead of relying on destruction order at scope exit.
+		ASSERT_NO_THROW(storage->flushOrThrow());
 	} // DB Closed
 
 	// 2. Session B: Re-open DB
 	{
-		graph::Database db(dbPath.string());
-		db.open();
-		auto vim = db.getQueryEngine()->getIndexManager()->getVectorIndexManager();
+		auto storage = std::make_shared<graph::storage::FileStorage>(
+				dbPath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
+		storage->open();
+		auto indexManager = std::make_shared<graph::query::indexes::IndexManager>(storage);
+		indexManager->initialize();
+		auto vim = indexManager->getVectorIndexManager();
 
 		// 3. Test hasIndex (Disk Path)
 		// Since it's a fresh VIM instance, indexes_ map is empty.
@@ -83,9 +92,12 @@ TEST_F(ManagerPersistenceTest, ReloadFromDisk) {
 }
 
 TEST_F(ManagerPersistenceTest, CreateCosineIndex) {
-	graph::Database db(dbPath.string());
-	db.open();
-	auto vim = db.getQueryEngine()->getIndexManager()->getVectorIndexManager();
+	auto storage = std::make_shared<graph::storage::FileStorage>(
+			dbPath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
+	storage->open();
+	auto indexManager = std::make_shared<graph::query::indexes::IndexManager>(storage);
+	indexManager->initialize();
+	auto vim = indexManager->getVectorIndexManager();
 
 	// Cosine metric should be stored as metricType=1 (same as IP)
 	vim->createIndex("idx_cosine", 4, "Cosine");
@@ -96,11 +108,14 @@ TEST_F(ManagerPersistenceTest, CreateCosineIndex) {
 }
 
 TEST_F(ManagerPersistenceTest, DirectManagerWorksWithoutThreadPoolAndSkipsNonVectorMetadata) {
-	graph::Database db(dbPath.string());
-	db.open();
-	auto dm = db.getStorage()->getDataManager();
-	auto sm = db.getStorage()->getSystemStateManager();
-	auto im = db.getQueryEngine()->getIndexManager();
+	auto storage = std::make_shared<graph::storage::FileStorage>(
+			dbPath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
+	storage->open();
+	auto indexManager = std::make_shared<graph::query::indexes::IndexManager>(storage);
+	indexManager->initialize();
+	auto dm = storage->getDataManager();
+	auto sm = storage->getSystemStateManager();
+	auto im = indexManager;
 
 	VectorIndexManager direct(dm, sm);
 	direct.createIndex("direct_l2", 4, "L2");
@@ -115,10 +130,13 @@ TEST_F(ManagerPersistenceTest, DirectManagerWorksWithoutThreadPoolAndSkipsNonVec
 }
 
 TEST_F(ManagerPersistenceTest, RemoveIndexIgnoresIndexesForOtherLabels) {
-	graph::Database db(dbPath.string());
-	db.open();
-	auto dm = db.getStorage()->getDataManager();
-	auto im = db.getQueryEngine()->getIndexManager();
+	auto storage = std::make_shared<graph::storage::FileStorage>(
+			dbPath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
+	storage->open();
+	auto indexManager = std::make_shared<graph::query::indexes::IndexManager>(storage);
+	indexManager->initialize();
+	auto dm = storage->getDataManager();
+	auto im = indexManager;
 	auto vim = im->getVectorIndexManager();
 
 	im->createVectorIndex("person_vec_remove_skip", "Person", "embedding", 4, "L2");
@@ -129,22 +147,28 @@ TEST_F(ManagerPersistenceTest, RemoveIndexIgnoresIndexesForOtherLabels) {
 }
 
 TEST_F(ManagerPersistenceTest, HasIndex_NonExistent) {
-	graph::Database db(dbPath.string());
-	db.open();
-	auto vim = db.getQueryEngine()->getIndexManager()->getVectorIndexManager();
+	auto storage = std::make_shared<graph::storage::FileStorage>(
+			dbPath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
+	storage->open();
+	auto indexManager = std::make_shared<graph::query::indexes::IndexManager>(storage);
+	indexManager->initialize();
+	auto vim = indexManager->getVectorIndexManager();
 
 	EXPECT_FALSE(vim->hasIndex("non_existent_index"));
 }
 
 TEST_F(ManagerPersistenceTest, UpdateIndex_WithVectorProperty) {
-	graph::Database db(dbPath.string());
-	db.open();
-	auto dm = db.getStorage()->getDataManager();
-	auto sm = db.getStorage()->getSystemStateManager();
-	auto vim = db.getQueryEngine()->getIndexManager()->getVectorIndexManager();
+	auto storage = std::make_shared<graph::storage::FileStorage>(
+			dbPath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
+	storage->open();
+	auto indexManager = std::make_shared<graph::query::indexes::IndexManager>(storage);
+	indexManager->initialize();
+	auto dm = storage->getDataManager();
+	auto sm = storage->getSystemStateManager();
+	auto vim = indexManager->getVectorIndexManager();
 
 	// 1. Create a vector index via IndexManager
-	db.getQueryEngine()->getIndexManager()->createVectorIndex("emb_idx", "Person", "embedding", 4, "L2");
+	indexManager->createVectorIndex("emb_idx", "Person", "embedding", 4, "L2");
 
 	// 2. Create a vector index instance
 	vim->createIndex("emb_idx", 4, "L2");
@@ -165,9 +189,12 @@ TEST_F(ManagerPersistenceTest, UpdateIndex_WithVectorProperty) {
 }
 
 TEST_F(ManagerPersistenceTest, UpdateIndex_EmptyLabel) {
-	graph::Database db(dbPath.string());
-	db.open();
-	auto vim = db.getQueryEngine()->getIndexManager()->getVectorIndexManager();
+	auto storage = std::make_shared<graph::storage::FileStorage>(
+			dbPath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
+	storage->open();
+	auto indexManager = std::make_shared<graph::query::indexes::IndexManager>(storage);
+	indexManager->initialize();
+	auto vim = indexManager->getVectorIndexManager();
 
 	graph::Node node(1, 0);
 	std::unordered_map<std::string, graph::PropertyValue> props;
@@ -178,13 +205,16 @@ TEST_F(ManagerPersistenceTest, UpdateIndex_EmptyLabel) {
 }
 
 TEST_F(ManagerPersistenceTest, UpdateIndex_NonListProperty) {
-	graph::Database db(dbPath.string());
-	db.open();
-	auto dm = db.getStorage()->getDataManager();
-	auto vim = db.getQueryEngine()->getIndexManager()->getVectorIndexManager();
+	auto storage = std::make_shared<graph::storage::FileStorage>(
+			dbPath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
+	storage->open();
+	auto indexManager = std::make_shared<graph::query::indexes::IndexManager>(storage);
+	indexManager->initialize();
+	auto dm = storage->getDataManager();
+	auto vim = indexManager->getVectorIndexManager();
 
 	// Create vector index
-	db.getQueryEngine()->getIndexManager()->createVectorIndex("emb_idx2", "Person", "embedding", 4, "L2");
+	indexManager->createVectorIndex("emb_idx2", "Person", "embedding", 4, "L2");
 	vim->createIndex("emb_idx2", 4, "L2");
 
 	graph::Node node(1, dm->getOrCreateTokenId("Person"));
@@ -198,12 +228,15 @@ TEST_F(ManagerPersistenceTest, UpdateIndex_NonListProperty) {
 }
 
 TEST_F(ManagerPersistenceTest, UpdateIndex_IntegerVectorElements) {
-	graph::Database db(dbPath.string());
-	db.open();
-	auto dm = db.getStorage()->getDataManager();
-	auto vim = db.getQueryEngine()->getIndexManager()->getVectorIndexManager();
+	auto storage = std::make_shared<graph::storage::FileStorage>(
+			dbPath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
+	storage->open();
+	auto indexManager = std::make_shared<graph::query::indexes::IndexManager>(storage);
+	indexManager->initialize();
+	auto dm = storage->getDataManager();
+	auto vim = indexManager->getVectorIndexManager();
 
-	db.getQueryEngine()->getIndexManager()->createVectorIndex("emb_int", "Item", "vec", 4, "L2");
+	indexManager->createVectorIndex("emb_int", "Item", "vec", 4, "L2");
 	vim->createIndex("emb_int", 4, "L2");
 
 	graph::Node node(1, dm->getOrCreateTokenId("Item"));
@@ -222,12 +255,15 @@ TEST_F(ManagerPersistenceTest, UpdateIndex_IntegerVectorElements) {
 }
 
 TEST_F(ManagerPersistenceTest, UpdateIndexSameVectorIsIdempotent) {
-	graph::Database db(dbPath.string());
-	db.open();
-	auto dm = db.getStorage()->getDataManager();
-	auto vim = db.getQueryEngine()->getIndexManager()->getVectorIndexManager();
+	auto storage = std::make_shared<graph::storage::FileStorage>(
+			dbPath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
+	storage->open();
+	auto indexManager = std::make_shared<graph::query::indexes::IndexManager>(storage);
+	indexManager->initialize();
+	auto dm = storage->getDataManager();
+	auto vim = indexManager->getVectorIndexManager();
 
-	db.getQueryEngine()->getIndexManager()->createVectorIndex("emb_idempotent", "Item", "vec", 3, "L2");
+	indexManager->createVectorIndex("emb_idempotent", "Item", "vec", 3, "L2");
 	vim->createIndex("emb_idempotent", 3, "L2");
 
 	graph::Node node(1, dm->getOrCreateTokenId("Item"));
@@ -244,12 +280,15 @@ TEST_F(ManagerPersistenceTest, UpdateIndexSameVectorIsIdempotent) {
 }
 
 TEST_F(ManagerPersistenceTest, UpdateIndexBatchCoalescesDuplicateNodeIds) {
-	graph::Database db(dbPath.string());
-	db.open();
-	auto dm = db.getStorage()->getDataManager();
-	auto vim = db.getQueryEngine()->getIndexManager()->getVectorIndexManager();
+	auto storage = std::make_shared<graph::storage::FileStorage>(
+			dbPath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
+	storage->open();
+	auto indexManager = std::make_shared<graph::query::indexes::IndexManager>(storage);
+	indexManager->initialize();
+	auto dm = storage->getDataManager();
+	auto vim = indexManager->getVectorIndexManager();
 
-	db.getQueryEngine()->getIndexManager()->createVectorIndex("emb_batch_dedup", "Item", "vec", 3, "L2");
+	indexManager->createVectorIndex("emb_batch_dedup", "Item", "vec", 3, "L2");
 	vim->createIndex("emb_batch_dedup", 3, "L2");
 	graph::Node node(1, dm->getOrCreateTokenId("Item"));
 	dm->addNode(node);
@@ -268,12 +307,15 @@ TEST_F(ManagerPersistenceTest, UpdateIndexBatchCoalescesDuplicateNodeIds) {
 }
 
 TEST_F(ManagerPersistenceTest, UpdateIndex_NonNumericVectorElement) {
-	graph::Database db(dbPath.string());
-	db.open();
-	auto dm = db.getStorage()->getDataManager();
-	auto vim = db.getQueryEngine()->getIndexManager()->getVectorIndexManager();
+	auto storage = std::make_shared<graph::storage::FileStorage>(
+			dbPath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
+	storage->open();
+	auto indexManager = std::make_shared<graph::query::indexes::IndexManager>(storage);
+	indexManager->initialize();
+	auto dm = storage->getDataManager();
+	auto vim = indexManager->getVectorIndexManager();
 
-	db.getQueryEngine()->getIndexManager()->createVectorIndex("emb_bad", "Thing", "vec", 3, "L2");
+	indexManager->createVectorIndex("emb_bad", "Thing", "vec", 3, "L2");
 	vim->createIndex("emb_bad", 3, "L2");
 
 	graph::Node node(1, dm->getOrCreateTokenId("Thing"));
@@ -291,12 +333,15 @@ TEST_F(ManagerPersistenceTest, UpdateIndex_NonNumericVectorElement) {
 }
 
 TEST_F(ManagerPersistenceTest, RemoveIndex_Basic) {
-	graph::Database db(dbPath.string());
-	db.open();
-	auto dm = db.getStorage()->getDataManager();
-	auto vim = db.getQueryEngine()->getIndexManager()->getVectorIndexManager();
+	auto storage = std::make_shared<graph::storage::FileStorage>(
+			dbPath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
+	storage->open();
+	auto indexManager = std::make_shared<graph::query::indexes::IndexManager>(storage);
+	indexManager->initialize();
+	auto dm = storage->getDataManager();
+	auto vim = indexManager->getVectorIndexManager();
 
-	db.getQueryEngine()->getIndexManager()->createVectorIndex("rem_idx", "Person", "embedding", 4, "L2");
+	indexManager->createVectorIndex("rem_idx", "Person", "embedding", 4, "L2");
 	vim->createIndex("rem_idx", 4, "L2");
 
 	// Insert a vector
@@ -317,21 +362,27 @@ TEST_F(ManagerPersistenceTest, RemoveIndex_Basic) {
 }
 
 TEST_F(ManagerPersistenceTest, RemoveIndex_EmptyLabel) {
-	graph::Database db(dbPath.string());
-	db.open();
-	auto vim = db.getQueryEngine()->getIndexManager()->getVectorIndexManager();
+	auto storage = std::make_shared<graph::storage::FileStorage>(
+			dbPath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
+	storage->open();
+	auto indexManager = std::make_shared<graph::query::indexes::IndexManager>(storage);
+	indexManager->initialize();
+	auto vim = indexManager->getVectorIndexManager();
 
 	// Empty label should be handled gracefully
 	EXPECT_NO_THROW(vim->removeIndex(1, "NonExistentLabel"));
 }
 
 TEST_F(ManagerPersistenceTest, UpdateIndexBatch_Basic) {
-	graph::Database db(dbPath.string());
-	db.open();
-	auto dm = db.getStorage()->getDataManager();
-	auto vim = db.getQueryEngine()->getIndexManager()->getVectorIndexManager();
+	auto storage = std::make_shared<graph::storage::FileStorage>(
+			dbPath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
+	storage->open();
+	auto indexManager = std::make_shared<graph::query::indexes::IndexManager>(storage);
+	indexManager->initialize();
+	auto dm = storage->getDataManager();
+	auto vim = indexManager->getVectorIndexManager();
 
-	db.getQueryEngine()->getIndexManager()->createVectorIndex("batch_idx", "Person", "embedding", 4, "L2");
+	indexManager->createVectorIndex("batch_idx", "Person", "embedding", 4, "L2");
 	vim->createIndex("batch_idx", 4, "L2");
 
 	int64_t labelId = dm->getOrCreateTokenId("Person");
@@ -357,9 +408,12 @@ TEST_F(ManagerPersistenceTest, UpdateIndexBatch_Basic) {
 }
 
 TEST_F(ManagerPersistenceTest, UpdateIndexBatch_EmptyLabel) {
-	graph::Database db(dbPath.string());
-	db.open();
-	auto vim = db.getQueryEngine()->getIndexManager()->getVectorIndexManager();
+	auto storage = std::make_shared<graph::storage::FileStorage>(
+			dbPath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
+	storage->open();
+	auto indexManager = std::make_shared<graph::query::indexes::IndexManager>(storage);
+	indexManager->initialize();
+	auto vim = indexManager->getVectorIndexManager();
 
 	std::vector<std::pair<graph::Node, std::unordered_map<std::string, graph::PropertyValue>>> nodesWithProps;
 	nodesWithProps.push_back({graph::Node(1, 0), {}});
@@ -369,9 +423,12 @@ TEST_F(ManagerPersistenceTest, UpdateIndexBatch_EmptyLabel) {
 }
 
 TEST_F(ManagerPersistenceTest, UpdateIndexBatch_EmptyNodes) {
-	graph::Database db(dbPath.string());
-	db.open();
-	auto vim = db.getQueryEngine()->getIndexManager()->getVectorIndexManager();
+	auto storage = std::make_shared<graph::storage::FileStorage>(
+			dbPath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
+	storage->open();
+	auto indexManager = std::make_shared<graph::query::indexes::IndexManager>(storage);
+	indexManager->initialize();
+	auto vim = indexManager->getVectorIndexManager();
 
 	std::vector<std::pair<graph::Node, std::unordered_map<std::string, graph::PropertyValue>>> emptyNodes;
 
@@ -380,12 +437,15 @@ TEST_F(ManagerPersistenceTest, UpdateIndexBatch_EmptyNodes) {
 }
 
 TEST_F(ManagerPersistenceTest, UpdateIndexBatch_NonNumericElement) {
-	graph::Database db(dbPath.string());
-	db.open();
-	auto dm = db.getStorage()->getDataManager();
-	auto vim = db.getQueryEngine()->getIndexManager()->getVectorIndexManager();
+	auto storage = std::make_shared<graph::storage::FileStorage>(
+			dbPath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
+	storage->open();
+	auto indexManager = std::make_shared<graph::query::indexes::IndexManager>(storage);
+	indexManager->initialize();
+	auto dm = storage->getDataManager();
+	auto vim = indexManager->getVectorIndexManager();
 
-	db.getQueryEngine()->getIndexManager()->createVectorIndex("batch_bad", "Item", "vec", 3, "L2");
+	indexManager->createVectorIndex("batch_bad", "Item", "vec", 3, "L2");
 	vim->createIndex("batch_bad", 3, "L2");
 
 	int64_t labelId = dm->getOrCreateTokenId("Item");
@@ -406,12 +466,15 @@ TEST_F(ManagerPersistenceTest, UpdateIndexBatch_NonNumericElement) {
 }
 
 TEST_F(ManagerPersistenceTest, UpdateIndexBatch_NonListProperty) {
-	graph::Database db(dbPath.string());
-	db.open();
-	auto dm = db.getStorage()->getDataManager();
-	auto vim = db.getQueryEngine()->getIndexManager()->getVectorIndexManager();
+	auto storage = std::make_shared<graph::storage::FileStorage>(
+			dbPath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
+	storage->open();
+	auto indexManager = std::make_shared<graph::query::indexes::IndexManager>(storage);
+	indexManager->initialize();
+	auto dm = storage->getDataManager();
+	auto vim = indexManager->getVectorIndexManager();
 
-	db.getQueryEngine()->getIndexManager()->createVectorIndex("batch_nlist", "Item", "vec", 3, "L2");
+	indexManager->createVectorIndex("batch_nlist", "Item", "vec", 3, "L2");
 	vim->createIndex("batch_nlist", 3, "L2");
 
 	int64_t labelId = dm->getOrCreateTokenId("Item");
@@ -428,12 +491,15 @@ TEST_F(ManagerPersistenceTest, UpdateIndexBatch_NonListProperty) {
 }
 
 TEST_F(ManagerPersistenceTest, UpdateIndexBatch_IntegerElements) {
-	graph::Database db(dbPath.string());
-	db.open();
-	auto dm = db.getStorage()->getDataManager();
-	auto vim = db.getQueryEngine()->getIndexManager()->getVectorIndexManager();
+	auto storage = std::make_shared<graph::storage::FileStorage>(
+			dbPath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE);
+	storage->open();
+	auto indexManager = std::make_shared<graph::query::indexes::IndexManager>(storage);
+	indexManager->initialize();
+	auto dm = storage->getDataManager();
+	auto vim = indexManager->getVectorIndexManager();
 
-	db.getQueryEngine()->getIndexManager()->createVectorIndex("batch_int", "Item", "vec", 4, "L2");
+	indexManager->createVectorIndex("batch_int", "Item", "vec", 4, "L2");
 	vim->createIndex("batch_int", 4, "L2");
 
 	int64_t labelId = dm->getOrCreateTokenId("Item");

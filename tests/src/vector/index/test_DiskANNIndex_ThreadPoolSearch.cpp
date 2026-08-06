@@ -12,7 +12,7 @@
 #include <memory>
 
 #include "graph/concurrent/ThreadPool.hpp"
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/vector/VectorIndexRegistry.hpp"
 #include "graph/vector/index/DiskANNIndex.hpp"
 
@@ -23,10 +23,10 @@ protected:
 	void SetUp() override {
 		const auto uuid = boost::uuids::random_generator()();
 		dbPath = std::filesystem::temp_directory_path() / ("ann_tp_" + to_string(uuid) + ".zyx");
-		database = std::make_unique<graph::Database>(dbPath.string());
+		database = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(dbPath.string());
 		database->open();
-		dm = database->getStorage()->getDataManager();
-		sm = database->getStorage()->getSystemStateManager();
+		dm = database->storage()->getDataManager();
+		sm = database->storage()->getSystemStateManager();
 	}
 
 	void TearDown() override {
@@ -39,7 +39,7 @@ protected:
 	}
 
 	std::filesystem::path dbPath;
-	std::unique_ptr<graph::Database> database;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> database;
 	std::shared_ptr<graph::storage::DataManager> dm;
 	std::shared_ptr<graph::storage::state::SystemStateManager> sm;
 };

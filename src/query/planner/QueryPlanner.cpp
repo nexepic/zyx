@@ -91,6 +91,13 @@ namespace graph::query {
 		optimizer_ = std::make_unique<optimizer::Optimizer>(im_);
 	}
 
+	QueryPlanner::QueryPlanner(LogicalOnlyTag) : pm_(std::make_shared<algorithm::GraphProjectionManager>()),
+													 supportsLegacyPhysicalPlanning_(false) {}
+
+	std::shared_ptr<QueryPlanner> QueryPlanner::createLogicalOnly() {
+		return std::shared_ptr<QueryPlanner>(new QueryPlanner(LogicalOnlyTag{}));
+	}
+
 	QueryPlanner::~QueryPlanner() = default;
 
 	// --- Read Operations ---

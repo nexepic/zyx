@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/execution/operators/NodeGroupCountScanOperator.hpp"
 
@@ -18,7 +18,7 @@ using namespace graph::query::execution::operators;
 
 class NodeGroupCountScanOperatorTest : public ::testing::Test {
 protected:
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<storage::DataManager> dm;
 	std::shared_ptr<query::indexes::IndexManager> im;
 	fs::path testFilePath;
@@ -27,10 +27,10 @@ protected:
 		const auto uuid = boost::uuids::random_generator()();
 		testFilePath = fs::temp_directory_path() /
 				("test_node_group_count_scan_path_" + boost::uuids::to_string(uuid) + ".dat");
-		db = std::make_unique<Database>(testFilePath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testFilePath.string());
 		db->open();
-		dm = db->getStorage()->getDataManager();
-		im = db->getQueryEngine()->getIndexManager();
+		dm = db->storage()->getDataManager();
+		im = db->indexManager();
 		debug::PerfTrace::reset();
 		debug::PerfTrace::setEnabled(false);
 	}
@@ -133,7 +133,7 @@ TEST_F(NodeGroupCountScanOperatorTest, CountsRowsByPropertyFromMetadataValueStre
 	}
 	addPerson();
 	addLabeledNode({"Animal"}, {{"country", PropertyValue("CN")}});
-	db->getStorage()->flush();
+	db->storage()->flush();
 	debug::PerfTrace::setEnabled(true);
 	debug::PerfTrace::reset();
 
@@ -170,7 +170,7 @@ TEST_F(NodeGroupCountScanOperatorTest, MetadataPathGroupsRowsWithoutPropertyEnti
 	for (int64_t i = 0; i < 4; ++i) {
 		addPerson();
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	NodeScanConfig config;
 	config.type = ScanType::FULL_SCAN;
@@ -195,7 +195,7 @@ TEST_F(NodeGroupCountScanOperatorTest, MetadataPathWithAllValuesAvoidsNullBucket
 	for (int64_t i = 0; i < 160; ++i) {
 		addPerson({{"country", PropertyValue(i % 2 == 0 ? "CN" : "US")}});
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 	debug::PerfTrace::setEnabled(false);
 
 	NodeScanConfig config;
@@ -231,7 +231,7 @@ TEST_F(NodeGroupCountScanOperatorTest, MetadataPathGroupsTypedScalarAndFallbackV
 	addPerson({{"bucket", PropertyValue(TemporalDuration{1, 2, 3})}});
 	addPerson({{"bucket", PropertyValue(std::vector<PropertyValue>{PropertyValue(int64_t{1})})}});
 	addPerson({{"bucket", PropertyValue(PropertyValue::MapType{{"k", PropertyValue(int64_t{1})}})}});
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	NodeScanConfig config;
 	config.type = ScanType::FULL_SCAN;
@@ -265,7 +265,7 @@ TEST_F(NodeGroupCountScanOperatorTest, AppliesFallbackPredicatesWhenNeeded) {
 	addPerson({{"country", PropertyValue("CN")}, {"age", PropertyValue(int64_t{40})}});
 	addPerson({{"country", PropertyValue("CN")}, {"age", PropertyValue(int64_t{20})}});
 	addPerson({{"country", PropertyValue("US")}, {"age", PropertyValue(int64_t{35})}});
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	NodeScanConfig config;
 	config.type = ScanType::FULL_SCAN;
@@ -297,7 +297,7 @@ TEST_F(NodeGroupCountScanOperatorTest, FallbackPredicateGroupsMissingPropertyAsN
 	for (int64_t i = 0; i < 300; ++i) {
 		addPerson({{"age", PropertyValue(i)}});
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	NodeScanConfig config;
 	config.type = ScanType::FULL_SCAN;
@@ -334,7 +334,7 @@ TEST_F(NodeGroupCountScanOperatorTest, CountsBlobBackedAndMissingGroupsFromMetad
 			addPerson({{"payload", PropertyValue(i % 2 == 0 ? cn : us)}});
 		}
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 	debug::PerfTrace::setEnabled(true);
 	debug::PerfTrace::reset();
@@ -374,7 +374,7 @@ TEST_F(NodeGroupCountScanOperatorTest, BlobFallbackMissingGroupPropertyCountsAsN
 	for (int64_t i = 0; i < 8; ++i) {
 		addPerson({{"payload", PropertyValue(payload)}});
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	NodeScanConfig config;
 	config.type = ScanType::FULL_SCAN;
@@ -400,7 +400,7 @@ TEST_F(NodeGroupCountScanOperatorTest, BlobFallbackWithDifferentGroupPropertyCou
 	for (int64_t i = 0; i < 8; ++i) {
 		addPerson({{"payload", PropertyValue(payload)}});
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	NodeScanConfig config;
 	config.type = ScanType::FULL_SCAN;

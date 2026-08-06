@@ -133,7 +133,7 @@ extern "C" {
 
 uint32_t zyx_driver_abi_version_major(void) { return 1; }
 
-uint32_t zyx_driver_abi_version_minor(void) { return 1; }
+uint32_t zyx_driver_abi_version_minor(void) { return 2; }
 
 uint32_t zyx_driver_abi_version_patch(void) { return 0; }
 

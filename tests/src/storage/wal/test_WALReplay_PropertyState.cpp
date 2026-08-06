@@ -28,9 +28,9 @@ TEST_F(WALReplayTest, PropertyRecoverySurvivesReopen) {
 	int64_t nodeId = 0;
 
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 
 		auto txn = db.beginTransaction();
 		Node n(0, 1);
@@ -44,7 +44,7 @@ TEST_F(WALReplayTest, PropertyRecoverySurvivesReopen) {
 
 	// Reopen — trigger WAL recovery via beginReadOnlyTransaction, then verify
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
 
 		// Trigger WAL recovery
@@ -53,7 +53,7 @@ TEST_F(WALReplayTest, PropertyRecoverySurvivesReopen) {
 			txn.commit();
 		}
 
-		auto dm = db2.getStorage()->getDataManager();
+		auto dm = db2.storage()->getDataManager();
 
 		Node retrieved = dm->getNode(nodeId);
 		EXPECT_TRUE(retrieved.isActive()) << "Node with properties should be recovered";
@@ -81,9 +81,9 @@ TEST_F(WALReplayTest, PropertyDeletionRecoverySurvivesReopen) {
 	int64_t nodeId = 0;
 
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 
 		// Create node with properties
 		{
@@ -108,7 +108,7 @@ TEST_F(WALReplayTest, PropertyDeletionRecoverySurvivesReopen) {
 
 	// Reopen with WAL recovery
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
 
 		// Trigger WAL recovery
@@ -117,7 +117,7 @@ TEST_F(WALReplayTest, PropertyDeletionRecoverySurvivesReopen) {
 			txn.commit();
 		}
 
-		auto dm = db2.getStorage()->getDataManager();
+		auto dm = db2.storage()->getDataManager();
 
 		Node retrieved = dm->getNode(nodeId);
 		EXPECT_TRUE(retrieved.isActive());
@@ -134,9 +134,9 @@ TEST_F(WALReplayTest, MultiEntityTypesSingleTransactionRecovery) {
 	int64_t nodeId1 = 0, nodeId2 = 0, edgeId = 0;
 
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 
 		auto txn = db.beginTransaction();
 
@@ -161,7 +161,7 @@ TEST_F(WALReplayTest, MultiEntityTypesSingleTransactionRecovery) {
 
 	// Reopen with WAL recovery — all entity types should be recovered
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
 
 		// Trigger WAL recovery
@@ -170,7 +170,7 @@ TEST_F(WALReplayTest, MultiEntityTypesSingleTransactionRecovery) {
 			txn.commit();
 		}
 
-		auto dm = db2.getStorage()->getDataManager();
+		auto dm = db2.storage()->getDataManager();
 
 		Node r1 = dm->getNode(nodeId1);
 		EXPECT_TRUE(r1.isActive()) << "Node 1 should be recovered";
@@ -199,9 +199,9 @@ TEST_F(WALReplayTest, BlobEntityRecoverySurvivesReopen) {
 	int64_t blobId = 0;
 
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 
 		auto txn = db.beginTransaction();
 		Blob blob(0, "test blob data for WAL recovery");
@@ -213,9 +213,9 @@ TEST_F(WALReplayTest, BlobEntityRecoverySurvivesReopen) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
-		auto dm = db2.getStorage()->getDataManager();
+		auto dm = db2.storage()->getDataManager();
 
 		Blob retrieved = dm->getBlob(blobId);
 		EXPECT_TRUE(retrieved.isActive()) << "Committed blob should be visible after WAL replay";
@@ -228,9 +228,9 @@ TEST_F(WALReplayTest, BlobEntityDeleteRecoverySurvivesReopen) {
 	int64_t blobId = 0;
 
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 
 		{
 			auto txn = db.beginTransaction();
@@ -251,9 +251,9 @@ TEST_F(WALReplayTest, BlobEntityDeleteRecoverySurvivesReopen) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
-		auto dm = db2.getStorage()->getDataManager();
+		auto dm = db2.storage()->getDataManager();
 
 		Blob retrieved = dm->getBlob(blobId);
 		EXPECT_FALSE(retrieved.isActive()) << "Deleted blob should be inactive after WAL replay";
@@ -266,9 +266,9 @@ TEST_F(WALReplayTest, IndexEntityRecoverySurvivesReopen) {
 	int64_t indexId = 0;
 
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 
 		auto txn = db.beginTransaction();
 		Index idx(0, Index::NodeType::LEAF, 1);
@@ -280,9 +280,9 @@ TEST_F(WALReplayTest, IndexEntityRecoverySurvivesReopen) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
-		auto dm = db2.getStorage()->getDataManager();
+		auto dm = db2.storage()->getDataManager();
 
 		Index retrieved = dm->getIndex(indexId);
 		EXPECT_TRUE(retrieved.isActive()) << "Committed index should be visible after WAL replay";
@@ -295,9 +295,9 @@ TEST_F(WALReplayTest, IndexEntityDeleteRecoverySurvivesReopen) {
 	int64_t indexId = 0;
 
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 
 		{
 			auto txn = db.beginTransaction();
@@ -318,9 +318,9 @@ TEST_F(WALReplayTest, IndexEntityDeleteRecoverySurvivesReopen) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
-		auto dm = db2.getStorage()->getDataManager();
+		auto dm = db2.storage()->getDataManager();
 
 		Index retrieved = dm->getIndex(indexId);
 		EXPECT_FALSE(retrieved.isActive()) << "Deleted index should be inactive after WAL replay";
@@ -333,9 +333,9 @@ TEST_F(WALReplayTest, StateEntityRecoverySurvivesReopen) {
 	int64_t stateId = 0;
 
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 
 		auto txn = db.beginTransaction();
 		State st(0, "test_state_key", "state_data_value");
@@ -347,9 +347,9 @@ TEST_F(WALReplayTest, StateEntityRecoverySurvivesReopen) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
-		auto dm = db2.getStorage()->getDataManager();
+		auto dm = db2.storage()->getDataManager();
 
 		State retrieved = dm->getState(stateId);
 		EXPECT_TRUE(retrieved.isActive()) << "Committed state should be visible after WAL replay";
@@ -362,9 +362,9 @@ TEST_F(WALReplayTest, StateEntityDeleteRecoverySurvivesReopen) {
 	int64_t stateId = 0;
 
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 
 		{
 			auto txn = db.beginTransaction();
@@ -385,9 +385,9 @@ TEST_F(WALReplayTest, StateEntityDeleteRecoverySurvivesReopen) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
-		auto dm = db2.getStorage()->getDataManager();
+		auto dm = db2.storage()->getDataManager();
 
 		State retrieved = dm->getState(stateId);
 		EXPECT_FALSE(retrieved.isActive()) << "Deleted state should be inactive after WAL replay";
@@ -400,9 +400,9 @@ TEST_F(WALReplayTest, PropertyEntityDirectRecoverySurvivesReopen) {
 	int64_t propId = 0;
 
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 
 		auto txn = db.beginTransaction();
 		Node n(0, 1);
@@ -417,9 +417,9 @@ TEST_F(WALReplayTest, PropertyEntityDirectRecoverySurvivesReopen) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
-		auto dm = db2.getStorage()->getDataManager();
+		auto dm = db2.storage()->getDataManager();
 
 		Property retrieved = dm->getProperty(propId);
 		EXPECT_TRUE(retrieved.isActive()) << "Committed property entity should be visible after WAL replay";
@@ -432,9 +432,9 @@ TEST_F(WALReplayTest, PropertyEntityDirectDeleteRecoverySurvivesReopen) {
 	int64_t propId = 0;
 
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 
 		{
 			auto txn = db.beginTransaction();
@@ -457,9 +457,9 @@ TEST_F(WALReplayTest, PropertyEntityDirectDeleteRecoverySurvivesReopen) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
-		auto dm = db2.getStorage()->getDataManager();
+		auto dm = db2.storage()->getDataManager();
 
 		Property retrieved = dm->getProperty(propId);
 		EXPECT_FALSE(retrieved.isActive()) << "Deleted property entity should be inactive after WAL replay";
@@ -472,9 +472,9 @@ TEST_F(WALReplayTest, AllEntityTypesInSingleTransactionRecovery) {
 	int64_t nodeId = 0, edgeId = 0, blobId = 0, indexId = 0, stateId = 0, propId = 0;
 
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 
 		auto txn = db.beginTransaction();
 
@@ -510,9 +510,9 @@ TEST_F(WALReplayTest, AllEntityTypesInSingleTransactionRecovery) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
-		auto dm = db2.getStorage()->getDataManager();
+		auto dm = db2.storage()->getDataManager();
 
 		Node nRet = dm->getNode(nodeId);
 		EXPECT_TRUE(nRet.isActive()) << "Node should survive all-types WAL replay";
@@ -541,11 +541,11 @@ TEST_F(WALReplayTest, InjectedWALRecordsReadableForAllEntityTypes) {
 
 	// Phase 1: Create a clean DB with a committed node
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 		auto txn = db.beginTransaction();
 		Node n(0, 1);
-		db.getStorage()->getDataManager()->addNode(n);
+		db.storage()->getDataManager()->addNode(n);
 		txn.commit();
 		db.close();
 		// db.close() deletes the WAL file; that is fine here since we want
@@ -663,7 +663,7 @@ TEST_F(WALReplayTest, InjectedWALRecordsReadableForAllEntityTypes) {
 
 	// Phase 3: Reopen DB — WAL recovery should exercise replayAddOrModify for all 4 types
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
 		// Must start a transaction to trigger WAL recovery (ensureWALAndTransactionManager)
 		auto txn = db2.beginReadOnlyTransaction();
@@ -677,9 +677,9 @@ TEST_F(WALReplayTest, InjectedWALDeleteRecordsForAllEntityTypes) {
 
 	// Phase 1: Create DB with entities of all types
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 
 		auto txn = db.beginTransaction();
 		Node n(0, 1);
@@ -748,7 +748,7 @@ TEST_F(WALReplayTest, InjectedWALDeleteRecordsForAllEntityTypes) {
 
 	// Phase 3: Reopen — WAL recovery should exercise replayDelete for all 4 types
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		EXPECT_NO_THROW(db2.open());
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
 		db2.close();
@@ -759,11 +759,11 @@ TEST_F(WALReplayTest, InjectedPropertyEntityAddRecovery) {
 	// Phase 1: Create a DB with a node (we need something so the DB file is valid)
 	int64_t nodeId = 0;
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 		auto txn = db.beginTransaction();
 		Node n(0, 1);
-		db.getStorage()->getDataManager()->addNode(n);
+		db.storage()->getDataManager()->addNode(n);
 		nodeId = n.getId();
 		txn.commit();
 		db.close();
@@ -790,7 +790,7 @@ TEST_F(WALReplayTest, InjectedPropertyEntityAddRecovery) {
 
 	// Phase 3: Reopen — WAL recovery should replay the Property add
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		EXPECT_NO_THROW(db2.open());
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
 		db2.close();
@@ -799,11 +799,11 @@ TEST_F(WALReplayTest, InjectedPropertyEntityAddRecovery) {
 
 TEST_F(WALReplayTest, InjectedBlobEntityAddRecovery) {
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 		auto txn = db.beginTransaction();
 		Node n(0, 1);
-		db.getStorage()->getDataManager()->addNode(n);
+		db.storage()->getDataManager()->addNode(n);
 		txn.commit();
 		db.close();
 	}
@@ -828,7 +828,7 @@ TEST_F(WALReplayTest, InjectedBlobEntityAddRecovery) {
 
 	// Reopen — WAL recovery should replay the Blob add (exercising replayAddOrModify<Blob>)
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		EXPECT_NO_THROW(db2.open());
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
 		db2.close();
@@ -837,11 +837,11 @@ TEST_F(WALReplayTest, InjectedBlobEntityAddRecovery) {
 
 TEST_F(WALReplayTest, InjectedIndexEntityAddRecovery) {
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 		auto txn = db.beginTransaction();
 		Node n(0, 1);
-		db.getStorage()->getDataManager()->addNode(n);
+		db.storage()->getDataManager()->addNode(n);
 		txn.commit();
 		db.close();
 	}
@@ -865,10 +865,10 @@ TEST_F(WALReplayTest, InjectedIndexEntityAddRecovery) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		EXPECT_NO_THROW(db2.open());
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
-		auto dm = db2.getStorage()->getDataManager();
+		auto dm = db2.storage()->getDataManager();
 		Index retrieved = dm->getIndex(1);
 		EXPECT_TRUE(retrieved.isActive()) << "Injected index should be recovered via WAL replay";
 		db2.close();
@@ -877,11 +877,11 @@ TEST_F(WALReplayTest, InjectedIndexEntityAddRecovery) {
 
 TEST_F(WALReplayTest, InjectedStateEntityAddRecovery) {
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 		auto txn = db.beginTransaction();
 		Node n(0, 1);
-		db.getStorage()->getDataManager()->addNode(n);
+		db.storage()->getDataManager()->addNode(n);
 		txn.commit();
 		db.close();
 	}
@@ -905,10 +905,10 @@ TEST_F(WALReplayTest, InjectedStateEntityAddRecovery) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		EXPECT_NO_THROW(db2.open());
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
-		auto dm = db2.getStorage()->getDataManager();
+		auto dm = db2.storage()->getDataManager();
 		State retrieved = dm->getState(1);
 		EXPECT_TRUE(retrieved.isActive()) << "Injected state should be recovered via WAL replay";
 		db2.close();
@@ -918,9 +918,9 @@ TEST_F(WALReplayTest, InjectedStateEntityAddRecovery) {
 TEST_F(WALReplayTest, InjectedPropertyEntityDeleteRecovery) {
 	int64_t propId = 0;
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 		auto txn = db.beginTransaction();
 		Node n(0, 1);
 		dm->addNode(n);
@@ -952,7 +952,7 @@ TEST_F(WALReplayTest, InjectedPropertyEntityDeleteRecovery) {
 
 	// Reopen — WAL recovery should replay the Property delete (exercising replayDelete<Property>)
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		EXPECT_NO_THROW(db2.open());
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
 		db2.close();
@@ -962,9 +962,9 @@ TEST_F(WALReplayTest, InjectedPropertyEntityDeleteRecovery) {
 TEST_F(WALReplayTest, InjectedBlobEntityDeleteRecovery) {
 	int64_t blobId = 0;
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 		auto txn = db.beginTransaction();
 		Blob blob(0, "blob to inject-delete");
 		dm->addBlobEntity(blob);
@@ -993,7 +993,7 @@ TEST_F(WALReplayTest, InjectedBlobEntityDeleteRecovery) {
 
 	// Reopen — WAL recovery should replay the Blob delete (exercising replayDelete<Blob>)
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		EXPECT_NO_THROW(db2.open());
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
 		db2.close();
@@ -1003,9 +1003,9 @@ TEST_F(WALReplayTest, InjectedBlobEntityDeleteRecovery) {
 TEST_F(WALReplayTest, InjectedIndexEntityDeleteRecovery) {
 	int64_t indexId = 0;
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 		auto txn = db.beginTransaction();
 		Index idx(0, Index::NodeType::LEAF, 5);
 		dm->addIndexEntity(idx);
@@ -1034,7 +1034,7 @@ TEST_F(WALReplayTest, InjectedIndexEntityDeleteRecovery) {
 
 	// Reopen — WAL recovery should replay the Index delete (exercising replayDelete<Index>)
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		EXPECT_NO_THROW(db2.open());
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
 		db2.close();
@@ -1044,9 +1044,9 @@ TEST_F(WALReplayTest, InjectedIndexEntityDeleteRecovery) {
 TEST_F(WALReplayTest, InjectedStateEntityDeleteRecovery) {
 	int64_t stateId = 0;
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 		auto txn = db.beginTransaction();
 		State st(0, "state_to_del", "data");
 		dm->addStateEntity(st);
@@ -1075,7 +1075,7 @@ TEST_F(WALReplayTest, InjectedStateEntityDeleteRecovery) {
 
 	// Reopen — WAL recovery should replay the State delete (exercising replayDelete<State>)
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		EXPECT_NO_THROW(db2.open());
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
 		db2.close();
@@ -1086,9 +1086,9 @@ TEST_F(WALReplayTest, DeleteAllEntityTypesRecovery) {
 	int64_t blobId = 0, indexId = 0, stateId = 0, propId = 0;
 
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 
 		// Create entities
 		{
@@ -1134,10 +1134,10 @@ TEST_F(WALReplayTest, DeleteAllEntityTypesRecovery) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
 		{ auto txn = db2.beginReadOnlyTransaction(); txn.commit(); }
-		auto dm = db2.getStorage()->getDataManager();
+		auto dm = db2.storage()->getDataManager();
 
 		Property pRet = dm->getProperty(propId);
 		EXPECT_FALSE(pRet.isActive()) << "Deleted property should be inactive after WAL replay";

@@ -32,7 +32,8 @@ public:
 		std::string targetLabel,
 		PatternDirection direction,
 		std::unique_ptr<Expression> mapExpr,
-		std::unique_ptr<Expression> whereExpr = nullptr
+		std::unique_ptr<Expression> whereExpr = nullptr,
+		std::string relationshipVar = {}
 	);
 
 	/**
@@ -58,6 +59,7 @@ public:
 	[[nodiscard]] const std::string& getPattern() const { return pattern_; }
 	[[nodiscard]] const std::string& getSourceVar() const { return sourceVar_; }
 	[[nodiscard]] const std::string& getTargetVar() const { return targetVar_; }
+	[[nodiscard]] const std::string& getRelationshipVar() const { return relationshipVar_; }
 	[[nodiscard]] const std::string& getRelType() const { return relType_; }
 	[[nodiscard]] const std::string& getTargetLabel() const { return targetLabel_; }
 	[[nodiscard]] PatternDirection getDirection() const { return direction_; }
@@ -69,6 +71,7 @@ private:
 	std::string pattern_;
 	std::string sourceVar_;
 	std::string targetVar_;
+	std::string relationshipVar_;
 	std::string relType_;
 	std::string targetLabel_;
 	PatternDirection direction_;

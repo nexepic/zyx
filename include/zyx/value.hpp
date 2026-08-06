@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -33,6 +34,7 @@ namespace zyx {
 	struct Edge;
 	struct ValueList;
 	struct ValueMap;
+	using Bytes = std::vector<std::uint8_t>;
 
 	// The universal value type.
 	// Uses shared_ptr for complex types to allow recursive definition and cheap copying.
@@ -40,6 +42,7 @@ namespace zyx {
 							   bool, int64_t, double, std::string, std::shared_ptr<Node>, std::shared_ptr<Edge>,
 							   std::vector<float>, // Compact numeric vector (e.g. embeddings)
 							   std::vector<std::string>, // Generic list/string-list interop
+							   Bytes, // Arbitrary binary payload
 							   std::shared_ptr<ValueList>, // Heterogeneous list
 							   std::shared_ptr<ValueMap>   // Key-value map
 							   >;

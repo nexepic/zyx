@@ -21,7 +21,6 @@
 #include <gtest/gtest.h>
 #include <memory>
 
-#include "graph/core/Database.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/storage/FileStorage.hpp"
@@ -38,10 +37,9 @@ protected:
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath = fs::temp_directory_path() / ("test_etim_branch_" + boost::uuids::to_string(uuid) + ".dat");
 
-		database = std::make_unique<graph::Database>(testFilePath.string());
-		database->open();
-
-		fileStorage = database->getStorage();
+		fileStorage = std::make_shared<graph::storage::FileStorage>(
+				testFilePath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
+		fileStorage->open();
 		dataManager = fileStorage->getDataManager();
 
 		nodeIndexManager = std::make_shared<graph::query::indexes::EntityTypeIndexManager>(
@@ -59,15 +57,13 @@ protected:
 		nodeIndexManager.reset();
 		edgeIndexManager.reset();
 		dataManager.reset();
+		if (fileStorage) fileStorage->close();
 		fileStorage.reset();
-		if (database) database->close();
-		database.reset();
 		std::error_code ec;
 		fs::remove(testFilePath, ec);
 	}
 
 	fs::path testFilePath;
-	std::unique_ptr<graph::Database> database;
 	std::shared_ptr<graph::storage::FileStorage> fileStorage;
 	std::shared_ptr<graph::storage::DataManager> dataManager;
 	std::shared_ptr<graph::query::indexes::EntityTypeIndexManager> nodeIndexManager;

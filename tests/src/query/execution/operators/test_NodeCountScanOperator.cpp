@@ -7,7 +7,7 @@
 #include <string>
 #include <unordered_map>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/execution/operators/NodeCountScanOperator.hpp"
 
@@ -18,7 +18,7 @@ using namespace graph::query::execution::operators;
 
 class NodeCountScanOperatorTest : public ::testing::Test {
 protected:
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<storage::DataManager> dm;
 	std::shared_ptr<query::indexes::IndexManager> im;
 	fs::path testFilePath;
@@ -27,10 +27,10 @@ protected:
 		const auto uuid = boost::uuids::random_generator()();
 		testFilePath =
 				fs::temp_directory_path() / ("test_node_count_scan_path_" + boost::uuids::to_string(uuid) + ".dat");
-		db = std::make_unique<Database>(testFilePath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testFilePath.string());
 		db->open();
-		dm = db->getStorage()->getDataManager();
-		im = db->getQueryEngine()->getIndexManager();
+		dm = db->storage()->getDataManager();
+		im = db->indexManager();
 		debug::PerfTrace::reset();
 		debug::PerfTrace::setEnabled(false);
 	}
@@ -127,7 +127,7 @@ TEST_F(NodeCountScanOperatorTest, CountOnlyPropertyPredicateUsesMetadataBatchWhe
 	for (size_t i = 0; i < kNodeCount; ++i) {
 		addPerson({{"age", PropertyValue(static_cast<int64_t>(i % 3))}});
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 	debug::PerfTrace::setEnabled(true);
 	debug::PerfTrace::reset();
@@ -165,7 +165,7 @@ TEST_F(NodeCountScanOperatorTest, RepeatsPropertyPredicateCountsWithoutResultCac
 	for (size_t i = 0; i < kNodeCount; ++i) {
 		addPerson({{"age", PropertyValue(static_cast<int64_t>(i % 3))}});
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	NodeScanConfig config;
@@ -209,7 +209,7 @@ TEST_F(NodeCountScanOperatorTest, SkipsRedundantChecksForLabelIndexCandidatesWit
 		addPerson({{"age", PropertyValue(i % 3)}});
 	}
 	addLabeledNode({"Animal"}, {{"age", PropertyValue(int64_t{1})}});
-	db->getStorage()->flush();
+	db->storage()->flush();
 	debug::PerfTrace::setEnabled(true);
 	debug::PerfTrace::reset();
 

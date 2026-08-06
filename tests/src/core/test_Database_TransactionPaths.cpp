@@ -13,7 +13,9 @@
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include <exception>
 #include <filesystem>
+#include <thread>
 #include "graph/core/Database.hpp"
 #include "graph/core/TransactionManager.hpp"
 
@@ -198,6 +200,28 @@ TEST_F(DatabaseTransactionPathsTest, TransactionMoveAssignmentActive) {
 	txn1.commit();
 }
 
+TEST_F(DatabaseTransactionPathsTest, LogicalTransactionCanCommitAfterCrossThreadMove) {
+	Database db(testDbPath.string());
+	db.open();
+	auto txn = db.beginTransaction();
+
+	std::exception_ptr commitFailure;
+	std::thread commitThread([transaction = std::move(txn), &commitFailure]() mutable {
+		try {
+			transaction.commit();
+		} catch (...) {
+			commitFailure = std::current_exception();
+		}
+	});
+	commitThread.join();
+
+	EXPECT_EQ(commitFailure, nullptr);
+	EXPECT_FALSE(db.hasActiveTransaction());
+	// The owner thread retained a stale TLS cache entry until this query. It
+	// must observe the cross-thread commit's invalidation before dispatching.
+	EXPECT_NO_THROW(static_cast<void>(db.getQueryEngine()->execute("RETURN 1")));
+}
+
 // ============================================================================
 // open() when already open is a no-op
 // ============================================================================
@@ -246,31 +270,31 @@ TEST_F(DatabaseTransactionPathsTest, CloseWhenNotOpen) {
 }
 
 // ============================================================================
-// WAL checkpoint: commit with enough data to trigger checkpoint
+// Native logical transaction: staged writes are visible to its read snapshot
+// and become durable only after commit.
 // ============================================================================
 
-TEST_F(DatabaseTransactionPathsTest, CommitWithDataTriggersWALFlow) {
+TEST_F(DatabaseTransactionPathsTest, CommitWithDataPublishesLogicalGraphState) {
 	Database db(testDbPath.string());
 	db.open();
 
 	{
 		auto txn = db.beginTransaction();
-		auto dm = db.getStorage()->getDataManager();
-		// Add multiple nodes to exercise WAL write paths
+		auto queryEngine = db.getQueryEngine();
+		ASSERT_NE(queryEngine, nullptr);
 		for (int i = 0; i < 5; i++) {
-			Node n(0, 1);
-			n.addProperty("name", std::string("node_") + std::to_string(i));
-			dm->addNode(n);
+			EXPECT_NO_THROW(
+					static_cast<void>(queryEngine->execute("CREATE (:TxnNode {name: 'node_" + std::to_string(i) + "'})")));
 		}
 		txn.commit();
 	}
 
-	// Verify data persisted
+	// Verify the committed graph is visible through an independent snapshot.
 	{
 		auto txn = db.beginReadOnlyTransaction();
-		auto dm = db.getStorage()->getDataManager();
-		auto node = dm->getNode(1);
-		EXPECT_NE(node.getId(), 0);
+		auto result = db.getQueryEngine()->execute("MATCH (n:TxnNode) RETURN count(n)");
+		ASSERT_EQ(result.rowCount(), 1U);
+		EXPECT_EQ(result.getRows().front().at("count(n)").toString(), "5");
 		txn.commit();
 	}
 

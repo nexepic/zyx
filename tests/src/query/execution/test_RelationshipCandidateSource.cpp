@@ -6,7 +6,7 @@
 #include <memory>
 #include <unordered_map>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/query/execution/RelationshipCandidateSource.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
@@ -24,10 +24,10 @@ protected:
 		const auto uuid = boost::uuids::random_generator()();
 		dbPath = fs::temp_directory_path() /
 		         ("test_relationship_candidate_source_" + boost::uuids::to_string(uuid) + ".zyx");
-		db = std::make_unique<Database>(dbPath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(dbPath.string());
 		db->open();
-		dm = db->getStorage()->getDataManager();
-		im = db->getQueryEngine()->getIndexManager();
+		dm = db->storage()->getDataManager();
+		im = db->indexManager();
 		userLabel = dm->getOrCreateTokenId("User");
 		followsType = dm->getOrCreateTokenId("FOLLOWS");
 		likesType = dm->getOrCreateTokenId("LIKES");
@@ -60,7 +60,7 @@ protected:
 	}
 
 	fs::path dbPath;
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<storage::DataManager> dm;
 	std::shared_ptr<query::indexes::IndexManager> im;
 	int64_t userLabel = 0;

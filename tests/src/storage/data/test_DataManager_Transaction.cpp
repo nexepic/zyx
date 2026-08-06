@@ -18,6 +18,7 @@
  **/
 
 #include "DataManagerTestFixture.hpp"
+#include "graph/storage/wal/WALManager.hpp"
 
 TEST_F(DataManagerTest, AddNodeWithTransaction) {
 	// Covers L255-261: transactionActive_ true branch in addNode
@@ -156,17 +157,18 @@ TEST_F(DataManagerTest, AddEdgesWithTransaction) {
 
 TEST_F(DataManagerTest, AddNodeWithTransactionAndWAL) {
 	// Covers L258-261: walManager_ non-null branch in addNode
-	// The database has a WAL manager by default, so this should exercise
-	// the walManager_->writeEntityChange path
-	auto txn = database->beginTransaction();
-	auto txnId = txn.getId();
-	dataManager->setActiveTransaction(txnId);
+	storage::wal::WALManager wal;
+	wal.open(testFilePath.string());
+	dataManager->setWALManager(&wal);
+	dataManager->setActiveTransaction(1U);
 
 	auto node = createTestNode(dataManager, "WALNode");
 	dataManager->addNode(node);
 	EXPECT_NE(0, node.getId());
 
 	dataManager->clearActiveTransaction();
+	dataManager->setWALManager(nullptr);
+	wal.close(storage::wal::WALManager::CloseMode::WCM_REMOVE_FILE);
 }
 
 TEST_F(DataManagerTest, AddEdgeWithTransactionAndWAL) {
@@ -176,15 +178,18 @@ TEST_F(DataManagerTest, AddEdgeWithTransactionAndWAL) {
 	auto node2 = createTestNode(dataManager, "B");
 	dataManager->addNode(node2);
 
-	auto txn = database->beginTransaction();
-	auto txnId = txn.getId();
-	dataManager->setActiveTransaction(txnId);
+	storage::wal::WALManager wal;
+	wal.open(testFilePath.string());
+	dataManager->setWALManager(&wal);
+	dataManager->setActiveTransaction(2U);
 
 	auto edge = createTestEdge(dataManager, node1.getId(), node2.getId(), "WALEdge");
 	dataManager->addEdge(edge);
 	EXPECT_NE(0, edge.getId());
 
 	dataManager->clearActiveTransaction();
+	dataManager->setWALManager(nullptr);
+	wal.close(storage::wal::WALManager::CloseMode::WCM_REMOVE_FILE);
 }
 
 TEST_F(DataManagerTest, SetAndClearActiveTransaction) {
@@ -399,4 +404,3 @@ TEST_F(DataManagerTest, RollbackWithEdgeUpdateOperation) {
 	EXPECT_EQ(origLabelId, result.getTypeId())
 		<< "Edge label should be reverted after rollback";
 }
-

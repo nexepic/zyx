@@ -10,7 +10,7 @@
 #include <gtest/gtest.h>
 #include <memory>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/query/optimizer/StatisticsCollector.hpp"
 #include "graph/storage/indexes/EntityTypeIndexManager.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
@@ -26,11 +26,11 @@ protected:
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testDbPath_ = fs::temp_directory_path() / ("test_stats_sampling_" + boost::uuids::to_string(uuid) + ".dat");
 
-		db_ = std::make_unique<Database>(testDbPath_.string());
+		db_ = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testDbPath_.string());
 		db_->open();
 
-		queryEngine_ = db_->getQueryEngine();
-		dataManager_ = db_->getStorage()->getDataManager();
+		queryEngine_ = db_->queryEngine();
+		dataManager_ = db_->storage()->getDataManager();
 		indexManager_ = queryEngine_->getIndexManager();
 		indexManager_->getNodeIndexManager()->getLabelIndex()->createIndex();
 	}
@@ -47,7 +47,7 @@ protected:
 	}
 
 	fs::path testDbPath_;
-	std::unique_ptr<Database> db_;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db_;
 	std::shared_ptr<query::QueryEngine> queryEngine_;
 	std::shared_ptr<storage::DataManager> dataManager_;
 	std::shared_ptr<query::indexes::IndexManager> indexManager_;

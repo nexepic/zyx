@@ -37,6 +37,8 @@ namespace graph::query::execution {
 				return PropertyValue(TemporalDateTime{value.intValue});
 			case PropertyType::DURATION:
 				return PropertyValue(value.durationValue);
+			case PropertyType::BYTES:
+				return value.fallbackValue != nullptr ? *value.fallbackValue : PropertyValue();
 			case PropertyType::LIST:
 			case PropertyType::MAP:
 			case PropertyType::COMPOSITE:
@@ -64,6 +66,9 @@ namespace graph::query::execution {
 				return TypedOrderKey::fromDateTimeEpochMillis(value.intValue);
 			case PropertyType::DURATION:
 				return TypedOrderKey::fromDuration(value.durationValue);
+			case PropertyType::BYTES:
+				return value.fallbackValue != nullptr ? TypedOrderKey::from(*value.fallbackValue)
+																 : TypedOrderKey::fromNull();
 			case PropertyType::LIST:
 			case PropertyType::MAP:
 			case PropertyType::COMPOSITE:

@@ -583,10 +583,8 @@ void registerImportCommand(CLI::App &parentApp) {
 				}
 			}
 
-			// Flush and close
-			if (auto storage = db.getStorage()) {
-				storage->flush();
-			}
+			// Database owns the format-specific checkpoint protocol.
+			db.flush();
 			db.close();
 
 			std::cout << "\nImport complete:" << std::endl;

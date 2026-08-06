@@ -46,7 +46,6 @@ TEST(LogicalOpHelperTest, DataMutatingOps) {
 	EXPECT_TRUE(isDataMutatingOp(LogicalOpType::LOP_MERGE_NODE));
 	EXPECT_TRUE(isDataMutatingOp(LogicalOpType::LOP_MERGE_EDGE));
 	EXPECT_TRUE(isDataMutatingOp(LogicalOpType::LOP_FOREACH));
-	EXPECT_TRUE(isDataMutatingOp(LogicalOpType::LOP_LOAD_CSV));
 	EXPECT_TRUE(isDataMutatingOp(LogicalOpType::LOP_SET_CONFIG));
 	EXPECT_TRUE(isDataMutatingOp(LogicalOpType::LOP_TRAIN_VECTOR_INDEX));
 }
@@ -63,6 +62,7 @@ TEST(LogicalOpHelperTest, ReadOpsAreNotDataMutating) {
 	EXPECT_FALSE(isDataMutatingOp(LogicalOpType::LOP_TRAVERSAL));
 	EXPECT_FALSE(isDataMutatingOp(LogicalOpType::LOP_UNWIND));
 	EXPECT_FALSE(isDataMutatingOp(LogicalOpType::LOP_UNION));
+	EXPECT_FALSE(isDataMutatingOp(LogicalOpType::LOP_LOAD_CSV));
 	EXPECT_FALSE(isDataMutatingOp(LogicalOpType::LOP_EXPLAIN));
 	EXPECT_FALSE(isDataMutatingOp(LogicalOpType::LOP_PROFILE));
 }

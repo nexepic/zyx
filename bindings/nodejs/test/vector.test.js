@@ -132,14 +132,17 @@ test('Vector - train on nonexistent index is rejected', withDb(async (db) => {
         `expected training on a missing index to fail; got isSuccess=${r.isSuccess}, error=${r.error}`);
 }));
 
-test('Vector - dimension mismatch on insert is tolerated by the index (skipped insert)', withDb(async (db) => {
-    // The insert path logs "Insert skipped: dimension mismatch" but does not throw;
-    // the node is created but not added to the vector index. Search then returns 0.
+test('Vector - dimension mismatch rejects the graph write atomically', withDb(async (db) => {
+    // A malformed vector cannot silently create a Node that is absent from the
+    // index; the engine rejects the complete graph write before publication.
     await db.execute(`CREATE VECTOR INDEX vec_dim ON :V(embedding) OPTIONS {dimension: 2, metric: 'L2'}`);
     await db.execute('CREATE (:V {id: 1, embedding: [1.0, 0.0]})');
-    await db.execute('CREATE (:V {id: 2, embedding: [1.0, 0.0, 0.0, 0.0]})'); // wrong dim - skipped from index
+    const invalid = await db.execute('CREATE (:V {id: 2, embedding: [1.0, 0.0, 0.0, 0.0]})');
+    assert.equal(invalid.isSuccess, false);
+    assert.match(String(invalid.error ?? ''), /dimension mismatch/i);
+    const persisted = (await db.execute('MATCH (n:V {id: 2}) RETURN n')).fetchAll();
+    assert.equal(persisted.length, 0);
     const r = (await db.execute(`CALL db.index.vector.queryNodes('vec_dim', 5, [1.0, 0.0]) YIELD node, score RETURN node.id AS id`)).fetchAll();
-    // The 2-d node must be found; the 4-d node must NOT be in the index results.
     const ids = r.map(x => x.id);
     assert.ok(ids.includes(1));
     assert.ok(!ids.includes(2));

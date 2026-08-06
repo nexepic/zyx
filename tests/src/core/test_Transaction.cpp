@@ -23,7 +23,7 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/core/Transaction.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/data/DataManager.hpp"
@@ -48,7 +48,7 @@ protected:
 };
 
 TEST_F(TransactionTest, BeginTransactionReturnsActiveTransaction) {
-	graph::Database db(testDbPath.string());
+	graph::storage::testing::LegacyPhysicalStorageTestHarness db(testDbPath.string());
 	db.open();
 	ASSERT_TRUE(db.isOpen());
 
@@ -60,7 +60,7 @@ TEST_F(TransactionTest, BeginTransactionReturnsActiveTransaction) {
 }
 
 TEST_F(TransactionTest, CommitChangesState) {
-	graph::Database db(testDbPath.string());
+	graph::storage::testing::LegacyPhysicalStorageTestHarness db(testDbPath.string());
 	db.open();
 
 	auto txn = db.beginTransaction();
@@ -72,7 +72,7 @@ TEST_F(TransactionTest, CommitChangesState) {
 }
 
 TEST_F(TransactionTest, EmptyWriteCommitSkipsWalCommitSync) {
-	graph::Database db(testDbPath.string());
+	graph::storage::testing::LegacyPhysicalStorageTestHarness db(testDbPath.string());
 	db.open();
 	db.flush();
 
@@ -90,7 +90,7 @@ TEST_F(TransactionTest, EmptyWriteCommitSkipsWalCommitSync) {
 }
 
 TEST_F(TransactionTest, RollbackChangesState) {
-	graph::Database db(testDbPath.string());
+	graph::storage::testing::LegacyPhysicalStorageTestHarness db(testDbPath.string());
 	db.open();
 
 	auto txn = db.beginTransaction();
@@ -102,7 +102,7 @@ TEST_F(TransactionTest, RollbackChangesState) {
 }
 
 TEST_F(TransactionTest, DoubleCommitThrows) {
-	graph::Database db(testDbPath.string());
+	graph::storage::testing::LegacyPhysicalStorageTestHarness db(testDbPath.string());
 	db.open();
 
 	auto txn = db.beginTransaction();
@@ -111,7 +111,7 @@ TEST_F(TransactionTest, DoubleCommitThrows) {
 }
 
 TEST_F(TransactionTest, DoubleRollbackThrows) {
-	graph::Database db(testDbPath.string());
+	graph::storage::testing::LegacyPhysicalStorageTestHarness db(testDbPath.string());
 	db.open();
 
 	auto txn = db.beginTransaction();
@@ -120,7 +120,7 @@ TEST_F(TransactionTest, DoubleRollbackThrows) {
 }
 
 TEST_F(TransactionTest, CommitAfterRollbackThrows) {
-	graph::Database db(testDbPath.string());
+	graph::storage::testing::LegacyPhysicalStorageTestHarness db(testDbPath.string());
 	db.open();
 
 	auto txn = db.beginTransaction();
@@ -129,7 +129,7 @@ TEST_F(TransactionTest, CommitAfterRollbackThrows) {
 }
 
 TEST_F(TransactionTest, AutoRollbackOnScopeExit) {
-	graph::Database db(testDbPath.string());
+	graph::storage::testing::LegacyPhysicalStorageTestHarness db(testDbPath.string());
 	db.open();
 
 	{
@@ -145,7 +145,7 @@ TEST_F(TransactionTest, AutoRollbackOnScopeExit) {
 }
 
 TEST_F(TransactionTest, MoveSemantics) {
-	graph::Database db(testDbPath.string());
+	graph::storage::testing::LegacyPhysicalStorageTestHarness db(testDbPath.string());
 	db.open();
 
 	auto txn1 = db.beginTransaction();
@@ -161,7 +161,7 @@ TEST_F(TransactionTest, MoveSemantics) {
 }
 
 TEST_F(TransactionTest, SequentialTransactions) {
-	graph::Database db(testDbPath.string());
+	graph::storage::testing::LegacyPhysicalStorageTestHarness db(testDbPath.string());
 	db.open();
 
 	for (int i = 0; i < 5; ++i) {
@@ -174,7 +174,7 @@ TEST_F(TransactionTest, SequentialTransactions) {
 }
 
 TEST_F(TransactionTest, MixedCommitAndRollback) {
-	graph::Database db(testDbPath.string());
+	graph::storage::testing::LegacyPhysicalStorageTestHarness db(testDbPath.string());
 	db.open();
 
 	{
@@ -198,7 +198,7 @@ TEST_F(TransactionTest, MixedCommitAndRollback) {
 }
 
 TEST_F(TransactionTest, TransactionContextRecordOperations) {
-	graph::Database db(testDbPath.string());
+	graph::storage::testing::LegacyPhysicalStorageTestHarness db(testDbPath.string());
 	db.open();
 
 	auto txn = db.beginTransaction();
@@ -206,7 +206,7 @@ TEST_F(TransactionTest, TransactionContextRecordOperations) {
 	// Operations are recorded via TransactionContext in the storage layer.
 	// Verify that the production recording path works by checking DataManager's
 	// transaction ops after performing real operations.
-	auto dm = db.getStorage()->getDataManager();
+	auto dm = db.storage()->getDataManager();
 	auto &ctx = dm->getTransactionContext();
 
 	ctx.recordOp({graph::Transaction::TxnOperation::OP_ADD, 0, 1});
@@ -290,7 +290,7 @@ TEST_F(TransactionTest, TransactionContextTracksCanceledPendingWalAdd) {
 }
 
 TEST_F(TransactionTest, HasActiveTransaction) {
-	graph::Database db(testDbPath.string());
+	graph::storage::testing::LegacyPhysicalStorageTestHarness db(testDbPath.string());
 	db.open();
 
 	EXPECT_FALSE(db.hasActiveTransaction());
@@ -307,7 +307,7 @@ TEST_F(TransactionTest, HasActiveTransaction) {
 // ============================================================================
 
 TEST_F(TransactionTest, MoveAssignmentToDefaultConstructedLikeTransaction) {
-	graph::Database db(testDbPath.string());
+	graph::storage::testing::LegacyPhysicalStorageTestHarness db(testDbPath.string());
 	db.open();
 
 	// Create first transaction, commit it (not active)
@@ -342,9 +342,9 @@ TEST_F(TransactionTest, MoveAssignmentFromActiveToActive) {
 	auto testDbPath2 = fs::temp_directory_path() / ("test_txn_move2_" + boost::uuids::to_string(uuid2) + ".zyx");
 	fs::remove_all(testDbPath2);
 
-	graph::Database db1(testDbPath.string());
+	graph::storage::testing::LegacyPhysicalStorageTestHarness db1(testDbPath.string());
 	db1.open();
-	graph::Database db2(testDbPath2.string());
+	graph::storage::testing::LegacyPhysicalStorageTestHarness db2(testDbPath2.string());
 	db2.open();
 
 	// txn1 is active from db1
@@ -380,7 +380,7 @@ TEST_F(TransactionTest, MoveAssignmentFromActiveToActive) {
 
 TEST_F(TransactionTest, MoveAssignmentSelfAssignment) {
 	// Cover: operator=(&&) line 47 False branch: this == &other (self-assignment)
-	graph::Database db(testDbPath.string());
+	graph::storage::testing::LegacyPhysicalStorageTestHarness db(testDbPath.string());
 	db.open();
 
 	auto txn = db.beginTransaction();

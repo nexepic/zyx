@@ -12,7 +12,6 @@
 #include <memory>
 #include <vector>
 
-#include "graph/core/Database.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/indexes/EntityTypeIndexManager.hpp"
@@ -30,27 +29,31 @@ protected:
 		testFilePath = std::filesystem::temp_directory_path() /
 					   ("test_pi_composite_" + boost::uuids::to_string(uuid) + ".dat");
 
-		database = std::make_unique<graph::Database>(testFilePath.string());
-		database->open();
-		dataManager = database->getStorage()->getDataManager();
-		propertyIndex = database->getQueryEngine()
-							->getIndexManager()
-							->getNodeIndexManager()
-							->getPropertyIndex();
+		fileStorage = std::make_shared<graph::storage::FileStorage>(
+				testFilePath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
+		fileStorage->open();
+		dataManager = fileStorage->getDataManager();
+		indexManager = std::make_shared<graph::query::indexes::IndexManager>(fileStorage);
+		indexManager->initialize();
+		propertyIndex = indexManager->getNodeIndexManager()->getPropertyIndex();
 	}
 
 	void TearDown() override {
-		if (database)
-			database->close();
-		database.reset();
+		propertyIndex.reset();
+		indexManager.reset();
+		dataManager.reset();
+		if (fileStorage)
+			fileStorage->close();
+		fileStorage.reset();
 		std::error_code ec;
 		if (std::filesystem::exists(testFilePath))
 			std::filesystem::remove(testFilePath, ec);
 	}
 
 	std::filesystem::path testFilePath;
-	std::unique_ptr<graph::Database> database;
+	std::shared_ptr<graph::storage::FileStorage> fileStorage;
 	std::shared_ptr<graph::storage::DataManager> dataManager;
+	std::shared_ptr<graph::query::indexes::IndexManager> indexManager;
 	std::shared_ptr<graph::query::indexes::PropertyIndex> propertyIndex;
 };
 
@@ -317,7 +320,7 @@ TEST_F(PropertyIndexCompositeTest, SaveAndReloadCompositeState) {
 	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
 
 	auto reloaded = std::make_unique<graph::query::indexes::PropertyIndex>(
-		dataManager, database->getStorage()->getSystemStateManager(),
+		dataManager, fileStorage->getSystemStateManager(),
 		indexType, stateKeyPrefix);
 
 	// Verify composite index was deserialized
@@ -341,7 +344,7 @@ TEST_F(PropertyIndexCompositeTest, DeserializeCompositeState_Empty) {
 	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
 
 	auto idx = std::make_unique<graph::query::indexes::PropertyIndex>(
-		dataManager, database->getStorage()->getSystemStateManager(),
+		dataManager, fileStorage->getSystemStateManager(),
 		indexType, stateKeyPrefix);
 
 	EXPECT_FALSE(idx->hasCompositeIndex({"any", "keys"}));

@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -45,6 +46,12 @@ namespace graph::query {
 
 		[[nodiscard]] bool isEmpty() const { return rows_.empty(); }
 
+		// Mutation runtimes may intentionally suppress entity columns that no
+		// longer exist after the statement while an outer aggregate still needs
+		// the cardinality of the rows that flowed through the write pipeline.
+		void setPipelineRowCount(size_t count) { pipeline_row_count_ = count; }
+		[[nodiscard]] size_t getPipelineRowCount() const { return pipeline_row_count_.value_or(rows_.size()); }
+
 		void setDuration(double ms) { duration_ms_ = ms; }
 		[[nodiscard]] double getDuration() const { return duration_ms_; }
 
@@ -57,6 +64,7 @@ namespace graph::query {
 
 		double duration_ms_ = 0.0;
 		std::vector<std::string> notifications_;
+		std::optional<size_t> pipeline_row_count_;
 	};
 
 } // namespace graph::query

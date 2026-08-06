@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <filesystem>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/query/expressions/Expression.hpp"
 #include "graph/query/logical/operators/LogicalAggregate.hpp"
 #include "graph/query/logical/operators/LogicalFilter.hpp"
@@ -570,9 +570,9 @@ TEST(RelationshipCountScanPlannerTest, RejectsMalformedTraversalShapes) {
 TEST(RelationshipCountScanPlannerTest, ChoosesIndexedRangeCompositeAndLabelCandidateSources) {
 	const auto dbPath = fs::temp_directory_path() /
 	                    ("test_relationship_count_planner_indexes_" + boost::uuids::to_string(boost::uuids::random_generator()()) + ".zyx");
-	Database db(dbPath.string());
+	graph::storage::testing::LegacyPhysicalStorageTestHarness db(dbPath.string());
 	db.open();
-	auto indexManager = db.getQueryEngine()->getIndexManager();
+	auto indexManager = db.indexManager();
 	ASSERT_TRUE(indexManager->createIndex("idx_user_age", "node", "User", "age"));
 	ASSERT_TRUE(indexManager->createCompositeIndex("idx_user_country_age", "node", "User", {"country", "age"}));
 	ASSERT_TRUE(indexManager->createIndex("idx_user_label", "node", "User", ""));
@@ -605,9 +605,9 @@ TEST(RelationshipCountScanPlannerTest, ChoosesIndexedRangeCompositeAndLabelCandi
 TEST(RelationshipCountScanPlannerTest, RejectsSelectiveSeedWhenIndexManagerHasNoMatchingIndex) {
 	const auto dbPath = fs::temp_directory_path() /
 	                    ("test_relationship_count_planner_no_indexes_" + boost::uuids::to_string(boost::uuids::random_generator()()) + ".zyx");
-	Database db(dbPath.string());
+	graph::storage::testing::LegacyPhysicalStorageTestHarness db(dbPath.string());
 	db.open();
-	auto indexManager = db.getQueryEngine()->getIndexManager();
+	auto indexManager = db.indexManager();
 
 	auto rangeSeed = std::make_unique<LogicalNodeScan>("u", std::vector<std::string>{});
 	rangeSeed->setRangePredicates({RangePredicate{"age", PropertyValue(int64_t{18}), PropertyValue(int64_t{65}), true, true}});
@@ -628,9 +628,9 @@ TEST(RelationshipCountScanPlannerTest, RejectsSelectiveSeedWhenIndexManagerHasNo
 TEST(RelationshipCountScanPlannerTest, DirectRelationshipCountCarriesPlannedRelationshipCandidateSource) {
 	const auto dbPath = fs::temp_directory_path() /
 	                    ("test_relationship_count_planner_relationship_access_" + boost::uuids::to_string(boost::uuids::random_generator()()) + ".zyx");
-	Database db(dbPath.string());
+	graph::storage::testing::LegacyPhysicalStorageTestHarness db(dbPath.string());
 	db.open();
-	auto indexManager = db.getQueryEngine()->getIndexManager();
+	auto indexManager = db.indexManager();
 	ASSERT_TRUE(indexManager->createIndex("idx_edge_type_relationship_access", "edge", "", ""));
 	ASSERT_TRUE(indexManager->createIndex("idx_edge_weight_relationship_access", "edge", "", "weight"));
 
@@ -689,10 +689,10 @@ TEST(RelationshipCountScanPlannerTest, PhysicalPlanConverterUsesScanPlanForRecog
 TEST(RelationshipCountScanPlannerTest, PhysicalPlanConverterPropagatesAccessPathExplainAttributes) {
 	const auto dbPath = fs::temp_directory_path() /
 	                    ("test_relationship_count_planner_explain_attributes_" + boost::uuids::to_string(boost::uuids::random_generator()()) + ".zyx");
-	Database db(dbPath.string());
+	graph::storage::testing::LegacyPhysicalStorageTestHarness db(dbPath.string());
 	db.open();
-	auto dataManager = db.getStorage()->getDataManager();
-	auto indexManager = db.getQueryEngine()->getIndexManager();
+	auto dataManager = db.storage()->getDataManager();
+	auto indexManager = db.indexManager();
 	ASSERT_TRUE(indexManager->createIndex("idx_edge_type_explain_access", "edge", "", ""));
 	ASSERT_TRUE(indexManager->createIndex("idx_edge_weight_explain_access", "edge", "", "weight"));
 

@@ -14,7 +14,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/storage/constraints/ConstraintManager.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 
@@ -30,7 +30,7 @@ using graph::storage::constraints::ConstraintManager;
 class ConstraintManagerEdgeAndLifecycleTest : public ::testing::Test {
 protected:
 	fs::path dbPath;
-	std::unique_ptr<graph::Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<DataManager> dataManager;
 	std::shared_ptr<IndexManager> indexManager;
 	std::shared_ptr<ConstraintManager> manager;
@@ -42,11 +42,11 @@ protected:
 			fs::remove(dbPath);
 		}
 
-		db = std::make_unique<graph::Database>(dbPath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(dbPath.string());
 		db->open();
-		dataManager = db->getStorage()->getDataManager();
-		indexManager = db->getQueryEngine()->getIndexManager();
-		manager = std::make_shared<ConstraintManager>(db->getStorage(), indexManager);
+		dataManager = db->storage()->getDataManager();
+		indexManager = db->indexManager();
+		manager = std::make_shared<ConstraintManager>(db->storage(), indexManager);
 		manager->initialize();
 	}
 
@@ -136,7 +136,7 @@ TEST_F(ConstraintManagerEdgeAndLifecycleTest, InitializeSkipsNonStringStateAndMa
 		{"bad_props", PropertyValue("node|not_null|Person|name,,other|")}
 	});
 
-	auto freshManager = std::make_shared<ConstraintManager>(db->getStorage(), indexManager);
+	auto freshManager = std::make_shared<ConstraintManager>(db->storage(), indexManager);
 	EXPECT_NO_THROW(freshManager->initialize());
 	EXPECT_TRUE(freshManager->listConstraints().empty());
 }

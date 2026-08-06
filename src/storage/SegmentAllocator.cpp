@@ -49,6 +49,8 @@ namespace graph::storage {
 			segmentTracker_->removeFromFreeList(offset);
 		} else {
 			offset = io_->reserveAppendSpace(segmentSize);
+			// reserveAppendSpace materializes one trailing zero byte for a new slot.
+			segmentTracker_->recordSegmentAllocationWrite(type, 1);
 		}
 
 		SegmentHeader header;
@@ -72,6 +74,7 @@ namespace graph::storage {
 		std::memset(header.activity_bitmap, 0, sizeof(header.activity_bitmap));
 
 		io_->writeAt(offset, &header, sizeof(SegmentHeader));
+		segmentTracker_->recordSegmentMetadataWrite(type, sizeof(SegmentHeader));
 
 		segmentTracker_->registerSegment(header);
 

@@ -372,7 +372,7 @@ namespace graph::storage {
 		SegmentHeader newHeader = sourceHeader;
 		newHeader.file_offset = destinationOffset;
 
-		if (!copySegmentData(sourceOffset, destinationOffset)) {
+		if (!copySegmentData(sourceOffset, destinationOffset, sourceHeader.data_type)) {
 			return false;
 		}
 
@@ -383,7 +383,7 @@ namespace graph::storage {
 		return true;
 	}
 
-	bool SegmentCompactor::copySegmentData(uint64_t sourceOffset, uint64_t destinationOffset) const {
+	bool SegmentCompactor::copySegmentData(uint64_t sourceOffset, uint64_t destinationOffset, uint32_t type) const {
 		constexpr size_t COPY_BLOCK_SIZE = 64 * 1024;
 		std::vector<char> buffer(COPY_BLOCK_SIZE);
 
@@ -396,6 +396,7 @@ namespace graph::storage {
 			}
 
 			io_->writeAt(destinationOffset + offset, buffer.data(), copySize);
+			tracker_->recordSegmentRelocationWrite(type, copySize);
 		}
 
 		return true;

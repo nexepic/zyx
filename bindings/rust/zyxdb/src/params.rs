@@ -3,7 +3,7 @@ use std::ptr;
 
 use zyxdb_sys as sys;
 
-use crate::error::status_to_result;
+use crate::error::{status_to_result, Error, ErrorCode};
 
 pub struct Params {
     pub(crate) raw: *mut sys::zyx_driver_params_t,
@@ -98,5 +98,24 @@ impl IntoParam for &str {
 impl IntoParam for String {
     fn set_param(self, params: &Params, key: &str) -> crate::Result<()> {
         self.as_str().set_param(params, key)
+    }
+}
+
+impl IntoParam for &[u8] {
+    fn set_param(self, params: &Params, key: &str) -> crate::Result<()> {
+        let key = key_cstring(key)?;
+        let size = u32::try_from(self.len())
+            .map_err(|_| Error::new(ErrorCode::OutOfRange, "binary parameter exceeds Driver ABI limit"))?;
+        let mut error = ptr::null_mut();
+        let status = unsafe {
+            sys::zyx_driver_params_set_bytes(params.raw, key.as_ptr(), self.as_ptr(), size, &mut error)
+        };
+        status_to_result(status, error)
+    }
+}
+
+impl IntoParam for Vec<u8> {
+    fn set_param(self, params: &Params, key: &str) -> crate::Result<()> {
+        self.as_slice().set_param(params, key)
     }
 }

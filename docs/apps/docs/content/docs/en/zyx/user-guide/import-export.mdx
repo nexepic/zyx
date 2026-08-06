@@ -16,7 +16,7 @@ projectOrder: 1
 
 | Task | Built-in Path | Notes |
 |---|---|---|
-| Query-time CSV ingest | `LOAD CSV` / `LOAD CSV WITH HEADERS` | Supports `FIELDTERMINATOR` |
+| Query-time CSV ingest | `LOAD CSV` / `LOAD CSV WITH HEADERS` | Bounded local `file:///` source; supports `FIELDTERMINATOR` |
 | Bulk file ingest | CLI `import` command | CSV and JSONL file modes |
 | Result export | API-level result iteration | App writes CSV/JSON/Parquet |
 | Physical backup | `save` + copy DB files | Keep no active writes during snapshot |
@@ -33,13 +33,15 @@ flowchart LR
 
 ## Path 1: LOAD CSV
 
-Ingest CSV within the Cypher query pipeline — suitable for small to medium files:
+Ingest bounded local CSV within the Cypher query pipeline — suitable for small to medium files. The database at `/srv/graphs/demo.zyx` uses `/srv/graphs` as its import root, so the source must stay below that directory:
 
 ```cypher
-LOAD CSV WITH HEADERS FROM 'file:///tmp/users.csv' AS row
+LOAD CSV WITH HEADERS FROM 'file:///srv/graphs/users.csv' AS row
 MERGE (:User {name: row.name})
 RETURN count(*) AS imported;
 ```
+
+`LOAD CSV` accepts only local `file:///` URIs without a host, query, or fragment. Canonicalization prevents `..` and percent-encoded traversal from escaping the import root; remote URLs are not fetched. File size, row count, record length, column count, and field length are bounded. A direct logical `QueryEngine` has imports disabled unless its `csv_import_root` option is explicitly configured.
 
 ## Path 2: CLI Bulk Import
 

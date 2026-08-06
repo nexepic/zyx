@@ -414,7 +414,7 @@ TEST_F(WritingClauseHandlerTest, EdgeCase_DeleteBeforeCreate) {
 	// Note: DELETE passes through matched rows from the child operator
 	(void) execute("CREATE (n:Test {id: 1})");
 
-	auto res = execute("MATCH (n:Test {id: 1}) DELETE n CREATE (n:Test {id: 2}) RETURN count(*)");
+	auto res = execute("MATCH (n:Test {id: 1}) DELETE n CREATE (m:Test {id: 2}) RETURN count(*)");
 	ASSERT_EQ(res.rowCount(), 1UL);
 }
 
@@ -894,12 +894,15 @@ TEST_F(WritingClauseHandlerTest, Set_MultipleChainedSets) {
 
 TEST_F(WritingClauseHandlerTest, Set_MultipleNodes) {
 	// Tests SET clause updating multiple nodes
-	// Note: Cartesian product returns 4 rows for 2 nodes (implementation behavior)
+	// Select one ordered pair so the assertions observe the values assigned to
+	// each alias instead of depending on the final state of a shared entity
+	// across multiple Cartesian-product rows.
 	(void) execute("CREATE (a:TestMulti1 {id: 1})");
 	(void) execute("CREATE (b:TestMulti1 {id: 2})");
 
-	auto res = execute("MATCH (a:TestMulti1), (b:TestMulti1) SET a.value = 10, b.value = 20 RETURN a.value, b.value");
-	ASSERT_EQ(res.rowCount(), 4UL);
+	auto res = execute("MATCH (a:TestMulti1), (b:TestMulti1) WHERE a.id = 1 AND b.id = 2 "
+					   "SET a.value = 10, b.value = 20 RETURN a.value, b.value");
+	ASSERT_EQ(res.rowCount(), 1UL);
 	EXPECT_EQ(res.getRows()[0].at("a.value").toString(), "10");
 	EXPECT_EQ(res.getRows()[0].at("b.value").toString(), "20");
 }
@@ -1053,4 +1056,3 @@ TEST_F(WritingClauseHandlerTest, Set_WithoutPrecedingClause) {
 		(void)execute("SET n.value = 100");
 	}, std::runtime_error);
 }
-

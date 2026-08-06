@@ -22,12 +22,20 @@
 
 class CypherAlgoTest : public QueryTestFixture {};
 
+namespace {
+
+	int64_t logicalNodeId(const graph::query::QueryResult &result, const std::string &column) {
+		return static_cast<int64_t>(result.getRows().at(0).at(column).asLogicalNode().node_id);
+	}
+
+} // namespace
+
 TEST_F(CypherAlgoTest, AlgoShortestPath) {
 	(void) execute("CREATE (a:City {name: 'A'})-[r1:ROAD]->(b:City {name: 'B'})");
 	(void) execute("MATCH (b:City {name: 'B'}) CREATE (b)-[r2:ROAD]->(c:City {name: 'C'})");
 
-	int64_t idA = execute("MATCH (n:City {name: 'A'}) RETURN n").getRows()[0].at("n").asNode().getId();
-	int64_t idC = execute("MATCH (n:City {name: 'C'}) RETURN n").getRows()[0].at("n").asNode().getId();
+	int64_t idA = logicalNodeId(execute("MATCH (n:City {name: 'A'}) RETURN n"), "n");
+	int64_t idC = logicalNodeId(execute("MATCH (n:City {name: 'C'}) RETURN n"), "n");
 
 	auto res = execute("CALL algo.shortestPath(" + std::to_string(idA) + ", " + std::to_string(idC) + ")");
 	ASSERT_EQ(res.rowCount(), 3UL); // A, B, C
@@ -37,8 +45,8 @@ TEST_F(CypherAlgoTest, AlgoShortestPathNoPath) {
 	(void) execute("CREATE (a:Isle {name: 'A'})");
 	(void) execute("CREATE (b:Isle {name: 'B'})");
 
-	int64_t idA = execute("MATCH (n:Isle {name: 'A'}) RETURN n").getRows()[0].at("n").asNode().getId();
-	int64_t idB = execute("MATCH (n:Isle {name: 'B'}) RETURN n").getRows()[0].at("n").asNode().getId();
+	int64_t idA = logicalNodeId(execute("MATCH (n:Isle {name: 'A'}) RETURN n"), "n");
+	int64_t idB = logicalNodeId(execute("MATCH (n:Isle {name: 'B'}) RETURN n"), "n");
 
 	auto res = execute("CALL algo.shortestPath(" + std::to_string(idA) + ", " + std::to_string(idB) + ")");
 	EXPECT_TRUE(res.isEmpty());
@@ -48,8 +56,8 @@ TEST_F(CypherAlgoTest, AlgoShortestPathRespectsMaxDepth) {
 	(void) execute("CREATE (a:LimitedPath {name: 'A'})-[r1:ROAD]->(b:LimitedPath {name: 'B'})");
 	(void) execute("MATCH (b:LimitedPath {name: 'B'}) CREATE (b)-[r2:ROAD]->(c:LimitedPath {name: 'C'})");
 
-	int64_t idA = execute("MATCH (n:LimitedPath {name: 'A'}) RETURN n").getRows()[0].at("n").asNode().getId();
-	int64_t idC = execute("MATCH (n:LimitedPath {name: 'C'}) RETURN n").getRows()[0].at("n").asNode().getId();
+	int64_t idA = logicalNodeId(execute("MATCH (n:LimitedPath {name: 'A'}) RETURN n"), "n");
+	int64_t idC = logicalNodeId(execute("MATCH (n:LimitedPath {name: 'C'}) RETURN n"), "n");
 
 	auto tooShallow = execute("CALL algo.shortestPath(" + std::to_string(idA) + ", " + std::to_string(idC) + ", 1)");
 	EXPECT_TRUE(tooShallow.isEmpty());
@@ -61,13 +69,13 @@ TEST_F(CypherAlgoTest, AlgoShortestPathRespectsMaxDepth) {
 TEST_F(CypherAlgoTest, AlgoShortestPathRejectsNonPositiveMaxDepth) {
 	(void) execute("CREATE (a:InvalidDepth {name: 'A'})-[r:ROAD]->(b:InvalidDepth {name: 'B'})");
 
-	int64_t idA = execute("MATCH (n:InvalidDepth {name: 'A'}) RETURN n").getRows()[0].at("n").asNode().getId();
-	int64_t idB = execute("MATCH (n:InvalidDepth {name: 'B'}) RETURN n").getRows()[0].at("n").asNode().getId();
+	int64_t idA = logicalNodeId(execute("MATCH (n:InvalidDepth {name: 'A'}) RETURN n"), "n");
+	int64_t idB = logicalNodeId(execute("MATCH (n:InvalidDepth {name: 'B'}) RETURN n"), "n");
 
 	EXPECT_THROW({ (void) execute("CALL algo.shortestPath(" + std::to_string(idA) + ", " + std::to_string(idB) + ", 0)"); },
-	             std::runtime_error);
+	             std::invalid_argument);
 	EXPECT_THROW({ (void) execute("CALL algo.shortestPath(" + std::to_string(idA) + ", " + std::to_string(idB) + ", -1)"); },
-	             std::runtime_error);
+	             std::invalid_argument);
 }
 
 // --- Additional Shortest Path Tests ---
@@ -76,8 +84,8 @@ TEST_F(CypherAlgoTest, AlgoShortestPathDirectConnection) {
 	// A -> B directly
 	(void) execute("CREATE (a:Direct {id:'A'})-[r:LINK]->(b:Direct {id:'B'})");
 
-	int64_t idA = execute("MATCH (n:Direct {id:'A'}) RETURN n").getRows()[0].at("n").asNode().getId();
-	int64_t idB = execute("MATCH (n:Direct {id:'B'}) RETURN n").getRows()[0].at("n").asNode().getId();
+	int64_t idA = logicalNodeId(execute("MATCH (n:Direct {id:'A'}) RETURN n"), "n");
+	int64_t idB = logicalNodeId(execute("MATCH (n:Direct {id:'B'}) RETURN n"), "n");
 
 	auto res = execute("CALL algo.shortestPath(" + std::to_string(idA) + ", " + std::to_string(idB) + ")");
 	ASSERT_EQ(res.rowCount(), 2UL); // A and B
@@ -90,8 +98,8 @@ TEST_F(CypherAlgoTest, AlgoShortestPathMultiplePaths) {
 	(void) execute("MATCH (b:Dia {id:'B'}) CREATE (b)-[r3:LINK]->(d:Dia {id:'D'})");
 	(void) execute("MATCH (c:Dia {id:'C'}) CREATE (c)-[r4:LINK]->(d:Dia {id:'D'})");
 
-	int64_t idA = execute("MATCH (n:Dia {id:'A'}) RETURN n").getRows()[0].at("n").asNode().getId();
-	int64_t idD = execute("MATCH (n:Dia {id:'D'}) RETURN n").getRows()[0].at("n").asNode().getId();
+	int64_t idA = logicalNodeId(execute("MATCH (n:Dia {id:'A'}) RETURN n"), "n");
+	int64_t idD = logicalNodeId(execute("MATCH (n:Dia {id:'D'}) RETURN n"), "n");
 
 	auto res = execute("CALL algo.shortestPath(" + std::to_string(idA) + ", " + std::to_string(idD) + ")");
 	// Should return one of the shortest paths (A->B->D or A->C->D)
@@ -109,8 +117,8 @@ TEST_F(CypherAlgoTest, AlgoShortestPathComplex) {
 	(void) execute("MATCH (a:Complex {id:'A'}) CREATE (a)-[r4:LINK]->(x:Complex {id:'X'})");
 	(void) execute("MATCH (x:Complex {id:'X'}) CREATE (x)-[r5:LINK]->(d:Complex {id:'D'})");
 
-	int64_t idA = execute("MATCH (n:Complex {id:'A'}) RETURN n").getRows()[0].at("n").asNode().getId();
-	int64_t idD = execute("MATCH (n:Complex {id:'D'}) RETURN n").getRows()[0].at("n").asNode().getId();
+	int64_t idA = logicalNodeId(execute("MATCH (n:Complex {id:'A'}) RETURN n"), "n");
+	int64_t idD = logicalNodeId(execute("MATCH (n:Complex {id:'D'}) RETURN n"), "n");
 
 	auto res = execute("CALL algo.shortestPath(" + std::to_string(idA) + ", " + std::to_string(idD) + ")");
 	// Should return a path (3-4 nodes depending on which path is chosen)

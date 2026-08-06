@@ -31,7 +31,7 @@ inline bool isAnonymousVariable(const std::string &name) {
  */
 struct QueryPlan {
 	std::unique_ptr<logical::LogicalOperator> root;
-	bool mutatesData = false;   // CREATE, SET, DELETE, MERGE, REMOVE, FOREACH, LOAD CSV
+	bool mutatesData = false;   // CREATE, SET, DELETE, MERGE, REMOVE, FOREACH, and mutating procedures
 	bool mutatesSchema = false; // CREATE INDEX, DROP INDEX, CREATE/DROP CONSTRAINT, etc.
 	bool cacheable = true;      // False for DDL, transaction control, EXPLAIN, PROFILE
 	bool optimizable = true;    // False for DDL, transaction control, CALL PROCEDURE, EXPLAIN, PROFILE

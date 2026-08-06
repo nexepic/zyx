@@ -38,24 +38,25 @@ protected:
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath = std::filesystem::temp_directory_path() / ("test_blobChain_" + to_string(uuid) + ".dat");
 
-		// Initialize Database and FileStorage
-		database = std::make_unique<graph::Database>(testFilePath.string());
-		database->open();
-		fileStorage = database->getStorage();
+		fileStorage = std::make_shared<graph::storage::FileStorage>(testFilePath.string(), 10'000U);
+		fileStorage->open();
 		dataManager = fileStorage->getDataManager();
 
 		chainManager = std::make_unique<graph::BlobChainManager>(dataManager);
 	}
 
 	void TearDown() override {
-		database->close();
-		database.reset();
+		chainManager.reset();
+		dataManager.reset();
+		if (fileStorage) {
+			fileStorage->close();
+		}
+		fileStorage.reset();
 		std::error_code ec;
 		std::filesystem::remove(testFilePath, ec);
 	}
 
 	std::filesystem::path testFilePath;
-	std::unique_ptr<graph::Database> database;
 	std::shared_ptr<graph::storage::FileStorage> fileStorage;
 	std::shared_ptr<graph::storage::DataManager> dataManager;
 	std::unique_ptr<graph::BlobChainManager> chainManager;

@@ -40,9 +40,9 @@ protected:
 		// Seed some data
 		auto qe = db->getQueryEngine();
 		auto txn = db->beginTransaction();
-		qe->execute("CREATE (a:Person {name: 'Alice', age: 30})");
-		qe->execute("CREATE (b:Person {name: 'Bob', age: 25})");
-		qe->execute("MATCH (a:Person {name: 'Alice'}) MATCH (b:Person {name: 'Bob'}) CREATE (a)-[:KNOWS]->(b)");
+		txn.execute(*qe, "CREATE (a:Person {name: 'Alice', age: 30})");
+		txn.execute(*qe, "CREATE (b:Person {name: 'Bob', age: 25})");
+		txn.execute(*qe, "MATCH (a:Person {name: 'Alice'}) MATCH (b:Person {name: 'Bob'}) CREATE (a)-[:KNOWS]->(b)");
 		txn.commit();
 	}
 
@@ -59,6 +59,9 @@ protected:
 	graph::query::QueryResult execute(const std::string &query) const {
 		return db->getQueryEngine()->execute(query);
 	}
+	graph::query::QueryResult execute(graph::Transaction &transaction, const std::string &query) const {
+		return transaction.execute(*db->getQueryEngine(), query);
+	}
 
 	fs::path testDbPath;
 	std::unique_ptr<graph::Database> db;
@@ -66,32 +69,32 @@ protected:
 
 TEST_F(ReadOnlyTransactionInternalTest, ReadOnlyTxnAllowsRead) {
 	auto txn = db->beginReadOnlyTransaction();
-	auto result = execute("MATCH (n:Person) RETURN n.name ORDER BY n.name");
+	auto result = execute(txn, "MATCH (n:Person) RETURN n.name ORDER BY n.name");
 	EXPECT_EQ(result.rowCount(), 2UL);
 	txn.commit();
 }
 
 TEST_F(ReadOnlyTransactionInternalTest, ReadOnlyTxnBlocksCreate) {
 	auto txn = db->beginReadOnlyTransaction();
-	EXPECT_THROW(execute("CREATE (n:Person {name: 'Charlie'})"), std::runtime_error);
+	EXPECT_THROW(execute(txn, "CREATE (n:Person {name: 'Charlie'})"), std::runtime_error);
 	txn.rollback();
 }
 
 TEST_F(ReadOnlyTransactionInternalTest, ReadOnlyTxnBlocksSet) {
 	auto txn = db->beginReadOnlyTransaction();
-	EXPECT_THROW(execute("MATCH (n:Person {name: 'Alice'}) SET n.age = 99"), std::runtime_error);
+	EXPECT_THROW(execute(txn, "MATCH (n:Person {name: 'Alice'}) SET n.age = 99"), std::runtime_error);
 	txn.rollback();
 }
 
 TEST_F(ReadOnlyTransactionInternalTest, ReadOnlyTxnBlocksDelete) {
 	auto txn = db->beginReadOnlyTransaction();
-	EXPECT_THROW(execute("MATCH (n:Person {name: 'Bob'}) DELETE n"), std::runtime_error);
+	EXPECT_THROW(execute(txn, "MATCH (n:Person {name: 'Bob'}) DELETE n"), std::runtime_error);
 	txn.rollback();
 }
 
 TEST_F(ReadOnlyTransactionInternalTest, ReadOnlyTxnBlocksMerge) {
 	auto txn = db->beginReadOnlyTransaction();
-	EXPECT_THROW(execute("MERGE (n:Person {name: 'Dave'})"), std::runtime_error);
+	EXPECT_THROW(execute(txn, "MERGE (n:Person {name: 'Dave'})"), std::runtime_error);
 	txn.rollback();
 }
 
@@ -99,7 +102,7 @@ TEST_F(ReadOnlyTransactionInternalTest, DataUnchangedAfterBlockedWrite) {
 	// Attempt a write in a read-only transaction
 	{
 		auto txn = db->beginReadOnlyTransaction();
-		EXPECT_THROW(execute("CREATE (n:Person {name: 'Ghost'})"), std::runtime_error);
+		EXPECT_THROW(execute(txn, "CREATE (n:Person {name: 'Ghost'})"), std::runtime_error);
 		txn.rollback();
 	}
 
@@ -111,7 +114,7 @@ TEST_F(ReadOnlyTransactionInternalTest, DataUnchangedAfterBlockedWrite) {
 TEST_F(ReadOnlyTransactionInternalTest, ReadWriteTxnStillWorks) {
 	// A normal transaction should still allow writes
 	auto txn = db->beginTransaction();
-	auto result = execute("CREATE (n:Person {name: 'Charlie'}) RETURN n.name");
+	auto result = execute(txn, "CREATE (n:Person {name: 'Charlie'}) RETURN n.name");
 	EXPECT_EQ(result.rowCount(), 1UL);
 	txn.commit();
 

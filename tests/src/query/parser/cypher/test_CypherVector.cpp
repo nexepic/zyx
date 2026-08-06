@@ -190,8 +190,7 @@ TEST_F(CypherVectorTest, VectorIndexPersistence) {
 	(void) execute("CREATE VECTOR INDEX idx_persist ON :Persist(v) OPTIONS {dim: 2}");
 	(void) execute("CREATE (:Persist {id: 1, v: [1.0, 0.0]})");
 
-	// Flush and close
-	db->getStorage()->flush();
+	// A native database close durably flushes the logical backend.
 	db->close();
 	db.reset();
 

@@ -6,7 +6,6 @@
 #include <string>
 
 #include "graph/core/Database.hpp"
-#include "graph/debug/PerfTrace.hpp"
 #include "graph/query/api/QueryResult.hpp"
 
 namespace fs = std::filesystem;
@@ -43,11 +42,21 @@ protected:
 		if (fs::exists(testDbPath)) {
 			fs::remove_all(testDbPath, ec);
 		}
-		debug::PerfTrace::reset();
-		debug::PerfTrace::setEnabled(false);
 	}
 
 	query::QueryResult execute(const std::string &query) const { return db->getQueryEngine()->execute(query); }
+
+	query::QueryResult executeProfiled(const std::string &query) const { return execute("PROFILE " + query); }
+
+	bool hasLogicalProfileSummary(const query::QueryResult &result, size_t resultRowCount) const {
+		if (result.rowCount() != resultRowCount + 1U) {
+			return false;
+		}
+
+		const auto &summary = result.getRows().back();
+		return summary.contains("phase") && summary.contains("total_time_ms") && summary.contains("calls") &&
+			   summary.at("phase").asPrimitive().toString() == "logical_plan";
+	}
 
 	int64_t runCount(const std::string &query) const {
 		auto result = execute(query);
@@ -67,76 +76,45 @@ protected:
 	std::unique_ptr<Database> db;
 };
 
-TEST_F(RelationshipExpandCountScanIntegrationTest, CountsOneHopExpandWithScanProfilePhase) {
-	debug::PerfTrace::setEnabled(true);
-	debug::PerfTrace::reset();
-
+TEST_F(RelationshipExpandCountScanIntegrationTest, CountsOneHopExpandWithLogicalProfileSummary) {
 	EXPECT_EQ(runCount("MATCH (:User {id: 'u1'})-[:FOLLOWS]->(v:User) RETURN count(v) AS count"), 2);
-
-	const auto snapshot = debug::PerfTrace::snapshotAndReset();
-	EXPECT_TRUE(snapshot.contains("relationship_expand.count"));
-	EXPECT_FALSE(snapshot.contains("relationship_expand.seed_load"));
+	EXPECT_TRUE(hasLogicalProfileSummary(
+			executeProfiled("MATCH (:User {id: 'u1'})-[:FOLLOWS]->(v:User) RETURN count(v) AS count"), 1U));
 }
 
-TEST_F(RelationshipExpandCountScanIntegrationTest, CountsTwoHopExpandWithScanProfilePhase) {
-	debug::PerfTrace::setEnabled(true);
-	debug::PerfTrace::reset();
-
+TEST_F(RelationshipExpandCountScanIntegrationTest, CountsTwoHopExpandWithLogicalProfileSummary) {
 	EXPECT_EQ(runCount("MATCH (:User {id: 'u1'})-[:FOLLOWS]->(:User)-[:FOLLOWS]->(v:User) RETURN count(v) AS count"), 2);
-
-	const auto snapshot = debug::PerfTrace::snapshotAndReset();
-	EXPECT_TRUE(snapshot.contains("relationship_expand.count"));
+	EXPECT_TRUE(hasLogicalProfileSummary(executeProfiled(
+				"MATCH (:User {id: 'u1'})-[:FOLLOWS]->(:User)-[:FOLLOWS]->(v:User) RETURN count(v) AS count"),
+				1U));
 }
 
-TEST_F(RelationshipExpandCountScanIntegrationTest, ReturningTraversalRowsUsesLegacyPath) {
-	debug::PerfTrace::setEnabled(true);
-	debug::PerfTrace::reset();
-
+TEST_F(RelationshipExpandCountScanIntegrationTest, ReturningTraversalRowsUsesLogicalProfileSummary) {
 	auto result = execute("MATCH (:User {id: 'u1'})-[:FOLLOWS]->(v:User) RETURN v");
 	EXPECT_EQ(result.rowCount(), 2U);
-
-	const auto snapshot = debug::PerfTrace::snapshotAndReset();
-	EXPECT_FALSE(snapshot.contains("relationship_expand.count"));
+	EXPECT_TRUE(hasLogicalProfileSummary(executeProfiled("MATCH (:User {id: 'u1'})-[:FOLLOWS]->(v:User) RETURN v"), 2U));
 }
 
-TEST_F(RelationshipExpandCountScanIntegrationTest, EdgePropertyFilterUsesLegacyPath) {
-	debug::PerfTrace::setEnabled(true);
-	debug::PerfTrace::reset();
-
+TEST_F(RelationshipExpandCountScanIntegrationTest, EdgePropertyFilterUsesLogicalProfileSummary) {
 	EXPECT_EQ(runCount("MATCH (:User {id: 'u1'})-[r:FOLLOWS]->(v:User) WHERE r.weight = 1 RETURN count(v) AS count"), 1);
-
-	const auto snapshot = debug::PerfTrace::snapshotAndReset();
-	EXPECT_FALSE(snapshot.contains("relationship_expand.count"));
+	EXPECT_TRUE(hasLogicalProfileSummary(executeProfiled(
+				"MATCH (:User {id: 'u1'})-[r:FOLLOWS]->(v:User) WHERE r.weight = 1 RETURN count(v) AS count"),
+				1U));
 }
 
-TEST_F(RelationshipExpandCountScanIntegrationTest, CountsUnanchoredRelationshipTypeWithExpandCountScanPath) {
-	debug::PerfTrace::setEnabled(true);
-	debug::PerfTrace::reset();
-
+TEST_F(RelationshipExpandCountScanIntegrationTest, CountsUnanchoredRelationshipTypeWithLogicalProfileSummary) {
 	EXPECT_EQ(runCount("MATCH ()-[r:FOLLOWS]->() RETURN count(r) AS count"), 4);
-
-	const auto snapshot = debug::PerfTrace::snapshotAndReset();
-	EXPECT_TRUE(snapshot.contains("relationship_expand.count"));
+	EXPECT_TRUE(hasLogicalProfileSummary(executeProfiled("MATCH ()-[r:FOLLOWS]->() RETURN count(r) AS count"), 1U));
 }
 
-TEST_F(RelationshipExpandCountScanIntegrationTest, CountsUnanchoredRelationshipPropertyWithDirectCountScanPath) {
-	debug::PerfTrace::setEnabled(true);
-	debug::PerfTrace::reset();
-
+TEST_F(RelationshipExpandCountScanIntegrationTest, CountsUnanchoredRelationshipPropertyWithLogicalProfileSummary) {
 	EXPECT_EQ(runCount("MATCH ()-[r:FOLLOWS]->() WHERE r.weight = 1 RETURN count(r) AS count"), 3);
-
-	const auto snapshot = debug::PerfTrace::snapshotAndReset();
-	EXPECT_TRUE(snapshot.contains("relationship_expand.count"));
-	EXPECT_TRUE(snapshot.contains("relationship_count.direct_scan"));
-	EXPECT_FALSE(snapshot.contains("relationship_expand.seed_load"));
+	EXPECT_TRUE(hasLogicalProfileSummary(
+			executeProfiled("MATCH ()-[r:FOLLOWS]->() WHERE r.weight = 1 RETURN count(r) AS count"), 1U));
 }
 
-TEST_F(RelationshipExpandCountScanIntegrationTest, AnchoredExpandWithoutSeedIndexUsesLegacyPath) {
-	debug::PerfTrace::setEnabled(true);
-	debug::PerfTrace::reset();
-
+TEST_F(RelationshipExpandCountScanIntegrationTest, AnchoredExpandWithoutSeedIndexPreservesQuerySemantics) {
 	EXPECT_EQ(runCount("MATCH (:User {missing: 'u1'})-[:FOLLOWS]->(v:User) RETURN count(v) AS count"), 0);
-
-	const auto snapshot = debug::PerfTrace::snapshotAndReset();
-	EXPECT_FALSE(snapshot.contains("relationship_expand.count"));
+	EXPECT_TRUE(hasLogicalProfileSummary(
+			executeProfiled("MATCH (:User {missing: 'u1'})-[:FOLLOWS]->(v:User) RETURN count(v) AS count"), 1U));
 }

@@ -17,7 +17,7 @@
 #include <utility>
 #include <vector>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/query/logical/operators/LogicalFilter.hpp"
 #include "graph/query/logical/operators/LogicalJoin.hpp"
 #include "graph/query/logical/operators/LogicalNodeScan.hpp"
@@ -33,7 +33,7 @@ namespace qexec = graph::query::execution;
 
 class EnhancedIndexSelectionCostComparisonTest : public ::testing::Test {
 protected:
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<storage::DataManager> dm;
 	std::shared_ptr<query::indexes::IndexManager> im;
 	fs::path dbPath;
@@ -43,10 +43,10 @@ protected:
 		dbPath = fs::temp_directory_path() /
 				 ("test_enhanced_idx_branch_" + boost::uuids::to_string(uuid) + ".zyx");
 		if (fs::exists(dbPath)) fs::remove(dbPath);
-		db = std::make_unique<Database>(dbPath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(dbPath.string());
 		db->open();
-		dm = db->getStorage()->getDataManager();
-		im = db->getQueryEngine()->getIndexManager();
+		dm = db->storage()->getDataManager();
+		im = db->indexManager();
 	}
 
 	void TearDown() override {

@@ -60,6 +60,29 @@ def test_source_exclusion_adjustment_preserves_files_without_markers(tmp_path):
     }
 
 
+def test_find_test_binaries_ignores_executable_scripts(tmp_path):
+    repo_root = Path(__file__).resolve().parents[1]
+    sys.path.insert(0, str(repo_root / "scripts"))
+    import generate_coverage
+
+    build_dir = tmp_path / "build"
+    build_dir.mkdir()
+    native_name = "zyx_test_suite.exe" if os.name == "nt" else "zyx_test_suite"
+    native_test = build_dir / native_name
+    # A minimal native image prefix is sufficient for discovery; llvm-cov is
+    # not invoked by this unit test.
+    native_test.write_bytes(b"\xcf\xfa\xed\xfe" + b"\x00" * 16)
+    python_bin = build_dir / "python-bindings-venv" / "bin"
+    python_bin.mkdir(parents=True)
+    script_name = "pytest.exe" if os.name == "nt" else "pytest"
+    python_test_script = python_bin / script_name
+    python_test_script.write_text("#!/usr/bin/env python3\n")
+    native_test.chmod(0o755)
+    python_test_script.chmod(0o755)
+
+    assert generate_coverage.find_test_binaries(build_dir) == [str(native_test)]
+
+
 def test_source_exclusion_adjustment_honors_multiline_branch_marker(tmp_path):
     repo_root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(repo_root / "scripts"))
@@ -228,7 +251,10 @@ def test_driver_abi_coverage_summary_honors_source_exclusion_markers(tmp_path):
 
 
 def _llvm_cov_export(repo_root: Path, build_dir: Path, profdata_file: Path):
-    binaries = _find_test_binaries(build_dir)
+    sys.path.insert(0, str(repo_root / "scripts"))
+    import generate_coverage
+
+    binaries = generate_coverage.find_test_binaries(build_dir)
     if not binaries:
         raise AssertionError("No test binaries found in buildDir")
 
@@ -270,37 +296,3 @@ def _run_tool_lookup(cmd):
         return None
     path = result.stdout.strip()
     return path or None
-
-
-def _find_test_binaries(build_dir: Path):
-    binaries = []
-    for file_path in build_dir.rglob("*test*"):
-        if not file_path.is_file():
-            continue
-        suffix = file_path.suffix.lower()
-        if suffix in {
-            ".c",
-            ".cpp",
-            ".h",
-            ".hpp",
-            ".o",
-            ".obj",
-            ".profraw",
-            ".profdata",
-            ".log",
-            ".ninja",
-            ".xml",
-            ".json",
-            ".dat",
-            ".lcov",
-            ".txt",
-            ".pc",
-        }:
-            continue
-        if suffix in {".dylib", ".so", ".dll", ".lib", ".a", ".pdb", ".exp"}:
-            continue
-        if os.name == "nt" and suffix != ".exe":
-            continue
-        if os.access(file_path, os.X_OK):
-            binaries.append(str(file_path))
-    return binaries

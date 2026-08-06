@@ -30,7 +30,7 @@ bool ok = db.openIfExists();
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| Constructor | `Database(const std::string& path, OpenMode mode = OPEN_CREATE_OR_OPEN_FILE, size_t cacheSize = 10000)` | Creates a Database object. `path` is the database file path. |
+| Constructor | `Database(const std::string& path, OpenMode mode = OPEN_CREATE_OR_OPEN_FILE, size_t cacheSize = 64 * 1024 * 1024)` | Creates a Database object. `path` is the database file path; `cacheSize` is the byte limit for the shared 4 KiB Buffer Pool and must be at least 4096 bytes. |
 | `open` | `void open() const` | Opens the database. Throws on failure. |
 | `openIfExists` | `bool openIfExists() const` | Opens only if the file exists. Returns `false` if not found. |
 | `close` | `void close() const` | Flushes and closes the database. |
@@ -41,7 +41,7 @@ bool ok = db.openIfExists();
 ### Query Execution
 
 ```cpp
-// Auto-commit query (write statements auto-wrap in a transaction)
+// Auto-commit query (a supported logical mutation publishes atomically)
 zyx::Result result = db.execute("CREATE (n:Person {name: 'Alice'})");
 
 // Parameterized query
@@ -75,7 +75,7 @@ tx.commit();
 
 // Bulk write transaction for large direct API imports
 auto bulkTx = db.beginBulkTransaction();
-db.createNodes("Person", {{{"name", std::string("Ada")}}});
+bulkTx.createNodes("Person", {{{"name", std::string("Ada")}}});
 bulkTx.commit();
 
 // Read-only transaction (snapshot isolation)
@@ -86,14 +86,20 @@ auto result = roTx.execute("MATCH (n) RETURN count(n)");
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `beginTransaction` | `Transaction beginTransaction()` | Begin a read-write transaction. Blocks if another write transaction is active. |
+| `beginTransaction` | `Transaction beginTransaction()` | Begin an optimistic read-write transaction with a pinned snapshot. |
 | `beginBulkTransaction` | `Transaction beginBulkTransaction()` | Begin a read-write transaction optimized for large direct API imports. Commit is WAL-durable; the main DB checkpoint may be deferred until `save()` or clean `close()`. |
 | `beginReadOnlyTransaction` | `Transaction beginReadOnlyTransaction()` | Begin a read-only transaction with snapshot isolation. Multiple can run concurrently. |
-| `hasActiveTransaction` | `bool hasActiveTransaction() const` | Check if a write transaction is currently active. |
+| `hasActiveTransaction` | `bool hasActiveTransaction() const` | Check whether any public transaction is currently active. |
+
+An explicit transaction owns its staged work. Use `Transaction::execute`, transaction-bound `createNode`/`createEdge` methods, transaction-bound row/columnar batch methods, `getShortestPath`, and `bfs` when an operation must see provisional state. They retain read-your-writes visibility until `commit()`. `Database::execute`, direct `Database` writes, and database-level algorithms are independent published-snapshot operations; direct database writes are rejected while any public transaction is active rather than being inferred from thread-local state. A read-only transaction rejects every transaction-bound write.
 
 ### High-Performance Write APIs
 
 These bypass the Cypher parser for maximum throughput. All create methods return IDs.
+
+`edgeType` may be empty for `createEdge`, `createEdges`, and `createEdgesColumnar`. An empty value creates an
+untyped relationship, rather than a relationship with a synthetic name. It remains visible to untyped traversal and is
+excluded from named relationship-type indexes.
 
 ```cpp
 // Create a single node (returns node ID)
@@ -143,9 +149,26 @@ auto columnarEdgeIds = db.createEdgesColumnar(
 | `createNode` | `int64_t createNode(const vector<string>& labels, const unordered_map<string, Value>& props) const` | Create a node with multiple labels. Returns node ID. |
 | `createNodes` | `vector<int64_t> createNodes(const string& label, const vector<unordered_map<string, Value>>& propsList) const` | Batch-create nodes with the same label. Returns list of IDs. |
 | `createNodesColumnar` | `vector<int64_t> createNodesColumnar(const string& label, size_t count, const vector<PropertyColumn>& columns) const` | Batch-create nodes from property columns. Useful for import workloads that already hold columnar data. |
-| `createEdge` | `int64_t createEdge(int64_t sourceId, int64_t targetId, const string& edgeType, const unordered_map<string, Value>& props = {}) const` | Create an edge by node IDs. Returns edge ID. |
-| `createEdges` | `vector<int64_t> createEdges(const string& edgeType, const vector<tuple<int64_t, int64_t, unordered_map<string, Value>>>& edges) const` | Batch-create edges of the same type. Returns list of edge IDs. |
-| `createEdgesColumnar` | `vector<int64_t> createEdgesColumnar(const string& edgeType, const vector<int64_t>& sourceIds, const vector<int64_t>& targetIds, const vector<PropertyColumn>& columns = {}) const` | Batch-create edges from source/target ID columns and property columns. |
+| `createEdge` | `int64_t createEdge(int64_t sourceId, int64_t targetId, const string& edgeType, const unordered_map<string, Value>& props = {}) const` | Create an edge by node IDs. An empty `edgeType` creates an untyped edge. Returns edge ID. |
+| `createEdges` | `vector<int64_t> createEdges(const string& edgeType, const vector<tuple<int64_t, int64_t, unordered_map<string, Value>>>& edges) const` | Batch-create edges of the same type; an empty type creates untyped edges. Returns list of edge IDs. |
+| `createEdgesColumnar` | `vector<int64_t> createEdgesColumnar(const string& edgeType, const vector<int64_t>& sourceIds, const vector<int64_t>& targetIds, const vector<PropertyColumn>& columns = {}) const` | Batch-create edges from source/target ID columns and property columns; an empty type creates untyped edges. |
+
+### Binary Values
+
+`zyx::Bytes` is an owning `std::vector<std::uint8_t>` used for arbitrary binary properties. It is distinct from
+`std::vector<float>`, which is reserved for numeric vector values.
+
+```cpp
+zyx::Bytes source = {0x00, 0x7f, 0xff};
+const int64_t nodeId = db.createNode("Artifact", {{"payload", source}});
+
+zyx::Result result = db.execute(
+    "MATCH (n:Artifact) RETURN n.payload AS payload");
+// A binary result is exposed as zyx::Bytes through Result::get()/value conversion.
+```
+
+Binary values are copied at the API boundary. Use `LargeValue`-backed storage for very large payloads rather than
+placing unbounded data in a single property collection; the logical property API remains the same.
 
 ### Schema APIs
 
@@ -161,7 +184,7 @@ if (!ok) {
 
 | Method | Signature | Description |
 |--------|-----------|-------------|
-| `createNodePropertyIndexes` | `bool createNodePropertyIndexes(const string& label, const vector<string>& properties) const` | Create multiple node property indexes for one label with one coordinated schema operation. Returns `true` only when every requested index is created. |
+| `createNodePropertyIndexes` | `bool createNodePropertyIndexes(const string& label, const vector<string>& properties) const` | Create multiple node property indexes for one label with one coordinated schema operation. The complete batch becomes visible together; validation or historical-build failure leaves no partial definition visible. Returns `true` only when every requested index is created. |
 
 ### Graph Algorithms
 

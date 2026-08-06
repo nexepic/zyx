@@ -1,6 +1,6 @@
 ---
-title: Segment Allocation
-description: ZYX 如何分配固定大小段、按实体类型链接段链，以及通过 IDAllocator 管理槽位分配。
+title: 旧版 Segment 分配
+description: 仅用于说明历史 segment-chain 格式；它不是目标原生存储架构。
 category: 存储
 categoryOrder: 2
 order: 2
@@ -9,7 +9,9 @@ projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
-# Segment Allocation
+# 旧版 Segment 分配
+
+> 本页只记录已经退役的 segment-chain 格式。新的存储工作必须遵循[原生单文件存储重构方案](/zh/docs/zyx/architecture/native-single-file-storage-plan)：逻辑 identity 通过 directory 解析，普通图 adjacency 使用全局 key-only Packed B+Tree，Node 与 Edge record 都不使用 adjacency chain。该旧布局不是 clean format 的兼容目标。
 
 ZYX 将所有图数据存储在固定大小的段中（默认 128 KB）。每种实体类型（Node、Edge、Property、Blob、Index、State）拥有各自的段链。分配算法负责管理段的创建、通过 `IDAllocator` 进行的槽位分配，以及通过文件头实现的链表链接。
 

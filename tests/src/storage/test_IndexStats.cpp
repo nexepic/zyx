@@ -22,9 +22,10 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
 #include <gtest/gtest.h>
+#include <memory>
 
-#include "graph/core/Database.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 
 namespace fs = std::filesystem;
 using namespace graph;
@@ -34,7 +35,8 @@ protected:
 	void SetUp() override {
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath = fs::temp_directory_path() / ("test_indexstats_" + to_string(uuid) + ".dat");
-		db = std::make_unique<Database>(testFilePath.string());
+		db = std::make_unique<storage::testing::LegacyPhysicalStorageTestHarness>(
+				testFilePath.string(), storage::OpenMode::OPEN_CREATE_NEW_FILE);
 		db->open();
 	}
 
@@ -46,16 +48,16 @@ protected:
 	}
 
 	query::QueryResult execute(const std::string &q) const {
-		return db->getQueryEngine()->execute(q);
+		return db->queryEngine()->execute(q);
 	}
 
 	fs::path testFilePath;
-	std::unique_ptr<Database> db;
+	std::unique_ptr<storage::testing::LegacyPhysicalStorageTestHarness> db;
 };
 
 // Test 1: Initial counters are zero after reset
 TEST_F(IndexStatsTest, InitialCountersZero) {
-	auto im = db->getQueryEngine()->getIndexManager();
+	auto im = db->indexManager();
 	im->resetStats();
 	EXPECT_EQ(im->lookups(), 0UL);
 	EXPECT_EQ(im->indexHits(), 0UL);
@@ -63,7 +65,7 @@ TEST_F(IndexStatsTest, InitialCountersZero) {
 
 // Test 2: Direct findNodeIdsByLabel call increments lookups
 TEST_F(IndexStatsTest, DirectLabelLookupIncrementsStats) {
-	auto im = db->getQueryEngine()->getIndexManager();
+	auto im = db->indexManager();
 	im->resetStats();
 
 	// Directly call the index lookup (label may or may not be indexed)
@@ -73,7 +75,7 @@ TEST_F(IndexStatsTest, DirectLabelLookupIncrementsStats) {
 
 // Test 2b: Index hits tracked when label has entries
 TEST_F(IndexStatsTest, IndexHitsTrackedWhenFound) {
-	auto im = db->getQueryEngine()->getIndexManager();
+	auto im = db->indexManager();
 
 	// Create nodes and ensure label index is populated
 	(void) execute("CREATE (n:Person {name: 'Alice'})");
@@ -90,7 +92,7 @@ TEST_F(IndexStatsTest, IndexHitsTrackedWhenFound) {
 
 // Test 3: Lookup on non-existent label increments lookups but not hits
 TEST_F(IndexStatsTest, MissOnNonExistentLabel) {
-	auto im = db->getQueryEngine()->getIndexManager();
+	auto im = db->indexManager();
 	im->resetStats();
 
 	auto result = im->findNodeIdsByLabel("NonExistent");
@@ -101,7 +103,7 @@ TEST_F(IndexStatsTest, MissOnNonExistentLabel) {
 
 // Test 4: Reset stats clears counters
 TEST_F(IndexStatsTest, ResetStatsClears) {
-	auto im = db->getQueryEngine()->getIndexManager();
+	auto im = db->indexManager();
 
 	(void) execute("CREATE (n:Person {name: 'Bob'})");
 	(void) im->findNodeIdsByLabel("Person");
@@ -115,7 +117,7 @@ TEST_F(IndexStatsTest, ResetStatsClears) {
 
 // Test 5: Multiple lookups accumulate
 TEST_F(IndexStatsTest, AccumulateStats) {
-	auto im = db->getQueryEngine()->getIndexManager();
+	auto im = db->indexManager();
 
 	(void) execute("CREATE (n:Person {name: 'Alice'})");
 	(void) execute("CREATE (n:Animal {name: 'Dog'})");
@@ -162,7 +164,7 @@ TEST_F(IndexStatsTest, ShowStatsIncludesIndex) {
 
 // Test 7: Reset stats via Cypher resets index counters
 TEST_F(IndexStatsTest, ResetStatsViaCypher) {
-	auto im = db->getQueryEngine()->getIndexManager();
+	auto im = db->indexManager();
 
 	(void) execute("CREATE (n:Person {name: 'Alice'})");
 	(void) im->findNodeIdsByLabel("Person");
@@ -195,7 +197,7 @@ TEST_F(IndexStatsTest, ShowStatsIncludesPlanCache) {
 
 // Test 9: findEdgeIdsByType increments stats
 TEST_F(IndexStatsTest, EdgeLabelLookupIncrementsStats) {
-	auto im = db->getQueryEngine()->getIndexManager();
+	auto im = db->indexManager();
 
 	(void) execute("CREATE (a:Person {name: 'Alice'})-[:KNOWS]->(b:Person {name: 'Bob'})");
 	im->resetStats();

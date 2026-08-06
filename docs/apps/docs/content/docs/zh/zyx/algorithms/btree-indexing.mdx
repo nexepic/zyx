@@ -1,452 +1,174 @@
 ---
-title: B+Tree 索引
-description: ZYX 使用 B+Tree 数据结构对标签和属性进行高效索引，支持快速查找、范围查询和有序遍历。该实现针对磁盘存储进行了优化，并通过 blob 存储支持大尺寸键值。
+title: Packed B+Tree 索引
+description: 干净的 ZYX 原生格式使用不可变 4 KiB Packed B+Tree page 承载标量索引和全局图邻接。
 category: 索引
 categoryOrder: 3
 order: 11
 project: zyx
 projectLabel: ZYX
-projectDescription: High-performance embedded graph database engine
+projectDescription: 高性能嵌入式图数据库引擎
 projectOrder: 1
 ---
-# B+Tree 索引
 
-ZYX 使用 B+Tree 数据结构对标签和属性进行高效索引，支持快速查找、范围查询和有序遍历。该实现针对磁盘存储进行了优化，并通过 blob 存储支持大尺寸键值。
+# Packed B+Tree 索引
 
-## 概述
+> 本文定义干净的原生存储格式。它明确替换已退役的固定 record index tree：不再存在 256-byte index node、parent pointer、value vector、Blob overflow field，也不保留旧数据库文件的 compatibility reader。
 
-B+Tree 是一种自平衡树数据结构，维护有序数据并支持对数时间的搜索、顺序访问、插入和删除操作。它针对数据存储在磁盘上的存储系统进行了优化。
+## 目标与范围
 
-### 核心特性
+ZYX 使用一套可复用的不可变 Packed B+Tree 实现承载有序持久访问路径。每棵树将 canonical byte key 映射到两种显式声明的 leaf-value layout 之一：
 
-- **平衡结构**：所有叶子节点处于同一层级
-- **有序数据**：按键的排序顺序存储，支持范围查询
-- **高扇出**：最小化树高度，减少磁盘 I/O
-- **叶子链接**：叶子节点通过双向链表连接，支持顺序访问
-- **节点分裂/合并**：插入/删除时自动平衡
-- **Blob 支持**：处理超大键和值列表
+- `BLVL_U64`：leaf key 映射到一个 unsigned 64-bit logical value；
+- `BLVL_EMPTY`：leaf key 不含物理 value，key 的存在本身就是结果。
 
-## B+Tree 与 B-Tree 对比
+第一种 layout 用于 scalar 与 Catalog access path。第二种 layout 消除 membership-style index 中不必要的 payload，普通图 adjacency 即使用它。每个 page header 都声明 tree layout；reader 打开树时必须拒绝与目标树不匹配的 root 或 leaf layout。
 
-### 为什么数据库选择 B+Tree？
+该树是 index structure，而不是 entity store。Node/Edge record 仍保存在 Entity page；B+Tree leaf 不嵌入 Edge record，也不与 Entity page 共用 page。普通图特化请参阅[关系遍历](/zh/docs/zyx/algorithms/relationship-traversal)。
 
-```mermaid
-graph TD
-    A[B-Tree vs B+Tree] --> B[B-Tree]
-    A --> C[B+Tree]
+## 持久拓扑
 
-    B --> B1[Keys in internal nodes]
-    B --> B2[Data pointers in all nodes]
-    B --> B3[Faster single record lookup]
-    B --> B4[Slower range queries]
-
-    C --> C1[Keys only in internal nodes]
-    C --> C2[Data only in leaf nodes]
-    C --> C3[Optimized for range scans]
-    C --> C4[Sequential leaf access]
-```
-
-**主要区别**：
-
-| 特性 | B-Tree | B+Tree |
-|------|--------|--------|
-| 数据存储位置 | 所有节点 | 仅叶子节点 |
-| 叶子链接 | 无 | 双向链接 |
-| 范围查询 | 较慢（需遍历树） | 较快（顺序扫描） |
-| 扇出 | 较低 | 较高（更多指针） |
-| 磁盘 I/O | 范围查询时较多 | 针对顺序访问优化 |
-
-## B+Tree 结构
-
-### 节点布局
+每棵树拥有稳定的逻辑 `IndexId`。current root 从 snapshot-pinned Index Root Directory 解析，不存储在 Entity、可变内存 map 或 file offset 中。
 
 ```mermaid
-graph TD
-    A[Root Node] --> B[Internal Node]
-    A --> C[Internal Node]
-    B --> D[Leaf 1]
-    B --> E[Leaf 2]
-    C --> F[Leaf 3]
-    C --> G[Leaf 4]
-
-    D -.-> E
-    E -.-> F
-    F -.-> G
+flowchart LR
+    S["A/B Superblock generation"] --> D["Index Root Directory"]
+    D --> I["IndexId -> root PageId and generation"]
+    I --> R["Packed B+Tree root"]
+    R --> P["4 KiB internal and leaf page"]
+    P --> PD["Page Directory route"]
+    PD --> F["SGK_INDEX_PAGE_POOL 中的 physical frame"]
 ```
 
-**B+Tree 结构**：
-- 根节点：第 2 层
-- 内部节点：第 1 层
-- 叶子节点：第 0 层（全部处于同一层级）
-- 叶子节点通过双向链表连接，支持顺序访问
+`PageId` 是逻辑 ID。relocation 只修改 Page Directory route；separator child reference、root directory entry 和公开 continuation 都不需要改写 physical offset。空 tree 没有 root-directory entry。第一次 insert 创建 root；删除最后一个 entry 会原子删除 mapping。
 
-### 内部节点结构
+归属同一 index 的所有 page 使用 `SGK_INDEX_PAGE_POOL`，并使用包含所属 `IndexId` 与 page role 的 owner identity。pool 可以让兼容的 Index page 共享 physical frame，但不同逻辑结构绝不能共用一个 4 KiB page。unknown page kind、owner identity、layout version、value layout 或 routing metadata 必须 fail closed。
 
-内部节点包含分隔键和子节点指针。每个子节点指针关联一个分隔键，该分隔键划分键空间。第一个子节点使用一个虚拟键（表示负无穷），后续子节点与划分其键范围的关键值配对。
+## Page 格式
+
+每个 page 固定为 4 KiB，并通过 explicit disk codec 解码。public format 以 byte 为单位；不得持久化 C++ object layout、host endianness、padding 或 pointer width。
+
+| 区域 | 职责 |
+|---|---|
+| Header | format version、page kind、owner、`IndexId`、generation/LSN、checksum、encoded byte bound 与声明的 leaf-value layout |
+| Packed entry area | 有序编码的 leaf key，或 internal separator/child pair |
+| Restart table | 为 prefix-compressed entry 提供有界 search anchor |
+| Trailer 或受保护 metadata | codec 定义的 integrity information 与有界 offset |
+
+internal entry 通过 separator 与逻辑 child `PageId` 路由。leaf entry 包含 canonical key，以及由声明 layout 允许的唯一 value byte。internal page 始终是带 child-reference value 的 page；`BLVL_EMPTY` 仅适用于 leaf。
+
+key 在 page 内进行 prefix compression。restart point 使 binary search 落到有界 decode 位置，因此 point lookup 不需要重建整个 leaf。split、merge、occupancy、separator truncation、restart spacing 与 fan-out 都由共享 layout solver 根据 encoded byte 推导；它们是 policy/configuration 的结果，不能在 caller 或文档中写成固定 entries-per-page 常量。
+
+leaf 为 range scan 保留经过校验的 forward sibling route。持久格式不要求 backward link。copy-on-write mutation 时，所有已变化 boundary 与 separator 都必须在 candidate generation 中重建后才能发布 root；cursor 绝不能沿着与 pinned root 不一致的 sibling 前进。
+
+## Canonical Key 与 Comparator
+
+每棵树都提供 explicit key codec 和 comparator。codec 校验输入、生成唯一 canonical byte representation，并在 read 时解码。numeric field 使用明确的 wire encoding；当 lexicographic byte order 必须匹配 unsigned numeric order 时，codec 使用适用 numeric component 的 canonical big-endian comparison order。该 comparator encoding 不会改变其他 persisted wire field。
+
+comparator 必须定义 strict total order。它决定 duplicate identity、lower/upper bound、internal separator、page ordering、online mutation、bulk construction、integrity check 与 recovery。任何 caller 都不得比较 host-memory struct，也不得假定某个架构的 byte layout 可跨平台持久化。
+
+scalar index 使用以 logical entity identity 结尾的唯一 composite key。例如 property access path 的排序为：
+
+```text
+(canonical PropertyValue, EntityId) -> empty
+```
+
+`EntityId` suffix 不是冗余：它代表每个 entity 一条 index entry，为重复的 PropertyValue 提供确定顺序，并使 exact deletion 不依赖 variable-length value list。相比于为每个 distinct property value 保存一个 EntityId vector，它更紧凑且更利于 mutation。用户可见的 property data 仍由 Entity/Property store 权威保存。
+
+## 读取路径与 Cursor Contract
+
+point lookup 从 snapshot root 沿 internal separator 下降到一个 leaf。range lookup 只下降一次定位 lower bound，按序扫描 entry，并通过经过校验的 forward sibling 推进到 upper bound。
 
 ```mermaid
-classDiagram
-    class InternalNode {
-        +NodeType: INTERNAL
-        +EntryCount: 3
-        +ChildCount: 4
-        +Level: 1
-        +ParentId: 100
-        +getChildren()
-    }
-
-    class ChildEntry {
-        +Key: PropertyValue
-        +ChildId: int64_t
-    }
-
-    InternalNode "1" --> "4" ChildEntry : contains
-    ChildEntry : DummyKey → ChildId 200
-    ChildEntry : Key 50 → ChildId 201
-    ChildEntry : Key 100 → ChildId 202
-    ChildEntry : Key 150 → ChildId 203
+flowchart LR
+    A["Pinned metadata snapshot"] --> B["Resolve IndexId root"]
+    B --> C["Descend internal separators"]
+    C --> D["Seek lower bound in leaf"]
+    D --> E["Decode matching entries"]
+    E --> F{"Range complete?"}
+    F -->|No| G["Follow validated forward sibling"]
+    G --> E
+    F -->|Yes| H["Return logical continuation"]
 ```
 
-**搜索逻辑**：对于键 K，找到小于或等于 K 的最大分隔键，然后进入对应的子节点。
+cursor pin 一个 snapshot，只保留有界 route/search state、一个 current leaf pin 与 logical resume key；不能保存 physical frame、slot、byte offset 或无界 materialized result。continuation 只对其 snapshot、tree identity、comparator 和 requested range 有效；foreign 或 malformed continuation 必须 fail closed。resume 严格位于最后一个 emitted logical key 之后，因此 relocation 后仍正确，也不会产生 duplicate output。
 
-### 叶子节点结构
+root/internal routing page 使用 normal Buffer Pool admission。point lookup 通常 normal-admit 最终 leaf。长 range scan 的 leaf 使用 sequential admission，并且至多执行有界 forward prefetch，防止 scan 淘汰 hot routing page。
 
-叶子节点包含实际的键值对，以及 next 和 previous 叶子指针，构成贯穿所有叶子节点的双向链表。
+## Mutation、原子性与 Snapshot
+
+writer 从一个 pinned metadata generation 开始，并构建 transaction-local sorted overlay。overlay canonicalize duplicate operation、拒绝 contradiction，并为该 transaction 中同一 tree 的所有 mutation 生成一个 byte-aware copy-on-write plan。candidate page 必须在任何 root metadata 可见之前写入并 durable。
 
 ```mermaid
-classDiagram
-    class LeafNode {
-        +NodeType: LEAF
-        +EntryCount: 4
-        +Level: 0
-        +ParentId: 100
-        +NextLeafId: 202
-        +PrevLeafId: 200
-        +getEntries()
-    }
-
-    class Entry {
-        +Key: PropertyValue
-        +Values: vector~int64_t~
-        +KeyBlobId: int64_t
-        +ValuesBlobId: int64_t
-    }
-
-    LeafNode "1" --> "4" Entry : contains
-    Entry : Key 10 → Values 1 5 8
-    Entry : Key 25 → Values 3
-    Entry : Key 40 → Values 7 9
-    Entry : Key 45 → Values 2 4 6
+flowchart LR
+    A["Pinned old generation"] --> B["Canonical transaction overlay"]
+    B --> C["COW leaf and internal candidate page"]
+    C --> D["Durable candidate page"]
+    D --> E["Replacement root-directory entry"]
+    E --> F["Publish inactive A/B Superblock"]
+    F --> G["New complete generation"]
 ```
 
-**条目结构**：每个条目存储索引键、共享该键值的实体 ID 向量以及可选的 blob ID。`keyBlobId` 字段在键本身超过内联阈值时持有对 blob 存储的引用。`valuesBlobId` 字段在实体 ID 列表过大无法内联存储时持有对 blob 存储的引用。
+reader 只能观察 old root 或完整 replacement root，绝不能观察中间 split、已修复一半的 sibling boundary 或部分更新的 multi-index transaction。old snapshot 继续读取先前的 immutable page。并发 root change 必须在 publication 前检测，由 transaction layer 基于 fresh snapshot 重试。
 
-### 节点内存布局
+insert/delete 的 tree work 为 `O(log N)`，另加有界的 split、redistribution 或 merge planning。物理 write cost 是 copy-on-write path amplification，必须以 bytes/pages 测量，而不能被渐进复杂度掩盖。
 
-每个 B+Tree 节点占用固定的 256 字节块，分为两个区域：
+## 删除、回收与 Repacking
 
-```mermaid
-graph TD
-    subgraph Metadata["Metadata Region (43 bytes)"]
-        M1["NodeType (1 byte)"]
-        M2["EntryCount (4 bytes)"]
-        M3["Level (4 bytes)"]
-        M4["ParentId (8 bytes)"]
-        M5["NextLeafId (8 bytes)"]
-        M6["PrevLeafId (8 bytes)"]
-        M7["DataUsage (2 bytes)"]
-        M8["Padding (8 bytes)"]
-    end
-    subgraph Data["Data Region (213 bytes)"]
-        E1["Entry 1: key + values + blobIds"]
-        E2["Entry 2: key + values + blobIds"]
-        E3["..."]
-        E4["Entry N: key + values + blobIds"]
-    end
-    Metadata --> Data
+delete 删除 exact canonical key。underflow 按 encoded byte occupancy 判断，而不是按固定 entry 数判断。mutation planner 尽可能向 sibling 重新分布；否则 merge candidate page 并修复 separator。root collapse 时，new root-directory mapping 指向幸存 root；删除最后一个 key 时，mapping 被完全移除。
+
+被 copy-on-write、merge、root collapse 或 whole-tree rebuilding 替换的 page 进入共享 generation-aware Retire Queue。只有没有 snapshot 能解析 old root 后，physical frame 才可复用。正确性不依赖后台 compactor。只有测量到 byte occupancy 较差时，才允许执行有界 whole-tree repack maintenance：它构建 new tree、原子发布一个 root，并 retirement old reachable set。
+
+## Bulk Construction
+
+bulk writer 在发出 canonical key 前校验 record，按相同 comparator 排序和去重，再由共享 Packed B+Tree builder 构建或 merge ordered run。不得对每个 input key 独立调用一次 root-to-leaf insertion。
+
+online 与 bulk path 共享同一 page codec、fill policy、restart layout、separator rule、ownership validation、checksum、root-publication sequence 与 reclamation protocol。所有 input、run、memory、I/O 和 retry budget 必须显式。未来若需要 external sort，只能使用有界 process memory 或单数据库文件内的受控区域；不能引入第二个 durable database file。
+
+## 全局 Adjacency 特化
+
+普通图 adjacency 是一棵保留的内建 key-only tree：
+
+```text
+(ADJ_OUT, sourceNodeId, EdgeId) -> empty
+(ADJ_IN,  targetNodeId, EdgeId) -> empty
 ```
 
-- **元数据区域**（43 字节）：包含节点类型（叶子或内部）、条目计数、树层级、父节点指针，以及叶子节点的 next/previous 指针。此开销固定不变，不受内容影响。
-- **数据区域**（213 字节）：存储实际条目（叶子节点为键值对，内部节点为分隔键-子节点对）。条目按顺序紧凑排列；超大数据会被转移到 blob 存储。
+它拥有一个保留 `IndexId`、独立 owner identity 和 `BLVL_EMPTY` leaf layout。Edge Entity Store 对 source、target、relationship type 与 state 保持权威。index 既不保存 Edge payload，也不重复 endpoint/type，因此它不是 covering index，不能通过静默增加 leaf value 变成 covering index。
 
-## 节点大小与容量
+该保留 identity 是格式常量 `RSS_GLOBAL_ADJACENCY_INDEX_ID`；user 与 derived index 都不能占用。两个 direction 是同一棵 tree 中的有序 range，而不是两棵按 direction 划分的 tree 或 per-Node tree。direction prefix 因而提供 access partition，却不会增加 root-directory entry、COW publication path 或 snapshot-retirement state 的数量。
 
-### 存储参数
+该布局让低阶 Node 在同一个 leaf 中紧凑共享，也让超级节点跨越连续 leaf。directed expansion 为 `O(log E + degree)`，cursor memory 有界。创建或删除 Edge 时，必须在一个 metadata generation 中发布 Edge record、Entity Map change、两个 adjacency key 和 replacement root。`DETACH DELETE` 使用有界 scan 与 exact erase；不创建 adjacency Tombstone，也不修改相邻 Edge。
 
-ZYX 使用固定 256 字节的节点，与存储块边界对齐。每个节点将 43 字节用于元数据（节点类型、层级、父 ID、叶子链表指针、数据使用量跟踪），213 字节用于实际条目数据。这种布局确保了可预测的 I/O 行为并简化了空间管理。
+commit 时，transaction 必须针对最新 root 重新验证；必要时重试/rebase 其有界 sorted final-state overlay。仅出现更新的 root 不构成语义 conflict；duplicate/deleted Edge identity 或不一致的权威 endpoint 才是。这样物理上的全局 root 不会成为用户可见的 conflict domain。
 
-### 容量计算
+全局 adjacency tree 与 Vector ANN adjacency 无关。ANN 使用 Vector 专用结构，不得复用普通 adjacency root、page owner、key codec 或 cursor contract。
 
-**叶子节点条目容量**：
-- 小型内联条目：每个节点约 20-30 个条目
-- 配合 blob 存储处理超大数据：实际上不限条目数
+### Entity 与 Adjacency 的分离
 
-**内部节点扇出**：
-- 典型扇出：每个内部节点 40-50 个子节点
-- 100 万条目的树高度：log50(1,000,000) 约为 3-4 层
+`BLVL_EMPTY` 表示 adjacency leaf 只代表有序 range 中的 membership，不能把它当作紧凑的 Edge store。Node 与 Edge record 继续存放于 Entity page，并通过 Entity Map 寻址；adjacency leaf 不保存 entity slot、physical offset、endpoint copy、relationship type、state 或 property byte。Edge expansion 先从全局 tree 找到 EdgeId，再在同一个 pinned snapshot 中只解析所需的 Edge record。
 
-## 插入算法
+这种分离是刻意设计：一个 leaf 可以让多个低阶 Node 共享编码 key space，超级节点则可延续到后续 leaf。它同时避免 per-Node page tail 和修改相邻 Edge link 的写放大。由于 Entity record 与 public continuation 都不指向 B+Tree frame，physical page relocation 也被限制在 Page Directory 内。
 
-### 流程图
+## Integrity、Recovery 与测试门禁
 
-```mermaid
-flowchart TD
-    A[Start Insert] --> B[Find Leaf Node]
-    B --> C{Leaf has space?}
-    C -->|Yes| D[Insert Entry]
-    D --> E[Done]
+runtime 在使用前验证每个访问 page：page kind、format、owner、`IndexId`、generation、LSN、checksum、encoded bound、restart table、key order、separator、child route、leaf-value layout 与 forward sibling relationship。corrupt 或 impossible state 是 format error，不能隐式 repair 或 silent skip。
 
-    C -->|No| F[Split Leaf Node]
-    F --> G[Divide entries 50/50]
-    G --> H[Create new leaf node]
-    H --> I[Update leaf links]
-    I --> J[InsertIntoParent]
+完整 integrity scanner 还验证 root-directory uniqueness 与 reachability、没有 cross-tree page ownership、没有 orphan current page，以及 snapshot-safe retirement 完整。对全局 adjacency，它会交叉验证每条 live Edge 恰好有一个 outgoing 与一个 incoming empty-value key，并验证每个 key 都匹配权威 Edge endpoint。
 
-    J --> K{Parent has space?}
-    K -->|Yes| L[Add separator to parent]
-    L --> E
+每个 implementation stage 在 macOS、Linux 与 Windows 都必须达到至少 95% 的 line、branch、function 和 region coverage。测试必须包括 comparator/codec boundary、malformed page、root create/collapse、split/merge/redistribution、duplicate operation、rollback、stale snapshot、relocation、reopen、publication 前后 crash injection、ENOSPC、short I/O、有界 range continuation、bulk/online equivalence 与 randomized model-oracle check。
 
-    K -->|No| M[Split Internal Node]
-    M --> N[Promote middle key]
-    N --> O{Parent exists?}
-    O -->|Yes| P[Recursive insert]
-    O -->|No| Q[Create new root]
-    Q --> E
-```
+## 实施顺序
 
-### 插入过程详解
-
-当属性值被添加到索引时，系统根据值的类型（integer、string、double、boolean）将其路由到相应的 `IndexTreeManager`。树管理器从根节点开始，通过内部节点的分隔键比较逻辑，逐层向下定位到正确的叶子节点。
-
-如果目标叶子节点有足够的空间，条目按排序顺序插入，操作完成。当叶子节点已满时，执行 50/50 分裂：创建一个新的兄弟叶子节点，条目在原始节点和新节点之间均匀分配，双向叶子链表随之更新。新节点（右侧）的第一个键成为向上传播到父节点的分隔键。
-
-这种传播可能会在父节点也已满时级联发生，导致父节点也进行分裂。在最坏情况下，分裂一直传播到根节点，此时创建一个包含两个子节点的新根节点，树高度增加一层。
-
-### 节点分裂（50/50 分配）
-
-叶子节点分裂将条目在两个节点之间均匀分配。原始节点（左侧）保留前半部分条目，新节点（右侧）接收后半部分条目。分裂后，叶子链表被修复：左侧节点的 next 指针和右侧节点的 previous 指针被更新以维护双向链表。分隔键（右侧节点的第一个键）随后被插入到父节点中。
-
-内部节点分裂遵循相同的 50/50 原则，但包含一个额外步骤：中间键作为分隔键向上提升，而不是留在任一子节点中。
-
-## 删除算法
-
-### 流程图
-
-```mermaid
-flowchart TD
-    A[Start Delete] --> B[Find Leaf Node]
-    B --> C[Remove Entry]
-    C --> D{Node underflow?}
-    D -->|No| E[Done]
-
-    D -->|Yes| F[handleUnderflow]
-    F --> G{Can borrow from sibling?}
-    G -->|Yes| H[Redistribute entries]
-    H --> I[Update parent separator]
-    I --> E
-
-    G -->|No| J[Merge with sibling]
-    J --> K[Remove separator from parent]
-    K --> L{Parent underflow?}
-    L -->|Yes| M[Recursive handleUnderflow]
-    L -->|No| E
-    M --> N{Root has 1 child?}
-    N -->|Yes| O[Collapse root]
-    N -->|No| E
-```
-
-### 下溢检测
-
-删除条目后，系统检查节点是否已降至下溢阈值以下。阈值设定为总节点大小（256 字节）的 40%，即当节点的数据使用量降至约 102 字节以下时，该节点被视为不饱满。空节点无论阈值如何始终被视为不饱满。
-
-40% 的比率（由 `UNDERFLOW_THRESHOLD_RATIO = 0.4` 定义）平衡了两个因素：较低的阈值会容忍更多的空间浪费并触发更少的合并，而较高的阈值会导致频繁的合并和重分布。所选值允许节点适度稀疏而不触发过多的再平衡操作。
-
-### 重分布
-
-当节点下溢但其兄弟节点有多余条目时，系统在它们之间重新分配条目。对于叶子节点，将左侧兄弟的最后一个条目（或右侧兄弟的第一个条目）移动到不饱满的节点。然后更新父节点的分隔键以反映两个节点之间的新边界。
-
-这种方式优于合并，因为它不会减少节点总数，也避免了将变更进一步向上传播。
-
-### 节点合并
-
-当不饱满的节点和其兄弟节点都过于稀疏而无法进行重分布时，两个节点被合并为一个。对于叶子节点，右侧节点的所有条目被追加到左侧节点，双向叶子链表被更新以跳过被移除的节点。对于内部节点，父节点的分隔键被下拉到合并后的节点中，同时包含两个节点的所有子条目。
-
-合并后，右侧节点被删除，父节点失去一个分隔键-子节点对。这可能导致父节点本身下溢，触发向上递归的再平衡。如果再平衡到达根节点且根节点只剩一个子节点，根节点被收缩（由其唯一子节点替代），树高度减少一层。
-
-## 搜索操作
-
-### 精确匹配搜索
-
-精确匹配搜索从根节点向下遍历到叶子节点。在每个内部节点层级，算法通过找到小于或等于搜索键的最大分隔键来定位适当的子节点。到达叶子层级后，扫描条目以找到精确匹配的键，并返回关联的实体 ID 向量。
-
-**搜索路径**：
-1. 从根节点开始
-2. 在每个内部节点，使用分隔键找到对应的子节点
-3. 向下遍历到叶子层级
-4. 扫描叶子节点查找匹配的键并返回其值
-
-**时间复杂度**：O(log_n N)，其中 n 为扇出，N 为总条目数。
-
-### 范围查询
-
-范围查询利用双向链表的叶子结构实现高效的顺序扫描。算法首先沿树下降找到包含范围最小键的叶子节点。从该起始叶子节点开始，按顺序扫描条目，收集所有键在指定范围内的实体 ID。当一个叶子节点扫描完毕后，算法沿 next 指针继续在相邻叶子节点中扫描。当遇到超出最大边界的键或没有更多叶子节点时，扫描停止。
-
-```mermaid
-graph LR
-    A[Find Start Leaf] --> B[Scan Leaf]
-    B --> C[Collect Matching Entries]
-    C --> D{More Leaves?}
-    D -->|Yes| E[Follow Next Link]
-    E --> B
-    D -->|No| F[Return Results]
-```
-
-**时间复杂度**：O(log_n N + K)，其中 K 为结果范围内的条目数。对数项用于查找起始叶子节点，线性项用于通过链接叶子节点的顺序扫描。
-
-## Blob 存储与大数据
-
-### 键/值超出内联限制时
-
-每个节点的内联存储空间有限（213 字节数据区域）。当键或值列表超过 32 字节的内联阈值时，会被序列化到独立的 blob 存储区域，节点条目中仅保留 blob ID。
-
-**内联阈值**：
-- 内部键：32 字节 —— 超过此长度的键存储为 blob
-- 叶子键：32 字节 —— 叶子层级键使用相同阈值
-- 叶子值：32 字节 —— 序列化后的值列表须在此限制内
-
-**Blob 存储策略**：
-
-`Entry` 结构在其内联数据旁包含两个 blob ID 字段。当键已被转移到 blob 存储时，`keyBlobId` 字段被设为非零值。类似地，当实体 ID 列表过大时，`valuesBlobId` 被设为非零值。在读取访问时，系统检查这些 blob ID，并在必要时从 blob 存储中检索完整数据。这种双层方法使得常见（小型）条目在节点内保持紧凑，同时支持任意大小的键和值列表而不牺牲节点容量。
-
-## 时间与空间复杂度
-
-### 时间复杂度
-
-| 操作 | 平均情况 | 最坏情况 |
-|------|----------|----------|
-| 搜索（精确匹配） | O(log N) | O(log N) |
-| 插入 | O(log N) | O(log N) |
-| 删除 | O(log N) | O(log N) |
-| 范围查询 | O(log N + K) | O(log N + K) |
-| 顺序扫描 | O(K) | O(K) |
-
-其中：
-- N = 总条目数
-- K = 结果/范围内的条目数
-
-### 空间复杂度
-
-| 组件 | 空间 |
-|------|------|
-| 节点大小 | 256 字节（固定） |
-| 每节点元数据 | 43 字节 |
-| 每节点数据 | 213 字节 |
-| 树总大小 | O(N) |
-
-**扇出计算**：
-- 指针大小：8 字节
-- 键大小：可变（通常 4-16 字节）
-- 子条目：约 16-24 字节
-- 扇出：213 / 16 约为 13 个子节点（保守估计）
-- 实际扇出：优化后 40-50
-
-## 磁盘 I/O 特性
-
-### 每次操作的 I/O
-
-| 操作 | 磁盘读取 | 磁盘写入 |
-|------|----------|----------|
-| 搜索 | O(log_n N) | 0 |
-| 插入 | O(log_n N) | O(log_n N) |
-| 删除 | O(log_n N) | O(log_n N) |
-| 范围查询 | O(log_n N + K/b) | 0 |
-
-其中：
-- n = 扇出（每个内部节点的子节点数）
-- N = 总条目数
-- K = 结果大小
-- b = 分支因子（每个叶子节点的条目数）
-
-### 优化策略
-
-1. **高扇出**：最小化树高度
-2. **节点大小**：256 字节与磁盘块对齐
-3. **顺序扫描**：叶子链接使范围查询无需重新遍历树
-4. **批量操作**：减少批量插入的 I/O
-
-**示例**：100 万条目，扇出 50：
-- 树高度：ceil(log50(1,000,000)) = 4 层
-- 每次搜索最大 I/O：4 次磁盘读取
-
-## 并发操作
-
-### 加锁策略
-
-`IndexTreeManager` 使用 `std::shared_mutex` 协调并发访问。此读写锁允许多个线程同时执行读操作，同时确保写操作具有独占访问权。
-
-**锁类型**：
-- **共享锁**：在读操作（精确匹配搜索、范围查询）时获取。多个读者可以同时持有共享锁，为查找密集型工作负载提供高吞吐量。
-- **排他锁**：在写操作（插入、删除、清空）时获取。同一时间只能有一个写者持有锁，所有读者在写操作期间被阻塞。
-
-这种方式适合读密集型访问模式，这在图数据库索引查找中很常见。写操作虽然被串行化，但由于树结构变更（分裂和合并）相对于总操作数来说较为罕见，因此影响有限。
-
-## ZYX 中的应用
-
-### 标签索引
-
-标签索引使用 B+Tree 将标签 token 映射到实体 ID。每个唯一标签都有自己的树根，存储在内存映射中。当节点被分配标签时，节点 ID 被插入到以该标签根为根的树中。查找时遍历树找到标签的条目，返回所有关联的实体 ID。
-
-### 属性索引
-
-属性索引为每种属性值类型维护独立的 `IndexTreeManager` 实例：string、integer、double 和 boolean。这种类型隔离的方法确保树内的比较始终类型一致，避免了跨类型排序的复杂性。
-
-对于每个属性名，按类型跟踪树根。精确匹配查询路由到相应的树管理器并执行标准 B+Tree 查找。范围查询（适用于数值类型）使用前面描述的链接叶子扫描来收集属性值在指定范围内的所有实体 ID。
-
-## 配置参数
-
-### 节点大小
-
-总节点大小固定为 256 字节。此值是一个平衡选择：较大的节点提供更高的扇出和更矮的树，但会增加每次读写节点的 I/O 开销。较小的节点减少单节点 I/O 但需要更多树层级。在 256 字节下，节点可以舒适地容纳在典型存储块大小内，同时为大多数数据集提供足够的扇出。
-
-### 下溢阈值
-
-下溢阈值比率设定为 0.4（40%）。这意味着当节点的数据使用量降至总节点大小的 40% 以下时，该节点被视为不饱满。权衡在于合并频率和空间利用率之间：较低的阈值容忍更多空间浪费但减少再平衡开销，较高的阈值保持节点紧凑但代价是更频繁的合并和重分布。40% 的值提供了实用的平衡。
-
-### 内联阈值
-
-所有内联阈值（内部键、叶子键和叶子值）均设为 32 字节。在此限制内的数据直接存储在节点条目中。超过阈值的数据被转移到 blob 存储，仅在线保留 blob ID。32 字节阈值可以容纳大多数常见属性值（小整数、短字符串、布尔值），同时保持节点条目格式紧凑。
-
-## 性能考量
-
-### 优化技术
-
-1. **批量插入**：`insertBatch` 方法接收一组键值对，排序后合并重复项再插入树中。与逐条插入相比，这减少了树重构操作的次数。
-
-2. **单趟插入**：`tryInsertEntry` 方法将反序列化、插入和序列化合并为对节点数据的单趟操作。避免了将节点反序列化、修改、再序列化为独立步骤的开销。
-
-3. **节点缓存**：频繁访问的节点由页面缓冲池缓存在内存中，减少热索引数据的磁盘 I/O。这对树的上层节点尤其有效，因为每次操作都会访问它们。
-
-### 基准性能
-
-典型性能特征：
-
-| 指标 | 数值 |
-|------|------|
-| 每叶子节点条目数 | 20-30 |
-| 扇出 | 40-50 |
-| 树高度（100 万条目） | 3-4 层 |
-| 搜索时间 | 约 4 次磁盘读取 |
-| 插入时间 | 约 4 次磁盘读取 + 4 次磁盘写入 |
-| 范围查询 | O(log N + K/b) |
-
-## 最佳实践
-
-1. **选择性索引**：仅对频繁查询的属性建立索引
-2. **使用合适的类型**：为范围查询选择数值类型
-3. **批量操作**：批量加载时使用批量插入
-4. **监控树高度**：树过高时考虑重建
-5. **调整阈值**：根据工作负载特征进行调优
+1. 冻结 4 KiB page codec、typed root-directory contract、key codec interface、byte-layout solver 与 fail-closed validation test。
+2. 实现 immutable point/range read、logical continuation 与 Buffer Pool admission hint。
+3. 实现 transaction-local copy-on-write planning、root publication、retirement 与 crash test。
+4. 将 scalar index 切换到 unique composite key，并删除 fixed-record/value-vector/Blob-overflow 假设。
+5. 添加全局 key-only adjacency 特化，再一并切换 graph write、reader、Cypher expansion、bulk ingest 与 `DETACH DELETE`。
+6. 删除退役 index/adjacency codec 和 reader、删除 Node adjacency root 与 Edge link、提升 clean format version，并拒绝退役 page subtype/field。
+7. 在宣布 cutover 完成之前运行 cross-platform coverage、integrity、durability、space 与 performance gate。
 
 ## 另见
 
-- [存储系统](/zh/docs/zyx/architecture/storage) - 整体存储架构
+- [原生单文件存储重构方案](/zh/docs/zyx/architecture/native-single-file-storage-plan)
+- [关系遍历](/zh/docs/zyx/algorithms/relationship-traversal)
+- [Segment 整理](/zh/docs/zyx/algorithms/segment-compaction)

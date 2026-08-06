@@ -1,424 +1,234 @@
 ---
 title: 关系遍历
-description: ZYX 实现了基于链表邻接结构的高性能关系遍历系统，支持高效导航图关系，为 Cypher 查询提供 O(1) 的连接节点和边访问能力。
+description: 基于一棵全局 Packed B+Tree adjacency index 的目标关系遍历架构。
 category: 查询
 categoryOrder: 4
 order: 10
 project: zyx
 projectLabel: ZYX
-projectDescription: High-performance embedded graph database engine
+projectDescription: 高性能嵌入式图数据库引擎
 projectOrder: 1
 ---
+
 # 关系遍历
 
-ZYX 实现了基于链表邻接结构的高性能关系遍历系统。这为 Cypher 查询（如 `MATCH (a)-[:KNOWS]->(b)`）提供了高效的图关系导航能力，并支持 O(1) 的连接节点和边访问。
+> 本文定义普通图关系遍历的目标架构。迁移会分阶段完成；在[原生单文件存储重构方案](/zh/docs/zyx/architecture/native-single-file-storage-plan) Stage 8 完成前，源码中仍可能存在已退役 adjacency format 的过渡实现。目标格式不兼容旧数据库文件。
 
 ## 概述
 
-关系遍历提供以下能力：
+ZYX 使用一棵全局 Packed B+Tree 存储普通图 adjacency。Edge Entity Store 仍是权威数据源；该树提供从 Node 与方向到 EdgeId 的有序访问路径。
 
-- **链表邻接结构**：使用双向链表实现高效的边存储
-- **双向遍历**：快速访问出边和入边
-- **连接节点检索**：无需全图扫描即可直接访问邻居节点
-- **环检测**：自动检测损坏的边链
-- **活跃边过滤**：遍历时自动跳过已删除/非活跃的边
-- **O(1) 边链接**：常数时间的边插入和删除
+该设计的优化目标包括：
 
-## 架构
+- 多个低阶 Node 共享 4 KiB leaf，避免每个 Node 留下一页尾部空间；
+- 超级节点使用有界、接近顺序读取的 leaf scan；
+- Node/Edge record 不保存 adjacency pointer；
+- Edge 与两个 adjacency direction 原子可见；
+- online mutation、bulk ingest、cache、recovery 和 reclamation 复用同一 Packed B+Tree 实现；
+- logical cursor 不依赖 physical page location，page 搬迁后仍能正确恢复。
 
-### 邻接结构
+普通图 adjacency 与 Vector search 的 ANN 图无关。它们使用不同的 owner identity、root、codec 和维护策略。
 
-ZYX 使用基于链表的邻接结构，每个节点维护指向其首条出边和首条入边的指针：
+## 存储模型
 
-```mermaid
-graph TD
-    A[Node 1] -->|firstOutEdgeId| B[Edge 101]
-    B -->|nextOutEdgeId| C[Edge 102]
-    C -->|nextOutEdgeId| D[Edge 103]
-    D -->|nextOutEdgeId| E[null: 0]
+### 权威 Edge Store
 
-    B -->|prevOutEdgeId| F[null: 0]
-    C -->|prevOutEdgeId| B
-    D -->|prevOutEdgeId| C
+每条 live directed relationship 只有一个权威 Edge record：
+
+```text
+EdgeId -> sourceNodeId + targetNodeId + relationshipTypeId + state
 ```
 
-### 双向边链接
+Node record 不持有 outgoing/incoming root。Edge record 不包含 `next` 或 `previous` link。更新 adjacency 因而不会改写相邻 Edge record。
 
-每条边维护四个指针，用于在两个方向上进行遍历：
+### 全局 Adjacency Index
 
-```mermaid
-graph LR
-    A[Node A] -->|firstOut| B[Edge 1]
-    B -->|nextOut| C[Edge 2]
-    C -->|nextOut| D[Edge 3]
+内建 adjacency index 的逻辑 schema 为：
 
-    E[Node B] -->|firstIn| C
-    C -->|nextIn| F[Edge 4]
+```text
+(direction, NodeId, EdgeId) -> empty
 ```
 
-**双向边链接：**
-- Node A（源节点）：出边列表
-- Node B（目标节点）：入边列表
-- Edge 2 出现在两个列表中，实现高效的双向遍历
+每条 live Edge 恰好生成两个 entry：
 
-**关键点**：同一条边（Edge 2）同时出现在 Node A 的出边列表和 Node B 的入边列表中，从而实现高效的双向遍历。
-
-## 数据结构
-
-遍历系统建立在两个核心数据结构之上，分别存储在 `include/graph/storage/Node.hpp` 和 `include/graph/storage/Edge.hpp` 中。
-
-### 节点结构
-
-每个节点维护两个 8 字节的指针，作为其边链表的头节点：
-
-| 字段 | 类型 | 用途 |
-|-----|------|------|
-| `firstOutEdgeId` | int64_t | 出边链表的头节点 |
-| `firstInEdgeId` | int64_t | 入边链表的头节点 |
-
-值为 0 表示空链表（该方向上没有边）。这两个指针共计 16 字节的每节点遍历开销。
-
-### 边结构
-
-每条边存储四个 8 字节的指针，将其串联到两个独立的双向链表中 -- 一个用于源节点的出边，一个用于目标节点的入边：
-
-| 字段 | 类型 | 用途 |
-|-----|------|------|
-| `sourceNodeId` | int64_t | 关系的源节点 |
-| `targetNodeId` | int64_t | 关系的目标节点 |
-| `nextOutEdgeId` | int64_t | 源节点出边列表中的下一条边 |
-| `prevOutEdgeId` | int64_t | 源节点出边列表中的上一条边 |
-| `nextInEdgeId` | int64_t | 目标节点入边列表中的下一条边 |
-| `prevInEdgeId` | int64_t | 目标节点入边列表中的上一条边 |
-
-四个链接指针（`nextOut`、`prevOut`、`nextIn`、`prevIn`）共计 32 字节的每边遍历开销。
-
-## 边生命周期
-
-边从创建到删除经历一个明确定义的生命周期：
-
-```mermaid
-stateDiagram-v2
-    state "Created" as Created
-    state "Linked" as Linked
-    state "Active" as Active
-    state "Unlinked" as Unlinked
-    state "Deleted" as Deleted
-
-    [*] --> Created: Edge allocated
-    Created --> Linked: linkEdge()
-    Linked --> Active: isActive = true
-    Active --> Unlinked: unlinkEdge()
-    Unlinked --> Deleted: isActive = false
-    Deleted --> [*]: Garbage collected
+```text
+(ADJ_OUT, sourceNodeId, EdgeId) -> empty
+(ADJ_IN,  targetNodeId, EdgeId) -> empty
 ```
 
-1. **Created**：边对象已分配，源节点和目标节点 ID 已赋值，但尚未从任一节点的边列表中可达。
-2. **Linked**：`linkEdge()` 将边插入到源节点的出边列表和目标节点的入边列表的头部位置，O(1) 时间完成。
-3. **Active**：当 `isActive` 为 true 时，遍历操作会返回该边。它正常参与查询。
-4. **Unlinked**：`unlinkEdge()` 利用双向链表结构在 O(1) 时间内从两个链表中移除该边（通过旁路跳过），并清除所有四个链接指针。
-5. **Deleted**：边被标记为非活跃（`isActive = false`）。它不再出现在遍历结果中，可被垃圾回收。
+这两个 entry 是同一棵保留 tree 中的两个有序 range，不是两棵按 direction 划分的 tree，也不是 per-Node index family。direction prefix 使两条 access path 都可 seek，同时保持一个 root、一个 codec、一个 COW publication unit 和一套 snapshot-retirement lifecycle。
 
-## 核心操作
+value 明确为空。routing NodeId 必然属于 access key，但 tree 不保存另一端 endpoint，也不把 relationship type/state 作为 Edge payload 存入 tree。Edge record 仍是完整 relationship 的权威表示。第一版不是 covering index。
 
-`RelationshipTraversal` 类（定义在 `include/graph/query/RelationshipTraversal.hpp`）提供所有遍历和链接操作。它持有对 `DataManager` 的弱引用，用于获取节点和边。
+### 存储边界
 
-### 获取出边
+全局 index 是 access path，而不是混合存放 Node/Edge 的新容器。明确分离职责可以让布局紧凑，同时避免产生第二份权威数据。
 
-通过遍历出边链检索节点的所有活跃出边：
+| 持久化结构 | 存储的数据 | 不存储的数据 |
+|---|---|---|
+| Node Entity page | Node identity、state、label 与 Node-owned reference | adjacency root、adjacency key 或 edge-chain link |
+| Edge Entity page | `EdgeId`、endpoint、relationship type、state 与 Edge-owned reference | B+Tree page/slot/offset、`next`/`previous` adjacency link 或重复的 adjacency payload |
+| 全局 adjacency B+Tree leaf | 排序后的 `(direction, NodeId, EdgeId)` key，value 为空 | Node/Edge record、另一端 endpoint、type、state 或 property |
+| 全局 adjacency B+Tree internal page | separator 与逻辑 child `PageId` | Entity record 或作为 payload 的 adjacency key |
 
-1. 通过 ID 从 `DataManager` 获取节点。
-2. 读取节点的 `firstOutEdgeId` 作为起点。
-3. 当前边 ID 不为 0 时循环：
-   - 检查该边 ID 是否已被访问过。如果是，抛出运行时错误以标识链损坏（环检测）。
-   - 将该边 ID 记录到已访问集合中。
-   - 从 `DataManager` 获取该边。
-   - 如果边是活跃的（`isActive()`），将其添加到结果中。
-   - 前进到 `nextOutEdgeId`。
-4. 返回收集到的活跃边。
+因此，一个 leaf 可以容纳多个低阶 Node 的连续 key range；这不代表这些 Node 或 Edge record 与 leaf 共置。相反，超级节点可以跨越连续 leaf，但它永远不会获得私有 root、chain 或永久保留的 tail page。
 
-**特性**：
-- **时间复杂度**：O(k)，其中 k = 出边数量
-- **空间复杂度**：O(k) 用于结果向量，加上 O(k) 用于环检测集合
-- **环检测**：防止在损坏数据上出现无限循环
-- **活跃过滤**：自动排除已删除的边
+持久化 direction enum 使用 `ADJ_OUT`、`ADJ_IN` 这类带前缀 member，避免 Windows macro 冲突。未知 direction、零 ID 或错误 key width 必须 fail closed。
 
-### 获取入边
+### 排序与 Page 共享
 
-检索节点的所有活跃入边。算法与 `getOutgoingEdges` 相同，区别在于它从 `firstInEdgeId` 开始，并沿 `nextInEdgeId` 指针前进而非 `nextOutEdgeId` 指针。
-
-**特性**：与 `getOutgoingEdges` 相同 -- O(k) 时间和空间，具有环检测和活跃过滤。
-
-### 获取所有连接边
-
-将出边和入边合并为单一结果：
-
-1. 调用 `getOutgoingEdges(nodeId)` 收集出边。
-2. 调用 `getIncomingEdges(nodeId)` 收集入边。
-3. 拼接两个向量并返回。
-
-**使用场景**：查找与节点相连的所有关系，不考虑方向。
-
-### 获取连接的目标节点
-
-通过出边检索所有可达节点：
-
-1. 调用 `getOutgoingEdges(nodeId)` 获取所有活跃出边。
-2. 对每条边，读取其 `targetNodeId` 并从 `DataManager` 获取相应节点。
-3. 返回收集到的目标节点。
-
-**使用场景**：Cypher 查询如 `MATCH (a)-[:KNOWS]->(b) RETURN b`。
-
-### 获取连接的源节点
-
-检索通过入边指向此节点的所有节点：
-
-1. 调用 `getIncomingEdges(nodeId)` 获取所有活跃入边。
-2. 对每条边，读取其 `sourceNodeId` 并从 `DataManager` 获取相应节点。
-3. 返回收集到的源节点。
-
-**使用场景**：Cypher 查询如 `MATCH (a)-[:KNOWS]->(b) RETURN a`，其中 `b` 是固定值。
-
-### 获取所有连接节点
-
-从两个方向检索所有邻居节点并进行去重：
-
-1. 创建一个空的 `unordered_set<int64_t>` 用于存储已访问的节点 ID。
-2. 对每条出边，提取 `targetNodeId`。如果该 ID 之前未见过，将其插入集合并获取节点。
-3. 对每条入边，提取 `sourceNodeId`。如果该 ID 之前未见过，将其插入集合并获取节点。
-4. 返回所有唯一的邻居节点。
-
-**关键特性**：通过 `unordered_set` 去重，确保同时由出边和入边连接的节点在结果中只出现一次。
-
-**使用场景**：在无向遍历中查找节点的所有邻居。
-
-### 查询流程图
-
-下图展示了典型 Cypher 查询中遍历操作的组合方式：
+canonical comparator 依次按 direction、无符号 NodeId、无符号 EdgeId 排序。同一 `(direction, NodeId)` 的所有 entry 构成一个有序 range。
 
 ```mermaid
-sequenceDiagram
-    participant Q as Cypher Query
-    participant P as Query Planner
-    participant E as Query Executor
-    participant RT as RelationshipTraversal
-    participant DM as DataManager
-
-    Q->>P: MATCH (a)-[:KNOWS]->(b)
-    P->>E: Plan execution
-
-    E->>DM: Get node 'a'
-    DM-->>E: Node object
-
-    E->>RT: getOutgoingEdges(a.id)
-    RT->>DM: Traverse edge list
-    DM-->>RT: Edge objects
-    RT-->>E: Filtered edges
-
-    E->>RT: getConnectedTargetNodes()
-    RT->>DM: Fetch target nodes
-    DM-->>RT: Node objects
-    RT-->>E: Connected nodes
-
-    E-->>Q: Results
+flowchart LR
+    ROOT["全局 adjacency B+Tree root"] --> INTERNAL["Packed internal page"]
+    INTERNAL --> L1["Leaf：多个低阶 Node 的 entry"]
+    INTERNAL --> L2["Leaf：高阶 Node 的一部分 entry"]
+    L2 --> L3["Right sibling：同一高阶 Node"]
+    L3 --> L4["Right sibling：后续 Node range"]
 ```
 
-## 边链接操作
+一个 leaf 可以保存多个 Node 的 entry；超级节点可以跨越任意多个连续 leaf。两种情况都不会为单个 Node 分配专用 page。prefix compression 高效编码重复 direction/NodeId，restart point 则保持 leaf 内随机查找有界。
 
-### 链接边
+Leaf capacity、internal fan-out、restart interval 和 split threshold 全部由编码字节数与 page layout solver 推导。文档、测试和 caller 不能把派生出的 entries-per-page 数复制为 format constant。
 
-将新边插入邻接结构，O(1) 时间完成，始终放置在源节点出边列表和目标节点入边列表的头部。
+### Root 与物理位置
 
-**算法**：
-
-对于源节点的出边列表：
-1. 获取源节点并读取其当前 `firstOutEdgeId`。
-2. 如果列表为空（`firstOutEdgeId` 为 0），将 `firstOutEdgeId` 设为新边的 ID。
-3. 如果列表非空，将新边插入头部：将新边的 `nextOutEdgeId` 设为当前头部，将当前头部的 `prevOutEdgeId` 设为新边的 ID，并将源节点的 `firstOutEdgeId` 更新为新边。
-4. 持久化修改后的源节点和任何已更新的现有边。
-
-对于目标节点的入边列表：
-1. 获取目标节点并读取其当前 `firstInEdgeId`。
-2. 如果列表为空，将 `firstInEdgeId` 设为新边的 ID。
-3. 如果列表非空，使用相同模式在头部插入：将新边的 `nextInEdgeId` 指向当前头部，更新当前头部的 `prevInEdgeId`，并将目标的 `firstInEdgeId` 设为新边。
-4. 持久化修改后的目标节点和任何已更新的现有边。
-
-最后，持久化新边本身。
-
-**特性**：
-- **时间复杂度**：O(1) -- 与图大小无关的常数时间
-- **插入策略**：始终插入到链表头部（无需遍历）
-- **双向链接**：同时维护 next 和 prev 指针以支持高效删除
-
-**可视化示例**：
+该树拥有一个保留的内建 `IndexId`。snapshot 通过 Index Root Directory 解析 root：
 
 ```mermaid
-sequenceDiagram
-    participant L as LinkEdge
-    participant S as Source Node
-    participant T as Target Node
-    participant E as New Edge
-    participant DM as DataManager
-
-    L->>S: Get firstOutEdgeId
-    S-->>L: Returns null (0)
-
-    L->>S: Set firstOutEdgeId = edgeId
-    L->>DM: Update source node
-
-    L->>T: Get firstInEdgeId
-    T-->>L: Returns existing edge (50)
-
-    L->>DM: Get edge 50
-    DM-->>L: Edge 50
-
-    L->>E: Set nextInEdgeId = 50
-    L->>E50: Set prevInEdgeId = edgeId
-    L->>T: Set firstInEdgeId = edgeId
-
-    L->>DM: Update all modified entities
+flowchart LR
+    S["A/B Superblock generation"] --> D["Index Root Directory"]
+    D --> R["RSS_GLOBAL_ADJACENCY_INDEX_ID 与 root PageId"]
+    R --> T["SGK_INDEX_PAGE_POOL 中的 Packed B+Tree page"]
+    T --> E["EdgeId"]
+    E --> ES["Edge Entity Store"]
 ```
 
-### 解除边链接
+Node/Edge page 使用 Entity pool；adjacency internal/leaf page 使用 Index pool，二者绝不共用一个 4 KiB page：B+Tree 保存的是 access key，不是 Edge record。兼容的逻辑 page type 可以占用各自 128 KiB pool 中的 frame；物理 Segment 完全清空后可以回收给其他 SegmentKind。
 
-利用双向链表结构在 O(1) 时间内从源节点的出边列表和目标节点的入边列表中移除边。
+所有 tree reference 都使用逻辑 PageId。page evacuation 只修改 Page Directory route，不改变 PageId；parent reference、cursor、Node record 和 Edge record 都不包含 physical offset，因此不需要 relocation rewrite。
 
-**算法**：
+## 遍历操作
 
-对于源节点的出边列表：
-1. 读取边的 `prevOutEdgeId` 和 `nextOutEdgeId`。
-2. 如果 `prevOutEdgeId` 为 0（边位于链表头部）：将源节点的 `firstOutEdgeId` 更新为 `nextOutEdgeId`。
-3. 如果 `prevOutEdgeId` 非零（边位于中间或尾部）：更新前一条边的 `nextOutEdgeId` 以旁路跳过被移除的边。
-4. 如果 `nextOutEdgeId` 非零：更新下一条边的 `prevOutEdgeId` 为 `prevOutEdgeId`。
+### 有向扩展
 
-对于目标节点的入边列表，使用 `prevInEdgeId` 和 `nextInEdgeId` 重复相同的旁路逻辑：
-1. 如果在头部，更新目标的 `firstInEdgeId`。
-2. 如果在中间，更新前一条边的 `nextInEdgeId`。
-3. 如果存在下一条边，更新其 `prevInEdgeId`。
+Outgoing expansion seek 到 `(ADJ_OUT, NodeId)` 的 lower bound，再推进到 direction 或 NodeId 改变为止。Incoming expansion 使用 `ADJ_IN` 执行相同操作。
 
-最后，将移除的边上的所有四个链接指针清零。
+cursor 必须：
 
-**特性**：
-- **时间复杂度**：O(1) -- 常数时间
-- **双向链接优势**：无需遍历即可找到前一条边
-- **安全解链**：正确处理头部、中间和尾部位置
+- 在生命周期内 pin 一个 metadata snapshot；
+- 只保留 logical prefix 与最后返回的 EdgeId；
+- 直接从经过校验的 page view 解码 key；
+- 至多保留当前 leaf 与有界 prefetch state；
+- 不 materialize 完整 leaf 或超级节点的全部 Edge；
+- 严格从最后一个 EdgeId 后恢复，且不暴露 PageId 或 physical offset。
 
-**可视化示例**：
+seek 加 scan 的复杂度为 `O(log E + degree)`，结果 materialization 与请求输出量成正比。
 
-```mermaid
-graph LR
-    A[Edge to Remove] -->|prev| B[Previous Edge]
-    A -->|next| C[Next Edge]
+### 无向扩展与 Self-loop
 
-    B -.->|bypass| C
-```
+无向扩展分别打开一个 outgoing range 和一个 incoming range。parallel Edge 因 key 包含 EdgeId 而保持独立。self-loop 具有一个 outgoing 和一个 incoming entry；只有 query operator 的 Cypher 语义要求返回一条 relationship 时，才对该 EdgeId 去重。
 
-**边解除链接：**
-- 通过将前一条边连接到下一条边来旁路跳过被移除的边
-- 得益于双向链表结构，为 O(1) 操作
+### Edge 与 Neighbor Materialization
 
-## 与 Cypher 查询的集成
+只依赖 adjacency 的 count 可以直接统计 key，不读取 Edge record。需要返回 Edge 字段时，通过 snapshot-pinned Edge Entity Map 解析 EdgeId。reader 必须验证 Edge live，且扫描的 direction/NodeId 与其权威 endpoint 一致。
 
-### 模式匹配
+第一阶段的 relationship-type filter 读取权威 Edge record。executor 应按 Entity page 对这些读取批处理并应用现有 query limit，不能退化为每个 key 一次无界独立随机读。未来只有 workload evidence 证明额外写入和空间成本合理时，才能增加 type-qualified derived index。
 
-关系遍历在 Cypher 查询执行中被广泛使用。查询中模式的方向决定使用哪种遍历方法：
+### Buffer Pool 策略
 
-**出向遍历** -- `MATCH (a)-[:KNOWS]->(b) RETURN b`：
-1. 获取节点 `a`。
-2. 调用 `getOutgoingEdges(a.id)`。
-3. 按类型 = KNOWS 过滤边。
-4. 从匹配的边中收集目标节点。
+root/internal routing page 使用 normal admission，point probe 的最终 leaf 通常也 normal admission。range scan 消费的 leaf 使用 sequential admission；有界 right-sibling prefetch 携带相同 hint。这样可保留可复用的 routing state，同时避免超级节点扫描淘汰 point-read working set。
 
-**入向遍历** -- `MATCH (a)<-[:KNOWS]-(b) RETURN b`：
-1. 获取节点 `a`。
-2. 调用 `getIncomingEdges(a.id)`。
-3. 按类型 = KNOWS 过滤边。
-4. 从匹配的边中收集源节点。
+cache lookup 后仍必须校验每个 page：owner identity、page subtype、generation、LSN、checksum、key order、restart table、separator 与 sibling relationship 都是强制 invariant。
 
-**双向遍历** -- `MATCH (a)-[:KNOWS]-(b) RETURN b`：
-1. 获取节点 `a`。
-2. 调用 `getAllConnectedEdges(a.id)`。
-3. 按类型 = KNOWS 过滤边。
-4. 从两个方向提取连接的节点。
+## Mutation 语义
 
-## 性能特征
+### 创建 Edge
 
-### 时间复杂度
+一个 transaction 必须针对同一 pinned generation 规划：
 
-| 操作 | 时间复杂度 | 描述 |
-|-----|-----------|------|
-| getOutgoingEdges | O(k) | k = 出边数量 |
-| getIncomingEdges | O(k) | k = 入边数量 |
-| getAllConnectedEdges | O(k1 + k2) | k1 = 出边，k2 = 入边 |
-| getConnectedTargetNodes | O(k) | k = 出边数量 |
-| getConnectedSourceNodes | O(k) | k = 入边数量 |
-| getAllConnectedNodes | O(k1 + k2) | 含去重 |
-| linkEdge | O(1) | 常数时间插入 |
-| unlinkEdge | O(1) | 常数时间移除 |
+1. 插入权威 Edge record 和 Entity Map entry。
+2. 插入 outgoing adjacency key。
+3. 插入 incoming adjacency key。
+4. 发布 replacement B+Tree root 与 metadata root。
+5. 将 inactive A/B Superblock 发布为 new generation。
 
-### 空间复杂度
+两个 key 使用同一个 transaction-local sorted B+Tree overlay。data page 在 root 可见前 durable。recovery 只能选择完整 old generation 或完整 new generation；禁止 Edge 只在一个方向可见。
 
-| 组件 | 空间 | 描述 |
-|-----|------|------|
-| 节点元数据 | 2 x 8 字节 | `firstOutEdgeId`、`firstInEdgeId` |
-| 边元数据 | 4 x 8 字节 | `nextOut`、`prevOut`、`nextIn`、`prevIn` |
-| 环检测 | O(k) | 遍历期间的 `unordered_set` |
-| 结果向量 | O(k) | 输出的边/节点集合 |
+共享 root 不能成为对外暴露伪写冲突的理由。commit 时，transaction layer 必须重新验证有界 sorted final-state overlay；必要时针对最新 root 重试/rebase。它应拒绝真正的语义 conflict（例如相互冲突的 Edge identity 或已改变的权威 endpoint），而不能仅因一个互不冲突的 writer 发布了更新的 adjacency root 就失败。
 
-**每条边总计**：32 字节用于遍历指针（4 x int64_t）
+### 删除 Edge
 
-### 内存开销
+删除操作读取权威旧 endpoint，erase 两个精确 key，删除 Edge record 与 Entity Map entry，并原子发布最终状态。普通 relationship 删除不追加 Tombstone，也不更新相邻 Edge。
 
-对于包含 100 万条边和 10 万个节点的图：
+COW 退休 page 进入公共 generation-aware Retire Queue。旧 snapshot 继续解析自己的旧 root；只有它们释放后，physical frame 才能复用。
 
-- **节点指针**：100K 节点 x 2 指针 x 8 字节 = 1.6 MB
-- **边指针**：1M 边 x 4 指针 x 8 字节 = 32 MB
-- **总遍历开销**：约 33.6 MB（平均每条边 33.6 字节）
+### DETACH DELETE
 
-### 优势与权衡
+`DETACH DELETE` 扫描 Node 的两个有界 range，对包含 self-loop 的 EdgeId 去重，校验资源上限，再构建一个 final-state batch。每条 Edge 与其两个 adjacency entry 都恰好删除一次。如果 key 与权威 Edge record 冲突或超过配置的 transaction bound，操作必须在 publication 前失败。
 
-**优势**：
-1. **O(1) 边操作**：插入和删除为常数时间
-2. **无需全局扫描**：直接访问连接的节点
-3. **缓存友好**：边链表的顺序遍历
-4. **内存高效**：每条边仅 32 字节用于遍历
-5. **可扩展**：性能与图的总大小无关
+### Bulk Edge Ingest
 
-**权衡**：
-1. **指针开销**：每条边 32 字节用于遍历指针
-2. **解引用开销**：每次边访问需要通过 DataManager 进行指针追踪
-3. **无类型索引**：必须扫描所有边才能按关系类型过滤
-4. **环检测开销**：遍历期间增加 O(k) 空间
+bulk create 先校验 endpoint，再生成 outgoing/incoming key，使用 canonical comparator 排序和去重，然后通过共享 Packed B+Tree bulk/overlay builder 合并有序 run。不能为每个 entry 单独执行一次 root-to-leaf insert。
 
-### 与其他方案的比较
+online 与 bulk writer 共享 page fill、prefix/restart、separator、split/merge、checksum、owner 和 publication invariant。内存由 ingest limit 约束。未来任何 external run storage 都必须遵守单数据库文件 durability model，不能成为第二个持久数据库文件。
 
-| 方案 | 边访问 | 内存 | 使用场景 |
-|-----|-------|------|---------|
-| **链表**（ZYX） | O(k) 遍历 | 32 字节/边 | 通用图 |
-| 邻接矩阵 | O(1) 查找 | O(V 平方) | 稠密图 |
-| 邻接数组 | O(k) 扫描 | O(V + E) | 静态图 |
-| 边类型索引 | O(log n + k) | 额外索引 | 类型过滤查询 |
+Bulk work 是 final-state operation。它必须在 publication 前校验完整 batch，按 canonical key 合并 duplicate 或相互抵消的 mutation，构建 ordered run，并通过与 online write 相同的 COW root replacement 应用最终变更。它绝不能暴露部分构建的 range、只在一个方向可见的新 Edge，或没有在同一 generation 发布 Entity change 的 replacement root。
 
-## 最佳实践
+## 删除、Occupancy 与回收
 
-1. **批量创建边**：先创建所有节点，再链接边，以最小化更新次数
-2. **避免手动指针操作**：永远不要直接修改边指针；始终使用 `linkEdge` 和 `unlinkEdge`
-3. **尽早过滤**：在获取连接节点之前应用边类型过滤
-4. **检查活跃状态**：使用 `edge.isActive()` 跳过已删除的边
-5. **去重**：在无向遍历中使用 `getAllConnectedNodes()`
+Packed B+Tree delete 在 COW candidate page 内执行 byte-aware redistribution 或 merge。空 leaf 与折叠的 internal root 使用和其他 Index page 相同的 reclamation path。空图不存在 adjacency root entry，也不会保留永久空 tree page。
 
-## 局限性
+steady-state 实现不存在 per-Node Root page、Base chain、Delta chain、逻辑 Tombstone 或 adjacency merge worker。若实际 byte occupancy 低于策略，可以执行有界全树 repack；它是优化，不属于普通读取正确性的一部分。
 
-1. **无边类型索引**：必须扫描所有边才能按关系类型过滤
-2. **指针开销**：每条边 32 字节用于遍历元数据
-3. **环检测成本**：遍历期间增加运行时开销
-4. **仅顺序访问**：无法对链表中的特定边进行随机访问
-5. **内存局部性**：边指针追踪可能导致缓存未命中
+第一版生产实现使用普通 Packed B+Tree。只有记录的基准证明孤立 Edge COW amplification 无法达到约定阈值时，才考虑有界全局 write buffer。该 buffer 必须保持同一逻辑排序、cursor、atomicity、memory bound、crash recovery 与单文件行为。per-Node delta hierarchy 不能作为 fallback。
+
+## Cypher 集成
+
+| Cypher pattern 或操作 | Adjacency access |
+|---|---|
+| `MATCH (a)-[r]->(b)` | `a` 的 outgoing range |
+| `MATCH (a)<-[r]-(b)` | `a` 的 incoming range |
+| `MATCH (a)-[r]-(b)` | outgoing 与 incoming range，并按语义去重 |
+| `degree(a)` 或 relationship count | 不需要 Edge 字段时直接统计有界 adjacency entry |
+| variable-length expansion | 每个 frontier Node 一个有界 cursor，并遵守 traversal limit |
+| `DETACH DELETE a` | 扫描两个 range、EdgeId 去重、发布一次 bulk erase |
+
+query layer 接收 logical continuation，而不是 page chain。relocation、leaf split/merge 和新 commit generation 都不能把 physical storage detail 泄漏到 Cypher DSL。
+
+## 复杂度与空间
+
+| 操作 | 时间 | 额外 cursor 内存 |
+|---|---|---|
+| seek outgoing/incoming range | `O(log E)` | tree height 与一个 leaf pin |
+| stream 一个方向 | `O(log E + degree)` | 有界，与 degree 无关 |
+| count 一个方向 | `O(log E + degree)` | 有界 |
+| create/delete 一条 Edge | `O(log E)` 逻辑 tree work | COW path 与有界 split/merge state |
+| sorted bulk ingest | input 线性工作加有序 tree construction/merge | 配置的 run bound |
+
+每条 directed Edge 贡献两个 compact key 且没有 value。这些成本替代 Node head pointer、四个 Edge link pointer、per-Node root record 和未填满的 adjacency tail page。由于 prefix compression 与 occupancy 会改变结果，每条 Edge 的精确字节数应从实际编码 page 计量，不能使用手写常量。
+
+## Integrity 与测试门禁
+
+完整 integrity scanner 验证：
+
+- 每条 live Edge 恰好具有两个 direction 正确的 entry；
+- 每个 entry 都解析到 endpoint 匹配的 live Edge；
+- 不存在 duplicate、missing、foreign、zero-ID 或 unknown-direction key；
+- canonical ordering 与 prefix/restart、separator、sibling、owner、generation、LSN、CRC 全部有效；
+- 保留 root identity 唯一，且不与 user index 冲突；
+- reachability 完整，snapshot-safe retirement 正确。
+
+测试覆盖 empty/first/final root transition、低阶 Node leaf sharing、跨多个 leaf 的 supernode、self-loop、parallel Edge、create/delete rollback、`DETACH DELETE`、bulk equivalence、cursor continuation、stale snapshot、page relocation、split/merge/root collapse、ENOSPC、short write、corruption，以及 Superblock 发布前后的 crash point。
+
+还必须覆盖并发但语义无冲突的 adjacency publication 后的 rebase：两个最终 Edge record 与四个 direction key 都可见，且 reader 不会观察到任何 writer 只出现一个 direction。
+
+macOS、Linux 和 Windows 的 line、branch、function、region coverage 都必须至少达到 95%。性能证据记录每次 Edge mutation 的 COW bytes、每次 expansion 的 page read、bulk throughput、churn 后 byte occupancy、Buffer Pool pollution、cursor peak memory 与 supernode tail latency。
 
 ## 另见
 
-- [存储系统](/zh/docs/zyx/architecture/storage) - 整体存储架构
-- [标签索引](/zh/docs/zyx/algorithms/label-index) - 节点标签索引
-- [属性索引](/zh/docs/zyx/algorithms/property-index) - 基于属性的索引
-- [查询优化](/zh/docs/zyx/algorithms/query-optimization) - 查询规划与优化
-- [B+Tree 索引](/zh/docs/zyx/algorithms/btree-indexing) - B+Tree 结构详情
+- [原生单文件存储重构方案](/zh/docs/zyx/architecture/native-single-file-storage-plan)
+- [B+Tree 索引](/zh/docs/zyx/algorithms/btree-indexing)
+- [查询优化](/zh/docs/zyx/algorithms/query-optimization)
+- [Segment 整理](/zh/docs/zyx/algorithms/segment-compaction)

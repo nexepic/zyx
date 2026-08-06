@@ -118,6 +118,28 @@ namespace zyx {
 
 		Result execute(const std::string &cypher) const;
 		Result execute(const std::string &cypher, const std::unordered_map<std::string, Value> &params) const;
+
+		// Transaction-bound direct writes keep their provisional IDs and
+		// read-your-writes visibility inside this transaction only.
+		[[nodiscard]] int64_t createNode(const std::string &label,
+										 const std::unordered_map<std::string, Value> &props = {}) const;
+		[[nodiscard]] int64_t createNode(const std::vector<std::string> &labels,
+										 const std::unordered_map<std::string, Value> &props = {}) const;
+		[[nodiscard]] std::vector<int64_t>
+		createNodes(const std::string &label, const std::vector<std::unordered_map<std::string, Value>> &propsList) const;
+		[[nodiscard]] std::vector<int64_t>
+		createNodesColumnar(const std::string &label, size_t count, const std::vector<PropertyColumn> &columns) const;
+		[[nodiscard]] int64_t createEdge(int64_t sourceId, int64_t targetId, const std::string &edgeType,
+										 const std::unordered_map<std::string, Value> &props = {}) const;
+		[[nodiscard]] std::vector<int64_t>
+		createEdges(const std::string &edgeType,
+						const std::vector<std::tuple<int64_t, int64_t, std::unordered_map<std::string, Value>>> &edgesList) const;
+		[[nodiscard]] std::vector<int64_t>
+		createEdgesColumnar(const std::string &edgeType, const std::vector<int64_t> &sourceIds,
+								const std::vector<int64_t> &targetIds,
+								const std::vector<PropertyColumn> &columns = {}) const;
+		[[nodiscard]] std::vector<Node> getShortestPath(int64_t startId, int64_t endId, int maxDepth = 15) const;
+		void bfs(int64_t startNodeId, const std::function<bool(const Node &)> &visitor) const;
 		void commit();
 		void rollback();
 		[[nodiscard]] bool isActive() const;
@@ -126,6 +148,8 @@ namespace zyx {
 	private:
 		std::unique_ptr<TransactionImpl> impl_;
 		friend class Database;
+		friend class DatabaseImpl;
+		friend class detail::DatabaseBulkInternal;
 		Transaction(); // Only Database can create
 	};
 

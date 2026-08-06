@@ -69,6 +69,8 @@ namespace graph::property_utils {
 						return sizeof(int64_t);
 					} else if constexpr (std::is_same_v<T, TemporalDuration>) {
 						return sizeof(int64_t) * 3;
+					} else if constexpr (std::is_same_v<T, PropertyValue::Bytes>) {
+						return arg.size() + sizeof(size_t);
 					} else {
 						return 0;
 					}

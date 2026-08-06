@@ -23,9 +23,11 @@
 #include <cstring>
 #include <functional>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <vector>
+#include "graph/storage/EntityDispatch.hpp"
 #include "graph/storage/SegmentIndexManager.hpp"
 #include "graph/utils/FixedSizeSerializer.hpp"
 
@@ -35,6 +37,20 @@ namespace graph::storage {
 	template<typename E>
 	constexpr auto to_underlying(E e) noexcept {
 		return static_cast<std::underlying_type_t<E>>(e);
+	}
+
+	uint64_t saturatingAdd(uint64_t lhs, uint64_t rhs) {
+		if (rhs > std::numeric_limits<uint64_t>::max() - lhs) {
+			return std::numeric_limits<uint64_t>::max();
+		}
+		return lhs + rhs;
+	}
+
+	uint64_t saturatingMultiply(uint64_t lhs, uint64_t rhs) {
+		if (lhs != 0 && rhs > std::numeric_limits<uint64_t>::max() / lhs) {
+			return std::numeric_limits<uint64_t>::max();
+		}
+		return lhs * rhs;
 	}
 
 	SegmentTracker::SegmentTracker(std::shared_ptr<StorageIO> io, const FileHeader &fileHeader) :
@@ -69,6 +85,10 @@ namespace graph::storage {
 		segments_.clear();
 		freeSegments_.clear();
 		dirtySegments_.clear();
+		{
+			std::lock_guard metricsLock(metricsMutex_);
+			writeMetrics_.fill({});
+		}
 
 		loadSegments();
 	}
@@ -209,6 +229,120 @@ namespace graph::storage {
 		return 1.0 - (totalUtilizedSpace / totalCapacity);
 	}
 
+	SegmentStorageMetrics SegmentTracker::getStorageMetrics() const {
+		SegmentStorageMetrics metrics;
+		for (uint32_t type = 0; type <= getMaxEntityType(); ++type) {
+			metrics.by_type[type].data_type = type;
+		}
+
+		std::shared_lock segmentLock(mutex_);
+		std::lock_guard metricsLock(metricsMutex_);
+		metrics.reusable_free_segment_count = static_cast<uint64_t>(freeSegments_.size());
+		metrics.reusable_free_bytes = saturatingMultiply(metrics.reusable_free_segment_count, TOTAL_SEGMENT_SIZE);
+
+		for (uint32_t type = 0; type <= getMaxEntityType(); ++type) {
+			metrics.by_type[type].writes = writeMetrics_[type];
+			auto &writes = metrics.by_type[type].writes;
+			writes.attributed_write_bytes = saturatingAdd(
+					saturatingAdd(saturatingAdd(writes.data_write_bytes, writes.metadata_write_bytes),
+							  writes.allocation_write_bytes),
+					writes.relocation_write_bytes);
+			writes.write_amplification = writes.logical_payload_bytes == 0
+										 ? 0.0
+										 : static_cast<double>(writes.attributed_write_bytes) /
+												static_cast<double>(writes.logical_payload_bytes);
+		}
+
+		for (const auto &[offset, header]: segments_) {
+			static_cast<void>(offset);
+			if (header.data_type > getMaxEntityType()) {
+				continue;
+			}
+
+			auto &typeMetrics = metrics.by_type[header.data_type];
+			const uint64_t recordSize = getEntitySize(header.data_type);
+			const uint64_t maxSlots = SEGMENT_SIZE / recordSize;
+			const uint64_t capacity = (std::min)(static_cast<uint64_t>(header.capacity), maxSlots);
+			const uint64_t used = (std::min)(static_cast<uint64_t>(header.used), capacity);
+			const uint64_t inactive = (std::min)(static_cast<uint64_t>(header.inactive_count), used);
+			const uint64_t live = used - inactive;
+			const uint64_t slotCapacityBytes = saturatingMultiply(capacity, recordSize);
+
+			if (header.capacity > maxSlots || header.used > capacity || header.inactive_count > used) {
+				typeMetrics.inconsistent_header_count = saturatingAdd(typeMetrics.inconsistent_header_count, 1);
+			}
+
+			typeMetrics.segment_count = saturatingAdd(typeMetrics.segment_count, 1);
+			typeMetrics.physical_bytes = saturatingAdd(typeMetrics.physical_bytes, TOTAL_SEGMENT_SIZE);
+			typeMetrics.metadata_bytes = saturatingAdd(typeMetrics.metadata_bytes, SEGMENT_HEADER_SIZE);
+			typeMetrics.data_region_bytes = saturatingAdd(typeMetrics.data_region_bytes, SEGMENT_SIZE);
+			typeMetrics.slot_capacity_bytes = saturatingAdd(typeMetrics.slot_capacity_bytes, slotCapacityBytes);
+			typeMetrics.live_payload_bytes = saturatingAdd(
+					typeMetrics.live_payload_bytes, saturatingMultiply(live, recordSize));
+			typeMetrics.never_used_payload_bytes = saturatingAdd(
+					typeMetrics.never_used_payload_bytes, saturatingMultiply(capacity - used, recordSize));
+			typeMetrics.tombstone_payload_bytes = saturatingAdd(
+					typeMetrics.tombstone_payload_bytes, saturatingMultiply(inactive, recordSize));
+			typeMetrics.layout_slack_bytes = saturatingAdd(
+					typeMetrics.layout_slack_bytes, SEGMENT_SIZE - slotCapacityBytes);
+		}
+
+		return metrics;
+	}
+
+	void SegmentTracker::validateMetricsType(uint32_t type) {
+		if (type > getMaxEntityType()) {
+			throw std::invalid_argument("Invalid segment type for metrics");
+		}
+	}
+
+	void SegmentTracker::recordSegmentDataWriteForType(uint32_t type, uint64_t bytes) {
+		validateMetricsType(type);
+		std::lock_guard lock(metricsMutex_);
+		auto &writes = writeMetrics_[type];
+		writes.logical_payload_bytes = saturatingAdd(writes.logical_payload_bytes, bytes);
+		writes.data_write_bytes = saturatingAdd(writes.data_write_bytes, bytes);
+	}
+
+	void SegmentTracker::recordSegmentDataWrite(uint64_t segmentOffset, uint64_t bytes) {
+		if (bytes == 0) {
+			return;
+		}
+		std::shared_lock lock(mutex_);
+		auto it = segments_.find(segmentOffset);
+		if (it == segments_.end()) {
+			throw std::runtime_error("Cannot attribute data write for unknown segment");
+		}
+		recordSegmentDataWriteForType(it->second.data_type, bytes);
+	}
+
+	void SegmentTracker::recordSegmentMetadataWrite(uint32_t type, uint64_t bytes) {
+		if (bytes == 0) {
+			return;
+		}
+		validateMetricsType(type);
+		std::lock_guard lock(metricsMutex_);
+		writeMetrics_[type].metadata_write_bytes = saturatingAdd(writeMetrics_[type].metadata_write_bytes, bytes);
+	}
+
+	void SegmentTracker::recordSegmentAllocationWrite(uint32_t type, uint64_t bytes) {
+		if (bytes == 0) {
+			return;
+		}
+		validateMetricsType(type);
+		std::lock_guard lock(metricsMutex_);
+		writeMetrics_[type].allocation_write_bytes = saturatingAdd(writeMetrics_[type].allocation_write_bytes, bytes);
+	}
+
+	void SegmentTracker::recordSegmentRelocationWrite(uint32_t type, uint64_t bytes) {
+		if (bytes == 0) {
+			return;
+		}
+		validateMetricsType(type);
+		std::lock_guard lock(metricsMutex_);
+		writeMetrics_[type].relocation_write_bytes = saturatingAdd(writeMetrics_[type].relocation_write_bytes, bytes);
+	}
+
 	uint64_t SegmentTracker::getChainHead(uint32_t type) const {
 		std::shared_lock lock(mutex_);
 		return registry_.getChainHead(static_cast<EntityType>(type));
@@ -263,8 +397,10 @@ namespace graph::storage {
 			throw std::runtime_error("Invalid segment offset alignment");
 		}
 
+		uint32_t releasedType = getMaxEntityType() + 1;
 		if (segments_.contains(offset)) {
 			const SegmentHeader &header = segments_[offset];
+			releasedType = header.data_type;
 
 			auto type = static_cast<EntityType>(header.data_type);
 			if (registry_.getChainTail(type) == offset) {
@@ -285,6 +421,9 @@ namespace graph::storage {
 		SegmentHeader emptyHeader{};
 		emptyHeader.data_type = 0xFF;
 		io_->writeAt(offset, &emptyHeader, sizeof(SegmentHeader));
+		if (releasedType <= getMaxEntityType()) {
+			recordSegmentMetadataWrite(releasedType, sizeof(SegmentHeader));
+		}
 	}
 
 	std::vector<uint64_t> SegmentTracker::getFreeSegments() const {
@@ -312,6 +451,7 @@ namespace graph::storage {
 		}
 
 		io_->writeAt(offset, &headerToWrite, sizeof(SegmentHeader));
+		recordSegmentMetadataWrite(headerToWrite.data_type, sizeof(SegmentHeader));
 
 		segments_[offset] = headerToWrite;
 		segments_[offset].file_offset = offset;
@@ -653,6 +793,7 @@ namespace graph::storage {
 			SegmentHeader headerToWrite = header;
 
 			io_->writeAt(offset, &headerToWrite, sizeof(SegmentHeader));
+			recordSegmentMetadataWrite(headerToWrite.data_type, sizeof(SegmentHeader));
 
 			it->second.is_dirty = 0;
 		}
@@ -693,6 +834,7 @@ namespace graph::storage {
 
 		auto it = segments_.find(segmentOffset);
 		if (it != segments_.end()) { // ZYX_COV_EXCL_LINE: ensureSegmentCached_locked inserts the segment before writing.
+			recordSegmentDataWriteForType(it->second.data_type, buf.size());
 			it->second.is_dirty = 1;
 			markSegmentDirty(segmentOffset);
 		}

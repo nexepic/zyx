@@ -1,6 +1,6 @@
 ---
-title: Segment Allocation
-description: How ZYX allocates fixed-size segments, chains them per entity type, and manages slot allocation with IDAllocator.
+title: Legacy Segment Allocation
+description: Historical segment-chain allocation format retained only to explain legacy databases; it is not the target native storage architecture.
 category: Storage
 categoryOrder: 2
 order: 2
@@ -9,7 +9,9 @@ projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
-# Segment Allocation
+# Legacy Segment Allocation
+
+> This page documents the retired segment-chain format only. New storage work must follow the [native single-file storage plan](/en/docs/zyx/architecture/native-single-file-storage-plan): logical identities resolve through directories, ordinary graph adjacency is a global key-only Packed B+Tree, and neither Node nor Edge records use adjacency chains. This legacy layout is not a compatibility target for the clean format.
 
 ZYX stores all graph data in fixed-size segments (128 KB by default). Each entity type (Node, Edge, Property, Blob, Index, State) has its own chain of segments. The allocation algorithm manages segment creation, slot assignment via `IDAllocator`, and chain linking through the file header.
 

@@ -6,7 +6,7 @@
 #include <set>
 
 #include "graph/concurrent/ThreadPool.hpp"
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/execution/RelationshipFrontierExecutor.hpp"
 
@@ -20,9 +20,9 @@ protected:
 		const auto uuid = boost::uuids::random_generator()();
 		dbPath = fs::temp_directory_path() /
 				 ("test_relationship_frontier_executor_" + boost::uuids::to_string(uuid) + ".zyx");
-		db = std::make_unique<Database>(dbPath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(dbPath.string());
 		db->open();
-		dm = db->getStorage()->getDataManager();
+		dm = db->storage()->getDataManager();
 		labelId = dm->getOrCreateTokenId("Node");
 		typeId = dm->getOrCreateTokenId("NEXT");
 	}
@@ -68,7 +68,7 @@ protected:
 	}
 
 	fs::path dbPath;
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<storage::DataManager> dm;
 	int64_t labelId = 0;
 	int64_t typeId = 0;

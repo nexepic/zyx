@@ -79,7 +79,7 @@ ZYX implements a broad subset of the Cypher query language, covering read, write
 
 **Data loading**: `LOAD CSV` / `LOAD CSV WITH HEADERS` with `FIELDTERMINATOR`
 
-**Diagnostics**: `EXPLAIN` (logical plan), `PROFILE` (execution with timing)
+**Diagnostics**: `EXPLAIN` (logical plan), `PROFILE` (execution timing; the native relocatable logical path reports one whole-plan summary)
 
 ```cypher
 // Pattern matching with variable-length paths
@@ -246,7 +246,7 @@ The cost-based optimizer applies up to 7 rules in a fixed-point iteration loop:
 | Limit Pushdown | Push LIMIT below non-DISTINCT projections |
 
 :::tip
-Use `EXPLAIN` to view the optimized logical plan without executing, or `PROFILE` to see operator-level timing after execution.
+Use `EXPLAIN` to view the optimized logical plan without executing. `PROFILE` reports execution timing; the native relocatable logical path currently appends one whole-plan summary rather than operator-level timing.
 :::
 
 ### Built-in Functions
@@ -276,10 +276,7 @@ ZYX includes a built-in thread pool for parallel query execution:
 | PQ training | K-means training across subspaces |
 | Vector search | DiskANN re-ranking and PQ distance computation |
 
-```cypher
-// Configure thread pool size at runtime
-CALL dbms.setConfig("thread.pool.size", 8)
-```
+For the native logical runtime, set the embedding application's thread-pool policy before issuing queries. The retired `dbms.setConfig` procedure is intentionally unavailable until native configuration updates have one durable metadata transaction boundary.
 
 :::info WASM Mode
 When compiled to WebAssembly, ZYX automatically runs in single-threaded mode. No configuration needed.
@@ -287,26 +284,7 @@ When compiled to WebAssembly, ZYX automatically runs in single-threaded mode. No
 
 ### Runtime Configuration
 
-| Config Key | Description |
-|------------|-------------|
-| `query.timeout_ms` | Per-query execution timeout |
-| `query.max_memory_mb` | Per-query memory limit |
-| `query.max_var_length_depth` | Max depth for variable-length traversal |
-| `query.slow_log.enabled` | Enable slow query logging |
-| `query.slow_log.threshold_ms` | Slow query threshold |
-| `thread.pool.size` | Thread pool size (0 = auto) |
-| `storage.compaction.enabled` | Enable segment compaction |
-
-```cypher
--- View all configuration
-CALL dbms.listConfig
-
--- Set a timeout of 5 seconds
-CALL dbms.setConfig("query.timeout_ms", 5000)
-
--- View query statistics
-CALL dbms.showStats
-```
+The native logical runtime does not expose configuration or statistics mutation through Cypher. `dbms.listConfig`, `dbms.getConfig`, `dbms.setConfig`, `dbms.showStats`, and `dbms.resetStats` fail closed rather than using the retired State-manager storage path. This prevents configuration writes from bypassing metadata WAL recovery and the graph publication fence.
 
 ## Multi-Language API
 

@@ -10,7 +10,7 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/core/Transaction.hpp"
 
 namespace fs = std::filesystem;
@@ -41,11 +41,11 @@ protected:
 
 TEST_F(TransactionErrorPathTest, DestructorHandlesClosedStorage) {
 	// Create database and begin transaction
-	auto db = std::make_unique<graph::Database>(testDbPath.string());
+	auto db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testDbPath.string());
 	db->open();
 
 	// Use a raw pointer to the storage so we can close it explicitly
-	auto storage = db->getStorage();
+	auto storage = db->storage();
 	auto txnMgr = std::make_unique<graph::TransactionManager>(storage, nullptr);
 
 	auto txn = txnMgr->begin();
@@ -64,7 +64,7 @@ TEST_F(TransactionErrorPathTest, DestructorHandlesClosedStorage) {
 // ============================================================================
 
 TEST_F(TransactionErrorPathTest, MoveAssignmentSelfAssignment) {
-	auto db = std::make_unique<graph::Database>(testDbPath.string());
+	auto db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testDbPath.string());
 	db->open();
 
 	auto txn = db->beginTransaction();
@@ -86,7 +86,7 @@ TEST_F(TransactionErrorPathTest, MoveAssignmentSelfAssignment) {
 // ============================================================================
 
 TEST_F(TransactionErrorPathTest, MoveConstructFromCommitted) {
-	auto db = std::make_unique<graph::Database>(testDbPath.string());
+	auto db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testDbPath.string());
 	db->open();
 
 	auto txn1 = db->beginTransaction();
@@ -106,7 +106,7 @@ TEST_F(TransactionErrorPathTest, MoveConstructFromCommitted) {
 // ============================================================================
 
 TEST_F(TransactionErrorPathTest, MoveAssignCommittedFromActive) {
-	auto db = std::make_unique<graph::Database>(testDbPath.string());
+	auto db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testDbPath.string());
 	db->open();
 
 	auto txn1 = db->beginTransaction();
@@ -129,7 +129,7 @@ TEST_F(TransactionErrorPathTest, MoveAssignCommittedFromActive) {
 // ============================================================================
 
 TEST_F(TransactionErrorPathTest, MoveAssignRolledBackFromActive) {
-	auto db = std::make_unique<graph::Database>(testDbPath.string());
+	auto db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testDbPath.string());
 	db->open();
 
 	auto txn1 = db->beginTransaction();
@@ -153,7 +153,7 @@ TEST_F(TransactionErrorPathTest, MoveAssignRolledBackFromActive) {
 // ============================================================================
 
 TEST_F(TransactionErrorPathTest, ReadOnlyDoubleCommitThrows) {
-	auto db = std::make_unique<graph::Database>(testDbPath.string());
+	auto db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testDbPath.string());
 	db->open();
 
 	auto txn = db->beginReadOnlyTransaction();
@@ -163,7 +163,7 @@ TEST_F(TransactionErrorPathTest, ReadOnlyDoubleCommitThrows) {
 }
 
 TEST_F(TransactionErrorPathTest, ReadOnlyDoubleRollbackThrows) {
-	auto db = std::make_unique<graph::Database>(testDbPath.string());
+	auto db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testDbPath.string());
 	db->open();
 
 	auto txn = db->beginReadOnlyTransaction();
@@ -179,10 +179,10 @@ TEST_F(TransactionErrorPathTest, ReadOnlyDoubleRollbackThrows) {
 // ============================================================================
 
 TEST_F(TransactionErrorPathTest, MoveAssignActiveTargetTriggersRollback) {
-	auto db = std::make_unique<graph::Database>(testDbPath.string());
+	auto db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testDbPath.string());
 	db->open();
 
-	auto storage = db->getStorage();
+	auto storage = db->storage();
 
 	// Use two separate TransactionManagers so we can have two active txns
 	// without deadlocking on the shared_mutex.
@@ -212,7 +212,7 @@ TEST_F(TransactionErrorPathTest, MoveAssignActiveTargetTriggersRollback) {
 // ============================================================================
 
 TEST_F(TransactionErrorPathTest, DestructorAutoRollbackReadOnly) {
-	auto db = std::make_unique<graph::Database>(testDbPath.string());
+	auto db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testDbPath.string());
 	db->open();
 
 	{

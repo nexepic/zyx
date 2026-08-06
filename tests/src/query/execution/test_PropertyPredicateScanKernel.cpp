@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/query/execution/PropertyPredicateScanKernel.hpp"
 
 namespace fs = std::filesystem;
@@ -23,9 +23,9 @@ protected:
 		const auto uuid = boost::uuids::random_generator()();
 		dbPath_ = fs::temp_directory_path() /
 		          ("test_property_predicate_scan_kernel_" + boost::uuids::to_string(uuid) + ".zyx");
-		db_ = std::make_unique<Database>(dbPath_.string());
+		db_ = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(dbPath_.string());
 		db_->open();
-		dm_ = db_->getStorage()->getDataManager();
+		dm_ = db_->storage()->getDataManager();
 	}
 
 	void TearDown() override {
@@ -55,7 +55,7 @@ protected:
 	}
 
 	fs::path dbPath_;
-	std::unique_ptr<Database> db_;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db_;
 	std::shared_ptr<storage::DataManager> dm_;
 };
 
@@ -67,7 +67,7 @@ TEST_F(PropertyPredicateScanKernelTest, CountsEqualityPredicatesWithoutMateriali
 			addPropertyEntity({{"country", PropertyValue("US")}, {"score", PropertyValue(int64_t{20})}}),
 			addPropertyEntity({{"country", PropertyValue("CN")}, {"score", PropertyValue(int64_t{30})}}),
 	};
-	db_->getStorage()->flush();
+	db_->storage()->flush();
 
 	auto kernel = PropertyPredicateScanKernel::fromEqualityPredicates(
 			dm_, {{"country", PropertyValue("CN")}});
@@ -83,7 +83,7 @@ TEST_F(PropertyPredicateScanKernelTest, CountMatchesReportsLoadedPropertyEntitie
 			addPropertyEntity({{"country", PropertyValue("CN")}, {"score", PropertyValue(int64_t{10})}}),
 			addPropertyEntity({{"country", PropertyValue("US")}, {"score", PropertyValue(int64_t{20})}}),
 	};
-	db_->getStorage()->flush();
+	db_->storage()->flush();
 
 	auto equalityKernel = PropertyPredicateScanKernel::fromEqualityPredicates(
 			dm_, {{"country", PropertyValue("CN")}});
@@ -112,7 +112,7 @@ TEST_F(PropertyPredicateScanKernelTest, CountsOwnerTypeMatchesWhenStorageCanProv
 	edge.setTypeId(dm_->getOrCreateTokenId("KERNEL_OWNER_EDGE"));
 	dm_->addEdge(edge);
 	dm_->addEdgeProperties(edge.getId(), {{"score", PropertyValue(99.0)}});
-	db_->getStorage()->flush();
+	db_->storage()->flush();
 
 	PropertyPredicateScanKernel kernel(
 			dm_, {predicate("score", VectorPredicateOp::VPO_GE, PropertyValue(90.0))});
@@ -134,7 +134,7 @@ TEST_F(PropertyPredicateScanKernelTest, CountsCompleteOwnerPropertiesAndRejectsU
 	dm_->addNode(second);
 	dm_->addNodeProperties(first.getId(), {{"score", PropertyValue(int64_t{95})}});
 	dm_->addNodeProperties(second.getId(), {{"score", PropertyValue(int64_t{12})}});
-	db_->getStorage()->flush();
+	db_->storage()->flush();
 
 	PropertyPredicateScanKernel kernel(
 			dm_, {predicate("score", VectorPredicateOp::VPO_GE, PropertyValue(int64_t{90}))});
@@ -172,7 +172,7 @@ TEST_F(PropertyPredicateScanKernelTest, MatchesRowAlignedRangePredicatesAndRepor
 			addPropertyEntity({{"score", PropertyValue(int64_t{20})}}),
 			addPropertyEntity({{"score", PropertyValue(int64_t{30})}}),
 	};
-	db_->getStorage()->flush();
+	db_->storage()->flush();
 
 	PropertyPredicateScanKernel kernel(
 			dm_, {predicate("score", VectorPredicateOp::VPO_GE, PropertyValue(int64_t{20}))});

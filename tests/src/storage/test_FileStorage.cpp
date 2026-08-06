@@ -195,9 +195,10 @@ TEST_F(FileStorageTest, Destructor_ClosesStorage) {
 	std::filesystem::path tmpPath =
 			std::filesystem::temp_directory_path() / ("test_destructor_" + to_string(uuid) + ".dat");
 	{
-		graph::Database db(tmpPath.string());
-		db.open();
-		EXPECT_TRUE(db.isOpen());
+		graph::storage::FileStorage storage(tmpPath.string(), 10'000U,
+													graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
+		storage.open();
+		EXPECT_TRUE(storage.isOpen());
 		// Destructor runs here
 	}
 	// File should exist even after destructor
@@ -268,14 +269,12 @@ TEST_F(FileStorageTest, CloseReopenVerifyPersistence) {
 
 	fileStorage->flush();
 
-	// Close the database
-	database->close();
+	// Close the physical store.
+	fileStorage->close();
 	EXPECT_FALSE(fileStorage->isOpen());
 
 	// Reopen
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-	fileStorage = database->getStorage();
+	reopenFileStorage();
 	dm = fileStorage->getDataManager();
 
 	// Verify nodes persisted

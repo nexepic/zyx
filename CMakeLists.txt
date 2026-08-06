@@ -61,6 +61,14 @@ target_include_directories(zyx_cypher_parser
         "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src/query/parser/cypher/helpers/public>"
 )
 target_link_libraries(zyx_cypher_parser PUBLIC zyx_project_options zyx::antlr4)
+# ANTLR's prebuilt runtime resets ParseTreeTracker from an uninstrumented
+# translation unit. Disable only libc++ container annotations in the generated
+# parser when this target itself is AddressSanitizer-instrumented; otherwise a
+# valid reset can leave stale poison state in the runtime-owned vector.
+if(APPLE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND
+   CMAKE_CXX_FLAGS MATCHES "(^|[ \t])-fsanitize=[^ \t]*address")
+    target_compile_definitions(zyx_cypher_parser PRIVATE _LIBCPP_HAS_NO_ASAN=1)
+endif()
 add_library(zyx::cypher_parser ALIAS zyx_cypher_parser)
 
 add_library(zyx_core STATIC ${ZYX_CORE_SOURCES})
@@ -77,6 +85,7 @@ target_link_libraries(zyx_core
     PUBLIC
         zyx_project_options
         zyx::zlib
+        zyx::large_value_codecs
         zyx::boost
         zyx::cli11
         zyx::antlr4
@@ -102,6 +111,7 @@ function(zyx_configure_public_library target)
         PRIVATE
             zyx_project_options
             zyx::zlib
+            zyx::large_value_codecs
             zyx::boost
             zyx::cli11
             zyx::antlr4
@@ -145,11 +155,47 @@ if(ZYX_BUILD_APPS AND NOT ZYX_WASM)
     set_target_properties(zyx_compare_bench PROPERTIES OUTPUT_NAME zyx-compare-bench)
     target_link_libraries(zyx_compare_bench PRIVATE zyx::core)
 
+    add_executable(zyx_vector_calibrate apps/vector_calibration/main.cpp)
+    set_target_properties(zyx_vector_calibrate PROPERTIES OUTPUT_NAME zyx-vector-calibrate)
+    target_link_libraries(zyx_vector_calibrate PRIVATE zyx::core)
+    if(WIN32)
+        target_link_libraries(zyx_vector_calibrate PRIVATE psapi)
+    endif()
+
+    add_executable(zyx_vector_build_calibrate apps/vector_build_calibration/main.cpp)
+    set_target_properties(zyx_vector_build_calibrate PROPERTIES OUTPUT_NAME zyx-vector-build-calibrate)
+    target_link_libraries(zyx_vector_build_calibrate PRIVATE zyx::core)
+    if(WIN32)
+        target_link_libraries(zyx_vector_build_calibrate PRIVATE psapi)
+    endif()
+
+    add_executable(zyx_large_value_calibrate apps/large_value_calibration/main.cpp)
+    set_target_properties(zyx_large_value_calibrate PROPERTIES OUTPUT_NAME zyx-large-value-calibrate)
+    target_link_libraries(zyx_large_value_calibrate PRIVATE zyx::core)
+    if(WIN32)
+        target_link_libraries(zyx_large_value_calibrate PRIVATE psapi)
+    endif()
+
     add_subdirectory(benchmarks/leiden)
 endif()
 
 if(ZYX_BUILD_TESTS AND BUILD_TESTING AND NOT ZYX_WASM)
     zyx_find_test_dependencies()
+    find_package(Python3 3.8 REQUIRED COMPONENTS Interpreter)
+    # Compile fault-injection seams into this test-only core artifact. Release
+    # builds retain direct native I/O with no hook dispatch on write hot paths.
+    target_compile_definitions(zyx_core PRIVATE ZYX_ENABLE_STORAGE_TEST_HOOKS=1)
+    # Google Mock generates zero-region expectation helpers in these vendored
+    # test units. LLVM records no profile counter for them, which otherwise
+    # produces a spurious profile mismatch warning while their sources are
+    # already excluded from the production coverage report.
+    if(ZYX_ENABLE_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang")
+        set_source_files_properties(
+            "${PROJECT_SOURCE_DIR}/lib/inputxx/tests/test_Session.cpp"
+            "${PROJECT_SOURCE_DIR}/lib/inputxx/tests/frontend/test_Editor.cpp"
+            PROPERTIES COMPILE_OPTIONS "-fno-profile-instr-generate;-fno-coverage-mapping"
+        )
+    endif()
     add_executable(zyx_test_suite ${ZYX_TEST_SOURCES})
     target_include_directories(zyx_test_suite
         PRIVATE
@@ -157,16 +203,24 @@ if(ZYX_BUILD_TESTS AND BUILD_TESTING AND NOT ZYX_WASM)
             "${PROJECT_SOURCE_DIR}/lib/inputxx/tests"
             "${PROJECT_SOURCE_DIR}/apps/benchmark"
     )
+    target_compile_definitions(zyx_test_suite PRIVATE ZYX_ENABLE_STORAGE_TEST_HOOKS=1)
     target_link_libraries(zyx_test_suite
         PRIVATE
             zyx::core
             zyx::gtest
             zyx::gmock
     )
-    add_test(NAME zyx_all_tests
-        COMMAND ${CMAKE_COMMAND} -E env sh -c "$<TARGET_FILE:zyx_test_suite> < /dev/null"
+    # The runner creates an isolated process group and reaps its descendants.
+    # This prevents debugger and crash-handler children from surviving CTest on
+    # both POSIX and native Windows hosts.
+    add_test(
+        NAME zyx_all_tests
+        COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/run_test_process.py"
+                --timeout 600 -- $<TARGET_FILE:zyx_test_suite>
     )
-    set_tests_properties(zyx_all_tests PROPERTIES TIMEOUT 600)
+    # Leave the runner enough time to complete its bounded SIGTERM/SIGKILL or
+    # taskkill cleanup before CTest applies its own outer timeout.
+    set_tests_properties(zyx_all_tests PROPERTIES TIMEOUT 620)
 endif()
 
 if(ZYX_BUILD_PYTHON)

@@ -1,6 +1,6 @@
 ---
-title: Storage System
-description: Segment-based persistence driven by FileStorage, DataManager, and coordinated dirty tracking.
+title: Legacy Storage System
+description: Historical segment-chain persistence retained only as implementation background during the native-format re-architecture.
 category: Core Components
 categoryOrder: 2
 order: 2
@@ -9,7 +9,9 @@ projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
-# Storage System
+# Legacy Storage System
+
+> This page records the retired segment-chain storage design. It is not an implementation guide for the clean native format and must not be extended with new functionality. New storage work follows the [Native Single-File Storage Re-architecture Plan](/en/docs/zyx/architecture/native-single-file-storage-plan): logical identities resolve through directories, mutations publish copy-on-write metadata generations, and ordinary graph adjacency is one global key-only Packed B+Tree. It intentionally does not retain segment chains, external durable WAL behavior, or Node/Edge adjacency links as format compatibility paths.
 
 The storage layer is coordinated by `FileStorage`, with `DataManager` handling entity read/write and `SegmentTracker` / `SpaceManager` managing space allocation.
 

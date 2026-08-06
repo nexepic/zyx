@@ -45,10 +45,10 @@
 #include <vector>
 
 #include "graph/concurrent/ThreadPool.hpp"
-#include "graph/core/Database.hpp"
 #include "graph/query/algorithm/CsrProjection.hpp"
 #include "graph/query/algorithm/GraphProjection.hpp"
 #include "graph/query/algorithm/LeidenEngine.hpp"
+#include "graph/storage/FileStorage.hpp"
 
 namespace fs = std::filesystem;
 using clock_type = std::chrono::steady_clock;
@@ -160,15 +160,20 @@ size_t sweepLeftovers() {
 
 struct TempDatabase {
 	std::string path;
-	graph::Database db;
+	std::shared_ptr<graph::storage::FileStorage> storage;
 	bool keep;
 
-	TempDatabase(bool keep) : path(tempDbPath()), db(path), keep(keep) { db.open(); }
+	TempDatabase(bool keep) :
+		path(tempDbPath()),
+		storage(std::make_shared<graph::storage::FileStorage>(
+				path, 10'000U, graph::storage::OpenMode::OPEN_CREATE_NEW_FILE)),
+		keep(keep) {
+		storage->open();
+	}
 	~TempDatabase() {
-		// Close first so WAL is removed (CloseMode::WCM_REMOVE_FILE) and handles
-		// are released, then delete any remaining files.
+		// Close physical storage before removing benchmark artifacts.
 		try {
-			db.close();
+			if (storage) storage->close();
 		} catch (...) { /* best effort */ }
 		if (!keep) cleanupFiles(path);
 	}
@@ -303,7 +308,7 @@ int main(int argc, char **argv) {
 			  << " threads=" << args.threadCount << "\n";
 
 	TempDatabase tdb(args.keep);
-	std::shared_ptr<graph::storage::DataManager> dm = tdb.db.getStorage()->getDataManager();
+	std::shared_ptr<graph::storage::DataManager> dm = tdb.storage->getDataManager();
 
 	// ---- Phase 1: build synthetic graph ----
 	double t0 = nowSec();
@@ -315,10 +320,10 @@ int main(int argc, char **argv) {
 		return 2;
 	}
 	// flush + reopen so the topology is visible to all subsystems.
-	tdb.db.getStorage()->flush();
-	tdb.db.close();
-	tdb.db.open();
-	dm = tdb.db.getStorage()->getDataManager();
+	tdb.storage->flush();
+	tdb.storage->close();
+	tdb.storage->open();
+	dm = tdb.storage->getDataManager();
 	double buildSec = nowSec() - t0;
 	std::cout << "result phase=build seconds=" << buildSec
 			  << " nodes=" << gh.nodes << " edges=" << gh.edges << "\n";

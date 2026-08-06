@@ -205,3 +205,19 @@ TEST_F(CsvReaderTest, QuoteInMiddleOfFieldTreatedAsLiteral) {
 	EXPECT_EQ(row[0], "ab\"cd");
 	EXPECT_EQ(row[1], "ef");
 }
+
+TEST_F(CsvReaderTest, RejectsInvalidQuotedRecordsAndResourceBoundExhaustion) {
+	auto unterminated = createTempFile("\"unterminated\n");
+	CsvReader invalidReader(unterminated);
+	EXPECT_THROW(static_cast<void>(invalidReader.hasNext()), std::runtime_error);
+
+	auto oversizedField = createTempFile("abcdef\n");
+	CsvReader fieldReader(oversizedField, ",", {.maximum_record_bytes = 16U, .maximum_columns = 2U,
+																 .maximum_field_bytes = 4U});
+	EXPECT_THROW(static_cast<void>(fieldReader.nextRow()), std::runtime_error);
+
+	auto tooManyColumns = createTempFile("a,b,c\n");
+	CsvReader columnReader(tooManyColumns, ",", {.maximum_record_bytes = 16U, .maximum_columns = 2U,
+																 .maximum_field_bytes = 8U});
+	EXPECT_THROW(static_cast<void>(columnReader.nextRow()), std::runtime_error);
+}

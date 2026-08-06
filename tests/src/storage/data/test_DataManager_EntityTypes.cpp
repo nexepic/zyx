@@ -17,6 +17,8 @@
  * limitations under the License.
  **/
 
+#include <algorithm>
+
 #include "DataManagerSharedTestFixture.hpp"
 
 TEST_F(DataManagerSharedTest, PropertyEntityCRUD) {
@@ -866,7 +868,7 @@ TEST_F(DataManagerSharedTest, GetEntitiesInRangeIndexNoSegmentOverlap) {
 	EXPECT_TRUE(indexes.empty()) << "Should find nothing when range doesn't overlap for Index";
 }
 
-TEST_F(DataManagerSharedTest, GetEntitiesInRangePropertyCacheHitSkipInPass2) {
+TEST_F(DataManagerSharedTest, GetEntitiesInRangePropertyDirtyEntrySkipsDiskDuplicate) {
 	std::vector<int64_t> propIds;
 	for (int i = 0; i < 5; i++) {
 		auto prop = createTestProperty(static_cast<int64_t>(i + 1), 0, {{"k", PropertyValue(i)}});
@@ -876,13 +878,26 @@ TEST_F(DataManagerSharedTest, GetEntitiesInRangePropertyCacheHitSkipInPass2) {
 
 	fileStorage->flush();
 
-	for (auto id : propIds) {
-		auto p = dataManager->getProperty(id);
-		EXPECT_TRUE(p.isActive());
+	// A persisted entity updated after the flush must come from Pass 1. Pass 2
+	// must not append its stale on-disk version a second time.
+	auto updatedProperty = dataManager->getProperty(propIds[2]);
+	updatedProperty.setProperties({{"k", PropertyValue(int64_t{999})}});
+	dataManager->updatePropertyEntity(updatedProperty);
+
+	const auto [firstId, lastId] = std::minmax_element(propIds.begin(), propIds.end());
+	auto props = dataManager->getEntitiesInRange<Property>(*firstId, *lastId, 1000);
+
+	for (const auto id: propIds) {
+		EXPECT_EQ(1U, std::count_if(props.begin(), props.end(), [id](const Property &property) {
+			return property.getId() == id;
+		})) << "Each property must be returned once even when it is dirty";
 	}
 
-	auto props = dataManager->getEntitiesInRange<Property>(propIds.front(), propIds.back(), 100);
-	EXPECT_EQ(5UL, props.size()) << "Should find all properties from cache";
+	const auto updatedIt = std::find_if(props.begin(), props.end(), [&updatedProperty](const Property &property) {
+		return property.getId() == updatedProperty.getId();
+	});
+	ASSERT_NE(updatedIt, props.end());
+	EXPECT_EQ(int64_t{999}, std::get<int64_t>(updatedIt->getPropertyValues().at("k").getVariant()));
 }
 
 TEST_F(DataManagerSharedTest, GetEntitiesInRangePropertyLimitInPass1) {
@@ -1623,4 +1638,3 @@ TEST_F(DataManagerSharedTest, GetEntitiesInRangeInvertedRange) {
 	auto result = dataManager->getEntitiesInRange<Node>(100, 1, 100);
 	EXPECT_TRUE(result.empty()) << "Inverted range should return empty result";
 }
-

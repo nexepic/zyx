@@ -25,7 +25,7 @@
 #include <gtest/gtest.h>
 #include <memory>
 #include <vector>
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/vector/VectorIndexRegistry.hpp"
 #include "graph/vector/core/VectorMetric.hpp"
@@ -152,14 +152,14 @@ protected:
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		dbPath = std::filesystem::temp_directory_path() / ("vec_test_" + to_string(uuid) + ".zyx");
 
-		database = std::make_unique<graph::Database>(dbPath.string());
+		database = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(dbPath.string());
 		database->open();
 
-		dataManager = database->getStorage()->getDataManager();
+		dataManager = database->storage()->getDataManager();
 		// Assume SystemStateManager is available via storage or we create one
-		// In real app, Database usually exposes this.
+		// The test harness exposes physical storage explicitly for legacy vectors.
 		// Here we construct one for testing if not exposed.
-		stateManager = database->getStorage()->getSystemStateManager();
+		stateManager = database->storage()->getSystemStateManager();
 	}
 
 	void TearDown() override {
@@ -172,7 +172,7 @@ protected:
 	}
 
 	std::filesystem::path dbPath;
-	std::unique_ptr<graph::Database> database;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> database;
 	std::shared_ptr<graph::storage::DataManager> dataManager;
 	std::shared_ptr<graph::storage::state::SystemStateManager> stateManager;
 };

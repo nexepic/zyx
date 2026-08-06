@@ -16,7 +16,7 @@
 #include <cstring>
 
 // Include project headers that might pull in ranges/etc
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/storage/data/BlobManager.hpp"
 
 // The `#define private public` hack does not work on Windows because MSVC
@@ -41,11 +41,11 @@ protected:
 	void SetUp() override {
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		dbPath = std::filesystem::temp_directory_path() / ("vec_data_integ_" + to_string(uuid) + ".zyx");
-		database = std::make_unique<graph::Database>(dbPath.string());
+		database = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(dbPath.string());
 		database->open();
 
-		dm = database->getStorage()->getDataManager();
-		sm = database->getStorage()->getSystemStateManager();
+		dm = database->storage()->getDataManager();
+		sm = database->storage()->getSystemStateManager();
 	}
 
 	void TearDown() override {
@@ -59,7 +59,7 @@ protected:
 	}
 
 	std::filesystem::path dbPath;
-	std::unique_ptr<graph::Database> database;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> database;
 	std::shared_ptr<graph::storage::DataManager> dm;
 	std::shared_ptr<graph::storage::state::SystemStateManager> sm;
 };

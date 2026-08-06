@@ -194,6 +194,9 @@ struct CallClause {
 		std::string alias;
 	};
 	std::vector<YieldItem> yieldItems;
+	// The grammar attaches WHERE to YIELD, so it must run after the aliases
+	// above are bound and before a following WITH or RETURN projection.
+	std::shared_ptr<expressions::Expression> yieldWhere;
 };
 
 // =============================================================================

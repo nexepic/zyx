@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/execution/NodeColumnarPredicateCounter.hpp"
 #include "graph/query/execution/PropertyPredicateScanKernel.hpp"
@@ -29,9 +29,9 @@ protected:
 		const auto uuid = boost::uuids::random_generator()();
 		dbPath_ = fs::temp_directory_path() /
 		          ("test_node_columnar_predicate_counter_" + boost::uuids::to_string(uuid) + ".zyx");
-		db_ = std::make_unique<Database>(dbPath_.string());
+		db_ = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(dbPath_.string());
 		db_->open();
-		dm_ = db_->getStorage()->getDataManager();
+		dm_ = db_->storage()->getDataManager();
 		userLabel_ = dm_->getOrCreateTokenId("User");
 		otherLabel_ = dm_->getOrCreateTokenId("Other");
 	}
@@ -93,7 +93,7 @@ protected:
 	}
 
 	fs::path dbPath_;
-	std::unique_ptr<Database> db_;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db_;
 	std::shared_ptr<storage::DataManager> dm_;
 	int64_t userLabel_ = 0;
 	int64_t otherLabel_ = 0;
@@ -156,7 +156,7 @@ TEST(NodeColumnarPredicateCounterDetailTest, RecordsPredicateCountTraceOnlyWhenE
 
 TEST_F(NodeColumnarPredicateCounterTest, DetailRecognizesCompleteFullNodeCandidateSets) {
 	auto ids = addScoreOnlyNodes(8);
-	db_->getStorage()->flush();
+	db_->storage()->flush();
 	dm_->clearCache();
 
 	NodeScanConfig config;
@@ -202,7 +202,7 @@ TEST_F(NodeColumnarPredicateCounterTest, DetailRecognizesCompleteFullNodeCandida
 
 TEST_F(NodeColumnarPredicateCounterTest, DetailCountsMaterializedFallbackMatches) {
 	auto ids = addScoreOnlyNodes(3);
-	db_->getStorage()->flush();
+	db_->storage()->flush();
 	dm_->clearCache();
 
 	std::vector<int64_t> propertyEntityIds;
@@ -238,7 +238,7 @@ TEST_F(NodeColumnarPredicateCounterTest, DetailCountsBlobFallbackMatches) {
 				stored.getPropertyStorageType(),
 		});
 	}
-	db_->getStorage()->flush();
+	db_->storage()->flush();
 	dm_->clearCache();
 
 	PropertyPredicateScanKernel kernel(
@@ -254,7 +254,7 @@ TEST_F(NodeColumnarPredicateCounterTest, DetailCountsBlobFallbackMatches) {
 
 TEST_F(NodeColumnarPredicateCounterTest, CountsRangePredicateWithoutMaterializingNodes) {
 	auto ids = addNodes(160);
-	db_->getStorage()->flush();
+	db_->storage()->flush();
 	dm_->clearCache();
 
 	NodeColumnarPredicateCounter counter(dm_);
@@ -272,7 +272,7 @@ TEST_F(NodeColumnarPredicateCounterTest, CountsRangePredicateWithoutMaterializin
 
 TEST_F(NodeColumnarPredicateCounterTest, FullScanOwnerShortcutRequiresCompleteCandidateSet) {
 	auto ids = addNodes(160);
-	db_->getStorage()->flush();
+	db_->storage()->flush();
 	dm_->clearCache();
 
 	std::vector<int64_t> subset(ids.begin(), ids.begin() + 130);
@@ -293,7 +293,7 @@ TEST_F(NodeColumnarPredicateCounterTest, ReportsUnavailableForUnorderedCandidate
 	auto ids = addNodes(160);
 	ASSERT_GT(ids.size(), 3U);
 	std::swap(ids[1], ids[2]);
-	db_->getStorage()->flush();
+	db_->storage()->flush();
 	dm_->clearCache();
 
 	NodeColumnarPredicateCounter counter(dm_);
@@ -311,7 +311,7 @@ TEST_F(NodeColumnarPredicateCounterTest, ReportsUnavailableForUnorderedCandidate
 
 TEST_F(NodeColumnarPredicateCounterTest, LabelMaterializationRequirementUsesCandidateScanWithoutLabelFilter) {
 	auto ids = addNodes(160);
-	db_->getStorage()->flush();
+	db_->storage()->flush();
 	dm_->clearCache();
 
 	NodeColumnarPredicateCounter counter(dm_);
@@ -329,7 +329,7 @@ TEST_F(NodeColumnarPredicateCounterTest, LabelMaterializationRequirementUsesCand
 
 TEST_F(NodeColumnarPredicateCounterTest, FullScanUsesCompleteOwnerPropertyShortcutForScalarProperties) {
 	auto ids = addScoreOnlyNodes(160);
-	db_->getStorage()->flush();
+	db_->storage()->flush();
 	dm_->clearCache();
 
 	graph::debug::PerfTrace::setEnabled(true);
@@ -353,7 +353,7 @@ TEST_F(NodeColumnarPredicateCounterTest, FullScanUsesCompleteOwnerPropertyShortc
 
 TEST_F(NodeColumnarPredicateCounterTest, AppliesLabelAndMultiplePredicates) {
 	auto ids = addNodes(160);
-	db_->getStorage()->flush();
+	db_->storage()->flush();
 	dm_->clearCache();
 
 	NodeScanConfig config;
@@ -374,7 +374,7 @@ TEST_F(NodeColumnarPredicateCounterTest, AppliesLabelAndMultiplePredicates) {
 
 TEST_F(NodeColumnarPredicateCounterTest, SupportsAllStoragePredicateOperators) {
 	auto ids = addNodes(160);
-	db_->getStorage()->flush();
+	db_->storage()->flush();
 	dm_->clearCache();
 
 	NodeColumnarPredicateCounter counter(dm_);
@@ -412,7 +412,7 @@ TEST_F(NodeColumnarPredicateCounterTest, SkipsInactiveRowsDuringColumnarCount) {
 	auto ids = addNodes(160);
 	Node deleted = dm_->getNode(ids[1]);
 	dm_->deleteNode(deleted);
-	db_->getStorage()->flush();
+	db_->storage()->flush();
 	dm_->clearCache();
 
 	NodeColumnarPredicateCounter counter(dm_);
@@ -441,7 +441,7 @@ TEST_F(NodeColumnarPredicateCounterTest, FallsBackForBlobStoredProperties) {
 		dm_->addNodeProperties(node.getId(), {{"payload", PropertyValue(payload)}});
 		ids.push_back(node.getId());
 	}
-	db_->getStorage()->flush();
+	db_->storage()->flush();
 	dm_->clearCache();
 
 	NodeColumnarPredicateCounter counter(dm_);
@@ -460,7 +460,7 @@ TEST_F(NodeColumnarPredicateCounterTest, FallsBackForBlobStoredProperties) {
 
 TEST_F(NodeColumnarPredicateCounterTest, UnknownLabelMatchesNoRows) {
 	auto ids = addNodes(160);
-	db_->getStorage()->flush();
+	db_->storage()->flush();
 	dm_->clearCache();
 
 	NodeScanConfig config;
@@ -491,7 +491,7 @@ TEST_F(NodeColumnarPredicateCounterTest, HandlesRowsWithoutExternalProperties) {
 	Node blobWithoutId = dm_->getNode(ids[1]);
 	blobWithoutId.setPropertyEntityId(0, PropertyStorageType::BLOB_ENTITY);
 	dm_->updateNode(blobWithoutId);
-	db_->getStorage()->flush();
+	db_->storage()->flush();
 	dm_->clearCache();
 
 	NodeColumnarPredicateCounter counter(dm_);
@@ -512,7 +512,7 @@ TEST_F(NodeColumnarPredicateCounterTest, FallsBackWhenPropertyEntityCannotBeBulk
 	Node corrupted = dm_->getNode(ids[0]);
 	corrupted.setPropertyEntityId(corrupted.getPropertyEntityId() + 1000000, PropertyStorageType::PROPERTY_ENTITY);
 	dm_->updateNode(corrupted);
-	db_->getStorage()->flush();
+	db_->storage()->flush();
 	dm_->clearCache();
 
 	NodeColumnarPredicateCounter counter(dm_);
@@ -533,7 +533,7 @@ TEST_F(NodeColumnarPredicateCounterTest, FallsBackFromChunkedPropertyEntityScanW
 	Node corrupted = dm_->getNode(ids[0]);
 	corrupted.setPropertyEntityId(corrupted.getPropertyEntityId() + 1000000, PropertyStorageType::PROPERTY_ENTITY);
 	dm_->updateNode(corrupted);
-	db_->getStorage()->flush();
+	db_->storage()->flush();
 	dm_->clearCache();
 
 	NodeScanConfig config;
@@ -562,7 +562,7 @@ TEST_F(NodeColumnarPredicateCounterTest, FallsBackFromChunkedMetadataScanForBlob
 		dm_->addNodeProperties(node.getId(), {{"payload", PropertyValue(payload)}});
 		ids.push_back(node.getId());
 	}
-	db_->getStorage()->flush();
+	db_->storage()->flush();
 	dm_->clearCache();
 
 	NodeScanConfig config;
@@ -581,7 +581,7 @@ TEST_F(NodeColumnarPredicateCounterTest, FallsBackFromChunkedMetadataScanForBlob
 
 TEST_F(NodeColumnarPredicateCounterTest, MissingPropertyReturnsZeroMatches) {
 	auto ids = addNodes(160);
-	db_->getStorage()->flush();
+	db_->storage()->flush();
 	dm_->clearCache();
 
 	NodeColumnarPredicateCounter counter(dm_);

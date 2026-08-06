@@ -4,14 +4,11 @@
  */
 
 #include <algorithm>
+#include <chrono>
 #include <unordered_map>
 #include <vector>
 
 #include "ApiTestFixture.hpp"
-#include "graph/core/TemporalTypes.hpp"
-#include "graph/core/PropertyTypes.hpp"
-#include "graph/core/Database.hpp"
-#include "graph/storage/data/DataManager.hpp"
 
 TEST_F(CppApiTest, VectorFloatPropertyConversionRoundTrip) {
 	std::unordered_map<std::string, zyx::Value> props;
@@ -122,7 +119,7 @@ TEST_F(CppApiTest, CreateNodeWithMultipleLabelsCoversImplicitAndExplicitTxnPaths
 
 	auto txn = db->beginTransaction();
 	EXPECT_TRUE(txn.isActive());
-	EXPECT_NO_THROW(db->createNode(std::vector<std::string>{}, {}));
+	EXPECT_NO_THROW(txn.createNode(std::vector<std::string>{}, {}));
 	txn.commit();
 
 	auto anyNode = db->execute("MATCH (n) RETURN n");
@@ -130,37 +127,57 @@ TEST_F(CppApiTest, CreateNodeWithMultipleLabelsCoversImplicitAndExplicitTxnPaths
 }
 
 // ============================================================================
-// Batch methods inside a Cypher-level BEGIN transaction
-// Covers: needsImplicitTransaction() returning false via cypherTxn_.has_value()
+// Database-bound direct methods must never infer a Cypher transaction from
+// thread-local state. The transaction object owns staged execution explicitly.
 // ============================================================================
 
-TEST_F(CppApiTest, BatchMethodsInsideCypherTransaction) {
+TEST_F(CppApiTest, DatabaseBoundBatchMethodsRejectCypherTransaction) {
 	// Start a Cypher-level transaction via execute("BEGIN")
 	auto beginRes = db->execute("BEGIN");
 	ASSERT_TRUE(beginRes.isSuccess());
 	EXPECT_TRUE(db->hasActiveTransaction());
 
-	// All batch write methods should participate in the Cypher transaction
-	// (no implicit transaction created — needsImplicitTransaction() == false)
-	EXPECT_NO_THROW(db->createNode("CypherTxnNode", {{"val", (int64_t) 1}}));
-	EXPECT_NO_THROW(db->createNode(std::vector<std::string>{"MultiA", "MultiB"}, {{"val", (int64_t) 2}}));
-	EXPECT_NO_THROW(db->createNodes("BatchNode", {{{"val", (int64_t) 3}}, {{"val", (int64_t) 4}}}));
-	int64_t nodeId = db->createNode("RetIdNode", {{"val", (int64_t) 5}});
-	EXPECT_GT(nodeId, 0);
-	int64_t nodeId2 = db->createNode("RetIdNode", {{"val", (int64_t) 6}});
-	EXPECT_NO_THROW(db->createEdge(nodeId, nodeId2, "LINK", {{"w", (int64_t) 10}}));
+	EXPECT_THROW(db->createNode("CypherTxnNode", {{"val", (int64_t) 1}}), std::logic_error);
+	EXPECT_THROW(db->createNode(std::vector<std::string>{"MultiA", "MultiB"}, {{"val", (int64_t) 2}}),
+			 std::logic_error);
+	EXPECT_THROW(db->createNodes("BatchNode", {{{"val", (int64_t) 3}}, {{"val", (int64_t) 4}}}), std::logic_error);
+	EXPECT_THROW(db->createNodesColumnar("ColumnarBatchNode", 2U, {{"val", {int64_t{7}, int64_t{8}}}}),
+			 std::logic_error);
+	EXPECT_THROW(db->createEdge(1, 2, "LINK", {{"w", (int64_t) 10}}), std::logic_error);
+	EXPECT_THROW(db->createEdges("BATCH_LINK", {{1, 2, {{"w", int64_t{11}}}}}), std::logic_error);
+	EXPECT_THROW(db->createEdgesColumnar("COLUMNAR_LINK", {1}, {2}, {{"w", {int64_t{12}}}}), std::logic_error);
 
 	// Rollback — all batch changes should be undone
 	auto rollbackRes = db->execute("ROLLBACK");
 	ASSERT_TRUE(rollbackRes.isSuccess());
 	EXPECT_FALSE(db->hasActiveTransaction());
 
-	// Verify nothing was persisted
+	// Verify no database-bound call escaped the Cypher transaction.
 	auto countRes = db->execute("MATCH (n) RETURN count(n)");
 	ASSERT_TRUE(countRes.hasNext());
 	countRes.next();
 	auto count = std::get<int64_t>(countRes.get(0));
 	EXPECT_EQ(count, 0);
+}
+
+TEST_F(CppApiTest, DatabaseBoundWritesRejectEveryActiveLogicalTransaction) {
+	auto outer = db->beginTransaction();
+	ASSERT_TRUE(outer.isActive());
+	EXPECT_THROW(static_cast<void>(db->createNode("OuterWrite", {})), std::logic_error);
+
+	auto inner = db->beginReadOnlyTransaction();
+	ASSERT_TRUE(inner.isActive());
+	EXPECT_THROW(static_cast<void>(db->createNode("ReadOnlyWrite", {})), std::logic_error);
+	inner.rollback();
+
+	EXPECT_THROW(static_cast<void>(db->createNode("OuterWrite", {})), std::logic_error);
+	outer.rollback();
+
+	auto countRes = db->execute("MATCH (n:OuterWrite) RETURN count(n)");
+	ASSERT_TRUE(countRes.isSuccess()) << countRes.getError();
+	ASSERT_TRUE(countRes.hasNext());
+	countRes.next();
+	EXPECT_EQ(std::get<int64_t>(countRes.get(0)), 0);
 }
 
 // ============================================================================
@@ -170,7 +187,12 @@ TEST_F(CppApiTest, BatchMethodsInsideCypherTransaction) {
 TEST_F(CppApiTest, BatchMethodsAutoOpenDatabase) {
 	// Create a fresh Database that has NOT been opened
 	auto tempDir = fs::temp_directory_path();
-	auto freshPath = (tempDir / ("auto_open_test_" + std::to_string(std::rand()))).string();
+	const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
+	auto freshPath = (tempDir / ("auto_open_test_" + std::to_string(unique))).string();
+	std::error_code ec;
+	fs::remove(freshPath, ec);
+	fs::remove(freshPath + ".wal", ec);
+	fs::remove(freshPath + ".migration", ec);
 	auto freshDb = std::make_unique<zyx::Database>(freshPath);
 	// Do NOT call freshDb->open()
 
@@ -184,9 +206,9 @@ TEST_F(CppApiTest, BatchMethodsAutoOpenDatabase) {
 	EXPECT_EQ(std::get<int64_t>(res.get("n.k")), 1);
 
 	freshDb->close();
-	std::error_code ec;
 	fs::remove_all(freshPath, ec);
-	fs::remove(freshPath + "-wal", ec);
+	fs::remove(freshPath + ".wal", ec);
+	fs::remove(freshPath + ".migration", ec);
 }
 
 TEST_F(CppApiTest, UtilityMethodsSaveThreadPoolAndTokenBoundaryQuery) {
@@ -239,16 +261,16 @@ TEST_F(CppApiTest, CreateNodePropertyIndexesBuildsMultipleIndexes) {
 	EXPECT_EQ(std::get<int64_t>(ageRes.get("count(u)")), 1);
 }
 
-TEST_F(CppApiTest, ExecuteLogsWhenSlowLogThresholdIsZero) {
-	auto enableRes = db->execute("CALL dbms.setConfig('query.slow_log.enabled', true)");
-	ASSERT_TRUE(enableRes.isSuccess()) << enableRes.getError();
-	auto thresholdRes = db->execute("CALL dbms.setConfig('query.slow_log.threshold_ms', 0)");
-	ASSERT_TRUE(thresholdRes.isSuccess()) << thresholdRes.getError();
+TEST_F(CppApiTest, UnsupportedLegacyConfigurationProcedureFailsClosed) {
+	const auto result = db->execute("CALL dbms.setConfig('query.slow_log.enabled', true)");
+	EXPECT_FALSE(result.isSuccess());
+	EXPECT_NE(result.getError().find("stored procedure"), std::string::npos);
 
 	ASSERT_TRUE(db->execute("BEGIN").isSuccess());
-	ASSERT_TRUE(db->execute("COMMIT").isSuccess());
-	auto res = db->execute("RETURN 1 AS one");
-	EXPECT_TRUE(res.isSuccess()) << res.getError();
+	const auto transactionResult = db->execute("CALL dbms.setConfig('query.slow_log.enabled', true)");
+	EXPECT_FALSE(transactionResult.isSuccess());
+	EXPECT_NE(transactionResult.getError().find("transaction overlays"), std::string::npos);
+	EXPECT_TRUE(db->execute("ROLLBACK").isSuccess());
 }
 
 TEST_F(CppApiTest, TransactionControlTokensAcceptTrailingDelimitersAndWhitespace) {
@@ -364,18 +386,24 @@ TEST_F(CppApiTest, TransactionReadOnlyFlagsCoverWriteAndAutoOpenedReadOnlyTransa
 	EXPECT_FALSE(writeTxn.isActive());
 
 	auto tempDir = fs::temp_directory_path();
-	auto freshPath = (tempDir / ("readonly_auto_open_test_" + std::to_string(std::rand()))).string();
+	const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
+	auto freshPath = (tempDir / ("readonly_auto_open_test_" + std::to_string(unique))).string();
+	std::error_code ec;
+	fs::remove(freshPath, ec);
+	fs::remove(freshPath + ".wal", ec);
+	fs::remove(freshPath + ".migration", ec);
 	{
 		zyx::Database freshDb(freshPath);
 		auto readOnlyTxn = freshDb.beginReadOnlyTransaction();
 		ASSERT_TRUE(readOnlyTxn.isActive());
 		EXPECT_TRUE(readOnlyTxn.isReadOnly());
+		EXPECT_THROW(static_cast<void>(freshDb.createNode("ReadOnlyWrite", {})), std::logic_error);
 		readOnlyTxn.rollback();
 		freshDb.close();
 	}
-	std::error_code ec;
 	fs::remove_all(freshPath, ec);
-	fs::remove(freshPath + "-wal", ec);
+	fs::remove(freshPath + ".wal", ec);
+	fs::remove(freshPath + ".migration", ec);
 }
 
 TEST_F(CppApiTest, CreateEdgesShortestPathAndBfsUseImplicitTransactions) {
@@ -419,38 +447,12 @@ TEST_F(CppApiTest, CreateEdgesShortestPathAndBfsUseImplicitTransactions) {
 
 // ============================================================================
 // toPublicValue for temporal types (TemporalDate, TemporalDateTime, TemporalDuration)
-// These are stored via the internal DataManager API and read back through the
-// C++ public API (Result::get()), hitting the temporal branches of toPublicValue.
+// These use the native logical backend, so public conversion coverage does not
+// require opening a retired legacy database format.
 // ============================================================================
 
 TEST_F(CppApiTest, TemporalDate_ConversionToPublicValue) {
-	// Store a TemporalDate via Cypher date() function if supported,
-	// or use internal graph::Database directly.
-	// We create a standalone test using graph::Database to bypass the zyx wrapper.
-	auto tempDir = fs::temp_directory_path();
-	auto path = (tempDir / ("temporal_date_test_" + std::to_string(std::rand()))).string();
-	{
-		graph::Database internalDb(path);
-		internalDb.open();
-
-		auto dm = internalDb.getStorage()->getDataManager();
-		int64_t labelId = dm->getOrCreateTokenId("TemporalNode");
-		graph::Node node(0, labelId);
-		auto txn = internalDb.beginTransaction();
-		dm->addNode(node);
-		int64_t nodeId = node.getId();
-
-		graph::TemporalDate date = graph::TemporalDate::fromISO("2024-06-15");
-		dm->addNodeProperties(nodeId, {{"birthday", graph::PropertyValue(date)}});
-		txn.commit();
-		internalDb.close();
-	}
-
-	// Now open via public zyx API and read back — hits TemporalDate branch
-	zyx::Database zyxDb(path);
-	zyxDb.open();
-
-	auto res = zyxDb.execute("MATCH (n:TemporalNode) RETURN n.birthday");
+	auto res = db->execute("RETURN date('2024-06-15') AS birthday");
 	ASSERT_TRUE(res.isSuccess());
 	ASSERT_TRUE(res.hasNext());
 	res.next();
@@ -460,37 +462,10 @@ TEST_F(CppApiTest, TemporalDate_ConversionToPublicValue) {
 	ASSERT_TRUE(std::holds_alternative<std::string>(val));
 	const auto &s = std::get<std::string>(val);
 	EXPECT_NE(s.find("2024"), std::string::npos) << "ISO date should contain year 2024: " << s;
-
-	zyxDb.close();
-	std::error_code ec;
-	fs::remove_all(path, ec);
-	fs::remove(path + "-wal", ec);
 }
 
 TEST_F(CppApiTest, TemporalDateTime_ConversionToPublicValue) {
-	auto tempDir = fs::temp_directory_path();
-	auto path = (tempDir / ("temporal_dt_test_" + std::to_string(std::rand()))).string();
-	{
-		graph::Database internalDb(path);
-		internalDb.open();
-
-		auto dm = internalDb.getStorage()->getDataManager();
-		int64_t labelId = dm->getOrCreateTokenId("EventNode");
-		graph::Node node(0, labelId);
-		auto txn = internalDb.beginTransaction();
-		dm->addNode(node);
-		int64_t nodeId = node.getId();
-
-		graph::TemporalDateTime dt = graph::TemporalDateTime::fromISO("2024-06-15T10:30:00");
-		dm->addNodeProperties(nodeId, {{"timestamp", graph::PropertyValue(dt)}});
-		txn.commit();
-		internalDb.close();
-	}
-
-	zyx::Database zyxDb(path);
-	zyxDb.open();
-
-	auto res = zyxDb.execute("MATCH (n:EventNode) RETURN n.timestamp");
+	auto res = db->execute("RETURN datetime('2024-06-15T10:30:00') AS timestamp");
 	ASSERT_TRUE(res.isSuccess());
 	ASSERT_TRUE(res.hasNext());
 	res.next();
@@ -499,37 +474,10 @@ TEST_F(CppApiTest, TemporalDateTime_ConversionToPublicValue) {
 	ASSERT_TRUE(std::holds_alternative<std::string>(val));
 	const auto &s = std::get<std::string>(val);
 	EXPECT_NE(s.find("2024"), std::string::npos) << "ISO datetime should contain year 2024: " << s;
-
-	zyxDb.close();
-	std::error_code ec;
-	fs::remove_all(path, ec);
-	fs::remove(path + "-wal", ec);
 }
 
 TEST_F(CppApiTest, TemporalDuration_ConversionToPublicValue) {
-	auto tempDir = fs::temp_directory_path();
-	auto path = (tempDir / ("temporal_dur_test_" + std::to_string(std::rand()))).string();
-	{
-		graph::Database internalDb(path);
-		internalDb.open();
-
-		auto dm = internalDb.getStorage()->getDataManager();
-		int64_t labelId = dm->getOrCreateTokenId("DurationNode");
-		graph::Node node(0, labelId);
-		auto txn = internalDb.beginTransaction();
-		dm->addNode(node);
-		int64_t nodeId = node.getId();
-
-		graph::TemporalDuration dur = graph::TemporalDuration::fromComponents(1, 2, 0, 3, 4, 5, 6);
-		dm->addNodeProperties(nodeId, {{"tenure", graph::PropertyValue(dur)}});
-		txn.commit();
-		internalDb.close();
-	}
-
-	zyx::Database zyxDb(path);
-	zyxDb.open();
-
-	auto res = zyxDb.execute("MATCH (n:DurationNode) RETURN n.tenure");
+	auto res = db->execute("RETURN duration('P1Y2M3DT4H5M6S') AS tenure");
 	ASSERT_TRUE(res.isSuccess());
 	ASSERT_TRUE(res.hasNext());
 	res.next();
@@ -539,9 +487,4 @@ TEST_F(CppApiTest, TemporalDuration_ConversionToPublicValue) {
 	const auto &s = std::get<std::string>(val);
 	// ISO duration starts with P
 	EXPECT_EQ(s.front(), 'P') << "ISO duration should start with 'P': " << s;
-
-	zyxDb.close();
-	std::error_code ec;
-	fs::remove_all(path, ec);
-	fs::remove(path + "-wal", ec);
 }

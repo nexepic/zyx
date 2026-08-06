@@ -224,6 +224,9 @@ namespace graph::query::execution {
 				case PropertyType::DURATION:
 					add(PropertyValue(value.durationValue), count);
 					break;
+				case PropertyType::BYTES:
+					add(value.fallbackValue != nullptr ? *value.fallbackValue : PropertyValue(), count);
+					break;
 				case PropertyType::LIST:
 				case PropertyType::MAP:
 				case PropertyType::COMPOSITE:
@@ -262,6 +265,7 @@ namespace graph::query::execution {
 					addDateTimeEpochMillis(std::get<TemporalDateTime>(value.getVariant()).epochMillis, count);
 					break;
 				case PropertyType::DURATION:
+				case PropertyType::BYTES:
 				case PropertyType::LIST:
 				case PropertyType::MAP:
 				case PropertyType::COMPOSITE:

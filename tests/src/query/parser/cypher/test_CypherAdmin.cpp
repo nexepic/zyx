@@ -54,23 +54,13 @@ TEST_F(CypherAdminTest, NamedIndexLifecycle) {
 }
 
 TEST_F(CypherAdminTest, SystemConfigFlow) {
-	(void) execute("CALL dbms.setConfig('test.key', 12345)");
-	auto res = execute("CALL dbms.getConfig('test.key')");
-	ASSERT_EQ(res.rowCount(), 1UL);
-	EXPECT_EQ(res.getRows()[0].at("value").toString(), "12345");
+	// The native logical backend deliberately does not route configuration
+	// mutation through the retired physical State manager.
+	EXPECT_THROW((void)execute("CALL dbms.setConfig('test.key', 12345)"), std::runtime_error);
 }
 
 TEST_F(CypherAdminTest, Persistence) {
-	(void) execute("CALL dbms.setConfig('persist', 'true')");
-	db->getStorage()->flush();
-	db->close();
-	db.reset();
-
-	// Restart
-	db = std::make_unique<graph::Database>(testFilePath.string());
-	db->open();
-	auto res = execute("CALL dbms.getConfig('persist')");
-	EXPECT_EQ(res.getRows()[0].at("value").toString(), "true");
+	EXPECT_THROW((void)execute("CALL dbms.setConfig('persist', 'true')"), std::runtime_error);
 }
 
 // --- Additional Index Tests ---
@@ -113,9 +103,9 @@ TEST_F(CypherAdminTest, DropIndexByDefinition) {
 
 TEST_F(CypherAdminTest, CreateDuplicateIndex) {
 	(void) execute("CREATE INDEX dup_idx1 ON :Dup(name)");
-	// Attempt to create another index with different name on same label/property should work
-	(void) execute("CREATE INDEX dup_idx2 ON :Dup(name)");
-	// Verify both indexes exist
+	// A second public name cannot own the same physical schema.
+	EXPECT_THROW((void)execute("CREATE INDEX dup_idx2 ON :Dup(name)"), std::exception);
+	// Verify that the first definition remains intact after the rejected DDL.
 	auto res = execute("SHOW INDEXES");
 	int count = 0;
 	for (const auto &row: res.getRows()) {
@@ -129,41 +119,19 @@ TEST_F(CypherAdminTest, CreateDuplicateIndex) {
 // --- Additional Configuration Tests ---
 
 TEST_F(CypherAdminTest, SetConfigDifferentTypes) {
-	// String
-	(void) execute("CALL dbms.setConfig('cfg.string', 'hello')");
-	auto res1 = execute("CALL dbms.getConfig('cfg.string')");
-	EXPECT_EQ(res1.getRows()[0].at("value").toString(), "hello");
-
-	// Integer
-	(void) execute("CALL dbms.setConfig('cfg.int', 42)");
-	auto res2 = execute("CALL dbms.getConfig('cfg.int')");
-	EXPECT_EQ(res2.getRows()[0].at("value").toString(), "42");
-
-	// Boolean
-	(void) execute("CALL dbms.setConfig('cfg.bool', true)");
-	auto res3 = execute("CALL dbms.getConfig('cfg.bool')");
-	EXPECT_EQ(res3.getRows()[0].at("value").toString(), "true");
+	EXPECT_THROW((void)execute("CALL dbms.setConfig('cfg.string', 'hello')"), std::runtime_error);
+	EXPECT_THROW((void)execute("CALL dbms.setConfig('cfg.int', 42)"), std::runtime_error);
+	EXPECT_THROW((void)execute("CALL dbms.setConfig('cfg.bool', true)"), std::runtime_error);
 }
 
 TEST_F(CypherAdminTest, ListAllConfig) {
-	(void) execute("CALL dbms.setConfig('list.test1', 'value1')");
-	(void) execute("CALL dbms.setConfig('list.test2', 'value2')");
-
-	// List all config (no filter)
-	auto res = execute("CALL dbms.listConfig()");
-	ASSERT_GE(res.rowCount(), 2UL);
+	EXPECT_THROW((void)execute("CALL dbms.listConfig()"), std::runtime_error);
 }
 
 TEST_F(CypherAdminTest, GetNonExistentConfig) {
-	auto res = execute("CALL dbms.getConfig('nonexistent.key')");
-	// Should return empty or null
-	EXPECT_TRUE(res.isEmpty());
+	EXPECT_THROW((void)execute("CALL dbms.getConfig('nonexistent.key')"), std::runtime_error);
 }
 
 TEST_F(CypherAdminTest, UpdateConfigValue) {
-	(void) execute("CALL dbms.setConfig('update.test', 'initial')");
-	(void) execute("CALL dbms.setConfig('update.test', 'updated')");
-
-	auto res = execute("CALL dbms.getConfig('update.test')");
-	EXPECT_EQ(res.getRows()[0].at("value").toString(), "updated");
+	EXPECT_THROW((void)execute("CALL dbms.setConfig('update.test', 'initial')"), std::runtime_error);
 }

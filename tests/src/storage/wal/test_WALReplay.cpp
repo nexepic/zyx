@@ -31,12 +31,12 @@ TEST_F(WALReplayTest, CommittedTransactionSurvivesReopen) {
 	// Phase 1: Open DB, add a node, commit — then simulate crash by saving WAL
 	// content before close (close now deletes the WAL file)
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 
 		auto txn = db.beginTransaction();
 		Node node(0, 77);
-		db.getStorage()->getDataManager()->addNode(node);
+		db.storage()->getDataManager()->addNode(node);
 		nodeId = node.getId();
 		ASSERT_GT(nodeId, 0);
 		txn.commit();
@@ -69,11 +69,11 @@ TEST_F(WALReplayTest, CommittedTransactionSurvivesReopen) {
 
 	// Phase 2: Reopen DB — replayWAL() should re-apply the committed transaction
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
 
 		// Check that the node committed in phase 1 is still visible
-		Node retrieved = db2.getStorage()->getDataManager()->getNode(nodeId);
+		Node retrieved = db2.storage()->getDataManager()->getNode(nodeId);
 		EXPECT_TRUE(retrieved.isActive()) << "Committed node should be visible after WAL replay";
 		EXPECT_EQ(retrieved.getLabelId(), 77);
 
@@ -85,14 +85,14 @@ TEST_F(WALReplayTest, RolledBackTransactionNotReplayed) {
 	int64_t rolledBackNodeId = 0;
 
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 
 		// Commit a node so the DB is non-empty
 		{
 			auto txn = db.beginTransaction();
 			Node n(0, 1);
-			db.getStorage()->getDataManager()->addNode(n);
+			db.storage()->getDataManager()->addNode(n);
 			txn.commit();
 		}
 
@@ -100,7 +100,7 @@ TEST_F(WALReplayTest, RolledBackTransactionNotReplayed) {
 		{
 			auto txn = db.beginTransaction();
 			Node n(0, 2);
-			db.getStorage()->getDataManager()->addNode(n);
+			db.storage()->getDataManager()->addNode(n);
 			rolledBackNodeId = n.getId();
 			txn.rollback();
 		}
@@ -110,11 +110,11 @@ TEST_F(WALReplayTest, RolledBackTransactionNotReplayed) {
 
 	// Reopen and verify rolled-back node is absent
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
 
 		if (rolledBackNodeId > 0) {
-			Node retrieved = db2.getStorage()->getDataManager()->getNode(rolledBackNodeId);
+			Node retrieved = db2.storage()->getDataManager()->getNode(rolledBackNodeId);
 			EXPECT_FALSE(retrieved.isActive()) << "Rolled-back node must not appear after reopen";
 		}
 
@@ -127,14 +127,14 @@ TEST_F(WALReplayTest, OnlyCommittedTransactionsReplayed) {
 	int64_t uncommittedId = 0;
 
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 
 		// Committed
 		{
 			auto txn = db.beginTransaction();
 			Node n(0, 10);
-			db.getStorage()->getDataManager()->addNode(n);
+			db.storage()->getDataManager()->addNode(n);
 			committedId = n.getId();
 			txn.commit();
 		}
@@ -143,7 +143,7 @@ TEST_F(WALReplayTest, OnlyCommittedTransactionsReplayed) {
 		{
 			auto txn = db.beginTransaction();
 			Node n(0, 20);
-			db.getStorage()->getDataManager()->addNode(n);
+			db.storage()->getDataManager()->addNode(n);
 			uncommittedId = n.getId();
 			txn.rollback();
 		}
@@ -152,10 +152,10 @@ TEST_F(WALReplayTest, OnlyCommittedTransactionsReplayed) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
 
-		auto &dm = *db2.getStorage()->getDataManager();
+		auto &dm = *db2.storage()->getDataManager();
 
 		Node committed = dm.getNode(committedId);
 		EXPECT_TRUE(committed.isActive()) << "Committed node must be visible";
@@ -175,11 +175,11 @@ TEST_F(WALReplayTest, CorruptedWALStopsAtCorruption) {
 
 	// Write a valid WAL with one committed transaction
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 		auto txn = db.beginTransaction();
 		Node n(0, 5);
-		db.getStorage()->getDataManager()->addNode(n);
+		db.storage()->getDataManager()->addNode(n);
 		txn.commit();
 		db.close();
 		walPath = dbPath.string() + "-wal";
@@ -195,7 +195,7 @@ TEST_F(WALReplayTest, CorruptedWALStopsAtCorruption) {
 
 	// Reopen with corrupted WAL — should not throw; corrupted records are skipped
 	EXPECT_NO_THROW({
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
 		db2.close();
 	});
@@ -205,11 +205,11 @@ TEST_F(WALReplayTest, WALEntityRecordsHaveNonZeroDataSize) {
 	std::string walPath = dbPath.string() + "-wal";
 
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 		auto txn = db.beginTransaction();
 		Node n(0, 88);
-		db.getStorage()->getDataManager()->addNode(n);
+		db.storage()->getDataManager()->addNode(n);
 		txn.commit();
 
 		// Read WAL content before closing (close deletes the WAL)
@@ -256,14 +256,14 @@ TEST_F(WALReplayTest, WALEntityRecordsHaveNonZeroDataSize) {
 TEST_F(WALReplayTest, EmptyWALNoOpRecovery) {
 	// Create and immediately close — produces empty WAL
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 		db.close();
 	}
 
 	// Reopen — should not throw
 	EXPECT_NO_THROW({
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
 		db2.close();
 	});
@@ -273,9 +273,9 @@ TEST_F(WALReplayTest, MultipleCommittedTransactionsAllRecovered) {
 	std::vector<int64_t> nodeIds;
 
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 
 		for (int i = 0; i < 5; ++i) {
 			auto txn = db.beginTransaction();
@@ -290,9 +290,9 @@ TEST_F(WALReplayTest, MultipleCommittedTransactionsAllRecovered) {
 
 	// Reopen — all 5 nodes should be recovered
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
-		auto dm = db2.getStorage()->getDataManager();
+		auto dm = db2.storage()->getDataManager();
 
 		for (size_t i = 0; i < nodeIds.size(); ++i) {
 			Node retrieved = dm->getNode(nodeIds[i]);
@@ -306,14 +306,14 @@ TEST_F(WALReplayTest, MultipleCommittedTransactionsAllRecovered) {
 
 TEST_F(WALReplayTest, RecoveryResultStatisticsAndCheckpoint) {
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 
 		// One committed transaction with a node
 		{
 			auto txn = db.beginTransaction();
 			Node n(0, 55);
-			db.getStorage()->getDataManager()->addNode(n);
+			db.storage()->getDataManager()->addNode(n);
 			txn.commit();
 		}
 
@@ -321,7 +321,7 @@ TEST_F(WALReplayTest, RecoveryResultStatisticsAndCheckpoint) {
 		{
 			auto txn = db.beginTransaction();
 			Node n(0, 66);
-			db.getStorage()->getDataManager()->addNode(n);
+			db.storage()->getDataManager()->addNode(n);
 			txn.rollback();
 		}
 
@@ -330,7 +330,7 @@ TEST_F(WALReplayTest, RecoveryResultStatisticsAndCheckpoint) {
 
 	// Reopen and trigger recovery via beginTransaction (which calls ensureWALAndTransactionManager)
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
 
 		// Trigger WAL recovery by starting (and immediately committing) a read-only transaction
@@ -355,12 +355,12 @@ TEST_F(WALReplayTest, IdempotentReplay) {
 	int64_t nodeId = 0;
 
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 
 		auto txn = db.beginTransaction();
 		Node n(0, 33);
-		db.getStorage()->getDataManager()->addNode(n);
+		db.storage()->getDataManager()->addNode(n);
 		nodeId = n.getId();
 		txn.commit();
 		db.close();
@@ -368,9 +368,9 @@ TEST_F(WALReplayTest, IdempotentReplay) {
 
 	// First reopen — triggers recovery
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
-		Node retrieved = db2.getStorage()->getDataManager()->getNode(nodeId);
+		Node retrieved = db2.storage()->getDataManager()->getNode(nodeId);
 		EXPECT_TRUE(retrieved.isActive());
 		EXPECT_EQ(retrieved.getLabelId(), 33);
 		db2.close();
@@ -378,9 +378,9 @@ TEST_F(WALReplayTest, IdempotentReplay) {
 
 	// Second reopen — recovery should be a no-op (WAL was checkpointed)
 	{
-		Database db3(dbPath.string());
+		LegacyWALTestDatabase db3(dbPath.string());
 		db3.open();
-		Node retrieved = db3.getStorage()->getDataManager()->getNode(nodeId);
+		Node retrieved = db3.storage()->getDataManager()->getNode(nodeId);
 		EXPECT_TRUE(retrieved.isActive());
 		EXPECT_EQ(retrieved.getLabelId(), 33);
 		db3.close();
@@ -391,9 +391,9 @@ TEST_F(WALReplayTest, EdgePropertyRecoverySurvivesReopen) {
 	int64_t nodeId1 = 0, nodeId2 = 0, edgeId = 0;
 
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 
 		auto txn = db.beginTransaction();
 
@@ -417,7 +417,7 @@ TEST_F(WALReplayTest, EdgePropertyRecoverySurvivesReopen) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
 
 		// Trigger WAL recovery
@@ -426,7 +426,7 @@ TEST_F(WALReplayTest, EdgePropertyRecoverySurvivesReopen) {
 			txn.commit();
 		}
 
-		auto dm = db2.getStorage()->getDataManager();
+		auto dm = db2.storage()->getDataManager();
 
 		Edge retrieved = dm->getEdge(edgeId);
 		EXPECT_TRUE(retrieved.isActive());
@@ -444,9 +444,9 @@ TEST_F(WALReplayTest, MultipleNodesWithPropertiesRecovery) {
 	constexpr int nodeCount = 3;
 
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
-		auto dm = db.getStorage()->getDataManager();
+		auto dm = db.storage()->getDataManager();
 
 		for (int i = 0; i < nodeCount; ++i) {
 			auto txn = db.beginTransaction();
@@ -463,7 +463,7 @@ TEST_F(WALReplayTest, MultipleNodesWithPropertiesRecovery) {
 	}
 
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
 
 		// Trigger WAL recovery
@@ -472,7 +472,7 @@ TEST_F(WALReplayTest, MultipleNodesWithPropertiesRecovery) {
 			txn.commit();
 		}
 
-		auto dm = db2.getStorage()->getDataManager();
+		auto dm = db2.storage()->getDataManager();
 
 		for (int i = 0; i < nodeCount; ++i) {
 			Node retrieved = dm->getNode(nodeIds[i]);
@@ -499,7 +499,7 @@ TEST_F(WALReplayTest, MultipleNodesWithPropertiesRecovery) {
 TEST_F(WALReplayTest, EmptyWALTriggersEarlyCheckpoint) {
 	// Create DB and write a transaction to create the WAL file
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 		auto txn = db.beginTransaction();
 		txn.commit();
@@ -528,7 +528,7 @@ TEST_F(WALReplayTest, EmptyWALTriggersEarlyCheckpoint) {
 
 	// Reopen — recovery should handle empty/invalid records gracefully
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
 		auto txn = db2.beginReadOnlyTransaction();
 		txn.commit();
@@ -538,21 +538,21 @@ TEST_F(WALReplayTest, EmptyWALTriggersEarlyCheckpoint) {
 
 TEST_F(WALReplayTest, RollbackOnlyWALTriggersEarlyCheckpoint) {
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 
 		// Only rolled-back transactions — no commits
 		{
 			auto txn = db.beginTransaction();
 			Node n(0, 1);
-			db.getStorage()->getDataManager()->addNode(n);
+			db.storage()->getDataManager()->addNode(n);
 			txn.rollback();
 		}
 
 		{
 			auto txn = db.beginTransaction();
 			Node n(0, 2);
-			db.getStorage()->getDataManager()->addNode(n);
+			db.storage()->getDataManager()->addNode(n);
 			txn.rollback();
 		}
 
@@ -561,7 +561,7 @@ TEST_F(WALReplayTest, RollbackOnlyWALTriggersEarlyCheckpoint) {
 
 	// Reopen — WAL has records but no committed txns
 	{
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
 
 		// Trigger WAL recovery
@@ -574,7 +574,7 @@ TEST_F(WALReplayTest, RollbackOnlyWALTriggersEarlyCheckpoint) {
 
 TEST_F(WALReplayTest, CommittedTxnNoEntityWritesFinalStateEmpty) {
 	{
-		Database db(dbPath.string());
+		LegacyWALTestDatabase db(dbPath.string());
 		db.open();
 
 		// Commit an empty transaction (no entity changes at all)
@@ -588,7 +588,7 @@ TEST_F(WALReplayTest, CommittedTxnNoEntityWritesFinalStateEmpty) {
 
 	// Reopen — should handle empty finalState gracefully
 	EXPECT_NO_THROW({
-		Database db2(dbPath.string());
+		LegacyWALTestDatabase db2(dbPath.string());
 		db2.open();
 		auto txn = db2.beginReadOnlyTransaction();
 		txn.commit();

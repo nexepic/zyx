@@ -45,6 +45,12 @@ struct zyx_driver_result_t {
     mutable uint64_t value_ref_generation = 1;
 };
 
+struct zyx_driver_bytes_stream_t {
+    zyx::Bytes bytes;
+    size_t position = 0U;
+    size_t end = 0U;
+};
+
 struct zyx_driver_params_t {
     std::unordered_map<std::string, zyx::Value> values;
 };
@@ -73,6 +79,7 @@ const std::unordered_map<std::string, zyx::Value> &paramsMapOrEmpty(const zyx_dr
 zyx_driver_status_t validateNoActiveTransaction(zyx_driver_db_t *db, zyx_driver_error_t **out_error);
 std::string &storeString(zyx_driver_result_t *result, std::string value);
 zyx::Value deepCopyValue(const zyx::Value &value);
+zyx::Bytes copyAbiBytes(const uint8_t *value, uint32_t size);
 zyx_driver_status_t resultErrorStatus(const zyx::Result &result);
 zyx_driver_status_t transactionExceptionStatus(const std::exception &ex);
 zyx_driver_status_t catchTransactionException(zyx_driver_error_t **out_error) noexcept;

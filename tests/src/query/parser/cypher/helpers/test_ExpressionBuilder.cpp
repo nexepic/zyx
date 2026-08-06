@@ -13,6 +13,7 @@
 #include "antlr4-runtime.h"
 #include "helpers/ExpressionBuilder.hpp"
 #include "graph/query/expressions/Expression.hpp"
+#include "graph/query/expressions/ShortestPathExpression.hpp"
 
 using namespace graph::parser::cypher::helpers;
 using namespace graph::query::expressions;
@@ -1051,6 +1052,32 @@ TEST_F(ExpressionBuilderUnitTest, ShortestPathWithTypeAndRange) {
 	}
 }
 
+TEST_F(ExpressionBuilderUnitTest, ShortestPathPreservesExactAndOpenHopRanges) {
+	const auto assertRange = [this](const std::string &query, int expectedMin, int expectedMax) {
+		auto *expr = parseReturnExpr(query);
+		ASSERT_NE(expr, nullptr);
+		auto result = ExpressionBuilder::buildExpression(expr);
+		auto *shortest = dynamic_cast<ShortestPathExpression *>(result.get());
+		ASSERT_NE(shortest, nullptr);
+		EXPECT_EQ(shortest->getMinHops(), expectedMin);
+		EXPECT_EQ(shortest->getMaxHops(), expectedMax);
+	};
+
+	assertRange("RETURN shortestPath((a)-[*2]->(b))", 2, 2);
+	assertRange("RETURN shortestPath((a)-[*2..]->(b))", 2, 15);
+	assertRange("RETURN shortestPath((a)-[*..2]->(b))", 1, 2);
+}
+
+TEST_F(ExpressionBuilderUnitTest, ShortestPathRejectsPatternsTheLogicalRuntimeCannotRepresent) {
+	auto *multiHop = parseReturnExpr("RETURN shortestPath((a)-[:R]->(middle)-[:S]->(b))");
+	ASSERT_NE(multiHop, nullptr);
+	EXPECT_THROW(static_cast<void>(ExpressionBuilder::buildExpression(multiHop)), std::runtime_error);
+
+	auto *multiType = parseReturnExpr("RETURN shortestPath((a)-[:R|S*]->(b))");
+	ASSERT_NE(multiType, nullptr);
+	EXPECT_THROW(static_cast<void>(ExpressionBuilder::buildExpression(multiType)), std::runtime_error);
+}
+
 // ============== Map projection ==============
 
 TEST_F(ExpressionBuilderUnitTest, MapProjectionPropertySelector) {
@@ -1641,4 +1668,3 @@ TEST_F(ExpressionBuilderUnitTest, NotWithOrExpression) {
 	auto result = ExpressionBuilder::buildExpression(expr);
 	ASSERT_NE(result, nullptr);
 }
-

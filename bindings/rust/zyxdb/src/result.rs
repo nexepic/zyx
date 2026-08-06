@@ -110,6 +110,27 @@ impl<'a> Record<'a> {
             .map_err(|err| Error::new(ErrorCode::InternalError, err.to_string()))?
             .to_owned())
     }
+
+    pub fn get_bytes(&self, index: usize) -> crate::Result<Vec<u8>> {
+        let mut value = ptr::null();
+        let mut size = 0u32;
+        let mut error = ptr::null_mut();
+        let index = checked_index(index)?;
+        let status = unsafe {
+            sys::zyx_driver_result_get_bytes(self.raw, index, &mut value, &mut size, &mut error)
+        };
+        status_to_result(status, error)?;
+        if size == 0 {
+            return Ok(Vec::new());
+        }
+        if value.is_null() {
+            return Err(Error::new(
+                ErrorCode::InternalError,
+                "driver returned a null non-empty bytes buffer",
+            ));
+        }
+        Ok(unsafe { std::slice::from_raw_parts(value, size as usize) }.to_vec())
+    }
 }
 
 fn checked_index(index: usize) -> crate::Result<u32> {

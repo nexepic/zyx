@@ -23,29 +23,30 @@
 #include "graph/concurrent/ThreadPool.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/api/QueryEngine.hpp"
-#include "graph/storage/indexes/IndexManager.hpp"
-#include "graph/storage/indexes/VectorIndexManager.hpp"
-#include "graph/storage/wal/WALManager.hpp"
-#include "graph/storage/wal/WALRecovery.hpp"
+#include "graph/storage/relocatable/backend/RelocatableStorageBackend.hpp"
 
 namespace graph {
 
-	Database::Database(const std::string &dbPath, storage::OpenMode mode, size_t cacheSize) : dbPath(dbPath) {
-		storage = std::make_shared<storage::FileStorage>(dbPath, cacheSize, mode);
-	}
+	Database::Database(const std::string &dbPath, storage::OpenMode mode, size_t cacheSize) :
+		dbPath(dbPath), openMode_(mode), cacheSize_(cacheSize) {}
 
 	Database::~Database() {
 		try {
 			close();
 		} catch (...) {
-			// Destructors must not throw. If the final checkpoint fails, close()
-			// leaves the WAL on disk so the next open can recover safely.
+			// Destructors must not throw. The relocatable backend retains recovery state.
 		}
 	}
 
-	bool Database::isOpen() const {
-		// Database owns FileStorage for its full lifetime; the open state lives there.
-		return storage->isOpen();
+	bool Database::isOpen() const { return backend_ && backend_->isOpen(); }
+
+	std::shared_ptr<storage::LogicalGraphWriteBackend> Database::getLogicalGraphWriteBackend() const {
+		return std::dynamic_pointer_cast<storage::LogicalGraphWriteBackend>(backend_);
+	}
+
+	std::shared_ptr<storage::LogicalGraphTransactionalBackend>
+	Database::getLogicalGraphTransactionalBackend() const {
+		return std::dynamic_pointer_cast<storage::LogicalGraphTransactionalBackend>(backend_);
 	}
 
 	void Database::open() {
@@ -54,20 +55,22 @@ namespace graph {
 		}
 
 		debug::ScopedPerfTimer totalTimer("db.open.total");
-		// Essential initialization — always needed at open()
+		// Public Database creation is exclusively native relocatable.
 		{
 			debug::ScopedPerfTimer storageTimer("db.open.storage");
-			storage->open();
-		}
-		{
-			debug::ScopedPerfTimer configTimer("db.open.config");
-			configManager_ = std::make_shared<config::SystemConfigManager>(storage->getSystemStateManager(), storage);
-			configManager_->loadAndApplyAll();
-			storage->getDataManager()->registerObserver(configManager_);
+			if (!backend_) {
+				storage::StorageBackendSelection selection =
+						storage::StorageBackendFactory::create(dbPath, cacheSize_, openMode_);
+				backend_ = std::move(selection.backend);
+				relocatableStorage_ = std::move(selection.relocatable_storage);
+				if (!relocatableStorage_) {
+					throw std::logic_error("public Database requires a native relocatable storage backend");
+				}
+			}
+			backend_->open();
 		}
 
-		// ThreadPool, QueryEngine, WALManager, TransactionManager are deferred
-		// to first use via ensure*() methods with std::call_once.
+		// ThreadPool and QueryEngine are deferred to first use.
 	}
 
 	bool Database::openIfExists() {
@@ -89,18 +92,7 @@ namespace graph {
 			return;
 		}
 
-		{
-			debug::ScopedPerfTimer storageTimer("db.flush.storage");
-			storage->flushOrThrow();
-		}
-
-		if (walManager_ && walManager_->isOpen()) {
-			debug::ScopedPerfTimer walTimer("db.flush.wal_checkpoint");
-			walManager_->checkpoint();
-		}
-		if (transactionManager_) {
-			transactionManager_->markStorageCheckpointed();
-		}
+		backend_->flush();
 	}
 
 	void Database::close() const {
@@ -109,26 +101,8 @@ namespace graph {
 		}
 
 		debug::ScopedPerfTimer totalTimer("db.close.total");
-		// A clean close is also the final checkpoint boundary: make the main DB
-		// file current before deleting the WAL. If this throws, the WAL stays on
-		// disk for recovery instead of being silently discarded.
-		if (walManager_) {
-			{
-				debug::ScopedPerfTimer storageTimer("db.close.storage_checkpoint");
-				storage->flushOrThrow();
-			}
-			if (transactionManager_) {
-				transactionManager_->markStorageCheckpointed();
-			}
-			debug::ScopedPerfTimer walTimer("db.close.wal");
-			walManager_->close(storage::wal::WALManager::CloseMode::WCM_REMOVE_FILE,
-							   storage::wal::WALManager::CloseSyncMode::WSM_FLUSH_ONLY);
-		}
-
-		{
-			debug::ScopedPerfTimer storageTimer("db.close.storage");
-			storage->close();
-		}
+		debug::ScopedPerfTimer storageTimer("db.close.storage");
+		backend_->close();
 	}
 
 	bool Database::exists() const { return std::filesystem::exists(dbPath); }
@@ -137,43 +111,35 @@ namespace graph {
 		if (!isOpen()) {
 			open();
 		}
-
-		// Ensure transaction manager is ready (Phase 1: opens WAL only if recovery needed)
-		const_cast<Database *>(this)->ensureWALAndTransactionManager();
-		// Ensure WAL file exists for write durability (Phase 2: creates WAL if not yet open)
-		const_cast<Database *>(this)->ensureWALForWrites();
-
-		// Create transaction via TransactionManager
-		// TransactionManager::begin() acquires the write lock, writes WAL begin,
-		// and sets DataManager's transaction context (flag + txnId).
-		return transactionManager_->begin();
+		return beginLogicalTransaction(false);
 	}
 
 	Transaction Database::beginBulkTransaction() {
 		if (!isOpen()) {
 			open();
 		}
-
-		const_cast<Database *>(this)->ensureWALAndTransactionManager();
-		const_cast<Database *>(this)->ensureWALForWrites();
-
-		return transactionManager_->beginBulk();
+		return beginLogicalTransaction(false);
 	}
 
 	Transaction Database::beginReadOnlyTransaction() {
 		if (!isOpen()) {
 			open();
 		}
-
-		// Ensure WAL and transaction manager are ready
-		const_cast<Database *>(this)->ensureWALAndTransactionManager();
-
-		// Create read-only transaction via TransactionManager
-		return transactionManager_->beginReadOnly();
+		return beginLogicalTransaction(true);
 	}
 
 	bool Database::hasActiveTransaction() const {
-		return transactionManager_ && transactionManager_->hasActiveTransaction();
+		return activeLogicalWriteTransactions_->load(std::memory_order_acquire) != 0U;
+	}
+
+	Transaction Database::beginLogicalTransaction(bool readOnly) {
+		auto logicalTransactions = getLogicalGraphTransactionalBackend();
+		if (!logicalTransactions) {
+			throw std::logic_error("database backend does not provide logical transactions");
+		}
+		const uint64_t transactionId = nextLogicalTransactionId_.fetch_add(1U, std::memory_order_relaxed);
+		return Transaction(transactionId, logicalTransactions->beginLogicalGraphTransaction(readOnly),
+						   activeLogicalWriteTransactions_);
 	}
 
 	void Database::setThreadPoolSize(size_t poolSize) {
@@ -187,13 +153,8 @@ namespace graph {
 
 		threadPool_ = std::make_shared<concurrent::ThreadPool>(poolSize);
 
-		// Re-wire the new pool to all subsystems
-		if (storage) // ZYX_COV_EXCL_LINE: Database constructs storage eagerly and keeps it for its lifetime.
-			storage->setThreadPool(threadPool_.get());
 		if (queryEngine) {
 			queryEngine->setThreadPool(threadPool_.get());
-			auto vim = queryEngine->getIndexManager()->getVectorIndexManager();
-			vim->setThreadPool(threadPool_.get());
 		}
 	}
 
@@ -202,9 +163,13 @@ namespace graph {
 	void Database::ensureThreadPool() {
 		std::call_once(threadPoolInitFlag_, [this]() {
 			debug::ScopedPerfTimer timer("db.ensure_thread_pool");
-			size_t poolSize = configuredThreadPoolSize_.value_or(configManager_->getThreadPoolSize());
-			threadPool_ = std::make_shared<concurrent::ThreadPool>(poolSize);
-			storage->setThreadPool(threadPool_.get());
+			if (configuredThreadPoolSize_.has_value()) {
+				threadPool_ = std::make_shared<concurrent::ThreadPool>(*configuredThreadPoolSize_);
+			} else {
+				// Preserve ThreadPool's auto-detection policy rather than converting
+				// the detected value into an indistinguishable manual override.
+				threadPool_ = std::make_shared<concurrent::ThreadPool>();
+			}
 		});
 	}
 
@@ -212,77 +177,35 @@ namespace graph {
 		std::call_once(queryEngineInitFlag_, [this]() {
 			debug::ScopedPerfTimer timer("db.ensure_query_engine");
 			ensureThreadPool();
-			queryEngine = std::make_shared<query::QueryEngine>(storage);
-			queryEngine->setThreadPool(threadPool_.get());
-			queryEngine->setConfigManager(configManager_.get());
-
-			// Wire thread pool to vector index subsystem
-			auto vim = queryEngine->getIndexManager()->getVectorIndexManager();
-			vim->setThreadPool(threadPool_.get());
-		});
-	}
-
-	void Database::ensureWALAndTransactionManager() {
-		std::call_once(walInitFlag_, [this]() {
-			debug::ScopedPerfTimer timer("db.ensure_wal_txn_manager");
-			ensureThreadPool();
-
-			// Only open WAL if a WAL file already exists on disk (crash recovery).
-			// For clean databases with only read-only operations (e.g., WASM Playground),
-			// we skip WAL creation entirely — TransactionManager handles nullptr safely.
-			std::string walFilePath = dbPath + "-wal";
-			if (std::filesystem::exists(walFilePath)) {
-				walManager_ = std::make_shared<storage::wal::WALManager>();
-				walManager_->open(dbPath);
-
-				// WAL Recovery: replay committed transactions that weren't flushed to DB file.
-				if (walManager_->needsRecovery()) {
-					storage::wal::WALRecovery recovery(
-							*walManager_,
-							storage->getStorageWriter(),
-							storage->getIDAllocators(),
-							storage->getSegmentTracker(),
-							storage->getStorageIO(),
-							storage->getDataManager(),
-							storage->getFileHeaderManager());
-					recovery.recover();
+			if (relocatableStorage_) {
+				query::LogicalReadExecutionOptions options;
+				std::error_code error;
+				const std::filesystem::path databaseDirectory =
+						std::filesystem::absolute(std::filesystem::path(dbPath).parent_path(), error);
+				if (error || databaseDirectory.empty()) {
+					throw std::runtime_error("relocatable database cannot resolve its LOAD CSV import directory");
 				}
-
-				storage->getDataManager()->setWALManager(walManager_.get());
+				options.csv_import_root = databaseDirectory;
+				queryEngine = std::make_shared<query::QueryEngine>(
+						std::static_pointer_cast<storage::LogicalGraphReadBackend>(relocatableStorage_),
+						std::static_pointer_cast<storage::LogicalGraphWriteBackend>(relocatableStorage_), std::move(options));
+			} else {
+				throw std::logic_error("Database has no open storage backend for query execution");
 			}
-
-			// Always create TransactionManager (walManager_ may be nullptr for pure read-only paths)
-			transactionManager_ = std::make_unique<TransactionManager>(storage, walManager_);
-		});
-	}
-
-	void Database::ensureWALForWrites() {
-		std::call_once(walWriteInitFlag_, [this]() {
-			// If WAL was already created during recovery in ensureWALAndTransactionManager(), skip
-			if (walManager_) {
-				return;
-			}
-
-			// Create WAL file for the first write transaction
-			walManager_ = std::make_shared<storage::wal::WALManager>();
-			walManager_->open(dbPath);
-
-			// Wire WAL into TransactionManager for future WAL record writes
-			transactionManager_->setWALManager(walManager_);
-
-			// Wire WAL into DataManager for per-entity WAL recording during mutations
-			storage->getDataManager()->setWALManager(walManager_.get());
+			queryEngine->setThreadPool(threadPool_.get());
 		});
 	}
 
 	std::shared_ptr<query::QueryEngine> Database::getQueryEngine() {
-		if (!isOpen()) return nullptr;
+		if (!isOpen())
+			return nullptr;
 		ensureQueryEngine();
 		return queryEngine;
 	}
 
 	std::shared_ptr<concurrent::ThreadPool> Database::getThreadPool() {
-		if (!isOpen()) return nullptr;
+		if (!isOpen())
+			return nullptr;
 		ensureThreadPool();
 		return threadPool_;
 	}

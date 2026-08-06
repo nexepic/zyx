@@ -1,6 +1,6 @@
 ---
 title: Cache Management
-description: PageBufferPool segment-level LRU cache and dirty entity coordination strategies.
+description: Native single-file raw-page Buffer Pool and its durability contract.
 category: Core Components
 categoryOrder: 2
 order: 7
@@ -9,101 +9,86 @@ projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
+
 # Cache Management
 
-Caching in ZYX is not a single module — it is a coordinated effort across multiple components:
+Every native ZYX database has one shared `BufferPool` below `StorageIO`. It
+caches raw 4 KiB pages for the Metadata, Catalog, Entity, Property, B+Tree,
+Vector, and LargeValue stores. No native production path uses the historical
+128 KiB `PageBufferPool` or a per-entity dirty registry.
 
-- **PageBufferPool** — A unified LRU cache operating at the segment level (128 KB per page).
-- **DirtyEntityRegistry** — Per-entity-type dirty tracking within `PersistenceManager`.
-- **Component-internal caches** — For example, `VectorIndexRegistry` maintains its own cache for vector index structures.
+`Database` accepts a cache limit in bytes. It defaults to 64 MiB and rejects a
+limit smaller than one 4 KiB page. The limit is rounded down to a whole-page
+capacity, so resident data never exceeds the configured byte ceiling.
 
-## Design Goals
+## Page Identity And Pins
 
-1. Reduce repeated disk reads for hot segments.
-2. Contain write amplification within transaction boundaries.
-3. Keep batch write memory usage bounded.
+A resident page is addressed by the physical 4 KiB-aligned file offset plus a
+generation:
 
-## PageBufferPool
-
-`PageBufferPool` is a segment-level LRU cache shared across all entity types. It stores complete segments (128 KB each) rather than individual entities, which amortizes the overhead of disk seeks.
-
-```mermaid
-graph TD
-    A[Read request for entity] --> B["PageBufferPool.getPage(segmentOffset)"]
-    B --> C{Page in cache?}
-    C -->|Hit| D[Return cached page]
-    C -->|Miss| E["StorageIO.pread(offset, SEGMENT_SIZE)"]
-    E --> F[Add to LRU list]
-    F --> G{Cache full?}
-    G -->|Yes| H[Evict least recently used page]
-    G -->|No| D
-    H --> D
+```cpp
+graph::storage::BufferPoolPageKey key{pageOffset, generation};
 ```
 
-**Key characteristics:**
-
-- **Thread-safe** — Protected by `std::shared_mutex`; concurrent reads are allowed.
-- **Statistics** — Tracks `hits` and `misses` atomically for monitoring.
-- **Configurable capacity** — Set at construction time as a number of pages.
-
-## Cache Invalidation
-
-Invalidation is targeted, not wholesale:
+The generation prevents a cached view from being confused with a later reuse
+of the same physical slot. A `Pin` is an RAII handle: a pinned page cannot be
+evicted or invalidated. COW writers create a nonzero-generation private page,
+change it through the exclusive mutable pin, and publish only the new root.
 
 ```mermaid
 sequenceDiagram
-    participant TX as Transaction (commit)
-    participant PM as PersistenceManager
-    participant SW as StorageWriter
-    participant PB as PageBufferPool
+    participant S as Typed store
+    participant BP as BufferPool
+    participant IO as StorageIO
+    participant SB as A/B Superblock
 
-    TX->>PM: createSnapshot()
-    PM-->>TX: FlushSnapshot with dirty entity maps
-
-    TX->>SW: writeSnapshot(snapshot)
-    SW->>SW: Write dirty entities to segments on disk
-
-    TX->>PB: invalidateDirtySegments(snapshot)
-    Note over PB: Only evict pages for segments that were actually modified
-    TX->>PM: commitSnapshot()
+    S->>BP: allocate private COW page
+    S->>BP: write page bytes through exclusive pin
+    S->>IO: sync
+    BP->>IO: flush dirty data pages
+    IO->>IO: durable file sync
+    S->>SB: publish inactive root generation
+    SB->>IO: durable Superblock sync
 ```
 
-After `StorageWriter` flushes dirty entities to disk, `invalidateDirtySegments()` removes only the pages belonging to modified segments. This avoids clearing the entire cache on every commit, preserving hot data that was not part of the transaction.
+The cache never makes unvalidated bytes trustworthy. Typed page codecs still
+validate their headers, lengths, checksums, ownership, and generation before a
+page is interpreted. A malformed file therefore fails closed whether a read is
+a cache hit or a miss.
 
-## Dirty Entity Tracking
+## Admission, Eviction, And Scans
 
-`PersistenceManager` maintains six `DirtyEntityRegistry` instances — one per entity type (Node, Edge, Property, Blob, Index, State).
+The pool uses byte-bounded 2Q admission:
 
-### Double-Buffered Design
+- First-use pages enter the recent queue.
+- A later hit promotes a page into the frequent queue.
+- Eviction takes an unpinned page from recent before frequent, flushing a dirty
+  page before releasing its frame.
+- Sequential `StorageIO` reads bypass residency, so scans do not evict the
+  point-query working set.
+- Callers can prefetch known sibling pages; a later demand read records the
+  prefetch hit.
 
-```mermaid
-graph LR
-    subgraph "Active Set"
-        A1["Node dirty map"]
-        A2["Edge dirty map"]
-        A3["... other types"]
-    end
+The pool does not evict a pinned page, overwrite an invalidated pinned page, or
+silently discard a dirty page. If no unpinned frame is available, it fails the
+operation instead of violating snapshot safety.
 
-    subgraph "Flushing Set"
-        F1["Node dirty map"]
-        F2["Edge dirty map"]
-        F3["... other types"]
-    end
+## Lifetime And Metrics
 
-    OP["Query operators"] -->|"upsert / remove"| A1
-    A1 -.->|"createSnapshot()"| F1
-    F1 -.->|"StorageWriter"| DISK[(Disk)]
-```
+`StorageIO::sync()` flushes dirty cache pages before the platform durable sync.
+`flushStream()` does the same before a stream visibility boundary, and storage
+teardown flushes a configured pool rather than dropping dirty data. Direct
+append/reserve operations first flush and invalidate their affected cached
+range.
 
-When `createSnapshot()` is called:
+`RelocatableStorageBackend::ioStats()` reports both logical `StorageIO` traffic
+and Buffer Pool metrics:
 
-1. The current active dirty maps are captured into a `FlushSnapshot`.
-2. Fresh, empty maps are swapped in as the new active set.
-3. New writes from subsequent operations go into the active set without blocking the flush.
-4. After `StorageWriter` finishes writing the snapshot to disk, `commitSnapshot()` clears the flushing set.
+- capacity, resident, pinned, and dirty bytes;
+- cache hits, misses, and evictions;
+- prefetch requests and demand hits;
+- raw disk bytes read and written by the pool.
 
-This double-buffer ensures that read operations can still serve data from the flushing set while the flush is in progress.
-
-### Auto-Flush
-
-`PersistenceManager` monitors the total dirty entity count across all types. When it exceeds a configurable threshold (default 10,000), it invokes a registered callback to trigger an automatic flush. This prevents unbounded memory growth during long-running write transactions.
+These counters distinguish application I/O from physical cache writeback, so
+they can be used to evaluate hit rate, scan isolation, pin pressure, and write
+amplification.

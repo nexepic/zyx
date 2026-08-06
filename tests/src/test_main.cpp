@@ -1,8 +1,40 @@
 #include <gtest/gtest.h>
+#include <filesystem>
 #include <iostream>
 #include <sstream>
+#include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
+
+#include "TestProcessSupport.hpp"
+
+namespace graph::test {
+
+	int runRelocatableCrashChild(std::string_view mode, const std::filesystem::path &databasePath,
+								 const std::filesystem::path &markerPath);
+
+	namespace {
+
+		std::filesystem::path testExecutable;
+
+	} // namespace
+
+	void initializeTestExecutablePath(const char *argv0) {
+		if (argv0 == nullptr || *argv0 == '\0') {
+			throw std::invalid_argument("test executable path is empty");
+		}
+		testExecutable = std::filesystem::absolute(argv0);
+	}
+
+	const std::filesystem::path &testExecutablePath() {
+		if (testExecutable.empty()) {
+			throw std::logic_error("test executable path was not initialized");
+		}
+		return testExecutable;
+	}
+
+} // namespace graph::test
 
 class TerseSuitePrinter : public ::testing::TestEventListener {
 private:
@@ -124,6 +156,10 @@ public:
 };
 
 int main(int argc, char **argv) {
+	if (argc == 5 && std::string_view(argv[1]) == "--zyx-relocatable-crash-child") {
+		return graph::test::runRelocatableCrashChild(argv[2], argv[3], argv[4]);
+	}
+	graph::test::initializeTestExecutablePath(argc > 0 ? argv[0] : nullptr);
     ::testing::InitGoogleTest(&argc, argv);
 
     ::testing::UnitTest* unit_test = ::testing::UnitTest::GetInstance();

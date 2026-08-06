@@ -67,15 +67,21 @@ TEST_F(CppApiTest, ExecuteAutoOpensDb) {
 	db->close();
 
 	auto tempDir = fs::temp_directory_path();
-	std::string newPath = (tempDir / ("api_autoopen_" + std::to_string(std::rand()))).string();
+	std::string newPath = (tempDir / ("api_autoopen_" + std::to_string(
+														std::chrono::steady_clock::now().time_since_epoch().count()))).string();
+	std::error_code ec;
+	fs::remove(newPath, ec);
+	ec.clear();
+	fs::remove(newPath + ".wal", ec);
 	auto newDb = std::make_unique<zyx::Database>(newPath);
 
 	auto res = newDb->execute("RETURN 42 AS val");
 	EXPECT_TRUE(res.isSuccess());
 
 	newDb->close();
-	if (fs::exists(newPath))
-		fs::remove_all(newPath);
+	fs::remove(newPath, ec);
+	ec.clear();
+	fs::remove(newPath + ".wal", ec);
 }
 
 TEST_F(CppApiTest, CloseAndReopenDatabase) {
@@ -143,7 +149,12 @@ TEST_F(CppApiTest, BulkCreateDeleteFlushReopen) {
 
 TEST_F(CppApiTest, ExecuteOnClosedDbCreatesNew) {
 	auto tempDir = fs::temp_directory_path();
-	std::string newPath = (tempDir / ("api_never_opened_" + std::to_string(std::rand()))).string();
+	std::string newPath = (tempDir / ("api_never_opened_" + std::to_string(
+														std::chrono::steady_clock::now().time_since_epoch().count()))).string();
+	std::error_code ec;
+	fs::remove(newPath, ec);
+	ec.clear();
+	fs::remove(newPath + ".wal", ec);
 	auto newDb = std::make_unique<zyx::Database>(newPath);
 	auto res = newDb->execute("CREATE (n:AutoOpen {val: 1})");
 	EXPECT_TRUE(res.isSuccess());
@@ -155,8 +166,9 @@ TEST_F(CppApiTest, ExecuteOnClosedDbCreatesNew) {
 	EXPECT_TRUE(std::holds_alternative<int64_t>(val));
 
 	newDb->close();
-	if (fs::exists(newPath))
-		fs::remove_all(newPath);
+	fs::remove(newPath, ec);
+	ec.clear();
+	fs::remove(newPath + ".wal", ec);
 }
 
 TEST_F(CppApiTest, SaveOnClosedDb) {

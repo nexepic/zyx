@@ -225,3 +225,16 @@ TEST_F(IntegrationSubqueryFeaturesTest, LoadCsv_EmptyFile) {
 		"RETURN row");
 	EXPECT_EQ(result.rowCount(), 0UL);
 }
+
+TEST_F(IntegrationSubqueryFeaturesTest, LoadCsv_CreateIsAtomicWhenALaterRecordIsMalformed) {
+	auto csvPath = createTempCsv("name\nAda\n\"unterminated");
+
+	EXPECT_THROW(
+		execute("LOAD CSV WITH HEADERS FROM 'file:///" + csvPath +
+				"' AS row CREATE (:AtomicCsvPerson {name: row.name})"),
+		std::runtime_error);
+
+	auto result = execute("MATCH (n:AtomicCsvPerson) RETURN count(n) AS count");
+	ASSERT_EQ(result.rowCount(), 1UL);
+	EXPECT_EQ(val(result, "count"), "0");
+}

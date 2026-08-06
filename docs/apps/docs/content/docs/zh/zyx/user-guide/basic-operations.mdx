@@ -44,6 +44,10 @@ MATCH (p:Person {name: 'Alice'}), (c:Company {name: 'ZYX'})
 CREATE (p)-[:WORKS_AT {since: 2026}]->(c);
 ```
 
+关系类型是可选的。`CREATE (p)-->(c)` 会创建无类型关系，`MERGE` 同样支持这种形式。该关系的
+`type(r)` 返回 `''`，可被 `MATCH (p)-->(c)` 这类无类型模式找到，但不会匹配
+`MATCH (p)-[:WORKS_AT]->(c)` 这类具名类型模式。系统不会为此创建虚构的 Schema Token 或关系类型索引条目。
+
 :::tip 幂等写入
 如果需要"不存在则创建、存在则更新"的语义，使用 `MERGE` 代替 `CREATE`。详见 [Cypher 基础](cypher-basics)。
 :::
@@ -100,6 +104,15 @@ OPTIONS {dimension: 4, metric: 'COSINE'};
 
 CALL db.index.vector.queryNodes('doc_vec_idx', 5, [0.1, 0.2, 0.3, 0.4])
 YIELD node, score
+RETURN node, score;
+```
+
+`YIELD` 之后可以使用 `WHERE` 过滤过程返回的行；此时已可引用 `YIELD` 声明的 alias：
+
+```cypher
+CALL db.index.vector.queryNodes('doc_vec_idx', 5, [0.1, 0.2, 0.3, 0.4])
+YIELD node, score
+WHERE node.status = 'published'
 RETURN node, score;
 ```
 

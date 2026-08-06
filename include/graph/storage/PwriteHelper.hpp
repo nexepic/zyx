@@ -72,6 +72,33 @@ inline file_handle_t portable_open_rw(const char* filePath) {
 }
 
 /**
+ * @brief Atomically create a new read-write file without replacing an existing path.
+ *
+ * The POSIX mode is owner-only until the application's normal permission policy
+ * changes it. Windows uses CREATE_NEW, which provides the same no-replacement
+ * guarantee and avoids a check-then-truncate race during database bootstrap.
+ */
+inline file_handle_t portable_create_rw_exclusive(const char* filePath) {
+	if (!filePath) return INVALID_FILE_HANDLE;
+
+#ifdef _WIN32
+	HANDLE hFile = ::CreateFileA(
+		filePath,
+		GENERIC_READ | GENERIC_WRITE,
+		FILE_SHARE_READ | FILE_SHARE_WRITE,
+		nullptr,
+		CREATE_NEW,
+		FILE_ATTRIBUTE_NORMAL,
+		nullptr
+	);
+	if (hFile == INVALID_HANDLE_VALUE) return INVALID_FILE_HANDLE;
+	return reinterpret_cast<file_handle_t>(hFile);
+#else
+	return ::open(filePath, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
+#endif
+}
+
+/**
  * @brief Cross-platform pwrite wrapper
  *
  * Performs an atomic position-independent write to a file.
@@ -116,7 +143,11 @@ inline int portable_file_size(file_handle_t fd, uint64_t *outSize) {
 }
 
 /**
- * @brief Cross-platform fsync/fdatasync wrapper
+ * @brief Cross-platform durable-sync wrapper.
+ *
+ * F_FULLFSYNC is a macOS-specific hardware-cache barrier. It is materially
+ * stronger and slower than the durable filesystem contract used by the other
+ * supported platforms, so ordinary database WAL publication uses fsync there.
  */
 inline int portable_fsync(file_handle_t fd) {
 	if (fd == INVALID_FILE_HANDLE) return -1;
@@ -126,7 +157,7 @@ inline int portable_fsync(file_handle_t fd) {
 	return ::FlushFileBuffers(hFile) ? 0 : -1;
 #else
 #ifdef __APPLE__
-	return ::fcntl(fd, F_FULLFSYNC);
+	return ::fsync(fd);
 #else
 	return ::fdatasync(fd);
 #endif

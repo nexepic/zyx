@@ -38,7 +38,7 @@
 #include <string>
 #include <vector>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/state/SystemStateManager.hpp"
 #include "graph/vector/VectorIndexRegistry.hpp"
@@ -108,10 +108,10 @@ protected:
 		if (std::filesystem::exists(dbPath))
 			std::filesystem::remove_all(dbPath);
 
-		database = std::make_unique<graph::Database>(dbPath.string());
+		database = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(dbPath.string());
 		database->open();
-		dataManager = database->getStorage()->getDataManager();
-		stateManager = database->getStorage()->getSystemStateManager();
+		dataManager = database->storage()->getDataManager();
+		stateManager = database->storage()->getSystemStateManager();
 	}
 
 	void TearDown() override {
@@ -124,7 +124,7 @@ protected:
 	}
 
 	std::filesystem::path dbPath;
-	std::unique_ptr<graph::Database> database;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> database;
 	std::shared_ptr<graph::storage::DataManager> dataManager;
 	std::shared_ptr<graph::storage::state::SystemStateManager> stateManager;
 };

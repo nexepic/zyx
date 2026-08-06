@@ -1,0 +1,1142 @@
+/**
+ * @file test_SystemCatalog.cpp
+ * @brief Atomic canonical System Catalog tests.
+ *
+ * Copyright (c) 2026 Nexepic
+ * Licensed under the Apache License, Version 2.0.
+ */
+
+#include <array>
+#include <filesystem>
+#include <fstream>
+#include <limits>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
+#include <gtest/gtest.h>
+
+#include "graph/core/Node.hpp"
+#include "graph/storage/StorageIO.hpp"
+#include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
+#include "graph/storage/relocatable/entity/EntityLabelSetStore.hpp"
+#include "graph/storage/relocatable/entity/EntityPageStore.hpp"
+#include "graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp"
+#include "graph/storage/relocatable/index/BTreePageStore.hpp"
+#include "graph/storage/relocatable/metadata/MetadataWriteBatch.hpp"
+#include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
+#include "graph/storage/relocatable/property/PropertyCollectionRootStore.hpp"
+#include "graph/storage/relocatable/schema/SystemCatalog.hpp"
+
+using namespace graph::storage;
+using graph::Node;
+using graph::PropertyValue;
+
+namespace {
+
+	Superblock initialSuperblock() {
+		Superblock result;
+		result.database_id = DatabaseId(0x5A5958434154414CULL);
+		result.generation = Generation(1U);
+		result.checkpoint_lsn = LogSequenceNumber(1U);
+		return result;
+	}
+
+	NativeGraphWritePlannerOptions plannerOptions() {
+		NativeGraphWritePlannerOptions options;
+		options.first_slot = PhysicalSlotId(40U);
+		options.last_slot = PhysicalSlotId(80U);
+		options.entity_pool_owner_id = 821U;
+		options.property_roots = {PhysicalSlotId(40U), PhysicalSlotId(80U), 822U};
+		return options;
+	}
+
+	std::vector<std::byte> propertyNameKey(std::string_view name) {
+		std::vector<std::byte> key = {std::byte{1U}};
+		for (const char character: name) {
+			key.push_back(static_cast<std::byte>(static_cast<unsigned char>(character)));
+		}
+		return key;
+	}
+
+	std::vector<std::byte> propertyTokenKey(uint32_t token, std::string_view name) {
+		std::vector<std::byte> key = {std::byte{2U}, static_cast<std::byte>(token >> 24U),
+								  static_cast<std::byte>(token >> 16U), static_cast<std::byte>(token >> 8U),
+								  static_cast<std::byte>(token)};
+		for (const char character: name) {
+			key.push_back(static_cast<std::byte>(static_cast<unsigned char>(character)));
+		}
+		return key;
+	}
+
+	void appendBigEndianU32(std::vector<std::byte> &target, uint32_t value) {
+		for (uint32_t shift = 24U;; shift -= 8U) {
+			target.push_back(static_cast<std::byte>((value >> shift) & UINT32_C(0xFF)));
+			if (shift == 0U) {
+				return;
+			}
+		}
+	}
+
+	void appendBigEndianU64(std::vector<std::byte> &target, uint64_t value) {
+		for (uint32_t shift = 56U;; shift -= 8U) {
+			target.push_back(static_cast<std::byte>((value >> shift) & UINT64_C(0xFF)));
+			if (shift == 0U) {
+				return;
+			}
+		}
+	}
+
+	std::vector<std::byte> schemaNameKey(SystemCatalogSchemaTokenKind kind, std::string_view name) {
+		std::vector<std::byte> key = {std::byte{3U}, static_cast<std::byte>(kind)};
+		for (const char character: name) {
+			key.push_back(static_cast<std::byte>(static_cast<unsigned char>(character)));
+		}
+		return key;
+	}
+
+	std::vector<std::byte> schemaTokenKey(SystemCatalogSchemaTokenKind kind, uint64_t token, std::string_view name) {
+		std::vector<std::byte> key = {std::byte{4U}, static_cast<std::byte>(kind)};
+		appendBigEndianU64(key, token);
+		for (const char character: name) {
+			key.push_back(static_cast<std::byte>(static_cast<unsigned char>(character)));
+		}
+		return key;
+	}
+
+	void appendLengthPrefixedString(std::vector<std::byte> &target, std::string_view value) {
+		target.push_back(static_cast<std::byte>((value.size() >> 8U) & UINT16_C(0xFF)));
+		target.push_back(static_cast<std::byte>(value.size() & UINT16_C(0xFF)));
+		for (const char character: value) {
+			target.push_back(static_cast<std::byte>(static_cast<unsigned char>(character)));
+		}
+	}
+
+	std::vector<std::byte> indexDefinitionKey(const IndexDefinition &definition) {
+		std::vector<std::byte> key = {std::byte{6U}};
+		appendBigEndianU64(key, definition.index_id);
+		const std::vector<std::byte> encoded = IndexDefinitionCodec::encode(definition);
+		key.insert(key.end(), encoded.begin(), encoded.end());
+		return key;
+	}
+
+	std::vector<std::byte> constraintDefinitionKey(const ConstraintDefinition &definition) {
+		std::vector<std::byte> key = {std::byte{9U}};
+		appendBigEndianU64(key, definition.constraint_id);
+		const std::vector<std::byte> encoded = ConstraintDefinitionCodec::encode(definition);
+		key.insert(key.end(), encoded.begin(), encoded.end());
+		return key;
+	}
+
+	std::vector<std::byte> definitionKey(uint8_t kind, uint64_t keyId, std::span<const std::byte> encoded) {
+		std::vector<std::byte> key = {static_cast<std::byte>(kind)};
+		appendBigEndianU64(key, keyId);
+		key.insert(key.end(), encoded.begin(), encoded.end());
+		return key;
+	}
+
+	std::vector<std::byte> namedDefinitionKey(uint8_t kind, std::string_view name) {
+		std::vector<std::byte> key = {static_cast<std::byte>(kind)};
+		for (const char character: name) {
+			key.push_back(static_cast<std::byte>(static_cast<unsigned char>(character)));
+		}
+		return key;
+	}
+
+	std::vector<std::byte> indexSemanticKey(const IndexDefinition &definition) {
+		std::vector<std::byte> key = {std::byte{8U}, static_cast<std::byte>(definition.entity_kind),
+									  static_cast<std::byte>(definition.kind)};
+		appendBigEndianU64(key, definition.label_token_id);
+		appendBigEndianU32(key, definition.vector_dimensions);
+		if (definition.kind == IndexDefinitionKind::IDK_VECTOR) {
+			appendLengthPrefixedString(key, definition.vector_metric);
+		} else {
+			key.insert(key.end(), {std::byte{0U}, std::byte{0U}});
+		}
+		key.push_back(static_cast<std::byte>((definition.property_names.size() >> 8U) & UINT16_C(0xFF)));
+		key.push_back(static_cast<std::byte>(definition.property_names.size() & UINT16_C(0xFF)));
+		for (const std::string &property: definition.property_names) {
+			appendLengthPrefixedString(key, property);
+		}
+		return key;
+	}
+
+	std::vector<std::byte> constraintSemanticKey(const ConstraintDefinition &definition) {
+		std::vector<std::byte> key = {std::byte{11U}, static_cast<std::byte>(definition.entity_kind),
+									  static_cast<std::byte>(definition.kind)};
+		appendBigEndianU64(key, definition.schema_token_id);
+		key.push_back(static_cast<std::byte>(definition.property_type));
+		key.push_back(static_cast<std::byte>((definition.property_names.size() >> 8U) & UINT16_C(0xFF)));
+		key.push_back(static_cast<std::byte>(definition.property_names.size() & UINT16_C(0xFF)));
+		for (const std::string &property: definition.property_names) {
+			appendLengthPrefixedString(key, property);
+		}
+		return key;
+	}
+
+	constexpr uint64_t SYSTEM_CATALOG_BOOTSTRAP_VALUE = UINT64_C(0x5A5958434154414C);
+
+} // namespace
+
+class SystemCatalogTest : public ::testing::Test {
+protected:
+	std::filesystem::path path_;
+	std::shared_ptr<std::fstream> file_;
+	std::shared_ptr<StorageIO> io_;
+	std::unique_ptr<RelocatableMetadataStore> metadata_;
+	std::unique_ptr<EntityPageStore> entities_;
+	std::unique_ptr<SlottedPagePool> slotted_pages_;
+	std::unique_ptr<EntityLabelSetStore> labels_;
+	std::unique_ptr<PropertyCollectionRootStore> properties_;
+
+	void SetUp() override {
+		const auto uuid = boost::uuids::random_generator()();
+		path_ = std::filesystem::temp_directory_path() / ("system_catalog_" + to_string(uuid));
+		file_ = std::make_shared<std::fstream>(path_,
+											   std::ios::in | std::ios::out | std::ios::binary | std::ios::trunc);
+		ASSERT_TRUE(file_->is_open());
+		io_ = std::make_shared<StorageIO>(file_, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		metadata_ = RelocatableMetadataStore::initializeNew(io_, initialSuperblock());
+		entities_ = std::make_unique<EntityPageStore>(io_, *metadata_);
+		slotted_pages_ = std::make_unique<SlottedPagePool>(io_, *metadata_);
+		labels_ = std::make_unique<EntityLabelSetStore>(io_, *metadata_, *slotted_pages_);
+		properties_ = std::make_unique<PropertyCollectionRootStore>(*slotted_pages_, *metadata_);
+	}
+
+	void TearDown() override {
+		properties_.reset();
+		labels_.reset();
+		slotted_pages_.reset();
+		entities_.reset();
+		metadata_.reset();
+		io_.reset();
+		if (file_ && file_->is_open()) {
+			file_->close();
+		}
+		file_.reset();
+		std::error_code error;
+		std::filesystem::remove(path_, error);
+	}
+
+	void reopenNativeStores() {
+		properties_.reset();
+		labels_.reset();
+		slotted_pages_.reset();
+		entities_.reset();
+		metadata_.reset();
+		metadata_ = RelocatableMetadataStore::open(io_);
+		entities_ = std::make_unique<EntityPageStore>(io_, *metadata_);
+		slotted_pages_ = std::make_unique<SlottedPagePool>(io_, *metadata_);
+		labels_ = std::make_unique<EntityLabelSetStore>(io_, *metadata_, *slotted_pages_);
+		properties_ = std::make_unique<PropertyCollectionRootStore>(*slotted_pages_, *metadata_);
+	}
+};
+
+TEST_F(SystemCatalogTest, ReturnsAbsentMappingsBeforeTheCatalogRootExists) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(indexes, *metadata_);
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+
+	EXPECT_EQ(catalog.findPropertyToken(snapshot, "name"), std::nullopt);
+	EXPECT_EQ(catalog.findPropertyName(snapshot, 1U), std::nullopt);
+	EXPECT_EQ(catalog.findSchemaToken(snapshot, SystemCatalogSchemaTokenKind::SCSTK_LABEL, "Person"), std::nullopt);
+	EXPECT_EQ(catalog.findSchemaToken(snapshot, SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, 1U),
+			  std::nullopt);
+	EXPECT_EQ(catalog.findIndexDefinitionById(snapshot, RSS_SYSTEM_CATALOG_INDEX_ID_FIRST), std::nullopt);
+	EXPECT_EQ(catalog.findConstraintDefinitionById(snapshot, RSS_SYSTEM_CATALOG_CONSTRAINT_ID_FIRST), std::nullopt);
+	EXPECT_TRUE(catalog.readIndexDefinitions(snapshot, 1U).empty());
+	EXPECT_TRUE(catalog.readConstraintDefinitions(snapshot, 1U).empty());
+	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, PublishesTokenMappingsWithNativeGraphChangesInOneGeneration) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(indexes, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	MetadataSnapshotPin before = metadata_->openSnapshot();
+
+	NativeGraphWriteTransaction transaction = planner.beginTransaction();
+	SystemCatalogWriteSession session = catalog.beginWrite(transaction);
+	const uint32_t property = session.ensurePropertyToken("name");
+	const uint64_t label = session.ensureSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_LABEL, "Person");
+	const uint64_t node = transaction.createNode(std::array<uint64_t, 1U>{label});
+	transaction.replaceNodeProperty({node, Node::typeId, {{property, PropertyValue("Ada")}}});
+	session.finish();
+	ASSERT_TRUE(transaction.commit().committed());
+
+	EXPECT_EQ(catalog.findPropertyToken(before, "name"), std::nullopt);
+	EXPECT_EQ(catalog.findSchemaToken(before, SystemCatalogSchemaTokenKind::SCSTK_LABEL, "Person"), std::nullopt);
+	before.release();
+
+	MetadataSnapshotPin current = metadata_->openSnapshot();
+	EXPECT_EQ(catalog.findPropertyToken(current, "name"), property);
+	EXPECT_EQ(catalog.findPropertyName(current, property), std::optional<std::string>("name"));
+	EXPECT_EQ(catalog.findPropertyName(current, property + 1U), std::nullopt);
+	EXPECT_EQ(catalog.findSchemaToken(current, SystemCatalogSchemaTokenKind::SCSTK_LABEL, "Person"), label);
+	EXPECT_EQ(catalog.findSchemaToken(current, SystemCatalogSchemaTokenKind::SCSTK_LABEL, label),
+			  std::optional<SystemCatalogSchemaToken>({label, SystemCatalogSchemaTokenKind::SCSTK_LABEL, "Person"}));
+	EXPECT_EQ(properties_->readEntity(current, {EntityPropertyOwnerKind::EPOK_NODE, node}).entries,
+			  (std::vector<PropertyCollectionRootEntry>{{property, PropertyValue("Ada")}}));
+	current.release();
+}
+
+TEST_F(SystemCatalogTest, KeepsLabelAndRelationshipTypeNamesInSeparateTokenDomains) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(indexes, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	NativeGraphWriteTransaction transaction = planner.beginTransaction();
+	SystemCatalogWriteSession session = catalog.beginWrite(transaction);
+	const uint64_t label = session.ensureSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_LABEL, "RELATES_TO");
+	const uint64_t relationship =
+			session.ensureSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, "RELATES_TO");
+	EXPECT_EQ(label, session.ensureSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_LABEL, "RELATES_TO"));
+	EXPECT_EQ(relationship,
+			  session.ensureSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, "RELATES_TO"));
+	EXPECT_NE(label, relationship);
+	session.finish();
+	ASSERT_TRUE(transaction.commit().committed());
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_EQ(catalog.findSchemaToken(snapshot, SystemCatalogSchemaTokenKind::SCSTK_LABEL, "RELATES_TO"), label);
+	EXPECT_EQ(catalog.findSchemaToken(snapshot, SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, "RELATES_TO"),
+			  relationship);
+	EXPECT_EQ(catalog.findSchemaToken(snapshot, SystemCatalogSchemaTokenKind::SCSTK_LABEL, relationship), std::nullopt);
+	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, PersistsForwardAndReverseMappingsAcrossReopenAndAdvancesSequences) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(indexes, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	NativeGraphWriteTransaction firstTransaction = planner.beginTransaction();
+	SystemCatalogWriteSession firstSession = catalog.beginWrite(firstTransaction);
+	const uint32_t firstProperty = firstSession.ensurePropertyToken("first");
+	const uint64_t firstSchema = firstSession.ensureSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_LABEL, "First");
+	EXPECT_EQ(firstSession.ensurePropertyToken("first"), firstProperty);
+	EXPECT_EQ(firstSession.ensureSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_LABEL, "First"), firstSchema);
+	firstSession.finish();
+	ASSERT_TRUE(firstTransaction.commit().committed());
+
+	NativeGraphWriteTransaction secondTransaction = planner.beginTransaction();
+	SystemCatalogWriteSession secondSession = catalog.beginWrite(secondTransaction);
+	EXPECT_EQ(secondSession.ensurePropertyToken("first"), firstProperty);
+	EXPECT_EQ(secondSession.ensureSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_LABEL, "First"), firstSchema);
+	const uint32_t secondProperty = secondSession.ensurePropertyToken("second");
+	const uint64_t secondSchema =
+			secondSession.ensureSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, "SECOND");
+	secondSession.finish();
+	ASSERT_TRUE(secondTransaction.commit().committed());
+	EXPECT_EQ(secondProperty, firstProperty + 1U);
+	EXPECT_EQ(secondSchema, firstSchema + 1U);
+
+	reopenNativeStores();
+	BTreePageStore reopenedIndexes(*slotted_pages_, *metadata_);
+	SystemCatalog reopenedCatalog(reopenedIndexes, *metadata_);
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_EQ(reopenedCatalog.findPropertyName(snapshot, firstProperty), std::optional<std::string>("first"));
+	EXPECT_EQ(reopenedCatalog.findPropertyToken(snapshot, "second"), secondProperty);
+	EXPECT_EQ(
+			reopenedCatalog.findSchemaToken(snapshot, SystemCatalogSchemaTokenKind::SCSTK_LABEL, firstSchema),
+			std::optional<SystemCatalogSchemaToken>({firstSchema, SystemCatalogSchemaTokenKind::SCSTK_LABEL, "First"}));
+	EXPECT_EQ(reopenedCatalog.findSchemaToken(snapshot, SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE,
+											  secondSchema),
+			  std::optional<SystemCatalogSchemaToken>(
+					  {secondSchema, SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, "SECOND"}));
+	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, RequiresFinishBeforeInitialRootPublication) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(indexes, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	NativeGraphWriteTransaction transaction = planner.beginTransaction();
+	SystemCatalogWriteSession session = catalog.beginWrite(transaction);
+	static_cast<void>(session.ensurePropertyToken("unpublished"));
+	static_cast<void>(transaction.createNode(std::array<uint64_t, 0U>{}));
+	ASSERT_TRUE(transaction.commit().committed());
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_EQ(catalog.findPropertyToken(snapshot, "unpublished"), std::nullopt);
+	EXPECT_FALSE(metadata_->findIndexRootOptional(snapshot, RSS_SYSTEM_CATALOG_INDEX_ID).has_value());
+	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, RejectsInvalidAndFinishedWriteSessionRequests) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(indexes, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	NativeGraphWriteTransaction transaction = planner.beginTransaction();
+	SystemCatalogWriteSession session = catalog.beginWrite(transaction);
+
+	EXPECT_THROW(static_cast<void>(session.ensurePropertyToken("")), FormatException);
+	EXPECT_THROW(static_cast<void>(session.ensureSchemaToken(static_cast<SystemCatalogSchemaTokenKind>(0xffU), "Person")),
+				 FormatException);
+	IndexDefinition suppliedIndexId;
+	suppliedIndexId.index_id = 1U;
+	EXPECT_THROW(static_cast<void>(session.createIndexDefinition(std::move(suppliedIndexId))), FormatException);
+	ConstraintDefinition suppliedConstraintId;
+	suppliedConstraintId.constraint_id = 1U;
+	EXPECT_THROW(static_cast<void>(session.createConstraintDefinition(std::move(suppliedConstraintId))), FormatException);
+
+	static_cast<void>(session.ensurePropertyToken("name"));
+	session.finish();
+	session.finish();
+	EXPECT_THROW(static_cast<void>(session.ensurePropertyToken("after_finish")), std::logic_error);
+	EXPECT_THROW(static_cast<void>(session.ensureSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_LABEL, "after_finish")),
+			 std::logic_error);
+	EXPECT_THROW(static_cast<void>(session.createIndexDefinition(IndexDefinition{})), std::logic_error);
+	EXPECT_THROW(static_cast<void>(session.createConstraintDefinition(ConstraintDefinition{})), std::logic_error);
+	EXPECT_THROW(session.dropIndexDefinition(IndexDefinition{}), std::logic_error);
+	EXPECT_THROW(session.dropConstraintDefinition(ConstraintDefinition{}), std::logic_error);
+	ASSERT_TRUE(transaction.commit().committed());
+
+	SystemCatalogWriteSession detached;
+	EXPECT_THROW(detached.finish(), std::logic_error);
+}
+
+TEST_F(SystemCatalogTest, KeepsAnActiveCatalogSessionUsableAfterMoveConstructionAndAssignment) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(indexes, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	NativeGraphWriteTransaction transaction = planner.beginTransaction();
+	SystemCatalogWriteSession original = catalog.beginWrite(transaction);
+	SystemCatalogWriteSession moved(std::move(original));
+	SystemCatalogWriteSession assigned;
+	assigned = std::move(moved);
+	const uint32_t token = assigned.ensurePropertyToken("moved");
+	assigned.finish();
+	ASSERT_TRUE(transaction.commit().committed());
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_EQ(catalog.findPropertyToken(snapshot, "moved"), token);
+	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, FailsClosedWhenPersistedAllocationSequencesAreOutOfRange) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	NativeGraphWriteTransaction seed = planner.beginTransaction();
+	const std::array<BTreePageEntry, 4U> malformed = {
+			BTreePageEntry{{std::byte{0U}}, SYSTEM_CATALOG_BOOTSTRAP_VALUE},
+			BTreePageEntry{{std::byte{5U}, std::byte{1U}}, static_cast<uint64_t>(std::numeric_limits<uint32_t>::max()) + 1U},
+			BTreePageEntry{{std::byte{5U}, std::byte{3U}}, RSS_SYSTEM_CATALOG_INDEX_ID_LAST + 1U},
+			BTreePageEntry{{std::byte{5U}, std::byte{4U}}, RSS_SYSTEM_CATALOG_CONSTRAINT_ID_LAST + 1U},
+	};
+	seed.stageScalarIndexCreate(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, malformed);
+	ASSERT_TRUE(seed.commit().committed());
+
+	SystemCatalog catalog(indexes, *metadata_);
+	NativeGraphWriteTransaction transaction = planner.beginTransaction();
+	SystemCatalogWriteSession propertySession = catalog.beginWrite(transaction);
+	EXPECT_THROW(static_cast<void>(propertySession.ensurePropertyToken("name")), FormatException);
+	SystemCatalogWriteSession indexSession = catalog.beginWrite(transaction);
+	EXPECT_THROW(static_cast<void>(indexSession.createIndexDefinition(IndexDefinition{})), FormatException);
+	SystemCatalogWriteSession constraintSession = catalog.beginWrite(transaction);
+	EXPECT_THROW(static_cast<void>(constraintSession.createConstraintDefinition(ConstraintDefinition{})), FormatException);
+}
+
+TEST_F(SystemCatalogTest, RejectsStagedAndDurableDefinitionConflicts) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(indexes, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+
+	IndexDefinition index;
+	index.name = "person_email_idx";
+	index.entity_kind = IndexDefinitionEntityKind::IDEK_NODE;
+	index.kind = IndexDefinitionKind::IDK_PROPERTY;
+	index.property_names = {"email"};
+	ConstraintDefinition constraint;
+	constraint.name = "person_email_unique";
+	constraint.entity_kind = ConstraintDefinitionEntityKind::CDEK_NODE;
+	constraint.kind = ConstraintDefinitionKind::CDK_UNIQUE;
+	constraint.property_names = {"email"};
+
+	NativeGraphWriteTransaction create = planner.beginTransaction();
+	SystemCatalogWriteSession createSession = catalog.beginWrite(create);
+	constraint.schema_token_id =
+			createSession.ensureSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_LABEL, "Person");
+	index = createSession.createIndexDefinition(std::move(index));
+	constraint = createSession.createConstraintDefinition(std::move(constraint));
+	IndexDefinition duplicateStagedIndex = index;
+	duplicateStagedIndex.index_id = 0U;
+	duplicateStagedIndex.name = "same_index_schema_different_name";
+	ConstraintDefinition duplicateStagedConstraint = constraint;
+	duplicateStagedConstraint.constraint_id = 0U;
+	duplicateStagedConstraint.name = "same_constraint_schema_different_name";
+	EXPECT_THROW(static_cast<void>(createSession.createIndexDefinition(std::move(duplicateStagedIndex))), FormatException);
+	EXPECT_THROW(static_cast<void>(createSession.createConstraintDefinition(std::move(duplicateStagedConstraint))),
+				 FormatException);
+	createSession.finish();
+	ASSERT_TRUE(create.commit().committed());
+
+	NativeGraphWriteTransaction duplicate = planner.beginTransaction();
+	SystemCatalogWriteSession duplicateSession = catalog.beginWrite(duplicate);
+	IndexDefinition duplicateDurableIndex = index;
+	duplicateDurableIndex.index_id = 0U;
+	duplicateDurableIndex.name = "same_durable_index_schema_different_name";
+	ConstraintDefinition duplicateDurableConstraint = constraint;
+	duplicateDurableConstraint.constraint_id = 0U;
+	duplicateDurableConstraint.name = "same_durable_constraint_schema_different_name";
+	EXPECT_THROW(static_cast<void>(duplicateSession.createIndexDefinition(std::move(duplicateDurableIndex))),
+				 FormatException);
+	EXPECT_THROW(static_cast<void>(duplicateSession.createConstraintDefinition(std::move(duplicateDurableConstraint))),
+				 FormatException);
+	IndexDefinition mismatchedIndex = index;
+	mismatchedIndex.name = "wrong_name";
+	ConstraintDefinition mismatchedConstraint = constraint;
+	mismatchedConstraint.name = "wrong_name";
+	EXPECT_THROW(duplicateSession.dropIndexDefinition(mismatchedIndex), FormatException);
+	EXPECT_THROW(duplicateSession.dropConstraintDefinition(mismatchedConstraint), FormatException);
+	IndexDefinition missingIndex;
+	missingIndex.index_id = RSS_SYSTEM_CATALOG_INDEX_ID_FIRST + 100U;
+	ConstraintDefinition missingConstraint;
+	missingConstraint.constraint_id = RSS_SYSTEM_CATALOG_CONSTRAINT_ID_FIRST + 100U;
+	EXPECT_THROW(duplicateSession.dropIndexDefinition(missingIndex), FormatException);
+	EXPECT_THROW(duplicateSession.dropConstraintDefinition(missingConstraint), FormatException);
+}
+
+TEST_F(SystemCatalogTest, RejectsStaleFirstRootPublicationWithoutLeakingMappings) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(indexes, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	NativeGraphWriteTransaction winner = planner.beginTransaction();
+	NativeGraphWriteTransaction stale = planner.beginTransaction();
+	SystemCatalogWriteSession winnerSession = catalog.beginWrite(winner);
+	SystemCatalogWriteSession staleSession = catalog.beginWrite(stale);
+	const uint32_t winnerToken = winnerSession.ensurePropertyToken("winner");
+	static_cast<void>(staleSession.ensurePropertyToken("stale"));
+	winnerSession.finish();
+	staleSession.finish();
+	ASSERT_TRUE(winner.commit().committed());
+	EXPECT_FALSE(stale.commit().committed());
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_EQ(catalog.findPropertyToken(snapshot, "winner"), winnerToken);
+	EXPECT_EQ(catalog.findPropertyToken(snapshot, "stale"), std::nullopt);
+	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, RecoversTheOldCatalogGenerationWhenFirstPublicationStopsBeforeSuperblock) {
+	{
+		BTreePageStore indexes(*slotted_pages_, *metadata_);
+		SystemCatalog catalog(indexes, *metadata_);
+		NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+		NativeGraphWriteTransaction transaction = planner.beginTransaction();
+		SystemCatalogWriteSession session = catalog.beginWrite(transaction);
+		static_cast<void>(session.ensurePropertyToken("interrupted"));
+		static_cast<void>(transaction.createNode(std::array<uint64_t, 0U>{}));
+		session.finish();
+		MetadataPublishOptions options;
+		options.bootstrap_failpoint = BootstrapPublishFailpoint::BPF_BEFORE_INACTIVE_WRITE;
+		EXPECT_THROW(static_cast<void>(transaction.commit(options)), BootstrapPublishInterrupted);
+		EXPECT_EQ(transaction.state(), NativeGraphWriteTransactionState::NGWTS_INDETERMINATE);
+
+		MetadataSnapshotPin current = metadata_->openSnapshot();
+		EXPECT_EQ(catalog.findPropertyToken(current, "interrupted"), std::nullopt);
+		EXPECT_FALSE(metadata_->findIndexRootOptional(current, RSS_SYSTEM_CATALOG_INDEX_ID).has_value());
+		current.release();
+	}
+
+	reopenNativeStores();
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(indexes, *metadata_);
+	MetadataSnapshotPin recovered = metadata_->openSnapshot();
+	EXPECT_EQ(catalog.findPropertyToken(recovered, "interrupted"), std::nullopt);
+	EXPECT_FALSE(metadata_->findIndexRootOptional(recovered, RSS_SYSTEM_CATALOG_INDEX_ID).has_value());
+	recovered.release();
+}
+
+TEST_F(SystemCatalogTest, RecoversTheNewCatalogGenerationWhenFirstPublicationStopsAfterSuperblock) {
+	uint32_t publishedToken = 0U;
+	{
+		BTreePageStore indexes(*slotted_pages_, *metadata_);
+		SystemCatalog catalog(indexes, *metadata_);
+		NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+		NativeGraphWriteTransaction transaction = planner.beginTransaction();
+		SystemCatalogWriteSession session = catalog.beginWrite(transaction);
+		publishedToken = session.ensurePropertyToken("published");
+		static_cast<void>(transaction.createNode(std::array<uint64_t, 0U>{}));
+		session.finish();
+		MetadataPublishOptions options;
+		options.bootstrap_failpoint = BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE;
+		EXPECT_THROW(static_cast<void>(transaction.commit(options)), BootstrapPublishInterrupted);
+		EXPECT_EQ(transaction.state(), NativeGraphWriteTransactionState::NGWTS_INDETERMINATE);
+
+		MetadataSnapshotPin current = metadata_->openSnapshot();
+		EXPECT_EQ(catalog.findPropertyToken(current, "published"), publishedToken);
+		current.release();
+	}
+
+	reopenNativeStores();
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(indexes, *metadata_);
+	MetadataSnapshotPin recovered = metadata_->openSnapshot();
+	EXPECT_EQ(catalog.findPropertyToken(recovered, "published"), publishedToken);
+	EXPECT_EQ(catalog.findPropertyName(recovered, publishedToken), std::optional<std::string>("published"));
+	recovered.release();
+}
+
+TEST_F(SystemCatalogTest, FailsClosedWhenAReachableCatalogHasNoBootstrapRecord) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	NativeGraphWriteTransaction transaction = planner.beginTransaction();
+	const std::array<BTreePageEntry, 1U> malformed = {{{propertyNameKey("name"), 1U}}};
+	transaction.stageScalarIndexCreate(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, malformed);
+	ASSERT_TRUE(transaction.commit().committed());
+
+	SystemCatalog catalog(indexes, *metadata_);
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_THROW(static_cast<void>(catalog.findPropertyToken(snapshot, "name")), FormatException);
+	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, FailsClosedWhenAPropertyForwardMappingHasNoReverseMapping) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	NativeGraphWriteTransaction transaction = planner.beginTransaction();
+	const std::array<BTreePageEntry, 2U> malformed = {
+			BTreePageEntry{{std::byte{0U}}, SYSTEM_CATALOG_BOOTSTRAP_VALUE},
+			BTreePageEntry{propertyNameKey("name"), 1U},
+	};
+	transaction.stageScalarIndexCreate(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, malformed);
+	ASSERT_TRUE(transaction.commit().committed());
+
+	SystemCatalog catalog(indexes, *metadata_);
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_THROW(static_cast<void>(catalog.findPropertyToken(snapshot, "name")), FormatException);
+	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, FailsClosedWhenAPropertyReverseMappingIsMissingOrAmbiguous) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	NativeGraphWriteTransaction transaction = planner.beginTransaction();
+	const std::array<BTreePageEntry, 3U> malformed = {
+			BTreePageEntry{{std::byte{0U}}, SYSTEM_CATALOG_BOOTSTRAP_VALUE},
+			BTreePageEntry{propertyTokenKey(1U, "alpha"), 1U},
+			BTreePageEntry{propertyTokenKey(1U, "beta"), 1U},
+	};
+	transaction.stageScalarIndexCreate(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, malformed);
+	ASSERT_TRUE(transaction.commit().committed());
+
+	SystemCatalog catalog(indexes, *metadata_);
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_THROW(static_cast<void>(catalog.findPropertyName(snapshot, 1U)), FormatException);
+	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, FailsClosedWhenAPropertyReverseMappingHasNoForwardMapping) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	NativeGraphWriteTransaction transaction = planner.beginTransaction();
+	const std::array<BTreePageEntry, 2U> malformed = {
+			BTreePageEntry{{std::byte{0U}}, SYSTEM_CATALOG_BOOTSTRAP_VALUE},
+			BTreePageEntry{propertyTokenKey(1U, "name"), 1U},
+	};
+	transaction.stageScalarIndexCreate(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, malformed);
+	ASSERT_TRUE(transaction.commit().committed());
+
+	SystemCatalog catalog(indexes, *metadata_);
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_THROW(static_cast<void>(catalog.findPropertyName(snapshot, 1U)), FormatException);
+	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, FailsClosedWhenAPropertyForwardMappingExceedsTheTokenWidth) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	NativeGraphWriteTransaction transaction = planner.beginTransaction();
+	const std::array<BTreePageEntry, 2U> malformed = {
+			BTreePageEntry{{std::byte{0U}}, SYSTEM_CATALOG_BOOTSTRAP_VALUE},
+			BTreePageEntry{propertyNameKey("name"), static_cast<uint64_t>(std::numeric_limits<uint32_t>::max()) + 1U},
+	};
+	transaction.stageScalarIndexCreate(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, malformed);
+	ASSERT_TRUE(transaction.commit().committed());
+
+	SystemCatalog catalog(indexes, *metadata_);
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_THROW(static_cast<void>(catalog.findPropertyToken(snapshot, "name")), FormatException);
+	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, RejectsInvalidPublicTokenLookupArguments) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(indexes, *metadata_);
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	const std::string oversized(RSS_SYSTEM_CATALOG_NAME_MAX_BYTES + 1U, 'x');
+
+	EXPECT_THROW(static_cast<void>(catalog.findPropertyToken(snapshot, "")), FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.findPropertyToken(snapshot, oversized)), FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.findPropertyName(snapshot, 0U)), FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.findSchemaToken(snapshot, static_cast<SystemCatalogSchemaTokenKind>(0xffU), "x")),
+			 FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.findSchemaToken(snapshot, SystemCatalogSchemaTokenKind::SCSTK_LABEL, "")),
+			 FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.findSchemaToken(snapshot, SystemCatalogSchemaTokenKind::SCSTK_LABEL, 0U)),
+			 FormatException);
+	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, FailsClosedWhenSchemaForwardOrReverseMappingsAreIncomplete) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	NativeGraphWriteTransaction transaction = planner.beginTransaction();
+	const std::array<BTreePageEntry, 3U> malformed = {
+			BTreePageEntry{{std::byte{0U}}, SYSTEM_CATALOG_BOOTSTRAP_VALUE},
+			BTreePageEntry{schemaNameKey(SystemCatalogSchemaTokenKind::SCSTK_LABEL, "Person"), 1U},
+			BTreePageEntry{schemaTokenKey(SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, 2U, "KNOWS"), 2U},
+	};
+	transaction.stageScalarIndexCreate(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, malformed);
+	ASSERT_TRUE(transaction.commit().committed());
+
+	SystemCatalog catalog(indexes, *metadata_);
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_THROW(static_cast<void>(catalog.findSchemaToken(snapshot, SystemCatalogSchemaTokenKind::SCSTK_LABEL, "Person")),
+			 FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.findSchemaToken(snapshot, SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, 2U)),
+			 FormatException);
+	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, FailsClosedWhenDefinitionEntriesAreTruncatedOrUseDifferentPayloadIds) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	IndexDefinition mismatchedIndex;
+	mismatchedIndex.index_id = RSS_SYSTEM_CATALOG_INDEX_ID_FIRST + 2U;
+	mismatchedIndex.name = "mismatched_idx";
+	mismatchedIndex.entity_kind = IndexDefinitionEntityKind::IDEK_NODE;
+	mismatchedIndex.kind = IndexDefinitionKind::IDK_PROPERTY;
+	mismatchedIndex.property_names = {"email"};
+	ConstraintDefinition mismatchedConstraint;
+	mismatchedConstraint.constraint_id = RSS_SYSTEM_CATALOG_CONSTRAINT_ID_FIRST + 2U;
+	mismatchedConstraint.name = "mismatched_unique";
+	mismatchedConstraint.entity_kind = ConstraintDefinitionEntityKind::CDEK_NODE;
+	mismatchedConstraint.kind = ConstraintDefinitionKind::CDK_UNIQUE;
+	mismatchedConstraint.schema_token_id = 1U;
+	mismatchedConstraint.property_names = {"email"};
+	const std::vector<std::byte> encodedIndex = IndexDefinitionCodec::encode(mismatchedIndex);
+	const std::vector<std::byte> encodedConstraint = ConstraintDefinitionCodec::encode(mismatchedConstraint);
+	NativeGraphWriteTransaction transaction = planner.beginTransaction();
+	const std::array<BTreePageEntry, 5U> malformed = {
+			BTreePageEntry{{std::byte{0U}}, SYSTEM_CATALOG_BOOTSTRAP_VALUE},
+			BTreePageEntry{definitionKey(6U, RSS_SYSTEM_CATALOG_INDEX_ID_FIRST, std::span<const std::byte>{}),
+							RSS_SYSTEM_CATALOG_INDEX_ID_FIRST},
+			BTreePageEntry{definitionKey(6U, RSS_SYSTEM_CATALOG_INDEX_ID_FIRST + 1U, encodedIndex),
+							RSS_SYSTEM_CATALOG_INDEX_ID_FIRST + 1U},
+			BTreePageEntry{definitionKey(9U, RSS_SYSTEM_CATALOG_CONSTRAINT_ID_FIRST, std::span<const std::byte>{}),
+							RSS_SYSTEM_CATALOG_CONSTRAINT_ID_FIRST},
+			BTreePageEntry{definitionKey(9U, RSS_SYSTEM_CATALOG_CONSTRAINT_ID_FIRST + 1U, encodedConstraint),
+							RSS_SYSTEM_CATALOG_CONSTRAINT_ID_FIRST + 1U},
+	};
+	transaction.stageScalarIndexCreate(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, malformed);
+	ASSERT_TRUE(transaction.commit().committed());
+
+	SystemCatalog catalog(indexes, *metadata_);
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_THROW(static_cast<void>(catalog.findIndexDefinitionById(snapshot, RSS_SYSTEM_CATALOG_INDEX_ID_FIRST)),
+			 FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.findIndexDefinitionById(snapshot, RSS_SYSTEM_CATALOG_INDEX_ID_FIRST + 1U)),
+			 FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.findConstraintDefinitionById(snapshot, RSS_SYSTEM_CATALOG_CONSTRAINT_ID_FIRST)),
+			 FormatException);
+	EXPECT_THROW(static_cast<void>(
+				catalog.findConstraintDefinitionById(snapshot, RSS_SYSTEM_CATALOG_CONSTRAINT_ID_FIRST + 1U)),
+			 FormatException);
+	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, PublishesAndFindsVectorIndexDefinitionsByTheirCompleteSemanticKey) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(indexes, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	NativeGraphWriteTransaction transaction = planner.beginTransaction();
+	SystemCatalogWriteSession session = catalog.beginWrite(transaction);
+	const uint64_t label = session.ensureSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_LABEL, "Document");
+	IndexDefinition vector;
+	vector.name = "document_embedding_idx";
+	vector.entity_kind = IndexDefinitionEntityKind::IDEK_NODE;
+	vector.kind = IndexDefinitionKind::IDK_VECTOR;
+	vector.label_token_id = label;
+	vector.property_names = {"embedding"};
+	vector.vector_dimensions = 4U;
+	vector.vector_metric = "cosine";
+	vector = session.createIndexDefinition(std::move(vector));
+	session.finish();
+	ASSERT_TRUE(transaction.commit().committed());
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_EQ(catalog.findIndexDefinitionBySchema(snapshot, vector.entity_kind, vector.kind, vector.label_token_id,
+													 vector.property_names, vector.vector_dimensions, vector.vector_metric),
+			  std::optional<IndexDefinition>(vector));
+	EXPECT_EQ(catalog.findIndexDefinitionBySchema(snapshot, vector.entity_kind, vector.kind, vector.label_token_id,
+													 vector.property_names, vector.vector_dimensions, "l2"),
+			  std::nullopt);
+	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, PublishesIndexAndConstraintDefinitionsInTheCanonicalCatalogRoot) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(indexes, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	NativeGraphWriteTransaction transaction = planner.beginTransaction();
+	SystemCatalogWriteSession session = catalog.beginWrite(transaction);
+	const uint64_t label = session.ensureSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_LABEL, "Person");
+	static_cast<void>(session.ensurePropertyToken("email"));
+
+	IndexDefinition index;
+	index.name = "person_email_idx";
+	index.entity_kind = IndexDefinitionEntityKind::IDEK_NODE;
+	index.kind = IndexDefinitionKind::IDK_PROPERTY;
+	index.label_token_id = label;
+	index.property_names = {"email"};
+	index = session.createIndexDefinition(std::move(index));
+
+	ConstraintDefinition constraint;
+	constraint.name = "person_email_unique";
+	constraint.entity_kind = ConstraintDefinitionEntityKind::CDEK_NODE;
+	constraint.kind = ConstraintDefinitionKind::CDK_UNIQUE;
+	constraint.schema_token_id = label;
+	constraint.property_names = {"email"};
+	constraint.property_type = ConstraintDefinitionPropertyType::CDPT_NONE;
+	constraint = session.createConstraintDefinition(std::move(constraint));
+	EXPECT_NE(index.index_id, 0U);
+	EXPECT_NE(constraint.constraint_id, 0U);
+	session.finish();
+	ASSERT_TRUE(transaction.commit().committed());
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_EQ(catalog.findIndexDefinitionById(snapshot, index.index_id), std::optional<IndexDefinition>(index));
+	EXPECT_EQ(catalog.findIndexDefinitionByName(snapshot, index.name), std::optional<IndexDefinition>(index));
+	EXPECT_EQ(catalog.findIndexDefinitionBySchema(snapshot, index.entity_kind, index.kind, index.label_token_id,
+													 index.property_names),
+			  std::optional<IndexDefinition>(index));
+	EXPECT_EQ(catalog.findIndexDefinitionBySchema(snapshot, index.entity_kind, index.kind, index.label_token_id,
+													 std::array<std::string, 1U>{"different"}),
+			  std::nullopt);
+	EXPECT_EQ(catalog.readIndexDefinitions(snapshot, 4U), std::vector<IndexDefinition>{index});
+	EXPECT_EQ(catalog.findConstraintDefinitionById(snapshot, constraint.constraint_id),
+			  std::optional<ConstraintDefinition>(constraint));
+	EXPECT_EQ(catalog.findConstraintDefinitionByName(snapshot, constraint.name),
+			  std::optional<ConstraintDefinition>(constraint));
+	EXPECT_EQ(catalog.findConstraintDefinitionBySchema(snapshot, constraint.entity_kind, constraint.kind,
+													 constraint.schema_token_id, constraint.property_names,
+													 constraint.property_type),
+			  std::optional<ConstraintDefinition>(constraint));
+	EXPECT_EQ(catalog.findConstraintDefinitionBySchema(snapshot, constraint.entity_kind, constraint.kind,
+													 constraint.schema_token_id, std::array<std::string, 1U>{"different"},
+													 constraint.property_type),
+			  std::nullopt);
+	EXPECT_EQ(catalog.readConstraintDefinitions(snapshot, 4U), std::vector<ConstraintDefinition>{constraint});
+	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, RejectsInvalidDefinitionLookupAndEnumerationBounds) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(indexes, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	NativeGraphWriteTransaction transaction = planner.beginTransaction();
+	SystemCatalogWriteSession session = catalog.beginWrite(transaction);
+	const uint64_t label = session.ensureSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_LABEL, "Person");
+
+	IndexDefinition firstIndex;
+	firstIndex.name = "first_idx";
+	firstIndex.entity_kind = IndexDefinitionEntityKind::IDEK_NODE;
+	firstIndex.kind = IndexDefinitionKind::IDK_PROPERTY;
+	firstIndex.label_token_id = label;
+	firstIndex.property_names = {"first"};
+	firstIndex = session.createIndexDefinition(std::move(firstIndex));
+	IndexDefinition secondIndex = firstIndex;
+	secondIndex.index_id = 0U;
+	secondIndex.name = "second_idx";
+	secondIndex.property_names = {"second"};
+	secondIndex = session.createIndexDefinition(std::move(secondIndex));
+
+	ConstraintDefinition firstConstraint;
+	firstConstraint.name = "first_unique";
+	firstConstraint.entity_kind = ConstraintDefinitionEntityKind::CDEK_NODE;
+	firstConstraint.kind = ConstraintDefinitionKind::CDK_UNIQUE;
+	firstConstraint.schema_token_id = label;
+	firstConstraint.property_names = {"first"};
+	firstConstraint = session.createConstraintDefinition(std::move(firstConstraint));
+	ConstraintDefinition secondConstraint = firstConstraint;
+	secondConstraint.constraint_id = 0U;
+	secondConstraint.name = "second_unique";
+	secondConstraint.property_names = {"second"};
+	secondConstraint = session.createConstraintDefinition(std::move(secondConstraint));
+	session.finish();
+	ASSERT_TRUE(transaction.commit().committed());
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_THROW(static_cast<void>(catalog.findIndexDefinitionById(snapshot, 0U)), FormatException);
+	EXPECT_EQ(catalog.findIndexDefinitionById(snapshot, 1U), std::nullopt);
+	EXPECT_EQ(catalog.findIndexDefinitionById(snapshot, RSS_SYSTEM_CATALOG_INDEX_ID_LAST + 1U), std::nullopt);
+	EXPECT_EQ(catalog.findIndexDefinitionById(snapshot, RSS_SYSTEM_CATALOG_INDEX_ID_FIRST + 100U), std::nullopt);
+	EXPECT_THROW(static_cast<void>(catalog.findIndexDefinitionByName(snapshot, "")), FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.readIndexDefinitions(snapshot, 0U)), FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.readIndexDefinitions(snapshot, std::numeric_limits<size_t>::max())),
+			 FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.readIndexDefinitions(snapshot, 1U)), FormatException);
+
+	EXPECT_THROW(static_cast<void>(catalog.findConstraintDefinitionById(snapshot, 0U)), FormatException);
+	EXPECT_EQ(catalog.findConstraintDefinitionById(snapshot, 1U), std::nullopt);
+	EXPECT_EQ(catalog.findConstraintDefinitionById(snapshot, RSS_SYSTEM_CATALOG_CONSTRAINT_ID_LAST + 1U), std::nullopt);
+	EXPECT_EQ(catalog.findConstraintDefinitionById(snapshot, RSS_SYSTEM_CATALOG_CONSTRAINT_ID_FIRST + 100U), std::nullopt);
+	EXPECT_THROW(static_cast<void>(catalog.findConstraintDefinitionByName(snapshot, "")), FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.readConstraintDefinitions(snapshot, 0U)), FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.readConstraintDefinitions(snapshot, std::numeric_limits<size_t>::max())),
+			 FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.readConstraintDefinitions(snapshot, 1U)), FormatException);
+	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, FailsClosedWhenIndexDefinitionDirectionsAreMissingOrDuplicated) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(indexes, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	NativeGraphWriteTransaction create = planner.beginTransaction();
+	SystemCatalogWriteSession createSession = catalog.beginWrite(create);
+	IndexDefinition index;
+	index.name = "person_email_idx";
+	index.entity_kind = IndexDefinitionEntityKind::IDEK_NODE;
+	index.kind = IndexDefinitionKind::IDK_PROPERTY;
+	index.property_names = {"email"};
+	index = createSession.createIndexDefinition(std::move(index));
+	createSession.finish();
+	ASSERT_TRUE(create.commit().committed());
+
+	NativeGraphWriteTransaction corrupt = planner.beginTransaction();
+	corrupt.stageScalarIndexErase(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, namedDefinitionKey(7U, index.name));
+	ASSERT_TRUE(corrupt.commit().committed());
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_THROW(static_cast<void>(catalog.findIndexDefinitionById(snapshot, index.index_id)), FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.readIndexDefinitions(snapshot, 4U)), FormatException);
+	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, FailsClosedWhenConstraintSemanticDirectionIsMissing) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(indexes, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	NativeGraphWriteTransaction create = planner.beginTransaction();
+	SystemCatalogWriteSession createSession = catalog.beginWrite(create);
+	ConstraintDefinition constraint;
+	constraint.name = "person_email_unique";
+	constraint.entity_kind = ConstraintDefinitionEntityKind::CDEK_NODE;
+	constraint.kind = ConstraintDefinitionKind::CDK_UNIQUE;
+	constraint.schema_token_id = createSession.ensureSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_LABEL, "Person");
+	constraint.property_names = {"email"};
+	constraint = createSession.createConstraintDefinition(std::move(constraint));
+	createSession.finish();
+	ASSERT_TRUE(create.commit().committed());
+
+	NativeGraphWriteTransaction corrupt = planner.beginTransaction();
+	corrupt.stageScalarIndexErase(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, constraintSemanticKey(constraint));
+	ASSERT_TRUE(corrupt.commit().committed());
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_THROW(static_cast<void>(catalog.findConstraintDefinitionById(snapshot, constraint.constraint_id)),
+			 FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.readConstraintDefinitions(snapshot, 4U)), FormatException);
+	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, FailsClosedWhenIndexSemanticDirectionIsMissing) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(indexes, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	NativeGraphWriteTransaction create = planner.beginTransaction();
+	SystemCatalogWriteSession createSession = catalog.beginWrite(create);
+	IndexDefinition index;
+	index.name = "person_email_idx";
+	index.entity_kind = IndexDefinitionEntityKind::IDEK_NODE;
+	index.kind = IndexDefinitionKind::IDK_PROPERTY;
+	index.property_names = {"email"};
+	index = createSession.createIndexDefinition(std::move(index));
+	createSession.finish();
+	ASSERT_TRUE(create.commit().committed());
+
+	NativeGraphWriteTransaction corrupt = planner.beginTransaction();
+	corrupt.stageScalarIndexErase(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, indexSemanticKey(index));
+	ASSERT_TRUE(corrupt.commit().committed());
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_THROW(static_cast<void>(catalog.findIndexDefinitionById(snapshot, index.index_id)), FormatException);
+	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, FailsClosedWhenDefinitionIdsHaveMultiplePersistedRecords) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(indexes, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	NativeGraphWriteTransaction create = planner.beginTransaction();
+	SystemCatalogWriteSession createSession = catalog.beginWrite(create);
+	IndexDefinition index;
+	index.name = "person_email_idx";
+	index.entity_kind = IndexDefinitionEntityKind::IDEK_NODE;
+	index.kind = IndexDefinitionKind::IDK_PROPERTY;
+	index.property_names = {"email"};
+	index = createSession.createIndexDefinition(std::move(index));
+	ConstraintDefinition constraint;
+	constraint.name = "person_email_unique";
+	constraint.entity_kind = ConstraintDefinitionEntityKind::CDEK_NODE;
+	constraint.kind = ConstraintDefinitionKind::CDK_UNIQUE;
+	constraint.schema_token_id = createSession.ensureSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_LABEL, "Person");
+	constraint.property_names = {"email"};
+	constraint = createSession.createConstraintDefinition(std::move(constraint));
+	createSession.finish();
+	ASSERT_TRUE(create.commit().committed());
+
+	IndexDefinition duplicate = index;
+	duplicate.name = "duplicate_name";
+	ConstraintDefinition duplicateConstraint = constraint;
+	duplicateConstraint.name = "duplicate_constraint";
+	NativeGraphWriteTransaction corrupt = planner.beginTransaction();
+	corrupt.stageScalarIndexUpsert(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, indexDefinitionKey(duplicate), duplicate.index_id);
+	corrupt.stageScalarIndexUpsert(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, constraintDefinitionKey(duplicateConstraint),
+								   duplicateConstraint.constraint_id);
+	ASSERT_TRUE(corrupt.commit().committed());
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_THROW(static_cast<void>(catalog.findIndexDefinitionById(snapshot, index.index_id)), FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.findConstraintDefinitionById(snapshot, constraint.constraint_id)), FormatException);
+	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, FailsClosedWhenDefinitionRecordsOrLookupDirectionsDisagree) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(indexes, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	NativeGraphWriteTransaction create = planner.beginTransaction();
+	SystemCatalogWriteSession createSession = catalog.beginWrite(create);
+	IndexDefinition index;
+	index.name = "person_email_idx";
+	index.entity_kind = IndexDefinitionEntityKind::IDEK_NODE;
+	index.kind = IndexDefinitionKind::IDK_PROPERTY;
+	index.property_names = {"email"};
+	index = createSession.createIndexDefinition(std::move(index));
+	ConstraintDefinition constraint;
+	constraint.name = "person_email_unique";
+	constraint.entity_kind = ConstraintDefinitionEntityKind::CDEK_NODE;
+	constraint.kind = ConstraintDefinitionKind::CDK_UNIQUE;
+	constraint.schema_token_id = createSession.ensureSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_LABEL, "Person");
+	constraint.property_names = {"email"};
+	constraint = createSession.createConstraintDefinition(std::move(constraint));
+	createSession.finish();
+	ASSERT_TRUE(create.commit().committed());
+
+	NativeGraphWriteTransaction corrupt = planner.beginTransaction();
+	corrupt.stageScalarIndexUpsert(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, indexDefinitionKey(index), index.index_id + 1U);
+	corrupt.stageScalarIndexUpsert(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, constraintDefinitionKey(constraint),
+								   constraint.constraint_id + 1U);
+	ASSERT_TRUE(corrupt.commit().committed());
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_THROW(static_cast<void>(catalog.findIndexDefinitionById(snapshot, index.index_id)), FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.readIndexDefinitions(snapshot, 4U)), FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.findConstraintDefinitionById(snapshot, constraint.constraint_id)), FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.readConstraintDefinitions(snapshot, 4U)), FormatException);
+	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, FailsClosedWhenDefinitionNameOrSemanticDirectionsReferenceAnotherId) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(indexes, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	NativeGraphWriteTransaction create = planner.beginTransaction();
+	SystemCatalogWriteSession createSession = catalog.beginWrite(create);
+	IndexDefinition index;
+	index.name = "person_email_idx";
+	index.entity_kind = IndexDefinitionEntityKind::IDEK_NODE;
+	index.kind = IndexDefinitionKind::IDK_PROPERTY;
+	index.property_names = {"email"};
+	index = createSession.createIndexDefinition(std::move(index));
+	ConstraintDefinition constraint;
+	constraint.name = "person_email_unique";
+	constraint.entity_kind = ConstraintDefinitionEntityKind::CDEK_NODE;
+	constraint.kind = ConstraintDefinitionKind::CDK_UNIQUE;
+	constraint.schema_token_id = createSession.ensureSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_LABEL, "Person");
+	constraint.property_names = {"email"};
+	constraint = createSession.createConstraintDefinition(std::move(constraint));
+	createSession.finish();
+	ASSERT_TRUE(create.commit().committed());
+
+	NativeGraphWriteTransaction corrupt = planner.beginTransaction();
+	corrupt.stageScalarIndexUpsert(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, namedDefinitionKey(7U, index.name),
+								   RSS_SYSTEM_CATALOG_INDEX_ID_FIRST + 1U);
+	corrupt.stageScalarIndexUpsert(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, indexSemanticKey(index),
+								   RSS_SYSTEM_CATALOG_INDEX_ID_FIRST + 1U);
+	corrupt.stageScalarIndexUpsert(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, namedDefinitionKey(10U, constraint.name),
+								   RSS_SYSTEM_CATALOG_CONSTRAINT_ID_FIRST + 1U);
+	corrupt.stageScalarIndexUpsert(indexes, RSS_SYSTEM_CATALOG_INDEX_ID, constraintSemanticKey(constraint),
+								   RSS_SYSTEM_CATALOG_CONSTRAINT_ID_FIRST + 1U);
+	ASSERT_TRUE(corrupt.commit().committed());
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_THROW(static_cast<void>(catalog.findIndexDefinitionByName(snapshot, index.name)), FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.findIndexDefinitionBySchema(
+				snapshot, index.entity_kind, index.kind, index.label_token_id, index.property_names)),
+			 FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.findConstraintDefinitionByName(snapshot, constraint.name)), FormatException);
+	EXPECT_THROW(static_cast<void>(catalog.findConstraintDefinitionBySchema(
+				snapshot, constraint.entity_kind, constraint.kind, constraint.schema_token_id, constraint.property_names,
+				constraint.property_type)),
+			 FormatException);
+	snapshot.release();
+}
+
+TEST_F(SystemCatalogTest, DropsOnlyTheRequestedCanonicalDefinitionDirections) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(indexes, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+
+	NativeGraphWriteTransaction create = planner.beginTransaction();
+	SystemCatalogWriteSession createSession = catalog.beginWrite(create);
+	IndexDefinition first;
+	first.name = "first_idx";
+	first.entity_kind = IndexDefinitionEntityKind::IDEK_NODE;
+	first.kind = IndexDefinitionKind::IDK_PROPERTY;
+	first.property_names = {"first"};
+	first = createSession.createIndexDefinition(std::move(first));
+	IndexDefinition second;
+	second.name = "second_idx";
+	second.entity_kind = IndexDefinitionEntityKind::IDEK_NODE;
+	second.kind = IndexDefinitionKind::IDK_PROPERTY;
+	second.property_names = {"second"};
+	second = createSession.createIndexDefinition(std::move(second));
+	const uint64_t label = createSession.ensureSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_LABEL, "Person");
+	ConstraintDefinition firstConstraint;
+	firstConstraint.name = "first_unique";
+	firstConstraint.entity_kind = ConstraintDefinitionEntityKind::CDEK_NODE;
+	firstConstraint.kind = ConstraintDefinitionKind::CDK_UNIQUE;
+	firstConstraint.schema_token_id = label;
+	firstConstraint.property_names = {"first"};
+	firstConstraint = createSession.createConstraintDefinition(std::move(firstConstraint));
+	ConstraintDefinition secondConstraint = firstConstraint;
+	secondConstraint.constraint_id = 0U;
+	secondConstraint.name = "second_unique";
+	secondConstraint.property_names = {"second"};
+	secondConstraint = createSession.createConstraintDefinition(std::move(secondConstraint));
+	createSession.finish();
+	ASSERT_TRUE(create.commit().committed());
+
+	NativeGraphWriteTransaction drop = planner.beginTransaction();
+	SystemCatalogWriteSession dropSession = catalog.beginWrite(drop);
+	dropSession.dropIndexDefinition(first);
+	dropSession.dropConstraintDefinition(firstConstraint);
+	dropSession.finish();
+	ASSERT_TRUE(drop.commit().committed());
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_EQ(catalog.findIndexDefinitionByName(snapshot, first.name), std::nullopt);
+	EXPECT_EQ(catalog.findIndexDefinitionByName(snapshot, second.name), std::optional<IndexDefinition>(second));
+	EXPECT_EQ(catalog.readIndexDefinitions(snapshot, 4U), std::vector<IndexDefinition>{second});
+	EXPECT_EQ(catalog.findConstraintDefinitionByName(snapshot, firstConstraint.name), std::nullopt);
+	EXPECT_EQ(catalog.findConstraintDefinitionByName(snapshot, secondConstraint.name),
+			  std::optional<ConstraintDefinition>(secondConstraint));
+	EXPECT_EQ(catalog.readConstraintDefinitions(snapshot, 4U), std::vector<ConstraintDefinition>{secondConstraint});
+	snapshot.release();
+}

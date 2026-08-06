@@ -5,8 +5,59 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      stage10_endurance_repetitions:
+        description: "Repeat the Stage 10 recovery/maintenance gate on every platform (0 disables it; 1-9999 are allowed)."
+        required: false
+        default: "0"
+        type: string
 
 jobs:
+  native-storage-tsan:
+    name: Native storage TSan (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Common Tools
+        run: pip install conan ninja
+
+      - name: Install Project Dependencies
+        run: |
+          conan profile detect --force
+          conan install . --output-folder=build-tsan --build=missing --build="antlr4-cppruntime/*" -s build_type=Debug -s compiler.cppstd=20
+
+      # Keep TSan focused on the real reader/writer/compactor paths. This makes
+      # races in snapshot retention, relocation, and native positioned I/O a
+      # required macOS gate without turning unrelated tests into sanitizer noise.
+      - name: Configure and build native storage TSan tests
+        run: |
+          cmake -S . -B build-tsan -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=build-tsan/conan_toolchain.cmake \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DZYX_BUILD_TESTS=ON \
+            -DZYX_BUILD_APPS=OFF \
+            -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread"
+          cmake --build build-tsan --target zyx_test_suite
+        shell: bash
+
+      - name: Run native storage TSan concurrency gates
+        run: |
+          TSAN_OPTIONS='halt_on_error=1:second_deadlock_stack=1' \
+            ./build-tsan/zyx_test_suite \
+              --gtest_filter='RelocatableCompactionWorkloadTest.*:RelocatableCompactionCoordinatorTest.*:RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance'
+        shell: bash
+
   build:
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -82,11 +133,119 @@ jobs:
           CC: ${{ matrix.cc || '' }}
           CXX: ${{ matrix.cxx || '' }}
 
+      # Keep the reports and test transcripts outside the build directory so
+      # every platform can upload one self-contained Stage 10 audit artifact.
+      - name: Prepare Stage 10 evidence directory
+        run: |
+          evidence_dir="$RUNNER_TEMP/stage10-evidence"
+          mkdir -p "$evidence_dir"
+          printf 'ZYX_STAGE10_EVIDENCE_DIR=%s\n' "$evidence_dir" >> "$GITHUB_ENV"
+        shell: bash
+
+      # Copy the manual input into the shared job environment only after
+      # validating it. Later evidence collection must record the same value
+      # that controlled the actual Google Test endurance invocation.
+      - name: Record Stage 10 endurance configuration
+        env:
+          STAGE10_WORKFLOW_INPUT: ${{ inputs.stage10_endurance_repetitions }}
+        run: |
+          repetitions=0
+          if [ "$GITHUB_EVENT_NAME" = 'workflow_dispatch' ]; then
+            repetitions="$STAGE10_WORKFLOW_INPUT"
+          fi
+          case "$repetitions" in
+            ''|*[!0-9]*) echo "stage10_endurance_repetitions must be decimal digits" >&2; exit 2 ;;
+          esac
+          if [ "${#repetitions}" -gt 4 ] || [ "$repetitions" -gt 9999 ]; then
+            echo "stage10_endurance_repetitions must be between 0 and 9999" >&2
+            exit 2
+          fi
+          printf 'ZYX_STAGE10_ENDURANCE_REPETITIONS=%s\n' "$repetitions" >> "$GITHUB_ENV"
+        shell: bash
+
       - name: Run Unit Tests
         run: |
           export LLVM_PROFILE_FILE="$PWD/buildDir/code-%p.profraw"
           ctest --test-dir buildDir --build-config Debug --output-on-failure
         shell: bash
+
+      # Keep the storage-format cutover visible as an explicit cross-platform
+      # gate instead of relying on its tests being buried in the full suite.
+      - name: Run native format lifecycle gates
+        run: |
+          export LLVM_PROFILE_FILE="$PWD/buildDir/stage10-%p.profraw"
+          set -o pipefail
+          ./buildDir/zyx_test_suite --gtest_filter='RelocatableStorageBackendTest.*:RelocatableDriverAbiIngestTest.*:DriverAbiLifecycleTest.*' 2>&1 | tee "$ZYX_STAGE10_EVIDENCE_DIR/native-lifecycle.log"
+        shell: bash
+
+      # These deterministic lifecycle tests are repeated to catch state that
+      # leaks across reopen, snapshot, compaction, and maintenance cycles.
+      - name: Repeat Stage 10 recovery and maintenance gates
+        run: |
+          export LLVM_PROFILE_FILE="$PWD/buildDir/stage10-recovery-%p.profraw"
+          set -o pipefail
+          ./buildDir/zyx_test_suite --gtest_filter='RelocatableCompactionWorkloadTest.*:RelocatablePageCompactionSchedulerTest.*:RelocatableSegmentRelocationSchedulerTest.*:RelocatableMixedRelocationRecoveryTest.*:BootstrapWriteBoundaries/RelocatableRelocationBootstrapBoundaryTest.*:PublicationBoundaries/RelocatableRelocatedSourceReleaseRecoveryTest.*:RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance' --gtest_repeat=5 --gtest_break_on_failure 2>&1 | tee "$ZYX_STAGE10_EVIDENCE_DIR/recovery-maintenance.log"
+        shell: bash
+
+      - name: Run requested Stage 10 endurance gate
+        run: |
+          if [ "$ZYX_STAGE10_ENDURANCE_REPETITIONS" -eq 0 ]; then
+            echo 'Stage 10 manual endurance gate is disabled for this run.'
+            exit 0
+          fi
+          export LLVM_PROFILE_FILE="$PWD/buildDir/stage10-endurance-%p.profraw"
+          set -o pipefail
+          ./buildDir/zyx_test_suite --gtest_filter='RelocatableCompactionWorkloadTest.*:RelocatablePageCompactionSchedulerTest.*:RelocatableSegmentRelocationSchedulerTest.*:RelocatableMixedRelocationRecoveryTest.*:BootstrapWriteBoundaries/RelocatableRelocationBootstrapBoundaryTest.*:PublicationBoundaries/RelocatableRelocatedSourceReleaseRecoveryTest.*:RelocatableMaintenanceServiceTest.BoundsSpaceDuringConcurrentReadersWritersAndMaintenance' --gtest_repeat="$ZYX_STAGE10_ENDURANCE_REPETITIONS" --gtest_break_on_failure 2>&1 | tee "$ZYX_STAGE10_EVIDENCE_DIR/endurance.log"
+        shell: bash
+
+      # This validates the single-file report schema, threshold-enforcement
+      # plumbing, and native build/reopen/search path. The intentionally
+      # permissive limits are a contract smoke test, never a production baseline.
+      - name: Run native storage calibration smoke pipeline
+        run: |
+          cmake --build buildDir --target zyx_vector_build_calibrate zyx_vector_calibrate zyx_large_value_calibrate
+          calibration_dir="$ZYX_STAGE10_EVIDENCE_DIR"
+          vector_data_path="$calibration_dir/vector-calibration.zyx"
+          large_value_data_path="$calibration_dir/large-value-calibration.zyx"
+          build_report="$calibration_dir/build-report.json"
+          query_report="$calibration_dir/query-report.json"
+          large_value_report="$calibration_dir/large-value-report.json"
+          ./buildDir/zyx-vector-build-calibrate --data "$vector_data_path" --vectors tests/fixtures/vector_calibration/smoke-vectors.tsv --output "$build_report" --database-id 1001 --index calibration_embedding --label CalibrationVector --property embedding --pq-subspaces 2 --pq-centroids 2 --adjacency-degree 3 --adjacency-search-budget 8 --dataset-label vector-calibration-smoke-v1 --hardware-label ci-smoke-not-baseline --enforce-gates --minimum-build-vectors-per-second 0.000001 --maximum-bytes-per-vector 1000000000000 --maximum-submitted-write-amplification 1000000000000 --maximum-file-growth-amplification 1000000000000 --maximum-peak-rss-bytes 1099511627776
+          ./buildDir/zyx-vector-calibrate --data "$vector_data_path" --queries tests/fixtures/vector_calibration/smoke-queries.tsv --output "$query_report" --index calibration_embedding --top-k 1 --warmup 0 --iterations 1 --candidate-search-budget 8 --refinement-budget 1 --dataset-label vector-calibration-smoke-v1 --hardware-label ci-smoke-not-baseline --enforce-gates --minimum-recall-at-k 0.000001 --maximum-p50-latency-us 1000000000000 --maximum-p95-latency-us 1000000000000 --maximum-p99-latency-us 1000000000000 --maximum-peak-rss-bytes 1099511627776
+          ./buildDir/zyx-large-value-calibrate --data "$large_value_data_path" --output "$large_value_report" --database-id 1002 --dataset-label large-value-calibration-smoke-v1 --hardware-label ci-smoke-not-baseline --unique-values 4 --value-bytes 8192 --duplicate-passes 1 --range-offset 128 --range-bytes 1024 --range-iterations 1 --maximum-physical-slot 1000 --enforce-gates --minimum-unique-writes-per-second 0.000001 --minimum-dedup-hit-rate 0.000001 --maximum-range-p95-latency-us 1000000000000 --maximum-space-amplification 1000000000000 --maximum-peak-rss-bytes 1099511627776
+          python -c 'import json, sys; build = json.load(open(sys.argv[1], encoding="utf-8")); query = json.load(open(sys.argv[2], encoding="utf-8")); large_value = json.load(open(sys.argv[3], encoding="utf-8")); assert build["schema_version"] == 2 and build["gate"]["enforced"] and build["gate"]["passed"]; assert query["schema_version"] == 2 and query["gate"]["enforced"] and query["gate"]["passed"]; assert large_value["schema_version"] == 1 and large_value["storage"]["single_file"] and large_value["gate"]["enforced"] and large_value["gate"]["passed"]' "$build_report" "$query_report" "$large_value_report"
+        shell: bash
+
+      # This manifest records report hashes, declared labels, and the actual
+      # repeat configuration. It deliberately classifies this run as CI smoke.
+      - name: Collect native storage evidence manifest
+        run: |
+          collector_args=(
+            --build-report "$ZYX_STAGE10_EVIDENCE_DIR/build-report.json"
+            --query-report "$ZYX_STAGE10_EVIDENCE_DIR/query-report.json"
+            --large-value-report "$ZYX_STAGE10_EVIDENCE_DIR/large-value-report.json"
+            --output "$ZYX_STAGE10_EVIDENCE_DIR/manifest.json"
+            --recovery-repetitions 5
+            --endurance-repetitions "$ZYX_STAGE10_ENDURANCE_REPETITIONS"
+            --native-lifecycle-log "$ZYX_STAGE10_EVIDENCE_DIR/native-lifecycle.log"
+            --recovery-maintenance-log "$ZYX_STAGE10_EVIDENCE_DIR/recovery-maintenance.log"
+            --vector-smoke-data "$ZYX_STAGE10_EVIDENCE_DIR/vector-calibration.zyx"
+            --large-value-smoke-data "$ZYX_STAGE10_EVIDENCE_DIR/large-value-calibration.zyx"
+          )
+          if [ "$ZYX_STAGE10_ENDURANCE_REPETITIONS" -gt 0 ]; then
+            collector_args+=(--endurance-log "$ZYX_STAGE10_EVIDENCE_DIR/endurance.log")
+          fi
+          python3 scripts/collect_native_storage_evidence.py "${collector_args[@]}"
+        shell: bash
+
+      - name: Upload Stage 10 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage10-evidence-${{ matrix.os }}-${{ github.run_attempt }}
+          path: ${{ env.ZYX_STAGE10_EVIDENCE_DIR }}
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Generate Coverage Report
         if: runner.os == 'Linux'

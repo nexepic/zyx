@@ -12,10 +12,12 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <gtest/gtest.h>
 #include <iomanip>
 #include <iostream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -70,50 +72,65 @@ protected:
 		const std::vector<std::string> cities = {"NYC", "LA", "Chicago", "Houston", "Phoenix"};
 		const std::vector<std::string> categories = {"A", "B", "C", "D", "E"};
 		const std::vector<std::string> industries = {"Tech", "Finance", "Healthcare", "Retail", "Energy"};
+		const auto writer = db_->getLogicalGraphWriteBackend();
+		if (!writer) {
+			throw std::runtime_error("optimizer benchmark requires the native logical write backend");
+		}
 
-		// Create Person nodes (100)
+		// This benchmark measures query planning/execution, not individual write
+		// latency.  Batch the deterministic fixture through the production logical
+		// boundary so each GoogleTest shard does not repeatedly rescan it while
+		// constructing the same graph.
+		storage::LogicalGraphMutationBatch batch;
+		batch.node_creates.reserve(220U);
+		batch.edge_creates.reserve(300U);
 		for (int i = 0; i < 100; ++i) {
-			std::string q = "CREATE (n:Person {name: 'Person_" + std::to_string(i) +
-				"', age: " + std::to_string(20 + (i % 50)) +
-				", city: '" + cities[i % cities.size()] +
-				"', category: '" + categories[i % categories.size()] + "'})";
-			exec(q);
+			batch.node_creates.push_back({{"Person"},
+									  {{"name", PropertyValue("Person_" + std::to_string(i))},
+									   {"age", PropertyValue(int64_t{20 + (i % 50)})},
+									   {"city", PropertyValue(cities[static_cast<size_t>(i) % cities.size()])},
+									   {"category", PropertyValue(categories[static_cast<size_t>(i) % categories.size()])}}});
 		}
 
-		// Create Company nodes (60)
 		for (int i = 0; i < 60; ++i) {
-			std::string q = "CREATE (n:Company {name: 'Company_" + std::to_string(i) +
-				"', size: " + std::to_string(10 + (i % 200)) +
-				", industry: '" + industries[i % industries.size()] + "'})";
-			exec(q);
+			batch.node_creates.push_back({{"Company"},
+									  {{"name", PropertyValue("Company_" + std::to_string(i))},
+									   {"size", PropertyValue(int64_t{10 + (i % 200)})},
+									   {"industry", PropertyValue(industries[static_cast<size_t>(i) % industries.size()])}}});
 		}
 
-		// Create Product nodes (60)
 		for (int i = 0; i < 60; ++i) {
-			std::string q = "CREATE (n:Product {name: 'Product_" + std::to_string(i) +
-				"', price: " + std::to_string(5 + (i % 100)) +
-				", category: '" + categories[i % categories.size()] + "'})";
-			exec(q);
+			batch.node_creates.push_back({{"Product"},
+									  {{"name", PropertyValue("Product_" + std::to_string(i))},
+									   {"price", PropertyValue(int64_t{5 + (i % 100)})},
+									   {"category", PropertyValue(categories[static_cast<size_t>(i) % categories.size()])}}});
 		}
 
-		// Create WORKS_AT edges: each Person works at a Company
+		const auto createdNode = [](uint64_t ordinal) {
+			return storage::LogicalGraphMutationEntityReference{storage::LogicalGraphMutationEntityKind::LGMK_NODE,
+															 storage::LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE, ordinal};
+		};
+		constexpr uint64_t companyOffset = 100U;
+		constexpr uint64_t productOffset = 160U;
 		for (int i = 0; i < 100; ++i) {
-			int companyIdx = i % 60;
-			std::string q = "MATCH (p:Person {name: 'Person_" + std::to_string(i) +
-				"'}), (c:Company {name: 'Company_" + std::to_string(companyIdx) +
-				"'}) CREATE (p)-[:WORKS_AT {since: " + std::to_string(2000 + (i % 25)) + "}]->(c)";
-			exec(q);
+			batch.edge_creates.push_back(
+					{createdNode(static_cast<uint64_t>(i)), createdNode(companyOffset + static_cast<uint64_t>(i % 60)),
+					 "WORKS_AT", {{"since", PropertyValue(int64_t{2000 + (i % 25)})}}});
 		}
 
-		// Create BOUGHT edges: each Person buys 2 products
 		for (int i = 0; i < 100; ++i) {
 			for (int j = 0; j < 2; ++j) {
-				int productIdx = (i * 2 + j) % 60;
-				std::string q = "MATCH (p:Person {name: 'Person_" + std::to_string(i) +
-					"'}), (pr:Product {name: 'Product_" + std::to_string(productIdx) +
-					"'}) CREATE (p)-[:BOUGHT {quantity: " + std::to_string(1 + (i % 5)) + "}]->(pr)";
-				exec(q);
+				batch.edge_creates.push_back(
+						{createdNode(static_cast<uint64_t>(i)),
+						 createdNode(productOffset + static_cast<uint64_t>((i * 2 + j) % 60)),
+						 "BOUGHT", {{"quantity", PropertyValue(int64_t{1 + (i % 5)})}}});
 			}
+		}
+
+		const storage::LogicalGraphMutationBatchResult result = writer->executeLogicalGraphMutationBatch(batch);
+		if (result.created_node_ids.size() != batch.node_creates.size() ||
+			result.created_edge_ids.size() != batch.edge_creates.size()) {
+			throw std::runtime_error("optimizer benchmark created an unexpected logical entity ID count");
 		}
 	}
 

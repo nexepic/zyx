@@ -4,16 +4,23 @@
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <limits>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include <gtest/gtest.h>
 
+#include "graph/storage/PreadHelper.hpp"
+#include "graph/storage/PwriteHelper.hpp"
+#include "graph/storage/StorageIO.hpp"
+#include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
 #include "zyx/zyx_driver_abi.h"
 
 namespace fs = std::filesystem;
+using namespace graph::storage;
 
 namespace {
 
@@ -23,6 +30,33 @@ namespace {
 		return (fs::temp_directory_path() / ("zyx_driver_abi_ingest_" + std::to_string(now) + "_" +
 											 std::to_string(counter.fetch_add(1, std::memory_order_relaxed))))
 				.string();
+	}
+
+	Superblock initialRelocatableSuperblock() {
+		Superblock superblock;
+		superblock.database_id = DatabaseId(0x1A2B3C4D5E6F7081ULL);
+		superblock.generation = Generation(1U);
+		superblock.checkpoint_lsn = LogSequenceNumber(1U);
+		return superblock;
+	}
+
+	void materializeEmptyRelocatableDatabase(const std::string &databasePath) {
+		auto data = std::make_shared<std::fstream>(databasePath,
+											 std::ios::in | std::ios::out | std::ios::binary | std::ios::trunc);
+		ASSERT_TRUE(data->is_open());
+		const file_handle_t dataWrite = portable_open_rw(databasePath.c_str());
+		const file_handle_t dataRead = portable_open(databasePath.c_str(), O_RDONLY);
+		ASSERT_NE(dataWrite, INVALID_FILE_HANDLE);
+		ASSERT_NE(dataRead, INVALID_FILE_HANDLE);
+
+		auto io = std::make_shared<StorageIO>(data, dataWrite, dataRead);
+		auto metadata = RelocatableMetadataStore::initializeNew(io, initialRelocatableSuperblock());
+		metadata.reset();
+		io->sync();
+		io.reset();
+		static_cast<void>(portable_close_rw(dataWrite));
+		static_cast<void>(portable_close(dataRead));
+		data->close();
 	}
 
 	ArrowSchema scalarSchema(const char *format, const char *name) {
@@ -135,8 +169,10 @@ protected:
 
 	void cleanupFiles() {
 		std::error_code ec;
-		fs::remove_all(dbPath, ec);
-		fs::remove(dbPath + "-wal", ec);
+		for (const std::string &suffix: {"", "-wal"}) {
+			fs::remove_all(dbPath + suffix, ec);
+			ec.clear();
+		}
 	}
 
 	std::pair<int64_t, int64_t> createEndpoints() {
@@ -148,9 +184,18 @@ protected:
 	}
 
 	int64_t countEdges(const char *type) {
+		return countEdges(db, type);
+	}
+
+	int64_t countEdges(zyx_driver_db_t *database, const char *type) {
 		zyx_driver_result_t *result = nullptr;
 		const std::string query = "MATCH ()-[e:" + std::string(type) + "]->() RETURN count(e)";
-		EXPECT_EQ(zyx_driver_db_execute(db, query.c_str(), nullptr, &result, &error), ZYX_DRIVER_OK);
+		const zyx_driver_status_t status = zyx_driver_db_execute(database, query.c_str(), nullptr, &result, &error);
+		if (status != ZYX_DRIVER_OK) {
+			const char *message = zyx_driver_error_message(error);
+			ADD_FAILURE() << "count edge query failed: " << (message != nullptr ? message : "unknown error");
+			return -1;
+		}
 		int64_t count = -1;
 		if (result != nullptr && zyx_driver_result_next(result, &error) == ZYX_DRIVER_ROW) {
 			EXPECT_EQ(zyx_driver_result_get_int64(result, 0, &count, &error), ZYX_DRIVER_OK);
@@ -179,6 +224,18 @@ protected:
 		EXPECT_EQ(zyx_driver_ingest_rollback(ingest, &error), ZYX_DRIVER_OK);
 		EXPECT_EQ(zyx_driver_edge_ingestor_close(ingestor, &error), ZYX_DRIVER_OK);
 		EXPECT_EQ(zyx_driver_ingest_close(ingest, &error), ZYX_DRIVER_OK);
+	}
+};
+
+class RelocatableDriverAbiIngestTest : public DriverAbiIngestTest {
+protected:
+	void SetUp() override {
+		dbPath = uniqueIngestDbPath();
+		cleanupFiles();
+		materializeEmptyRelocatableDatabase(dbPath);
+		ASSERT_FALSE(fs::exists(dbPath + ".wal"));
+		ASSERT_EQ(zyx_driver_db_open(dbPath.c_str(), &db, &error), ZYX_DRIVER_OK);
+		ASSERT_NE(db, nullptr);
 	}
 };
 
@@ -237,6 +294,53 @@ TEST_F(DriverAbiIngestTest, RollbackDiscardsArrowBatch) {
 	EXPECT_EQ(zyx_driver_edge_ingestor_close(ingestor, &error), ZYX_DRIVER_OK);
 	EXPECT_EQ(zyx_driver_ingest_close(ingest, &error), ZYX_DRIVER_OK);
 	EXPECT_EQ(countEdges("ROLLBACK_REL"), 0);
+}
+
+TEST_F(RelocatableDriverAbiIngestTest, ArrowEdgeIngestStagesRowsUntilCommitAndDropsRolledBackRows) {
+	const auto [source, target] = createEndpoints();
+	IngestEdgeSchema schema;
+	zyx_driver_db_t *reader = nullptr;
+	ASSERT_EQ(zyx_driver_db_open_if_exists(dbPath.c_str(), &reader, &error), ZYX_DRIVER_OK);
+	ASSERT_NE(reader, nullptr);
+
+	zyx_driver_ingest_t *ingest = nullptr;
+	zyx_driver_edge_ingestor_t *ingestor = nullptr;
+	IngestEdgeBatch committedBatch({source}, {target}, {2026}, {"committed"});
+	zyx_driver_id_range_t committedIds{};
+	ASSERT_EQ(zyx_driver_ingest_begin(db, &ingest, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_prepare_edges(ingest, "RSS_INGEST_REL", &schema.root, &ingestor, &error),
+			  ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_edge_ingestor_write(ingestor, &committedBatch.root, &committedIds, &error), ZYX_DRIVER_OK);
+	EXPECT_GT(committedIds.first_id, 0);
+	EXPECT_EQ(committedIds.count, 1);
+	EXPECT_EQ(countEdges(reader, "RSS_INGEST_REL"), 0);
+
+	const zyx_driver_status_t commitStatus = zyx_driver_ingest_commit(ingest, &error);
+	ASSERT_EQ(commitStatus, ZYX_DRIVER_OK) << zyx_driver_error_message(error);
+	EXPECT_EQ(zyx_driver_edge_ingestor_close(ingestor, &error), ZYX_DRIVER_OK);
+	ingestor = nullptr;
+	EXPECT_EQ(zyx_driver_ingest_close(ingest, &error), ZYX_DRIVER_OK);
+	ingest = nullptr;
+	EXPECT_EQ(zyx_driver_db_close(reader, &error), ZYX_DRIVER_OK);
+	reader = nullptr;
+
+	ASSERT_EQ(zyx_driver_db_open_if_exists(dbPath.c_str(), &reader, &error), ZYX_DRIVER_OK);
+	ASSERT_NE(reader, nullptr);
+	EXPECT_EQ(countEdges(reader, "RSS_INGEST_REL"), 1);
+
+	IngestEdgeBatch rolledBackBatch({target}, {source}, {2027}, {"rolled-back"});
+	ASSERT_EQ(zyx_driver_ingest_begin(db, &ingest, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_ingest_prepare_edges(ingest, "RSS_INGEST_REL", &schema.root, &ingestor, &error),
+			  ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_edge_ingestor_write(ingestor, &rolledBackBatch.root, nullptr, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(countEdges(reader, "RSS_INGEST_REL"), 1);
+	ASSERT_EQ(zyx_driver_ingest_rollback(ingest, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(zyx_driver_edge_ingestor_close(ingestor, &error), ZYX_DRIVER_OK);
+	ingestor = nullptr;
+	EXPECT_EQ(zyx_driver_ingest_close(ingest, &error), ZYX_DRIVER_OK);
+	ingest = nullptr;
+	EXPECT_EQ(countEdges(reader, "RSS_INGEST_REL"), 1);
+	EXPECT_EQ(zyx_driver_db_close(reader, &error), ZYX_DRIVER_OK);
 }
 
 TEST_F(DriverAbiIngestTest, InvalidOffsetsPoisonSessionAndReportRowAndField) {
@@ -747,7 +851,8 @@ TEST_F(DriverAbiIngestTest, TenThousandEdgesUseOnePreparedBatchAndOneIdRange) {
 	ASSERT_EQ(zyx_driver_edge_ingestor_write(ingestor, &rootArray, &ids, &error), ZYX_DRIVER_OK);
 	EXPECT_GT(ids.first_id, 0);
 	EXPECT_EQ(ids.count, rowCount);
-	ASSERT_EQ(zyx_driver_ingest_commit(ingest, &error), ZYX_DRIVER_OK);
+	const zyx_driver_status_t commitStatus = zyx_driver_ingest_commit(ingest, &error);
+	ASSERT_EQ(commitStatus, ZYX_DRIVER_OK) << zyx_driver_error_message(error);
 	EXPECT_EQ(zyx_driver_edge_ingestor_close(ingestor, &error), ZYX_DRIVER_OK);
 	EXPECT_EQ(zyx_driver_ingest_close(ingest, &error), ZYX_DRIVER_OK);
 	EXPECT_EQ(countEdges("TEN_K_ARROW_REL"), rowCount);

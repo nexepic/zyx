@@ -23,7 +23,7 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
 #include <gtest/gtest.h>
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/query/algorithm/GraphAlgorithm.hpp"
 #include "graph/query/algorithm/GraphProjection.hpp"
 
@@ -37,7 +37,7 @@ protected:
 		testFilePath = fs::temp_directory_path() / ("test_algo_" + to_string(uuid) + ".dat");
 
 		// Initialize DB
-		database = std::make_unique<graph::Database>(testFilePath.string());
+		database = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testFilePath.string());
 		database->open();
 
 		initPointers();
@@ -54,7 +54,7 @@ protected:
 	}
 
 	void initPointers() {
-		dataManager = database->getStorage()->getDataManager();
+		dataManager = database->storage()->getDataManager();
 		algo = std::make_unique<graph::query::algorithm::GraphAlgorithm>(dataManager);
 	}
 
@@ -105,14 +105,14 @@ protected:
 		}
 
 		// [CRITICAL] Persist and Reload to ensure graph topology is visible to all subsystems
-		database->getStorage()->flush();
+		database->storage()->flush();
 		database->close();
 		database->open();
 		initPointers();
 	}
 
 	fs::path testFilePath;
-	std::unique_ptr<graph::Database> database;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> database;
 	std::shared_ptr<graph::storage::DataManager> dataManager;
 	std::unique_ptr<graph::query::algorithm::GraphAlgorithm> algo;
 
@@ -323,7 +323,7 @@ TEST_F(GraphAlgorithmTest, FindAllPathsWithEdgeLabelFilter) {
 	dataManager->addEdge(labeled1);
 	dataManager->addEdge(labeled2);
 
-	database->getStorage()->flush();
+	database->storage()->flush();
 	database->close();
 	database->open();
 	initPointers();
@@ -473,7 +473,7 @@ TEST_F(GraphAlgorithmTest, FindAllPaths_CycleInVariableLength) {
 	graph::Edge cycle(202, node3Id, node1Id, dataManager->getOrCreateTokenId("LINK"));
 	dataManager->addEdge(cycle);
 
-	database->getStorage()->flush();
+	database->storage()->flush();
 	database->close();
 	database->open();
 	initPointers();
@@ -606,7 +606,7 @@ TEST_F(GraphAlgorithmTest, Dijkstra_WeightedEdges) {
 	dataManager->addEdgeProperties(eBC.getId(), {{"cost", graph::PropertyValue(1.0)}});
 	dataManager->addEdgeProperties(eAC.getId(), {{"cost", graph::PropertyValue(3.0)}});
 
-	database->getStorage()->flush();
+	database->storage()->flush();
 	database->close();
 	database->open();
 	initPointers();
@@ -647,7 +647,7 @@ TEST_F(GraphAlgorithmTest, Dijkstra_StalePriorityQueueEntries) {
 	dataManager->addEdgeProperties(eYX.getId(), {{"w", graph::PropertyValue(1.0)}});
 	dataManager->addEdgeProperties(eXZ.getId(), {{"w", graph::PropertyValue(100.0)}});
 
-	database->getStorage()->flush();
+	database->storage()->flush();
 	database->close();
 	database->open();
 	initPointers();
@@ -673,7 +673,7 @@ TEST_F(GraphAlgorithmTest, Betweenness_SamplingSizeExceedsNodeCount) {
 	graph::Edge exy(0, x.getId(), y.getId(), dataManager->getOrCreateTokenId("T"));
 	dataManager->addEdge(exy);
 
-	database->getStorage()->flush();
+	database->storage()->flush();
 	database->close();
 	database->open();
 	initPointers();
@@ -713,7 +713,7 @@ TEST_F(GraphAlgorithmTest, PageRank_BasicScores) {
 TEST_F(GraphAlgorithmTest, PageRank_SingleNode) {
 	graph::Node solo(0, dataManager->getOrCreateTokenId("Solo"));
 	dataManager->addNode(solo);
-	database->getStorage()->flush();
+	database->storage()->flush();
 	database->close();
 	database->open();
 	initPointers();
@@ -767,7 +767,7 @@ TEST_F(GraphAlgorithmTest, WCC_MultipleComponents) {
 	graph::Edge eIsland(0, iso1.getId(), iso2.getId(), dataManager->getOrCreateTokenId("BRIDGE"));
 	dataManager->addEdge(eIsland);
 
-	database->getStorage()->flush();
+	database->storage()->flush();
 	database->close();
 	database->open();
 	initPointers();
@@ -793,7 +793,7 @@ TEST_F(GraphAlgorithmTest, WCC_IsolatedNodes) {
 	dataManager->addNode(i2);
 	dataManager->addNode(i3);
 
-	database->getStorage()->flush();
+	database->storage()->flush();
 	database->close();
 	database->open();
 	initPointers();
@@ -867,7 +867,7 @@ TEST_F(GraphAlgorithmTest, Betweenness_LinearGraph) {
 	dataManager->addEdge(e1);
 	dataManager->addEdge(e2);
 
-	database->getStorage()->flush();
+	database->storage()->flush();
 	database->close();
 	database->open();
 	initPointers();
@@ -909,7 +909,7 @@ TEST_F(GraphAlgorithmTest, Closeness_EmptyGraph) {
 TEST_F(GraphAlgorithmTest, Closeness_SingleNode) {
 	graph::Node solo(0, dataManager->getOrCreateTokenId("Solo2"));
 	dataManager->addNode(solo);
-	database->getStorage()->flush();
+	database->storage()->flush();
 	database->close();
 	database->open();
 	initPointers();
@@ -939,7 +939,7 @@ TEST_F(GraphAlgorithmTest, Closeness_StarGraph) {
 	dataManager->addEdge(e2);
 	dataManager->addEdge(e3);
 
-	database->getStorage()->flush();
+	database->storage()->flush();
 	database->close();
 	database->open();
 	initPointers();

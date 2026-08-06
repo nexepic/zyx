@@ -212,106 +212,107 @@ TEST_F(AdminClauseHandlerTest, CreateIndex_WithLongName) {
 
 TEST_F(AdminClauseHandlerTest, CreateVectorIndex_SimpleIndex) {
 	auto res = execute("CREATE VECTOR INDEX ON :Person(embedding) OPTIONS {dimension: 3}");
-	ASSERT_EQ(res.rowCount(), 0UL);
+	ASSERT_EQ(res.rowCount(), 1UL);
 }
 
 TEST_F(AdminClauseHandlerTest, CreateVectorIndex_WithNamedIndex) {
 	auto res = execute("CREATE VECTOR INDEX my_vec_idx ON :Person(embedding) OPTIONS {dimension: 3}");
-	ASSERT_EQ(res.rowCount(), 0UL);
+	ASSERT_EQ(res.rowCount(), 1UL);
 }
 
 TEST_F(AdminClauseHandlerTest, CreateVectorIndex_WithCustomMetricCosine) {
 	auto res = execute("CREATE VECTOR INDEX ON :Person(embedding) OPTIONS {dimension: 3, metric: 'COSINE'}");
-	ASSERT_EQ(res.rowCount(), 0UL);
+	ASSERT_EQ(res.rowCount(), 1UL);
 }
 
 TEST_F(AdminClauseHandlerTest, CreateVectorIndex_MetricL2) {
 	auto res = execute("CREATE VECTOR INDEX ON :Test(vec) OPTIONS {dimension: 3, metric: 'L2'}");
-	ASSERT_EQ(res.rowCount(), 0UL);
+	ASSERT_EQ(res.rowCount(), 1UL);
 }
 
 TEST_F(AdminClauseHandlerTest, CreateVectorIndex_MetricInnerProduct) {
 	auto res = execute("CREATE VECTOR INDEX ON :Test(vec) OPTIONS {dimension: 3, metric: 'INNER_PRODUCT'}");
-	ASSERT_EQ(res.rowCount(), 0UL);
+	ASSERT_EQ(res.rowCount(), 1UL);
 }
 
 TEST_F(AdminClauseHandlerTest, CreateVectorIndex_DimShortForm) {
 	auto res = execute("CREATE VECTOR INDEX ON :Person(vec) OPTIONS {dim: 5}");
-	ASSERT_EQ(res.rowCount(), 0UL);
+	ASSERT_EQ(res.rowCount(), 1UL);
 }
 
 TEST_F(AdminClauseHandlerTest, CreateVectorIndex_DimWithMetric) {
 	auto res = execute("CREATE VECTOR INDEX ON :Test(vec) OPTIONS {dim: 5, metric: 'COSINE'}");
-	ASSERT_EQ(res.rowCount(), 0UL);
+	ASSERT_EQ(res.rowCount(), 1UL);
 }
 
 TEST_F(AdminClauseHandlerTest, CreateVectorIndex_DimensionOne) {
 	auto res = execute("CREATE VECTOR INDEX ON :Test(vec) OPTIONS {dimension: 1}");
-	ASSERT_EQ(res.rowCount(), 0UL);
+	ASSERT_EQ(res.rowCount(), 1UL);
 }
 
 TEST_F(AdminClauseHandlerTest, CreateVectorIndex_DimensionTwo) {
 	auto res = execute("CREATE VECTOR INDEX ON :Test(vec) OPTIONS {dimension: 2}");
-	ASSERT_EQ(res.rowCount(), 0UL);
+	ASSERT_EQ(res.rowCount(), 1UL);
 }
 
 TEST_F(AdminClauseHandlerTest, CreateVectorIndex_DimensionHundred) {
 	auto res = execute("CREATE VECTOR INDEX ON :Test(embedding) OPTIONS {dimension: 100}");
-	ASSERT_EQ(res.rowCount(), 0UL);
+	ASSERT_EQ(res.rowCount(), 1UL);
 }
 
 TEST_F(AdminClauseHandlerTest, CreateVectorIndex_DimensionThousand) {
 	auto res = execute("CREATE VECTOR INDEX ON :Test(embedding) OPTIONS {dimension: 1000}");
-	ASSERT_EQ(res.rowCount(), 0UL);
+	ASSERT_EQ(res.rowCount(), 1UL);
 }
 
 TEST_F(AdminClauseHandlerTest, CreateVectorIndex_DimensionLargeValue) {
-	auto res = execute("CREATE VECTOR INDEX ON :Test(vec) OPTIONS {dimension: 10000}");
-	ASSERT_EQ(res.rowCount(), 0UL);
+	// A raw vector must fit its bounded on-page record representation.
+	EXPECT_THROW((void)execute("CREATE VECTOR INDEX ON :Test(vec) OPTIONS {dimension: 10000}"),
+			 std::invalid_argument);
 }
 
 TEST_F(AdminClauseHandlerTest, CreateVectorIndex_OptionsOrderReversed) {
 	auto res = execute("CREATE VECTOR INDEX ON :Test(vec) OPTIONS {metric: 'L2', dimension: 5}");
-	ASSERT_EQ(res.rowCount(), 0UL);
+	ASSERT_EQ(res.rowCount(), 1UL);
 }
 
 TEST_F(AdminClauseHandlerTest, CreateVectorIndex_WithUnknownOptionKey) {
 	auto res = execute("CREATE VECTOR INDEX ON :Test(vec) OPTIONS {dimension: 3, unknown_key: 'value'}");
-	ASSERT_EQ(res.rowCount(), 0UL);
+	ASSERT_EQ(res.rowCount(), 1UL);
 }
 
 TEST_F(AdminClauseHandlerTest, CreateVectorIndex_WithMultipleUnknownKeys) {
 	auto res = execute("CREATE VECTOR INDEX ON :Test(vec) OPTIONS {dimension: 3, key1: 1, key2: 2}");
-	ASSERT_EQ(res.rowCount(), 0UL);
+	ASSERT_EQ(res.rowCount(), 1UL);
 }
 
 TEST_F(AdminClauseHandlerTest, CreateVectorIndex_OtherKeyBetweenDimAndMetric) {
 	auto res = execute("CREATE VECTOR INDEX ON :Test(vec) OPTIONS {dimension: 3, other: 1, metric: 'L2'}");
-	ASSERT_EQ(res.rowCount(), 0UL);
+	ASSERT_EQ(res.rowCount(), 1UL);
 }
 
 TEST_F(AdminClauseHandlerTest, CreateVectorIndex_MultipleDifferentProperties) {
 	auto res1 = execute("CREATE VECTOR INDEX ON :Person(vec1) OPTIONS {dimension: 3}");
-	ASSERT_EQ(res1.rowCount(), 0UL);
+	ASSERT_EQ(res1.rowCount(), 1UL);
 
 	auto res2 = execute("CREATE VECTOR INDEX ON :Person(vec2) OPTIONS {dim: 5}");
-	ASSERT_EQ(res2.rowCount(), 0UL);
+	ASSERT_EQ(res2.rowCount(), 1UL);
 
 	auto res3 = execute("CREATE VECTOR INDEX ON :Person(vec3) OPTIONS {dimension: 10, metric: 'L2'}");
-	ASSERT_EQ(res3.rowCount(), 0UL);
+	ASSERT_EQ(res3.rowCount(), 1UL);
 }
 
 TEST_F(AdminClauseHandlerTest, CreateVectorIndex_DifferentMetrics) {
 	auto res1 = execute("CREATE VECTOR INDEX ON :Person(vec1) OPTIONS {dimension: 3, metric: 'L2'}");
-	ASSERT_EQ(res1.rowCount(), 0UL);
+	ASSERT_EQ(res1.rowCount(), 1UL);
 
 	auto res2 = execute("CREATE VECTOR INDEX ON :Person(vec2) OPTIONS {dimension: 3, metric: 'COSINE'}");
-	ASSERT_EQ(res2.rowCount(), 0UL);
+	ASSERT_EQ(res2.rowCount(), 1UL);
 }
 
 TEST_F(AdminClauseHandlerTest, CreateVectorIndex_ThenShow) {
 	auto res1 = execute("CREATE VECTOR INDEX ON :Person(vec) OPTIONS {dimension: 3}");
-	ASSERT_EQ(res1.rowCount(), 0UL);
+	ASSERT_EQ(res1.rowCount(), 1UL);
 
 	auto res2 = execute("SHOW INDEXES");
 	EXPECT_GE(res2.rowCount(), 1UL);
@@ -460,21 +461,19 @@ TEST_F(AdminClauseHandlerTest, Error_CreateVectorIndexDimensionZero) {
 }
 
 TEST_F(AdminClauseHandlerTest, EdgeCase_CreateVectorIndexNegativeDimension) {
-	// Implementation accepts negative dimensions (doesn't throw) - verify no crash
-	EXPECT_NO_THROW({ (void)execute("CREATE VECTOR INDEX ON :Person(vec) OPTIONS {dimension: -5}"); });
+	EXPECT_THROW((void)execute("CREATE VECTOR INDEX ON :Person(vec) OPTIONS {dimension: -5}"), std::exception);
 }
 
 TEST_F(AdminClauseHandlerTest, EdgeCase_CreateSameIndexTwice) {
 	(void) execute("CREATE INDEX duplicate_test ON :Person(name)");
 
-	// Should either succeed idempotently or fail, but not crash
-	EXPECT_NO_THROW({ (void)execute("CREATE INDEX duplicate_test ON :Person(name)"); });
+	// Names and physical schemas are unique durable identities.
+	EXPECT_THROW((void)execute("CREATE INDEX duplicate_test ON :Person(name)"), std::exception);
 }
 
 TEST_F(AdminClauseHandlerTest, EdgeCase_MultipleIndexesSameProperty) {
 	auto res1 = execute("CREATE INDEX idx1 ON :Person(name)");
-	auto res2 = execute("CREATE INDEX idx2 ON :Person(name)");
 
 	ASSERT_EQ(res1.rowCount(), 1UL);
-	ASSERT_EQ(res2.rowCount(), 1UL);
+	EXPECT_THROW((void)execute("CREATE INDEX idx2 ON :Person(name)"), std::exception);
 }

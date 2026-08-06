@@ -44,13 +44,7 @@ TEST_F(DataManagerTest, DirtyTracking) {
 TEST_F(DataManagerTest, AutoFlush) {
 	bool autoFlushCalled = false;
 
-	if (database) {
-		auto idxMgr = database->getQueryEngine()->getIndexManager();
-		// Drop it to disable auto-indexing
-		(void) idxMgr->getNodeIndexManager()->dropIndex("label", "");
-
-		database->getStorage()->flush();
-	}
+	fileStorage->flush();
 
 	// Note: The new auto-flush logic checks SUM of all entities.
 	dataManager->setMaxDirtyEntities(10);
@@ -557,4 +551,3 @@ TEST_F(DataManagerTest, GetDirtyEntityInfosNodeTwoTypesWithMatch) {
 		{EntityChangeType::CHANGE_ADDED, EntityChangeType::CHANGE_MODIFIED});
 	EXPECT_GE(filtered.size(), 1UL) << "Should find ADDED node with 2-type filter";
 }
-

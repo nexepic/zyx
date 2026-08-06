@@ -27,7 +27,6 @@
 #include <gtest/gtest.h>
 #include <memory>
 #include "graph/core/Blob.hpp"
-#include "graph/core/Database.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Index.hpp"
 #include "graph/core/Node.hpp"
@@ -90,9 +89,8 @@ protected:
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath_ = std::filesystem::temp_directory_path() / ("test_dm_shared_" + to_string(uuid) + ".dat");
 
-		database_ = std::make_unique<graph::Database>(testFilePath_.string());
-		database_->open();
-		fileStorage_ = database_->getStorage();
+		fileStorage_ = std::make_shared<FileStorage>(testFilePath_.string(), 10'000U);
+		fileStorage_->open();
 		dataManager_ = fileStorage_->getDataManager();
 
 		observer_ = std::make_shared<SharedTestEntityObserver>();
@@ -102,11 +100,10 @@ protected:
 	static void TearDownTestSuite() {
 		observer_.reset();
 		dataManager_.reset();
-		fileStorage_.reset();
-		if (database_) {
-			database_->close();
-			database_.reset();
+		if (fileStorage_) {
+			fileStorage_->close();
 		}
+		fileStorage_.reset();
 		std::error_code ec;
 		if (std::filesystem::exists(testFilePath_)) {
 			std::filesystem::remove(testFilePath_, ec);
@@ -176,7 +173,6 @@ protected:
 
 	// Static members shared across all tests in the suite
 	static std::filesystem::path testFilePath_;
-	static std::unique_ptr<Database> database_;
 	static std::shared_ptr<FileStorage> fileStorage_;
 	static std::shared_ptr<DataManager> dataManager_;
 	static std::shared_ptr<SharedTestEntityObserver> observer_;
@@ -191,7 +187,6 @@ protected:
 // Each test file that includes this header needs to define these once.
 // We use inline to allow multiple TU inclusion (C++17).
 inline std::filesystem::path DataManagerSharedTest::testFilePath_;
-inline std::unique_ptr<Database> DataManagerSharedTest::database_;
 inline std::shared_ptr<FileStorage> DataManagerSharedTest::fileStorage_;
 inline std::shared_ptr<DataManager> DataManagerSharedTest::dataManager_;
 inline std::shared_ptr<SharedTestEntityObserver> DataManagerSharedTest::observer_;

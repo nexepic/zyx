@@ -59,9 +59,32 @@ def find_test_binaries(build_dir):
         if os.name == 'nt' and suffix != '.exe':
             continue
 
-        if os.access(file_path, os.X_OK):
+        if os.access(file_path, os.X_OK) and _is_native_coverage_binary(file_path):
             binaries.append(str(file_path))
     return binaries
+
+
+def _is_native_coverage_binary(file_path):
+    """Return whether a candidate is a native executable LLVM can inspect.
+
+    Build directories may contain executable Python entry points (for example a
+    binding test virtual environment).  They satisfy ``os.X_OK`` but are not
+    Mach-O, ELF, or PE objects and must never be supplied with ``-object`` to
+    llvm-cov.
+    """
+
+    try:
+        magic = file_path.read_bytes()[:4]
+    except OSError:
+        return False
+
+    mach_o_magics = {
+        b"\xfe\xed\xfa\xce", b"\xce\xfa\xed\xfe",  # 32-bit Mach-O
+        b"\xfe\xed\xfa\xcf", b"\xcf\xfa\xed\xfe",  # 64-bit Mach-O
+        b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca",  # universal Mach-O
+        b"\xca\xfe\xba\xbf", b"\xbf\xba\xfe\xca",  # universal 64-bit Mach-O
+    }
+    return magic.startswith(b"\x7fELF") or magic.startswith(b"MZ") or magic in mach_o_magics
 
 
 def excluded_source_lines(source_path):
@@ -400,13 +423,19 @@ def main():
     parser.add_argument("--html", action="store_true", help="Generate and open HTML report")
     parser.add_argument("--lcov", type=str, default=None, help="Generate LCOV report to file")
     parser.add_argument("--file", type=str, default=None, help="Show detailed source coverage for a specific file")
+    parser.add_argument("--profile-dir", type=str, default=None,
+                        help="Merge profiles only from this directory instead of the full build tree")
 
     args, unknown = parser.parse_known_args()
 
     if unknown:
         print(f"Warning: Ignoring unknown arguments: {unknown}")
 
-    profraw_files = list(Path(args.build_dir).rglob("*.profraw"))
+    profile_root = Path(args.profile_dir) if args.profile_dir else Path(args.build_dir)
+    if not profile_root.is_dir():
+        print(f"Error: Coverage profile directory does not exist: {profile_root}")
+        sys.exit(1)
+    profraw_files = list(profile_root.rglob("*.profraw"))
     profdata_file = os.path.join(args.build_dir, "code.profdata")
 
     if not profraw_files:

@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/execution/NodeBatchLoader.hpp"
 #include "graph/query/execution/NodeMetadataColumnLoader.hpp"
@@ -20,16 +20,16 @@ using namespace graph::query::execution;
 
 class NodeBatchLoaderTest : public ::testing::Test {
 protected:
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<storage::DataManager> dm;
 	fs::path testFilePath;
 
 	void SetUp() override {
 		const auto uuid = boost::uuids::random_generator()();
 		testFilePath = fs::temp_directory_path() / ("test_node_batch_loader_" + boost::uuids::to_string(uuid) + ".dat");
-		db = std::make_unique<Database>(testFilePath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testFilePath.string());
 		db->open();
-		dm = db->getStorage()->getDataManager();
+		dm = db->storage()->getDataManager();
 	}
 
 	void TearDown() override {
@@ -176,7 +176,7 @@ TEST_F(NodeBatchLoaderTest, DenseCleanBatchUsesBulkNodeLoad) {
 	for (size_t i = 0; i < kNodeCount; ++i) {
 		candidates.push_back(addPerson());
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	NodeScanConfig config;
 	config.labels = {"Person"};
@@ -206,7 +206,7 @@ TEST_F(NodeBatchLoaderTest, DenseCleanBatchMarksDeletedBulkRowsUnselected) {
 	}
 	Node deleted = dm->getNode(candidates[7]);
 	dm->deleteNode(deleted);
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	NodeScanConfig config;
@@ -234,7 +234,7 @@ TEST_F(NodeBatchLoaderTest, SelectedPropertyCleanBatchUsesMetadataLoad) {
 	for (size_t i = 0; i < kNodeCount; ++i) {
 		candidates.push_back(addPerson({{"age", PropertyValue(static_cast<int64_t>(i))}}));
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	NodeScanConfig config;
 	config.labels = {"Person"};
@@ -268,10 +268,10 @@ TEST_F(NodeBatchLoaderTest, MetadataLoadFiltersPersistedInactiveRows) {
 	for (size_t i = 0; i < kNodeCount; ++i) {
 		candidates.push_back(addPerson({{"age", PropertyValue(static_cast<int64_t>(i))}}));
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 	Node deleted = dm->getNode(candidates[1]);
 	dm->deleteNode(deleted);
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	NodeScanConfig config;
@@ -298,7 +298,7 @@ TEST_F(NodeBatchLoaderTest, MetadataLoadAppliesResidualLabelFilter) {
 	for (size_t i = 0; i < kNodeCount; ++i) {
 		candidates.push_back(addPerson({{"age", PropertyValue(static_cast<int64_t>(i))}}));
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 	ASSERT_FALSE(dm->hasUnsavedChanges());
 
 	NodeScanConfig config;
@@ -325,7 +325,7 @@ TEST_F(NodeBatchLoaderTest, SelectedPropertyCountOnlyCleanBatchUsesMetadataLoad)
 	for (size_t i = 0; i < kNodeCount; ++i) {
 		candidates.push_back(addPerson({{"age", PropertyValue(static_cast<int64_t>(i))}}));
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	NodeScanConfig config;
 	config.labels = {"Person"};
@@ -355,7 +355,7 @@ TEST_F(NodeBatchLoaderTest, DirtyBatchFallsBackToPerNodeLoad) {
 	for (size_t i = 0; i < kNodeCount; ++i) {
 		candidates.push_back(addPerson());
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 	addPerson();
 
 	NodeScanConfig config;
@@ -433,7 +433,7 @@ TEST_F(NodeBatchLoaderTest, DenseBatchWithInvalidCandidateFallsBackToPerNodeLoad
 	for (size_t i = 1; i < kCandidateCount; ++i) {
 		candidates[i] = addPerson();
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	NodeScanConfig config;
 	NodeScanRequirements requirements;
@@ -455,7 +455,7 @@ TEST_F(NodeBatchLoaderTest, DenseCleanBatchFallsBackWhenBulkRangeHasNoRows) {
 	for (size_t i = 0; i < kCandidateCount; ++i) {
 		candidates.push_back(50'000 + static_cast<int64_t>(i));
 	}
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	NodeScanConfig config;
 	NodeScanRequirements requirements;

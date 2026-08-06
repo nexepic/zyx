@@ -18,6 +18,9 @@
  * limitations under the License.
  **/
 
+#include <chrono>
+#include <string>
+#include <system_error>
 #include <variant>
 
 #include "ApiTestFixture.hpp"
@@ -44,16 +47,16 @@ TEST_F(CppApiTest, TransactionBeginCommit) {
 	EXPECT_EQ(std::get<std::string>(nameVal), "committed");
 }
 
-TEST_F(CppApiTest, BulkTransactionSupportsDirectBatchWrites) {
+TEST_F(CppApiTest, BulkTransactionSupportsTransactionBoundBatchWrites) {
 	auto txn = db->beginBulkTransaction();
 	EXPECT_TRUE(txn.isActive());
 	EXPECT_FALSE(txn.isReadOnly());
 
-	auto ids = db->createNodes("BulkApiUser",
+	auto ids = txn.createNodes("BulkApiUser",
 							   {{{"id", std::string("u1")}, {"score", int64_t{1}}},
 								{{"id", std::string("u2")}, {"score", int64_t{2}}}});
 	ASSERT_EQ(ids.size(), 2U);
-	auto edgeIds = db->createEdges("FOLLOWS", {{ids[0], ids[1], {{"weight", int64_t{7}}}}});
+	auto edgeIds = txn.createEdges("FOLLOWS", {{ids[0], ids[1], {{"weight", int64_t{7}}}}});
 	ASSERT_EQ(edgeIds.size(), 1U);
 
 	txn.commit();
@@ -120,13 +123,13 @@ TEST_F(CppApiTest, ColumnarBulkInsertCreatesNodesAndEdges) {
 			{"score", {int64_t{10}, int64_t{20}, int64_t{30}}},
 			{"active", {true, false, true}},
 	};
-	const auto ids = db->createNodesColumnar("ColumnarUser", 3, nodeColumns);
+	const auto ids = txn.createNodesColumnar("ColumnarUser", 3, nodeColumns);
 	ASSERT_EQ(ids.size(), 3U);
 
 	const std::vector<zyx::PropertyColumn> edgeColumns{
 			{"weight", {int64_t{4}, int64_t{8}}},
 	};
-	const auto edgeIds = db->createEdgesColumnar(
+	const auto edgeIds = txn.createEdgesColumnar(
 			"COLUMNAR_FOLLOWS", {ids[0], ids[1]}, {ids[1], ids[2]}, edgeColumns);
 	ASSERT_EQ(edgeIds.size(), 2U);
 
@@ -154,7 +157,7 @@ TEST_F(CppApiTest, ColumnarBulkInsertMaintainsPreexistingPropertyIndexes) {
 			{"id", {std::string("idx-c1"), std::string("idx-c2"), std::string("idx-c3")}},
 			{"score", {int64_t{101}, int64_t{202}, int64_t{303}}},
 	};
-	const auto ids = db->createNodesColumnar("ColumnarIndexedUser", 3, nodeColumns);
+	const auto ids = txn.createNodesColumnar("ColumnarIndexedUser", 3, nodeColumns);
 	ASSERT_EQ(ids.size(), 3U);
 	txn.commit();
 
@@ -194,7 +197,7 @@ TEST_F(CppApiTest, ColumnarBulkInsertValidatesShape) {
 
 TEST_F(CppApiTest, BulkTransactionCanBeFollowedByPropertyIndexBuild) {
 	auto txn = db->beginBulkTransaction();
-	auto ids = db->createNodes("BulkIndexedUser",
+	auto ids = txn.createNodes("BulkIndexedUser",
 							   {{{"id", std::string("bulk-index-1")}, {"score", int64_t{11}}},
 								{{"id", std::string("bulk-index-2")}, {"score", int64_t{22}}}});
 	ASSERT_EQ(ids.size(), 2U);
@@ -216,7 +219,7 @@ TEST_F(CppApiTest, BulkTransactionIndexBuildIncludesPreexistingNodes) {
 	db->save();
 
 	auto txn = db->beginBulkTransaction();
-	auto ids = db->createNodes("MixedBulkIndexUser",
+	auto ids = txn.createNodes("MixedBulkIndexUser",
 							   {{{"id", std::string("after")}, {"score", int64_t{5}}}});
 	ASSERT_EQ(ids.size(), 1U);
 	txn.commit();
@@ -280,7 +283,21 @@ TEST_F(CppApiTest, BeginTransactionOnClosedDb) {
 	db->close();
 
 	auto tempDir = fs::temp_directory_path();
-	std::string newPath = (tempDir / ("api_txn_test_" + std::to_string(std::rand()))).string();
+	const std::string newPath =
+			(tempDir / ("api_txn_test_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) +
+						"_" + std::to_string(std::rand())))
+					.string();
+	const auto removeArtifacts = [&newPath] {
+		std::error_code error;
+		for (const std::string &suffix: {"", ".wal", ".migration", ".cutover", ".legacy-backup", "-wal"}) {
+			fs::remove_all(newPath + suffix, error);
+			error.clear();
+		}
+	};
+	// Native relocatable storage owns its WAL sidecar independently of the data file.
+	// Remove both before and after the test so a repeated run cannot collide with
+	// a prior invocation that used the same process-global rand() sequence.
+	removeArtifacts();
 	auto newDb = std::make_unique<zyx::Database>(newPath);
 
 	auto txn = newDb->beginTransaction();
@@ -288,8 +305,8 @@ TEST_F(CppApiTest, BeginTransactionOnClosedDb) {
 	txn.rollback();
 
 	newDb->close();
-	if (fs::exists(newPath))
-		fs::remove_all(newPath);
+	newDb.reset();
+	removeArtifacts();
 }
 
 TEST_F(CppApiTest, TransactionExecuteAndQueryData) {

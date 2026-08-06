@@ -21,6 +21,7 @@
 #pragma once
 
 #include <iostream>
+#include <stdexcept>
 #include <string>
 #include <variant>
 #include <vector>
@@ -134,6 +135,8 @@ namespace graph::utils {
 						writePOD(os, arg.months);
 						writePOD(os, arg.days);
 						writePOD(os, arg.nanos);
+					} else if constexpr (std::is_same_v<T, PropertyValue::Bytes>) {
+						throw std::runtime_error("binary PropertyValue requires the native property codec");
 					}
 				},
 				value.getVariant());
@@ -187,6 +190,8 @@ namespace graph::utils {
 				int64_t nanos = readPOD<int64_t>(is);
 				return PropertyValue(TemporalDuration{months, days, nanos});
 			}
+			case PropertyType::BYTES:
+				throw std::runtime_error("binary PropertyValue is not supported by the legacy serializer");
 			default:
 				throw std::runtime_error("Invalid PropertyType tag in stream during deserialization.");
 		}

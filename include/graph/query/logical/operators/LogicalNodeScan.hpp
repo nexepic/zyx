@@ -39,6 +39,14 @@ struct CompositeEqualityPredicate {
 };
 
 /**
+ * @brief Equality predicate whose value is resolved from QueryContext at execution time.
+ */
+struct ParameterPropertyPredicate {
+    std::string key;
+    std::string parameter_name;
+};
+
+/**
  * @class LogicalNodeScan
  * @brief Leaf operator that scans nodes matching a variable, optional labels,
  *        and optional property predicates.
@@ -88,6 +96,7 @@ public:
         auto cloned = std::make_unique<LogicalNodeScan>(variable_, labels_, propertyPredicates_);
         cloned->rangePredicates_ = rangePredicates_;
         cloned->compositeEquality_ = compositeEquality_;
+        cloned->parameterPropertyPredicates_ = parameterPropertyPredicates_;
         cloned->preferredScanType_ = preferredScanType_;
         return cloned;
     }
@@ -109,6 +118,9 @@ public:
     [[nodiscard]] const std::vector<std::pair<std::string, graph::PropertyValue>> &getPropertyPredicates() const {
         return propertyPredicates_;
     }
+    [[nodiscard]] const std::vector<ParameterPropertyPredicate> &getParameterPropertyPredicates() const {
+        return parameterPropertyPredicates_;
+    }
 
     // -------------------------------------------------------------------------
     // Mutators (for optimizer use)
@@ -116,6 +128,9 @@ public:
 
     void setPropertyPredicates(std::vector<std::pair<std::string, graph::PropertyValue>> predicates) {
         propertyPredicates_ = std::move(predicates);
+    }
+    void setParameterPropertyPredicates(std::vector<ParameterPropertyPredicate> predicates) {
+        parameterPropertyPredicates_ = std::move(predicates);
     }
 
     // Range predicates
@@ -148,6 +163,7 @@ private:
     std::string variable_;
     std::vector<std::string> labels_;
     std::vector<std::pair<std::string, graph::PropertyValue>> propertyPredicates_;
+    std::vector<ParameterPropertyPredicate> parameterPropertyPredicates_;
     std::vector<RangePredicate> rangePredicates_;
     std::optional<CompositeEqualityPredicate> compositeEquality_;
     graph::query::execution::ScanType preferredScanType_ =

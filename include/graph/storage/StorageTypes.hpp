@@ -25,7 +25,11 @@ namespace graph::storage {
 	enum class OpenMode {
 		OPEN_CREATE_NEW_FILE, // Create new file. Fail if exists.
 		OPEN_EXISTING_FILE, // Open existing file. Fail if missing.
-		OPEN_CREATE_OR_OPEN_FILE // Open if exists, create if missing (Legacy behavior)
+		OPEN_CREATE_OR_OPEN_FILE, // Open if exists, create if missing (Legacy behavior)
+		// Opens an existing legacy file without acquiring a writable native handle.
+		// This remains available only for isolated legacy-format inspection paths;
+		// it never permits FileStorage lifecycle operations to modify the source.
+		OPEN_READ_ONLY_EXISTING_FILE
 	};
 
 }

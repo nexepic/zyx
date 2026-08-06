@@ -1,6 +1,6 @@
 ---
-title: Transaction Management
-description: Transaction state machine, concurrency control, and commit/rollback flows in ZYX.
+title: Legacy Transaction Management
+description: Historical transaction and WAL behavior retained only as background during the native-format re-architecture.
 category: Core Components
 categoryOrder: 2
 order: 6
@@ -9,7 +9,9 @@ projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
-# Transaction Management
+# Legacy Transaction Management
+
+> This page documents the retired transaction path that writes segment chains and an external WAL. It is historical background only. The clean native format is specified by the [Native Single-File Storage Re-architecture Plan](/en/docs/zyx/architecture/native-single-file-storage-plan): a transaction writes all candidate pages before atomically publishing one A/B Superblock metadata generation in the database file. In particular, an Edge record and its two global Packed B+Tree adjacency keys become visible together or not at all. Do not use the flow below to design new storage mutations.
 
 Transactions are managed by `TransactionManager`. `Transaction` serves as the external handle with RAII semantics.
 

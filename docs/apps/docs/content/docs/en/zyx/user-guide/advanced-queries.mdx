@@ -79,31 +79,27 @@ RETURN n.val;
 
 ## LOAD CSV
 
-Ingest CSV files directly within a query:
+`LOAD CSV` reads bounded local files inside the Cypher pipeline. For a normal native database, the import root is the directory containing the database file. For example, a database at `/srv/graphs/demo.zyx` may import `/srv/graphs/users.csv`:
 
 ```cypher
-LOAD CSV WITH HEADERS FROM 'file:///tmp/users.csv' AS row
+LOAD CSV WITH HEADERS FROM 'file:///srv/graphs/users.csv' AS row
 RETURN row.name, row.age;
 ```
 
 Custom field delimiter (e.g., TSV):
 
 ```cypher
-LOAD CSV WITH HEADERS FROM 'file:///tmp/users.tsv' AS row FIELDTERMINATOR '\t'
+LOAD CSV WITH HEADERS FROM 'file:///srv/graphs/users.tsv' AS row FIELDTERMINATOR '\t'
 RETURN row.name;
 ```
 
+Only local `file:///` URIs below the configured import root are accepted. Remote URLs, URI hosts, query/fragment forms, and paths that escape the root (including percent-encoded traversal) are rejected. CSV parsing also enforces configured file, row, record, column, and field limits. Use the CLI [`import`](import-export#path-2-cli-bulk-import) workflow for large datasets.
+
 ## Built-in Procedures
 
-### Config & Stats
+### Native Runtime Boundary
 
-| Procedure | Description |
-|---|---|
-| `dbms.listConfig()` | List all configuration items |
-| `dbms.getConfig(key)` | Get a specific config value |
-| `dbms.setConfig(key, value)` | Set a configuration item |
-| `dbms.showStats()` | View database statistics |
-| `dbms.resetStats()` | Reset statistics counters |
+The native logical runtime supports only procedures with a native, snapshot-pinned implementation. `dbms.listConfig()`, `dbms.getConfig(key)`, `dbms.setConfig(key, value)`, `dbms.showStats()`, and `dbms.resetStats()` are not available: they fail closed instead of routing through the retired State-manager path. A durable runtime-configuration service will be exposed only after it can participate in the same metadata WAL and atomic publication boundary as graph writes.
 
 ### Vector Index
 
@@ -146,7 +142,7 @@ Two key tools for query tuning:
 | Command | Purpose |
 |---|---|
 | `EXPLAIN` | View the logical plan structure without executing |
-| `PROFILE` | Execute the query and return actual timing and row counts per step |
+| `PROFILE` | Execute the query and return timing information; the native relocatable logical path currently adds one whole-plan summary row rather than per-operator metrics |
 
 ```mermaid
 flowchart LR

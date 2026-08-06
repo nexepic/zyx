@@ -18,9 +18,9 @@
  * limitations under the License.
  **/
 
-#include "QueryTestFixture.hpp"
+#include "LegacyQueryTestFixture.hpp"
 
-class CypherGdsTest : public QueryTestFixture {
+class CypherGdsTest : public LegacyQueryTestFixture {
 protected:
 	void createSocialGraph() {
 		(void) execute("CREATE (a:Person {name: 'Alice'})-[:KNOWS]->(b:Person {name: 'Bob'})");

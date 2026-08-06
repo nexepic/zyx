@@ -9,7 +9,9 @@
 
 #pragma once
 
+#include <cstddef>
 #include <fstream>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -17,10 +19,22 @@
 
 namespace graph::query::execution {
 
+	struct CsvReaderLimits {
+		size_t maximum_record_bytes = 1U * 1024U * 1024U;
+		size_t maximum_columns = 16'384U;
+		size_t maximum_field_bytes = 1U * 1024U * 1024U;
+	};
+
 class CsvReader {
 public:
-	explicit CsvReader(const std::string &filePath, const std::string &delimiter = ",")
-		: delimiter_(delimiter) {
+	explicit CsvReader(const std::string &filePath, const std::string &delimiter = ",",
+					   CsvReaderLimits limits = {})
+		: delimiter_(delimiter), limits_(limits) {
+		if (delimiter_.empty() || delimiter_.size() > 8U || delimiter_.find_first_of("\r\n\"") != std::string::npos ||
+			limits_.maximum_record_bytes == 0U || limits_.maximum_columns == 0U ||
+			limits_.maximum_field_bytes == 0U || limits_.maximum_field_bytes > limits_.maximum_record_bytes) {
+			throw std::invalid_argument("CsvReader: invalid delimiter or resource limits");
+		}
 		file_.open(filePath, std::ios::in);
 		if (!file_.is_open()) {
 			throw std::runtime_error("CsvReader: cannot open file: " + filePath);
@@ -67,6 +81,7 @@ public:
 private:
 	std::ifstream file_;
 	std::string delimiter_;
+	CsvReaderLimits limits_;
 	bool peeked_ = false;
 	std::vector<std::string> peekedFields_;
 
@@ -74,17 +89,59 @@ private:
 		result.clear();
 		std::string line;
 		bool inQuote = false;
+		bool fieldStart = true;
+		bool quoteClosed = false;
 
 		while (std::getline(file_, line)) {
+			if (!line.empty() && line.back() == '\r') {
+				line.pop_back();
+			}
+			const size_t separatorBytes = result.empty() ? 0U : 1U;
+			if (line.size() > limits_.maximum_record_bytes - separatorBytes ||
+				result.size() > limits_.maximum_record_bytes - separatorBytes - line.size()) {
+				throw std::runtime_error("CsvReader: logical record exceeds its byte bound");
+			}
 			if (result.empty()) {
 				result = line;
 			} else {
 				result += "\n" + line;
 			}
 
-			// Count unescaped quotes to determine if we're inside a quoted field
-			for (char c : line) {
-				if (c == '"') inQuote = !inQuote;
+			// Quotes are structural only at a field boundary. A quote in an
+			// unquoted field remains literal for backwards-compatible CSV input.
+			for (size_t index = 0U; index < line.size(); ++index) {
+				if (inQuote) {
+					if (line[index] != '"') {
+						continue;
+					}
+					if (index + 1U < line.size() && line[index + 1U] == '"') {
+						++index;
+						continue;
+					}
+					inQuote = false;
+					quoteClosed = true;
+					continue;
+				}
+				if (quoteClosed) {
+					if (matchDelimiter(line, index)) {
+						index += delimiter_.size() - 1U;
+						fieldStart = true;
+						quoteClosed = false;
+					} else {
+						fieldStart = false;
+						quoteClosed = false;
+					}
+					continue;
+				}
+				if (fieldStart && line[index] == '"') {
+					inQuote = true;
+					fieldStart = false;
+				} else if (matchDelimiter(line, index)) {
+					index += delimiter_.size() - 1U;
+					fieldStart = true;
+				} else {
+					fieldStart = false;
+				}
 			}
 
 			if (!inQuote) {
@@ -92,7 +149,9 @@ private:
 			}
 		}
 
-		// Handle last line without trailing newline
+		if (inQuote) {
+			throw std::runtime_error("CsvReader: unterminated quoted field");
+		}
 		return !result.empty();
 	}
 
@@ -105,41 +164,67 @@ private:
 
 		std::string field;
 		bool inQuotes = false;
+		bool quoteClosed = false;
 		size_t i = 0;
+		const auto append = [&](char value) {
+			if (field.size() == limits_.maximum_field_bytes) {
+				throw std::runtime_error("CsvReader: field exceeds its byte bound");
+			}
+			field += value;
+		};
+		const auto appendField = [&]() {
+			if (fields.size() == limits_.maximum_columns) {
+				throw std::runtime_error("CsvReader: record exceeds its column bound");
+			}
+			fields.push_back(std::move(field));
+			field.clear();
+			quoteClosed = false;
+		};
 
 		while (i < line.size()) {
 			if (inQuotes) {
 				if (line[i] == '"') {
 					if (i + 1 < line.size() && line[i + 1] == '"') {
 						// Escaped quote
-						field += '"';
+						append('"');
 						i += 2;
 					} else {
 						// End of quoted field
 						inQuotes = false;
+						quoteClosed = true;
 						i++;
 					}
 				} else {
-					field += line[i];
+					append(line[i]);
 					i++;
 				}
 			} else {
+				if (quoteClosed) {
+					if (!matchDelimiter(line, i)) {
+						throw std::runtime_error("CsvReader: unexpected data after a quoted field");
+					}
+					appendField();
+					i += delimiter_.size();
+					continue;
+				}
 				if (line[i] == '"' && field.empty()) {
 					// Start of quoted field
 					inQuotes = true;
 					i++;
 				} else if (matchDelimiter(line, i)) {
-					fields.push_back(field);
-					field.clear();
+					appendField();
 					i += delimiter_.size();
 				} else {
-					field += line[i];
+					append(line[i]);
 					i++;
 				}
 			}
 		}
 
-		fields.push_back(field);
+		if (inQuotes) {
+			throw std::runtime_error("CsvReader: unterminated quoted field");
+		}
+		appendField();
 		return fields;
 	}
 

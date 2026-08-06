@@ -24,7 +24,7 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
 #include <thread>
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/core/TransactionManager.hpp"
 #include "graph/storage/wal/WALManager.hpp"
 
@@ -37,7 +37,7 @@ protected:
 		testDbPath = fs::temp_directory_path() / ("test_txnmgr_" + boost::uuids::to_string(uuid) + ".zyx");
 		fs::remove_all(testDbPath);
 
-		db = std::make_unique<graph::Database>(testDbPath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testDbPath.string());
 		db->open();
 	}
 
@@ -52,7 +52,7 @@ protected:
 	}
 
 	fs::path testDbPath;
-	std::unique_ptr<graph::Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 };
 
 TEST_F(TransactionManagerTest, BeginCreatesActiveTransaction) {
@@ -209,7 +209,7 @@ TEST_F(TransactionManagerTest, CommitWithDataPersists) {
 	{
 		auto txn = db->beginTransaction();
 		// Perform some data operation within the transaction
-		auto storage = db->getStorage();
+		auto storage = db->storage();
 		auto dm = storage->getDataManager();
 		graph::Node node(0, dm->getOrCreateTokenId("TestLabel"));
 		dm->addNode(node);
@@ -217,7 +217,7 @@ TEST_F(TransactionManagerTest, CommitWithDataPersists) {
 	}
 
 	// Verify data persists after commit
-	auto storage = db->getStorage();
+	auto storage = db->storage();
 	auto dm = storage->getDataManager();
 	// The node should have been created with a valid ID
 	EXPECT_TRUE(dm->getIdAllocator(graph::EntityType::Node)->getCurrentMaxId() > 0);
@@ -225,7 +225,7 @@ TEST_F(TransactionManagerTest, CommitWithDataPersists) {
 
 TEST_F(TransactionManagerTest, RollbackRevertsData) {
 	// Exercises the full rollback path: dm->rollbackActiveTransaction, WAL rollback, checkpoint
-	auto storage = db->getStorage();
+	auto storage = db->storage();
 	auto dm = storage->getDataManager();
 	{
 		auto txn = db->beginTransaction();
@@ -249,7 +249,7 @@ TEST_F(TransactionManagerTest, AutoRollbackWithOpenStorage) {
 	// and dm check (line 92) during auto-rollback
 	{
 		auto txn = db->beginTransaction();
-		auto storage = db->getStorage();
+		auto storage = db->storage();
 		auto dm = storage->getDataManager();
 		graph::Node node(0, dm->getOrCreateTokenId("AutoRollbackLabel"));
 		dm->addNode(node);
@@ -273,9 +273,9 @@ TEST(TransactionManagerNoWALTest, TransactionWithoutWAL) {
 	auto testPath = fs::temp_directory_path() / ("test_txnmgr_nowal_" + boost::uuids::to_string(uuid) + ".zyx");
 	fs::remove_all(testPath);
 
-	auto testDb = std::make_unique<graph::Database>(testPath.string());
+	auto testDb = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testPath.string());
 	testDb->open();
-	auto storage = testDb->getStorage();
+	auto storage = testDb->storage();
 
 	// Create a TransactionManager directly with null WAL manager
 	graph::TransactionManager txnMgr(storage, nullptr);
@@ -313,9 +313,9 @@ TEST(TransactionManagerNoWALTest, CommitNonActiveTransactionEarlyReturn) {
 	auto testPath = fs::temp_directory_path() / ("test_txnmgr_commit_noop_" + boost::uuids::to_string(uuid) + ".zyx");
 	fs::remove_all(testPath);
 
-	auto testDb = std::make_unique<graph::Database>(testPath.string());
+	auto testDb = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testPath.string());
 	testDb->open();
-	auto storage = testDb->getStorage();
+	auto storage = testDb->storage();
 	graph::TransactionManager txnMgr(storage, nullptr);
 
 	auto txn = txnMgr.begin();
@@ -339,9 +339,9 @@ TEST(TransactionManagerNoWALTest, RollbackNonActiveTransactionEarlyReturn) {
 	auto testPath = fs::temp_directory_path() / ("test_txnmgr_rollback_noop_" + boost::uuids::to_string(uuid) + ".zyx");
 	fs::remove_all(testPath);
 
-	auto testDb = std::make_unique<graph::Database>(testPath.string());
+	auto testDb = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testPath.string());
 	testDb->open();
-	auto storage = testDb->getStorage();
+	auto storage = testDb->storage();
 	graph::TransactionManager txnMgr(storage, nullptr);
 
 	auto txn = txnMgr.begin();
@@ -411,9 +411,9 @@ TEST_F(TransactionManagerTest, RollbackAfterStorageClosed) {
 	auto testPath2 = fs::temp_directory_path() / ("test_txnmgr_closed_" + boost::uuids::to_string(uuid) + ".zyx");
 	fs::remove_all(testPath2);
 
-	auto testDb2 = std::make_unique<graph::Database>(testPath2.string());
+	auto testDb2 = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testPath2.string());
 	testDb2->open();
-	auto storage2 = testDb2->getStorage();
+	auto storage2 = testDb2->storage();
 	graph::TransactionManager txnMgr2(storage2, nullptr);
 
 	auto txn = txnMgr2.begin();
@@ -443,9 +443,9 @@ TEST(TransactionManagerClosedWALTest, TransactionWithClosedWAL) {
 	auto testPath = fs::temp_directory_path() / ("test_txnmgr_closedwal_" + boost::uuids::to_string(uuid) + ".zyx");
 	fs::remove_all(testPath);
 
-	auto testDb = std::make_unique<graph::Database>(testPath.string());
+	auto testDb = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testPath.string());
 	testDb->open();
-	auto storage = testDb->getStorage();
+	auto storage = testDb->storage();
 
 	// Create a WAL manager, open it, then close it
 	auto walMgr = std::make_shared<graph::storage::wal::WALManager>();
@@ -487,9 +487,9 @@ TEST(TransactionManagerTimeoutTest, TimeoutOnBusyMutex) {
 	auto testPath = fs::temp_directory_path() / ("test_txnmgr_timeout_" + boost::uuids::to_string(uuid) + ".zyx");
 	fs::remove_all(testPath);
 
-	auto testDb = std::make_unique<graph::Database>(testPath.string());
+	auto testDb = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testPath.string());
 	testDb->open();
-	auto storage = testDb->getStorage();
+	auto storage = testDb->storage();
 
 	// Shared TransactionManager so both threads use the same mutex
 	graph::TransactionManager txnMgr(storage, nullptr);
@@ -537,9 +537,9 @@ TEST(ConcurrentReadTest, MultipleReadTransactionsSimultaneously) {
 	auto testPath = fs::temp_directory_path() / ("test_conc_read_" + boost::uuids::to_string(uuid) + ".zyx");
 	fs::remove_all(testPath);
 
-	auto testDb = std::make_unique<graph::Database>(testPath.string());
+	auto testDb = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testPath.string());
 	testDb->open();
-	auto storage = testDb->getStorage();
+	auto storage = testDb->storage();
 	graph::TransactionManager txnMgr(storage, nullptr);
 
 	constexpr int NUM_READERS = 4;
@@ -583,9 +583,9 @@ TEST(ConcurrentReadTest, ReadTransactionGetsSnapshot) {
 	auto testPath = fs::temp_directory_path() / ("test_read_snapshot_" + boost::uuids::to_string(uuid) + ".zyx");
 	fs::remove_all(testPath);
 
-	auto testDb = std::make_unique<graph::Database>(testPath.string());
+	auto testDb = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testPath.string());
 	testDb->open();
-	auto storage = testDb->getStorage();
+	auto storage = testDb->storage();
 	graph::TransactionManager txnMgr(storage, nullptr);
 
 	auto txn = txnMgr.beginReadOnly();
@@ -609,9 +609,9 @@ TEST(ConcurrentReadTest, ReadDoesNotBlockRead) {
 	auto testPath = fs::temp_directory_path() / ("test_read_no_block_" + boost::uuids::to_string(uuid) + ".zyx");
 	fs::remove_all(testPath);
 
-	auto testDb = std::make_unique<graph::Database>(testPath.string());
+	auto testDb = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testPath.string());
 	testDb->open();
-	auto storage = testDb->getStorage();
+	auto storage = testDb->storage();
 	graph::TransactionManager txnMgr(storage, nullptr);
 
 	// First reader
@@ -639,9 +639,9 @@ TEST(ConcurrentReadTest, WriteBlocksOnActiveReaders) {
 	auto testPath = fs::temp_directory_path() / ("test_write_blocks_" + boost::uuids::to_string(uuid) + ".zyx");
 	fs::remove_all(testPath);
 
-	auto testDb = std::make_unique<graph::Database>(testPath.string());
+	auto testDb = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testPath.string());
 	testDb->open();
-	auto storage = testDb->getStorage();
+	auto storage = testDb->storage();
 	graph::TransactionManager txnMgr(storage, nullptr);
 
 	// Start a reader
@@ -670,9 +670,9 @@ TEST(ConcurrentReadTest, HasActiveTransactionOnlyTracksWrites) {
 	auto testPath = fs::temp_directory_path() / ("test_has_active_" + boost::uuids::to_string(uuid) + ".zyx");
 	fs::remove_all(testPath);
 
-	auto testDb = std::make_unique<graph::Database>(testPath.string());
+	auto testDb = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testPath.string());
 	testDb->open();
-	auto storage = testDb->getStorage();
+	auto storage = testDb->storage();
 	graph::TransactionManager txnMgr(storage, nullptr);
 
 	// Read-only transaction should NOT set hasActiveTransaction
@@ -700,9 +700,9 @@ TEST(ConcurrentReadTest, ReadRollbackReleasesLock) {
 	auto testPath = fs::temp_directory_path() / ("test_read_rollback_" + boost::uuids::to_string(uuid) + ".zyx");
 	fs::remove_all(testPath);
 
-	auto testDb = std::make_unique<graph::Database>(testPath.string());
+	auto testDb = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testPath.string());
 	testDb->open();
-	auto storage = testDb->getStorage();
+	auto storage = testDb->storage();
 	graph::TransactionManager txnMgr(storage, nullptr);
 
 	auto readTxn = txnMgr.beginReadOnly();
@@ -730,9 +730,9 @@ TEST(ConcurrentReadTest, MultipleReadersOneWriter) {
 	auto testPath = fs::temp_directory_path() / ("test_multi_rw_" + boost::uuids::to_string(uuid) + ".zyx");
 	fs::remove_all(testPath);
 
-	auto testDb = std::make_unique<graph::Database>(testPath.string());
+	auto testDb = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testPath.string());
 	testDb->open();
-	auto storage = testDb->getStorage();
+	auto storage = testDb->storage();
 	graph::TransactionManager txnMgr(storage, nullptr);
 
 	constexpr int NUM_READERS = 3;
@@ -781,9 +781,9 @@ TEST(TransactionManagerReadOnlyTimeoutTest, ReadOnlyTimeoutBlockedByWriter) {
 	auto testPath = fs::temp_directory_path() / ("test_ro_timeout_" + boost::uuids::to_string(uuid) + ".zyx");
 	fs::remove_all(testPath);
 
-	auto testDb = std::make_unique<graph::Database>(testPath.string());
+	auto testDb = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testPath.string());
 	testDb->open();
-	auto storage = testDb->getStorage();
+	auto storage = testDb->storage();
 
 	graph::TransactionManager txnMgr(storage, nullptr);
 
@@ -814,9 +814,9 @@ TEST(TransactionManagerCheckpointTest, CommitTriggersWALCheckpointWhenThresholdZ
 	auto testPath = fs::temp_directory_path() / ("test_txnmgr_ckpt_" + boost::uuids::to_string(uuid) + ".zyx");
 	fs::remove_all(testPath);
 
-	auto testDb = std::make_unique<graph::Database>(testPath.string());
+	auto testDb = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testPath.string());
 	testDb->open();
-	auto storage = testDb->getStorage();
+	auto storage = testDb->storage();
 
 	// Create a WAL manager with threshold=0 so shouldCheckpoint() returns true
 	// immediately after the first write.

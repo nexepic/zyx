@@ -12,7 +12,6 @@
 #include <string>
 #include <vector>
 
-#include "graph/core/Database.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/debug/PerfTrace.hpp"
@@ -31,11 +30,12 @@ protected:
 	void SetUp() override {
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath = fs::temp_directory_path() / ("test_indexManager_bulk_" + to_string(uuid) + ".dat");
-		database = std::make_unique<graph::Database>(testFilePath.string());
-		database->open();
-		fileStorage = database->getStorage();
+		fileStorage = std::make_shared<graph::storage::FileStorage>(
+				testFilePath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
+		fileStorage->open();
 		dataManager = fileStorage->getDataManager();
-		indexManager = database->getQueryEngine()->getIndexManager();
+		indexManager = std::make_shared<graph::query::indexes::IndexManager>(fileStorage);
+		indexManager->initialize();
 	}
 
 	void TearDown() override {
@@ -43,17 +43,15 @@ protected:
 		graph::debug::PerfTrace::reset();
 		indexManager.reset();
 		dataManager.reset();
-		fileStorage.reset();
-		if (database) {
-			database->close();
+		if (fileStorage) {
+			fileStorage->close();
 		}
-		database.reset();
+		fileStorage.reset();
 		std::error_code ec;
 		fs::remove(testFilePath, ec);
 	}
 
 	fs::path testFilePath;
-	std::unique_ptr<graph::Database> database;
 	std::shared_ptr<graph::storage::FileStorage> fileStorage;
 	std::shared_ptr<graph::storage::DataManager> dataManager;
 	std::shared_ptr<graph::query::indexes::IndexManager> indexManager;

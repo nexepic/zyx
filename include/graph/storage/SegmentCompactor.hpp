@@ -58,7 +58,7 @@ namespace graph::storage {
 							   uint32_t &targetNextIndex, uint8_t *newBitmap,
 							   const SegmentHeader &sourceHeader, const SegmentHeader &targetHeader);
 
-		bool copySegmentData(uint64_t sourceOffset, uint64_t destinationOffset) const;
+		bool copySegmentData(uint64_t sourceOffset, uint64_t destinationOffset, uint32_t type) const;
 		void updateSegmentChain(uint64_t newOffset, const SegmentHeader &info) const;
 		std::vector<uint64_t> findRelocatableSegments() const;
 		uint64_t calculateCurrentFileSize() const;

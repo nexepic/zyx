@@ -30,7 +30,7 @@ bool ok = db.openIfExists();
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| 构造函数 | `Database(const string& path, OpenMode mode = OPEN_CREATE_OR_OPEN_FILE, size_t cacheSize = 10000)` | 创建 Database 对象，`path` 为数据库文件路径 |
+| 构造函数 | `Database(const string& path, OpenMode mode = OPEN_CREATE_OR_OPEN_FILE, size_t cacheSize = 64 * 1024 * 1024)` | 创建 Database 对象，`path` 为数据库文件路径；`cacheSize` 是统一 4 KiB Buffer Pool 的字节上限，最小为 4096 字节 |
 | `open` | `void open() const` | 打开数据库，失败时抛异常 |
 | `openIfExists` | `bool openIfExists() const` | 仅在文件存在时打开，不存在返回 `false` |
 | `close` | `void close() const` | 刷新并关闭数据库 |
@@ -41,7 +41,7 @@ bool ok = db.openIfExists();
 ### 查询执行
 
 ```cpp
-// 自动提交查询（写语句自动包事务）
+// 自动提交查询（受支持的 logical mutation 会原子发布）
 zyx::Result result = db.execute("CREATE (n:Person {name: 'Alice'})");
 
 // 参数化查询
@@ -75,7 +75,7 @@ tx.commit();
 
 // 面向大型直接 API 导入的批量写事务
 auto bulkTx = db.beginBulkTransaction();
-db.createNodes("Person", {{{"name", std::string("Ada")}}});
+bulkTx.createNodes("Person", {{{"name", std::string("Ada")}}});
 bulkTx.commit();
 
 // 只读事务（快照隔离）
@@ -86,14 +86,19 @@ auto result = roTx.execute("MATCH (n) RETURN count(n)");
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `beginTransaction` | `Transaction beginTransaction()` | 开始读写事务，若有其他写事务活跃则阻塞 |
+| `beginTransaction` | `Transaction beginTransaction()` | 开始带固定快照的乐观读写事务 |
 | `beginBulkTransaction` | `Transaction beginBulkTransaction()` | 开始面向大型直接 API 导入的读写事务。`commit()` 保证 WAL 持久化；主数据库 checkpoint 可延迟到 `save()` 或正常 `close()`。 |
 | `beginReadOnlyTransaction` | `Transaction beginReadOnlyTransaction()` | 开始只读事务，快照隔离，可多并发 |
-| `hasActiveTransaction` | `bool hasActiveTransaction() const` | 检查是否有活跃写事务 |
+| `hasActiveTransaction` | `bool hasActiveTransaction() const` | 检查是否有任意活跃公共事务 |
+
+显式事务拥有自己的暂存工作。需要读取 provisional state 时，应使用 `Transaction::execute`、事务绑定的 `createNode`/`createEdge`、事务绑定的行式/列式批量方法、`getShortestPath` 和 `bfs`；这些操作在 `commit()` 前保持 read-your-writes 可见性。`Database::execute`、直接 `Database` 写入和数据库级算法始终是独立的已发布快照操作；任意公共事务处于活动状态时，直接数据库写入会被拒绝，而不会根据线程局部状态猜测其归属。只读事务会拒绝全部事务绑定写入。
 
 ### 高性能写入 API
 
 这些方法绕过 Cypher 解析器，吞吐量最大。所有创建方法均返回 ID。
+
+`createEdge`、`createEdges` 和 `createEdgesColumnar` 的 `edgeType` 可以为空。空值会创建无类型关系，
+而不是创建一个虚构名称的关系；该关系可被无类型遍历读取，并且不会写入具名关系类型索引。
 
 ```cpp
 // 创建单标签节点（返回节点 ID）
@@ -142,9 +147,26 @@ auto columnarEdgeIds = db.createEdgesColumnar(
 | `createNode` | `int64_t createNode(const vector<string>& labels, const unordered_map<string, Value>& props) const` | 创建多标签节点，返回节点 ID |
 | `createNodes` | `vector<int64_t> createNodes(const string& label, const vector<unordered_map<string, Value>>& propsList) const` | 批量创建同标签节点，返回 ID 列表 |
 | `createNodesColumnar` | `vector<int64_t> createNodesColumnar(const string& label, size_t count, const vector<PropertyColumn>& columns) const` | 按属性列批量创建同标签节点，适合已经按列持有数据的导入场景 |
-| `createEdge` | `int64_t createEdge(int64_t sourceId, int64_t targetId, const string& edgeType, const unordered_map<string, Value>& props = {}) const` | 通过节点 ID 创建边，返回边 ID |
-| `createEdges` | `vector<int64_t> createEdges(const string& edgeType, const vector<tuple<int64_t, int64_t, unordered_map<string, Value>>>& edges) const` | 批量创建同类型边，返回边 ID 列表 |
-| `createEdgesColumnar` | `vector<int64_t> createEdgesColumnar(const string& edgeType, const vector<int64_t>& sourceIds, const vector<int64_t>& targetIds, const vector<PropertyColumn>& columns = {}) const` | 按 source/target ID 列与属性列批量创建边 |
+| `createEdge` | `int64_t createEdge(int64_t sourceId, int64_t targetId, const string& edgeType, const unordered_map<string, Value>& props = {}) const` | 通过节点 ID 创建边；空 `edgeType` 创建无类型关系，返回边 ID |
+| `createEdges` | `vector<int64_t> createEdges(const string& edgeType, const vector<tuple<int64_t, int64_t, unordered_map<string, Value>>>& edges) const` | 批量创建同类型边；空类型创建无类型关系，返回边 ID 列表 |
+| `createEdgesColumnar` | `vector<int64_t> createEdgesColumnar(const string& edgeType, const vector<int64_t>& sourceIds, const vector<int64_t>& targetIds, const vector<PropertyColumn>& columns = {}) const` | 按 source/target ID 列与属性列批量创建边；空类型创建无类型关系 |
+
+### 二进制值
+
+`zyx::Bytes` 是拥有数据的 `std::vector<std::uint8_t>`，用于任意二进制 Property。它与用于数值向量的
+`std::vector<float>` 是不同类型。
+
+```cpp
+zyx::Bytes source = {0x00, 0x7f, 0xff};
+const int64_t nodeId = db.createNode("Artifact", {{"payload", source}});
+
+zyx::Result result = db.execute(
+    "MATCH (n:Artifact) RETURN n.payload AS payload");
+// 二进制结果通过 Result::get()/值转换以 zyx::Bytes 返回。
+```
+
+二进制值会在 API 边界复制。对于很大的 payload，应使用 LargeValue-backed 存储，而不是将无界数据塞入单个
+Property collection；逻辑 Property API 保持不变。
 
 ### Schema API
 
@@ -160,7 +182,7 @@ if (!ok) {
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `createNodePropertyIndexes` | `bool createNodePropertyIndexes(const string& label, const vector<string>& properties) const` | 针对同一个 label 协调创建多个节点属性索引。只有全部索引创建成功时才返回 `true` |
+| `createNodePropertyIndexes` | `bool createNodePropertyIndexes(const string& label, const vector<string>& properties) const` | 针对同一个 label 协调创建多个节点属性索引。完整批次会同时可见；校验或历史数据构建失败时不会暴露部分 definition。只有全部索引创建成功时才返回 `true` |
 
 ### 图算法
 

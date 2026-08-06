@@ -1,6 +1,6 @@
 ---
-title: B+Tree Indexing
-description: ZYX uses B+Tree data structures for efficient indexing of labels and properties, providing fast lookups, range queries, and ordered traversal. The imp
+title: Packed B+Tree Indexing
+description: The clean native ZYX format uses immutable 4 KiB Packed B+Tree pages for scalar indexes and global graph adjacency.
 category: Indexing
 categoryOrder: 3
 order: 11
@@ -9,444 +9,166 @@ projectLabel: ZYX
 projectDescription: High-performance embedded graph database engine
 projectOrder: 1
 ---
-# B+Tree Indexing
 
-ZYX uses B+Tree data structures for efficient indexing of labels and properties, providing fast lookups, range queries, and ordered traversal. The implementation is optimized for disk-based storage with support for large keys and values through blob storage.
+# Packed B+Tree Indexing
 
-## Overview
+> This document specifies the clean native storage format. It deliberately replaces the retired fixed-record index tree: there are no 256-byte index nodes, parent pointers, value vectors, Blob overflow fields, or compatibility readers for old database files.
 
-B+Tree is a self-balancing tree data structure that maintains sorted data and allows searches, sequential access, insertions, and deletions in logarithmic time. It is optimized for storage systems where data is stored on disk.
+## Purpose and Scope
 
-### Key Features
+ZYX uses one reusable immutable Packed B+Tree implementation for ordered persistent access paths. A tree maps a canonical byte key to one of two explicitly declared leaf-value layouts:
 
-- **Balanced Structure**: All leaf nodes at the same level
-- **Ordered Data**: Keys stored in sorted order for range queries
-- **High Fanout**: Minimizes tree height for fewer disk I/Os
-- **Leaf Linking**: Doubly-linked leaf nodes for sequential access
-- **Node Splitting/Merging**: Automatic balancing on insert/delete
-- **Blob Support**: Handles oversized keys and value lists
+- `BLVL_U64`: a leaf key maps to one unsigned 64-bit logical value;
+- `BLVL_EMPTY`: a leaf key has no physical value and its presence is the result.
 
-## B+Tree vs B-Tree
+The first layout serves scalar and catalog access paths. The second removes needless payload from membership-style indexes, including ordinary graph adjacency. A tree declares its layout in every page header; a reader must reject a root or leaf whose layout does not match the tree it is opening.
 
-### Why B+Tree for Databases?
+The tree is an index structure, not an entity store. Node and Edge records remain in Entity pages; a B+Tree leaf never embeds an Edge record or shares an Entity page. The ordinary graph specialization is documented in [Relationship Traversal](/en/docs/zyx/algorithms/relationship-traversal).
 
-```mermaid
-graph TD
-    A[B-Tree vs B+Tree] --> B[B-Tree]
-    A --> C[B+Tree]
+## Durable Topology
 
-    B --> B1[Keys in internal nodes]
-    B --> B2[Data pointers in all nodes]
-    B --> B3[Faster single record lookup]
-    B --> B4[Slower range queries]
-
-    C --> C1[Keys only in internal nodes]
-    C --> C2[Data only in leaf nodes]
-    C --> C3[Optimized for range scans]
-    C --> C4[Sequential leaf access]
-```
-
-**Key Differences**:
-
-| Feature | B-Tree | B+Tree |
-|---------|--------|--------|
-| Data Storage | All nodes | Leaf nodes only |
-| Leaf Links | None | Doubly-linked |
-| Range Queries | Slower (tree traversal) | Faster (sequential scan) |
-| Fanout | Lower | Higher (more pointers) |
-| Disk I/O | More for ranges | Optimized for sequential access |
-
-## B+Tree Structure
-
-### Node Layout
+Each tree has a stable logical `IndexId`. The current root is resolved from the snapshot-pinned Index Root Directory, rather than being stored in an Entity, a mutable in-memory map, or a file offset.
 
 ```mermaid
-graph TD
-    A[Root Node] --> B[Internal Node]
-    A --> C[Internal Node]
-    B --> D[Leaf 1]
-    B --> E[Leaf 2]
-    C --> F[Leaf 3]
-    C --> G[Leaf 4]
-
-    D -.-> E
-    E -.-> F
-    F -.-> G
+flowchart LR
+    S["A/B Superblock generation"] --> D["Index Root Directory"]
+    D --> I["IndexId -> root PageId and generation"]
+    I --> R["Packed B+Tree root"]
+    R --> P["4 KiB internal and leaf pages"]
+    P --> PD["Page Directory route"]
+    PD --> F["Physical frame in SGK_INDEX_PAGE_POOL"]
 ```
 
-**B+Tree Structure:**
-- Root Node: Level 2
-- Internal Nodes: Level 1
-- Leaf Nodes: Level 0 (all at same level)
-- Doubly-linked leaf nodes for sequential access
+`PageId` is logical. Relocation changes the Page Directory route only; separator child references, root directory entries, and public continuations never need a physical-offset rewrite. An empty tree has no root-directory entry. The first insertion creates its root, and removal of the final entry removes the mapping atomically.
 
-### Internal Node Structure
+All pages belonging to an index use `SGK_INDEX_PAGE_POOL` and an owner identity that includes the owning `IndexId` and page role. The pool can share physical frames among compatible Index pages, but pages from different logical structures never share a 4 KiB page. Unknown page kinds, owner identities, layout versions, value layouts, or routing metadata fail closed.
 
-Internal nodes contain separator keys and child pointers. Each child pointer is associated with a separator key that divides the key space. The first child has a dummy key (representing negative infinity) and subsequent children are paired with the key value that separates their key ranges.
+## Page Format
+
+Every page is exactly 4 KiB and is decoded through an explicit disk codec. The public format is byte-oriented; C++ object layout, host endianness, padding, and pointer width are never persisted.
+
+| Area | Responsibility |
+|---|---|
+| Header | Format version, page kind, owner, `IndexId`, generation/LSN, checksum, encoded byte bounds, and declared leaf-value layout |
+| Packed entry area | Ordered encoded leaf keys or internal separator/child pairs |
+| Restart table | Bounded search anchors for prefix-compressed entries |
+| Trailer or protected metadata | Codec-defined integrity information and bounded offsets |
+
+Internal entries route by a separator and a logical child `PageId`. Leaf entries contain canonical keys and only the value bytes permitted by the declared layout. Internal pages are always valued child-reference pages; `BLVL_EMPTY` applies only to leaves.
+
+Keys are prefix-compressed within a page. Restart points make a binary search land at a bounded decode position, so a point lookup does not reconstruct the whole leaf. Split, merge, occupancy, separator truncation, restart spacing, and fan-out are determined from encoded bytes by the shared layout solver. They are policy/configuration results, not handwritten entry-count constants in callers or documentation.
+
+Leaves have a validated forward sibling route for range scans. A backward link is not required by the durable format. During copy-on-write mutation, every changed boundary and separator is rebuilt into the candidate generation before its root is published; a cursor must never follow a sibling that is inconsistent with its pinned root.
+
+## Canonical Keys and Comparators
+
+A tree supplies an explicit key codec and comparator. The codec validates input, produces one canonical byte representation, and decodes on read. Numeric fields use an explicitly selected wire encoding; when lexicographic byte order must match unsigned numeric order, the codec emits the applicable numeric components in canonical big-endian comparison order. This comparator encoding does not change other persisted wire fields.
+
+The comparator must define a strict total order. It is responsible for duplicate identity, lower/upper bounds, internal separators, page ordering, online mutations, bulk construction, integrity checks, and recovery. No caller may compare host-memory structs or assume that one architecture's byte layout is portable to another.
+
+Scalar indexes use a unique composite key that ends in the logical entity identity. For example, a property access path is ordered as:
+
+```text
+(canonical PropertyValue, EntityId) -> empty
+```
+
+The EntityId suffix is not redundant: it represents one index entry per entity, gives duplicate property values a deterministic order, and makes exact deletion independent of a variable-length value list. It is more compact and mutation-friendly than storing a separate vector of EntityIds for every distinct property value. The user-visible property data remains authoritative in the Entity/Property store.
+
+## Read Path and Cursor Contract
+
+A point lookup descends from the snapshot root through internal separators to one leaf. A range lookup descends once to its lower bound, scans entries in order, and advances across validated forward siblings until the upper bound is reached.
 
 ```mermaid
-classDiagram
-    class InternalNode {
-        +NodeType: INTERNAL
-        +EntryCount: 3
-        +ChildCount: 4
-        +Level: 1
-        +ParentId: 100
-        +getChildren()
-    }
-
-    class ChildEntry {
-        +Key: PropertyValue
-        +ChildId: int64_t
-    }
-
-    InternalNode "1" --> "4" ChildEntry : contains
-    ChildEntry : DummyKey → ChildId 200
-    ChildEntry : Key 50 → ChildId 201
-    ChildEntry : Key 100 → ChildId 202
-    ChildEntry : Key 150 → ChildId 203
+flowchart LR
+    A["Pinned metadata snapshot"] --> B["Resolve IndexId root"]
+    B --> C["Descend internal separators"]
+    C --> D["Seek lower bound in leaf"]
+    D --> E["Decode matching entries"]
+    E --> F{"Range complete?"}
+    F -->|No| G["Follow validated forward sibling"]
+    G --> E
+    F -->|Yes| H["Return logical continuation"]
 ```
 
-**Search Logic**: For a key K, find the largest separator key that is less than or equal to K, then traverse to that child.
+The cursor pins one snapshot and retains only bounded routing/search state, one current leaf pin, and a logical resume key. It must not retain a physical frame, slot, byte offset, or unbounded materialized result. A continuation is valid only for its snapshot, tree identity, comparator, and requested range; a foreign or malformed continuation fails closed. Resume is strict-after the last emitted logical key, which makes it correct across relocation and protects it from duplicate output.
 
-### Leaf Node Structure
+Root and internal routing pages use normal Buffer Pool admission. Point-lookups normally admit the final leaf. Leaves traversed by a long range scan use sequential admission and at most bounded forward prefetch, preventing a scan from evicting hot routing pages.
 
-Leaf nodes contain the actual key-value pairs along with next and previous leaf pointers that form a doubly-linked list across all leaf nodes.
+## Mutation, Atomicity, and Snapshots
+
+Writers start from one pinned metadata generation and build a transaction-local sorted overlay. The overlay canonicalizes duplicate operations, rejects contradictions, and uses one byte-aware copy-on-write plan for all mutations to a tree in that transaction. Candidate pages are written and made durable before any root metadata becomes visible.
 
 ```mermaid
-classDiagram
-    class LeafNode {
-        +NodeType: LEAF
-        +EntryCount: 4
-        +Level: 0
-        +ParentId: 100
-        +NextLeafId: 202
-        +PrevLeafId: 200
-        +getEntries()
-    }
-
-    class Entry {
-        +Key: PropertyValue
-        +Values: vector~int64_t~
-        +KeyBlobId: int64_t
-        +ValuesBlobId: int64_t
-    }
-
-    LeafNode "1" --> "4" Entry : contains
-    Entry : Key 10 → Values 1 5 8
-    Entry : Key 25 → Values 3
-    Entry : Key 40 → Values 7 9
-    Entry : Key 45 → Values 2 4 6
+flowchart LR
+    A["Pinned old generation"] --> B["Canonical transaction overlay"]
+    B --> C["COW leaf and internal candidate pages"]
+    C --> D["Durable candidate pages"]
+    D --> E["Replacement root-directory entry"]
+    E --> F["Publish inactive A/B Superblock"]
+    F --> G["New complete generation"]
 ```
 
-**Entry Structure**: Each entry stores the indexed key, a vector of entity IDs that share that key value, and optional blob IDs. The `keyBlobId` field holds a reference to blob storage when the key itself exceeds the inline threshold. The `valuesBlobId` field holds a reference to blob storage when the list of entity IDs grows too large to fit inline.
+Readers observe either the old root or the complete replacement root. They never observe an intermediate split, repaired sibling boundary, or partially updated multi-index transaction. Older snapshots continue to read their prior immutable pages. Concurrent root changes are detected before publication and retried from a fresh snapshot by the transaction layer.
 
-### Node Memory Layout
+Insertion and deletion are `O(log N)` tree work plus a bounded amount of split, redistribution, or merge planning. The physical write cost is copy-on-write path amplification and must be measured in bytes/pages rather than hidden behind the asymptotic notation.
 
-Each B+Tree node occupies a fixed 256-byte block divided into two regions:
+## Deletion, Reclamation, and Repacking
 
-```mermaid
-graph TD
-    subgraph Metadata["Metadata Region (43 bytes)"]
-        M1["NodeType (1 byte)"]
-        M2["EntryCount (4 bytes)"]
-        M3["Level (4 bytes)"]
-        M4["ParentId (8 bytes)"]
-        M5["NextLeafId (8 bytes)"]
-        M6["PrevLeafId (8 bytes)"]
-        M7["DataUsage (2 bytes)"]
-        M8["Padding (8 bytes)"]
-    end
-    subgraph Data["Data Region (213 bytes)"]
-        E1["Entry 1: key + values + blobIds"]
-        E2["Entry 2: key + values + blobIds"]
-        E3["..."]
-        E4["Entry N: key + values + blobIds"]
-    end
-    Metadata --> Data
+Deletion removes the exact canonical key. Underflow is judged by encoded byte occupancy, not by a fixed number of entries. The mutation planner redistributes with a sibling when possible or merges candidate pages and repairs separators when necessary. If the root collapses, the new root-directory mapping points to the surviving root; if the last key is removed, it is removed entirely.
+
+Pages displaced by copy-on-write, merge, root collapse, or whole-tree rebuilding enter the shared generation-aware Retire Queue. A physical frame becomes reusable only when no snapshot can resolve the old root. Correctness never depends on a background compactor. A bounded whole-tree repack is allowed only as a measured maintenance operation for poor byte occupancy; it builds a new tree, atomically publishes one root, and retires the old reachable set.
+
+## Bulk Construction
+
+Bulk writers validate records before emitting canonical keys, sort and deduplicate with the same comparator, then construct or merge ordered runs through the shared Packed B+Tree builder. They must not call a separate root-to-leaf insertion for every input key.
+
+Online and bulk paths share the same page codec, fill policy, restart layout, separator rule, ownership validation, checksum, root-publication sequence, and reclamation protocol. All input, run, memory, I/O, and retry budgets are explicit. If future external sorting is needed, it must use bounded process memory or a controlled region inside the single database file; it cannot introduce a second durable database file.
+
+## Global Adjacency Specialization
+
+Ordinary graph adjacency is one reserved built-in key-only tree:
+
+```text
+(ADJ_OUT, sourceNodeId, EdgeId) -> empty
+(ADJ_IN,  targetNodeId, EdgeId) -> empty
 ```
 
-- **Metadata region** (43 bytes): Contains the node type (leaf or internal), entry count, tree level, parent pointer, and for leaf nodes the next/previous leaf pointers. This overhead is fixed regardless of content.
-- **Data region** (213 bytes): Stores the actual entries (key-value pairs for leaves, separator-child pairs for internal nodes). Entries are packed sequentially; oversized data is offloaded to blob storage.
+It has one reserved `IndexId`, its own owner identity, and the `BLVL_EMPTY` leaf layout. The Edge Entity Store is authoritative for source, target, relationship type, and state. The index stores neither Edge payload nor endpoint/type copies, so it is not a covering index and cannot become one by silently adding a leaf value.
 
-## Node Size and Capacity
+The reserved identity is the format constant `RSS_GLOBAL_ADJACENCY_INDEX_ID`; user and derived indexes cannot claim it. Both directions are ordered ranges in this one tree, rather than separate direction trees or per-Node trees. The direction prefix therefore provides the access partition without multiplying root-directory entries, COW publication paths, or snapshot-retirement state.
 
-### Storage Parameters
+This layout packs low-degree Nodes together in the same leaf while allowing a supernode to span sequential leaves. Directed expansion is `O(log E + degree)` with bounded cursor memory. Creating or deleting an Edge publishes the Edge record, Entity Map change, both adjacency keys, and the replacement root in one metadata generation. `DETACH DELETE` uses bounded scans and exact erases; it does not create adjacency Tombstones or mutate neighboring Edges.
 
-ZYX uses fixed-size 256-byte nodes to align with storage block boundaries. Each node dedicates 43 bytes to metadata (node type, level, parent ID, leaf link pointers, data usage tracking) and 213 bytes to actual entry data. This layout ensures predictable I/O behavior and simplifies space management.
+At commit, a transaction revalidates and, where necessary, retries/rebases its bounded sorted final-state overlay on the latest root. A newer root alone is never a semantic conflict; duplicate/deleted Edge identity or an inconsistent authoritative endpoint is. This keeps the physical global root from becoming a user-visible conflict domain.
 
-### Capacity Calculations
+The global adjacency tree and Vector ANN adjacency are unrelated. ANN uses its Vector-specific structures and may not reuse the ordinary adjacency root, page owner, key codec, or cursor contract.
 
-**Leaf Node Entry Capacity**:
-- Small inline entries: approximately 20-30 entries per node
-- With blob storage for oversized data: effectively unlimited entries
+### Entity and Adjacency Separation
 
-**Internal Node Fanout**:
-- Typical fanout: 40-50 children per internal node
-- Tree height for 1M entries: log50(1,000,000) is approximately 3-4 levels
+`BLVL_EMPTY` means that an adjacency leaf represents only membership in an ordered range. It must not be treated as a compact Edge store. Node and Edge records remain in Entity pages and are addressed through the Entity Map; adjacency leaves contain no entity slot, physical offset, endpoint copy, relationship type, state, or property bytes. An Edge expansion first finds EdgeIds in the global tree and resolves only the required Edge records in the same pinned snapshot.
 
-## Insertion Algorithm
+This separation is intentional: one leaf can share its encoded key space among many low-degree Nodes, while a supernode can continue into following leaves. It prevents both a per-Node page tail and the write amplification of relinking neighboring Edge records. It also keeps physical page relocation local to the Page Directory because neither Entity records nor public continuations point at a B+Tree frame.
 
-### Process Flow
+## Integrity, Recovery, and Test Gates
 
-```mermaid
-flowchart TD
-    A[Start Insert] --> B[Find Leaf Node]
-    B --> C{Leaf has space?}
-    C -->|Yes| D[Insert Entry]
-    D --> E[Done]
+The runtime validates every visited page before using it: page kind, format, owner, `IndexId`, generation, LSN, checksum, encoded bounds, restart table, key order, separators, child routes, leaf-value layout, and forward sibling relationship. A corrupt or impossible state is a format error, never an implicit repair or silent skip.
 
-    C -->|No| F[Split Leaf Node]
-    F --> G[Divide entries 50/50]
-    G --> H[Create new leaf node]
-    H --> I[Update leaf links]
-    I --> J[InsertIntoParent]
+The full integrity scanner additionally verifies root-directory uniqueness and reachability, no cross-tree page ownership, no orphan current page, complete snapshot-safe retirement, and tree-specific semantic rules. For global adjacency, it cross-validates every live Edge against exactly one outgoing and one incoming empty-value key, and every key against the authoritative Edge endpoints.
 
-    J --> K{Parent has space?}
-    K -->|Yes| L[Add separator to parent]
-    L --> E
+Every implementation stage requires at least 95% line, branch, function, and region coverage on macOS, Linux, and Windows. Required tests include comparator/codec boundaries, malformed pages, root create/collapse, split/merge/redistribution, duplicate operations, rollback, stale snapshots, relocation, reopen, injected crashes before and after publication, ENOSPC, short I/O, bounded range continuation, bulk/online equivalence, and randomized model-oracle checks.
 
-    K -->|No| M[Split Internal Node]
-    M --> N[Promote middle key]
-    N --> O{Parent exists?}
-    O -->|Yes| P[Recursive insert]
-    O -->|No| Q[Create new root]
-    Q --> E
-```
+## Implementation Sequence
 
-### Insert Walkthrough
-
-When a property value is added to the index, the system routes it to the appropriate `IndexTreeManager` based on the value's type (integer, string, double, boolean). The tree manager then locates the correct leaf node by traversing from the root through internal nodes using the separator key comparison logic.
-
-If the target leaf has sufficient space, the entry is inserted in sorted order and the operation completes. When the leaf is full, a 50/50 split occurs: a new sibling leaf node is created, entries are divided evenly between the original and new node, and the doubly-linked leaf chain is updated. The first key of the new (right) node becomes the separator key that is propagated up to the parent.
-
-This propagation may cascade if the parent is also full, causing the parent to split in turn. In the worst case, splits propagate all the way to the root, at which point a new root is created with two children, increasing the tree height by one.
-
-### Node Splitting (50/50 Distribution)
-
-Leaf splitting divides entries evenly between two nodes. The original (left) node keeps the first half of entries, while the new (right) node receives the second half. After the split, the leaf chain is repaired: the left node's next pointer and the right node's previous pointer are updated to maintain the doubly-linked list. The separator key (the first key in the right node) is then inserted into the parent.
-
-Internal node splitting follows the same 50/50 principle but includes an extra step: the middle key is promoted upward as the separator rather than remaining in either child.
-
-## Deletion Algorithm
-
-### Process Flow
-
-```mermaid
-flowchart TD
-    A[Start Delete] --> B[Find Leaf Node]
-    B --> C[Remove Entry]
-    C --> D{Node underflow?}
-    D -->|No| E[Done]
-
-    D -->|Yes| F[handleUnderflow]
-    F --> G{Can borrow from sibling?}
-    G -->|Yes| H[Redistribute entries]
-    H --> I[Update parent separator]
-    I --> E
-
-    G -->|No| J[Merge with sibling]
-    J --> K[Remove separator from parent]
-    K --> L{Parent underflow?}
-    L -->|Yes| M[Recursive handleUnderflow]
-    L -->|No| E
-    M --> N{Root has 1 child?}
-    N -->|Yes| O[Collapse root]
-    N -->|No| E
-```
-
-### Underflow Detection
-
-After removing an entry, the system checks whether the node has fallen below the underflow threshold. The threshold is set at 40% of the total node size (256 bytes), meaning a node is considered underfull when its data usage drops below approximately 102 bytes. An empty node is always treated as underfull regardless of the threshold.
-
-The 40% ratio (defined by `UNDERFLOW_THRESHOLD_RATIO = 0.4`) balances two concerns: a lower threshold would tolerate more wasted space and trigger fewer merges, while a higher threshold would cause frequent merging and redistribution. The chosen value allows nodes to be moderately sparse without triggering excessive rebalancing.
-
-### Redistribution
-
-When a node underflows but one of its siblings has entries to spare, the system redistributes entries between them. For leaf nodes, the last entry from the left sibling (or the first entry from the right sibling) is moved to the underfull node. The parent's separator key is then updated to reflect the new boundary between the two nodes.
-
-This is preferred over merging because it does not reduce the total number of nodes and avoids propagating changes further up the tree.
-
-### Node Merging
-
-When both the underfull node and its sibling are too sparse to allow redistribution, the two nodes are merged into one. For leaf nodes, all entries from the right node are appended to the left node, and the doubly-linked leaf chain is updated to skip the removed node. For internal nodes, the parent's separator key is pulled down into the merged node along with all child entries from both nodes.
-
-After merging, the right node is deleted and the parent loses one separator-child pair. This may cause the parent itself to underflow, triggering recursive rebalancing up the tree. If rebalancing reaches the root and the root is left with only one child, the root is collapsed (replaced by its sole child), reducing the tree height by one.
-
-## Search Operations
-
-### Exact Match Search
-
-Exact match search traverses the tree from root to leaf. At each internal node level, the algorithm locates the appropriate child by finding the largest separator key that is less than or equal to the search key. Once the leaf level is reached, the entries are scanned for an exact key match, and the associated vector of entity IDs is returned.
-
-**Search Path**:
-1. Start at root
-2. At each internal node, find the appropriate child using separator keys
-3. Traverse down to the leaf level
-4. Scan the leaf for a matching key and return its values
-
-**Time Complexity**: O(log_n N) where n is the fanout and N is the total number of entries.
-
-### Range Query
-
-Range queries leverage the doubly-linked leaf structure for efficient sequential scanning. The algorithm first descends the tree to find the leaf node containing the minimum key of the range. From that starting leaf, it scans entries sequentially, collecting all entity IDs whose keys fall within the specified range. When a leaf is exhausted, the algorithm follows the next-leaf pointer to continue scanning in the adjacent leaf. Scanning stops when a key exceeding the maximum bound is encountered or when no more leaves remain.
-
-```mermaid
-graph LR
-    A[Find Start Leaf] --> B[Scan Leaf]
-    B --> C[Collect Matching Entries]
-    C --> D{More Leaves?}
-    D -->|Yes| E[Follow Next Link]
-    E --> B
-    D -->|No| F[Return Results]
-```
-
-**Time Complexity**: O(log_n N + K) where K is the number of entries in the result range. The logarithmic term accounts for finding the starting leaf, and the linear term covers the sequential scan through linked leaves.
-
-## Blob Storage for Large Data
-
-### When Keys/Values Do Not Fit Inline
-
-Each node has limited inline storage (213 bytes of data). When a key or a value list exceeds the 32-byte inline threshold, it is serialized to a separate blob storage area and only its blob ID is kept in the node entry.
-
-**Inline Thresholds**:
-- Internal keys: 32 bytes -- keys longer than this are stored as blobs
-- Leaf keys: 32 bytes -- same threshold for leaf-level keys
-- Leaf values: 32 bytes -- the serialized value list must fit within this limit
-
-**Blob Storage Strategy**:
-
-The `Entry` structure contains two blob ID fields alongside its inline data. The `keyBlobId` field is set to a non-zero value when the key has been offloaded to blob storage. Similarly, `valuesBlobId` is set when the entity ID list is too large. On read access, the system checks these blob IDs and retrieves the full data from blob storage when necessary. This two-tier approach keeps common (small) entries compact within the node while supporting arbitrarily large keys and value lists without sacrificing node capacity.
-
-## Time and Space Complexity
-
-### Time Complexity
-
-| Operation | Average Case | Worst Case |
-|-----------|--------------|------------|
-| Search (exact) | O(log N) | O(log N) |
-| Insert | O(log N) | O(log N) |
-| Delete | O(log N) | O(log N) |
-| Range Query | O(log N + K) | O(log N + K) |
-| Sequential Scan | O(K) | O(K) |
-
-Where:
-- N = total number of entries
-- K = number of entries in result/range
-
-### Space Complexity
-
-| Component | Space |
-|-----------|-------|
-| Node Size | 256 bytes (fixed) |
-| Metadata per Node | 43 bytes |
-| Data per Node | 213 bytes |
-| Total Tree Size | O(N) |
-
-**Fanout Calculation**:
-- Pointer size: 8 bytes
-- Key size: varies (typically 4-16 bytes)
-- Child entry: approximately 16-24 bytes
-- Fanout: 213 / 16 is approximately 13 children (conservative estimate)
-- Actual fanout: 40-50 with optimization
-
-## Disk I/O Characteristics
-
-### I/O per Operation
-
-| Operation | Disk Reads | Disk Writes |
-|-----------|------------|-------------|
-| Search | O(log_n N) | 0 |
-| Insert | O(log_n N) | O(log_n N) |
-| Delete | O(log_n N) | O(log_n N) |
-| Range Query | O(log_n N + K/b) | 0 |
-
-Where:
-- n = fanout (number of children per internal node)
-- N = total entries
-- K = result size
-- b = branching factor (entries per leaf node)
-
-### Optimization Strategies
-
-1. **High Fanout**: Minimizes tree height
-2. **Node Size**: 256 bytes fits in disk blocks
-3. **Sequential Scanning**: Leaf linking enables range queries without tree re-traversal
-4. **Batch Operations**: Reduces I/O for bulk inserts
-
-**Example**: For 1 million entries with fanout 50:
-- Tree height: ceil(log50(1,000,000)) = 4 levels
-- Max I/O per search: 4 disk reads
-
-## Concurrent Operations
-
-### Locking Strategy
-
-The `IndexTreeManager` uses a `std::shared_mutex` to coordinate concurrent access. This reader-writer lock allows multiple threads to perform read operations simultaneously while ensuring that write operations have exclusive access.
-
-**Lock Types**:
-- **Shared Lock**: Acquired for read operations (exact match search, range query). Multiple readers can hold shared locks concurrently, allowing high throughput for lookup-heavy workloads.
-- **Exclusive Lock**: Acquired for write operations (insert, remove, clear). Only one writer can hold the lock at a time, and all readers are blocked during writes.
-
-This approach favors read-heavy access patterns, which are typical for graph database index lookups. Write operations are serialized but benefit from the fact that the tree structure changes (splits and merges) are relatively infrequent compared to the total number of operations.
-
-## Use in ZYX
-
-### Label Index
-
-The label index maps label tokens to entity IDs using a B+Tree. Each unique label has its own tree root stored in an in-memory map. When a node is assigned a label, the node's ID is inserted into the tree rooted at that label's root. Lookups traverse the tree to find the label's entry and return all associated entity IDs.
-
-### Property Index
-
-The property index maintains separate `IndexTreeManager` instances for each property value type: string, integer, double, and boolean. This type-segregated approach ensures that comparisons within a tree are always type-consistent and avoids the complexity of cross-type ordering.
-
-For each property name, a tree root is tracked per type. Exact match queries route to the appropriate tree manager and perform a standard B+Tree lookup. Range queries (applicable to numeric types) use the linked-leaf scan described earlier to collect all entity IDs whose property values fall within the specified bounds.
-
-## Configuration Parameters
-
-### Node Size
-
-The total node size is fixed at 256 bytes. This value was chosen as a balance: larger nodes would provide higher fanout and shorter trees but would increase the I/O cost of reading and writing each node. Smaller nodes would reduce per-node I/O but require more levels in the tree. At 256 bytes, the node fits comfortably within typical storage block sizes while providing adequate fanout for most datasets.
-
-### Underflow Threshold
-
-The underflow threshold ratio is set to 0.4 (40%). This means a node is considered underfull when its data usage drops below 40% of the total node size. The trade-off is between merge frequency and space utilization: a lower threshold tolerates more wasted space but reduces rebalancing overhead, while a higher threshold keeps nodes dense at the cost of more frequent merges and redistributions. The 40% value provides a practical balance.
-
-### Inline Thresholds
-
-All inline thresholds (internal keys, leaf keys, and leaf values) are set to 32 bytes. Data within this limit is stored directly in the node entry. Data exceeding the threshold is offloaded to blob storage with only a blob ID retained inline. The 32-byte threshold accommodates most common property values (small integers, short strings, booleans) while keeping the node entry format compact.
-
-## Performance Considerations
-
-### Optimization Techniques
-
-1. **Batch Insertion**: The `insertBatch` method accepts a collection of key-value pairs, sorts them, and coalesces duplicates before inserting them into the tree. This reduces the number of tree restructuring operations compared to inserting entries one at a time.
-
-2. **Single-Pass Insert**: The `tryInsertEntry` method combines deserialization, insertion, and serialization into a single pass over the node data. This avoids the overhead of deserializing a node, modifying it, and re-serializing it as separate steps.
-
-3. **Cached Nodes**: Frequently accessed nodes are cached in memory by the page buffer pool, reducing disk I/O for hot index data. This is especially effective for upper tree levels, which are accessed on every operation.
-
-### Benchmarks
-
-Typical performance characteristics:
-
-| Metric | Value |
-|--------|-------|
-| Entries per Leaf | 20-30 |
-| Fanout | 40-50 |
-| Tree Height (1M entries) | 3-4 levels |
-| Search Time | approximately 4 disk reads |
-| Insert Time | approximately 4 disk reads + 4 disk writes |
-| Range Query | O(log N + K/b) |
-
-## Best Practices
-
-1. **Index Selectively**: Only index frequently queried properties
-2. **Use Appropriate Types**: Choose numeric types for range queries
-3. **Batch Operations**: Use batch insertion for bulk loads
-4. **Monitor Tree Height**: Rebuild if tree grows too tall
-5. **Configure Thresholds**: Tune for workload characteristics
+1. Freeze the 4 KiB page codec, typed root-directory contract, key codec interface, byte-layout solver, and fail-closed validation tests.
+2. Implement immutable point/range reads with logical continuations and Buffer Pool admission hints.
+3. Implement transaction-local copy-on-write planning, root publication, retirement, and crash tests.
+4. Move scalar indexes to unique composite keys and remove fixed-record/value-vector/Blob-overflow assumptions.
+5. Add the global key-only adjacency specialization, then switch graph writes, readers, Cypher expansion, bulk ingest, and `DETACH DELETE` together.
+6. Remove retired index/adjacency codecs and readers, remove Node adjacency roots and Edge links, raise the clean format version, and reject retired page subtypes/fields.
+7. Run cross-platform coverage, integrity, durability, space, and performance gates before declaring the cutover complete.
 
 ## See Also
 
-- [Storage System](/en/docs/zyx/architecture/storage) - Overall storage architecture
+- [Native Single-File Storage Plan](/en/docs/zyx/architecture/native-single-file-storage-plan)
+- [Relationship Traversal](/en/docs/zyx/algorithms/relationship-traversal)
+- [Segment Compaction](/en/docs/zyx/algorithms/segment-compaction)

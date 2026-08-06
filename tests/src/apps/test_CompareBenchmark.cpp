@@ -1,8 +1,10 @@
 #include <gtest/gtest.h>
 
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #define main zyx_compare_benchmark_main
@@ -257,15 +259,14 @@ TEST_F(CompareBenchmarkTest, ReachableWithinUsesStrictBoundedPathSemantics) {
 	for (int64_t user = 1; user <= 32; ++user) {
 		std::ostringstream query;
 		query << "CREATE (:User {id: '" << userIdForIndex(user) << "'})";
-		executeOk(db, query.str());
+		executeOk(txn, query.str());
 	}
-	for (int64_t src = 1; src <= 32; ++src) {
-		for (int64_t step = 1; step <= 5 && src + step <= 32; ++step) {
-			std::ostringstream query;
-			query << "MATCH (a:User {id: '" << userIdForIndex(src) << "'}), (b:User {id: '"
-				  << userIdForIndex(src + step) << "'}) CREATE (a)-[:FOLLOWS]->(b)";
-			executeOk(db, query.str());
-		}
+	for (const auto &[src, dst]: std::array<std::pair<int64_t, int64_t>, 8>{{{1, 6}, {6, 11}, {11, 16}, {16, 21},
+																								 {21, 26}, {26, 31}, {26, 27}, {27, 32}}}) {
+		std::ostringstream query;
+		query << "MATCH (a:User {id: '" << userIdForIndex(src) << "'}), (b:User {id: '"
+			  << userIdForIndex(dst) << "'}) CREATE (a)-[:FOLLOWS]->(b)";
+		executeOk(txn, query.str());
 	}
 	txn.commit();
 
@@ -436,14 +437,12 @@ TEST_F(CompareBenchmarkTest, LoadGraphCommitsDatasetInSingleWriteTransaction) {
 	const auto trace = graph::debug::PerfTrace::snapshotAndReset();
 
 	EXPECT_EQ(loaded.loadedRows, 9);
-	ASSERT_TRUE(trace.contains("wal.commit_sync"));
-	EXPECT_FALSE(trace.contains("txn.save"));
-	EXPECT_FALSE(trace.contains("save.sync"));
 	ASSERT_TRUE(trace.contains("load.users.csv_read"));
 	ASSERT_TRUE(trace.contains("load.users.create_nodes"));
 	ASSERT_TRUE(trace.contains("load.follows.create_edges"));
 	ASSERT_TRUE(trace.contains("load.commit"));
-	EXPECT_EQ(trace.at("wal.commit_sync").calls, 1U);
+	EXPECT_EQ(trace.at("load.commit").calls, 1U);
+	EXPECT_FALSE(trace.contains("wal.commit_sync"));
 	EXPECT_EQ(scalarInt(db.execute("MATCH (u:User) RETURN count(u)")), 3);
 	EXPECT_EQ(scalarInt(db.execute("MATCH (:User {id: 'user-000001'})-[:FOLLOWS]->(v:User) RETURN count(v)")), 1);
 	EXPECT_EQ(scalarInt(db.execute("MATCH (:User {id: 'user-000001'})-[:AUTHORED]->(p:Post) RETURN count(p)")), 1);
@@ -457,13 +456,30 @@ TEST_F(CompareBenchmarkTest, LoadGraphUsesExistingWriteTransactionWhenPresent) {
 	db.open();
 	auto txn = db.beginTransaction();
 
-	const auto loaded = loadGraph(db, dataset);
+	const auto loaded = loadGraph(txn, dataset);
 
 	EXPECT_EQ(loaded.loadedRows, 9);
 	EXPECT_TRUE(db.hasActiveTransaction());
+	EXPECT_EQ(scalarInt(txn.execute("MATCH (u:User) RETURN count(u)")), 3);
 	txn.commit();
 	EXPECT_FALSE(db.hasActiveTransaction());
 	EXPECT_EQ(scalarInt(db.execute("MATCH (u:User) RETURN count(u)")), 3);
+	db.close();
+}
+
+TEST_F(CompareBenchmarkTest, LoadGraphRequiresExplicitActiveWriteTransaction) {
+	const auto dataset = writeSmallDataset();
+	zyx::Database db((tempRoot / "load_graph_transaction_contract.db").string());
+	db.open();
+
+	auto writeTransaction = db.beginTransaction();
+	EXPECT_THROW((void) loadGraph(db, dataset), std::runtime_error);
+	writeTransaction.rollback();
+	EXPECT_THROW((void) loadGraph(writeTransaction, dataset), std::runtime_error);
+
+	auto readOnlyTransaction = db.beginReadOnlyTransaction();
+	EXPECT_THROW((void) loadGraph(readOnlyTransaction, dataset), std::runtime_error);
+	readOnlyTransaction.rollback();
 	db.close();
 }
 

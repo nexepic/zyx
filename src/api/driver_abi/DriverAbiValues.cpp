@@ -42,6 +42,16 @@ zyx::Value deepCopyValue(const zyx::Value &value) {
     return value;
 }
 
+zyx::Bytes copyAbiBytes(const uint8_t *value, uint32_t size) {
+    if (size == 0U) {
+        return {};
+    }
+    if (value == nullptr) {
+        throw std::invalid_argument("bytes value must not be null when size is non-zero");
+    }
+    return zyx::Bytes(value, value + size);
+}
+
 namespace {
 
 zyx::ValueList &asMutableList(zyx_driver_value_t *value) {
@@ -155,6 +165,24 @@ zyx_driver_status_t zyx_driver_value_string_create(const char *value, zyx_driver
     }
 }
 
+zyx_driver_status_t zyx_driver_value_bytes_create(const uint8_t *value, uint32_t size,
+                                                   zyx_driver_value_t **out_value,
+                                                   zyx_driver_error_t **out_error) {
+    clearError(out_error);
+    try {
+        if (out_value == nullptr) {
+            return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, "out_value must not be null");
+        }
+        *out_value = nullptr;
+        *out_value = new zyx_driver_value_t{copyAbiBytes(value, size)};
+        return ZYX_DRIVER_OK;
+    } catch (const std::invalid_argument &ex) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, ex.what());
+    } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
+        return catchAbiException(out_error);
+    }
+}
+
 zyx_driver_status_t zyx_driver_value_list_create(zyx_driver_value_t **out_value,
                                                  zyx_driver_error_t **out_error) {
     clearError(out_error);
@@ -229,6 +257,18 @@ zyx_driver_status_t zyx_driver_value_list_append_string(zyx_driver_value_t *list
     }
 }
 
+zyx_driver_status_t zyx_driver_value_list_append_bytes(zyx_driver_value_t *list,
+                                                       const uint8_t *value, uint32_t size,
+                                                       zyx_driver_error_t **out_error) {
+    try {
+        return appendListValue(list, copyAbiBytes(value, size), out_error);
+    } catch (const std::invalid_argument &ex) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, ex.what());
+    } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
+        return catchAbiException(out_error);
+    }
+}
+
 zyx_driver_status_t zyx_driver_value_list_append_value(zyx_driver_value_t *list,
                                                        const zyx_driver_value_t *value,
                                                        zyx_driver_error_t **out_error) {
@@ -285,6 +325,18 @@ zyx_driver_status_t zyx_driver_value_map_set_string(zyx_driver_value_t *map, con
         return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, ex.what());
     } catch (const std::domain_error &ex) {
         return setError(out_error, ZYX_DRIVER_TYPE_MISMATCH, ex.what());
+    } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
+        return catchAbiException(out_error);
+    }
+}
+
+zyx_driver_status_t zyx_driver_value_map_set_bytes(zyx_driver_value_t *map, const char *key,
+                                                   const uint8_t *value, uint32_t size,
+                                                   zyx_driver_error_t **out_error) {
+    try {
+        return setMapValue(map, key, copyAbiBytes(value, size), out_error);
+    } catch (const std::invalid_argument &ex) {
+        return setError(out_error, ZYX_DRIVER_INVALID_ARGUMENT, ex.what());
     } catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.
         return catchAbiException(out_error);
     }

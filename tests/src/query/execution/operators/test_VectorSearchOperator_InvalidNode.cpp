@@ -13,19 +13,19 @@
 #include <string>
 #include <vector>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/query/execution/operators/VectorSearchOperator.hpp"
 
 namespace fs = std::filesystem;
 
-using graph::Database;
+using graph::storage::testing::LegacyPhysicalStorageTestHarness;
 using graph::query::execution::operators::VectorSearchOperator;
 
 class VectorSearchOperatorInvalidNodeTest : public ::testing::Test {
 protected:
 	fs::path dbPath;
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<graph::storage::DataManager> dm;
 	std::shared_ptr<graph::query::indexes::IndexManager> im;
 
@@ -36,10 +36,10 @@ protected:
 			fs::remove(dbPath);
 		}
 
-		db = std::make_unique<Database>(dbPath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(dbPath.string());
 		db->open();
-		dm = db->getStorage()->getDataManager();
-		im = db->getQueryEngine()->getIndexManager();
+		dm = db->storage()->getDataManager();
+		im = db->indexManager();
 	}
 
 	void TearDown() override {

@@ -12,7 +12,7 @@
 #include <gtest/gtest.h>
 #include <memory>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/query/api/QueryEngine.hpp"
 #include "graph/query/execution/operators/NodeScanOperator.hpp"
 #include "graph/query/execution/Record.hpp"
@@ -24,7 +24,7 @@ using namespace graph::query::execution::operators;
 
 class NodeScanOperatorInactiveAndEmptyTest : public ::testing::Test {
 protected:
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<storage::DataManager> dm;
 	std::shared_ptr<query::indexes::IndexManager> im;
 	fs::path testFilePath;
@@ -34,10 +34,10 @@ protected:
 		testFilePath = fs::temp_directory_path() /
 					   ("test_nodescan_branch2_" + boost::uuids::to_string(uuid) + ".dat");
 		if (fs::exists(testFilePath)) fs::remove_all(testFilePath);
-		db = std::make_unique<Database>(testFilePath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testFilePath.string());
 		db->open();
-		dm = db->getStorage()->getDataManager();
-		im = db->getQueryEngine()->getIndexManager();
+		dm = db->storage()->getDataManager();
+		im = db->indexManager();
 	}
 
 	void TearDown() override {
@@ -57,7 +57,7 @@ TEST_F(NodeScanOperatorInactiveAndEmptyTest, RangeScanBranch) {
 
 	// Create a property index so the range lookup has something to query
 	im->createIndex("idx_age", "Node", "Person", "age");
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	NodeScanConfig config;
 	config.type = ScanType::RANGE_SCAN;
@@ -86,7 +86,7 @@ TEST_F(NodeScanOperatorInactiveAndEmptyTest, CompositeScanBranch) {
 	});
 
 	im->createCompositeIndex("idx_city_age", "node", "Person", {"city", "age"});
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	NodeScanConfig config;
 	config.type = ScanType::COMPOSITE_SCAN;

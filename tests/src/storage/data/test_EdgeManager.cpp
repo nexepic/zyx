@@ -25,7 +25,6 @@
 #include <fstream>
 #include <gtest/gtest.h>
 #include <memory>
-#include "graph/core/Database.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/storage/FileStorage.hpp"
@@ -40,10 +39,10 @@ protected:
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath = std::filesystem::temp_directory_path() / ("test_edgeManager_" + to_string(uuid) + ".dat");
 
-		// Initialize Database and FileStorage
-		database = std::make_unique<graph::Database>(testFilePath.string());
-		database->open();
-		fileStorage = database->getStorage();
+		// This suite exercises the legacy physical edge manager directly.
+		fileStorage = std::make_shared<graph::storage::FileStorage>(
+				testFilePath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
+		fileStorage->open();
 		dataManager = fileStorage->getDataManager();
 		deletionManager = dataManager->getDeletionManager();
 
@@ -56,17 +55,15 @@ protected:
 	}
 
 	void TearDown() override {
-		// Release shared_ptrs before closing database
+		// Release entity managers before closing legacy physical storage.
 		nodeManager.reset();
 		edgeManager.reset();
 		deletionManager.reset();
 		dataManager.reset();
-		fileStorage.reset();
-
-		if (database) {
-			database->close();
+		if (fileStorage) {
+			fileStorage->close();
 		}
-		database.reset();
+		fileStorage.reset();
 
 		std::error_code ec;
 		std::filesystem::remove(testFilePath, ec);
@@ -97,7 +94,6 @@ protected:
 	}
 
 	std::filesystem::path testFilePath;
-	std::unique_ptr<graph::Database> database;
 	std::shared_ptr<graph::storage::FileStorage> fileStorage;
 	std::shared_ptr<graph::storage::DataManager> dataManager;
 	std::shared_ptr<graph::storage::DeletionManager> deletionManager;
@@ -512,19 +508,19 @@ TEST_F(EdgeManagerTest, EdgePropertiesMultipleOperations) {
 // This tests defensive code paths that handle weak_ptr expiration
 TEST_F(EdgeManagerTest, OperationsWithExpiredDataManager) {
 	// NOTE: Testing the weak_ptr expiration scenario is complex due to the architecture
-	// where Database/FileStorage/DataManager may have circular references or extended lifecycles.
+	// where FileStorage/DataManager may have circular references or extended lifecycles.
 	// This test documents the expected behavior when DataManager becomes unavailable.
 
 	// For now, we test the defensive code paths indirectly by ensuring
 	// the EdgeManager handles all operations correctly when DataManager is available
 	// The defensive checks (if (!dataManager)) are in place for safety in edge cases.
 
-	// Create a temporary database to get a separate EdgeManager instance
+	// Create separate physical storage to get a separate EdgeManager instance.
 	boost::uuids::uuid uuid = boost::uuids::random_generator()();
 	auto tempPath = std::filesystem::temp_directory_path() / ("temp_edgeManager_" + to_string(uuid) + ".dat");
-	auto tempDatabase = std::make_unique<graph::Database>(tempPath.string());
-	tempDatabase->open();
-	auto tempStorage = tempDatabase->getStorage();
+	auto tempStorage = std::make_shared<graph::storage::FileStorage>(
+			tempPath.string(), 10'000U, graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
+	tempStorage->open();
 	auto tempDataManager = tempStorage->getDataManager();
 
 	// Get the edge manager
@@ -549,7 +545,7 @@ TEST_F(EdgeManagerTest, OperationsWithExpiredDataManager) {
 	EXPECT_GT(edges.size(), 0UL);
 
 	// Clean up
-	tempDatabase->close();
+	tempStorage->close();
 	std::error_code ec;
 	std::filesystem::remove(tempPath, ec);
 	std::filesystem::remove(tempPath.string() + ".wal", ec);

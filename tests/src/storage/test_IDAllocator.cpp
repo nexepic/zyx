@@ -338,12 +338,7 @@ TEST_F(IDAllocatorTest, RecoverGapsOnRestart) {
 	fileStorage->flush();
 
 	// 3. Restart DB
-	database->close();
-	database.reset();
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-	fileStorage = database->getStorage();
-	nodeAllocator = fileStorage->getIDAllocator(graph::EntityType::Node);
+	reopenFileStorage();
 
 	// 4. Insert New Node
 	// It should reuse 3 (via Lazy Load scan).
@@ -363,16 +358,13 @@ TEST_F(IDAllocatorTest, Persistence_Restart_NoOverlap) {
 		EXPECT_EQ(n2.getId(), 2);
 		EXPECT_EQ(n3.getId(), 3);
 
-		database->close();
+		reopenFileStorage();
 	}
 
 	// 2. Session 2: Re-open and Insert New Node
 	{
-		auto db2 = std::make_unique<graph::Database>(testFilePath.string());
-		db2->open();
-		auto store2 = db2->getStorage();
-		auto alloc2 = store2->getIDAllocator(graph::EntityType::Node);
-		auto dataManager2 = store2->getDataManager();
+		auto alloc2 = fileStorage->getIDAllocator(graph::EntityType::Node);
+		auto dataManager2 = fileStorage->getDataManager();
 
 		// CHECK: Max ID should be recovered correctly from header
 		// If the "Capacity vs Used" bug exists, this might be incorrect (e.g. 1024).
@@ -403,15 +395,9 @@ TEST_F(IDAllocatorTest, CrashRecovery_WithSparseSegment_CapacityVsUsed) {
 	// This ensures the data is written to disk.
 	// Header.used = 3, Header.capacity = 1024.
 	fileStorage->flush();
-	database->close();
-	database.reset();
 
 	// 3. Simulate Restart
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-	fileStorage = database->getStorage();
-	nodeAllocator = fileStorage->getIDAllocator(graph::EntityType::Node);
-	dataManager = fileStorage->getDataManager();
+	reopenFileStorage();
 
 	// 4. Verify Max ID Recovery
 	// Buggy behavior: recoverGapIds calculates physicalMaxId = 1 + 1024 - 1 = 1024.
@@ -444,13 +430,8 @@ TEST_F(IDAllocatorTest, RecoverGapsOnNormalRestart_CaseA) {
 	// The FileHeader manager saves the logical max ID (4) on clean shutdown/flush.
 	// We force a flush of the file header to persist "MaxNodeId = 4".
 	// Note: In real app, FileStorage::close() does this.
-	database->close();
-
 	// 4. Reopen
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-	fileStorage = database->getStorage();
-	nodeAllocator = fileStorage->getIDAllocator(graph::EntityType::Node);
+	reopenFileStorage();
 
 	// 5. Verify Gap Recovery
 	// Physical Max is 3 (from segments). Logical Max is 4 (from header).
@@ -583,13 +564,7 @@ TEST_F(IDAllocatorTest, RecoverGaps_EmptySegments) {
 	fileStorage->flush();
 
 	// 2. Close and restart to trigger recovery
-	database->close();
-	database.reset();
-
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-	fileStorage = database->getStorage();
-	nodeAllocator = fileStorage->getIDAllocator(graph::EntityType::Node);
+	reopenFileStorage();
 
 	// 3. Should recover correctly
 	EXPECT_EQ(nodeAllocator->getCurrentMaxId(), 0);
@@ -695,13 +670,7 @@ TEST_F(IDAllocatorTest, LargeGapRecovery) {
 	EXPECT_EQ(logicalMax, 103);
 
 	// 3. Simulate restart - gap [4, 103] should be recovered to volatile cache
-	database->close();
-	database.reset();
-
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-	fileStorage = database->getStorage();
-	nodeAllocator = fileStorage->getIDAllocator(graph::EntityType::Node);
+	reopenFileStorage();
 
 	// 4. Next allocations should reuse from gap
 	std::unordered_set<int64_t> gapIds;
@@ -737,13 +706,7 @@ TEST_F(IDAllocatorTest, StaleHeaderCorrection) {
 	// In real scenario, this would be a crash before header save
 	// We simulate by checking that physical max takes precedence on restart
 
-	database->close();
-	database.reset();
-
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-	fileStorage = database->getStorage();
-	nodeAllocator = fileStorage->getIDAllocator(graph::EntityType::Node);
+	reopenFileStorage();
 
 	// Should recover correctly from physical max
 	EXPECT_EQ(nodeAllocator->getCurrentMaxId(), 2);
@@ -828,13 +791,7 @@ TEST_F(IDAllocatorTest, RecoverGapIds_PhysicalEqualsLogical) {
 	fileStorage->flush();
 
 	// Restart - physical == logical, no gaps to recover
-	database->close();
-	database.reset();
-
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-	fileStorage = database->getStorage();
-	nodeAllocator = fileStorage->getIDAllocator(graph::EntityType::Node);
+	reopenFileStorage();
 
 	EXPECT_EQ(nodeAllocator->getCurrentMaxId(), 3);
 	// Next should be 4 (no gap recovery needed)
@@ -881,14 +838,7 @@ TEST_F(IDAllocatorTest, Initialize_RecoverGaps_AllEntityTypes) {
 	(void)gapEdge;
 
 	// Restart
-	database->close();
-	database.reset();
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-	fileStorage = database->getStorage();
-	nodeAllocator = fileStorage->getIDAllocator(graph::EntityType::Node);
-	edgeAllocator = fileStorage->getIDAllocator(graph::EntityType::Edge);
-	dataManager = fileStorage->getDataManager();
+	reopenFileStorage();
 
 	// Gap IDs should be recoverable via volatile cache
 	EXPECT_EQ(nodeAllocator->getCurrentMaxId(), 2);
@@ -904,13 +854,7 @@ TEST_F(IDAllocatorTest, RecoverGapIds_SegmentWithZeroUsed) {
 	fileStorage->flush();
 
 	// Now close and reopen - initialize will scan segments
-	database->close();
-	database.reset();
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-	fileStorage = database->getStorage();
-	nodeAllocator = fileStorage->getIDAllocator(graph::EntityType::Node);
-	dataManager = fileStorage->getDataManager();
+	reopenFileStorage();
 
 	// Verify allocator is functional
 	int64_t id = nodeAllocator->allocate();
@@ -946,16 +890,9 @@ TEST_F(IDAllocatorTest, RecoverGapIds_CaseA_LogicalGtPhysical) {
 	EXPECT_EQ(id4, 4);
 	EXPECT_EQ(id5, 5);
 
-	// 3. Close and reopen the database
-	// FileHeaderManager saves logicalMaxId=5 on close, but physical max on disk=3
-	database->close();
-	database.reset();
-
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-	fileStorage = database->getStorage();
-	nodeAllocator = fileStorage->getIDAllocator(graph::EntityType::Node);
-	dataManager = fileStorage->getDataManager();
+	// 3. Close and reopen the physical store.
+	// FileHeaderManager saves logicalMaxId=5 on close, but physical max on disk=3.
+	reopenFileStorage();
 
 	// 4. initialize() -> recoverGapIds should detect logicalMax(5) > physicalMax(3)
 	// Gap [4, 5] should be in volatile cache
@@ -1037,15 +974,7 @@ TEST_F(IDAllocatorTest, RecoverGapIds_SegmentWithZeroUsed_PhysicalMaxStaysZero) 
 	fileStorage->flush();
 
 	// 3. Close and reopen
-	database->close();
-	database.reset();
-
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-	fileStorage = database->getStorage();
-	nodeAllocator = fileStorage->getIDAllocator(graph::EntityType::Node);
-	edgeAllocator = fileStorage->getIDAllocator(graph::EntityType::Edge);
-	dataManager = fileStorage->getDataManager();
+	reopenFileStorage();
 
 	// Edge type should have no segments at all, meaning chain head is 0
 	// and the while loop in recoverGapIds never executes.
@@ -1079,14 +1008,7 @@ TEST_F(IDAllocatorTest, RecoverGapIds_MultipleSegments_UsedZeroInSome) {
 	fileStorage->flush();
 
 	// 3. Close and reopen to trigger recoverGapIds
-	database->close();
-	database.reset();
-
-	database = std::make_unique<graph::Database>(testFilePath.string());
-	database->open();
-	fileStorage = database->getStorage();
-	nodeAllocator = fileStorage->getIDAllocator(graph::EntityType::Node);
-	dataManager = fileStorage->getDataManager();
+	reopenFileStorage();
 
 	// 4. Allocator should still work correctly
 	int64_t id = nodeAllocator->allocate();
@@ -1132,7 +1054,7 @@ TEST_F(IDAllocatorTest, Initialize_ClearsCachesAndRescansPhysicalMax) {
 TEST_F(IDAllocatorTest, EnsureMaxId_IdLessThanOrEqualToCurrentMax_NoChange) {
 	// Allocate a few nodes to advance maxId.
 	for (int i = 0; i < 3; ++i) {
-		insertNode("EnsureNode");
+		(void) insertNode("EnsureNode");
 	}
 	int64_t maxBefore = nodeAllocator->getCurrentMaxId();
 	EXPECT_EQ(maxBefore, 3);

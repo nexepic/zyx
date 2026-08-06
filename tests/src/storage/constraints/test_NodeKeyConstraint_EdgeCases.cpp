@@ -9,7 +9,7 @@
 #include <filesystem>
 #include <gtest/gtest.h>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/storage/constraints/NodeKeyConstraint.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 
@@ -19,7 +19,7 @@ using namespace graph::storage::constraints;
 
 class NodeKeyConstraintEdgeCaseTest : public ::testing::Test {
 protected:
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<storage::DataManager> dm;
 	std::shared_ptr<query::indexes::IndexManager> im;
 	fs::path dbPath;
@@ -27,10 +27,10 @@ protected:
 	void SetUp() override {
 		auto uuid = boost::uuids::random_generator()();
 		dbPath = fs::temp_directory_path() / ("test_nkc_edge_" + boost::uuids::to_string(uuid) + ".dat");
-		db = std::make_unique<Database>(dbPath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(dbPath.string());
 		db->open();
-		dm = db->getStorage()->getDataManager();
-		im = db->getQueryEngine()->getIndexManager();
+		dm = db->storage()->getDataManager();
+		im = db->indexManager();
 	}
 
 	void TearDown() override {

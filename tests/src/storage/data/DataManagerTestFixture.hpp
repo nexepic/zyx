@@ -27,7 +27,6 @@
 #include <gtest/gtest.h>
 #include <memory>
 #include "graph/core/Blob.hpp"
-#include "graph/core/Database.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Index.hpp"
 #include "graph/core/Node.hpp"
@@ -86,10 +85,10 @@ protected:
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath = std::filesystem::temp_directory_path() / ("test_dataManager_" + to_string(uuid) + ".dat");
 
-		// Initialize Database and get the DataManager instance
-		database = std::make_unique<graph::Database>(testFilePath.string());
-		database->open();
-		fileStorage = database->getStorage();
+		// The fixture exercises physical legacy DataManager behavior directly.
+		// Database intentionally creates and opens only native relocatable files.
+		fileStorage = std::make_shared<FileStorage>(testFilePath.string(), 10'000U);
+		fileStorage->open();
 		dataManager = fileStorage->getDataManager();
 
 		// Register a test observer to monitor notifications
@@ -101,9 +100,10 @@ protected:
 		// Clean up resources - reset shared_ptrs before file removal
 		observer.reset();
 		dataManager.reset();
+		if (fileStorage) {
+			fileStorage->close();
+		}
 		fileStorage.reset();
-		database->close();
-		database.reset();
 		std::error_code ec;
 		if (std::filesystem::exists(testFilePath)) {
 			std::filesystem::remove(testFilePath, ec);
@@ -162,7 +162,6 @@ protected:
 	}
 
 	std::filesystem::path testFilePath;
-	std::unique_ptr<Database> database;
 	std::shared_ptr<FileStorage> fileStorage;
 	std::shared_ptr<DataManager> dataManager;
 	std::shared_ptr<TestEntityObserver> observer;

@@ -173,10 +173,13 @@ TEST_F(EditorTest, UnknownKeyIgnored) {
 }
 
 TEST_F(EditorTest, EnableRawModeFails) {
+    std::istringstream input;
+    auto* original = std::cin.rdbuf(input.rdbuf());
     EXPECT_CALL(*terminal, enableRawMode()).WillOnce(Return(false));
-    // When raw mode fails, Editor falls back to std::getline from cin.
-    // In test environment cin is not interactive, so it returns nullopt.
+    // When raw mode fails, inject EOF so the fallback remains non-interactive
+    // even when the suite runs from a terminal.
     auto result = editor->readLine("> ");
+    std::cin.rdbuf(original);
     EXPECT_FALSE(result.has_value());
 }
 

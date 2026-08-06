@@ -380,6 +380,21 @@ TEST_F(StorageWriterWritePathsTest, WriteSnapshot_MultiThreadPool) {
 	EXPECT_NO_THROW(writer->writeSnapshot(snapshot, &pool));
 }
 
+TEST_F(StorageWriterWritePathsTest, WriteSnapshot_ParallelPreparationForLargeDirtySet) {
+	FlushSnapshot snapshot;
+	constexpr int64_t dirtyNodeCount = 4096;
+	for (int64_t id = 1; id <= dirtyNodeCount; ++id) {
+		Node node = makeNode(id);
+		snapshot.nodes.emplace(id, DirtyEntityInfo<Node>(EntityChangeType::CHANGE_ADDED, std::move(node)));
+	}
+
+	concurrent::ThreadPool pool(4);
+	ASSERT_NO_THROW(writer->writeSnapshot(snapshot, &pool));
+	const std::vector<uint64_t> touchedSegments = writer->takeTouchedSegments();
+	EXPECT_FALSE(touchedSegments.empty());
+	EXPECT_EQ(header.node_segment_head, touchedSegments.front());
+}
+
 // ============================================================================
 // writeSegmentData with empty data (exercises data.empty() guard)
 // ============================================================================

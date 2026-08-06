@@ -22,7 +22,6 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
-#include <cstdlib>
 #include <filesystem>
 #include <gtest/gtest.h>
 #include <iostream>
@@ -48,21 +47,46 @@ static_assert(agent_memory_sigsegv_repro::kHashVectorCounts.size() == kSessionCo
 static_assert(agent_memory_blob_chain_repro::kBgeVectors.size() == kBlobChainSessionCount);
 static_assert(agent_memory_blob_chain_repro::kBgeVectors.front().size() == kBlobChainEmbeddingDimension);
 
-const std::filesystem::path kDatabasePath =
-	std::filesystem::temp_directory_path() / "zyx_agent_memory_sigsegv_repro.zyx";
-const std::filesystem::path kBlobChainDatabasePath =
-	std::filesystem::temp_directory_path() / "zyx_agent_memory_blob_chain_repro.zyx";
+const std::filesystem::path &databasePath() {
+	static const std::filesystem::path path = [] {
+		std::error_code error;
+		const std::filesystem::path temporaryDirectory = std::filesystem::temp_directory_path(error);
+		if (error) {
+			throw std::runtime_error("could not resolve the test temporary directory: " + error.message());
+		}
+		return temporaryDirectory / "zyx_agent_memory_sigsegv_repro.zyx";
+	}();
+	return path;
+}
+
+const std::filesystem::path &blobChainDatabasePath() {
+	static const std::filesystem::path path = [] {
+		std::error_code error;
+		const std::filesystem::path temporaryDirectory = std::filesystem::temp_directory_path(error);
+		if (error) {
+			throw std::runtime_error("could not resolve the test temporary directory: " + error.message());
+		}
+		return temporaryDirectory / "zyx_agent_memory_blob_chain_repro.zyx";
+	}();
+	return path;
+}
 
 void removeDatabaseArtifacts() {
+	const std::filesystem::path &path = databasePath();
 	std::error_code error;
-	std::filesystem::remove_all(kDatabasePath, error);
-	std::filesystem::remove_all(kDatabasePath.string() + "-wal", error);
+	for (const std::string &suffix: {"", ".wal", ".migration", ".cutover", ".legacy-backup", "-wal"}) {
+		std::filesystem::remove_all(path.string() + suffix, error);
+		error.clear();
+	}
 }
 
 void removeBlobChainDatabaseArtifacts() {
+	const std::filesystem::path &path = blobChainDatabasePath();
 	std::error_code error;
-	std::filesystem::remove_all(kBlobChainDatabasePath, error);
-	std::filesystem::remove_all(kBlobChainDatabasePath.string() + "-wal", error);
+	for (const std::string &suffix: {"", ".wal", ".migration", ".cutover", ".legacy-backup", "-wal"}) {
+		std::filesystem::remove_all(path.string() + suffix, error);
+		error.clear();
+	}
 }
 
 void requireDriverSuccess(zyx_driver_status_t status, zyx_driver_error_t *&error, const std::string &operation) {
@@ -315,7 +339,7 @@ void retainFullConversationWorkload() {
 
 	zyx_driver_db_t *database = nullptr;
 	zyx_driver_error_t *error = nullptr;
-	requireDriverSuccess(zyx_driver_db_open(kDatabasePath.string().c_str(), &database, &error), error,
+	requireDriverSuccess(zyx_driver_db_open(databasePath().string().c_str(), &database, &error), error,
 		"open agent-memory database");
 	initializeMemorySchema(database);
 
@@ -453,7 +477,7 @@ void retainBlobChainWorkload() {
 	removeBlobChainDatabaseArtifacts();
 	zyx_driver_db_t *database = nullptr;
 	zyx_driver_error_t *error = nullptr;
-	requireDriverSuccess(zyx_driver_db_open(kBlobChainDatabasePath.string().c_str(), &database, &error), error,
+	requireDriverSuccess(zyx_driver_db_open(blobChainDatabasePath().string().c_str(), &database, &error), error,
 		"open blob-chain agent-memory database");
 	initializeBlobChainMemorySchema(database);
 
@@ -505,19 +529,13 @@ private:
 	std::streambuf *original_;
 };
 
-TEST(DriverAbiAgentMemoryLongConversationTest, FullConversationRetentionAndPQTrainingExitNormally) {
+TEST(DriverAbiAgentMemoryLongConversationTest, FullConversationRetentionAndPQTrainingCompletesWithoutNativeCrash) {
 	removeDatabaseArtifacts();
 
-	// Run in a death-test child so a native regression is reported as a failed
-	// assertion instead of terminating the unified test executable.
-	EXPECT_EXIT(
-		{
-			retainFullConversationWorkload();
-			std::_Exit(0);
-		},
-		::testing::ExitedWithCode(0),
-		"");
-
+	// The suite-level supervisor already isolates timeout and crash failures.
+	// A fork-based death test is unsafe here because vector training can create
+	// worker threads before the death-test child starts the full workload.
+	EXPECT_NO_THROW(retainFullConversationWorkload());
 	removeDatabaseArtifacts();
 }
 

@@ -79,7 +79,7 @@ ZYX 实现了 Cypher 查询语言的广泛子集，覆盖读取、写入、DDL �
 
 **数据加载**: `LOAD CSV` / `LOAD CSV WITH HEADERS`，支持 `FIELDTERMINATOR`
 
-**诊断**: `EXPLAIN`（逻辑计划）, `PROFILE`（含耗时的执行计划）
+**诊断**: `EXPLAIN`（逻辑计划）, `PROFILE`（执行耗时；native relocatable logical 路径提供一条整条 plan 的 summary）
 
 ```cypher
 // 变长路径模式匹配
@@ -246,7 +246,7 @@ WAL 文件延迟到首次写事务时才创建。纯只读负载不会接触 WAL
 | Limit 下推 | 将 LIMIT 下推到非 DISTINCT 投影之下 |
 
 :::tip
-使用 `EXPLAIN` 查看优化后的逻辑计划（不执行），或使用 `PROFILE` 查看执行后的算子级耗时。
+使用 `EXPLAIN` 查看优化后的逻辑计划（不执行）。`PROFILE` 用于查看执行耗时；native relocatable logical 路径当前追加一条整条 plan 的 summary，而不是算子级耗时。
 :::
 
 ### 内置函数
@@ -276,10 +276,7 @@ ZYX 内置线程池，支持并行查询执行：
 | PQ 训练 | K-means 跨子空间并行训练 |
 | 向量检索 | DiskANN 重排序和 PQ 距离计算并行 |
 
-```cypher
-// 运行时配置线程池大小
-CALL dbms.setConfig("thread.pool.size", 8)
-```
+对于 native logical runtime，请在执行查询前由嵌入应用设置线程池策略。在原生配置更新具备统一的持久化 metadata transaction 边界之前，已退休的 `dbms.setConfig` 过程会保持不可用。
 
 :::info WASM 模式
 编译为 WebAssembly 时，ZYX 自动以单线程模式运行，无需额外配置。
@@ -287,26 +284,7 @@ CALL dbms.setConfig("thread.pool.size", 8)
 
 ### 运行时配置
 
-| 配置键 | 说明 |
-|--------|------|
-| `query.timeout_ms` | 单次查询执行超时 |
-| `query.max_memory_mb` | 单次查询内存限制 |
-| `query.max_var_length_depth` | 变长遍历最大深度 |
-| `query.slow_log.enabled` | 启用慢查询日志 |
-| `query.slow_log.threshold_ms` | 慢查询阈值 |
-| `thread.pool.size` | 线程池大小（0 = 自动） |
-| `storage.compaction.enabled` | 启用段压缩 |
-
-```cypher
--- 查看所有配置
-CALL dbms.listConfig
-
--- 设置 5 秒超时
-CALL dbms.setConfig("query.timeout_ms", 5000)
-
--- 查看查询统计
-CALL dbms.showStats
-```
+native logical runtime 当前不通过 Cypher 暴露配置或统计更新。`dbms.listConfig`、`dbms.getConfig`、`dbms.setConfig`、`dbms.showStats` 和 `dbms.resetStats` 会 fail closed，而不会使用已退休的 State-manager 存储路径。这可避免配置写入绕过 metadata WAL 恢复和图发布 fence。
 
 ## 多语言 API
 

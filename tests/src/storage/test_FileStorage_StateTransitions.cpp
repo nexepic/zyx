@@ -32,6 +32,13 @@ protected:
 		std::error_code ec;
 		std::filesystem::remove(testFilePath, ec);
 	}
+
+	[[nodiscard]] std::shared_ptr<graph::storage::FileStorage> openLegacyStorage() const {
+		auto storage = std::make_shared<graph::storage::FileStorage>(
+				testFilePath.string(), 16U, graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
+		storage->open();
+		return storage;
+	}
 };
 
 // ============================================================================
@@ -64,12 +71,10 @@ TEST_F(FileStorageStateTransitionsTest, Open_CreateNewFile_AlreadyExists) {
 // ============================================================================
 
 TEST_F(FileStorageStateTransitionsTest, Open_AlreadyOpen) {
-	graph::Database db(testFilePath.string());
-	db.open();
-	auto fs = db.getStorage();
+	auto fs = openLegacyStorage();
 	// Second open should be a no-op
 	EXPECT_NO_THROW(fs->open());
-	db.close();
+	fs->close();
 }
 
 // ============================================================================
@@ -86,11 +91,9 @@ TEST_F(FileStorageStateTransitionsTest, Save_NotOpen) {
 // ============================================================================
 
 TEST_F(FileStorageStateTransitionsTest, Save_NoChanges) {
-	graph::Database db(testFilePath.string());
-	db.open();
-	auto fs = db.getStorage();
+	auto fs = openLegacyStorage();
 	EXPECT_NO_THROW(fs->save());
-	db.close();
+	fs->close();
 }
 
 // ============================================================================
@@ -98,9 +101,7 @@ TEST_F(FileStorageStateTransitionsTest, Save_NoChanges) {
 // ============================================================================
 
 TEST_F(FileStorageStateTransitionsTest, Flush_CompactionDisabled) {
-	graph::Database db(testFilePath.string());
-	db.open();
-	auto fs = db.getStorage();
+	auto fs = openLegacyStorage();
 
 	fs->setCompactionEnabled(false);
 
@@ -110,7 +111,7 @@ TEST_F(FileStorageStateTransitionsTest, Flush_CompactionDisabled) {
 
 	// Flush with compaction disabled
 	EXPECT_NO_THROW(fs->flush());
-	db.close();
+	fs->close();
 }
 
 // ============================================================================
@@ -118,9 +119,7 @@ TEST_F(FileStorageStateTransitionsTest, Flush_CompactionDisabled) {
 // ============================================================================
 
 TEST_F(FileStorageStateTransitionsTest, Flush_DeleteNoCompact) {
-	graph::Database db(testFilePath.string());
-	db.open();
-	auto fs = db.getStorage();
+	auto fs = openLegacyStorage();
 
 	fs->setCompactionEnabled(false);
 
@@ -131,7 +130,7 @@ TEST_F(FileStorageStateTransitionsTest, Flush_DeleteNoCompact) {
 
 	dm->deleteNode(n);
 	EXPECT_NO_THROW(fs->flush());
-	db.close();
+	fs->close();
 }
 
 // ============================================================================
@@ -139,11 +138,9 @@ TEST_F(FileStorageStateTransitionsTest, Flush_DeleteNoCompact) {
 // ============================================================================
 
 TEST_F(FileStorageStateTransitionsTest, ClearCache) {
-	graph::Database db(testFilePath.string());
-	db.open();
-	auto fs = db.getStorage();
+	auto fs = openLegacyStorage();
 	EXPECT_NO_THROW(fs->clearCache());
-	db.close();
+	fs->close();
 }
 
 // ============================================================================
@@ -151,12 +148,10 @@ TEST_F(FileStorageStateTransitionsTest, ClearCache) {
 // ============================================================================
 
 TEST_F(FileStorageStateTransitionsTest, VerifyIntegrity) {
-	graph::Database db(testFilePath.string());
-	db.open();
-	auto fs = db.getStorage();
+	auto fs = openLegacyStorage();
 	auto result = fs->verifyIntegrity();
 	EXPECT_TRUE(result.allPassed);
-	db.close();
+	fs->close();
 }
 
 // ============================================================================
@@ -170,9 +165,7 @@ public:
 };
 
 TEST_F(FileStorageStateTransitionsTest, RegisterEventListener_FlushNotifies) {
-	graph::Database db(testFilePath.string());
-	db.open();
-	auto fs = db.getStorage();
+	auto fs = openLegacyStorage();
 
 	auto listener = std::make_shared<TestStorageListener>();
 	fs->registerEventListener(listener);
@@ -183,13 +176,11 @@ TEST_F(FileStorageStateTransitionsTest, RegisterEventListener_FlushNotifies) {
 
 	fs->flush();
 	EXPECT_GE(listener->flushCount, 1);
-	db.close();
+	fs->close();
 }
 
 TEST_F(FileStorageStateTransitionsTest, RegisterEventListener_ExpiredListener) {
-	graph::Database db(testFilePath.string());
-	db.open();
-	auto fs = db.getStorage();
+	auto fs = openLegacyStorage();
 
 	{
 		auto listener = std::make_shared<TestStorageListener>();
@@ -203,7 +194,7 @@ TEST_F(FileStorageStateTransitionsTest, RegisterEventListener_ExpiredListener) {
 
 	// Flush should clean up expired listener
 	EXPECT_NO_THROW(fs->flush());
-	db.close();
+	fs->close();
 }
 
 // ============================================================================
@@ -211,9 +202,7 @@ TEST_F(FileStorageStateTransitionsTest, RegisterEventListener_ExpiredListener) {
 // ============================================================================
 
 TEST_F(FileStorageStateTransitionsTest, VerifyBitmapConsistency) {
-	graph::Database db(testFilePath.string());
-	db.open();
-	auto fs = db.getStorage();
+	auto fs = openLegacyStorage();
 
 	auto dm = fs->getDataManager();
 	graph::Node n(0, 1);
@@ -227,7 +216,7 @@ TEST_F(FileStorageStateTransitionsTest, VerifyBitmapConsistency) {
 		bool consistent = fs->verifyBitmapConsistency(segments[0].file_offset);
 		EXPECT_TRUE(consistent);
 	}
-	db.close();
+	fs->close();
 }
 
 // ============================================================================
@@ -245,9 +234,7 @@ TEST_F(FileStorageStateTransitionsTest, Close_NotOpen) {
 // ============================================================================
 
 TEST_F(FileStorageStateTransitionsTest, Flush_Concurrent) {
-	graph::Database db(testFilePath.string());
-	db.open();
-	auto fs = db.getStorage();
+	auto fs = openLegacyStorage();
 
 	auto dm = fs->getDataManager();
 
@@ -268,7 +255,7 @@ TEST_F(FileStorageStateTransitionsTest, Flush_Concurrent) {
 		t.join();
 	}
 
-	db.close();
+	fs->close();
 }
 
 // ============================================================================
@@ -276,9 +263,7 @@ TEST_F(FileStorageStateTransitionsTest, Flush_Concurrent) {
 // ============================================================================
 
 TEST_F(FileStorageStateTransitionsTest, Save_SnapshotEmpty) {
-	graph::Database db(testFilePath.string());
-	db.open();
-	auto fs = db.getStorage();
+	auto fs = openLegacyStorage();
 
 	auto dm = fs->getDataManager();
 	graph::Node n(0, 1);
@@ -290,7 +275,7 @@ TEST_F(FileStorageStateTransitionsTest, Save_SnapshotEmpty) {
 	// Second save: no dirty data but hasUnsavedChanges might still be true
 	// depending on implementation. If not, this is just a no-op coverage.
 	EXPECT_NO_THROW(fs->save());
-	db.close();
+	fs->close();
 }
 
 // ============================================================================
@@ -298,9 +283,7 @@ TEST_F(FileStorageStateTransitionsTest, Save_SnapshotEmpty) {
 // ============================================================================
 
 TEST_F(FileStorageStateTransitionsTest, Flush_DeleteWithCompaction) {
-	graph::Database db(testFilePath.string());
-	db.open();
-	auto fs = db.getStorage();
+	auto fs = openLegacyStorage();
 
 	fs->setCompactionEnabled(true);
 
@@ -320,7 +303,7 @@ TEST_F(FileStorageStateTransitionsTest, Flush_DeleteWithCompaction) {
 		dm->deleteNode(n);
 	}
 	EXPECT_NO_THROW(fs->flush());
-	db.close();
+	fs->close();
 }
 
 // ============================================================================
@@ -328,9 +311,7 @@ TEST_F(FileStorageStateTransitionsTest, Flush_DeleteWithCompaction) {
 // ============================================================================
 
 TEST_F(FileStorageStateTransitionsTest, Flush_DeleteBelowCompactionThreshold) {
-	graph::Database db(testFilePath.string());
-	db.open();
-	auto fs = db.getStorage();
+	auto fs = openLegacyStorage();
 
 	fs->setCompactionEnabled(true);
 
@@ -351,7 +332,7 @@ TEST_F(FileStorageStateTransitionsTest, Flush_DeleteBelowCompactionThreshold) {
 	// flush() enters compaction block (deleteOperationPerformed=true,
 	// compactionEnabled=true) but shouldCompact() returns false.
 	EXPECT_NO_THROW(fs->flush());
-	db.close();
+	fs->close();
 }
 
 // ============================================================================
@@ -359,9 +340,7 @@ TEST_F(FileStorageStateTransitionsTest, Flush_DeleteBelowCompactionThreshold) {
 // ============================================================================
 
 TEST_F(FileStorageStateTransitionsTest, Save_EmptySnapshot) {
-	graph::Database db(testFilePath.string());
-	db.open();
-	auto fs = db.getStorage();
+	auto fs = openLegacyStorage();
 
 	auto dm = fs->getDataManager();
 
@@ -372,5 +351,5 @@ TEST_F(FileStorageStateTransitionsTest, Save_EmptySnapshot) {
 
 	// Now save() with no new dirty data — prepareFlushSnapshot returns empty
 	EXPECT_NO_THROW(fs->save());
-	db.close();
+	fs->close();
 }

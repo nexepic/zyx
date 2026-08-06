@@ -13,7 +13,7 @@
 #include <vector>
 
 #include "graph/concurrent/ThreadPool.hpp"
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/execution/operators/NodeScanOperator.hpp"
 
@@ -24,7 +24,7 @@ using namespace graph::query::execution::operators;
 
 class NodeScanOperatorParallelTest : public ::testing::Test {
 protected:
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 	std::shared_ptr<storage::DataManager> dm;
 	std::shared_ptr<query::indexes::IndexManager> im;
 	fs::path testFilePath;
@@ -36,10 +36,10 @@ protected:
 			fs::remove_all(testFilePath);
 		}
 
-		db = std::make_unique<Database>(testFilePath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testFilePath.string());
 		db->open();
-		dm = db->getStorage()->getDataManager();
-		im = db->getQueryEngine()->getIndexManager();
+		dm = db->storage()->getDataManager();
+		im = db->indexManager();
 	}
 
 	void TearDown() override {
@@ -121,7 +121,7 @@ TEST_F(NodeScanOperatorParallelTest, ParallelFullScanExecutesParallelPathAndPerf
 		dm->addNodeProperties(nodes[i].getId(), {{"k", PropertyValue(int64_t(i))}});
 	}
 
-	db->getStorage()->flush();
+	db->storage()->flush();
 	dm->clearCache();
 
 	NodeScanConfig cfg;
@@ -306,7 +306,7 @@ TEST_F(NodeScanOperatorParallelTest, InterleavedLabelScanFiltersNonCandidateNode
 
 	ASSERT_TRUE(im->createIndex("idx_interleaved_match_label_parallel", "node", "InterleavedMatch", ""));
 
-	db->getStorage()->flush();
+	db->storage()->flush();
 	dm->clearCache();
 
 	NodeScanConfig cfg;
@@ -341,7 +341,7 @@ TEST_F(NodeScanOperatorParallelTest, ParallelFullScanSkipsNodesStoredInactive) {
 	}
 	dm->addNodes(nodes);
 
-	db->getStorage()->flush();
+	db->storage()->flush();
 	dm->clearCache();
 
 	NodeScanConfig cfg;

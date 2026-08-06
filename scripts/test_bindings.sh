@@ -40,11 +40,14 @@ DO_PYTHON=0
 DO_RUST=0
 DO_CONAN=1
 
-# Python interpreter used to build/test the Python binding. Default to 3.14 so
-# the editable (PEP 660) install works even on machines whose system python3 is
-# too old (macOS CommandLineTools ships 3.9 / pip 21.2, which cannot do PEP 660
-# editable installs with scikit-build-core). Override with: PY_BIN=python3.12 ...
+# Python interpreter used to create the isolated Python-binding test environment.
+# Default to 3.14 so the editable (PEP 660) install works even on machines whose
+# system python3 is too old (macOS CommandLineTools ships 3.9 / pip 21.2, which
+# cannot do PEP 660 editable installs with scikit-build-core). Override with:
+# PY_BIN=python3.12 ...
 PYTHON_BIN="${PY_BIN:-python3.14}"
+PYTHON_VENV_DIR="${ZYX_BINDINGS_PYTHON_VENV_DIR:-${BUILD_DIR}/python-bindings-venv}"
+USE_ACTIVE_PYTHON="${ZYX_BINDINGS_USE_ACTIVE_PYTHON:-0}"
 PYTHON_MIN_MAJOR=3
 PYTHON_MIN_MINOR=10
 PIP_MIN_MAJOR=21
@@ -144,14 +147,33 @@ check_python_env() {
 	fi
 }
 
+prepare_python_env() {
+	# Validate the requested base interpreter before using it to create a venv.
+	check_python_env
+	if [[ "${USE_ACTIVE_PYTHON}" == "1" ]]; then
+		log "Using requested active Python environment"
+		return
+	fi
+
+	local venv_python
+	if [[ "${OS:-}" == "Windows_NT" ]]; then
+		venv_python="${PYTHON_VENV_DIR}/Scripts/python.exe"
+	else
+		venv_python="${PYTHON_VENV_DIR}/bin/python"
+	fi
+	if [[ ! -x "${venv_python}" ]]; then
+		log "Creating isolated Python binding environment: ${PYTHON_VENV_DIR}"
+		"${PYTHON_BIN}" -m venv "${PYTHON_VENV_DIR}"
+	fi
+	PYTHON_BIN="${venv_python}"
+	check_python_env
+}
+
 test_python() {
 	local dir="${ROOT_DIR}/bindings/python"
 	linux_clang_env
-	check_python_env
+	prepare_python_env
 	log "Using Python: $(${PYTHON_BIN} --version) ($(${PYTHON_BIN} -m pip --version | awk '{print $2}'))"
-	if [[ -z "${VIRTUAL_ENV:-}" ]]; then
-		warn "Not in a virtualenv; installing into the active Python environment (${PYTHON_BIN})."
-	fi
 	log "Building + installing zyxdb (editable, [test])"
 	CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN} -DCMAKE_BUILD_TYPE=${BUILD_TYPE}" \
 		"${PYTHON_BIN}" -m pip install -e "${dir}[test]"

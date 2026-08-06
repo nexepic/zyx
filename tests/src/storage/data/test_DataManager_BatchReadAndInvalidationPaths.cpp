@@ -108,12 +108,8 @@ TEST_F(DataManagerTest, PreadSegmentsHandlesGuardsBypassAndReadThroughCache) {
 TEST_F(DataManagerTest, PreadSegmentsReadThroughWorksWithZeroPageCache) {
 	const auto zeroCachePath = testFilePath.string() + ".zero_cache";
 	{
-		graph::Database zeroCacheDb(
-				zeroCachePath,
-				storage::OpenMode::OPEN_CREATE_OR_OPEN_FILE,
-				0);
-		zeroCacheDb.open();
-		auto zeroCacheStorage = zeroCacheDb.getStorage();
+		auto zeroCacheStorage = std::make_shared<graph::storage::FileStorage>(zeroCachePath, 0U);
+		zeroCacheStorage->open();
 		auto zeroCacheDataManager = zeroCacheStorage->getDataManager();
 		ASSERT_EQ(zeroCacheDataManager->getPagePool().capacity(), 0U);
 
@@ -130,7 +126,7 @@ TEST_F(DataManagerTest, PreadSegmentsReadThroughWorksWithZeroPageCache) {
 		EXPECT_EQ(zeroCacheDataManager->preadSegments(
 						  buffer.data(), 1, nodeSegment, SegmentReadCachePolicy::SRCP_READ_THROUGH),
 				  static_cast<ssize_t>(TOTAL_SEGMENT_SIZE));
-		zeroCacheDb.close();
+		zeroCacheStorage->close();
 	}
 	std::error_code ec;
 	std::filesystem::remove(zeroCachePath, ec);

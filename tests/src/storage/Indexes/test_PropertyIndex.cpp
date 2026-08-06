@@ -25,7 +25,6 @@
 #include <gtest/gtest.h>
 #include <memory>
 #include <numeric>
-#include "graph/core/Database.hpp"
 #include "graph/storage/FileStorage.hpp"
 #include "graph/storage/data/DataManager.hpp"
 #include "graph/storage/indexes/EntityTypeIndexManager.hpp"
@@ -40,22 +39,37 @@ protected:
 		testFilePath = std::filesystem::temp_directory_path() /
 					   ("test_propertyIndex" + boost::uuids::to_string(uuid) + ".dat");
 
-		database = std::make_unique<graph::Database>(testFilePath.string());
-		database->open();
-		dataManager = database->getStorage()->getDataManager();
-
-		propertyIndex = database->getQueryEngine()->getIndexManager()->getNodeIndexManager()->getPropertyIndex();
+		openStorage(graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
 	}
 
 	void TearDown() override {
-		propertyIndex.reset();
-		dataManager.reset();
-		if (database) {
-			database->close();
-			database.reset();
-		}
+		closeStorage();
 		std::error_code ec;
 		std::filesystem::remove(testFilePath, ec);
+	}
+
+	void closeStorage() {
+		propertyIndex.reset();
+		indexManager.reset();
+		dataManager.reset();
+		if (fileStorage) {
+			fileStorage->close();
+		}
+		fileStorage.reset();
+	}
+
+	void reopenStorage() {
+		closeStorage();
+		openStorage(graph::storage::OpenMode::OPEN_EXISTING_FILE);
+	}
+
+	void openStorage(graph::storage::OpenMode mode) {
+		fileStorage = std::make_shared<graph::storage::FileStorage>(testFilePath.string(), 10'000U, mode);
+		fileStorage->open();
+		dataManager = fileStorage->getDataManager();
+		indexManager = std::make_shared<graph::query::indexes::IndexManager>(fileStorage);
+		indexManager->initialize();
+		propertyIndex = indexManager->getNodeIndexManager()->getPropertyIndex();
 	}
 
 	static bool vectorContains(const std::vector<int64_t> &vec, int64_t val) {
@@ -72,8 +86,9 @@ protected:
 	}
 
 	std::filesystem::path testFilePath;
-	std::unique_ptr<graph::Database> database;
+	std::shared_ptr<graph::storage::FileStorage> fileStorage;
 	std::shared_ptr<graph::storage::DataManager> dataManager;
+	std::shared_ptr<graph::query::indexes::IndexManager> indexManager;
 	std::shared_ptr<graph::query::indexes::PropertyIndex> propertyIndex;
 };
 
@@ -314,7 +329,7 @@ TEST_F(PropertyIndexTest, SaveAndLoadState) {
 	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
 
 	auto reloadedIndex = std::make_unique<graph::query::indexes::PropertyIndex>(
-			dataManager, database->getStorage()->getSystemStateManager(), indexType, stateKeyPrefix);
+			dataManager, fileStorage->getSystemStateManager(), indexType, stateKeyPrefix);
 
 	// Assert: The reloaded index should contain all the data and type information.
 	EXPECT_FALSE(reloadedIndex->isEmpty());
@@ -347,7 +362,7 @@ TEST_F(PropertyIndexTest, HandlesLargeNumberOfPropertiesAndReloads) {
 
 	// Act II: Create a new instance, which should load the state from the DataManager.
 	auto reloadedIndex = std::make_unique<graph::query::indexes::PropertyIndex>(
-			dataManager, database->getStorage()->getSystemStateManager(), indexType, stateKeyPrefix);
+			dataManager, fileStorage->getSystemStateManager(), indexType, stateKeyPrefix);
 
 	// Assert: Verify that the reloaded index contains the correct data.
 	ASSERT_FALSE(reloadedIndex->isEmpty());
@@ -460,22 +475,18 @@ TEST_F(PropertyIndexTest, Persistence_MapKeyRemoval) {
 	propertyIndex->addProperty(1, key1, 100);
 	propertyIndex->addProperty(1, key2, 200);
 	propertyIndex->flush();
-	database->getStorage()->flush();
+	fileStorage->flush();
 
 	// 1. Manually drop one key
 	propertyIndex->dropKey(key1);
 	propertyIndex->flush();
-	database->getStorage()->flush();
+	fileStorage->flush();
 
 	// 2. Reload
-	database->close();
-	database.reset();
-
-	auto newDatabase = std::make_unique<graph::Database>(testFilePath.string());
-	newDatabase->open();
+	reopenStorage();
 
 	// 3. Verify key1 is totally gone from persisted state
-	auto reloadedIdx = newDatabase->getQueryEngine()->getIndexManager()->getNodeIndexManager()->getPropertyIndex();
+	auto reloadedIdx = propertyIndex;
 	EXPECT_FALSE(reloadedIdx->hasKeyIndexed(key1));
 	EXPECT_TRUE(reloadedIdx->hasKeyIndexed(key2));
 }
@@ -1106,7 +1117,7 @@ TEST_F(PropertyIndexTest, SerializeRootMap_OnlyBoolRoots) {
 	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
 
 	auto reloadedIndex = std::make_unique<graph::query::indexes::PropertyIndex>(
-			dataManager, database->getStorage()->getSystemStateManager(), indexType, stateKeyPrefix);
+			dataManager, fileStorage->getSystemStateManager(), indexType, stateKeyPrefix);
 
 	EXPECT_TRUE(reloadedIndex->hasKeyIndexed("only_bool"));
 	EXPECT_EQ(reloadedIndex->getIndexedKeyType("only_bool"), graph::PropertyType::BOOLEAN);
@@ -1127,7 +1138,7 @@ TEST_F(PropertyIndexTest, SerializeRootMap_OnlyDoubleRoots) {
 	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
 
 	auto reloadedIndex = std::make_unique<graph::query::indexes::PropertyIndex>(
-			dataManager, database->getStorage()->getSystemStateManager(), indexType, stateKeyPrefix);
+			dataManager, fileStorage->getSystemStateManager(), indexType, stateKeyPrefix);
 
 	EXPECT_TRUE(reloadedIndex->hasKeyIndexed("only_double"));
 	EXPECT_EQ(reloadedIndex->getIndexedKeyType("only_double"), graph::PropertyType::DOUBLE);
@@ -1161,7 +1172,7 @@ TEST_F(PropertyIndexTest, Initialize_WithPersistedKeys) {
 	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
 
 	auto reloadedIndex = std::make_unique<graph::query::indexes::PropertyIndex>(
-			dataManager, database->getStorage()->getSystemStateManager(), indexType, stateKeyPrefix);
+			dataManager, fileStorage->getSystemStateManager(), indexType, stateKeyPrefix);
 
 	// Verify all keys were loaded during initialize
 	auto keys = reloadedIndex->getIndexedKeys();
@@ -1190,7 +1201,7 @@ TEST_F(PropertyIndexTest, SerializeRootMap_OnlyIntRoots) {
 	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
 
 	auto reloadedIndex = std::make_unique<graph::query::indexes::PropertyIndex>(
-			dataManager, database->getStorage()->getSystemStateManager(), indexType, stateKeyPrefix);
+			dataManager, fileStorage->getSystemStateManager(), indexType, stateKeyPrefix);
 
 	EXPECT_TRUE(reloadedIndex->hasKeyIndexed("only_int"));
 	EXPECT_EQ(reloadedIndex->getIndexedKeyType("only_int"), graph::PropertyType::INTEGER);
@@ -1211,7 +1222,7 @@ TEST_F(PropertyIndexTest, SerializeRootMap_OnlyStringRoots) {
 	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
 
 	auto reloadedIndex = std::make_unique<graph::query::indexes::PropertyIndex>(
-			dataManager, database->getStorage()->getSystemStateManager(), indexType, stateKeyPrefix);
+			dataManager, fileStorage->getSystemStateManager(), indexType, stateKeyPrefix);
 
 	EXPECT_TRUE(reloadedIndex->hasKeyIndexed("only_str"));
 	EXPECT_EQ(reloadedIndex->getIndexedKeyType("only_str"), graph::PropertyType::STRING);
@@ -1290,7 +1301,7 @@ TEST_F(PropertyIndexTest, CountQueriesHandleOpenBoundsAndMissingRoots) {
 
 	constexpr uint32_t indexType = graph::query::indexes::IndexTypes::NODE_PROPERTY_TYPE;
 	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
-	auto sysState = database->getStorage()->getSystemStateManager();
+	auto sysState = fileStorage->getSystemStateManager();
 
 	std::unordered_map<std::string, int64_t> typeMap;
 	typeMap["count_orphan_int"] = static_cast<int64_t>(graph::PropertyType::INTEGER);
@@ -1480,7 +1491,7 @@ TEST_F(PropertyIndexTest, AddProperty_AutoCreatesIndex) {
 TEST_F(PropertyIndexTest, RemoveProperty_TypeExistsButNoRoot) {
 	constexpr uint32_t indexType = graph::query::indexes::IndexTypes::NODE_PROPERTY_TYPE;
 	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
-	auto sysState = database->getStorage()->getSystemStateManager();
+	auto sysState = fileStorage->getSystemStateManager();
 
 	// Set up state: key "orphan_key" has INTEGER type but no int root entry
 	std::unordered_map<std::string, int64_t> typeMap;
@@ -1509,7 +1520,7 @@ TEST_F(PropertyIndexTest, RemoveProperty_TypeExistsButNoRoot) {
 TEST_F(PropertyIndexTest, FindExactMatch_TypeExistsButNoRoot) {
 	constexpr uint32_t indexType = graph::query::indexes::IndexTypes::NODE_PROPERTY_TYPE;
 	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
-	auto sysState = database->getStorage()->getSystemStateManager();
+	auto sysState = fileStorage->getSystemStateManager();
 
 	// Set up state: key "orphan_str" has STRING type but no string root entry
 	std::unordered_map<std::string, int64_t> typeMap;
@@ -1534,7 +1545,7 @@ TEST_F(PropertyIndexTest, FindExactMatch_TypeExistsButNoRoot) {
 TEST_F(PropertyIndexTest, FindRange_TypeExistsButNoRoot) {
 	constexpr uint32_t indexType = graph::query::indexes::IndexTypes::NODE_PROPERTY_TYPE;
 	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
-	auto sysState = database->getStorage()->getSystemStateManager();
+	auto sysState = fileStorage->getSystemStateManager();
 
 	// Set up state: key "orphan_dbl" has DOUBLE type but no double root entry
 	std::unordered_map<std::string, int64_t> typeMap;
@@ -1559,7 +1570,7 @@ TEST_F(PropertyIndexTest, FindRange_TypeExistsButNoRoot) {
 TEST_F(PropertyIndexTest, FindRange_IntegerTypeNoRoot) {
 	constexpr uint32_t indexType = graph::query::indexes::IndexTypes::NODE_PROPERTY_TYPE;
 	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
-	auto sysState = database->getStorage()->getSystemStateManager();
+	auto sysState = fileStorage->getSystemStateManager();
 
 	std::unordered_map<std::string, int64_t> typeMap;
 	typeMap["orphan_int"] = static_cast<int64_t>(graph::PropertyType::INTEGER);
@@ -1688,7 +1699,7 @@ TEST_F(PropertyIndexTest, AddPropertiesBatch_StringTypeTransition) {
 TEST_F(PropertyIndexTest, RemoveProperty_BooleanTypeNoRoot) {
 	constexpr uint32_t indexType = graph::query::indexes::IndexTypes::NODE_PROPERTY_TYPE;
 	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
-	auto sysState = database->getStorage()->getSystemStateManager();
+	auto sysState = fileStorage->getSystemStateManager();
 
 	std::unordered_map<std::string, int64_t> typeMap;
 	typeMap["orphan_bool"] = static_cast<int64_t>(graph::PropertyType::BOOLEAN);
@@ -1708,7 +1719,7 @@ TEST_F(PropertyIndexTest, RemoveProperty_BooleanTypeNoRoot) {
 TEST_F(PropertyIndexTest, FindExactMatch_BooleanTypeNoRoot) {
 	constexpr uint32_t indexType = graph::query::indexes::IndexTypes::NODE_PROPERTY_TYPE;
 	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
-	auto sysState = database->getStorage()->getSystemStateManager();
+	auto sysState = fileStorage->getSystemStateManager();
 
 	std::unordered_map<std::string, int64_t> typeMap;
 	typeMap["orphan_bool_find"] = static_cast<int64_t>(graph::PropertyType::BOOLEAN);
@@ -1875,7 +1886,7 @@ TEST_F(PropertyIndexTest, AddProperty_TypeMismatchOnConcreteKey) {
 TEST_F(PropertyIndexTest, ClearKey_TypeExistsButNoRoot) {
 	constexpr uint32_t indexType = graph::query::indexes::IndexTypes::NODE_PROPERTY_TYPE;
 	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
-	auto sysState = database->getStorage()->getSystemStateManager();
+	auto sysState = fileStorage->getSystemStateManager();
 
 	// Set up state: key has INTEGER type but no integer root
 	std::unordered_map<std::string, int64_t> typeMap;
@@ -1954,7 +1965,7 @@ TEST_F(PropertyIndexTest, AddPropertiesBatch_ListTypeSkipsWithoutChangingType) {
 TEST_F(PropertyIndexTest, FindExactMatch_ListTypeThrowsFromRootMap) {
 	constexpr uint32_t indexType = graph::query::indexes::IndexTypes::NODE_PROPERTY_TYPE;
 	const std::string stateKeyPrefix = graph::query::indexes::StateKeys::NODE_PROPERTY_PREFIX;
-	auto sysState = database->getStorage()->getSystemStateManager();
+	auto sysState = fileStorage->getSystemStateManager();
 
 	// Set up state: key has LIST type (which has no root map)
 	std::unordered_map<std::string, int64_t> typeMap;

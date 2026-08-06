@@ -112,7 +112,7 @@ TEST(LRUCacheStatsTest, EvictionDoesNotAffectCounters) {
 }
 
 // ============================================================================
-// PageBufferPool hit/miss counter tests (via Database)
+// PageBufferPool hit/miss counter tests (via graph::storage::testing::LegacyPhysicalStorageTestHarness)
 // ============================================================================
 
 #include <boost/uuid/uuid.hpp>
@@ -120,7 +120,7 @@ TEST(LRUCacheStatsTest, EvictionDoesNotAffectCounters) {
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
 
-#include "graph/core/Database.hpp"
+#include "storage/LegacyPhysicalStorageTestHarness.hpp"
 #include "graph/storage/SegmentIndexManager.hpp"
 #include "graph/storage/StorageHeaders.hpp"
 
@@ -132,7 +132,7 @@ protected:
 	void SetUp() override {
 		boost::uuids::uuid uuid = boost::uuids::random_generator()();
 		testFilePath = fs::temp_directory_path() / ("test_cachestats_" + to_string(uuid) + ".dat");
-		db = std::make_unique<Database>(testFilePath.string());
+		db = std::make_unique<graph::storage::testing::LegacyPhysicalStorageTestHarness>(testFilePath.string());
 		db->open();
 	}
 
@@ -144,11 +144,11 @@ protected:
 	}
 
 	fs::path testFilePath;
-	std::unique_ptr<Database> db;
+	std::unique_ptr<graph::storage::testing::LegacyPhysicalStorageTestHarness> db;
 };
 
 TEST_F(PageBufferPoolStatsTest, StatsAccessible) {
-	auto dm = db->getStorage()->getDataManager();
+	auto dm = db->storage()->getDataManager();
 	auto &pool = dm->getPagePool();
 
 	// Stats should be accessible without errors
@@ -157,11 +157,11 @@ TEST_F(PageBufferPoolStatsTest, StatsAccessible) {
 }
 
 TEST_F(PageBufferPoolStatsTest, ResetStats) {
-	auto dm = db->getStorage()->getDataManager();
+	auto dm = db->storage()->getDataManager();
 	auto &pool = dm->getPagePool();
 
 	// Do some operations to generate stats
-	auto qe = db->getQueryEngine();
+	auto qe = db->queryEngine();
 	(void) qe->execute("CREATE (n:Person {name: 'Alice'})");
 	(void) qe->execute("MATCH (n:Person) RETURN n");
 
@@ -172,11 +172,11 @@ TEST_F(PageBufferPoolStatsTest, ResetStats) {
 }
 
 TEST_F(PageBufferPoolStatsTest, OperationsGenerateStats) {
-	auto dm = db->getStorage()->getDataManager();
+	auto dm = db->storage()->getDataManager();
 	auto &pool = dm->getPagePool();
 	pool.resetStats();
 
-	auto qe = db->getQueryEngine();
+	auto qe = db->queryEngine();
 	// Create enough data to generate page accesses
 	for (int i = 0; i < 20; ++i) {
 		(void) qe->execute("CREATE (n:Person {name: 'Person" + std::to_string(i) + "', age: " + std::to_string(i) + "})");
@@ -190,12 +190,12 @@ TEST_F(PageBufferPoolStatsTest, OperationsGenerateStats) {
 }
 
 TEST_F(PageBufferPoolStatsTest, SegmentReadsPopulateAndHitPagePool) {
-	auto dm = db->getStorage()->getDataManager();
+	auto dm = db->storage()->getDataManager();
 	auto &pool = dm->getPagePool();
 
-	auto qe = db->getQueryEngine();
+	auto qe = db->queryEngine();
 	(void) qe->execute("CREATE (:SegmentCacheNode {value: 1})");
-	db->getStorage()->flush();
+	db->storage()->flush();
 
 	const auto &segments = dm->getSegmentIndexManager()->getNodeSegmentIndex();
 	ASSERT_FALSE(segments.empty());
@@ -217,7 +217,7 @@ TEST_F(PageBufferPoolStatsTest, SegmentReadsPopulateAndHitPagePool) {
 }
 
 TEST_F(PageBufferPoolStatsTest, ShowStatsViaCypher) {
-	auto qe = db->getQueryEngine();
+	auto qe = db->queryEngine();
 
 	// Generate some cache activity first
 	(void) qe->execute("CREATE (n:Test {val: 1})");
@@ -238,7 +238,7 @@ TEST_F(PageBufferPoolStatsTest, ShowStatsViaCypher) {
 }
 
 TEST_F(PageBufferPoolStatsTest, ResetStatsViaCypher) {
-	auto qe = db->getQueryEngine();
+	auto qe = db->queryEngine();
 
 	// Generate some activity
 	(void) qe->execute("CREATE (n:Test {val: 1})");
@@ -248,7 +248,7 @@ TEST_F(PageBufferPoolStatsTest, ResetStatsViaCypher) {
 	EXPECT_FALSE(result.isEmpty());
 	EXPECT_EQ(result.rowCount(), 1UL);
 
-	auto dm = db->getStorage()->getDataManager();
+	auto dm = db->storage()->getDataManager();
 	auto &pool = dm->getPagePool();
 	EXPECT_EQ(pool.hits(), 0UL);
 	EXPECT_EQ(pool.misses(), 0UL);

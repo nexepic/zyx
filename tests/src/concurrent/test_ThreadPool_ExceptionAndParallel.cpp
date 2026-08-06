@@ -32,6 +32,14 @@ using graph::concurrent::ThreadPool;
 using graph::concurrent::ThreadPoolSizeSource;
 using graph::concurrent::AdaptiveParallelPolicyState;
 
+TEST(ThreadPoolExceptionAndParallelTest, MeasuredTelemetryDurationHasPortableMinimum) {
+	using graph::concurrent::detail::minimumMeasuredElapsedNs;
+
+	EXPECT_EQ(minimumMeasuredElapsedNs(std::chrono::nanoseconds::zero()), 1U);
+	EXPECT_EQ(minimumMeasuredElapsedNs(std::chrono::nanoseconds(-1)), 1U);
+	EXPECT_EQ(minimumMeasuredElapsedNs(std::chrono::nanoseconds(37)), 37U);
+}
+
 // Single-thread void submit that throws — covers the catch path for void returns.
 TEST(ThreadPoolExceptionAndParallelTest, SingleThreadVoidSubmitExceptionPropagates) {
 	ThreadPool pool(1);

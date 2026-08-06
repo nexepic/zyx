@@ -25,8 +25,8 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
 #include <gtest/gtest.h>
-#include "graph/core/Database.hpp"
 #include "graph/core/IndexTreeManager.hpp"
+#include "graph/storage/FileStorage.hpp"
 #include "graph/storage/data/BlobManager.hpp"
 #include "graph/storage/indexes/IndexManager.hpp"
 
@@ -41,16 +41,16 @@ protected:
 		testDbPath_ = std::filesystem::temp_directory_path() /
 					  ("test_indexTreeManager_" + boost::uuids::to_string(uuid) + ".dat");
 
-		database_ = std::make_unique<Database>(testDbPath_.string());
-		database_->open();
-		dataManager_ = database_->getStorage()->getDataManager();
+		storage_ = std::make_shared<FileStorage>(testDbPath_.string(), 10'000U);
+		storage_->open();
+		dataManager_ = storage_->getDataManager();
 	}
 
 	static void TearDownTestSuite() {
 		dataManager_.reset();
-		if (database_) {
-			database_->close();
-			database_.reset();
+		if (storage_) {
+			storage_->close();
+			storage_.reset();
 			std::error_code ec;
 			if (std::filesystem::exists(testDbPath_)) {
 				std::filesystem::remove(testDbPath_, ec);
@@ -82,7 +82,7 @@ protected:
 		return ss.str();
 	}
 
-	static std::unique_ptr<Database> database_;
+	static std::shared_ptr<FileStorage> storage_;
 	static std::shared_ptr<DataManager> dataManager_;
 	static std::filesystem::path testDbPath_;
 
@@ -92,6 +92,6 @@ protected:
 	int64_t intRootId_{};
 };
 
-inline std::unique_ptr<Database> IndexTreeManagerTest::database_ = nullptr;
+inline std::shared_ptr<FileStorage> IndexTreeManagerTest::storage_ = nullptr;
 inline std::shared_ptr<DataManager> IndexTreeManagerTest::dataManager_ = nullptr;
 inline std::filesystem::path IndexTreeManagerTest::testDbPath_;

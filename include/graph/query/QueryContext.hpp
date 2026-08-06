@@ -5,6 +5,9 @@
 
 #pragma once
 
+#include <cstddef>
+#include <filesystem>
+#include <optional>
 #include "graph/core/PropertyTypes.hpp"
 #include "graph/query/ExecMode.hpp"
 #include <string>
@@ -13,6 +16,21 @@
 namespace graph::query {
 
 class QueryGuard;
+
+/**
+ * @brief Explicit, bounded policy for the local-file LOAD CSV surface.
+ *
+ * Remote URLs are intentionally unsupported. An unset import root disables
+ * LOAD CSV instead of allowing a query to read arbitrary host files.
+ */
+struct CsvImportPolicy {
+	std::optional<std::filesystem::path> import_root;
+	size_t maximum_file_bytes = 64U * 1024U * 1024U;
+	size_t maximum_rows = 1'000'000U;
+	size_t maximum_record_bytes = 4U * 1024U * 1024U;
+	size_t maximum_columns = 16'384U;
+	size_t maximum_field_bytes = 1U * 1024U * 1024U;
+};
 
 /**
  * @brief Holds execution-time context that flows through the query pipeline.
@@ -25,6 +43,7 @@ struct QueryContext {
 	ExecMode execMode = ExecMode::EM_FULL;
 	QueryGuard *guard = nullptr;
 	int maxVarLengthDepth = 50;
+	CsvImportPolicy csv_import_policy;
 
 	void checkGuard() const;
 };

@@ -140,13 +140,20 @@ fn train_on_nonexistent_index_errors() {
 }
 
 #[test]
-fn dimension_mismatch_on_insert_is_tolerated_by_index() {
-    let (_dir, db) = temp_db();
-    db.execute("CREATE VECTOR INDEX vdim ON :V(embedding) OPTIONS {dimension: 2, metric: 'L2'}", None).unwrap();
-    db.execute("CREATE (:V {id: 1, embedding: [1.0, 0.0]})", None).unwrap();
-    db.execute("CREATE (:V {id: 2, embedding: [1.0, 0.0, 0.0, 0.0]})", None).unwrap(); // skipped from index
+fn dimension_mismatch_rejects_the_graph_write_atomically() {
+	let (_dir, db) = temp_db();
+	db.execute("CREATE VECTOR INDEX vdim ON :V(embedding) OPTIONS {dimension: 2, metric: 'L2'}", None).unwrap();
+	db.execute("CREATE (:V {id: 1, embedding: [1.0, 0.0]})", None).unwrap();
+	let error = match db.execute("CREATE (:V {id: 2, embedding: [1.0, 0.0, 0.0, 0.0]})", None) {
+		Ok(_) => panic!("wrong-dimension vector write must fail"),
+		Err(error) => error,
+	};
+	assert_eq!(error.code(), ErrorCode::ExecutionError);
+	assert!(error.message().to_lowercase().contains("dimension mismatch"));
+	let mut persisted = db.execute("MATCH (n:V {id: 2}) RETURN n", None).unwrap();
+	assert!(persisted.next().unwrap().is_none());
 
-    let res = search(&db, "vdim", 5, &[1.0, 0.0]);
+	let res = search(&db, "vdim", 5, &[1.0, 0.0]);
     let ids: Vec<_> = res.iter().map(|(id, _)| *id).collect();
     assert!(ids.contains(&1), "2-d node must be found");
     assert!(!ids.contains(&2), "4-d node must be skipped from the index");

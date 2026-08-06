@@ -20,12 +20,14 @@
 
 #include "graph/query/expressions/FunctionRegistry.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
-#include "graph/storage/data/DataManager.hpp"
 
 namespace graph::query::expressions {
 
 // All entity introspection functions receive args[0] = variable name as STRING.
-// The EvaluationContext provides Record and DataManager access.
+// The native logical runtime handles these functions directly against its
+// snapshot-backed bindings. The fallback implementations below retain the
+// marker type for non-runtime expression consumers without depending on
+// discarded DataManager token resolution.
 
 static PropertyValue idImpl(
 	const std::vector<PropertyValue>& args,
@@ -52,15 +54,10 @@ static PropertyValue labelsImpl(
 
 	if (auto node = record.getNode(varName)) {
 		auto labelIds = node->getLabelIds();
-		auto* dm = context.getDataManager();
 		std::vector<PropertyValue> labels;
 		for (int64_t labelId : labelIds) {
 			if (labelId == 0) continue;
-			if (dm) {
-				labels.emplace_back(dm->resolveTokenName(labelId));
-			} else {
-				labels.emplace_back(labelId);
-			}
+			labels.emplace_back(labelId);
 		}
 		return PropertyValue(labels);
 	}
@@ -76,10 +73,6 @@ static PropertyValue typeImpl(
 
 	if (auto edge = record.getEdge(varName)) {
 		int64_t labelId = edge->getTypeId();
-		auto* dm = context.getDataManager();
-		if (dm && labelId != 0) {
-			return PropertyValue(dm->resolveTokenName(labelId));
-		}
 		return PropertyValue(labelId);
 	}
 	throw ExpressionEvaluationException("type() requires a relationship variable, '" + varName + "' is not a relationship");
