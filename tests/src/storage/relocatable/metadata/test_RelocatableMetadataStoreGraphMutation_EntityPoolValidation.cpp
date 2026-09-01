@@ -99,6 +99,7 @@ TEST_F(RelocatableMetadataStoreTest, RejectsConflictingOrEntityMappedAuxiliaryNe
 	expectIdentityMismatch([](auto &request) { request.reservation.segment_generation = Generation(2U); });
 	expectIdentityMismatch([](auto &request) { request.reservation.require_absent = false; });
 	expectIdentityMismatch([](auto &request) { request.reservation.state = SegmentState::SGS_RETIRED; });
+	expectIdentityMismatch([](auto &request) { request.last_slot = PhysicalSlotId(41U); });
 
 	const auto expectMalformed = [&](auto mutate) {
 		EntityPageNewPoolBatchRequest malformed = first;
