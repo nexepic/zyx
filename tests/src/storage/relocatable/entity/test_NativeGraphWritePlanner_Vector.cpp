@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <memory>
 #include <span>
 #include <vector>
@@ -322,13 +323,43 @@ TEST_F(NativeGraphWritePlannerVectorTest, RejectsMalformedBootstrapContractsWith
 	IndexDefinition nonVector = vectorDefinition();
 	nonVector.kind = IndexDefinitionKind::IDK_PROPERTY;
 	expectRejectedBeforeRecordLookup(nonVector, placeholder, vectorOptions());
+	IndexDefinition nonNode = vectorDefinition();
+	nonNode.entity_kind = IndexDefinitionEntityKind::IDEK_EDGE;
+	expectRejectedBeforeRecordLookup(nonNode, placeholder, vectorOptions());
+	IndexDefinition noIndexId = vectorDefinition();
+	noIndexId.index_id = 0U;
+	expectRejectedBeforeRecordLookup(noIndexId, placeholder, vectorOptions());
 	expectRejectedBeforeRecordLookup(vectorDefinition(), emptyRecords, vectorOptions());
+	const std::array<NativeGraphVectorBootstrapRecord, 2U> tooManyRecords = {{placeholder.front(), placeholder.front()}};
 	NativeGraphVectorBootstrapOptions noVectors = vectorOptions();
 	noVectors.maximum_vectors = 0U;
 	expectRejectedBeforeRecordLookup(vectorDefinition(), placeholder, noVectors);
+	NativeGraphVectorBootstrapOptions tooManyVectors = vectorOptions();
+	tooManyVectors.maximum_vectors = 1U;
+	expectRejectedBeforeRecordLookup(vectorDefinition(), tooManyRecords, tooManyVectors);
 	NativeGraphVectorBootstrapOptions noPages = vectorOptions();
 	noPages.maximum_pages = 0U;
 	expectRejectedBeforeRecordLookup(vectorDefinition(), placeholder, noPages);
+	NativeGraphVectorBootstrapOptions invalidFirstSlot = vectorOptions();
+	invalidFirstSlot.first_slot = PhysicalSlotId{};
+	expectRejectedBeforeRecordLookup(vectorDefinition(), placeholder, invalidFirstSlot);
+	NativeGraphVectorBootstrapOptions invalidLastSlot = vectorOptions();
+	invalidLastSlot.last_slot = PhysicalSlotId{};
+	expectRejectedBeforeRecordLookup(vectorDefinition(), placeholder, invalidLastSlot);
+	NativeGraphVectorBootstrapOptions reversedSlots = vectorOptions();
+	reversedSlots.first_slot = PhysicalSlotId(81U);
+	reversedSlots.last_slot = PhysicalSlotId(80U);
+	expectRejectedBeforeRecordLookup(vectorDefinition(), placeholder, reversedSlots);
+	IndexDefinition oversized = vectorDefinition();
+	oversized.vector_dimensions = RSS_VECTOR_SEMANTIC_MAX_DIMENSIONS + 1U;
+	expectRejectedBeforeRecordLookup(oversized, placeholder, vectorOptions());
+	NativeGraphVectorBootstrapOptions exactlyOnePage = vectorOptions();
+	exactlyOnePage.maximum_pages = 1U;
+	expectRejectedBeforeRecordLookup(vectorDefinition(), placeholder, exactlyOnePage);
+	NativeGraphVectorBootstrapRecord wrongWidth = placeholder.front();
+	wrongWidth.encoded_bfloat16.pop_back();
+	std::array<NativeGraphVectorBootstrapRecord, 1U> wrongWidthRecords = {{wrongWidth}};
+	expectRejectedBeforeRecordLookup(vectorDefinition(), wrongWidthRecords, vectorOptions());
 
 	NativeGraphWriteTransaction duplicate = planner.beginTransaction();
 	const uint64_t nodeId = duplicate.createNode(std::array<uint64_t, 1U>{7U});
@@ -357,6 +388,67 @@ TEST_F(NativeGraphWritePlannerVectorTest, RejectsMalformedBootstrapContractsWith
 	EXPECT_FALSE(metadata_->findIndexRootOptional(afterRejected, vectorDefinition().index_id).has_value());
 	EXPECT_FALSE(metadata_->findVectorManifestOptional(afterRejected, vectorDefinition().index_id).has_value());
 	afterRejected.release();
+}
+
+TEST_F(NativeGraphWritePlannerVectorTest, RejectsVectorStoresFromAnotherMetadataDomainBeforePlanning) {
+	const std::filesystem::path foreignPath = path_.string() + ".foreign";
+	auto foreignFile = std::make_shared<std::fstream>(foreignPath,
+															 std::ios::in | std::ios::out | std::ios::binary | std::ios::trunc);
+	ASSERT_TRUE(foreignFile->is_open());
+	auto foreignIo = std::make_shared<StorageIO>(foreignFile, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+	auto foreignMetadata = RelocatableMetadataStore::initializeNew(foreignIo, initialSuperblock());
+	auto foreignSlottedPages = std::make_unique<SlottedPagePool>(foreignIo, *foreignMetadata);
+	auto foreignIndexes = std::make_unique<BTreePageStore>(*foreignSlottedPages, *foreignMetadata);
+	auto foreignRawPages = std::make_unique<VectorPageStore>(foreignIo, *foreignMetadata);
+	auto foreignManifests = std::make_unique<VectorManifestStore>(foreignIo, *foreignMetadata);
+
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *indexes_, plannerOptions());
+	NativeGraphWriteTransaction transaction = planner.beginTransaction();
+	const uint64_t nodeId = transaction.createNode(std::array<uint64_t, 1U>{7U});
+	const std::array<NativeGraphVectorBootstrapRecord, 1U> records = {{
+			{nodeId, {std::byte{0x10}, std::byte{0x30}, std::byte{0x50}, std::byte{0x70}}},
+	}};
+
+	// Every store participates in the same atomic publication, so each must
+	// share the transaction's metadata domain before any Vector plan is derived.
+	EXPECT_THROW(transaction.stageVectorIndexBootstrap(*foreignIndexes, *raw_pages_, *manifests_, vectorDefinition(),
+																				 records, vectorOptions()),
+			 FormatException);
+	EXPECT_THROW(transaction.stageVectorIndexBootstrap(*indexes_, *foreignRawPages, *manifests_, vectorDefinition(),
+																				 records, vectorOptions()),
+			 FormatException);
+	EXPECT_THROW(transaction.stageVectorIndexBootstrap(*indexes_, *raw_pages_, *foreignManifests, vectorDefinition(),
+																				 records, vectorOptions()),
+			 FormatException);
+	const std::array<NativeVectorMutation, 1U> mutations = {{
+			{NativeVectorMutationKind::NVMK_INSERT,
+			 vectorDefinition().index_id,
+			 nodeId,
+			 vectorDefinition().vector_dimensions,
+			 VectorDistanceMetric::VDM_L2,
+			 {std::byte{0x10}, std::byte{0x30}, std::byte{0x50}, std::byte{0x70}}},
+	}};
+	EXPECT_THROW(transaction.stageVectorIndexDelta(*foreignIndexes, *raw_pages_, *manifests_, vectorDefinition(),
+																		mutations, vectorDeltaOptions()),
+			 FormatException);
+	EXPECT_THROW(transaction.stageVectorIndexDelta(*indexes_, *foreignRawPages, *manifests_, vectorDefinition(),
+																		mutations, vectorDeltaOptions()),
+			 FormatException);
+	EXPECT_THROW(transaction.stageVectorIndexDelta(*indexes_, *raw_pages_, *foreignManifests, vectorDefinition(),
+																		mutations, vectorDeltaOptions()),
+			 FormatException);
+	transaction.rollback();
+
+	foreignManifests.reset();
+	foreignRawPages.reset();
+	foreignIndexes.reset();
+	foreignSlottedPages.reset();
+	foreignMetadata.reset();
+	foreignIo.reset();
+	foreignFile->close();
+	foreignFile.reset();
+	std::error_code error;
+	std::filesystem::remove(foreignPath, error);
 }
 
 TEST_F(NativeGraphWritePlannerVectorTest, RefusesToOverwriteAPublishedVectorBootstrapState) {
@@ -408,13 +500,70 @@ TEST_F(NativeGraphWritePlannerVectorTest,
 	IndexDefinition nonVector = vectorDefinition();
 	nonVector.kind = IndexDefinitionKind::IDK_PROPERTY;
 	expectRejectedBeforeRootLookup(nonVector, placeholder, vectorDeltaOptions());
+	IndexDefinition nonNode = vectorDefinition();
+	nonNode.entity_kind = IndexDefinitionEntityKind::IDEK_EDGE;
+	expectRejectedBeforeRootLookup(nonNode, placeholder, vectorDeltaOptions());
+	IndexDefinition noIndexId = vectorDefinition();
+	noIndexId.index_id = 0U;
+	expectRejectedBeforeRootLookup(noIndexId, placeholder, vectorDeltaOptions());
 	expectRejectedBeforeRootLookup(vectorDefinition(), emptyMutations, vectorDeltaOptions());
 	NativeGraphVectorDeltaOptions noRecords = vectorDeltaOptions();
 	noRecords.maximum_records = 0U;
 	expectRejectedBeforeRootLookup(vectorDefinition(), placeholder, noRecords);
+	const std::array<NativeVectorMutation, 2U> tooManyRecords = {{placeholder.front(), placeholder.front()}};
+	NativeGraphVectorDeltaOptions boundedRecords = vectorDeltaOptions();
+	boundedRecords.maximum_records = 1U;
+	expectRejectedBeforeRootLookup(vectorDefinition(), tooManyRecords, boundedRecords);
+	NativeGraphVectorDeltaOptions noRawPages = vectorDeltaOptions();
+	noRawPages.maximum_raw_pages = 0U;
+	expectRejectedBeforeRootLookup(vectorDefinition(), placeholder, noRawPages);
+	NativeGraphVectorDeltaOptions noFirstSlot = vectorDeltaOptions();
+	noFirstSlot.first_slot = PhysicalSlotId{};
+	expectRejectedBeforeRootLookup(vectorDefinition(), placeholder, noFirstSlot);
+	NativeGraphVectorDeltaOptions noLastSlot = vectorDeltaOptions();
+	noLastSlot.last_slot = PhysicalSlotId{};
+	expectRejectedBeforeRootLookup(vectorDefinition(), placeholder, noLastSlot);
+	NativeGraphVectorDeltaOptions noRebuildThreshold = vectorDeltaOptions();
+	noRebuildThreshold.rebuild_threshold = 0U;
+	expectRejectedBeforeRootLookup(vectorDefinition(), placeholder, noRebuildThreshold);
+	NativeGraphVectorDeltaOptions unboundedRebuildThreshold = vectorDeltaOptions();
+	unboundedRebuildThreshold.rebuild_threshold = std::numeric_limits<size_t>::max();
+	expectRejectedBeforeRootLookup(vectorDefinition(), placeholder, unboundedRebuildThreshold);
+	NativeGraphVectorDeltaOptions wideRebuildThreshold = vectorDeltaOptions();
+	wideRebuildThreshold.rebuild_threshold = static_cast<size_t>(std::numeric_limits<uint32_t>::max()) + 1U;
+	expectRejectedBeforeRootLookup(vectorDefinition(), placeholder, wideRebuildThreshold);
 	NativeGraphVectorDeltaOptions invalidThreshold = vectorDeltaOptions();
 	invalidThreshold.rebuild_threshold = invalidThreshold.maximum_overlay_entries + 1U;
 	expectRejectedBeforeRootLookup(vectorDefinition(), placeholder, invalidThreshold);
+	NativeGraphVectorDeltaOptions noOverlay = vectorDeltaOptions();
+	noOverlay.maximum_overlay_entries = 0U;
+	expectRejectedBeforeRootLookup(vectorDefinition(), placeholder, noOverlay);
+	NativeGraphVectorDeltaOptions unboundedOverlay = vectorDeltaOptions();
+	unboundedOverlay.maximum_overlay_entries = std::numeric_limits<size_t>::max();
+	expectRejectedBeforeRootLookup(vectorDefinition(), placeholder, unboundedOverlay);
+	NativeGraphVectorDeltaOptions wideOverlay = vectorDeltaOptions();
+	wideOverlay.maximum_overlay_entries = static_cast<size_t>(std::numeric_limits<uint32_t>::max()) + 1U;
+	expectRejectedBeforeRootLookup(vectorDefinition(), placeholder, wideOverlay);
+	NativeGraphVectorDeltaOptions noDeltaPages = vectorDeltaOptions();
+	noDeltaPages.maximum_delta_pages = 0U;
+	expectRejectedBeforeRootLookup(vectorDefinition(), placeholder, noDeltaPages);
+	NativeGraphVectorDeltaOptions unboundedDeltaPages = vectorDeltaOptions();
+	unboundedDeltaPages.maximum_delta_pages = std::numeric_limits<size_t>::max();
+	expectRejectedBeforeRootLookup(vectorDefinition(), placeholder, unboundedDeltaPages);
+	NativeGraphVectorDeltaOptions pageBoundedOverlay = vectorDeltaOptions();
+	pageBoundedOverlay.maximum_delta_pages = 1U;
+	pageBoundedOverlay.maximum_overlay_entries = VectorDeltaMapping::maximumEntriesForPageBudget(1U) + 1U;
+	expectRejectedBeforeRootLookup(vectorDefinition(), placeholder, pageBoundedOverlay);
+	NativeGraphVectorDeltaOptions reversedSlots = vectorDeltaOptions();
+	reversedSlots.first_slot = PhysicalSlotId(81U);
+	reversedSlots.last_slot = PhysicalSlotId(80U);
+	expectRejectedBeforeRootLookup(vectorDefinition(), placeholder, reversedSlots);
+	IndexDefinition noDimensions = vectorDefinition();
+	noDimensions.vector_dimensions = 0U;
+	expectRejectedBeforeRootLookup(noDimensions, placeholder, vectorDeltaOptions());
+	IndexDefinition tooManyDimensions = vectorDefinition();
+	tooManyDimensions.vector_dimensions = RSS_VECTOR_SEMANTIC_MAX_DIMENSIONS + 1U;
+	expectRejectedBeforeRootLookup(tooManyDimensions, placeholder, vectorDeltaOptions());
 
 	NativeGraphWriteTransaction missingRoot = planner.beginTransaction();
 	EXPECT_THROW(missingRoot.stageVectorIndexDelta(*indexes_, *raw_pages_, *manifests_, vectorDefinition(), placeholder,
@@ -501,7 +650,24 @@ TEST_F(NativeGraphWritePlannerVectorTest, RejectsZeroNormCosineDeltaPayload) {
 	EXPECT_THROW(
 			delta.stageVectorIndexDelta(*indexes_, *raw_pages_, *manifests_, cosine, mutations, vectorDeltaOptions()),
 			FormatException);
-	delta.rollback();
+
+	// Rejecting one malformed payload must not poison the transaction. A valid
+	// cosine Vector for the already staged Node still publishes atomically.
+	const std::array<NativeVectorMutation, 1U> validInsertion = {{
+			{NativeVectorMutationKind::NVMK_INSERT,
+			 cosine.index_id,
+			 secondNode,
+			 cosine.vector_dimensions,
+			 VectorDistanceMetric::VDM_COSINE,
+			 {std::byte{0x80}, std::byte{0x3F}, std::byte{0x00}, std::byte{0x40}}},
+	}};
+	delta.stageVectorIndexDelta(*indexes_, *raw_pages_, *manifests_, cosine, validInsertion, vectorDeltaOptions());
+	ASSERT_TRUE(delta.commit().committed());
+	MetadataSnapshotPin current = metadata_->openSnapshot();
+	EXPECT_EQ(BTreeIndex(cosine.index_id, *indexes_, *metadata_)
+				  .find(current, VectorSemanticCodec::nodeMappingKey(secondNode)),
+			  std::optional<uint64_t>(2U));
+	current.release();
 }
 
 TEST_F(NativeGraphWritePlannerVectorTest, RejectsDeltaInsertForANodeOutsideTheGraphSnapshot) {
@@ -732,6 +898,48 @@ TEST_F(NativeGraphWritePlannerVectorTest, MaintainsNativeVectorMappingsAcrossLab
 	restored.release();
 	labelRemoved.release();
 	beforeLabelLoss.release();
+}
+
+TEST_F(NativeGraphWritePlannerVectorTest, RejectsVectorInsertionForANodeErasedByTheSameTransaction) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *indexes_, plannerOptions());
+	const std::array<uint64_t, 1U> labels = {7U};
+	NativeGraphWriteTransaction bootstrap = planner.beginTransaction();
+	const uint64_t nodeId = bootstrap.createNode(labels);
+	bootstrap.stageVectorIndexBootstrap(
+			*indexes_, *raw_pages_, *manifests_, vectorDefinition(),
+			std::array<NativeGraphVectorBootstrapRecord, 1U>{{
+					{nodeId, {std::byte{0x10}, std::byte{0x30}, std::byte{0x50}, std::byte{0x70}}},
+			}},
+			vectorOptions());
+	ASSERT_TRUE(bootstrap.commit().committed());
+
+	MetadataSnapshotPin before = metadata_->openSnapshot();
+	const Superblock beforeSuperblock = before.superblock();
+	NativeGraphWriteTransaction transaction = planner.beginTransaction();
+	transaction.eraseNode(nodeId);
+	const std::array<NativeVectorMutation, 1U> insertion = {{
+			{NativeVectorMutationKind::NVMK_INSERT,
+			 vectorDefinition().index_id,
+			 nodeId,
+			 vectorDefinition().vector_dimensions,
+			 VectorDistanceMetric::VDM_L2,
+			 {std::byte{0x21}, std::byte{0x43}, std::byte{0x65}, std::byte{0x87}}},
+	}};
+	// A delete and a replacement vector cannot be folded into a durable state for
+	// the same Node. Reject it while the write remains rollback-safe.
+	EXPECT_THROW(transaction.stageVectorIndexDelta(*indexes_, *raw_pages_, *manifests_, vectorDefinition(), insertion,
+											 vectorDeltaOptions()),
+			 FormatException);
+	EXPECT_EQ(transaction.state(), NativeGraphWriteTransactionState::NGWTS_ACTIVE);
+	transaction.rollback();
+
+	MetadataSnapshotPin after = metadata_->openSnapshot();
+	EXPECT_EQ(after.superblock(), beforeSuperblock);
+	EXPECT_EQ(BTreeIndex(vectorDefinition().index_id, *indexes_, *metadata_)
+				  .find(after, VectorSemanticCodec::nodeMappingKey(nodeId)),
+			  std::optional<uint64_t>(1U));
+	after.release();
+	before.release();
 }
 
 TEST_F(NativeGraphWritePlannerVectorTest, ReplacesMappingsRawLocationAndManifestInOneDeltaGeneration) {
