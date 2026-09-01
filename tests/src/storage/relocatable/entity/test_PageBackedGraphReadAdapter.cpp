@@ -420,11 +420,17 @@ TEST_F(PageBackedGraphReadAdapterTest, ScansNativeEntityMapInLogicalOrderWithRes
 	EXPECT_EQ(terminalPage.metadata_pages_visited, 0U);
 
 	std::vector<uint64_t> edgeIds;
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setEnabled(true);
 	EXPECT_TRUE(adapter.visitEdgesUntil(current, 4U, [&edgeIds](const PageBackedGraphEdge &record) {
 		edgeIds.push_back(record.edge_id);
 		return true;
 	}));
+	const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setEnabled(false);
 	EXPECT_EQ(edgeIds, (std::vector<uint64_t>{2001U, 2003U}));
+	EXPECT_TRUE(trace.contains("native_graph.read.edge_native_materialization"));
+	EXPECT_TRUE(trace.contains("native_graph.read.edge_logical_visitor"));
 	EXPECT_THROW(static_cast<void>(adapter.visitNodesUntil(current, 0U, {})), FormatException);
 	EXPECT_THROW(static_cast<void>(adapter.scanNodesAfter(current, 0U, 1U, 0U)), FormatException);
 	afterFirstNode.release();

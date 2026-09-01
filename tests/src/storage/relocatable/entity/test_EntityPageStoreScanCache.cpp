@@ -17,6 +17,7 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <gtest/gtest.h>
 
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/StorageIO.hpp"
 #include "graph/storage/relocatable/entity/EntityPageStore.hpp"
 
@@ -178,4 +179,20 @@ TEST_F(EntityPageStoreScanCacheTest, EdgeScansStreamMapAndEntityFramesWhilePoint
 	EXPECT_EQ(afterSecondPoint.disk_read_bytes, afterFirstPoint.disk_read_bytes);
 	EXPECT_EQ(afterSecondPoint.misses, afterFirstPoint.misses);
 	EXPECT_GT(afterSecondPoint.hits, afterFirstPoint.hits);
+}
+
+TEST_F(EntityPageStoreScanCacheTest, EdgeScanRecordsPerfTraceWhenTracingIsEnabled) {
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setEnabled(true);
+	std::vector<uint64_t> edgeIds;
+	EXPECT_TRUE(entities_->visitEdgesUntil(snapshot_, 8U, [&](uint64_t edgeId, const EdgeEntityRecord &) {
+		edgeIds.push_back(edgeId);
+		return true;
+	}));
+	const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setEnabled(false);
+
+	EXPECT_EQ(edgeIds, (std::vector<uint64_t>{2001U, 2002U, 2003U}));
+	EXPECT_TRUE(trace.contains("native_graph.read.edge_entity_record"));
+	EXPECT_TRUE(trace.contains("native_graph.read.edge_entity_visitor"));
 }
