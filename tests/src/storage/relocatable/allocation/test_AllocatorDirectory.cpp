@@ -27,6 +27,7 @@
 #include "graph/storage/PwriteHelper.hpp"
 #include "graph/storage/relocatable/allocation/AllocatorDirectory.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPagePool.hpp"
+#include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
 #include "graph/storage/relocatable/metadata/MetadataWriteBatch.hpp"
 
 #ifdef _WIN32
@@ -138,6 +139,19 @@ protected:
 		io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
 	}
 };
+
+TEST_F(RelocatableAllocatorDirectoryTest, ResolvesAllocatorRootThroughPublishedMetadataBootstrapRoutes) {
+	auto metadata = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	ASSERT_TRUE(snapshot.superblock().usesPageDirectoryBootstrap());
+	MetadataPageFile pages(io, snapshot.superblock());
+	MetadataPagePoolAllocator allocator(io, snapshot.superblock(), MetadataPagePoolOpenMode::CPOM_ROOT_RECOVER);
+	AllocatorDirectory directory(pages, allocator);
+	const std::optional<PhysicalSlotId> free =
+			directory.findFirstFree(snapshot.superblock(), PhysicalSlotId(1U), PhysicalSlotId(256U));
+	EXPECT_TRUE(free.has_value());
+	snapshot.release();
+}
 
 TEST_F(RelocatableAllocatorDirectoryTest, PublishesCopyOnWriteSlotTransitionsAndPreservesOldRoots) {
 	const Superblock initial = superblock(1, 1);
@@ -691,6 +705,20 @@ TEST_F(RelocatableAllocatorDirectoryTest, PreparedTransitionsRejectForeignAlloca
 	directory.prepareSetAllocated(batch, PhysicalSlotId(1), true);
 	EXPECT_THROW(directory.prepareSetAllocated(batch, PhysicalSlotId(1), true), FormatException);
 	EXPECT_FALSE(directory.prepareReserveFirstFree(batch, PhysicalSlotId(1), PhysicalSlotId(1)).has_value());
+}
+
+TEST_F(RelocatableAllocatorDirectoryTest, ReservesFromAnUninitializedCandidateAllocatorRoot) {
+	const Superblock initial = superblock(1, 1);
+	SuperblockFile bootstrap(io);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(io, initial);
+	MetadataPagePoolAllocator allocator(io, initial);
+	AllocatorDirectory directory(pages, allocator);
+	MetadataWriteBatch batch(allocator, initial, LogSequenceNumber(2));
+	const std::optional<PhysicalSlotId> free =
+			directory.prepareReserveFirstFree(batch, PhysicalSlotId(1), PhysicalSlotId(1));
+	ASSERT_TRUE(free.has_value());
+	EXPECT_EQ(*free, PhysicalSlotId(1));
 }
 
 TEST_F(RelocatableAllocatorDirectoryTest, PreservesEveryDistinctPreparedSlotTransitionInOnePublication) {

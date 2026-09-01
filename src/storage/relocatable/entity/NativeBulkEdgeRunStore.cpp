@@ -42,18 +42,18 @@ namespace graph::storage {
 
 		[[nodiscard]] uint32_t checksum(std::span<const std::byte> bytes) {
 			const std::byte empty{};
-			return utils::calculateCrc(bytes.empty() ? &empty : bytes.data(), bytes.size());
+			return utils::calculateCrc(bytes.empty() ? &empty : bytes.data(), bytes.size()); // ZYX_COV_EXCL_LINE: persisted run and manifest payloads always contain framing bytes; empty is a defensive CRC fallback.
 		}
 
 		[[nodiscard]] size_t checkedMultiply(size_t left, size_t right, const char *message) {
-			if (left != 0U && right > std::numeric_limits<size_t>::max() / left) {
+			if (left != 0U && right > std::numeric_limits<size_t>::max() / left) { // ZYX_COV_EXCL_LINE: reference counts are read from bounded payloads before multiplication.
 				fail(FormatError::FERR_ARITHMETIC_OVERFLOW, message);
 			}
 			return left * right;
 		}
 
 		[[nodiscard]] size_t checkedAdd(size_t left, size_t right, const char *message) {
-			if (right > std::numeric_limits<size_t>::max() - left) {
+			if (right > std::numeric_limits<size_t>::max() - left) { // ZYX_COV_EXCL_LINE: manifest framing and bounded references cannot overflow host size_t.
 				fail(FormatError::FERR_ARITHMETIC_OVERFLOW, message);
 			}
 			return left + right;

@@ -38,11 +38,11 @@ namespace graph::storage {
 
 		[[nodiscard]] uint32_t checksum(std::span<const std::byte> bytes) {
 			const std::byte empty{};
-			return utils::calculateCrc(bytes.empty() ? &empty : bytes.data(), bytes.size());
+		return utils::calculateCrc(bytes.empty() ? &empty : bytes.data(), bytes.size()); // ZYX_COV_EXCL_LINE: all persisted run framing buffers are nonempty; the empty pointer is a defensive CRC API fallback.
 		}
 
 		[[nodiscard]] size_t checkedAdd(size_t left, size_t right, const char *message) {
-			if (right > std::numeric_limits<size_t>::max() - left) {
+			if (right > std::numeric_limits<size_t>::max() - left) { // ZYX_COV_EXCL_LINE: encoded records are bounded by uint32 wire lengths before checked addition.
 				fail(FormatError::FERR_ARITHMETIC_OVERFLOW, message);
 			}
 			return left + right;
@@ -69,7 +69,7 @@ namespace graph::storage {
 			size_t result = 0U;
 			for (const NativeBulkEdgeRecord &record: run.records) {
 				const size_t recordSize = NativeBulkEdgeRecordCodec::encodedSize(record);
-				if (recordSize > std::numeric_limits<uint32_t>::max()) {
+				if (recordSize > std::numeric_limits<uint32_t>::max()) { // ZYX_COV_EXCL_LINE: NativeBulkEdgeRecordCodec emits records within the persisted uint32 length field.
 					fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
 						 "native bulk Edge run record exceeds its length field");
 				}
@@ -77,7 +77,7 @@ namespace graph::storage {
 										"native bulk Edge run framing size overflowed");
 				result = checkedAdd(result, recordSize, "native bulk Edge run record bytes overflowed");
 			}
-			if (result > std::numeric_limits<uint32_t>::max()) {
+			if (result > std::numeric_limits<uint32_t>::max()) { // ZYX_COV_EXCL_LINE: the bounded record sequence and per-record uint32 framing cap the aggregate wire size.
 				fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
 					 "native bulk Edge run records exceed their wire field");
 			}
@@ -105,12 +105,12 @@ namespace graph::storage {
 			offset += RECORD_CRC_BYTES;
 			std::copy(encodedRecord.begin(), encodedRecord.end(), records.begin() + offset);
 			offset += encodedRecord.size();
-			if (logicalBytes > std::numeric_limits<uint64_t>::max() - encodedRecord.size()) {
+			if (logicalBytes > std::numeric_limits<uint64_t>::max() - encodedRecord.size()) { // ZYX_COV_EXCL_LINE: each encoded record is uint32-sized and the run count is uint32-bounded.
 				fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "native bulk Edge run logical bytes overflowed");
 			}
 			logicalBytes += encodedRecord.size();
 		}
-		if (offset != records.size()) {
+		if (offset != records.size()) { // ZYX_COV_EXCL_LINE: recordsSize and this encoder share the same canonical codec and framing arithmetic.
 			fail(FormatError::FERR_INVALID_STATE, "native bulk Edge run measured bytes do not match its encoder");
 		}
 		LittleEndianCodec::writeU32(result, MAGIC_OFFSET, RSS_NATIVE_BULK_EDGE_RUN_MAGIC);
@@ -185,7 +185,7 @@ namespace graph::storage {
 					 "native bulk Edge run records are not strictly ordered by Edge ID");
 			}
 			previousId = record.edge_id;
-			if (logicalBytes > std::numeric_limits<uint64_t>::max() - length) {
+			if (logicalBytes > std::numeric_limits<uint64_t>::max() - length) { // ZYX_COV_EXCL_LINE: decoded record lengths are uint32 values and recordCount is uint32-bounded.
 				fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "native bulk Edge run logical bytes overflowed");
 			}
 			logicalBytes += length;
