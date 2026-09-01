@@ -1966,11 +1966,20 @@ namespace graph::storage {
 			native_logical_graph_reads_ = std::make_unique<PageBackedLogicalGraphReadAdapter>(
 					*native_graph_reads_, static_cast<const PageBackedGraphNameResolver &>(*this));
 			if (!isReadOnly()) {
-				if (options_.maximum_index_definitions == 0U || options_.maximum_constraint_definitions == 0U ||
+				if (options_.maximum_index_definitions == 0U ||
+					options_.maximum_index_definitions == std::numeric_limits<size_t>::max() ||
+					options_.maximum_constraint_definitions == 0U ||
+					options_.maximum_constraint_definitions == std::numeric_limits<size_t>::max() ||
 					options_.maximum_online_index_entries == 0U ||
 					options_.maximum_online_index_entries == std::numeric_limits<size_t>::max() ||
 					options_.maximum_online_index_scan_nodes == 0U ||
 					options_.maximum_online_index_scan_nodes == std::numeric_limits<size_t>::max() ||
+					options_.maximum_online_index_pages == 0U ||
+					options_.maximum_online_index_pages == std::numeric_limits<size_t>::max() ||
+					options_.online_index_sort_run_bytes == 0U ||
+					options_.online_index_sort_run_bytes == std::numeric_limits<size_t>::max() ||
+					options_.maximum_online_index_sort_runs < 2U ||
+					options_.maximum_online_index_sort_runs == std::numeric_limits<size_t>::max() ||
 					options_.vector_delta_rebuild_threshold == 0U ||
 					options_.vector_delta_rebuild_threshold == std::numeric_limits<size_t>::max() ||
 					options_.vector_delta_rebuild_threshold > std::numeric_limits<uint32_t>::max() ||
@@ -1982,6 +1991,13 @@ namespace graph::storage {
 					options_.maximum_vector_delta_pages == std::numeric_limits<size_t>::max() ||
 					options_.maximum_vector_delta_overlay_entries >
 							VectorDeltaMapping::maximumEntriesForPageBudget(options_.maximum_vector_delta_pages) ||
+					options_.maximum_vector_training_records == 0U ||
+					options_.maximum_vector_training_records == std::numeric_limits<size_t>::max() ||
+					options_.maximum_vector_training_pages == 0U ||
+					options_.maximum_vector_training_pages == std::numeric_limits<size_t>::max() ||
+					options_.maximum_vector_training_samples == 0U ||
+					options_.maximum_vector_training_samples == std::numeric_limits<size_t>::max() ||
+					options_.vector_training_iterations == 0U ||
 					options_.maximum_adjacency_read_edges == 0U ||
 					options_.maximum_adjacency_read_edges == std::numeric_limits<size_t>::max() ||
 					options_.maximum_bulk_edge_transaction_records == 0U ||
@@ -3625,7 +3641,8 @@ namespace graph::storage {
 		requireOwnedSnapshot(snapshot);
 		if (request.index_name.empty() || request.query_vector.empty() || request.top_k == 0U ||
 			request.maximum_mapping_entries == 0U || request.maximum_raw_vector_reads == 0U ||
-			request.maximum_mapping_entries == std::numeric_limits<size_t>::max()) {
+			request.maximum_mapping_entries == std::numeric_limits<size_t>::max() ||
+			request.maximum_raw_vector_reads == std::numeric_limits<size_t>::max()) {
 			throw std::invalid_argument(
 					"relocatable logical Vector search requires a name, query, result count, and finite bounds");
 		}
@@ -3677,7 +3694,8 @@ namespace graph::storage {
 		requireOwnedSnapshot(snapshot);
 		if (request.index_name.empty() || request.query_vector.empty() || request.top_k == 0U ||
 			request.maximum_mapping_entries == 0U || request.maximum_raw_vector_reads == 0U ||
-			request.maximum_mapping_entries == std::numeric_limits<size_t>::max()) {
+			request.maximum_mapping_entries == std::numeric_limits<size_t>::max() ||
+			request.maximum_raw_vector_reads == std::numeric_limits<size_t>::max()) {
 			throw std::invalid_argument(
 					"relocatable logical Vector search requires a name, query, result count, and finite bounds");
 		}
@@ -3791,6 +3809,7 @@ namespace graph::storage {
 		requireNoIndeterminateWrite();
 		if (request.index_name.empty() || request.maximum_records == 0U || request.maximum_pages == 0U ||
 			request.maximum_records == std::numeric_limits<size_t>::max() ||
+			request.maximum_pages == std::numeric_limits<size_t>::max() ||
 			options_.maximum_vector_training_records == 0U || options_.maximum_vector_training_pages == 0U ||
 			options_.maximum_vector_training_samples == 0U || options_.vector_training_iterations == 0U) {
 			throw std::invalid_argument("relocatable logical Vector training requires a nonempty index name and finite "
@@ -3853,6 +3872,7 @@ namespace graph::storage {
 		requireNoIndeterminateWrite();
 		if (request.index_name.empty() || request.maximum_records == 0U || request.maximum_pages == 0U ||
 			request.maximum_records == std::numeric_limits<size_t>::max() ||
+			request.maximum_pages == std::numeric_limits<size_t>::max() ||
 			options_.maximum_vector_training_records == 0U || options_.maximum_vector_training_pages == 0U ||
 			options_.maximum_vector_training_samples == 0U || options_.vector_training_iterations == 0U) {
 			throw std::invalid_argument("relocatable logical Vector training requires a nonempty index name and finite "
@@ -4073,6 +4093,15 @@ namespace graph::storage {
 				(hasDeltaIdentity && !VectorDeltaMapping::isMappingIndexId(manifest.delta_mapping_index_id))) {
 				failVectorTraining(FormatError::FERR_INVALID_STATE,
 								   "relocatable logical Vector training found a partial delta generation");
+			}
+			if (hasDeltaIdentity) {
+				const std::optional<IndexRootLocation> deltaRoot =
+						metadata_->findIndexRootOptional(sourceSnapshot, manifest.delta_mapping_index_id);
+				if (!deltaRoot.has_value() || deltaRoot->root_page_id != manifest.delta_mapping_root_page_id ||
+					deltaRoot->root_generation != manifest.delta_mapping_root_generation) {
+					failVectorTraining(FormatError::FERR_INVALID_STATE,
+										   "relocatable logical Vector training found a stale delta mapping root");
+				}
 			}
 			bool reuseVisibleCodebook = false;
 			if (!hasDelta && hasCompletePqIdentity(manifest) &&

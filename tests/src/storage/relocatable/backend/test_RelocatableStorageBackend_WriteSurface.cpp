@@ -1089,3 +1089,156 @@ TEST_F(RelocatableStorageBackendTest, ReadOnlyNativeLogicalWriteSurfaceRejectsEv
 	reopenedSnapshot.release();
 	reopened.close();
 }
+
+TEST_F(RelocatableStorageBackendTest, ReadOnlyNativeAdministrativeAndMaintenanceWritesFailClosed) {
+	materializeNativeDatabase();
+	RelocatableStorageBackendOptions writerOptions = backendOptions();
+	writerOptions.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend writer(std::move(writerOptions));
+	writer.open();
+	static_cast<void>(writer.createLogicalNodes(
+			{{{"ReadOnly"}, {{"value", graph::PropertyValue(int64_t{1})}}}}));
+	static_cast<void>(writer.createLogicalNodeIndex({"read_only_scalar", "ReadOnly", {"value"}}));
+	writer.close();
+
+	RelocatableStorageBackendOptions readOnlyOptions = backendOptions();
+	readOnlyOptions.open_mode = OpenMode::OPEN_READ_ONLY_EXISTING_FILE;
+	RelocatableStorageBackend readOnly(std::move(readOnlyOptions));
+	readOnly.open();
+
+	const LogicalGraphNodeIndexCreateRequest scalarIndex{"read_only_scalar", "ReadOnly", {"value"}};
+	const std::array<LogicalGraphNodeIndexCreateRequest, 1U> scalarIndexes{scalarIndex};
+	const LogicalGraphNodeVectorIndexCreateRequest vectorIndex{"read_only_vector", "ReadOnly", "embedding", 2U,
+																							 "l2"};
+	const LogicalGraphConstraintCreateRequest constraint{"read_only_unique", LogicalGraphConstraintEntityKind::LGCEK_NODE,
+																				 LogicalGraphConstraintKind::LGCK_UNIQUE, "ReadOnly", {"value"},
+																				 LogicalGraphConstraintPropertyType::LGCPT_NONE};
+
+	EXPECT_THROW(static_cast<void>(readOnly.reserveNativeBulkEdgeSessionIds(1U)), std::logic_error);
+	EXPECT_GT(readOnly.allocateNativeBulkScratchOwner(), 0U);
+	EXPECT_THROW(static_cast<void>(readOnly.createNativeBulkRunStore()), std::logic_error);
+	EXPECT_GT(readOnly.nextNativeBulkScratchCheckpointLsn().value(), 0U);
+	EXPECT_THROW(readOnly.refreshNativeMetadataAfterExternalPublication(), std::logic_error);
+	EXPECT_THROW(static_cast<void>(readOnly.prepareLogicalVectorTraining({})), std::runtime_error);
+	EXPECT_THROW(readOnly.setConfiguration("storage.compaction.enabled", graph::PropertyValue(false)), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(readOnly.createLogicalNodeIndex(scalarIndex)), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(readOnly.createLogicalNodeIndexes(scalarIndexes)), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(readOnly.createLogicalNodeVectorIndex(vectorIndex)), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(readOnly.dropLogicalIndexByName("read_only_scalar")), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(readOnly.dropLogicalNodeIndexBySchema("ReadOnly", "value")), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(readOnly.createLogicalConstraint(constraint)), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(readOnly.dropLogicalConstraintByName("read_only_unique")), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(readOnly.reclaimObsoleteScalarIndexTrees({})), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(readOnly.reclaimObsoleteVectorIndexState({})), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(readOnly.reclaimUnreachableLargeValues({})), std::runtime_error);
+
+	RelocatableReadSnapshot snapshot = readOnly.openSnapshot();
+	const std::vector<LogicalGraphIndexDefinition> indexes = readOnly.listLogicalIndexes(8U);
+	ASSERT_EQ(indexes.size(), 1U);
+	EXPECT_EQ(indexes.front().name, "read_only_scalar");
+	EXPECT_TRUE(readOnly.listLogicalConstraints(8U).empty());
+	snapshot.release();
+	readOnly.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, NativeBulkIdentityReservationsValidateBoundsBeforeLeasingIds) {
+	materializeNativeDatabase();
+	RelocatableStorageBackendOptions options = backendOptions();
+	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(std::move(options));
+	backend.open();
+
+	const uint64_t maximum = static_cast<uint64_t>(backend.maximumNativeBulkEdgeTransactionRecords());
+	ASSERT_GT(maximum, 0U);
+	EXPECT_THROW(static_cast<void>(backend.reserveLogicalGraphCreationIds(0U, 0U)), std::logic_error);
+	EXPECT_THROW(static_cast<void>(backend.reserveNativeBulkEdgeSessionIds(0U)), std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(backend.reserveNativeBulkEdgeSessionIds(maximum + 1U)), std::invalid_argument);
+
+	const NativeGraphLogicalIdReservation reservation = backend.reserveNativeBulkEdgeSessionIds(1U);
+	ASSERT_TRUE(reservation.node_ranges.empty());
+	ASSERT_EQ(reservation.edge_ranges.size(), 1U);
+	EXPECT_EQ(reservation.edge_ranges.front().count, 1U);
+	EXPECT_GT(reservation.edge_ranges.front().first_id, 0U);
+	backend.abandonLogicalGraphCreationIds(reservation);
+
+	// Reservation rejection and abandonment only affect the durable ID lease;
+	// they must not disturb the opened backend or the next scratch checkpoint.
+	EXPECT_GT(backend.allocateNativeBulkScratchOwner(), 0U);
+	EXPECT_GT(backend.nextNativeBulkScratchCheckpointLsn().value(), 0U);
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, NativeSchemaWriteSurfaceRejectsEachMalformedBoundedRequest) {
+	materializeNativeDatabase();
+	RelocatableStorageBackendOptions options = backendOptions();
+	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(std::move(options));
+	backend.open();
+
+	// Exercise each independently validated field.  These are admission checks,
+	// so none of the malformed requests may allocate a catalog token or publish a
+	// candidate generation.
+	EXPECT_THROW(static_cast<void>(backend.createLogicalNodeIndexes({})), std::invalid_argument);
+	const auto expectInvalidIndex = [&](LogicalGraphNodeIndexCreateRequest request) {
+		const std::array<LogicalGraphNodeIndexCreateRequest, 1U> requests{std::move(request)};
+		EXPECT_THROW(static_cast<void>(backend.createLogicalNodeIndexes(requests)), std::invalid_argument);
+	};
+	const std::string oversizedName(RSS_INDEX_DEFINITION_MAX_NAME_BYTES + 1U, 'x');
+	const std::string oversizedProperty(RSS_INDEX_DEFINITION_MAX_PROPERTY_NAME_BYTES + 1U, 'x');
+	const std::string oversizedLabel(RSS_TOKEN_DEFINITION_MAX_NAME_BYTES + 1U, 'x');
+	expectInvalidIndex({oversizedName, "Person", {"name"}});
+	expectInvalidIndex({"person_name", oversizedLabel, {"name"}});
+	expectInvalidIndex({"person_name", "Person", {oversizedProperty}});
+	expectInvalidIndex({"person_name", "", {"name"}});
+	expectInvalidIndex({"person_name", "Person", {}});
+	expectInvalidIndex({"person_name", "Person", {""}});
+	expectInvalidIndex({"person_name", "Person", {"name", "name"}});
+	const std::array<LogicalGraphNodeIndexCreateRequest, 2U> duplicateIndexes{
+		LogicalGraphNodeIndexCreateRequest{"same", "Person", {"name"}},
+		LogicalGraphNodeIndexCreateRequest{"same", "Person", {"email"}}};
+	EXPECT_THROW(static_cast<void>(backend.createLogicalNodeIndexes(duplicateIndexes)), std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(backend.createLogicalNodeVectorIndex({"vector", "", "embedding", 2U, "l2"})),
+			 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(backend.createLogicalNodeVectorIndex({"vector", "Person", "", 2U, "l2"})),
+			 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(backend.createLogicalNodeVectorIndex({oversizedName, "Person", "embedding", 2U, "l2"})),
+			 FormatException);
+	EXPECT_THROW(static_cast<void>(backend.createLogicalNodeVectorIndex({"vector", "Person", oversizedProperty, 2U, "l2"})),
+			 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(backend.createLogicalNodeVectorIndex({"vector", oversizedLabel, "embedding", 2U, "l2"})),
+			 FormatException);
+	EXPECT_THROW(static_cast<void>(backend.createLogicalNodeVectorIndex({"vector", "Person", "embedding", 0U, "l2"})),
+			 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(backend.createLogicalNodeVectorIndex({"vector", "Person", "embedding", 2U, "unknown"})),
+			 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(backend.createLogicalConstraint({"", LogicalGraphConstraintEntityKind::LGCEK_NODE,
+			 LogicalGraphConstraintKind::LGCK_UNIQUE, "Person", {"name"}, LogicalGraphConstraintPropertyType::LGCPT_NONE})),
+			 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(backend.createLogicalConstraint({"constraint", LogicalGraphConstraintEntityKind::LGCEK_NODE,
+			 LogicalGraphConstraintKind::LGCK_UNIQUE, "", {"name"}, LogicalGraphConstraintPropertyType::LGCPT_NONE})),
+			 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(backend.createLogicalConstraint({"constraint", LogicalGraphConstraintEntityKind::LGCEK_NODE,
+			 LogicalGraphConstraintKind::LGCK_UNIQUE, "Person", {}, LogicalGraphConstraintPropertyType::LGCPT_NONE})),
+			 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(backend.createLogicalConstraint({"constraint", LogicalGraphConstraintEntityKind::LGCEK_NODE,
+			 LogicalGraphConstraintKind::LGCK_UNIQUE, "Person", {""}, LogicalGraphConstraintPropertyType::LGCPT_NONE})),
+			 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(backend.createLogicalConstraint({oversizedName, LogicalGraphConstraintEntityKind::LGCEK_NODE,
+			 LogicalGraphConstraintKind::LGCK_UNIQUE, "Person", {"name"}, LogicalGraphConstraintPropertyType::LGCPT_NONE})),
+			 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(backend.createLogicalConstraint({"constraint", LogicalGraphConstraintEntityKind::LGCEK_NODE,
+			 LogicalGraphConstraintKind::LGCK_UNIQUE, oversizedLabel, {"name"}, LogicalGraphConstraintPropertyType::LGCPT_NONE})),
+			 FormatException);
+	EXPECT_THROW(static_cast<void>(backend.createLogicalConstraint({"constraint", LogicalGraphConstraintEntityKind::LGCEK_NODE,
+			 LogicalGraphConstraintKind::LGCK_UNIQUE, "Person", {oversizedProperty}, LogicalGraphConstraintPropertyType::LGCPT_NONE})),
+			 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(backend.dropLogicalIndexByName("")), std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(backend.dropLogicalNodeIndexBySchema("", "name")), std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(backend.dropLogicalNodeIndexBySchema("Person", "")), std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(backend.dropLogicalConstraintByName("")), std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(backend.listLogicalIndexes(0U)), FormatException);
+	EXPECT_THROW(static_cast<void>(backend.listLogicalConstraints(0U)), FormatException);
+	EXPECT_TRUE(backend.listLogicalIndexes(16U).empty());
+	EXPECT_TRUE(backend.listLogicalConstraints(16U).empty());
+	backend.close();
+}

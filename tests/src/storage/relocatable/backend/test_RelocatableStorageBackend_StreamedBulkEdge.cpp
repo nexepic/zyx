@@ -19,6 +19,7 @@
 #include <chrono>
 #include <functional>
 #include <future>
+#include <limits>
 #include <span>
 
 #ifdef _WIN32
@@ -1277,9 +1278,37 @@ TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgeRequiresFiniteSortAndCandi
 	assertRejected([](RelocatableStorageBackendOptions &options) { options.maximum_bulk_edge_sort_runs = 1U; });
 	assertRejected([](RelocatableStorageBackendOptions &options) { options.maximum_bulk_edge_candidate_pages = 0U; });
 	assertRejected([](RelocatableStorageBackendOptions &options) { options.maximum_bulk_edge_index_entries = 0U; });
+	assertRejected([](RelocatableStorageBackendOptions &options) { options.maximum_bulk_edge_transaction_records = 0U; });
 	assertRejected([](RelocatableStorageBackendOptions &options) {
 		options.maximum_bulk_edge_transaction_records = 2U;
 		options.maximum_bulk_edge_index_entries = 3U;
+	});
+	// Every streamed-write work limit must reject an unbounded request before it
+	// can allocate scratch state or acquire a publication lease.
+	const size_t unbounded = std::numeric_limits<size_t>::max();
+	assertRejected([](RelocatableStorageBackendOptions &options) {
+		options.maximum_bulk_edge_transaction_records = unbounded;
+	});
+	assertRejected([](RelocatableStorageBackendOptions &options) {
+		options.bulk_edge_id_lease_block_records = unbounded;
+	});
+	assertRejected([](RelocatableStorageBackendOptions &options) {
+		options.maximum_bulk_edge_append_records = unbounded;
+	});
+	assertRejected([](RelocatableStorageBackendOptions &options) {
+		options.maximum_bulk_edge_append_bytes = unbounded;
+	});
+	assertRejected([](RelocatableStorageBackendOptions &options) {
+		options.bulk_edge_sort_run_bytes = unbounded;
+	});
+	assertRejected([](RelocatableStorageBackendOptions &options) {
+		options.maximum_bulk_edge_sort_runs = unbounded;
+	});
+	assertRejected([](RelocatableStorageBackendOptions &options) {
+		options.maximum_bulk_edge_candidate_pages = unbounded;
+	});
+	assertRejected([](RelocatableStorageBackendOptions &options) {
+		options.maximum_bulk_edge_index_entries = unbounded;
 	});
 }
 
@@ -1467,10 +1496,22 @@ TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgeAppendBoundsRejectBeforeLe
 	const std::array<uint64_t, 2U> twoSources{nodes[0], nodes[0]};
 	const std::array<uint64_t, 2U> twoTargets{nodes[1], nodes[1]};
 	EXPECT_THROW(static_cast<void>(bulk->appendPersistedBulkEdges({"TOO_MANY", twoSources, twoTargets, {}})),
-				 std::invalid_argument);
+			 std::invalid_argument);
+	const std::array<uint64_t, 0U> noEndpoints{};
+	EXPECT_THROW(static_cast<void>(bulk->appendPersistedBulkEdges({"EMPTY", noEndpoints, noEndpoints, {}})),
+			 std::invalid_argument);
 
 	const std::array<uint64_t, 1U> oneSource{nodes[0]};
 	const std::array<uint64_t, 1U> oneTarget{nodes[1]};
+	EXPECT_THROW(static_cast<void>(bulk->appendPersistedBulkEdges({"MISMATCHED", oneSource, twoTargets, {}})),
+			 std::invalid_argument);
+	const std::array<int64_t, 1U> zeroSource{0};
+	const std::array<int64_t, 1U> signedTarget{static_cast<int64_t>(nodes[1])};
+	EXPECT_THROW(static_cast<void>(bulk->appendPersistedBulkEdges({"ZERO_ENDPOINT", zeroSource, signedTarget, {}})),
+			 std::invalid_argument);
+	const std::array<uint64_t, 1U> missingTarget{std::numeric_limits<uint64_t>::max()};
+	EXPECT_THROW(static_cast<void>(bulk->appendPersistedBulkEdges({"MISSING_ENDPOINT", oneSource, missingTarget, {}})),
+			 std::invalid_argument);
 	const std::array<PropertyValue, 1U> oversizedValue{PropertyValue(std::string(1'024U, 'x'))};
 	const std::array<LogicalGraphBulkEdgePropertyColumn, 1U> oversizedColumn{{{"payload", oversizedValue}}};
 	EXPECT_THROW(static_cast<void>(bulk->appendPersistedBulkEdges({"TOO_WIDE", oneSource, oneTarget, oversizedColumn})),
@@ -1478,6 +1519,32 @@ TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgeAppendBoundsRejectBeforeLe
 
 	const std::vector<uint64_t> accepted = bulk->appendPersistedBulkEdges({"BOUNDED", oneSource, oneTarget, {}});
 	ASSERT_EQ(accepted.size(), 1U);
+	EXPECT_NO_THROW(transaction->rollback());
+	transaction.reset();
+	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgeRejectsAnOrdinaryStagedMutationBeforeLeasingOrScratch) {
+	materializeNativeDatabase();
+	RelocatableStorageBackendOptions options = backendOptions();
+	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(std::move(options));
+	backend.open();
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes({{{"BulkSource"}, {}}, {{"BulkTarget"}, {}}});
+	ASSERT_EQ(nodes.size(), 2U);
+
+	std::unique_ptr<LogicalGraphTransaction> transaction = backend.beginLogicalGraphTransaction(false);
+	LogicalGraphMutationBatch ordinaryBatch;
+	ordinaryBatch.node_creates = {{{"Ordinary"}, {}}};
+	ASSERT_EQ(transaction->stageMutationBatch(std::move(ordinaryBatch)).created_node_ids.size(), 1U);
+	auto *const bulk = dynamic_cast<LogicalGraphBoundedBulkEdgeTransaction *>(transaction.get());
+	ASSERT_NE(bulk, nullptr);
+	const std::array<uint64_t, 1U> source{nodes[0]};
+	const std::array<uint64_t, 1U> target{nodes[1]};
+	EXPECT_THROW(static_cast<void>(bulk->appendPersistedBulkEdges({"MIXED_MODE", source, target, {}})),
+			 std::logic_error);
+	EXPECT_FALSE(bulk->hasStreamedBulkEdges());
 	EXPECT_NO_THROW(transaction->rollback());
 	transaction.reset();
 	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
@@ -1499,6 +1566,13 @@ TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgeDuplicatePropertyKeysRejec
 	const std::array<uint64_t, 1U> source{nodes[0]};
 	const std::array<uint64_t, 1U> target{nodes[1]};
 	const std::array<PropertyValue, 1U> values{PropertyValue(int64_t{7})};
+	const std::array<LogicalGraphBulkEdgePropertyColumn, 1U> emptyKeyColumn{{{"", values}}};
+	EXPECT_THROW(static_cast<void>(bulk->appendPersistedBulkEdges({"EMPTY_PROPERTY", source, target, emptyKeyColumn})),
+			 std::invalid_argument);
+	const std::array<PropertyValue, 0U> noValues{};
+	const std::array<LogicalGraphBulkEdgePropertyColumn, 1U> shortColumn{{{"rank", noValues}}};
+	EXPECT_THROW(static_cast<void>(bulk->appendPersistedBulkEdges({"SHORT_PROPERTY", source, target, shortColumn})),
+			 std::invalid_argument);
 	const std::array<LogicalGraphBulkEdgePropertyColumn, 2U> duplicateColumns{{
 			{"rank", values}, {"rank", values}}};
 	EXPECT_THROW(static_cast<void>(bulk->appendPersistedBulkEdges({"DUPLICATE_PROPERTY", source, target, duplicateColumns})),
