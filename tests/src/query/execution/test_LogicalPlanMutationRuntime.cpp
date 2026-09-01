@@ -281,6 +281,64 @@ namespace graph::query {
 		EXPECT_EQ(backend->graph().mutation_batches, 1U);
 	}
 
+	TEST(LogicalPlanMutationRuntimeTest, WriteOnlyCallAppliesImportedSetAndRemoveUpdatesAtomically) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const uint64_t nodeId =
+				backend->addNode({"Seed"}, {{"value", PropertyValue(4)}, {"obsolete", PropertyValue(true)}});
+		QueryEngine engine(backend, backend);
+
+		const QueryResult result = engine.execute(
+				"MATCH (seed:Seed) "
+				"CALL { WITH seed SET seed.value = seed.value + 1, seed:Processed, seed += {merged: 'yes'} "
+				"REMOVE seed.obsolete } "
+				"RETURN seed.value AS value");
+
+		ASSERT_EQ(result.rowCount(), 1U);
+		EXPECT_EQ(result.getRows().front().at("value").asPrimitive(), PropertyValue(5));
+		const TestNode &stored = backend->graph().nodes.at(nodeId);
+		EXPECT_EQ(stored.properties.at("value"), PropertyValue(5));
+		EXPECT_EQ(stored.properties.at("merged"), PropertyValue("yes"));
+		EXPECT_FALSE(stored.properties.contains("obsolete"));
+		EXPECT_TRUE(std::ranges::find(stored.labels, "Processed") != stored.labels.end());
+		EXPECT_EQ(backend->graph().mutation_batches, 1U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, InTransactionsCallAppliesImportedSetAndRemoveUpdatesPerBatch) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const uint64_t first =
+				backend->addNode({"Seed"}, {{"value", PropertyValue(2)}, {"obsolete", PropertyValue(true)}});
+		const uint64_t second =
+				backend->addNode({"Seed"}, {{"value", PropertyValue(3)}, {"obsolete", PropertyValue(true)}});
+		const uint64_t third =
+				backend->addNode({"Seed"}, {{"value", PropertyValue(5)}, {"obsolete", PropertyValue(true)}});
+		QueryEngine engine(backend, backend);
+
+		const QueryResult result = engine.execute(
+				"MATCH (seed:Seed) "
+				"CALL { WITH seed SET seed.value = seed.value * 2, seed:Processed REMOVE seed.obsolete } "
+				"IN TRANSACTIONS OF 2 ROWS RETURN seed.value AS value");
+
+		ASSERT_EQ(result.rowCount(), 3U);
+		std::vector<PropertyValue> values;
+		for (const QueryResult::Row &row: result.getRows()) {
+			values.push_back(row.at("value").asPrimitive());
+		}
+		std::ranges::sort(values);
+		// Batched CALL preserves its outer input rows for the following projection;
+		// the mutation itself is published once each batch has completed.
+		EXPECT_EQ(values, (std::vector<PropertyValue>{PropertyValue(2), PropertyValue(3), PropertyValue(5)}));
+		for (const auto &[nodeId, expectedValue]:
+				 std::initializer_list<std::pair<uint64_t, PropertyValue>>{{first, PropertyValue(4)},
+																											 {second, PropertyValue(6)},
+																											 {third, PropertyValue(10)}}) {
+			const TestNode &stored = backend->graph().nodes.at(nodeId);
+			EXPECT_EQ(stored.properties.at("value"), expectedValue);
+			EXPECT_FALSE(stored.properties.contains("obsolete"));
+			EXPECT_TRUE(std::ranges::find(stored.labels, "Processed") != stored.labels.end());
+		}
+		EXPECT_EQ(backend->graph().mutation_batches, 2U);
+	}
+
 	TEST(LogicalPlanMutationRuntimeTest, InTransactionsCallUsesAnImplicitSingleRowWhenItsInputIsOmitted) {
 		auto backend = std::make_shared<TestLogicalGraph>();
 		execution::LogicalPlanMutationRuntime runtime(*backend, *backend);
@@ -454,7 +512,20 @@ namespace graph::query {
 		logical::LogicalCallSubquery exportingCall(std::make_unique<logical::LogicalSingleRow>(), makeCreate(),
 				std::vector<std::string>{}, std::vector<std::string>{"child"}, true, 1);
 		EXPECT_THROW(static_cast<void>(runtime.execute(exportingCall, nativeMutationBounds(), QueryContext{})),
-			 std::runtime_error);
+				std::runtime_error);
+
+		// A batched body has one result per independently committed input batch.
+		// DISTINCT would change that public cardinality, so reject the direct-plan
+		// shape before any batch can publish its CREATE.
+		auto distinctExport = std::make_unique<logical::LogicalProject>(
+				makeCreate(),
+				std::vector<logical::LogicalProjectItem>{{
+						std::make_shared<expressions::VariableReferenceExpression>("child"), "child"}},
+				true);
+		logical::LogicalCallSubquery distinctExportingCall(std::make_unique<logical::LogicalSingleRow>(),
+				std::move(distinctExport), std::vector<std::string>{}, std::vector<std::string>{"child"}, true, 1);
+		EXPECT_THROW(static_cast<void>(runtime.execute(distinctExportingCall, nativeMutationBounds(), QueryContext{})),
+				std::runtime_error);
 
 		logical::LogicalCallSubquery nonCreateCall(
 				std::make_unique<logical::LogicalSingleRow>(),
@@ -511,12 +582,50 @@ namespace graph::query {
 				std::make_unique<logical::LogicalSingleRow>(), {},
 				{{"sum", nullptr, "total", false}});
 		EXPECT_THROW(static_cast<void>(execute(unsupportedAggregate)), std::logic_error);
+		const auto validCount = [] {
+			return logical::LogicalAggItem{"count", nullptr, "total", false, nullptr};
+		};
+		// Exercise each public count(*) shape guard independently. Keeping all
+		// earlier predicates valid makes every later fail-closed branch reachable.
+		logical::LogicalAggregate groupedCount(
+				std::make_unique<logical::LogicalSingleRow>(),
+				{std::make_shared<expressions::LiteralExpression>(PropertyValue(int64_t{1}))}, {validCount()});
+		EXPECT_THROW(static_cast<void>(execute(groupedCount)), std::logic_error);
+		logical::LogicalAggregate emptyAggregations(std::make_unique<logical::LogicalSingleRow>(), {}, {});
+		EXPECT_THROW(static_cast<void>(execute(emptyAggregations)), std::logic_error);
+		logical::LogicalAggregate argumentCount(
+				std::make_unique<logical::LogicalSingleRow>(), {},
+				{{"count", std::make_shared<expressions::LiteralExpression>(PropertyValue(int64_t{1})), "total"}});
+		EXPECT_THROW(static_cast<void>(execute(argumentCount)), std::logic_error);
+		logical::LogicalAggregate distinctCount(
+				std::make_unique<logical::LogicalSingleRow>(), {}, {{"count", nullptr, "total", true}});
+		EXPECT_THROW(static_cast<void>(execute(distinctCount)), std::logic_error);
+		logical::LogicalAggregate extraCount(
+				std::make_unique<logical::LogicalSingleRow>(), {},
+				{{"count", nullptr, "total", false,
+				  std::make_shared<expressions::LiteralExpression>(PropertyValue(int64_t{1}))}});
+		EXPECT_THROW(static_cast<void>(execute(extraCount)), std::logic_error);
+		logical::LogicalAggregate unnamedCount(
+				std::make_unique<logical::LogicalSingleRow>(), {}, {{"count", nullptr, "", false}});
+		EXPECT_THROW(static_cast<void>(execute(unnamedCount)), std::logic_error);
 
 		logical::LogicalDelete emptyTargets({}, false, std::make_unique<logical::LogicalSingleRow>());
 		EXPECT_THROW(static_cast<void>(execute(emptyTargets)), std::logic_error);
 
 		logical::LogicalDelete missingChild({"n"}, false);
 		EXPECT_THROW(static_cast<void>(execute(missingChild)), std::logic_error);
+
+		// DELETE must reject both an unresolved binding and a scalar binding; only
+		// persisted Node/Edge values are valid deletion targets.
+		logical::LogicalDelete unresolvedDelete({"n"}, false, std::make_unique<logical::LogicalSingleRow>());
+		EXPECT_THROW(static_cast<void>(execute(unresolvedDelete)), std::logic_error);
+		logical::LogicalDelete scalarDelete(
+				{"n"}, false,
+				std::make_unique<logical::LogicalProject>(
+						std::make_unique<logical::LogicalSingleRow>(),
+						std::vector<logical::LogicalProjectItem>{
+								{std::make_shared<expressions::LiteralExpression>(PropertyValue(int64_t{1})), "n"}}));
+		EXPECT_THROW(static_cast<void>(execute(scalarDelete)), std::logic_error);
 
 		// The logical operator hierarchy is public, so enum values are not proof of
 		// the concrete operator type. Every mutation-root dispatch must reject a
@@ -631,6 +740,17 @@ namespace graph::query {
 				std::make_shared<expressions::LiteralExpression>(PropertyValue(std::vector<PropertyValue>{})),
 				std::make_unique<MalformedLogicalOperator>(malformedForeachBody));
 		EXPECT_THROW(static_cast<void>(execute(nonUnaryForeachBody)), std::logic_error);
+
+		// A unary update chain may expose a null child through the public operator
+		// interface.  Reject it before dereferencing the child while validating the
+		// FOREACH body.
+		MalformedLogicalOperator nullForeachChild(
+				logical::LogicalOpType::LOP_CREATE_NODE, std::vector<logical::LogicalOperator *>{nullptr});
+		logical::LogicalForeach nullUnaryForeach(
+				std::make_unique<logical::LogicalSingleRow>(), "item",
+				std::make_shared<expressions::LiteralExpression>(PropertyValue(std::vector<PropertyValue>{})),
+				std::make_unique<MalformedLogicalOperator>(nullForeachChild));
+		EXPECT_THROW(static_cast<void>(execute(nullUnaryForeach)), std::logic_error);
 
 		// A SingleRow seed is a terminal operator. Permitting a hidden child would
 		// make the update body depend on an unaccounted read pipeline.
