@@ -55,7 +55,7 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] bool hasSameNewEntityPoolIdentity(const EntityPageNewPoolBatchRequest &left,
-														const EntityPageNewPoolBatchRequest &right) {
+															const EntityPageNewPoolBatchRequest &right) {
 			const CatalogSlotReservationRequest &leftReservation = left.reservation;
 			const CatalogSlotReservationRequest &rightReservation = right.reservation;
 			return leftReservation.segment_id == rightReservation.segment_id &&
@@ -365,6 +365,31 @@ namespace graph::storage {
 							"native graph private scratch candidates require one homogeneous identity contract");
 				}
 			}
+			// A batch must be able to give every candidate a distinct slot before
+			// materialization starts; otherwise a failed publish could alias scratch.
+			std::vector<const NativeGraphPrivateSegmentRequest *> ordered;
+			ordered.reserve(derivedState.private_segments.size());
+			for (const NativeGraphPrivateSegmentRequest &request: derivedState.private_segments) {
+				ordered.push_back(&request);
+			}
+			std::ranges::sort(ordered, {}, [](const auto *request) { return request->last_slot; });
+			uint64_t nextSlot = 0U;
+			for (const NativeGraphPrivateSegmentRequest *request: ordered) {
+				const uint64_t candidate = std::max(nextSlot, request->first_slot.value());
+				if (candidate > request->last_slot.value()) {
+					throw FormatException(FormatError::FERR_INVALID_HEADER,
+									  "native graph private scratch candidates exceed their bounded physical slots");
+				}
+				if (candidate == std::numeric_limits<uint64_t>::max()) {
+					nextSlot = 0U;
+					if (request != ordered.back()) {
+						throw FormatException(FormatError::FERR_INVALID_HEADER,
+											  "native graph private scratch candidates exceed their bounded physical slots");
+					}
+				} else {
+					nextSlot = candidate + 1U;
+				}
+			}
 		}
 		if (derivedState.private_segment_plan.has_value()) {
 			const NativeGraphPrivateSegmentPlan &plan = *derivedState.private_segment_plan;
@@ -379,6 +404,11 @@ namespace graph::storage {
 			if (plan.segment_count == 0U) {
 				throw FormatException(FormatError::FERR_INVALID_HEADER,
 									  "native graph compact private scratch plan has no candidate segments");
+			}
+			if (plan.segment_count - 1U > plan.last_slot.value() - plan.first_slot.value()) {
+				throw FormatException(
+						FormatError::FERR_INVALID_HEADER,
+						"native graph compact private scratch plan exceeds its bounded physical slot range");
 			}
 		}
 		if ((!derivedState.vector_bootstraps.empty() && !vectorBootstrapPreparer) ||
@@ -4306,7 +4336,7 @@ namespace graph::storage {
 													*io_, context.current_superblock.data_region_offset, activePool, publications);
 											for (size_t index = 0U; index < pendingPages.size(); ++index) {
 												propertyPageSession->append(locations[index]);
-												for (const EntityPropertyLocation &property: pendingPages[index].property_locations) {
+													for (const EntityPropertyLocation &property: pendingPages[index].property_locations) {
 													if (!streamedEdgeIdIsLeased(request.edge_id_reservation, property.key.entity_id)) {
 														throw FormatException(FormatError::FERR_INVALID_STATE,
 																  "streamed Edge final coordinator materialized an unleased Property owner");
