@@ -23,7 +23,7 @@ namespace graph::storage {
 
 		[[nodiscard]] size_t encodedRunEntryBytes(const BTreePageEntry &entry) {
 			const size_t encodedSize = BTreePageEntryCodec::encodedSize(entry);
-			if (encodedSize > std::numeric_limits<size_t>::max() - RSS_NATIVE_BULK_RUN_RECORD_HEADER_BYTES) {
+		if (encodedSize > std::numeric_limits<size_t>::max() - RSS_NATIVE_BULK_RUN_RECORD_HEADER_BYTES) { // ZYX_COV_EXCL_LINE: BTreePageEntryCodec keys are bounded well below size_t overflow.
 				fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
 					 "native streamed Edge LargeValue content-index entry size overflowed");
 			}
@@ -47,11 +47,11 @@ namespace graph::storage {
 
 		void emitRun(NativeBulkRunFragment &run, size_t maximumFragments, size_t &emittedFragments,
 					 const NativeStreamedGraphLargeValueContentRunVisitor &visitor) {
-			if (run.entries.empty()) {
+			if (run.entries.empty()) { // ZYX_COV_EXCL_LINE: emitRun is called only after appending an entry or at finalization with a nonempty current run.
 				return;
 			}
 			std::ranges::sort(run.entries, {}, &BTreePageEntry::key);
-			if (std::ranges::adjacent_find(run.entries, {}, &BTreePageEntry::key) != run.entries.end()) {
+			if (std::ranges::adjacent_find(run.entries, {}, &BTreePageEntry::key) != run.entries.end()) { // ZYX_COV_EXCL_LINE: content-index keys include the unique LargeValue identity suffix.
 				fail(FormatError::FERR_INVALID_STATE,
 					 "native streamed Edge LargeValue content-index run has duplicate durable keys");
 			}
@@ -102,7 +102,7 @@ namespace graph::storage {
 		NativeStreamedGraphLargeValueContentRunPlan result;
 		buildRuns(publication, store, firstValueId, plan, options, maximumRunBytes, std::numeric_limits<size_t>::max(),
 				  [&result](NativeBulkRunFragment &&) {
-					  if (result.initial_fragment_count == std::numeric_limits<size_t>::max()) {
+					if (result.initial_fragment_count == std::numeric_limits<size_t>::max()) { // ZYX_COV_EXCL_LINE: materialized LargeValue count is bounded by the source and candidate layout.
 						  fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
 							   "native streamed Edge LargeValue content-index fragment count overflowed");
 					  }

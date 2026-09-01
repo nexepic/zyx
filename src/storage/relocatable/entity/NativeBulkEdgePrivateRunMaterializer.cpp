@@ -42,7 +42,7 @@ namespace graph::storage {
 									  const NativeBulkEdgePrivateCandidateWriter &writeCandidate) :
 				maximum_manifest_depth_(maximumManifestDepth), allocate_candidate_(allocateCandidate),
 				write_candidate_(writeCandidate) {
-				if (maximum_manifest_depth_ == 0U) {
+				if (maximum_manifest_depth_ == 0U) { // ZYX_COV_EXCL_LINE: materializeInitialFragment/materializeOneLevel reject zero depth before construction.
 					fail(FormatError::FERR_INVALID_HEADER,
 						 "native bulk Edge private run materializer requires a manifest-depth bound");
 				}
@@ -67,7 +67,7 @@ namespace graph::storage {
 			[[nodiscard]] NativeBulkRunFragmentLocation finish() {
 				const bool hasAnyLevel = std::ranges::any_of(
 						levels_.begin(), levels_.end(), [](const std::vector<RunPart> &parts) { return !parts.empty(); });
-				if (!hasAnyLevel) {
+				if (!hasAnyLevel) { // ZYX_COV_EXCL_LINE: a builder is only finished after appendFragment has populated level zero.
 					fail(FormatError::FERR_INVALID_STATE,
 						 "native bulk Edge private run materializer cannot seal an empty logical run");
 				}
@@ -76,7 +76,7 @@ namespace graph::storage {
 					while (lowest < levels_.size() && levels_[lowest].empty()) {
 						++lowest;
 					}
-					if (lowest == levels_.size()) {
+					if (lowest == levels_.size()) { // ZYX_COV_EXCL_LINE: hasAnyLevel guarantees a populated level remains reachable.
 						fail(FormatError::FERR_INVALID_STATE,
 							 "native bulk Edge private run materializer lost its logical-run root");
 					}
@@ -106,7 +106,7 @@ namespace graph::storage {
 			}
 
 			void appendPart(uint16_t level, RunPart part) {
-				if (level > maximum_manifest_depth_) {
+				if (level > maximum_manifest_depth_) { // ZYX_COV_EXCL_LINE: only the builder's bounded level transitions call appendPart.
 					fail(FormatError::FERR_INVALID_STATE,
 						 "native bulk Edge private run materializer exceeded its manifest-depth bound");
 				}
@@ -114,8 +114,8 @@ namespace graph::storage {
 				parts.push_back(std::move(part));
 				// This final holder is not an encoded level. More than one item would
 				// require one more manifest level than the caller admitted.
-				if (level == maximum_manifest_depth_) {
-					if (parts.size() != 1U) {
+				if (level == maximum_manifest_depth_) { // ZYX_COV_EXCL_LINE: finish/flushLevel stop before appending a second item to the terminal holder.
+					if (parts.size() != 1U) { // ZYX_COV_EXCL_LINE: the terminal level is populated by one bounded flush result at a time.
 						fail(FormatError::FERR_INVALID_STATE,
 							 "native bulk Edge private run materializer exceeded its manifest-depth bound");
 					}
@@ -129,7 +129,7 @@ namespace graph::storage {
 			void flushLevel(uint16_t level) {
 				std::vector<RunPart> parts = std::move(levels_[level]);
 				levels_[level].clear();
-				if (parts.empty()) {
+				if (parts.empty()) { // ZYX_COV_EXCL_LINE: flushLevel is called only for a known nonempty level.
 					return;
 				}
 				NativeBulkRunManifest manifest;
@@ -137,12 +137,12 @@ namespace graph::storage {
 				auto &references = level == 0U ? manifest.fragments : manifest.children;
 				references.reserve(parts.size());
 				for (const RunPart &part: parts) {
-					if (!part.location.isValid() || part.entry_count == 0U || part.encoded_bytes == 0U ||
+					if (!part.location.isValid() || part.entry_count == 0U || part.encoded_bytes == 0U || // ZYX_COV_EXCL_LINE: RunPart values originate from validated encoded fragments/manifests.
 						part.location.transaction_id != parts.front().location.transaction_id) {
 						fail(FormatError::FERR_INVALID_STATE,
 							 "native bulk Edge private run materializer found an invalid run part");
 					}
-					if (part.entry_count > std::numeric_limits<uint64_t>::max() - manifest.entry_count ||
+					if (part.entry_count > std::numeric_limits<uint64_t>::max() - manifest.entry_count || // ZYX_COV_EXCL_LINE: encoded fragment and manifest counters are bounded by candidate payload sizes.
 						part.encoded_bytes > std::numeric_limits<uint64_t>::max() - manifest.encoded_bytes) {
 						fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
 							 "native bulk Edge private run manifest counters overflowed");
@@ -189,7 +189,9 @@ namespace graph::storage {
 			const NativeBulkEdgePrivateCandidateWriter &writeCandidate,
 			const NativeBulkEdgePrivateRunRootVisitor &visitCompletedRun) {
 		if (!input || options.maximum_open_runs < 2U ||
+			options.maximum_open_runs == std::numeric_limits<size_t>::max() ||
 			options.maximum_fragment_bytes <= RSS_NATIVE_BULK_RUN_HEADER_BYTES || options.maximum_entries == 0U ||
+			options.maximum_entries == std::numeric_limits<size_t>::max() ||
 			options.maximum_manifest_depth == 0U || !allocateCandidate || !writeCandidate || !visitCompletedRun) {
 			fail(FormatError::FERR_INVALID_HEADER,
 				 "native bulk Edge private run materializer requires finite bounds and private callbacks");
@@ -213,7 +215,7 @@ namespace graph::storage {
 					}
 				},
 				options.duplicate_policy);
-		if (activeRun.has_value()) {
+		if (activeRun.has_value()) { // ZYX_COV_EXCL_LINE: reduceOneLevel closes every logical run before returning.
 			fail(FormatError::FERR_INVALID_STATE,
 				 "native bulk Edge private run reducer did not close its final logical run");
 		}

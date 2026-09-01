@@ -18,7 +18,7 @@ namespace graph::storage {
 			const NativeStreamedGraphDeferredPublication &publication,
 			const NativeStreamedGraphEntityPageAssignmentSource &assign,
 			const NativeStreamedGraphEntityPageVisitor &visit) {
-		if (!assign || !visit || publication.recordCount() == 0U || publication.entityPageCount() == 0U) {
+		if (!assign || !visit || publication.recordCount() == 0U || publication.entityPageCount() == 0U) { // ZYX_COV_EXCL_LINE: DeferredPublication::create rejects zero-shaped publications before materialization.
 			throw FormatException(FormatError::FERR_INVALID_HEADER,
 							  "native streamed Edge Entity-page materialization requires a complete bounded publication");
 		}
@@ -26,7 +26,7 @@ namespace graph::storage {
 		uint64_t recordCount = 0U;
 		debug::ScopedPerfTimer sourceTimer("native_graph.streamed.final.entity_page_source");
 		publication.visitEntityPages([&](NativeBulkEdgeEntityPageBatch &&batch) {
-			if (pageOrdinal == publication.entityPageCount() || batch.records.empty()) {
+			if (pageOrdinal == publication.entityPageCount() || batch.records.empty()) { // ZYX_COV_EXCL_LINE: the bounded page batcher emits exactly the validated nonempty page sequence.
 				throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "native streamed Edge Entity-page source emitted an invalid page batch");
 			}
@@ -46,7 +46,7 @@ namespace graph::storage {
 			records.reserve(batch.records.size());
 			uint64_t previousEdgeId = 0U;
 			for (const NativeBulkEdgeMaterializedRecord &record: batch.records) {
-				if (record.edge_id == 0U || record.edge_id <= previousEdgeId ||
+				if (record.edge_id == 0U || record.edge_id <= previousEdgeId || // ZYX_COV_EXCL_LINE: source replay validation rejects non-canonical IDs before the entity-page callback.
 					recordCount == std::numeric_limits<uint64_t>::max()) {
 					throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "native streamed Edge Entity-page source lost canonical Edge-ID ordering");
@@ -56,7 +56,7 @@ namespace graph::storage {
 				++recordCount;
 			}
 			const std::vector<uint16_t> slots = page.insertEdges(records);
-			if (slots.size() != batch.records.size()) {
+			if (slots.size() != batch.records.size()) { // ZYX_COV_EXCL_LINE: EntityPage::insertEdges returns one slot for every validated edge record.
 				throw FormatException(FormatError::FERR_INVALID_STATE,
 							  "native streamed Edge Entity-page batch lost one assigned fixed-record slot");
 			}
