@@ -97,6 +97,21 @@ TEST(NativeBulkEdgePrivateRunSetTest, BuildsARewindableLogicalRunSourceInAppendO
 			 FormatException);
 }
 
+TEST(NativeBulkEdgePrivateRunSetTest, RejectsTruncatedPayloadsAndInvalidManifestRoots) {
+	const NativeBulkRunFragmentLocation run{SegmentId(101U), Generation(7U), 88U};
+	NativeBulkEdgePrivateRunSetManifest manifest;
+	manifest.runs = {run};
+	manifest.run_count = 1U;
+	const std::vector<std::byte> payload = NativeBulkEdgePrivateRunSetCodec::encode(manifest);
+	const NativeBulkRunFragmentLocation root{SegmentId(100U), Generation(7U), 88U};
+
+	EXPECT_THROW(static_cast<void>(NativeBulkEdgePrivateRunSetCodec::decode({}, root)), FormatException);
+	EXPECT_THROW(static_cast<void>(NativeBulkEdgePrivateRunSetCodec::decode(payload, {})), FormatException);
+	manifest.runs = {root};
+	const std::vector<std::byte> selfReferential = NativeBulkEdgePrivateRunSetCodec::encode(manifest);
+	EXPECT_THROW(static_cast<void>(NativeBulkEdgePrivateRunSetCodec::decode(selfReferential, root)), FormatException);
+}
+
 TEST(NativeBulkEdgePrivateRunSetTest, BuildsAndReplaysExactAndOverFanoutHierarchies) {
 	auto buildAndReplay = [](size_t count) {
 		PrivateCandidates candidates;
@@ -159,6 +174,64 @@ TEST(NativeBulkEdgePrivateRunSetTest, RejectsChecksumAndRunCountCorruption) {
 			 FormatException);
 }
 
+TEST(NativeBulkEdgePrivateRunSetTest, RejectsMalformedHierarchyBeforeReadingUntrustedRunPayloads) {
+	NativeGraphPrivateSegmentSet identities{SegmentId(100U), Generation(7U), 3U, 88U};
+	const NativeBulkRunFragmentLocation root{identities[0U].segment_id, identities[0U].generation, identities[0U].owner_id};
+	const NativeBulkRunFragmentLocation firstChild{
+			identities[1U].segment_id, identities[1U].generation, identities[1U].owner_id};
+	const NativeBulkRunFragmentLocation secondChild{
+			identities[2U].segment_id, identities[2U].generation, identities[2U].owner_id};
+	const NativeBulkRunFragmentLocation untrustedRun{SegmentId(200U), Generation(1U), 88U};
+
+	NativeBulkEdgePrivateRunSetManifest child;
+	child.runs = {untrustedRun};
+	child.run_count = 1U;
+	NativeBulkEdgePrivateRunSetManifest parent;
+	parent.level = 1U;
+	parent.children = {firstChild, secondChild};
+	// The parent claims only one run although both valid children each expose
+	// one. Traversal must reject this before it opens either referenced run.
+	parent.run_count = 1U;
+	std::vector<std::vector<std::byte>> payloads{
+			NativeBulkEdgePrivateRunSetCodec::encode(parent), NativeBulkEdgePrivateRunSetCodec::encode(child),
+			NativeBulkEdgePrivateRunSetCodec::encode(child)};
+	const NativeGraphPrivateSegmentReader reader = [&identities, &payloads](
+				const NativeGraphPrivateSegmentMaterialization &identity) {
+		return payloads.at(identities.ordinalOf(identity));
+	};
+
+	// A root at level one cannot be traversed with a one-frame depth budget.
+	NativeBulkEdgeRunCursor depthBounded = nativeBulkEdgePrivateRunSetSource(identities, root, 1U, reader)();
+	EXPECT_THROW((void)depthBounded(), FormatException);
+
+	NativeBulkEdgeRunCursor cursor = nativeBulkEdgePrivateRunSetSource(identities, root, 4U, reader)();
+	EXPECT_TRUE(cursor().has_value());
+	EXPECT_TRUE(cursor().has_value());
+	EXPECT_THROW((void)cursor(), FormatException);
+
+	constexpr size_t levelOffset = sizeof(uint32_t) + 3U * sizeof(uint16_t);
+	LittleEndianCodec::writeU16(payloads[0U], levelOffset, 2U);
+	NativeBulkEdgeRunCursor malformedLevel = nativeBulkEdgePrivateRunSetSource(identities, root, 4U, reader)();
+	EXPECT_THROW((void)malformedLevel(), FormatException);
+}
+
+TEST(NativeBulkEdgePrivateRunSetTest, RejectsAFlatManifestThatExposesMoreRunsThanDeclared) {
+	PrivateCandidates candidates;
+	const NativeBulkRunFragmentLocation first = writeSingleEntryRun(candidates, 0x11U);
+	const NativeBulkRunFragmentLocation second = writeSingleEntryRun(candidates, 0x22U);
+	NativeBulkEdgePrivateRunSetManifest rootManifest;
+	rootManifest.runs = {first, second};
+	rootManifest.run_count = 1U;
+	const NativeGraphPrivateSegmentMaterialization rootIdentity = candidates.allocate();
+	const NativeBulkRunFragmentLocation root{rootIdentity.segment_id, rootIdentity.generation, rootIdentity.owner_id};
+	candidates.write(rootIdentity, NativeBulkEdgePrivateRunSetCodec::encode(rootManifest));
+
+	NativeBulkEdgeRunCursor cursor = nativeBulkEdgePrivateRunSetSource(candidates.identities, root, 2U,
+			candidates.reader())();
+	ASSERT_TRUE(cursor().has_value());
+	EXPECT_THROW(static_cast<void>(cursor()), FormatException);
+}
+
 TEST(NativeBulkEdgePrivateRunSetTest, ReturnsTheOnlyTerminalRun) {
 	PrivateCandidates candidates;
 	const NativeBulkRunFragmentLocation expected = writeSingleEntryRun(candidates, 0x10U);
@@ -170,6 +243,92 @@ TEST(NativeBulkEdgePrivateRunSetTest, ReturnsTheOnlyTerminalRun) {
 	builder.append(expected);
 	const NativeBulkRunFragmentLocation root = builder.finish();
 	EXPECT_EQ(nativeBulkEdgePrivateRunSetSingleRun(candidates.identities, root, candidates.reader()), expected);
+}
+
+TEST(NativeBulkEdgePrivateRunSetTest, RejectsInvalidPublicBuilderAndSourceContracts) {
+	PrivateCandidates candidates;
+	const NativeBulkEdgePrivateCandidateAllocator allocate = [&] { return candidates.allocate(); };
+	const NativeBulkEdgePrivateCandidateWriter write =
+			[&](const NativeGraphPrivateSegmentMaterialization &identity, std::vector<std::byte> payload) {
+				candidates.write(identity, std::move(payload));
+			};
+	EXPECT_THROW(NativeBulkEdgePrivateRunSetBuilder(0U, allocate, write), FormatException);
+	EXPECT_THROW(NativeBulkEdgePrivateRunSetBuilder(1U, {}, write), FormatException);
+	EXPECT_THROW(NativeBulkEdgePrivateRunSetBuilder(1U, allocate, {}), FormatException);
+
+	NativeBulkEdgePrivateRunSetBuilder builder(1U, allocate, write);
+	EXPECT_THROW((void)builder.finish(), FormatException);
+	EXPECT_THROW(builder.append({}), FormatException);
+
+	const NativeBulkRunFragmentLocation invalid{};
+	EXPECT_THROW((void)nativeBulkEdgePrivateRunSetSource(candidates.identities, invalid, 1U, candidates.reader()),
+			 FormatException);
+	const NativeBulkRunFragmentLocation unknown{SegmentId(99U), Generation(1U), 88U};
+	EXPECT_THROW((void)nativeBulkEdgePrivateRunSetSource(candidates.identities, unknown, 1U, candidates.reader()),
+			 FormatException);
+	EXPECT_THROW((void)nativeBulkEdgePrivateRunSetSingleRun(candidates.identities, invalid, candidates.reader()),
+			 FormatException);
+	EXPECT_THROW((void)nativeBulkEdgePrivateRunSetSingleRun(candidates.identities, unknown, candidates.reader()),
+				 FormatException);
+}
+
+TEST(NativeBulkEdgePrivateRunSetTest, RejectsEveryInvalidOutboundRunSetManifestShape) {
+	const auto valid = [] {
+		NativeBulkEdgePrivateRunSetManifest manifest;
+		manifest.runs = {{SegmentId(9U), Generation(1U), 71U}};
+		manifest.run_count = 1U;
+		return manifest;
+	};
+	const auto reject = [&](const auto &mutate) {
+		NativeBulkEdgePrivateRunSetManifest manifest = valid();
+		mutate(manifest);
+		EXPECT_THROW(static_cast<void>(NativeBulkEdgePrivateRunSetCodec::encode(manifest)), FormatException);
+	};
+
+	reject([](auto &manifest) { manifest.location = {SegmentId(10U), Generation(1U), 71U}; });
+	reject([](auto &manifest) { manifest.runs.clear(); });
+	reject([](auto &manifest) { manifest.run_count = 0U; });
+	reject([](auto &manifest) { manifest.children = {{SegmentId(10U), Generation(1U), 71U}}; });
+	reject([](auto &manifest) { manifest.runs.front().segment_id = {}; });
+	reject([](auto &manifest) { manifest.runs.front().generation = {}; });
+	reject([](auto &manifest) { manifest.runs.front().transaction_id = 0U; });
+	reject([](auto &manifest) { manifest.runs.push_back({SegmentId(10U), Generation(1U), 72U}); });
+
+	// A non-leaf manifest carries child run-set roots only, still under one
+	// immutable private owner.
+	NativeBulkEdgePrivateRunSetManifest internal;
+	internal.level = 1U;
+	internal.children = {{SegmentId(9U), Generation(1U), 71U}};
+	internal.run_count = 1U;
+	EXPECT_NO_THROW(static_cast<void>(NativeBulkEdgePrivateRunSetCodec::encode(internal)));
+}
+
+TEST(NativeBulkEdgePrivateRunSetTest, RejectsMissingReadersAndNonterminalSingleRunShapes) {
+	PrivateCandidates candidates;
+	const NativeBulkRunFragmentLocation first = writeSingleEntryRun(candidates, 0x10U);
+	const NativeBulkRunFragmentLocation second = writeSingleEntryRun(candidates, 0x20U);
+	NativeBulkEdgePrivateRunSetBuilder builder(
+			4U, [&] { return candidates.allocate(); },
+			[&](const NativeGraphPrivateSegmentMaterialization &identity, std::vector<std::byte> payload) {
+				candidates.write(identity, std::move(payload));
+			});
+	builder.append(first);
+	builder.append(second);
+	const NativeBulkRunFragmentLocation root = builder.finish();
+
+	EXPECT_THROW((void)nativeBulkEdgePrivateRunSetSource(candidates.identities, root, 4U, {}), FormatException);
+	EXPECT_THROW((void)nativeBulkEdgePrivateRunSetSingleRun(candidates.identities, root, {}), FormatException);
+
+	const size_t rootOrdinal = candidates.identities.ordinalOf({root.segment_id, root.generation, root.transaction_id});
+	constexpr size_t runCountOffset = sizeof(uint32_t) + 4U * sizeof(uint16_t) + sizeof(uint32_t);
+	constexpr size_t recordCrcOffset = runCountOffset + sizeof(uint64_t) + sizeof(uint64_t);
+	LittleEndianCodec::writeU64(candidates.payloads[rootOrdinal], runCountOffset, 1U);
+	LittleEndianCodec::writeU32(
+			candidates.payloads[rootOrdinal], recordCrcOffset,
+			graph::utils::calculateCrc(candidates.payloads[rootOrdinal].data() + RSS_NATIVE_BULK_RUN_SET_HEADER_BYTES,
+										   candidates.payloads[rootOrdinal].size() - RSS_NATIVE_BULK_RUN_SET_HEADER_BYTES));
+	EXPECT_THROW((void)nativeBulkEdgePrivateRunSetSingleRun(candidates.identities, root, candidates.reader()),
+				 FormatException);
 }
 
 TEST(NativeBulkEdgePrivateRunSetTest, SingleBitMutationIsRejectedOrRoundTripsWithoutNormalization) {
