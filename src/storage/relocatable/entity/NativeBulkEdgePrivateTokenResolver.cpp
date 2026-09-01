@@ -311,7 +311,9 @@ namespace graph::storage {
 			const NativeBulkEdgeCatalogTokenResolutionSource &resolutions, size_t maximumTokenEntries,
 			const NativeGraphPrivateSegmentReader &reader, const NativeGraphPrivateSegmentWriter &writer,
 			const NativeGraphPrivateSegmentFence &fence) {
-		if (!resolutions || maximumTokenEntries == 0U || !reader || !writer || !fence || candidateRange.count == 0U ||
+		if (!resolutions || maximumTokenEntries == 0U ||
+			maximumTokenEntries == std::numeric_limits<size_t>::max() || !reader || !writer || !fence ||
+			candidateRange.count == 0U ||
 			candidateRange.count < maximumCandidateSegments(maximumTokenEntries)) {
 			fail(FormatError::FERR_INVALID_HEADER,
 					 "native bulk Edge Token resolver requires bounded scoped candidate callbacks");
