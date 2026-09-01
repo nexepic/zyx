@@ -100,7 +100,7 @@ flowchart TD
 
 1. 先完成正确、优雅、高效、可扩展的最终功能实现；
 2. 为每项新增或修改行为增加足以证明正确性、错误处理、原子性和关键边界的必要测试；
-3. 用最小相关测试快速定位问题，并在每个可交付变更结束前运行完整 quick suite；
+3. 用最小相关测试快速定位问题；先按最近可信全量基线列出全部低覆盖率文件，逐个用受影响 suite 和单文件 coverage 收口；在该清单全部处理前不运行完整 quick suite，避免每补一条用例就重复执行全量回归；
 4. 将仍有公开行为价值的 Legacy 测试保留为只读 specification，直到 native replacement test 建立；
 5. 删除所有已被安全替代的 Legacy 实现和 implementation-only 测试，稳定最终 production source set；
 6. 最后针对最终保留代码集中执行 line、branch、function、region 四个维度的全面覆盖率收口。
@@ -109,7 +109,7 @@ flowchart TD
 
 - 修改 production 行为时，必须先判断是实现错误还是测试错误，禁止为通过测试而盲目改 expectation；
 - storage codec、publication、allocator、reclamation、recovery 和 corruption boundary 必须随实现同步增加测试；
-- 每个阶段性实现至少运行最小相关 GoogleTest selection；代码变更交付前仍应运行 `./scripts/run_tests.sh --quick`；
+- 每个阶段性实现至少运行最小相关 GoogleTest selection，并配合 `--file` 审视受影响 production 文件的覆盖率；先完成当前 C7 低覆盖率文件清单的逐文件收口，再运行一次 `ZYX_TEST_SHARDS=8 ./scripts/run_tests.sh --quick`；中间的测试、文档或局部 coverage 复核不得单独触发全量 quick；
 - `.g4` 发生变化时必须重新生成 parser，并同时验证生成文件；
 - 最终 C7 仍要求当前精确 binary 的 line、branch、function、region 均达到至少 95%；
 - 不为计划删除的 implementation-only Legacy 代码补测试来美化全局数字；
@@ -5339,3 +5339,57 @@ native binding current-source checkpoint（2026-08-30，macOS）：使用当前�
 Rust system-feature workspace 38/38（含 `zyxdb-sys` ABI layout）均通过；随后重新启用 `ZYX_BUILD_TESTS=ON` 并完整编译
 `zyx_test_suite`，确保 binding 验收不会改变日常 native test target。该证据确认当前 Driver ABI 消费者仍与 native storage/query
 runtime 一致，不新增公开功能，也不关闭 browser、crash/recovery、规模、coverage 或 Linux/Windows 门禁。
+
+native backend fixture test-speed checkpoint（2026-09-01，macOS）：定位到 `RelocatableStorageBackendTest` suite 约 90 秒耗时的主要固定开销后，将测试 fixture 中逐条提交的 2 个 Node + 2 个 Edge 改为一次 Node 批量写入和一次 Edge 批量写入；数据仍通过 relocatable backend 的公开 logical writer 生成，不改变测试语义或生产代码。编译通过，覆盖读写/批量 mutation 的 4 个定向测试共 4/4 通过（约 1.7 秒）。后续继续保持“定向 suite 迭代、完成 2--3 个模块批次后再跑一次 `ZYX_TEST_SHARDS=8 ./scripts/run_tests.sh --quick`”的低频全量策略。
+
+低频全量测试策略 checkpoint（2026-09-01，macOS）：完成两批 `NativeGraphWritePlanner`、backend direct-read 与
+`RelocatableMetadataStoreGraphMutation` 定向契约/边界测试后，才执行一次
+`ZYX_TEST_SHARDS=8 ./scripts/run_tests.sh --quick`。8 个隔离 shard 全部通过，耗时约 82 秒；同一精确 binary 的
+coverage 为 Region 95.00%、Function 98.82%、Line 95.54%、Branch 88.83%。本轮确认全量 quick 不再作为每条单测后的
+即时回归，而是在完成明确模块批次后集中执行；Branch coverage、完整故障/恢复、规模和三平台门禁仍未完成，后续继续采用
+定向测试，完成下一批模块后再运行全量 quick。
+
+C7 query/index/metadata coverage recheck（2026-09-01，macOS）：完成 logical read runtime 的索引返回实体完整性回归，
+并复核 index-lookup 与 graph-metadata publication 定向测试批次后，执行
+`ZYX_TEST_SHARDS=8 ./scripts/run_tests.sh --quick`（`native-20260901T153128-20818`）。8 个 shard 全部以
+`exit_code: 0` 完成，测试阶段约 87 秒；以该轮 8 份 `profraw` 生成的精确 coverage 为 Region 95.00%、
+Function 98.82%、Line 95.54%、Branch 88.83%。前三个维度仍已达标，Branch 未提升至 C7 所需 95%，
+故本项只能作为正确性与当前基线复核，不能标记 C7 coverage gate 完成；后续继续按低频策略进行定向分支测试。
+
+C7 backend/write-planner coverage recheck（2026-09-01，macOS）：在不运行全量的迭代阶段，先执行后端 final-state、
+read-only、direct-index 公开契约 6/6，以及 `NativeGraphWritePlannerLeaseRecoveryTest.*`、
+`NativeGraphWritePlannerPublicContractsTest.*`、`NativeGraphWritePlannerVectorTest.*` 的定向回归；两批均通过，且构建阶段
+无重新编译。达到两个明确模块批次后，才执行一次 `ZYX_TEST_SHARDS=8 ./scripts/run_tests.sh --quick`
+（`native-20260901T155210-52215`）。8 个 shard 全部以 `exit_code: 0` 完成，测试阶段约 89 秒；coverage 为
+Region 95.00%、Function 98.82%、Line 95.54%、Branch 88.86%。Branch 仍未达到 C7 的 95% gate，
+因此 C7 保持开放；该记录同时确认完整 quick 只在模块批次收口时运行，而不在每条单测后重复运行。
+
+全量 quick 频率收紧（2026-09-01，macOS）：后续 coverage 收口日常只运行受影响的 GoogleTest suite 与对应 `--file` coverage。先从最近可信的完整基线建立全部低覆盖率 source 文件清单，逐个文件补真实公开契约、原子性或 fail-closed 边界并以单文件四维 coverage 验收；该清单全部处理前，不运行 8-shard 完整 quick。全量 quick 不因单条用例、单一文档记录或局部 coverage 复核而运行；这项策略只改变验证节奏，不降低最终 C7 的四维 95% 门槛。
+
+C7 单文件 coverage 收口批次（2026-09-01，macOS）：按低频策略先处理 typed bulk-Edge 的可公开验证边界。`NativeBulkEdgeMaterializerTest.*` 6/6 通过，`NativeBulkEdgeMaterializer.cpp` 为 Region/Function/Line/Branch 100%（删除一个由合法非零 lease 与 lease membership 同时保证、因而不可达的零 Edge-ID 重复判断）；`NativeBulkEdgePrivateRunPipelineTest.*` 7/7 通过，对应文件为 Region 98.89%、Function 100%、Line 98.63%、Branch 98.39%，唯一缺口是无法经公开 API 构造的已封存空 private run-set 不变量；`NativeBulkEdgePrivateFamilyMaterializerTest.*` 3/3 通过，对应文件四维均为 100%。本批只运行各文件的 `--gtest-filter` 与 `--file` report，未运行完整 quick；多层 manifest fan-out 仍只保留在 disabled scale/故障验收，不向普通 unit test 引入大规模 workload。
+
+C7 candidate-layout 单文件收口（2026-09-01，macOS）：`NativeStreamedGraphCandidateLayoutTest.*` 4/4 通过，覆盖零 source run、两个 LargeValue private family 的成对完整性、候选 ordinal 溢出及正的 transaction-wide upper bound。`NativeStreamedGraphCandidateLayout.cpp` 的 Region/Function/Line/Branch 均为 100%；移除了仅由同一函数已验证范围相减再与同一 immutable plan 求和比较、对任何输入均不可达的重复自比较。只运行定向 suite 与单文件 coverage，未运行完整 quick。
+
+C7 bulk-Edge wire-record 单文件收口（2026-09-01，macOS）：`NativeBulkEdgeRecordCodecTest.*` 7/7 通过，覆盖已校验 CRC 的短 header、零 Edge/source/target identity、type 越界、截断/空/越界 Property key 及非 canonical duplicate key 等 fail-closed 路径。`NativeBulkEdgeRecord.cpp` 的 Region/Function/Line/Branch 为 96.47%/100%/96.05%/91.67%；剩余 6 个 branch 全部要求构造超过 `uint32_t` 或 `size_t` 可表示范围的 4 GiB 级输入，或强行令同一 Property codec 的 size/append 合约自相矛盾。按 unit-test 不引入大容量 workload 的约束保留这些防御，未以规模测试或 coverage exclusion 伪造覆盖；本批只运行定向 suite 与单文件 report，未运行完整 quick。
+
+C7 bulk-Edge scale 归位与局部收口（2026-09-01，macOS）：将 `NativeBulkEdgeAdjacencyRunBuilder` 中跨越物理 segment 容量的 sort-run 分片用例，以及 `NativeBulkEdgePrivateTokenResolver` 中构造内部 resolver node 所需的 130 个最大长度 token 用例，均改为显式 `DISABLED_*ScaleTest` gate；它们仍保留作性能/故障验收，不再拖慢普通单测。前者的常规 suite 7/7 通过，补充 1--2 record 的有序性、record bound、paired direction、paired candidate bound、空与未租赁 source 边界后，单文件为 Region/Function/Line/Branch 93.98%/100%/88.44%/83.33%；后者常规 suite 6/6 通过，补充零 bound、非法 resolution、短 payload、空 resolver 与查找下界后，为 83.20%/96.15%/81.29%/69.80%。两处剩余主要是只能通过容量级 fan-out 才能触达的私有层级分支，故不以普通 unit workload 强行覆盖；本批均只运行定向 suite 与单文件 report，未运行完整 quick。
+
+C7 LargeValue private materializer 单文件收口（2026-09-01，macOS）：`RelocatableMetadataStoreTest.StreamedLargeValuePrivateMaterializer*` 3/3 通过，覆盖内容 run、reference-map run 与每一项 exact scoped-contract 前置条件。`NativeStreamedGraphLargeValuePrivateMaterializer.cpp` 的 Region/Function/Line/Branch 均为 100%；本批只运行定向 suite 与单文件 report，未运行完整 quick。
+
+C7 LargeValue content-run builder 局部收口（2026-09-01，macOS）：`RelocatableMetadataStoreTest.StreamedLargeValueContentRuns*` 定向 suite 3/3 通过，补充 zero count、无效 merge fan-in、empty measured plan、无效 first ID、零 fragment budget 与缺失 visitor 等小型边界。`NativeStreamedGraphLargeValueContentRunBuilder.cpp` 的 Region/Function/Line/Branch 为 90.74%/100%/89.55%/85.71%；剩余路径为不可用公开输入构造的 `size_t` 溢出、空内部 run，及 source 在测量和实际写入之间改变固定 entry shape 的 fail-closed 守卫。未以容量型数据伪造这些路径；本批只运行定向 suite 与单文件 report，未运行完整 quick。
+
+C7 streamed Catalog index planner 单文件收口（2026-09-01，macOS）：新增 `RelocatableMetadataStoreTest.StreamedCatalogIndexReplacesAnExistingTreeAndRetiresItsOldPools`，通过公开
+`mutateNativeGraphPagesWithLargeValues` 先发布初始 System Catalog B+Tree，再规划并发布包含旧根退休和新根替换的第二代；同时覆盖 replacement preparer 的 undersized pool partition fail-closed，以及 foreign Catalog/released snapshot 前置条件。
+`RelocatableMetadataStoreTest.StreamedCatalogIndex*` 定向测试 7/7 通过，`NativeStreamedGraphCatalogIndexPlanner.cpp` 单文件 coverage 为 Region 95.45%、Function 100%、Line 93.75%、Branch 84.21%。剩余分支集中在 `BulkBTreeBuilder` 返回的内部 plan invariant 防御路径，不可由公开 planner 输入直接构造；本批未运行完整 quick，继续按模块批次低频收口全局 Branch gate。
+
+C7 LargeValue content-index planner 单文件补测（2026-09-01，macOS）：新增 `StreamedLargeValueContentIndexDeduplicatesContentIdentities`，使用两个不同
+LargeValue ID 的相同内容验证 canonical identity 去重；新增 `StreamedLargeValueContentIndexRejectsInvalidEntryShape`，验证 private run entry 的 key shape
+在 B+Tree planning 前 fail closed。`RelocatableMetadataStoreTest.StreamedLargeValueContentIndex*` 定向测试 5/5 通过，单文件 coverage 提升至
+Region 87.32%、Function 72.73%、Line 84.98%、Branch 72.22%；剩余缺口主要是 private reader/manifest 深层错误以及 existing content-index replacement
+的内部树构造路径，后续继续以公开契约补测，不引入大批量 workload；本批未运行完整 quick。
+
+C7 LargeValue content-index replacement 单文件收口（2026-09-01，macOS）：使用公开 native graph metadata publication API 发布初始 content-index
+树，再以新的内容 identity 规划 existing-root replacement；同时调用 replacement preparer 的 undersized pool partition fail-closed。定向
+`RelocatableMetadataStoreTest.StreamedLargeValueContentIndex*` 5/5 通过，`NativeStreamedGraphLargeValueContentIndexPlanner.cpp` 单文件 coverage 为
+Region 94.37%、Function 100%、Line 94.37%、Branch 74.07%。剩余分支为入口多条件的组合变体、private manifest reader 深层错误和内部
+builder invariant，不能用普通 unit workload 安全构造；本批只运行定向 suite，未运行完整 quick。
