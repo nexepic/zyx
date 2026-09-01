@@ -740,6 +740,33 @@ namespace graph::query {
 		}
 	}
 
+	TEST(LogicalPlanMutationRuntimeTest, CreateFailsClosedWhenTheSnapshotCannotSupplyAnOptimisticFence) {
+		for (const TestSnapshotMode mode: {TestSnapshotMode::TSSM_NULL, TestSnapshotMode::TSSM_MISSING_FENCE,
+										 TestSnapshotMode::TSSM_INVALID_FENCE}) {
+			auto backend = std::make_shared<TestLogicalGraph>();
+			backend->setSnapshotMode(mode);
+			QueryEngine engine(backend, backend);
+
+			if (mode == TestSnapshotMode::TSSM_NULL) {
+				EXPECT_THROW(static_cast<void>(engine.execute("CREATE (:Seed {value: 1})")), std::runtime_error);
+			} else {
+				EXPECT_THROW(static_cast<void>(engine.execute("CREATE (:Seed {value: 1})")), std::logic_error);
+			}
+			EXPECT_EQ(backend->countNodesWithLabel("Seed"), 0U);
+			EXPECT_EQ(backend->graph().mutation_batches, 0U);
+		}
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, CreateExhaustsConflictsWithoutPublishingAnyPartialMutation) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		backend->rejectMutationAttempts(4U);
+		QueryEngine engine(backend, backend);
+
+		EXPECT_THROW(static_cast<void>(engine.execute("CREATE (:Seed {value: 1})")), std::runtime_error);
+		EXPECT_EQ(backend->countNodesWithLabel("Seed"), 0U);
+		EXPECT_EQ(backend->graph().mutation_batches, 0U);
+	}
+
 	TEST(LogicalPlanMutationRuntimeTest, SetRemoveExhaustsConflictsWithoutPublishingAnyPartialMutation) {
 		auto backend = std::make_shared<TestLogicalGraph>();
 		const uint64_t nodeId = backend->addNode({"Seed"}, {{"value", PropertyValue(1)}});

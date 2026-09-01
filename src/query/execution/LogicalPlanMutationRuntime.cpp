@@ -680,23 +680,20 @@ namespace graph::query::execution {
 		}
 
 		void applySetOperation(const logical::LogicalSet &setOperator, const LogicalPlanReadRow &row,
-							   storage::LogicalGraphReadSnapshot &snapshot, const LogicalPlanReadRuntimeBounds &bounds,
-							   const QueryContext &context, MutableGraphEntities &entities,
-							   std::unordered_map<std::string, PropertyMap> &propertyCache) {
-			if (setOperator.getItems().empty()) {
-				throw std::logic_error("logical SET requires at least one assignment");
-			}
+								   storage::LogicalGraphReadSnapshot &snapshot, const LogicalPlanReadRuntimeBounds &bounds,
+								   const QueryContext &context, MutableGraphEntities &entities,
+								   std::unordered_map<std::string, PropertyMap> &propertyCache) {
+			// Keep direct callers on the same fail-closed shape contract as every
+			// collected mutation chain before resolving a runtime binding.
+			validateSetOperationShape(setOperator, "logical SET");
 			for (const logical::LogicalSetItem &item: setOperator.getItems()) {
 				const auto binding = row.values.find(item.variable);
-				if (item.variable.empty() || binding == row.values.end()) {
+				if (binding == row.values.end()) {
 					throw std::logic_error("logical SET could not resolve a requested entity variable");
 				}
 				MutableGraphEntity &entity = mutableEntityForValue(entities, binding->second);
 				switch (item.type) {
 					case logical::SetActionType::LSET_PROPERTY: {
-						if (item.key.empty() || !item.expression) {
-							throw std::logic_error("logical SET Property assignment is malformed");
-						}
 						PropertyMap &properties = mutableEntityProperties(entity, snapshot, bounds);
 						synchronizeEntityPropertyCache(row, entity, properties, propertyCache);
 						const PropertyValue value = evaluateCreatePropertyExpression(*item.expression, context, row,
@@ -716,7 +713,7 @@ namespace graph::query::execution {
 						break;
 					}
 					case logical::SetActionType::LSET_LABEL:
-						if (entity.kind != LogicalGraphMutationEntityKind::LGMK_NODE || item.key.empty()) {
+						if (entity.kind != LogicalGraphMutationEntityKind::LGMK_NODE) {
 							throw std::logic_error("logical SET label assignment requires a Node and nonempty label");
 						}
 						if (std::ranges::find(entity.labels, item.key) == entity.labels.end()) {
@@ -725,9 +722,6 @@ namespace graph::query::execution {
 						}
 						break;
 					case logical::SetActionType::LSET_MAP_MERGE: {
-						if (!item.expression) {
-							throw std::logic_error("logical SET map-merge assignment is malformed");
-						}
 						PropertyMap &properties = mutableEntityProperties(entity, snapshot, bounds);
 						synchronizeEntityPropertyCache(row, entity, properties, propertyCache);
 						const PropertyValue value = evaluateCreatePropertyExpression(*item.expression, context, row,
@@ -754,22 +748,18 @@ namespace graph::query::execution {
 						synchronizeEntityPropertyCache(row, entity, properties, propertyCache);
 						break;
 					}
-					default:
-						throw std::logic_error("logical SET received an unsupported assignment type");
 				}
 			}
 		}
 
 		void applyRemoveOperation(const logical::LogicalRemove &removeOperator, const LogicalPlanReadRow &row,
-								  storage::LogicalGraphReadSnapshot &snapshot,
-								  const LogicalPlanReadRuntimeBounds &bounds, MutableGraphEntities &entities,
-								  std::unordered_map<std::string, PropertyMap> &propertyCache) {
-			if (removeOperator.getItems().empty()) {
-				throw std::logic_error("logical REMOVE requires at least one item");
-			}
+									  storage::LogicalGraphReadSnapshot &snapshot,
+									  const LogicalPlanReadRuntimeBounds &bounds, MutableGraphEntities &entities,
+									  std::unordered_map<std::string, PropertyMap> &propertyCache) {
+			validateRemoveOperationShape(removeOperator, "logical REMOVE");
 			for (const logical::LogicalRemoveItem &item: removeOperator.getItems()) {
 				const auto binding = row.values.find(item.variable);
-				if (item.variable.empty() || item.key.empty() || binding == row.values.end()) {
+				if (binding == row.values.end()) {
 					throw std::logic_error("logical REMOVE could not resolve a valid entity item");
 				}
 				MutableGraphEntity &entity = mutableEntityForValue(entities, binding->second);
@@ -793,8 +783,6 @@ namespace graph::query::execution {
 						}
 						break;
 					}
-					default:
-						throw std::logic_error("logical REMOVE received an unsupported item type");
 				}
 			}
 		}
@@ -1827,6 +1815,7 @@ namespace graph::query::execution {
 				});
 			}
 			std::function<ResultValue(const CreateSetRuntimeRow &, const std::string &)> resolveForRow;
+			std::set<std::string> resolvingExportValues;
 			resolveForRow = [&](const CreateSetRuntimeRow &runtimeRow, const std::string &variable) -> ResultValue {
 				if (const auto entity = runtimeRow.entities.find(variable); entity != runtimeRow.entities.end()) {
 					if (entity->second.reference_kind != LogicalGraphMutationReferenceKind::LGRK_PERSISTED) {
@@ -1839,12 +1828,22 @@ namespace graph::query::execution {
 					return std::get<PropertyValue>(scalar->second);
 				}
 				if (const auto exported = exportedItems.find(variable); exported != exportedItems.end()) {
-					return evaluateMutationProjectionExpression(
-							*exported->second->expression, runtimeRow.source, snapshot, bounds, context,
-							[&resolveForRow, &runtimeRow](const LogicalPlanReadRow &,
-														  const std::string &nestedVariable) {
-								return resolveForRow(runtimeRow, nestedVariable);
-							});
+					if (!resolvingExportValues.insert(variable).second) {
+						throw std::logic_error("logical write-only CALL has a cyclic exported-variable dependency");
+					}
+					try {
+						ResultValue result = evaluateMutationProjectionExpression(
+								*exported->second->expression, runtimeRow.source, snapshot, bounds, context,
+								[&resolveForRow, &runtimeRow](const LogicalPlanReadRow &,
+															 const std::string &nestedVariable) {
+									return resolveForRow(runtimeRow, nestedVariable);
+								});
+						resolvingExportValues.erase(variable);
+						return result;
+					} catch (...) {
+						resolvingExportValues.erase(variable);
+						throw;
+					}
 				}
 				throw std::logic_error("logical CREATE/SET RETURN could not resolve a variable");
 			};
@@ -2331,7 +2330,7 @@ namespace graph::query::execution {
 			return result;
 		}
 
-		using MergeRowVisitor = std::function<bool(MergeRuntimeRow &&)>;
+		using MergeRowVisitor = std::function<void(MergeRuntimeRow &&)>;
 
 		[[nodiscard]] bool mergeNodePropertiesMatch(const PropertyMap &actual, const PropertyMap &expected) {
 			for (const auto &[key, value]: expected) {
@@ -2709,7 +2708,7 @@ namespace graph::query::execution {
 			return result;
 		}
 
-		bool visitMergeOperator(const logical::LogicalOperator &operation, MergeExecutionState &state,
+		void visitMergeOperator(const logical::LogicalOperator &operation, MergeExecutionState &state,
 								const MergeRowVisitor &visitor) {
 			state.context.checkGuard();
 			if (++state.operator_count > state.bounds.maximum_rows) {
@@ -2732,20 +2731,25 @@ namespace graph::query::execution {
 				} else {
 					throw std::logic_error("logical MERGE tree has an unsupported operator");
 				}
-				return visitor(std::move(row));
+				visitor(std::move(row));
 			};
 			if (child == nullptr) {
-				return apply({});
+				apply({});
+				return;
 			}
 			if (child->getType() == logical::LogicalOpType::LOP_MERGE_NODE ||
 				child->getType() == logical::LogicalOpType::LOP_MERGE_EDGE) {
-				return visitMergeOperator(*child, state, apply);
+				visitMergeOperator(*child, state, apply);
+				return;
 			}
 			const LogicalPlanReadRuntimeStats stats = state.reader.executeWithSnapshot(
 					state.snapshot, *child, state.bounds,
-					[&](const LogicalPlanReadRow &row) { return apply(makeMergeRow(row)); }, state.context);
+					[&](const LogicalPlanReadRow &row) {
+						apply(makeMergeRow(row));
+						return true;
+					},
+					state.context);
 			requireCompleteReadForMutation(stats, state.bounds, "logical MATCH ... MERGE");
-			return true;
 		}
 
 		void appendModifiedMergeEntities(MergeExecutionState &state) {
@@ -3763,15 +3767,10 @@ namespace graph::query::execution {
 				LogicalPlanReadRuntime reader(read_backend_);
 				MergeExecutionState state{*snapshot, bounds, context, reader};
 				std::vector<MergeRuntimeRow> rows;
-				const bool completed = visitMergeOperator(
-						*mergePipeline->mutation_chain.merge_root, state, [&](MergeRuntimeRow &&row) {
-							applyMergePostMutations(mergePipeline->mutation_chain.operations, row, state);
-							rows.push_back(std::move(row));
-							return true;
-						});
-				if (!completed) {
-					throw std::runtime_error("logical MERGE did not complete its input evaluation");
-				}
+				visitMergeOperator(*mergePipeline->mutation_chain.merge_root, state, [&](MergeRuntimeRow &&row) {
+					applyMergePostMutations(mergePipeline->mutation_chain.operations, row, state);
+					rows.push_back(std::move(row));
+				});
 				appendModifiedMergeEntities(state);
 				synchronizeCreatedMergeEntities(state);
 				// Publication must not turn a deterministic RETURN/ORDER BY expression
