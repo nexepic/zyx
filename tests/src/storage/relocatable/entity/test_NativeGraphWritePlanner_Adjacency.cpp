@@ -130,6 +130,41 @@ namespace {
 
 class NativeGraphWritePlannerAdjacencyTest : public graph::storage::test::NativeGraphWritePlannerTestFixture {};
 
+TEST_F(NativeGraphWritePlannerAdjacencyTest, RejectsEveryInvalidPlannerBoundBeforeAttachingStorage) {
+	using Mutator = std::function<void(NativeGraphWritePlannerOptions &)>;
+	const size_t sizeMax = std::numeric_limits<size_t>::max();
+	const std::vector<Mutator> invalidOptions{
+			[](auto &value) { value.first_slot = PhysicalSlotId{}; },
+			[](auto &value) { value.last_slot = PhysicalSlotId{}; },
+			[](auto &value) { value.first_slot = PhysicalSlotId(81U); },
+			[](auto &value) { value.entity_pool_owner_id = 0U; },
+			[](auto &value) { value.maximum_adjacency_read_edges = 0U; },
+			[sizeMax](auto &value) { value.maximum_adjacency_read_edges = sizeMax; },
+			[](auto &value) { value.maximum_global_adjacency_tree_pages = 0U; },
+			[sizeMax](auto &value) { value.maximum_global_adjacency_tree_pages = sizeMax; },
+			[](auto &value) { value.maximum_global_adjacency_tree_pages = sizeMax / RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES + 1U; },
+			[](auto &value) { value.maximum_global_adjacency_write_entries = 0U; },
+			[sizeMax](auto &value) { value.maximum_global_adjacency_write_entries = sizeMax; },
+			[](auto &value) { value.global_adjacency_bulk_rebuild_entry_threshold = 0U; },
+			[](auto &value) { value.logical_id_lease_block_size = 0U; },
+			[sizeMax](auto &value) { value.logical_id_lease_block_size = sizeMax; },
+			[](auto &value) { value.maximum_logical_id_reservation = 0U; },
+			[sizeMax](auto &value) { value.maximum_logical_id_reservation = sizeMax; },
+			[](auto &value) { value.property_roots.first_slot = PhysicalSlotId{}; },
+			[](auto &value) { value.property_roots.last_slot = PhysicalSlotId{}; },
+			[](auto &value) { value.property_roots.first_slot = PhysicalSlotId(81U); },
+			[](auto &value) { value.property_roots.page_owner_id = 0U; },
+	};
+
+	for (size_t index = 0U; index < invalidOptions.size(); ++index) {
+		SCOPED_TRACE(std::to_string(index));
+		NativeGraphWritePlannerOptions invalid = plannerOptions();
+		invalidOptions[index](invalid);
+		EXPECT_THROW(NativeGraphWritePlanner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, invalid),
+				 std::invalid_argument);
+	}
+}
+
 TEST_F(NativeGraphWritePlannerAdjacencyTest, PublishesAuthoritativeEdgesAndBothKeyOnlyDirections) {
 	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
 	NativeGraphWriteTransaction transaction = planner.beginTransaction();
@@ -202,6 +237,34 @@ TEST_F(NativeGraphWritePlannerAdjacencyTest, BoundsStagedAdjacencyOperationsBefo
 			  (std::vector<uint64_t>{firstEdge}));
 	EXPECT_TRUE(scan(adjacency, snapshot, GlobalAdjacencyDirection::GAD_IN, secondTarget).empty());
 	snapshot.release();
+}
+
+TEST_F(NativeGraphWritePlannerAdjacencyTest, RejectsAnEdgeWhenItsTwoAdjacencyKeysExceedTheWholeTransactionBudget) {
+	NativeGraphWritePlannerOptions options = plannerOptions();
+	options.maximum_global_adjacency_write_entries = 1U;
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, options);
+	NativeGraphWriteTransaction transaction = planner.beginTransaction();
+	const uint64_t source = transaction.createNode(std::array<uint64_t, 0U>{});
+	const uint64_t target = transaction.createNode(std::array<uint64_t, 0U>{});
+
+	MetadataSnapshotPin before = metadata_->openSnapshot();
+	const uint64_t nextEdgeId = before.superblock().next_logical_edge_id;
+	before.release();
+	EXPECT_THROW(static_cast<void>(transaction.createEdge(source, target, 7U)), FormatException);
+	EXPECT_TRUE(transaction.isActive());
+
+	// A single Edge always requires outgoing and incoming keys, so rejecting this
+	// configuration must precede any durable Edge-ID lease or graph publication.
+	MetadataSnapshotPin afterRejectedEdge = metadata_->openSnapshot();
+	EXPECT_EQ(afterRejectedEdge.superblock().next_logical_edge_id, nextEdgeId);
+	afterRejectedEdge.release();
+	ASSERT_TRUE(transaction.commit().committed());
+
+	MetadataSnapshotPin published = metadata_->openSnapshot();
+	EXPECT_NO_THROW(static_cast<void>(entities_->readNode(published, source)));
+	EXPECT_NO_THROW(static_cast<void>(entities_->readNode(published, target)));
+	EXPECT_FALSE(metadata_->findIndexRootOptional(published, RSS_GLOBAL_ADJACENCY_INDEX_ID).has_value());
+	published.release();
 }
 
 TEST_F(NativeGraphWritePlannerAdjacencyTest, CancelsProvisionalAdjacencyKeysWhenAnEdgeIsErasedBeforeCommit) {
