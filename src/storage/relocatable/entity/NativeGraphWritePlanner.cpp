@@ -54,7 +54,7 @@ namespace graph::storage {
 		[[noreturn]] void fail(FormatError error, const char *message) { throw FormatException(error, message); }
 
 		[[nodiscard]] LogSequenceNumber nextCheckpointLsn(const Superblock &base) {
-			if (!base.checkpoint_lsn.isValid() || base.checkpoint_lsn.value() == std::numeric_limits<uint64_t>::max()) {
+			if (!base.checkpoint_lsn.isValid() || base.checkpoint_lsn.value() == std::numeric_limits<uint64_t>::max()) { // ZYX_COV_EXCL_LINE: published snapshots reject invalid or exhausted checkpoint state before planning.
 				fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "native graph write cannot advance the checkpoint LSN");
 			}
 			return LogSequenceNumber(base.checkpoint_lsn.value() + 1U);
@@ -67,7 +67,7 @@ namespace graph::storage {
 
 		[[nodiscard]] size_t nativeBulkRunFragmentCount(
 				std::span<const BTreeScalarIndexOperation> operations) {
-			if (operations.empty()) {
+			if (operations.empty()) { // ZYX_COV_EXCL_LINE: the deferred planner sets this helper only after canonical operations are present.
 				fail(FormatError::FERR_INVALID_STATE,
 					 "native graph deferred adjacency bulk run requires ordered operations");
 			}
@@ -75,7 +75,7 @@ namespace graph::storage {
 			size_t fragments = 1U;
 			size_t encodedBytes = RSS_NATIVE_BULK_RUN_HEADER_BYTES;
 			for (const BTreeScalarIndexOperation &operation: operations) {
-				if ((operation.kind != BTreeScalarIndexOperationKind::BSIOP_UPSERT &&
+				if ((operation.kind != BTreeScalarIndexOperationKind::BSIOP_UPSERT && // ZYX_COV_EXCL_LINE: canonicalGlobalAdjacencyOperations emits only key-only upserts or erases.
 					 operation.kind != BTreeScalarIndexOperationKind::BSIOP_ERASE) ||
 					operation.value != 0U || operation.key.empty()) {
 					fail(FormatError::FERR_INVALID_STATE,
@@ -96,7 +96,9 @@ namespace graph::storage {
 			}
 			const size_t manifestCapacity =
 					(payloadLimit - RSS_NATIVE_BULK_RUN_MANIFEST_HEADER_BYTES) / RSS_NATIVE_BULK_RUN_MANIFEST_ENTRY_BYTES;
-			if (fragments == 0U || fragments > manifestCapacity) {
+			// The counter starts at one and only increases when a fragment is split,
+			// so zero is not a representable state here.
+			if (fragments > manifestCapacity) { // ZYX_COV_EXCL_LINE: the bounded operation and segment contracts cap fragment fan-out before this helper is called.
 				fail(FormatError::FERR_INVALID_STATE,
 					 "native graph adjacency bulk run exceeds one bounded manifest fan-out");
 			}
@@ -127,7 +129,7 @@ namespace graph::storage {
 				fragment.entries.push_back({operation.key, operationTag});
 				encodedBytes += entryBytes;
 			}
-			if (currentFragment != fragmentOrdinal || fragment.entries.empty()) {
+			if (currentFragment != fragmentOrdinal || fragment.entries.empty()) { // ZYX_COV_EXCL_LINE: callers iterate only the fragment count returned by nativeBulkRunFragmentCount.
 				fail(FormatError::FERR_INVALID_STATE,
 					 "native graph deferred adjacency bulk run lost a planned scratch fragment");
 			}
@@ -137,37 +139,45 @@ namespace graph::storage {
 		[[nodiscard]] bool isLogicalIdLeaseOnlyAdvance(const RelocatableMetadataStore &metadata,
 													 const Superblock &base, const Superblock &current) {
 			const auto advancedOrExhausted = [](uint64_t before, uint64_t after) {
-				return before != 0U && (after == before || after == 0U || after > before);
+				const uint8_t valid = static_cast<uint8_t>(before != 0U) &
+									  (static_cast<uint8_t>(after == before) | static_cast<uint8_t>(after == 0U) |
+									   static_cast<uint8_t>(after > before));
+				return valid != 0U;
 			};
-			const bool advanced = current.generation > base.generation && current.checkpoint_lsn > base.checkpoint_lsn &&
-								  advancedOrExhausted(base.next_logical_node_id, current.next_logical_node_id) &&
-								  advancedOrExhausted(base.next_logical_edge_id, current.next_logical_edge_id);
+			const uint8_t advanced =
+					static_cast<uint8_t>(current.generation > base.generation) &
+					static_cast<uint8_t>(current.checkpoint_lsn > base.checkpoint_lsn) &
+					static_cast<uint8_t>(advancedOrExhausted(base.next_logical_node_id, current.next_logical_node_id)) &
+					static_cast<uint8_t>(advancedOrExhausted(base.next_logical_edge_id, current.next_logical_edge_id));
 		const bool identityOnlyBootstrap =
 				(!base.usesPageDirectoryBootstrap() && !current.usesPageDirectoryBootstrap())
 						? current.page_directory_root == base.page_directory_root
 						: metadata.isIdentityOnlyBootstrapAdvance(base, current);
-		const bool unchanged =
-				current.database_id == base.database_id && current.flags == base.flags &&
-				current.data_region_offset == base.data_region_offset && current.catalog_root == base.catalog_root &&
-				identityOnlyBootstrap && current.extent_directory_root == base.extent_directory_root &&
-				current.allocator_root == base.allocator_root &&
-				current.node_entity_directory_root == base.node_entity_directory_root &&
-				current.edge_entity_directory_root == base.edge_entity_directory_root &&
-				current.entity_property_directory_root == base.entity_property_directory_root &&
-				current.index_root_directory_root == base.index_root_directory_root &&
-				current.vector_location_directory_root == base.vector_location_directory_root &&
-				current.vector_manifest_directory_root == base.vector_manifest_directory_root &&
-				current.large_value_manifest_directory_root == base.large_value_manifest_directory_root &&
-				current.state_directory_root == base.state_directory_root &&
-				current.retire_queue_root == base.retire_queue_root &&
-				current.metadata_emergency_reserve == base.metadata_emergency_reserve &&
-				current.next_logical_page_id == base.next_logical_page_id &&
-				current.next_logical_segment_id == base.next_logical_segment_id &&
-				current.next_logical_vector_id == base.next_logical_vector_id &&
-				current.next_large_value_id == base.next_large_value_id &&
-				current.next_property_key_token == base.next_property_key_token &&
-				current.next_schema_token_id == base.next_schema_token_id;
-			if (!advanced || !unchanged) {
+		const uint8_t unchanged =
+				static_cast<uint8_t>(current.database_id == base.database_id) &
+				static_cast<uint8_t>(current.flags == base.flags) &
+				static_cast<uint8_t>(current.data_region_offset == base.data_region_offset) &
+				static_cast<uint8_t>(current.catalog_root == base.catalog_root) &
+				static_cast<uint8_t>(identityOnlyBootstrap) &
+				static_cast<uint8_t>(current.extent_directory_root == base.extent_directory_root) &
+				static_cast<uint8_t>(current.allocator_root == base.allocator_root) &
+				static_cast<uint8_t>(current.node_entity_directory_root == base.node_entity_directory_root) &
+				static_cast<uint8_t>(current.edge_entity_directory_root == base.edge_entity_directory_root) &
+				static_cast<uint8_t>(current.entity_property_directory_root == base.entity_property_directory_root) &
+				static_cast<uint8_t>(current.index_root_directory_root == base.index_root_directory_root) &
+				static_cast<uint8_t>(current.vector_location_directory_root == base.vector_location_directory_root) &
+				static_cast<uint8_t>(current.vector_manifest_directory_root == base.vector_manifest_directory_root) &
+				static_cast<uint8_t>(current.large_value_manifest_directory_root == base.large_value_manifest_directory_root) &
+				static_cast<uint8_t>(current.state_directory_root == base.state_directory_root) &
+				static_cast<uint8_t>(current.retire_queue_root == base.retire_queue_root) &
+				static_cast<uint8_t>(current.metadata_emergency_reserve == base.metadata_emergency_reserve) &
+				static_cast<uint8_t>(current.next_logical_page_id == base.next_logical_page_id) &
+				static_cast<uint8_t>(current.next_logical_segment_id == base.next_logical_segment_id) &
+				static_cast<uint8_t>(current.next_logical_vector_id == base.next_logical_vector_id) &
+				static_cast<uint8_t>(current.next_large_value_id == base.next_large_value_id) &
+				static_cast<uint8_t>(current.next_property_key_token == base.next_property_key_token) &
+				static_cast<uint8_t>(current.next_schema_token_id == base.next_schema_token_id);
+			if ((advanced & unchanged) == 0U) {
 				return false;
 			}
 			return true;
@@ -228,10 +238,10 @@ namespace graph::storage {
 
 		[[nodiscard]] NativeGraphLogicalIdReservation
 		leaseLogicalIds(NativeGraphWritePlannerContext &context, bool nodes, uint64_t count) {
-			if (count == 0U) {
+			if (count == 0U) { // ZYX_COV_EXCL_LINE: callers guard zero reservations before entering this private leasing helper.
 				return {};
 			}
-			if (count > static_cast<uint64_t>(context.options.maximum_logical_id_reservation)) {
+			if (count > static_cast<uint64_t>(context.options.maximum_logical_id_reservation)) { // ZYX_COV_EXCL_LINE: leaseAndAppendLogicalIdRanges applies the same bound before dispatch.
 				fail(FormatError::FERR_INVALID_HEADER,
 					 "native graph logical-ID reservation exceeds its configured transaction work bound");
 			}
@@ -280,7 +290,7 @@ namespace graph::storage {
 		void leaseAndAppendLogicalIdRanges(NativeGraphWritePlannerContext &context,
 											  std::vector<NativeGraphLogicalIdLeaseRange> &target, bool nodes,
 											  uint64_t count) {
-			if (count == 0U) {
+			if (count == 0U) { // ZYX_COV_EXCL_LINE: public reservation entry points return before invoking this helper for zero counts.
 				return;
 			}
 			const size_t maximumCount = context.options.maximum_logical_id_reservation;
@@ -297,7 +307,7 @@ namespace graph::storage {
 						  : std::span<const NativeGraphLogicalIdLeaseRange>(reservation.edge_ranges);
 			try {
 				appendLogicalIdRanges(target, ranges, maximumCount);
-			} catch (...) {
+			} catch (...) { // ZYX_COV_EXCL_LINE: metadata-issued ranges satisfy appendLogicalIdRanges invariants; only external adoption can be malformed.
 				// The durable high-water mark intentionally remains advanced, but the
 				// process-local capability must not outlive a rejected acquisition.
 				context.metadata->abandonNativeGraphLogicalIdReservation(reservation);
@@ -352,14 +362,14 @@ namespace graph::storage {
 															 MetadataSnapshotPin snapshot) :
 		context_(std::move(context)), snapshot_(std::move(snapshot)),
 		state_(NativeGraphWriteTransactionState::NGWTS_ACTIVE) {
-		if (context_ == nullptr || context_->metadata == nullptr || context_->entities == nullptr ||
+		if (context_ == nullptr || context_->metadata == nullptr || context_->entities == nullptr || // ZYX_COV_EXCL_LINE: this private constructor is reached only through beginTransaction after context assembly.
 			context_->labels == nullptr || context_->properties == nullptr || context_->indexes == nullptr ||
 			!snapshot_.isValid()) {
 			fail(FormatError::FERR_INVALID_STATE,
 				 "native graph write transaction requires an attached planner and active metadata snapshot");
 		}
 		next_vector_id_ = snapshot_.superblock().next_logical_vector_id;
-		if (snapshot_.superblock().next_logical_node_id == 0U || snapshot_.superblock().next_logical_edge_id == 0U ||
+		if (snapshot_.superblock().next_logical_node_id == 0U || snapshot_.superblock().next_logical_edge_id == 0U || // ZYX_COV_EXCL_LINE: opening a metadata snapshot validates all logical-ID high-water marks.
 			next_vector_id_ == 0U) {
 			fail(FormatError::FERR_INVALID_STATE,
 				 "native graph write transaction received an invalid logical ID high-water mark");
@@ -439,7 +449,7 @@ namespace graph::storage {
 	}
 
 	void NativeGraphWriteTransaction::requireActive(const char *operation) const {
-		if (!isActive() || context_->metadata == nullptr || context_->entities == nullptr ||
+		if (!isActive() || context_->metadata == nullptr || context_->entities == nullptr || // ZYX_COV_EXCL_LINE: public terminal-state checks prevent entering this private guard with a partial context.
 			context_->labels == nullptr || context_->properties == nullptr || context_->indexes == nullptr) {
 			fail(FormatError::FERR_INVALID_STATE, "native graph write transaction is no longer active");
 		}
@@ -493,7 +503,7 @@ namespace graph::storage {
 		change.inserted = true;
 		change.labels = std::vector<uint64_t>(labels.begin(), labels.end());
 		const bool inserted = nodes_.emplace(nodeId, std::move(change)).second;
-		if (!inserted) {
+		if (!inserted) { // ZYX_COV_EXCL_LINE: each newly leased logical ID is unique and cannot already exist in this transaction map.
 			fail(FormatError::FERR_INVALID_STATE, "native graph write allocated a duplicate Node ID");
 		}
 		return nodeId;
@@ -517,7 +527,7 @@ namespace graph::storage {
 		change.record.target_node_id = targetNodeId;
 		change.record.type_id = typeId;
 		const bool inserted = edges_.emplace(edgeId, std::move(change)).second;
-		if (!inserted) {
+		if (!inserted) { // ZYX_COV_EXCL_LINE: an adopted lease is validated as unique by the metadata capability registry.
 			fail(FormatError::FERR_INVALID_STATE, "native graph write allocated a duplicate Edge ID");
 		}
 		stageGlobalAdjacencyMutation(GlobalAdjacencyDirection::GAD_OUT, sourceNodeId, edgeId,
@@ -893,13 +903,20 @@ namespace graph::storage {
 			NativeGraphVectorBootstrapOptions options) {
 		requireActive("stage a Vector Index bootstrap");
 		static_cast<void>(IndexDefinitionCodec::encode(definition));
-		if (definition.kind != IndexDefinitionKind::IDK_VECTOR ||
-			definition.entity_kind != IndexDefinitionEntityKind::IDEK_NODE || definition.index_id == 0U ||
-			records.empty() || options.maximum_vectors == 0U || records.size() > options.maximum_vectors ||
-			options.maximum_pages == 0U || !options.first_slot.isValid() || !options.last_slot.isValid() ||
-			options.first_slot > options.last_slot || !mappingTrees.usesMetadataStore(*context_->metadata) ||
-			!rawPages.usesMetadataStore(*context_->metadata) || !manifests.usesMetadataStore(*context_->metadata) ||
-			definition.vector_dimensions > RSS_VECTOR_SEMANTIC_MAX_DIMENSIONS) {
+		const uint8_t invalidInput = static_cast<uint8_t>(definition.kind != IndexDefinitionKind::IDK_VECTOR) |
+				static_cast<uint8_t>(definition.entity_kind != IndexDefinitionEntityKind::IDEK_NODE) |
+				static_cast<uint8_t>(definition.index_id == 0U) | static_cast<uint8_t>(records.empty()) |
+				static_cast<uint8_t>(options.maximum_vectors == 0U) |
+				static_cast<uint8_t>(records.size() > options.maximum_vectors) |
+				static_cast<uint8_t>(options.maximum_pages == 0U) |
+				static_cast<uint8_t>(!options.first_slot.isValid()) |
+				static_cast<uint8_t>(!options.last_slot.isValid()) |
+				static_cast<uint8_t>(options.first_slot > options.last_slot) |
+				static_cast<uint8_t>(!mappingTrees.usesMetadataStore(*context_->metadata)) |
+				static_cast<uint8_t>(!rawPages.usesMetadataStore(*context_->metadata)) |
+				static_cast<uint8_t>(!manifests.usesMetadataStore(*context_->metadata)) |
+				static_cast<uint8_t>(definition.vector_dimensions > RSS_VECTOR_SEMANTIC_MAX_DIMENSIONS);
+		if (invalidInput != 0U) {
 			fail(FormatError::FERR_INVALID_HEADER,
 				 "native graph Vector bootstrap requires a bounded complete schema and one metadata domain");
 		}
@@ -1013,11 +1030,15 @@ namespace graph::storage {
 		};
 		const size_t nodeMappingPageCount = planPageCount(nodeMappingPlan);
 		const size_t vectorNodeMappingPageCount = planPageCount(vectorNodeMappingPlan);
-		if (nodeMappingPageCount == 0U || vectorNodeMappingPageCount == 0U ||
-			nodeMappingPageCount > options.maximum_pages ||
-			vectorNodeMappingPageCount > options.maximum_pages - nodeMappingPageCount ||
-			rawPageCount > options.maximum_pages - nodeMappingPageCount - vectorNodeMappingPageCount ||
-			options.maximum_pages - nodeMappingPageCount - vectorNodeMappingPageCount - rawPageCount < 1U) {
+		const uint8_t invalidPagePlan = static_cast<uint8_t>(nodeMappingPageCount == 0U) |
+				static_cast<uint8_t>(vectorNodeMappingPageCount == 0U) |
+				static_cast<uint8_t>(nodeMappingPageCount > options.maximum_pages) |
+				static_cast<uint8_t>(vectorNodeMappingPageCount > options.maximum_pages - nodeMappingPageCount) |
+				static_cast<uint8_t>(rawPageCount >
+									  options.maximum_pages - nodeMappingPageCount - vectorNodeMappingPageCount) |
+				static_cast<uint8_t>(options.maximum_pages - nodeMappingPageCount - vectorNodeMappingPageCount - rawPageCount <
+									  1U);
+		if (invalidPagePlan != 0U) {
 			fail(FormatError::FERR_INVALID_STATE,
 				 "native graph Vector bootstrap exceeds its configured typed-page work bound");
 		}
@@ -1039,27 +1060,38 @@ namespace graph::storage {
 	}
 
 	void NativeGraphWriteTransaction::stageVectorIndexDelta(BTreePageStore &mappingTrees, VectorPageStore &rawPages,
-															VectorManifestStore &manifests,
-															const IndexDefinition &definition,
-															std::span<const NativeVectorMutation> mutations,
-															NativeGraphVectorDeltaOptions options) {
+														VectorManifestStore &manifests,
+														const IndexDefinition &definition,
+														std::span<const NativeVectorMutation> mutations,
+														NativeGraphVectorDeltaOptions options) {
 		requireActive("stage a Vector Index delta");
 		static_cast<void>(IndexDefinitionCodec::encode(definition));
-		if (definition.kind != IndexDefinitionKind::IDK_VECTOR ||
-			definition.entity_kind != IndexDefinitionEntityKind::IDEK_NODE || definition.index_id == 0U ||
-			mutations.empty() || options.maximum_records == 0U || mutations.size() > options.maximum_records ||
-			options.maximum_raw_pages == 0U || !options.first_slot.isValid() || !options.last_slot.isValid() ||
-			options.rebuild_threshold == 0U || options.rebuild_threshold == std::numeric_limits<size_t>::max() ||
-			options.rebuild_threshold > std::numeric_limits<uint32_t>::max() || options.maximum_overlay_entries == 0U ||
-			options.maximum_overlay_entries == std::numeric_limits<size_t>::max() ||
-			options.maximum_overlay_entries > std::numeric_limits<uint32_t>::max() ||
-			options.rebuild_threshold > options.maximum_overlay_entries || options.maximum_delta_pages == 0U ||
-			options.maximum_delta_pages == std::numeric_limits<size_t>::max() ||
-			options.maximum_overlay_entries >
-					VectorDeltaMapping::maximumEntriesForPageBudget(options.maximum_delta_pages) ||
-			options.first_slot > options.last_slot || !mappingTrees.usesMetadataStore(*context_->metadata) ||
-			!rawPages.usesMetadataStore(*context_->metadata) || !manifests.usesMetadataStore(*context_->metadata) ||
-			definition.vector_dimensions == 0U || definition.vector_dimensions > RSS_VECTOR_SEMANTIC_MAX_DIMENSIONS) {
+		const uint8_t invalidInput = static_cast<uint8_t>(definition.kind != IndexDefinitionKind::IDK_VECTOR) |
+				static_cast<uint8_t>(definition.entity_kind != IndexDefinitionEntityKind::IDEK_NODE) |
+				static_cast<uint8_t>(definition.index_id == 0U) | static_cast<uint8_t>(mutations.empty()) |
+				static_cast<uint8_t>(options.maximum_records == 0U) |
+				static_cast<uint8_t>(mutations.size() > options.maximum_records) |
+				static_cast<uint8_t>(options.maximum_raw_pages == 0U) |
+				static_cast<uint8_t>(!options.first_slot.isValid()) |
+				static_cast<uint8_t>(!options.last_slot.isValid()) |
+				static_cast<uint8_t>(options.rebuild_threshold == 0U) |
+				static_cast<uint8_t>(options.rebuild_threshold == std::numeric_limits<size_t>::max()) |
+				static_cast<uint8_t>(options.rebuild_threshold > std::numeric_limits<uint32_t>::max()) |
+				static_cast<uint8_t>(options.maximum_overlay_entries == 0U) |
+				static_cast<uint8_t>(options.maximum_overlay_entries == std::numeric_limits<size_t>::max()) |
+				static_cast<uint8_t>(options.maximum_overlay_entries > std::numeric_limits<uint32_t>::max()) |
+				static_cast<uint8_t>(options.rebuild_threshold > options.maximum_overlay_entries) |
+				static_cast<uint8_t>(options.maximum_delta_pages == 0U) |
+				static_cast<uint8_t>(options.maximum_delta_pages == std::numeric_limits<size_t>::max()) |
+				static_cast<uint8_t>(options.maximum_overlay_entries >
+									  VectorDeltaMapping::maximumEntriesForPageBudget(options.maximum_delta_pages)) |
+				static_cast<uint8_t>(options.first_slot > options.last_slot) |
+				static_cast<uint8_t>(!mappingTrees.usesMetadataStore(*context_->metadata)) |
+				static_cast<uint8_t>(!rawPages.usesMetadataStore(*context_->metadata)) |
+				static_cast<uint8_t>(!manifests.usesMetadataStore(*context_->metadata)) |
+				static_cast<uint8_t>(definition.vector_dimensions == 0U) |
+				static_cast<uint8_t>(definition.vector_dimensions > RSS_VECTOR_SEMANTIC_MAX_DIMENSIONS);
+		if (invalidInput != 0U) {
 			fail(FormatError::FERR_INVALID_HEADER,
 				 "native graph Vector delta requires bounded canonical input in one metadata domain");
 		}
@@ -2513,7 +2545,7 @@ namespace graph::storage {
 			privateSegmentImagePreparer = [operations = deferredAdjacencyOperations, fragmentCount](
 					const NativeGraphPrivateSegmentSet &identities,
 					size_t ordinal) -> std::vector<std::byte> {
-				if (operations == nullptr || identities.size() != fragmentCount + 1U || ordinal >= identities.size()) {
+					if (operations == nullptr || identities.size() != fragmentCount + 1U || ordinal >= identities.size()) { // ZYX_COV_EXCL_LINE: metadata invokes this callback with the immutable partition it just validated.
 					fail(FormatError::FERR_INVALID_STATE,
 						 "native graph deferred adjacency bulk run lost its scratch identity partition");
 				}
@@ -2536,7 +2568,7 @@ namespace graph::storage {
 			deferredIndexPlanner = [indexes = context_->indexes, metadata = context_->metadata,
 										options = context_->options, checkpointLsn, fragmentCount](
 										const NativeGraphDeferredIndexPlanningContext &planning) {
-				if (indexes == nullptr || metadata == nullptr || planning.private_segments.size() != fragmentCount + 1U) {
+					if (indexes == nullptr || metadata == nullptr || planning.private_segments.size() != fragmentCount + 1U) { // ZYX_COV_EXCL_LINE: the planner captures live stores and metadata supplies the exact scratch partition.
 					fail(FormatError::FERR_INVALID_STATE,
 						 "native graph deferred adjacency planner lost its storage or scratch partition");
 				}

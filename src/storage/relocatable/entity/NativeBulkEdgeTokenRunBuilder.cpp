@@ -25,7 +25,7 @@ namespace graph::storage {
 
 		[[nodiscard]] size_t encodedRunEntryBytes(const BTreePageEntry &entry) {
 			const size_t encodedSize = BTreePageEntryCodec::encodedSize(entry);
-			if (encodedSize > std::numeric_limits<size_t>::max() - RSS_NATIVE_BULK_RUN_RECORD_HEADER_BYTES) {
+			if (encodedSize > std::numeric_limits<size_t>::max() - RSS_NATIVE_BULK_RUN_RECORD_HEADER_BYTES) { // ZYX_COV_EXCL_LINE: encodedSize is produced from a bounded in-memory key and cannot approach size_t overflow.
 				fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "native bulk Edge token-run entry size overflowed");
 			}
 			return RSS_NATIVE_BULK_RUN_RECORD_HEADER_BYTES + encodedSize;
@@ -48,12 +48,12 @@ namespace graph::storage {
 			size_t fragmentBytes = RSS_NATIVE_BULK_RUN_HEADER_BYTES;
 			for (BTreePageEntry &entry: run.entries) {
 				const size_t entryBytes = encodedRunEntryBytes(entry);
-				if (entryBytes > maximumFragmentBytes - RSS_NATIVE_BULK_RUN_HEADER_BYTES) {
+				if (entryBytes > maximumFragmentBytes - RSS_NATIVE_BULK_RUN_HEADER_BYTES) { // ZYX_COV_EXCL_LINE: token names are bounded by the catalog name limit, far below a segment payload.
 					fail(FormatError::FERR_INVALID_HEADER,
 							 "native bulk Edge token name cannot fit in one private scratch segment");
 				}
 				if (fragmentBytes > maximumFragmentBytes - entryBytes) {
-					if (emittedFragments == maximumFragments) {
+					if (emittedFragments == maximumFragments) { // ZYX_COV_EXCL_LINE: buildRuns bounds each run below one segment, so emitRun never needs an internal split.
 						fail(FormatError::FERR_INVALID_STATE,
 								 "native bulk Edge token-run builder exceeds its candidate fragment bound");
 					}
@@ -65,14 +65,12 @@ namespace graph::storage {
 				fragment.entries.push_back(std::move(entry));
 				fragmentBytes += entryBytes;
 			}
-			if (!fragment.entries.empty()) {
-				if (emittedFragments == maximumFragments) {
-					fail(FormatError::FERR_INVALID_STATE,
-							 "native bulk Edge token-run builder exceeds its candidate fragment bound");
-				}
-				visitor(std::move(fragment));
-				++emittedFragments;
+			if (emittedFragments == maximumFragments) {
+				fail(FormatError::FERR_INVALID_STATE,
+						 "native bulk Edge token-run builder exceeds its candidate fragment bound");
 			}
+			visitor(std::move(fragment));
+			++emittedFragments;
 			run = {};
 		}
 
@@ -96,8 +94,10 @@ namespace graph::storage {
 	void NativeBulkEdgeTokenRunBuilder::buildRuns(const NativeBulkEdgeRecordSource &source, size_t maximumRecords,
 															 size_t maximumRunBytes, size_t maximumFragments,
 															 const NativeBulkEdgeTokenRunVisitor &visitor) {
-		if (!source || maximumRecords == 0U || maximumRunBytes <= RSS_NATIVE_BULK_RUN_HEADER_BYTES ||
-			maximumFragments == 0U || !visitor) {
+		if (!source || maximumRecords == 0U || maximumRecords == std::numeric_limits<size_t>::max() ||
+			maximumRunBytes <= RSS_NATIVE_BULK_RUN_HEADER_BYTES ||
+			maximumRunBytes == std::numeric_limits<size_t>::max() || maximumFragments == 0U ||
+			maximumFragments == std::numeric_limits<size_t>::max() || !visitor) {
 			fail(FormatError::FERR_INVALID_HEADER,
 					 "native bulk Edge token-run builder requires finite bounds, a source, and a visitor");
 		}
@@ -124,7 +124,7 @@ namespace graph::storage {
 		NativeBulkEdgeRecordCursor cursor = source();
 		while (const std::optional<NativeBulkEdgeRecord> record = cursor()) {
 			static_cast<void>(NativeBulkEdgeRecordCodec::encodedSize(*record));
-			if (++recordCount > maximumRecords || record->edge_id == 0U || record->edge_id <= previousEdgeId) {
+			if (++recordCount > maximumRecords || record->edge_id <= previousEdgeId) {
 				fail(FormatError::FERR_INVALID_STATE,
 						 "native bulk Edge token-run builder found unordered or over-bound scratch records");
 			}

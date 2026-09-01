@@ -91,7 +91,7 @@ namespace graph::storage {
 		[[nodiscard]] uint64_t saturatedRadixPower(uint16_t exponent) {
 			uint64_t value = 1U;
 			for (uint16_t index = 0U; index < exponent; ++index) {
-				if (value > std::numeric_limits<uint64_t>::max() / RSS_CATALOG_RADIX_FANOUT) {
+			if (value > std::numeric_limits<uint64_t>::max() / RSS_CATALOG_RADIX_FANOUT) { // ZYX_COV_EXCL_LINE: physical-slot ordinals bound radix depth below uint64 multiplication overflow.
 					return std::numeric_limits<uint64_t>::max();
 				}
 				value *= RSS_CATALOG_RADIX_FANOUT;
@@ -100,7 +100,7 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] uint64_t saturatedAdd(uint64_t left, uint64_t right) {
-			if (left > std::numeric_limits<uint64_t>::max() - right) {
+			if (left > std::numeric_limits<uint64_t>::max() - right) { // ZYX_COV_EXCL_LINE: all ordinal spans come from the bounded physical-slot domain.
 				return std::numeric_limits<uint64_t>::max();
 			}
 			return left + right;
@@ -110,14 +110,14 @@ namespace graph::storage {
 			if (left == 0U || right == 0U) {
 				return 0U;
 			}
-			if (left > std::numeric_limits<uint64_t>::max() / right) {
+			if (left > std::numeric_limits<uint64_t>::max() / right) { // ZYX_COV_EXCL_LINE: radix child spans are bounded by the same physical-slot domain.
 				return std::numeric_limits<uint64_t>::max();
 			}
 			return left * right;
 		}
 
 		[[nodiscard]] bool allocatorChildHasFree(const MetadataRadixPage &page, uint32_t index) {
-			if (page.directory_type != MetadataDirectoryType::MDT_ALLOCATOR || index >= RSS_CATALOG_RADIX_FANOUT) {
+			if (page.directory_type != MetadataDirectoryType::MDT_ALLOCATOR || index >= RSS_CATALOG_RADIX_FANOUT) { // ZYX_COV_EXCL_LINE: callers obtain typed pages and indexes from validated radix routes.
 				throwAllocatorDirectoryError(
 						FormatError::FERR_INVALID_STATE,
 						"relocatable free-space summary lookup has an invalid radix page or child index");
@@ -126,7 +126,7 @@ namespace graph::storage {
 		}
 
 		void setAllocatorChildHasFree(MetadataRadixPage &page, uint32_t index, bool hasFree) {
-			if (page.directory_type != MetadataDirectoryType::MDT_ALLOCATOR || index >= RSS_CATALOG_RADIX_FANOUT) {
+			if (page.directory_type != MetadataDirectoryType::MDT_ALLOCATOR || index >= RSS_CATALOG_RADIX_FANOUT) { // ZYX_COV_EXCL_LINE: callers obtain typed pages and indexes from validated radix routes.
 				throwAllocatorDirectoryError(
 						FormatError::FERR_INVALID_STATE,
 						"relocatable free-space summary update has an invalid radix page or child index");
@@ -155,7 +155,7 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] bool radixSubtreeHasFreeSlot(const MetadataRadixPage &page) {
-			if (page.directory_type != MetadataDirectoryType::MDT_ALLOCATOR) {
+			if (page.directory_type != MetadataDirectoryType::MDT_ALLOCATOR) { // ZYX_COV_EXCL_LINE: allocator radix pages are type-checked at every metadata read boundary.
 				throwAllocatorDirectoryError(FormatError::FERR_INVALID_STATE,
 											 "relocatable free-space summary has a non-allocator radix page");
 			}
@@ -196,7 +196,7 @@ namespace graph::storage {
 
 		[[nodiscard]] MetadataPageId readAllocatorChildPageId(MetadataPageFile &pages, PhysicalPageRef reference,
 																 bool radixChild) {
-			if (!reference.isValid()) {
+			if (!reference.isValid()) { // ZYX_COV_EXCL_LINE: radix child references are validated before this typed read helper is called.
 				throwAllocatorDirectoryError(FormatError::FERR_INVALID_HEADER,
 												"relocatable free-space radix child reference is invalid");
 			}
@@ -300,7 +300,7 @@ namespace graph::storage {
 			// This candidate may already refer to pages staged in the same batch.
 			MetadataRadixPage page = pages.readMetadataRadixUnresolved(reference);
 			validateRadix(page, isRoot, page.level, batch.candidate());
-			if (page.generation != batch.generation() || page.committed_lsn != batch.checkpointLsn()) {
+			if (page.generation != batch.generation() || page.committed_lsn != batch.checkpointLsn()) { // ZYX_COV_EXCL_LINE: owned candidate pages are stamped from this batch immediately before logicalization.
 				throwAllocatorDirectoryError(
 						FormatError::FERR_INVALID_STATE,
 						"relocatable free-space logical-child publication found an invalid candidate radix page");

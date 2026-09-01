@@ -7,6 +7,7 @@
  */
 
 #include <algorithm>
+#include <limits>
 #include <optional>
 #include <vector>
 
@@ -69,8 +70,10 @@ TEST(NativeBulkEdgeTokenRunBuilderTest, SortsAndDeduplicatesRelationshipAndPrope
 }
 
 TEST(NativeBulkEdgeTokenRunBuilderTest, RejectsInvalidNamesAndCandidateFragmentOverflow) {
+	EXPECT_THROW(static_cast<void>(NativeBulkEdgeTokenRunBuilder::encodeKey(
+			static_cast<NativeBulkEdgeTokenKind>(0U), "REL")), FormatException);
 	EXPECT_THROW(static_cast<void>(NativeBulkEdgeTokenRunBuilder::encodeKey(NativeBulkEdgeTokenKind::NBETK_PROPERTY, "")),
-			 FormatException);
+				 FormatException);
 	EXPECT_THROW(static_cast<void>(NativeBulkEdgeTokenRunBuilder::encodeKey(
 								  NativeBulkEdgeTokenKind::NBETK_PROPERTY,
 								  std::string(RSS_SYSTEM_CATALOG_NAME_MAX_BYTES + 1U, 'x'))),
@@ -80,8 +83,77 @@ TEST(NativeBulkEdgeTokenRunBuilderTest, RejectsInvalidNamesAndCandidateFragmentO
 							NativeBulkEdgeTokenRunBuilder::encodeKey(NativeBulkEdgeTokenKind::NBETK_RELATIONSHIP_TYPE, "REL").size() +
 							sizeof(uint32_t) + sizeof(uint64_t);
 	EXPECT_THROW(NativeBulkEdgeTokenRunBuilder::buildRuns(
-						 source({tokenRecord(1U, "REL_A", {}), tokenRecord(2U, "REL_B", {})}), 2U,
-						 RSS_NATIVE_BULK_RUN_HEADER_BYTES + oneEntry, 1U,
-						 [](NativeBulkRunFragment &&) {}),
+					 source({tokenRecord(1U, "REL_A", {}), tokenRecord(2U, "REL_B", {})}), 2U,
+					 RSS_NATIVE_BULK_RUN_HEADER_BYTES + oneEntry, 1U,
+					 [](NativeBulkRunFragment &&) {}),
+				 FormatException);
+	EXPECT_THROW(NativeBulkEdgeTokenRunBuilder::buildRuns(
+					 source({tokenRecord(1U, "REL", {})}), 1U, RSS_NATIVE_BULK_RUN_HEADER_BYTES + 1U, 1U,
+					 [](NativeBulkRunFragment &&) {}),
+				 FormatException);
+	const auto sourceWithOneRecord = source({tokenRecord(1U, "REL", {})});
+	const auto visitor = [](NativeBulkRunFragment &&) {};
+	EXPECT_THROW(NativeBulkEdgeTokenRunBuilder::buildRuns(
+					 sourceWithOneRecord, std::numeric_limits<size_t>::max(), RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES,
+					 1U, visitor),
 			 FormatException);
+	EXPECT_THROW(NativeBulkEdgeTokenRunBuilder::buildRuns(
+					 sourceWithOneRecord, 1U, std::numeric_limits<size_t>::max(), 1U, visitor),
+			 FormatException);
+	EXPECT_THROW(NativeBulkEdgeTokenRunBuilder::buildRuns(
+					 sourceWithOneRecord, 1U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES,
+					 std::numeric_limits<size_t>::max(), visitor),
+				 FormatException);
+}
+
+TEST(NativeBulkEdgeTokenRunBuilderTest, RejectsMissingSourceVisitorAndNonFiniteBounds) {
+	const auto validSource = source({tokenRecord(1U, "REL", {})});
+	const auto visitor = [](NativeBulkRunFragment &&) {};
+	EXPECT_THROW(NativeBulkEdgeTokenRunBuilder::buildRuns({}, 1U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 1U, visitor),
+				 FormatException);
+	EXPECT_THROW(NativeBulkEdgeTokenRunBuilder::buildRuns(validSource, 0U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 1U,
+								 visitor),
+				 FormatException);
+	EXPECT_THROW(NativeBulkEdgeTokenRunBuilder::buildRuns(validSource, 1U, RSS_NATIVE_BULK_RUN_HEADER_BYTES, 1U,
+								 visitor),
+				 FormatException);
+	EXPECT_THROW(NativeBulkEdgeTokenRunBuilder::buildRuns(validSource, 1U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 0U,
+								 visitor),
+				 FormatException);
+	EXPECT_THROW(NativeBulkEdgeTokenRunBuilder::buildRuns(validSource, 1U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 1U,
+								 {}),
+				 FormatException);
+	EXPECT_THROW(NativeBulkEdgeTokenRunBuilder::buildRuns(validSource, std::numeric_limits<size_t>::max(),
+								 RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 1U, visitor),
+				 FormatException);
+}
+
+TEST(NativeBulkEdgeTokenRunBuilderTest, RejectsEmptyAndUnorderedSealedSources) {
+	const auto visitor = [](NativeBulkRunFragment &&) {};
+	EXPECT_THROW(NativeBulkEdgeTokenRunBuilder::buildRuns(source({}), 1U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 1U,
+								 visitor),
+				 FormatException);
+	EXPECT_THROW(NativeBulkEdgeTokenRunBuilder::buildRuns(
+				 source({tokenRecord(0U, "REL", {})}), 1U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 1U, visitor),
+				 FormatException);
+	EXPECT_THROW(NativeBulkEdgeTokenRunBuilder::buildRuns(
+				 source({tokenRecord(2U, "REL", {}), tokenRecord(1U, "REL", {})}), 2U,
+				 RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 1U, visitor),
+				 FormatException);
+}
+
+TEST(NativeBulkEdgeTokenRunBuilderTest, AcceptsRecordsWithoutTokenNames) {
+	bool called = false;
+	NativeBulkEdgeTokenRunBuilder::buildRuns(
+			source({tokenRecord(1U, "", {})}), 1U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 1U,
+			[&called](NativeBulkRunFragment &&) { called = true; });
+	EXPECT_FALSE(called);
+}
+
+TEST(NativeBulkEdgeTokenRunBuilderTest, RejectsOversizedPropertyTokenNames) {
+	const std::string oversized(RSS_SYSTEM_CATALOG_NAME_MAX_BYTES + 1U, 'p');
+	EXPECT_THROW(NativeBulkEdgeTokenRunBuilder::buildRuns(
+				 source({tokenRecord(1U, "REL", {oversized})}), 1U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 1U,
+				 [](NativeBulkRunFragment &&) {}),
+				 FormatException);
 }
