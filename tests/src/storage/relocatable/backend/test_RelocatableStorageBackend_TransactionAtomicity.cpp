@@ -182,6 +182,11 @@ TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgeStagingIsBoundedAndRollbac
 
 	// Streamed edges must not be copied into the normal read-your-writes overlay.
 	EXPECT_THROW(static_cast<void>(transaction->readSnapshot()), std::logic_error);
+	auto *const vectorSnapshotProvider =
+			dynamic_cast<LogicalGraphTransactionVectorSnapshotProvider *>(transaction.get());
+	ASSERT_NE(vectorSnapshotProvider, nullptr);
+	EXPECT_THROW(static_cast<void>(vectorSnapshotProvider->pinnedLogicalGraphVectorSearchSnapshot()),
+			 std::logic_error);
 	LogicalGraphMutationBatch ordinary;
 	ordinary.node_creates = {{{"MustNotMix"}, {}}};
 	EXPECT_THROW(static_cast<void>(transaction->stageMutationBatch(std::move(ordinary))), std::logic_error);

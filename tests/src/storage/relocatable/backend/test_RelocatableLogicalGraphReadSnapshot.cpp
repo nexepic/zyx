@@ -73,3 +73,80 @@ TEST_F(RelocatableStorageBackendTest,
 	snapshot.reset();
 	uncached.close();
 }
+
+TEST_F(RelocatableStorageBackendTest, LogicalReadSnapshotValidatesAllVisitorCallbacks) {
+	const NativeGraphFixture fixture = materializeNativeGraphFixture();
+	RelocatableStorageBackend backend(backendOptions());
+	backend.open();
+	std::unique_ptr<LogicalGraphReadSnapshot> snapshot = backend.openLogicalGraphReadSnapshot();
+
+	const std::function<bool(const LogicalGraphNode &)> noNodeVisitor;
+	const std::function<bool(const LogicalGraphEdge &)> noEdgeVisitor;
+	const std::function<bool(const LogicalGraphEdgeTopology &)> noTopologyVisitor;
+	EXPECT_THROW(snapshot->visitNodes(4U, noNodeVisitor), FormatException);
+	EXPECT_THROW(snapshot->visitEdges(4U, noEdgeVisitor), FormatException);
+	EXPECT_THROW(snapshot->visitEdgeTopologies(4U, noTopologyVisitor), FormatException);
+	EXPECT_THROW(snapshot->visitAdjacentEdges(fixture.person_node_id, LogicalGraphReadDirection::LGRD_OUTGOING,
+								 4U, noEdgeVisitor), FormatException);
+	EXPECT_THROW(snapshot->visitAdjacentEdgeTopologies(fixture.person_node_id,
+								 LogicalGraphReadDirection::LGRD_OUTGOING, 4U, noTopologyVisitor), FormatException);
+
+	// The same snapshot remains usable after rejected callbacks, and topology
+	// traversal is exposed through the format-independent contract.
+	size_t nodeCount = 0U;
+	snapshot->visitNodes(4U, [&nodeCount](const LogicalGraphNode &) {
+		++nodeCount;
+		return true;
+	});
+	EXPECT_EQ(nodeCount, 2U);
+	size_t topologyCount = 0U;
+	snapshot->visitEdgeTopologies(4U, [&topologyCount](const LogicalGraphEdgeTopology &) {
+		++topologyCount;
+		return true;
+	});
+	EXPECT_EQ(topologyCount, 2U);
+
+	EXPECT_EQ(snapshot->readNode(fixture.person_node_id).node_id, fixture.person_node_id);
+	EXPECT_TRUE(snapshot->containsNode(fixture.person_node_id));
+	EXPECT_EQ(snapshot->readEdge(fixture.knows_edge_id).edge_id, fixture.knows_edge_id);
+	const auto exact = snapshot->findNodesByExactProperties(
+			{"Person"}, {{"alpha", PropertyValue(int64_t{42})}}, 2U, 2U);
+	EXPECT_FALSE(exact.has_value());
+	const auto range = snapshot->findNodesByPropertyRange(
+			{"Person"}, {"alpha", PropertyValue(int64_t{1}), PropertyValue(int64_t{100}), true, true}, 2U, 2U);
+	EXPECT_FALSE(range.has_value());
+	const auto composite = snapshot->findNodesByCompositePropertyRange(
+			{"Person"}, {{{"alpha", PropertyValue(int64_t{42})}},
+					{"beta", PropertyValue("a"), PropertyValue("z"), true, true}},
+			2U, 2U);
+	EXPECT_FALSE(composite.has_value());
+	const LogicalGraphNodePage nodePage = snapshot->scanNodesAfter(0U, 2U, 8U);
+	EXPECT_EQ(nodePage.nodes.size(), 2U);
+	const LogicalGraphAdjacencyPage adjacencyPage = snapshot->scanAdjacentEdges(
+			fixture.person_node_id, LogicalGraphReadDirection::LGRD_OUTGOING, std::nullopt, 2U);
+	EXPECT_EQ(adjacencyPage.edges.size(), 2U);
+	size_t adjacentTopologyCount = 0U;
+	snapshot->visitAdjacentEdgeTopologies(fixture.person_node_id, LogicalGraphReadDirection::LGRD_OUTGOING, 4U,
+			[&adjacentTopologyCount](const LogicalGraphEdgeTopology &) {
+				++adjacentTopologyCount;
+				return true;
+			});
+	EXPECT_EQ(adjacentTopologyCount, 2U);
+	EXPECT_TRUE(snapshot->mutationFence().has_value());
+
+	snapshot.reset();
+	std::unique_ptr<LogicalGraphVectorSearchSnapshot> vectorSnapshot = backend.openLogicalGraphVectorSearchSnapshot();
+	const LogicalGraphVectorSearchRequest invalidVectorRequest;
+	EXPECT_THROW(static_cast<void>(vectorSnapshot->searchLogicalVector(invalidVectorRequest)), std::invalid_argument);
+	LogicalGraphVectorSearchRequest describeRequest;
+	describeRequest.index_name = "missing";
+	describeRequest.query_vector = {1.0F};
+	describeRequest.top_k = 1U;
+	describeRequest.maximum_mapping_entries = 1U;
+	describeRequest.maximum_raw_vector_reads = 1U;
+	describeRequest.candidate_search_budget = 1U;
+	describeRequest.candidate_refinement_budget = 1U;
+	EXPECT_THROW(static_cast<void>(vectorSnapshot->describeLogicalVectorIndex(describeRequest)), std::runtime_error);
+	vectorSnapshot.reset();
+	backend.close();
+}

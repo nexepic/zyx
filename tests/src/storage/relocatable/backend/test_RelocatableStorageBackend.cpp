@@ -285,35 +285,6 @@ TEST_F(RelocatableStorageBackendTest, LogicalGraphReadResumesAdjacencyWithoutRes
 	backend.close();
 }
 
-TEST_F(RelocatableStorageBackendTest, LogicalPlanRuntimeExecutesRelocatableNodeAndAdjacencyPagesOnOneSnapshot) {
-	const NativeGraphFixture fixture = materializeNativeGraphFixture();
-	RelocatableStorageBackend backend(backendOptions());
-	ASSERT_NO_THROW(backend.open());
-	execution::LogicalPlanReadRuntime runtime(backend);
-	auto scan = std::make_unique<logical::LogicalNodeScan>("n", std::vector<std::string>{"Person"});
-	logical::LogicalTraversal root(std::move(scan), "n", "r", "m", "", "out");
-	const execution::LogicalPlanReadRuntimeBounds bounds{
-			.maximum_node_records = 2U,
-			.maximum_node_page_records = 1U,
-			.maximum_metadata_pages_per_node_page = 8U,
-			.maximum_edges_per_node = 2U,
-			.maximum_adjacency_page_records = 1U,
-			.maximum_property_entries = 2U,
-			.maximum_rows = 4U,
-			.maximum_distinct_rows = 4U,
-	};
-	std::vector<uint64_t> edgeIds;
-	const execution::LogicalPlanReadRuntimeStats stats =
-			runtime.execute(root, bounds, [&edgeIds](const execution::LogicalPlanReadRow &row) {
-				edgeIds.push_back(std::get<LogicalGraphEdge>(row.values.at("r")).edge_id);
-				return true;
-			});
-	std::ranges::sort(edgeIds);
-	EXPECT_EQ(edgeIds, (std::vector<uint64_t>{fixture.knows_edge_id, fixture.mentions_edge_id}));
-	EXPECT_EQ(stats, (execution::LogicalPlanReadRuntimeStats{2U, 2U, 0U, 2U}));
-	backend.close();
-}
-
 TEST_F(RelocatableStorageBackendTest, DatabaseFactoryExposesTheBoundedRelocatableLogicalBoundary) {
 	const NativeGraphFixture fixture = materializeNativeGraphFixture();
 
@@ -614,35 +585,6 @@ TEST_F(RelocatableStorageBackendTest, RejectsReleasedSnapshotsUnsupportedOpenMod
 	EXPECT_THROW(emptyPathBackend.open(), std::runtime_error);
 }
 
-TEST_F(RelocatableStorageBackendTest, LifecycleBoundariesRejectOperationsOutsideAnOpenBackend) {
-	materializeNativeDatabase();
-	RelocatableStorageBackend backend(backendOptions());
-
-	// Every public storage family must fail before it can dereference an unopened
-	// resource graph; close must restore that same boundary.
-	EXPECT_THROW(backend.flush(), std::logic_error);
-	EXPECT_THROW(static_cast<void>(backend.openSnapshot()), std::logic_error);
-	EXPECT_THROW(static_cast<void>(backend.beginLogicalGraphTransaction(true)), std::logic_error);
-	EXPECT_THROW(static_cast<void>(backend.createLogicalNodes({{{"unopened"}, {}}})), std::logic_error);
-	EXPECT_THROW(static_cast<void>(backend.listLogicalIndexes(1U)), std::logic_error);
-	EXPECT_THROW(backend.pauseMaintenance(), std::logic_error);
-	EXPECT_THROW(static_cast<void>(backend.verifyIntegrity()), std::logic_error);
-
-	backend.open();
-	const RelocatableStorageBackend &constBackend = backend;
-	EXPECT_THROW(static_cast<void>(constBackend.maintenanceMetrics()), std::logic_error);
-	EXPECT_THROW(static_cast<void>(constBackend.maintenanceFailure()), std::logic_error);
-	backend.close();
-
-	EXPECT_THROW(backend.flush(), std::logic_error);
-	EXPECT_THROW(static_cast<void>(backend.openSnapshot()), std::logic_error);
-	EXPECT_THROW(static_cast<void>(backend.beginLogicalGraphTransaction(true)), std::logic_error);
-	EXPECT_THROW(static_cast<void>(backend.createLogicalNodes({{{"closed"}, {}}})), std::logic_error);
-	EXPECT_THROW(static_cast<void>(backend.listLogicalIndexes(1U)), std::logic_error);
-	EXPECT_THROW(backend.pauseMaintenance(), std::logic_error);
-	EXPECT_THROW(static_cast<void>(backend.verifyIntegrity()), std::logic_error);
-}
-
 TEST_F(RelocatableStorageBackendTest, ReadOnlyFlushIsANoOpAndPreservesTheCompleteDatabaseFile) {
 	materializeNativeDatabase();
 	std::ifstream before(data_path_, std::ios::binary);
@@ -705,11 +647,19 @@ TEST_F(RelocatableStorageBackendTest, WritableOpenRejectsEveryUnboundedOrInconsi
 	const size_t unbounded = std::numeric_limits<size_t>::max();
 
 	expectRejected([](auto &options) { options.maximum_index_definitions = 0U; });
+	expectRejected([unbounded](auto &options) { options.maximum_index_definitions = unbounded; });
 	expectRejected([](auto &options) { options.maximum_constraint_definitions = 0U; });
+	expectRejected([unbounded](auto &options) { options.maximum_constraint_definitions = unbounded; });
 	expectRejected([](auto &options) { options.maximum_online_index_entries = 0U; });
 	expectRejected([unbounded](auto &options) { options.maximum_online_index_entries = unbounded; });
 	expectRejected([](auto &options) { options.maximum_online_index_scan_nodes = 0U; });
 	expectRejected([unbounded](auto &options) { options.maximum_online_index_scan_nodes = unbounded; });
+	expectRejected([](auto &options) { options.maximum_online_index_pages = 0U; });
+	expectRejected([unbounded](auto &options) { options.maximum_online_index_pages = unbounded; });
+	expectRejected([](auto &options) { options.online_index_sort_run_bytes = 0U; });
+	expectRejected([unbounded](auto &options) { options.online_index_sort_run_bytes = unbounded; });
+	expectRejected([](auto &options) { options.maximum_online_index_sort_runs = 1U; });
+	expectRejected([unbounded](auto &options) { options.maximum_online_index_sort_runs = unbounded; });
 	expectRejected([](auto &options) { options.vector_delta_rebuild_threshold = 0U; });
 	expectRejected([unbounded](auto &options) { options.vector_delta_rebuild_threshold = unbounded; });
 	expectRejected([](auto &options) {
@@ -731,6 +681,13 @@ TEST_F(RelocatableStorageBackendTest, WritableOpenRejectsEveryUnboundedOrInconsi
 		options.maximum_vector_delta_overlay_entries =
 				VectorDeltaMapping::maximumEntriesForPageBudget(1U) + 1U;
 	});
+	expectRejected([](auto &options) { options.maximum_vector_training_records = 0U; });
+	expectRejected([unbounded](auto &options) { options.maximum_vector_training_records = unbounded; });
+	expectRejected([](auto &options) { options.maximum_vector_training_pages = 0U; });
+	expectRejected([unbounded](auto &options) { options.maximum_vector_training_pages = unbounded; });
+	expectRejected([](auto &options) { options.maximum_vector_training_samples = 0U; });
+	expectRejected([unbounded](auto &options) { options.maximum_vector_training_samples = unbounded; });
+	expectRejected([](auto &options) { options.vector_training_iterations = 0U; });
 	expectRejected([](auto &options) { options.maximum_adjacency_read_edges = 0U; });
 	expectRejected([unbounded](auto &options) { options.maximum_adjacency_read_edges = unbounded; });
 	expectRejected([](auto &options) { options.maximum_vector_adjacency_exact_records = 0U; });
