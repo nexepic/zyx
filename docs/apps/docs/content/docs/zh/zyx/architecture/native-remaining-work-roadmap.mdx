@@ -5397,3 +5397,13 @@ builder invariant，不能用普通 unit workload 安全构造；本批只运行
 C7 metadata typed-pool enumeration checkpoint（2026-09-01，macOS）：新增 `RelocatableMetadataStoreTest.EnumeratesEmptyTypedPoolNamespacesAndSnapshotOwnership`，
 验证新建 metadata store 的 snapshot ownership、空 Entity/Vector/Property/State pool 枚举以及 retire queue visitor 的空结果，并确认 snapshot release
 后 ownership 立即失效。该定向测试通过；本批只验证公开空状态契约，未运行完整 quick，不能将定向 profile 当作全局 coverage。
+
+C7 low-frequency global coverage recheck（2026-09-01，macOS）：完成 planner replacement、metadata typed-pool enumeration 等明确模块批次后，执行
+`ZYX_TEST_SHARDS=8 ./scripts/run_tests.sh --quick`（`native-20260901T174900-38526`）。8 个 isolated shard 全部以 exit code 0 完成，
+CTest registration 通过；精确全局 coverage 为 Region 95.03%、Function 98.85%、Line 95.61%、Branch 89.00%。前三维继续满足 C7 的 95% 门槛，
+但 Branch 仍差 6.00 个百分点，C7 不得标记完成。后续继续只做受影响 module 的定向 coverage，避免每条用例重复全量 quick。
+
+C7 adjacency private-reference fail-closed checkpoint（2026-09-01，macOS）：新增
+`RelocatableMetadataStoreTest.StreamedAdjacencyIndexRejectsForeignFragmentInsideAValidManifest`，构造编码合法但 fragment 引用越过当前
+writer-fenced private segment set 的 manifest，验证 Global Adjacency planner 在 materialization 前以 `FERR_INVALID_STATE` 拒绝。定向
+`RelocatableMetadataStoreTest.StreamedAdjacencyIndex*` 通过；该项目只覆盖真实小型损坏契约，不引入 fan-out 或容量 workload，未运行额外全量 quick。
