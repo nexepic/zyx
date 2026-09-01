@@ -5380,7 +5380,7 @@ C7 LargeValue content-run builder 局部收口（2026-09-01，macOS）：`Reloca
 
 C7 streamed Catalog index planner 单文件收口（2026-09-01，macOS）：新增 `RelocatableMetadataStoreTest.StreamedCatalogIndexReplacesAnExistingTreeAndRetiresItsOldPools`，通过公开
 `mutateNativeGraphPagesWithLargeValues` 先发布初始 System Catalog B+Tree，再规划并发布包含旧根退休和新根替换的第二代；同时覆盖 replacement preparer 的 undersized pool partition fail-closed，以及 foreign Catalog/released snapshot 前置条件。
-`RelocatableMetadataStoreTest.StreamedCatalogIndex*` 定向测试 7/7 通过，`NativeStreamedGraphCatalogIndexPlanner.cpp` 单文件 coverage 为 Region 95.45%、Function 100%、Line 93.75%、Branch 84.21%。剩余分支集中在 `BulkBTreeBuilder` 返回的内部 plan invariant 防御路径，不可由公开 planner 输入直接构造；本批未运行完整 quick，继续按模块批次低频收口全局 Branch gate。
+`RelocatableMetadataStoreTest.StreamedCatalogIndex*` 定向测试 6/6 通过，`NativeStreamedGraphCatalogIndexPlanner.cpp` 单文件 coverage 为 Region 95.45%、Function 100%、Line 93.75%、Branch 84.21%。剩余分支集中在 `BulkBTreeBuilder` 返回的内部 plan invariant 防御路径，不可由公开 planner 输入直接构造；本批未运行完整 quick，继续按模块批次低频收口全局 Branch gate。
 
 C7 LargeValue content-index planner 单文件补测（2026-09-01，macOS）：新增 `StreamedLargeValueContentIndexDeduplicatesContentIdentities`，使用两个不同
 LargeValue ID 的相同内容验证 canonical identity 去重；新增 `StreamedLargeValueContentIndexRejectsInvalidEntryShape`，验证 private run entry 的 key shape
@@ -5390,6 +5390,10 @@ Region 87.32%、Function 72.73%、Line 84.98%、Branch 72.22%；剩余缺口主�
 
 C7 LargeValue content-index replacement 单文件收口（2026-09-01，macOS）：使用公开 native graph metadata publication API 发布初始 content-index
 树，再以新的内容 identity 规划 existing-root replacement；同时调用 replacement preparer 的 undersized pool partition fail-closed。定向
-`RelocatableMetadataStoreTest.StreamedLargeValueContentIndex*` 5/5 通过，`NativeStreamedGraphLargeValueContentIndexPlanner.cpp` 单文件 coverage 为
+`RelocatableMetadataStoreTest.StreamedLargeValueContentIndex*` 6/6 通过，`NativeStreamedGraphLargeValueContentIndexPlanner.cpp` 单文件 coverage 为
 Region 94.37%、Function 100%、Line 94.37%、Branch 74.07%。剩余分支为入口多条件的组合变体、private manifest reader 深层错误和内部
 builder invariant，不能用普通 unit workload 安全构造；本批只运行定向 suite，未运行完整 quick。
+
+C7 metadata typed-pool enumeration checkpoint（2026-09-01，macOS）：新增 `RelocatableMetadataStoreTest.EnumeratesEmptyTypedPoolNamespacesAndSnapshotOwnership`，
+验证新建 metadata store 的 snapshot ownership、空 Entity/Vector/Property/State pool 枚举以及 retire queue visitor 的空结果，并确认 snapshot release
+后 ownership 立即失效。该定向测试通过；本批只验证公开空状态契约，未运行完整 quick，不能将定向 profile 当作全局 coverage。

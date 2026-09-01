@@ -28,6 +28,24 @@
 #include <windows.h>
 #endif
 
+TEST_F(RelocatableMetadataStoreTest, EnumeratesEmptyTypedPoolNamespacesAndSnapshotOwnership) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	MetadataSnapshotPin snapshot = store->openSnapshot();
+	EXPECT_TRUE(store->ownsSnapshot(snapshot));
+	EXPECT_TRUE(store->findCurrentEntityPagePools(snapshot).empty());
+	EXPECT_TRUE(store->findCurrentVectorAdjacencyPagePools(snapshot).empty());
+	EXPECT_TRUE(store->findCurrentVectorRawPagePools(snapshot).empty());
+	EXPECT_TRUE(store->findRetiredVectorRawPagePools(snapshot).empty());
+	EXPECT_TRUE(store->findCurrentVectorPqPagePools(snapshot).empty());
+	EXPECT_TRUE(store->findCurrentPropertyPagePools(snapshot, 19U).empty());
+	EXPECT_TRUE(store->findCurrentStatePagePools(snapshot, 19U).empty());
+	size_t retireEntries = 0U;
+	store->visitRetireQueueEntries(snapshot, [&retireEntries](const RetireQueueEntry &) { ++retireEntries; });
+	EXPECT_EQ(retireEntries, 0U);
+	snapshot.release();
+	EXPECT_FALSE(store->ownsSnapshot(snapshot));
+}
+
 TEST_F(RelocatableMetadataStoreTest, SerializesCatalogPublicationSnapshotsReclamationAndReopen) {
 	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
 	const Superblock generationTwo = store->upsertCatalog(std::vector{entry(100, 2, 2)}, LogSequenceNumber(2));
