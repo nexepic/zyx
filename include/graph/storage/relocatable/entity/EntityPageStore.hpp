@@ -413,8 +413,6 @@ namespace graph::storage {
 		void prepareReplacementPage(const CatalogEntry &pool, const PageLocation &expected,
 									LogSequenceNumber expectedOwnerLsn, const EntityPage &page,
 									LogSequenceNumber checkpointLsn, PageLocation &replacement) const;
-		void prepareRetirementPage(const CatalogEntry &pool, const PageLocation &expected,
-								   LogSequenceNumber expectedOwnerLsn, LogSequenceNumber checkpointLsn) const;
 
 		SharedPagePoolAllocator allocator_;
 		RelocatableMetadataStore &metadata_;

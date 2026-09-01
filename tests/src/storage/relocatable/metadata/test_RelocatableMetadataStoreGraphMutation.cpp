@@ -20,8 +20,8 @@
 #include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
 #include "graph/storage/relocatable/entity/EntityLabelSet.hpp"
 #include "graph/storage/relocatable/entity/EntityPageStore.hpp"
-#include "graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp"
 #include "graph/storage/relocatable/entity/NativeBulkEdgePrivateFamilyMaterializer.hpp"
+#include "graph/storage/relocatable/entity/NativeBulkEdgeRunStore.hpp"
 #include "graph/storage/relocatable/entity/NativeStreamedGraphCandidateLayout.hpp"
 #include "graph/storage/relocatable/entity/NativeStreamedGraphDeferredPublication.hpp"
 #include "graph/storage/relocatable/entity/NativeStreamedGraphFinalPublication.hpp"
@@ -31,8 +31,8 @@
 #include "graph/storage/relocatable/index/BTreeIndex.hpp"
 #include "graph/storage/relocatable/index/BTreePageStore.hpp"
 #include "graph/storage/relocatable/index/NativeBulkRun.hpp"
-#include "graph/storage/relocatable/property/PropertyCollectionRoot.hpp"
 #include "graph/storage/relocatable/property/LargeValueStore.hpp"
+#include "graph/storage/relocatable/property/PropertyCollectionRoot.hpp"
 #include "graph/storage/relocatable/schema/SystemCatalog.hpp"
 
 TEST(NativeGraphPrivateSegmentSetTest, RejectsInvalidAndForeignOrdinals) {
@@ -78,16 +78,16 @@ TEST_F(RelocatableMetadataStoreTest, PublishesStreamedEdgeGraphRootsInOneGenerat
 			{firstEdgeId + 1U, 2U, 1U, "KNOWS", {{"weight", graph::PropertyValue(int64_t{9})}}},
 	};
 	PhysicalSegmentAllocator physical(io, *store);
-	NativeBulkRunStore scratch(physical, *store,
-								{PhysicalSlotId(221U), PhysicalSlotId(240U), RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 16U, 4U});
+	NativeBulkRunStore scratch(
+			physical, *store,
+			{PhysicalSlotId(221U), PhysicalSlotId(240U), RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 16U, 4U});
 	NativeBulkEdgeRunStreamingWriter scratchWriter(
 			scratch, 901U, {RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, records.size(), 4U}, LogSequenceNumber(3U));
 	for (const NativeBulkEdgeRecord &record: records) {
 		scratchWriter.add(record);
 	}
 	const NativeBulkEdgeRunManifest scratchManifest = scratchWriter.finish();
-	const NativeBulkEdgeRecordSource source =
-			nativeBulkEdgeRecordSource(scratch, scratchManifest.location, 4U);
+	const NativeBulkEdgeRecordSource source = nativeBulkEdgeRecordSource(scratch, scratchManifest.location, 4U);
 	const NativeBulkEdgePublicationPreflightOptions preflight{16U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U, 128U};
 	const NativeStreamedGraphPublicationPlan plan = NativeStreamedGraphPublicationPlan::derive(
 			source, reservation.edge_ranges, preflight, [](uint64_t) { return true; });
@@ -105,13 +105,9 @@ TEST_F(RelocatableMetadataStoreTest, PublishesStreamedEdgeGraphRootsInOneGenerat
 	request.durable_source = {&scratch, scratchManifest.location, 4U};
 	request.publication_plan = plan;
 	request.candidate_layout = layout;
-	request.private_candidate_plan = {SegmentKind::SGK_BULK_SCRATCH,
-										  801U,
-										  PhysicalSlotId(40U),
-										  PhysicalSlotId(120U),
-										  RSS_ENVELOPE_BYTES,
-										  {},
-										  layout.candidate_count};
+	request.private_candidate_plan = {
+			SegmentKind::SGK_BULK_SCRATCH, 801U, PhysicalSlotId(40U), PhysicalSlotId(120U), RSS_ENVELOPE_BYTES, {},
+			layout.candidate_count};
 	request.entity_pool_owner_id = 802U;
 	request.property_pool_owner_id = 803U;
 	request.first_entity_output_slot = PhysicalSlotId(121U);
@@ -131,7 +127,10 @@ TEST_F(RelocatableMetadataStoreTest, PublishesStreamedEdgeGraphRootsInOneGenerat
 		NativeStreamedGraphFinalPublicationRequest invalid = request;
 		invalid.edge_id_reservation = std::move(malformed);
 		expectFormatError(
-				[&] { static_cast<void>(store->publishStreamedEdgeGraph(invalid, catalog, indexes, nullptr, publicationLsn)); },
+				[&] {
+					static_cast<void>(
+							store->publishStreamedEdgeGraph(invalid, catalog, indexes, nullptr, publicationLsn));
+				},
 				FormatError::FERR_INVALID_HEADER);
 	};
 	NativeGraphLogicalIdReservation nonEdgeLease = reservation;
@@ -162,8 +161,7 @@ TEST_F(RelocatableMetadataStoreTest, PublishesStreamedEdgeGraphRootsInOneGenerat
 	NativeGraphLogicalIdReservation unorderedLease = reservation;
 	unorderedLease.edge_ranges = {{firstEdgeId + 1U, 1U}, {firstEdgeId, 1U}};
 	rejectMalformedLease(std::move(unorderedLease));
-	const Superblock published =
-			store->publishStreamedEdgeGraph(request, catalog, indexes, nullptr, publicationLsn);
+	const Superblock published = store->publishStreamedEdgeGraph(request, catalog, indexes, nullptr, publicationLsn);
 	EXPECT_EQ(published.generation, Generation(before.superblock().generation.value() + 1U));
 	EXPECT_FALSE(store->findEdgePageLocationOptional(before, firstEdgeId).has_value());
 	before.release();
@@ -194,38 +192,38 @@ TEST_F(RelocatableMetadataStoreTest, PublishesStreamedEdgeGraphLargeValueRootsIn
 	const NativeGraphLogicalIdReservation reservation = store->acquireNativeGraphLogicalIds(0U, 1U, 1U);
 	ASSERT_EQ(reservation.edge_ranges.size(), 1U);
 	const uint64_t edgeId = reservation.edge_ranges.front().first_id;
-	const NativeBulkEdgeRecord record{
-			edgeId,
-			1U,
-			2U,
-			"KNOWS",
-			{{"body", graph::PropertyValue(graph::PropertyValue::Bytes(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, std::byte{0x5A}))}}};
+	const NativeBulkEdgeRecord record{edgeId,
+									  1U,
+									  2U,
+									  "KNOWS",
+									  {{"body", graph::PropertyValue(graph::PropertyValue::Bytes(
+														RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, std::byte{0x5A}))}}};
 	PhysicalSegmentAllocator physical(io, *store);
-	NativeBulkRunStore scratch(physical, *store,
-								{PhysicalSlotId(221U), PhysicalSlotId(240U), RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 16U, 4U});
-	NativeBulkEdgeRunStreamingWriter scratchWriter(
-		scratch, 902U, {RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 1U, 4U}, LogSequenceNumber(3U));
+	NativeBulkRunStore scratch(
+			physical, *store,
+			{PhysicalSlotId(221U), PhysicalSlotId(240U), RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 16U, 4U});
+	NativeBulkEdgeRunStreamingWriter scratchWriter(scratch, 902U, {RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 1U, 4U},
+												   LogSequenceNumber(3U));
 	scratchWriter.add(record);
 	const NativeBulkEdgeRunManifest scratchManifest = scratchWriter.finish();
 	const NativeBulkEdgeRecordSource source = nativeBulkEdgeRecordSource(scratch, scratchManifest.location, 4U);
 	const NativeBulkEdgePublicationPreflightOptions preflight{16U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U, 128U};
-	const NativeStreamedGraphPublicationPlan plan =
-		NativeStreamedGraphPublicationPlan::derive(source, reservation.edge_ranges, preflight, [](uint64_t) { return true; });
+	const NativeStreamedGraphPublicationPlan plan = NativeStreamedGraphPublicationPlan::derive(
+			source, reservation.edge_ranges, preflight, [](uint64_t) { return true; });
 	ASSERT_EQ(plan.large_value_count, 1U);
 
 	SlottedPagePool pagePools(io, *store);
 	BTreePageStore indexes(pagePools, *store);
 	SystemCatalog catalog(indexes, *store);
 	SharedPagePoolAllocator sharedPools(io, *store);
-	const SharedPagePoolAllocationRequest existingDataPool{
-			.segment_id = SegmentId(901U),
-			.pool_kind = SegmentKind::SGK_LARGE_VALUE_DATA_POOL,
-			.pool_owner_id = RSS_LARGE_VALUE_SHARED_DATA_POOL_OWNER_ID,
-			.generation = Generation(1U),
-			.page_id = PageId(900U),
-			.page_owner_id = 77U,
-			.page_owner_kind = PageOwnerKind::POK_LARGE_VALUE_DATA,
-			.payload = {std::byte{0x11}}};
+	const SharedPagePoolAllocationRequest existingDataPool{.segment_id = SegmentId(901U),
+														   .pool_kind = SegmentKind::SGK_LARGE_VALUE_DATA_POOL,
+														   .pool_owner_id = RSS_LARGE_VALUE_SHARED_DATA_POOL_OWNER_ID,
+														   .generation = Generation(1U),
+														   .page_id = PageId(900U),
+														   .page_owner_id = 77U,
+														   .page_owner_kind = PageOwnerKind::POK_LARGE_VALUE_DATA,
+														   .payload = {std::byte{0x11}}};
 	const SharedPagePoolAllocationRequest existingManifestPool{
 			.segment_id = SegmentId(902U),
 			.pool_kind = SegmentKind::SGK_LARGE_VALUE_MANIFEST_POOL,
@@ -241,12 +239,14 @@ TEST_F(RelocatableMetadataStoreTest, PublishesStreamedEdgeGraphLargeValueRootsIn
 		snapshot.release();
 		return next;
 	};
-	ASSERT_TRUE(sharedPools.allocateNewPoolPage(
-							existingDataPool, PhysicalSlotId(241U), PhysicalSlotId(241U), nextCheckpointLsn())
-							.has_value());
-	ASSERT_TRUE(sharedPools.allocateNewPoolPage(
-							existingManifestPool, PhysicalSlotId(261U), PhysicalSlotId(261U), nextCheckpointLsn())
-							.has_value());
+	ASSERT_TRUE(sharedPools
+						.allocateNewPoolPage(existingDataPool, PhysicalSlotId(241U), PhysicalSlotId(241U),
+											 nextCheckpointLsn())
+						.has_value());
+	ASSERT_TRUE(sharedPools
+						.allocateNewPoolPage(existingManifestPool, PhysicalSlotId(261U), PhysicalSlotId(261U),
+											 nextCheckpointLsn())
+						.has_value());
 	LargeValueStore values(io, *store);
 	const NativeStreamedGraphLargeValueContentRunPlan contentRun =
 			NativeStreamedGraphLargeValueContentRunBuilder::derivePlanForValueCount(
@@ -254,9 +254,8 @@ TEST_F(RelocatableMetadataStoreTest, PublishesStreamedEdgeGraphLargeValueRootsIn
 	const NativeStreamedGraphLargeValueReferenceMapRunPlan referenceMapRun =
 			NativeStreamedGraphLargeValueReferenceMapBuilder::derivePlanForValueCount(
 					plan.large_value_count, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U);
-	const NativeStreamedGraphCandidateLayout layout =
-			NativeStreamedGraphCandidateLayout::derive(plan, contentRun.candidate_segment_count,
-													 referenceMapRun.candidate_segment_count);
+	const NativeStreamedGraphCandidateLayout layout = NativeStreamedGraphCandidateLayout::derive(
+			plan, contentRun.candidate_segment_count, referenceMapRun.candidate_segment_count);
 
 	MetadataSnapshotPin before = store->openSnapshot();
 	const std::vector<CatalogEntry> dataPoolsBefore = store->findCurrentLargeValueDataPagePools(before);
@@ -269,13 +268,9 @@ TEST_F(RelocatableMetadataStoreTest, PublishesStreamedEdgeGraphLargeValueRootsIn
 	request.durable_source = {&scratch, scratchManifest.location, 4U};
 	request.publication_plan = plan;
 	request.candidate_layout = layout;
-	request.private_candidate_plan = {SegmentKind::SGK_BULK_SCRATCH,
-										  804U,
-										  PhysicalSlotId(40U),
-										  PhysicalSlotId(120U),
-										  RSS_ENVELOPE_BYTES,
-										  {},
-										  layout.candidate_count};
+	request.private_candidate_plan = {
+			SegmentKind::SGK_BULK_SCRATCH, 804U, PhysicalSlotId(40U), PhysicalSlotId(120U), RSS_ENVELOPE_BYTES, {},
+			layout.candidate_count};
 	request.entity_pool_owner_id = 805U;
 	request.property_pool_owner_id = 806U;
 	request.first_entity_output_slot = PhysicalSlotId(121U);
@@ -287,10 +282,10 @@ TEST_F(RelocatableMetadataStoreTest, PublishesStreamedEdgeGraphLargeValueRootsIn
 	request.first_large_value_manifest_output_slot = PhysicalSlotId(261U);
 	request.last_large_value_manifest_output_slot = PhysicalSlotId(280U);
 	request.preparation.families = {
-		16U,
-		16U,
-		RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES,
-		{2U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 16U, 4U, NativeBulkEdgeRunDuplicatePolicy::NBERDP_REJECT}};
+			16U,
+			16U,
+			RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES,
+			{2U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 16U, 4U, NativeBulkEdgeRunDuplicatePolicy::NBERDP_REJECT}};
 	request.preparation.maximum_catalog_entries = 64U;
 	request.preparation.large_value_store = &values;
 	request.preparation.large_value_content_options = {RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U, 16U, 4U};
@@ -299,10 +294,11 @@ TEST_F(RelocatableMetadataStoreTest, PublishesStreamedEdgeGraphLargeValueRootsIn
 	request.index_planning.large_value_content = {PhysicalSlotId(321U), PhysicalSlotId(340U), 16U, 16U, 4U};
 	const LogSequenceNumber publicationLsn(before.superblock().checkpoint_lsn.value() + 1U);
 	const auto rejectMalformedLargeValuePublication = [&](NativeStreamedGraphFinalPublicationRequest invalid,
-															 LargeValueStore *publicationStore) {
+														  LargeValueStore *publicationStore) {
 		expectFormatError(
 				[&] {
-					static_cast<void>(store->publishStreamedEdgeGraph(invalid, catalog, indexes, publicationStore, publicationLsn));
+					static_cast<void>(store->publishStreamedEdgeGraph(invalid, catalog, indexes, publicationStore,
+																	  publicationLsn));
 				},
 				FormatError::FERR_INVALID_HEADER);
 	};
@@ -323,10 +319,10 @@ TEST_F(RelocatableMetadataStoreTest, PublishesStreamedEdgeGraphLargeValueRootsIn
 
 	MetadataSnapshotPin current = store->openSnapshot();
 	EXPECT_TRUE(store->findEdgePageLocationOptional(current, edgeId).has_value());
-	EXPECT_TRUE(store->findEntityPropertyLocationOptional(current, {EntityPropertyOwnerKind::EPOK_EDGE, edgeId}).has_value());
+	EXPECT_TRUE(store->findEntityPropertyLocationOptional(current, {EntityPropertyOwnerKind::EPOK_EDGE, edgeId})
+						.has_value());
 	const LargeValueManifestLocation route = store->findLargeValueManifest(current, LargeValueId(1U));
-	const std::optional<PageLocation> manifestPage =
-			store->findPageLocationOptional(current, route.manifest_page_id);
+	const std::optional<PageLocation> manifestPage = store->findPageLocationOptional(current, route.manifest_page_id);
 	ASSERT_TRUE(manifestPage.has_value());
 	EXPECT_EQ(manifestPage->segment_id, manifestPoolsBefore.front().segment_id);
 	const LargeValueManifest manifest = values.manifest(current, LargeValueId(1U));
@@ -341,6 +337,101 @@ TEST_F(RelocatableMetadataStoreTest, PublishesStreamedEdgeGraphLargeValueRootsIn
 			store->findIndexRootOptional(current, RSS_LARGE_VALUE_CONTENT_INDEX_ID);
 	ASSERT_TRUE(contentRoot.has_value());
 	EXPECT_TRUE(store->findPageLocationOptional(current, contentRoot->root_page_id).has_value());
+	EXPECT_FALSE(store->isPhysicalSlotAllocated(current, PhysicalSlotId(40U)));
+	current.release();
+}
+
+TEST_F(RelocatableMetadataStoreTest, PublishesStreamedLargeValuesIntoFreshSharedPools) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	const NativeGraphLogicalIdReservation reservation = store->acquireNativeGraphLogicalIds(0U, 1U, 1U);
+	ASSERT_EQ(reservation.edge_ranges.size(), 1U);
+	const uint64_t edgeId = reservation.edge_ranges.front().first_id;
+	const NativeBulkEdgeRecord record{edgeId,
+									  1U,
+									  2U,
+									  "KNOWS",
+									  {{"body", graph::PropertyValue(graph::PropertyValue::Bytes(
+														RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, std::byte{0x5A}))}}};
+	PhysicalSegmentAllocator physical(io, *store);
+	NativeBulkRunStore scratch(
+			physical, *store,
+			{PhysicalSlotId(221U), PhysicalSlotId(240U), RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 16U, 4U});
+	NativeBulkEdgeRunStreamingWriter scratchWriter(scratch, 903U, {RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 1U, 4U},
+												   LogSequenceNumber(3U));
+	scratchWriter.add(record);
+	const NativeBulkEdgeRunManifest scratchManifest = scratchWriter.finish();
+	const NativeBulkEdgeRecordSource source = nativeBulkEdgeRecordSource(scratch, scratchManifest.location, 4U);
+	const NativeStreamedGraphPublicationPlan plan = NativeStreamedGraphPublicationPlan::derive(
+			source, reservation.edge_ranges, {16U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U, 128U},
+			[](uint64_t) { return true; });
+	ASSERT_EQ(plan.large_value_count, 1U);
+
+	SlottedPagePool pagePools(io, *store);
+	BTreePageStore indexes(pagePools, *store);
+	SystemCatalog catalog(indexes, *store);
+	LargeValueStore values(io, *store);
+	const NativeStreamedGraphLargeValueContentRunPlan contentRun =
+			NativeStreamedGraphLargeValueContentRunBuilder::derivePlanForValueCount(
+					values, plan.large_value_count, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U);
+	const NativeStreamedGraphLargeValueReferenceMapRunPlan referenceMapRun =
+			NativeStreamedGraphLargeValueReferenceMapBuilder::derivePlanForValueCount(
+					plan.large_value_count, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U);
+	const NativeStreamedGraphCandidateLayout layout = NativeStreamedGraphCandidateLayout::derive(
+			plan, contentRun.candidate_segment_count, referenceMapRun.candidate_segment_count);
+
+	MetadataSnapshotPin before = store->openSnapshot();
+	ASSERT_TRUE(store->findCurrentLargeValueDataPagePools(before).empty());
+	ASSERT_TRUE(store->findCurrentLargeValueManifestPagePools(before).empty());
+	NativeStreamedGraphFinalPublicationRequest request;
+	request.expected_metadata_generation = before.superblock().generation;
+	request.edge_id_reservation = reservation;
+	request.durable_source = {&scratch, scratchManifest.location, 4U};
+	request.publication_plan = plan;
+	request.candidate_layout = layout;
+	request.private_candidate_plan = {
+			SegmentKind::SGK_BULK_SCRATCH, 805U, PhysicalSlotId(40U), PhysicalSlotId(120U), RSS_ENVELOPE_BYTES, {},
+			layout.candidate_count};
+	request.entity_pool_owner_id = 806U;
+	request.property_pool_owner_id = 807U;
+	request.first_entity_output_slot = PhysicalSlotId(121U);
+	request.last_entity_output_slot = PhysicalSlotId(140U);
+	request.first_property_output_slot = PhysicalSlotId(141U);
+	request.last_property_output_slot = PhysicalSlotId(160U);
+	request.first_large_value_data_output_slot = PhysicalSlotId(241U);
+	request.last_large_value_data_output_slot = PhysicalSlotId(260U);
+	request.first_large_value_manifest_output_slot = PhysicalSlotId(261U);
+	request.last_large_value_manifest_output_slot = PhysicalSlotId(280U);
+	request.preparation.families = {
+			16U,
+			16U,
+			RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES,
+			{2U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 16U, 4U, NativeBulkEdgeRunDuplicatePolicy::NBERDP_REJECT}};
+	request.preparation.maximum_catalog_entries = 64U;
+	request.preparation.large_value_store = &values;
+	request.preparation.large_value_content_options = {RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U, 16U, 4U};
+	request.index_planning.catalog = {PhysicalSlotId(281U), PhysicalSlotId(300U), 64U, 16U};
+	request.index_planning.adjacency = {PhysicalSlotId(301U), PhysicalSlotId(320U), 16U, 16U, 4U};
+	request.index_planning.large_value_content = {PhysicalSlotId(321U), PhysicalSlotId(340U), 16U, 16U, 4U};
+	const LogSequenceNumber publicationLsn(before.superblock().checkpoint_lsn.value() + 1U);
+	const Superblock published = store->publishStreamedEdgeGraph(request, catalog, indexes, &values, publicationLsn);
+	EXPECT_EQ(published.generation, Generation(before.superblock().generation.value() + 1U));
+	before.release();
+
+	MetadataSnapshotPin current = store->openSnapshot();
+	const std::vector<CatalogEntry> dataPools = store->findCurrentLargeValueDataPagePools(current);
+	const std::vector<CatalogEntry> manifestPools = store->findCurrentLargeValueManifestPagePools(current);
+	ASSERT_EQ(dataPools.size(), 1U);
+	ASSERT_EQ(manifestPools.size(), 1U);
+	EXPECT_TRUE(store->isPhysicalSlotAllocated(current, dataPools.front().physical_slot));
+	EXPECT_TRUE(store->isPhysicalSlotAllocated(current, manifestPools.front().physical_slot));
+	const LargeValueManifest manifest = values.manifest(current, LargeValueId(1U));
+	ASSERT_FALSE(manifest.chunks.empty());
+	EXPECT_EQ(store->findPageLocation(current, manifest.chunks.front().first_data_page_id).segment_id,
+			  dataPools.front().segment_id);
+	EXPECT_EQ(
+			store->findPageLocation(current, store->findLargeValueManifest(current, LargeValueId(1U)).manifest_page_id)
+					.segment_id,
+			manifestPools.front().segment_id);
 	EXPECT_FALSE(store->isPhysicalSlotAllocated(current, PhysicalSlotId(40U)));
 	current.release();
 }
@@ -524,14 +615,14 @@ TEST_F(RelocatableMetadataStoreTest,
 						noEntityReplacements, noEntityAppends, noEntityPools, noPropertyReplacements, noPropertyBatches,
 						noLargeValues, derived, LogSequenceNumber(2U),
 						[&preparerCalled](std::span<EntityPageReplacementMaterialization>,
-											 std::span<EntityPageAppendBatchMaterialization>,
-											 std::span<EntityPageNewPoolBatchMaterialization>,
-											 std::span<NativeGraphPropertyPageReplacementMaterialization>,
-											 std::span<NativeGraphPropertyPageBatchMaterialization>,
-											 std::span<LargeValueMaterializationResult>) { preparerCalled = true; },
+										  std::span<EntityPageAppendBatchMaterialization>,
+										  std::span<EntityPageNewPoolBatchMaterialization>,
+										  std::span<NativeGraphPropertyPageReplacementMaterialization>,
+										  std::span<NativeGraphPropertyPageBatchMaterialization>,
+										  std::span<LargeValueMaterializationResult>) { preparerCalled = true; },
 						[](std::vector<std::vector<IndexTreeMutationPoolBatch>> &) {}, {}, {}, {}, {}, {},
-						MetadataPublishOptions{}, NativeGraphLogicalIdReservation{}, std::nullopt,
-						{}, {}, [&plannerCalled](const NativeGraphDeferredIndexPlanningContext &) {
+						MetadataPublishOptions{}, NativeGraphLogicalIdReservation{}, std::nullopt, {}, {},
+						[&plannerCalled](const NativeGraphDeferredIndexPlanningContext &) {
 							plannerCalled = true;
 							NativeGraphDeferredIndexPlan plan;
 							plan.mutation.index_id = RSS_GLOBAL_ADJACENCY_INDEX_ID;
@@ -559,9 +650,9 @@ TEST_F(RelocatableMetadataStoreTest,
 	MetadataSnapshotPin recovered = reopened->openSnapshot();
 	EXPECT_EQ(recovered.superblock(), beforeSuperblock);
 	EXPECT_FALSE(reopened->isPhysicalSlotAllocated(recovered, PhysicalSlotId(40U)));
-	EXPECT_THROW(static_cast<void>(reopened->findCatalog(
-					 recovered, SegmentId(beforeSuperblock.next_logical_segment_id))),
-				 FormatException);
+	EXPECT_THROW(
+			static_cast<void>(reopened->findCatalog(recovered, SegmentId(beforeSuperblock.next_logical_segment_id))),
+			FormatException);
 	recovered.release();
 }
 
@@ -804,14 +895,14 @@ TEST_F(RelocatableMetadataStoreTest, EarlyPlanningDerivesAStreamedPublicationPla
 									{},
 									layout.candidate_count};
 	std::optional<NativeStreamedGraphPublicationPlan> publicationPlan;
-	const NativeGraphPrivateSegmentImagePreparer reservations =
-			[](const NativeGraphPrivateSegmentSet &identities, size_t ordinal) {
-				if (ordinal >= identities.size()) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "streamed publication reservation ordinal is out of range");
-				}
-				return NativeGraphPrivateSegmentReservation::payload();
-			};
+	const NativeGraphPrivateSegmentImagePreparer reservations = [](const NativeGraphPrivateSegmentSet &identities,
+																   size_t ordinal) {
+		if (ordinal >= identities.size()) {
+			throw FormatException(FormatError::FERR_INVALID_STATE,
+								  "streamed publication reservation ordinal is out of range");
+		}
+		return NativeGraphPrivateSegmentReservation::payload();
+	};
 
 	const std::array<EntityPageReplacementRequest, 0U> noEntityReplacements{};
 	const std::array<EntityPageAppendBatchRequest, 0U> noEntityAppends{};
@@ -828,14 +919,14 @@ TEST_F(RelocatableMetadataStoreTest, EarlyPlanningDerivesAStreamedPublicationPla
 			   std::span<NativeGraphPropertyPageReplacementMaterialization>,
 			   std::span<NativeGraphPropertyPageBatchMaterialization>, std::span<LargeValueMaterializationResult>) {},
 			[](std::vector<std::vector<IndexTreeMutationPoolBatch>> &) {}, {}, {}, {}, {}, {}, MetadataPublishOptions{},
-				NativeGraphLogicalIdReservation{}, std::nullopt, reservations, {}, {},
-				[&](const NativeGraphEarlyPublicationPlanningContext &context) {
-					EXPECT_EQ(context.private_segments.size(), layout.candidate_count);
-					EXPECT_THROW(context.deferred_index_plan_sink(NativeGraphDeferredIndexPlan{}), FormatException);
-					escapedFence = context.private_segment_fence;
-					publicationPlan = NativeStreamedGraphPublicationPlan::derive(
-							source, lease, options, [](uint64_t nodeId) { return nodeId >= 1U && nodeId <= 5U; });
-				});
+			NativeGraphLogicalIdReservation{}, std::nullopt, reservations, {}, {},
+			[&](const NativeGraphEarlyPublicationPlanningContext &context) {
+				EXPECT_EQ(context.private_segments.size(), layout.candidate_count);
+				EXPECT_THROW(context.deferred_index_plan_sink(NativeGraphDeferredIndexPlan{}), FormatException);
+				escapedFence = context.private_segment_fence;
+				publicationPlan = NativeStreamedGraphPublicationPlan::derive(
+						source, lease, options, [](uint64_t nodeId) { return nodeId >= 1U && nodeId <= 5U; });
+			});
 
 	ASSERT_TRUE(publicationPlan.has_value());
 	EXPECT_EQ(publicationPlan->record_count, records.size());
@@ -905,15 +996,15 @@ TEST_F(RelocatableMetadataStoreTest, EarlyPlanningMaterializesAllPrivateBulkFami
 			publicationPlan.token_entry_count,
 			runBytes,
 			{preflightOptions.maximum_sort_runs, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 1U, 4U,
-				 NativeBulkEdgeRunDuplicatePolicy::NBERDP_REJECT}};
-	const NativeGraphPrivateSegmentImagePreparer reservations =
-			[](const NativeGraphPrivateSegmentSet &identities, size_t ordinal) {
-				if (ordinal >= identities.size()) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "streamed publication reservation ordinal is out of range");
-				}
-				return NativeGraphPrivateSegmentReservation::payload();
-			};
+			 NativeBulkEdgeRunDuplicatePolicy::NBERDP_REJECT}};
+	const NativeGraphPrivateSegmentImagePreparer reservations = [](const NativeGraphPrivateSegmentSet &identities,
+																   size_t ordinal) {
+		if (ordinal >= identities.size()) {
+			throw FormatException(FormatError::FERR_INVALID_STATE,
+								  "streamed publication reservation ordinal is out of range");
+		}
+		return NativeGraphPrivateSegmentReservation::payload();
+	};
 
 	const Superblock published = store->mutateNativeGraphPagesWithLargeValues(
 			noEntityReplacements, noEntityAppends, noEntityPools, noPropertyReplacements, noPropertyBatches,
@@ -926,12 +1017,11 @@ TEST_F(RelocatableMetadataStoreTest, EarlyPlanningMaterializesAllPrivateBulkFami
 			NativeGraphLogicalIdReservation{}, std::nullopt, reservations, {}, {},
 			[&](const NativeGraphEarlyPublicationPlanningContext &context) {
 				tokenRoot = NativeBulkEdgePrivateFamilyMaterializer::materializeTokens(
-						source,
-						context.private_segments, {layout.tokens.first_ordinal, layout.tokens.count}, familyOptions,
-						context.private_segment_reader, context.private_segment_writer, context.private_segment_fence);
+						source, context.private_segments, {layout.tokens.first_ordinal, layout.tokens.count},
+						familyOptions, context.private_segment_reader, context.private_segment_writer,
+						context.private_segment_fence);
 				adjacencyRoots = NativeBulkEdgePrivateFamilyMaterializer::materializeAdjacency(
-						source,
-						lease, context.private_segments,
+						source, lease, context.private_segments,
 						{layout.outgoing_adjacency.first_ordinal, layout.outgoing_adjacency.count},
 						{layout.incoming_adjacency.first_ordinal, layout.incoming_adjacency.count}, familyOptions,
 						context.private_segment_reader, context.private_segment_writer, context.private_segment_fence);
@@ -991,19 +1081,19 @@ TEST_F(RelocatableMetadataStoreTest, EarlyPlanningCanQueueOneDeferredIndexPlanFo
 					ASSERT_EQ(batches.size(), 1U);
 					ASSERT_EQ(batches.front().appended_page_ids.size(), 1U);
 					const PageOwnerHeader owner{batches.front().appended_page_ids.front(),
-										 RSS_GLOBAL_ADJACENCY_INDEX_ID,
-										 PageOwnerKind::POK_INDEX,
-										 0U,
-										 RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES,
-										 batches.front().pool.generation,
-										 LogSequenceNumber(2U)};
+												RSS_GLOBAL_ADJACENCY_INDEX_ID,
+												PageOwnerKind::POK_INDEX,
+												0U,
+												RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES,
+												batches.front().pool.generation,
+												LogSequenceNumber(2U)};
 					BTreePageHeader header;
 					header.index_id = RSS_GLOBAL_ADJACENCY_INDEX_ID;
 					header.page_id = batches.front().appended_page_ids.front();
 					header.generation = batches.front().pool.generation;
 					const std::array<BTreePage, 1U> pages{{BTreePage::create(owner, header)}};
-					indexes.prepareNewPoolInitialPages(batches.front().pool, pages,
-													batches.front().appended_locations, LogSequenceNumber(2U));
+					indexes.prepareNewPoolInitialPages(batches.front().pool, pages, batches.front().appended_locations,
+													   LogSequenceNumber(2U));
 				};
 				context.deferred_index_plan_sink(std::move(plan));
 			});
@@ -1094,7 +1184,7 @@ TEST_F(RelocatableMetadataStoreTest, AssignsAllPrivateScratchIdentitiesBeforePre
 			   std::span<NativeGraphPropertyPageBatchMaterialization>, std::span<LargeValueMaterializationResult>) {},
 			[](std::vector<std::vector<IndexTreeMutationPoolBatch>> &) {}, {}, {}, {}, {}, {}, MetadataPublishOptions{},
 			NativeGraphLogicalIdReservation{}, std::nullopt,
-		[&assigned, candidateCount](const NativeGraphPrivateSegmentSet &identities, size_t ordinal) {
+			[&assigned, candidateCount](const NativeGraphPrivateSegmentSet &identities, size_t ordinal) {
 				assigned.clear();
 				for (size_t identityOrdinal = 0U; identityOrdinal < identities.size(); ++identityOrdinal) {
 					assigned.push_back(identities[identityOrdinal]);
