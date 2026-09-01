@@ -114,6 +114,411 @@ TEST_F(RelocatableMetadataStoreTest, BuildsAndRewindsAnUnpublishedBulkRunInsideO
 			}));
 }
 
+TEST_F(RelocatableMetadataStoreTest, PlannerFailuresReleasePrivateSnapshotAndCandidateSlotsForEveryPlanningStage) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	const auto expectPlannerFailure = [&store](const NativeGraphDeferredIndexPlanner &deferred,
+												 const NativeGraphEarlyPublicationPlanner &early,
+												 const NativeGraphDeferredIndexPlansPlanner &deferredPlans,
+												 LogSequenceNumber checkpointLsn, Generation expectedGeneration) {
+		NativeGraphDerivedStateMutation derived;
+		NativeGraphPrivateSegmentRequest scratch;
+		scratch.kind = SegmentKind::SGK_BULK_SCRATCH;
+		scratch.owner_id = 91U;
+		scratch.first_slot = PhysicalSlotId(40U);
+		scratch.last_slot = PhysicalSlotId(40U);
+		scratch.payload = {std::byte{0x5A}};
+		derived.private_segments.push_back(std::move(scratch));
+		const std::array<EntityPageReplacementRequest, 0U> noEntityReplacements{};
+		const std::array<EntityPageAppendBatchRequest, 0U> noEntityAppends{};
+		const std::array<EntityPageNewPoolBatchRequest, 0U> noEntityPools{};
+		const std::array<NativeGraphPropertyPageReplacementRequest, 0U> noPropertyReplacements{};
+		const std::array<NativeGraphPropertyPageBatchRequest, 0U> noPropertyBatches{};
+		const std::array<NativeGraphLargeValueMutation, 0U> noLargeValues{};
+
+		EXPECT_THROW(static_cast<void>(store->mutateNativeGraphPagesWithLargeValues(
+						 noEntityReplacements, noEntityAppends, noEntityPools, noPropertyReplacements,
+						 noPropertyBatches, noLargeValues, derived, checkpointLsn,
+						 [](std::span<EntityPageReplacementMaterialization>, std::span<EntityPageAppendBatchMaterialization>,
+							std::span<EntityPageNewPoolBatchMaterialization>,
+							std::span<NativeGraphPropertyPageReplacementMaterialization>,
+							std::span<NativeGraphPropertyPageBatchMaterialization>, std::span<LargeValueMaterializationResult>) {},
+						 [](std::vector<std::vector<IndexTreeMutationPoolBatch>> &) {}, {}, {}, {}, {}, {},
+						 MetadataPublishOptions{}, NativeGraphLogicalIdReservation{}, std::nullopt, {}, {}, deferred, early,
+						 deferredPlans)),
+				 std::runtime_error);
+
+		// All three planner callbacks execute after the candidate has been written.
+		// A failure must still restore the publication boundary so a following writer
+		// can enter and the scratch slot cannot leak into allocator-visible state.
+		MetadataSnapshotPin unchanged = store->openSnapshot();
+		EXPECT_EQ(unchanged.superblock().generation, expectedGeneration);
+		EXPECT_FALSE(store->isPhysicalSlotAllocated(unchanged, PhysicalSlotId(40U)));
+		unchanged.release();
+		EXPECT_NO_THROW(static_cast<void>(store->reserveNativeGraphLogicalIds(1U, 0U)));
+	};
+
+	expectPlannerFailure(
+			{},
+			[](const NativeGraphEarlyPublicationPlanningContext &) {
+				throw std::runtime_error("early publication planner rejected its candidate");
+			},
+			{}, LogSequenceNumber(2U), Generation(1U));
+	expectPlannerFailure(
+			[](const NativeGraphDeferredIndexPlanningContext &) -> NativeGraphDeferredIndexPlan {
+				throw std::runtime_error("deferred index planner rejected its candidate");
+			},
+			{}, {}, LogSequenceNumber(3U), Generation(2U));
+	expectPlannerFailure(
+			{}, {},
+			[](const NativeGraphDeferredIndexPlanningContext &) -> NativeGraphDeferredIndexPlans {
+				throw std::runtime_error("deferred index planners rejected their candidate");
+			}, LogSequenceNumber(4U), Generation(3U));
+}
+
+TEST_F(RelocatableMetadataStoreTest,
+	   RejectsPrivatePublicationCapabilitiesWithoutOneValidCandidateBeforeOpeningTheWriter) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	const std::array<EntityPageReplacementRequest, 0U> noEntityReplacements{};
+	const std::array<EntityPageAppendBatchRequest, 0U> noEntityAppends{};
+	const std::array<EntityPageNewPoolBatchRequest, 0U> noEntityPools{};
+	const std::array<NativeGraphPropertyPageReplacementRequest, 0U> noPropertyReplacements{};
+	const std::array<NativeGraphPropertyPageBatchRequest, 0U> noPropertyBatches{};
+	const std::array<NativeGraphLargeValueMutation, 0U> noLargeValues{};
+	const NativeGraphPageTransactionWithLargeValuesPreparer pagePreparer =
+			[](std::span<EntityPageReplacementMaterialization>, std::span<EntityPageAppendBatchMaterialization>,
+			   std::span<EntityPageNewPoolBatchMaterialization>,
+			   std::span<NativeGraphPropertyPageReplacementMaterialization>,
+			   std::span<NativeGraphPropertyPageBatchMaterialization>, std::span<LargeValueMaterializationResult>) {};
+	const NativeGraphDerivedStatePreparer derivedPreparer =
+			[](std::vector<std::vector<IndexTreeMutationPoolBatch>> &) {};
+	const auto expectRejected = [&](NativeGraphDerivedStateMutation derived,
+								 const NativeGraphPrivateSegmentImagePreparer &images = {},
+								 const NativeGraphPrivateSegmentPreparer &privatePreparer = {},
+								 const NativeGraphDeferredIndexPlanner &deferred = {},
+								 const NativeGraphEarlyPublicationPlanner &early = {},
+								 const NativeGraphDeferredIndexPlansPlanner &deferredPlans = {}) {
+		expectFormatError(
+				[&] {
+					static_cast<void>(store->mutateNativeGraphPagesWithLargeValues(
+							noEntityReplacements, noEntityAppends, noEntityPools, noPropertyReplacements,
+							noPropertyBatches, noLargeValues, derived, LogSequenceNumber(2U), pagePreparer,
+							derivedPreparer, {}, {}, {}, {}, {}, MetadataPublishOptions{},
+							NativeGraphLogicalIdReservation{}, std::nullopt, images, privatePreparer, deferred, early,
+							deferredPlans));
+				},
+				FormatError::FERR_INVALID_HEADER);
+		MetadataSnapshotPin unchanged = store->openSnapshot();
+		EXPECT_EQ(unchanged.superblock().generation, Generation(1U));
+		EXPECT_FALSE(store->isPhysicalSlotAllocated(unchanged, PhysicalSlotId(40U)));
+		unchanged.release();
+	};
+
+	NativeGraphDerivedStateMutation externalTail;
+	externalTail.external_private_tail_reservation = {PhysicalSlotId(40U), PhysicalSlotId(40U)};
+	expectRejected(std::move(externalTail));
+
+	// Keep a real derived request so these callbacks reach their individual
+	// no-candidate guards instead of the earlier no-work rejection.
+	NativeGraphDerivedStateMutation noCandidate;
+	noCandidate.private_segment_plan = {SegmentKind::SGK_BULK_SCRATCH, 91U, PhysicalSlotId(40U),
+									  PhysicalSlotId(40U), RSS_ENVELOPE_BYTES, {}, 0U};
+	const NativeGraphPrivateSegmentImagePreparer imagePreparer =
+			[](const NativeGraphPrivateSegmentSet &, size_t) { return std::vector<std::byte>{std::byte{0x5AU}}; };
+	const auto expectInitialBoundaryRejected = [&](const NativeGraphPageTransactionWithLargeValuesPreparer &preparer,
+																						  LogSequenceNumber checkpointLsn) {
+		expectFormatError(
+				[&] {
+					static_cast<void>(store->mutateNativeGraphPagesWithLargeValues(
+							noEntityReplacements, noEntityAppends, noEntityPools, noPropertyReplacements,
+							noPropertyBatches, noLargeValues, noCandidate, checkpointLsn, preparer, derivedPreparer,
+							{}, {}, {}, {}, {}, MetadataPublishOptions{}, NativeGraphLogicalIdReservation{}, std::nullopt));
+				},
+				FormatError::FERR_INVALID_HEADER);
+		MetadataSnapshotPin unchanged = store->openSnapshot();
+		EXPECT_EQ(unchanged.superblock().generation, Generation(1U));
+		EXPECT_FALSE(store->isPhysicalSlotAllocated(unchanged, PhysicalSlotId(40U)));
+		unchanged.release();
+	};
+	NativeGraphPageTransactionWithLargeValuesPreparer missingPagePreparer;
+	expectInitialBoundaryRejected(missingPagePreparer, LogSequenceNumber(2U));
+	expectInitialBoundaryRejected(pagePreparer, LogSequenceNumber{});
+	NativeGraphDerivedStatePreparer missingDerivedPreparer;
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->mutateNativeGraphPagesWithLargeValues(
+						noEntityReplacements, noEntityAppends, noEntityPools, noPropertyReplacements, noPropertyBatches,
+						noLargeValues, noCandidate, LogSequenceNumber(2U), pagePreparer, missingDerivedPreparer));
+			},
+			FormatError::FERR_INVALID_HEADER);
+	MetadataSnapshotPin unchangedAfterMissingDerivedPreparer = store->openSnapshot();
+	EXPECT_EQ(unchangedAfterMissingDerivedPreparer.superblock().generation, Generation(1U));
+	unchangedAfterMissingDerivedPreparer.release();
+
+	// A nonempty mutation with no content-index transition must fail before it
+	// can allocate a LargeValue page or make a dangling manifest reachable.
+	const std::array<NativeGraphLargeValueMutation, 1U> oneLargeValue{};
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->mutateNativeGraphPagesWithLargeValues(
+						noEntityReplacements, noEntityAppends, noEntityPools, noPropertyReplacements, noPropertyBatches,
+						oneLargeValue, NativeGraphDerivedStateMutation{}, LogSequenceNumber(2U), pagePreparer,
+						derivedPreparer));
+			},
+			FormatError::FERR_INVALID_HEADER);
+	MetadataSnapshotPin unchangedAfterMissingContentIndex = store->openSnapshot();
+	EXPECT_EQ(unchangedAfterMissingContentIndex.superblock().generation, Generation(1U));
+	unchangedAfterMissingContentIndex.release();
+	const auto expectLargeValueRetirementRejected = [&](std::span<const PageRetirement> retiredPages,
+																								std::span<const LargeValueId> erasedValueIds,
+																								const ExistingPoolPagesRetirementPreparer &retirementPreparer = {}) {
+		expectFormatError(
+				[&] {
+					static_cast<void>(store->mutateNativeGraphPagesWithLargeValues(
+							noEntityReplacements, noEntityAppends, noEntityPools, noPropertyReplacements,
+							noPropertyBatches, noLargeValues, noCandidate, LogSequenceNumber(2U), pagePreparer,
+							derivedPreparer, {}, {}, retiredPages, erasedValueIds, retirementPreparer, MetadataPublishOptions{},
+							NativeGraphLogicalIdReservation{}, std::nullopt));
+				},
+				FormatError::FERR_INVALID_HEADER);
+		MetadataSnapshotPin unchanged = store->openSnapshot();
+		EXPECT_EQ(unchanged.superblock().generation, Generation(1U));
+		EXPECT_FALSE(store->isPhysicalSlotAllocated(unchanged, PhysicalSlotId(40U)));
+		unchanged.release();
+	};
+	const std::array<PageRetirement, 1U> oneRetiredPage{{}};
+	const std::array<LargeValueId, 1U> oneErasedValue{{LargeValueId(1U)}};
+	expectLargeValueRetirementRejected(oneRetiredPage, {});
+	expectLargeValueRetirementRejected({}, oneErasedValue);
+	expectLargeValueRetirementRejected(oneRetiredPage, oneErasedValue);
+	const ExistingPoolPagesRetirementPreparer retirementPreparer =
+			[](std::span<const ExistingPoolPageRetirementBatch>) {};
+	const std::array<LargeValueId, 1U> invalidErasedValue{{}};
+	const std::array<LargeValueId, 2U> unorderedErasedValues{{LargeValueId(1U), LargeValueId(1U)}};
+	expectLargeValueRetirementRejected(oneRetiredPage, invalidErasedValue, retirementPreparer);
+	expectLargeValueRetirementRejected(oneRetiredPage, unorderedErasedValues, retirementPreparer);
+	expectLargeValueRetirementRejected(oneRetiredPage, oneErasedValue, retirementPreparer);
+	expectRejected({});
+	expectRejected(noCandidate, imagePreparer,
+				   [](const NativeGraphPrivateSegmentSet &, const NativeGraphPrivateSegmentReader &) {});
+	expectRejected(noCandidate, imagePreparer, {},
+				   [](const NativeGraphDeferredIndexPlanningContext &) { return NativeGraphDeferredIndexPlan{}; });
+	expectRejected(noCandidate, imagePreparer, {}, {}, [](const NativeGraphEarlyPublicationPlanningContext &) {});
+	expectRejected(noCandidate, imagePreparer, {}, {}, {},
+				   [](const NativeGraphDeferredIndexPlanningContext &) { return NativeGraphDeferredIndexPlans{}; });
+	expectRejected(noCandidate, imagePreparer);
+
+	NativeGraphDerivedStateMutation mixed;
+	NativeGraphPrivateSegmentRequest request;
+	request.kind = SegmentKind::SGK_BULK_SCRATCH;
+	request.owner_id = 91U;
+	request.first_slot = PhysicalSlotId(40U);
+	request.last_slot = PhysicalSlotId(40U);
+	request.payload = {std::byte{0x5AU}};
+	mixed.private_segments.push_back(request);
+	mixed.private_segment_plan = {SegmentKind::SGK_BULK_SCRATCH, 91U, PhysicalSlotId(40U), PhysicalSlotId(40U),
+							  RSS_ENVELOPE_BYTES, {}, 1U};
+	expectRejected(std::move(mixed));
+
+	NativeGraphDerivedStateMutation emptyCompact;
+	emptyCompact.private_segment_plan = {SegmentKind::SGK_BULK_SCRATCH, 91U, PhysicalSlotId(40U), PhysicalSlotId(40U),
+									 RSS_ENVELOPE_BYTES, {}, 0U};
+	expectRejected(std::move(emptyCompact),
+				   [](const NativeGraphPrivateSegmentSet &, size_t) { return std::vector<std::byte>{std::byte{0x5AU}}; });
+
+	NativeGraphDerivedStateMutation malformed;
+	NativeGraphPrivateSegmentRequest bad;
+	bad.kind = SegmentKind::SGK_METADATA_PAGE_POOL;
+	bad.owner_id = 0U;
+	bad.first_slot = PhysicalSlotId{};
+	bad.last_slot = PhysicalSlotId{};
+	bad.header_bytes = 0U;
+	malformed.private_segments.push_back(std::move(bad));
+	expectRejected(std::move(malformed));
+
+	const auto validPrivateRequest = [] {
+		NativeGraphPrivateSegmentRequest request;
+		request.kind = SegmentKind::SGK_BULK_SCRATCH;
+		request.owner_id = 91U;
+		request.first_slot = PhysicalSlotId(40U);
+		request.last_slot = PhysicalSlotId(40U);
+		request.payload = {std::byte{0x5AU}};
+		return request;
+	};
+	const auto rejectsMalformedPrivateRequest = [&](auto mutate) {
+		NativeGraphDerivedStateMutation invalid;
+		NativeGraphPrivateSegmentRequest request = validPrivateRequest();
+		mutate(request);
+		invalid.private_segments.push_back(std::move(request));
+		expectRejected(std::move(invalid));
+	};
+	rejectsMalformedPrivateRequest([](auto &request) { request.kind = SegmentKind::SGK_ENTITY_PAGE_POOL; });
+	rejectsMalformedPrivateRequest([](auto &request) { request.owner_id = 0U; });
+	rejectsMalformedPrivateRequest([](auto &request) { request.first_slot = {}; });
+	rejectsMalformedPrivateRequest([](auto &request) { request.last_slot = {}; });
+	rejectsMalformedPrivateRequest(
+			[](auto &request) { request.last_slot = PhysicalSlotId(request.first_slot.value() - 1U); });
+	rejectsMalformedPrivateRequest([](auto &request) { request.header_bytes = RSS_ENVELOPE_BYTES - 1U; });
+	rejectsMalformedPrivateRequest([](auto &request) { request.header_bytes = RSS_MAX_HEADER_BYTES + 1U; });
+	rejectsMalformedPrivateRequest([](auto &request) { request.header_bytes = RSS_ENVELOPE_BYTES + 1U; });
+	rejectsMalformedPrivateRequest([](auto &request) { request.header_extension = {std::byte{0x5AU}}; });
+	rejectsMalformedPrivateRequest([](auto &request) { request.payload.clear(); });
+
+	NativeGraphDerivedStateMutation inconsistentPrivateIdentity;
+	inconsistentPrivateIdentity.private_segments.push_back(validPrivateRequest());
+	NativeGraphPrivateSegmentRequest differentOwner = validPrivateRequest();
+	differentOwner.owner_id = 92U;
+	inconsistentPrivateIdentity.private_segments.push_back(std::move(differentOwner));
+	expectRejected(std::move(inconsistentPrivateIdentity));
+	NativeGraphDerivedStateMutation overlappingPrivateSlots;
+	overlappingPrivateSlots.private_segments.push_back(validPrivateRequest());
+	overlappingPrivateSlots.private_segments.push_back(validPrivateRequest());
+	expectRejected(std::move(overlappingPrivateSlots));
+	NativeGraphDerivedStateMutation overflowingPrivateSlots;
+	NativeGraphPrivateSegmentRequest finalSlotCandidate = validPrivateRequest();
+	finalSlotCandidate.first_slot = PhysicalSlotId(std::numeric_limits<uint64_t>::max());
+	finalSlotCandidate.last_slot = finalSlotCandidate.first_slot;
+	overflowingPrivateSlots.private_segments.push_back(finalSlotCandidate);
+	overflowingPrivateSlots.private_segments.push_back(std::move(finalSlotCandidate));
+	expectRejected(std::move(overflowingPrivateSlots));
+	const auto validCompactPlan = [] {
+		return NativeGraphPrivateSegmentPlan{SegmentKind::SGK_BULK_SCRATCH, 91U, PhysicalSlotId(40U),
+																					 PhysicalSlotId(40U), RSS_ENVELOPE_BYTES, {}, 1U};
+	};
+	const auto rejectsMalformedCompactPlan = [&](auto mutate) {
+		NativeGraphDerivedStateMutation invalid;
+		invalid.private_segment_plan = validCompactPlan();
+		mutate(*invalid.private_segment_plan);
+		expectRejected(std::move(invalid), imagePreparer);
+	};
+	rejectsMalformedCompactPlan([](auto &plan) { plan.kind = SegmentKind::SGK_ENTITY_PAGE_POOL; });
+	rejectsMalformedCompactPlan([](auto &plan) { plan.owner_id = 0U; });
+	rejectsMalformedCompactPlan([](auto &plan) { plan.first_slot = {}; });
+	rejectsMalformedCompactPlan([](auto &plan) { plan.last_slot = {}; });
+	rejectsMalformedCompactPlan([](auto &plan) { plan.last_slot = PhysicalSlotId(plan.first_slot.value() - 1U); });
+	rejectsMalformedCompactPlan([](auto &plan) { plan.header_bytes = RSS_ENVELOPE_BYTES - 1U; });
+	rejectsMalformedCompactPlan([](auto &plan) { plan.header_bytes = RSS_MAX_HEADER_BYTES + 1U; });
+	rejectsMalformedCompactPlan([](auto &plan) { plan.header_bytes = RSS_ENVELOPE_BYTES + 1U; });
+	rejectsMalformedCompactPlan([](auto &plan) { plan.header_extension = {std::byte{0x5AU}}; });
+	rejectsMalformedCompactPlan([](auto &plan) { plan.segment_count = std::numeric_limits<size_t>::max(); });
+	// A compact plan must be physically realizable before it can enter the
+	// writer. Otherwise a failing late materialization could consume candidate
+	// slots without ever producing a publication.
+	rejectsMalformedCompactPlan([](auto &plan) { plan.segment_count = 2U; });
+}
+
+TEST_F(RelocatableMetadataStoreTest,
+       RejectsInvalidPrivateScratchImagesBeforeCallingMaterializersOrPublishingMetadata) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	NativeGraphDerivedStateMutation derived;
+	NativeGraphPrivateSegmentRequest scratch;
+	scratch.kind = SegmentKind::SGK_BULK_SCRATCH;
+	scratch.owner_id = 91U;
+	scratch.first_slot = PhysicalSlotId(40U);
+	scratch.last_slot = PhysicalSlotId(40U);
+	scratch.payload = {std::byte{0x5AU}};
+	derived.private_segments.push_back(std::move(scratch));
+
+	const std::array<EntityPageReplacementRequest, 0U> noEntityReplacements{};
+	const std::array<EntityPageAppendBatchRequest, 0U> noEntityAppends{};
+	const std::array<EntityPageNewPoolBatchRequest, 0U> noEntityPools{};
+	const std::array<NativeGraphPropertyPageReplacementRequest, 0U> noPropertyReplacements{};
+	const std::array<NativeGraphPropertyPageBatchRequest, 0U> noPropertyBatches{};
+	const std::array<NativeGraphLargeValueMutation, 0U> noLargeValues{};
+	bool pagePreparerCalled = false;
+	bool derivedPreparerCalled = false;
+
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->mutateNativeGraphPagesWithLargeValues(
+						noEntityReplacements, noEntityAppends, noEntityPools, noPropertyReplacements,
+						noPropertyBatches, noLargeValues, derived, LogSequenceNumber(2U),
+						[&pagePreparerCalled](std::span<EntityPageReplacementMaterialization>,
+													 std::span<EntityPageAppendBatchMaterialization>,
+													 std::span<EntityPageNewPoolBatchMaterialization>,
+													 std::span<NativeGraphPropertyPageReplacementMaterialization>,
+													 std::span<NativeGraphPropertyPageBatchMaterialization>,
+													 std::span<LargeValueMaterializationResult>) { pagePreparerCalled = true; },
+						[&derivedPreparerCalled](std::vector<std::vector<IndexTreeMutationPoolBatch>> &) {
+							derivedPreparerCalled = true;
+						},
+						{}, {}, {}, {}, {}, MetadataPublishOptions{}, NativeGraphLogicalIdReservation{}, std::nullopt,
+						[](const NativeGraphPrivateSegmentSet &, size_t) { return std::vector<std::byte>{}; }));
+			},
+			FormatError::FERR_INVALID_STATE);
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->mutateNativeGraphPagesWithLargeValues(
+						noEntityReplacements, noEntityAppends, noEntityPools, noPropertyReplacements,
+						noPropertyBatches, noLargeValues, derived, LogSequenceNumber(2U),
+						[&pagePreparerCalled](std::span<EntityPageReplacementMaterialization>,
+													 std::span<EntityPageAppendBatchMaterialization>,
+													 std::span<EntityPageNewPoolBatchMaterialization>,
+													 std::span<NativeGraphPropertyPageReplacementMaterialization>,
+													 std::span<NativeGraphPropertyPageBatchMaterialization>,
+													 std::span<LargeValueMaterializationResult>) { pagePreparerCalled = true; },
+						[&derivedPreparerCalled](std::vector<std::vector<IndexTreeMutationPoolBatch>> &) {
+							derivedPreparerCalled = true;
+						},
+						{}, {}, {}, {}, {}, MetadataPublishOptions{}, NativeGraphLogicalIdReservation{}, std::nullopt,
+						[](const NativeGraphPrivateSegmentSet &, size_t) {
+							return std::vector<std::byte>(RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES + 1U);
+						}));
+			},
+			FormatError::FERR_INVALID_STATE);
+
+	EXPECT_FALSE(pagePreparerCalled);
+	EXPECT_FALSE(derivedPreparerCalled);
+	MetadataSnapshotPin unchanged = store->openSnapshot();
+	EXPECT_EQ(unchanged.superblock().generation, Generation(1U));
+	EXPECT_FALSE(store->isPhysicalSlotAllocated(unchanged, PhysicalSlotId(40U)));
+	unchanged.release();
+}
+
+TEST_F(RelocatableMetadataStoreTest,
+		RejectsAnInvalidCompactPrivateScratchImageWhenTheEarlyPlannerFirstMaterializesIt) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	NativeGraphDerivedStateMutation derived;
+	derived.private_segment_plan = {SegmentKind::SGK_BULK_SCRATCH, 92U, PhysicalSlotId(40U), PhysicalSlotId(40U),
+									   RSS_ENVELOPE_BYTES, {}, 1U};
+	const std::array<EntityPageReplacementRequest, 0U> noEntityReplacements{};
+	const std::array<EntityPageAppendBatchRequest, 0U> noEntityAppends{};
+	const std::array<EntityPageNewPoolBatchRequest, 0U> noEntityPools{};
+	const std::array<NativeGraphPropertyPageReplacementRequest, 0U> noPropertyReplacements{};
+	const std::array<NativeGraphPropertyPageBatchRequest, 0U> noPropertyBatches{};
+	const std::array<NativeGraphLargeValueMutation, 0U> noLargeValues{};
+	bool pagePreparerCalled = false;
+	bool derivedPreparerCalled = false;
+
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->mutateNativeGraphPagesWithLargeValues(
+						noEntityReplacements, noEntityAppends, noEntityPools, noPropertyReplacements,
+						noPropertyBatches, noLargeValues, derived, LogSequenceNumber(2U),
+						[&pagePreparerCalled](std::span<EntityPageReplacementMaterialization>,
+													 std::span<EntityPageAppendBatchMaterialization>,
+													 std::span<EntityPageNewPoolBatchMaterialization>,
+													 std::span<NativeGraphPropertyPageReplacementMaterialization>,
+													 std::span<NativeGraphPropertyPageBatchMaterialization>,
+													 std::span<LargeValueMaterializationResult>) { pagePreparerCalled = true; },
+						[&derivedPreparerCalled](std::vector<std::vector<IndexTreeMutationPoolBatch>> &) {
+							derivedPreparerCalled = true;
+						},
+						{}, {}, {}, {}, {}, MetadataPublishOptions{}, NativeGraphLogicalIdReservation{}, std::nullopt,
+						[](const NativeGraphPrivateSegmentSet &, size_t) { return std::vector<std::byte>{}; }, {}, {},
+						[](const NativeGraphEarlyPublicationPlanningContext &context) {
+							context.private_segment_writer(context.private_segments.front(), {std::byte{0x5AU}});
+						}));
+			},
+			FormatError::FERR_INVALID_STATE);
+
+	EXPECT_FALSE(pagePreparerCalled);
+	EXPECT_FALSE(derivedPreparerCalled);
+	MetadataSnapshotPin unchanged = store->openSnapshot();
+	EXPECT_EQ(unchanged.superblock().generation, Generation(1U));
+	EXPECT_FALSE(store->isPhysicalSlotAllocated(unchanged, PhysicalSlotId(40U)));
+	unchanged.release();
+}
+
 TEST_F(RelocatableMetadataStoreTest,
        DeferredIndexPlannerPublishesARewindableScratchBuiltTreeAndRejectsStaleRetirementAtomically) {
 	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));

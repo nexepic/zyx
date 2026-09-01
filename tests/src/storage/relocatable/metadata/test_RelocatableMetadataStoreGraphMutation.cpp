@@ -36,6 +36,12 @@
 #include "graph/storage/relocatable/schema/SystemCatalog.hpp"
 
 TEST(NativeGraphPrivateSegmentSetTest, RejectsInvalidAndForeignOrdinals) {
+	expectFormatError([] { static_cast<void>(NativeGraphPrivateSegmentSet(SegmentId{}, Generation(1U), 1U, 1U)); },
+					  FormatError::FERR_INVALID_HEADER);
+	expectFormatError([] { static_cast<void>(NativeGraphPrivateSegmentSet(SegmentId(1U), Generation{}, 1U, 1U)); },
+					  FormatError::FERR_INVALID_HEADER);
+	expectFormatError([] { static_cast<void>(NativeGraphPrivateSegmentSet(SegmentId(1U), Generation(1U), 0U, 1U)); },
+					  FormatError::FERR_INVALID_HEADER);
 	expectFormatError([] { static_cast<void>(NativeGraphPrivateSegmentSet(SegmentId(1U), Generation(1U), 2U, 0U)); },
 					  FormatError::FERR_INVALID_HEADER);
 	expectFormatError(
@@ -50,6 +56,14 @@ TEST(NativeGraphPrivateSegmentSetTest, RejectsInvalidAndForeignOrdinals) {
 	EXPECT_EQ(set.back(), NativeGraphPrivateSegmentMaterialization(SegmentId(11U), Generation(3U), 42U));
 	EXPECT_EQ(set.ordinalOf(set.back()), 1U);
 	expectFormatError([&] { static_cast<void>(set.at(2U)); }, FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(set.ordinalOf({SegmentId{}, Generation(3U), 42U})); },
+					  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(set.ordinalOf({SegmentId(10U), Generation(4U), 42U})); },
+					  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(set.ordinalOf({SegmentId(10U), Generation(3U), 43U})); },
+					  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(set.ordinalOf({SegmentId(9U), Generation(3U), 42U})); },
+					  FormatError::FERR_INVALID_STATE);
 	expectFormatError([&] { static_cast<void>(set.ordinalOf({SegmentId(12U), Generation(3U), 42U})); },
 					  FormatError::FERR_INVALID_STATE);
 }
@@ -113,6 +127,41 @@ TEST_F(RelocatableMetadataStoreTest, PublishesStreamedEdgeGraphRootsInOneGenerat
 	request.index_planning.catalog = {PhysicalSlotId(161U), PhysicalSlotId(190U), 64U, 16U};
 	request.index_planning.adjacency = {PhysicalSlotId(191U), PhysicalSlotId(220U), 16U, 16U, 4U};
 	const LogSequenceNumber publicationLsn(before.superblock().checkpoint_lsn.value() + 1U);
+	const auto rejectMalformedLease = [&](NativeGraphLogicalIdReservation malformed) {
+		NativeStreamedGraphFinalPublicationRequest invalid = request;
+		invalid.edge_id_reservation = std::move(malformed);
+		expectFormatError(
+				[&] { static_cast<void>(store->publishStreamedEdgeGraph(invalid, catalog, indexes, nullptr, publicationLsn)); },
+				FormatError::FERR_INVALID_HEADER);
+	};
+	NativeGraphLogicalIdReservation nonEdgeLease = reservation;
+	nonEdgeLease.node_ranges.push_back({1U, 1U});
+	rejectMalformedLease(std::move(nonEdgeLease));
+	NativeGraphLogicalIdReservation emptyLease;
+	rejectMalformedLease(std::move(emptyLease));
+	NativeGraphLogicalIdReservation zeroRange = reservation;
+	zeroRange.edge_ranges = {{0U, 1U}};
+	rejectMalformedLease(std::move(zeroRange));
+	NativeGraphLogicalIdReservation zeroCount = reservation;
+	zeroCount.edge_ranges = {{firstEdgeId, 0U}};
+	rejectMalformedLease(std::move(zeroCount));
+	NativeGraphLogicalIdReservation overflowingRange = reservation;
+	overflowingRange.edge_ranges = {{std::numeric_limits<uint64_t>::max(), 2U}};
+	rejectMalformedLease(std::move(overflowingRange));
+	NativeGraphLogicalIdReservation unrelatedLease = reservation;
+	// This range is ordered and relevant, but owns only the source's first ID.
+	// It must reach the independent source-bound ownership check.
+	unrelatedLease.edge_ranges = {{firstEdgeId, 1U}};
+	expectFormatError(
+			[&] {
+				NativeStreamedGraphFinalPublicationRequest invalid = request;
+				invalid.edge_id_reservation = std::move(unrelatedLease);
+				static_cast<void>(store->publishStreamedEdgeGraph(invalid, catalog, indexes, nullptr, publicationLsn));
+			},
+			FormatError::FERR_INVALID_STATE);
+	NativeGraphLogicalIdReservation unorderedLease = reservation;
+	unorderedLease.edge_ranges = {{firstEdgeId + 1U, 1U}, {firstEdgeId, 1U}};
+	rejectMalformedLease(std::move(unorderedLease));
 	const Superblock published =
 			store->publishStreamedEdgeGraph(request, catalog, indexes, nullptr, publicationLsn);
 	EXPECT_EQ(published.generation, Generation(before.superblock().generation.value() + 1U));
@@ -200,13 +249,13 @@ TEST_F(RelocatableMetadataStoreTest, PublishesStreamedEdgeGraphLargeValueRootsIn
 							.has_value());
 	LargeValueStore values(io, *store);
 	const NativeStreamedGraphLargeValueContentRunPlan contentRun =
-		NativeStreamedGraphLargeValueContentRunBuilder::derivePlanForValueCount(
-			values, plan.large_value_count, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U);
+			NativeStreamedGraphLargeValueContentRunBuilder::derivePlanForValueCount(
+					values, plan.large_value_count, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U);
 	const NativeStreamedGraphLargeValueReferenceMapRunPlan referenceMapRun =
-		NativeStreamedGraphLargeValueReferenceMapBuilder::derivePlanForValueCount(
-			plan.large_value_count, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U);
+			NativeStreamedGraphLargeValueReferenceMapBuilder::derivePlanForValueCount(
+					plan.large_value_count, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U);
 	const NativeStreamedGraphCandidateLayout layout =
-		NativeStreamedGraphCandidateLayout::derive(plan, contentRun.candidate_segment_count,
+			NativeStreamedGraphCandidateLayout::derive(plan, contentRun.candidate_segment_count,
 													 referenceMapRun.candidate_segment_count);
 
 	MetadataSnapshotPin before = store->openSnapshot();
@@ -249,6 +298,24 @@ TEST_F(RelocatableMetadataStoreTest, PublishesStreamedEdgeGraphLargeValueRootsIn
 	request.index_planning.adjacency = {PhysicalSlotId(301U), PhysicalSlotId(320U), 16U, 16U, 4U};
 	request.index_planning.large_value_content = {PhysicalSlotId(321U), PhysicalSlotId(340U), 16U, 16U, 4U};
 	const LogSequenceNumber publicationLsn(before.superblock().checkpoint_lsn.value() + 1U);
+	const auto rejectMalformedLargeValuePublication = [&](NativeStreamedGraphFinalPublicationRequest invalid,
+															 LargeValueStore *publicationStore) {
+		expectFormatError(
+				[&] {
+					static_cast<void>(store->publishStreamedEdgeGraph(invalid, catalog, indexes, publicationStore, publicationLsn));
+				},
+				FormatError::FERR_INVALID_HEADER);
+	};
+	NativeStreamedGraphFinalPublicationRequest missingDataRange = request;
+	missingDataRange.first_large_value_data_output_slot = PhysicalSlotId{};
+	rejectMalformedLargeValuePublication(std::move(missingDataRange), &values);
+	NativeStreamedGraphFinalPublicationRequest reversedManifestRange = request;
+	reversedManifestRange.last_large_value_manifest_output_slot = PhysicalSlotId(240U);
+	rejectMalformedLargeValuePublication(std::move(reversedManifestRange), &values);
+	NativeStreamedGraphFinalPublicationRequest missingPreparedStore = request;
+	missingPreparedStore.preparation.large_value_store = nullptr;
+	rejectMalformedLargeValuePublication(std::move(missingPreparedStore), &values);
+	rejectMalformedLargeValuePublication(request, nullptr);
 	const Superblock published = store->publishStreamedEdgeGraph(request, catalog, indexes, &values, publicationLsn);
 	EXPECT_EQ(published.generation, Generation(before.superblock().generation.value() + 1U));
 	EXPECT_FALSE(store->findEdgePageLocationOptional(before, edgeId).has_value());
@@ -1178,70 +1245,6 @@ TEST_F(RelocatableMetadataStoreTest, NativeIoTruncatesFailedCompactPrivateScratc
 	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
 }
 
-TEST_F(RelocatableMetadataStoreTest, RejectsConflictingOrEntityMappedAuxiliaryNewPoolsBeforeReservingAnyPhysicalSlot) {
-	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
-	const std::array<EntityPageReplacementRequest, 0U> noEntityReplacements{};
-	const std::array<EntityPageAppendBatchRequest, 0U> noEntityAppends{};
-	const std::array<NativeGraphPropertyPageReplacementRequest, 0U> noPropertyReplacements{};
-	const std::array<NativeGraphPropertyPageBatchRequest, 0U> noPropertyBatches{};
-	const std::array<NativeGraphLargeValueMutation, 0U> noLargeValues{};
-
-	CatalogSlotReservationRequest reservation;
-	reservation.segment_id = SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID);
-	reservation.kind = SegmentKind::SGK_ENTITY_PAGE_POOL;
-	reservation.owner_id = 17U;
-	reservation.segment_generation = Generation(1U);
-	reservation.state = SegmentState::SGS_SEALED;
-	reservation.require_absent = true;
-	const EntityPageNewPoolBatchRequest first{reservation,
-											  PageId(101U),
-											  PhysicalSlotId(40U),
-											  PhysicalSlotId(40U),
-											  {},
-											  {},
-											  PageOwnerKind::POK_ENTITY_LABEL};
-	EntityPageNewPoolBatchRequest conflicting = first;
-	conflicting.page_id = PageId(102U);
-	conflicting.first_slot = PhysicalSlotId(41U);
-	conflicting.last_slot = PhysicalSlotId(41U);
-	const std::array<EntityPageNewPoolBatchRequest, 2U> conflictingPools{{first, conflicting}};
-
-	bool materializerCalled = false;
-	const auto expectRejected = [&](std::span<const EntityPageNewPoolBatchRequest> requests) {
-		expectFormatError(
-				[&] {
-					static_cast<void>(store->mutateNativeGraphPagesWithLargeValues(
-							noEntityReplacements, noEntityAppends, requests, noPropertyReplacements, noPropertyBatches,
-							noLargeValues, {}, LogSequenceNumber(2U),
-							[&materializerCalled](std::span<EntityPageReplacementMaterialization>,
-												  std::span<EntityPageAppendBatchMaterialization>,
-												  std::span<EntityPageNewPoolBatchMaterialization>,
-												  std::span<NativeGraphPropertyPageReplacementMaterialization>,
-												  std::span<NativeGraphPropertyPageBatchMaterialization>,
-												  std::span<LargeValueMaterializationResult>) {
-								materializerCalled = true;
-							},
-							{}));
-				},
-				FormatError::FERR_INVALID_STATE);
-		EXPECT_FALSE(materializerCalled);
-		MetadataSnapshotPin unchanged = store->openSnapshot();
-		EXPECT_EQ(unchanged.superblock().generation, Generation(1U));
-		EXPECT_FALSE(store->isPhysicalSlotAllocated(unchanged, PhysicalSlotId(40U)));
-		EXPECT_FALSE(store->isPhysicalSlotAllocated(unchanged, PhysicalSlotId(41U)));
-		EXPECT_FALSE(store->findPageLocationOptional(unchanged, PageId(101U)).has_value());
-		EXPECT_FALSE(store->findPageLocationOptional(unchanged, PageId(102U)).has_value());
-		unchanged.release();
-	};
-
-	expectRejected(conflictingPools);
-
-	EntityPageNewPoolBatchRequest entityMappedAuxiliary = first;
-	entityMappedAuxiliary.inserted_nodes = {{1U, PageId(101U), 0U, 1U}};
-	const std::array<EntityPageNewPoolBatchRequest, 1U> malformedAuxiliary{{entityMappedAuxiliary}};
-	expectRejected(malformedAuxiliary);
-}
-
 TEST_F(RelocatableMetadataStoreTest,
 	   RejectsExhaustedNewPoolRangeWithoutCallingTheMaterializerOrPublishingAnyPartialReservation) {
 	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
@@ -1516,37 +1519,45 @@ TEST_F(RelocatableMetadataStoreTest, RejectsAnAuxiliaryLabelPageThatAttemptsToPu
 	MetadataSnapshotPin before = store->openSnapshot();
 	const Superblock beforeSuperblock = before.superblock();
 	const PageLocation labelLocation = store->findPageLocation(before, PageId(102U));
-	EntityPageReplacementRequest forged;
-	forged.expected_pool = pool;
-	forged.expected_location = labelLocation;
-	forged.owner_kind = PageOwnerKind::POK_ENTITY_LABEL;
-	forged.inserted_nodes = {{1002U, PageId(102U), 0U, 1U}};
-	const std::array<EntityPageReplacementRequest, 1U> requests{{forged}};
 	const std::array<EntityPageAppendBatchRequest, 0U> noEntityAppends{};
 	const std::array<EntityPageNewPoolBatchRequest, 0U> noEntityPools{};
 	const std::array<NativeGraphPropertyPageReplacementRequest, 0U> noPropertyReplacements{};
 	const std::array<NativeGraphPropertyPageBatchRequest, 0U> noPropertyBatches{};
 	const std::array<NativeGraphLargeValueMutation, 0U> noLargeValues{};
-	bool materializerCalled = false;
+	const auto rejectsAuxiliaryMapDelta = [&](auto addMapDelta) {
+		EntityPageReplacementRequest forged;
+		forged.expected_pool = pool;
+		forged.expected_location = labelLocation;
+		forged.owner_kind = PageOwnerKind::POK_ENTITY_LABEL;
+		addMapDelta(forged);
+		const std::array<EntityPageReplacementRequest, 1U> requests{{std::move(forged)}};
+		bool materializerCalled = false;
+		expectFormatError(
+				[&] {
+					static_cast<void>(store->mutateNativeGraphPagesWithLargeValues(
+							requests, noEntityAppends, noEntityPools, noPropertyReplacements, noPropertyBatches,
+							noLargeValues, {}, LogSequenceNumber(4U),
+							[&materializerCalled](std::span<EntityPageReplacementMaterialization>,
+												  std::span<EntityPageAppendBatchMaterialization>,
+												  std::span<EntityPageNewPoolBatchMaterialization>,
+												  std::span<NativeGraphPropertyPageReplacementMaterialization>,
+												  std::span<NativeGraphPropertyPageBatchMaterialization>,
+												  std::span<LargeValueMaterializationResult>) {
+								materializerCalled = true;
+							},
+							{}));
+				},
+				FormatError::FERR_INVALID_STATE);
+		EXPECT_FALSE(materializerCalled);
+	};
 
-	expectFormatError(
-			[&] {
-				static_cast<void>(store->mutateNativeGraphPagesWithLargeValues(
-						requests, noEntityAppends, noEntityPools, noPropertyReplacements, noPropertyBatches,
-						noLargeValues, {}, LogSequenceNumber(4U),
-						[&materializerCalled](std::span<EntityPageReplacementMaterialization>,
-											  std::span<EntityPageAppendBatchMaterialization>,
-											  std::span<EntityPageNewPoolBatchMaterialization>,
-											  std::span<NativeGraphPropertyPageReplacementMaterialization>,
-											  std::span<NativeGraphPropertyPageBatchMaterialization>,
-											  std::span<LargeValueMaterializationResult>) {
-							materializerCalled = true;
-						},
-						{}));
-			},
-			FormatError::FERR_INVALID_STATE);
+	// Auxiliary label pages own no Entity Map entries. Exercise every map-delta
+	// shape so each rejects before a materializer can publish a partial update.
+	rejectsAuxiliaryMapDelta([](auto &request) { request.inserted_nodes = {{1002U, PageId(102U), 0U, 1U}}; });
+	rejectsAuxiliaryMapDelta([](auto &request) { request.erased_node_ids = {1001U}; });
+	rejectsAuxiliaryMapDelta([](auto &request) { request.inserted_edges = {{2002U, PageId(102U), 0U, 1U}}; });
+	rejectsAuxiliaryMapDelta([](auto &request) { request.erased_edge_ids = {2001U}; });
 
-	EXPECT_FALSE(materializerCalled);
 	MetadataSnapshotPin unchanged = store->openSnapshot();
 	EXPECT_EQ(unchanged.superblock(), beforeSuperblock);
 	EXPECT_EQ(entities.readNode(unchanged, 1001U), labelledNode);
