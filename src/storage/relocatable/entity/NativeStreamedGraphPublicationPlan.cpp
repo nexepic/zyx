@@ -29,7 +29,7 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] size_t checkedCeilingDivide(size_t numerator, size_t denominator, const char *message) {
-			if (numerator == 0U || denominator == 0U) {
+			if (numerator == 0U || denominator == 0U) { // ZYX_COV_EXCL_LINE: all callers validate positive counts and fan-in before deriving a plan.
 				fail(FormatError::FERR_INVALID_HEADER, message);
 			}
 			return (numerator - 1U) / denominator + 1U;
@@ -41,7 +41,7 @@ namespace graph::storage {
 		};
 
 		[[nodiscard]] ReductionShape deriveReductionShape(size_t initialRuns, size_t maximumFanIn) {
-			if (maximumFanIn < 2U) {
+		if (maximumFanIn < 2U) { // ZYX_COV_EXCL_LINE: publication preflight rejects fan-in below two before this helper is reached.
 				fail(FormatError::FERR_INVALID_HEADER,
 					 "native streamed Edge publication requires a usable merge fan-in");
 			}
@@ -78,7 +78,7 @@ namespace graph::storage {
 		const NativeBulkEdgePublicationPreflightResult preflight =
 				NativeBulkEdgePublicationPreflight::validate(source, edgeIdRanges, options, persistedNodeExists);
 		const size_t entityCapacity = EntityPage::recordCapacity(EntityPageRecordKind::EPRK_EDGE);
-		if (entityCapacity == 0U || preflight.record_count == 0U) {
+		if (entityCapacity == 0U || preflight.record_count == 0U) { // ZYX_COV_EXCL_LINE: EntityPage capacity is a nonzero format constant and preflight rejects empty sources.
 			fail(FormatError::FERR_INVALID_STATE,
 				 "native streamed Edge publication cannot derive an Entity-page batch shape");
 		}

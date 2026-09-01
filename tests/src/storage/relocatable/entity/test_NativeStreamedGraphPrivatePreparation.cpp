@@ -160,6 +160,249 @@ TEST_F(NativeStreamedGraphPrivatePreparationTest, PreparesTokenResolverAndBothAd
 	snapshot.release();
 }
 
+TEST_F(NativeStreamedGraphPrivatePreparationTest, RejectsIncompletePrivatePreparationContractsBeforeWritingCandidates) {
+	BTreePageStore pages(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(pages, *metadata_);
+	const NativeBulkEdgeRecord record{100U, 1U, 2U, "KNOWS", {}};
+	const NativeBulkEdgeRecordSource records = source({record});
+	const std::array<NativeGraphLogicalIdLeaseRange, 1U> lease{{{100U, 1U}}};
+	const NativeBulkEdgePublicationPreflightOptions preflight{16U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U, 256U};
+	const NativeStreamedGraphPublicationPlan plan =
+			NativeStreamedGraphPublicationPlan::derive(records, lease, preflight, [](uint64_t) { return true; });
+	const NativeStreamedGraphCandidateLayout layout = NativeStreamedGraphCandidateLayout::derive(plan);
+	PrivateCandidates candidates(layout.candidate_count);
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	NativeStreamedGraphPrivatePreparationOptions options;
+	options.families = {
+			16U,
+			16U,
+			RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES,
+			{2U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 16U, 4U, NativeBulkEdgeRunDuplicatePolicy::NBERDP_REJECT}};
+	options.maximum_catalog_entries = 64U;
+	const NativeGraphPrivateSegmentWriter writer =
+			[](const NativeGraphPrivateSegmentMaterialization &, std::vector<std::byte>) {};
+	const NativeGraphPrivateSegmentFence fence = [] {};
+	const NativeStreamedGraphPrivatePreparationVisitor visitor =
+			[](const NativeStreamedGraphPrivatePreparation &) {};
+	const auto invoke = [&](const NativeBulkEdgeRecordSource &candidateSource,
+							  std::span<const NativeGraphLogicalIdLeaseRange> candidateLease,
+							  const NativeStreamedGraphCandidateLayout &candidateLayout,
+							  const NativeStreamedGraphPrivatePreparationOptions &candidateOptions,
+							  const NativeGraphPrivateSegmentReader &reader,
+							  const NativeGraphPrivateSegmentWriter &candidateWriter,
+							  const NativeGraphPrivateSegmentFence &candidateFence,
+							  const NativeStreamedGraphPrivatePreparationVisitor &candidateVisitor) {
+		NativeStreamedGraphPrivatePreparationCoordinator::prepare(
+				candidateSource, candidateLease, candidateLayout, candidates.identities, catalog, snapshot, candidateOptions,
+				reader, candidateWriter, candidateFence, candidateVisitor);
+	};
+	const NativeBulkEdgeRecordSource noSource;
+	EXPECT_THROW(invoke(noSource, lease, layout, options, candidates.reader(), writer, fence, visitor), FormatException);
+	const std::array<NativeGraphLogicalIdLeaseRange, 0U> noLease{};
+	EXPECT_THROW(invoke(records, noLease, layout, options, candidates.reader(), writer, fence, visitor), FormatException);
+	NativeStreamedGraphCandidateLayout mismatchedLayout = layout;
+	++mismatchedLayout.candidate_count;
+	EXPECT_THROW(invoke(records, lease, mismatchedLayout, options, candidates.reader(), writer, fence, visitor),
+			 FormatException);
+	mismatchedLayout = layout;
+	mismatchedLayout.outgoing_adjacency.count = 0U;
+	EXPECT_THROW(invoke(records, lease, mismatchedLayout, options, candidates.reader(), writer, fence, visitor),
+			 FormatException);
+	mismatchedLayout = layout;
+	mismatchedLayout.incoming_adjacency.count = 0U;
+	EXPECT_THROW(invoke(records, lease, mismatchedLayout, options, candidates.reader(), writer, fence, visitor),
+			 FormatException);
+	NativeStreamedGraphPrivatePreparationOptions invalidOptions = options;
+	invalidOptions.maximum_catalog_entries = 0U;
+	EXPECT_THROW(invoke(records, lease, layout, invalidOptions, candidates.reader(), writer, fence, visitor),
+			 FormatException);
+	invalidOptions = options;
+	invalidOptions.families.maximum_token_entries = 0U;
+	EXPECT_THROW(invoke(records, lease, layout, invalidOptions, candidates.reader(), writer, fence, visitor),
+			 FormatException);
+	const NativeGraphPrivateSegmentReader noReader;
+	EXPECT_THROW(invoke(records, lease, layout, options, noReader, writer, fence, visitor), FormatException);
+	const NativeGraphPrivateSegmentWriter noWriter;
+	EXPECT_THROW(invoke(records, lease, layout, options, candidates.reader(), noWriter, fence, visitor), FormatException);
+	const NativeGraphPrivateSegmentFence noFence;
+	EXPECT_THROW(invoke(records, lease, layout, options, candidates.reader(), writer, noFence, visitor), FormatException);
+	const NativeStreamedGraphPrivatePreparationVisitor noVisitor;
+	EXPECT_THROW(invoke(records, lease, layout, options, candidates.reader(), writer, fence, noVisitor), FormatException);
+	for (const auto &payload: candidates.payloads) {
+		EXPECT_FALSE(payload.has_value());
+	}
+	snapshot.release();
+}
+
+TEST_F(NativeStreamedGraphPrivatePreparationTest, RejectsTokenRunsWithoutReservedResolverCandidates) {
+	BTreePageStore pages(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(pages, *metadata_);
+	const NativeBulkEdgeRecord first{100U, 1U, 2U, "KNOWS", {{"weight", graph::PropertyValue(int64_t(1U))}}};
+	const NativeBulkEdgeRecord second{101U, 2U, 3U, "LIKES", {{"cost", graph::PropertyValue(int64_t(2U))}}};
+	const NativeBulkEdgeRecordSource records = source({first, second});
+	const std::array<NativeGraphLogicalIdLeaseRange, 1U> lease{{{100U, 2U}}};
+	const NativeBulkEdgePublicationPreflightOptions preflight{16U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U, 256U};
+	const NativeStreamedGraphPublicationPlan plan =
+			NativeStreamedGraphPublicationPlan::derive(records, lease, preflight, [](uint64_t) { return true; });
+	NativeStreamedGraphCandidateLayout layout = NativeStreamedGraphCandidateLayout::derive(plan);
+	ASSERT_NE(layout.tokens.count, 0U);
+	ASSERT_NE(layout.token_resolver.count, 0U);
+	layout.token_resolver.count = 0U;
+	PrivateCandidates candidates(layout.candidate_count);
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	NativeStreamedGraphPrivatePreparationOptions options;
+	options.families = {
+			16U,
+			16U,
+			RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES,
+			{2U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 16U, 4U, NativeBulkEdgeRunDuplicatePolicy::NBERDP_REJECT}};
+	options.maximum_catalog_entries = 64U;
+
+	EXPECT_THROW(
+			NativeStreamedGraphPrivatePreparationCoordinator::prepare(
+					records, lease, layout, candidates.identities, catalog, snapshot, options, candidates.reader(),
+					[&candidates](const NativeGraphPrivateSegmentMaterialization &identity, std::vector<std::byte> payload) {
+						candidates.write(identity, std::move(payload));
+					},
+					[] {},
+					[](const NativeStreamedGraphPrivatePreparation &) {}),
+			FormatException);
+	EXPECT_TRUE(candidates.payloads[layout.tokens.first_ordinal].has_value());
+	snapshot.release();
+}
+
+TEST_F(NativeStreamedGraphPrivatePreparationTest, RejectsResolverCandidatesReservedForAnEmptyTokenStream) {
+	BTreePageStore pages(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(pages, *metadata_);
+	const NativeBulkEdgeRecord record{100U, 1U, 2U, {}, {}};
+	const NativeBulkEdgeRecordSource records = source({record});
+	const std::array<NativeGraphLogicalIdLeaseRange, 1U> lease{{{100U, 1U}}};
+	const NativeBulkEdgePublicationPreflightOptions preflight{16U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U, 256U};
+	const NativeStreamedGraphPublicationPlan plan =
+			NativeStreamedGraphPublicationPlan::derive(records, lease, preflight, [](uint64_t) { return true; });
+	NativeStreamedGraphCandidateLayout layout = NativeStreamedGraphCandidateLayout::derive(plan);
+	ASSERT_EQ(plan.token_entry_count, 0U);
+	ASSERT_EQ(layout.token_resolver.count, 0U);
+	++layout.token_resolver.count;
+	++layout.candidate_count;
+	PrivateCandidates candidates(layout.candidate_count);
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	NativeStreamedGraphPrivatePreparationOptions options;
+	options.families = {
+			16U,
+			16U,
+			RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES,
+			{2U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 16U, 4U, NativeBulkEdgeRunDuplicatePolicy::NBERDP_REJECT}};
+	options.maximum_catalog_entries = 64U;
+	EXPECT_THROW(NativeStreamedGraphPrivatePreparationCoordinator::prepare(
+					 records, lease, layout, candidates.identities, catalog, snapshot, options, candidates.reader(),
+					 [&candidates](const NativeGraphPrivateSegmentMaterialization &identity, std::vector<std::byte> payload) {
+						 candidates.write(identity, std::move(payload));
+					 },
+					 [] {}, [](const NativeStreamedGraphPrivatePreparation &) {}),
+				 FormatException);
+	snapshot.release();
+}
+
+TEST_F(NativeStreamedGraphPrivatePreparationTest, RejectsIncompleteDeferredPreparationContractsBeforeWritingCandidates) {
+	BTreePageStore pages(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(pages, *metadata_);
+	const NativeBulkEdgeRecord record{100U, 1U, 2U, "KNOWS", {}};
+	const NativeBulkEdgeRecordSource records = source({record});
+	const std::array<NativeGraphLogicalIdLeaseRange, 1U> lease{{{100U, 1U}}};
+	const NativeBulkEdgePublicationPreflightOptions preflight{16U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U, 256U};
+	const NativeStreamedGraphPublicationPlan plan =
+			NativeStreamedGraphPublicationPlan::derive(records, lease, preflight, [](uint64_t) { return true; });
+	const NativeStreamedGraphCandidateLayout layout = NativeStreamedGraphCandidateLayout::derive(plan);
+	PrivateCandidates candidates(layout.candidate_count);
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	NativeStreamedGraphPrivatePreparationOptions options;
+	options.families = {
+			16U,
+			16U,
+			RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES,
+			{2U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 16U, 4U, NativeBulkEdgeRunDuplicatePolicy::NBERDP_REJECT}};
+	options.maximum_catalog_entries = 64U;
+	const NativeGraphPrivateSegmentWriter writer =
+			[](const NativeGraphPrivateSegmentMaterialization &, std::vector<std::byte>) {};
+	const NativeGraphPrivateSegmentFence fence = [] {};
+	const NativeStreamedGraphPreparedPublicationVisitor visitor =
+			[](const NativeStreamedGraphPrivatePreparation &, const NativeStreamedGraphDeferredPublication &) {};
+	const auto invoke = [&](const NativeStreamedGraphPublicationPlan &candidatePlan,
+							  const NativeStreamedGraphCandidateLayout &candidateLayout,
+							  const NativeStreamedGraphPreparedPublicationVisitor &candidateVisitor) {
+		NativeStreamedGraphPrivatePreparationCoordinator::prepareDeferredPublication(
+				records, lease, candidatePlan, candidateLayout, candidates.identities, catalog, snapshot, options,
+				candidates.reader(), writer, fence, candidateVisitor);
+	};
+	const NativeStreamedGraphPreparedPublicationVisitor noVisitor;
+	EXPECT_THROW(invoke(plan, layout, noVisitor), FormatException);
+	NativeStreamedGraphPublicationPlan missingRecords = plan;
+	missingRecords.record_count = 0U;
+	EXPECT_THROW(invoke(missingRecords, layout, visitor), FormatException);
+	NativeStreamedGraphPublicationPlan missingEntityPages = plan;
+	missingEntityPages.edge_entity_page_count = 0U;
+	EXPECT_THROW(invoke(missingEntityPages, layout, visitor), FormatException);
+	NativeStreamedGraphCandidateLayout mismatchedLayout = layout;
+	++mismatchedLayout.candidate_count;
+	EXPECT_THROW(invoke(plan, mismatchedLayout, visitor), FormatException);
+	for (const auto &payload: candidates.payloads) {
+		EXPECT_FALSE(payload.has_value());
+	}
+	snapshot.release();
+}
+
+TEST_F(NativeStreamedGraphPrivatePreparationTest, RejectsLargeValueCandidatesReservedForAnInlinePublication) {
+	BTreePageStore pages(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(pages, *metadata_);
+	const NativeBulkEdgeRecord record{100U, 1U, 2U, {}, {}};
+	const NativeBulkEdgeRecordSource records = source({record});
+	const std::array<NativeGraphLogicalIdLeaseRange, 1U> lease{{{100U, 1U}}};
+	const NativeBulkEdgePublicationPreflightOptions preflight{16U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U, 256U};
+	const NativeStreamedGraphPublicationPlan plan =
+			NativeStreamedGraphPublicationPlan::derive(records, lease, preflight, [](uint64_t) { return true; });
+	NativeStreamedGraphCandidateLayout layout = NativeStreamedGraphCandidateLayout::derive(plan);
+	ASSERT_EQ(plan.large_value_count, 0U);
+	ASSERT_EQ(layout.large_value_content.count, 0U);
+	++layout.large_value_content.count;
+	++layout.candidate_count;
+	PrivateCandidates candidates(layout.candidate_count);
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	NativeStreamedGraphPrivatePreparationOptions options;
+	options.families = {
+			16U,
+			16U,
+			RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES,
+			{2U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 16U, 4U, NativeBulkEdgeRunDuplicatePolicy::NBERDP_REJECT}};
+	options.maximum_catalog_entries = 64U;
+	EXPECT_THROW(NativeStreamedGraphPrivatePreparationCoordinator::prepareDeferredPublication(
+					 records, lease, plan, layout, candidates.identities, catalog, snapshot, options, candidates.reader(),
+					 [&candidates](const NativeGraphPrivateSegmentMaterialization &identity, std::vector<std::byte> payload) {
+						 candidates.write(identity, std::move(payload));
+					 },
+					 [] {}, [](const NativeStreamedGraphPrivatePreparation &, const NativeStreamedGraphDeferredPublication &) {}),
+				 FormatException);
+	snapshot.release();
+
+	// Validate the other side of the disjunction independently: a reference-map
+	// reservation is also invalid when the publication has no overflow roots.
+	layout = NativeStreamedGraphCandidateLayout::derive(plan);
+	++layout.large_value_reference_map.count;
+	++layout.candidate_count;
+	PrivateCandidates referenceMapCandidates(layout.candidate_count);
+	MetadataSnapshotPin referenceMapSnapshot = metadata_->openSnapshot();
+	EXPECT_THROW(NativeStreamedGraphPrivatePreparationCoordinator::prepareDeferredPublication(
+					 records, lease, plan, layout, referenceMapCandidates.identities, catalog, referenceMapSnapshot, options,
+					 referenceMapCandidates.reader(),
+					 [&referenceMapCandidates](const NativeGraphPrivateSegmentMaterialization &identity,
+													 std::vector<std::byte> payload) {
+						 referenceMapCandidates.write(identity, std::move(payload));
+					 },
+					 [] {}, [](const NativeStreamedGraphPrivatePreparation &, const NativeStreamedGraphDeferredPublication &) {}),
+				 FormatException);
+	referenceMapSnapshot.release();
+}
+
 TEST_F(NativeStreamedGraphPrivatePreparationTest,
 	   ExposesOnlyCallbackScopedDeferredEntityAndPropertySourcesAfterPrivatePreparation) {
 	BTreePageStore pages(*slotted_pages_, *metadata_);
