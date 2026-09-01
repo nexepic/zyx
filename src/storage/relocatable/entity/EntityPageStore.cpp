@@ -2383,18 +2383,4 @@ namespace graph::storage {
 										std::span(&replacement, 1), {}, checkpointLsn);
 	}
 
-	void EntityPageStore::prepareRetirementPage(const CatalogEntry &pool, const PageLocation &expected,
-												LogSequenceNumber expectedOwnerLsn,
-												LogSequenceNumber checkpointLsn) const {
-		const SharedPagePoolPreparedRetirement retirement{expected, pool.owner_id, PageOwnerKind::POK_ENTITY,
-														  expectedOwnerLsn};
-		const std::array<PageLocation, 0> noReplacements{};
-		const std::array<SharedPagePoolPreparedReplacement, 0> noReplacementPayloads{};
-		const std::array<SharedPagePoolPreparedAppend, 0> noAppends{};
-		std::array<PageLocation, 0> noReplacementLocations{};
-		std::array<PageLocation, 0> noAppendLocations{};
-		allocator_.prepareMutationPages(pool, noReplacements, noReplacementPayloads, noAppends, noReplacementLocations,
-										noAppendLocations, checkpointLsn, std::span(&retirement, 1));
-	}
-
 } // namespace graph::storage

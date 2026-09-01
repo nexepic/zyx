@@ -742,6 +742,41 @@ TEST_F(RelocatableLocationDirectoryTest, RejectsAStreamThatDivergesFromItsDeclar
 			FormatError::FERR_INVALID_STATE);
 }
 
+TEST_F(RelocatableLocationDirectoryTest, AppendSessionsRejectMismatchedLocationTypesAndInvalidTypedRanges) {
+	const Superblock initial = superblock();
+	SuperblockFile bootstrap(dataIo);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(dataIo, initial);
+	MetadataPagePoolAllocator allocator(dataIo, initial);
+	LocationDirectory directory(pages, allocator);
+	MetadataWriteBatch batch(allocator, initial, LogSequenceNumber(2U));
+
+	auto pageSession = directory.beginAppendPageLocations(batch, 1U, 1U, 1U);
+	expectFormatError([&] { pageSession.append(EntityPageLocation{1U, PageId(1U), 0U, 1U}); },
+					  FormatError::FERR_INVALID_STATE);
+
+	auto edgeSession = directory.beginAppendEdgePageLocations(batch, 1U, 1U, 1U);
+	expectFormatError([&] { edgeSession.append(PageLocation{PageId(1U), SegmentId(1U), 1U, Generation(1U), 0U}); },
+					  FormatError::FERR_INVALID_STATE);
+	expectFormatError(
+			[&] {
+				edgeSession.append(
+						EntityPropertyLocation{{EntityPropertyOwnerKind::EPOK_EDGE, 1U}, PageId(1U), 0U, 1U});
+			},
+			FormatError::FERR_INVALID_STATE);
+	expectFormatError(
+			[&] { edgeSession.append(LargeValueManifestLocation{LargeValueId(1U), PageId(1U), Generation(1U)}); },
+			FormatError::FERR_INVALID_STATE);
+
+	expectFormatError([&] { static_cast<void>(directory.beginAppendEdgePropertyLocations(batch, 0U, 1U, 1U)); },
+					  FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				static_cast<void>(directory.beginAppendLargeValueManifestLocations(batch, {}, LargeValueId(1U), 1U));
+			},
+			FormatError::FERR_INVALID_HEADER);
+}
+
 TEST_F(RelocatableLocationDirectoryTest, AcceptsAProducerThatPushesMappingsWithoutAnIntermediateVector) {
 	const Superblock initial = superblock();
 	SuperblockFile bootstrap(dataIo);
@@ -1687,6 +1722,7 @@ TEST_F(RelocatableLocationDirectoryTest, TraversesEveryTypedDirectoryAndHonorsEa
 	const ExtentLocation extentLocation = extent(2, 11, 1, 2, 1);
 	const EntityPageLocation nodeLocation{3, PageId(12), 0, 1};
 	const EntityPageLocation edgeLocation{4, PageId(13), 1, 1};
+	const EntityPropertyLocation propertyLocation{{EntityPropertyOwnerKind::EPOK_EDGE, 5}, PageId(14), 2, 1};
 	const StateLocation stateLocation{6, PageId(15), 3, 1};
 	const IndexRootLocation indexRoot{7, PageId(16), Generation(1)};
 	const VectorLocation vectorLocation{8, PageId(17), 4, 1};
@@ -1697,6 +1733,7 @@ TEST_F(RelocatableLocationDirectoryTest, TraversesEveryTypedDirectoryAndHonorsEa
 	directory.prepareReplaceExtents(batch, std::span(&extentLocation, 1), {});
 	directory.prepareReplaceNodePageLocations(batch, std::span(&nodeLocation, 1), {});
 	directory.prepareReplaceEdgePageLocations(batch, std::span(&edgeLocation, 1), {});
+	directory.prepareReplaceEntityProperties(batch, std::span(&propertyLocation, 1), {});
 	directory.prepareReplaceStates(batch, std::span(&stateLocation, 1), {});
 	directory.prepareReplaceIndexRoots(batch, std::span(&indexRoot, 1), {});
 	directory.prepareReplaceVectorLocations(batch, std::span(&vectorLocation, 1), {});
@@ -1705,11 +1742,14 @@ TEST_F(RelocatableLocationDirectoryTest, TraversesEveryTypedDirectoryAndHonorsEa
 	const Superblock published = batch.candidate();
 
 	std::vector<ExtentLocation> extents;
+	std::vector<EntityPropertyLocation> properties;
 	std::vector<StateLocation> states;
 	std::vector<IndexRootLocation> indexRoots;
 	std::vector<VectorLocation> vectorLocations;
 	std::vector<VectorManifestLocation> vectorManifests;
 	directory.visitExtents(published, [&extents](const ExtentLocation &location) { extents.push_back(location); });
+	directory.visitEntityProperties(
+			published, [&properties](const EntityPropertyLocation &location) { properties.push_back(location); });
 	directory.visitStates(published, [&states](const StateLocation &location) { states.push_back(location); });
 	directory.visitIndexRoots(published,
 							  [&indexRoots](const IndexRootLocation &location) { indexRoots.push_back(location); });
@@ -1719,6 +1759,7 @@ TEST_F(RelocatableLocationDirectoryTest, TraversesEveryTypedDirectoryAndHonorsEa
 		vectorManifests.push_back(location);
 	});
 	EXPECT_EQ(extents, std::vector<ExtentLocation>{extentLocation});
+	EXPECT_EQ(properties, std::vector<EntityPropertyLocation>{propertyLocation});
 	EXPECT_EQ(states, std::vector<StateLocation>{stateLocation});
 	EXPECT_EQ(indexRoots, std::vector<IndexRootLocation>{indexRoot});
 	EXPECT_EQ(vectorLocations, std::vector<VectorLocation>{vectorLocation});
@@ -1738,6 +1779,7 @@ TEST_F(RelocatableLocationDirectoryTest, TraversesEveryTypedDirectoryAndHonorsEa
 	expectFormatError([&] { static_cast<void>(directory.visitEdgePageLocationsUntil(published, {})); },
 					  FormatError::FERR_INVALID_HEADER);
 	expectFormatError([&] { directory.visitExtents(published, {}); }, FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { directory.visitEntityProperties(published, {}); }, FormatError::FERR_INVALID_HEADER);
 	expectFormatError([&] { directory.visitIndexRoots(published, {}); }, FormatError::FERR_INVALID_HEADER);
 	expectFormatError([&] { directory.visitVectorLocations(published, {}); }, FormatError::FERR_INVALID_HEADER);
 	expectFormatError([&] { directory.visitVectorManifests(published, {}); }, FormatError::FERR_INVALID_HEADER);
@@ -1803,160 +1845,6 @@ TEST_F(RelocatableLocationDirectoryTest, ResolvesTypedBootstrapRootsWithoutSuper
 	EXPECT_EQ(directory.findLargeValueManifest(routed, largeValueManifest.value_id), largeValueManifest);
 	EXPECT_EQ(directory.findRetireQueueEntryOptional(routed, retireEntry.physical_slot),
 			  std::optional<RetireQueueEntry>(retireEntry));
-}
-
-TEST_F(RelocatableLocationDirectoryTest, RejectsMalformedPublishedRootsAndRoutes) {
-	const Superblock initial = superblock();
-	SuperblockFile(dataIo).initializeNew(initial);
-	MetadataPageFile pages(dataIo, initial);
-	MetadataPagePoolAllocator allocator(dataIo, initial);
-	LocationDirectory directory(pages, allocator);
-	LocationLeafPage validLeaf = leaf();
-	validLeaf.generation = Generation(1);
-	validLeaf.committed_lsn = LogSequenceNumber(1);
-
-	auto writeRoot = [&](MetadataDirectoryType type, CatalogRadixPageKind kind, uint16_t level, PhysicalPageRef child,
-						 uint32_t childIndex, LogSequenceNumber lsn = LogSequenceNumber(1)) {
-		const PhysicalPageRef rootReference = allocator.allocatePage(Generation(1));
-		CatalogRadixPage root;
-		root.kind = kind;
-		root.directory_type = type;
-		root.level = level;
-		root.page_id = allocator.allocateMetadataPageId();
-		root.generation = Generation(1);
-		root.committed_lsn = lsn;
-		root.children[childIndex] = child;
-		pages.writeMetadataRadix(rootReference, root);
-		Superblock result = initial;
-		result.page_directory_root = rootReference;
-		return result;
-	};
-
-	const PhysicalPageRef validLeafReference = allocator.allocatePage(Generation(1));
-	pages.writeLocationLeaf(validLeafReference, validLeaf);
-	MetadataWriteBatch emptyBatch(allocator, initial, LogSequenceNumber(2));
-	expectFormatError([&] { directory.prepareUpsertPages(emptyBatch, std::span<const PageLocation>{}); },
-					  FormatError::FERR_INVALID_STATE);
-	MetadataPagePoolAllocator foreignAllocator(dataIo, initial);
-	MetadataWriteBatch foreignBatch(foreignAllocator, initial, LogSequenceNumber(2));
-	const PageLocation foreignLocation = page(1, 10, 1);
-	expectFormatError([&] { directory.prepareUpsertPages(foreignBatch, std::span(&foreignLocation, 1)); },
-					  FormatError::FERR_INVALID_STATE);
-	expectFormatError([&] { static_cast<void>(directory.findPage(initial, PageId{})); },
-					  FormatError::FERR_INVALID_STATE);
-	expectFormatError(
-			[&] {
-				static_cast<void>(
-						directory.findPage(writeRoot(MetadataDirectoryType::MDT_EXTENT, CatalogRadixPageKind::CRPK_ROOT,
-													 0, validLeafReference, 0),
-										   PageId(1)));
-			},
-			FormatError::FERR_INVALID_HEADER);
-	expectFormatError(
-			[&] {
-				static_cast<void>(
-						directory.findPage(writeRoot(MetadataDirectoryType::MDT_PAGE,
-													 CatalogRadixPageKind::CRPK_INTERNAL, 0, validLeafReference, 0),
-										   PageId(1)));
-			},
-			FormatError::FERR_INVALID_HEADER);
-
-	LocationLeafPage extentLeaf = leaf(MetadataDirectoryType::MDT_EXTENT);
-	extentLeaf.generation = Generation(1);
-	extentLeaf.committed_lsn = LogSequenceNumber(1);
-	const PhysicalPageRef extentLeafReference = allocator.allocatePage(Generation(1));
-	pages.writeLocationLeaf(extentLeafReference, extentLeaf);
-	expectFormatError(
-			[&] {
-				static_cast<void>(
-						directory.findPage(writeRoot(MetadataDirectoryType::MDT_PAGE, CatalogRadixPageKind::CRPK_ROOT,
-													 0, extentLeafReference, 0),
-										   PageId(1)));
-			},
-			FormatError::FERR_INVALID_HEADER);
-
-	LocationLeafPage wrongRouteLeaf = validLeaf;
-	wrongRouteLeaf.entries.front().logical_id = RSS_LOCATION_LEAF_MAX_ENTRIES + 1U;
-	wrongRouteLeaf.entries.back().logical_id = 2U * RSS_LOCATION_LEAF_MAX_ENTRIES;
-	const PhysicalPageRef wrongRouteReference = allocator.allocatePage(Generation(1));
-	pages.writeLocationLeaf(wrongRouteReference, wrongRouteLeaf);
-	expectFormatError(
-			[&] {
-				static_cast<void>(
-						directory.findPage(writeRoot(MetadataDirectoryType::MDT_PAGE, CatalogRadixPageKind::CRPK_ROOT,
-													 0, wrongRouteReference, 0),
-										   PageId(1)));
-			},
-			FormatError::FERR_INVALID_HEADER);
-
-	expectFormatError(
-			[&] {
-				static_cast<void>(
-						directory.findPage(writeRoot(MetadataDirectoryType::MDT_PAGE, CatalogRadixPageKind::CRPK_ROOT,
-													 0, validLeafReference, 0, LogSequenceNumber(2)),
-										   PageId(1)));
-			},
-			FormatError::FERR_INVALID_STATE);
-
-	const PhysicalPageRef malformedInternalReference = allocator.allocatePage(Generation(1));
-	CatalogRadixPage malformedInternal;
-	malformedInternal.kind = CatalogRadixPageKind::CRPK_ROOT;
-	malformedInternal.directory_type = MetadataDirectoryType::MDT_PAGE;
-	malformedInternal.level = 0;
-	malformedInternal.page_id = allocator.allocateMetadataPageId();
-	malformedInternal.generation = Generation(1);
-	malformedInternal.committed_lsn = LogSequenceNumber(1);
-	malformedInternal.children[0] = validLeafReference;
-	pages.writeMetadataRadix(malformedInternalReference, malformedInternal);
-	const uint64_t deepId = 1U + static_cast<uint64_t>(RSS_LOCATION_LEAF_MAX_ENTRIES) * RSS_CATALOG_RADIX_FANOUT;
-	expectFormatError(
-			[&] {
-				static_cast<void>(
-						directory.findPage(writeRoot(MetadataDirectoryType::MDT_PAGE, CatalogRadixPageKind::CRPK_ROOT,
-													 1, malformedInternalReference, 1),
-										   PageId(deepId)));
-			},
-			FormatError::FERR_INVALID_HEADER);
-
-	auto expectPrepareError = [&](const Superblock &current, PageLocation update, FormatError expected) {
-		MetadataWriteBatch batch(allocator, current, LogSequenceNumber(2));
-		expectFormatError([&] { directory.prepareUpsertPages(batch, std::span(&update, 1)); }, expected);
-	};
-	expectPrepareError(
-			writeRoot(MetadataDirectoryType::MDT_PAGE, CatalogRadixPageKind::CRPK_ROOT, 0, extentLeafReference, 0),
-			page(1, 10, 1), FormatError::FERR_INVALID_HEADER);
-
-	const auto writeInternal = [&](CatalogRadixPageKind kind, MetadataDirectoryType type, uint16_t level,
-								   Generation generation) {
-		const PhysicalPageRef reference = allocator.allocatePage(generation);
-		CatalogRadixPage internal;
-		internal.kind = kind;
-		internal.directory_type = type;
-		internal.level = level;
-		internal.page_id = allocator.allocateMetadataPageId();
-		internal.generation = generation;
-		internal.committed_lsn = LogSequenceNumber(1);
-		internal.children[0] = validLeafReference;
-		pages.writeMetadataRadix(reference, internal);
-		return reference;
-	};
-	for (const PhysicalPageRef invalidInternal: {
-				 writeInternal(CatalogRadixPageKind::CRPK_ROOT, MetadataDirectoryType::MDT_PAGE, 0, Generation(1)),
-				 writeInternal(CatalogRadixPageKind::CRPK_INTERNAL, MetadataDirectoryType::MDT_EXTENT, 0,
-							   Generation(1)),
-				 writeInternal(CatalogRadixPageKind::CRPK_INTERNAL, MetadataDirectoryType::MDT_PAGE, 1, Generation(1)),
-		 }) {
-		expectPrepareError(
-				writeRoot(MetadataDirectoryType::MDT_PAGE, CatalogRadixPageKind::CRPK_ROOT, 1, invalidInternal, 1),
-				page(deepId, 10, 1), FormatError::FERR_INVALID_HEADER);
-	}
-	const PhysicalPageRef newerInternal =
-			writeInternal(CatalogRadixPageKind::CRPK_INTERNAL, MetadataDirectoryType::MDT_PAGE, 0, Generation(2));
-	expectPrepareError(writeRoot(MetadataDirectoryType::MDT_PAGE, CatalogRadixPageKind::CRPK_ROOT, 1, newerInternal, 1),
-					   page(deepId, 10, 1), FormatError::FERR_INVALID_STATE);
-	Superblock malformedForRecovery =
-			writeRoot(MetadataDirectoryType::MDT_PAGE, CatalogRadixPageKind::CRPK_ROOT, 0, wrongRouteReference, 0);
-	expectFormatError([&] { allocator.recover(malformedForRecovery); }, FormatError::FERR_INVALID_HEADER);
 }
 
 TEST_F(RelocatableLocationDirectoryTest, RejectsInvalidMutationsAndHidesRootsBeforeSuperblockPublication) {

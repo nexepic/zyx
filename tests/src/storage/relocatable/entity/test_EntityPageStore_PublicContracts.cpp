@@ -117,6 +117,40 @@ namespace {
 
 } // namespace
 
+TEST_F(RelocatableEntityPageStoreTest, EvacuatePoolPageDispatchesFixedEntityPagesByRecordKind) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore store(io, *metadata);
+	const auto source = store.allocateNode(newPool(31U, 901U, 101U, 40U), 1001U, node(1U, 2U), LogSequenceNumber(2U));
+	ASSERT_TRUE(source.has_value());
+	ASSERT_TRUE(store.allocateNode(newPool(32U, 901U, 201U, 41U), 1002U, node(3U, 4U), LogSequenceNumber(3U)).has_value());
+
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	const EntityPageMutationResult relocated =
+			store.evacuatePoolPage(snapshot, source->page.page_id, SegmentId(32U), LogSequenceNumber(4U));
+	EXPECT_EQ(relocated.page.page_id, source->page.page_id);
+	EXPECT_EQ(relocated.page.segment_id, SegmentId(32U));
+	snapshot.release();
+
+	MetadataSnapshotPin current = metadata->openSnapshot();
+	EXPECT_EQ(metadata->findPageLocation(current, source->page.page_id).segment_id, SegmentId(32U));
+	EXPECT_EQ(store.readNode(current, 1001U), node(1U, 2U));
+	CatalogEntry mismatchedPool = metadata->findCatalog(current, SegmentId(32U));
+	++mismatchedPool.owner_id;
+	EXPECT_THROW(static_cast<void>(store.availableFrameCount(current, mismatchedPool)), FormatException);
+	current.release();
+
+	const auto edgeSource =
+			store.allocateEdge(newPool(33U, 901U, 301U, 42U), 2001U, edge(1001U, 1002U, 7U), LogSequenceNumber(5U));
+	ASSERT_TRUE(edgeSource.has_value());
+	ASSERT_TRUE(store.allocateEdge(newPool(34U, 901U, 401U, 43U), 2002U, edge(1002U, 1003U, 8U), LogSequenceNumber(6U)).has_value());
+	MetadataSnapshotPin edgeSnapshot = metadata->openSnapshot();
+	const EntityPageMutationResult relocatedEdge =
+			store.evacuatePoolPage(edgeSnapshot, edgeSource->page.page_id, SegmentId(34U), LogSequenceNumber(7U));
+	EXPECT_EQ(relocatedEdge.page.segment_id, SegmentId(34U));
+	EXPECT_EQ(store.readEdge(edgeSnapshot, 2001U), edge(1001U, 1002U, 7U));
+	edgeSnapshot.release();
+}
+
 TEST_F(RelocatableEntityPageStoreTest, ReadsDecodedLocationsAndBoundsEntityScans) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
 	EntityPageStore store(io, *metadata);
@@ -196,6 +230,113 @@ TEST_F(RelocatableEntityPageStoreTest, RejectsUntypedOrInvalidAuxiliaryPageReque
 			[&] { static_cast<void>(store.readAuxiliaryPage(snapshot, PageId(101U), PageOwnerKind::POK_ENTITY)); },
 			FormatError::FERR_INVALID_HEADER);
 	expectFormatError([&] { store.prefetchAuxiliaryPage(snapshot, PageId{}); }, FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableEntityPageStoreTest, ReusesOneSnapshotVerifiedLargeValueAcrossSeveralPropertyRoots) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore entities(io, *metadata);
+	SlottedPagePool pages(io, *metadata);
+	LargeValueStore largeValues(io, *metadata);
+	PropertyCollectionRootStore properties(pages, largeValues, *metadata);
+	const PropertyCollectionRootStoreOptions propertyOptions{PhysicalSlotId(41U), PhysicalSlotId(48U), 902U};
+	const std::string largeContent(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, 'R');
+	const PropertyCollectionRoot firstRoot{
+			1001U, graph::Node::typeId, {{3U, graph::PropertyValue(largeContent)}}};
+	const std::array<EntityPageBatchNewPool, 1U> firstNodePool{{
+			{.request = newPool(31U, 901U, 101U, 40U),
+			 .record_kind = EntityPageRecordKind::EPRK_NODE,
+			 .node_insertions = {{1001U, node(11U, 12U)}}},
+	}};
+
+	MetadataSnapshotPin empty = metadata->openSnapshot();
+	const EntityPropertyRootMutationPlan firstPlan =
+			properties.planEntityRootReplacement(empty, firstRoot, propertyOptions);
+	ASSERT_EQ(firstPlan.large_values.size(), 1U);
+	const std::array firstPlans{firstPlan};
+	static_cast<void>(entities.applyNativeGraphBatchTransaction(empty, {}, {}, firstNodePool, firstPlans, properties,
+																		 propertyOptions, LogSequenceNumber(2U)));
+	empty.release();
+
+	const PropertyCollectionRoot secondRoot{
+			1002U, graph::Node::typeId, {{3U, graph::PropertyValue(largeContent)}}};
+	const PropertyCollectionRoot thirdRoot{
+			1003U, graph::Node::typeId, {{3U, graph::PropertyValue(largeContent)}}};
+	MetadataSnapshotPin before = metadata->openSnapshot();
+	const std::array<PropertyCollectionRoot, 2U> reusedRoots{secondRoot, thirdRoot};
+	const std::vector<EntityPropertyRootMutationPlan> plans =
+			properties.planEntityRootReplacements(before, reusedRoots, propertyOptions);
+	ASSERT_EQ(plans.size(), 1U);
+	ASSERT_TRUE(plans.front().large_values.empty());
+	ASSERT_EQ(plans.front().reused_large_values.size(), 2U);
+	EXPECT_EQ(plans.front().reused_large_values[0].value_id, LargeValueId(1U));
+	EXPECT_EQ(plans.front().reused_large_values[1].value_id, LargeValueId(1U));
+	const std::array<EntityPageBatchMutation, 1U> nodeMutation{{
+			{.page_id = PageId(101U),
+			 .record_kind = EntityPageRecordKind::EPRK_NODE,
+			 .node_insertions = {{1002U, node(21U, 22U)}, {1003U, node(31U, 32U)}}},
+	}};
+	static_cast<void>(entities.applyNativeGraphBatchTransaction(before, nodeMutation, {}, {}, plans, properties,
+																			propertyOptions, LogSequenceNumber(3U)));
+	before.release();
+
+	const MetadataSnapshotPin current = metadata->openSnapshot();
+	EXPECT_EQ(properties.readEntity(current, EntityPropertyKey{EntityPropertyOwnerKind::EPOK_NODE, 1002U}), secondRoot);
+	EXPECT_EQ(properties.readEntity(current, EntityPropertyKey{EntityPropertyOwnerKind::EPOK_NODE, 1003U}), thirdRoot);
+	EXPECT_TRUE(metadata->findLargeValueManifestOptional(current, LargeValueId(1U)).has_value());
+	EXPECT_EQ(current.superblock().next_large_value_id, 2U);
+}
+
+TEST_F(RelocatableEntityPageStoreTest, RejectsConflictingReusedLargeValueReferencesBeforePublication) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore entities(io, *metadata);
+	SlottedPagePool pages(io, *metadata);
+	LargeValueStore largeValues(io, *metadata);
+	PropertyCollectionRootStore properties(pages, largeValues, *metadata);
+	const PropertyCollectionRootStoreOptions propertyOptions{PhysicalSlotId(41U), PhysicalSlotId(48U), 902U};
+	const std::string largeContent(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, 'R');
+	const PropertyCollectionRoot firstRoot{
+			1001U, graph::Node::typeId, {{3U, graph::PropertyValue(largeContent)}}};
+	const std::array<EntityPageBatchNewPool, 1U> firstNodePool{{
+			{.request = newPool(31U, 901U, 101U, 40U),
+			 .record_kind = EntityPageRecordKind::EPRK_NODE,
+			 .node_insertions = {{1001U, node(11U, 12U)}}},
+	}};
+
+	MetadataSnapshotPin empty = metadata->openSnapshot();
+	const EntityPropertyRootMutationPlan firstPlan =
+			properties.planEntityRootReplacement(empty, firstRoot, propertyOptions);
+	const std::array firstPlans{firstPlan};
+	static_cast<void>(entities.applyNativeGraphBatchTransaction(empty, {}, {}, firstNodePool, firstPlans, properties,
+															 propertyOptions, LogSequenceNumber(2U)));
+	empty.release();
+
+	MetadataSnapshotPin before = metadata->openSnapshot();
+	const std::array<PropertyCollectionRoot, 2U> roots{{
+			{1002U, graph::Node::typeId, {{3U, graph::PropertyValue(largeContent)}}},
+			{1003U, graph::Node::typeId, {{3U, graph::PropertyValue(largeContent)}}},
+	}};
+	std::vector<EntityPropertyRootMutationPlan> plans =
+			properties.planEntityRootReplacements(before, roots, propertyOptions);
+	ASSERT_EQ(plans.size(), 1U);
+	ASSERT_EQ(plans.front().reused_large_values.size(), 2U);
+	plans.front().reused_large_values[1].content_hash[0] = std::byte{0x01};
+	const std::array<EntityPageBatchMutation, 1U> nodeMutation{{
+			{.page_id = PageId(101U),
+			 .record_kind = EntityPageRecordKind::EPRK_NODE,
+			 .node_insertions = {{1002U, node(21U, 22U)}, {1003U, node(31U, 32U)}}},
+	}};
+	expectFormatError(
+			[&] {
+				static_cast<void>(entities.applyNativeGraphBatchTransaction(
+						before, nodeMutation, {}, {}, plans, properties, propertyOptions, LogSequenceNumber(3U)));
+			},
+			FormatError::FERR_INVALID_HEADER);
+	MetadataSnapshotPin current = metadata->openSnapshot();
+	EXPECT_EQ(current.superblock(), before.superblock());
+	EXPECT_THROW(static_cast<void>(entities.readNode(before, 1002U)), FormatException);
+	EXPECT_THROW(static_cast<void>(entities.readNode(before, 1003U)), FormatException);
+	current.release();
+	before.release();
 }
 
 TEST_F(RelocatableEntityPageStoreTest, PublishesAndReadsTypedLabelAuxiliaryPagesWithTheirNodeMutation) {
