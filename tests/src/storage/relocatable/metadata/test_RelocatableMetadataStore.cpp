@@ -46,6 +46,31 @@ TEST_F(RelocatableMetadataStoreTest, EnumeratesEmptyTypedPoolNamespacesAndSnapsh
 	EXPECT_FALSE(store->ownsSnapshot(snapshot));
 }
 
+TEST_F(RelocatableMetadataStoreTest, ObservesCompactionStateWithoutRetainingSnapshots) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	const auto initial = store->observeCompactionState();
+	EXPECT_EQ(initial.generation, Generation(1U));
+	EXPECT_EQ(initial.checkpoint_lsn, LogSequenceNumber(1U));
+	EXPECT_EQ(initial.active_snapshot_count, 0U);
+	EXPECT_EQ(initial.sealed_segments, 0U);
+	EXPECT_EQ(initial.retired_segments, 0U);
+	EXPECT_EQ(initial.obsolete_segments, 0U);
+	EXPECT_EQ(initial.pending_relocation_sources, 0U);
+
+	static_cast<void>(store->upsertCatalog(std::vector{entry(100U, 2U, 2U)}, LogSequenceNumber(2U)));
+	MetadataSnapshotPin held = store->openSnapshot();
+	const auto observed = store->observeCompactionState();
+	EXPECT_EQ(observed.generation, Generation(2U));
+	EXPECT_EQ(observed.checkpoint_lsn, LogSequenceNumber(2U));
+	EXPECT_EQ(observed.active_snapshot_count, 1U);
+	EXPECT_EQ(observed.sealed_segments, 2U);
+	EXPECT_EQ(observed.retired_segments, 0U);
+	EXPECT_EQ(observed.obsolete_segments, 0U);
+	EXPECT_EQ(observed.pending_relocation_sources, 0U);
+	EXPECT_EQ(observed.retainedGenerationCount(), 0U);
+	held.release();
+}
+
 TEST_F(RelocatableMetadataStoreTest, SerializesCatalogPublicationSnapshotsReclamationAndReopen) {
 	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
 	const Superblock generationTwo = store->upsertCatalog(std::vector{entry(100, 2, 2)}, LogSequenceNumber(2));
