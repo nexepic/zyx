@@ -218,6 +218,22 @@ TEST_F(RelocatableEntityPageStoreTest, ReadsDecodedLocationsAndBoundsEntityScans
 					  FormatError::FERR_INVALID_HEADER);
 }
 
+TEST_F(RelocatableEntityPageStoreTest, RejectsMissingScanVisitorsBeforeReadingMetadata) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore store(io, *metadata);
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	const std::function<bool(uint64_t, const NodeEntityRecord &)> missingNodeVisitor;
+	const std::function<bool(uint64_t, const EdgeEntityRecord &)> missingEdgeVisitor;
+
+	expectFormatError([&] { static_cast<void>(store.visitNodesUntil(snapshot, 1U, missingNodeVisitor)); },
+					  FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { static_cast<void>(store.visitEdgesUntil(snapshot, 1U, missingEdgeVisitor)); },
+					  FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] { static_cast<void>(store.visitNodesAfter(snapshot, 0U, 1U, 1U, missingNodeVisitor)); },
+			FormatError::FERR_INVALID_HEADER);
+}
+
 TEST_F(RelocatableEntityPageStoreTest, RejectsUntypedOrInvalidAuxiliaryPageRequestsBeforeIO) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
 	EntityPageStore store(io, *metadata);
