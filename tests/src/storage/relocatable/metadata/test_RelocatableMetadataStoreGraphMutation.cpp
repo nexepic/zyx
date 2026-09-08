@@ -54,6 +54,10 @@ TEST(NativeGraphPrivateSegmentSetTest, RejectsInvalidAndForeignOrdinals) {
 	const NativeGraphPrivateSegmentSet set(SegmentId(10U), Generation(3U), 2U, 42U);
 	EXPECT_EQ(set.front(), NativeGraphPrivateSegmentMaterialization(SegmentId(10U), Generation(3U), 42U));
 	EXPECT_EQ(set.back(), NativeGraphPrivateSegmentMaterialization(SegmentId(11U), Generation(3U), 42U));
+	EXPECT_TRUE(set.front().isValid());
+	EXPECT_FALSE((NativeGraphPrivateSegmentMaterialization{SegmentId{}, Generation(3U), 42U}.isValid()));
+	EXPECT_FALSE((NativeGraphPrivateSegmentMaterialization{SegmentId(10U), Generation{}, 42U}.isValid()));
+	EXPECT_FALSE((NativeGraphPrivateSegmentMaterialization{SegmentId(10U), Generation(3U), 0U}.isValid()));
 	EXPECT_EQ(set.ordinalOf(set.back()), 1U);
 	expectFormatError([&] { static_cast<void>(set.at(2U)); }, FormatError::FERR_INVALID_STATE);
 	expectFormatError([&] { static_cast<void>(set.ordinalOf({SegmentId{}, Generation(3U), 42U})); },
@@ -70,19 +74,27 @@ TEST(NativeGraphPrivateSegmentSetTest, RejectsInvalidAndForeignOrdinals) {
 
 TEST_F(RelocatableMetadataStoreTest, PublishesStreamedEdgeGraphRootsInOneGenerationWithoutLargeValues) {
 	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
-	const NativeGraphLogicalIdReservation reservation = store->acquireNativeGraphLogicalIds(0U, 2U, 2U);
-	ASSERT_EQ(reservation.edge_ranges.size(), 1U);
+	// Consume the first ID from a two-ID lease, then request three records. The
+	// latter reservation must combine its cached tail with a fresh durable range.
+	// Publication therefore verifies the normal multi-range lease lifecycle.
+	const NativeGraphLogicalIdReservation prefix = store->acquireNativeGraphLogicalIds(0U, 1U, 2U);
+	ASSERT_TRUE(store->claimNativeGraphLogicalIdReservation(prefix));
+	const NativeGraphLogicalIdReservation reservation = store->acquireNativeGraphLogicalIds(0U, 3U, 3U);
+	ASSERT_EQ(reservation.edge_ranges.size(), 2U);
+	ASSERT_EQ(reservation.edge_ranges[0], (NativeGraphLogicalIdLeaseRange{2U, 1U}));
+	ASSERT_EQ(reservation.edge_ranges[1], (NativeGraphLogicalIdLeaseRange{3U, 2U}));
 	const uint64_t firstEdgeId = reservation.edge_ranges.front().first_id;
 	const std::vector<NativeBulkEdgeRecord> records = {
 			{firstEdgeId, 1U, 2U, "KNOWS", {{"weight", graph::PropertyValue(int64_t{7})}}},
 			{firstEdgeId + 1U, 2U, 1U, "KNOWS", {{"weight", graph::PropertyValue(int64_t{9})}}},
+			{firstEdgeId + 2U, 1U, 3U, "KNOWS", {{"weight", graph::PropertyValue(int64_t{11})}}},
 	};
 	PhysicalSegmentAllocator physical(io, *store);
 	NativeBulkRunStore scratch(
 			physical, *store,
 			{PhysicalSlotId(221U), PhysicalSlotId(240U), RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 16U, 4U});
 	NativeBulkEdgeRunStreamingWriter scratchWriter(
-			scratch, 901U, {RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, records.size(), 4U}, LogSequenceNumber(3U));
+			scratch, 901U, {RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, records.size(), 4U}, LogSequenceNumber(4U));
 	for (const NativeBulkEdgeRecord &record: records) {
 		scratchWriter.add(record);
 	}
@@ -133,6 +145,99 @@ TEST_F(RelocatableMetadataStoreTest, PublishesStreamedEdgeGraphRootsInOneGenerat
 				},
 				FormatError::FERR_INVALID_HEADER);
 	};
+	const auto rejectMalformedRequest = [&](auto mutate) {
+		NativeStreamedGraphFinalPublicationRequest invalid = request;
+		// Keep the lease capability untouched: malformed-request validation runs
+		// after the common coordinator would otherwise claim this one-shot lease.
+		invalid.edge_id_reservation = {};
+		mutate(invalid);
+		expectFormatError(
+				[&] {
+					static_cast<void>(store->publishStreamedEdgeGraph(invalid, catalog, indexes, nullptr, publicationLsn));
+				},
+				FormatError::FERR_INVALID_HEADER);
+	};
+	// Exercise the public request gate one predicate at a time. These are
+	// deliberately tiny malformed requests; scale-sized candidate layouts are
+	// reserved for the performance/failure gates rather than ordinary unit tests.
+	rejectMalformedRequest([](auto &invalid) { invalid.expected_metadata_generation = Generation{}; });
+	rejectMalformedRequest([](auto &invalid) { invalid.durable_source = {}; });
+	rejectMalformedRequest([](auto &invalid) { invalid.publication_plan.record_count = 0U; });
+	rejectMalformedRequest([](auto &invalid) { invalid.publication_plan.first_edge_id = 0U; });
+	rejectMalformedRequest([](auto &invalid) {
+		invalid.publication_plan.last_edge_id = invalid.publication_plan.first_edge_id - 1U;
+	});
+	rejectMalformedRequest([](auto &invalid) { invalid.publication_plan.edge_entity_page_count = 0U; });
+	rejectMalformedRequest([](auto &invalid) { invalid.entity_pool_owner_id = 0U; });
+	rejectMalformedRequest([](auto &invalid) { invalid.property_pool_owner_id = 0U; });
+	rejectMalformedRequest([](auto &invalid) { invalid.first_entity_output_slot = PhysicalSlotId{}; });
+	rejectMalformedRequest([](auto &invalid) { invalid.last_entity_output_slot = PhysicalSlotId{}; });
+	rejectMalformedRequest([](auto &invalid) {
+		invalid.last_entity_output_slot = PhysicalSlotId(invalid.first_entity_output_slot.value() - 1U);
+	});
+	rejectMalformedRequest([](auto &invalid) { invalid.first_property_output_slot = PhysicalSlotId{}; });
+	rejectMalformedRequest([](auto &invalid) { invalid.last_property_output_slot = PhysicalSlotId{}; });
+	rejectMalformedRequest([](auto &invalid) {
+		invalid.last_property_output_slot = PhysicalSlotId(invalid.first_property_output_slot.value() - 1U);
+	});
+	rejectMalformedRequest([](auto &invalid) { invalid.private_candidate_plan.kind = SegmentKind::SGK_NONE; });
+	rejectMalformedRequest([](auto &invalid) { invalid.private_candidate_plan.owner_id = 0U; });
+	rejectMalformedRequest([](auto &invalid) { invalid.private_candidate_plan.first_slot = PhysicalSlotId{}; });
+	rejectMalformedRequest([](auto &invalid) { invalid.private_candidate_plan.last_slot = PhysicalSlotId{}; });
+	rejectMalformedRequest([](auto &invalid) {
+		invalid.private_candidate_plan.last_slot = PhysicalSlotId(invalid.private_candidate_plan.first_slot.value() - 1U);
+	});
+	rejectMalformedRequest([](auto &invalid) {
+		invalid.private_candidate_plan.segment_count = invalid.candidate_layout.candidate_count + 1U;
+	});
+	rejectMalformedRequest([](auto &invalid) { invalid.private_candidate_plan.segment_count = 0U; });
+	rejectMalformedRequest([](auto &invalid) { invalid.private_candidate_plan.header_bytes = 0U; });
+	rejectMalformedRequest([](auto &invalid) { invalid.index_planning.catalog.first_slot = PhysicalSlotId{}; });
+	rejectMalformedRequest([](auto &invalid) { invalid.index_planning.adjacency.last_slot = PhysicalSlotId{}; });
+	rejectMalformedRequest([](auto &invalid) { invalid.publication_plan = {}; });
+	{
+		NativeStreamedGraphFinalPublicationRequest invalid = request;
+		invalid.edge_id_reservation = {};
+		expectFormatError(
+				[&] {
+					static_cast<void>(store->publishStreamedEdgeGraph(
+							invalid, catalog, indexes, nullptr, LogSequenceNumber{}));
+				},
+				FormatError::FERR_INVALID_HEADER);
+	}
+	{
+		const std::filesystem::path foreignPath = testFilePath.string() + ".streamed-edge-foreign";
+		auto foreignFile = std::make_shared<std::fstream>(
+				foreignPath, std::ios::in | std::ios::out | std::ios::binary | std::ios::trunc);
+		ASSERT_TRUE(foreignFile->is_open());
+		auto foreignIo = std::make_shared<StorageIO>(foreignFile, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		auto foreignMetadata = RelocatableMetadataStore::initializeNew(foreignIo, superblock(1U, 1U));
+		SlottedPagePool foreignPages(foreignIo, *foreignMetadata);
+		BTreePageStore foreignIndexes(foreignPages, *foreignMetadata);
+		SystemCatalog foreignCatalog(foreignIndexes, *foreignMetadata);
+		LargeValueStore foreignValues(foreignIo, *foreignMetadata);
+
+		// The final coordinator publishes every supplied store in one generation;
+		// reject a foreign participant before opening its source or claiming a lease.
+		NativeStreamedGraphFinalPublicationRequest invalid = request;
+		invalid.edge_id_reservation = {};
+		expectFormatError(
+				[&] { static_cast<void>(store->publishStreamedEdgeGraph(invalid, foreignCatalog, indexes, nullptr, publicationLsn)); },
+				FormatError::FERR_INVALID_HEADER);
+		expectFormatError(
+				[&] { static_cast<void>(store->publishStreamedEdgeGraph(invalid, catalog, foreignIndexes, nullptr, publicationLsn)); },
+				FormatError::FERR_INVALID_HEADER);
+		expectFormatError(
+				[&] { static_cast<void>(store->publishStreamedEdgeGraph(invalid, catalog, indexes, &foreignValues, publicationLsn)); },
+				FormatError::FERR_INVALID_HEADER);
+
+		foreignMetadata.reset();
+		foreignIo.reset();
+		foreignFile->close();
+		foreignFile.reset();
+		std::error_code error;
+		std::filesystem::remove(foreignPath, error);
+	}
 	NativeGraphLogicalIdReservation nonEdgeLease = reservation;
 	nonEdgeLease.node_ranges.push_back({1U, 1U});
 	rejectMalformedLease(std::move(nonEdgeLease));
@@ -158,9 +263,36 @@ TEST_F(RelocatableMetadataStoreTest, PublishesStreamedEdgeGraphRootsInOneGenerat
 				static_cast<void>(store->publishStreamedEdgeGraph(invalid, catalog, indexes, nullptr, publicationLsn));
 			},
 			FormatError::FERR_INVALID_STATE);
+	NativeGraphLogicalIdReservation leadingLease = reservation;
+	// The preceding, genuinely reserved ID is well-formed but grants no right
+	// to publish this source. It exercises the independent first-bound check.
+	leadingLease.edge_ranges = {{firstEdgeId - 1U, 1U}};
+	expectFormatError(
+			[&] {
+				NativeStreamedGraphFinalPublicationRequest invalid = request;
+				invalid.edge_id_reservation = std::move(leadingLease);
+				static_cast<void>(store->publishStreamedEdgeGraph(invalid, catalog, indexes, nullptr, publicationLsn));
+			},
+			FormatError::FERR_INVALID_STATE);
+	NativeGraphLogicalIdReservation gappedLease;
+	// The source bounds are owned, but the middle Edge and its Property owner
+	// are not. Publication must reject this before appending either directory.
+	gappedLease.edge_ranges = {{firstEdgeId, 1U}, {firstEdgeId + 2U, 1U}};
+	expectFormatError(
+			[&] {
+				NativeStreamedGraphFinalPublicationRequest invalid = request;
+				invalid.edge_id_reservation = std::move(gappedLease);
+				static_cast<void>(store->publishStreamedEdgeGraph(invalid, catalog, indexes, nullptr, publicationLsn));
+			},
+			FormatError::FERR_INVALID_STATE);
 	NativeGraphLogicalIdReservation unorderedLease = reservation;
 	unorderedLease.edge_ranges = {{firstEdgeId + 1U, 1U}, {firstEdgeId, 1U}};
 	rejectMalformedLease(std::move(unorderedLease));
+	NativeGraphLogicalIdReservation trailingLease = reservation;
+	// A lease wholly after the sealed source span cannot grant publication rights
+	// to any record, even though its range is internally well-formed.
+	trailingLease.edge_ranges = {{plan.last_edge_id + 1U, 1U}};
+	rejectMalformedLease(std::move(trailingLease));
 	const Superblock published = store->publishStreamedEdgeGraph(request, catalog, indexes, nullptr, publicationLsn);
 	EXPECT_EQ(published.generation, Generation(before.superblock().generation.value() + 1U));
 	EXPECT_FALSE(store->findEdgePageLocationOptional(before, firstEdgeId).has_value());
@@ -183,6 +315,71 @@ TEST_F(RelocatableMetadataStoreTest, PublishesStreamedEdgeGraphRootsInOneGenerat
 	ASSERT_TRUE(adjacencyRoot.has_value());
 	EXPECT_TRUE(store->findPageLocationOptional(current, catalogRoot->root_page_id).has_value());
 	EXPECT_TRUE(store->findPageLocationOptional(current, adjacencyRoot->root_page_id).has_value());
+	EXPECT_FALSE(store->isPhysicalSlotAllocated(current, PhysicalSlotId(40U)));
+	current.release();
+}
+
+TEST_F(RelocatableMetadataStoreTest, PublishesPropertylessStreamedEdgeGraphWithoutPropertyDirectories) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	const NativeGraphLogicalIdReservation reservation = store->acquireNativeGraphLogicalIds(0U, 1U, 1U);
+	ASSERT_EQ(reservation.edge_ranges.size(), 1U);
+	const uint64_t edgeId = reservation.edge_ranges.front().first_id;
+	const NativeBulkEdgeRecord record{edgeId, 1U, 2U, "KNOWS", {}};
+	PhysicalSegmentAllocator physical(io, *store);
+	NativeBulkRunStore scratch(
+			physical, *store,
+			{PhysicalSlotId(221U), PhysicalSlotId(240U), RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 16U, 4U});
+	NativeBulkEdgeRunStreamingWriter scratchWriter(
+			scratch, 903U, {RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 1U, 4U}, LogSequenceNumber(4U));
+	scratchWriter.add(record);
+	const NativeBulkEdgeRunManifest scratchManifest = scratchWriter.finish();
+	const NativeBulkEdgeRecordSource source = nativeBulkEdgeRecordSource(scratch, scratchManifest.location, 4U);
+	const NativeBulkEdgePublicationPreflightOptions preflight{16U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U, 128U};
+	const NativeStreamedGraphPublicationPlan plan = NativeStreamedGraphPublicationPlan::derive(
+			source, reservation.edge_ranges, preflight, [](uint64_t) { return true; });
+	ASSERT_EQ(plan.large_value_count, 0U);
+	const NativeStreamedGraphCandidateLayout layout = NativeStreamedGraphCandidateLayout::derive(plan);
+	ASSERT_NE(layout.candidate_count, 0U);
+
+	SlottedPagePool pagePools(io, *store);
+	BTreePageStore indexes(pagePools, *store);
+	SystemCatalog catalog(indexes, *store);
+	MetadataSnapshotPin before = store->openSnapshot();
+	NativeStreamedGraphFinalPublicationRequest request;
+	request.expected_metadata_generation = before.superblock().generation;
+	request.edge_id_reservation = reservation;
+	request.durable_source = {&scratch, scratchManifest.location, 4U};
+	request.publication_plan = plan;
+	request.candidate_layout = layout;
+	request.private_candidate_plan = {
+			SegmentKind::SGK_BULK_SCRATCH, 804U, PhysicalSlotId(40U), PhysicalSlotId(120U), RSS_ENVELOPE_BYTES, {},
+			layout.candidate_count};
+	request.entity_pool_owner_id = 805U;
+	request.property_pool_owner_id = 806U;
+	request.first_entity_output_slot = PhysicalSlotId(121U);
+	request.last_entity_output_slot = PhysicalSlotId(140U);
+	request.first_property_output_slot = PhysicalSlotId(141U);
+	request.last_property_output_slot = PhysicalSlotId(160U);
+	request.preparation.families = {
+			16U,
+			16U,
+			RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES,
+			{2U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 16U, 4U, NativeBulkEdgeRunDuplicatePolicy::NBERDP_REJECT}};
+	request.preparation.maximum_catalog_entries = 64U;
+	request.index_planning.catalog = {PhysicalSlotId(161U), PhysicalSlotId(190U), 64U, 16U};
+	request.index_planning.adjacency = {PhysicalSlotId(191U), PhysicalSlotId(220U), 16U, 16U, 4U};
+	const LogSequenceNumber publicationLsn(before.superblock().checkpoint_lsn.value() + 1U);
+	const Superblock published = store->publishStreamedEdgeGraph(request, catalog, indexes, nullptr, publicationLsn);
+	EXPECT_EQ(published.generation, Generation(before.superblock().generation.value() + 1U));
+	EXPECT_FALSE(store->findEdgePageLocationOptional(before, edgeId).has_value());
+	before.release();
+
+	MetadataSnapshotPin current = store->openSnapshot();
+	EXPECT_TRUE(store->findEdgePageLocationOptional(current, edgeId).has_value());
+	EXPECT_FALSE(store->findEntityPropertyLocationOptional(current, {EntityPropertyOwnerKind::EPOK_EDGE, edgeId})
+				 .has_value());
+	EXPECT_TRUE(store->findIndexRootOptional(current, RSS_SYSTEM_CATALOG_INDEX_ID).has_value());
+	EXPECT_TRUE(store->findIndexRootOptional(current, RSS_GLOBAL_ADJACENCY_INDEX_ID).has_value());
 	EXPECT_FALSE(store->isPhysicalSlotAllocated(current, PhysicalSlotId(40U)));
 	current.release();
 }
@@ -305,13 +502,53 @@ TEST_F(RelocatableMetadataStoreTest, PublishesStreamedEdgeGraphLargeValueRootsIn
 	NativeStreamedGraphFinalPublicationRequest missingDataRange = request;
 	missingDataRange.first_large_value_data_output_slot = PhysicalSlotId{};
 	rejectMalformedLargeValuePublication(std::move(missingDataRange), &values);
+	NativeStreamedGraphFinalPublicationRequest missingDataRangeEnd = request;
+	missingDataRangeEnd.last_large_value_data_output_slot = PhysicalSlotId{};
+	rejectMalformedLargeValuePublication(std::move(missingDataRangeEnd), &values);
+	NativeStreamedGraphFinalPublicationRequest reversedDataRange = request;
+	reversedDataRange.last_large_value_data_output_slot = PhysicalSlotId(240U);
+	rejectMalformedLargeValuePublication(std::move(reversedDataRange), &values);
+	NativeStreamedGraphFinalPublicationRequest missingManifestRange = request;
+	missingManifestRange.first_large_value_manifest_output_slot = PhysicalSlotId{};
+	rejectMalformedLargeValuePublication(std::move(missingManifestRange), &values);
+	NativeStreamedGraphFinalPublicationRequest missingManifestRangeEnd = request;
+	missingManifestRangeEnd.last_large_value_manifest_output_slot = PhysicalSlotId{};
+	rejectMalformedLargeValuePublication(std::move(missingManifestRangeEnd), &values);
 	NativeStreamedGraphFinalPublicationRequest reversedManifestRange = request;
 	reversedManifestRange.last_large_value_manifest_output_slot = PhysicalSlotId(240U);
 	rejectMalformedLargeValuePublication(std::move(reversedManifestRange), &values);
 	NativeStreamedGraphFinalPublicationRequest missingPreparedStore = request;
 	missingPreparedStore.preparation.large_value_store = nullptr;
 	rejectMalformedLargeValuePublication(std::move(missingPreparedStore), &values);
+	LargeValueStore otherValues(io, *store);
+	rejectMalformedLargeValuePublication(request, &otherValues);
 	rejectMalformedLargeValuePublication(request, nullptr);
+	// Exercise each independently supplied identity/placement guard before any
+	// candidate slot is reserved. These are public request fields, so malformed
+	// values must remain fail-closed rather than being hidden by a later check.
+	const auto rejectMalformedRequest = [&](auto mutate) {
+		NativeStreamedGraphFinalPublicationRequest invalid = request;
+		mutate(invalid);
+		rejectMalformedLargeValuePublication(std::move(invalid), &values);
+	};
+	rejectMalformedRequest([](auto &invalid) { invalid.expected_metadata_generation = Generation{}; });
+	rejectMalformedRequest([](auto &invalid) { invalid.publication_plan.record_count = 0U; });
+	rejectMalformedRequest([](auto &invalid) { invalid.publication_plan.first_edge_id = 0U; });
+	rejectMalformedRequest([](auto &invalid) { invalid.publication_plan.last_edge_id = 0U; });
+	rejectMalformedRequest([](auto &invalid) { invalid.publication_plan.edge_entity_page_count = 0U; });
+	rejectMalformedRequest([](auto &invalid) { invalid.entity_pool_owner_id = 0U; });
+	rejectMalformedRequest([](auto &invalid) { invalid.property_pool_owner_id = 0U; });
+	rejectMalformedRequest([](auto &invalid) { invalid.first_entity_output_slot = PhysicalSlotId{}; });
+	rejectMalformedRequest([](auto &invalid) { invalid.last_entity_output_slot = PhysicalSlotId(120U); });
+	rejectMalformedRequest([](auto &invalid) { invalid.first_property_output_slot = PhysicalSlotId{}; });
+	rejectMalformedRequest([](auto &invalid) { invalid.last_property_output_slot = PhysicalSlotId(140U); });
+	rejectMalformedRequest([](auto &invalid) { invalid.private_candidate_plan.kind = SegmentKind::SGK_PROPERTY_PAGE_POOL; });
+	rejectMalformedRequest([](auto &invalid) { invalid.private_candidate_plan.owner_id = 0U; });
+	rejectMalformedRequest([](auto &invalid) { invalid.private_candidate_plan.first_slot = PhysicalSlotId{}; });
+	rejectMalformedRequest([](auto &invalid) { invalid.private_candidate_plan.last_slot = PhysicalSlotId(39U); });
+	rejectMalformedRequest([](auto &invalid) { invalid.private_candidate_plan.segment_count = 0U; });
+	rejectMalformedRequest([](auto &invalid) { invalid.private_candidate_plan.header_bytes = RSS_ENVELOPE_BYTES - 1U; });
+	rejectMalformedRequest([](auto &invalid) { invalid.preparation.large_value_store = nullptr; });
 	const Superblock published = store->publishStreamedEdgeGraph(request, catalog, indexes, &values, publicationLsn);
 	EXPECT_EQ(published.generation, Generation(before.superblock().generation.value() + 1U));
 	EXPECT_FALSE(store->findEdgePageLocationOptional(before, edgeId).has_value());
@@ -1430,6 +1667,10 @@ TEST_F(RelocatableMetadataStoreTest, RejectsEmptyOrIncoherentGraphPublicationBef
 			[&vectorPreparerCalled](std::vector<NativeGraphVectorBootstrapMaterialization> &) {
 				vectorPreparerCalled = true;
 			};
+	const NativeGraphVectorDeltaPreparer unexpectedDeltaPreparer =
+			[&vectorPreparerCalled](std::vector<NativeGraphVectorDeltaMaterialization> &) {
+				vectorPreparerCalled = true;
+			};
 	const NativeGraphVectorDeltaPreparer noDeltaPreparer{};
 	const std::array<PageRetirement, 0U> noRetiredLargeValuePages{};
 	const std::array<LargeValueId, 0U> noErasedLargeValueIds{};
@@ -1460,6 +1701,15 @@ TEST_F(RelocatableMetadataStoreTest, RejectsEmptyOrIncoherentGraphPublicationBef
 						noLargeValueRetirementPreparer, noPublishOptions, logicalIds));
 			},
 			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->mutateNativeGraphPagesWithLargeValues(
+						noEntityReplacements, noEntityAppends, noEntityPools, noPropertyReplacements, noPropertyBatches,
+						noLargeValues, {}, LogSequenceNumber(2U), graphPreparer, noDerivedStatePreparer, {},
+						unexpectedDeltaPreparer, noRetiredLargeValuePages, noErasedLargeValueIds,
+						noLargeValueRetirementPreparer, noPublishOptions, logicalIds));
+			},
+			FormatError::FERR_INVALID_HEADER);
 
 	EXPECT_FALSE(graphPreparerCalled);
 	EXPECT_FALSE(vectorPreparerCalled);
@@ -1486,6 +1736,7 @@ TEST_F(RelocatableMetadataStoreTest, RejectsIncompleteCoordinatorInputsBeforeTak
 			 LogSequenceNumber(1U)},
 	}};
 	const std::array<LargeValueId, 0U> noErasedLargeValueIds{};
+	const std::array<LargeValueId, 1U> oneErasedLargeValueId{{LargeValueId(1U)}};
 
 	bool graphPreparerCalled = false;
 	bool derivedPreparerCalled = false;
@@ -1524,8 +1775,31 @@ TEST_F(RelocatableMetadataStoreTest, RejectsIncompleteCoordinatorInputsBeforeTak
 			[&] {
 				static_cast<void>(store->mutateNativeGraphPagesWithLargeValues(
 						noEntityReplacements, noEntityAppends, noEntityPools, noPropertyReplacements, noPropertyBatches,
+						noLargeValues, {}, LogSequenceNumber{}, graphPreparer, {}, {}, {}, {}, {}, {}, {}, nodeLease));
+			},
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->mutateNativeGraphPagesWithLargeValues(
+						noEntityReplacements, noEntityAppends, noEntityPools, noPropertyReplacements, noPropertyBatches,
 						noLargeValues, {}, LogSequenceNumber(2U), graphPreparer, {}, {}, {}, oneRetirement,
 						noErasedLargeValueIds, noRetirementPreparer));
+			},
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->mutateNativeGraphPagesWithLargeValues(
+						noEntityReplacements, noEntityAppends, noEntityPools, noPropertyReplacements, noPropertyBatches,
+						noLargeValues, {}, LogSequenceNumber(2U), graphPreparer, {}, {}, {}, {}, oneErasedLargeValueId,
+						noRetirementPreparer));
+			},
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->mutateNativeGraphPagesWithLargeValues(
+						noEntityReplacements, noEntityAppends, noEntityPools, noPropertyReplacements, noPropertyBatches,
+						noLargeValues, {}, LogSequenceNumber(2U), graphPreparer, {}, {}, {}, oneRetirement,
+						oneErasedLargeValueId, noRetirementPreparer));
 			},
 			FormatError::FERR_INVALID_HEADER);
 

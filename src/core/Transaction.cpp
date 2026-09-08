@@ -32,12 +32,13 @@ namespace graph {
 	Transaction::Transaction(uint64_t txnId, std::unique_ptr<storage::LogicalGraphTransaction> logicalTransaction,
 							 std::shared_ptr<std::atomic<size_t>> activeWriteTransactionCount,
 							 std::shared_ptr<storage::StorageBackend> backendLifetime) :
-		txnId_(txnId), readOnly_(logicalTransaction && logicalTransaction->isReadOnly()),
+		txnId_(txnId),
 		backendLifetime_(std::move(backendLifetime)), logicalTransaction_(std::move(logicalTransaction)),
 		activeLogicalWriteTransactionCount_(std::move(activeWriteTransactionCount)) {
 		if (!logicalTransaction_) {
 			throw std::invalid_argument("logical core transaction requires a transaction");
 		}
+		readOnly_ = logicalTransaction_->isReadOnly();
 		if (!backendLifetime_) {
 			throw std::invalid_argument("logical core transaction requires a backend lifetime anchor");
 		}
@@ -54,7 +55,7 @@ namespace graph {
 	}
 
 	void Transaction::finishLogicalTransaction() noexcept {
-		if (logicalWriteTransactionCounted_ && activeLogicalWriteTransactionCount_) {
+		if (logicalWriteTransactionCounted_) {
 			activeLogicalWriteTransactionCount_->fetch_sub(1U, std::memory_order_acq_rel);
 			logicalWriteTransactionCounted_ = false;
 		}
@@ -162,9 +163,6 @@ namespace graph {
 		query::QueryContext context;
 		if (readOnly_) {
 			context.execMode = query::ExecMode::EM_READ_ONLY;
-		}
-		if (!logicalOverlay_) {
-			throw std::logic_error("logical transaction has no execution overlay");
 		}
 		return engine.executePlanWithLogicalTransactionOverlay(
 				engine.buildPlan(query), context, *logicalOverlay_, *logicalOverlay_, logicalProjectionCatalog_.get());

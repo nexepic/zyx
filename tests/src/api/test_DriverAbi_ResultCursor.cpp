@@ -686,3 +686,66 @@ TEST_F(DriverAbiResultCursorTest, DbExecuteInvalidCypherReportsErrorWithOptional
     EXPECT_EQ(result, nullptr);
     EXPECT_EQ(error, nullptr);
 }
+
+TEST_F(DriverAbiResultCursorTest, ResultAndValueRefAccessorsRejectInvalidColumnsTypesAndStaleRefs) {
+    zyx_driver_result_t *result = nullptr;
+    ASSERT_EQ(zyx_driver_db_execute(db, "RETURN 7 AS scalar, [1, true, 'text'] AS items", nullptr, &result, &error),
+              ZYX_DRIVER_OK);
+    ASSERT_NE(result, nullptr);
+    ASSERT_EQ(zyx_driver_result_next(result, &error), ZYX_DRIVER_ROW);
+
+    auto expectError = [this](zyx_driver_status_t status, zyx_driver_status_t expected) {
+        EXPECT_EQ(status, expected);
+        ASSERT_NE(error, nullptr);
+        EXPECT_EQ(zyx_driver_error_code(error), expected);
+        zyx_driver_error_free(error);
+        error = nullptr;
+    };
+
+    int64_t intValue = 0;
+    double doubleValue = 0.0;
+    bool boolValue = false;
+    const char *stringValue = nullptr;
+    const uint8_t *bytes = nullptr;
+    uint32_t byteCount = 0;
+    constexpr uint32_t invalidColumn = 2U;
+
+    // Every typed list accessor must reject an out-of-range result column before decoding a value.
+    expectError(zyx_driver_result_get_list_int64(result, invalidColumn, 0, &intValue, &error),
+                ZYX_DRIVER_OUT_OF_RANGE);
+    expectError(zyx_driver_result_get_list_double(result, invalidColumn, 0, &doubleValue, &error),
+                ZYX_DRIVER_OUT_OF_RANGE);
+    expectError(zyx_driver_result_get_list_bool(result, invalidColumn, 0, &boolValue, &error),
+                ZYX_DRIVER_OUT_OF_RANGE);
+    expectError(zyx_driver_result_get_list_string(result, invalidColumn, 0, &stringValue, &error),
+                ZYX_DRIVER_OUT_OF_RANGE);
+    expectError(zyx_driver_result_get_list_bytes(result, invalidColumn, 0, &bytes, &byteCount, &error),
+                ZYX_DRIVER_OUT_OF_RANGE);
+
+    expectError(zyx_driver_result_get_bytes(result, 0, &bytes, &byteCount, &error), ZYX_DRIVER_TYPE_MISMATCH);
+    expectError(zyx_driver_result_get_list_bytes(result, 0, 0, &bytes, &byteCount, &error),
+                ZYX_DRIVER_TYPE_MISMATCH);
+
+    zyx_driver_value_ref_t scalar{};
+    zyx_driver_value_ref_t items{};
+    zyx_driver_value_ref_t item{};
+    ASSERT_EQ(zyx_driver_result_get_value(result, 0, &scalar, &error), ZYX_DRIVER_OK);
+    ASSERT_EQ(zyx_driver_result_get_value(result, 1, &items, &error), ZYX_DRIVER_OK);
+
+    expectError(zyx_driver_value_ref_get_bytes(&scalar, &bytes, &byteCount, &error), ZYX_DRIVER_TYPE_MISMATCH);
+    zyx_driver_bytes_stream_t *stream = nullptr;
+    expectError(zyx_driver_value_ref_open_bytes_stream(&scalar, 0, 0, &stream, &error),
+                ZYX_DRIVER_TYPE_MISMATCH);
+    expectError(zyx_driver_value_ref_list_get(&scalar, 0, &item, &error), ZYX_DRIVER_TYPE_MISMATCH);
+    expectError(zyx_driver_value_ref_map_get(&scalar, "missing", &item, &error), ZYX_DRIVER_TYPE_MISMATCH);
+    expectError(zyx_driver_value_ref_list_get_bytes(&items, 0, &bytes, &byteCount, &error),
+                ZYX_DRIVER_TYPE_MISMATCH);
+
+    ASSERT_EQ(zyx_driver_value_ref_list_get(&items, 0, &item, &error), ZYX_DRIVER_OK);
+    EXPECT_EQ(zyx_driver_value_ref_type(&item), ZYX_DRIVER_VALUE_INT64);
+
+    ASSERT_EQ(zyx_driver_result_next(result, &error), ZYX_DRIVER_DONE);
+    expectError(zyx_driver_value_ref_list_get(&items, 0, &item, &error), ZYX_DRIVER_INVALID_ARGUMENT);
+
+    zyx_driver_result_free(result);
+}

@@ -213,7 +213,24 @@ TEST_F(NativeGraphWritePlannerAdjacencyTest, KeepsParallelEdgesAndSelfLoopsDisti
 	NativeGraphWriteTransaction detach = planner.beginTransaction();
 	EXPECT_EQ(detach.collectIncidentEdgeIds(source, 4U),
 			  (std::vector<uint64_t>{firstParallel, secondParallel, selfLoop}));
+	EXPECT_EQ(detach.collectIncidentEdgeIds(target, 4U), (std::vector<uint64_t>{firstParallel, secondParallel}));
 	detach.rollback();
+}
+
+TEST_F(NativeGraphWritePlannerAdjacencyTest, EnumeratesNewIncidentEdgesBeforeTheirTransactionCommits) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	NativeGraphWriteTransaction createNodes = planner.beginTransaction();
+	const uint64_t source = createNodes.createNode(std::array<uint64_t, 0U>{});
+	const uint64_t target = createNodes.createNode(std::array<uint64_t, 0U>{});
+	ASSERT_TRUE(createNodes.commit().committed());
+
+	NativeGraphWriteTransaction createEdge = planner.beginTransaction();
+	const uint64_t edgeId = createEdge.createEdge(source, target, 17U);
+	EXPECT_TRUE(createEdge.nodeHasIncidentEdges(source));
+	EXPECT_TRUE(createEdge.nodeHasIncidentEdges(target));
+	EXPECT_EQ(createEdge.collectIncidentEdgeIds(source, 1U), (std::vector<uint64_t>{edgeId}));
+	EXPECT_EQ(createEdge.collectIncidentEdgeIds(target, 1U), (std::vector<uint64_t>{edgeId}));
+	ASSERT_TRUE(createEdge.commit().committed());
 }
 
 TEST_F(NativeGraphWritePlannerAdjacencyTest, BoundsStagedAdjacencyOperationsBeforeChangingEdgeState) {
@@ -560,6 +577,35 @@ TEST_F(NativeGraphWritePlannerAdjacencyTest, RebasesConcurrentLeasedEdgeCreation
 	const uint64_t firstEdge = first.createEdge(source, firstTarget, 7U);
 	const uint64_t secondEdge = second.createEdge(source, secondTarget, 9U);
 	EXPECT_NE(firstEdge, secondEdge);
+	ASSERT_TRUE(first.commit().committed());
+	EXPECT_TRUE(second.commit().committed());
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	GlobalAdjacencyIndex adjacency(*btree_pages_, *metadata_);
+	EXPECT_EQ(scan(adjacency, snapshot, GlobalAdjacencyDirection::GAD_OUT, source),
+			  (std::vector<uint64_t>{firstEdge, secondEdge}));
+	EXPECT_EQ(scan(adjacency, snapshot, GlobalAdjacencyDirection::GAD_IN, firstTarget),
+			  (std::vector<uint64_t>{firstEdge}));
+	EXPECT_EQ(scan(adjacency, snapshot, GlobalAdjacencyDirection::GAD_IN, secondTarget),
+			  (std::vector<uint64_t>{secondEdge}));
+	EXPECT_EQ(entities_->readEdge(snapshot, firstEdge), (EdgeEntityRecord{source, firstTarget, 7U}));
+	EXPECT_EQ(entities_->readEdge(snapshot, secondEdge), (EdgeEntityRecord{source, secondTarget, 9U}));
+	snapshot.release();
+}
+
+TEST_F(NativeGraphWritePlannerAdjacencyTest, RebasesConcurrentNodeAndEdgeCreationsWithoutLosingEitherDirection) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	NativeGraphWriteTransaction seed = planner.beginTransaction();
+	const uint64_t source = seed.createNode(std::array<uint64_t, 0U>{});
+	ASSERT_TRUE(seed.commit().committed());
+
+	NativeGraphWriteTransaction first = planner.beginTransaction();
+	NativeGraphWriteTransaction second = planner.beginTransaction();
+	const uint64_t firstTarget = first.createNode(std::array<uint64_t, 0U>{});
+	const uint64_t firstEdge = first.createEdge(source, firstTarget, 7U);
+	const uint64_t secondTarget = second.createNode(std::array<uint64_t, 0U>{});
+	const uint64_t secondEdge = second.createEdge(source, secondTarget, 9U);
+
 	ASSERT_TRUE(first.commit().committed());
 	EXPECT_TRUE(second.commit().committed());
 

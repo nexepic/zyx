@@ -111,6 +111,18 @@ TEST(RelocatableVectorPageTest, StoresFixedRawRecordsWithStableSlotOrdinals) {
 	EXPECT_EQ(reopened.read(second), record(std::byte{0x33}));
 }
 
+TEST(RelocatableVectorPageTest, FindsVectorIdsByTheirCanonicalRecordPrefix) {
+	const VectorPageHeader initial = header();
+	VectorPage page = VectorPage::create(owner(initial), initial);
+	std::vector<std::byte> first = record(std::byte{0x11});
+	LittleEndianCodec::writeU64(first, 0U, 42U);
+	const uint16_t slot = page.insert(first);
+
+	EXPECT_EQ(page.findVectorId(42U), slot);
+	EXPECT_FALSE(page.findVectorId(99U).has_value());
+	expectFormatError([&] { static_cast<void>(page.findVectorId(0U)); }, FormatError::FERR_INVALID_HEADER);
+}
+
 TEST(RelocatableVectorPageTest, EnforcesKindStrideCapacityAndOwnerIdentity) {
 	VectorPageHeader raw = header();
 	VectorPage page = VectorPage::create(owner(raw), raw);

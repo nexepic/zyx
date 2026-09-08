@@ -121,6 +121,8 @@ TEST_F(NativeScalarIndexMutationPlannerTest, RejectsInvalidMutationInputsBeforeS
 	NativeScalarIndexMutationPlanner scalar(
 			*metadata_, *btree_pages_, {valid},
 			[](const MetadataSnapshotPin &, std::string_view) -> std::optional<uint32_t> { return std::nullopt; });
+	ASSERT_EQ(scalar.definitions().size(), 1U);
+	EXPECT_EQ(scalar.definitions().front().index_id, valid.index_id);
 	NativeGraphWritePlanner graph(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
 	NativeGraphWriteTransaction transaction = graph.beginTransaction();
 

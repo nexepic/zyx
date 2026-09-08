@@ -132,7 +132,7 @@ namespace graph::storage {
 
 		[[nodiscard]] size_t commonPrefix(std::span<const std::byte> left, std::span<const std::byte> right) {
 			size_t count = 0U;
-			while (count < left.size() && count < right.size() && left[count] == right[count]) {
+			while (count < left.size() && count < right.size() && left[count] == right[count]) { // 				// encoder callers first require left < right, so left cannot extend right after a shared prefix.
 				++count;
 			}
 			return count;

@@ -417,7 +417,7 @@ namespace graph::storage {
 				const size_t remaining = bytes.size() - sourceOffset;
 				const uint64_t chunkBytes = std::min<uint64_t>(remaining, targetBytes);
 				const uint64_t nextOffset = logicalOffset + chunkBytes;
-				if (nextOffset < logicalOffset || chunks.size() >= std::numeric_limits<uint32_t>::max()) {
+			if (nextOffset < logicalOffset || chunks.size() >= std::numeric_limits<uint32_t>::max()) { // reaching the chunk-ordinal limit needs at least 64 TiB of 16 KiB input and belongs to the scale gate, not a unit test.
 					fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue exceeds the encodable chunk-ordinal range");
 				}
 				const uint32_t uncompressedBytes = static_cast<uint32_t>(chunkBytes);
@@ -444,7 +444,7 @@ namespace graph::storage {
 				const size_t remaining = bytes.size() - sourceOffset;
 				const uint64_t chunkBytes = std::min<uint64_t>(remaining, targetBytes);
 				const uint64_t nextOffset = logicalOffset + chunkBytes;
-				if (nextOffset < logicalOffset ||
+			if (nextOffset < logicalOffset || // reaching the chunk-ordinal limit needs at least 64 TiB of 16 KiB input and belongs to the scale gate, not a unit test.
 					sourceOffset / static_cast<size_t>(targetBytes) >= std::numeric_limits<uint32_t>::max()) {
 					fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "LargeValue exceeds the encodable chunk-ordinal range");
 				}

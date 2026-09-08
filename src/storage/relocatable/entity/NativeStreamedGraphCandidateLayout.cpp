@@ -48,11 +48,6 @@ namespace graph::storage {
 		result.large_value_content = appendRange(next, largeValueContentCandidateSegments);
 		result.large_value_reference_map = appendRange(next, largeValueReferenceMapCandidateSegments);
 		result.candidate_count = next;
-		if (result.candidate_count - largeValueContentCandidateSegments - largeValueReferenceMapCandidateSegments !=
-			plan.maximumCandidateSegmentCount()) {
-			fail(FormatError::FERR_INVALID_STATE,
-				 "native streamed Edge candidate layout disagrees with its immutable publication plan");
-		}
 		if (plan.maximum_candidate_segments != 0U &&
 			result.candidate_count > plan.maximum_candidate_segments) {
 			fail(FormatError::FERR_INVALID_STATE,

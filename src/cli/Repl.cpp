@@ -25,6 +25,7 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <variant>
 #include "inputxx/Session.hpp"
 #include "ProjectConfig.hpp"
 
@@ -55,9 +56,7 @@ namespace graph {
 		inline std::string bold(const std::string &s) { return colorEnabled() ? "\033[1m" + s + "\033[0m" : s; }
 		inline std::string boldWhite(const std::string &s) { return colorEnabled() ? "\033[1;37m" + s + "\033[0m" : s; }
 		inline std::string green(const std::string &s) { return colorEnabled() ? "\033[32m" + s + "\033[0m" : s; }
-		inline std::string boldGreen(const std::string &s) { return colorEnabled() ? "\033[1;32m" + s + "\033[0m" : s; }
 		inline std::string brandBlue(const std::string &s) { return colorEnabled() ? "\033[38;5;105;1m" + s + "\033[0m" : s; }
-		inline std::string boldYellow(const std::string &s) { return colorEnabled() ? "\033[1;33m" + s + "\033[0m" : s; }
 		inline std::string boldRed(const std::string &s) { return colorEnabled() ? "\033[1;31m" + s + "\033[0m" : s; }
 		inline std::string dimItalic(const std::string &s) { return colorEnabled() ? "\033[3;90m" + s + "\033[0m" : s; }
 	} // namespace ansi
@@ -160,7 +159,8 @@ namespace graph {
 				auto it = row.find(cols[i]);
 				if (it != row.end()) {
 					valStr = it->second.toString(resolver);
-					cellIsNull = false;
+					cellIsNull = it->second.isPrimitive() &&
+							 std::holds_alternative<std::monostate>(it->second.asPrimitive().getVariant());
 				}
 
 				valStr = truncate(valStr);
@@ -336,19 +336,29 @@ namespace graph {
 				completer.complete(line, completions);
 			});
 
-		// Use 256-color palette (color 105 is slate blue, matching #818cf8) to ensure compatibility across older terminals like macOS Terminal.app
-		static const std::string PROMPT_COLOR = "\033[38;5;105;1m" + std::string(PROJECT_DISPLAY_STR) + ">\033[0m ";
-		const std::string promptNormal = PROMPT_COLOR;
-		const std::string promptMulti = "\033[38;5;105;1m     \u00b7\u00b7\u00b7\033[0m "; // Matching color ···
+		runInteractive(
+			[&replSession](const std::string &prompt) { return replSession.readLine(prompt); },
+			[&replSession](const std::string &entry) { replSession.addHistory(entry); });
+	}
 
-		printBanner(false);
+	void REPL::runInteractive(const std::function<std::optional<std::string>(const std::string &)> &readLine,
+						  const std::function<void(const std::string &)> &addHistory) const {
+		if (!readLine || !addHistory) {
+			throw std::invalid_argument("interactive REPL requires line and history callbacks");
+		}
 
 		std::string buffer;
+		// Use a 256-color prompt so older macOS terminals render it consistently.
+		static const std::string PROMPT_COLOR =
+				"\033[38;5;105;1m" + std::string(PROJECT_DISPLAY_STR) + ">\033[0m ";
+		const std::string promptNormal = PROMPT_COLOR;
+		const std::string promptMulti = "\033[38;5;105;1m     \u00b7\u00b7\u00b7\033[0m ";
 
+		printBanner(false);
 		while (true) {
 			const std::string& currentPrompt = buffer.empty() ? promptNormal : promptMulti;
 
-			auto result = replSession.readLine(currentPrompt);
+			auto result = readLine(currentPrompt);
 
 			if (!result.has_value()) {
 				break;
@@ -362,7 +372,7 @@ namespace graph {
 
 			if (trimmedLine.empty()) {
 				if (!buffer.empty()) {
-					replSession.addHistory(buffer);
+					addHistory(buffer);
 					echoMultilineBuffer(buffer);
 					handleCommand(buffer);
 					buffer.clear();
@@ -372,7 +382,7 @@ namespace graph {
 
 			if (buffer.empty()) {
 				if (trimmedLine == "help" || trimmedLine == "save" || trimmedLine == "clear") {
-					replSession.addHistory(trimmedLine);
+					addHistory(trimmedLine);
 					handleCommand(trimmedLine);
 					continue;
 				}
@@ -383,7 +393,7 @@ namespace graph {
 			buffer += line;
 
 			if (trimmedLine.back() == ';') {
-				replSession.addHistory(buffer);
+				addHistory(buffer);
 				echoMultilineBuffer(buffer);
 				handleCommand(buffer);
 				buffer.clear();

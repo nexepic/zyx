@@ -1186,8 +1186,12 @@ TEST_F(RelocatableStorageBackendTest, NativeSchemaWriteSurfaceRejectsEachMalform
 	const std::string oversizedName(RSS_INDEX_DEFINITION_MAX_NAME_BYTES + 1U, 'x');
 	const std::string oversizedProperty(RSS_INDEX_DEFINITION_MAX_PROPERTY_NAME_BYTES + 1U, 'x');
 	const std::string oversizedLabel(RSS_TOKEN_DEFINITION_MAX_NAME_BYTES + 1U, 'x');
+	// An omitted name is a public request to derive one. The derived name still
+	// has to fit the durable schema field before any schema publication.
+	const std::string defaultNameOverflowLabel(RSS_TOKEN_DEFINITION_MAX_NAME_BYTES - 16U, 'x');
 	expectInvalidIndex({oversizedName, "Person", {"name"}});
 	expectInvalidIndex({"person_name", oversizedLabel, {"name"}});
+	expectInvalidIndex({"", defaultNameOverflowLabel, {"name"}});
 	expectInvalidIndex({"person_name", "Person", {oversizedProperty}});
 	expectInvalidIndex({"person_name", "", {"name"}});
 	expectInvalidIndex({"person_name", "Person", {}});
@@ -1203,6 +1207,9 @@ TEST_F(RelocatableStorageBackendTest, NativeSchemaWriteSurfaceRejectsEachMalform
 			 std::invalid_argument);
 	EXPECT_THROW(static_cast<void>(backend.createLogicalNodeVectorIndex({oversizedName, "Person", "embedding", 2U, "l2"})),
 			 FormatException);
+	EXPECT_THROW(static_cast<void>(
+				 backend.createLogicalNodeVectorIndex({"", defaultNameOverflowLabel, "embedding", 2U, "l2"})),
+			 std::invalid_argument);
 	EXPECT_THROW(static_cast<void>(backend.createLogicalNodeVectorIndex({"vector", "Person", oversizedProperty, 2U, "l2"})),
 			 std::invalid_argument);
 	EXPECT_THROW(static_cast<void>(backend.createLogicalNodeVectorIndex({"vector", oversizedLabel, "embedding", 2U, "l2"})),

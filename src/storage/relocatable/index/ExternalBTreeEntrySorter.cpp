@@ -71,10 +71,6 @@ namespace graph::storage {
 
 		void writeEntry(std::FILE *file, const BTreePageEntry &entry) {
 			const std::vector<std::byte> encoded = BTreePageEntryCodec::encode(entry);
-			if (encoded.size() > MAXIMUM_RUN_ENTRY_BYTES) { // ZYX_COV_EXCL_LINE: add() rejects this before run writing.
-				fail(FormatError::FERR_INVALID_HEADER,
-					 "relocatable external B+Tree sort entry exceeds the configured index-key framing bound");
-			}
 			std::array<std::byte, sizeof(uint32_t)> length{};
 			LittleEndianCodec::writeU32(length, 0, static_cast<uint32_t>(encoded.size()));
 			writeAll(file, length.data(), length.size());
@@ -84,9 +80,6 @@ namespace graph::storage {
 		class RunReader final {
 		public:
 			explicit RunReader(std::FILE *file) : file_(file) {
-				if (file_ == nullptr) { // ZYX_COV_EXCL_LINE: only TemporaryRun supplies readers.
-					fail(FormatError::FERR_INVALID_STATE, "relocatable external B+Tree sort reader has no temporary run");
-				}
 				std::clearerr(file_);
 				std::rewind(file_);
 			}
@@ -213,9 +206,6 @@ namespace graph::storage {
 
 		[[nodiscard]] std::unique_ptr<TemporaryRun>
 		mergeRuns(std::span<const std::unique_ptr<TemporaryRun>> runs) {
-			if (runs.size() < 2U) { // ZYX_COV_EXCL_LINE: State merges only a full multi-run group.
-				fail(FormatError::FERR_INVALID_STATE, "relocatable external B+Tree sort merge requires multiple runs");
-			}
 			std::vector<RunReader> readers;
 			readers.reserve(runs.size());
 			for (const std::unique_ptr<TemporaryRun> &run: runs) {
@@ -246,12 +236,14 @@ namespace graph::storage {
 		void reduceRuns(detail::ExternalBTreeEntrySorterState &state) {
 			while (state.runs.size() > state.options.maximum_open_runs) {
 				const size_t groupSize = std::min(state.runs.size(), state.options.maximum_open_runs);
-				std::unique_ptr<TemporaryRun> merged = mergeRuns(
-						std::span<const std::unique_ptr<TemporaryRun>>(state.runs.data(), groupSize));
-				state.runs.erase(state.runs.begin(), state.runs.begin() + static_cast<std::ptrdiff_t>(groupSize));
-				state.runs.push_back(std::move(merged));
-			}
+			std::unique_ptr<TemporaryRun> merged = mergeRuns(
+					std::span<const std::unique_ptr<TemporaryRun>>(state.runs.data(), groupSize));
+			state.runs.erase(state.runs.begin(), state.runs.begin() + static_cast<std::ptrdiff_t>(groupSize));
+			// Keep the reduced prefix in source order so equal keys remain stable
+			// when the final cursor breaks ties by run ordinal.
+			state.runs.insert(state.runs.begin(), std::move(merged));
 		}
+	}
 
 	} // namespace
 

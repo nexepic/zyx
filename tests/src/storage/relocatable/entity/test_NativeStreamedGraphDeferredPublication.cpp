@@ -7,8 +7,9 @@
  **/
 
 #include <array>
-#include <optional>
+#include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -30,7 +31,7 @@ namespace {
 		return [records = std::move(records)] {
 			return [records, ordinal = size_t{0U}]() mutable -> std::optional<NativeBulkEdgeRecord> {
 				return ordinal == records.size() ? std::nullopt
-										 : std::optional<NativeBulkEdgeRecord>(records[ordinal++]);
+												 : std::optional<NativeBulkEdgeRecord>(records[ordinal++]);
 			};
 		};
 	}
@@ -61,6 +62,10 @@ TEST(NativeStreamedGraphDeferredPublicationTest, RewindsBoundedEntityPagesAndPro
 	shape.edge_entity_page_count = 2U;
 	const NativeStreamedGraphDeferredPublication publication =
 			NativeStreamedGraphDeferredPublication::create(source(records), std::span(&lease, 1U), shape, resolvers());
+	EXPECT_EQ(publication.recordCount(), records.size());
+	EXPECT_EQ(publication.firstEdgeId(), records.front().edge_id);
+	EXPECT_EQ(publication.lastEdgeId(), records.back().edge_id);
+	EXPECT_EQ(publication.entityPageCount(), shape.edge_entity_page_count);
 
 	std::vector<uint64_t> entityIds;
 	publication.visitEntityPages([&entityIds](NativeBulkEdgeEntityPageBatch &&batch) {
@@ -89,8 +94,8 @@ TEST(NativeStreamedGraphDeferredPublicationTest, RejectsSourceDivergenceFromItsI
 	shape.first_edge_id = 100U;
 	shape.last_edge_id = 101U;
 	shape.edge_entity_page_count = 1U;
-	const NativeStreamedGraphDeferredPublication publication =
-			NativeStreamedGraphDeferredPublication::create(source({record(100U)}), std::span(&lease, 1U), shape, resolvers());
+	const NativeStreamedGraphDeferredPublication publication = NativeStreamedGraphDeferredPublication::create(
+			source({record(100U)}), std::span(&lease, 1U), shape, resolvers());
 	EXPECT_THROW(publication.visitEntityPages([](NativeBulkEdgeEntityPageBatch &&) {}), FormatException);
 	EXPECT_THROW(publication.visitPropertyRoots([](PropertyCollectionRoot &&) {}), FormatException);
 }
@@ -116,8 +121,8 @@ TEST(NativeStreamedGraphDeferredPublicationTest, RejectsADeclaredEntityPageCount
 	shape.last_edge_id = 100U;
 	shape.edge_entity_page_count = 2U;
 	EXPECT_THROW(static_cast<void>(NativeStreamedGraphDeferredPublication::create(
-				source({record(100U)}), std::span(&lease, 1U), shape, resolvers())),
-			 FormatException);
+						 source({record(100U)}), std::span(&lease, 1U), shape, resolvers())),
+				 FormatException);
 }
 
 TEST(NativeStreamedGraphDeferredPublicationTest, RejectsADeclaredSpanOutsideItsDurableLease) {
@@ -128,8 +133,138 @@ TEST(NativeStreamedGraphDeferredPublicationTest, RejectsADeclaredSpanOutsideItsD
 	shape.last_edge_id = 99U;
 	shape.edge_entity_page_count = 1U;
 	EXPECT_THROW(static_cast<void>(NativeStreamedGraphDeferredPublication::create(
-				source({record(100U)}), std::span(&lease, 1U), shape, resolvers())),
-			 FormatException);
+						 source({record(100U)}), std::span(&lease, 1U), shape, resolvers())),
+				 FormatException);
+
+	shape.first_edge_id = 100U;
+	shape.last_edge_id = 101U;
+	EXPECT_THROW(static_cast<void>(NativeStreamedGraphDeferredPublication::create(
+						 source({record(100U)}), std::span(&lease, 1U), shape, resolvers())),
+				 FormatException);
+}
+
+TEST(NativeStreamedGraphDeferredPublicationTest, RejectsMissingMaterializationVisitors) {
+	const NativeGraphLogicalIdLeaseRange lease{100U, 1U};
+	NativeStreamedGraphPublicationPlan shape;
+	shape.record_count = 1U;
+	shape.first_edge_id = 100U;
+	shape.last_edge_id = 100U;
+	shape.edge_entity_page_count = 1U;
+	const NativeStreamedGraphDeferredPublication publication = NativeStreamedGraphDeferredPublication::create(
+			source({record(100U)}), std::span(&lease, 1U), shape, resolvers());
+	const NativeBulkEdgeEntityPageBatchVisitor noEntityVisitor;
+	const NativeStreamedGraphPropertyRootVisitor noPropertyVisitor;
+	EXPECT_THROW(publication.visitEntityPages(noEntityVisitor), FormatException);
+	EXPECT_THROW(publication.visitPropertyRoots(noPropertyVisitor), FormatException);
+}
+
+TEST(NativeStreamedGraphDeferredPublicationTest, RejectsIncompleteCreationContractsBeforeOpeningTheSource) {
+	const NativeGraphLogicalIdLeaseRange lease{100U, 1U};
+	const auto invoke = [&](const NativeBulkEdgeRecordSource &records, NativeStreamedGraphPublicationPlan shape,
+							NativeBulkEdgeMaterializerResolvers materializers,
+							std::span<const NativeGraphLogicalIdLeaseRange> leases) {
+		EXPECT_THROW(static_cast<void>(
+							 NativeStreamedGraphDeferredPublication::create(records, leases, shape, materializers)),
+					 FormatException);
+	};
+
+	NativeStreamedGraphPublicationPlan valid;
+	valid.record_count = 1U;
+	valid.edge_entity_page_count = 1U;
+	NativeBulkEdgeMaterializerResolvers validResolvers = resolvers();
+	const NativeBulkEdgeRecordSource validSource = source({record(100U)});
+	invoke({}, valid, validResolvers, std::span(&lease, 1U));
+	NativeStreamedGraphPublicationPlan noRecords = valid;
+	noRecords.record_count = 0U;
+	invoke(validSource, noRecords, validResolvers, std::span(&lease, 1U));
+	NativeStreamedGraphPublicationPlan noPages = valid;
+	noPages.edge_entity_page_count = 0U;
+	invoke(validSource, noPages, validResolvers, std::span(&lease, 1U));
+	NativeBulkEdgeMaterializerResolvers noRelationship = validResolvers;
+	noRelationship.relationship_type_token = {};
+	invoke(validSource, valid, noRelationship, std::span(&lease, 1U));
+	NativeBulkEdgeMaterializerResolvers noProperty = validResolvers;
+	noProperty.property_key_token = {};
+	invoke(validSource, valid, noProperty, std::span(&lease, 1U));
+	invoke(validSource, valid, validResolvers, {});
+}
+
+TEST(NativeStreamedGraphDeferredPublicationTest, RejectsMalformedOrderedLeases) {
+	NativeStreamedGraphPublicationPlan shape;
+	shape.record_count = 1U;
+	shape.edge_entity_page_count = 1U;
+	const NativeBulkEdgeRecordSource records = source({record(100U)});
+	const NativeBulkEdgeMaterializerResolvers materializers = resolvers();
+	const auto reject = [&](std::span<const NativeGraphLogicalIdLeaseRange> leases) {
+		EXPECT_THROW(static_cast<void>(
+							 NativeStreamedGraphDeferredPublication::create(records, leases, shape, materializers)),
+					 FormatException);
+	};
+	const NativeGraphLogicalIdLeaseRange zeroFirst{0U, 1U};
+	reject(std::span(&zeroFirst, 1U));
+	const NativeGraphLogicalIdLeaseRange zeroCount{100U, 0U};
+	reject(std::span(&zeroCount, 1U));
+	const NativeGraphLogicalIdLeaseRange overflowing{std::numeric_limits<uint64_t>::max(), 2U};
+	reject(std::span(&overflowing, 1U));
+	const std::array<NativeGraphLogicalIdLeaseRange, 2U> unordered{{{102U, 1U}, {101U, 1U}}};
+	reject(unordered);
+}
+
+TEST(NativeStreamedGraphDeferredPublicationTest, RejectsIncompleteAndNoncanonicalSourceSpans) {
+	const NativeGraphLogicalIdLeaseRange lease{100U, 1U};
+	const NativeBulkEdgeMaterializerResolvers materializers = resolvers();
+	NativeStreamedGraphPublicationPlan shape;
+	shape.record_count = 1U;
+	shape.edge_entity_page_count = 1U;
+	shape.first_edge_id = 0U;
+	shape.last_edge_id = 100U;
+	EXPECT_THROW(static_cast<void>(NativeStreamedGraphDeferredPublication::create(
+						 source({record(100U)}), std::span(&lease, 1U), shape, materializers)),
+				 FormatException);
+	shape.first_edge_id = 100U;
+	shape.last_edge_id = 0U;
+	EXPECT_THROW(static_cast<void>(NativeStreamedGraphDeferredPublication::create(
+						 source({record(100U)}), std::span(&lease, 1U), shape, materializers)),
+				 FormatException);
+
+	NativeStreamedGraphPublicationPlan inferred = shape;
+	inferred.first_edge_id = 0U;
+	inferred.last_edge_id = 0U;
+	const std::array<NativeGraphLogicalIdLeaseRange, 2U> sparseLeases{{{100U, 1U}, {102U, 1U}}};
+	NativeBulkEdgeRecord zero = record(100U);
+	zero.edge_id = 0U;
+	EXPECT_THROW(static_cast<void>(NativeStreamedGraphDeferredPublication::create(source({zero}), sparseLeases,
+																				  inferred, materializers)),
+				 FormatException);
+	EXPECT_THROW(static_cast<void>(NativeStreamedGraphDeferredPublication::create(
+						 source({record(100U), record(101U)}), sparseLeases, inferred, materializers)),
+				 FormatException);
+}
+
+TEST(NativeStreamedGraphDeferredPublicationTest, RejectsLegacySparseLeaseSourcesWithDuplicateOrTruncatedRecords) {
+	const std::array<NativeGraphLogicalIdLeaseRange, 2U> leases = {NativeGraphLogicalIdLeaseRange{100U, 1U},
+																   NativeGraphLogicalIdLeaseRange{102U, 1U}};
+	const NativeBulkEdgeMaterializerResolvers materializers = resolvers();
+	const NativeStreamedGraphPublicationPlan shape{2U, 1U};
+	EXPECT_THROW(static_cast<void>(NativeStreamedGraphDeferredPublication::create(source({record(102U), record(102U)}),
+																				  leases, shape, materializers)),
+				 FormatException);
+	EXPECT_THROW(static_cast<void>(NativeStreamedGraphDeferredPublication::create(source({record(100U)}), leases, shape,
+																				  materializers)),
+				 FormatException);
+}
+
+TEST(NativeStreamedGraphDeferredPublicationTest, RejectsAReplayThatChangesOnlyItsLastEdgeId) {
+	const NativeGraphLogicalIdLeaseRange lease{100U, 3U};
+	NativeStreamedGraphPublicationPlan shape;
+	shape.record_count = 2U;
+	shape.first_edge_id = 100U;
+	shape.last_edge_id = 101U;
+	shape.edge_entity_page_count = 1U;
+	const NativeStreamedGraphDeferredPublication publication = NativeStreamedGraphDeferredPublication::create(
+			source({record(100U), record(102U)}), std::span(&lease, 1U), shape, resolvers());
+	EXPECT_THROW(publication.visitEntityPages([](NativeBulkEdgeEntityPageBatch &&) {}), FormatException);
+	EXPECT_THROW(publication.visitPropertyRoots([](PropertyCollectionRoot &&) {}), FormatException);
 }
 
 TEST(NativeStreamedGraphDeferredPublicationTest, DefersLegacySingleLeaseSourceReadsUntilMaterialization) {
@@ -155,8 +290,8 @@ TEST(NativeStreamedGraphDeferredPublicationTest, DefersLegacySingleLeaseSourceRe
 }
 
 TEST(NativeStreamedGraphDeferredPublicationTest, DerivesLegacySparseLeaseSpanByVerifyingTheSource) {
-	const std::array<NativeGraphLogicalIdLeaseRange, 2U> leases = {
-			NativeGraphLogicalIdLeaseRange{100U, 1U}, NativeGraphLogicalIdLeaseRange{102U, 1U}};
+	const std::array<NativeGraphLogicalIdLeaseRange, 2U> leases = {NativeGraphLogicalIdLeaseRange{100U, 1U},
+																   NativeGraphLogicalIdLeaseRange{102U, 1U}};
 	const NativeStreamedGraphPublicationPlan shape{2U, 1U};
 	const NativeStreamedGraphDeferredPublication publication = NativeStreamedGraphDeferredPublication::create(
 			source({record(100U), record(102U)}), leases, shape, resolvers());

@@ -165,6 +165,25 @@ TEST_F(RelocatableBTreePageStoreTest, BulkBuildsAnEmptyTreeWithOneRootLeaf) {
 	snapshot.release();
 }
 
+TEST_F(RelocatableBTreePageStoreTest, BulkBuildsLexicographicallyOrderedPrefixKeys) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+	SlottedPagePool pages(io, *metadata);
+	BTreePageStore store(pages, *metadata);
+	const std::vector<BTreePageEntry> expected{
+			{{static_cast<std::byte>(0x10U)}, 1U},
+			{{static_cast<std::byte>(0x10U), static_cast<std::byte>(0x20U)}, 2U},
+	};
+
+	static_cast<void>(
+			BulkBTreeBuilder::build(store, *metadata, INDEX_ID, sourceFor(expected), options(), LogSequenceNumber(2U)));
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	BTreeIndex index(INDEX_ID, store, *metadata);
+	EXPECT_EQ(index.find(snapshot, expected.front().key), std::optional<uint64_t>(1U));
+	EXPECT_EQ(index.find(snapshot, expected.back().key), std::optional<uint64_t>(2U));
+	EXPECT_EQ(index.scan(snapshot, std::nullopt, expected.size()), expected);
+	snapshot.release();
+}
+
 TEST_F(RelocatableBTreePageStoreTest, BulkBuildsAndReopensKeyOnlyLeaves) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
 	SlottedPagePool pages(io, *metadata);
@@ -507,6 +526,32 @@ TEST_F(RelocatableBTreePageStoreTest, RejectsInvalidNativePlansAndTamperedPrepar
 						store, *metadata, published, INDEX_ID, sourceFor(entries(1U)), options()));
 			},
 			FormatError::FERR_INVALID_STATE);
+	published.release();
+}
+
+TEST_F(RelocatableBTreePageStoreTest, NativeBulkReplacementPlanRequiresAndUsesAPublishedRoot) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+	SlottedPagePool pages(io, *metadata);
+	BTreePageStore store(pages, *metadata);
+
+	MetadataSnapshotPin empty = metadata->openSnapshot();
+	expectFormatError(
+			[&] {
+				static_cast<void>(BulkBTreeBuilder::planNativeReplacementTree(
+						store, *metadata, empty, INDEX_ID, sourceFor(entries(2U)), options()));
+			},
+			FormatError::FERR_INVALID_STATE);
+	empty.release();
+
+	static_cast<void>(
+			BulkBTreeBuilder::build(store, *metadata, INDEX_ID, sourceFor(entries(2U)), options(), LogSequenceNumber(2U)));
+	MetadataSnapshotPin published = metadata->openSnapshot();
+	const BTreeInitialTreeMutationPlan replacement = BulkBTreeBuilder::planNativeReplacementTree(
+			store, *metadata, published, INDEX_ID, sourceFor(entries(3U)), options());
+	EXPECT_EQ(replacement.index_id, INDEX_ID);
+	EXPECT_EQ(replacement.entry_count, 3U);
+	EXPECT_FALSE(replacement.new_pool_mutations.empty());
+	EXPECT_TRUE(replacement.preparer);
 	published.release();
 }
 

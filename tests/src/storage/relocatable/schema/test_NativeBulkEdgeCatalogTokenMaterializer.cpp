@@ -7,6 +7,7 @@
  **/
 
 #include <algorithm>
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -128,6 +129,57 @@ protected:
 	}
 };
 
+TEST(SystemCatalogTokenKeyCodecTest, RejectsInvalidSchemaKindsAndNamesAtThePublicCodecBoundary) {
+	EXPECT_NO_THROW(SystemCatalogTokenKeyCodec::validateSchemaKind(SystemCatalogSchemaTokenKind::SCSTK_LABEL));
+	EXPECT_NO_THROW(SystemCatalogTokenKeyCodec::validateSchemaKind(
+			SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE));
+	EXPECT_THROW(SystemCatalogTokenKeyCodec::validateSchemaKind(static_cast<SystemCatalogSchemaTokenKind>(0U)),
+			 FormatException);
+
+	EXPECT_NO_THROW(SystemCatalogTokenKeyCodec::validateName("catalog_name"));
+	EXPECT_THROW(SystemCatalogTokenKeyCodec::validateName(""), FormatException);
+	const std::string oversized(RSS_SYSTEM_CATALOG_NAME_MAX_BYTES + 1U, 'x');
+	EXPECT_THROW(SystemCatalogTokenKeyCodec::validateName(oversized), FormatException);
+}
+
+TEST(SystemCatalogTokenKeyCodecTest, ProducesStableKeysInSeparateTokenNamespaces) {
+	const std::vector<std::byte> bootstrap = SystemCatalogTokenKeyCodec::bootstrapKey();
+	const std::vector<std::byte> propertyName = SystemCatalogTokenKeyCodec::propertyNameKey("name");
+	const std::vector<std::byte> propertyToken = SystemCatalogTokenKeyCodec::propertyTokenKey(7U, "name");
+	const std::vector<std::byte> labelName =
+			SystemCatalogTokenKeyCodec::schemaNameKey(SystemCatalogSchemaTokenKind::SCSTK_LABEL, "name");
+	const std::vector<std::byte> relationshipName = SystemCatalogTokenKeyCodec::schemaNameKey(
+			SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, "name");
+	const std::vector<std::byte> labelToken =
+			SystemCatalogTokenKeyCodec::schemaTokenKey(SystemCatalogSchemaTokenKind::SCSTK_LABEL, 7U, "name");
+	const std::vector<std::byte> relationshipToken = SystemCatalogTokenKeyCodec::schemaTokenKey(
+			SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, 7U, "name");
+	const std::vector<std::byte> propertySequence = SystemCatalogTokenKeyCodec::propertyTokenSequenceKey();
+	const std::vector<std::byte> schemaSequence = SystemCatalogTokenKeyCodec::schemaTokenSequenceKey();
+
+	EXPECT_FALSE(bootstrap.empty());
+	EXPECT_EQ(propertyName, SystemCatalogTokenKeyCodec::propertyNameKey("name"));
+	EXPECT_NE(propertyName, SystemCatalogTokenKeyCodec::propertyNameKey("other"));
+	EXPECT_NE(propertyName, propertyToken);
+	EXPECT_NE(propertyName, labelName);
+	EXPECT_NE(labelName, relationshipName);
+	EXPECT_NE(labelToken, relationshipToken);
+	EXPECT_NE(bootstrap, propertySequence);
+	EXPECT_NE(propertySequence, schemaSequence);
+}
+
+TEST(SystemCatalogGraphCardinalityCodecTest, PreservesZeroCountsAndRejectsInvalidPersistedValues) {
+	EXPECT_FALSE(SystemCatalogGraphCardinalityCodec::nodeCountKey().empty());
+	EXPECT_FALSE(SystemCatalogGraphCardinalityCodec::edgeCountKey().empty());
+	EXPECT_EQ(SystemCatalogGraphCardinalityCodec::encodeCount(0U), 1U);
+	EXPECT_EQ(SystemCatalogGraphCardinalityCodec::encodeCount(41U), 42U);
+	EXPECT_EQ(SystemCatalogGraphCardinalityCodec::decodeCount(1U), 0U);
+	EXPECT_EQ(SystemCatalogGraphCardinalityCodec::decodeCount(42U), 41U);
+	EXPECT_THROW(static_cast<void>(SystemCatalogGraphCardinalityCodec::encodeCount(std::numeric_limits<uint64_t>::max())),
+			 FormatException);
+	EXPECT_THROW(static_cast<void>(SystemCatalogGraphCardinalityCodec::decodeCount(0U)), FormatException);
+}
+
 TEST_F(NativeBulkEdgeCatalogTokenMaterializerTest,
 	   ResolvesExistingTokensAllocatesMissingTokensAndBuildsARewindableOverlay) {
 	BTreePageStore pages(*slottedPages_, *metadata_);
@@ -196,6 +248,32 @@ TEST_F(NativeBulkEdgeCatalogTokenMaterializerTest, RejectsUnorderedOrOverBoundTo
 	snapshot.release();
 }
 
+TEST_F(NativeBulkEdgeCatalogTokenMaterializerTest, RejectsIndependentTokenAndCatalogBoundsBeforePublication) {
+	BTreePageStore pages(*slottedPages_, *metadata_);
+	SystemCatalog catalog(pages, *metadata_);
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	const BTreePageEntry property{
+			NativeBulkEdgeTokenRunBuilder::encodeKey(NativeBulkEdgeTokenKind::NBETK_PROPERTY, "property"), 0U};
+	const BTreePageEntry relationship{
+			NativeBulkEdgeTokenRunBuilder::encodeKey(NativeBulkEdgeTokenKind::NBETK_RELATIONSHIP_TYPE, "REL"), 0U};
+	EXPECT_TRUE(std::lexicographical_compare(property.key.begin(), property.key.end(), relationship.key.begin(),
+															 relationship.key.end()));
+
+	EXPECT_THROW(static_cast<void>(NativeBulkEdgeCatalogTokenMaterializer::prepare(
+					 catalog, snapshot, tokenSource({property, relationship}), {1U, 64U})),
+			 FormatException);
+	EXPECT_THROW(static_cast<void>(NativeBulkEdgeCatalogTokenMaterializer::prepare(
+					 catalog, snapshot, tokenSource({property}), {1U, 0U})),
+			 FormatException);
+	snapshot.release();
+	EXPECT_THROW(static_cast<void>(NativeBulkEdgeCatalogTokenMaterializer::prepare(
+					 catalog, snapshot, tokenSource({property}), {1U, 64U})),
+			 FormatException);
+	EXPECT_THROW(static_cast<void>(NativeBulkEdgeCatalogTokenMaterializer::prepare(catalog, metadata_->openSnapshot(),
+					 OrderedBTreeEntrySource{}, {1U, 64U})),
+			 FormatException);
+}
+
 TEST_F(NativeBulkEdgeCatalogTokenMaterializerTest, LeavesTheCatalogAbsentForAnEmptyTokenStream) {
 	BTreePageStore pages(*slottedPages_, *metadata_);
 	SystemCatalog catalog(pages, *metadata_);
@@ -206,6 +284,54 @@ TEST_F(NativeBulkEdgeCatalogTokenMaterializerTest, LeavesTheCatalogAbsentForAnEm
 	EXPECT_TRUE(readResolutions(materialization.resolutions).empty());
 	EXPECT_TRUE(readEntries(materialization.final_catalog_entries).empty());
 	EXPECT_FALSE(metadata_->findIndexRootOptional(snapshot, RSS_SYSTEM_CATALOG_INDEX_ID).has_value());
+	snapshot.release();
+}
+
+TEST_F(NativeBulkEdgeCatalogTokenMaterializerTest, BuildsAnInitialCatalogForRelationshipTypesWithoutPropertyTokens) {
+	BTreePageStore pages(*slottedPages_, *metadata_);
+	SystemCatalog catalog(pages, *metadata_);
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	const BTreePageEntry relationship{
+			NativeBulkEdgeTokenRunBuilder::encodeKey(NativeBulkEdgeTokenKind::NBETK_RELATIONSHIP_TYPE, "REL"), 0U};
+	const NativeBulkEdgeCatalogTokenMaterialization materialization = NativeBulkEdgeCatalogTokenMaterializer::prepare(
+			catalog, snapshot, tokenSource({relationship}), {1U, 64U});
+
+	EXPECT_TRUE(materialization.catalog_changed);
+	EXPECT_EQ(materialization.new_property_tokens, 0U);
+	EXPECT_EQ(materialization.new_schema_tokens, 1U);
+	const std::map<std::vector<std::byte>, uint64_t> overlay = readEntries(materialization.final_catalog_entries);
+	EXPECT_EQ(overlay.at(SystemCatalogTokenKeyCodec::bootstrapKey()), RSS_SYSTEM_CATALOG_BOOTSTRAP_VALUE);
+	EXPECT_EQ(overlay.at(SystemCatalogTokenKeyCodec::schemaNameKey(
+					  SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, "REL")),
+			  1U);
+	EXPECT_EQ(overlay.at(SystemCatalogTokenKeyCodec::schemaTokenSequenceKey()), 2U);
+	EXPECT_EQ(overlay.count(SystemCatalogTokenKeyCodec::propertyTokenSequenceKey()), 0U);
+	snapshot.release();
+}
+
+TEST_F(NativeBulkEdgeCatalogTokenMaterializerTest, RejectsMalformedTokenEntriesAtResolutionTime) {
+	BTreePageStore pages(*slottedPages_, *metadata_);
+	SystemCatalog catalog(pages, *metadata_);
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	const auto expectMalformed = [&](BTreePageEntry malformed) {
+		EXPECT_THROW(static_cast<void>(NativeBulkEdgeCatalogTokenMaterializer::prepare(
+					catalog, snapshot, tokenSource({std::move(malformed)}), {1U, 64U})),
+				 FormatException);
+	};
+
+	// Token entries are key-only and must carry a supported kind plus a valid name.
+	expectMalformed({NativeBulkEdgeTokenRunBuilder::encodeKey(NativeBulkEdgeTokenKind::NBETK_PROPERTY, "p"), 1U});
+	expectMalformed({{std::byte{0xffU}, std::byte{'p'}}, 0U});
+	expectMalformed({{std::byte{static_cast<uint8_t>(NativeBulkEdgeTokenKind::NBETK_PROPERTY)}}, 0U});
+	std::vector<std::byte> oversizedName{
+			static_cast<std::byte>(static_cast<uint8_t>(NativeBulkEdgeTokenKind::NBETK_PROPERTY))};
+	oversizedName.resize(1U + RSS_SYSTEM_CATALOG_NAME_MAX_BYTES + 1U, std::byte{'x'});
+	expectMalformed({std::move(oversizedName), 0U});
+
+	const OrderedBTreeEntrySource noCursor = [] { return OrderedBTreeEntryCursor{}; };
+	EXPECT_THROW(static_cast<void>(NativeBulkEdgeCatalogTokenMaterializer::prepare(catalog, snapshot, noCursor,
+																									 {1U, 64U})),
+				 FormatException);
 	snapshot.release();
 }
 
@@ -231,4 +357,162 @@ TEST_F(NativeBulkEdgeCatalogTokenMaterializerTest, UpdatesExistingGraphCardinali
 	EXPECT_EQ(overlay.at(SystemCatalogGraphCardinalityCodec::edgeCountKey()),
 			  SystemCatalogGraphCardinalityCodec::encodeCount(7U));
 	snapshot.release();
+}
+
+TEST_F(NativeBulkEdgeCatalogTokenMaterializerTest,
+	   PreservesAnExistingCatalogForAnEmptyTokenStreamWithoutAStatisticsUpdate) {
+	BTreePageStore pages(*slottedPages_, *metadata_);
+	SystemCatalog catalog(pages, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, pages, plannerOptions());
+	NativeGraphWriteTransaction seed = planner.beginTransaction();
+	SystemCatalogWriteSession session = catalog.beginWrite(seed);
+	EXPECT_EQ(session.ensurePropertyToken("persisted"), 1U);
+	session.setGraphCardinalityStatistics({2U, 3U});
+	session.finish();
+	ASSERT_TRUE(seed.commit().committed());
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	const NativeBulkEdgeCatalogTokenMaterialization materialization =
+			NativeBulkEdgeCatalogTokenMaterializer::prepare(catalog, snapshot, tokenSource({}), {1U, 64U});
+	EXPECT_FALSE(materialization.graph_cardinality_updated);
+	EXPECT_FALSE(materialization.catalog_changed);
+	EXPECT_TRUE(readResolutions(materialization.resolutions).empty());
+	const std::map<std::vector<std::byte>, uint64_t> overlay = readEntries(materialization.final_catalog_entries);
+	EXPECT_EQ(overlay.at(SystemCatalogTokenKeyCodec::bootstrapKey()), RSS_SYSTEM_CATALOG_BOOTSTRAP_VALUE);
+	EXPECT_EQ(overlay.at(SystemCatalogTokenKeyCodec::propertyNameKey("persisted")), 1U);
+	EXPECT_EQ(overlay.at(SystemCatalogTokenKeyCodec::propertyTokenSequenceKey()), 2U);
+	EXPECT_EQ(overlay.at(SystemCatalogGraphCardinalityCodec::nodeCountKey()),
+			  SystemCatalogGraphCardinalityCodec::encodeCount(2U));
+	EXPECT_EQ(overlay.at(SystemCatalogGraphCardinalityCodec::edgeCountKey()),
+			  SystemCatalogGraphCardinalityCodec::encodeCount(3U));
+	snapshot.release();
+}
+
+TEST_F(NativeBulkEdgeCatalogTokenMaterializerTest, RejectsAnOverflowingIncrementForExistingGraphCardinality) {
+	BTreePageStore pages(*slottedPages_, *metadata_);
+	SystemCatalog catalog(pages, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, pages, plannerOptions());
+	NativeGraphWriteTransaction seed = planner.beginTransaction();
+	SystemCatalogWriteSession session = catalog.beginWrite(seed);
+	session.setGraphCardinalityStatistics({2U, std::numeric_limits<uint64_t>::max() - 1U});
+	session.finish();
+	ASSERT_TRUE(seed.commit().committed());
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_THROW(static_cast<void>(NativeBulkEdgeCatalogTokenMaterializer::prepare(
+				 catalog, snapshot, tokenSource({}), {1U, 64U}, 2U)),
+			 FormatException);
+	EXPECT_EQ(catalog.readGraphCardinalityStatistics(snapshot),
+			  std::optional<NativeGraphCardinalityStatistics>({2U, std::numeric_limits<uint64_t>::max() - 1U}));
+	snapshot.release();
+}
+
+TEST_F(NativeBulkEdgeCatalogTokenMaterializerTest, IgnoresCardinalityIncrementUntilStatisticsExist) {
+	BTreePageStore pages(*slottedPages_, *metadata_);
+	SystemCatalog catalog(pages, *metadata_);
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	const NativeBulkEdgeCatalogTokenMaterialization materialization =
+			NativeBulkEdgeCatalogTokenMaterializer::prepare(catalog, snapshot, tokenSource({}), {1U, 64U}, 3U);
+	EXPECT_FALSE(materialization.graph_cardinality_updated);
+	EXPECT_FALSE(materialization.catalog_changed);
+	EXPECT_TRUE(readEntries(materialization.final_catalog_entries).empty());
+	snapshot.release();
+}
+
+TEST_F(NativeBulkEdgeCatalogTokenMaterializerTest,
+	   RejectsAnOutOfRangePersistedPropertySequenceBeforeEmittingAResolution) {
+	BTreePageStore pages(*slottedPages_, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, pages, plannerOptions());
+	NativeGraphWriteTransaction seed = planner.beginTransaction();
+	const std::array<BTreePageEntry, 2U> entries = {
+			BTreePageEntry{SystemCatalogTokenKeyCodec::bootstrapKey(), RSS_SYSTEM_CATALOG_BOOTSTRAP_VALUE},
+			BTreePageEntry{SystemCatalogTokenKeyCodec::propertyTokenSequenceKey(),
+							static_cast<uint64_t>(std::numeric_limits<uint32_t>::max()) + 1U},
+	};
+	seed.stageScalarIndexCreate(pages, RSS_SYSTEM_CATALOG_INDEX_ID, entries);
+	ASSERT_TRUE(seed.commit().committed());
+
+	SystemCatalog catalog(pages, *metadata_);
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	const BTreePageEntry property{
+			NativeBulkEdgeTokenRunBuilder::encodeKey(NativeBulkEdgeTokenKind::NBETK_PROPERTY, "overflow"), 0U};
+	EXPECT_THROW(static_cast<void>(NativeBulkEdgeCatalogTokenMaterializer::prepare(
+					 catalog, snapshot, tokenSource({property}), {1U, 64U})),
+			 FormatException);
+	snapshot.release();
+}
+
+TEST_F(NativeBulkEdgeCatalogTokenMaterializerTest,
+	   AllocatesTheLastRelationshipTokenAndPersistsTheExhaustedSequenceMarker) {
+	BTreePageStore pages(*slottedPages_, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, pages, plannerOptions());
+	NativeGraphWriteTransaction seed = planner.beginTransaction();
+	const std::array<BTreePageEntry, 2U> entries = {
+			BTreePageEntry{SystemCatalogTokenKeyCodec::bootstrapKey(), RSS_SYSTEM_CATALOG_BOOTSTRAP_VALUE},
+			BTreePageEntry{SystemCatalogTokenKeyCodec::schemaTokenSequenceKey(),
+							std::numeric_limits<uint64_t>::max()},
+	};
+	seed.stageScalarIndexCreate(pages, RSS_SYSTEM_CATALOG_INDEX_ID, entries);
+	ASSERT_TRUE(seed.commit().committed());
+
+	SystemCatalog catalog(pages, *metadata_);
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	const BTreePageEntry relationship{NativeBulkEdgeTokenRunBuilder::encodeKey(
+											NativeBulkEdgeTokenKind::NBETK_RELATIONSHIP_TYPE, "LAST"),
+											0U};
+	const NativeBulkEdgeCatalogTokenMaterialization materialization = NativeBulkEdgeCatalogTokenMaterializer::prepare(
+			catalog, snapshot, tokenSource({relationship}), {1U, 64U});
+	EXPECT_EQ(readResolutions(materialization.resolutions),
+			  (std::vector<NativeBulkEdgeCatalogTokenResolution>{
+					  {NativeBulkEdgeTokenKind::NBETK_RELATIONSHIP_TYPE, "LAST",
+					   std::numeric_limits<uint64_t>::max(), true}}));
+	const std::map<std::vector<std::byte>, uint64_t> overlay = readEntries(materialization.final_catalog_entries);
+	EXPECT_EQ(overlay.at(SystemCatalogTokenKeyCodec::schemaTokenSequenceKey()), 0U);
+	snapshot.release();
+}
+
+TEST_F(NativeBulkEdgeCatalogTokenMaterializerTest, RejectsThePersistedExhaustedRelationshipSequenceMarker) {
+	BTreePageStore pages(*slottedPages_, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, pages, plannerOptions());
+	NativeGraphWriteTransaction seed = planner.beginTransaction();
+	const std::array<BTreePageEntry, 2U> entries = {
+			BTreePageEntry{SystemCatalogTokenKeyCodec::bootstrapKey(), RSS_SYSTEM_CATALOG_BOOTSTRAP_VALUE},
+			BTreePageEntry{SystemCatalogTokenKeyCodec::schemaTokenSequenceKey(),
+							std::numeric_limits<uint64_t>::max()},
+	};
+	seed.stageScalarIndexCreate(pages, RSS_SYSTEM_CATALOG_INDEX_ID, entries);
+	ASSERT_TRUE(seed.commit().committed());
+
+	SystemCatalog catalog(pages, *metadata_);
+	NativeGraphWriteTransaction exhaust = planner.beginTransaction();
+	SystemCatalogWriteSession session = catalog.beginWrite(exhaust);
+	EXPECT_EQ(session.ensureSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, "LAST"),
+			  std::numeric_limits<uint64_t>::max());
+	session.finish();
+	ASSERT_TRUE(exhaust.commit().committed());
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	const BTreePageEntry relationship{NativeBulkEdgeTokenRunBuilder::encodeKey(
+											NativeBulkEdgeTokenKind::NBETK_RELATIONSHIP_TYPE, "EXHAUSTED"),
+											0U};
+	EXPECT_THROW(static_cast<void>(NativeBulkEdgeCatalogTokenMaterializer::prepare(
+					 catalog, snapshot, tokenSource({relationship}), {1U, 64U})),
+			 FormatException);
+	snapshot.release();
+}
+
+TEST_F(NativeBulkEdgeCatalogTokenMaterializerTest, ResolutionAndOverlaySourcesDoNotOutliveTheirPlanningSnapshot) {
+	BTreePageStore pages(*slottedPages_, *metadata_);
+	SystemCatalog catalog(pages, *metadata_);
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	const BTreePageEntry property{
+			NativeBulkEdgeTokenRunBuilder::encodeKey(NativeBulkEdgeTokenKind::NBETK_PROPERTY, "scoped"), 0U};
+	const NativeBulkEdgeCatalogTokenMaterialization materialization = NativeBulkEdgeCatalogTokenMaterializer::prepare(
+			catalog, snapshot, tokenSource({property}), {1U, 64U});
+	snapshot.release();
+
+	// Both exposed sources capture the planning snapshot. They must reject use
+	// after its release instead of resolving tokens against a later generation.
+	EXPECT_THROW(static_cast<void>(readResolutions(materialization.resolutions)), FormatException);
+	EXPECT_THROW(static_cast<void>(readEntries(materialization.final_catalog_entries)), FormatException);
 }

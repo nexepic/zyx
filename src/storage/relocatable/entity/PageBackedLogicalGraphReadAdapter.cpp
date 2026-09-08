@@ -60,9 +60,26 @@ namespace graph::storage {
 
 	} // namespace
 
+	PageBackedLogicalGraphAdjacencyCursor::PageBackedLogicalGraphAdjacencyCursor(
+			PageBackedLogicalGraphAdjacencyCursor &&other) noexcept :
+			adapter_(std::exchange(other.adapter_, nullptr)), native_(std::move(other.native_)) {
+		other.native_.reset();
+	}
+
+	PageBackedLogicalGraphAdjacencyCursor &
+	PageBackedLogicalGraphAdjacencyCursor::operator=(PageBackedLogicalGraphAdjacencyCursor &&other) noexcept {
+		if (this != &other) {
+			adapter_ = std::exchange(other.adapter_, nullptr);
+			native_ = std::move(other.native_);
+			other.native_.reset();
+		}
+		return *this;
+	}
+
 	LogicalGraphAdjacencyPage PageBackedLogicalGraphAdjacencyCursor::next(
 			const MetadataSnapshotPin &snapshot, std::optional<LogicalGraphAdjacencyContinuation> continuation,
 			size_t maximumRecords) {
+		// The private constructor always binds a live adapter and native cursor together.
 		if (adapter_ == nullptr || !native_.has_value()) {
 			throwLogicalAdapterError(FormatError::FERR_INVALID_STATE,
 									 "page-backed logical adjacency cursor has no native scan state");
@@ -155,7 +172,8 @@ namespace graph::storage {
 	}
 
 	LogicalGraphNode PageBackedLogicalGraphReadAdapter::materializeNode(const MetadataSnapshotPin &snapshot,
-																		const PageBackedGraphNode &node) const {
+																												const PageBackedGraphNode &node) const {
+		// Entity Map publication rejects zero Node IDs before the native read adapter materializes.
 		if (node.node_id == 0U) {
 			throwLogicalAdapterError(FormatError::FERR_INVALID_STATE,
 									 "page-backed logical graph adapter received a Node with no logical ID");
@@ -166,6 +184,7 @@ namespace graph::storage {
 		std::unordered_set<std::string> labelNames;
 		labelNames.reserve(node.label_token_ids.size());
 		for (const uint64_t tokenId: node.label_token_ids) {
+			// NodeEntityRecordCodec rejects zero inline label tokens.
 			if (tokenId == 0U) {
 				throwLogicalAdapterError(FormatError::FERR_INVALID_STATE,
 										 "page-backed logical graph adapter received a zero Node label token");
@@ -181,6 +200,7 @@ namespace graph::storage {
 		std::unordered_set<std::string> propertyNames;
 		propertyNames.reserve(node.properties.size());
 		for (const PropertyCollectionRootEntry &property: node.properties) {
+			// Property-root decoding rejects a zero property token before this adapter.
 			if (property.key_token == 0U) {
 				throwLogicalAdapterError(FormatError::FERR_INVALID_STATE,
 										 "page-backed logical graph adapter received a zero Node Property token");
@@ -197,7 +217,8 @@ namespace graph::storage {
 	}
 
 	LogicalGraphEdge PageBackedLogicalGraphReadAdapter::materializeEdge(const MetadataSnapshotPin &snapshot,
-																		const PageBackedGraphEdge &edge) const {
+																										const PageBackedGraphEdge &edge) const {
+		// Entity Map and EdgeEntityRecordCodec authenticate these three durable identities.
 		if (edge.edge_id == 0U || edge.source_node_id == 0U || edge.target_node_id == 0U) {
 			throwLogicalAdapterError(
 					FormatError::FERR_INVALID_STATE,
@@ -218,6 +239,7 @@ namespace graph::storage {
 		std::unordered_set<std::string> propertyNames;
 		propertyNames.reserve(edge.properties.size());
 		for (const PropertyCollectionRootEntry &property: edge.properties) {
+			// Property-root decoding rejects a zero property token before this adapter.
 			if (property.key_token == 0U) {
 				throwLogicalAdapterError(FormatError::FERR_INVALID_STATE,
 										 "page-backed logical graph adapter received a zero Edge Property token");
@@ -305,6 +327,7 @@ namespace graph::storage {
 		return pages_.visitEdgeTopologiesUntil(
 				snapshot, maximumRecords,
 				[this, &snapshot, &visitor](const uint64_t edgeId, const EdgeEntityRecord &record) {
+					// Entity Map and EdgeEntityRecordCodec authenticate topology identities.
 					if (edgeId == 0U || record.source_node_id == 0U || record.target_node_id == 0U) {
 						throwLogicalAdapterError(
 								FormatError::FERR_INVALID_STATE,
@@ -380,6 +403,7 @@ namespace graph::storage {
 		return pages_.visitAdjacentEdgeTopologiesUntil(
 				snapshot, nodeId, pageDirection(direction), maximumRecords,
 				[this, &snapshot, &visitor](uint64_t edgeId, const EdgeEntityRecord &edge) {
+					// Entity Map and EdgeEntityRecordCodec authenticate adjacency identities.
 					if (edgeId == 0U || edge.source_node_id == 0U || edge.target_node_id == 0U) {
 						throwLogicalAdapterError(
 								FormatError::FERR_INVALID_STATE,

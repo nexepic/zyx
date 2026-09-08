@@ -90,6 +90,19 @@ TEST(RelocatableSlottedPageTest, CreatesRoundTripsAndReportsEmptyStats) {
 					  FormatError::FERR_INVALID_HEADER);
 }
 
+TEST(RelocatableSlottedPageTest, DefinesThePublicSlotReferenceAndOwnerKindDomains) {
+	EXPECT_FALSE(SlottedSlotReference{}.isValid());
+	EXPECT_FALSE((SlottedSlotReference{PageId(1U), RSS_SLOTTED_PAGE_NO_SLOT, 1U}.isValid()));
+	EXPECT_FALSE((SlottedSlotReference{PageId(1U), 0U, 0U}.isValid()));
+	EXPECT_TRUE((SlottedSlotReference{PageId(1U), 0U, 1U}.isValid()));
+
+	for (const PageOwnerKind kind: {PageOwnerKind::POK_PROPERTY, PageOwnerKind::POK_INDEX, PageOwnerKind::POK_STATE,
+								   PageOwnerKind::POK_VECTOR_ADJACENCY, PageOwnerKind::POK_ENTITY_LABEL}) {
+		EXPECT_TRUE(SlottedPage::supportsOwnerKind(kind));
+	}
+	EXPECT_FALSE(SlottedPage::supportsOwnerKind(PageOwnerKind::POK_NONE));
+}
+
 TEST(RelocatableSlottedPageTest, BindsVariablePageBytesToTheirSharedPoolOwner) {
 	PageOwnerHeader owner;
 	owner.page_id = PageId(18);

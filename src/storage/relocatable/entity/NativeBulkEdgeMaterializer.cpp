@@ -31,7 +31,8 @@ namespace graph::storage {
 											  size_t maximumRecords,
 											  const NativeBulkEdgeMaterializerResolvers &resolvers,
 											  const NativeBulkEdgeMaterializedRecordVisitor &visitor) {
-		if (!source || edgeIdRanges.empty() || maximumRecords == 0U || !resolvers.relationship_type_token ||
+		if (!source || edgeIdRanges.empty() || maximumRecords == 0U ||
+			maximumRecords == std::numeric_limits<size_t>::max() || !resolvers.relationship_type_token ||
 			!resolvers.property_key_token || !visitor) {
 			fail(FormatError::FERR_INVALID_HEADER,
 				 "native bulk Edge materializer requires a source, exact lease, finite bound, resolvers, and visitor");
@@ -55,7 +56,7 @@ namespace graph::storage {
 			// materializer repeats canonical validation because it is also the last
 			// typed boundary before graph-visible pages are prepared.
 			static_cast<void>(NativeBulkEdgeRecordCodec::encodedSize(*record));
-			if (++materialized > maximumRecords || record->edge_id == 0U || record->edge_id <= previousEdgeId ||
+			if (++materialized > maximumRecords || record->edge_id <= previousEdgeId ||
 				!isLeased(edgeIdRanges, record->edge_id)) {
 				fail(FormatError::FERR_INVALID_STATE,
 					 "native bulk Edge materializer found unordered, over-bound, or unleased scratch records");

@@ -8,16 +8,18 @@
 
 #include "storage/relocatable/metadata/RelocatableMetadataStoreTestFixture.hpp"
 
-#include <optional>
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
 #include "graph/storage/relocatable/adjacency/AdjacencyKeyCodec.hpp"
 #include "graph/storage/relocatable/entity/NativeStreamedGraphAdjacencyIndexPlanner.hpp"
 #include "graph/storage/relocatable/entity/NativeStreamedGraphPublicationIndexPlanner.hpp"
+#include "graph/storage/relocatable/index/BTreeIndex.hpp"
+#include "graph/storage/relocatable/property/LargeValueStore.hpp"
 
 namespace graph::storage {
 
@@ -103,6 +105,153 @@ namespace graph::storage {
 		snapshot.release();
 	}
 
+	TEST_F(RelocatableMetadataStoreTest,
+		   StreamedAdjacencyIndexPublishesAndReplacesItsTreeThroughTheDeferredGraphCoordinator) {
+		auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+		SlottedPagePool pool(io, *metadata);
+		BTreePageStore pages(pool, *metadata);
+		NativeGraphDerivedStateMutation derived;
+		for (size_t ordinal = 0U; ordinal < 4U; ++ordinal) {
+			NativeGraphPrivateSegmentRequest scratch;
+			scratch.kind = SegmentKind::SGK_BULK_SCRATCH;
+			scratch.owner_id = 88U;
+			scratch.first_slot = PhysicalSlotId(30U);
+			scratch.last_slot = PhysicalSlotId(39U);
+			derived.private_segments.push_back(std::move(scratch));
+		}
+		const std::array<EntityPageReplacementRequest, 0U> noEntityReplacements{};
+		const std::array<EntityPageAppendBatchRequest, 0U> noEntityAppends{};
+		const std::array<EntityPageNewPoolBatchRequest, 0U> noEntityPools{};
+		const std::array<NativeGraphPropertyPageReplacementRequest, 0U> noPropertyReplacements{};
+		const std::array<NativeGraphPropertyPageBatchRequest, 0U> noPropertyBatches{};
+		const std::array<NativeGraphLargeValueMutation, 0U> noLargeValues{};
+		const auto location = [](const NativeGraphPrivateSegmentSet &identities, size_t ordinal) {
+			return NativeBulkRunFragmentLocation{identities[ordinal].segment_id, identities[ordinal].generation,
+												 identities[ordinal].owner_id};
+		};
+
+		const Superblock published = metadata->mutateNativeGraphPagesWithLargeValues(
+				noEntityReplacements, noEntityAppends, noEntityPools, noPropertyReplacements, noPropertyBatches,
+				noLargeValues, derived, LogSequenceNumber(2U),
+				[](std::span<EntityPageReplacementMaterialization>, std::span<EntityPageAppendBatchMaterialization>,
+				   std::span<EntityPageNewPoolBatchMaterialization>,
+				   std::span<NativeGraphPropertyPageReplacementMaterialization>,
+				   std::span<NativeGraphPropertyPageBatchMaterialization>,
+				   std::span<LargeValueMaterializationResult>) {},
+				[](std::vector<std::vector<IndexTreeMutationPoolBatch>> &) {}, {}, {}, {}, {}, {},
+				MetadataPublishOptions{}, NativeGraphLogicalIdReservation{}, std::nullopt,
+				[&location](const NativeGraphPrivateSegmentSet &identities, size_t ordinal) {
+					if (identities.size() != 4U) {
+						throw FormatException(FormatError::FERR_INVALID_STATE,
+											  "adjacency publication lost a private-run identity");
+					}
+					const BTreePageEntry entry =
+							ordinal < 2U ? BTreePageEntry{AdjacencyKeyCodec::encode(
+																  {GlobalAdjacencyDirection::GAD_OUT, 7U, 11U}),
+														  1U}
+										 : BTreePageEntry{AdjacencyKeyCodec::encode(
+																  {GlobalAdjacencyDirection::GAD_IN, 9U, 11U}),
+														  1U};
+					if (ordinal == 0U || ordinal == 2U) {
+						return NativeBulkRunFragmentCodec::encode({{entry}});
+					}
+					NativeBulkRunManifest manifest;
+					manifest.fragments = {location(identities, ordinal - 1U)};
+					manifest.entry_count = 1U;
+					manifest.encoded_bytes = NativeBulkRunFragmentCodec::encode({{entry}}).size();
+					return NativeBulkRunManifestCodec::encode(manifest);
+				},
+				{},
+				[&metadata, &pages, &location](const NativeGraphDeferredIndexPlanningContext &context) {
+					return NativeStreamedGraphAdjacencyIndexPlanner::plan(
+							pages, *metadata,
+							{location(context.private_segments, 1U), location(context.private_segments, 3U)},
+							{PhysicalSlotId(10U), PhysicalSlotId(20U), 8U, 4U, 1U}, context, LogSequenceNumber(2U));
+				});
+
+		EXPECT_EQ(published.generation, Generation(2U));
+		MetadataSnapshotPin snapshot = metadata->openSnapshot();
+		const std::optional<IndexRootLocation> initialRoot =
+				metadata->findIndexRootOptional(snapshot, RSS_GLOBAL_ADJACENCY_INDEX_ID);
+		ASSERT_TRUE(initialRoot.has_value());
+		snapshot.release();
+
+		NativeGraphDerivedStateMutation replacement;
+		for (size_t ordinal = 0U; ordinal < 4U; ++ordinal) {
+			NativeGraphPrivateSegmentRequest scratch;
+			scratch.kind = SegmentKind::SGK_BULK_SCRATCH;
+			scratch.owner_id = 88U;
+			scratch.first_slot = PhysicalSlotId(30U);
+			scratch.last_slot = PhysicalSlotId(39U);
+			replacement.private_segments.push_back(std::move(scratch));
+		}
+		const Superblock replaced = metadata->mutateNativeGraphPagesWithLargeValues(
+				noEntityReplacements, noEntityAppends, noEntityPools, noPropertyReplacements, noPropertyBatches,
+				noLargeValues, replacement, LogSequenceNumber(3U),
+				[](std::span<EntityPageReplacementMaterialization>, std::span<EntityPageAppendBatchMaterialization>,
+				   std::span<EntityPageNewPoolBatchMaterialization>,
+				   std::span<NativeGraphPropertyPageReplacementMaterialization>,
+				   std::span<NativeGraphPropertyPageBatchMaterialization>,
+				   std::span<LargeValueMaterializationResult>) {},
+				[](std::vector<std::vector<IndexTreeMutationPoolBatch>> &) {}, {}, {}, {}, {}, {},
+				MetadataPublishOptions{}, NativeGraphLogicalIdReservation{}, std::nullopt,
+				[&location](const NativeGraphPrivateSegmentSet &identities, size_t ordinal) {
+					const BTreePageEntry entry =
+							ordinal < 2U ? BTreePageEntry{AdjacencyKeyCodec::encode(
+																  {GlobalAdjacencyDirection::GAD_OUT, 8U, 12U}),
+														  1U}
+										 : BTreePageEntry{AdjacencyKeyCodec::encode(
+																  {GlobalAdjacencyDirection::GAD_IN, 10U, 12U}),
+														  1U};
+					if (ordinal == 0U || ordinal == 2U) {
+						return NativeBulkRunFragmentCodec::encode({{entry}});
+					}
+					NativeBulkRunManifest manifest;
+					manifest.fragments = {location(identities, ordinal - 1U)};
+					manifest.entry_count = 1U;
+					manifest.encoded_bytes = NativeBulkRunFragmentCodec::encode({{entry}}).size();
+					return NativeBulkRunManifestCodec::encode(manifest);
+				},
+				{},
+				[&metadata, &pages, &location](const NativeGraphDeferredIndexPlanningContext &context) {
+					return NativeStreamedGraphAdjacencyIndexPlanner::plan(
+							pages, *metadata,
+							{location(context.private_segments, 1U), location(context.private_segments, 3U)},
+							{PhysicalSlotId(10U), PhysicalSlotId(20U), 8U, 4U, 1U}, context, LogSequenceNumber(3U));
+				});
+
+		EXPECT_EQ(replaced.generation, Generation(3U));
+		snapshot = metadata->openSnapshot();
+		const std::optional<IndexRootLocation> replacementRoot =
+				metadata->findIndexRootOptional(snapshot, RSS_GLOBAL_ADJACENCY_INDEX_ID);
+		ASSERT_TRUE(replacementRoot.has_value());
+		EXPECT_NE(replacementRoot->root_page_id, initialRoot->root_page_id);
+		BTreeIndex index(RSS_GLOBAL_ADJACENCY_INDEX_ID, pages, *metadata, BTreeLeafValueLayout::BLVL_EMPTY);
+		OrderedBTreeEntryCursor cursor = index.orderedSource(snapshot, 8U)();
+		size_t entryCount = 0U;
+		for (std::optional<BTreePageEntry> entry = cursor(); entry.has_value(); entry = cursor()) {
+			++entryCount;
+		}
+		EXPECT_EQ(entryCount, 4U);
+		snapshot.release();
+
+		// A replacement plan cannot publish if the coordinator drops the old-tree
+		// retirement partition before it invokes the deferred preparer.
+		PrivateCandidates candidates;
+		const NativeBulkEdgePrivateAdjacencyRoots roots = writeDirections(candidates);
+		snapshot = metadata->openSnapshot();
+		const NativeGraphDeferredIndexPlan rejectedPlan = NativeStreamedGraphAdjacencyIndexPlanner::plan(
+				pages, *metadata, roots, {PhysicalSlotId(10U), PhysicalSlotId(20U), 8U, 4U, 1U},
+				{candidates.identities, candidates.reader(), snapshot}, LogSequenceNumber(4U));
+		expectFormatError(
+				[&rejectedPlan] {
+					std::vector<IndexTreeMutationPoolBatch> missingRetirementBatches;
+					rejectedPlan.preparer(missingRetirementBatches);
+				},
+				FormatError::FERR_INVALID_STATE);
+		snapshot.release();
+	}
+
 	TEST_F(RelocatableMetadataStoreTest, StreamedAdjacencyIndexRejectsForeignPrivateRun) {
 		auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
 		SlottedPagePool pool(io, *metadata);
@@ -163,6 +312,36 @@ namespace graph::storage {
 		snapshot.release();
 	}
 
+	TEST_F(RelocatableMetadataStoreTest, StreamedAdjacencyIndexRejectsAForeignPageStore) {
+		auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+		PrivateCandidates candidates;
+		const NativeBulkEdgePrivateAdjacencyRoots roots = writeDirections(candidates);
+		MetadataSnapshotPin snapshot = metadata->openSnapshot();
+		const std::filesystem::path foreignPath = testFilePath.string() + ".foreign";
+		auto foreignFile = std::make_shared<std::fstream>(
+				foreignPath, std::ios::in | std::ios::out | std::ios::binary | std::ios::trunc);
+		ASSERT_TRUE(foreignFile->is_open());
+		auto foreignIo = std::make_shared<StorageIO>(foreignFile, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		auto foreignMetadata = RelocatableMetadataStore::initializeNew(foreignIo, superblock(1U, 1U));
+		SlottedPagePool foreignPool(foreignIo, *foreignMetadata);
+		BTreePageStore foreignPages(foreignPool, *foreignMetadata);
+
+		expectFormatError(
+				[&] {
+					static_cast<void>(NativeStreamedGraphAdjacencyIndexPlanner::plan(
+							foreignPages, *metadata, roots, {PhysicalSlotId(10U), PhysicalSlotId(20U), 8U, 4U, 1U},
+							{candidates.identities, candidates.reader(), snapshot}, LogSequenceNumber(2U)));
+				},
+				FormatError::FERR_INVALID_HEADER);
+
+		snapshot.release();
+		foreignMetadata.reset();
+		foreignIo.reset();
+		foreignFile->close();
+		std::error_code error;
+		std::filesystem::remove(foreignPath, error);
+	}
+
 	TEST_F(RelocatableMetadataStoreTest, StreamedAdjacencyIndexRejectsIncompletePlanningContracts) {
 		auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
 		SlottedPagePool pool(io, *metadata);
@@ -180,8 +359,19 @@ namespace graph::storage {
 					checkpoint);
 		};
 		EXPECT_THROW(static_cast<void>(invoke({}, valid, LogSequenceNumber(2U))), FormatException);
+		auto invalidRoots = roots;
+		invalidRoots.incoming = {};
+		EXPECT_THROW(static_cast<void>(invoke(invalidRoots, valid, LogSequenceNumber(2U))), FormatException);
+		MetadataSnapshotPin invalidSnapshot;
+		EXPECT_THROW(static_cast<void>(NativeStreamedGraphAdjacencyIndexPlanner::plan(
+							 pages, *metadata, roots, valid,
+							 {candidates.identities, candidates.reader(), invalidSnapshot}, LogSequenceNumber(2U))),
+					 FormatException);
 		auto invalid = valid;
 		invalid.first_slot = {};
+		EXPECT_THROW(static_cast<void>(invoke(roots, invalid, LogSequenceNumber(2U))), FormatException);
+		invalid = valid;
+		invalid.last_slot = {};
 		EXPECT_THROW(static_cast<void>(invoke(roots, invalid, LogSequenceNumber(2U))), FormatException);
 		invalid = valid;
 		invalid.last_slot = PhysicalSlotId(9U);
@@ -209,13 +399,14 @@ namespace graph::storage {
 		SlottedPagePool pool(io, *metadata);
 		BTreePageStore pages(pool, *metadata);
 		SystemCatalog catalog(pages, *metadata);
+		LargeValueStore values(io, *metadata);
 		PrivateCandidates candidates;
 		NativeStreamedGraphPrivatePreparation prepared;
 		prepared.adjacency_roots = writeDirections(candidates);
 		MetadataSnapshotPin snapshot = metadata->openSnapshot();
 
 		const NativeGraphDeferredIndexPlans plans = NativeStreamedGraphPublicationIndexPlanner::plan(
-				catalog, pages, nullptr, *metadata, prepared,
+				catalog, pages, &values, *metadata, prepared,
 				{{PhysicalSlotId(10U), PhysicalSlotId(20U), 8U, 4U},
 				 {PhysicalSlotId(10U), PhysicalSlotId(20U), 8U, 4U, 1U},
 				 {PhysicalSlotId(10U), PhysicalSlotId(20U), 8U, 4U, 1U}},
@@ -251,6 +442,29 @@ namespace graph::storage {
 		snapshot.release();
 	}
 
+	TEST_F(RelocatableMetadataStoreTest, StreamedIndexBundleValidatesACompleteLargeValueStoreBeforeReadingItsRun) {
+		auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+		SlottedPagePool pool(io, *metadata);
+		BTreePageStore pages(pool, *metadata);
+		SystemCatalog catalog(pages, *metadata);
+		LargeValueStore values(io, *metadata);
+		PrivateCandidates candidates;
+		NativeStreamedGraphPrivatePreparation prepared;
+		prepared.adjacency_roots = writeDirections(candidates);
+		prepared.large_values.emplace();
+		prepared.large_values->content_run = candidates.location(1U);
+		const NativeStreamedGraphPublicationIndexPlanningOptions options{
+				{PhysicalSlotId(10U), PhysicalSlotId(20U), 8U, 4U},
+				{PhysicalSlotId(10U), PhysicalSlotId(20U), 8U, 4U, 1U},
+				{PhysicalSlotId(10U), PhysicalSlotId(20U), 8U, 4U, 1U}};
+		MetadataSnapshotPin snapshot = metadata->openSnapshot();
+		EXPECT_THROW(static_cast<void>(NativeStreamedGraphPublicationIndexPlanner::plan(
+							 catalog, pages, &values, *metadata, prepared, options,
+							 {candidates.identities, candidates.reader(), snapshot}, LogSequenceNumber(2U))),
+					 FormatException);
+		snapshot.release();
+	}
+
 	TEST_F(RelocatableMetadataStoreTest, StreamedIndexBundleRejectsInvalidPublicationFence) {
 		auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
 		SlottedPagePool pool(io, *metadata);
@@ -270,7 +484,8 @@ namespace graph::storage {
 		expectFormatError(
 				[&] {
 					static_cast<void>(NativeStreamedGraphPublicationIndexPlanner::plan(
-							catalog, pages, nullptr, *metadata, prepared, options, invalidSnapshot, LogSequenceNumber(2U)));
+							catalog, pages, nullptr, *metadata, prepared, options, invalidSnapshot,
+							LogSequenceNumber(2U)));
 				},
 				FormatError::FERR_INVALID_HEADER);
 
@@ -326,8 +541,8 @@ namespace graph::storage {
 		const NativeGraphDeferredIndexPlanningContext planning{candidates.identities, reader, snapshot};
 
 		const std::filesystem::path foreignPath = testFilePath.string() + ".foreign";
-		auto foreignFile = std::make_shared<std::fstream>(
-				foreignPath, std::ios::in | std::ios::out | std::ios::binary | std::ios::trunc);
+		auto foreignFile = std::make_shared<std::fstream>(foreignPath, std::ios::in | std::ios::out | std::ios::binary |
+																			   std::ios::trunc);
 		ASSERT_TRUE(foreignFile->is_open());
 		auto foreignIo = std::make_shared<StorageIO>(foreignFile, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
 		auto foreignMetadata = RelocatableMetadataStore::initializeNew(foreignIo, superblock(1U, 1U));
@@ -339,19 +554,22 @@ namespace graph::storage {
 		expectFormatError(
 				[&] {
 					static_cast<void>(NativeStreamedGraphPublicationIndexPlanner::plan(
-							foreignCatalog, pages, nullptr, *metadata, prepared, options, planning, LogSequenceNumber(2U)));
+							foreignCatalog, pages, nullptr, *metadata, prepared, options, planning,
+							LogSequenceNumber(2U)));
 				},
 				FormatError::FERR_INVALID_HEADER);
 		expectFormatError(
 				[&] {
 					static_cast<void>(NativeStreamedGraphPublicationIndexPlanner::plan(
-							catalog, foreignPages, nullptr, *metadata, prepared, options, planning, LogSequenceNumber(2U)));
+							catalog, foreignPages, nullptr, *metadata, prepared, options, planning,
+							LogSequenceNumber(2U)));
 				},
 				FormatError::FERR_INVALID_HEADER);
 		expectFormatError(
 				[&] {
 					static_cast<void>(NativeStreamedGraphPublicationIndexPlanner::plan(
-							catalog, pages, &foreignValues, *metadata, prepared, options, planning, LogSequenceNumber(2U)));
+							catalog, pages, &foreignValues, *metadata, prepared, options, planning,
+							LogSequenceNumber(2U)));
 				},
 				FormatError::FERR_INVALID_STATE);
 
@@ -359,7 +577,8 @@ namespace graph::storage {
 		expectFormatError(
 				[&] {
 					static_cast<void>(NativeStreamedGraphPublicationIndexPlanner::plan(
-							catalog, pages, &foreignValues, *metadata, prepared, options, planning, LogSequenceNumber(2U)));
+							catalog, pages, &foreignValues, *metadata, prepared, options, planning,
+							LogSequenceNumber(2U)));
 				},
 				FormatError::FERR_INVALID_STATE);
 		snapshot.release();

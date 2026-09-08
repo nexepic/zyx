@@ -146,6 +146,23 @@ namespace graph::storage {
 		EXPECT_EQ(plans[1].upserted_canonical_key, std::optional{canonical("created@example.test")});
 	}
 
+	TEST(ConstraintMutationValidatorTest, ReturnsNoPlanForEmptyDefinitionsOrAnUnchangedUniqueKey) {
+		FakeGraph graph;
+		EXPECT_TRUE(validator(graph).validate(std::span<const ConstraintDefinition>{}, {}).empty());
+
+		graph.nodes.emplace(1U, node(1U, {7U}, {{"email", PropertyValue("same@example.test")}}));
+		graph.support_roots.insert(81U);
+		addSupportEntry(graph, 81U, "same@example.test", 1U);
+		const ConstraintDefinition unique =
+				nodeConstraint(81U, ConstraintDefinitionKind::CDK_UNIQUE, "person_email_unique", {"email"});
+		LogicalGraphMutationBatch batch;
+		batch.property_replacements.push_back(
+				{{LogicalGraphMutationEntityKind::LGMK_NODE, LogicalGraphMutationReferenceKind::LGRK_PERSISTED, 1U},
+				 {{"email", PropertyValue("same@example.test")}}});
+
+		EXPECT_TRUE(validator(graph).validate(std::array{unique}, batch).empty());
+	}
+
 	TEST(ConstraintMutationValidatorTest, RejectsDuplicateAgainstAValidatedSupportTreeCandidate) {
 		FakeGraph graph;
 		graph.nodes.emplace(1U, node(1U, {7U}, {{"email", PropertyValue("duplicate@example.test")}}));
@@ -727,6 +744,25 @@ namespace graph::storage {
 		LogicalGraphMutationBatch deleted;
 		deleted.node_deletes.push_back({1U, false, 0U});
 		EXPECT_NO_THROW(static_cast<void>(validator(graph).validate(std::array{required}, deleted)));
+	}
+
+	TEST(ConstraintMutationValidatorTest, RemovesAUniqueSupportKeyWhenAnExistingPropertyBecomesNull) {
+		FakeGraph graph;
+		graph.nodes.emplace(1U, node(1U, {7U}, {{"email", PropertyValue("old@example.test")}}));
+		graph.support_roots.insert(81U);
+		addSupportEntry(graph, 81U, "old@example.test", 1U);
+		const ConstraintDefinition unique =
+				nodeConstraint(81U, ConstraintDefinitionKind::CDK_UNIQUE, "person_email_unique", {"email"});
+
+		LogicalGraphMutationBatch batch;
+		batch.property_replacements.push_back(
+				{{LogicalGraphMutationEntityKind::LGMK_NODE, LogicalGraphMutationReferenceKind::LGRK_PERSISTED, 1U},
+				 {{"email", PropertyValue{}}}});
+
+		const std::vector<ConstraintSupportTreeMutationPlan> plans = validator(graph).validate(std::array{unique}, batch);
+		ASSERT_EQ(plans.size(), 1U);
+		EXPECT_EQ(plans.front().erased_canonical_key, std::optional{canonical("old@example.test")});
+		EXPECT_FALSE(plans.front().upserted_canonical_key.has_value());
 	}
 
 	TEST(ConstraintMutationValidatorTest, AllowsAKeyReleasedByADeletedSupportTreeCandidate) {

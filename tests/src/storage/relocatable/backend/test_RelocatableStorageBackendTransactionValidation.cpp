@@ -8,6 +8,8 @@
 
 #include "storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp"
 
+#include <limits>
+
 using namespace relocatable_storage_backend_test;
 
 TEST_F(RelocatableStorageBackendTest,
@@ -197,8 +199,14 @@ TEST_F(RelocatableStorageBackendTest,
 	LogicalGraphMutationBatch detachBoundTooSmall;
 	detachBoundTooSmall.node_creates = {{{"BoundedSource"}, {}}, {{"FirstTarget"}, {}}, {{"SecondTarget"}, {}}};
 	detachBoundTooSmall.edge_creates = {{createdNode(0U), createdNode(1U), "FIRST", {}},
-															  {createdNode(0U), createdNode(2U), "SECOND", {}}};
+										  {createdNode(0U), createdNode(2U), "SECOND", {}}};
 	rejectCreatedDeleteOnCommit(std::move(detachBoundTooSmall), 0U, true, 1U);
+
+	// A detach delete must retain a finite scan budget. Accepting the sentinel
+	// maximum would permit an unbounded adjacency read during publication.
+	LogicalGraphMutationBatch unboundedDetach;
+	unboundedDetach.node_deletes = {{fixture.person_node_id, true, std::numeric_limits<size_t>::max()}};
+	rejectOnCommit(std::move(unboundedDetach));
 
 	LogicalGraphMutationBatch persistedDeleteWithLiveCreatedEdge;
 	persistedDeleteWithLiveCreatedEdge.node_creates = {{{"NewNeighbor"}, {}}};
@@ -213,6 +221,84 @@ TEST_F(RelocatableStorageBackendTest,
 	EXPECT_EQ(snapshot->readNode(committed.front()).labels, (std::vector<std::string>{"AfterDeleteValidation"}));
 	EXPECT_NO_THROW(static_cast<void>(snapshot->readNode(fixture.person_node_id)));
 	EXPECT_NO_THROW(static_cast<void>(snapshot->readEdge(fixture.knows_edge_id)));
+	snapshot.reset();
+	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest,
+	   LogicalTransactionRejectsMalformedCreatedEdgeEndpointAtFinalCanonicalization) {
+	materializeNativeDatabase();
+	RelocatableStorageBackendOptions options = backendOptions();
+	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(std::move(options));
+	backend.open();
+
+	const auto createdNode = [](uint64_t ordinal) {
+		return LogicalGraphMutationEntityReference{LogicalGraphMutationEntityKind::LGMK_NODE,
+																LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE, ordinal};
+	};
+	std::unique_ptr<LogicalGraphTransaction> transaction = backend.beginLogicalGraphTransaction(false);
+	LogicalGraphMutationBatch batch;
+	batch.node_creates = {{{"MalformedSource"}, {}}, {{"ValidTarget"}, {}}};
+	batch.edge_creates = {{
+			{LogicalGraphMutationEntityKind::LGMK_EDGE,
+			 LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE,
+			 0U},
+			createdNode(1U),
+			"MALFORMED_ENDPOINT",
+			{},
+	}};
+
+	ASSERT_NO_THROW(static_cast<void>(transaction->stageMutationBatch(std::move(batch))));
+	EXPECT_THROW(static_cast<void>(transaction->commit()), std::invalid_argument);
+	EXPECT_EQ(transaction->state(), LogicalGraphTransactionState::LGTTS_ROLLED_BACK);
+
+	std::unique_ptr<LogicalGraphReadSnapshot> snapshot = backend.openLogicalGraphReadSnapshot();
+	std::vector<uint64_t> nodeIds;
+	snapshot->visitNodes(8U, [&nodeIds](const LogicalGraphNode &node) {
+		nodeIds.push_back(node.node_id);
+		return true;
+	});
+	EXPECT_TRUE(nodeIds.empty());
+	snapshot.reset();
+	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest,
+	   LogicalTransactionCancelsAnIsolatedCreatedNodeWithoutRejectingAnUnrelatedCreatedEdge) {
+	materializeNativeDatabase();
+	RelocatableStorageBackendOptions options = backendOptions();
+	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(std::move(options));
+	backend.open();
+
+	const auto createdNode = [](uint64_t ordinal) {
+		return LogicalGraphMutationEntityReference{LogicalGraphMutationEntityKind::LGMK_NODE,
+																LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE, ordinal};
+	};
+	std::unique_ptr<LogicalGraphTransaction> transaction = backend.beginLogicalGraphTransaction(false);
+	LogicalGraphMutationBatch create;
+	create.node_creates = {{{"EdgeSource"}, {}}, {{"EdgeTarget"}, {}}, {{"Isolated"}, {}}};
+	create.edge_creates = {{createdNode(0U), createdNode(1U), "UNRELATED", {}}};
+	const LogicalGraphMutationBatchResult staged = transaction->stageMutationBatch(std::move(create));
+	ASSERT_EQ(staged.created_node_ids.size(), 3U);
+	ASSERT_EQ(staged.created_edge_ids.size(), 1U);
+
+	LogicalGraphMutationBatch erase;
+	erase.node_deletes = {{staged.created_node_ids[2U], false, 0U}};
+	ASSERT_TRUE(transaction->stageMutationBatch(std::move(erase)).created_node_ids.empty());
+	const LogicalGraphMutationBatchResult committed = transaction->commit();
+	ASSERT_EQ(committed.created_node_ids,
+			  (std::vector<uint64_t>{staged.created_node_ids[0U], staged.created_node_ids[1U]}));
+	ASSERT_EQ(committed.created_edge_ids, staged.created_edge_ids);
+
+	std::unique_ptr<LogicalGraphReadSnapshot> snapshot = backend.openLogicalGraphReadSnapshot();
+	EXPECT_NO_THROW(static_cast<void>(snapshot->readNode(staged.created_node_ids[0U])));
+	EXPECT_NO_THROW(static_cast<void>(snapshot->readNode(staged.created_node_ids[1U])));
+	EXPECT_NO_THROW(static_cast<void>(snapshot->readEdge(staged.created_edge_ids[0U])));
+	EXPECT_THROW(static_cast<void>(snapshot->readNode(staged.created_node_ids[2U])), FormatException);
 	snapshot.reset();
 	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
 	backend.close();

@@ -140,6 +140,9 @@ TEST_F(RelocatableMetadataPageRouteDirectoryTest, ResolvesCompleteRoutesAcrossMu
 	EXPECT_EQ(pages.readMetadataRadix(root).level, 3U);
 	EXPECT_EQ(directory.find(batch.candidate(), root, MetadataPageId(1U)), routes[0].physical_reference);
 	EXPECT_EQ(directory.find(batch.candidate(), root, routes[1].page_id), routes[1].physical_reference);
+	EXPECT_EQ(directory.collectRoutesFromRouteBranch(batch.candidate(), root), routes);
+	const std::vector<PhysicalPageRef> branchFrames = directory.collectRouteBranchFrames(batch.candidate(), root);
+	EXPECT_GT(branchFrames.size(), 2U);
 	io->sync();
 
 	reopen();
@@ -147,6 +150,7 @@ TEST_F(RelocatableMetadataPageRouteDirectoryTest, ResolvesCompleteRoutesAcrossMu
 	MetadataPageRouteDirectory reopenedDirectory(reopenedPages);
 	EXPECT_EQ(reopenedDirectory.find(batch.candidate(), root, MetadataPageId(1U)), routes[0].physical_reference);
 	EXPECT_EQ(reopenedDirectory.find(batch.candidate(), root, routes[1].page_id), routes[1].physical_reference);
+	EXPECT_EQ(reopenedDirectory.collectRoutesFromRouteBranch(batch.candidate(), root), routes);
 }
 
 TEST_F(RelocatableMetadataPageRouteDirectoryTest, RejectsMissingFutureAndWronglyTypedRoutes) {
@@ -167,6 +171,66 @@ TEST_F(RelocatableMetadataPageRouteDirectoryTest, RejectsMissingFutureAndWrongly
 	wrongRoot.directory_type = MetadataDirectoryType::MDT_PAGE;
 	pages.writeMetadataRadix(root, wrongRoot);
 	expectFormatError([&] { static_cast<void>(directory.find(batch.candidate(), root, MetadataPageId(1U))); },
+					  FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableMetadataPageRouteDirectoryTest, RejectsEmptyInvalidAndFutureRouteInputs) {
+	const Superblock current = superblock(2U, 2U);
+	TestMetadataPageAllocator allocator;
+	MetadataWriteBatch batch(allocator, current, LogSequenceNumber(3U));
+	MetadataPageFile pages(io, batch.candidate());
+	MetadataPageRouteDirectory directory(pages);
+
+	expectFormatError([&] {
+		static_cast<void>(directory.buildFromCompleteRouteSet(batch, std::span<const MetadataPageRoute>{}));
+	}, FormatError::FERR_INVALID_STATE);
+
+	const MetadataPageRoute zeroLogical{MetadataPageId{}, pageRef(10U, 1U, 1U)};
+	expectFormatError([&] {
+		static_cast<void>(directory.buildFromCompleteRouteSet(batch, std::span(&zeroLogical, 1U)));
+	}, FormatError::FERR_INVALID_HEADER);
+
+	const MetadataPageRoute zeroPhysical{MetadataPageId(1U), PhysicalPageRef{}};
+	expectFormatError([&] {
+		static_cast<void>(directory.buildFromCompleteRouteSet(batch, std::span(&zeroPhysical, 1U)));
+	}, FormatError::FERR_INVALID_HEADER);
+
+	const MetadataPageRoute futurePhysical{MetadataPageId(1U), pageRef(10U, 1U, 4U)};
+	expectFormatError([&] {
+		static_cast<void>(directory.buildFromCompleteRouteSet(batch, std::span(&futurePhysical, 1U)));
+	}, FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableMetadataPageRouteDirectoryTest, RejectsMissingAndWronglyTypedRouteDescendants) {
+	const Superblock current = superblock(1U, 1U);
+	TestMetadataPageAllocator allocator;
+	MetadataWriteBatch batch(allocator, current, LogSequenceNumber(2U));
+	MetadataPageFile pages(io, batch.candidate());
+	MetadataPageRouteDirectory directory(pages);
+
+	const PhysicalPageRef sparseRoot = directory.buildFromCompleteRouteSet(
+			batch, std::vector{route(RSS_METADATA_PAGE_ROUTE_LEAF_MAX_ENTRIES + 1U, 600U, 1U, 1U)});
+	expectFormatError([&] { static_cast<void>(directory.find(batch.candidate(), sparseRoot, MetadataPageId(1U))); },
+					  FormatError::FERR_INVALID_STATE);
+
+	MetadataRadixPage missingRoot;
+	missingRoot.kind = CatalogRadixPageKind::CRPK_ROOT;
+	missingRoot.directory_type = MetadataDirectoryType::MDT_METADATA_PAGE_ROUTE;
+	missingRoot.page_id = MetadataPageId(401U);
+	missingRoot.generation = Generation(1U);
+	missingRoot.committed_lsn = LogSequenceNumber(1U);
+
+	MetadataRadixPage internalRoot = missingRoot;
+	internalRoot.level = 1U;
+	internalRoot.page_id = MetadataPageId(402U);
+	const PhysicalPageRef internalRootReference = pageRef(22U, 1U, 1U);
+	const PhysicalPageRef malformedChildReference = pageRef(22U, 2U, 1U);
+	internalRoot.children[0] = malformedChildReference;
+	pages.writeMetadataRadix(internalRootReference, internalRoot);
+	MetadataRadixPage malformedChild = missingRoot;
+	malformedChild.page_id = MetadataPageId(403U);
+	pages.writeMetadataRadix(malformedChildReference, malformedChild);
+	expectFormatError([&] { static_cast<void>(directory.find(batch.candidate(), internalRootReference, MetadataPageId(1U))); },
 					  FormatError::FERR_INVALID_HEADER);
 }
 
@@ -239,14 +303,211 @@ TEST_F(RelocatableMetadataPageRouteDirectoryTest, RejectsUnorderedIncompleteOrFu
 				static_cast<void>(directory.buildFromCompleteRouteSet(batch, std::vector{route(1U, 1000U, 1U, 3U)}));
 			},
 			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				static_cast<void>(directory.buildFromCompleteRouteSet(batch, std::vector{route(0U, 1000U, 1U, 1U)}));
+			},
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				static_cast<void>(directory.buildFromCompleteRouteSet(batch, std::vector{route(1U, 0U, 0U, 1U)}));
+			},
+			FormatError::FERR_INVALID_HEADER);
+
+	const PhysicalPageRef root = directory.buildFromCompleteRouteSet(batch, std::vector{route(1U, 1000U, 1U, 1U)});
+	expectFormatError([&] { static_cast<void>(directory.find(batch.candidate(), {}, MetadataPageId(1U))); },
+					  FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { static_cast<void>(directory.find(batch.candidate(), root, {})); },
+					  FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { static_cast<void>(directory.nextBootstrapFrameCount(batch)); },
+					  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(directory.publishNextBootstrap(batch, {})); },
+					  FormatError::FERR_INVALID_STATE);
 }
 
-TEST_F(RelocatableMetadataPageRouteDirectoryTest, CountsAllFramesBeforeInitialBootstrapAllocation) {
+TEST_F(RelocatableMetadataPageRouteDirectoryTest, RejectsRouteLeavesThatDoNotMatchTheirRadixOrdinal) {
+	const Superblock current = superblock(1U, 1U);
+	TestMetadataPageAllocator allocator;
+	MetadataWriteBatch batch(allocator, current, LogSequenceNumber(2U));
+	MetadataPageFile pages(io, batch.candidate());
+	MetadataPageRouteDirectory directory(pages);
+	const PhysicalPageRef root = directory.buildFromCompleteRouteSet(batch, std::vector{route(1U, 1000U, 1U, 1U)});
+	MetadataRadixPage radix = pages.readMetadataRadix(root);
+	ASSERT_TRUE(radix.children[0].isValid());
+	MetadataPageRouteLeafPage leaf = pages.readMetadataPageRouteLeaf(radix.children[0]);
+	ASSERT_EQ(leaf.routes.size(), 1U);
+	leaf.routes[0].page_id = MetadataPageId(RSS_METADATA_PAGE_ROUTE_LEAF_MAX_ENTRIES + 1U);
+	pages.writeMetadataPageRouteLeaf(radix.children[0], leaf);
+	expectFormatError([&] { static_cast<void>(directory.find(batch.candidate(), root, MetadataPageId(1U))); },
+					  FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { static_cast<void>(directory.collectRoutesFromRouteBranch(batch.candidate(), root)); },
+					  FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableMetadataPageRouteDirectoryTest, RejectsInvalidOrFutureRouteBranchReferences) {
+	const Superblock current = superblock(1U, 1U);
+	TestMetadataPageAllocator allocator;
+	MetadataWriteBatch batch(allocator, current, LogSequenceNumber(2U));
+	MetadataPageFile pages(io, batch.candidate());
+	MetadataPageRouteDirectory directory(pages);
+
+	expectFormatError([&] {
+		static_cast<void>(directory.collectRoutesFromRouteBranch(current, PhysicalPageRef{}));
+	}, FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] {
+		static_cast<void>(directory.collectRoutesFromRouteBranch(current, pageRef(9U, 1U, 2U)));
+	}, FormatError::FERR_INVALID_HEADER);
+
+	const PhysicalPageRef rootReference = pageRef(9U, 1U, 1U);
+	MetadataRadixPage root;
+	root.kind = CatalogRadixPageKind::CRPK_ROOT;
+	root.directory_type = MetadataDirectoryType::MDT_METADATA_PAGE_ROUTE;
+	root.page_id = MetadataPageId(1U);
+	root.generation = Generation(1U);
+	root.committed_lsn = LogSequenceNumber(2U);
+	pages.writeMetadataRadix(rootReference, root);
+	expectFormatError([&] {
+		static_cast<void>(directory.collectRoutesFromRouteBranch(current, rootReference));
+	}, FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableMetadataPageRouteDirectoryTest, RejectsAliasedRouteBranchFramesAndTargets) {
+	const Superblock current = superblock(1U, 1U);
+	MetadataPageFile pages(io, current);
+	MetadataPageRouteDirectory directory(pages);
+
+	const PhysicalPageRef rootReference = pageRef(19U, 1U, 1U);
+	const PhysicalPageRef internalReference = pageRef(20U, 1U, 1U);
+	const PhysicalPageRef leafReference = pageRef(21U, 1U, 1U);
+	MetadataRadixPage root;
+	root.kind = CatalogRadixPageKind::CRPK_ROOT;
+	root.directory_type = MetadataDirectoryType::MDT_METADATA_PAGE_ROUTE;
+	root.level = 1U;
+	root.page_id = MetadataPageId(1U);
+	root.generation = Generation(1U);
+	root.committed_lsn = LogSequenceNumber(1U);
+	root.children[0] = internalReference;
+	root.children[1] = internalReference;
+	MetadataRadixPage internal = root;
+	internal.kind = CatalogRadixPageKind::CRPK_INTERNAL;
+	internal.level = 0U;
+	internal.page_id = MetadataPageId(2U);
+	internal.children.fill({});
+	internal.children[0] = leafReference;
+	MetadataPageRouteLeafPage leaf;
+	leaf.page_id = MetadataPageId(3U);
+	leaf.generation = Generation(1U);
+	leaf.committed_lsn = LogSequenceNumber(1U);
+	leaf.routes = {route(1U, 1000U, 1U, 1U)};
+	pages.writeMetadataRadix(rootReference, root);
+	pages.writeMetadataRadix(internalReference, internal);
+	pages.writeMetadataPageRouteLeaf(leafReference, leaf);
+	expectFormatError([&] { static_cast<void>(directory.collectRoutesFromRouteBranch(current, rootReference)); },
+					  FormatError::FERR_INVALID_STATE);
+
+	TestMetadataPageAllocator allocator;
+	MetadataWriteBatch batch(allocator, current, LogSequenceNumber(2U));
+	MetadataPageFile batchPages(io, batch.candidate());
+	MetadataPageRouteDirectory batchDirectory(batchPages);
+	const PhysicalPageRef routeRoot = batchDirectory.buildFromCompleteRouteSet(
+			batch, std::vector{route(1U, 1000U, 1U, 1U), route(2U, 1001U, 1U, 1U)});
+	MetadataRadixPage batchRadix = batchPages.readMetadataRadix(routeRoot);
+	MetadataPageRouteLeafPage batchLeaf = batchPages.readMetadataPageRouteLeaf(batchRadix.children[0]);
+	ASSERT_EQ(batchLeaf.routes.size(), 2U);
+	batchLeaf.routes[1].physical_reference = batchLeaf.routes[0].physical_reference;
+	batchPages.writeMetadataPageRouteLeaf(batchRadix.children[0], batchLeaf);
+	expectFormatError([&] { static_cast<void>(batchDirectory.collectRoutesFromRouteBranch(batch.candidate(), routeRoot)); },
+					  FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(RelocatableMetadataPageRouteDirectoryTest, RejectsRouteTargetsThatAliasBootstrapPlumbing) {
+	const Superblock current = superblock(1U, 1U);
+	TestMetadataPageAllocator allocator;
+	MetadataWriteBatch batch(allocator, current, LogSequenceNumber(2U));
+	MetadataPageFile pages(io, batch.candidate());
+	MetadataPageRouteDirectory directory(pages);
+	const PhysicalPageRef routeRoot = directory.buildFromCompleteRouteSet(
+			batch, std::vector{route(1U, 1000U, 1U, 1U)});
+	MetadataRadixPage radix = pages.readMetadataRadix(routeRoot);
+	ASSERT_TRUE(radix.children[0].isValid());
+	MetadataPageRouteLeafPage leaf = pages.readMetadataPageRouteLeaf(radix.children[0]);
+	ASSERT_EQ(leaf.routes.size(), 1U);
+	// Route targets must never point at the bootstrap frames used to locate them.
+	leaf.routes[0].physical_reference = routeRoot;
+	pages.writeMetadataPageRouteLeaf(radix.children[0], leaf);
+
+	expectFormatError([&] { static_cast<void>(directory.collectRoutesFromRouteBranch(batch.candidate(), routeRoot)); },
+					  FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(RelocatableMetadataPageRouteDirectoryTest, RejectsWronglyTypedInternalRouteChildDuringLookup) {
+	const Superblock current = superblock(1U, 1U);
+	TestMetadataPageAllocator allocator;
+	MetadataWriteBatch batch(allocator, current, LogSequenceNumber(2U));
+	MetadataPageFile pages(io, batch.candidate());
+	MetadataPageRouteDirectory directory(pages);
+	const PhysicalPageRef root = directory.buildFromCompleteRouteSet(
+			batch, std::vector{route(1U, 1000U, 1U, 1U),
+								 route(RSS_METADATA_PAGE_ROUTE_LEAF_MAX_ENTRIES + 1U, 1001U, 1U, 1U)});
+	MetadataRadixPage rootPage = pages.readMetadataRadix(root);
+	ASSERT_TRUE(rootPage.children[0].isValid());
+	MetadataRadixPage child = pages.readMetadataRadix(rootPage.children[0]);
+	child.directory_type = MetadataDirectoryType::MDT_PAGE;
+	pages.writeMetadataRadix(rootPage.children[0], child);
+	expectFormatError([&] { static_cast<void>(directory.find(batch.candidate(), root, MetadataPageId(1U))); },
+					  FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableMetadataPageRouteDirectoryTest, RejectsInvalidVisibilityAndRouteIdentityMetadata) {
+	const Superblock current = superblock(1U, 1U);
+	TestMetadataPageAllocator allocator;
+	MetadataWriteBatch batch(allocator, current, LogSequenceNumber(2U));
+	MetadataPageFile pages(io, batch.candidate());
+	MetadataPageRouteDirectory directory(pages);
+
+	const PhysicalPageRef routeRoot = directory.buildFromCompleteRouteSet(
+			batch, std::vector{route(1U, 1000U, 1U, 1U)});
+	MetadataRadixPage radix = pages.readMetadataRadix(routeRoot);
+	ASSERT_TRUE(radix.children[0].isValid());
+	MetadataPageRouteLeafPage leaf = pages.readMetadataPageRouteLeaf(radix.children[0]);
+	ASSERT_EQ(leaf.routes.size(), 1U);
+	leaf.routes[0].physical_reference.generation = Generation(3U);
+	pages.writeMetadataPageRouteLeaf(radix.children[0], leaf);
+	expectFormatError([&] { static_cast<void>(directory.collectRoutesFromRouteBranch(batch.candidate(), routeRoot)); },
+					  FormatError::FERR_INVALID_HEADER);
+
+	leaf.routes[0].physical_reference.generation = batch.generation();
+	leaf.committed_lsn = LogSequenceNumber(3U);
+	pages.writeMetadataPageRouteLeaf(radix.children[0], leaf);
+	expectFormatError([&] { static_cast<void>(directory.collectRoutesFromRouteBranch(batch.candidate(), routeRoot)); },
+					  FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableMetadataPageRouteDirectoryTest, RejectsEmptyPhysicalDirectoryRouteSet) {
+	const Superblock current = superblock(1U, 1U);
+	MetadataPageFile pages(io, current);
+	MetadataPageRouteDirectory directory(pages);
+	expectFormatError([&] { static_cast<void>(directory.initialBootstrapFrameCount(current)); },
+					  FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(RelocatableMetadataPageRouteDirectoryTest, RejectsFuturePhysicalDirectoryRoot) {
+	Superblock current = superblock(1U, 1U);
+	current.catalog_root = pageRef(9U, 1U, 2U);
+	MetadataPageFile pages(io, current);
+	MetadataPageRouteDirectory directory(pages);
+	expectFormatError([&] { static_cast<void>(directory.collectRoutesFromPhysicalDirectoryRoots(current)); },
+					  FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableMetadataPageRouteDirectoryTest, RejectsBootstrapRootMissingFromTheCompleteRouteSet) {
 	Superblock current = superblock(1U, 1U);
 	const PhysicalPageRef catalogRoot = pageRef(1U, 1U, 1U);
 	const PhysicalPageRef catalogLeaf = pageRef(1U, 2U, 1U);
 	current.catalog_root = catalogRoot;
-	MetadataPageFile pages(io, current);
+	TestMetadataPageAllocator allocator;
+	MetadataWriteBatch batch(allocator, current, LogSequenceNumber(2U));
+	MetadataPageFile pages(io, batch.candidate());
 	CatalogRadixPage root;
 	root.kind = CatalogRadixPageKind::CRPK_ROOT;
 	root.directory_type = MetadataDirectoryType::MDT_CATALOG;
@@ -262,11 +523,45 @@ TEST_F(RelocatableMetadataPageRouteDirectoryTest, CountsAllFramesBeforeInitialBo
 	leaf.generation = Generation(1U);
 	leaf.committed_lsn = LogSequenceNumber(1U);
 	leaf.entries = {{SegmentId(1U), PhysicalSlotId(100U), SegmentKind::SGK_ENTITY_PAGE_POOL, 7U,
+					 Generation(1U), SegmentState::SGS_SEALED, LogSequenceNumber(1U)}};
+	pages.writeCatalogRadix(catalogRoot, root);
+	pages.writeCatalogLeaf(catalogLeaf, leaf);
+
+	// A replacement root is not publishable until its metadata route is registered in this batch.
+	batch.setCatalogRoot(batch.allocatePage());
+	MetadataPageRouteDirectory directory(pages);
+	expectFormatError([&] { static_cast<void>(directory.prepareInitialBootstrapMigration(batch)); },
+					  FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(RelocatableMetadataPageRouteDirectoryTest, CountsAllFramesBeforeInitialBootstrapAllocation) {
+	Superblock current = superblock(1U, 1U);
+	const PhysicalPageRef catalogRoot = pageRef(1U, 1U, 1U);
+	const PhysicalPageRef catalogLeaf = pageRef(1U, 2U, 1U);
+	current.catalog_root = catalogRoot;
+	MetadataPageFile pages(io, current);
+	CatalogRadixPage root;
+	root.kind = CatalogRadixPageKind::CRPK_ROOT;
+	root.directory_type = MetadataDirectoryType::MDT_CATALOG;
+	root.level = 0U;
+	root.page_id = MetadataPageId(1U);
+	root.generation = Generation(1U);
+	root.committed_lsn = LogSequenceNumber(1U);
+	root.children[0] = catalogLeaf;
+	CatalogLeafPage leaf;
+	leaf.page_id = MetadataPageId(RSS_METADATA_PAGE_ROUTE_LEAF_MAX_ENTRIES + 1U);
+	leaf.minimum_segment_id = SegmentId(1U);
+	leaf.maximum_segment_id = SegmentId(1U);
+	leaf.generation = Generation(1U);
+	leaf.committed_lsn = LogSequenceNumber(1U);
+	leaf.entries = {{SegmentId(1U), PhysicalSlotId(100U), SegmentKind::SGK_ENTITY_PAGE_POOL, 7U,
 						 Generation(1U), SegmentState::SGS_SEALED, LogSequenceNumber(1U)}};
 	pages.writeCatalogRadix(catalogRoot, root);
 	pages.writeCatalogLeaf(catalogLeaf, leaf);
 	MetadataPageRouteDirectory directory(pages);
-	EXPECT_EQ(directory.initialBootstrapFrameCount(current), 3U);
+	// Distinct route-leaf ordinals require two leaves, one radix page, a root,
+	// and the Bootstrap header.
+	EXPECT_EQ(directory.initialBootstrapFrameCount(current), 5U);
 }
 
 TEST_F(RelocatableMetadataPageRouteDirectoryTest, CollectsEveryVisiblePhysicalDirectoryPageBeforeBootstrapMigration) {
@@ -323,6 +618,89 @@ TEST_F(RelocatableMetadataPageRouteDirectoryTest, CollectsEveryVisiblePhysicalDi
 	pages.writeLocationLeaf(pageLeaf, location);
 	expectFormatError([&] { static_cast<void>(directory.collectRoutesFromPhysicalDirectoryRoots(current)); },
 					  FormatError::FERR_INVALID_STATE);
+
+	location.page_id = MetadataPageId(202U);
+	pages.writeLocationLeaf(pageLeaf, location);
+	catalog.entries.clear();
+	catalog.minimum_segment_id = {};
+	catalog.maximum_segment_id = {};
+	pages.writeCatalogLeaf(catalogLeaf, catalog);
+	expectFormatError([&] { static_cast<void>(directory.collectRoutesFromPhysicalDirectoryRoots(current)); },
+					  FormatError::FERR_INVALID_HEADER);
+
+	catalog.minimum_segment_id = SegmentId(RSS_CATALOG_PAGE_MAX_ENTRIES + 1U);
+	catalog.maximum_segment_id = catalog.minimum_segment_id;
+	catalog.entries = {{catalog.minimum_segment_id, PhysicalSlotId(100U), SegmentKind::SGK_ENTITY_PAGE_POOL, 7U,
+						Generation(1U), SegmentState::SGS_SEALED, LogSequenceNumber(1U)}};
+	pages.writeCatalogLeaf(catalogLeaf, catalog);
+	expectFormatError([&] { static_cast<void>(directory.collectRoutesFromPhysicalDirectoryRoots(current)); },
+					  FormatError::FERR_INVALID_HEADER);
+
+}
+
+TEST_F(RelocatableMetadataPageRouteDirectoryTest, CollectsAllocatorAndExtentDirectoryRoutes) {
+	Superblock current = superblock(1U, 1U);
+	const PhysicalPageRef allocatorRoot = pageRef(2U, 1U, 1U);
+	const PhysicalPageRef allocatorLeaf = pageRef(2U, 2U, 1U);
+	const PhysicalPageRef extentRoot = pageRef(2U, 3U, 1U);
+	const PhysicalPageRef extentLeaf = pageRef(2U, 4U, 1U);
+	current.allocator_root = allocatorRoot;
+	current.extent_directory_root = extentRoot;
+	MetadataPageFile pages(io, current);
+
+	MetadataRadixPage allocatorRadix;
+	allocatorRadix.kind = CatalogRadixPageKind::CRPK_ROOT;
+	allocatorRadix.directory_type = MetadataDirectoryType::MDT_ALLOCATOR;
+	allocatorRadix.level = 0U;
+	allocatorRadix.page_id = MetadataPageId(301U);
+	allocatorRadix.generation = Generation(1U);
+	allocatorRadix.committed_lsn = LogSequenceNumber(1U);
+	allocatorRadix.children[0] = allocatorLeaf;
+	AllocatorLeafPage allocator;
+	allocator.page_id = MetadataPageId(302U);
+	allocator.first_slot = PhysicalSlotId(1U);
+	allocator.slot_count = 1U;
+	allocator.generation = Generation(1U);
+	allocator.committed_lsn = LogSequenceNumber(1U);
+	pages.writeMetadataRadix(allocatorRoot, allocatorRadix);
+	pages.writeAllocatorLeaf(allocatorLeaf, allocator);
+
+	MetadataRadixPage extentRadix = allocatorRadix;
+	extentRadix.directory_type = MetadataDirectoryType::MDT_EXTENT;
+	extentRadix.page_id = MetadataPageId(401U);
+	extentRadix.children.fill({});
+	extentRadix.children[0] = extentLeaf;
+	LocationLeafPage extent;
+	extent.directory_type = MetadataDirectoryType::MDT_EXTENT;
+	extent.page_id = MetadataPageId(402U);
+	extent.generation = Generation(1U);
+	extent.committed_lsn = LogSequenceNumber(1U);
+	extent.entries = {{1U, SegmentId(22U), Generation(1U), 1U, 1U, 0U}};
+	pages.writeMetadataRadix(extentRoot, extentRadix);
+	pages.writeLocationLeaf(extentLeaf, extent);
+
+	MetadataPageRouteDirectory directory(pages);
+	EXPECT_EQ(directory.collectRoutesFromPhysicalDirectoryRoots(current),
+			  (std::vector<MetadataPageRoute>{{MetadataPageId(301U), allocatorRoot},
+											 {MetadataPageId(302U), allocatorLeaf},
+											 {MetadataPageId(401U), extentRoot},
+											 {MetadataPageId(402U), extentLeaf}}));
+
+	extent.directory_type = MetadataDirectoryType::MDT_PAGE;
+	pages.writeLocationLeaf(extentLeaf, extent);
+	expectFormatError([&] { static_cast<void>(directory.collectRoutesFromPhysicalDirectoryRoots(current)); },
+					  FormatError::FERR_INVALID_HEADER);
+
+	extent.directory_type = MetadataDirectoryType::MDT_EXTENT;
+	extent.entries.front().logical_id = RSS_LOCATION_LEAF_MAX_ENTRIES + 1U;
+	pages.writeLocationLeaf(extentLeaf, extent);
+	expectFormatError([&] { static_cast<void>(directory.collectRoutesFromPhysicalDirectoryRoots(current)); },
+					  FormatError::FERR_INVALID_HEADER);
+
+	allocator.first_slot = PhysicalSlotId(2U);
+	pages.writeAllocatorLeaf(allocatorLeaf, allocator);
+	expectFormatError([&] { static_cast<void>(directory.collectRoutesFromPhysicalDirectoryRoots(current)); },
+					  FormatError::FERR_INVALID_HEADER);
 }
 
 TEST_F(RelocatableMetadataPageRouteDirectoryTest, StagedBootstrapOverlaysFinalBatchFramesWithoutDroppingCurrentRoutes) {
@@ -378,6 +756,43 @@ TEST_F(RelocatableMetadataPageRouteDirectoryTest, StagedBootstrapOverlaysFinalBa
 													 {MetadataPageId(102U), replacementRef}}));
 }
 
+TEST_F(RelocatableMetadataPageRouteDirectoryTest, InitialRouteBranchOverlaysPhysicalRootsWithBatchRoutes) {
+	Superblock current = superblock(1U, 1U);
+	const PhysicalPageRef catalogRoot = pageRef(1U, 1U, 1U);
+	const PhysicalPageRef catalogLeaf = pageRef(1U, 2U, 1U);
+	current.catalog_root = catalogRoot;
+	TestMetadataPageAllocator allocator;
+	MetadataWriteBatch batch(allocator, current, LogSequenceNumber(2U));
+	MetadataPageFile pages(io, batch.candidate());
+
+	CatalogRadixPage root;
+	root.kind = CatalogRadixPageKind::CRPK_ROOT;
+	root.directory_type = MetadataDirectoryType::MDT_CATALOG;
+	root.level = 0U;
+	root.page_id = MetadataPageId(101U);
+	root.generation = Generation(1U);
+	root.committed_lsn = LogSequenceNumber(1U);
+	root.children[0] = catalogLeaf;
+	CatalogLeafPage leaf;
+	leaf.page_id = MetadataPageId(102U);
+	leaf.minimum_segment_id = SegmentId(1U);
+	leaf.maximum_segment_id = SegmentId(1U);
+	leaf.generation = Generation(1U);
+	leaf.committed_lsn = LogSequenceNumber(1U);
+	leaf.entries = {{SegmentId(1U), PhysicalSlotId(100U), SegmentKind::SGK_ENTITY_PAGE_POOL, 7U,
+					 Generation(1U), SegmentState::SGS_SEALED, LogSequenceNumber(1U)}};
+	pages.writeCatalogRadix(catalogRoot, root);
+	pages.writeCatalogLeaf(catalogLeaf, leaf);
+
+	const PhysicalPageRef replacement = batch.allocatePage();
+	batch.registerMetadataPageRoute(MetadataPageId(102U), replacement);
+	MetadataPageRouteDirectory directory(pages);
+	const PhysicalPageRef routeRoot = directory.buildInitialRouteBranch(batch);
+	EXPECT_TRUE(routeRoot.isValid());
+	EXPECT_EQ(directory.find(batch.candidate(), routeRoot, MetadataPageId(101U)), catalogRoot);
+	EXPECT_EQ(directory.find(batch.candidate(), routeRoot, MetadataPageId(102U)), replacement);
+}
+
 TEST_F(RelocatableMetadataPageRouteDirectoryTest, NextRouteBranchOverlaysPublishedRoutesWithCurrentBatchFrames) {
 	TestMetadataPageAllocator allocator;
 	const Superblock initial = superblock(1U, 1U);
@@ -431,6 +846,82 @@ TEST_F(RelocatableMetadataPageRouteDirectoryTest, CountsExactFramesForNextBootst
 }
 
 TEST_F(RelocatableMetadataPageRouteDirectoryTest,
+	   IdentityOnlyBootstrapPublicationPreservesThePublishedRouteBranchAndRejectsRouteChanges) {
+	TestMetadataPageAllocator allocator;
+	const Superblock initial = superblock(1U, 1U);
+	PhysicalPageRef bootstrapReference;
+	PhysicalPageRef publishedRouteRoot;
+	{
+		MetadataWriteBatch firstBatch(allocator, initial, LogSequenceNumber(2U));
+		MetadataPageFile pages(io, firstBatch.candidate());
+		MetadataPageRouteDirectory directory(pages);
+		publishedRouteRoot = directory.buildFromCompleteRouteSet(
+				firstBatch, std::vector{route(1U, 1000U, 1U, 1U), route(2U, 1001U, 1U, 1U)});
+		PageDirectoryBootstrap bootstrap;
+		bootstrap.generation = firstBatch.generation();
+		bootstrap.committed_lsn = firstBatch.checkpointLsn();
+		bootstrap.metadata_page_directory_root = publishedRouteRoot;
+		bootstrapReference = firstBatch.allocatePage();
+		pages.writePageDirectoryBootstrap(bootstrapReference, bootstrap);
+	}
+
+	Superblock published = superblock(2U, 2U);
+	published.page_directory_root = bootstrapReference;
+	published.flags |= RSS_SUPERBLOCK_FLAG_PAGE_DIRECTORY_BOOTSTRAP;
+	MetadataWriteBatch identityOnly(allocator, published, LogSequenceNumber(3U));
+	MetadataPageFile pages(io, identityOnly.candidate());
+	MetadataPageRouteDirectory directory(pages);
+
+	// A metadata-identity-only commit must advance the bootstrap generation
+	// without rebuilding or replacing its already-published route branch.
+	const PhysicalPageRef replacement = directory.publishIdentityOnlyBootstrap(identityOnly);
+	EXPECT_NE(replacement, bootstrapReference);
+	const PageDirectoryBootstrap header = pages.readPageDirectoryBootstrap(replacement);
+	EXPECT_EQ(header.generation, Generation(3U));
+	EXPECT_EQ(header.committed_lsn, LogSequenceNumber(3U));
+	EXPECT_EQ(header.metadata_page_directory_root, publishedRouteRoot);
+	EXPECT_EQ(directory.find(identityOnly.candidate(), header.metadata_page_directory_root, MetadataPageId(2U)),
+			  pageRef(1001U, 1U, 1U));
+
+	MetadataWriteBatch routeChange(allocator, published, LogSequenceNumber(3U));
+	routeChange.registerMetadataPageRoute(MetadataPageId(2U), routeChange.allocatePage());
+	expectFormatError([&] { static_cast<void>(directory.publishIdentityOnlyBootstrap(routeChange)); },
+				  FormatError::FERR_INVALID_STATE);
+
+	MetadataWriteBatch pendingDataRoot(allocator, published, LogSequenceNumber(3U));
+	pendingDataRoot.setPendingBootstrapDataRoot(pendingDataRoot.allocatePage());
+	expectFormatError([&] { static_cast<void>(directory.publishIdentityOnlyBootstrap(pendingDataRoot)); },
+				  FormatError::FERR_INVALID_STATE);
+
+	MetadataWriteBatch routeRefresh(allocator, published, LogSequenceNumber(3U));
+	routeRefresh.requestBootstrapRouteRefresh();
+	expectFormatError([&] { static_cast<void>(directory.publishIdentityOnlyBootstrap(routeRefresh)); },
+				  FormatError::FERR_INVALID_STATE);
+
+	// A torn or incorrectly ordered bootstrap header must not be copied into the
+	// next generation, even when there are no pending route mutations.
+	PageDirectoryBootstrap futureHeader = pages.readPageDirectoryBootstrap(bootstrapReference);
+	futureHeader.committed_lsn = LogSequenceNumber(4U);
+	pages.writePageDirectoryBootstrap(bootstrapReference, futureHeader);
+	MetadataWriteBatch futureHeaderBatch(allocator, published, LogSequenceNumber(3U));
+	expectFormatError([&] { static_cast<void>(directory.publishIdentityOnlyBootstrap(futureHeaderBatch)); },
+				  FormatError::FERR_INVALID_STATE);
+
+	PageDirectoryBootstrap missingRouteHeader = pages.readPageDirectoryBootstrap(bootstrapReference);
+	missingRouteHeader.committed_lsn = LogSequenceNumber(2U);
+	missingRouteHeader.metadata_page_directory_root = {};
+	pages.writePageDirectoryBootstrap(bootstrapReference, missingRouteHeader);
+	MetadataWriteBatch missingRouteBatch(allocator, published, LogSequenceNumber(3U));
+	expectFormatError([&] { static_cast<void>(directory.publishIdentityOnlyBootstrap(missingRouteBatch)); },
+				  FormatError::FERR_INVALID_STATE);
+
+	MetadataWriteBatch preBootstrap(allocator, initial, LogSequenceNumber(2U));
+	expectFormatError([&] { static_cast<void>(directory.publishIdentityOnlyBootstrap(preBootstrap)); },
+				  FormatError::FERR_INVALID_STATE);
+
+}
+
+TEST_F(RelocatableMetadataPageRouteDirectoryTest,
 	   IdentifiesACompleteRouteBranchPoolForRefreshOnlyEvacuation) {
 	TestMetadataPageAllocator allocator;
 	const Superblock initial = superblock(1U, 1U);
@@ -460,6 +951,13 @@ TEST_F(RelocatableMetadataPageRouteDirectoryTest,
 	published.flags |= RSS_SUPERBLOCK_FLAG_PAGE_DIRECTORY_BOOTSTRAP;
 
 	EXPECT_TRUE(canRefreshMetadataRouteBranchForEvacuation(pages, published, sourceSlot, sourceAllocatedFrames));
+	MetadataWriteBatch staleRefresh(allocator, initial, LogSequenceNumber(2U));
+	expectFormatError(
+			[&] {
+				static_cast<void>(refreshMetadataRouteBranchForEvacuation(
+						pages, staleRefresh, published, sourceSlot, sourceAllocatedFrames));
+			},
+			FormatError::FERR_INVALID_STATE);
 	MetadataWriteBatch refresh(allocator, published, LogSequenceNumber(3U));
 	const std::optional<uint32_t> refreshed =
 			refreshMetadataRouteBranchForEvacuation(pages, refresh, published, sourceSlot, sourceAllocatedFrames);
@@ -700,6 +1198,18 @@ TEST_F(RelocatableMetadataPageRouteDirectoryTest,
 	EXPECT_EQ(replacementRootPage.children[0], replacementLeaf);
 	EXPECT_EQ(pages.readMetadataRadix(sourceRoot, published).children[0], sourceLeaf);
 
+	// A subsequent evacuation reads the published logical child through its
+	// route, then emits an ordinary physical COW directory candidate.
+	pages.rebindSuperblock(relocation.candidate());
+	MetadataWriteBatch evacuation(allocator, relocation.candidate(), LogSequenceNumber(4U));
+	ASSERT_NO_THROW(cloneMetadataDirectoryRootsForEvacuation(pages, evacuation, relocation.candidate()));
+	const MetadataRadixPage evacuatedRoot =
+			pages.readMetadataRadixUnresolved(evacuation.candidate().extent_directory_root);
+	EXPECT_FALSE(evacuatedRoot.logical_children_enabled);
+	EXPECT_FALSE(evacuatedRoot.logical_children_resolved);
+	EXPECT_FALSE(evacuatedRoot.logical_children[0].isValid());
+	EXPECT_TRUE(evacuatedRoot.children[0].isValid());
+
 	EXPECT_FALSE(canRelocateRoutedMetadataPoolPages(
 			pages, published, unrouteableRoot.physical_slot,
 			1U << (unrouteableRoot.frame_index - RSS_PAGE_POOL_FIRST_DATA_FRAME)));
@@ -724,6 +1234,13 @@ TEST_F(RelocatableMetadataPageRouteDirectoryTest, RefreshesAnIsolatedBootstrapHe
 	published.flags |= RSS_SUPERBLOCK_FLAG_PAGE_DIRECTORY_BOOTSTRAP;
 	const uint32_t sourceFrame = 1U << (sourceHeader.frame_index - RSS_PAGE_POOL_FIRST_DATA_FRAME);
 	ASSERT_TRUE(canRefreshBootstrapHeaderForEvacuation(pages, published, sourceHeader.physical_slot, sourceFrame));
+	MetadataWriteBatch staleRefresh(allocator, initial, LogSequenceNumber(2U));
+	expectFormatError(
+			[&] {
+				static_cast<void>(refreshBootstrapHeaderForEvacuation(
+						pages, staleRefresh, published, sourceHeader.physical_slot, sourceFrame));
+			},
+			FormatError::FERR_INVALID_STATE);
 
 	MetadataWriteBatch refresh(allocator, published, LogSequenceNumber(3U));
 	refresh.reserveDataSlot(sourceHeader.physical_slot);

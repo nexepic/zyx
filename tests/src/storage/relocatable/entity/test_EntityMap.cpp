@@ -781,6 +781,30 @@ TEST_F(RelocatableMetadataStoreTest, NativeGraphPageTransactionPublishesEntityAn
 	propertyReplacement.expected_owner_lsn = LogSequenceNumber(4U);
 	propertyReplacement.upserted_properties.push_back(
 			{propertyKey, originalPropertyPage.page_id, static_cast<uint16_t>(originalProperty.slot_id + 1U), 2U});
+	const auto rejectIncompleteFreshPoolRange = [&](NativeGraphPropertyPageReplacementRequest invalid) {
+		bool materializerCalled = false;
+		expectFormatError(
+				[&] {
+					static_cast<void>(store->mutateNativeGraphPages(
+							std::span(&entityReplacement, 1), {}, {}, std::span(&invalid, 1), {}, LogSequenceNumber(5U),
+							[&materializerCalled](std::span<EntityPageReplacementMaterialization>,
+														std::span<EntityPageAppendBatchMaterialization>,
+														std::span<EntityPageNewPoolBatchMaterialization>,
+														std::span<NativeGraphPropertyPageReplacementMaterialization>,
+														std::span<NativeGraphPropertyPageBatchMaterialization>) {
+								materializerCalled = true;
+							}));
+				},
+				FormatError::FERR_INVALID_HEADER);
+		EXPECT_FALSE(materializerCalled);
+	};
+	NativeGraphPropertyPageReplacementRequest missingFreshPoolEnd = propertyReplacement;
+	missingFreshPoolEnd.first_slot = PhysicalSlotId(40U);
+	rejectIncompleteFreshPoolRange(std::move(missingFreshPoolEnd));
+	NativeGraphPropertyPageReplacementRequest reversedFreshPoolRange = propertyReplacement;
+	reversedFreshPoolRange.first_slot = PhysicalSlotId(41U);
+	reversedFreshPoolRange.last_slot = PhysicalSlotId(40U);
+	rejectIncompleteFreshPoolRange(std::move(reversedFreshPoolRange));
 
 	bool prepared = false;
 	const Superblock published = store->mutateNativeGraphPages(
@@ -819,6 +843,51 @@ TEST_F(RelocatableMetadataStoreTest, NativeGraphPageTransactionPublishesEntityAn
 	EXPECT_NE(store->findPageLocation(current, node.page_id).page_index, originalEntityPage.page_index);
 	EXPECT_NE(store->findPageLocation(current, originalPropertyPage.page_id).page_index,
 			  originalPropertyPage.page_index);
+
+	// A relocation source must be consumed by exactly one destination Property page batch.
+	NativeGraphPropertyPageReplacementRequest unmatchedPropertyRelocation = propertyReplacement;
+	unmatchedPropertyRelocation.expected_location = store->findPageLocation(current, originalPropertyPage.page_id);
+	unmatchedPropertyRelocation.expected_owner_lsn = LogSequenceNumber(5U);
+	unmatchedPropertyRelocation.upserted_properties.clear();
+	unmatchedPropertyRelocation.relocated_properties = {propertyKey};
+	bool rejectedRelocationPreparer = false;
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->mutateNativeGraphPages(
+						{}, {}, {}, std::span(&unmatchedPropertyRelocation, 1), {}, LogSequenceNumber(6U),
+						[&rejectedRelocationPreparer](std::span<EntityPageReplacementMaterialization>,
+														  std::span<EntityPageAppendBatchMaterialization>,
+														  std::span<EntityPageNewPoolBatchMaterialization>,
+														  std::span<NativeGraphPropertyPageReplacementMaterialization>,
+														  std::span<NativeGraphPropertyPageBatchMaterialization>) {
+							rejectedRelocationPreparer = true;
+						}));
+			},
+			FormatError::FERR_INVALID_STATE);
+	EXPECT_FALSE(rejectedRelocationPreparer);
+
+	NativeGraphPropertyPageReplacementRequest emptyPropertyRetirement = unmatchedPropertyRelocation;
+	emptyPropertyRetirement.relocated_properties.clear();
+	emptyPropertyRetirement.retire_page = true;
+	bool rejectedRetirementPreparer = false;
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->mutateNativeGraphPages(
+						{}, {}, {}, std::span(&emptyPropertyRetirement, 1), {}, LogSequenceNumber(6U),
+						[&rejectedRetirementPreparer](std::span<EntityPageReplacementMaterialization>,
+														  std::span<EntityPageAppendBatchMaterialization>,
+														  std::span<EntityPageNewPoolBatchMaterialization>,
+														  std::span<NativeGraphPropertyPageReplacementMaterialization>,
+														  std::span<NativeGraphPropertyPageBatchMaterialization>) {
+							rejectedRetirementPreparer = true;
+						}));
+			},
+			FormatError::FERR_INVALID_STATE);
+	EXPECT_FALSE(rejectedRetirementPreparer);
+	const MetadataSnapshotPin afterPropertyRejections = store->openSnapshot();
+	EXPECT_EQ(afterPropertyRejections.superblock(), current.superblock());
+	EXPECT_EQ(store->findEntityPropertyLocation(afterPropertyRejections, propertyKey),
+			  store->findEntityPropertyLocation(current, propertyKey));
 
 	EntityPageReplacementRequest deletedNode = entityReplacement;
 	deletedNode.expected_location = store->findPageLocation(current, node.page_id);
@@ -972,10 +1041,12 @@ TEST_F(RelocatableMetadataStoreTest, NativeGraphPropertyPoolBecomesReachableOnly
 	ASSERT_TRUE(entityReservation.has_value());
 	initializeTestSharedPagePool(*io, dataRegionOffset, entityReservation->entries.front());
 	const EntityPageLocation node{101U, PageId(91U), 0U, 1U};
+	const EntityPageLocation additionalNode{102U, node.page_id, 1U, 1U};
+	const std::array<EntityPageLocation, 2U> nodes{node, additionalNode};
 	PageLocation entityPageLocation{node.page_id, entityReservation->entries.front().segment_id, 0U,
 									entityReservation->entries.front().generation, 0U};
 	static_cast<void>(store->appendEntityPageToExistingPool(
-			entityReservation->entries.front(), entityPageLocation, std::span(&node, 1), {}, LogSequenceNumber(3U),
+			entityReservation->entries.front(), entityPageLocation, nodes, {}, LogSequenceNumber(3U),
 			[this, dataRegionOffset](const CatalogEntry &pool, PageLocation &page) {
 				page.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME;
 				prepareTestSharedPageFrame(*io, dataRegionOffset, pool, page.page_id, page.page_index, pool.owner_id,
@@ -1052,6 +1123,47 @@ TEST_F(RelocatableMetadataStoreTest, NativeGraphPropertyPoolBecomesReachableOnly
 			  candidate->pages.front().location);
 	EXPECT_EQ(reopened->findEntityPropertyLocation(published, propertyKey),
 			  candidate->pages.front().upserted_properties.front());
+	published.release();
+
+	const EntityPropertyKey additionalPropertyKey{EntityPropertyOwnerKind::EPOK_NODE, additionalNode.entity_id};
+	NativeGraphPropertyPageBatchRequest appendRequest;
+	appendRequest.kind = NativeGraphPropertyPageBatchKind::NGPBK_APPEND_EXISTING_POOL;
+	appendRequest.expected_pool = visiblePool;
+	appendRequest.page_owner_id = 701U;
+	appendRequest.page_property_keys = {{additionalPropertyKey}};
+	bool appendPrepared = false;
+	const Superblock appended = reopened->mutateNativeGraphPages(
+			{}, {}, {}, {}, std::span(&appendRequest, 1), LogSequenceNumber(5U),
+			[this, dataRegionOffset, &appendPrepared](std::span<EntityPageReplacementMaterialization> entities,
+													   std::span<EntityPageAppendBatchMaterialization> appends,
+													   std::span<EntityPageNewPoolBatchMaterialization> newPools,
+													   std::span<NativeGraphPropertyPageReplacementMaterialization> properties,
+													   std::span<NativeGraphPropertyPageBatchMaterialization> propertyPools) {
+				EXPECT_TRUE(entities.empty());
+				EXPECT_TRUE(appends.empty());
+				EXPECT_TRUE(newPools.empty());
+				EXPECT_TRUE(properties.empty());
+				ASSERT_EQ(propertyPools.size(), 1U);
+				ASSERT_EQ(propertyPools.front().pages.size(), 1U);
+				auto &page = propertyPools.front().pages.front();
+				page.location.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME + 1U;
+				page.upserted_properties.front() = {
+						page.upserted_properties.front().key, page.location.page_id, 0U, 1U};
+				prepareTestSharedPageFrame(*io, dataRegionOffset, propertyPools.front().pool, page.location.page_id,
+									 page.location.page_index, propertyPools.front().page_owner_id,
+									 PageOwnerKind::POK_PROPERTY, LogSequenceNumber(5U));
+				appendPrepared = true;
+			});
+	EXPECT_TRUE(appendPrepared);
+	EXPECT_EQ(appended.generation, Generation(5U));
+	MetadataSnapshotPin afterAppend = reopened->openSnapshot();
+	EXPECT_EQ(reopened->findEntityPropertyLocation(afterAppend, propertyKey),
+			  candidate->pages.front().upserted_properties.front());
+	const EntityPropertyLocation additionalProperty =
+			reopened->findEntityPropertyLocation(afterAppend, additionalPropertyKey);
+	EXPECT_EQ(additionalProperty.slot_id, 0U);
+	EXPECT_EQ(reopened->findPageLocation(afterAppend, additionalProperty.page_id).page_index,
+			  RSS_PAGE_POOL_FIRST_DATA_FRAME + 1U);
 }
 
 TEST_F(RelocatableMetadataStoreTest, NativeGraphTransactionRejectsPropertyRootWithoutSurvivingEntityOwner) {

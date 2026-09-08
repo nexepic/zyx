@@ -228,6 +228,12 @@ TEST_F(NativeStreamedGraphPrivatePreparationTest, RejectsIncompletePrivatePrepar
 	EXPECT_THROW(invoke(records, lease, layout, options, candidates.reader(), writer, noFence, visitor), FormatException);
 	const NativeStreamedGraphPrivatePreparationVisitor noVisitor;
 	EXPECT_THROW(invoke(records, lease, layout, options, candidates.reader(), writer, fence, noVisitor), FormatException);
+	MetadataSnapshotPin releasedSnapshot = metadata_->openSnapshot();
+	releasedSnapshot.release();
+	EXPECT_THROW(NativeStreamedGraphPrivatePreparationCoordinator::prepare(
+					 records, lease, layout, candidates.identities, catalog, releasedSnapshot, options, candidates.reader(),
+					 writer, fence, visitor),
+			 FormatException);
 	for (const auto &payload: candidates.payloads) {
 		EXPECT_FALSE(payload.has_value());
 	}
@@ -401,6 +407,80 @@ TEST_F(NativeStreamedGraphPrivatePreparationTest, RejectsLargeValueCandidatesRes
 					 [] {}, [](const NativeStreamedGraphPrivatePreparation &, const NativeStreamedGraphDeferredPublication &) {}),
 				 FormatException);
 	referenceMapSnapshot.release();
+}
+
+TEST_F(NativeStreamedGraphPrivatePreparationTest,
+	   RejectsIncompleteOrInconsistentLargeValuePrivatePreparationBeforePublication) {
+	BTreePageStore pages(*slotted_pages_, *metadata_);
+	SystemCatalog catalog(pages, *metadata_);
+	LargeValueStore values(io_, *metadata_);
+	const NativeBulkEdgeRecord oversized{100U,
+									 1U,
+									 2U,
+									 "REL",
+									 {{"body", graph::PropertyValue(graph::PropertyValue::Bytes(
+												   RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, std::byte{0x4B}))}}};
+	const NativeBulkEdgeRecordSource records = source({oversized});
+	const std::array<NativeGraphLogicalIdLeaseRange, 1U> lease{{{100U, 1U}}};
+	const NativeBulkEdgePublicationPreflightOptions preflight{16U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U, 256U};
+	const NativeStreamedGraphPublicationPlan plan =
+			NativeStreamedGraphPublicationPlan::derive(records, lease, preflight, [](uint64_t) { return true; });
+	ASSERT_EQ(plan.large_value_count, 1U);
+	const NativeStreamedGraphLargeValueContentRunPlan contentRun =
+			NativeStreamedGraphLargeValueContentRunBuilder::derivePlanForValueCount(
+					values, plan.large_value_count, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U);
+	const NativeStreamedGraphLargeValueReferenceMapRunPlan referenceMapRun =
+			NativeStreamedGraphLargeValueReferenceMapBuilder::derivePlanForValueCount(
+					plan.large_value_count, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U);
+	const NativeStreamedGraphCandidateLayout layout = NativeStreamedGraphCandidateLayout::derive(
+			plan, contentRun.candidate_segment_count, referenceMapRun.candidate_segment_count);
+	NativeStreamedGraphPrivatePreparationOptions options;
+	options.families = {
+			16U,
+			16U,
+			RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES,
+			{2U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 16U, 4U, NativeBulkEdgeRunDuplicatePolicy::NBERDP_REJECT}};
+	options.maximum_catalog_entries = 64U;
+	options.large_value_store = &values;
+	options.large_value_content_options = {RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U, 16U, 4U};
+
+	const auto expectRejected = [&](const NativeStreamedGraphPublicationPlan &candidatePlan,
+									 const NativeStreamedGraphCandidateLayout &candidateLayout,
+									 const NativeStreamedGraphPrivatePreparationOptions &candidateOptions) {
+		PrivateCandidates candidates(candidateLayout.candidate_count);
+		MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+		EXPECT_THROW(NativeStreamedGraphPrivatePreparationCoordinator::prepareDeferredPublication(
+						 records, lease, candidatePlan, candidateLayout, candidates.identities, catalog, snapshot,
+						 candidateOptions, candidates.reader(),
+						 [&candidates](const NativeGraphPrivateSegmentMaterialization &identity,
+										   std::vector<std::byte> payload) { candidates.write(identity, std::move(payload)); },
+						 [] {},
+						 [](const NativeStreamedGraphPrivatePreparation &,
+							const NativeStreamedGraphDeferredPublication &) {}),
+					 FormatException);
+		snapshot.release();
+	};
+
+	NativeStreamedGraphPrivatePreparationOptions noStore = options;
+	noStore.large_value_store = nullptr;
+	expectRejected(plan, layout, noStore);
+	NativeStreamedGraphCandidateLayout missingContent = layout;
+	missingContent.large_value_content.count = 0U;
+	expectRejected(plan, missingContent, options);
+	NativeStreamedGraphCandidateLayout missingReferenceMap = layout;
+	missingReferenceMap.large_value_reference_map.count = 0U;
+	expectRejected(plan, missingReferenceMap, options);
+	NativeStreamedGraphPublicationPlan mismatchedPreflight = plan;
+	++mismatchedPreflight.large_value_count;
+	expectRejected(mismatchedPreflight, layout, options);
+	NativeStreamedGraphCandidateLayout mismatchedContentLayout = layout;
+	++mismatchedContentLayout.large_value_content.count;
+	++mismatchedContentLayout.candidate_count;
+	expectRejected(plan, mismatchedContentLayout, options);
+	NativeStreamedGraphCandidateLayout mismatchedReferenceMapLayout = layout;
+	++mismatchedReferenceMapLayout.large_value_reference_map.count;
+	++mismatchedReferenceMapLayout.candidate_count;
+	expectRejected(plan, mismatchedReferenceMapLayout, options);
 }
 
 TEST_F(NativeStreamedGraphPrivatePreparationTest,

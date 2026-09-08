@@ -231,6 +231,9 @@ TEST_F(CypherFunctionContractsTest, RejectsMalformedFunctionValuesWithoutPartial
 	EXPECT_THROW(static_cast<void>(execute("RETURN toInteger('42x') AS invalid_integer")), std::runtime_error);
 	EXPECT_THROW(static_cast<void>(execute("RETURN bytes('0x0') AS invalid_bytes")), std::invalid_argument);
 	EXPECT_THROW(static_cast<void>(execute("RETURN bytes('0x0g') AS invalid_bytes")), std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(execute("RETURN bytes('::') AS invalid_bytes")), std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(execute("RETURN bytes('//') AS invalid_bytes")), std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(execute("RETURN bytes('0q') AS invalid_bytes")), std::invalid_argument);
 	EXPECT_THROW(static_cast<void>(execute("RETURN bytes([0, 'bad']) AS invalid_bytes")), std::invalid_argument);
 	EXPECT_THROW(static_cast<void>(execute("RETURN bytes([-1]) AS invalid_bytes")), std::invalid_argument);
 	EXPECT_THROW(static_cast<void>(execute("RETURN bytes([0, 256]) AS invalid_bytes")), std::invalid_argument);

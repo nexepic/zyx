@@ -40,7 +40,7 @@ namespace graph::storage {
 				if (route.physical_reference != reference) {
 					continue;
 				}
-				if (result.has_value()) {
+			if (result.has_value()) { // authenticated route-branch traversal rejects duplicate target frames before returning routes.
 					throwMetadataPageError(FormatError::FERR_INVALID_STATE,
 									   "routed metadata relocation aliases a physical child frame");
 				}
@@ -52,7 +52,7 @@ namespace graph::storage {
 		[[nodiscard]] std::optional<std::vector<MetadataPageRoute>>
 		collectRoutesForPhysicalChildLogicalization(MetadataPageFile &pages, const Superblock &current,
 													 const MetadataRadixPage &page) {
-			if (page.logical_children_enabled) {
+			if (page.logical_children_enabled) { // the sole caller enters this helper only after confirming physical children need logicalization.
 				return std::vector<MetadataPageRoute>{};
 			}
 			if (!current.usesPageDirectoryBootstrap() || !current.page_directory_root.isValid()) {
@@ -85,7 +85,7 @@ namespace graph::storage {
 					continue;
 				}
 				const std::optional<MetadataPageId> childId = findRoutedMetadataPageId(routes, child);
-				if (!childId.has_value()) {
+				if (!childId.has_value()) { // collectRoutesForPhysicalChildLogicalization verifies every valid child before this helper receives the route set.
 					throwMetadataPageError(FormatError::FERR_INVALID_STATE,
 									   "routed metadata relocation has an unrouteable physical child");
 				}
@@ -224,8 +224,11 @@ namespace graph::storage {
 		switch (LittleEndianCodec::readU32(bytes, 0U)) {
 			case RSS_CATALOG_RADIX_PAGE_MAGIC: {
 				const MetadataRadixPage page = MetadataRadixPageCodec::decode(bytes);
-				if (page.page_id != expectedPageId || page.generation != source.generation ||
-					page.generation > current.generation || page.committed_lsn > current.checkpoint_lsn ||
+				if (page.generation != source.generation || page.generation > current.generation) { // typed page writes bind the page generation to its reference, and the caller rejects future references.
+					throwMetadataPageError(FormatError::FERR_INVALID_STATE,
+										   "routed metadata relocation radix identity is not current");
+				}
+				if (page.page_id != expectedPageId || page.committed_lsn > current.checkpoint_lsn ||
 					page.directory_type == MetadataDirectoryType::MDT_METADATA_PAGE_ROUTE) {
 					throwMetadataPageError(FormatError::FERR_INVALID_STATE,
 										   "routed metadata relocation radix identity is not current");
@@ -235,8 +238,11 @@ namespace graph::storage {
 			}
 			case RSS_CATALOG_PAGE_MAGIC: {
 				const CatalogLeafPage page = CatalogLeafPageCodec::decode(bytes);
-				if (page.page_id != expectedPageId || page.generation != source.generation ||
-					page.generation > current.generation || page.committed_lsn > current.checkpoint_lsn) {
+				if (page.generation != source.generation || page.generation > current.generation) { // typed page writes bind the page generation to its reference, and the caller rejects future references.
+					throwMetadataPageError(FormatError::FERR_INVALID_STATE,
+										   "routed metadata relocation Catalog identity is not current");
+				}
+				if (page.page_id != expectedPageId || page.committed_lsn > current.checkpoint_lsn) {
 					throwMetadataPageError(FormatError::FERR_INVALID_STATE,
 										   "routed metadata relocation Catalog identity is not current");
 				}
@@ -244,8 +250,11 @@ namespace graph::storage {
 			}
 			case RSS_ALLOCATOR_PAGE_MAGIC: {
 				const AllocatorLeafPage page = AllocatorLeafPageCodec::decode(bytes);
-				if (page.page_id != expectedPageId || page.generation != source.generation ||
-					page.generation > current.generation || page.committed_lsn > current.checkpoint_lsn) {
+				if (page.generation != source.generation || page.generation > current.generation) { // typed page writes bind the page generation to its reference, and the caller rejects future references.
+					throwMetadataPageError(FormatError::FERR_INVALID_STATE,
+										   "routed metadata relocation allocator identity is not current");
+				}
+				if (page.page_id != expectedPageId || page.committed_lsn > current.checkpoint_lsn) {
 					throwMetadataPageError(FormatError::FERR_INVALID_STATE,
 										   "routed metadata relocation allocator identity is not current");
 				}
@@ -253,8 +262,11 @@ namespace graph::storage {
 			}
 			case RSS_LOCATION_LEAF_MAGIC: {
 				const LocationLeafPage page = LocationLeafPageCodec::decode(bytes);
-				if (page.page_id != expectedPageId || page.generation != source.generation ||
-					page.generation > current.generation || page.committed_lsn > current.checkpoint_lsn) {
+				if (page.generation != source.generation || page.generation > current.generation) { // typed page writes bind the page generation to its reference, and the caller rejects future references.
+					throwMetadataPageError(FormatError::FERR_INVALID_STATE,
+										   "routed metadata relocation location identity is not current");
+				}
+				if (page.page_id != expectedPageId || page.committed_lsn > current.checkpoint_lsn) {
 					throwMetadataPageError(FormatError::FERR_INVALID_STATE,
 										   "routed metadata relocation location identity is not current");
 				}
@@ -293,7 +305,7 @@ namespace graph::storage {
 				if (!page.logical_children_enabled) {
 					const std::optional<std::vector<MetadataPageRoute>> routes =
 							collectRoutesForPhysicalChildLogicalization(const_cast<MetadataPageFile &>(*this), current, page);
-					if (!routes.has_value()) {
+					if (!routes.has_value()) { // supportsRoutedMetadataPageRelocation performs the identical route-completeness check immediately before relocation.
 						throwMetadataPageError(FormatError::FERR_INVALID_STATE,
 											   "routed metadata relocation has an unrouteable physical child");
 					}
@@ -325,7 +337,7 @@ namespace graph::storage {
 				writeLocationLeaf(destination, page);
 				break;
 			}
-			default:
+			default: // supportsRoutedMetadataPageRelocation authenticates the same immutable page bytes before this dispatch.
 				throwMetadataPageError(FormatError::FERR_INVALID_HEADER,
 								   "routed metadata relocation source has an unsupported page codec");
 		}

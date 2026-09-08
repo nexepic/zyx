@@ -213,6 +213,21 @@ TEST_F(LogicalCreateEdgeTest, Clone) {
     EXPECT_EQ(cce->getChildren().size(), 1u);
 }
 
+TEST_F(LogicalCreateEdgeTest, ClonesDynamicPropertyExpressionsWithoutAliasingThem) {
+	std::unordered_map<std::string, graph::PropertyValue> props;
+	std::unordered_map<std::string, std::shared_ptr<Expression>> propertyExpressions;
+	propertyExpressions.emplace("weight", makeLiteralExpr(1));
+	propertyExpressions.emplace("optional", nullptr);
+	LogicalCreateEdge edge("r", "KNOWS", std::move(props), std::move(propertyExpressions), "n", "m");
+
+	const auto cloned = edge.clone();
+	const auto *copy = dynamic_cast<const LogicalCreateEdge *>(cloned.get());
+	ASSERT_NE(copy, nullptr);
+	ASSERT_EQ(copy->getPropertyExprs().size(), 2U);
+	ASSERT_NE(copy->getPropertyExprs().at("weight"), nullptr);
+	EXPECT_EQ(copy->getPropertyExprs().at("optional"), nullptr);
+}
+
 TEST_F(LogicalCreateEdgeTest, NullChildGetChildrenAndCloneCoverage) {
     std::unordered_map<std::string, graph::PropertyValue> props;
     LogicalCreateEdge ce("r", "KNOWS", props, "n", "m");
@@ -230,6 +245,19 @@ TEST_F(LogicalCreateEdgeTest, InvalidChildIndex) {
     LogicalCreateEdge ce("r", "KNOWS", props, "n", "m");
     EXPECT_THROW(ce.setChild(1, nullptr), std::logic_error);
     EXPECT_THROW(ce.detachChild(1), std::logic_error);
+}
+
+TEST_F(LogicalCreateEdgeTest, ReplacesAndDetachesItsOnlyChild) {
+	std::unordered_map<std::string, graph::PropertyValue> props;
+	LogicalCreateEdge edge("r", "KNOWS", std::move(props), "source", "target",
+						 std::make_unique<LogicalNodeScan>("input"));
+
+	const std::unique_ptr<LogicalOperator> detached = edge.detachChild(0U);
+	ASSERT_NE(detached, nullptr);
+	EXPECT_TRUE(edge.getChildren().empty());
+	edge.setChild(0U, std::make_unique<LogicalNodeScan>("replacement"));
+	ASSERT_EQ(edge.getChildren().size(), 1U);
+	EXPECT_EQ(edge.getOutputVariables(), (std::vector<std::string>{"replacement", "r"}));
 }
 
 TEST_F(LogicalCreateEdgeTest, ToString) {
@@ -583,7 +611,8 @@ TEST_F(LogicalMergeNodeTest, Clone) {
     std::vector<MergeSetAction> onMatch = {
         {"n", "prop", nullptr}
     };
-    LogicalMergeNode mn("n", {"Person"}, matchProps, onCreate, onMatch);
+    LogicalMergeNode mn("n", {"Person"}, matchProps, onCreate, onMatch,
+                        std::make_unique<LogicalNodeScan>("input"));
 
     auto cloned = mn.clone();
     auto *cmn = dynamic_cast<LogicalMergeNode *>(cloned.get());
@@ -593,6 +622,23 @@ TEST_F(LogicalMergeNodeTest, Clone) {
     EXPECT_NE(cmn->getOnCreateItems()[0].expression, nullptr);
     ASSERT_EQ(cmn->getOnMatchItems().size(), 1u);
     EXPECT_EQ(cmn->getOnMatchItems()[0].expression, nullptr);
+	ASSERT_EQ(cmn->getChildren().size(), 1U);
+	EXPECT_NE(cmn->getChildren().front(), nullptr);
+}
+
+TEST_F(LogicalMergeNodeTest, ClonesDynamicMatchPropertyExpressionsWithoutAliasingThem) {
+	std::unordered_map<std::string, graph::PropertyValue> matchProps;
+	std::unordered_map<std::string, std::shared_ptr<Expression>> matchExpressions;
+	matchExpressions.emplace("age", makeLiteralExpr(42));
+	matchExpressions.emplace("optional", nullptr);
+	LogicalMergeNode node("n", {"Person"}, std::move(matchProps), {}, {}, nullptr, std::move(matchExpressions));
+
+	const auto cloned = node.clone();
+	const auto *copy = dynamic_cast<const LogicalMergeNode *>(cloned.get());
+	ASSERT_NE(copy, nullptr);
+	ASSERT_EQ(copy->getMatchPropertyExpressions().size(), 2U);
+	ASSERT_NE(copy->getMatchPropertyExpressions().at("age"), nullptr);
+	EXPECT_EQ(copy->getMatchPropertyExpressions().at("optional"), nullptr);
 }
 
 TEST_F(LogicalMergeNodeTest, InvalidChildIndex) {

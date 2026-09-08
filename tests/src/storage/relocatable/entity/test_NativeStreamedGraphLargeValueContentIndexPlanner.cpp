@@ -9,11 +9,15 @@
 #include "storage/relocatable/metadata/RelocatableMetadataStoreTestFixture.hpp"
 
 #include <array>
+#include <filesystem>
+#include <fstream>
+#include <memory>
 #include <optional>
 #include <utility>
 #include <vector>
 
 #include "graph/storage/relocatable/entity/NativeStreamedGraphLargeValueContentIndexPlanner.hpp"
+#include "graph/storage/relocatable/index/BTreeIndex.hpp"
 
 namespace graph::storage {
 
@@ -89,6 +93,37 @@ namespace graph::storage {
 		snapshot.release();
 	}
 
+	TEST_F(RelocatableMetadataStoreTest, StreamedLargeValueContentIndexRejectsAForeignStore) {
+		auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+		PrivateCandidates candidates;
+		MetadataSnapshotPin snapshot = metadata->openSnapshot();
+		const std::filesystem::path foreignPath = testFilePath.string() + ".foreign";
+		auto foreignFile = std::make_shared<std::fstream>(
+				foreignPath, std::ios::in | std::ios::out | std::ios::binary | std::ios::trunc);
+		ASSERT_TRUE(foreignFile->is_open());
+		auto foreignIo = std::make_shared<StorageIO>(foreignFile, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		auto foreignMetadata = RelocatableMetadataStore::initializeNew(foreignIo, superblock(1U, 1U));
+		LargeValueStore foreignValues(foreignIo, *foreignMetadata);
+
+		expectFormatError(
+				[&] {
+					static_cast<void>(NativeStreamedGraphLargeValueContentIndexPlanner::plan(
+							foreignValues, *metadata,
+							{candidates.identities[1U].segment_id, candidates.identities[1U].generation,
+							 candidates.identities[1U].owner_id},
+							{PhysicalSlotId(10U), PhysicalSlotId(20U), 8U, 4U, 1U},
+							{candidates.identities, candidates.reader(), snapshot}, LogSequenceNumber(2U)));
+				},
+				FormatError::FERR_INVALID_HEADER);
+
+		snapshot.release();
+		foreignMetadata.reset();
+		foreignIo.reset();
+		foreignFile->close();
+		std::error_code error;
+		std::filesystem::remove(foreignPath, error);
+	}
+
 	TEST_F(RelocatableMetadataStoreTest, StreamedLargeValueContentIndexDeduplicatesContentIdentities) {
 		auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
 		LargeValueStore values(io, *metadata);
@@ -126,6 +161,10 @@ namespace graph::storage {
 	TEST_F(RelocatableMetadataStoreTest, StreamedLargeValueContentIndexRejectsInvalidEntryShape) {
 		auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
 		LargeValueStore values(io, *metadata);
+		const std::vector<std::byte> validBytes{std::byte{0x01}};
+		const LargeValueRef validReference = values.planReference(
+				LargeValueId(1U), Generation(1U), validBytes, LargeValueKind::LVK_BYTES,
+				RSS_ENTITY_PROPERTY_LARGE_VALUE_MEDIA_TYPE, {}, LargeValueExtentClass::LVEC_32K);
 		PrivateCandidates candidates;
 		const NativeBulkRunFragmentLocation fragmentLocation{candidates.identities[0U].segment_id,
 																												candidates.identities[0U].generation,
@@ -139,6 +178,23 @@ namespace graph::storage {
 		manifest.encoded_bytes = candidates.payloads[0U]->size();
 		candidates.set(1U, NativeBulkRunManifestCodec::encode(manifest));
 		MetadataSnapshotPin snapshot = metadata->openSnapshot();
+		expectFormatError(
+				[&] {
+					static_cast<void>(NativeStreamedGraphLargeValueContentIndexPlanner::plan(
+							values, *metadata,
+							{candidates.identities[1U].segment_id, candidates.identities[1U].generation,
+							 candidates.identities[1U].owner_id},
+							{PhysicalSlotId(10U), PhysicalSlotId(20U), 8U, 4U, 1U},
+							{candidates.identities, candidates.reader(), snapshot}, LogSequenceNumber(2U)));
+				},
+				FormatError::FERR_INVALID_STATE);
+
+		// The content key is well-formed here, but a zero canonical value ID
+		// would make the published index point at no LargeValue.
+		malformedFragment.entries = {{values.contentIndexKey(validReference), 0U}};
+		candidates.set(0U, NativeBulkRunFragmentCodec::encode(malformedFragment));
+		manifest.encoded_bytes = candidates.payloads[0U]->size();
+		candidates.set(1U, NativeBulkRunManifestCodec::encode(manifest));
 		expectFormatError(
 				[&] {
 					static_cast<void>(NativeStreamedGraphLargeValueContentIndexPlanner::plan(
@@ -203,6 +259,10 @@ namespace graph::storage {
 					initial.preparer(batches.front());
 				}, {}, {}, {}, {}, {}, MetadataPublishOptions{}, NativeGraphLogicalIdReservation{}, std::nullopt));
 		initialSnapshot.release();
+		MetadataSnapshotPin initialVisibleSnapshot = metadata->openSnapshot();
+		const IndexRootLocation initialRoot =
+				metadata->findIndexRoot(initialVisibleSnapshot, RSS_LARGE_VALUE_CONTENT_INDEX_ID);
+		initialVisibleSnapshot.release();
 		NativeBulkRunFragment replacementFragment{{{values.contentIndexKey(replacementReference),
 																															 replacementReference.value_id.value()}}};
 		candidates.set(0U, NativeBulkRunFragmentCodec::encode(replacementFragment));
@@ -214,7 +274,32 @@ namespace graph::storage {
 		ASSERT_TRUE(replacement.mutation.expected_root.has_value());
 		std::vector<IndexTreeMutationPoolBatch> undersized;
 		EXPECT_THROW(replacement.preparer(undersized), FormatException);
+		NativeGraphDerivedStateMutation replacementDerived;
+		replacementDerived.index_tree_mutations.push_back(replacement.mutation);
+		static_cast<void>(metadata->mutateNativeGraphPagesWithLargeValues(
+				noEntityReplacements, noEntityAppends, noEntityPools, noPropertyReplacements, noPropertyBatches,
+				noLargeValues, replacementDerived, LogSequenceNumber(3U),
+				[](std::span<EntityPageReplacementMaterialization>, std::span<EntityPageAppendBatchMaterialization>,
+				   std::span<EntityPageNewPoolBatchMaterialization>,
+				   std::span<NativeGraphPropertyPageReplacementMaterialization>,
+				   std::span<NativeGraphPropertyPageBatchMaterialization>, std::span<LargeValueMaterializationResult>) {},
+				[&replacement](std::vector<std::vector<IndexTreeMutationPoolBatch>> &batches) {
+					ASSERT_EQ(batches.size(), 1U);
+					replacement.preparer(batches.front());
+				}, {}, {}, {}, {}, {}, MetadataPublishOptions{}, NativeGraphLogicalIdReservation{}, std::nullopt));
 		replacementSnapshot.release();
+		MetadataSnapshotPin replacementVisibleSnapshot = metadata->openSnapshot();
+		const IndexRootLocation replacementRoot =
+				metadata->findIndexRoot(replacementVisibleSnapshot, RSS_LARGE_VALUE_CONTENT_INDEX_ID);
+		EXPECT_NE(replacementRoot.root_page_id, initialRoot.root_page_id);
+		BTreeIndex index(RSS_LARGE_VALUE_CONTENT_INDEX_ID, values.contentIndex(), *metadata);
+		OrderedBTreeEntryCursor cursor = index.orderedSource(replacementVisibleSnapshot, 8U)();
+		size_t entryCount = 0U;
+		for (std::optional<BTreePageEntry> entry = cursor(); entry.has_value(); entry = cursor()) {
+			++entryCount;
+		}
+		EXPECT_EQ(entryCount, 2U);
+		replacementVisibleSnapshot.release();
 	}
 
 	TEST_F(RelocatableMetadataStoreTest, StreamedLargeValueContentIndexRejectsIncompletePlanningContracts) {
@@ -239,6 +324,9 @@ namespace graph::storage {
 		invalidSlots.first_slot = {};
 		EXPECT_THROW(static_cast<void>(invoke(root, invalidSlots, LogSequenceNumber(2U))), FormatException);
 		invalidSlots = validOptions;
+		invalidSlots.last_slot = {};
+		EXPECT_THROW(static_cast<void>(invoke(root, invalidSlots, LogSequenceNumber(2U))), FormatException);
+		invalidSlots = validOptions;
 		invalidSlots.last_slot = PhysicalSlotId(9U);
 		EXPECT_THROW(static_cast<void>(invoke(root, invalidSlots, LogSequenceNumber(2U))), FormatException);
 		invalidSlots = validOptions;
@@ -251,6 +339,11 @@ namespace graph::storage {
 		invalidSlots.maximum_manifest_depth = 0U;
 		EXPECT_THROW(static_cast<void>(invoke(root, invalidSlots, LogSequenceNumber(2U))), FormatException);
 		EXPECT_THROW(static_cast<void>(invoke(root, validOptions, {})), FormatException);
+		MetadataSnapshotPin invalidSnapshot;
+		EXPECT_THROW(static_cast<void>(NativeStreamedGraphLargeValueContentIndexPlanner::plan(
+						values, *metadata, root, validOptions,
+						{candidates.identities, candidates.reader(), invalidSnapshot}, LogSequenceNumber(2U))),
+					 FormatException);
 
 		const NativeGraphPrivateSegmentReader noReader;
 		EXPECT_THROW(static_cast<void>(NativeStreamedGraphLargeValueContentIndexPlanner::plan(

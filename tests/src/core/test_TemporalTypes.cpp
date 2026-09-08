@@ -463,3 +463,25 @@ TEST(TemporalDateTest, EqualTotalDaysAndEqualNanosNotLess) {
 	EXPECT_LE(a, b);
 	EXPECT_GE(a, b);
 }
+
+TEST(TemporalDateTest, SupportsDatesBeforeTheCommonEra) {
+	const auto date = TemporalDate::fromYMD(-1, 12, 31);
+	EXPECT_EQ(date.year(), -1);
+	EXPECT_EQ(date.month(), 12);
+	EXPECT_EQ(date.day(), 31);
+}
+
+TEST(TemporalDateTimeTest, RejectsEachInvalidTimeComponentBoundary) {
+	EXPECT_THROW(static_cast<void>(TemporalDateTime::fromComponents(2024, 1, 1, -1, 0, 0)), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(TemporalDateTime::fromComponents(2024, 1, 1, 24, 0, 0)), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(TemporalDateTime::fromComponents(2024, 1, 1, 0, -1, 0)), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(TemporalDateTime::fromComponents(2024, 1, 1, 0, 60, 0)), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(TemporalDateTime::fromComponents(2024, 1, 1, 0, 0, -1)), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(TemporalDateTime::fromComponents(2024, 1, 1, 0, 0, 60)), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(TemporalDateTime::fromComponents(2024, 1, 1, 0, 0, 0, -1)), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(TemporalDateTime::fromComponents(2024, 1, 1, 0, 0, 0, 1000)), std::runtime_error);
+}
+
+TEST(TemporalDurationTest, RejectsRepeatedTimeSeparator) {
+	EXPECT_THROW(static_cast<void>(TemporalDuration::fromISO("P1DT2HT3M")), std::runtime_error);
+}

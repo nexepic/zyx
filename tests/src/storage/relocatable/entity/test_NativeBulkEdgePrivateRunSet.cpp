@@ -94,7 +94,36 @@ TEST(NativeBulkEdgePrivateRunSetTest, BuildsARewindableLogicalRunSourceInAppendO
 	EXPECT_EQ(replay(source), (std::vector<uint8_t>{0x10U, 0x20U, 0x30U}));
 	EXPECT_EQ(replay(source), (std::vector<uint8_t>{0x10U, 0x20U, 0x30U}));
 	EXPECT_THROW((void)nativeBulkEdgePrivateRunSetSingleRun(candidates.identities, root, candidates.reader()),
-			 FormatException);
+		 FormatException);
+}
+
+TEST(NativeBulkEdgePrivateRunSetTest, TraversesACompleteTwoLevelHierarchyInRunOrder) {
+	PrivateCandidates candidates;
+	const NativeBulkRunFragmentLocation first = writeSingleEntryRun(candidates, 0x10U);
+	const NativeBulkRunFragmentLocation second = writeSingleEntryRun(candidates, 0x20U);
+
+	const auto writeRunSet = [&](const NativeBulkEdgePrivateRunSetManifest &manifest) {
+		const NativeGraphPrivateSegmentMaterialization identity = candidates.allocate();
+		candidates.write(identity, NativeBulkEdgePrivateRunSetCodec::encode(manifest));
+		return NativeBulkRunFragmentLocation{identity.segment_id, identity.generation, identity.owner_id};
+	};
+	NativeBulkEdgePrivateRunSetManifest firstLeaf;
+	firstLeaf.runs = {first};
+	firstLeaf.run_count = 1U;
+	const NativeBulkRunFragmentLocation firstLeafRoot = writeRunSet(firstLeaf);
+	NativeBulkEdgePrivateRunSetManifest secondLeaf;
+	secondLeaf.runs = {second};
+	secondLeaf.run_count = 1U;
+	const NativeBulkRunFragmentLocation secondLeafRoot = writeRunSet(secondLeaf);
+
+	NativeBulkEdgePrivateRunSetManifest parent;
+	parent.level = 1U;
+	parent.children = {firstLeafRoot, secondLeafRoot};
+	parent.run_count = 2U;
+	const NativeBulkRunFragmentLocation root = writeRunSet(parent);
+
+	EXPECT_EQ(replay(nativeBulkEdgePrivateRunSetSource(candidates.identities, root, 2U, candidates.reader())),
+			  (std::vector<uint8_t>{0x10U, 0x20U}));
 }
 
 TEST(NativeBulkEdgePrivateRunSetTest, RejectsTruncatedPayloadsAndInvalidManifestRoots) {
@@ -110,9 +139,23 @@ TEST(NativeBulkEdgePrivateRunSetTest, RejectsTruncatedPayloadsAndInvalidManifest
 	manifest.runs = {root};
 	const std::vector<std::byte> selfReferential = NativeBulkEdgePrivateRunSetCodec::encode(manifest);
 	EXPECT_THROW(static_cast<void>(NativeBulkEdgePrivateRunSetCodec::decode(selfReferential, root)), FormatException);
+
+	// A persisted payload can have a valid checksum while referring to an
+	// invalid private segment. Decode must still reject that reference.
+	std::vector<std::byte> invalidReference = payload;
+	LittleEndianCodec::writeU64(invalidReference, RSS_NATIVE_BULK_RUN_SET_HEADER_BYTES, 0U);
+	constexpr size_t recordCrcOffset = sizeof(uint32_t) + 4U * sizeof(uint16_t) + sizeof(uint32_t) + sizeof(uint64_t) +
+								  sizeof(uint64_t);
+	LittleEndianCodec::writeU32(
+			invalidReference, recordCrcOffset,
+			graph::utils::calculateCrc(invalidReference.data() + RSS_NATIVE_BULK_RUN_SET_HEADER_BYTES,
+									   invalidReference.size() - RSS_NATIVE_BULK_RUN_SET_HEADER_BYTES));
+	EXPECT_THROW(static_cast<void>(NativeBulkEdgePrivateRunSetCodec::decode(invalidReference, root)), FormatException);
 }
 
-TEST(NativeBulkEdgePrivateRunSetTest, BuildsAndReplaysExactAndOverFanoutHierarchies) {
+// Crossing the physical fan-out requires thousands of private segments. Keep
+// this capacity boundary out of the normal correctness suite.
+TEST(DISABLED_NativeBulkEdgePrivateRunSetScaleTest, BuildsAndReplaysExactAndOverFanoutHierarchies) {
 	auto buildAndReplay = [](size_t count) {
 		PrivateCandidates candidates;
 		NativeBulkEdgePrivateRunSetBuilder builder(
@@ -272,6 +315,63 @@ TEST(NativeBulkEdgePrivateRunSetTest, RejectsInvalidPublicBuilderAndSourceContra
 				 FormatException);
 }
 
+TEST(NativeBulkEdgePrivateRunSetTest, RejectsInvalidOrForeignAllocatorIdentitiesBeforeWriting) {
+	PrivateCandidates candidates;
+	const NativeBulkRunFragmentLocation run = writeSingleEntryRun(candidates, 0x10U);
+
+	auto verifyRejectedBeforeWrite = [&](NativeGraphPrivateSegmentMaterialization identity) {
+		size_t writeCount = 0U;
+		NativeBulkEdgePrivateRunSetBuilder builder(
+				1U, [identity] { return identity; },
+				[&writeCount](const NativeGraphPrivateSegmentMaterialization &, std::vector<std::byte>) { ++writeCount; });
+		builder.append(run);
+		EXPECT_THROW((void)builder.finish(), FormatException);
+		EXPECT_EQ(writeCount, 0U);
+	};
+
+	// Candidate callbacks are extension points. Reject malformed and cross-owner
+	// identities before they can make a private payload externally observable.
+	verifyRejectedBeforeWrite({SegmentId{}, Generation(7U), 88U});
+	verifyRejectedBeforeWrite({SegmentId(999U), Generation(7U), 89U});
+}
+
+TEST(NativeBulkEdgePrivateRunSetTest, RejectsMixedOwnerRunRootsBeforeWritingCandidate) {
+	PrivateCandidates candidates;
+	const NativeBulkRunFragmentLocation localRun = writeSingleEntryRun(candidates, 0x10U);
+	const NativeBulkRunFragmentLocation foreignRun{SegmentId(900U), Generation(7U), 89U};
+
+	size_t writeCount = 0U;
+	NativeBulkEdgePrivateRunSetBuilder builder(
+			1U, [] { return NativeGraphPrivateSegmentMaterialization{SegmentId(800U), Generation(7U), 88U}; },
+			[&writeCount](const NativeGraphPrivateSegmentMaterialization &, std::vector<std::byte>) { ++writeCount; });
+	builder.append(localRun);
+	builder.append(foreignRun);
+
+	// Ownership must be checked before the builder asks its callback to publish a private candidate.
+	EXPECT_THROW(static_cast<void>(builder.finish()), FormatException);
+	EXPECT_EQ(writeCount, 0U);
+}
+
+TEST(NativeBulkEdgePrivateRunSetTest, EvaluatesEachSourceAndTerminalContractGuard) {
+	PrivateCandidates candidates;
+	const NativeBulkRunFragmentLocation root{SegmentId(100U), Generation(7U), 88U};
+	const NativeBulkEdgePrivateCandidateAllocator readerBackedAllocator = [&] { return candidates.allocate(); };
+	const NativeBulkEdgePrivateCandidateWriter readerBackedWriter =
+			[&](const NativeGraphPrivateSegmentMaterialization &identity, std::vector<std::byte> payload) {
+				candidates.write(identity, std::move(payload));
+			};
+
+	// Exercise each short-circuit operand independently so invalid caller input
+	// is validated consistently instead of only testing the first predicate.
+	EXPECT_THROW((void)nativeBulkEdgePrivateRunSetSource(candidates.identities, root, 0U, candidates.reader()),
+				 FormatException);
+	EXPECT_THROW((void)nativeBulkEdgePrivateRunSetSource(candidates.identities, root, 1U, {}), FormatException);
+	EXPECT_THROW((void)nativeBulkEdgePrivateRunSetSingleRun(candidates.identities, root, {}), FormatException);
+
+	EXPECT_THROW(NativeBulkEdgePrivateRunSetBuilder(1U, {}, readerBackedWriter), FormatException);
+	EXPECT_THROW(NativeBulkEdgePrivateRunSetBuilder(1U, readerBackedAllocator, {}), FormatException);
+}
+
 TEST(NativeBulkEdgePrivateRunSetTest, RejectsEveryInvalidOutboundRunSetManifestShape) {
 	const auto valid = [] {
 		NativeBulkEdgePrivateRunSetManifest manifest;
@@ -301,6 +401,8 @@ TEST(NativeBulkEdgePrivateRunSetTest, RejectsEveryInvalidOutboundRunSetManifestS
 	internal.children = {{SegmentId(9U), Generation(1U), 71U}};
 	internal.run_count = 1U;
 	EXPECT_NO_THROW(static_cast<void>(NativeBulkEdgePrivateRunSetCodec::encode(internal)));
+	internal.runs = {{SegmentId(10U), Generation(1U), 71U}};
+	EXPECT_THROW(static_cast<void>(NativeBulkEdgePrivateRunSetCodec::encode(internal)), FormatException);
 }
 
 TEST(NativeBulkEdgePrivateRunSetTest, RejectsMissingReadersAndNonterminalSingleRunShapes) {

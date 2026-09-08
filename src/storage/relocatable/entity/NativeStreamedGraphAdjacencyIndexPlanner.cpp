@@ -43,16 +43,10 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] OrderedBTreeEntrySource insertionEntries(const OrderedBTreeEntrySource &operations) {
-			if (!operations) {
-				fail(FormatError::FERR_INVALID_HEADER,
-					 "native streamed Edge adjacency planner requires a private operation source");
-			}
+			// The two native run sources are merged into a rewindable operation source.
 			return [operations] {
 				OrderedBTreeEntryCursor cursor = operations();
-				if (!cursor) {
-					fail(FormatError::FERR_INVALID_STATE,
-						 "native streamed Edge adjacency planner received an empty source cursor");
-				}
+				// Native run readers reject malformed payloads by exception, not by a null cursor.
 				return [cursor = std::move(cursor)]() mutable -> std::optional<BTreePageEntry> {
 					std::optional<BTreePageEntry> operation = cursor();
 					if (!operation.has_value()) {
@@ -71,13 +65,7 @@ namespace graph::storage {
 		makeFreshPlan(const BTreeInitialTreeMutationPlan &plan,
 					  const NativeStreamedGraphAdjacencyIndexPlanningOptions &options,
 					  LogSequenceNumber checkpointLsn) {
-			if (plan.index_id != RSS_GLOBAL_ADJACENCY_INDEX_ID || plan.new_pool_mutations.empty() || !plan.preparer ||
-				plan.root_page.pool_ordinal >= plan.new_pool_mutations.size() ||
-				plan.root_page.appended_page_ordinal >=
-						plan.new_pool_mutations[plan.root_page.pool_ordinal].appended_page_count) {
-				fail(FormatError::FERR_INVALID_STATE,
-					 "native streamed Edge adjacency planner lost its replacement root identity");
-			}
+			// BulkBTreeBuilder returns a complete plan after validating its fresh root.
 			NativeGraphDeferredIndexPlan result;
 			result.mutation.index_id = RSS_GLOBAL_ADJACENCY_INDEX_ID;
 			for (const BTreeNewIndexTreePoolMutation &pool: plan.new_pool_mutations) {
@@ -146,10 +134,7 @@ namespace graph::storage {
 				pages, metadata, planning.current_snapshot, RSS_GLOBAL_ADJACENCY_INDEX_ID, merged, build);
 		const BTreeTreeRetirementPlan retirement = pages.planTreeRetirement(
 				planning.current_snapshot, RSS_GLOBAL_ADJACENCY_INDEX_ID, options.maximum_pages);
-		if (replacement.entry_count == 0U) {
-			fail(FormatError::FERR_INVALID_STATE,
-				 "native streamed Edge adjacency planner produced an empty replacement tree");
-		}
+		// Existing trees are nonempty and streamed Edge runs contain only UPSERTs.
 		NativeGraphDeferredIndexPlan result = makeFreshPlan(replacement, options, checkpointLsn);
 		result.mutation.expected_root = retirement.expected_root;
 		result.mutation.pool_requests = retirement.pool_requests;

@@ -182,6 +182,7 @@ TEST_F(NativeGraphWritePlannerPublicContractsTest, RejectsTransactionsFromAMoved
 	NativeGraphWritePlanner destination(std::move(planner));
 
 	EXPECT_THROW(static_cast<void>(planner.beginTransaction()), FormatException);
+	EXPECT_THROW(static_cast<void>(planner.reserveLogicalIds(1U, 0U)), FormatException);
 	NativeGraphWriteTransaction transaction = destination.beginTransaction();
 	EXPECT_TRUE(transaction.isActive());
 	transaction.rollback();
@@ -287,6 +288,23 @@ TEST_F(NativeGraphWritePlannerPublicContractsTest, ReservesOnlyBoundedNonemptyLo
 	EXPECT_EQ(reservation.node_ranges.front().count, 1U);
 	EXPECT_EQ(reservation.edge_ranges.front().count, 1U);
 	metadata_->abandonNativeGraphLogicalIdReservation(reservation);
+}
+
+TEST_F(NativeGraphWritePlannerPublicContractsTest, ReservesNodeAndEdgeIdentityRangesIndependently) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+
+	NativeGraphLogicalIdReservation nodeOnly = planner.reserveLogicalIds(2U, 0U);
+	ASSERT_FALSE(nodeOnly.node_ranges.empty());
+	EXPECT_TRUE(nodeOnly.edge_ranges.empty());
+	EXPECT_EQ(nodeOnly.node_ranges.front().count, 2U);
+
+	NativeGraphLogicalIdReservation edgeOnly = planner.reserveLogicalIds(0U, 2U);
+	EXPECT_TRUE(edgeOnly.node_ranges.empty());
+	ASSERT_FALSE(edgeOnly.edge_ranges.empty());
+	EXPECT_EQ(edgeOnly.edge_ranges.front().count, 2U);
+
+	metadata_->abandonNativeGraphLogicalIdReservation(nodeOnly);
+	metadata_->abandonNativeGraphLogicalIdReservation(edgeOnly);
 }
 
 TEST_F(NativeGraphWritePlannerPublicContractsTest,
@@ -462,13 +480,59 @@ TEST_F(NativeGraphWritePlannerPublicContractsTest, EnforcesExactAdoptedLogicalId
 	transaction.adoptLogicalIdReservation(reservation);
 	EXPECT_THROW(static_cast<void>(transaction.createNodeWithReservedId(nodeId - 1U, std::array<uint64_t, 0U>{})),
 				 FormatException);
+	// A nonzero identity outside the adopted range is distinct from the invalid
+	// zero sentinel and must not be accepted as a leased ID.
+	EXPECT_THROW(static_cast<void>(transaction.createNodeWithReservedId(nodeId + 2U, std::array<uint64_t, 0U>{})),
+				 FormatException);
 	EXPECT_EQ(transaction.createNodeWithReservedId(nodeId, std::array<uint64_t, 0U>{}), nodeId);
 	EXPECT_THROW(static_cast<void>(transaction.createNodeWithReservedId(nodeId, std::array<uint64_t, 0U>{})),
 				 FormatException);
 	EXPECT_THROW(transaction.adoptLogicalIdReservation(std::move(reservation)), FormatException);
 	EXPECT_THROW(static_cast<void>(transaction.createEdgeWithReservedId(0U, nodeId, nodeId, 7U)), FormatException);
+	EXPECT_THROW(static_cast<void>(transaction.createEdgeWithReservedId(edgeId + 1U, nodeId, nodeId, 7U)),
+				 FormatException);
 	EXPECT_EQ(transaction.createEdgeWithReservedId(edgeId, nodeId, nodeId, 7U), edgeId);
+	EXPECT_THROW(static_cast<void>(transaction.createEdgeWithReservedId(edgeId, nodeId, nodeId, 7U)),
+				 FormatException);
 	transaction.rollback();
+}
+
+TEST_F(NativeGraphWritePlannerPublicContractsTest,
+		RejectsAdoptionAfterAcquiringTransactionLocalLogicalIdRanges) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	NativeGraphWriteTransaction transaction = planner.beginTransaction();
+	transaction.reserveNodeIds(1U);
+
+	NativeGraphLogicalIdReservation externalReservation = planner.reserveLogicalIds(1U, 0U);
+	EXPECT_THROW(transaction.adoptLogicalIdReservation(externalReservation), FormatException);
+	EXPECT_TRUE(transaction.isActive());
+
+	transaction.rollback();
+	metadata_->abandonNativeGraphLogicalIdReservation(externalReservation);
+}
+
+TEST_F(NativeGraphWritePlannerPublicContractsTest,
+	   PublishesReservedEdgeBetweenDistinctReservedNodes) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	NativeGraphLogicalIdReservation reservation = planner.reserveLogicalIds(2U, 1U);
+	ASSERT_EQ(reservation.node_ranges.size(), 1U);
+	ASSERT_EQ(reservation.edge_ranges.size(), 1U);
+
+	const uint64_t source = reservation.node_ranges.front().first_id;
+	const uint64_t target = source + 1U;
+	const uint64_t edgeId = reservation.edge_ranges.front().first_id;
+	NativeGraphWriteTransaction transaction = planner.beginTransaction();
+	transaction.adoptLogicalIdReservation(std::move(reservation));
+	EXPECT_EQ(transaction.createNodeWithReservedId(source, std::array<uint64_t, 0U>{}), source);
+	EXPECT_EQ(transaction.createNodeWithReservedId(target, std::array<uint64_t, 0U>{}), target);
+	EXPECT_EQ(transaction.createEdgeWithReservedId(edgeId, source, target, 7U), edgeId);
+	ASSERT_TRUE(transaction.commit().committed());
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_EQ(entities_->readNode(snapshot, source), NodeEntityRecord{});
+	EXPECT_EQ(entities_->readNode(snapshot, target), NodeEntityRecord{});
+	EXPECT_EQ(entities_->readEdge(snapshot, edgeId), (EdgeEntityRecord{source, target, 7U}));
+	snapshot.release();
 }
 
 TEST_F(NativeGraphWritePlannerPublicContractsTest,
@@ -506,6 +570,7 @@ TEST_F(NativeGraphWritePlannerPublicContractsTest, RetiresAPublishedScalarIndexT
 	NativeGraphWriteTransaction create = planner.beginTransaction();
 	create.stageScalarIndexCreate(*btree_pages_, indexId, entries);
 	EXPECT_THROW(create.stageScalarIndexUpsert(*btree_pages_, indexId, conflictingKey, 33U), FormatException);
+	EXPECT_THROW(create.stageScalarIndexErase(*btree_pages_, indexId, conflictingKey), FormatException);
 	EXPECT_THROW(create.stageScalarIndexDrop(*btree_pages_, indexId, 16U), FormatException);
 	ASSERT_TRUE(create.commit().committed());
 	MetadataSnapshotPin beforeDrop = metadata_->openSnapshot();
@@ -584,6 +649,7 @@ TEST_F(NativeGraphWritePlannerPublicContractsTest, RejectsScalarIndexMutationsTh
 	const std::array<std::byte, 1U> key = {std::byte{0x5AU}};
 
 	transaction.stageScalarIndexUpsert(*btree_pages_, 71U, key, 9U);
+	EXPECT_THROW(transaction.stageScalarIndexUpsert(alternatePages, 71U, key, 10U), FormatException);
 	EXPECT_THROW(transaction.stageScalarIndexErase(alternatePages, 71U, key), FormatException);
 	EXPECT_TRUE(transaction.isActive());
 	transaction.rollback();
@@ -611,6 +677,59 @@ TEST_F(NativeGraphWritePlannerPublicContractsTest,
 	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
 	EXPECT_EQ(properties_->readEntity(snapshot, {EntityPropertyOwnerKind::EPOK_NODE, nodeId}),
 			  (PropertyCollectionRoot{nodeId, Node::typeId, {{17U, graph::PropertyValue(int64_t(22))}}}));
+	snapshot.release();
+}
+
+TEST_F(NativeGraphWritePlannerPublicContractsTest,
+	   RejectsAStaleScalarIndexWriteInsteadOfRebasingItOntoAnUnrelatedPublication) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	NativeGraphWriteTransaction create = planner.beginTransaction();
+	const uint64_t nodeId = create.createNode(std::array<uint64_t, 0U>{});
+	ASSERT_TRUE(create.commit().committed());
+
+	NativeGraphWriteTransaction stale = planner.beginTransaction();
+	const std::array<std::byte, 1U> key = {std::byte{0x5AU}};
+	stale.stageScalarIndexUpsert(*btree_pages_, 71U, key, nodeId);
+
+	NativeGraphWriteTransaction winner = planner.beginTransaction();
+	winner.replaceNodeProperty({nodeId, Node::typeId, {{17U, graph::PropertyValue(int64_t(22))}}});
+	ASSERT_TRUE(winner.commit().committed());
+
+	const NativeGraphWriteCommitResult rejected = stale.commit();
+	EXPECT_EQ(rejected.outcome, NativeGraphWriteCommitOutcome::NGWCO_CONFLICTED);
+	EXPECT_EQ(stale.state(), NativeGraphWriteTransactionState::NGWTS_CONFLICTED);
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_EQ(properties_->readEntity(snapshot, {EntityPropertyOwnerKind::EPOK_NODE, nodeId}),
+			  (PropertyCollectionRoot{nodeId, Node::typeId, {{17U, graph::PropertyValue(int64_t(22))}}}));
+	EXPECT_FALSE(metadata_->findIndexRootOptional(snapshot, 71U).has_value());
+	snapshot.release();
+}
+
+TEST_F(NativeGraphWritePlannerPublicContractsTest,
+	   RejectsAStaleScalarIndexCreationInsteadOfRebasingItOntoAnUnrelatedPublication) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	NativeGraphWriteTransaction create = planner.beginTransaction();
+	const uint64_t nodeId = create.createNode(std::array<uint64_t, 0U>{});
+	ASSERT_TRUE(create.commit().committed());
+
+	NativeGraphWriteTransaction stale = planner.beginTransaction();
+	const std::array<std::byte, 1U> key = {std::byte{0x6BU}};
+	const std::array<BTreePageEntry, 1U> entries{{{std::vector<std::byte>(key.begin(), key.end()), nodeId}}};
+	stale.stageScalarIndexCreate(*btree_pages_, 71U, entries);
+
+	NativeGraphWriteTransaction winner = planner.beginTransaction();
+	winner.replaceNodeProperty({nodeId, Node::typeId, {{17U, graph::PropertyValue(int64_t(22))}}});
+	ASSERT_TRUE(winner.commit().committed());
+
+	const NativeGraphWriteCommitResult rejected = stale.commit();
+	EXPECT_EQ(rejected.outcome, NativeGraphWriteCommitOutcome::NGWCO_CONFLICTED);
+	EXPECT_EQ(stale.state(), NativeGraphWriteTransactionState::NGWTS_CONFLICTED);
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_EQ(properties_->readEntity(snapshot, {EntityPropertyOwnerKind::EPOK_NODE, nodeId}),
+			  (PropertyCollectionRoot{nodeId, Node::typeId, {{17U, graph::PropertyValue(int64_t(22))}}}));
+	EXPECT_FALSE(metadata_->findIndexRootOptional(snapshot, 71U).has_value());
 	snapshot.release();
 }
 

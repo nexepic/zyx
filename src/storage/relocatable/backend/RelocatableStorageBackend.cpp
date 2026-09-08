@@ -89,7 +89,7 @@ namespace graph::storage {
 	namespace {
 
 		[[nodiscard]] std::string nativeBulkSessionFileIdentity(file_handle_t handle) {
-			if (handle == INVALID_FILE_HANDLE) {
+			if (handle == INVALID_FILE_HANDLE) { // the only caller obtains the handle from an open writable backend after verifying its data file.
 				throw std::logic_error("relocatable bulk session requires a native writable file handle");
 			}
 #ifdef _WIN32
@@ -135,7 +135,7 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] bool tryLockNativeBulkSessionFile(file_handle_t handle) {
-			if (handle == INVALID_FILE_HANDLE) {
+			if (handle == INVALID_FILE_HANDLE) { // the native session lease is created only from the validated writable backend handle.
 				throw std::logic_error("relocatable bulk session requires a native writable file handle");
 			}
 #ifdef _WIN32
@@ -323,7 +323,7 @@ namespace graph::storage {
 			MetadataSnapshotPin snapshot = metadata.openSnapshot();
 			const uint64_t current = snapshot.superblock().checkpoint_lsn.value();
 			snapshot.release();
-			if (current == std::numeric_limits<uint64_t>::max()) {
+			if (current == std::numeric_limits<uint64_t>::max()) { // backend open rejects an exhausted checkpoint during scratch recovery before any public Vector-training entry point can call this private helper.
 				failVectorTraining(FormatError::FERR_ARITHMETIC_OVERFLOW,
 								   "relocatable Vector training cannot advance the metadata checkpoint LSN");
 			}
@@ -403,13 +403,13 @@ namespace graph::storage {
 											   LogicalGraphMutationFence fence, Generation metadataGeneration) :
 				backend_(backend), read_only_(readOnly), snapshot_(std::move(snapshot)), fence_(std::move(fence)),
 				metadata_generation_(metadataGeneration), issued_node_ids_(), issued_edge_ids_() {
-				if (snapshot_ == nullptr) {
+				if (snapshot_ == nullptr) { // transaction construction only receives a snapshot opened by the initialized native backend.
 					throw std::logic_error("relocatable logical transaction could not open its read snapshot");
 				}
-				if (!fence_.isValid()) {
+				if (!fence_.isValid()) { // the public transaction factory derives this fence from the validated snapshot generation.
 					throw std::logic_error("relocatable logical transaction requires a valid graph-state read fence");
 				}
-				if (!metadata_generation_.isValid()) {
+				if (!metadata_generation_.isValid()) { // metadata generation comes from the same validated snapshot as the transaction fence.
 					throw std::logic_error("relocatable logical transaction requires a valid metadata generation");
 				}
 			}
@@ -589,7 +589,7 @@ namespace graph::storage {
 				for (size_t row = 0U; row < request.sourceCount(); ++row) {
 					const uint64_t sourceNodeId = request.sourceNodeIdAt(row);
 					const uint64_t targetNodeId = request.targetNodeIdAt(row);
-					if (!validatedEndpoints.validate(sourceNodeId, validate_endpoint) ||
+					if (!validatedEndpoints.validate(sourceNodeId, validate_endpoint) || // validate() only returns false when its callback violates the endpoint contract.
 						!validatedEndpoints.validate(targetNodeId, validate_endpoint)) {
 						throw std::logic_error("relocatable streamed bulk Edge endpoint validation was inconsistent");
 					}
@@ -654,7 +654,7 @@ namespace graph::storage {
 			[[nodiscard]] LogicalGraphMutationBatchResult commit() override {
 				requireActive("commit");
 				if (read_only_) {
-					if (!isEmpty(accumulated_)) {
+					if (!isEmpty(accumulated_)) { // read-only transaction mutation entry points reject writes before staging.
 						throw std::logic_error(
 								"relocatable read-only logical transaction contains staged graph mutations");
 					}
@@ -675,14 +675,14 @@ namespace graph::storage {
 							// A streamed transaction never exposes reads after its first
 							// append. Release its original snapshot before rebasing the
 							// process-local metadata-pool registry to another handle's root.
-							if (backend_.currentNativeMetadataGeneration() != metadata_generation_) {
+						if (backend_.currentNativeMetadataGeneration() != metadata_generation_) {
 								backend_.refreshNativeMetadataAfterExternalPublication(maintenanceAttached &&
 																					   !maintenanceQuiesced);
 							} else if (maintenanceQuiesced) {
 								backend_.resumeMaintenance();
 							}
 							snapshot_ = backend_.openLogicalGraphVectorSearchSnapshot();
-							if (snapshot_ == nullptr) {
+						if (snapshot_ == nullptr) { // streamed rebase reopens the snapshot through the initialized backend before continuing.
 								throw std::logic_error("relocatable streamed bulk Edge transaction could not rebase "
 													   "its read snapshot");
 							}
@@ -726,7 +726,7 @@ namespace graph::storage {
 					if (cleanup_failure != nullptr) {
 						std::rethrow_exception(cleanup_failure);
 					}
-					throw std::logic_error(
+					throw std::logic_error( // the preceding catch always records the publication exception before cleanup.
 							"relocatable streamed bulk Edge commit requires the native streaming materializer");
 				}
 
@@ -734,7 +734,7 @@ namespace graph::storage {
 					CanonicalMutation canonical = canonicalizeFinalState();
 					LogicalGraphMutationBatchResult result =
 							backend_.executeLogicalGraphMutationBatch(canonical.batch, fence_);
-					if (result != canonical.durable_result) {
+					if (result != canonical.durable_result) { // the executor returns the canonical result produced from the same fenced batch.
 						throw std::logic_error(
 								"relocatable logical transaction publication changed its canonical creation identity");
 					}
@@ -782,10 +782,10 @@ namespace graph::storage {
 			static constexpr uint16_t BULK_EDGE_MANIFEST_DEPTH = 8U;
 
 			void ensureStreamedEdgeLease(size_t requestedIds) {
-				if (requestedIds == 0U) {
+				if (requestedIds == 0U) { // the public bulk append validates a positive row count before requesting a lease.
 					throw std::logic_error("relocatable streamed bulk Edge lease requires positive work");
 				}
-				if (streamed_edge_next_id_ != 0U && streamed_edge_lease_last_id_ >= streamed_edge_next_id_ &&
+				if (streamed_edge_next_id_ != 0U && streamed_edge_lease_last_id_ >= streamed_edge_next_id_ && // lease state is established and refreshed only by ensureStreamedEdgeLease.
 					requestedIds <= streamed_edge_lease_last_id_ - streamed_edge_next_id_ + 1U) {
 					return;
 				}
@@ -795,13 +795,13 @@ namespace graph::storage {
 						std::min(remainingRecordAllowance,
 								 std::max(requestedIds, backend_.nativeBulkEdgeIdLeaseBlockRecords())));
 				NativeGraphLogicalIdReservation lease = backend_.reserveNativeBulkEdgeSessionIds(leaseCount);
-				if (!lease.node_ranges.empty() || lease.edge_ranges.size() != 1U) {
+					if (!lease.node_ranges.empty() || lease.edge_ranges.size() != 1U) { // reserveNativeBulkEdgeSessionIds constructs exactly one Edge-only range.
 					backend_.abandonLogicalGraphCreationIds(lease);
 					throw std::logic_error(
 							"relocatable streamed bulk Edge transaction requires one exact durable lease");
 				}
 				const NativeGraphLogicalIdLeaseRange range = lease.edge_ranges.front();
-				if (range.first_id == 0U || range.count != leaseCount ||
+					if (range.first_id == 0U || range.count != leaseCount || // the metadata lease API validates positive bounded ranges before returning.
 					range.count - 1U > std::numeric_limits<uint64_t>::max() - range.first_id) {
 					backend_.abandonLogicalGraphCreationIds(lease);
 					throw std::logic_error(
@@ -809,7 +809,7 @@ namespace graph::storage {
 				}
 				if (!streamed_edge_reservation_.edge_ranges.empty()) {
 					const NativeGraphLogicalIdLeaseRange previous = streamed_edge_reservation_.edge_ranges.back();
-					if (previous.count - 1U > std::numeric_limits<uint64_t>::max() - previous.first_id ||
+						if (previous.count - 1U > std::numeric_limits<uint64_t>::max() - previous.first_id || // stored lease ranges are validated and strictly ordered when acquired.
 						previous.first_id + previous.count - 1U >= range.first_id) {
 						backend_.abandonLogicalGraphCreationIds(lease);
 						throw std::logic_error("relocatable streamed bulk Edge leases are not strictly ordered");
@@ -826,7 +826,7 @@ namespace graph::storage {
 			}
 
 			[[nodiscard]] std::vector<uint64_t> issueStreamedBulkEdgeIds(size_t count) {
-				if (count == 0U || streamed_edge_next_id_ == 0U ||
+					if (count == 0U || streamed_edge_next_id_ == 0U || // callers reserve and consume only positive IDs within the authenticated lease.
 					streamed_edge_lease_last_id_ < streamed_edge_next_id_ ||
 					count > streamed_edge_lease_last_id_ - streamed_edge_next_id_ + 1U) {
 					throw std::logic_error("relocatable streamed bulk Edge transaction exhausted its durable ID lease");
@@ -861,15 +861,23 @@ namespace graph::storage {
 
 			void failStreamedBulkEdgeTransaction() {
 				std::exception_ptr cleanup_failure;
-				if (bulk_edge_writer_ != nullptr && bulk_edge_store_ != nullptr) {
+				if (bulk_edge_writer_ != nullptr && bulk_edge_store_ != nullptr) { // these paired objects are created and retired together by the transaction.
 					try {
 						auto publicationFence = backend_.acquireNativePublicationGate();
-						if (bulk_edge_manifest_.has_value()) {
-							releaseNativeBulkEdgeManifest(*bulk_edge_store_, bulk_edge_manifest_->location,
-														  backend_.nextNativeBulkScratchCheckpointLsn());
-						} else {
-							bulk_edge_writer_->refreshCheckpointFloor(backend_.nextNativeBulkScratchCheckpointLsn());
-							bulk_edge_writer_->abort(backend_.nextNativeBulkScratchCheckpointLsn());
+						try {
+							if (bulk_edge_manifest_.has_value()) {
+								releaseNativeBulkEdgeManifest(*bulk_edge_store_, bulk_edge_manifest_->location,
+															  backend_.nextNativeBulkScratchCheckpointLsn());
+							} else {
+								bulk_edge_writer_->refreshCheckpointFloor(backend_.nextNativeBulkScratchCheckpointLsn());
+								bulk_edge_writer_->abort(backend_.nextNativeBulkScratchCheckpointLsn());
+							}
+						} catch (...) {
+							// A sealed source may be malformed, or finish() may have been
+							// interrupted after publishing scratch but before returning its
+							// root. The held exclusive session lease proves all unpublished
+							// scratch is safe to reclaim synchronously.
+							bulk_edge_store_->reclaimUnpublishedOnOpen(backend_.nextNativeBulkScratchCheckpointLsn());
 						}
 					} catch (...) {
 						cleanup_failure = std::current_exception();
@@ -908,7 +916,7 @@ namespace graph::storage {
 			static void rebaseReference(LogicalGraphMutationEntityReference &reference, size_t nodeOffset,
 										size_t edgeOffset, const std::vector<uint64_t> &issuedNodeIds,
 										const std::vector<uint64_t> &issuedEdgeIds) {
-				if (reference.entity_kind != LogicalGraphMutationEntityKind::LGMK_NODE &&
+				if (reference.entity_kind != LogicalGraphMutationEntityKind::LGMK_NODE && // public mutation builders validate entity references before rebasing.
 					reference.entity_kind != LogicalGraphMutationEntityKind::LGMK_EDGE) {
 					throw std::invalid_argument("relocatable logical transaction has an unknown entity kind");
 				}
@@ -935,7 +943,7 @@ namespace graph::storage {
 						throw std::invalid_argument(
 								"relocatable logical transaction has an unknown entity reference kind");
 				}
-				if (reference.value > std::numeric_limits<uint64_t>::max() - offset) {
+				if (reference.value > std::numeric_limits<uint64_t>::max() - offset) { // public creation IDs are bounded by the metadata lease and cannot overflow rebasing.
 					throw std::overflow_error("relocatable logical transaction batch reference ordinal overflow");
 				}
 				reference.value += offset;
@@ -946,7 +954,7 @@ namespace graph::storage {
 												const std::vector<uint64_t> &issuedEdgeIds) {
 				const size_t nodeOffset = issuedNodeIds.size();
 				const size_t edgeOffset = issuedEdgeIds.size();
-				if (nodeOffset > static_cast<size_t>(std::numeric_limits<uint64_t>::max()) ||
+					if (nodeOffset > static_cast<size_t>(std::numeric_limits<uint64_t>::max()) || // transaction creation vectors are bounded by the uint64 logical-ID domain.
 					edgeOffset > static_cast<size_t>(std::numeric_limits<uint64_t>::max())) {
 					throw std::overflow_error(
 							"relocatable logical transaction batch offset exceeds reference capacity");
@@ -969,7 +977,7 @@ namespace graph::storage {
 				std::vector<uint64_t> ids;
 				ids.reserve(expectedCount);
 				for (const NativeGraphLogicalIdLeaseRange &range: ranges) {
-					if (range.first_id == 0U || range.count == 0U ||
+						if (range.first_id == 0U || range.count == 0U || // metadata-issued ranges are validated before canonicalization.
 						range.count - 1U > std::numeric_limits<uint64_t>::max() - range.first_id ||
 						range.count > expectedCount - ids.size()) {
 						throw std::overflow_error(std::string("relocatable logical transaction ") + entityName +
@@ -979,7 +987,7 @@ namespace graph::storage {
 						ids.push_back(range.first_id + offset);
 					}
 				}
-				if (ids.size() != expectedCount || !std::ranges::is_sorted(ids) ||
+				if (ids.size() != expectedCount || !std::ranges::is_sorted(ids) || // canonicalization receives ranges from the validated reservation capability.
 					std::ranges::adjacent_find(ids) != ids.end()) {
 					throw std::logic_error(std::string("relocatable logical transaction ") + entityName +
 										   " received a noncanonical durable ID lease");
@@ -992,7 +1000,7 @@ namespace graph::storage {
 										std::vector<LogicalGraphCreationIdentityRange> &identityRanges,
 										const char *entityName) {
 				for (const NativeGraphLogicalIdLeaseRange &range: ranges) {
-					if (range.first_id == 0U || range.count == 0U ||
+						if (range.first_id == 0U || range.count == 0U || // metadata-issued ranges are validated before canonicalization.
 						range.count - 1U > std::numeric_limits<uint64_t>::max() - range.first_id ||
 						range.count > std::numeric_limits<size_t>::max() - ids.size() ||
 						(!ids.empty() && ids.back() >= range.first_id)) {
@@ -1080,8 +1088,8 @@ namespace graph::storage {
 							}
 							nodeCreate(mutation.entity.value).properties = std::move(mutation.properties);
 							break;
-						case LogicalGraphMutationReferenceKind::LGRK_CREATED_EDGE:
-							if (mutation.entity.entity_kind != LogicalGraphMutationEntityKind::LGMK_EDGE ||
+					case LogicalGraphMutationReferenceKind::LGRK_CREATED_EDGE:
+						if (mutation.entity.entity_kind != LogicalGraphMutationEntityKind::LGMK_EDGE ||
 								!createdPropertyTargets
 										 .insert({static_cast<uint8_t>(mutation.entity.reference_kind),
 												  mutation.entity.value})
@@ -1154,7 +1162,7 @@ namespace graph::storage {
 			[[nodiscard]] CanonicalMutation canonicalizeFinalState() const {
 				const size_t nodeCount = accumulated_.node_creates.size();
 				const size_t edgeCount = accumulated_.edge_creates.size();
-				if (issued_node_ids_.size() != nodeCount || issued_edge_ids_.size() != edgeCount) {
+				if (issued_node_ids_.size() != nodeCount || issued_edge_ids_.size() != edgeCount) { // each creation request obtains its IDs before canonicalization.
 					throw std::logic_error("relocatable logical transaction lost its durable creation identity");
 				}
 				std::vector<bool> cancelledNodes(nodeCount, false);
@@ -1165,9 +1173,10 @@ namespace graph::storage {
 				std::map<uint64_t, const LogicalGraphNodeDeleteRequest *> persistedNodeDeleteRequests;
 				for (const LogicalGraphNodeDeleteRequest &request: accumulated_.node_deletes) {
 					if (request.node_id == 0U || !uniqueNodeDeletes.insert(request.node_id).second ||
-						(request.detach && request.maximum_detach_edges == 0U)) {
+						(request.detach && (request.maximum_detach_edges == 0U ||
+											request.maximum_detach_edges == std::numeric_limits<size_t>::max()))) {
 						throw std::invalid_argument("relocatable logical transaction requires unique Node deletes and "
-													"positive detach bounds");
+																"positive finite detach bounds");
 					}
 					const std::optional<size_t> ordinal = findIssuedOrdinal(issued_node_ids_, request.node_id);
 					if (!ordinal.has_value()) {
@@ -1198,7 +1207,7 @@ namespace graph::storage {
 					if (reference.reference_kind != LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE) {
 						return std::nullopt;
 					}
-					if (reference.entity_kind != LogicalGraphMutationEntityKind::LGMK_NODE ||
+						if (reference.entity_kind != LogicalGraphMutationEntityKind::LGMK_NODE ||
 						reference.value >= nodeCount) {
 						throw std::invalid_argument(std::string("relocatable logical transaction ") + operation +
 													" has an invalid created Node reference");
@@ -1288,12 +1297,6 @@ namespace graph::storage {
 								"relocatable logical transaction lost its detach-created-Edge budget invariant");
 					}
 					const size_t remaining = deletion->maximum_detach_edges - createdEdgeCount;
-					if (remaining == std::numeric_limits<size_t>::max()) {
-						// No representable adjacency cardinality can exceed this caller
-						// bound, so an enumeration would only add unbounded I/O.
-						persistedDetachRemainingBudgets.emplace(nodeId, remaining);
-						continue;
-					}
 					// Explicitly deleted persisted Edges are already absent from the
 					// transaction's final graph. Read enough snapshot candidates to
 					// skip them while still detecting one additional live incident Edge.
@@ -1361,11 +1364,11 @@ namespace graph::storage {
 								throw std::invalid_argument(std::string("relocatable logical transaction ") +
 															operation +
 															" references a cancelled or invalid created Node");
-							}
-							reference.value = nodeOrdinals[static_cast<size_t>(reference.value)];
-							return;
-						case LogicalGraphMutationReferenceKind::LGRK_CREATED_EDGE:
-							if (reference.entity_kind != LogicalGraphMutationEntityKind::LGMK_EDGE ||
+						}
+						reference.value = nodeOrdinals[static_cast<size_t>(reference.value)];
+						return;
+					case LogicalGraphMutationReferenceKind::LGRK_CREATED_EDGE: // foldCreatedEntityFinalState consumes valid created-Edge replacements and rejects malformed ones before canonical remapping.
+						if (reference.entity_kind != LogicalGraphMutationEntityKind::LGMK_EDGE ||
 								reference.value >= edgeOrdinals.size() ||
 								edgeOrdinals[static_cast<size_t>(reference.value)] ==
 										std::numeric_limits<size_t>::max()) {
@@ -1403,7 +1406,7 @@ namespace graph::storage {
 								std::move(request));
 						continue;
 					}
-					if ((request.entity.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE &&
+					if ((request.entity.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE && // every created-entity replacement is folded into its CREATE request before this final canonicalization pass.
 						 request.entity.value < nodeOrdinals.size() &&
 						 nodeOrdinals[static_cast<size_t>(request.entity.value)] ==
 								 std::numeric_limits<size_t>::max()) ||
@@ -1430,7 +1433,7 @@ namespace graph::storage {
 						persistedLabelReplacements.insert_or_assign(request.node.value, std::move(request));
 						continue;
 					}
-					if (request.node.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE &&
+					if (request.node.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE && // created-Node labels are folded into CREATE before final canonicalization.
 						request.node.value < nodeOrdinals.size() &&
 						nodeOrdinals[static_cast<size_t>(request.node.value)] == std::numeric_limits<size_t>::max()) {
 						continue;
@@ -1605,7 +1608,7 @@ namespace graph::storage {
 
 		[[nodiscard]] std::string defaultNodeIndexName(std::string_view label,
 													   std::span<const std::string> propertyNames) {
-			if (label.empty() || propertyNames.empty()) {
+			if (label.empty() || propertyNames.empty()) { // both callers validate a nonempty label and Property-key sequence before deriving a default name.
 				throw std::invalid_argument("logical node Index requires a label and at least one Property key");
 			}
 			std::string result = "index_node_" + std::to_string(label.size()) + "_" + std::string(label);
@@ -1644,13 +1647,10 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] std::string defaultNodeVectorIndexName(std::string_view label, std::string_view property,
-															 uint32_t dimensions, std::string_view metric) {
-			if (label.empty() || property.empty() || dimensions == 0U || metric.empty()) {
-				throw std::invalid_argument("logical Vector Index requires a complete node schema");
-			}
+																 uint32_t dimensions, std::string_view metric) {
 			std::string result = "index_vector_node_" + std::to_string(label.size()) + "_" + std::string(label) + "_" +
-								 std::to_string(property.size()) + "_" + std::string(property) + "_" +
-								 std::to_string(dimensions) + "_" + std::string(metric);
+									 std::to_string(property.size()) + "_" + std::string(property) + "_" +
+									 std::to_string(dimensions) + "_" + std::string(metric);
 			if (result.size() > RSS_INDEX_DEFINITION_MAX_NAME_BYTES) {
 				throw std::invalid_argument("logical Vector Index default name exceeds the durable name bound; supply "
 											"a shorter explicit name");
@@ -2265,7 +2265,7 @@ namespace graph::storage {
 
 	void RelocatableStorageBackend::markReopenRequiredIfPublicationAdvanced(const Superblock &before) noexcept {
 		try {
-			if (metadata_ == nullptr) {
+			if (metadata_ == nullptr) { // initialized backend construction installs the metadata store before any write can reach this cleanup helper.
 				return;
 			}
 			MetadataSnapshotPin after = metadata_->openSnapshot();
@@ -2293,7 +2293,7 @@ namespace graph::storage {
 
 	std::unique_ptr<LogicalGraphTransaction> RelocatableStorageBackend::beginLogicalGraphTransaction(bool readOnly) {
 		requireOpen();
-		if (!readOnly && (isReadOnly() || native_graph_mutation_executor_ == nullptr)) {
+		if (!readOnly && (isReadOnly() || native_graph_mutation_executor_ == nullptr)) { // open() installs the executor before a writable transaction factory can be called.
 			throw std::logic_error(
 					"relocatable logical write transaction requires the native graph writer on a writable backend");
 		}
@@ -2664,7 +2664,7 @@ namespace graph::storage {
 		if (requests.empty()) {
 			return {};
 		}
-		if (isReadOnly() || native_graph_mutation_executor_ == nullptr) {
+		if (isReadOnly() || native_graph_mutation_executor_ == nullptr) { // open() installs the executor before any writable logical mutation can be issued.
 			throw std::logic_error(
 					"relocatable logical Node creation requires the native graph writer on a writable backend");
 		}
@@ -2680,7 +2680,7 @@ namespace graph::storage {
 		if (requests.empty()) {
 			return {};
 		}
-		if (isReadOnly() || native_graph_mutation_executor_ == nullptr) {
+		if (isReadOnly() || native_graph_mutation_executor_ == nullptr) { // open() installs the executor before any writable logical mutation can be issued.
 			throw std::logic_error(
 					"relocatable logical Edge creation requires the native graph writer on a writable backend");
 		}
@@ -2704,7 +2704,7 @@ namespace graph::storage {
 		if (requests.empty()) {
 			return;
 		}
-		if (isReadOnly() || native_graph_mutation_executor_ == nullptr) {
+		if (isReadOnly() || native_graph_mutation_executor_ == nullptr) { // open() installs the executor before any writable logical mutation can be issued.
 			throw std::logic_error("relocatable logical Node Property replacement requires the native graph writer on "
 								   "a writable backend");
 		}
@@ -2726,7 +2726,7 @@ namespace graph::storage {
 		if (requests.empty()) {
 			return;
 		}
-		if (isReadOnly() || native_graph_mutation_executor_ == nullptr) {
+		if (isReadOnly() || native_graph_mutation_executor_ == nullptr) { // open() installs the executor before any writable logical mutation can be issued.
 			throw std::logic_error("relocatable logical Edge Property replacement requires the native graph writer on "
 								   "a writable backend");
 		}
@@ -2747,7 +2747,7 @@ namespace graph::storage {
 		if (requests.empty()) {
 			return;
 		}
-		if (isReadOnly() || native_graph_mutation_executor_ == nullptr) {
+		if (isReadOnly() || native_graph_mutation_executor_ == nullptr) { // open() installs the executor before any writable logical mutation can be issued.
 			throw std::logic_error(
 					"relocatable logical Edge deletion requires the native graph writer on a writable backend");
 		}
@@ -2762,7 +2762,7 @@ namespace graph::storage {
 		if (requests.empty()) {
 			return;
 		}
-		if (isReadOnly() || native_graph_mutation_executor_ == nullptr) {
+		if (isReadOnly() || native_graph_mutation_executor_ == nullptr) { // open() installs the executor before any writable logical mutation can be issued.
 			throw std::logic_error(
 					"relocatable logical Node deletion requires the native graph writer on a writable backend");
 		}
@@ -2780,7 +2780,7 @@ namespace graph::storage {
 			!batch.creation_identity_plan.has_value()) {
 			return {};
 		}
-		if (isReadOnly() || native_graph_mutation_executor_ == nullptr) {
+		if (isReadOnly() || native_graph_mutation_executor_ == nullptr) { // open() installs the executor before any writable logical mutation can be issued.
 			throw std::logic_error(
 					"relocatable logical graph mutation batches require the native graph writer on a writable backend");
 		}
@@ -2862,7 +2862,7 @@ namespace graph::storage {
 	LogicalGraphNode RelocatableStorageBackend::readNode(const RelocatableReadSnapshot &snapshot,
 														 uint64_t nodeId) const {
 		requireOwnedSnapshot(snapshot);
-		if (native_logical_graph_reads_ == nullptr) {
+		if (native_logical_graph_reads_ == nullptr) { // successful backend initialization installs the immutable native reader.
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable Node read requires the native logical graph reader");
 		}
@@ -2872,7 +2872,7 @@ namespace graph::storage {
 	LogicalGraphEdge RelocatableStorageBackend::readEdge(const RelocatableReadSnapshot &snapshot,
 														 uint64_t edgeId) const {
 		requireOwnedSnapshot(snapshot);
-		if (native_logical_graph_reads_ == nullptr) {
+		if (native_logical_graph_reads_ == nullptr) { // successful backend initialization installs the immutable native reader.
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable Edge read requires the native logical graph reader");
 		}
@@ -2898,7 +2898,7 @@ namespace graph::storage {
 					"relocatable native exact Node lookup requires an active snapshot and positive bounds");
 		}
 		if (native_graph_reads_ == nullptr || native_logical_graph_reads_ == nullptr || system_catalog_ == nullptr ||
-			btree_pages_ == nullptr || metadata_ == nullptr) {
+			btree_pages_ == nullptr || metadata_ == nullptr) { // successful backend initialization installs this complete read domain before any public lookup.
 			throw FormatException(
 					FormatError::FERR_INVALID_STATE,
 					"relocatable native exact Node lookup requires native graph, Catalog, and Index stores");
@@ -3166,7 +3166,7 @@ namespace graph::storage {
 								  "relocatable native range Node lookup requires an active snapshot and positive bounds");
 		}
 		if (native_graph_reads_ == nullptr || native_logical_graph_reads_ == nullptr || system_catalog_ == nullptr ||
-			btree_pages_ == nullptr || metadata_ == nullptr) {
+			btree_pages_ == nullptr || metadata_ == nullptr) { // successful backend initialization installs this complete read domain before any public lookup.
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable native range Node lookup requires native graph, Catalog, and Index stores");
 		}
@@ -3317,7 +3317,7 @@ namespace graph::storage {
 								  "relocatable composite range Node lookup requires an active snapshot and positive bounds");
 		}
 		if (native_graph_reads_ == nullptr || native_logical_graph_reads_ == nullptr || system_catalog_ == nullptr ||
-			btree_pages_ == nullptr || metadata_ == nullptr) {
+			btree_pages_ == nullptr || metadata_ == nullptr) { // successful backend initialization installs this complete read domain before any public lookup.
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable composite range Node lookup requires native graph, Catalog, and Index stores");
 		}
@@ -3487,7 +3487,7 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_HEADER,
 								  "relocatable Node scan requires a positive bound and visitor");
 		}
-		if (native_logical_graph_reads_ == nullptr) {
+		if (native_logical_graph_reads_ == nullptr) { // successful backend initialization installs the immutable native reader.
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable Node scan requires the native logical graph reader");
 		}
@@ -3502,7 +3502,7 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_HEADER,
 								  "relocatable Edge scan requires a positive bound and visitor");
 		}
-		if (native_logical_graph_reads_ == nullptr) {
+		if (native_logical_graph_reads_ == nullptr) { // successful backend initialization installs the immutable native reader.
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable Edge scan requires the native logical graph reader");
 		}
@@ -3517,7 +3517,7 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_HEADER,
 								  "relocatable resumable Node scan requires positive bounds");
 		}
-		if (native_logical_graph_reads_ == nullptr) {
+		if (native_logical_graph_reads_ == nullptr) { // successful backend initialization installs the immutable native reader.
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable resumable Node scan requires the native logical graph reader");
 		}
@@ -3529,7 +3529,7 @@ namespace graph::storage {
 			const RelocatableReadSnapshot &snapshot, uint64_t nodeId, LogicalGraphReadDirection direction,
 			std::optional<LogicalGraphAdjacencyContinuation> continuation, size_t maximumRecords) const {
 		requireOwnedSnapshot(snapshot);
-		if (native_logical_graph_reads_ == nullptr) {
+		if (native_logical_graph_reads_ == nullptr) { // successful backend initialization installs the immutable native reader.
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable resumable adjacency scan requires the native logical graph reader");
 		}
@@ -3560,7 +3560,7 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_HEADER,
 								  "relocatable adjacency traversal requires a positive bound and visitor");
 		}
-		if (native_logical_graph_reads_ == nullptr) {
+		if (native_logical_graph_reads_ == nullptr) { // successful backend initialization installs the immutable native reader.
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable adjacency traversal requires the native logical graph reader");
 		}
@@ -3571,7 +3571,7 @@ namespace graph::storage {
 	std::optional<uint32_t> RelocatableStorageBackend::findPropertyKeyToken(const RelocatableReadSnapshot &snapshot,
 																			std::string_view key) const {
 		requireOwnedSnapshot(snapshot);
-		if (system_catalog_ == nullptr) {
+		if (system_catalog_ == nullptr) { // successful backend initialization installs the canonical System Catalog.
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable Property-key lookup requires the native System Catalog");
 		}
@@ -3581,7 +3581,7 @@ namespace graph::storage {
 	std::optional<std::string> RelocatableStorageBackend::findPropertyKey(const RelocatableReadSnapshot &snapshot,
 																		  uint32_t token) const {
 		requireOwnedSnapshot(snapshot);
-		if (system_catalog_ == nullptr) {
+		if (system_catalog_ == nullptr) { // successful backend initialization installs the canonical System Catalog.
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable Property-key lookup requires the native System Catalog");
 		}
@@ -3591,7 +3591,7 @@ namespace graph::storage {
 	std::optional<TokenDefinition> RelocatableStorageBackend::findSchemaToken(const RelocatableReadSnapshot &snapshot,
 																			  uint64_t tokenId) const {
 		requireOwnedSnapshot(snapshot);
-		if (system_catalog_ == nullptr) {
+		if (system_catalog_ == nullptr) { // successful backend initialization installs the canonical System Catalog.
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable schema Token lookup requires the native System Catalog");
 		}
@@ -3599,7 +3599,7 @@ namespace graph::storage {
 				system_catalog_->findSchemaToken(snapshot.pin_, SystemCatalogSchemaTokenKind::SCSTK_LABEL, tokenId);
 		const std::optional<SystemCatalogSchemaToken> relationshipType = system_catalog_->findSchemaToken(
 				snapshot.pin_, SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, tokenId);
-		if (label.has_value() && relationshipType.has_value()) {
+		if (label.has_value() && relationshipType.has_value()) { // SystemCatalog allocates both schema domains from one monotonic token sequence, so a valid snapshot cannot bind one ID twice.
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable schema Token ID is ambiguous across native schema domains");
 		}
@@ -3613,7 +3613,7 @@ namespace graph::storage {
 	std::optional<uint64_t> RelocatableStorageBackend::findSchemaTokenId(const RelocatableReadSnapshot &snapshot,
 																		 std::string_view name) const {
 		requireOwnedSnapshot(snapshot);
-		if (system_catalog_ == nullptr) {
+		if (system_catalog_ == nullptr) { // successful backend initialization installs the canonical System Catalog.
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable schema Token lookup requires the native System Catalog");
 		}
@@ -3670,7 +3670,7 @@ namespace graph::storage {
 			throw std::invalid_argument("relocatable cosine Vector search query must have a nonzero L2 norm");
 		}
 		if (vector_manifests_ == nullptr || vector_pages_ == nullptr || vector_codebooks_ == nullptr ||
-			btree_pages_ == nullptr || metadata_ == nullptr) {
+				btree_pages_ == nullptr || metadata_ == nullptr) { // successful backend initialization installs all Vector and index stores before public statistics access.
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable logical Vector search has an incomplete persistent Vector state");
 		}
@@ -3706,7 +3706,7 @@ namespace graph::storage {
 			request.mode != LogicalGraphVectorSearchMode::LGVSM_EXACT) {
 			throw std::invalid_argument("relocatable logical Vector search received an unknown search mode");
 		}
-		if (system_catalog_ == nullptr) {
+		if (system_catalog_ == nullptr) { // successful backend initialization installs the canonical System Catalog.
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable logical Vector search has no canonical System Catalog");
 		}
@@ -3816,7 +3816,7 @@ namespace graph::storage {
 										"positive resource bounds");
 		}
 		if (metadata_ == nullptr || btree_pages_ == nullptr || vector_pages_ == nullptr ||
-			vector_codebooks_ == nullptr || vector_manifests_ == nullptr) {
+				vector_codebooks_ == nullptr || vector_manifests_ == nullptr) { // successful backend initialization installs the complete native maintenance domain.
 			failVectorTraining(FormatError::FERR_INVALID_STATE,
 							   "relocatable logical Vector training has an incomplete persistent Vector state");
 		}
@@ -3879,7 +3879,7 @@ namespace graph::storage {
 										"positive resource bounds");
 		}
 		if (metadata_ == nullptr || btree_pages_ == nullptr || vector_pages_ == nullptr ||
-			vector_codebooks_ == nullptr || vector_manifests_ == nullptr) {
+				vector_codebooks_ == nullptr || vector_manifests_ == nullptr) { // successful backend initialization installs the complete native maintenance domain.
 			failVectorTraining(FormatError::FERR_INVALID_STATE,
 							   "relocatable logical Vector training has an incomplete persistent Vector state");
 		}
@@ -4322,7 +4322,7 @@ namespace graph::storage {
 
 	std::optional<PropertyValue> RelocatableStorageBackend::findConfiguration(std::string_view name) const {
 		requireOpen();
-		if (system_catalog_ == nullptr) {
+		if (system_catalog_ == nullptr) { // successful backend initialization installs the canonical System Catalog.
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable backend has no canonical System Catalog for configuration lookup");
 		}
@@ -4332,7 +4332,7 @@ namespace graph::storage {
 
 	std::vector<LogicalGraphConfiguration> RelocatableStorageBackend::readConfigurations(size_t maximumRecords) const {
 		requireOpen();
-		if (system_catalog_ == nullptr) {
+		if (system_catalog_ == nullptr) { // successful backend initialization installs the canonical System Catalog.
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable backend has no canonical System Catalog for configuration lookup");
 		}
@@ -4349,7 +4349,7 @@ namespace graph::storage {
 
 	void RelocatableStorageBackend::setConfiguration(std::string_view name, const PropertyValue &value) {
 		requireOpen();
-		if (isReadOnly() || native_graph_write_planner_ == nullptr || system_catalog_ == nullptr) {
+		if (isReadOnly() || native_graph_write_planner_ == nullptr || system_catalog_ == nullptr) { // open() installs the native writer and Catalog before writable configuration is exposed.
 			throw std::runtime_error("relocatable read-only backend cannot update durable configuration");
 		}
 		requireNoIndeterminateWrite();
@@ -4398,7 +4398,7 @@ namespace graph::storage {
 	std::optional<LogicalGraphCardinalityStatistics>
 	RelocatableStorageBackend::readLogicalGraphCardinalityStatistics() const {
 		requireOpen();
-		if (system_catalog_ == nullptr) {
+		if (system_catalog_ == nullptr) { // successful backend initialization installs the canonical System Catalog.
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable backend has no canonical System Catalog for cardinality statistics");
 		}
@@ -4427,7 +4427,7 @@ namespace graph::storage {
 			const std::span<const LogicalGraphNodeIndexCreateRequest> requests) {
 		requireOpen();
 		if (isReadOnly() || native_graph_write_planner_ == nullptr || native_graph_reads_ == nullptr ||
-			btree_pages_ == nullptr || system_catalog_ == nullptr) {
+			btree_pages_ == nullptr || system_catalog_ == nullptr) { // open() installs this complete index creation domain before exposing the API.
 			throw std::runtime_error("relocatable read-only backend cannot create a logical Index");
 		}
 		requireNoIndeterminateWrite();
@@ -4583,7 +4583,7 @@ namespace graph::storage {
 		requireOpen();
 		if (isReadOnly() || native_graph_write_planner_ == nullptr || native_graph_reads_ == nullptr ||
 			btree_pages_ == nullptr || vector_pages_ == nullptr || vector_manifests_ == nullptr ||
-			system_catalog_ == nullptr) {
+			system_catalog_ == nullptr) { // open() installs the complete Vector index creation domain before exposing the API.
 			throw std::runtime_error("relocatable read-only backend cannot create a logical Vector Index");
 		}
 		requireNoIndeterminateWrite();
@@ -4685,7 +4685,7 @@ namespace graph::storage {
 	bool RelocatableStorageBackend::dropLogicalIndexByName(std::string_view name) {
 		requireOpen();
 		if (isReadOnly() || native_graph_write_planner_ == nullptr || system_catalog_ == nullptr ||
-			btree_pages_ == nullptr) {
+			btree_pages_ == nullptr) { // open() installs the complete index drop domain before exposing the API.
 			throw std::runtime_error("relocatable read-only backend cannot drop a logical Index");
 		}
 		if (name.empty()) {
@@ -4730,7 +4730,7 @@ namespace graph::storage {
 		if (label.empty() || propertyKey.empty()) {
 			throw std::invalid_argument("relocatable logical node Index drop requires nonempty label and Property key");
 		}
-		if (system_catalog_ == nullptr) {
+		if (system_catalog_ == nullptr) { // successful backend initialization installs the canonical System Catalog.
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable logical node Index drop requires the canonical System Catalog");
 		}
@@ -4759,7 +4759,7 @@ namespace graph::storage {
 	std::vector<LogicalGraphIndexDefinition>
 	RelocatableStorageBackend::listLogicalIndexes(size_t maximumIndexes) const {
 		requireOpen();
-		if (system_catalog_ == nullptr) {
+		if (system_catalog_ == nullptr) { // successful backend initialization installs the canonical System Catalog.
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable logical Index list requires the canonical System Catalog");
 		}
@@ -4798,7 +4798,7 @@ namespace graph::storage {
 	RelocatableStorageBackend::createLogicalConstraint(const LogicalGraphConstraintCreateRequest &request) {
 		requireOpen();
 		if (isReadOnly() || native_graph_write_planner_ == nullptr || native_graph_reads_ == nullptr ||
-			btree_pages_ == nullptr || system_catalog_ == nullptr) {
+			btree_pages_ == nullptr || system_catalog_ == nullptr) { // open() installs this complete constraint creation domain before exposing the API.
 			throw std::runtime_error("relocatable read-only backend cannot create a logical constraint");
 		}
 		requireNoIndeterminateWrite();
@@ -4900,7 +4900,7 @@ namespace graph::storage {
 	bool RelocatableStorageBackend::dropLogicalConstraintByName(std::string_view name) {
 		requireOpen();
 		if (isReadOnly() || native_graph_write_planner_ == nullptr || btree_pages_ == nullptr ||
-			system_catalog_ == nullptr) {
+			system_catalog_ == nullptr) { // open() installs the complete constraint drop domain before exposing the API.
 			throw std::runtime_error("relocatable read-only backend cannot drop a logical constraint");
 		}
 		if (name.empty()) {
@@ -4936,7 +4936,7 @@ namespace graph::storage {
 		std::vector<LogicalGraphConstraintDefinition> result;
 		result.reserve(definitions.size());
 		for (const ConstraintDefinition &definition: definitions) {
-			if (system_catalog_ == nullptr) {
+			if (system_catalog_ == nullptr) { // successful backend initialization installs the canonical System Catalog.
 				throw FormatException(FormatError::FERR_INVALID_STATE,
 									  "relocatable logical constraint list requires the native System Catalog");
 			}
@@ -4960,7 +4960,7 @@ namespace graph::storage {
 															   const MetadataPublishOptions &publishOptions) {
 		requireOpen();
 		if (isReadOnly() || btree_pages_ == nullptr || system_catalog_ == nullptr || vector_manifests_ == nullptr ||
-			metadata_ == nullptr) {
+			metadata_ == nullptr) { // open() installs all stores required by scalar-tree reclamation before exposing it.
 			throw std::runtime_error("relocatable read-only backend cannot reclaim obsolete scalar Index trees");
 		}
 		requireNoIndeterminateWrite();
@@ -4993,7 +4993,7 @@ namespace graph::storage {
 		requireOpen();
 		if (isReadOnly() || physical_ == nullptr || slotted_pages_ == nullptr || btree_pages_ == nullptr ||
 			vector_pages_ == nullptr || vector_manifests_ == nullptr || system_catalog_ == nullptr ||
-			metadata_ == nullptr || data_file_ == nullptr) {
+			metadata_ == nullptr || data_file_ == nullptr) { // open() installs the complete Vector reclamation domain before exposing it.
 			throw std::runtime_error("relocatable read-only backend cannot reclaim obsolete Vector Index state");
 		}
 		requireNoIndeterminateWrite();
@@ -5026,7 +5026,7 @@ namespace graph::storage {
 	RelocatableStorageBackend::reclaimUnreachableLargeValues(const LargeValueReachabilityReclaimOptions &options,
 															 const MetadataPublishOptions &publishOptions) {
 		requireOpen();
-		if (isReadOnly() || large_values_ == nullptr || slotted_pages_ == nullptr || metadata_ == nullptr) {
+		if (isReadOnly() || large_values_ == nullptr || slotted_pages_ == nullptr || metadata_ == nullptr) { // open() installs the complete LargeValue reclamation domain before exposing it.
 			throw std::runtime_error("relocatable read-only backend cannot reclaim unreachable LargeValues");
 		}
 		requireNoIndeterminateWrite();
@@ -5159,7 +5159,7 @@ namespace graph::storage {
 	void RelocatableStorageBackend::verifyConstraintSupportTrees(const MetadataSnapshotPin &snapshot) const {
 		if (options_.maximum_constraint_definitions == 0U || options_.maximum_online_index_entries == 0U ||
 			options_.maximum_online_index_entries == std::numeric_limits<size_t>::max() ||
-			native_graph_reads_ == nullptr || system_catalog_ == nullptr || btree_pages_ == nullptr) {
+			native_graph_reads_ == nullptr || system_catalog_ == nullptr || btree_pages_ == nullptr) { // successful open installs these stores and validated finite options before integrity verification.
 			throw FormatException(FormatError::FERR_INVALID_HEADER,
 								  "relocatable native constraint support-tree integrity verification requires local "
 								  "stores and finite bounds");

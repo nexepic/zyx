@@ -442,78 +442,223 @@ TEST_F(NativeGraphLargeValueMutationTest,
 TEST_F(NativeGraphLargeValueMutationTest,
 	   RebuildsContentIndexFreshWhenSharedPoolDemandExceedsItsRemainingFrames) {
 	constexpr size_t CONTENT_ENTRY_COUNT = 80U;
-	constexpr size_t RESERVED_CURRENT_FRAMES = 3U;
-	const std::array<std::byte, 1U> scalarKey = {std::byte{'r'}};
-	const IndexDefinition scalar = scalarDefinition();
+	constexpr size_t FINAL_ENTRY_COUNT = 20U;
 	BTreePageStore indexes(*slotted_pages_, *metadata_);
-	allocateEmptyScalarIndexRoot(indexes, scalar.index_id, PageId(101U), LogSequenceNumber(2U));
+	allocateEmptyScalarIndexRoot(indexes, RSS_LARGE_VALUE_CONTENT_INDEX_ID, PageId(101U), LogSequenceNumber(2U));
 	appendEmptyIndexRoot(indexes, RSS_GLOBAL_ADJACENCY_INDEX_ID, PageId(102U), LogSequenceNumber(4U),
 						 BTreeLeafValueLayout::BLVL_EMPTY);
-	appendEmptyIndexRoot(indexes, RSS_LARGE_VALUE_CONTENT_INDEX_ID, PageId(103U), LogSequenceNumber(6U));
-
-	// Retain three current-pool frames: scalar and adjacency each need one,
-	// while the content-index split fits by itself but not with both other
-	// callbacks. The unified planner must therefore select the larger content
-	// mutation for a fresh immutable rebuild before materialization begins.
-	const size_t dummyRootCount = static_cast<size_t>(RSS_PAGE_POOL_DATA_FRAME_COUNT) - 3U - RESERVED_CURRENT_FRAMES;
-	for (size_t ordinal = 0U; ordinal < dummyRootCount; ++ordinal) {
-		const uint64_t indexId = 10'000U + ordinal;
-		const uint64_t pageId = 1'000U + ordinal;
-		const uint64_t lsn = 8U + ordinal * 2U;
-		appendEmptyIndexRoot(indexes, indexId, PageId(pageId), LogSequenceNumber(lsn));
-	}
+	MetadataSnapshotPin baseline = metadata_->openSnapshot();
 
 	NativeGraphWritePlanner writer(*metadata_, *entities_, *labels_, *properties_, *btree_pages_);
-	NativeGraphWriteTransaction transaction = writer.beginTransaction();
+	NativeGraphWriteTransaction seed = writer.beginTransaction();
 	std::vector<uint64_t> nodeIds;
 	std::vector<std::string> bodies;
 	nodeIds.reserve(CONTENT_ENTRY_COUNT);
 	bodies.reserve(CONTENT_ENTRY_COUNT);
 	for (size_t ordinal = 0U; ordinal < CONTENT_ENTRY_COUNT; ++ordinal) {
-		const uint64_t nodeId = transaction.createNode(std::array<uint64_t, 1U>{PERSON_LABEL_TOKEN});
+		const uint64_t nodeId = seed.createNode(std::array<uint64_t, 1U>{PERSON_LABEL_TOKEN});
 		bodies.emplace_back(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES + 97U, 'r');
 		bodies.back().append("-" + std::to_string(ordinal));
-		transaction.replaceNodeProperty(entityPropertyRoot(nodeId, bodies.back()));
+		seed.replaceNodeProperty(entityPropertyRoot(nodeId, bodies.back()));
 		nodeIds.push_back(nodeId);
 	}
-	const uint64_t edgeId = transaction.createEdge(nodeIds.front(), nodeIds.back(), 17U);
-	transaction.stageScalarIndexUpsert(indexes, scalar.index_id, scalarKey, nodeIds.front());
+	const uint64_t seedEdgeId = seed.createEdge(nodeIds.front(), nodeIds.back(), 17U);
+	ASSERT_TRUE(seed.commit().committed());
+
+	// The content tree now spans an internal root and a leaf. Leave two frames:
+	// the content update needs both pages and the competing adjacency update needs
+	// one, so only the content candidate can resolve the aggregate shortfall.
+	size_t appendedRoots = 0U;
+	while (true) {
+		MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+		const CatalogEntry pool = metadata_->findCatalog(snapshot, SegmentId(71U));
+		const bool hasThreeFrames = indexes.hasReplacementFrameCapacity(pool, 3U);
+		const uint64_t checkpoint = snapshot.superblock().checkpoint_lsn.value();
+		snapshot.release();
+		if (!hasThreeFrames) {
+			break;
+		}
+		ASSERT_LT(appendedRoots, RSS_PAGE_POOL_DATA_FRAME_COUNT);
+		appendEmptyIndexRoot(indexes, 10'000U + appendedRoots, PageId(1'000U + appendedRoots),
+							 LogSequenceNumber(checkpoint + 1U));
+		++appendedRoots;
+	}
+
+	MetadataSnapshotPin before = metadata_->openSnapshot();
+	const CatalogEntry originalPool = metadata_->findCatalog(before, SegmentId(71U));
+	ASSERT_TRUE(indexes.hasReplacementFrameCapacity(originalPool, 2U));
+	ASSERT_FALSE(indexes.hasReplacementFrameCapacity(originalPool, 3U));
+	const IndexRootLocation contentBefore = metadata_->findIndexRoot(before, RSS_LARGE_VALUE_CONTENT_INDEX_ID);
+	ASSERT_EQ(metadata_->findPageLocation(before, contentBefore.root_page_id).segment_id, originalPool.segment_id);
+	ASSERT_EQ(indexes.read(before, contentBefore.root_page_id).header().kind, BTreeNodeKind::BPN_INTERNAL);
+	GlobalAdjacencyIndex adjacency(*btree_pages_, *metadata_);
+	EXPECT_EQ(adjacency.scan(before, GlobalAdjacencyDirection::GAD_OUT, nodeIds.front(), 4U).edge_ids,
+			  (std::vector<uint64_t>{seedEdgeId}));
+
+	NativeGraphWriteTransaction transaction = writer.beginTransaction();
+	std::vector<uint64_t> finalNodeIds;
+	std::vector<std::string> finalBodies;
+	finalNodeIds.reserve(FINAL_ENTRY_COUNT);
+	finalBodies.reserve(FINAL_ENTRY_COUNT);
+	for (size_t ordinal = 0U; ordinal < FINAL_ENTRY_COUNT; ++ordinal) {
+		const uint64_t nodeId = transaction.createNode(std::array<uint64_t, 1U>{PERSON_LABEL_TOKEN});
+		finalBodies.emplace_back(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES + 97U, 'z');
+		finalBodies.back().append("-final-" + std::to_string(ordinal));
+		transaction.replaceNodeProperty(entityPropertyRoot(nodeId, finalBodies.back()));
+		finalNodeIds.push_back(nodeId);
+	}
+	const uint64_t edgeId = transaction.createEdge(nodeIds.front(), finalNodeIds.front(), 19U);
 	ASSERT_TRUE(transaction.commit().committed());
 
 	MetadataSnapshotPin current = metadata_->openSnapshot();
-	const PageLocation scalarLocation = metadata_->findPageLocation(
-			current, metadata_->findIndexRoot(current, scalar.index_id).root_page_id);
 	const PageLocation adjacencyLocation = metadata_->findPageLocation(
 			current, metadata_->findIndexRoot(current, RSS_GLOBAL_ADJACENCY_INDEX_ID).root_page_id);
 	const PageLocation contentLocation = metadata_->findPageLocation(
 			current, metadata_->findIndexRoot(current, RSS_LARGE_VALUE_CONTENT_INDEX_ID).root_page_id);
-	EXPECT_EQ(scalarLocation.segment_id, SegmentId(71U));
-	EXPECT_EQ(adjacencyLocation.segment_id, SegmentId(71U));
-	EXPECT_NE(contentLocation.segment_id, SegmentId(71U));
-	EXPECT_EQ(BTreeIndex(scalar.index_id, indexes, *metadata_).find(current, scalarKey),
-			  std::optional<uint64_t>(nodeIds.front()));
-	GlobalAdjacencyIndex adjacency(*btree_pages_, *metadata_);
+	EXPECT_EQ(adjacencyLocation.segment_id, originalPool.segment_id);
+	EXPECT_NE(contentLocation.segment_id, originalPool.segment_id);
 	EXPECT_EQ(adjacency.scan(current, GlobalAdjacencyDirection::GAD_OUT, nodeIds.front(), 4U).edge_ids,
-			  (std::vector<uint64_t>{edgeId}));
+			  (std::vector<uint64_t>{seedEdgeId, edgeId}));
 	const LargeValueRef firstReference =
 			storedLargeValueReference(current, *metadata_, *slotted_pages_, nodeIds.front()).value;
-	const LargeValueRef lastReference =
-			storedLargeValueReference(current, *metadata_, *slotted_pages_, nodeIds.back()).value;
+	const LargeValueRef finalReference =
+			storedLargeValueReference(current, *metadata_, *slotted_pages_, finalNodeIds.back()).value;
 	EXPECT_EQ(large_values_->read(current, firstReference), encodedEntityPropertyLargeValuePayload(bodies.front()));
-	EXPECT_EQ(large_values_->read(current, lastReference), encodedEntityPropertyLargeValuePayload(bodies.back()));
+	EXPECT_EQ(large_values_->read(current, finalReference), encodedEntityPropertyLargeValuePayload(finalBodies.back()));
+	EXPECT_EQ(adjacency.scan(before, GlobalAdjacencyDirection::GAD_OUT, nodeIds.front(), 4U).edge_ids,
+			  (std::vector<uint64_t>{seedEdgeId}));
 	EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io_, *metadata_).scan()));
 	current.release();
+	before.release();
+	baseline.release();
 
 	reopenWithLargeValues();
 	MetadataSnapshotPin reopened = metadata_->openSnapshot();
 	EXPECT_NE(metadata_->findPageLocation(
 				  reopened, metadata_->findIndexRoot(reopened, RSS_LARGE_VALUE_CONTENT_INDEX_ID).root_page_id)
 				  .segment_id,
-			  SegmentId(71U));
-	const LargeValueRef reopenedLast =
-			storedLargeValueReference(reopened, *metadata_, *slotted_pages_, nodeIds.back()).value;
-	EXPECT_EQ(large_values_->read(reopened, reopenedLast), encodedEntityPropertyLargeValuePayload(bodies.back()));
+			  originalPool.segment_id);
+	const LargeValueRef reopenedFinal =
+			storedLargeValueReference(reopened, *metadata_, *slotted_pages_, finalNodeIds.back()).value;
+	EXPECT_EQ(large_values_->read(reopened, reopenedFinal), encodedEntityPropertyLargeValuePayload(finalBodies.back()));
 	reopened.release();
+}
+
+TEST_F(NativeGraphLargeValueMutationTest,
+	   RebuildsTheLargeValueContentIndexFreshWhenItsCurrentPoolHasNoFrameCapacity) {
+	const std::string seedBody(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES + 97U, 's');
+	const std::string body(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES + 97U, 'f');
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	allocateEmptyScalarIndexRoot(indexes, RSS_LARGE_VALUE_CONTENT_INDEX_ID, PageId(101U), LogSequenceNumber(2U));
+	NativeGraphWritePlanner writer(*metadata_, *entities_, *labels_, *properties_, *btree_pages_);
+	NativeGraphWriteTransaction seed = writer.beginTransaction();
+	const uint64_t seedNodeId = seed.createNode(std::array<uint64_t, 1U>{PERSON_LABEL_TOKEN});
+	seed.replaceNodeProperty(entityPropertyRoot(seedNodeId, seedBody));
+	ASSERT_TRUE(seed.commit().committed());
+
+	// The content tree now has a real entry. Exhausting its current pool makes
+	// the next content update take the shared-capacity fresh-pool fallback.
+	size_t appendedRoots = 0U;
+	while (true) {
+		MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+		const CatalogEntry pool = metadata_->findCatalog(snapshot, SegmentId(71U));
+		const bool hasCapacity = indexes.hasReplacementFrameCapacity(pool, 1U);
+		const uint64_t checkpoint = snapshot.superblock().checkpoint_lsn.value();
+		snapshot.release();
+		if (!hasCapacity) {
+			break;
+		}
+		ASSERT_LT(appendedRoots, RSS_PAGE_POOL_DATA_FRAME_COUNT);
+		appendEmptyIndexRoot(indexes, 20'000U + appendedRoots, PageId(2'000U + appendedRoots),
+							 LogSequenceNumber(checkpoint + 1U));
+		++appendedRoots;
+	}
+
+	MetadataSnapshotPin before = metadata_->openSnapshot();
+	const CatalogEntry originalPool = metadata_->findCatalog(before, SegmentId(71U));
+	ASSERT_FALSE(indexes.hasReplacementFrameCapacity(originalPool, 1U));
+	const LargeValueRef seedReference = storedLargeValueReference(before, *metadata_, *slotted_pages_, seedNodeId).value;
+	EXPECT_EQ(large_values_->read(before, seedReference), encodedEntityPropertyLargeValuePayload(seedBody));
+
+	NativeGraphWriteTransaction transaction = writer.beginTransaction();
+	const uint64_t nodeId = transaction.createNode(std::array<uint64_t, 1U>{PERSON_LABEL_TOKEN});
+	transaction.replaceNodeProperty(entityPropertyRoot(nodeId, body));
+	ASSERT_TRUE(transaction.commit().committed());
+
+	MetadataSnapshotPin current = metadata_->openSnapshot();
+	const IndexRootLocation contentRoot = metadata_->findIndexRoot(current, RSS_LARGE_VALUE_CONTENT_INDEX_ID);
+	EXPECT_NE(metadata_->findPageLocation(current, contentRoot.root_page_id).segment_id, originalPool.segment_id);
+	const LargeValueRef reference = storedLargeValueReference(current, *metadata_, *slotted_pages_, nodeId).value;
+	EXPECT_EQ(large_values_->read(current, reference), encodedEntityPropertyLargeValuePayload(body));
+	EXPECT_EQ(large_values_->read(current, seedReference), encodedEntityPropertyLargeValuePayload(seedBody));
+	EXPECT_FALSE(metadata_->findLargeValueManifestOptional(before, reference.value_id).has_value());
+	current.release();
+	before.release();
+}
+
+TEST_F(NativeGraphLargeValueMutationTest,
+	   RebuildsGlobalAdjacencyFreshBeforeTheCompetingLargeValueContentIndex) {
+	const std::string seedBody(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES + 97U, 'a');
+	const std::string body(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES + 97U, 'b');
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	allocateEmptyScalarIndexRoot(indexes, RSS_LARGE_VALUE_CONTENT_INDEX_ID, PageId(101U), LogSequenceNumber(2U));
+	appendEmptyIndexRoot(indexes, RSS_GLOBAL_ADJACENCY_INDEX_ID, PageId(102U), LogSequenceNumber(4U),
+						 BTreeLeafValueLayout::BLVL_EMPTY);
+
+	NativeGraphWritePlanner writer(*metadata_, *entities_, *labels_, *properties_, *btree_pages_);
+	NativeGraphWriteTransaction seed = writer.beginTransaction();
+	const uint64_t source = seed.createNode(std::array<uint64_t, 1U>{PERSON_LABEL_TOKEN});
+	const uint64_t seedTarget = seed.createNode(std::array<uint64_t, 1U>{PERSON_LABEL_TOKEN});
+	const uint64_t seedEdgeId = seed.createEdge(source, seedTarget, 43U);
+	seed.replaceNodeProperty(entityPropertyRoot(source, seedBody));
+	ASSERT_TRUE(seed.commit().committed());
+
+	// Each of the two current trees can COW by itself, but not together. The
+	// planner must select the first (global adjacency) candidate for a fresh
+	// rebuild and retain the content-index update in the remaining frame.
+	size_t appendedRoots = 0U;
+	while (true) {
+		MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+		const CatalogEntry pool = metadata_->findCatalog(snapshot, SegmentId(71U));
+		const bool hasTwoFrames = indexes.hasReplacementFrameCapacity(pool, 2U);
+		const uint64_t checkpoint = snapshot.superblock().checkpoint_lsn.value();
+		snapshot.release();
+		if (!hasTwoFrames) {
+			break;
+		}
+		ASSERT_LT(appendedRoots, RSS_PAGE_POOL_DATA_FRAME_COUNT);
+		appendEmptyIndexRoot(indexes, 30'000U + appendedRoots, PageId(3'000U + appendedRoots),
+							 LogSequenceNumber(checkpoint + 1U));
+		++appendedRoots;
+	}
+
+	MetadataSnapshotPin before = metadata_->openSnapshot();
+	const CatalogEntry originalPool = metadata_->findCatalog(before, SegmentId(71U));
+	ASSERT_TRUE(indexes.hasReplacementFrameCapacity(originalPool, 1U));
+	ASSERT_FALSE(indexes.hasReplacementFrameCapacity(originalPool, 2U));
+	GlobalAdjacencyIndex adjacency(*btree_pages_, *metadata_);
+	EXPECT_EQ(adjacency.scan(before, GlobalAdjacencyDirection::GAD_OUT, source, 4U).edge_ids,
+			  (std::vector<uint64_t>{seedEdgeId}));
+
+	NativeGraphWriteTransaction transaction = writer.beginTransaction();
+	const uint64_t target = transaction.createNode(std::array<uint64_t, 1U>{PERSON_LABEL_TOKEN});
+	const uint64_t edgeId = transaction.createEdge(source, target, 47U);
+	transaction.replaceNodeProperty(entityPropertyRoot(target, body));
+	ASSERT_TRUE(transaction.commit().committed());
+
+	MetadataSnapshotPin current = metadata_->openSnapshot();
+	const IndexRootLocation adjacencyRoot = metadata_->findIndexRoot(current, RSS_GLOBAL_ADJACENCY_INDEX_ID);
+	const IndexRootLocation contentRoot = metadata_->findIndexRoot(current, RSS_LARGE_VALUE_CONTENT_INDEX_ID);
+	EXPECT_NE(metadata_->findPageLocation(current, adjacencyRoot.root_page_id).segment_id, originalPool.segment_id);
+	EXPECT_EQ(metadata_->findPageLocation(current, contentRoot.root_page_id).segment_id, originalPool.segment_id);
+	EXPECT_EQ(adjacency.scan(current, GlobalAdjacencyDirection::GAD_OUT, source, 4U).edge_ids,
+			  (std::vector<uint64_t>{seedEdgeId, edgeId}));
+	const LargeValueRef reference = storedLargeValueReference(current, *metadata_, *slotted_pages_, target).value;
+	EXPECT_EQ(large_values_->read(current, reference), encodedEntityPropertyLargeValuePayload(body));
+	EXPECT_EQ(adjacency.scan(before, GlobalAdjacencyDirection::GAD_OUT, source, 4U).edge_ids,
+			  (std::vector<uint64_t>{seedEdgeId}));
+	current.release();
+	before.release();
 }
 
 TEST_F(NativeGraphLargeValueMutationTest, PublishesCompressedLargeValueReferencesWithTheirOwningProperty) {
@@ -964,19 +1109,25 @@ TEST_F(NativeGraphLargeValueMutationTest,
 	recovered.release();
 }
 
-TEST_F(NativeGraphLargeValueMutationTest, ReusesSnapshotVerifiedContentWithoutAllocatingAnotherLargeValue) {
-	const std::string body(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES + 67U, 'd');
+TEST_F(NativeGraphLargeValueMutationTest, ReusesSeveralSnapshotVerifiedContentsWithoutAllocatingAnotherLargeValue) {
+	const std::string firstBody(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES + 67U, 'd');
+	const std::string secondBody(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES + 83U, 'e');
 	const std::array<uint64_t, 0U> noLabels{};
 	NativeGraphWritePlanner writer(*metadata_, *entities_, *labels_, *properties_, *btree_pages_);
 	NativeGraphWriteTransaction create = writer.beginTransaction();
-	const uint64_t nodeId = create.createNode(noLabels);
+	const uint64_t firstNodeId = create.createNode(noLabels);
+	const uint64_t secondNodeId = create.createNode(noLabels);
 	ASSERT_TRUE(create.commit().committed());
 
-	PropertyCollectionRoot root;
-	root.owner_entity_id = nodeId;
-	root.owner_entity_type = graph::Node::typeId;
-	root.entries = {{BODY_PROPERTY_TOKEN, PropertyValue(body)}};
-	const std::vector<std::byte> canonicalBytes = EntityPropertyLargeValuePayloadCodec::encode(root.entries);
+	const auto makeRoot = [](uint64_t nodeId, const std::string &body) {
+		PropertyCollectionRoot root;
+		root.owner_entity_id = nodeId;
+		root.owner_entity_type = graph::Node::typeId;
+		root.entries = {{BODY_PROPERTY_TOKEN, PropertyValue(body)}};
+		return root;
+	};
+	const PropertyCollectionRoot firstRoot = makeRoot(firstNodeId, firstBody);
+	const PropertyCollectionRoot secondRoot = makeRoot(secondNodeId, secondBody);
 	LargeValueWriteOptions options;
 	options.first_data_slot = PhysicalSlotId(1U);
 	options.last_data_slot = PhysicalSlotId(64U);
@@ -984,19 +1135,29 @@ TEST_F(NativeGraphLargeValueMutationTest, ReusesSnapshotVerifiedContentWithoutAl
 	options.last_manifest_slot = PhysicalSlotId(64U);
 	options.kind = LargeValueKind::LVK_BYTES;
 	options.media_type = RSS_ENTITY_PROPERTY_LARGE_VALUE_MEDIA_TYPE;
-	MetadataSnapshotPin beforeCanonicalWrite = metadata_->openSnapshot();
-	const LogSequenceNumber canonicalWriteLsn(beforeCanonicalWrite.superblock().checkpoint_lsn.value() + 1U);
-	beforeCanonicalWrite.release();
-	const LargeValueWriteResult canonical = large_values_->write(canonicalBytes, options, canonicalWriteLsn);
+	const auto writeCanonical = [&](const PropertyCollectionRoot &root) {
+		const std::vector<std::byte> bytes = EntityPropertyLargeValuePayloadCodec::encode(root.entries);
+		MetadataSnapshotPin beforeWrite = metadata_->openSnapshot();
+		const LogSequenceNumber writeLsn(beforeWrite.superblock().checkpoint_lsn.value() + 1U);
+		beforeWrite.release();
+		return std::pair{large_values_->write(bytes, options, writeLsn), bytes};
+	};
+	const auto [firstCanonical, firstCanonicalBytes] = writeCanonical(firstRoot);
+	const auto [secondCanonical, secondCanonicalBytes] = writeCanonical(secondRoot);
 
 	NativeGraphWriteTransaction replace = writer.beginTransaction();
-	replace.replaceNodeProperty(root);
+	replace.replaceNodeProperty(firstRoot);
+	replace.replaceNodeProperty(secondRoot);
 	ASSERT_TRUE(replace.commit().committed());
 
 	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
-	EXPECT_EQ(storedLargeValueReference(snapshot, *metadata_, *slotted_pages_, nodeId).value, canonical.reference);
-	EXPECT_EQ(snapshot.superblock().next_large_value_id, 2U);
-	EXPECT_EQ(large_values_->read(snapshot, canonical.reference), canonicalBytes);
+	EXPECT_EQ(storedLargeValueReference(snapshot, *metadata_, *slotted_pages_, firstNodeId).value,
+			  firstCanonical.reference);
+	EXPECT_EQ(storedLargeValueReference(snapshot, *metadata_, *slotted_pages_, secondNodeId).value,
+			  secondCanonical.reference);
+	EXPECT_EQ(snapshot.superblock().next_large_value_id, 3U);
+	EXPECT_EQ(large_values_->read(snapshot, firstCanonical.reference), firstCanonicalBytes);
+	EXPECT_EQ(large_values_->read(snapshot, secondCanonical.reference), secondCanonicalBytes);
 	snapshot.release();
 }
 

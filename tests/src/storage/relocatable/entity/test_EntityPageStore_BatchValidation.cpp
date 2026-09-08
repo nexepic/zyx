@@ -419,3 +419,375 @@ TEST_F(RelocatableEntityPageStoreTest, BatchCowRequiresOneConsistentIdentityForS
 	EXPECT_EQ(store.readNode(current, 1001U), consistent[0].node_updates.front().record);
 	EXPECT_EQ(store.readNode(current, 1002U), consistent[1].node_updates.front().record);
 }
+
+TEST_F(RelocatableEntityPageStoreTest, NativeGraphBatchRejectsInvalidPropertyPoolOptionsBeforePublication) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore store(io, *metadata);
+	SlottedPagePool pages(io, *metadata);
+	LargeValueStore largeValues(io, *metadata);
+	PropertyCollectionRootStore properties(pages, largeValues, *metadata);
+	const MetadataSnapshotPin before = metadata->openSnapshot();
+	const std::array<EntityPageBatchNewPool, 1U> nodePool{{
+			{.request = newPool(31U, 901U, 101U, 40U),
+			 .record_kind = EntityPageRecordKind::EPRK_NODE,
+			 .node_insertions = {{1001U, node(11U, 12U)}}},
+	}};
+	const EntityPageAuxiliaryMutationBatch noAuxiliaryPages;
+	const NativeGraphDerivedStateMutation noDerivedState;
+	const NativeGraphDerivedStatePreparer noDerivedStatePreparer;
+	const auto expectInvalidOptions = [&](const PropertyCollectionRootStoreOptions &options) {
+		expectFormatError(
+				[&] {
+					static_cast<void>(store.applyNativeGraphBatchTransaction(
+							before, {}, {}, nodePool, {}, properties, options, LogSequenceNumber(2U)));
+				},
+				FormatError::FERR_INVALID_HEADER);
+		expectFormatError(
+				[&] {
+					static_cast<void>(store.applyNativeGraphBatchTransaction(
+							before, {}, {}, nodePool, {}, properties, options, noAuxiliaryPages, LogSequenceNumber(2U)));
+				},
+				FormatError::FERR_INVALID_HEADER);
+		expectFormatError(
+				[&] {
+					static_cast<void>(store.applyNativeGraphBatchTransaction(
+							before, {}, {}, nodePool, {}, properties, options, noAuxiliaryPages, noDerivedState,
+							noDerivedStatePreparer, LogSequenceNumber(2U)));
+				},
+				FormatError::FERR_INVALID_HEADER);
+	};
+
+	PropertyCollectionRootStoreOptions invalidFirstSlot{PhysicalSlotId{}, PhysicalSlotId(48U), 902U};
+	expectInvalidOptions(invalidFirstSlot);
+	PropertyCollectionRootStoreOptions invertedSlots{PhysicalSlotId(48U), PhysicalSlotId(41U), 902U};
+	expectInvalidOptions(invertedSlots);
+	PropertyCollectionRootStoreOptions missingOwner{PhysicalSlotId(41U), PhysicalSlotId(48U), 0U};
+	expectInvalidOptions(missingOwner);
+	const PropertyCollectionRootStoreOptions validOptions{PhysicalSlotId(41U), PhysicalSlotId(48U), 902U};
+	const EntityPageBatchResult published = store.applyNativeGraphBatchTransaction(
+			before, {}, {}, nodePool, {}, properties, validOptions, LogSequenceNumber(2U));
+	ASSERT_EQ(published.new_pool_pages.size(), 1U);
+
+	const MetadataSnapshotPin current = metadata->openSnapshot();
+	EXPECT_EQ(metadata->findNodePageLocation(current, 1001U).page_id, PageId(101U));
+}
+
+TEST_F(RelocatableEntityPageStoreTest, NativeGraphBatchRejectsForeignPropertyRootsBeforePublication) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore store(io, *metadata);
+	const MetadataSnapshotPin before = metadata->openSnapshot();
+	const std::array<EntityPageBatchNewPool, 1U> nodePool{{
+			{.request = newPool(31U, 901U, 101U, 40U),
+			 .record_kind = EntityPageRecordKind::EPRK_NODE,
+			 .node_insertions = {{1001U, node(11U, 12U)}}},
+	}};
+	const PropertyCollectionRootStoreOptions propertyOptions{PhysicalSlotId(41U), PhysicalSlotId(48U), 902U};
+	const std::filesystem::path foreignPath = path.string() + ".foreign-property-roots";
+	{
+		auto foreignFile = std::make_shared<std::fstream>(
+				foreignPath, std::ios::in | std::ios::out | std::ios::binary | std::ios::trunc);
+		ASSERT_TRUE(foreignFile->is_open());
+		auto foreignIo = std::make_shared<StorageIO>(foreignFile, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		auto foreignMetadata = RelocatableMetadataStore::initializeNew(foreignIo, initialSuperblock());
+		SlottedPagePool foreignPages(foreignIo, *foreignMetadata);
+		PropertyCollectionRootStore foreignProperties(foreignPages, *foreignMetadata);
+		const EntityPageAuxiliaryMutationBatch noAuxiliaryPages;
+		const NativeGraphDerivedStateMutation noDerivedState;
+		const NativeGraphDerivedStatePreparer noDerivedStatePreparer;
+
+		// Each public entry point would otherwise publish both Entity and Property roots.
+		// A store from another metadata file cannot participate in that atomic generation.
+		expectFormatError(
+				[&] {
+					static_cast<void>(store.applyNativeGraphBatchTransaction(
+							before, {}, {}, nodePool, {}, foreignProperties, propertyOptions, LogSequenceNumber(2U)));
+				},
+				FormatError::FERR_INVALID_HEADER);
+		expectFormatError(
+				[&] {
+					static_cast<void>(store.applyNativeGraphBatchTransaction(before, {}, {}, nodePool, {}, foreignProperties,
+							propertyOptions, noAuxiliaryPages, LogSequenceNumber(2U)));
+				},
+				FormatError::FERR_INVALID_HEADER);
+		expectFormatError(
+				[&] {
+					static_cast<void>(store.applyNativeGraphBatchTransaction(
+							before, {}, {}, nodePool, {}, foreignProperties, propertyOptions, noAuxiliaryPages,
+							noDerivedState, noDerivedStatePreparer, LogSequenceNumber(2U)));
+				},
+				FormatError::FERR_INVALID_HEADER);
+		EXPECT_FALSE(metadata->findNodePageLocationOptional(before, 1001U).has_value());
+	}
+	std::error_code error;
+	std::filesystem::remove(foreignPath, error);
+}
+
+TEST_F(RelocatableEntityPageStoreTest, NativeGraphBatchRejectsLargeValuePlansWithoutAContentStoreBeforePublication) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore store(io, *metadata);
+	SlottedPagePool pages(io, *metadata);
+	LargeValueStore largeValues(io, *metadata);
+	PropertyCollectionRootStore planningProperties(pages, largeValues, *metadata);
+	PropertyCollectionRootStore propertiesWithoutContentStore(pages, *metadata);
+	const PropertyCollectionRootStoreOptions propertyOptions{PhysicalSlotId(41U), PhysicalSlotId(48U), 902U};
+	const MetadataSnapshotPin before = metadata->openSnapshot();
+	const PropertyCollectionRoot largeRoot{
+			1001U, graph::Node::typeId,
+			{{3U, graph::PropertyValue(std::string(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, 'L'))}}};
+	const EntityPropertyRootMutationPlan plan =
+			planningProperties.planEntityRootReplacement(before, largeRoot, propertyOptions);
+	ASSERT_EQ(plan.large_values.size(), 1U);
+	const std::array plans{plan};
+	const std::array<EntityPageBatchNewPool, 1U> nodePool{{
+			{.request = newPool(31U, 901U, 101U, 40U),
+			 .record_kind = EntityPageRecordKind::EPRK_NODE,
+			 .node_insertions = {{1001U, node(11U, 12U)}}},
+	}};
+
+	// A caller can carry a precomputed public plan into this API. Reject it
+	// before publication when the selected Property store cannot materialize
+	// its referenced immutable content.
+	expectFormatError(
+			[&] {
+				static_cast<void>(store.applyNativeGraphBatchTransaction(
+						before, {}, {}, nodePool, plans, propertiesWithoutContentStore, propertyOptions,
+						LogSequenceNumber(2U)));
+			},
+			FormatError::FERR_INVALID_STATE);
+	EXPECT_FALSE(metadata->findNodePageLocationOptional(before, 1001U).has_value());
+	EXPECT_FALSE(metadata->findEntityPropertyLocationOptional(before, plan.key).has_value());
+}
+
+TEST_F(RelocatableEntityPageStoreTest, NativeGraphBatchRejectsMismatchedDerivedStatePreparersBeforePublication) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore store(io, *metadata);
+	SlottedPagePool pages(io, *metadata);
+	PropertyCollectionRootStore properties(pages, *metadata);
+	const PropertyCollectionRootStoreOptions propertyOptions{PhysicalSlotId(41U), PhysicalSlotId(48U), 902U};
+	const MetadataSnapshotPin before = metadata->openSnapshot();
+	const std::array<EntityPageBatchNewPool, 1U> nodePool{{
+			{.request = newPool(31U, 901U, 101U, 40U),
+			 .record_kind = EntityPageRecordKind::EPRK_NODE,
+			 .node_insertions = {{1001U, node(11U, 12U)}}},
+	}};
+	const EntityPageAuxiliaryMutationBatch noAuxiliaryPages;
+	const NativeGraphDerivedStateMutation noDerivedState;
+	const NativeGraphDerivedStatePreparer derivedPreparer =
+			[](std::vector<std::vector<IndexTreeMutationPoolBatch>> &) {};
+	const NativeGraphVectorBootstrapPreparer bootstrapPreparer =
+			[](std::vector<NativeGraphVectorBootstrapMaterialization> &) {};
+	const NativeGraphVectorDeltaPreparer deltaPreparer =
+			[](std::vector<NativeGraphVectorDeltaMaterialization> &) {};
+	const auto expectRejected = [&](const NativeGraphDerivedStateMutation &derived,
+									 const NativeGraphDerivedStatePreparer &derivedCallback,
+									 const NativeGraphVectorBootstrapPreparer &bootstrapCallback,
+									 const NativeGraphVectorDeltaPreparer &deltaCallback) {
+		expectFormatError(
+				[&] {
+					static_cast<void>(store.applyNativeGraphBatchTransaction(
+							before, {}, {}, nodePool, {}, properties, propertyOptions, noAuxiliaryPages, derived,
+							derivedCallback, LogSequenceNumber(2U), {}, {}, bootstrapCallback, deltaCallback));
+				},
+				FormatError::FERR_INVALID_HEADER);
+		EXPECT_FALSE(metadata->findNodePageLocationOptional(before, 1001U).has_value());
+	};
+
+	expectRejected(noDerivedState, derivedPreparer, {}, {});
+	expectRejected(noDerivedState, {}, bootstrapPreparer, {});
+	expectRejected(noDerivedState, {}, {}, deltaPreparer);
+	NativeGraphDerivedStateMutation bootstrapState;
+	bootstrapState.vector_bootstraps.emplace_back();
+	expectRejected(bootstrapState, derivedPreparer, {}, {});
+	expectRejected(bootstrapState, derivedPreparer, bootstrapPreparer, deltaPreparer);
+	NativeGraphDerivedStateMutation deltaState;
+	deltaState.vector_deltas.emplace_back();
+	expectRejected(deltaState, derivedPreparer, {}, {});
+}
+
+TEST_F(RelocatableEntityPageStoreTest, NativeGraphBatchRejectsForgedNewPropertyRootPlansBeforePublication) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore store(io, *metadata);
+	SlottedPagePool pages(io, *metadata);
+	PropertyCollectionRootStore properties(pages, *metadata);
+	const PropertyCollectionRootStoreOptions propertyOptions{PhysicalSlotId(41U), PhysicalSlotId(48U), 902U};
+	const PropertyCollectionRoot root{
+			1001U, graph::Node::typeId, {{3U, graph::PropertyValue("native property root")}}};
+	const MetadataSnapshotPin before = metadata->openSnapshot();
+	const EntityPropertyRootMutationPlan planned =
+			properties.planEntityRootReplacement(before, root, propertyOptions);
+	ASSERT_EQ(planned.kind, EntityPropertyRootMutationPlanKind::EPRMPK_NEW_PAGE_REQUIRED);
+	const std::array<EntityPageBatchNewPool, 1U> nodePool{{
+			{.request = newPool(31U, 901U, 101U, 40U),
+			 .record_kind = EntityPageRecordKind::EPRK_NODE,
+			 .node_insertions = {{1001U, node(11U, 12U)}}},
+	}};
+	const auto expectRejected = [&](EntityPropertyRootMutationPlan forged) {
+		const std::array plans{std::move(forged)};
+		expectFormatError(
+				[&] {
+					static_cast<void>(store.applyNativeGraphBatchTransaction(
+							before, {}, {}, nodePool, plans, properties, propertyOptions, LogSequenceNumber(2U)));
+				},
+				FormatError::FERR_INVALID_HEADER);
+		EXPECT_FALSE(metadata->findNodePageLocationOptional(before, 1001U).has_value());
+		EXPECT_FALSE(metadata->findEntityPropertyLocationOptional(before, planned.key).has_value());
+	};
+
+	EntityPropertyRootMutationPlan invalidKey = planned;
+	invalidKey.key = {};
+	expectRejected(std::move(invalidKey));
+	EntityPropertyRootMutationPlan emptyRoot = planned;
+	emptyRoot.encoded_root.clear();
+	expectRejected(std::move(emptyRoot));
+	EntityPropertyRootMutationPlan oversizedRoot = planned;
+	oversizedRoot.encoded_root.resize(
+			RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES - RSS_SLOTTED_PAGE_HEADER_BYTES - RSS_SLOTTED_PAGE_SLOT_BYTES + 1U);
+	expectRejected(std::move(oversizedRoot));
+	EntityPropertyRootMutationPlan unexpectedReplacementPayload = planned;
+	unexpectedReplacementPayload.replacement_payload = {std::byte{0x01}};
+	expectRejected(std::move(unexpectedReplacementPayload));
+	EntityPropertyRootMutationPlan missingRelocatedKey = planned;
+	missingRelocatedKey.page_replacement = NativeGraphPropertyPageReplacementRequest{};
+	expectRejected(std::move(missingRelocatedKey));
+	EntityPropertyRootMutationPlan missingReplacementImage = planned;
+	missingReplacementImage.page_replacement = NativeGraphPropertyPageReplacementRequest{};
+	missingReplacementImage.page_replacement->relocated_properties.push_back(planned.key);
+	expectRejected(std::move(missingReplacementImage));
+	EntityPropertyRootMutationPlan malformedRetirement = planned;
+	malformedRetirement.page_replacement = NativeGraphPropertyPageReplacementRequest{};
+	malformedRetirement.page_replacement->relocated_properties.push_back(planned.key);
+	malformedRetirement.page_replacement->retire_page = true;
+	expectRejected(std::move(malformedRetirement));
+
+	const std::array validPlans{planned};
+	const EntityPageBatchResult published = store.applyNativeGraphBatchTransaction(
+			before, {}, {}, nodePool, validPlans, properties, propertyOptions, LogSequenceNumber(2U));
+	ASSERT_EQ(published.properties.size(), 1U);
+	const MetadataSnapshotPin current = metadata->openSnapshot();
+	EXPECT_EQ(properties.readEntity(current, planned.key), root);
+}
+
+TEST_F(RelocatableEntityPageStoreTest, NativeGraphBatchRejectsMalformedExistingPropertyRootPlansBeforePublication) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore store(io, *metadata);
+	SlottedPagePool pages(io, *metadata);
+	PropertyCollectionRootStore properties(pages, *metadata);
+	const PropertyCollectionRootStoreOptions propertyOptions{PhysicalSlotId(41U), PhysicalSlotId(48U), 902U};
+	const PropertyCollectionRoot initialRoot{
+			1001U, graph::Node::typeId, {{3U, graph::PropertyValue("existing Property root")}}};
+	const std::array<EntityPageBatchNewPool, 1U> nodePool{{
+			{.request = newPool(31U, 901U, 101U, 40U),
+			 .record_kind = EntityPageRecordKind::EPRK_NODE,
+			 .node_insertions = {{1001U, node(11U, 12U)}}},
+	}};
+	MetadataSnapshotPin empty = metadata->openSnapshot();
+	const EntityPropertyRootMutationPlan initialPlan =
+			properties.planEntityRootReplacement(empty, initialRoot, propertyOptions);
+	static_cast<void>(store.applyNativeGraphBatchTransaction(empty, {}, {}, nodePool, std::span(&initialPlan, 1U),
+																		 properties, propertyOptions, LogSequenceNumber(2U)));
+	empty.release();
+
+	const PropertyCollectionRoot replacementRoot{
+			1002U, graph::Node::typeId, {{5U, graph::PropertyValue("replacement Property root")}}};
+	const MetadataSnapshotPin before = metadata->openSnapshot();
+	const EntityPropertyRootMutationPlan planned =
+			properties.planEntityRootReplacement(before, replacementRoot, propertyOptions);
+	ASSERT_EQ(planned.kind, EntityPropertyRootMutationPlanKind::EPRMPK_EXISTING_PAGE);
+	ASSERT_TRUE(planned.page_replacement.has_value());
+	const auto expectRejected = [&](std::vector<EntityPropertyRootMutationPlan> forged, const char *scenario) {
+		SCOPED_TRACE(scenario);
+		expectFormatError(
+				[&] {
+					static_cast<void>(store.applyNativeGraphBatchTransaction(
+							before, {}, {}, {}, forged, properties, propertyOptions, LogSequenceNumber(3U)));
+				},
+				FormatError::FERR_INVALID_HEADER);
+		EXPECT_EQ(properties.readEntity(before, initialPlan.key), initialRoot);
+		EXPECT_FALSE(metadata->findEntityPropertyLocationOptional(before, planned.key).has_value());
+	};
+
+	EntityPropertyRootMutationPlan invalidKey = planned;
+	invalidKey.key = {};
+	expectRejected({std::move(invalidKey)}, "invalid key");
+	EntityPropertyRootMutationPlan missingReplacement = planned;
+	missingReplacement.page_replacement.reset();
+	expectRejected({std::move(missingReplacement)}, "missing replacement");
+	EntityPropertyRootMutationPlan unexpectedRoot = planned;
+	unexpectedRoot.encoded_root = {std::byte{0x01U}};
+	expectRejected({std::move(unexpectedRoot)}, "unexpected encoded root");
+	EntityPropertyRootMutationPlan emptyMutation = planned;
+	emptyMutation.page_replacement->upserted_properties.clear();
+	expectRejected({std::move(emptyMutation)}, "empty mutation");
+	EntityPropertyRootMutationPlan unboundMutation = planned;
+	unboundMutation.page_replacement->upserted_properties.front().key =
+			{EntityPropertyOwnerKind::EPOK_NODE, 1003U};
+	expectRejected({std::move(unboundMutation)}, "unbound mutation");
+	EntityPropertyRootMutationPlan malformedRetirement = planned;
+	malformedRetirement.page_replacement->retire_page = true;
+	expectRejected({std::move(malformedRetirement)}, "retirement with upsert");
+	EntityPropertyRootMutationPlan retirementWithPayload = planned;
+	retirementWithPayload.page_replacement->retire_page = true;
+	retirementWithPayload.page_replacement->upserted_properties.clear();
+	retirementWithPayload.page_replacement->erased_properties.push_back(planned.key);
+	retirementWithPayload.replacement_payload = {std::byte{0x01U}};
+	expectRejected({std::move(retirementWithPayload)}, "retirement payload");
+	EntityPropertyRootMutationPlan retirementWithFreeBytes = planned;
+	retirementWithFreeBytes.page_replacement->retire_page = true;
+	retirementWithFreeBytes.page_replacement->upserted_properties.clear();
+	retirementWithFreeBytes.page_replacement->erased_properties.push_back(planned.key);
+	retirementWithFreeBytes.replacement_free_bytes = 1U;
+	expectRejected({std::move(retirementWithFreeBytes)}, "retirement free bytes");
+	expectRejected({planned, planned}, "duplicate plan key");
+}
+
+TEST_F(RelocatableEntityPageStoreTest, NativeGraphBatchValidatesUnchangedPropertyRootPlansBeforePublication) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore store(io, *metadata);
+	SlottedPagePool pages(io, *metadata);
+	PropertyCollectionRootStore properties(pages, *metadata);
+	const PropertyCollectionRootStoreOptions propertyOptions{PhysicalSlotId(41U), PhysicalSlotId(48U), 902U};
+	const MetadataSnapshotPin before = metadata->openSnapshot();
+	const std::array<EntityPageBatchNewPool, 1U> nodePool{{
+			{.request = newPool(31U, 901U, 101U, 40U),
+			 .record_kind = EntityPageRecordKind::EPRK_NODE,
+			 .node_insertions = {{1001U, node(11U, 12U)}}},
+	}};
+	const EntityPropertyRootMutationPlan unchanged{
+			.kind = EntityPropertyRootMutationPlanKind::EPRMPK_NO_CHANGE,
+			.key = {EntityPropertyOwnerKind::EPOK_NODE, 1001U},
+	};
+	const auto expectRejected = [&](EntityPropertyRootMutationPlan forged) {
+		const std::array plans{std::move(forged)};
+		expectFormatError(
+				[&] {
+					static_cast<void>(store.applyNativeGraphBatchTransaction(
+							before, {}, {}, nodePool, plans, properties, propertyOptions, LogSequenceNumber(2U)));
+				},
+				FormatError::FERR_INVALID_HEADER);
+		EXPECT_FALSE(metadata->findNodePageLocationOptional(before, 1001U).has_value());
+	};
+
+	EntityPropertyRootMutationPlan invalidKey = unchanged;
+	invalidKey.key = {};
+	expectRejected(std::move(invalidKey));
+	EntityPropertyRootMutationPlan unexpectedReplacement = unchanged;
+	unexpectedReplacement.page_replacement = NativeGraphPropertyPageReplacementRequest{};
+	expectRejected(std::move(unexpectedReplacement));
+	EntityPropertyRootMutationPlan unexpectedPayload = unchanged;
+	unexpectedPayload.replacement_payload = {std::byte{0x01}};
+	expectRejected(std::move(unexpectedPayload));
+	EntityPropertyRootMutationPlan unexpectedRoot = unchanged;
+	unexpectedRoot.encoded_root = {std::byte{0x01}};
+	expectRejected(std::move(unexpectedRoot));
+	EntityPropertyRootMutationPlan unexpectedFreeBytes = unchanged;
+	unexpectedFreeBytes.replacement_free_bytes = 1U;
+	expectRejected(std::move(unexpectedFreeBytes));
+
+	const std::array plans{unchanged};
+	const EntityPageBatchResult published = store.applyNativeGraphBatchTransaction(
+			before, {}, {}, nodePool, plans, properties, propertyOptions, LogSequenceNumber(2U));
+	ASSERT_EQ(published.new_pool_pages.size(), 1U);
+	const MetadataSnapshotPin current = metadata->openSnapshot();
+	EXPECT_EQ(metadata->findNodePageLocation(current, 1001U).page_id, PageId(101U));
+	EXPECT_FALSE(metadata->findEntityPropertyLocationOptional(current, unchanged.key).has_value());
+}

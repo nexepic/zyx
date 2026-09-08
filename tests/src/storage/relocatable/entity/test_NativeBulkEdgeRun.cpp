@@ -134,6 +134,14 @@ TEST(NativeBulkEdgeRunCodecTest, RejectsEverySingleBitWireCorruption) {
 TEST(NativeBulkEdgeRunCodecTest, RejectsMalformedRecordFramingAfterHeaderValidation) {
 	const std::vector<std::byte> encoded = NativeBulkEdgeRunCodec::encode(run());
 
+	// The declared count must fit the persisted record-byte extent before the
+	// decoder attempts to interpret any individual record frame.
+	auto impossibleCount = encoded;
+	LittleEndianCodec::writeU32(impossibleCount, RECORD_COUNT_OFFSET, std::numeric_limits<uint32_t>::max());
+	refreshHeaderChecksum(impossibleCount);
+	expectFormatError([&] { static_cast<void>(NativeBulkEdgeRunCodec::decode(impossibleCount)); },
+				  FormatError::FERR_INVALID_HEADER);
+
 	// Four declared records leave the dimensions check valid, but the fourth
 	// frame is absent and must fail at the record-framing boundary.
 	auto missingFrame = encoded;

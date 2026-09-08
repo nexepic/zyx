@@ -10,6 +10,7 @@
 
 #include <atomic>
 #include <cerrno>
+#include <limits>
 #include <system_error>
 
 #include "graph/storage/PreadHelper.hpp"
@@ -43,12 +44,369 @@ TEST_F(RelocatableMetadataStoreValidationTest, RejectsInvalidAndReadOnlyLogicalI
 					  FormatError::FERR_INVALID_HEADER);
 	expectFormatError([&] { static_cast<void>(writable->acquireNativeGraphLogicalIds(1U, 0U, 0U)); },
 					  FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				static_cast<void>(writable->acquireNativeGraphLogicalIds(
+						1U, 0U, std::numeric_limits<uint64_t>::max()));
+			},
+			FormatError::FERR_INVALID_HEADER);
 
 	auto readOnly = RelocatableMetadataStore::openReadOnly(io);
+	expectFormatError([&] { readOnly->refreshAfterExternalPublication(); }, FormatError::FERR_INVALID_STATE);
 	expectFormatError([&] { static_cast<void>(readOnly->reserveNativeGraphLogicalIds(1U, 0U)); },
 					  FormatError::FERR_INVALID_HEADER);
 	expectFormatError([&] { static_cast<void>(readOnly->acquireNativeGraphLogicalIds(1U, 0U, 1U)); },
 					  FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableMetadataStoreValidationTest,
+		ServesFullyCachedLogicalIdLeasesWithoutPublishingAnotherMetadataGeneration) {
+	auto store = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	const NativeGraphLogicalIdReservation initial = store->acquireNativeGraphLogicalIds(1U, 1U, 4U);
+	ASSERT_EQ(initial.node_ranges, (std::vector<NativeGraphLogicalIdLeaseRange>{{1U, 1U}}));
+	ASSERT_EQ(initial.edge_ranges, (std::vector<NativeGraphLogicalIdLeaseRange>{{1U, 1U}}));
+	EXPECT_TRUE(store->claimNativeGraphLogicalIdReservation(initial));
+
+	MetadataSnapshotPin afterInitial = store->openSnapshot();
+	const Superblock durableAfterInitial = afterInitial.superblock();
+	afterInitial.release();
+	EXPECT_EQ(durableAfterInitial.generation, Generation(2U));
+	EXPECT_EQ(durableAfterInitial.next_logical_node_id, 5U);
+	EXPECT_EQ(durableAfterInitial.next_logical_edge_id, 5U);
+
+	const NativeGraphLogicalIdReservation cached = store->acquireNativeGraphLogicalIds(2U, 3U, 4U);
+	EXPECT_EQ(cached.node_ranges, (std::vector<NativeGraphLogicalIdLeaseRange>{{2U, 2U}}));
+	EXPECT_EQ(cached.edge_ranges, (std::vector<NativeGraphLogicalIdLeaseRange>{{2U, 3U}}));
+	EXPECT_TRUE(store->claimNativeGraphLogicalIdReservation(cached));
+	EXPECT_FALSE(store->claimNativeGraphLogicalIdReservation(cached));
+
+	MetadataSnapshotPin afterCached = store->openSnapshot();
+	EXPECT_EQ(afterCached.superblock(), durableAfterInitial);
+	afterCached.release();
+}
+
+TEST_F(RelocatableMetadataStoreValidationTest,
+		CombinesCachedAndFreshLogicalIdRangesWithoutReorderingNamespaces) {
+	auto store = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	const NativeGraphLogicalIdReservation initial = store->acquireNativeGraphLogicalIds(1U, 1U, 4U);
+	ASSERT_TRUE(store->claimNativeGraphLogicalIdReservation(initial));
+	const NativeGraphLogicalIdReservation cached = store->acquireNativeGraphLogicalIds(2U, 3U, 4U);
+	ASSERT_TRUE(store->claimNativeGraphLogicalIdReservation(cached));
+
+	// Only Node ID 4 remains cached. The request must return it before the
+	// freshly leased Node range while independently leasing the exhausted Edge
+	// namespace.
+	const NativeGraphLogicalIdReservation mixed = store->acquireNativeGraphLogicalIds(2U, 1U, 4U);
+	EXPECT_EQ(mixed.node_ranges,
+			  (std::vector<NativeGraphLogicalIdLeaseRange>{{4U, 1U}, {5U, 1U}}));
+	EXPECT_EQ(mixed.edge_ranges, (std::vector<NativeGraphLogicalIdLeaseRange>{{5U, 1U}}));
+	EXPECT_TRUE(store->claimNativeGraphLogicalIdReservation(mixed));
+
+	MetadataSnapshotPin snapshot = store->openSnapshot();
+	EXPECT_EQ(snapshot.superblock().generation, Generation(3U));
+	EXPECT_EQ(snapshot.superblock().next_logical_node_id, 9U);
+	EXPECT_EQ(snapshot.superblock().next_logical_edge_id, 9U);
+	snapshot.release();
+}
+
+TEST_F(RelocatableMetadataStoreValidationTest,
+	   DistinguishesIdentityOnlyBootstrapAdvancesFromDirectoryMutations) {
+	auto store = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	MetadataSnapshotPin legacySnapshot = store->openSnapshot();
+	const Superblock legacy = legacySnapshot.superblock();
+	legacySnapshot.release();
+
+	const Superblock routed = store->migratePageDirectoryToBootstrap(LogSequenceNumber(2U));
+	ASSERT_TRUE(routed.usesPageDirectoryBootstrap());
+	EXPECT_FALSE(store->isIdentityOnlyBootstrapAdvance(legacy, routed));
+
+	const NativeGraphLogicalIdLease lease = store->reserveNativeGraphLogicalIds(1U, 0U);
+	EXPECT_TRUE(store->isIdentityOnlyBootstrapAdvance(routed, lease.superblock));
+
+	const Superblock directoryMutation =
+			store->setPhysicalSlotAllocated(PhysicalSlotId(40U), true, LogSequenceNumber(4U));
+	EXPECT_FALSE(store->isIdentityOnlyBootstrapAdvance(lease.superblock, directoryMutation));
+}
+
+TEST_F(RelocatableMetadataStoreValidationTest, ReadOnlyStoreRejectsMetadataMutationAndMaintenanceEntrypoints) {
+	static_cast<void>(RelocatableMetadataStore::initializeNew(io, initialSuperblock()));
+	auto readOnly = RelocatableMetadataStore::openReadOnly(io);
+
+	// These entry points either publish a new metadata generation or alter the
+	// physical tail. A read-only handle must reject them before inspecting state.
+	expectFormatError(
+			[&] { static_cast<void>(readOnly->migratePageDirectoryToBootstrap(LogSequenceNumber(2U))); },
+			FormatError::FERR_INVALID_STATE);
+	expectFormatError(
+			[&] { static_cast<void>(readOnly->reclaimEmptyMetadataPagePools(LogSequenceNumber(2U))); },
+			FormatError::FERR_INVALID_STATE);
+	expectFormatError(
+			[&] { static_cast<void>(readOnly->evacuateSparseMetadataPagePool(LogSequenceNumber(2U))); },
+			FormatError::FERR_INVALID_STATE);
+	expectFormatError(
+			[&] { static_cast<void>(readOnly->rotateMetadataEmergencyReserve(LogSequenceNumber(2U))); },
+			FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(readOnly->truncateReleasedTail()); }, FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(RelocatableMetadataStoreValidationTest, RejectsInactiveSnapshotPinsAcrossDirectoryReadSurfaces) {
+	auto store = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	const MetadataSnapshotPin inactive;
+	const EntityPropertyKey propertyKey{EntityPropertyOwnerKind::EPOK_NODE, 1U};
+	const auto stopNode = [](const EntityPageLocation &) { return false; };
+	const auto stopPage = [](const PageLocation &) { return false; };
+
+	expectFormatError([&] { static_cast<void>(store->findCatalog(inactive, SegmentId(1U))); },
+				  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { store->visitCatalogEntries(inactive, [](const CatalogEntry &) {}); },
+				  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(store->findPageLocation(inactive, PageId(1U))); },
+				  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(store->findPageLocationOptional(inactive, PageId(1U))); },
+				  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(store->findExtentLocation(inactive, ExtentId(1U))); },
+				  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(store->findExtentLocationOptional(inactive, ExtentId(1U))); },
+				  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(store->findNodePageLocation(inactive, 1U)); },
+				  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(store->findEdgePageLocation(inactive, 1U)); },
+				  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(store->findEntityPropertyLocation(inactive, propertyKey)); },
+				  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(store->findStateLocation(inactive, 1U)); },
+				  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(store->findVectorLocation(inactive, 1U)); },
+				  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(store->findVectorManifest(inactive, 1U)); },
+				  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(store->findLargeValueManifest(inactive, LargeValueId(1U))); },
+				  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(store->findIndexRoot(inactive, 1U)); }, FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { store->visitNodePageLocations(inactive, [](const EntityPageLocation &) {}); },
+				  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(store->visitNodePageLocationsUntil(inactive, stopNode)); },
+				  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(store->visitNodePageLocationsAfter(inactive, 0U, 1U, stopNode)); },
+				  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(store->visitPageLocationsUntil(inactive, stopPage)); },
+				  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(store->findPageLocationsForSegment(inactive, SegmentId(1U))); },
+				  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(store->isPhysicalSlotAllocated(inactive, PhysicalSlotId(1U))); },
+				  FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(RelocatableMetadataStoreValidationTest, RejectsEmptyDirectoryMutationsAndInvalidStateReplacementInput) {
+	auto store = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->upsertEntityPageLocations({}, {}, {}, {}, LogSequenceNumber(2U)));
+			},
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] { static_cast<void>(store->upsertEntityPropertyLocations({}, {}, LogSequenceNumber(2U))); },
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] { static_cast<void>(store->upsertStateLocations({}, {}, LogSequenceNumber(2U))); },
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] { static_cast<void>(store->upsertVectorLocations({}, {}, LogSequenceNumber(2U))); },
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] { static_cast<void>(store->upsertVectorManifests({}, {}, LogSequenceNumber(2U))); },
+			FormatError::FERR_INVALID_HEADER);
+
+	const PageLocation invalidPage{};
+	const StateLocation invalidState{};
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->replaceStatePageAndUpsertLocation(
+						invalidPage, invalidState, LogSequenceNumber(2U), {}));
+			},
+			FormatError::FERR_INVALID_HEADER);
+
+	const auto statePreparer = [](const CatalogEntry &pool, PageId pageId, PageLocation &page, StateLocation &state) {
+		page = {pageId, pool.segment_id, RSS_PAGE_POOL_FIRST_DATA_FRAME, pool.generation, 0U};
+		state = {state.state_id, pageId, 0U, 1U};
+	};
+	const auto materialized = store->materializeStatePagePool(
+			1U, 77U, PhysicalSlotId(40U), PhysicalSlotId(40U), LogSequenceNumber(2U), statePreparer);
+	ASSERT_TRUE(materialized.has_value());
+	StateLocation invalidLocation = materialized->state;
+	invalidLocation.state_id = 0U;
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->upsertStateLocations(std::span(&invalidLocation, 1U), {}, LogSequenceNumber(3U)));
+			},
+			FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(RelocatableMetadataStoreValidationTest, RejectsInvalidEntityPageMutationPreconditions) {
+	auto store = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	const LogSequenceNumber checkpointLsn(2U);
+	const ExistingPoolPagePreparer pagePreparer = [](const CatalogEntry &, PageLocation &) {};
+	const ExistingPoolPageReplacementPreparer replacementPreparer =
+			[](const CatalogEntry &, const PageLocation &, PageLocation &) {};
+	const ExistingPoolPageRetirementPreparer retirementPreparer = [](const CatalogEntry &, const PageLocation &) {};
+	const EntityPageLocation node{1U, PageId(1U), 0U, 1U};
+	const EntityPageLocation edge{1U, PageId(1U), 0U, 1U};
+
+	expectFormatError(
+			[&] { static_cast<void>(store->appendPageToExistingPool({}, {}, checkpointLsn, {})); },
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] { static_cast<void>(store->appendEntityPageToExistingPool({}, {}, {}, {}, checkpointLsn, {})); },
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] { static_cast<void>(store->appendEntityPageToExistingPool({}, {}, {}, {}, {}, pagePreparer)); },
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] { static_cast<void>(store->appendEntityPageToExistingPool({}, {}, {}, {}, checkpointLsn, pagePreparer)); },
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				static_cast<void>(
+						store->replaceEntityPageInExistingPool({}, {}, {}, {}, {}, {}, {}, checkpointLsn, {}));
+			},
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				static_cast<void>(
+						store->replaceEntityPageInExistingPool({}, {}, {}, {}, {}, {}, {}, {}, replacementPreparer));
+			},
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->replaceEntityPageInExistingPool(
+						{}, {}, {}, std::span(&node, 1U), {}, std::span(&edge, 1U), {}, checkpointLsn,
+						replacementPreparer));
+			},
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] { static_cast<void>(store->mutateEntityPages({}, {}, {}, checkpointLsn, {})); },
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] { static_cast<void>(store->mutateEntityPagesInExistingPools({}, {}, checkpointLsn, {})); },
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] { static_cast<void>(store->replaceEntityPagesInExistingPools({}, checkpointLsn, {})); },
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] { static_cast<void>(store->retireEntityPageInExistingPool({}, {}, {}, {}, checkpointLsn, {})); },
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] { static_cast<void>(store->retireEntityPageInExistingPool({}, {}, {}, {}, {}, retirementPreparer)); },
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->retireEntityPageInExistingPool({}, {}, {}, {}, checkpointLsn, retirementPreparer));
+			},
+			FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableMetadataStoreValidationTest,
+	   RejectsInvalidExistingEntityPoolMutationsBeforePublishingMetadata) {
+	auto store = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	CatalogSlotReservationRequest request =
+			reservationRequest(SegmentId(31U), SegmentKind::SGK_ENTITY_PAGE_POOL);
+	const std::optional<CatalogSlotReservation> reservation =
+			store->reserveFirstFreeAndUpsertCatalog(request, PhysicalSlotId(40U), PhysicalSlotId(40U),
+															LogSequenceNumber(2U));
+	ASSERT_TRUE(reservation.has_value());
+
+	const EntityPageLocation firstNode{101U, PageId(91U), 0U, 1U};
+	PageLocation firstPage{firstNode.page_id, reservation->entry.segment_id, 0U, reservation->entry.generation};
+	static_cast<void>(store->appendEntityPageToExistingPool(
+			reservation->entry, firstPage, std::span(&firstNode, 1U), {}, LogSequenceNumber(3U),
+			[](const CatalogEntry &, PageLocation &page) { page.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME; }));
+	MetadataSnapshotPin before = store->openSnapshot();
+	const Superblock beforeSuperblock = before.superblock();
+	const PageLocation publishedFirstPage = store->findPageLocation(before, firstNode.page_id);
+	before.release();
+
+	bool callbackCalled = false;
+	const EntityPageLocation duplicateNode{102U, firstNode.page_id, 0U, 1U};
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->appendEntityPageToExistingPool(
+						reservation->entry, firstPage, std::span(&duplicateNode, 1U), {}, LogSequenceNumber(4U),
+						[&callbackCalled](const CatalogEntry &, PageLocation &) { callbackCalled = true; }));
+			},
+			FormatError::FERR_INVALID_STATE);
+	EXPECT_FALSE(callbackCalled);
+
+	PageLocation secondPage{PageId(92U), reservation->entry.segment_id, 0U, reservation->entry.generation};
+	const EntityPageLocation wrongPage{102U, PageId(93U), 0U, 1U};
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->appendEntityPageToExistingPool(
+						reservation->entry, secondPage, std::span(&wrongPage, 1U), {}, LogSequenceNumber(4U),
+						[](const CatalogEntry &, PageLocation &) {}));
+			},
+			FormatError::FERR_INVALID_STATE);
+
+	const EntityPageLocation invalidNode{0U, firstNode.page_id, 1U, 1U};
+	PageLocation replacement{firstNode.page_id, reservation->entry.segment_id, 0U, reservation->entry.generation};
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->replaceEntityPageInExistingPool(
+						reservation->entry, publishedFirstPage, replacement, std::span(&invalidNode, 1U), {}, {}, {},
+						LogSequenceNumber(4U), [](const CatalogEntry &, const PageLocation &, PageLocation &) {}));
+			},
+			FormatError::FERR_INVALID_STATE);
+
+	const std::array<uint64_t, 1U> missingNodes{102U};
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->replaceEntityPageInExistingPool(
+						reservation->entry, publishedFirstPage, replacement, {}, missingNodes, {}, {}, LogSequenceNumber(4U),
+						[](const CatalogEntry &, const PageLocation &, PageLocation &) {}));
+			},
+			FormatError::FERR_INVALID_STATE);
+
+	callbackCalled = false;
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->replaceEntityPageInExistingPool(
+						reservation->entry, publishedFirstPage, replacement, {}, {}, {}, {}, LogSequenceNumber(4U),
+						[&callbackCalled](const CatalogEntry &, const PageLocation &, PageLocation &) {
+							callbackCalled = true;
+						}));
+			},
+			FormatError::FERR_INVALID_STATE);
+	EXPECT_TRUE(callbackCalled);
+
+	MetadataSnapshotPin unchanged = store->openSnapshot();
+	EXPECT_EQ(unchanged.superblock(), beforeSuperblock);
+	EXPECT_EQ(store->findPageLocation(unchanged, firstNode.page_id), publishedFirstPage);
+	EXPECT_EQ(store->findNodePageLocation(unchanged, firstNode.entity_id), firstNode);
+	unchanged.release();
+}
+
+TEST_F(RelocatableMetadataStoreValidationTest, RejectsInvalidCompleteInitializationCheckpoints) {
+	Superblock invalid = initialSuperblock();
+	invalid.checkpoint_lsn = {};
+	expectFormatError([&] { static_cast<void>(RelocatableMetadataStore::initializeNewComplete(io, invalid)); },
+					  FormatError::FERR_INVALID_HEADER);
+
+	invalid = initialSuperblock();
+	invalid.checkpoint_lsn = LogSequenceNumber(std::numeric_limits<uint64_t>::max());
+	expectFormatError([&] { static_cast<void>(RelocatableMetadataStore::initializeNewComplete(io, invalid)); },
+					  FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableMetadataStoreValidationTest, RejectsEmptyEntityPoolReservationPlan) {
+	auto store = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	const LogSequenceNumber checkpointLsn(2U);
+
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->reserveFirstFreeAndUpsertCatalogAndEntityPageLocations(
+						{}, {}, {}, {}, PhysicalSlotId(40U), PhysicalSlotId(40U), checkpointLsn, {}));
+			},
+			FormatError::FERR_INVALID_HEADER);
 }
 
 TEST_F(RelocatableMetadataStoreValidationTest, ValidatesLogicalIdLeaseCapabilitiesAcrossNodeAndEdgeNamespaces) {
@@ -58,6 +416,17 @@ TEST_F(RelocatableMetadataStoreValidationTest, ValidatesLogicalIdLeaseCapabiliti
 	ASSERT_EQ(reservation.node_ranges.size(), 1U);
 	EXPECT_TRUE(reservation.edge_ranges.empty());
 
+	// A caller may only claim the exact, nonempty capability it received. This
+	// rejects malformed and fabricated ranges without consuming the real lease.
+	NativeGraphLogicalIdReservation zeroFirst = reservation;
+	zeroFirst.node_ranges.front().first_id = 0U;
+	EXPECT_FALSE(store->claimNativeGraphLogicalIdReservation(zeroFirst));
+	NativeGraphLogicalIdReservation zeroCount = reservation;
+	zeroCount.node_ranges.front().count = 0U;
+	EXPECT_FALSE(store->claimNativeGraphLogicalIdReservation(zeroCount));
+	NativeGraphLogicalIdReservation unknownRange = reservation;
+	unknownRange.node_ranges.front().first_id += reservation.node_ranges.front().count;
+	EXPECT_FALSE(store->claimNativeGraphLogicalIdReservation(unknownRange));
 	NativeGraphLogicalIdReservation wrongCount = reservation;
 	wrongCount.node_ranges.front().count = 1U;
 	EXPECT_FALSE(store->claimNativeGraphLogicalIdReservation(wrongCount));
@@ -79,6 +448,28 @@ TEST_F(RelocatableMetadataStoreValidationTest, ValidatesLogicalIdLeaseCapabiliti
 	EXPECT_EQ(snapshot.superblock().next_logical_node_id, nodeLease.nodes.first_id + nodeLease.nodes.count);
 	EXPECT_EQ(snapshot.superblock().next_logical_edge_id, edgeLease.edges.first_id + edgeLease.edges.count);
 	snapshot.release();
+}
+
+TEST_F(RelocatableMetadataStoreValidationTest, AbandoningLogicalIdCapabilitiesRequiresTheirExactIssuedRanges) {
+	auto store = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	const NativeGraphLogicalIdReservation nodeReservation = store->acquireNativeGraphLogicalIds(1U, 0U, 1U);
+	ASSERT_EQ(nodeReservation.node_ranges.size(), 1U);
+	ASSERT_TRUE(nodeReservation.edge_ranges.empty());
+	NativeGraphLogicalIdReservation wrongCount = nodeReservation;
+	++wrongCount.node_ranges.front().count;
+	store->abandonNativeGraphLogicalIdReservation(wrongCount);
+	EXPECT_TRUE(store->claimNativeGraphLogicalIdReservation(nodeReservation));
+
+	const NativeGraphLogicalIdReservation edgeReservation = store->acquireNativeGraphLogicalIds(0U, 1U, 1U);
+	ASSERT_TRUE(edgeReservation.node_ranges.empty());
+	ASSERT_EQ(edgeReservation.edge_ranges.size(), 1U);
+	NativeGraphLogicalIdReservation unknownRange = edgeReservation;
+	++unknownRange.edge_ranges.front().first_id;
+	store->abandonNativeGraphLogicalIdReservation(unknownRange);
+
+	// An abandon request is best-effort, but it must never release a different
+	// outstanding capability that shares only part of the caller-supplied shape.
+	EXPECT_TRUE(store->claimNativeGraphLogicalIdReservation(edgeReservation));
 }
 
 TEST_F(RelocatableMetadataStoreValidationTest, PreservesLogicalIdHighWaterMarksWhenDirectLeasePublicationFails) {
@@ -205,6 +596,42 @@ TEST_F(RelocatableMetadataStoreValidationTest, RejectsExhaustedLogicalIdNamespac
 	expectFormatError([&] { static_cast<void>(store->acquireNativeGraphLogicalIds(1U, 0U, 1U)); },
 					  FormatError::FERR_ARITHMETIC_OVERFLOW);
 	expectFormatError([&] { static_cast<void>(store->acquireNativeGraphLogicalIds(0U, 1U, 1U)); },
+					  FormatError::FERR_ARITHMETIC_OVERFLOW);
+}
+
+TEST_F(RelocatableMetadataStoreValidationTest, BoundsLogicalIdLeasesAtTheFinalRepresentableIdentity) {
+	Superblock finalIds = initialSuperblock();
+	finalIds.next_logical_node_id = std::numeric_limits<uint64_t>::max();
+	finalIds.next_logical_edge_id = std::numeric_limits<uint64_t>::max();
+	auto store = RelocatableMetadataStore::initializeNew(io, finalIds);
+
+	MetadataSnapshotPin before = store->openSnapshot();
+	expectFormatError([&] { static_cast<void>(store->reserveNativeGraphLogicalIds(2U, 0U)); },
+					  FormatError::FERR_ARITHMETIC_OVERFLOW);
+	expectFormatError([&] { static_cast<void>(store->reserveNativeGraphLogicalIds(0U, 2U)); },
+					  FormatError::FERR_ARITHMETIC_OVERFLOW);
+	MetadataSnapshotPin unchanged = store->openSnapshot();
+	EXPECT_EQ(unchanged.superblock(), before.superblock());
+	unchanged.release();
+
+	const NativeGraphLogicalIdLease node = store->reserveNativeGraphLogicalIds(1U, 0U);
+	EXPECT_EQ(node.nodes, (NativeGraphLogicalIdLeaseRange{std::numeric_limits<uint64_t>::max(), 1U}));
+	const NativeGraphLogicalIdLease edge = store->reserveNativeGraphLogicalIds(0U, 1U);
+	EXPECT_EQ(edge.edges, (NativeGraphLogicalIdLeaseRange{std::numeric_limits<uint64_t>::max(), 1U}));
+	expectFormatError([&] { static_cast<void>(store->reserveNativeGraphLogicalIds(1U, 0U)); },
+					  FormatError::FERR_ARITHMETIC_OVERFLOW);
+	expectFormatError([&] { static_cast<void>(store->reserveNativeGraphLogicalIds(0U, 1U)); },
+					  FormatError::FERR_ARITHMETIC_OVERFLOW);
+	before.release();
+}
+
+TEST_F(RelocatableMetadataStoreValidationTest, RejectsLogicalIdLeasesWhenTheCheckpointNamespaceIsExhausted) {
+	Superblock exhaustedCheckpoint = initialSuperblock();
+	exhaustedCheckpoint.checkpoint_lsn = LogSequenceNumber(std::numeric_limits<uint64_t>::max());
+	auto store = RelocatableMetadataStore::initializeNew(io, exhaustedCheckpoint);
+	expectFormatError([&] { static_cast<void>(store->reserveNativeGraphLogicalIds(1U, 0U)); },
+					  FormatError::FERR_ARITHMETIC_OVERFLOW);
+	expectFormatError([&] { static_cast<void>(store->acquireNativeGraphLogicalIds(1U, 0U, 1U)); },
 					  FormatError::FERR_ARITHMETIC_OVERFLOW);
 }
 
@@ -776,6 +1203,60 @@ TEST_F(RelocatableMetadataStoreValidationTest,
 	LargeValueStore reopenedValues(io, *reopened);
 	MetadataSnapshotPin recovered = reopened->openSnapshot();
 	EXPECT_EQ(recovered.superblock().generation, written.superblock.generation);
+	EXPECT_EQ(reopenedValues.read(recovered, written.reference), payload);
+	recovered.release();
+}
+
+TEST_F(RelocatableMetadataStoreValidationTest,
+	   RevalidatesAReachableReusedLargeValueBeforePublishingTheGraphGeneration) {
+	auto store = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	LargeValueStore values(io, *store);
+	LargeValueWriteOptions writeOptions;
+	writeOptions.first_data_slot = PhysicalSlotId(40U);
+	writeOptions.last_data_slot = PhysicalSlotId(60U);
+	writeOptions.first_manifest_slot = PhysicalSlotId(61U);
+	writeOptions.last_manifest_slot = PhysicalSlotId(80U);
+	writeOptions.kind = LargeValueKind::LVK_BYTES;
+	writeOptions.media_type = "application/octet-stream";
+	const std::vector<std::byte> payload{std::byte{0x4DU}};
+	const LargeValueWriteResult written = values.write(payload, writeOptions, LogSequenceNumber(2U));
+
+	NativeGraphDerivedStateMutation derivedState;
+	derivedState.reused_large_values.push_back(written.reference);
+	const std::array<EntityPageReplacementRequest, 0U> noEntityReplacements{};
+	const std::array<EntityPageAppendBatchRequest, 0U> noEntityAppends{};
+	const std::array<EntityPageNewPoolBatchRequest, 0U> noEntityPools{};
+	const std::array<NativeGraphPropertyPageReplacementRequest, 0U> noPropertyReplacements{};
+	const std::array<NativeGraphPropertyPageBatchRequest, 0U> noPropertyPools{};
+	const std::array<NativeGraphLargeValueMutation, 0U> noLargeValues{};
+	bool graphPreparerCalled = false;
+	bool derivedPreparerCalled = false;
+	const Superblock published = store->mutateNativeGraphPagesWithLargeValues(
+			noEntityReplacements, noEntityAppends, noEntityPools, noPropertyReplacements, noPropertyPools,
+			noLargeValues, derivedState, LogSequenceNumber(3U),
+			[&graphPreparerCalled](std::span<EntityPageReplacementMaterialization>,
+								   std::span<EntityPageAppendBatchMaterialization>,
+								   std::span<EntityPageNewPoolBatchMaterialization>,
+								   std::span<NativeGraphPropertyPageReplacementMaterialization>,
+								   std::span<NativeGraphPropertyPageBatchMaterialization>,
+								   std::span<LargeValueMaterializationResult>) { graphPreparerCalled = true; },
+			[&derivedPreparerCalled](std::vector<std::vector<IndexTreeMutationPoolBatch>> &) {
+				derivedPreparerCalled = true;
+			});
+	EXPECT_TRUE(graphPreparerCalled);
+	EXPECT_TRUE(derivedPreparerCalled);
+	EXPECT_EQ(published.generation, Generation(written.superblock.generation.value() + 1U));
+
+	MetadataSnapshotPin current = store->openSnapshot();
+	EXPECT_EQ(current.superblock().generation, published.generation);
+	EXPECT_EQ(values.read(current, written.reference), payload);
+	current.release();
+	store.reset();
+
+	auto reopened = RelocatableMetadataStore::open(io);
+	LargeValueStore reopenedValues(io, *reopened);
+	MetadataSnapshotPin recovered = reopened->openSnapshot();
+	EXPECT_EQ(recovered.superblock().generation, published.generation);
 	EXPECT_EQ(reopenedValues.read(recovered, written.reference), payload);
 	recovered.release();
 }

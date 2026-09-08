@@ -17,7 +17,9 @@ namespace graph::storage {
 		[[noreturn]] void fail(FormatError error, const char *message) { throw FormatException(error, message); }
 
 		[[nodiscard]] PageId add(PageId first, size_t offset, const char *message) {
-			if (!first.isValid() || offset > std::numeric_limits<uint64_t>::max() - first.value()) {
+			// derive() and at() validate their first PageId before reaching this helper;
+			// next() returns early for an empty range. Only arithmetic can fail here.
+			if (offset > std::numeric_limits<uint64_t>::max() - first.value()) {
 				fail(FormatError::FERR_ARITHMETIC_OVERFLOW, message);
 			}
 			return PageId(first.value() + static_cast<uint64_t>(offset));

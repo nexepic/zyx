@@ -1276,9 +1276,12 @@ namespace graph::query::execution {
 			if (name != "keys" && name != "properties") {
 				throw std::logic_error("logical-plan received an unknown entity introspection function");
 			}
+			const auto *scalar = std::get_if<PropertyValue>(&binding);
 			if (!std::holds_alternative<storage::LogicalGraphNode>(binding) &&
-				!std::holds_alternative<storage::LogicalGraphEdge>(binding)) {
-				throw std::runtime_error("logical-plan entity Property function requires a node or relationship variable");
+				!std::holds_alternative<storage::LogicalGraphEdge>(binding) &&
+				(scalar == nullptr || scalar->getType() != PropertyType::MAP)) {
+				throw std::runtime_error(
+						"logical-plan entity Property function requires a node, relationship, or Map variable");
 			}
 			const PropertyMap &properties = readBindingProperties(state.snapshot, row, reference->getVariableName(), state);
 			if (name == "properties") {
@@ -2516,7 +2519,10 @@ namespace graph::query::execution {
 						// than silently truncating the aggregate input.
 						state.snapshot.visitAdjacentEdgeTopologies(
 								source->node_id, direction, 1U,
-								[](const storage::LogicalGraphEdgeTopology &) { return true; });
+								[](const storage::LogicalGraphEdgeTopology &) -> bool {
+									throw std::runtime_error(
+											"logical-plan anchored relationship count exceeded its per-Node Edge bound");
+								});
 						return;
 					}
 					uint64_t previousEdgeId = 0U;
@@ -2581,7 +2587,9 @@ namespace graph::query::execution {
 								return true;
 							});
 				};
-				visitDirection(storage::LogicalGraphReadDirection::LGRD_OUTGOING);
+				if (traversal.getDirection() == "out" || traversal.getDirection() == "both") {
+					visitDirection(storage::LogicalGraphReadDirection::LGRD_OUTGOING);
+				}
 				if (traversal.getDirection() == "both" || traversal.getDirection() == "in") {
 					visitDirection(storage::LogicalGraphReadDirection::LGRD_INCOMING);
 				}

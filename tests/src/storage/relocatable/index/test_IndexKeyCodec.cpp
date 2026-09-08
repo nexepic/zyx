@@ -67,6 +67,8 @@ TEST(RelocatableIndexKeyCodecTest, EncodesCompositeValuesAndStableEntityIdSuffix
 	const std::array second = {PropertyValue("alpha"), PropertyValue(8)};
 	EXPECT_TRUE(lessKey(IndexKeyCodec::encodeComposite(first), IndexKeyCodec::encodeComposite(second)));
 	EXPECT_EQ(IndexKeyCodec::tryEncodeComposite(first), IndexKeyCodec::encodeComposite(first));
+	EXPECT_EQ(IndexKeyCodec::tryEncodeCompositeEntryKey(first, 12U),
+			  IndexKeyCodec::encodeCompositeEntryKey(first, 12U));
 	const std::vector<std::byte> low = IndexKeyCodec::encodeEntryKey(PropertyValue("name"), 7);
 	const std::vector<std::byte> high = IndexKeyCodec::encodeEntryKey(PropertyValue("name"), 9);
 	EXPECT_TRUE(lessKey(low, high));
@@ -102,8 +104,24 @@ TEST(RelocatableIndexKeyCodecTest, RejectsUnsupportedOrNonCanonicalInputs) {
 	std::string oversized(RSS_INDEX_KEY_MAX_BYTES, 'x');
 	expectFormatError([&] { static_cast<void>(IndexKeyCodec::encodeValue(PropertyValue(oversized))); },
 				  FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] { static_cast<void>(IndexKeyCodec::encodeComposite(std::array{PropertyValue(oversized)})); },
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] { static_cast<void>(IndexKeyCodec::encodeEntryKey(PropertyValue(oversized), 1U)); },
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				static_cast<void>(IndexKeyCodec::encodeCompositeEntryKey(std::array{PropertyValue(oversized)}, 1U));
+			},
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] { static_cast<void>(IndexKeyCodec::lowerBound(PropertyValue(oversized))); }, FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] { static_cast<void>(IndexKeyCodec::upperBound(PropertyValue(oversized))); }, FormatError::FERR_INVALID_HEADER);
 	EXPECT_FALSE(IndexKeyCodec::tryEncodeEntryKey(PropertyValue(oversized), 1U).has_value());
 	EXPECT_FALSE(IndexKeyCodec::tryEncodeComposite(std::array{PropertyValue(oversized)}).has_value());
+	EXPECT_FALSE(IndexKeyCodec::tryEncodeCompositeEntryKey(std::array{PropertyValue(oversized)}, 1U).has_value());
 	expectFormatError(
 			[&] { static_cast<void>(IndexKeyCodec::tryEncodeComposite(std::array<PropertyValue, 0>{})); },
 			FormatError::FERR_INVALID_HEADER);

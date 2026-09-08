@@ -50,8 +50,8 @@ namespace graph::storage {
 		~PageBackedLogicalGraphAdjacencyCursor() = default;
 		PageBackedLogicalGraphAdjacencyCursor(const PageBackedLogicalGraphAdjacencyCursor &) = delete;
 		PageBackedLogicalGraphAdjacencyCursor &operator=(const PageBackedLogicalGraphAdjacencyCursor &) = delete;
-		PageBackedLogicalGraphAdjacencyCursor(PageBackedLogicalGraphAdjacencyCursor &&) noexcept = default;
-		PageBackedLogicalGraphAdjacencyCursor &operator=(PageBackedLogicalGraphAdjacencyCursor &&) noexcept = default;
+		PageBackedLogicalGraphAdjacencyCursor(PageBackedLogicalGraphAdjacencyCursor &&) noexcept;
+		PageBackedLogicalGraphAdjacencyCursor &operator=(PageBackedLogicalGraphAdjacencyCursor &&) noexcept;
 
 		[[nodiscard]] LogicalGraphAdjacencyPage
 		next(const MetadataSnapshotPin &snapshot, std::optional<LogicalGraphAdjacencyContinuation> continuation,

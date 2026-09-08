@@ -126,3 +126,83 @@ TEST(NativeBulkEdgeRunReducerTest, SplitsAGroupAtTheCandidateFragmentBoundaryWit
 	EXPECT_EQ(reduced[1].entries.front(), second);
 	EXPECT_EQ(closesRun, (std::vector<bool>{false, true}));
 }
+
+TEST(NativeBulkEdgeRunReducerTest, RejectsInvalidBoundsSourcesAndPolicies) {
+	const auto validInput = source({{{entry(0x10U, 1U)}}, {{entry(0x20U, 2U)}}});
+	const auto visitor = [](NativeBulkRunFragment &&, bool) {};
+	EXPECT_THROW(NativeBulkEdgeRunReducer::reduceOneLevel({}, 2U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U,
+								 visitor),
+				 FormatException);
+	EXPECT_THROW(NativeBulkEdgeRunReducer::reduceOneLevel(validInput, 1U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U,
+								 visitor),
+				 FormatException);
+	EXPECT_THROW(NativeBulkEdgeRunReducer::reduceOneLevel(validInput, 2U, RSS_NATIVE_BULK_RUN_HEADER_BYTES, 2U,
+								 visitor),
+				 FormatException);
+	EXPECT_THROW(NativeBulkEdgeRunReducer::reduceOneLevel(validInput, 2U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 0U,
+								 visitor),
+				 FormatException);
+	EXPECT_THROW(NativeBulkEdgeRunReducer::reduceOneLevel(validInput, 2U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U,
+								 {}),
+				 FormatException);
+	EXPECT_THROW(NativeBulkEdgeRunReducer::reduceOneLevel(
+				 validInput, 2U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U, visitor,
+				 static_cast<NativeBulkEdgeRunDuplicatePolicy>(0U)),
+				 FormatException);
+	EXPECT_THROW(NativeBulkEdgeRunReducer::reduceOneLevel(
+				 validInput, 2U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U, visitor,
+				 static_cast<NativeBulkEdgeRunDuplicatePolicy>(3U)),
+				 FormatException);
+}
+
+TEST(NativeBulkEdgeRunReducerTest, RejectsSourcesThatCannotOpenCursorsOrContainUnorderedEntries) {
+	const auto visitor = [](NativeBulkRunFragment &&, bool) {};
+	const NativeBulkEdgeRunSource noCursor = []() -> NativeBulkEdgeRunCursor { return {}; };
+	EXPECT_THROW(NativeBulkEdgeRunReducer::reduceOneLevel(
+				 noCursor, 2U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U, visitor),
+				 FormatException);
+	const NativeBulkEdgeRunSource noFragments = []() {
+		return []() -> std::optional<OrderedBTreeEntrySource> { return std::nullopt; };
+	};
+	EXPECT_THROW(NativeBulkEdgeRunReducer::reduceOneLevel(
+				 noFragments, 2U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U, visitor),
+				 FormatException);
+	const NativeBulkEdgeRunSource emptyRun = []() {
+		return []() -> std::optional<OrderedBTreeEntrySource> { return OrderedBTreeEntrySource{}; };
+	};
+	EXPECT_THROW(NativeBulkEdgeRunReducer::reduceOneLevel(
+				 emptyRun, 2U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U, visitor),
+				 FormatException);
+	const NativeBulkEdgeRunSource emptyEntryCursor = []() {
+		return []() -> std::optional<OrderedBTreeEntrySource> {
+			return OrderedBTreeEntrySource([]() -> OrderedBTreeEntryCursor { return {}; });
+		};
+	};
+	EXPECT_THROW(NativeBulkEdgeRunReducer::reduceOneLevel(
+				 emptyEntryCursor, 2U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U, visitor),
+				 FormatException);
+	EXPECT_THROW(NativeBulkEdgeRunReducer::reduceOneLevel(
+				 source({{{entry(0x20U, 1U), entry(0x10U, 2U)}}}), 2U,
+				 RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U, visitor),
+				 FormatException);
+	EXPECT_THROW(NativeBulkEdgeRunReducer::reduceOneLevel(
+				 source({{{entry(0x10U, 1U), entry(0x10U, 2U)}}}), 2U,
+				 RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U, visitor,
+				 NativeBulkEdgeRunDuplicatePolicy::NBERDP_KEEP_ONE),
+				 FormatException);
+}
+
+TEST(NativeBulkEdgeRunReducerTest, RejectsEmptyKeysAndEntryOrOutputBounds) {
+	const auto visitor = [](NativeBulkRunFragment &&, bool) {};
+	EXPECT_THROW(NativeBulkEdgeRunReducer::reduceOneLevel(
+				 source({{{BTreePageEntry{{}, 1U}}}}), 2U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 2U, visitor),
+				 FormatException);
+	EXPECT_THROW(NativeBulkEdgeRunReducer::reduceOneLevel(
+				 source({{{entry(0x10U, 1U), entry(0x20U, 2U)}}}), 2U,
+				 RSS_NATIVE_BULK_RUN_HEADER_BYTES + RSS_NATIVE_BULK_RUN_RECORD_HEADER_BYTES + 1U, 1U, visitor),
+				 FormatException);
+	EXPECT_THROW(NativeBulkEdgeRunReducer::reduceOneLevel(
+				 source({{{entry(0x10U, 1U), entry(0x20U, 2U)}}}), 2U,
+				 RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 1U, visitor),
+				 FormatException);
+}

@@ -19,6 +19,8 @@
  **/
 
 #include <gtest/gtest.h>
+#include <array>
+#include <cstddef>
 #include <limits>
 #include <sstream>
 #include <vector>
@@ -107,6 +109,15 @@ namespace graph::utils::test {
 		EXPECT_TRUE(stream.fail() || stream.eof()); // A more robust check for read failure.
 	}
 
+	TEST_F(SerializerTest, BufferPrimitivesPreserveRawPayload) {
+		const std::array<char, 5> expected{{'z', 'y', 'x', '\0', '1'}};
+		std::array<char, expected.size()> actual{};
+		std::stringstream stream;
+		Serializer::writeBuffer(stream, expected.data(), expected.size());
+		Serializer::readBuffer(stream, actual.data(), actual.size());
+		EXPECT_EQ(actual, expected);
+	}
+
 	// Test PropertyValue with vector (LIST type)
 	TEST_F(SerializerTest, PropertyValue_Vector) {
 		std::vector<PropertyValue> vec = {PropertyValue(1.0), PropertyValue(2.0), PropertyValue(3.0), PropertyValue(4.0), PropertyValue(5.0)};
@@ -187,6 +198,16 @@ namespace graph::utils::test {
 		testInvalidTag(254);
 
 		// Type 255 is already tested in ErrorOnInvalidTypeTag
+	}
+
+	TEST_F(SerializerTest, RejectsBytesOnEveryLegacySerializerSurface) {
+		const PropertyValue bytes(PropertyValue::Bytes{std::byte{0x12}, std::byte{0x34}});
+		std::stringstream stream;
+		EXPECT_THROW(Serializer::serialize<PropertyValue>(stream, bytes), std::runtime_error);
+
+		Serializer::serialize(stream, PropertyType::BYTES);
+		EXPECT_THROW(Serializer::deserialize<PropertyValue>(stream), std::runtime_error);
+		EXPECT_THROW(static_cast<void>(getSerializedSize(bytes)), std::runtime_error);
 	}
 
 	// Test PropertyValue with large vector

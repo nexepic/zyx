@@ -477,6 +477,20 @@ TEST_F(LogicalGdsProceduresTest, RunsNativePageRankWccAndWeightedDijkstraWithSta
 	EXPECT_DOUBLE_EQ(doubleValue(path.getRows()[2U].at("cost")), 3.75);
 	EXPECT_DOUBLE_EQ(doubleValue(path.getRows()[2U].at("totalCost")), 3.75);
 	EXPECT_EQ(path.getRows()[1U].at("node").asLogicalNode().node_id, b);
+	const auto stringIdPath = execute("CALL gds.shortestPath.dijkstra.stream('cities', '" + std::to_string(a) +
+								"', '" + std::to_string(c) + "')");
+	ASSERT_EQ(stringIdPath.rowCount(), 3U);
+	EXPECT_EQ(integerValue(stringIdPath.getRows().front().at("nodeId")), static_cast<int64_t>(a));
+	EXPECT_EQ(integerValue(stringIdPath.getRows().back().at("nodeId")), static_cast<int64_t>(c));
+	const auto filteredPath = execute("CALL gds.shortestPath.dijkstra.stream('cities', " + std::to_string(a) +
+								 ", " + std::to_string(c) +
+								 ") YIELD nodeId, cost, totalCost WHERE cost >= 1.5 "
+								 "RETURN nodeId, cost, totalCost ORDER BY cost DESC LIMIT 1");
+	ASSERT_EQ(filteredPath.getColumns(), (std::vector<std::string>{"nodeId", "cost", "totalCost"}));
+	ASSERT_EQ(filteredPath.rowCount(), 1U);
+	EXPECT_EQ(integerValue(filteredPath.getRows().front().at("nodeId")), static_cast<int64_t>(c));
+	EXPECT_DOUBLE_EQ(doubleValue(filteredPath.getRows().front().at("cost")), 3.75);
+	EXPECT_DOUBLE_EQ(doubleValue(filteredPath.getRows().front().at("totalCost")), 3.75);
 	EXPECT_TRUE(execute("CALL gds.shortestPath.dijkstra.stream('cities', " + std::to_string(d) + ", " +
 						std::to_string(a) + ")")
 						.isEmpty());

@@ -32,6 +32,47 @@ TEST_F(CypherSyntaxTest, ValidProcedures) {
 	EXPECT_TRUE(validate("CALL dbms.setConfig('key', 'val')"));
 }
 
+TEST_F(CypherSyntaxTest, ValidAdministrativeGrammarAlternatives) {
+	// Keep one small syntax contract for each DDL form that is not reliably
+	// reachable from the execution tests without changing persistent state.
+	const std::vector<std::string> statements = {
+			"SHOW INDEX",
+			"DROP INDEX named_index",
+			"CREATE INDEX FOR (n:User) ON (n.email)",
+			"CREATE INDEX user_identity FOR (n:User) ON (n.id, n.tenant)",
+			"CREATE VECTOR INDEX ON :Document(embedding)",
+			"CREATE CONSTRAINT active_flag FOR (n:User) REQUIRE n.active IS :: BOOLEAN",
+			"CREATE CONSTRAINT score_value FOR (n:User) REQUIRE n.score IS :: FLOAT",
+			"CREATE CONSTRAINT display_name FOR (n:User) REQUIRE n.name IS :: STRING",
+			"CREATE CONSTRAINT tag_list FOR (n:User) REQUIRE n.tags IS :: LIST",
+			"CREATE CONSTRAINT metadata_map FOR (n:User) REQUIRE n.metadata IS :: MAP",
+			"DROP CONSTRAINT named_constraint",
+			"SHOW CONSTRAINT",
+	};
+	for (const std::string &statement: statements) {
+		SCOPED_TRACE(statement);
+		EXPECT_TRUE(validate(statement));
+	}
+}
+
+TEST_F(CypherSyntaxTest, ValidTransactionControlForms) {
+	// These statements are handled before logical-plan execution, so exercise the
+	// grammar directly to retain both optional TRANSACTION forms as contracts.
+	EXPECT_TRUE(validate("BEGIN"));
+	EXPECT_TRUE(validate("BEGIN TRANSACTION"));
+	EXPECT_TRUE(validate("COMMIT"));
+	EXPECT_TRUE(validate("COMMIT TRANSACTION"));
+	EXPECT_TRUE(validate("ROLLBACK"));
+	EXPECT_TRUE(validate("ROLLBACK TRANSACTION"));
+}
+
+TEST_F(CypherSyntaxTest, RejectsIncompleteTransactionControlForms) {
+	EXPECT_FALSE(validate("BEGIN WORK"));
+	EXPECT_FALSE(validate("COMMIT WORK"));
+	EXPECT_FALSE(validate("ROLLBACK WORK"));
+	EXPECT_FALSE(validate("TRANSACTION"));
+}
+
 // Vector Index Syntax Tests
 TEST_F(CypherSyntaxTest, ValidVectorIndex) {
 	// Basic Create

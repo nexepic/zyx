@@ -30,6 +30,11 @@
 
 namespace {
 
+	class TestOwnershipSink final : public LargeValueOwnershipScanSink {
+	public:
+		void markReachable(const LargeValueRef &) override {}
+	};
+
 	class TestLargeValueOwnershipScanner final : public LargeValueOwnershipScanner {
 	public:
 		TestLargeValueOwnershipScanner(std::string mediaType, LargeValueRef reference) :
@@ -187,6 +192,14 @@ namespace {
 
 } // namespace
 
+TEST(LargeValueOwnershipScanSinkTest, VirtualDestructorIsSafe) {
+	std::unique_ptr<LargeValueOwnershipScanSink> sink = std::make_unique<TestOwnershipSink>();
+	EXPECT_NE(sink, nullptr);
+	std::unique_ptr<LargeValueOwnershipScanner> scanner =
+			std::make_unique<TestLargeValueOwnershipScanner>("application/vnd.test", LargeValueRef{});
+	EXPECT_NE(scanner, nullptr);
+}
+
 TEST_F(RelocatableMetadataStoreTest,
 	   LargeValueReclaimerRetiresOnlyUnreferencedEntityPropertyValuesAndPreservesSnapshots) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
@@ -320,6 +333,121 @@ TEST_F(RelocatableMetadataStoreTest, LargeValueMaintenanceJournalAdvancesOnlyThr
 	EXPECT_TRUE(metadata->findLargeValueManifestOptional(snapshot, orphan.reference.value_id).has_value());
 }
 
+TEST_F(RelocatableMetadataStoreTest, LargeValueMaintenanceJournalCompletesWithoutCandidatesForAnEmptyGeneration) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	LargeValueStore values(io, *metadata);
+	SlottedPagePool propertyPages(io, *metadata);
+	LargeValueReachabilityReclaimer reclaimer(values, propertyPages, *metadata);
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	LargeValueMaintenanceJournal journal;
+	journal.scan_generation = snapshot.superblock().generation;
+
+	const LargeValueMaintenanceJournalAdvance advanced = reclaimer.advanceJournal(snapshot, journal, reclaimOptions());
+	EXPECT_TRUE(advanced.completed_without_candidates);
+	EXPECT_TRUE(advanced.journal.manifest_scan_exhausted);
+	EXPECT_EQ(advanced.manifest_locations_scanned, 0U);
+	EXPECT_EQ(advanced.journal.phase, LargeValueMaintenanceJournalPhase::LVMJP_ENUMERATE_MANIFESTS);
+	EXPECT_TRUE(advanced.journal.candidate_value_ids.empty());
+	EXPECT_TRUE(advanced.journal.reachable_value_ids.empty());
+}
+
+TEST_F(RelocatableMetadataStoreTest, LargeValueMaintenanceJournalContinuesUnknownMediaEnumerationWithoutCandidates) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	LargeValueStore values(io, *metadata);
+	SlottedPagePool propertyPages(io, *metadata);
+	LargeValueWriteOptions unknownMediaOptions = propertyValueWriteOptions();
+	unknownMediaOptions.media_type = "application/test-unregistered-large-value";
+	static_cast<void>(
+			values.write(std::array{std::byte{0x61}}, unknownMediaOptions, nextCheckpointLsn(*metadata)));
+	static_cast<void>(
+			values.write(std::array{std::byte{0x62}}, unknownMediaOptions, nextCheckpointLsn(*metadata)));
+	LargeValueReachabilityReclaimer reclaimer(values, propertyPages, *metadata);
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	LargeValueMaintenanceJournal journal;
+	journal.scan_generation = snapshot.superblock().generation;
+	LargeValueReachabilityReclaimOptions options = reclaimOptions();
+	options.maximum_manifest_locations = 1U;
+
+	const LargeValueMaintenanceJournalAdvance first = reclaimer.advanceJournal(snapshot, journal, options);
+	EXPECT_FALSE(first.journal.manifest_scan_exhausted);
+	EXPECT_FALSE(first.completed_without_candidates);
+	EXPECT_EQ(first.manifest_locations_scanned, 1U);
+	EXPECT_EQ(first.journal.phase, LargeValueMaintenanceJournalPhase::LVMJP_ENUMERATE_MANIFESTS);
+	EXPECT_TRUE(first.journal.candidate_value_ids.empty());
+
+	const LargeValueMaintenanceJournalAdvance second = reclaimer.advanceJournal(snapshot, first.journal, options);
+	EXPECT_TRUE(second.journal.manifest_scan_exhausted);
+	EXPECT_TRUE(second.completed_without_candidates);
+	EXPECT_EQ(second.manifest_locations_scanned, 1U);
+	EXPECT_TRUE(second.journal.candidate_value_ids.empty());
+}
+
+TEST_F(RelocatableMetadataStoreTest, LargeValueMaintenanceJournalContinuesEachBuiltInOwnerScanAtItsLogicalCursor) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	LargeValueStore values(io, *metadata);
+	SlottedPagePool propertyPages(io, *metadata);
+	const LargeValueWriteResult firstProperty =
+			values.write(std::array{std::byte{0x11}}, propertyValueWriteOptions(), nextCheckpointLsn(*metadata));
+	const LargeValueWriteResult secondProperty =
+			values.write(std::array{std::byte{0x12}}, propertyValueWriteOptions(), nextCheckpointLsn(*metadata));
+	const LargeValueWriteResult firstState =
+			values.write(std::array{std::byte{0x21}}, stateValueWriteOptions(), nextCheckpointLsn(*metadata));
+	const LargeValueWriteResult secondState =
+			values.write(std::array{std::byte{0x22}}, stateValueWriteOptions(), nextCheckpointLsn(*metadata));
+	static_cast<void>(publishEntityPropertyReference(*metadata, propertyPages, firstProperty.reference,
+															 {EntityPropertyOwnerKind::EPOK_NODE, 7U}));
+	static_cast<void>(publishEntityPropertyReference(*metadata, propertyPages, secondProperty.reference,
+															 {EntityPropertyOwnerKind::EPOK_NODE, 8U}));
+	StateRecordStore states(propertyPages, *metadata);
+	static_cast<void>(states.upsert(
+			{7U, "state.first", StateRecordStorageKind::SRS_LARGE_VALUE, firstState.reference.value_id, {}},
+			stateRecordStoreOptions()));
+	static_cast<void>(states.upsert(
+			{8U, "state.second", StateRecordStorageKind::SRS_LARGE_VALUE, secondState.reference.value_id, {}},
+			stateRecordStoreOptions()));
+	LargeValueReachabilityReclaimer reclaimer(values, propertyPages, *metadata);
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	LargeValueMaintenanceJournal journal;
+	journal.scan_generation = snapshot.superblock().generation;
+	LargeValueReachabilityReclaimOptions options = reclaimOptions();
+	options.maximum_owner_locations = 1U;
+
+	journal = reclaimer.advanceJournal(snapshot, journal, options).journal;
+	ASSERT_EQ(journal.phase, LargeValueMaintenanceJournalPhase::LVMJP_SCAN_ENTITY_PROPERTIES);
+	const LargeValueMaintenanceJournalAdvance firstPropertyScan = reclaimer.advanceJournal(snapshot, journal, options);
+	EXPECT_EQ(firstPropertyScan.owner_locations_scanned, 1U);
+	EXPECT_EQ(firstPropertyScan.journal.phase, LargeValueMaintenanceJournalPhase::LVMJP_SCAN_ENTITY_PROPERTIES);
+	EXPECT_EQ(firstPropertyScan.journal.entity_property_after_directory_id, 7U);
+	EXPECT_EQ(firstPropertyScan.journal.reachable_value_ids,
+			  (std::vector<LargeValueId>{firstProperty.reference.value_id}));
+
+	const LargeValueMaintenanceJournalAdvance secondPropertyScan =
+			reclaimer.advanceJournal(snapshot, firstPropertyScan.journal, options);
+	EXPECT_EQ(secondPropertyScan.owner_locations_scanned, 1U);
+	EXPECT_EQ(secondPropertyScan.journal.phase, LargeValueMaintenanceJournalPhase::LVMJP_SCAN_STATES);
+	EXPECT_EQ(secondPropertyScan.journal.entity_property_after_directory_id, 8U);
+	EXPECT_EQ(secondPropertyScan.journal.reachable_value_ids,
+			  (std::vector<LargeValueId>{firstProperty.reference.value_id, secondProperty.reference.value_id}));
+
+	const LargeValueMaintenanceJournalAdvance firstStateScan =
+			reclaimer.advanceJournal(snapshot, secondPropertyScan.journal, options);
+	EXPECT_EQ(firstStateScan.owner_locations_scanned, 1U);
+	EXPECT_EQ(firstStateScan.journal.phase, LargeValueMaintenanceJournalPhase::LVMJP_SCAN_STATES);
+	EXPECT_EQ(firstStateScan.journal.state_after_id, 7U);
+	EXPECT_EQ(firstStateScan.journal.reachable_value_ids,
+			  (std::vector<LargeValueId>{firstProperty.reference.value_id, secondProperty.reference.value_id,
+										 firstState.reference.value_id}));
+
+	const LargeValueMaintenanceJournalAdvance secondStateScan =
+			reclaimer.advanceJournal(snapshot, firstStateScan.journal, options);
+	EXPECT_EQ(secondStateScan.owner_locations_scanned, 1U);
+	EXPECT_EQ(secondStateScan.journal.phase, LargeValueMaintenanceJournalPhase::LVMJP_RECLAIM);
+	EXPECT_EQ(secondStateScan.journal.state_after_id, 8U);
+	EXPECT_EQ(secondStateScan.journal.reachable_value_ids,
+			  (std::vector<LargeValueId>{firstProperty.reference.value_id, secondProperty.reference.value_id,
+										 firstState.reference.value_id, secondState.reference.value_id}));
+}
+
 TEST_F(RelocatableMetadataStoreTest, LargeValueMaintenanceJournalReclaimsOnlyCandidatesAfterCompleteOwnerEvidence) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
 	LargeValueStore values(io, *metadata);
@@ -349,6 +477,37 @@ TEST_F(RelocatableMetadataStoreTest, LargeValueMaintenanceJournalReclaimsOnlyCan
 	EXPECT_TRUE(metadata->findLargeValueManifestOptional(current, live.reference.value_id).has_value());
 	EXPECT_FALSE(metadata->findLargeValueManifestOptional(current, orphan.reference.value_id).has_value());
 	EXPECT_EQ(values.read(current, live.reference), std::vector<std::byte>{std::byte{0x41}});
+	current.release();
+}
+
+TEST_F(RelocatableMetadataStoreTest, LargeValueMaintenanceJournalKeepsACompleteLiveCandidateSetWithoutPublication) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	LargeValueStore values(io, *metadata);
+	SlottedPagePool propertyPages(io, *metadata);
+	const LargeValueWriteResult live =
+			values.write(std::array{std::byte{0x43}}, propertyValueWriteOptions(), nextCheckpointLsn(*metadata));
+	static_cast<void>(publishEntityPropertyReference(*metadata, propertyPages, live.reference));
+	LargeValueReachabilityReclaimer reclaimer(values, propertyPages, *metadata);
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	LargeValueMaintenanceJournal journal;
+	journal.scan_generation = snapshot.superblock().generation;
+	journal = reclaimer.advanceJournal(snapshot, journal, reclaimOptions()).journal;
+	journal = reclaimer.advanceJournal(snapshot, journal, reclaimOptions()).journal;
+	journal = reclaimer.advanceJournal(snapshot, journal, reclaimOptions()).journal;
+	ASSERT_EQ(journal.phase, LargeValueMaintenanceJournalPhase::LVMJP_RECLAIM);
+
+	const LargeValueReachabilityReclaimReport report =
+			reclaimer.reclaimJournal(snapshot, journal, reclaimOptions(), nextCheckpointLsn(*metadata));
+	EXPECT_EQ(report.scanned_generation, journal.scan_generation);
+	EXPECT_EQ(report.published_generation, journal.scan_generation);
+	EXPECT_EQ(report.reachable_values, 1U);
+	EXPECT_EQ(report.retired_values, 0U);
+	EXPECT_EQ(report.retired_manifest_pages, 0U);
+	EXPECT_EQ(report.retired_data_pages, 0U);
+
+	MetadataSnapshotPin current = metadata->openSnapshot();
+	EXPECT_TRUE(metadata->findLargeValueManifestOptional(current, live.reference.value_id).has_value());
+	EXPECT_EQ(values.read(current, live.reference), std::vector<std::byte>{std::byte{0x43}});
 	current.release();
 }
 
@@ -848,6 +1007,30 @@ TEST_F(RelocatableMetadataStoreTest, LargeValueReclaimerUsesRegisteredTypedMedia
 	EXPECT_EQ(report.published_generation, report.scanned_generation);
 	MetadataSnapshotPin snapshot = metadata->openSnapshot();
 	EXPECT_EQ(values.read(snapshot, value.reference), std::vector<std::byte>(payload.begin(), payload.end()));
+}
+
+TEST_F(RelocatableMetadataStoreTest, LargeValueJournalRefusesResumeAndReclaimWithUnpersistedOwnerScanner) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	LargeValueStore values(io, *metadata);
+	SlottedPagePool propertyPages(io, *metadata);
+	const LargeValueOwnershipScannerPtr scanner = std::make_shared<TestLargeValueOwnershipScanner>(
+			"application/vnd.zyx.test-owner", LargeValueRef{});
+	const std::array<LargeValueOwnershipScannerPtr, 1U> scanners{{scanner}};
+	LargeValueReachabilityReclaimer reclaimer(values, propertyPages, *metadata,
+			std::span<const LargeValueOwnershipScannerPtr>(scanners));
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	LargeValueMaintenanceJournal journal;
+	journal.scan_generation = snapshot.superblock().generation;
+	expectFormatError([&] { static_cast<void>(reclaimer.advanceJournal(snapshot, journal, reclaimOptions())); },
+					  FormatError::FERR_INVALID_STATE);
+
+	journal.phase = LargeValueMaintenanceJournalPhase::LVMJP_RECLAIM;
+	expectFormatError(
+			[&] {
+				static_cast<void>(reclaimer.reclaimJournal(snapshot, journal, reclaimOptions(),
+												 nextCheckpointLsn(*metadata)));
+			},
+			FormatError::FERR_INVALID_STATE);
 }
 
 TEST_F(RelocatableMetadataStoreTest, LargeValueReclaimerRejectsDuplicateTypedMediaOwnershipScanners) {

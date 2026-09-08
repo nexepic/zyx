@@ -15,6 +15,7 @@
 #include <gtest/gtest.h>
 
 #include "graph/core/Edge.hpp"
+#include "graph/core/Node.hpp"
 #include "graph/storage/relocatable/allocation/SlottedPage.hpp"
 #include "graph/storage/relocatable/entity/NativeStreamedGraphPropertyPageMaterializer.hpp"
 
@@ -22,12 +23,12 @@ namespace graph::storage {
 
 	namespace {
 
-		[[nodiscard]] NativeStreamedGraphDeferredPublication publicationFor(
-				const std::vector<NativeBulkEdgeRecord> &records) {
+		[[nodiscard]] NativeStreamedGraphDeferredPublication
+		publicationFor(const std::vector<NativeBulkEdgeRecord> &records) {
 			const NativeBulkEdgeRecordSource source = [records] {
 				return [records, ordinal = size_t{0U}]() mutable -> std::optional<NativeBulkEdgeRecord> {
 					return ordinal == records.size() ? std::nullopt
-											 : std::optional<NativeBulkEdgeRecord>(records[ordinal++]);
+													 : std::optional<NativeBulkEdgeRecord>(records[ordinal++]);
 				};
 			};
 			NativeStreamedGraphPublicationPlan plan;
@@ -42,9 +43,9 @@ namespace graph::storage {
 					{[](std::string_view name) -> std::optional<uint64_t> {
 						 return name == "REL" ? std::optional<uint64_t>(1U) : std::nullopt;
 					 },
-						 [](std::string_view name) -> std::optional<uint32_t> {
-							 return name == "weight" ? std::optional<uint32_t>(1U) : std::nullopt;
-						 }});
+					 [](std::string_view name) -> std::optional<uint32_t> {
+						 return name == "weight" ? std::optional<uint32_t>(1U) : std::nullopt;
+					 }});
 		}
 
 	} // namespace
@@ -81,6 +82,31 @@ namespace graph::storage {
 		EXPECT_EQ(pages.front().free_bytes, page.stats().contiguous_free_bytes);
 	}
 
+	TEST(NativeStreamedGraphPropertyPageMaterializerTest, DoesNotMaterializePropertyPagesForEdgesWithoutProperties) {
+		const NativeStreamedGraphDeferredPublication publication = publicationFor({
+				{11U, 1U, 2U, "REL", {}},
+				{12U, 2U, 3U, "REL", {}},
+		});
+
+		const NativeStreamedGraphInlinePropertyPageCount measured =
+				NativeStreamedGraphPropertyPageMaterializer::measureInlinePages(publication);
+		EXPECT_EQ(measured.page_count, 0U);
+		EXPECT_EQ(measured.property_count, 0U);
+
+		size_t assignedPages = 0U;
+		size_t publishedPages = 0U;
+		NativeStreamedGraphPropertyPageMaterializer::materializeInlinePages(
+				publication,
+				[&assignedPages](size_t) {
+					++assignedPages;
+					return NativeStreamedGraphPropertyPageAssignment{};
+				},
+				[&publishedPages](NativeStreamedGraphPropertyPage &&) { ++publishedPages; });
+
+		EXPECT_EQ(assignedPages, 0U);
+		EXPECT_EQ(publishedPages, 0U);
+	}
+
 	TEST(NativeStreamedGraphPropertyPageMaterializerTest, StreamsInlineRootsAcrossSlottedPages) {
 		// Each root remains below the inline threshold, while five roots exceed one
 		// Property page. This is distinct from a single oversized root, which uses
@@ -115,20 +141,20 @@ namespace graph::storage {
 	}
 
 	TEST(NativeStreamedGraphPropertyPageMaterializerTest, RejectsAPropertyRootThatNeedsLargeValuePublication) {
-		const NativeStreamedGraphDeferredPublication publication = publicationFor(
-				{{11U, 1U, 2U, "REL", {{"weight", PropertyValue(std::string(5000U, 'x'))}}}});
+		const NativeStreamedGraphDeferredPublication publication =
+				publicationFor({{11U, 1U, 2U, "REL", {{"weight", PropertyValue(std::string(5000U, 'x'))}}}});
 		EXPECT_THROW(static_cast<void>(NativeStreamedGraphPropertyPageMaterializer::countInlinePages(publication)),
 					 FormatException);
 	}
 
 	TEST(NativeStreamedGraphPropertyPageMaterializerTest, StreamsLargeRootsThroughACompactSameGenerationReference) {
-		const NativeStreamedGraphDeferredPublication publication = publicationFor(
-				{{11U, 1U, 2U, "REL", {{"weight", PropertyValue(std::string(5000U, 'x'))}}}});
+		const NativeStreamedGraphDeferredPublication publication =
+				publicationFor({{11U, 1U, 2U, "REL", {{"weight", PropertyValue(std::string(5000U, 'x'))}}}});
 		size_t plannedRoots = 0U;
 		const NativeStreamedGraphLargePropertyRootEncoder encodeLarge =
 				[&plannedRoots](const PropertyCollectionRoot &root, std::vector<std::byte> &&encodedRoot) {
 					EXPECT_GT(encodedRoot.size(), RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES - RSS_SLOTTED_PAGE_HEADER_BYTES -
-																		 RSS_SLOTTED_PAGE_SLOT_BYTES);
+														  RSS_SLOTTED_PAGE_SLOT_BYTES);
 					++plannedRoots;
 					LargeValueRef value;
 					value.value_id = LargeValueId(1U);
@@ -160,14 +186,141 @@ namespace graph::storage {
 		ASSERT_EQ(pages.size(), 1U);
 		ASSERT_EQ(pages.front().property_locations.size(), 1U);
 		const SlottedPage page = SlottedPage::open(pages.front().owner, pages.front().payload);
-		const std::vector<std::byte> stored = page.read(
-				{pages.front().property_locations.front().page_id, pages.front().property_locations.front().slot_id,
-				 pages.front().property_locations.front().slot_generation});
+		const std::vector<std::byte> stored = page.read({pages.front().property_locations.front().page_id,
+														 pages.front().property_locations.front().slot_id,
+														 pages.front().property_locations.front().slot_generation});
 		ASSERT_TRUE(EntityPropertyLargeValueReferenceCodec::hasMagic(stored));
 		const EntityPropertyLargeValueReference reference = EntityPropertyLargeValueReferenceCodec::decode(stored);
 		EXPECT_EQ(reference.owner_entity_id, 11U);
 		EXPECT_EQ(reference.owner_entity_type, Edge::typeId);
 		EXPECT_EQ(reference.value.value_id, LargeValueId(1U));
+	}
+
+	TEST(NativeStreamedGraphPropertyPageMaterializerTest, RejectsIncompleteConsumersAndInvalidPageAssignments) {
+		const NativeStreamedGraphDeferredPublication publication =
+				publicationFor({{11U, 1U, 2U, "REL", {{"weight", PropertyValue(int64_t{7})}}}});
+		const NativeStreamedGraphPropertyPageVisitor visitor = [](NativeStreamedGraphPropertyPage &&) {};
+		const NativeStreamedGraphPropertyPageAssignmentSource validAssignment = [](size_t) {
+			return NativeStreamedGraphPropertyPageAssignment{{PageId(101U), 99U, PageOwnerKind::POK_PROPERTY, 0U,
+															  RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, Generation(1U),
+															  LogSequenceNumber(2U)}};
+		};
+		const NativeStreamedGraphPropertyPageAssignmentSource noAssignment;
+		const NativeStreamedGraphPropertyPageVisitor noVisitor;
+		EXPECT_THROW(
+				NativeStreamedGraphPropertyPageMaterializer::materializeInlinePages(publication, noAssignment, visitor),
+				FormatException);
+		EXPECT_THROW(NativeStreamedGraphPropertyPageMaterializer::materializeInlinePages(publication, validAssignment,
+																						 noVisitor),
+					 FormatException);
+		const auto rejectsOwner = [&](PageOwnerHeader owner) {
+			EXPECT_THROW(NativeStreamedGraphPropertyPageMaterializer::materializeInlinePages(
+								 publication,
+								 [owner](size_t) { return NativeStreamedGraphPropertyPageAssignment{owner}; }, visitor),
+						 FormatException);
+		};
+		const auto validOwner = [] {
+			return PageOwnerHeader{PageId(101U),
+								   99U,
+								   PageOwnerKind::POK_PROPERTY,
+								   0U,
+								   RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES,
+								   Generation(1U),
+								   LogSequenceNumber(2U)};
+		};
+		PageOwnerHeader invalid = validOwner();
+		invalid.page_id = {};
+		rejectsOwner(invalid);
+		invalid = validOwner();
+		invalid.owner_id = 0U;
+		rejectsOwner(invalid);
+		invalid = validOwner();
+		invalid.kind = PageOwnerKind::POK_ENTITY;
+		rejectsOwner(invalid);
+		invalid = validOwner();
+		invalid.kind = PageOwnerKind::POK_PROPERTY;
+		invalid.flags = 1U;
+		rejectsOwner(invalid);
+		invalid = validOwner();
+		invalid.flags = 0U;
+		invalid.payload_bytes = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES - 1U;
+		rejectsOwner(invalid);
+		invalid = validOwner();
+		invalid.payload_bytes = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES;
+		invalid.generation = {};
+		rejectsOwner(invalid);
+		invalid = validOwner();
+		invalid.generation = Generation(1U);
+		invalid.committed_lsn = {};
+		rejectsOwner(invalid);
+	}
+
+	TEST(NativeStreamedGraphPropertyPageMaterializerTest,
+		 RejectsMalformedLargeRootResultsBeforePublishingAnyPropertyPage) {
+		const NativeStreamedGraphDeferredPublication publication =
+				publicationFor({{11U, 1U, 2U, "REL", {{"weight", PropertyValue(std::string(5000U, 'x'))}}}});
+		const NativeStreamedGraphPropertyPageAssignmentSource assignment = [](size_t) {
+			return NativeStreamedGraphPropertyPageAssignment{
+					{PageId(101U), 99U, PageOwnerKind::POK_PROPERTY, 0U, RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES,
+					 Generation(1U), LogSequenceNumber(2U)}};
+		};
+		bool visited = false;
+		const NativeStreamedGraphPropertyPageVisitor visitor = [&visited](NativeStreamedGraphPropertyPage &&) {
+			visited = true;
+		};
+		const auto expectRejected = [&](const NativeStreamedGraphLargePropertyRootEncoder &encoder) {
+			EXPECT_THROW(NativeStreamedGraphPropertyPageMaterializer::materializePages(
+						 publication, assignment, visitor, encoder),
+					 FormatException);
+			EXPECT_FALSE(visited);
+		};
+
+		expectRejected([](const PropertyCollectionRoot &, std::vector<std::byte> &&) { return std::vector<std::byte>{}; });
+		expectRejected([](const PropertyCollectionRoot &root, std::vector<std::byte> &&) {
+			PropertyCollectionRoot wrongOwner = root;
+			++wrongOwner.owner_entity_id;
+			return EntityPropertyCollectionRootCodec::encode(wrongOwner);
+		});
+		expectRejected([](const PropertyCollectionRoot &root, std::vector<std::byte> &&encoded) {
+			// Returning the oversized inline encoding proves that identity validation
+			// alone is insufficient: the stored replacement must also fit one slot.
+			EXPECT_EQ(EntityPropertyCollectionRootCodec::decode(encoded), root);
+			return encoded;
+		});
+		expectRejected([](const PropertyCollectionRoot &root, std::vector<std::byte> &&encoded) {
+			LargeValueRef value;
+			value.value_id = LargeValueId(1U);
+			value.generation = Generation(1U);
+			value.logical_bytes = encoded.size();
+			value.content_hash.front() = std::byte{1U};
+			value.kind = LargeValueKind::LVK_BYTES;
+			value.codec = LargeValueCodec::LVC_RAW;
+			value.media_type = RSS_ENTITY_PROPERTY_LARGE_VALUE_MEDIA_TYPE;
+			return EntityPropertyLargeValueReferenceCodec::encode(
+					{root.owner_entity_id + 1U, root.owner_entity_type, std::move(value)});
+		});
+		expectRejected([](const PropertyCollectionRoot &root, std::vector<std::byte> &&encoded) {
+			LargeValueRef value;
+			value.value_id = LargeValueId(1U);
+			value.generation = Generation(1U);
+			value.logical_bytes = encoded.size();
+			value.content_hash.front() = std::byte{1U};
+			value.kind = LargeValueKind::LVK_BYTES;
+			value.codec = LargeValueCodec::LVC_RAW;
+			value.media_type = RSS_ENTITY_PROPERTY_LARGE_VALUE_MEDIA_TYPE;
+			return EntityPropertyLargeValueReferenceCodec::encode(
+					{root.owner_entity_id, Node::typeId, std::move(value)});
+		});
+		expectRejected([](const PropertyCollectionRoot &root, std::vector<std::byte> &&) {
+			PropertyCollectionRoot wrongType = root;
+			wrongType.owner_entity_type = Node::typeId;
+			return EntityPropertyCollectionRootCodec::encode(wrongType);
+		});
+		expectRejected([](const PropertyCollectionRoot &root, std::vector<std::byte> &&) {
+			PropertyCollectionRoot changed = root;
+			changed.entries.front().value = PropertyValue(int64_t{99});
+			return EntityPropertyCollectionRootCodec::encode(changed);
+		});
 	}
 
 } // namespace graph::storage

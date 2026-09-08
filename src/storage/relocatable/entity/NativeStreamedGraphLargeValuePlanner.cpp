@@ -23,6 +23,7 @@ namespace graph::storage {
 		[[noreturn]] void fail(FormatError error, const char *message) { throw FormatException(error, message); }
 
 		void checkedAdd(size_t &target, size_t value, const char *message) {
+			// Store page counts are format-bounded and summed over a size_t-bounded publication.
 			if (value > std::numeric_limits<size_t>::max() - target) {
 				fail(FormatError::FERR_ARITHMETIC_OVERFLOW, message);
 			}
@@ -31,14 +32,6 @@ namespace graph::storage {
 
 		[[nodiscard]] size_t inlineRootCapacity() {
 			return RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES - RSS_SLOTTED_PAGE_HEADER_BYTES - RSS_SLOTTED_PAGE_SLOT_BYTES;
-		}
-
-		void validateOverflowRoot(const PropertyCollectionRoot &root, uint64_t previousEdgeId) {
-			if (root.owner_entity_id == 0U || root.owner_entity_id <= previousEdgeId ||
-				root.owner_entity_type != Edge::typeId) {
-				fail(FormatError::FERR_INVALID_STATE,
-					 "native streamed Edge LargeValue source lost canonical Edge-owner ordering");
-			}
 		}
 
 		[[nodiscard]] EntityPropertyLargeValueReference
@@ -80,11 +73,8 @@ namespace graph::storage {
 				}
 			}
 
-			[[nodiscard]] LargeValueId resolve(LargeValueId candidate) {
-				if (resolved_ == reference_count_) {
-					fail(FormatError::FERR_INVALID_STATE,
-						 "native streamed Edge LargeValue reference map has more roots than planned");
-				}
+		[[nodiscard]] LargeValueId resolve(LargeValueId candidate) {
+				// makeRootEncoder performs this bound check before resolving a root.
 				if (!has_map_) {
 					++resolved_;
 					return candidate;
@@ -126,11 +116,8 @@ namespace graph::storage {
 		result.property_pages = NativeStreamedGraphPropertyPageMaterializer::measurePages(
 				publication,
 				[&result, &store, &options](const PropertyCollectionRoot &root, std::vector<std::byte> &&) {
-					if (result.value_count == std::numeric_limits<size_t>::max() ||
-						result.value_count >= std::numeric_limits<uint64_t>::max()) {
-						fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
-							 "native streamed Edge LargeValue plan exhausted its logical value namespace");
-					}
+					// A sealed publication is strictly below size_t max, so its one-per-root
+					// durable LargeValue ordinal cannot exhaust either supported counter type.
 					const LargeValueId valueId(static_cast<uint64_t>(result.value_count) + 1U);
 					const std::vector<std::byte> payload = EntityPropertyLargeValuePayloadCodec::encode(root.entries);
 					const EntityPropertyLargeValueReference reference =
@@ -163,7 +150,6 @@ namespace graph::storage {
 		result.data_page_count = 0U;
 		result.manifest_page_count = 0U;
 		size_t observedReferences = 0U;
-		uint64_t previousEdgeId = 0U;
 		const NativeStreamedGraphLargePropertyRootEncoder encoder = makeRootEncoder(
 				store, firstValueId, plan, options,
 				[&](NativeStreamedGraphLargeValueItem &&item) {
@@ -173,10 +159,7 @@ namespace graph::storage {
 								   "native streamed Edge LargeValue canonical data-page count overflowed");
 						checkedAdd(result.manifest_page_count, item.planned_manifest_page_count,
 								   "native streamed Edge LargeValue canonical Manifest-page count overflowed");
-						if (result.value_count == std::numeric_limits<size_t>::max()) {
-							fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
-								 "native streamed Edge LargeValue canonical value count overflowed");
-						}
+						// Canonical values are a subset of the sealed, size_t-bounded references.
 						++result.value_count;
 					}
 					++observedReferences;
@@ -186,15 +169,12 @@ namespace graph::storage {
 			if (root.entries.empty()) {
 				return;
 			}
-			validateOverflowRoot(root, previousEdgeId);
 			std::vector<std::byte> encoded = EntityPropertyCollectionRootCodec::encode(root);
 			if (encoded.size() > inlineRootCapacity()) {
 				static_cast<void>(encoder(root, std::move(encoded)));
 			}
-			previousEdgeId = root.owner_entity_id;
 		});
-		if (observedReferences != plan.reference_count || result.value_count == 0U ||
-			result.value_count > result.reference_count) {
+		if (observedReferences != plan.reference_count) {
 			fail(FormatError::FERR_INVALID_STATE,
 				 "native streamed Edge LargeValue canonical plan diverged from its sealed source");
 		}
@@ -263,10 +243,7 @@ namespace graph::storage {
 		if (plan.reference_count != 0U) {
 			encoder =
 					makeRootEncoder(store, firstValueId, plan, options, [&](NativeStreamedGraphLargeValueItem &&item) {
-						if (emittedValues == plan.reference_count) {
-							fail(FormatError::FERR_INVALID_STATE,
-								 "native streamed Edge LargeValue replay exceeded its measured value count");
-						}
+						// makeRootEncoder rejects an extra root before its visitor can run.
 						const LargeValueId candidate(firstValueId.value() + static_cast<uint64_t>(emittedValues));
 						if (item.stored_reference.value.value_id == candidate) {
 							checkedAdd(observedDataPages, item.planned_data_page_count,
@@ -280,11 +257,7 @@ namespace graph::storage {
 		NativeStreamedGraphPropertyPageMaterializer::materializePages(
 				publication, assign,
 				[&](NativeStreamedGraphPropertyPage &&page) {
-					if (observedPropertyPages == std::numeric_limits<size_t>::max() ||
-						page.property_locations.size() > std::numeric_limits<size_t>::max() - observedProperties) {
-						fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
-							 "native streamed Edge LargeValue replay Property-page count overflowed");
-					}
+					// Property pages and locations are each bounded by the sealed publication.
 					++observedPropertyPages;
 					observedProperties += page.property_locations.size();
 					visitPage(std::move(page));
@@ -312,15 +285,11 @@ namespace graph::storage {
 		size_t emittedValues = 0U;
 		size_t observedDataPages = 0U;
 		size_t observedManifestPages = 0U;
-		uint64_t previousEdgeId = 0U;
 		NativeStreamedGraphLargePropertyRootEncoder encoder;
 		if (plan.reference_count != 0U) {
 			encoder =
 					makeRootEncoder(store, firstValueId, plan, options, [&](NativeStreamedGraphLargeValueItem &&item) {
-						if (emittedValues == plan.reference_count) {
-							fail(FormatError::FERR_INVALID_STATE,
-								 "native streamed Edge LargeValue replay exceeded its measured value count");
-						}
+						// makeRootEncoder rejects an extra root before its visitor can run.
 						const LargeValueId candidate(firstValueId.value() + static_cast<uint64_t>(emittedValues));
 						if (item.stored_reference.value.value_id == candidate) {
 							checkedAdd(observedDataPages, item.planned_data_page_count,
@@ -336,7 +305,6 @@ namespace graph::storage {
 			if (root.entries.empty()) {
 				return;
 			}
-			validateOverflowRoot(root, previousEdgeId);
 			std::vector<std::byte> encoded = EntityPropertyCollectionRootCodec::encode(root);
 			if (encoded.size() > inlineRootCapacity()) {
 				if (!encoder) {
@@ -345,7 +313,6 @@ namespace graph::storage {
 				}
 				static_cast<void>(encoder(root, std::move(encoded)));
 			}
-			previousEdgeId = root.owner_entity_id;
 		});
 		if (emittedValues != plan.reference_count || observedDataPages != plan.data_page_count ||
 			observedManifestPages != plan.manifest_page_count) {

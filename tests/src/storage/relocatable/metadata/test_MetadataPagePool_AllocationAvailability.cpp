@@ -7,6 +7,7 @@
  **/
 
 #include <functional>
+#include <limits>
 
 #include "graph/storage/relocatable/format/SuperblockFile.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPagePool.hpp"
@@ -85,6 +86,25 @@ TEST_F(RelocatableMetadataPagePoolTest, AllocatableFreePagesExcludesReserveAndSn
 
 	allocator.protectPoolUntilSnapshotsDrain(normalPage.physical_slot);
 	EXPECT_EQ(allocator.allocatableFreePages(), 0U);
+
+	// A protected pool remains readable to old snapshots but cannot receive a
+	// new allocation. The reserve is also excluded, so allocation must use a
+	// distinct normal pool.
+	const PhysicalPageRef replacement = allocator.allocatePage(Generation(1U));
+	EXPECT_NE(replacement.physical_slot, normalPage.physical_slot);
+	EXPECT_NE(replacement.physical_slot, reserve.physical_slot);
+}
+
+TEST_F(RelocatableMetadataPagePoolTest, SnapshotProtectionRejectsInvalidAndUnknownPoolSlots) {
+	const Superblock initial = initialSuperblock();
+	SuperblockFile bootstrap(io);
+	bootstrap.initializeNew(initial);
+	MetadataPagePoolAllocator allocator(io, initial);
+
+	expectFormatError([&] { allocator.protectPoolUntilSnapshotsDrain(PhysicalSlotId{}); },
+					  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { allocator.protectPoolUntilSnapshotsDrain(PhysicalSlotId(99U)); },
+					  FormatError::FERR_INVALID_STATE);
 }
 
 TEST_F(RelocatableMetadataPagePoolTest, RecoveryReclaimsAReleasedSnapshotProtectedPoolForAllocation) {
@@ -101,6 +121,20 @@ TEST_F(RelocatableMetadataPagePoolTest, RecoveryReclaimsAReleasedSnapshotProtect
 	// recovery must release the protection and make the pool reusable.
 	allocator.recover(initial);
 	EXPECT_EQ(allocator.allocatableFreePages(), RSS_PAGE_POOL_DATA_FRAME_COUNT);
+}
+
+TEST_F(RelocatableMetadataPagePoolTest, RecoveryRejectsBootstrapFlagsWithoutAHeaderReference) {
+	const Superblock initial = initialSuperblock();
+	SuperblockFile bootstrap(io);
+	bootstrap.initializeNew(initial);
+	MetadataPagePoolAllocator allocator(io, initial);
+	static_cast<void>(allocator.allocatePage(Generation(1U)));
+
+	// A bootstrap flag changes root interpretation, so an absent header must
+	// fail before recovery can reclaim any reachable pool frame.
+	Superblock malformed = initial;
+	malformed.flags |= RSS_SUPERBLOCK_FLAG_PAGE_DIRECTORY_BOOTSTRAP;
+	expectFormatError([&] { allocator.recover(malformed); }, FormatError::FERR_INVALID_HEADER);
 }
 
 TEST_F(RelocatableMetadataPagePoolTest, MetadataFrameReservationRejectsInvalidStateTransitions) {
@@ -188,6 +222,21 @@ TEST_F(RelocatableMetadataPagePoolTest, MetadataFrameReservationDoesNotConsumeSn
 			FormatError::FERR_INVALID_STATE);
 }
 
+TEST_F(RelocatableMetadataPagePoolTest, ReservedFramesCannotCreateAPoolAfterTheirOnlyPoolBecomesProtected) {
+	const Superblock initial = initialSuperblock();
+	SuperblockFile bootstrap(io);
+	bootstrap.initializeNew(initial);
+	MetadataPagePoolAllocator allocator(io, initial);
+	const PhysicalPageRef allocated = allocator.allocatePage(Generation(1U));
+
+	allocator.reserveMetadataFrames(1U, std::span<const PhysicalSlotId>{}, std::span<const PhysicalSlotRange>{},
+									nullptr);
+	allocator.protectPoolUntilSnapshotsDrain(allocated.physical_slot);
+	expectFormatError([&] { static_cast<void>(allocator.allocatePage(Generation(1U))); },
+				  FormatError::FERR_INVALID_STATE);
+	allocator.releaseMetadataFrames();
+}
+
 TEST_F(RelocatableMetadataPagePoolTest, MetadataFrameCapacityCreatesPoolsAroundExcludedSlots) {
 	const Superblock initial = initialSuperblock();
 	SuperblockFile bootstrap(io);
@@ -203,6 +252,23 @@ TEST_F(RelocatableMetadataPagePoolTest, MetadataFrameCapacityCreatesPoolsAroundE
 	EXPECT_EQ(allocator.stats().pools, 2U);
 }
 
+TEST_F(RelocatableMetadataPagePoolTest, AllocatePageSkipsAnExcludedDataSlotRange) {
+	const Superblock initial = initialSuperblock();
+	SuperblockFile bootstrap(io);
+	bootstrap.initializeNew(initial);
+	MetadataPagePoolAllocator allocator(io, initial);
+	static_cast<void>(allocator.allocatePage(Generation(1U)));
+
+	// The first metadata pool occupies slot 1. Excluding that slot through the
+	// data-range API exercises the same public reservation path used by native
+	// graph publication when a private tail overlaps the current pool domain.
+	const std::array<PhysicalSlotRange, 1U> excluded{{PhysicalSlotRange{PhysicalSlotId(1U), PhysicalSlotId(1U)}}};
+	const MetadataPageAllocation allocation =
+			allocator.allocatePage(Generation(2U), LogSequenceNumber(2U), {}, excluded);
+	EXPECT_TRUE(allocation.page.isValid());
+	EXPECT_NE(allocation.page.physical_slot, PhysicalSlotId(1U));
+}
+
 TEST_F(RelocatableMetadataPagePoolTest, MetadataFrameReservationConsultsDataSlotReservations) {
 	const Superblock initial = initialSuperblock();
 	SuperblockFile bootstrap(io);
@@ -216,4 +282,32 @@ TEST_F(RelocatableMetadataPagePoolTest, MetadataFrameReservationConsultsDataSlot
 				allocator.reserveMetadataFrames(1U, {}, {}, &lookup);
 			},
 			FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(RelocatableMetadataPagePoolTest, UnpublishedBatchLifecycleHandlesNestingAndMissingContexts) {
+	const Superblock initial = initialSuperblock();
+	SuperblockFile bootstrap(io);
+	bootstrap.initializeNew(initial);
+	MetadataPagePoolAllocator allocator(io, initial);
+
+	// Ending a batch that was never started is an allowed no-op for cleanup paths.
+	allocator.endUnpublishedBatch(initial);
+
+	allocator.beginUnpublishedBatch(initial);
+	allocator.beginUnpublishedBatch(initial);
+	allocator.endUnpublishedBatch(initial);
+	allocator.endUnpublishedBatch(initial);
+	allocator.endUnpublishedBatch(initial);
+
+	// A cleanup callback for a different snapshot must leave the active context intact.
+	allocator.beginUnpublishedBatch(initial);
+	Superblock unrelated = initial;
+	unrelated.checkpoint_lsn = LogSequenceNumber(2U);
+	allocator.endUnpublishedBatch(unrelated);
+	allocator.endUnpublishedBatch(initial);
+
+	Superblock exhausted = initial;
+	exhausted.generation = Generation(std::numeric_limits<uint64_t>::max());
+	expectFormatError([&] { allocator.beginUnpublishedBatch(exhausted); }, FormatError::FERR_ARITHMETIC_OVERFLOW);
+	allocator.endUnpublishedBatch(exhausted);
 }

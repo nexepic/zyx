@@ -41,6 +41,11 @@ namespace graph::storage {
 		[[nodiscard]] static size_t readAtUncached(const StorageIO &io, uint64_t offset, void *buffer, size_t size) {
 			return io.readAtUncached(offset, buffer, size);
 		}
+
+		[[nodiscard]] static bool isWritable(const StorageIO &io) { return io.isWritable(); }
+		[[nodiscard]] static std::shared_ptr<std::fstream> stream(const StorageIO &io) { return io.getStream(); }
+		[[nodiscard]] static file_handle_t writeHandle(const StorageIO &io) { return io.getWriteFd(); }
+		static void setWriteHandle(StorageIO &io, file_handle_t handle) { io.setWriteFd(handle); }
 	};
 
 } // namespace graph::storage
@@ -137,6 +142,29 @@ TEST_F(StorageIOTest, ConstructorRejectsUnknownAccessMode) {
 	EXPECT_THROW(static_cast<void>(std::make_shared<StorageIO>(stream, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE,
 															   static_cast<StorageIOAccessMode>(0U))),
 				 std::invalid_argument);
+}
+
+TEST_F(StorageIOTest, ExplicitAccessModeAccuratelyReportsWriteCapability) {
+	auto writable = createIO(/*withNativeFds=*/false);
+	EXPECT_TRUE(StorageIOTestAccess::isWritable(*writable));
+
+	auto readOnlyStream = std::make_shared<std::fstream>(testFile_, std::ios::binary | std::ios::in);
+	ASSERT_TRUE(readOnlyStream->is_open());
+	StorageIO readOnly(std::move(readOnlyStream), INVALID_FILE_HANDLE, INVALID_FILE_HANDLE,
+					   StorageIOAccessMode::SIOAM_READ_ONLY);
+	EXPECT_FALSE(StorageIOTestAccess::isWritable(readOnly));
+}
+
+TEST_F(StorageIOTest, RetainsItsStreamAndNativeWriteHandleLifecycle) {
+	auto io = createIO(/*withNativeFds=*/true);
+	ASSERT_NE(StorageIOTestAccess::stream(*io), nullptr);
+	EXPECT_TRUE(StorageIOTestAccess::stream(*io)->is_open());
+	const file_handle_t handle = StorageIOTestAccess::writeHandle(*io);
+	ASSERT_NE(handle, INVALID_FILE_HANDLE);
+
+	// The backend can retain the same native descriptor after a stream rebase.
+	StorageIOTestAccess::setWriteHandle(*io, handle);
+	EXPECT_EQ(StorageIOTestAccess::writeHandle(*io), handle);
 }
 
 TEST_F(StorageIOTest, PositionedOperationsRejectUnaddressableRangesBeforeIo) {
@@ -497,6 +525,120 @@ TEST_F(StorageIOTest, FileSizeUsesNativeAndFstreamPaths) {
 	EXPECT_EQ(streamIo->fileSize(), testSize_ + 128U);
 }
 
+TEST_F(StorageIOTest, SequentialReadTracksBytesWithoutUsingThePageCache) {
+	auto io = createIO(true);
+	const std::array<char, 4U> expected{'z', 'y', 'x', '\0'};
+	io->writeAt(128U, expected.data(), expected.size());
+
+	std::array<char, 4U> actual{};
+	EXPECT_EQ(io->readAtSequential(128U, actual.data(), actual.size()), actual.size());
+	EXPECT_EQ(actual, expected);
+	EXPECT_EQ(io->stats().read_bytes, actual.size());
+	EXPECT_EQ(io->stats().read_calls, 1U);
+}
+
+TEST_F(StorageIOTest, SequentialReadTreatsEmptyRequestsAsNoOps) {
+	auto io = createIO(true);
+	char byte = 0;
+
+	EXPECT_EQ(io->readAtSequential(0U, nullptr, 1U), 0U);
+	EXPECT_EQ(io->readAtSequential(0U, &byte, 0U), 0U);
+	EXPECT_EQ(io->stats(), StorageIOStats{});
+}
+
+TEST_F(StorageIOTest, TypedPageOperationsSupportDirectNativeIoAndRejectNullReads) {
+	auto io = createIO(true);
+	const BufferPoolPageKey key{0U, 1U};
+	std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> expected{};
+	std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> actual{};
+	expected.fill(std::byte{0x4BU});
+
+	EXPECT_THROW(io->writeAt(key, nullptr, expected.size()), std::invalid_argument);
+	io->writeAt(key, expected.data(), expected.size());
+	EXPECT_EQ(io->readAt(key, actual.data(), actual.size()), actual.size());
+	EXPECT_EQ(actual, expected);
+	EXPECT_THROW(static_cast<void>(io->readAt(key, nullptr, expected.size())), std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(io->readPages(key, nullptr, expected.size())), std::invalid_argument);
+}
+
+TEST_F(StorageIOTest, TypedPageWriteThroughSupportsDirectNativeIoAndRejectsNullBuffer) {
+	auto io = createIO(true);
+	const BufferPoolPageKey key{0U, 1U};
+	std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> expected{};
+	std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> actual{};
+	expected.fill(std::byte{0xB4U});
+
+	EXPECT_THROW(io->writePagesThrough(key, nullptr, expected.size()), std::invalid_argument);
+	io->writePagesThrough(key, expected.data(), expected.size());
+	EXPECT_EQ(io->readPages(key, actual.data(), actual.size()), actual.size());
+	EXPECT_EQ(actual, expected);
+}
+
+TEST_F(StorageIOTest, TruncateShrinksNativeFilesAndRejectsExtension) {
+	auto io = createIO(true);
+	const char data[] = "tail";
+	io->writeAt(3072U, data, sizeof(data));
+
+	EXPECT_NO_THROW(io->truncate(2048U));
+	EXPECT_EQ(io->fileSize(), 2048U);
+	EXPECT_NO_THROW(io->truncate(2048U));
+	EXPECT_THROW(io->truncate(2049U), std::invalid_argument);
+}
+
+TEST_F(StorageIOTest, TruncateRejectsFstreamOnlyIo) {
+	auto io = createIO(false);
+	EXPECT_THROW(io->truncate(testSize_ - 1U), std::runtime_error);
+}
+
+TEST_F(StorageIOTest, TruncateFlushesAndInvalidatesCachedTailPages) {
+	auto io = createIO(true);
+	const size_t pageSize = RSS_BUFFER_POOL_PAGE_BYTES;
+	ASSERT_GE(testSize_, pageSize);
+	ASSERT_EQ(io->reserveAppendSpace(pageSize), testSize_);
+	io->enableBufferPool(2U * pageSize);
+	std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> firstPage{};
+	std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> tailPage{};
+	firstPage.fill(std::byte{0x11U});
+	tailPage.fill(std::byte{0x22U});
+	io->writeAt({0U, 1U}, firstPage.data(), firstPage.size());
+	io->writeAt({static_cast<uint64_t>(pageSize), 1U}, tailPage.data(), tailPage.size());
+	ASSERT_EQ(io->bufferPoolStats().resident_bytes, 2U * pageSize);
+
+	io->truncate(pageSize);
+	EXPECT_EQ(io->fileSize(), pageSize);
+	EXPECT_EQ(io->bufferPoolStats().resident_bytes, pageSize);
+	EXPECT_EQ(io->bufferPoolStats().dirty_bytes, 0U);
+}
+
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+TEST_F(StorageIOTest, TruncateAndSyncSurfaceNativeDurabilityFailures) {
+	auto io = createIO(true);
+	{
+		StorageIO::ScopedNativeTruncateHookForTesting failedTruncate([](file_handle_t, uint64_t) {
+#ifdef _WIN32
+			SetLastError(ERROR_SUCCESS);
+#else
+			errno = 0;
+#endif
+			return -1;
+		});
+		EXPECT_THROW(io->truncate(testSize_ - 1U), std::system_error);
+	}
+	{
+		StorageIO::ScopedNativeSyncHookForTesting failedSync([](file_handle_t) {
+#ifdef _WIN32
+			SetLastError(ERROR_SUCCESS);
+#else
+			errno = 0;
+#endif
+			return -1;
+		});
+		EXPECT_THROW(io->sync(), std::system_error);
+	}
+	EXPECT_EQ(io->stats().sync_calls, 0U);
+}
+#endif
+
 TEST_F(StorageIOTest, FileSizeRejectsAnIoWithoutFileAccess) {
 	auto io = std::make_shared<StorageIO>(nullptr, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
 	EXPECT_THROW(static_cast<void>(io->fileSize()), std::runtime_error);
@@ -641,6 +783,17 @@ TEST_F(StorageIOTest, SyncDoesNotThrow) {
 	EXPECT_NO_THROW(io->sync());
 }
 
+TEST_F(StorageIOTest, SyncRecordsDataAndSuperblockDurabilityFences) {
+	auto io = createIO(true);
+	EXPECT_NO_THROW(io->sync(StorageIOSyncKind::SIOSK_DATA_FENCE));
+	EXPECT_NO_THROW(io->sync(StorageIOSyncKind::SIOSK_SUPERBLOCK_FENCE));
+	const StorageIOStats stats = io->stats();
+	EXPECT_EQ(stats.sync_calls, 2U);
+	EXPECT_EQ(stats.data_sync_calls, 1U);
+	EXPECT_EQ(stats.superblock_sync_calls, 1U);
+	EXPECT_THROW(io->sync(static_cast<StorageIOSyncKind>(0U)), std::invalid_argument);
+}
+
 TEST_F(StorageIOTest, SyncReportsClosedNativeWriteHandle) {
 	file_handle_t writeFd = portable_open_rw(testFile_.c_str());
 	ASSERT_NE(writeFd, INVALID_FILE_HANDLE);
@@ -696,6 +849,50 @@ TEST_F(StorageIOTest, BufferPoolHelpersAreNoOpsWithoutCacheAndFlushCachedWrites)
 	EXPECT_EQ(io->bufferPoolStats().dirty_bytes, 0U);
 	io->disableBufferPool();
 	EXPECT_EQ(io->bufferPoolStats(), BufferPoolStats{});
+}
+
+TEST_F(StorageIOTest, BufferPoolRoutesByteReadsPrefetchAndExternalRebaseThroughTheCache) {
+	auto io = createIO(true);
+	io->enableBufferPool(2U * RSS_BUFFER_POOL_PAGE_BYTES);
+	const char written = static_cast<char>(0x6C);
+	char observed = 0;
+	const std::array<BufferPoolPageKey, 1U> keys{{{0U, 1U}}};
+
+	io->writeAt(0U, &written, 1U);
+	EXPECT_EQ(io->readAt(0U, &observed, 1U), 1U);
+	EXPECT_EQ(observed, written);
+	io->flushStream();
+	io->prefetchPages(keys);
+	EXPECT_EQ(io->bufferPoolStats().prefetch_requests, 1U);
+	EXPECT_EQ(io->bufferPoolStats().resident_bytes, 2U * RSS_BUFFER_POOL_PAGE_BYTES);
+
+	io->resetBufferPoolStats();
+	EXPECT_EQ(io->bufferPoolStats().prefetch_requests, 0U);
+	io->discardBufferPoolForExternalRebase();
+	EXPECT_EQ(io->bufferPoolStats().resident_bytes, 0U);
+}
+
+TEST_F(StorageIOTest, CacheAwareAppendAndReserveInvalidateTheDurableTailRange) {
+	auto io = createIO(true);
+	io->enableBufferPool(RSS_BUFFER_POOL_PAGE_BYTES);
+	const char cached = static_cast<char>(0x29);
+	const char appended = static_cast<char>(0x7C);
+
+	io->writeAt(0U, &cached, 1U);
+	EXPECT_EQ(io->append(&appended, 1U), testSize_);
+	EXPECT_EQ(io->reserveAppendSpace(1U), testSize_ + 1U);
+	EXPECT_EQ(io->fileSize(), testSize_ + 2U);
+}
+
+TEST_F(StorageIOTest, ReadOnlyIoRejectsMutationsBeforeTouchingTheStream) {
+	auto stream = std::make_shared<std::fstream>(testFile_, std::ios::binary | std::ios::in);
+	ASSERT_TRUE(stream->is_open());
+	StorageIO io(std::move(stream), INVALID_FILE_HANDLE, INVALID_FILE_HANDLE, StorageIOAccessMode::SIOAM_READ_ONLY);
+	const char byte = static_cast<char>(0x61);
+
+	EXPECT_THROW(io.writeAt(0U, &byte, 1U), std::logic_error);
+	EXPECT_THROW(static_cast<void>(io.append(&byte, 1U)), std::logic_error);
+	EXPECT_THROW(static_cast<void>(io.reserveAppendSpace(1U)), std::logic_error);
 }
 
 TEST_F(StorageIOTest, ControlRecordWriteInvalidatesTheGenerationTaggedCacheEntry) {

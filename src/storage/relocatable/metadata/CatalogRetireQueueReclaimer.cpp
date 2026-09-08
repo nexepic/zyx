@@ -57,7 +57,8 @@ namespace graph::storage {
 										  "relocatable Retire Queue retired Segment disagrees with Catalog state");
 				}
 				return;
-			default:
+			default: // LocationLeafPageCodec validates the persisted Retire Queue disposition before the
+					 // sole typed traversal caller constructs this private reclaimer entry.
 				throw FormatException(FormatError::FERR_INVALID_ENUM,
 									  "relocatable Retire Queue has an unknown disposition");
 		}

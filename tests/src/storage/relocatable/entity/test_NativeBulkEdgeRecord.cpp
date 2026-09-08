@@ -24,7 +24,13 @@ using namespace graph::storage;
 namespace {
 
 constexpr size_t HEADER_CRC_OFFSET = 52U;
+constexpr size_t EDGE_ID_OFFSET = 12U;
+constexpr size_t SOURCE_ID_OFFSET = 20U;
+constexpr size_t TARGET_ID_OFFSET = 28U;
+constexpr size_t TYPE_BYTES_OFFSET = 36U;
 constexpr size_t PROPERTY_COUNT_OFFSET = 40U;
+constexpr size_t PAYLOAD_CRC_OFFSET = 48U;
+constexpr size_t PROPERTY_KEY_BYTES = sizeof(uint32_t);
 
 void expectFormatError(const std::function<void()> &operation, FormatError expected) {
 	try {
@@ -45,6 +51,13 @@ void rewriteHeaderCrc(std::vector<std::byte> &bytes) {
 	LittleEndianCodec::writeU32(bytes, HEADER_CRC_OFFSET, 0U);
 	LittleEndianCodec::writeU32(bytes, HEADER_CRC_OFFSET,
 							crc(std::span<const std::byte>(bytes).first(RSS_NATIVE_BULK_EDGE_RECORD_HEADER_BYTES)));
+}
+
+void rewritePayloadAndHeaderCrcs(std::vector<std::byte> &bytes) {
+	ASSERT_GE(bytes.size(), RSS_NATIVE_BULK_EDGE_RECORD_HEADER_BYTES);
+	LittleEndianCodec::writeU32(bytes, PAYLOAD_CRC_OFFSET,
+							crc(std::span<const std::byte>(bytes).subspan(RSS_NATIVE_BULK_EDGE_RECORD_HEADER_BYTES)));
+	rewriteHeaderCrc(bytes);
 }
 
 [[nodiscard]] NativeBulkEdgeRecord record() {
@@ -94,10 +107,39 @@ TEST(NativeBulkEdgeRecordCodecTest, PreservesAnUntypedLogicalRelationship) {
 	EXPECT_EQ(decoded, untyped);
 }
 
+TEST(NativeBulkEdgeRecordCodecTest, OrdersPropertyKeysByUnsignedByteValue) {
+	NativeBulkEdgeRecord source = record();
+	source.properties = {
+			{std::string(1, static_cast<char>(0xFF)), PropertyValue(int64_t(1))},
+			{std::string(1, static_cast<char>(0x01)), PropertyValue(int64_t(2))},
+	};
+
+	const auto encoded = NativeBulkEdgeRecordCodec::encode(source);
+	const auto decoded = NativeBulkEdgeRecordCodec::decode(encoded);
+	ASSERT_EQ(decoded.properties.size(), 2U);
+	EXPECT_EQ(static_cast<unsigned char>(decoded.properties[0].key[0]), 0x01U);
+	EXPECT_EQ(static_cast<unsigned char>(decoded.properties[1].key[0]), 0xFFU);
+	NativeBulkEdgeRecord expected = source;
+	std::ranges::sort(expected.properties, [](const auto &left, const auto &right) {
+		return static_cast<unsigned char>(left.key[0]) < static_cast<unsigned char>(right.key[0]);
+	});
+	EXPECT_EQ(decoded, expected);
+}
+
 TEST(NativeBulkEdgeRecordCodecTest, RejectsInvalidLogicalIdentitiesAndPropertyKeysBeforeScratchWrite) {
 	NativeBulkEdgeRecord invalid = record();
 	invalid.edge_id = 0U;
 	expectFormatError([&] { static_cast<void>(NativeBulkEdgeRecordCodec::encodedSize(invalid)); },
+					  FormatError::FERR_INVALID_HEADER);
+
+	invalid = record();
+	invalid.source_node_id = 0U;
+	expectFormatError([&] { static_cast<void>(NativeBulkEdgeRecordCodec::encode(invalid)); },
+					  FormatError::FERR_INVALID_HEADER);
+
+	invalid = record();
+	invalid.target_node_id = 0U;
+	expectFormatError([&] { static_cast<void>(NativeBulkEdgeRecordCodec::encode(invalid)); },
 					  FormatError::FERR_INVALID_HEADER);
 
 	invalid = record();
@@ -137,6 +179,66 @@ TEST(NativeBulkEdgeRecordCodecTest, FailsClosedForHeaderPayloadAndCanonicalDimen
 
 	std::vector<std::byte> truncated(encoded.begin(), encoded.end() - 1U);
 	expectFormatError([&] { static_cast<void>(NativeBulkEdgeRecordCodec::decode(truncated)); },
+					  FormatError::FERR_INVALID_HEADER);
+}
+
+TEST(NativeBulkEdgeRecordCodecTest, RejectsChecksummedWireFormatBoundaryCorruption) {
+	const std::vector<std::byte> encoded = NativeBulkEdgeRecordCodec::encode(record());
+
+	std::vector<std::byte> tooShort(encoded.begin(), encoded.begin() + RSS_NATIVE_BULK_EDGE_RECORD_HEADER_BYTES - 1U);
+	expectFormatError([&] { static_cast<void>(NativeBulkEdgeRecordCodec::decode(tooShort)); },
+					  FormatError::FERR_INVALID_HEADER);
+
+	auto oversizedType = encoded;
+	LittleEndianCodec::writeU32(oversizedType, TYPE_BYTES_OFFSET,
+							static_cast<uint32_t>(oversizedType.size() - RSS_NATIVE_BULK_EDGE_RECORD_HEADER_BYTES + 1U));
+	rewriteHeaderCrc(oversizedType);
+	expectFormatError([&] { static_cast<void>(NativeBulkEdgeRecordCodec::decode(oversizedType)); },
+					  FormatError::FERR_INVALID_HEADER);
+
+	for (const size_t identityOffset: {EDGE_ID_OFFSET, SOURCE_ID_OFFSET, TARGET_ID_OFFSET}) {
+		auto zeroIdentity = encoded;
+		LittleEndianCodec::writeU64(zeroIdentity, identityOffset, 0U);
+		rewriteHeaderCrc(zeroIdentity);
+		expectFormatError([&] { static_cast<void>(NativeBulkEdgeRecordCodec::decode(zeroIdentity)); },
+						  FormatError::FERR_INVALID_HEADER);
+	}
+}
+
+TEST(NativeBulkEdgeRecordCodecTest, RejectsChecksummedPropertyFrameCorruption) {
+	NativeBulkEdgeRecord oneProperty = record();
+	oneProperty.type.clear();
+	oneProperty.properties = {{"a", PropertyValue(int64_t(7))}};
+	const std::vector<std::byte> encoded = NativeBulkEdgeRecordCodec::encode(oneProperty);
+
+	auto truncatedKeyLength = encoded;
+	LittleEndianCodec::writeU32(truncatedKeyLength, TYPE_BYTES_OFFSET,
+							static_cast<uint32_t>(truncatedKeyLength.size() - RSS_NATIVE_BULK_EDGE_RECORD_HEADER_BYTES));
+	rewriteHeaderCrc(truncatedKeyLength);
+	expectFormatError([&] { static_cast<void>(NativeBulkEdgeRecordCodec::decode(truncatedKeyLength)); },
+					  FormatError::FERR_BUFFER_TOO_SMALL);
+
+	auto emptyKey = encoded;
+	LittleEndianCodec::writeU32(emptyKey, RSS_NATIVE_BULK_EDGE_RECORD_HEADER_BYTES, 0U);
+	rewritePayloadAndHeaderCrcs(emptyKey);
+	expectFormatError([&] { static_cast<void>(NativeBulkEdgeRecordCodec::decode(emptyKey)); },
+					  FormatError::FERR_INVALID_HEADER);
+
+	auto oversizedKey = encoded;
+	LittleEndianCodec::writeU32(oversizedKey, RSS_NATIVE_BULK_EDGE_RECORD_HEADER_BYTES,
+							static_cast<uint32_t>(oversizedKey.size() - RSS_NATIVE_BULK_EDGE_RECORD_HEADER_BYTES + 1U));
+	rewritePayloadAndHeaderCrcs(oversizedKey);
+	expectFormatError([&] { static_cast<void>(NativeBulkEdgeRecordCodec::decode(oversizedKey)); },
+					  FormatError::FERR_INVALID_HEADER);
+
+	NativeBulkEdgeRecord twoProperties = oneProperty;
+	twoProperties.properties.push_back({"b", PropertyValue(int64_t(8))});
+	auto duplicateKeys = NativeBulkEdgeRecordCodec::encode(twoProperties);
+	const size_t secondKeyOffset = RSS_NATIVE_BULK_EDGE_RECORD_HEADER_BYTES + PROPERTY_KEY_BYTES + 1U +
+							CanonicalPropertyValueCodec::encodedSize(twoProperties.properties.front().value);
+	duplicateKeys[secondKeyOffset + PROPERTY_KEY_BYTES] = std::byte{'a'};
+	rewritePayloadAndHeaderCrcs(duplicateKeys);
+	expectFormatError([&] { static_cast<void>(NativeBulkEdgeRecordCodec::decode(duplicateKeys)); },
 					  FormatError::FERR_INVALID_HEADER);
 }
 

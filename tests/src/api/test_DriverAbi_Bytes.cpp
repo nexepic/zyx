@@ -169,6 +169,7 @@ TEST_F(DriverAbiBytesTest, RoundTripsBytesInsideListAndMapValueReferences) {
 	ASSERT_EQ(zyx_driver_params_create(&params, &error), ZYX_DRIVER_OK);
 	ASSERT_EQ(zyx_driver_value_list_create(&list, &error), ZYX_DRIVER_OK);
 	ASSERT_EQ(zyx_driver_value_list_append_bytes(list, listBytes.data(), listBytes.size(), &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_value_list_append_int64(list, 17, &error), ZYX_DRIVER_OK);
 	ASSERT_EQ(zyx_driver_value_map_create(&map, &error), ZYX_DRIVER_OK);
 	ASSERT_EQ(zyx_driver_value_map_set_bytes(map, "payload", mapBytes.data(), mapBytes.size(), &error), ZYX_DRIVER_OK);
 	ASSERT_EQ(zyx_driver_params_set_value(params, "list", list, &error), ZYX_DRIVER_OK);
@@ -183,9 +184,37 @@ TEST_F(DriverAbiBytesTest, RoundTripsBytesInsideListAndMapValueReferences) {
 	ASSERT_EQ(zyx_driver_result_get_value(result, 1, &mapRef, &error), ZYX_DRIVER_OK);
 	uint32_t listCount = 0U;
 	ASSERT_EQ(zyx_driver_value_ref_list_count(&listRef, &listCount, &error), ZYX_DRIVER_OK);
-	EXPECT_EQ(listCount, 1U);
+	EXPECT_EQ(listCount, 2U);
 	const uint8_t *actual = nullptr;
 	uint32_t actualSize = 0U;
+	ASSERT_EQ(zyx_driver_result_get_list_bytes(result, 0U, 0U, &actual, &actualSize, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(std::vector<uint8_t>(actual, actual + actualSize), listBytes);
+
+	actual = reinterpret_cast<const uint8_t *>(static_cast<uintptr_t>(1U));
+	actualSize = 99U;
+	EXPECT_EQ(zyx_driver_result_get_list_bytes(result, 0U, 0U, nullptr, &actualSize, &error),
+			  ZYX_DRIVER_INVALID_ARGUMENT);
+	EXPECT_EQ(actualSize, 0U);
+	zyx_driver_error_free(error);
+	error = nullptr;
+	EXPECT_EQ(zyx_driver_result_get_list_bytes(result, 0U, 0U, &actual, nullptr, &error),
+			  ZYX_DRIVER_INVALID_ARGUMENT);
+	EXPECT_EQ(actual, nullptr);
+	zyx_driver_error_free(error);
+	error = nullptr;
+	EXPECT_EQ(zyx_driver_result_get_list_bytes(result, 0U, listCount, &actual, &actualSize, &error),
+			  ZYX_DRIVER_OUT_OF_RANGE);
+	zyx_driver_error_free(error);
+	error = nullptr;
+	EXPECT_EQ(zyx_driver_result_get_list_bytes(result, 0U, 1U, &actual, &actualSize, &error),
+			  ZYX_DRIVER_TYPE_MISMATCH);
+	zyx_driver_error_free(error);
+	error = nullptr;
+	EXPECT_EQ(zyx_driver_result_get_list_bytes(result, 1U, 0U, &actual, &actualSize, &error),
+			  ZYX_DRIVER_TYPE_MISMATCH);
+	zyx_driver_error_free(error);
+	error = nullptr;
+
 	ASSERT_EQ(zyx_driver_value_ref_list_get_bytes(&listRef, 0U, &actual, &actualSize, &error), ZYX_DRIVER_OK);
 	EXPECT_EQ(std::vector<uint8_t>(actual, actual + actualSize), listBytes);
 	ASSERT_EQ(zyx_driver_value_ref_map_get_bytes(&mapRef, "payload", &actual, &actualSize, &error), ZYX_DRIVER_OK);
@@ -373,6 +402,14 @@ TEST_F(DriverAbiBytesTest, RejectsNullNonEmptyInputAndInvalidByteOutputs) {
 	zyx_driver_value_t *value = nullptr;
 	ASSERT_EQ(zyx_driver_params_create(&params, &error), ZYX_DRIVER_OK);
 
+	EXPECT_EQ(zyx_driver_params_set_bytes(nullptr, "bad", nullptr, 0U, &error), ZYX_DRIVER_INVALID_ARGUMENT);
+	zyx_driver_error_free(error);
+	error = nullptr;
+	EXPECT_EQ(zyx_driver_params_set_bytes(params, nullptr, nullptr, 0U, &error), ZYX_DRIVER_INVALID_ARGUMENT);
+	zyx_driver_error_free(error);
+	error = nullptr;
+	EXPECT_EQ(zyx_driver_params_set_bytes(params, "empty", nullptr, 0U, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(error, nullptr);
 	EXPECT_EQ(zyx_driver_params_set_bytes(params, "bad", nullptr, 1U, &error), ZYX_DRIVER_INVALID_ARGUMENT);
 	zyx_driver_error_free(error);
 	error = nullptr;
@@ -382,6 +419,127 @@ TEST_F(DriverAbiBytesTest, RejectsNullNonEmptyInputAndInvalidByteOutputs) {
 	EXPECT_EQ(zyx_driver_value_bytes_create(nullptr, 0U, nullptr, &error), ZYX_DRIVER_INVALID_ARGUMENT);
 	zyx_driver_error_free(error);
 	error = nullptr;
+	ASSERT_EQ(zyx_driver_value_list_create(&value, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(zyx_driver_value_list_append_bytes(value, nullptr, 1U, &error), ZYX_DRIVER_INVALID_ARGUMENT);
+	zyx_driver_error_free(error);
+	error = nullptr;
+	zyx_driver_value_free(value, &error);
+	value = nullptr;
+	const uint8_t byte = 7U;
+	ASSERT_EQ(zyx_driver_value_int64_create(1, &value, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(zyx_driver_value_list_append_bytes(value, &byte, 1U, &error), ZYX_DRIVER_TYPE_MISMATCH);
+	zyx_driver_error_free(error);
+	error = nullptr;
+	EXPECT_EQ(zyx_driver_value_list_append_value(value, value, &error), ZYX_DRIVER_TYPE_MISMATCH);
+	zyx_driver_error_free(error);
+	error = nullptr;
+	zyx_driver_value_free(value, &error);
+	value = nullptr;
+	ASSERT_EQ(zyx_driver_value_map_create(&value, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(zyx_driver_value_map_set_bytes(value, "bad", nullptr, 1U, &error), ZYX_DRIVER_INVALID_ARGUMENT);
+	zyx_driver_error_free(error);
+	error = nullptr;
+	zyx_driver_value_free(value, &error);
+	value = nullptr;
 
+	zyx_driver_params_free(params, &error);
+}
+
+TEST_F(DriverAbiBytesTest, RejectsInvalidByteResultAndReferenceAccessWithoutLeakingOutputState) {
+	const std::vector<uint8_t> expected{0x11U, 0x22U};
+	zyx_driver_params_t *params = nullptr;
+	zyx_driver_value_t *list = nullptr;
+	zyx_driver_value_t *map = nullptr;
+	zyx_driver_result_t *result = nullptr;
+	ASSERT_EQ(zyx_driver_params_create(&params, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_params_set_bytes(params, "payload", expected.data(), expected.size(), &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_value_list_create(&list, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_value_list_append_bytes(list, expected.data(), expected.size(), &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_value_map_create(&map, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_value_map_set_bytes(map, "payload", expected.data(), expected.size(), &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_value_map_set_string(map, "text", "not bytes", &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_params_set_value(params, "list", list, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_params_set_value(params, "map", map, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_db_execute(db, "RETURN $payload AS payload, $list AS list, $map AS map", params, &result,
+								  &error),
+			  ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_result_next(result, &error), ZYX_DRIVER_ROW);
+
+	const auto expectError = [this](const zyx_driver_status_t status, const zyx_driver_status_t expectedStatus) {
+		EXPECT_EQ(status, expectedStatus);
+		ASSERT_NE(error, nullptr);
+		EXPECT_EQ(zyx_driver_error_code(error), expectedStatus);
+		zyx_driver_error_free(error);
+		error = nullptr;
+	};
+
+	const uint8_t *bytes = reinterpret_cast<const uint8_t *>(static_cast<uintptr_t>(1U));
+	uint32_t size = 99U;
+	expectError(zyx_driver_result_get_bytes(result, 0U, nullptr, &size, &error), ZYX_DRIVER_INVALID_ARGUMENT);
+	EXPECT_EQ(size, 0U);
+	expectError(zyx_driver_result_get_bytes(result, 0U, &bytes, nullptr, &error), ZYX_DRIVER_INVALID_ARGUMENT);
+	EXPECT_EQ(bytes, nullptr);
+	expectError(zyx_driver_result_get_bytes(result, 3U, &bytes, &size, &error), ZYX_DRIVER_OUT_OF_RANGE);
+	EXPECT_EQ(bytes, nullptr);
+	EXPECT_EQ(size, 0U);
+
+	expectError(zyx_driver_result_open_bytes_stream(result, 0U, 0U, 0U, nullptr, &error),
+				ZYX_DRIVER_INVALID_ARGUMENT);
+	zyx_driver_bytes_stream_t *stream = nullptr;
+	expectError(zyx_driver_result_open_bytes_stream(result, 3U, 0U, 0U, &stream, &error),
+				ZYX_DRIVER_OUT_OF_RANGE);
+	EXPECT_EQ(stream, nullptr);
+
+	zyx_driver_value_ref_t payload{};
+	zyx_driver_value_ref_t listRef{};
+	zyx_driver_value_ref_t mapRef{};
+	ASSERT_EQ(zyx_driver_result_get_value(result, 0U, &payload, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_result_get_value(result, 1U, &listRef, &error), ZYX_DRIVER_OK);
+	ASSERT_EQ(zyx_driver_result_get_value(result, 2U, &mapRef, &error), ZYX_DRIVER_OK);
+
+	bytes = reinterpret_cast<const uint8_t *>(static_cast<uintptr_t>(1U));
+	size = 99U;
+	expectError(zyx_driver_value_ref_get_bytes(&payload, nullptr, &size, &error), ZYX_DRIVER_INVALID_ARGUMENT);
+	EXPECT_EQ(size, 0U);
+	expectError(zyx_driver_value_ref_get_bytes(&payload, &bytes, nullptr, &error), ZYX_DRIVER_INVALID_ARGUMENT);
+	EXPECT_EQ(bytes, nullptr);
+	expectError(zyx_driver_value_ref_open_bytes_stream(&payload, 0U, 0U, nullptr, &error),
+				ZYX_DRIVER_INVALID_ARGUMENT);
+	ASSERT_EQ(zyx_driver_value_ref_open_bytes_stream(&payload, 0U, expected.size(), &stream, &error), ZYX_DRIVER_OK);
+	uint32_t read = 99U;
+	EXPECT_EQ(zyx_driver_bytes_stream_read(stream, nullptr, 0U, &read, &error), ZYX_DRIVER_OK);
+	EXPECT_EQ(read, 0U);
+	expectError(zyx_driver_bytes_stream_read(stream, nullptr, 1U, &read, &error), ZYX_DRIVER_INVALID_ARGUMENT);
+	EXPECT_EQ(read, 0U);
+	zyx_driver_bytes_stream_close(stream, &error);
+	EXPECT_EQ(error, nullptr);
+
+	bytes = reinterpret_cast<const uint8_t *>(static_cast<uintptr_t>(1U));
+	size = 99U;
+	expectError(zyx_driver_value_ref_list_get_bytes(&listRef, 0U, nullptr, &size, &error),
+				ZYX_DRIVER_INVALID_ARGUMENT);
+	EXPECT_EQ(size, 0U);
+	expectError(zyx_driver_value_ref_list_get_bytes(&listRef, 0U, &bytes, nullptr, &error),
+				ZYX_DRIVER_INVALID_ARGUMENT);
+	EXPECT_EQ(bytes, nullptr);
+	expectError(zyx_driver_value_ref_list_get_bytes(&listRef, 1U, &bytes, &size, &error), ZYX_DRIVER_OUT_OF_RANGE);
+
+	bytes = reinterpret_cast<const uint8_t *>(static_cast<uintptr_t>(1U));
+	size = 99U;
+	expectError(zyx_driver_value_ref_map_get_bytes(&mapRef, "payload", nullptr, &size, &error),
+				ZYX_DRIVER_INVALID_ARGUMENT);
+	EXPECT_EQ(size, 0U);
+	expectError(zyx_driver_value_ref_map_get_bytes(&mapRef, "payload", &bytes, nullptr, &error),
+				ZYX_DRIVER_INVALID_ARGUMENT);
+	EXPECT_EQ(bytes, nullptr);
+	expectError(zyx_driver_value_ref_map_get_bytes(&mapRef, "missing", &bytes, &size, &error), ZYX_DRIVER_NOT_FOUND);
+	expectError(zyx_driver_value_ref_map_get_bytes(&mapRef, "text", &bytes, &size, &error),
+				ZYX_DRIVER_TYPE_MISMATCH);
+	EXPECT_EQ(bytes, nullptr);
+	EXPECT_EQ(size, 0U);
+
+	zyx_driver_result_free(result);
+	zyx_driver_value_free(map, &error);
+	zyx_driver_value_free(list, &error);
 	zyx_driver_params_free(params, &error);
 }

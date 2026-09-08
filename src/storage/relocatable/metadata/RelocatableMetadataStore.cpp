@@ -37,12 +37,10 @@ namespace graph::storage {
 
 	namespace {
 
-		[[nodiscard]] bool matchesSharedPagePoolOwnerKind(SegmentKind poolKind, PageOwnerKind ownerKind) {
+		// This primitive only retires Page Directory routes. Its callers support the
+		// four derived page-pool families whose owners need no other directory update.
+		[[nodiscard]] bool matchesPageDirectoryOnlyPoolOwnerKind(SegmentKind poolKind, PageOwnerKind ownerKind) {
 			switch (poolKind) {
-				case SegmentKind::SGK_ENTITY_PAGE_POOL:
-					return ownerKind == PageOwnerKind::POK_ENTITY || ownerKind == PageOwnerKind::POK_ENTITY_LABEL;
-				case SegmentKind::SGK_PROPERTY_PAGE_POOL:
-					return ownerKind == PageOwnerKind::POK_PROPERTY;
 				case SegmentKind::SGK_INDEX_PAGE_POOL:
 					return ownerKind == PageOwnerKind::POK_INDEX;
 				case SegmentKind::SGK_VECTOR_RAW_POOL:
@@ -51,25 +49,9 @@ namespace graph::storage {
 					return ownerKind == PageOwnerKind::POK_VECTOR_PQ;
 				case SegmentKind::SGK_VECTOR_ADJACENCY_POOL:
 					return ownerKind == PageOwnerKind::POK_VECTOR_ADJACENCY;
-				case SegmentKind::SGK_VECTOR_MANIFEST_POOL:
-					return ownerKind == PageOwnerKind::POK_VECTOR_MANIFEST;
-				case SegmentKind::SGK_STATE_PAGE_POOL:
-					return ownerKind == PageOwnerKind::POK_STATE;
-				case SegmentKind::SGK_LARGE_VALUE_DATA_POOL:
-					return ownerKind == PageOwnerKind::POK_LARGE_VALUE_DATA;
-				case SegmentKind::SGK_LARGE_VALUE_MANIFEST_POOL:
-					return ownerKind == PageOwnerKind::POK_LARGE_VALUE_MANIFEST;
-				default:
+				default: // validated B+Tree and Vector reclaimers construct retirement plans only for the four supported pool families above.
 					return false;
 			}
-		}
-
-		// This primitive removes only Page Directory routes. Owner kinds that also
-		// require Entity, Property, State, or Manifest directory updates must use
-		// their dedicated atomic retirement transaction instead.
-		[[nodiscard]] bool supportsPageDirectoryOnlyRetirement(PageOwnerKind ownerKind) {
-			return ownerKind == PageOwnerKind::POK_INDEX || ownerKind == PageOwnerKind::POK_VECTOR_RAW ||
-				   ownerKind == PageOwnerKind::POK_VECTOR_PQ || ownerKind == PageOwnerKind::POK_VECTOR_ADJACENCY;
 		}
 
 	} // namespace
@@ -551,6 +533,8 @@ namespace graph::storage {
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
 		const SegmentId segmentId = batch.allocateLogicalSegmentId();
 		const PageId pageId = batch.allocateLogicalPageId();
+		// The writer-held MetadataWriteBatch allocates from durable high-water
+		// marks, so newly issued Segment and Page IDs cannot already be present.
 		if (catalog_.findOptional(current, segmentId).has_value() ||
 			locations_.findPageOptional(current, pageId).has_value()) {
 			throw FormatException(
@@ -624,6 +608,8 @@ namespace graph::storage {
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
 		const SegmentId segmentId = batch.allocateLogicalSegmentId();
 		const PageId pageId = batch.allocateLogicalPageId();
+		// The writer-held MetadataWriteBatch allocates from durable high-water
+		// marks, so newly issued Segment and Page IDs cannot already be present.
 		if (catalog_.findOptional(current, segmentId).has_value() ||
 			locations_.findPageOptional(current, pageId).has_value()) {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
@@ -1754,7 +1740,7 @@ namespace graph::storage {
 				[&preparer](std::span<EntityPageReplacementMaterialization> replacements,
 							std::span<EntityPageAppendBatchMaterialization> appends,
 							std::span<EntityPageNewPoolBatchMaterialization> newPools) {
-					if (!newPools.empty()) {
+					if (!newPools.empty()) { // this wrapper always passes a zero-length new-pool request array.
 						throw FormatException(
 								FormatError::FERR_INVALID_STATE,
 								"relocatable existing-pool Entity page mutation unexpectedly allocated a new pool");
@@ -1776,7 +1762,7 @@ namespace graph::storage {
 				requests, noAppends, checkpointLsn,
 				[&preparer](std::span<EntityPageReplacementMaterialization> replacements,
 							std::span<EntityPageAppendBatchMaterialization> appends) {
-					if (!appends.empty()) {
+					if (!appends.empty()) { // this replacement-only wrapper always passes a zero-length append request array.
 						throw FormatException(
 								FormatError::FERR_INVALID_STATE,
 								"relocatable Entity page replacement unexpectedly received append materializations");
@@ -1925,12 +1911,12 @@ namespace graph::storage {
 	}
 
 	Superblock RelocatableMetadataStore::retirePagesInExistingPools(Generation expectedMetadataGeneration,
-																	std::span<const IndexRootLocation> erasedRoots,
-																	std::span<const PageRetirement> retirements,
-																	LogSequenceNumber checkpointLsn,
-																	const ExistingPoolPagesRetirementPreparer &preparer,
-																	const MetadataPublishOptions &options,
-																	std::span<const uint64_t> erasedVectorIds) {
+																						std::span<const IndexRootLocation> erasedRoots,
+																						std::span<const PageRetirement> retirements,
+																						LogSequenceNumber checkpointLsn,
+																						const ExistingPoolPagesRetirementPreparer &preparer,
+																						const MetadataPublishOptions &options,
+																						std::span<const uint64_t> erasedVectorIds) {
 		const uint8_t invalidInput = static_cast<uint8_t>(!expectedMetadataGeneration.isValid()) |
 									 static_cast<uint8_t>(retirements.empty()) |
 									 static_cast<uint8_t>(!checkpointLsn.isValid()) | static_cast<uint8_t>(!preparer);
@@ -1962,9 +1948,9 @@ namespace graph::storage {
 		uint64_t previousRootIndexId = 0U;
 		for (const IndexRootLocation &root: erasedRoots) {
 			const uint8_t invalidRoot = static_cast<uint8_t>(root.index_id == 0U) |
-										static_cast<uint8_t>(root.index_id <= previousRootIndexId) |
-										static_cast<uint8_t>(!root.root_page_id.isValid()) |
-										static_cast<uint8_t>(!root.root_generation.isValid());
+												static_cast<uint8_t>(root.index_id <= previousRootIndexId) |
+												static_cast<uint8_t>(!root.root_page_id.isValid()) |
+												static_cast<uint8_t>(!root.root_generation.isValid());
 			if (invalidRoot != 0U) {
 				throw FormatException(FormatError::FERR_INVALID_HEADER,
 									  "relocatable page retirement has an invalid or non-canonical erased Index Root");
@@ -2003,8 +1989,7 @@ namespace graph::storage {
 					static_cast<uint8_t>(pool.generation != retirement.location.generation) |
 					static_cast<uint8_t>(pool.state != SegmentState::SGS_SEALED) |
 					static_cast<uint8_t>(!isSharedPagePoolSegmentKind(pool.kind)) |
-					static_cast<uint8_t>(!matchesSharedPagePoolOwnerKind(pool.kind, retirement.expected_owner_kind)) |
-					static_cast<uint8_t>(!supportsPageDirectoryOnlyRetirement(retirement.expected_owner_kind)) |
+					static_cast<uint8_t>(!matchesPageDirectoryOnlyPoolOwnerKind(pool.kind, retirement.expected_owner_kind)) |
 					static_cast<uint8_t>(largeValueData || largeValueManifest) |
 					static_cast<uint8_t>(!allocator_.isAllocated(current, pool.physical_slot));
 			if (invalidCurrent != 0U) {

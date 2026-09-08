@@ -14,12 +14,14 @@
 #include <memory>
 #include <random>
 #include <source_location>
+#include <span>
 #include <vector>
 
 #include <gtest/gtest.h>
 
 #include "graph/storage/StorageIO.hpp"
 #include "graph/storage/relocatable/entity/NativeBulkEdgeRun.hpp"
+#include "graph/storage/relocatable/index/IndexKeyCodec.hpp"
 #include "graph/storage/relocatable/index/NativeBulkRun.hpp"
 #include "graph/storage/relocatable/maintenance/RelocatableIntegrityScanner.hpp"
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
@@ -71,6 +73,22 @@ namespace {
 		return {PhysicalSlotId(40U), PhysicalSlotId(80U), RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES};
 	}
 
+	[[nodiscard]] uint32_t bulkRunCrc(std::span<const std::byte> bytes) {
+		const std::byte empty{};
+		return graph::utils::calculateCrc(bytes.empty() ? &empty : bytes.data(), bytes.size());
+	}
+
+	void refreshFragmentRecordChecksum(std::vector<std::byte> &bytes) {
+		constexpr size_t RECORD_BYTES_OFFSET = 16U;
+		constexpr size_t RECORD_CRC_OFFSET = 20U;
+		constexpr size_t LOGICAL_BYTES_OFFSET = 24U;
+		const std::span<const std::byte> records =
+				std::span<const std::byte>(bytes).subspan(RSS_NATIVE_BULK_RUN_HEADER_BYTES);
+		LittleEndianCodec::writeU32(bytes, RECORD_BYTES_OFFSET, static_cast<uint32_t>(records.size()));
+		LittleEndianCodec::writeU64(bytes, LOGICAL_BYTES_OFFSET, records.size());
+		LittleEndianCodec::writeU32(bytes, RECORD_CRC_OFFSET, bulkRunCrc(records));
+	}
+
 } // namespace
 
 class NativeBulkRunStoreTest : public ::testing::Test {
@@ -105,6 +123,35 @@ TEST(NativeBulkRunFragmentCodecTest, RoundTripsStrictlySortedEntriesWithIndepend
 	EXPECT_EQ(NativeBulkRunFragmentCodec::decode(encoded), expected);
 }
 
+TEST(NativeBulkRunValueObjectTest, ValidatesFragmentAndManifestIdentitiesAcrossBothManifestLevels) {
+	const NativeBulkRunFragmentLocation valid{SegmentId(9U), Generation(3U), 71U};
+	EXPECT_TRUE(valid.isValid());
+	EXPECT_FALSE((NativeBulkRunFragmentLocation{}).isValid());
+	EXPECT_FALSE((NativeBulkRunFragmentLocation{SegmentId(9U), Generation{}, 71U}).isValid());
+	EXPECT_FALSE((NativeBulkRunFragmentLocation{SegmentId(9U), Generation(3U), 0U}).isValid());
+	EXPECT_EQ(valid, valid);
+
+	const NativeBulkRunManifest leaf{valid, 0U, {valid}, {}, 1U, 16U};
+	EXPECT_TRUE(leaf.isValid());
+	const NativeBulkRunManifest parent{valid, 1U, {}, {valid}, 1U, 16U};
+	EXPECT_TRUE(parent.isValid());
+	EXPECT_FALSE((NativeBulkRunManifest{{}, 0U, {valid}, {}, 1U, 16U}).isValid());
+	EXPECT_FALSE((NativeBulkRunManifest{valid, 0U, {}, {}, 1U, 16U}).isValid());
+	EXPECT_FALSE((NativeBulkRunManifest{valid, 0U, {valid}, {valid}, 1U, 16U}).isValid());
+	EXPECT_FALSE((NativeBulkRunManifest{valid, 1U, {valid}, {}, 1U, 16U}).isValid());
+	EXPECT_FALSE((NativeBulkRunManifest{valid, 1U, {}, {}, 1U, 16U}).isValid());
+	EXPECT_FALSE((NativeBulkRunManifest{valid, 0U, {valid}, {}, 0U, 16U}).isValid());
+	EXPECT_FALSE((NativeBulkRunManifest{valid, 0U, {valid}, {}, 1U, 0U}).isValid());
+	EXPECT_EQ(leaf, leaf);
+}
+
+TEST_F(NativeBulkRunStoreTest, BindsScratchStorageToItsOwningMetadataCoordinator) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io_, superblock());
+	PhysicalSegmentAllocator physical(io_, *metadata);
+	NativeBulkRunStore store(physical, *metadata, storeOptions());
+	EXPECT_TRUE(store.usesMetadataStore(*metadata));
+}
+
 TEST(NativeBulkRunFragmentCodecTest, RejectsUnsortedDuplicateAndEmptyInputBeforeItCanReachScratchStorage) {
 	NativeBulkRunFragment unordered{{entry(0x20U, 22U), entry(0x10U, 11U)}};
 	expectFormatError([&] { static_cast<void>(NativeBulkRunFragmentCodec::encode(unordered)); },
@@ -114,6 +161,22 @@ TEST(NativeBulkRunFragmentCodecTest, RejectsUnsortedDuplicateAndEmptyInputBefore
 					  FormatError::FERR_INVALID_HEADER);
 	expectFormatError([&] { static_cast<void>(NativeBulkRunFragmentCodec::encode({})); },
 					  FormatError::FERR_INVALID_HEADER);
+}
+
+TEST(NativeBulkRunFragmentCodecTest, RejectsEmptyAndUnownedWireFramesBeforeDecodingFields) {
+	const NativeBulkRunFragmentLocation location{SegmentId(13U), Generation(1U), 71U};
+	expectFormatError(
+			[&] { static_cast<void>(NativeBulkRunFragmentCodec::decode(std::span<const std::byte>{})); },
+			FormatError::FERR_BUFFER_TOO_SMALL);
+	expectFormatError(
+			[&] { static_cast<void>(NativeBulkRunManifestCodec::decode(std::span<const std::byte>{}, location)); },
+			FormatError::FERR_BUFFER_TOO_SMALL);
+
+	const NativeBulkRunManifest manifest{
+			{}, 0U, {{SegmentId(11U), Generation(1U), 71U}}, {}, 1U, 32U};
+	const std::vector<std::byte> encoded = NativeBulkRunManifestCodec::encode(manifest);
+	expectFormatError([&] { static_cast<void>(NativeBulkRunManifestCodec::decode(encoded, {})); },
+					  FormatError::FERR_BUFFER_TOO_SMALL);
 }
 
 TEST(NativeBulkRunFragmentCodecTest, FailsClosedForHeaderDimensionsAndRecordIntegrityCorruption) {
@@ -162,6 +225,61 @@ TEST(NativeBulkRunFragmentCodecTest, RejectsTruncatedAndOversizedRecordFrames) {
 	LittleEndianCodec::writeU32(oversized, RSS_NATIVE_BULK_RUN_HEADER_BYTES, 4'196U);
 	expectFormatError([&] { static_cast<void>(NativeBulkRunFragmentCodec::decode(oversized)); },
 					  FormatError::FERR_CHECKSUM_MISMATCH);
+}
+
+TEST(NativeBulkRunFragmentCodecTest, RejectsEachIndependentAggregateDimensionMismatch) {
+	const std::vector<std::byte> encoded = NativeBulkRunFragmentCodec::encode(fragment());
+
+	// Keep the header checksum valid so each assertion reaches the dimension
+	// contract instead of being masked by aggregate-integrity validation.
+	auto mismatchedRecordBytes = encoded;
+	LittleEndianCodec::writeU32(mismatchedRecordBytes, 16U,
+			LittleEndianCodec::readU32(mismatchedRecordBytes, 16U) - 1U);
+	expectFormatError([&] { static_cast<void>(NativeBulkRunFragmentCodec::decode(mismatchedRecordBytes)); },
+					  FormatError::FERR_INVALID_HEADER);
+
+	auto mismatchedLogicalBytes = encoded;
+	LittleEndianCodec::writeU64(mismatchedLogicalBytes, 24U,
+			LittleEndianCodec::readU64(mismatchedLogicalBytes, 24U) + 1U);
+	expectFormatError([&] { static_cast<void>(NativeBulkRunFragmentCodec::decode(mismatchedLogicalBytes)); },
+					  FormatError::FERR_INVALID_HEADER);
+}
+
+TEST(NativeBulkRunFragmentCodecTest, RejectsChecksumValidMalformedNestedRecordFrames) {
+	constexpr size_t RECORD_LENGTH_OFFSET = 0U;
+	constexpr size_t RECORD_CRC_OFFSET = 4U;
+	const std::vector<std::byte> encoded = NativeBulkRunFragmentCodec::encode(fragment());
+	const size_t firstRecordOffset = RSS_NATIVE_BULK_RUN_HEADER_BYTES;
+	const size_t firstEntryBytes = LittleEndianCodec::readU32(encoded, firstRecordOffset + RECORD_LENGTH_OFFSET);
+	const size_t secondRecordOffset = firstRecordOffset + RSS_NATIVE_BULK_RUN_RECORD_HEADER_BYTES + firstEntryBytes;
+
+	auto truncatedHeader = encoded;
+	truncatedHeader.resize(secondRecordOffset + RSS_NATIVE_BULK_RUN_RECORD_HEADER_BYTES - 1U);
+	refreshFragmentRecordChecksum(truncatedHeader);
+	expectFormatError([&] { static_cast<void>(NativeBulkRunFragmentCodec::decode(truncatedHeader)); },
+					  FormatError::FERR_BUFFER_TOO_SMALL);
+
+	auto invalidLength = encoded;
+	LittleEndianCodec::writeU32(invalidLength, firstRecordOffset + RECORD_LENGTH_OFFSET, 1U);
+	refreshFragmentRecordChecksum(invalidLength);
+	expectFormatError([&] { static_cast<void>(NativeBulkRunFragmentCodec::decode(invalidLength)); },
+					  FormatError::FERR_INVALID_HEADER);
+
+	auto invalidRecordChecksum = encoded;
+	invalidRecordChecksum.back() ^= std::byte{0x01U};
+	refreshFragmentRecordChecksum(invalidRecordChecksum);
+	expectFormatError([&] { static_cast<void>(NativeBulkRunFragmentCodec::decode(invalidRecordChecksum)); },
+					  FormatError::FERR_CHECKSUM_MISMATCH);
+
+	auto duplicateKey = encoded;
+	const std::vector<std::byte> firstEntry = BTreePageEntryCodec::encode(entry(0x10U, 22U));
+	ASSERT_EQ(firstEntry.size(), firstEntryBytes);
+	std::copy(firstEntry.begin(), firstEntry.end(),
+				  duplicateKey.begin() + static_cast<std::ptrdiff_t>(secondRecordOffset + RSS_NATIVE_BULK_RUN_RECORD_HEADER_BYTES));
+	LittleEndianCodec::writeU32(duplicateKey, secondRecordOffset + RECORD_CRC_OFFSET, bulkRunCrc(firstEntry));
+	refreshFragmentRecordChecksum(duplicateKey);
+	expectFormatError([&] { static_cast<void>(NativeBulkRunFragmentCodec::decode(duplicateKey)); },
+					  FormatError::FERR_INVALID_HEADER);
 }
 
 TEST_F(NativeBulkRunStoreTest, ReadsOnlyTheMatchingTransactionPrivateFragmentAndReleasesItsSlot) {
@@ -217,6 +335,26 @@ TEST_F(NativeBulkRunStoreTest, PersistsASeparateCanonicalEdgeRunAsTransactionPri
 	store.release(location, LogSequenceNumber(4U));
 }
 
+TEST_F(NativeBulkRunStoreTest, OpenOpaquePayloadReaderPinsAndAuthenticatesPrivateScratch) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io_, superblock());
+	PhysicalSegmentAllocator physical(io_, *metadata);
+	NativeBulkRunStore store(physical, *metadata, storeOptions());
+	const std::vector<std::byte> expected{std::byte{0x11U}, std::byte{0x22U}};
+	const NativeBulkRunFragmentLocation location =
+			store.writeOpaquePayload(71U, expected, LogSequenceNumber(2U));
+
+	{
+		const NativeBulkRunPayloadReader reader = store.openOpaquePayloadReader();
+		EXPECT_EQ(reader(location), expected);
+
+		NativeBulkRunFragmentLocation foreign = location;
+		foreign.transaction_id = 72U;
+		expectFormatError([&] { static_cast<void>(reader(foreign)); }, FormatError::FERR_INVALID_STATE);
+	}
+
+	store.release(location, LogSequenceNumber(4U));
+}
+
 TEST_F(NativeBulkRunStoreTest, BatchWritePublishesOrderedPrivateFragmentsThroughOnePhysicalAllocation) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io_, superblock());
 	PhysicalSegmentAllocator physical(io_, *metadata);
@@ -263,10 +401,143 @@ TEST_F(NativeBulkRunStoreTest, BatchWriteRejectsMoreFragmentsThanItsExplicitMemo
 					  FormatError::FERR_INVALID_HEADER);
 }
 
+TEST_F(NativeBulkRunStoreTest, RejectsInvalidStoreAndScratchBoundsBeforeMetadataMutation) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io_, superblock());
+	PhysicalSegmentAllocator physical(io_, *metadata);
+
+	auto rejectStore = [&](NativeBulkRunStoreOptions options) {
+		expectFormatError([&] { NativeBulkRunStore rejected(physical, *metadata, options); },
+						  FormatError::FERR_INVALID_HEADER);
+	};
+	NativeBulkRunStoreOptions invalid = storeOptions();
+	invalid.first_slot = {};
+	rejectStore(invalid);
+	invalid = storeOptions();
+	invalid.last_slot = {};
+	rejectStore(invalid);
+	invalid = storeOptions();
+	invalid.first_slot = PhysicalSlotId(80U);
+	invalid.last_slot = PhysicalSlotId(40U);
+	rejectStore(invalid);
+	invalid = storeOptions();
+	invalid.maximum_fragment_bytes = 0U;
+	rejectStore(invalid);
+	invalid = storeOptions();
+	invalid.maximum_fragment_bytes = RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES + 1U;
+	rejectStore(invalid);
+	invalid = storeOptions();
+	invalid.maximum_batch_fragments = 0U;
+	rejectStore(invalid);
+	invalid = storeOptions();
+	invalid.maximum_manifest_depth = 0U;
+	rejectStore(invalid);
+}
+
+TEST_F(NativeBulkRunStoreTest, RejectsInvalidScratchWriteInputsWithoutPublishingAnything) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io_, superblock());
+	PhysicalSegmentAllocator physical(io_, *metadata);
+	NativeBulkRunStore store(physical, *metadata, storeOptions());
+	const NativeBulkRunFragment valid = fragment();
+	const LogSequenceNumber checkpoint(2U);
+
+	expectFormatError([&] { static_cast<void>(store.write(0U, valid, checkpoint)); },
+					  FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { static_cast<void>(store.write(71U, valid, {})); },
+					  FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { static_cast<void>(store.write(71U, {}, checkpoint)); },
+					  FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { static_cast<void>(store.writeOpaquePayload(0U, {std::byte{1U}}, checkpoint)); },
+					  FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { static_cast<void>(store.writeOpaquePayload(71U, {}, checkpoint)); },
+					  FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { static_cast<void>(store.writeOpaquePayload(71U, {std::byte{1U}}, {})); },
+					  FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { static_cast<void>(store.writeOpaquePayloadBatch(0U, {{std::byte{1U}}}, checkpoint)); },
+					  FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { static_cast<void>(store.writeOpaquePayloadBatch(71U, {}, checkpoint)); },
+					  FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { static_cast<void>(store.writeOpaquePayloadBatch(71U, {{ }}, checkpoint)); },
+					  FormatError::FERR_INVALID_HEADER);
+	const std::array oneFragment{valid};
+	const std::array<NativeBulkRunFragment, 0U> noFragments{};
+	expectFormatError([&] { static_cast<void>(store.writeBatch(0U, oneFragment, checkpoint)); },
+					  FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { static_cast<void>(store.writeBatch(71U, noFragments, checkpoint)); },
+					  FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { static_cast<void>(store.writeBatch(71U, oneFragment, {})); },
+					  FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { static_cast<void>(store.writeOpaquePayloadBatch(71U, {{std::byte{1U}}}, {})); },
+					  FormatError::FERR_INVALID_HEADER);
+
+	NativeBulkRunStoreOptions shortPayloadOptions = storeOptions();
+	shortPayloadOptions.maximum_fragment_bytes = 1U;
+	NativeBulkRunStore shortPayloadStore(physical, *metadata, shortPayloadOptions);
+	expectFormatError(
+			[&] { static_cast<void>(shortPayloadStore.writeOpaquePayload(71U, {std::byte{1U}, std::byte{2U}}, checkpoint)); },
+			FormatError::FERR_INVALID_HEADER);
+	// The single-fragment path has its own bound check before it can reserve a
+	// scratch segment; keep it aligned with the already-covered batch path.
+	expectFormatError([&] { static_cast<void>(shortPayloadStore.write(71U, valid, checkpoint)); },
+				  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(shortPayloadStore.writeBatch(71U, oneFragment, checkpoint)); },
+				  FormatError::FERR_INVALID_STATE);
+	MetadataSnapshotPin unchanged = metadata->openSnapshot();
+	EXPECT_FALSE(metadata->isPhysicalSlotAllocated(unchanged, PhysicalSlotId(40U)));
+}
+
+TEST_F(NativeBulkRunStoreTest, RejectsEntriesThatExceedTheBoundedIndexKeyFrame) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io_, superblock());
+	PhysicalSegmentAllocator physical(io_, *metadata);
+	NativeBulkRunStore store(physical, *metadata, storeOptions());
+	NativeBulkRunFragment oversized;
+	oversized.entries.push_back(
+			BTreePageEntry{std::vector<std::byte>(RSS_INDEX_KEY_MAX_BYTES + 1U, std::byte{0x5AU}), 71U});
+
+	expectFormatError([&] { static_cast<void>(store.write(71U, oversized, LogSequenceNumber(2U))); },
+					  FormatError::FERR_INVALID_HEADER);
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	EXPECT_FALSE(metadata->isPhysicalSlotAllocated(snapshot, PhysicalSlotId(40U)));
+}
+
+TEST_F(NativeBulkRunStoreTest, RejectsInvalidReadAndManifestReleaseLocations) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io_, superblock());
+	PhysicalSegmentAllocator physical(io_, *metadata);
+	NativeBulkRunStore store(physical, *metadata, storeOptions());
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	expectFormatError([&] { static_cast<void>(store.read(snapshot, {})); }, FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { static_cast<void>(store.readOpaquePayload(snapshot, {})); }, FormatError::FERR_INVALID_HEADER);
+	snapshot.release();
+	expectFormatError([&] { static_cast<void>(store.releaseManifest({}, LogSequenceNumber(2U))); },
+					  FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { static_cast<void>(store.releaseManifest(
+						NativeBulkRunFragmentLocation{SegmentId(1U), Generation(1U), 71U}, {})); },
+					  FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { static_cast<void>(store.orderedSource({})); }, FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { static_cast<void>(NativeBulkRunStore::orderedSourceFromPayloadReader(
+						{}, 1U, {})); }, FormatError::FERR_INVALID_HEADER);
+}
+
 TEST_F(NativeBulkRunStoreTest, WritableOpenRecoveryReclaimsEveryUnpublishedScratchFragment) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io_, superblock());
 	PhysicalSegmentAllocator physical(io_, *metadata);
 	NativeBulkRunStore store(physical, *metadata, storeOptions());
+	const NativeBulkRunFragmentLocation first = store.write(71U, fragment(), LogSequenceNumber(2U));
+	const NativeBulkRunFragmentLocation second = store.write(72U, fragment(), LogSequenceNumber(4U));
+
+	store.reclaimUnpublishedOnOpen(LogSequenceNumber(6U));
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	EXPECT_FALSE(metadata->isPhysicalSlotAllocated(snapshot, PhysicalSlotId(40U)));
+	EXPECT_FALSE(metadata->isPhysicalSlotAllocated(snapshot, PhysicalSlotId(41U)));
+	EXPECT_EQ(metadata->findCatalog(snapshot, first.segment_id).state, SegmentState::SGS_OBSOLETE);
+	EXPECT_EQ(metadata->findCatalog(snapshot, second.segment_id).state, SegmentState::SGS_OBSOLETE);
+}
+
+TEST_F(NativeBulkRunStoreTest, WritableOpenRecoveryContinuesAfterEachBoundedScratchBatch) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io_, superblock());
+	PhysicalSegmentAllocator physical(io_, *metadata);
+	NativeBulkRunStoreOptions options = storeOptions();
+	options.maximum_batch_fragments = 1U;
+	NativeBulkRunStore store(physical, *metadata, options);
 	const NativeBulkRunFragmentLocation first = store.write(71U, fragment(), LogSequenceNumber(2U));
 	const NativeBulkRunFragmentLocation second = store.write(72U, fragment(), LogSequenceNumber(4U));
 
@@ -345,6 +616,25 @@ TEST_F(NativeBulkRunStoreTest, CandidatePayloadReaderProvidesTheSameRewindableMa
 	}
 }
 
+TEST(NativeBulkRunCandidateSourceTest, RejectsEachMissingCandidateSourceContractBeforeReadingPayloads) {
+	const NativeBulkRunFragmentLocation manifestLocation{SegmentId(13U), Generation(1U), 71U};
+	const NativeBulkRunPayloadReader reader = [](const NativeBulkRunFragmentLocation &) {
+		return std::vector<std::byte>{};
+	};
+	expectFormatError(
+			[&] { static_cast<void>(NativeBulkRunStore::orderedSourceFromPayloadReader({}, 2U, reader)); },
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] { static_cast<void>(NativeBulkRunStore::orderedSourceFromPayloadReader(manifestLocation, 0U, reader)); },
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				static_cast<void>(NativeBulkRunStore::orderedSourceFromPayloadReader(
+						manifestLocation, 2U, NativeBulkRunPayloadReader{}));
+			},
+			FormatError::FERR_INVALID_HEADER);
+}
+
 TEST(NativeBulkRunCandidateSourceTest, FailsClosedOnManifestCountAndHierarchyDivergence) {
 	const uint64_t transactionId = 71U;
 	const NativeBulkRunFragmentLocation fragmentLocation{SegmentId(11U), Generation(1U), transactionId};
@@ -399,6 +689,42 @@ TEST(NativeBulkRunCandidateSourceTest, FailsClosedOnManifestCountAndHierarchyDiv
 	const OrderedBTreeEntryCursor invalidHierarchyCursor =
 			NativeBulkRunStore::orderedSourceFromPayloadReader(rootLocation, 3U, invalidHierarchyReader)();
 	expectFormatError([&] { static_cast<void>(invalidHierarchyCursor()); }, FormatError::FERR_INVALID_STATE);
+}
+
+TEST(NativeBulkRunCandidateSourceTest, FailsClosedWhenDecodedFragmentsBreakGlobalKeyOrder) {
+	const uint64_t transactionId = 71U;
+	const NativeBulkRunFragmentLocation firstLocation{SegmentId(11U), Generation(1U), transactionId};
+	const NativeBulkRunFragmentLocation secondLocation{SegmentId(12U), Generation(1U), transactionId};
+	const NativeBulkRunFragmentLocation manifestLocation{SegmentId(13U), Generation(1U), transactionId};
+	const NativeBulkRunFragment first{{entry(0x30U, 33U)}};
+	const NativeBulkRunFragment second{{entry(0x20U, 22U)}};
+	const std::vector<std::byte> firstBytes = NativeBulkRunFragmentCodec::encode(first);
+	const std::vector<std::byte> secondBytes = NativeBulkRunFragmentCodec::encode(second);
+	NativeBulkRunManifest manifest;
+	manifest.fragments = {firstLocation, secondLocation};
+	manifest.entry_count = 2U;
+	manifest.encoded_bytes = firstBytes.size() + secondBytes.size();
+	const std::vector<std::byte> manifestBytes = NativeBulkRunManifestCodec::encode(manifest);
+
+	const OrderedBTreeEntrySource source = NativeBulkRunStore::orderedSourceFromPayloadReader(
+			manifestLocation, 1U,
+			[firstLocation, secondLocation, manifestLocation, firstBytes, secondBytes, manifestBytes](
+					const NativeBulkRunFragmentLocation &location) {
+				if (location == firstLocation) {
+					return firstBytes;
+				}
+				if (location == secondLocation) {
+					return secondBytes;
+				}
+				if (location == manifestLocation) {
+					return manifestBytes;
+				}
+				throw FormatException(FormatError::FERR_INVALID_STATE,
+								  "candidate reader received an out-of-scope segment");
+			});
+	OrderedBTreeEntryCursor cursor = source();
+	ASSERT_TRUE(cursor().has_value());
+	expectFormatError([&] { static_cast<void>(cursor()); }, FormatError::FERR_INVALID_STATE);
 }
 
 TEST_F(NativeBulkRunStoreTest, RejectsAManifestWhoseFragmentBoundariesAreNotGloballyOrdered) {
@@ -474,6 +800,31 @@ TEST_F(NativeBulkRunStoreTest, StreamingWriterFlushesBoundedAllocationBatchesInt
 	}
 	const NativeBulkRunManifest root = writer.finish();
 	EXPECT_EQ(root.level, 1U);
+	EXPECT_EQ(root.entry_count, 5U);
+
+	OrderedBTreeEntryCursor cursor = store.orderedSource(root.location)();
+	std::vector<uint8_t> keys;
+	for (std::optional<BTreePageEntry> next = cursor(); next.has_value(); next = cursor()) {
+		keys.push_back(std::to_integer<uint8_t>(next->key.front()));
+	}
+	EXPECT_EQ(keys, (std::vector<uint8_t>{0x10U, 0x20U, 0x30U, 0x40U, 0x50U}));
+}
+
+TEST_F(NativeBulkRunStoreTest, StreamingWriterLiftsASoleLeafRootBeneathAnExistingParentLevel) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io_, superblock());
+	PhysicalSegmentAllocator physical(io_, *metadata);
+	NativeBulkRunStoreOptions options = storeOptions();
+	options.maximum_fragment_bytes = RSS_NATIVE_BULK_RUN_HEADER_BYTES + 41U;
+	options.maximum_batch_fragments = 2U;
+	NativeBulkRunStore store(physical, *metadata, options);
+	NativeBulkRunStreamingWriter writer(store, 71U, {.maximum_buffered_bytes = 41U, .maximum_entries = 5U},
+										LogSequenceNumber(2U));
+	for (uint8_t key = 0x10U; key <= 0x50U; static_cast<void>(key += 0x10U)) {
+		writer.add(entry(key, key));
+	}
+
+	const NativeBulkRunManifest root = writer.finish();
+	EXPECT_EQ(root.level, 2U);
 	EXPECT_EQ(root.entry_count, 5U);
 
 	OrderedBTreeEntryCursor cursor = store.orderedSource(root.location)();
@@ -613,6 +964,23 @@ TEST(NativeBulkRunMergerTest, RewindablyMergesCandidateInputsWithoutWritingScrat
 	}
 }
 
+TEST(NativeBulkRunMergerTest, OrdersSourcesWhoseInitialKeysArriveInReversePriorityOrder) {
+	// The merge heap receives its cursors in caller order, which need not match
+	// key order. This exercises the comparator's reverse-priority path while
+	// preserving the public guarantee of a strictly ordered rewindable source.
+	const std::array<OrderedBTreeEntrySource, 3U> inputs{source({entry(0x50U, 55U)}),
+														 source({entry(0x10U, 11U), entry(0x40U, 44U)}),
+														 source({entry(0x20U, 22U), entry(0x30U, 33U)})};
+	const OrderedBTreeEntrySource merged = NativeBulkRunMerger::orderedSource(inputs, 3U, 5U);
+
+	OrderedBTreeEntryCursor cursor = merged();
+	std::vector<uint8_t> keys;
+	for (std::optional<BTreePageEntry> next = cursor(); next.has_value(); next = cursor()) {
+		keys.push_back(std::to_integer<uint8_t>(next->key.front()));
+	}
+	EXPECT_EQ(keys, (std::vector<uint8_t>{0x10U, 0x20U, 0x30U, 0x40U, 0x50U}));
+}
+
 TEST(NativeBulkRunMergerTest, RejectsDuplicateUnorderedAndOverboundCandidateInputs) {
 	const std::array<OrderedBTreeEntrySource, 2U> duplicate{source({entry(0x10U, 11U)}), source({entry(0x10U, 22U)})};
 	const OrderedBTreeEntrySource duplicateMerged = NativeBulkRunMerger::orderedSource(duplicate, 2U, 2U);
@@ -682,6 +1050,19 @@ TEST_F(NativeBulkRunStoreTest, RejectsInvalidScratchWriteReleaseAndRecoveryInput
 	const NativeBulkRunFragmentLocation location = store.write(71U, fragment(), LogSequenceNumber(2U));
 	const std::array duplicate{location, location};
 	expectFormatError([&] { store.releaseBatch(duplicate, LogSequenceNumber(4U)); }, FormatError::FERR_INVALID_HEADER);
+	NativeBulkRunStoreOptions oneItemBatchOptions = storeOptions();
+	oneItemBatchOptions.maximum_batch_fragments = 1U;
+	NativeBulkRunStore oneItemBatchStore(physical, *metadata, oneItemBatchOptions);
+	const std::vector<std::vector<std::byte>> twoPayloads{{std::byte{0x01U}}, {std::byte{0x02U}}};
+	expectFormatError(
+			[&] {
+				static_cast<void>(oneItemBatchStore.writeOpaquePayloadBatch(71U, twoPayloads, LogSequenceNumber(4U)));
+			},
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { oneItemBatchStore.releaseBatch(duplicate, LogSequenceNumber(4U)); },
+				  FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { oneItemBatchStore.releaseBatch(std::array{location}, {}); },
+				  FormatError::FERR_INVALID_HEADER);
 	NativeBulkRunFragmentLocation foreign = location;
 	foreign.transaction_id = 72U;
 	expectFormatError([&] { store.release(foreign, LogSequenceNumber(4U)); }, FormatError::FERR_INVALID_STATE);
@@ -699,6 +1080,28 @@ TEST_F(NativeBulkRunStoreTest, RejectsCheckpointLsnOverflowBeforeScratchPublicat
 						LogSequenceNumber(std::numeric_limits<uint64_t>::max())));
 			},
 			FormatError::FERR_ARITHMETIC_OVERFLOW);
+}
+
+TEST_F(NativeBulkRunStoreTest, RejectsTerminalCheckpointBeforeReservingScratchIdentifiers) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io_, superblock());
+	PhysicalSegmentAllocator physical(io_, *metadata);
+	NativeBulkRunStore store(physical, *metadata, storeOptions());
+
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	const Superblock before = snapshot.superblock();
+	snapshot.release();
+	expectFormatError(
+			[&] {
+				static_cast<void>(store.write(71U, fragment(),
+						LogSequenceNumber(std::numeric_limits<uint64_t>::max())));
+			},
+			FormatError::FERR_ARITHMETIC_OVERFLOW);
+
+	snapshot = metadata->openSnapshot();
+	EXPECT_EQ(snapshot.superblock().generation, before.generation);
+	EXPECT_EQ(snapshot.superblock().checkpoint_lsn, before.checkpoint_lsn);
+	EXPECT_EQ(snapshot.superblock().next_logical_segment_id, before.next_logical_segment_id);
+	EXPECT_FALSE(metadata->isPhysicalSlotAllocated(snapshot, PhysicalSlotId(40U)));
 }
 
 TEST_F(NativeBulkRunStoreTest, StreamingWriterRejectsInvalidInputAndOneShotReuse) {
@@ -721,8 +1124,42 @@ TEST_F(NativeBulkRunStoreTest, StreamingWriterRejectsInvalidInputAndOneShotReuse
 	expectFormatError([&] { static_cast<void>(ordered.finish()); }, FormatError::FERR_INVALID_STATE);
 
 	NativeBulkRunStreamingWriter tooSmall(store, 72U, {.maximum_buffered_bytes = 1U, .maximum_entries = 1U},
-										  LogSequenceNumber(20U));
+									  LogSequenceNumber(20U));
 	expectFormatError([&] { tooSmall.add(entry(0x10U, 11U)); }, FormatError::FERR_INVALID_STATE);
+
+	// A writer must not publish an empty run, and its logical entry budget is
+	// independent from the byte-buffer bound above.
+	NativeBulkRunStreamingWriter empty(store, 73U, {.maximum_buffered_bytes = 64U, .maximum_entries = 1U},
+								   LogSequenceNumber(40U));
+	expectFormatError([&] { static_cast<void>(empty.finish()); }, FormatError::FERR_INVALID_STATE);
+
+	NativeBulkRunStreamingWriter bounded(store, 74U, {.maximum_buffered_bytes = 64U, .maximum_entries = 1U},
+									 LogSequenceNumber(42U));
+	bounded.add(entry(0x10U, 11U));
+	expectFormatError([&] { bounded.add(entry(0x20U, 22U)); }, FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(NativeBulkRunStoreTest, StreamingWriterValidatesEveryResourceBoundBeforeAllocatingScratch) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io_, superblock());
+	PhysicalSegmentAllocator physical(io_, *metadata);
+	auto reject = [&](NativeBulkRunStore &store, NativeBulkRunStreamingOptions options,
+					  uint64_t transactionId, LogSequenceNumber lsn) {
+		expectFormatError([&] { NativeBulkRunStreamingWriter writer(store, transactionId, options, lsn); },
+						  FormatError::FERR_INVALID_HEADER);
+	};
+	NativeBulkRunStore store(physical, *metadata, storeOptions());
+	const NativeBulkRunStreamingOptions valid{64U, 2U};
+	reject(store, {0U, valid.maximum_entries}, 71U, LogSequenceNumber(2U));
+	reject(store, {valid.maximum_buffered_bytes, 0U}, 71U, LogSequenceNumber(2U));
+	reject(store, valid, 71U, {});
+	reject(store, {RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES + 1U, 2U}, 71U, LogSequenceNumber(2U));
+
+	NativeBulkRunStoreOptions shortFragment = storeOptions();
+	// A store with a valid constructor can still be too small for the writer's
+	// minimum manifest fan-out when its bound is reduced to one frame.
+	shortFragment.maximum_fragment_bytes = RSS_NATIVE_BULK_RUN_HEADER_BYTES + RSS_NATIVE_BULK_RUN_MANIFEST_ENTRY_BYTES;
+	NativeBulkRunStore fanoutStore(physical, *metadata, shortFragment);
+	reject(fanoutStore, valid, 71U, LogSequenceNumber(2U));
 }
 
 TEST_F(NativeBulkRunStoreTest, SourceRejectsAStoredManifestAboveItsConfiguredDepth) {
@@ -744,6 +1181,38 @@ TEST_F(NativeBulkRunStoreTest, SourceRejectsAStoredManifestAboveItsConfiguredDep
 					  FormatError::FERR_INVALID_STATE);
 }
 
+TEST_F(NativeBulkRunStoreTest, ManifestWritersRejectEmptyForeignAndMixedLevelReferencesBeforePublication) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io_, superblock());
+	PhysicalSegmentAllocator physical(io_, *metadata);
+	NativeBulkRunStore store(physical, *metadata, storeOptions());
+	const std::array<NativeBulkRunFragmentLocation, 0U> noLocations;
+	expectFormatError([&] { static_cast<void>(store.writeManifest(71U, noLocations, LogSequenceNumber(2U))); },
+					  FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] { static_cast<void>(store.writeManifestParent(71U, noLocations, LogSequenceNumber(2U))); },
+			FormatError::FERR_INVALID_HEADER);
+
+	const NativeBulkRunFragmentLocation first = store.write(71U, {{entry(0x10U, 11U)}}, LogSequenceNumber(2U));
+	const NativeBulkRunFragmentLocation second = store.write(71U, {{entry(0x20U, 22U)}}, LogSequenceNumber(4U));
+	const NativeBulkRunFragmentLocation foreign = store.write(72U, {{entry(0x30U, 33U)}}, LogSequenceNumber(6U));
+	expectFormatError(
+			[&] { static_cast<void>(store.writeManifest(71U, std::array{first, foreign}, LogSequenceNumber(8U))); },
+			FormatError::FERR_INVALID_STATE);
+	const NativeBulkRunManifest leaf = store.writeManifest(71U, std::array{first, second}, LogSequenceNumber(8U));
+	expectFormatError(
+			[&] { static_cast<void>(store.writeManifestParent(71U, std::array{foreign}, LogSequenceNumber(10U))); },
+			FormatError::FERR_INVALID_STATE);
+	const NativeBulkRunManifest parent = store.writeManifestParent(71U, std::array{leaf.location}, LogSequenceNumber(10U));
+	expectFormatError([&] {
+		static_cast<void>(store.writeManifestParent(71U, std::array{leaf.location, parent.location}, LogSequenceNumber(12U)));
+	}, FormatError::FERR_INVALID_STATE);
+
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	EXPECT_EQ(store.readManifest(snapshot, leaf.location).level, 0U);
+	EXPECT_EQ(store.readManifest(snapshot, parent.location).level, 1U);
+	snapshot.release();
+}
+
 TEST_F(NativeBulkRunStoreTest, ReleaseManifestRecursivelyReclaimsFragmentsAndParentManifests) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io_, superblock());
 	PhysicalSegmentAllocator physical(io_, *metadata);
@@ -760,8 +1229,62 @@ TEST_F(NativeBulkRunStoreTest, ReleaseManifestRecursivelyReclaimsFragmentsAndPar
 		EXPECT_EQ(metadata->findCatalog(snapshot, segmentId).state, SegmentState::SGS_OBSOLETE);
 	}
 	EXPECT_EQ(metadata->isPhysicalSlotAllocated(snapshot,
-												first.segment_id.isValid() ? PhysicalSlotId(40U) : PhysicalSlotId{}),
+													first.segment_id.isValid() ? PhysicalSlotId(40U) : PhysicalSlotId{}),
 				  false);
+}
+
+TEST_F(NativeBulkRunStoreTest, ReleaseManifestRejectsAliasedFragmentsAndChildrenBeforeReclaimingScratch) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io_, superblock());
+	PhysicalSegmentAllocator physical(io_, *metadata);
+	NativeBulkRunStore store(physical, *metadata, storeOptions());
+	const NativeBulkRunFragmentLocation fragment =
+			store.write(71U, {{entry(0x10U, 11U)}}, LogSequenceNumber(20U));
+
+	NativeBulkRunManifest aliasedLeaf;
+	aliasedLeaf.fragments = {fragment, fragment};
+	aliasedLeaf.entry_count = 2U;
+	aliasedLeaf.encoded_bytes = NativeBulkRunFragmentCodec::encode({{entry(0x10U, 11U)}}).size() * 2U;
+	const NativeBulkRunFragmentLocation aliasedLeafLocation = store.writeOpaquePayload(
+			71U, NativeBulkRunManifestCodec::encode(aliasedLeaf), LogSequenceNumber(22U));
+	expectFormatError([&] { store.releaseManifest(aliasedLeafLocation, LogSequenceNumber(24U)); },
+				  FormatError::FERR_INVALID_STATE);
+
+	const NativeBulkRunManifest validLeaf =
+			store.writeManifest(71U, std::array{fragment}, LogSequenceNumber(26U));
+	NativeBulkRunManifest aliasedParent;
+	aliasedParent.level = 1U;
+	aliasedParent.children = {validLeaf.location, validLeaf.location};
+	aliasedParent.entry_count = 2U;
+	aliasedParent.encoded_bytes = validLeaf.encoded_bytes * 2U;
+	const NativeBulkRunFragmentLocation aliasedParentLocation = store.writeOpaquePayload(
+			71U, NativeBulkRunManifestCodec::encode(aliasedParent), LogSequenceNumber(28U));
+	expectFormatError([&] { store.releaseManifest(aliasedParentLocation, LogSequenceNumber(30U)); },
+				  FormatError::FERR_INVALID_STATE);
+
+	NativeBulkRunManifest wrongLevelChild;
+	wrongLevelChild.level = 1U;
+	wrongLevelChild.children = {validLeaf.location};
+	wrongLevelChild.entry_count = 1U;
+	wrongLevelChild.encoded_bytes = validLeaf.encoded_bytes;
+	const NativeBulkRunFragmentLocation wrongLevelChildLocation = store.writeOpaquePayload(
+			71U, NativeBulkRunManifestCodec::encode(wrongLevelChild), LogSequenceNumber(32U));
+	NativeBulkRunManifest wrongLevelParent;
+	wrongLevelParent.level = 1U;
+	wrongLevelParent.children = {wrongLevelChildLocation};
+	wrongLevelParent.entry_count = 1U;
+	wrongLevelParent.encoded_bytes = validLeaf.encoded_bytes;
+	const NativeBulkRunFragmentLocation wrongLevelParentLocation = store.writeOpaquePayload(
+			71U, NativeBulkRunManifestCodec::encode(wrongLevelParent), LogSequenceNumber(34U));
+	expectFormatError([&] { store.releaseManifest(wrongLevelParentLocation, LogSequenceNumber(36U)); },
+				  FormatError::FERR_INVALID_STATE);
+
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	for (const NativeBulkRunFragmentLocation &location:
+			 {fragment, aliasedLeafLocation, validLeaf.location, aliasedParentLocation, wrongLevelChildLocation,
+			  wrongLevelParentLocation}) {
+		EXPECT_EQ(metadata->findCatalog(snapshot, location.segment_id).state, SegmentState::SGS_SEALED);
+	}
+	snapshot.release();
 }
 
 TEST_F(NativeBulkRunStoreTest, RejectsCheckpointOverflowBeforeAnyReleaseMutation) {
@@ -823,6 +1346,24 @@ TEST(NativeBulkRunManifestCodecTest, RejectsCorruptionForeignReferencesAndInvali
 									   selfReference.size() - RSS_NATIVE_BULK_RUN_MANIFEST_HEADER_BYTES));
 	expectFormatError([&] { static_cast<void>(NativeBulkRunManifestCodec::decode(selfReference, location)); },
 					  FormatError::FERR_INVALID_HEADER);
+	auto missingReference = encoded;
+	LittleEndianCodec::writeU64(missingReference, RSS_NATIVE_BULK_RUN_MANIFEST_HEADER_BYTES, 0U);
+	LittleEndianCodec::writeU32(missingReference, 32U,
+							bulkRunCrc(std::span<const std::byte>(missingReference).subspan(
+										RSS_NATIVE_BULK_RUN_MANIFEST_HEADER_BYTES)));
+	expectFormatError([&] { static_cast<void>(NativeBulkRunManifestCodec::decode(missingReference, location)); },
+					  FormatError::FERR_INVALID_HEADER);
+
+	// Exercise the independent aggregate guards while retaining a valid
+	// manifest shape and reference table.
+	auto zeroEntryCount = encoded;
+	LittleEndianCodec::writeU64(zeroEntryCount, 16U, 0U);
+	expectFormatError([&] { static_cast<void>(NativeBulkRunManifestCodec::decode(zeroEntryCount, location)); },
+					  FormatError::FERR_INVALID_HEADER);
+	auto zeroEncodedBytes = encoded;
+	LittleEndianCodec::writeU64(zeroEncodedBytes, 24U, 0U);
+	expectFormatError([&] { static_cast<void>(NativeBulkRunManifestCodec::decode(zeroEncodedBytes, location)); },
+					  FormatError::FERR_INVALID_HEADER);
 }
 
 TEST(NativeBulkRunManifestCodecTest, DeterministicWireFuzzEitherFailsClosedOrRoundTripsCanonicalBytes) {
@@ -881,4 +1422,84 @@ TEST(NativeBulkRunManifestCodecTest, RejectsNonCanonicalShapesBeforeEncoding) {
 	selfLocated.location = {SegmentId(13U), Generation(1U), 71U};
 	expectFormatError([&] { static_cast<void>(NativeBulkRunManifestCodec::encode(selfLocated)); },
 					  FormatError::FERR_INVALID_HEADER);
+}
+
+TEST(NativeBulkRunManifestCodecTest, RejectsMixedLevelOwnershipAndAggregateShapesBeforeEncoding) {
+	const NativeBulkRunFragmentLocation first{SegmentId(11U), Generation(1U), 71U};
+	const NativeBulkRunFragmentLocation second{SegmentId(12U), Generation(1U), 72U};
+	NativeBulkRunManifest parent{{}, 1U, {first}, {first}, 1U, 32U};
+	expectFormatError([&] { static_cast<void>(NativeBulkRunManifestCodec::encode(parent)); },
+					  FormatError::FERR_INVALID_HEADER);
+
+	NativeBulkRunManifest zeroBytes{{}, 0U, {first}, {}, 1U, 0U};
+	expectFormatError([&] { static_cast<void>(NativeBulkRunManifestCodec::encode(zeroBytes)); },
+					  FormatError::FERR_INVALID_HEADER);
+
+	NativeBulkRunManifest mixedOwners{{}, 0U, {first, second}, {}, 2U, 64U};
+	expectFormatError([&] { static_cast<void>(NativeBulkRunManifestCodec::encode(mixedOwners)); },
+					  FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(NativeBulkRunStoreTest, RejectsAnUnadvanceableCheckpointBeforeAllocatingScratch) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io_, superblock());
+	PhysicalSegmentAllocator physical(io_, *metadata);
+	NativeBulkRunStore store(physical, *metadata, storeOptions());
+	expectFormatError(
+			[&] { static_cast<void>(store.write(71U, fragment(), LogSequenceNumber(std::numeric_limits<uint64_t>::max()))); },
+			FormatError::FERR_ARITHMETIC_OVERFLOW);
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	EXPECT_FALSE(metadata->isPhysicalSlotAllocated(snapshot, PhysicalSlotId(40U)));
+	snapshot.release();
+}
+
+TEST(NativeBulkRunMergerTest, OrderedSourceFailsClosedForInvalidAndIncoherentInputCursors) {
+	const OrderedBTreeEntrySource first = source({entry(0x10U, 11U), entry(0x20U, 22U)});
+	const OrderedBTreeEntrySource second = source({entry(0x30U, 33U)});
+	const OrderedBTreeEntrySource noSource;
+	const OrderedBTreeEntrySource noCursor = [] { return OrderedBTreeEntryCursor{}; };
+	const std::array<OrderedBTreeEntrySource, 0U> noInputs{};
+	expectFormatError(
+			[&] { static_cast<void>(NativeBulkRunMerger::orderedSource(noInputs, 1U, 1U)); },
+			FormatError::FERR_INVALID_HEADER);
+	const std::array oneInput{first};
+	expectFormatError(
+			[&] { static_cast<void>(NativeBulkRunMerger::orderedSource(oneInput, 0U, 1U)); },
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] { static_cast<void>(NativeBulkRunMerger::orderedSource(oneInput, 1U, 0U)); },
+			FormatError::FERR_INVALID_HEADER);
+	const std::array twoInputs{first, second};
+	expectFormatError(
+			[&] { static_cast<void>(NativeBulkRunMerger::orderedSource(twoInputs, 1U, 2U)); },
+			FormatError::FERR_INVALID_HEADER);
+	const std::array missingFactory{noSource};
+	expectFormatError(
+			[&] { static_cast<void>(NativeBulkRunMerger::orderedSource(missingFactory, 1U, 1U)); },
+			FormatError::FERR_INVALID_HEADER);
+	const std::array missingCursor{noCursor};
+	const OrderedBTreeEntrySource cursorSource = NativeBulkRunMerger::orderedSource(missingCursor, 1U, 1U);
+	expectFormatError([&] { static_cast<void>(cursorSource()); }, FormatError::FERR_INVALID_STATE);
+
+	const std::array unorderedInputs{source({entry(0x20U, 22U), entry(0x10U, 11U)})};
+	const OrderedBTreeEntrySource unordered = NativeBulkRunMerger::orderedSource(unorderedInputs, 1U, 2U);
+	OrderedBTreeEntryCursor unorderedCursor = unordered();
+	expectFormatError([&] { static_cast<void>(unorderedCursor()); }, FormatError::FERR_INVALID_STATE);
+
+	const std::array duplicateInputs{source({entry(0x10U, 11U)}), source({entry(0x10U, 12U)})};
+	const OrderedBTreeEntrySource duplicate = NativeBulkRunMerger::orderedSource(duplicateInputs, 2U, 2U);
+	OrderedBTreeEntryCursor duplicateCursor = duplicate();
+	ASSERT_TRUE(duplicateCursor().has_value());
+	expectFormatError([&] { static_cast<void>(duplicateCursor()); }, FormatError::FERR_INVALID_STATE);
+
+	const OrderedBTreeEntrySource bounded = NativeBulkRunMerger::orderedSource(oneInput, 1U, 1U);
+	OrderedBTreeEntryCursor boundedCursor = bounded();
+	ASSERT_TRUE(boundedCursor().has_value());
+	expectFormatError([&] { static_cast<void>(boundedCursor()); }, FormatError::FERR_INVALID_STATE);
+}
+
+TEST(NativeBulkRunMergerTest, OrderedSourceRejectsAnEmptyBTreeKeyBeforeExposingIt) {
+	const std::array inputs{source({BTreePageEntry{std::vector<std::byte>{}, 11U}})};
+	const OrderedBTreeEntrySource merged = NativeBulkRunMerger::orderedSource(inputs, 1U, 1U);
+
+	expectFormatError([&] { static_cast<void>(merged()); }, FormatError::FERR_INVALID_STATE);
 }

@@ -83,3 +83,14 @@ TEST(Sha256Test, IncrementalDigestMatchesOneShotAcrossBlockAndPaddingBoundaries)
 	hasher.update(std::span(message).subspan(121U));
 	EXPECT_EQ(hasher.finalize(), graph::utils::Sha256::digest(message));
 }
+
+TEST(Sha256Test, IncrementalDigestRetainsAnIncompleteTailAcrossSmallUpdates) {
+	const std::vector<std::byte> message = bytes("abc");
+	graph::utils::Sha256 hasher;
+
+	hasher.update(std::span(message).first(1U));
+	hasher.update(std::span(message).subspan(1U, 1U));
+	hasher.update(std::span(message).subspan(2U));
+
+	EXPECT_EQ(hasher.finalize(), graph::utils::Sha256::digest(message));
+}

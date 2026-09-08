@@ -8,6 +8,8 @@
 
 #include "storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp"
 
+#include "graph/debug/PerfTrace.hpp"
+
 using namespace relocatable_storage_backend_test;
 
 namespace {
@@ -74,6 +76,30 @@ TEST_F(RelocatableStorageBackendTest,
 	uncached.close();
 }
 
+TEST_F(RelocatableStorageBackendTest, ResumesAnAdjacentScanFromAnotherSnapshot) {
+	const NativeGraphFixture fixture = materializeNativeGraphFixture();
+	RelocatableStorageBackend backend(backendOptions());
+	backend.open();
+
+	std::unique_ptr<LogicalGraphReadSnapshot> origin = backend.openLogicalGraphReadSnapshot();
+	const LogicalGraphAdjacencyPage first = origin->scanAdjacentEdges(
+			fixture.person_node_id, LogicalGraphReadDirection::LGRD_OUTGOING, std::nullopt, 1U);
+	ASSERT_EQ(first.edges.size(), 1U);
+	ASSERT_TRUE(first.continuation.has_value());
+
+	// Continuations contain logical edge IDs, so another snapshot must safely
+	// rebuild its own physical cursor rather than relying on the origin cache.
+	std::unique_ptr<LogicalGraphReadSnapshot> resumed = backend.openLogicalGraphReadSnapshot();
+	const LogicalGraphAdjacencyPage second = resumed->scanAdjacentEdges(
+			fixture.person_node_id, LogicalGraphReadDirection::LGRD_OUTGOING, first.continuation, 1U);
+	ASSERT_EQ(second.edges.size(), 1U);
+	EXPECT_GT(second.edges.front().edge_id, first.edges.front().edge_id);
+
+	resumed.reset();
+	origin.reset();
+	backend.close();
+}
+
 TEST_F(RelocatableStorageBackendTest, LogicalReadSnapshotValidatesAllVisitorCallbacks) {
 	const NativeGraphFixture fixture = materializeNativeGraphFixture();
 	RelocatableStorageBackend backend(backendOptions());
@@ -99,6 +125,36 @@ TEST_F(RelocatableStorageBackendTest, LogicalReadSnapshotValidatesAllVisitorCall
 		return true;
 	});
 	EXPECT_EQ(nodeCount, 2U);
+	size_t edgeCount = 0U;
+	snapshot->visitEdges(4U, [&edgeCount](const LogicalGraphEdge &edge) {
+		EXPECT_NE(edge.edge_id, 0U);
+		EXPECT_NE(edge.source_node_id, 0U);
+		EXPECT_NE(edge.target_node_id, 0U);
+		EXPECT_FALSE(edge.type.empty());
+		++edgeCount;
+		return true;
+	});
+	EXPECT_EQ(edgeCount, 2U);
+	size_t adjacentEdgeCount = 0U;
+	snapshot->visitAdjacentEdges(
+			fixture.person_node_id, LogicalGraphReadDirection::LGRD_OUTGOING, 4U,
+			[&adjacentEdgeCount, &fixture](const LogicalGraphEdge &edge) {
+				EXPECT_EQ(edge.source_node_id, fixture.person_node_id);
+				EXPECT_FALSE(edge.type.empty());
+				++adjacentEdgeCount;
+				return true;
+			});
+	EXPECT_EQ(adjacentEdgeCount, 2U);
+	size_t incomingEdgeCount = 0U;
+	snapshot->visitAdjacentEdges(
+			fixture.person_node_id, LogicalGraphReadDirection::LGRD_INCOMING, 4U,
+			[&incomingEdgeCount, &fixture](const LogicalGraphEdge &edge) {
+				EXPECT_EQ(edge.target_node_id, fixture.person_node_id);
+				EXPECT_FALSE(edge.type.empty());
+				++incomingEdgeCount;
+				return true;
+			});
+	EXPECT_EQ(incomingEdgeCount, 2U);
 	size_t topologyCount = 0U;
 	snapshot->visitEdgeTopologies(4U, [&topologyCount](const LogicalGraphEdgeTopology &) {
 		++topologyCount;
@@ -108,6 +164,7 @@ TEST_F(RelocatableStorageBackendTest, LogicalReadSnapshotValidatesAllVisitorCall
 
 	EXPECT_EQ(snapshot->readNode(fixture.person_node_id).node_id, fixture.person_node_id);
 	EXPECT_TRUE(snapshot->containsNode(fixture.person_node_id));
+	EXPECT_TRUE(snapshot->supportsNodeExistenceProbes());
 	EXPECT_EQ(snapshot->readEdge(fixture.knows_edge_id).edge_id, fixture.knows_edge_id);
 	const auto exact = snapshot->findNodesByExactProperties(
 			{"Person"}, {{"alpha", PropertyValue(int64_t{42})}}, 2U, 2U);
@@ -122,6 +179,8 @@ TEST_F(RelocatableStorageBackendTest, LogicalReadSnapshotValidatesAllVisitorCall
 	EXPECT_FALSE(composite.has_value());
 	const LogicalGraphNodePage nodePage = snapshot->scanNodesAfter(0U, 2U, 8U);
 	EXPECT_EQ(nodePage.nodes.size(), 2U);
+	EXPECT_THROW(static_cast<void>(snapshot->scanNodesAfter(0U, 0U, 8U)), FormatException);
+	EXPECT_THROW(static_cast<void>(snapshot->scanNodesAfter(0U, 2U, 0U)), FormatException);
 	const LogicalGraphAdjacencyPage adjacencyPage = snapshot->scanAdjacentEdges(
 			fixture.person_node_id, LogicalGraphReadDirection::LGRD_OUTGOING, std::nullopt, 2U);
 	EXPECT_EQ(adjacencyPage.edges.size(), 2U);
@@ -147,6 +206,39 @@ TEST_F(RelocatableStorageBackendTest, LogicalReadSnapshotValidatesAllVisitorCall
 	describeRequest.candidate_search_budget = 1U;
 	describeRequest.candidate_refinement_budget = 1U;
 	EXPECT_THROW(static_cast<void>(vectorSnapshot->describeLogicalVectorIndex(describeRequest)), std::runtime_error);
+	const LogicalGraphVectorIndexDescriptor nonMatchingIndex{1U, "Other", "embedding", 1U, "l2"};
+	const auto overlayScore = vectorSnapshot->scoreLogicalVectorExactOverlayCandidate(
+			describeRequest, nonMatchingIndex, vectorSnapshot->readNode(fixture.person_node_id));
+	EXPECT_FALSE(overlayScore.has_value());
 	vectorSnapshot.reset();
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, LogicalEdgeMaterializationRecordsTraceWhenEnabled) {
+	static_cast<void>(materializeNativeGraphFixture());
+	RelocatableStorageBackend backend(backendOptions());
+	backend.open();
+	std::unique_ptr<LogicalGraphReadSnapshot> snapshot = backend.openLogicalGraphReadSnapshot();
+
+	const bool traceWasEnabled = graph::debug::PerfTrace::isEnabled();
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setEnabled(true);
+	size_t visited = 0U;
+	snapshot->visitEdges(4U, [&visited](const LogicalGraphEdge &edge) {
+		++visited;
+		return edge.edge_id != 0U && edge.source_node_id != 0U && edge.target_node_id != 0U;
+	});
+	const graph::debug::PerfTrace::Snapshot trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setEnabled(traceWasEnabled);
+
+	EXPECT_EQ(visited, 2U);
+	ASSERT_TRUE(trace.contains("native_graph.read.edge_logical_materialization"));
+	EXPECT_EQ(trace.at("native_graph.read.edge_logical_materialization").calls, 1U);
+	ASSERT_TRUE(trace.contains("native_graph.read.edge_name_materialization"));
+	EXPECT_EQ(trace.at("native_graph.read.edge_name_materialization").calls, 2U);
+	ASSERT_TRUE(trace.contains("native_graph.read.edge_query_visitor"));
+	EXPECT_EQ(trace.at("native_graph.read.edge_query_visitor").calls, 2U);
+
+	snapshot.reset();
 	backend.close();
 }

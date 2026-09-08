@@ -72,6 +72,17 @@ namespace {
 
 } // namespace
 
+TEST(MetadataSnapshotHandleContractTest, DefaultHandlesAreInvalidAndReleaseIsIdempotent) {
+	MetadataSnapshotPin pin;
+	EXPECT_FALSE(pin.isValid());
+	EXPECT_FALSE(pin.superblock().generation.isValid());
+	EXPECT_NO_THROW(pin.release());
+
+	MetadataWriteGuard guard;
+	EXPECT_FALSE(guard.isValid());
+	EXPECT_NO_THROW(guard.release());
+}
+
 class RelocatableMetadataSnapshotRegistryTest : public ::testing::Test {
 protected:
 	std::filesystem::path testFilePath;

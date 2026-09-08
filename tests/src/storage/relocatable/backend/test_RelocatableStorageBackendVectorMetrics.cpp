@@ -420,6 +420,20 @@ TEST_F(RelocatableStorageBackendVectorMetricTest, EmptyVectorIndexPreparesAndCom
 	backend->close();
 }
 
+TEST_F(RelocatableStorageBackendVectorMetricTest, PreparedVectorTrainingCannotCommitTwice) {
+	auto backend = openBackend();
+	static_cast<void>(backend->createLogicalNodeVectorIndex({"single_commit_embedding", "Embedding", "value", 2U, "l2"}));
+
+	std::unique_ptr<PreparedLogicalGraphVectorTraining> prepared =
+			backend->prepareLogicalVectorTraining({"single_commit_embedding", 16U, 16U});
+	ASSERT_NE(prepared, nullptr);
+	EXPECT_FALSE(prepared->preview().will_train);
+	EXPECT_FALSE(prepared->commit().trained);
+	EXPECT_THROW(static_cast<void>(prepared->commit()), std::logic_error);
+
+	backend->close();
+}
+
 TEST_F(RelocatableStorageBackendVectorMetricTest, TrainsAndQueriesAHighDimensionalPqIndex) {
 	auto backend = openBackend();
 	const auto vector = [](const size_t dimensions, const size_t hotCoordinate) {

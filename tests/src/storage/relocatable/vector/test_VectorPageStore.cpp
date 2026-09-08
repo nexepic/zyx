@@ -543,6 +543,30 @@ TEST_F(RelocatableVectorPageStoreTest, RetiresRawPagesAndTheirVectorLocationsInO
 	pinned.release();
 }
 
+TEST_F(RelocatableVectorPageStoreTest, RetiresDerivedPqPagesWhilePinnedSnapshotsRetainTheirMapping) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	VectorPageStore store(io, *metadata);
+	const std::array<PqVectorMaterializationRecord, 2U> records = {pqRecord(1U, {1U, 2U}),
+																		 pqRecord(2U, {3U, 4U})};
+	const VectorPqMaterializationResult materialized =
+			store.materializePq(17U, records, pqOptions(), LogSequenceNumber(2U));
+	ASSERT_EQ(materialized.pages.size(), 1U);
+
+	MetadataSnapshotPin pinned = metadata->openSnapshot();
+	const PageId pageId = materialized.pages.front().page_id;
+	const std::optional<DerivedVectorPqPage> observed = store.inspectDerivedPqPage(pinned, pageId);
+	ASSERT_TRUE(observed.has_value());
+	const LogSequenceNumber retirementLsn(pinned.superblock().checkpoint_lsn.value() + 1U);
+	const std::array<DerivedVectorPqPage, 1U> pages{*observed};
+	static_cast<void>(store.retireDerivedPqPages(pinned.superblock().generation, pages, retirementLsn));
+
+	MetadataSnapshotPin current = metadata->openSnapshot();
+	EXPECT_FALSE(metadata->findPageLocationOptional(current, pageId).has_value());
+	current.release();
+	EXPECT_EQ(store.read(pinned, pageId).header().kind, VectorStorageKind::VSK_PQ);
+	pinned.release();
+}
+
 TEST_F(RelocatableVectorPageStoreTest, MaterializesPqPagesWithoutPollutingTheRawVectorLocationDirectory) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
 	VectorPageStore store(io, *metadata);
@@ -991,6 +1015,42 @@ TEST_F(RelocatableVectorPageStoreTest, PreparesTheFirstRawPageBeforePublishingIt
 	VectorPageStore reopenedStore(io, *reopened);
 	const MetadataSnapshotPin reopenedSnapshot = reopened->openSnapshot();
 	EXPECT_EQ(reopenedStore.read(reopenedSnapshot, rawHeader.page_id).header(), rawPage.header());
+}
+
+TEST_F(RelocatableVectorPageStoreTest, PreparesRawReplacementAndAppendPagesWithStableIdentity) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	VectorPageStore store(io, *metadata);
+	const VectorPageHeader rawHeader =
+			header(VectorStorageKind::VSK_RAW, PageId(101U), Generation(1U), LogSequenceNumber(2U));
+	const VectorPage rawPage = page(rawHeader, std::byte{0x71});
+	ASSERT_TRUE(store.allocate(allocationRequest(rawHeader, SegmentId(71U)), rawPage, PhysicalSlotId(40U),
+							   PhysicalSlotId(40U), LogSequenceNumber(2U))
+						.has_value());
+
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	const CatalogEntry pool = metadata->findCatalog(snapshot, SegmentId(71U));
+	const PageLocation expected = metadata->findPageLocation(snapshot, rawHeader.page_id);
+	snapshot.release();
+
+	const VectorPageHeader replacementHeader =
+			header(VectorStorageKind::VSK_RAW, rawHeader.page_id, Generation(1U), LogSequenceNumber(3U));
+	PageLocation replacement;
+	store.prepareRawReplacement(pool, expected, LogSequenceNumber(2U), page(replacementHeader, std::byte{0x72}),
+							LogSequenceNumber(3U), replacement);
+	EXPECT_EQ(replacement.page_id, rawHeader.page_id);
+	EXPECT_EQ(replacement.segment_id, pool.segment_id);
+	EXPECT_EQ(replacement.generation, pool.generation);
+	EXPECT_GT(replacement.page_index, 0U);
+
+	const VectorPageHeader appendedHeader =
+			header(VectorStorageKind::VSK_RAW, PageId(102U), Generation(1U), LogSequenceNumber(4U));
+	PageLocation appended{appendedHeader.page_id, pool.segment_id, 0U, pool.generation, 0U};
+	store.prepareRawAppend(pool, page(appendedHeader, std::byte{0x73}), LogSequenceNumber(4U), appended);
+	EXPECT_EQ(appended.page_id, appendedHeader.page_id);
+	EXPECT_EQ(appended.segment_id, pool.segment_id);
+	EXPECT_EQ(appended.generation, pool.generation);
+	EXPECT_GT(appended.page_index, 0U);
+	store.reclaimRetiredFrames(pool.segment_id);
 }
 
 TEST_F(RelocatableVectorPageStoreTest, RejectsAnInvalidInitialRawPageLocationWithoutPublishingThePool) {

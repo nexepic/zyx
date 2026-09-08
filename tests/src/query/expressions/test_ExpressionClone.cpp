@@ -4,6 +4,8 @@
  *        plus utility functions (toString for operators, isArithmeticOperator, etc.).
  */
 
+#include <memory>
+
 #include <gtest/gtest.h>
 #include "graph/query/expressions/ExistsExpression.hpp"
 #include "graph/query/expressions/Expression.hpp"
@@ -94,6 +96,11 @@ public:
 } // namespace
 
 TEST(ExpressionClone, CoreExpressionTypesDispatchVisitorsAndPreserveOptionalChildren) {
+	// Call through both public visitor interfaces so their virtual destruction
+	// contracts remain valid for callers that retain visitors polymorphically.
+	std::unique_ptr<ExpressionVisitor> mutableOwner = std::make_unique<ExpressionVisitorProbe>();
+	std::unique_ptr<ConstExpressionVisitor> constOwner = std::make_unique<ExpressionVisitorProbe>();
+
 	ExpressionVisitorProbe visitor;
 	auto expectDispatch = [&visitor](Expression &expression, bool &mutableVisited, bool &constVisited) {
 		expression.accept(static_cast<ExpressionVisitor &>(visitor));
@@ -107,6 +114,12 @@ TEST(ExpressionClone, CoreExpressionTypesDispatchVisitorsAndPreserveOptionalChil
 
 	VariableReferenceExpression variable("node");
 	expectDispatch(variable, visitor.visitedVariableMutable, visitor.visitedVariableConst);
+	EXPECT_FALSE(variable.hasProperty());
+	EXPECT_EQ(variable.getVariableName(), "node");
+	VariableReferenceExpression propertyAccess("node", "name");
+	EXPECT_EQ(propertyAccess.getExpressionType(), ExpressionType::PROPERTY_ACCESS);
+	EXPECT_TRUE(propertyAccess.hasProperty());
+	EXPECT_EQ(propertyAccess.getPropertyName(), "name");
 
 	BinaryOpExpression binary(
 			std::make_unique<LiteralExpression>(int64_t(1)), BinaryOperatorType::BOP_ADD,
@@ -118,9 +131,11 @@ TEST(ExpressionClone, CoreExpressionTypesDispatchVisitorsAndPreserveOptionalChil
 
 	FunctionCallExpression function("count", {});
 	expectDispatch(function, visitor.visitedFunctionMutable, visitor.visitedFunctionConst);
+	EXPECT_TRUE(function.getArguments().empty());
 
 	CaseExpression caseExpression;
 	expectDispatch(caseExpression, visitor.visitedCaseMutable, visitor.visitedCaseConst);
+	EXPECT_EQ(caseExpression.getComparisonExpression(), nullptr);
 
 	InExpression inExpression(
 			std::make_unique<VariableReferenceExpression>("node"),
@@ -128,6 +143,7 @@ TEST(ExpressionClone, CoreExpressionTypesDispatchVisitorsAndPreserveOptionalChil
 					graph::PropertyValue(int64_t(1)), graph::PropertyValue(int64_t(2))})));
 	expectDispatch(inExpression, visitor.visitedInMutable, visitor.visitedInConst);
 	EXPECT_TRUE(inExpression.hasDynamicList());
+	EXPECT_NE(inExpression.getValue(), nullptr);
 	EXPECT_EQ(inExpression.toString(), "(node IN [1, 2])");
 	EXPECT_EQ(inExpression.clone()->toString(), inExpression.toString());
 
@@ -358,6 +374,7 @@ TEST(ExpressionClone, FunctionCallNoArgs) {
 
 	EXPECT_EQ(expr.getFunctionName(), "count");
 	EXPECT_EQ(expr.getArgumentCount(), 0u);
+	EXPECT_FALSE(expr.isDistinct());
 	EXPECT_EQ(expr.toString(), "count()");
 
 	auto cloned = expr.clone();
@@ -365,7 +382,18 @@ TEST(ExpressionClone, FunctionCallNoArgs) {
 	ASSERT_NE(fn, nullptr);
 	EXPECT_EQ(fn->getFunctionName(), "count");
 	EXPECT_EQ(fn->getArgumentCount(), 0u);
+	EXPECT_FALSE(fn->isDistinct());
 	EXPECT_EQ(fn->toString(), "count()");
+}
+
+TEST(ExpressionClone, FunctionCallDistinctPreservesItsPublicModifier) {
+	FunctionCallExpression expression("count", {}, true);
+	EXPECT_TRUE(expression.isDistinct());
+
+	auto cloned = expression.clone();
+	auto *function = dynamic_cast<FunctionCallExpression *>(cloned.get());
+	ASSERT_NE(function, nullptr);
+	EXPECT_TRUE(function->isDistinct());
 }
 
 TEST(ExpressionClone, FunctionCallOneArg) {
@@ -894,6 +922,8 @@ TEST(ExpressionClone, InExpressionCloneAndToString) {
 	listValues.emplace_back(int64_t(35));
 
 	InExpression expr(std::move(value), std::move(listValues));
+	EXPECT_FALSE(expr.hasDynamicList());
+	EXPECT_EQ(expr.getListExpression(), nullptr);
 
 	std::string str = expr.toString();
 	EXPECT_NE(str.find("n.age"), std::string::npos);

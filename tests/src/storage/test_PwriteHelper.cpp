@@ -175,6 +175,15 @@ TEST_F(PwriteHelperTest, FileSizeReportsCurrentNativeSize) {
 	portable_close_rw(fd);
 }
 
+TEST_F(PwriteHelperTest, FileSizeRejectsAClosedNativeHandle) {
+	file_handle_t fd = portable_open_rw(testFile_.c_str());
+	ASSERT_NE(fd, INVALID_FILE_HANDLE);
+	ASSERT_EQ(portable_close_rw(fd), 0);
+
+	uint64_t size = 0U;
+	EXPECT_EQ(portable_file_size(fd, &size), -1);
+}
+
 TEST_F(PwriteHelperTest, TruncateFile) {
 	file_handle_t fd = portable_open_rw(testFile_.c_str());
 	ASSERT_NE(fd, INVALID_FILE_HANDLE);
@@ -203,6 +212,18 @@ TEST_F(PwriteHelperTest, TruncateInvalidFd) {
 TEST_F(PwriteHelperTest, OpenRWNullPath) {
 	file_handle_t fd = portable_open_rw(nullptr);
 	EXPECT_EQ(fd, INVALID_FILE_HANDLE);
+}
+
+TEST_F(PwriteHelperTest, ExclusiveCreateNeverReplacesAnExistingFile) {
+	EXPECT_EQ(portable_create_rw_exclusive(nullptr), INVALID_FILE_HANDLE);
+	EXPECT_EQ(portable_create_rw_exclusive(testFile_.c_str()), INVALID_FILE_HANDLE);
+
+	std::error_code error;
+	ASSERT_TRUE(std::filesystem::remove(testFile_, error));
+	file_handle_t created = portable_create_rw_exclusive(testFile_.c_str());
+	ASSERT_NE(created, INVALID_FILE_HANDLE);
+	EXPECT_EQ(portable_close_rw(created), 0);
+	EXPECT_EQ(portable_create_rw_exclusive(testFile_.c_str()), INVALID_FILE_HANDLE);
 }
 
 // Covers: portable_pwrite with null buffer returns -1

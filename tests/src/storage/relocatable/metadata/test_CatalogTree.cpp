@@ -26,6 +26,8 @@
 #include "graph/storage/PwriteHelper.hpp"
 #include "graph/storage/StorageIO.hpp"
 #include "graph/storage/relocatable/metadata/CatalogTree.hpp"
+#include "graph/storage/relocatable/metadata/MetadataPagePool.hpp"
+#include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
 #include "graph/storage/relocatable/metadata/MetadataWriteBatch.hpp"
 
 #ifdef _WIN32
@@ -102,6 +104,7 @@ namespace {
 		}
 
 		void abandonPage(PhysicalPageRef reference) noexcept override { abandonedReferences.push_back(reference); }
+		void abandonUnpublishedPool(PhysicalSlotId slot) noexcept override { abandonedPoolSlots.push_back(slot); }
 
 		bool invalidMetadataPageId = false;
 		bool invalidPhysicalReference = false;
@@ -111,6 +114,17 @@ namespace {
 		uint64_t nextPhysicalPage = 0;
 		std::vector<PhysicalPageRef> returnedReferences;
 		std::vector<PhysicalPageRef> abandonedReferences;
+		std::vector<PhysicalSlotId> abandonedPoolSlots;
+	};
+
+	class DefaultPoolMetadataPageAllocator final : public MetadataPageAllocator {
+	public:
+		MetadataPageId allocateMetadataPageId() override { return MetadataPageId(1U); }
+		MetadataPageAllocation allocatePage(Generation generation, LogSequenceNumber,
+											 std::span<const PhysicalSlotId>) override {
+			return {{PhysicalSlotId(1U), 1U, generation}, std::nullopt};
+		}
+		void abandonPage(PhysicalPageRef) noexcept override {}
 	};
 
 	TEST(MetadataPageAllocationContractTest, ConvertsToItsPhysicalPageAndSupportsDefaultPoolAbandonment) {
@@ -122,6 +136,47 @@ namespace {
 		EXPECT_EQ(static_cast<PhysicalPageRef>(allocation), allocation.page);
 		MetadataPageAllocator &baseAllocator = allocator;
 		EXPECT_NO_THROW(baseAllocator.abandonUnpublishedPool(PhysicalSlotId(7U)));
+		DefaultPoolMetadataPageAllocator defaultAllocator;
+		EXPECT_NO_THROW(defaultAllocator.abandonUnpublishedPool(PhysicalSlotId(8U)));
+	}
+
+	TEST(MetadataPageAllocatorDefaultContractTest, ForwardsOptionalAllocationAndAbandonsEveryUnpublishedPool) {
+		TestMetadataPageAllocator allocator;
+		MetadataPageAllocator &baseAllocator = allocator;
+		const std::array excludedPools{PhysicalSlotId(3U)};
+		const std::array excludedRanges{PhysicalSlotRange{PhysicalSlotId(8U), PhysicalSlotId(10U)}};
+		const MetadataPageAllocation allocation = baseAllocator.allocatePage(
+				Generation(4U), LogSequenceNumber(7U), excludedPools, excludedRanges, nullptr);
+		EXPECT_TRUE(allocation.page.isValid());
+		ASSERT_EQ(allocator.returnedReferences.size(), 1U);
+
+		baseAllocator.beginUnpublishedBatch(superblock(3U, 6U));
+		baseAllocator.reserveMetadataFrames(2U, excludedPools, excludedRanges, nullptr);
+		EXPECT_TRUE(baseAllocator.ensureMetadataFrameCapacity(Generation(4U), LogSequenceNumber(7U), 2U,
+																  excludedPools, excludedRanges, nullptr)
+					.empty());
+		EXPECT_EQ(baseAllocator.physicalFileSize(), 0U);
+		baseAllocator.releaseMetadataFrames();
+		baseAllocator.endUnpublishedBatch(superblock(3U, 6U));
+
+		const std::array pools{PhysicalSlotId(11U), PhysicalSlotId(12U)};
+		baseAllocator.abandonUnpublishedBatch(pools, {}, 0U);
+		EXPECT_EQ(allocator.abandonedPoolSlots, (std::vector<PhysicalSlotId>{pools.begin(), pools.end()}));
+	}
+
+	TEST(PhysicalSlotRangeTest, ValidatesOrderedValidBoundsAndMembership) {
+		const PhysicalSlotRange valid{PhysicalSlotId(4U), PhysicalSlotId(6U)};
+		EXPECT_TRUE(valid.isValid());
+		EXPECT_FALSE(PhysicalSlotRange{}.isValid());
+		EXPECT_FALSE((PhysicalSlotRange{PhysicalSlotId{}, PhysicalSlotId(4U)}.isValid()));
+		EXPECT_FALSE((PhysicalSlotRange{PhysicalSlotId(4U), PhysicalSlotId{}}.isValid()));
+		EXPECT_FALSE((PhysicalSlotRange{PhysicalSlotId(6U), PhysicalSlotId(4U)}.isValid()));
+		EXPECT_TRUE(valid.contains(PhysicalSlotId(4U)));
+		EXPECT_TRUE(valid.contains(PhysicalSlotId(6U)));
+		EXPECT_FALSE(valid.contains(PhysicalSlotId(3U)));
+		EXPECT_FALSE(valid.contains(PhysicalSlotId(7U)));
+		EXPECT_FALSE(valid.contains(PhysicalSlotId{}));
+		EXPECT_FALSE((PhysicalSlotRange{PhysicalSlotId{}, PhysicalSlotId(4U)}.contains(PhysicalSlotId(1U))));
 	}
 
 } // namespace
@@ -199,6 +254,28 @@ TEST_F(RelocatableCatalogTreeTest, PublishesOneBatchIntoSharedLeavesAndSurvivesR
 	expectSameSuperblock(recovered, published);
 	EXPECT_EQ(reopenedTree.find(recovered, SegmentId(RSS_CATALOG_PAGE_MAX_ENTRIES + 1U)).physical_slot,
 			  PhysicalSlotId(103));
+}
+
+TEST_F(RelocatableCatalogTreeTest, LogicalizesAnOwnedCandidateRootBeforeBootstrapRoutePublication) {
+	auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
+	MetadataSnapshotPin snapshot = store->openSnapshot();
+	const Superblock current = snapshot.superblock();
+	snapshot.release();
+
+	ASSERT_TRUE(current.usesPageDirectoryBootstrap());
+	ASSERT_TRUE(current.catalog_root.isValid());
+	MetadataPageFile pages(io, current);
+	MetadataPagePoolAllocator allocator(io, current, MetadataPagePoolOpenMode::CPOM_ROOT_RECOVER);
+	CatalogTree tree(pages, allocator);
+	MetadataWriteBatch batch(allocator, current, LogSequenceNumber(current.checkpoint_lsn.value() + 1U));
+	const CatalogEntry added = entry(17U, 3U, batch.generation().value(), batch.checkpointLsn().value());
+
+	tree.prepareUpsert(batch, std::span(&added, 1U));
+	ASSERT_TRUE(batch.ownsAllocatedPage(batch.candidate().catalog_root));
+	EXPECT_FALSE(pages.readMetadataRadixUnresolved(batch.candidate().catalog_root).logical_children_enabled);
+
+	tree.prepareLogicalRootChildren(batch);
+	EXPECT_TRUE(pages.readMetadataRadixUnresolved(batch.candidate().catalog_root).logical_children_enabled);
 }
 
 TEST_F(RelocatableCatalogTreeTest, NativeCandidateShortWriteRetainsOldGenerationAndAllowsRetryAfterReopen) {
@@ -633,6 +710,89 @@ TEST_F(RelocatableCatalogTreeTest, AcceptsAProducerWithoutAnIntermediateCatalogV
 	EXPECT_EQ(tree.find(published, SegmentId(9U)).physical_slot, PhysicalSlotId(102U));
 }
 
+TEST_F(RelocatableCatalogTreeTest, RejectsEmptyStreamSourcesAndMovedFromAppendSessions) {
+	const Superblock initial = superblock(1U, 1U);
+	SuperblockFile bootstrap(io);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(io, initial);
+	TestMetadataPageAllocator allocator;
+	CatalogTree tree(pages, allocator);
+
+	MetadataWriteBatch cursorBatch(allocator, initial, LogSequenceNumber(2U));
+	expectFormatError(
+			[&] {
+				tree.prepareAppend(cursorBatch, SegmentId(8U), SegmentId(8U), 1U,
+							   CatalogTree::EntryCursor{});
+			},
+			FormatError::FERR_INVALID_HEADER);
+
+	MetadataWriteBatch producerBatch(allocator, initial, LogSequenceNumber(2U));
+	expectFormatError(
+			[&] {
+				tree.prepareAppend(producerBatch, SegmentId(8U), SegmentId(8U), 1U,
+							   CatalogTree::EntryProducer{});
+			},
+			FormatError::FERR_INVALID_HEADER);
+
+	MetadataWriteBatch sessionBatch(allocator, initial, LogSequenceNumber(2U));
+	CatalogAppendSession session = tree.beginAppend(sessionBatch, SegmentId(8U), SegmentId(8U), 1U);
+	CatalogAppendSession active = std::move(session);
+	expectFormatError([&] { session.append(entry(8U, 100U, 1U, 2U)); }, FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { session.finish(); }, FormatError::FERR_INVALID_STATE);
+	EXPECT_FALSE(session.isFinished());
+	active.append(entry(8U, 100U, 1U, 2U));
+	active.finish();
+	EXPECT_TRUE(active.isFinished());
+	expectFormatError([&] { active.append(entry(8U, 100U, 1U, 2U)); }, FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { active.finish(); }, FormatError::FERR_INVALID_STATE);
+
+	MetadataWriteBatch boundedBatch(allocator, initial, LogSequenceNumber(2U));
+	CatalogAppendSession bounded = tree.beginAppend(boundedBatch, SegmentId(9U), SegmentId(9U), 1U);
+	expectFormatError([&] { bounded.finish(); }, FormatError::FERR_INVALID_STATE);
+	bounded.append(entry(9U, 101U, 1U, 2U));
+	expectFormatError([&] { bounded.append(entry(9U, 101U, 1U, 2U)); }, FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(RelocatableCatalogTreeTest, RejectsInvalidStreamedAppendRangesBeforeAllocatingPages) {
+	const Superblock initial = superblock(1U, 1U);
+	MetadataPageFile pages(io, initial);
+	TestMetadataPageAllocator allocator;
+	CatalogTree tree(pages, allocator);
+
+	const auto rejects = [&](SegmentId first, SegmentId last, size_t count) {
+		MetadataWriteBatch batch(allocator, initial, LogSequenceNumber(2U));
+		expectFormatError([&] { static_cast<void>(tree.beginAppend(batch, first, last, count)); },
+					  FormatError::FERR_INVALID_HEADER);
+	};
+
+	rejects(SegmentId{}, SegmentId(1U), 1U);
+	rejects(SegmentId(1U), SegmentId{}, 1U);
+	rejects(SegmentId(2U), SegmentId(1U), 1U);
+	rejects(SegmentId(1U), SegmentId(1U), 0U);
+	rejects(SegmentId(1U), SegmentId(2U), 1U);
+	rejects(SegmentId(1U), SegmentId(1U), 2U);
+	EXPECT_TRUE(allocator.returnedReferences.empty());
+
+	TestMetadataPageAllocator foreignAllocator;
+	MetadataWriteBatch foreignBatch(foreignAllocator, initial, LogSequenceNumber(2U));
+	expectFormatError(
+			[&] { static_cast<void>(tree.beginAppend(foreignBatch, SegmentId(1U), SegmentId(1U), 1U)); },
+			FormatError::FERR_INVALID_HEADER);
+	EXPECT_TRUE(allocator.returnedReferences.empty());
+}
+
+TEST_F(RelocatableCatalogTreeTest, RejectsEraseBeforeAnyCatalogRootIsPublished) {
+	const Superblock initial = superblock(1U, 1U);
+	MetadataPageFile pages(io, initial);
+	TestMetadataPageAllocator allocator;
+	CatalogTree tree(pages, allocator);
+	MetadataWriteBatch batch(allocator, initial, LogSequenceNumber(2U));
+	const std::array segmentIds{SegmentId(1U)};
+
+	expectFormatError([&] { tree.prepareErase(batch, segmentIds); }, FormatError::FERR_INVALID_STATE);
+	EXPECT_TRUE(allocator.returnedReferences.empty());
+}
+
 TEST_F(RelocatableCatalogTreeTest, PreservesExistingSparseSubtreeAcrossMultiLevelStreamedRootGrowth) {
 	const Superblock initial = superblock(1, 1);
 	SuperblockFile bootstrap(io);
@@ -663,6 +823,24 @@ TEST_F(RelocatableCatalogTreeTest, PreservesExistingSparseSubtreeAcrossMultiLeve
 	EXPECT_FALSE(tree.findOptional(before, distant.segment_id).has_value());
 	EXPECT_EQ(tree.find(after, SegmentId(1U)).physical_slot, PhysicalSlotId(100U));
 	EXPECT_EQ(tree.find(after, distant.segment_id).physical_slot, distant.physical_slot);
+
+	const CatalogEntry adjacent = entry(distantId + 1U, 201U, 1U, 4U);
+	bool emittedAdjacent = false;
+	MetadataWriteBatch adjacentBatch(allocator, after, LogSequenceNumber(4U));
+	tree.prepareAppend(adjacentBatch, adjacent.segment_id, adjacent.segment_id, 1U,
+			[&]() -> std::optional<CatalogEntry> {
+				if (emittedAdjacent) {
+					return std::nullopt;
+				}
+				emittedAdjacent = true;
+				return adjacent;
+			});
+	adjacentBatch.publish(bootstrap);
+	const Superblock appended = adjacentBatch.candidate();
+
+	EXPECT_EQ(tree.find(appended, SegmentId(1U)).physical_slot, PhysicalSlotId(100U));
+	EXPECT_EQ(tree.find(appended, distant.segment_id).physical_slot, distant.physical_slot);
+	EXPECT_EQ(tree.find(appended, adjacent.segment_id).physical_slot, adjacent.physical_slot);
 }
 
 TEST_F(RelocatableCatalogTreeTest, RejectsInvalidBatchesAndStaleSuperblocksBeforeAllocatingPages) {
@@ -771,6 +949,10 @@ TEST_F(RelocatableCatalogTreeTest, FindsOptionalEntriesAcrossEmptySparseAndOutOf
 	TestMetadataPageAllocator allocator;
 	CatalogTree tree(pages, allocator);
 	EXPECT_FALSE(tree.findOptional(initial, SegmentId(1)).has_value());
+	Superblock incompleteBootstrap = initial;
+	incompleteBootstrap.flags = RSS_SUPERBLOCK_FLAG_PAGE_DIRECTORY_BOOTSTRAP;
+	expectFormatError([&] { static_cast<void>(tree.findOptional(incompleteBootstrap, SegmentId(1))); },
+					  FormatError::FERR_INVALID_HEADER);
 	const Superblock published =
 			tree.upsertAndPublish(bootstrap, initial, std::vector{entry(1, 100, 1, 2)}, LogSequenceNumber(2));
 	EXPECT_EQ(tree.findOptional(published, SegmentId(1))->physical_slot, PhysicalSlotId(100));
@@ -841,6 +1023,24 @@ TEST_F(RelocatableCatalogTreeTest, FindsOptionalEntriesThroughADeepRadixRouteAnd
 	const std::optional<CatalogEntry> found = tree.findOptional(published, SegmentId(deepSegmentId));
 	ASSERT_TRUE(found.has_value());
 	EXPECT_EQ(found->physical_slot, PhysicalSlotId(101));
+
+	// Optional lookup must validate each traversed radix child just as strictly
+	// as mandatory lookup, rather than silently treating a corrupt route as absent.
+	const CatalogRadixPage root = pages.readCatalogRadix(published.catalog_root);
+	ASSERT_TRUE(root.children[1].isValid());
+	const CatalogRadixPage validChild = pages.readCatalogRadix(root.children[1]);
+	CatalogRadixPage wrongKind = validChild;
+	wrongKind.kind = CatalogRadixPageKind::CRPK_ROOT;
+	pages.writeCatalogRadix(root.children[1], wrongKind);
+	expectFormatError([&] { static_cast<void>(tree.findOptional(published, SegmentId(deepSegmentId))); },
+					  FormatError::FERR_INVALID_HEADER);
+
+	CatalogRadixPage wrongLevel = validChild;
+	++wrongLevel.level;
+	pages.writeCatalogRadix(root.children[1], wrongLevel);
+	expectFormatError([&] { static_cast<void>(tree.findOptional(published, SegmentId(deepSegmentId))); },
+					  FormatError::FERR_INVALID_HEADER);
+	pages.writeCatalogRadix(root.children[1], validChild);
 
 	TestMetadataPageAllocator foreignAllocator;
 	MetadataWriteBatch foreignBatch(foreignAllocator, published, LogSequenceNumber(3));
@@ -1144,9 +1344,19 @@ TEST_F(RelocatableCatalogTreeTest, RejectsMalformedOrAbsentEraseRequestsWithoutP
 	expectFormatError([&] { tree.prepareErase(unorderedBatch, unordered); }, FormatError::FERR_INVALID_HEADER);
 	EXPECT_EQ(allocator.returnedReferences.size(), allocatedBefore);
 
+	MetadataWriteBatch invalidIdBatch(allocator, published, LogSequenceNumber(3));
+	const std::array invalidId{SegmentId{}};
+	expectFormatError([&] { tree.prepareErase(invalidIdBatch, invalidId); }, FormatError::FERR_INVALID_HEADER);
+	EXPECT_EQ(allocator.returnedReferences.size(), allocatedBefore);
+
 	MetadataWriteBatch absentBatch(allocator, published, LogSequenceNumber(3));
 	const std::array absent{SegmentId(2)};
 	expectFormatError([&] { tree.prepareErase(absentBatch, absent); }, FormatError::FERR_INVALID_STATE);
+	EXPECT_EQ(allocator.returnedReferences.size(), allocatedBefore);
+
+	MetadataWriteBatch absentRouteBatch(allocator, published, LogSequenceNumber(3));
+	const std::array absentRoute{SegmentId(RSS_CATALOG_PAGE_MAX_ENTRIES + 1U)};
+	expectFormatError([&] { tree.prepareErase(absentRouteBatch, absentRoute); }, FormatError::FERR_INVALID_STATE);
 	EXPECT_EQ(allocator.returnedReferences.size(), allocatedBefore);
 	expectSameSuperblock(bootstrap.recover(), published);
 

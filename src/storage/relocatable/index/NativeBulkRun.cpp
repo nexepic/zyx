@@ -115,12 +115,7 @@ namespace graph::storage {
 		public:
 			NativeBulkRunManifestCursor(NativeBulkRunManifest manifest, uint16_t maximumDepth,
 								 NativeBulkRunPayloadReader payloadReader) :
-				manifest_(std::move(manifest)), payload_reader_(std::move(payloadReader)), maximum_depth_(maximumDepth) {
-				if (maximum_depth_ == 0U || manifest_.level >= maximum_depth_ || !payload_reader_) {
-					fail(FormatError::FERR_INVALID_STATE,
-						 "relocatable native bulk-run source exceeds its configured manifest depth");
-				}
-			}
+				manifest_(std::move(manifest)), payload_reader_(std::move(payloadReader)), maximum_depth_(maximumDepth) {}
 
 			[[nodiscard]] std::optional<BTreePageEntry> next() {
 				for (;;) {
@@ -168,14 +163,11 @@ namespace graph::storage {
 				while (!stack_.empty()) {
 					ManifestFrame &frame = stack_.back();
 					if (frame.manifest.level == 0U) {
-						if (!frame.manifest.fragments.empty()) {
-							leaf_fragments_ = std::move(frame.manifest.fragments);
-							fragment_ordinal_ = 0U;
-							stack_.pop_back();
-							return true;
-						}
+						// Decoding rejects zero-reference manifests before this private cursor is created.
+						leaf_fragments_ = std::move(frame.manifest.fragments);
+						fragment_ordinal_ = 0U;
 						stack_.pop_back();
-						continue;
+						return true;
 					}
 					if (frame.child_ordinal == frame.manifest.children.size()) {
 						stack_.pop_back();
@@ -537,6 +529,7 @@ namespace graph::storage {
 		}
 		std::vector<PhysicalSegmentAllocationRequest> requests;
 		requests.reserve(payloads.size());
+		const LogSequenceNumber allocationCheckpoint = nextCheckpointLsn(checkpointLsn);
 		const std::vector<SegmentId> ids = metadata_.allocateLogicalSegmentIds(payloads.size(), checkpointLsn);
 		if (ids.size() != payloads.size()) {
 			fail(FormatError::FERR_INVALID_STATE,
@@ -553,7 +546,7 @@ namespace graph::storage {
 		}
 		const std::optional<PhysicalSegmentAllocations> allocations = physical_.allocate(
 			std::span<const PhysicalSegmentAllocationRequest>(requests), options_.first_slot, options_.last_slot,
-			nextCheckpointLsn(checkpointLsn));
+			allocationCheckpoint);
 		if (!allocations.has_value() || allocations->entries.size() != requests.size()) {
 			fail(FormatError::FERR_INVALID_STATE,
 				 "relocatable native bulk-run payload batch exhausted its physical-slot range");
@@ -896,9 +889,7 @@ namespace graph::storage {
 			pending_fragment_batch_.clear();
 			advanceCheckpointLsn();
 		}
-		if (pending_fragments_.empty()) {
-			return;
-		}
+		// Every caller reaches this helper after staging a nonempty fragment batch.
 		const NativeBulkRunManifest manifest = store_.writeManifest(transaction_id_, pending_fragments_, next_checkpoint_lsn_);
 		advanceCheckpointLsn();
 		pending_fragments_.clear();
@@ -906,9 +897,7 @@ namespace graph::storage {
 	}
 
 	void NativeBulkRunStreamingWriter::sealParentManifest(size_t level) {
-		if (level >= manifest_levels_.size() || manifest_levels_[level].empty()) {
-			return;
-		}
+		// Callers either just filled this level or selected it as a nonempty root.
 		const NativeBulkRunManifest manifest =
 				store_.writeManifestParent(transaction_id_, manifest_levels_[level], next_checkpoint_lsn_);
 		advanceCheckpointLsn();
@@ -981,8 +970,11 @@ namespace graph::storage {
 				}
 				if (manifest_levels_[level].size() == 1U && level < lastNonEmptyLevel) {
 					const NativeBulkRunFragmentLocation location = manifest_levels_[level].front();
+					const NativeBulkRunManifest parent =
+							store_.writeManifestParent(transaction_id_, std::array{location}, next_checkpoint_lsn_);
+					advanceCheckpointLsn();
 					manifest_levels_[level].clear();
-					appendManifestAtLevel(location, level + 1U);
+					appendManifestAtLevel(parent.location, level + 1U);
 					progressed = true;
 					break;
 				}

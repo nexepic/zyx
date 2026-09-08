@@ -444,6 +444,10 @@ TEST_F(RelocatableEntityPageStoreTest, NativeBatchPublishesLabelSetAppendAndRepl
 	const std::optional<EntityPageInsertResult> allocated =
 			entities.allocateNode(newPool(31U, 901U, 101U, 40U), 1001U, initial, LogSequenceNumber(2U));
 	ASSERT_TRUE(allocated.has_value());
+	const NodeEntityRecord initialUnrelated = node(21U, 22U);
+	const std::optional<EntityPageInsertResult> allocatedUnrelated =
+			entities.allocateNode(newPool(32U, 902U, 201U, 41U), 1002U, initialUnrelated, LogSequenceNumber(3U));
+	ASSERT_TRUE(allocatedUnrelated.has_value());
 	SlottedPagePool pages(io, *metadata);
 	EntityLabelSetStore labelStore(io, *metadata, pages);
 	PropertyCollectionRootStore properties(pages, *metadata);
@@ -454,13 +458,17 @@ TEST_F(RelocatableEntityPageStoreTest, NativeBatchPublishesLabelSetAppendAndRepl
 	const CatalogEntry entityPool = metadata->findCatalog(before, SegmentId(31U));
 	const std::vector<uint64_t> firstLabels = orderedLabels(7U, RSS_ENTITY_INLINE_LABEL_CAPACITY + 2U);
 	const LabelPagePayload firstPayload =
-			labelPagePayload(entityPool, PageId(102U), LogSequenceNumber(3U),
+			labelPagePayload(entityPool, PageId(102U), LogSequenceNumber(4U),
 							 std::span(firstLabels).subspan(RSS_ENTITY_INLINE_LABEL_CAPACITY));
 	const NodeEntityRecord firstNode = nodeWithOverflow(firstLabels, firstPayload.overflow);
-	const std::array<EntityPageBatchMutation, 1U> firstMutation{{
+	const NodeEntityRecord updatedUnrelated = node(23U, 24U);
+	const std::array<EntityPageBatchMutation, 2U> firstMutation{{
 			{.page_id = PageId(101U),
 			 .record_kind = EntityPageRecordKind::EPRK_NODE,
 			 .node_updates = {{1001U, firstNode}}},
+			{.page_id = PageId(201U),
+			 .record_kind = EntityPageRecordKind::EPRK_NODE,
+			 .node_updates = {{1002U, updatedUnrelated}}},
 	}};
 	EntityPageAuxiliaryMutationBatch firstAuxiliary;
 	firstAuxiliary.appends.push_back(
@@ -470,8 +478,8 @@ TEST_F(RelocatableEntityPageStoreTest, NativeBatchPublishesLabelSetAppendAndRepl
 	MetadataPublishOptions interrupted;
 	interrupted.bootstrap_failpoint = BootstrapPublishFailpoint::BPF_BEFORE_INACTIVE_WRITE;
 	EXPECT_THROW(static_cast<void>(entities.applyNativeGraphBatchTransaction(
-						 before, firstMutation, {}, {}, noPropertyPlans, properties, propertyOptions, firstAuxiliary,
-						 LogSequenceNumber(3U), interrupted)),
+							 before, firstMutation, {}, {}, noPropertyPlans, properties, propertyOptions, firstAuxiliary,
+							 LogSequenceNumber(4U), interrupted)),
 				 BootstrapPublishInterrupted);
 	MetadataSnapshotPin notPublished = metadata->openSnapshot();
 	EXPECT_EQ(notPublished.superblock(), before.superblock());
@@ -483,19 +491,20 @@ TEST_F(RelocatableEntityPageStoreTest, NativeBatchPublishesLabelSetAppendAndRepl
 	MetadataSnapshotPin firstWrite = metadata->openSnapshot();
 	const EntityPageBatchResult firstPublished =
 			entities.applyNativeGraphBatchTransaction(firstWrite, firstMutation, {}, {}, noPropertyPlans, properties,
-													  propertyOptions, firstAuxiliary, LogSequenceNumber(3U));
-	EXPECT_EQ(firstPublished.pages.size(), 1U);
+											  propertyOptions, firstAuxiliary, LogSequenceNumber(4U));
+	EXPECT_EQ(firstPublished.pages.size(), 2U);
 	EXPECT_TRUE(firstPublished.appended_pages.empty());
 	EXPECT_TRUE(firstPublished.new_pool_pages.empty());
 	firstWrite.release();
 
 	MetadataSnapshotPin afterFirst = metadata->openSnapshot();
 	EXPECT_EQ(entities.readNode(afterFirst, 1001U), firstNode);
+	EXPECT_EQ(entities.readNode(afterFirst, 1002U), updatedUnrelated);
 	EXPECT_EQ(labelStore.readNodeLabels(afterFirst, entities.readNode(afterFirst, 1001U)), firstLabels);
 	const PageLocation firstLabelLocation = metadata->findPageLocation(afterFirst, PageId(102U));
 	const std::vector<uint64_t> grownLabels = orderedLabels(7U, RSS_ENTITY_INLINE_LABEL_CAPACITY + 3U);
 	const LabelPagePayload grownPayload =
-			labelPagePayload(entityPool, PageId(102U), LogSequenceNumber(4U),
+			labelPagePayload(entityPool, PageId(102U), LogSequenceNumber(5U),
 							 std::span(grownLabels).subspan(RSS_ENTITY_INLINE_LABEL_CAPACITY));
 	const NodeEntityRecord grownNode = nodeWithOverflow(grownLabels, grownPayload.overflow);
 	const std::array<EntityPageBatchMutation, 1U> grownMutation{{
@@ -505,13 +514,13 @@ TEST_F(RelocatableEntityPageStoreTest, NativeBatchPublishesLabelSetAppendAndRepl
 	}};
 	EntityPageAuxiliaryMutationBatch grownAuxiliary;
 	grownAuxiliary.replacements.push_back({entityPool, firstLabelLocation, PageOwnerKind::POK_ENTITY_LABEL,
-										   LogSequenceNumber(3U), grownPayload.payload, grownPayload.free_bytes,
+										   LogSequenceNumber(4U), grownPayload.payload, grownPayload.free_bytes,
 										   false, {}, {}});
 	grownAuxiliary.node_update_bindings.push_back(
 			{1001U, metadata->findNodePageLocation(afterFirst, 1001U), grownNode});
 	static_cast<void>(entities.applyNativeGraphBatchTransaction(afterFirst, grownMutation, {}, {}, noPropertyPlans,
-																properties, propertyOptions, grownAuxiliary,
-																LogSequenceNumber(4U)));
+															properties, propertyOptions, grownAuxiliary,
+															LogSequenceNumber(5U)));
 	EXPECT_EQ(labelStore.readNodeLabels(afterFirst, entities.readNode(afterFirst, 1001U)), firstLabels);
 
 	MetadataSnapshotPin current = metadata->openSnapshot();
@@ -1082,6 +1091,93 @@ TEST_F(RelocatableEntityPageStoreTest, NativeBatchSplitsNewRootsAcrossPagesWithi
 	EXPECT_EQ(properties.readEntity(current, created.properties[1].key), secondRoot);
 	EXPECT_EQ(metadata->findPageLocation(current, created.properties[0].page_id).segment_id,
 			  metadata->findPageLocation(current, created.properties[1].page_id).segment_id);
+
+	// Both existing Property pages are full, but their published pool still has
+	// free frames. A later root must append a new page to that pool rather than
+	// reserve a second physical pool.
+	const PropertyCollectionRoot thirdRoot{
+			1003U, graph::Node::typeId, {{7U, graph::PropertyValue(std::string(payloadBytes, 'c'))}}};
+	const EntityPropertyRootMutationPlan thirdPlan =
+			properties.planEntityRootReplacement(current, thirdRoot, propertyOptions);
+	ASSERT_EQ(thirdPlan.kind, EntityPropertyRootMutationPlanKind::EPRMPK_NEW_PAGE_REQUIRED);
+	ASSERT_FALSE(thirdPlan.page_replacement.has_value());
+	const std::array<EntityPageBatchMutation, 1U> nodeInsertion{{
+			{.page_id = newNodePool.front().request.page_id,
+			 .record_kind = EntityPageRecordKind::EPRK_NODE,
+			 .node_insertions = {{1003U, node(31U, 32U)}}},
+	}};
+	const std::array thirdPlans{thirdPlan};
+	const EntityPageBatchResult appended = entities.applyNativeGraphBatchTransaction(
+			current, nodeInsertion, {}, {}, thirdPlans, properties, propertyOptions, LogSequenceNumber(3U));
+	ASSERT_EQ(appended.properties.size(), 1U);
+	EXPECT_NE(appended.properties.front().page_id, created.properties[0].page_id);
+	EXPECT_NE(appended.properties.front().page_id, created.properties[1].page_id);
+	MetadataSnapshotPin afterAppend = metadata->openSnapshot();
+	EXPECT_EQ(properties.readEntity(afterAppend, appended.properties.front().key), thirdRoot);
+	EXPECT_EQ(metadata->findPageLocation(afterAppend, appended.properties.front().page_id).segment_id,
+			  metadata->findPageLocation(afterAppend, created.properties[0].page_id).segment_id);
+}
+
+TEST_F(RelocatableEntityPageStoreTest,
+	   NativeBatchReservesPropertyCowFrameBeforeAppendingAnotherPageToThatPool) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore entities(io, *metadata);
+	SlottedPagePool pages(io, *metadata);
+	PropertyCollectionRootStore properties(pages, *metadata);
+	const PropertyCollectionRootStoreOptions propertyOptions{PhysicalSlotId(41U), PhysicalSlotId(42U), 902U};
+	const size_t payloadBytes =
+			(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES - RSS_SLOTTED_PAGE_HEADER_BYTES - 2U * RSS_SLOTTED_PAGE_SLOT_BYTES) / 2U;
+	const PropertyCollectionRoot firstRoot{
+			1001U, graph::Node::typeId, {{3U, graph::PropertyValue(std::string(payloadBytes, 'a'))}}};
+	const PropertyCollectionRoot secondRoot{
+			1002U, graph::Node::typeId, {{5U, graph::PropertyValue(std::string(payloadBytes, 'b'))}}};
+	const std::array<EntityPageBatchNewPool, 1U> nodePool{{
+			{.request = newPool(31U, 901U, 101U, 40U),
+			 .record_kind = EntityPageRecordKind::EPRK_NODE,
+			 .node_insertions = {{1001U, node(11U, 12U)}, {1002U, node(21U, 22U)}}},
+	}};
+
+	MetadataSnapshotPin empty = metadata->openSnapshot();
+	const std::array initialPlans{
+			properties.planEntityRootReplacement(empty, firstRoot, propertyOptions),
+			properties.planEntityRootReplacement(empty, secondRoot, propertyOptions),
+	};
+	const EntityPageBatchResult initial = entities.applyNativeGraphBatchTransaction(
+			empty, {}, {}, nodePool, initialPlans, properties, propertyOptions, LogSequenceNumber(2U));
+	ASSERT_EQ(initial.properties.size(), 2U);
+	empty.release();
+
+	const PropertyCollectionRoot replacementFirst{
+			1001U, graph::Node::typeId, {{3U, graph::PropertyValue(std::string(payloadBytes, 'c'))}}};
+	const PropertyCollectionRoot thirdRoot{
+			1003U, graph::Node::typeId, {{7U, graph::PropertyValue(std::string(payloadBytes, 'd'))}}};
+	MetadataSnapshotPin before = metadata->openSnapshot();
+	const std::array<PropertyCollectionRoot, 2U> requestedRoots{replacementFirst, thirdRoot};
+	const std::vector<EntityPropertyRootMutationPlan> plans =
+			properties.planEntityRootReplacements(before, requestedRoots, propertyOptions);
+	ASSERT_EQ(plans.size(), 2U);
+	EXPECT_TRUE(std::ranges::any_of(plans, [](const EntityPropertyRootMutationPlan &plan) {
+		return plan.kind == EntityPropertyRootMutationPlanKind::EPRMPK_EXISTING_PAGE;
+	}));
+	EXPECT_TRUE(std::ranges::any_of(plans, [](const EntityPropertyRootMutationPlan &plan) {
+		return plan.kind == EntityPropertyRootMutationPlanKind::EPRMPK_NEW_PAGE_REQUIRED;
+	}));
+	const std::array<EntityPageBatchMutation, 1U> nodeMutation{{
+			{.page_id = nodePool.front().request.page_id,
+			 .record_kind = EntityPageRecordKind::EPRK_NODE,
+			 .node_updates = {{1001U, node(31U, 32U)}},
+			 .node_insertions = {{1003U, node(41U, 42U)}}},
+	}};
+	const EntityPageBatchResult published = entities.applyNativeGraphBatchTransaction(
+			before, nodeMutation, {}, {}, plans, properties, propertyOptions, LogSequenceNumber(3U));
+	ASSERT_EQ(published.properties.size(), 2U);
+
+	MetadataSnapshotPin current = metadata->openSnapshot();
+	EXPECT_EQ(properties.readEntity(current, EntityPropertyKey{EntityPropertyOwnerKind::EPOK_NODE, 1001U}),
+			  replacementFirst);
+	EXPECT_EQ(properties.readEntity(current, EntityPropertyKey{EntityPropertyOwnerKind::EPOK_NODE, 1003U}), thirdRoot);
+	EXPECT_EQ(metadata->findPageLocation(current, initial.properties.front().page_id).segment_id,
+			  metadata->findPageLocation(current, published.properties.back().page_id).segment_id);
 }
 
 TEST_F(RelocatableEntityPageStoreTest, NativeBatchRetiresFinalOwnerKeyedPropertyPageAfterSnapshotsDrain) {

@@ -147,8 +147,8 @@ TEST_F(RelocatableLocationDirectoryRouteValidationTest, RejectsMalformedPublishe
 			[&] {
 				static_cast<void>(
 						directory.findPage(writeRoot(MetadataDirectoryType::MDT_PAGE,
-													 CatalogRadixPageKind::CRPK_INTERNAL, 0, validLeafReference, 0),
-										   PageId(1)));
+															 CatalogRadixPageKind::CRPK_INTERNAL, 0, validLeafReference, 0),
+														   PageId(1)));
 			},
 			FormatError::FERR_INVALID_HEADER);
 
@@ -241,6 +241,29 @@ TEST_F(RelocatableLocationDirectoryRouteValidationTest, RejectsMalformedPublishe
 				writeRoot(MetadataDirectoryType::MDT_PAGE, CatalogRadixPageKind::CRPK_ROOT, 1, invalidInternal, 1),
 				page(deepId, 10, 1), FormatError::FERR_INVALID_HEADER);
 	}
+	// Reading and both traversal modes independently validate each persisted
+	// internal radix hop rather than trusting the root's directory type.
+	const PhysicalPageRef wrongLevelPageInternal =
+			writeInternal(CatalogRadixPageKind::CRPK_INTERNAL, MetadataDirectoryType::MDT_PAGE, 1, Generation(1));
+	const Superblock wrongLevelPageRoot = writeRoot(
+			MetadataDirectoryType::MDT_PAGE, CatalogRadixPageKind::CRPK_ROOT, 1, wrongLevelPageInternal, 1);
+	expectFormatError([&] { static_cast<void>(directory.findPage(wrongLevelPageRoot, PageId(deepId))); },
+				  FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] { static_cast<void>(directory.visitPagesUntil(wrongLevelPageRoot, [](const PageLocation &) { return true; })); },
+			FormatError::FERR_INVALID_HEADER);
+
+	const PhysicalPageRef wrongLevelNodeInternal = writeInternal(
+			CatalogRadixPageKind::CRPK_INTERNAL, MetadataDirectoryType::MDT_NODE_ENTITY, 1, Generation(1));
+	Superblock wrongLevelNodeRoot = writeRoot(
+			MetadataDirectoryType::MDT_NODE_ENTITY, CatalogRadixPageKind::CRPK_ROOT, 1, wrongLevelNodeInternal, 1);
+	wrongLevelNodeRoot.node_entity_directory_root = wrongLevelNodeRoot.page_directory_root;
+	expectFormatError(
+			[&] {
+				static_cast<void>(directory.visitNodePageLocationsAfter(
+						wrongLevelNodeRoot, 0U, 2U, [](const EntityPageLocation &) { return true; }));
+			},
+			FormatError::FERR_INVALID_HEADER);
 	const PhysicalPageRef newerInternal =
 			writeInternal(CatalogRadixPageKind::CRPK_INTERNAL, MetadataDirectoryType::MDT_PAGE, 0, Generation(2));
 	expectPrepareError(writeRoot(MetadataDirectoryType::MDT_PAGE, CatalogRadixPageKind::CRPK_ROOT, 1, newerInternal, 1),
@@ -248,4 +271,138 @@ TEST_F(RelocatableLocationDirectoryRouteValidationTest, RejectsMalformedPublishe
 	Superblock malformedForRecovery =
 			writeRoot(MetadataDirectoryType::MDT_PAGE, CatalogRadixPageKind::CRPK_ROOT, 0, wrongRouteReference, 0);
 	expectFormatError([&] { allocator.recover(malformedForRecovery); }, FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableLocationDirectoryRouteValidationTest, AppendSessionsRejectReuseAfterFinishAndInvalidPayloads) {
+	const Superblock initial = superblock();
+	SuperblockFile bootstrap(dataIo);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(dataIo, initial);
+	MetadataPagePoolAllocator allocator(dataIo, initial);
+	LocationDirectory directory(pages, allocator);
+
+	MetadataWriteBatch pageBatch(allocator, initial, LogSequenceNumber(2U));
+	auto pageSession = directory.beginAppendPageLocations(pageBatch, 1U, 1U, 1U);
+	LocationDirectoryAppendSession moved = std::move(pageSession);
+	MetadataWriteBatch replacementBatch(allocator, initial, LogSequenceNumber(2U));
+	auto reassigned = directory.beginAppendPageLocations(replacementBatch, 1U, 1U, 1U);
+	reassigned = std::move(moved);
+	EXPECT_FALSE(pageSession.isFinished());
+	EXPECT_FALSE(moved.isFinished());
+	expectFormatError([&] { pageSession.append(page(1U, 10U, 1U)); }, FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { moved.append(page(1U, 10U, 1U)); }, FormatError::FERR_INVALID_STATE);
+	reassigned.append(page(1U, 10U, 1U));
+	reassigned.finish();
+	EXPECT_TRUE(reassigned.isFinished());
+	expectFormatError([&] { reassigned.finish(); }, FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { reassigned.append(page(1U, 10U, 1U)); }, FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { pageSession.append(EntityPageLocation{1U, PageId(1U), 0U, 1U}); },
+					  FormatError::FERR_INVALID_STATE);
+	expectFormatError(
+			[&] {
+				pageSession.append(
+						EntityPropertyLocation{{EntityPropertyOwnerKind::EPOK_NODE, 1U}, PageId(1U), 0U, 1U});
+			},
+			FormatError::FERR_INVALID_STATE);
+	expectFormatError(
+			[&] { pageSession.append(LargeValueManifestLocation{LargeValueId(1U), PageId(1U), Generation(1U)}); },
+			FormatError::FERR_INVALID_STATE);
+	// Each typed append overload must reject a live session for another directory,
+	// before it can place a mismatched location into that directory's stream.
+	MetadataWriteBatch edgeBatch(allocator, initial, LogSequenceNumber(2U));
+	auto edgeSession = directory.beginAppendEdgePageLocations(edgeBatch, 1U, 1U, 1U);
+	expectFormatError([&] { edgeSession.append(page(1U, 10U, 1U)); }, FormatError::FERR_INVALID_STATE);
+	MetadataWriteBatch pageTypeBatch(allocator, initial, LogSequenceNumber(2U));
+	auto pageTypeSession = directory.beginAppendPageLocations(pageTypeBatch, 1U, 1U, 1U);
+	expectFormatError([&] { pageTypeSession.append(EntityPageLocation{1U, PageId(1U), 0U, 1U}); },
+				  FormatError::FERR_INVALID_STATE);
+
+	// Sparse Edge ranges may contain gaps, but an append must still remain inside
+	// its immutable lease boundaries.
+	MetadataWriteBatch lowerEdgeBatch(allocator, initial, LogSequenceNumber(2U));
+	auto lowerEdgeSession = directory.beginAppendEdgePageLocations(lowerEdgeBatch, 10U, 20U, 2U);
+	expectFormatError([&] { lowerEdgeSession.append(EntityPageLocation{9U, PageId(10U), 0U, 1U}); },
+				  FormatError::FERR_INVALID_STATE);
+	MetadataWriteBatch upperEdgeBatch(allocator, initial, LogSequenceNumber(2U));
+	auto upperEdgeSession = directory.beginAppendEdgePageLocations(upperEdgeBatch, 10U, 20U, 2U);
+	expectFormatError([&] { upperEdgeSession.append(EntityPageLocation{21U, PageId(10U), 0U, 1U}); },
+				  FormatError::FERR_INVALID_STATE);
+
+	MetadataWriteBatch propertyBatch(allocator, initial, LogSequenceNumber(2U));
+	auto propertySession = directory.beginAppendEdgePropertyLocations(propertyBatch, 1U, 1U, 1U);
+	expectFormatError(
+			[&] {
+				propertySession.append(
+						EntityPropertyLocation{{EntityPropertyOwnerKind::EPOK_NODE, 0U}, PageId(1U), 0U, 1U});
+			},
+			FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { propertySession.append(page(1U, 10U, 1U)); }, FormatError::FERR_INVALID_STATE);
+
+	MetadataWriteBatch manifestBatch(allocator, initial, LogSequenceNumber(2U));
+	auto manifestSession =
+			directory.beginAppendLargeValueManifestLocations(manifestBatch, LargeValueId(1U), LargeValueId(1U), 1U);
+	expectFormatError(
+			[&] { manifestSession.append(LargeValueManifestLocation{LargeValueId(1U), PageId{}, Generation(1U)}); },
+			FormatError::FERR_INVALID_STATE);
+	expectFormatError(
+			[&] { manifestSession.append(LargeValueManifestLocation{LargeValueId{}, PageId(1U), Generation(1U)}); },
+			FormatError::FERR_INVALID_STATE);
+	expectFormatError(
+			[&] { manifestSession.append(LargeValueManifestLocation{LargeValueId(1U), PageId(1U), Generation{}}); },
+			FormatError::FERR_INVALID_STATE);
+
+	MetadataWriteBatch producerBatch(allocator, initial, LogSequenceNumber(2U));
+	expectFormatError(
+			[&] {
+				directory.prepareAppendPageLocations(producerBatch, 1U, 1U, 0U,
+													 LocationDirectory::PageLocationProducer{});
+			},
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				directory.prepareAppendPageLocations(producerBatch, 1U, 1U, 0U,
+													 LocationDirectory::PageLocationCursor{});
+			},
+			FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableLocationDirectoryRouteValidationTest, PageAppendSessionsRequireAnExactContiguousRange) {
+	const Superblock initial = superblock();
+	SuperblockFile bootstrap(dataIo);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(dataIo, initial);
+	MetadataPagePoolAllocator allocator(dataIo, initial);
+	LocationDirectory directory(pages, allocator);
+	MetadataWriteBatch batch(allocator, initial, LogSequenceNumber(2U));
+
+	// Page streams expose their requested range directly to the common session;
+	// reject every malformed bound before a location can be appended to the batch.
+	const auto reject = [&](uint64_t first, uint64_t last, size_t count) {
+		expectFormatError(
+				[&] { static_cast<void>(directory.beginAppendPageLocations(batch, first, last, count)); },
+				FormatError::FERR_INVALID_HEADER);
+	};
+	reject(0U, 1U, 1U);
+	reject(2U, 1U, 1U);
+	reject(1U, 1U, 0U);
+	reject(1U, 1U, 2U);
+	reject(1U, 2U, 1U);
+}
+
+TEST_F(RelocatableLocationDirectoryRouteValidationTest, AppendSessionsRejectAnInvalidFinalLargeValueIdentity) {
+	const Superblock initial = superblock();
+	SuperblockFile bootstrap(dataIo);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(dataIo, initial);
+	MetadataPagePoolAllocator allocator(dataIo, initial);
+	LocationDirectory directory(pages, allocator);
+	MetadataWriteBatch batch(allocator, initial, LogSequenceNumber(2U));
+
+	// The second identity must be valid independently of range ordering.
+	expectFormatError(
+			[&] {
+				static_cast<void>(directory.beginAppendLargeValueManifestLocations(
+						batch, LargeValueId(1U), LargeValueId{}, 1U));
+			},
+			FormatError::FERR_INVALID_HEADER);
 }

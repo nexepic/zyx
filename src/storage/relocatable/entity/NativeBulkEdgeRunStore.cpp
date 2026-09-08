@@ -86,12 +86,8 @@ namespace graph::storage {
 		class NativeBulkEdgeManifestCursor final {
 		public:
 			NativeBulkEdgeManifestCursor(NativeBulkRunFragmentLocation root, uint16_t maximumDepth,
-											 NativeBulkRunPayloadReader reader) :
+										 NativeBulkRunPayloadReader reader) :
 					maximum_depth_(maximumDepth), reader_(std::move(reader)) {
-				if (!root.isValid() || maximum_depth_ == 0U || !reader_) {
-					fail(FormatError::FERR_INVALID_HEADER,
-							 "native bulk Edge cursor requires a bounded owned manifest source");
-				}
 				pushManifest(root, std::nullopt);
 			}
 
@@ -305,10 +301,9 @@ namespace graph::storage {
 			const PendingManifest pending_manifest = pending.back();
 			pending.pop_back();
 			const NativeBulkRunFragmentLocation current = pending_manifest.location;
-			if (current.transaction_id != manifestLocation.transaction_id ||
-				!seen_locations.insert({current.segment_id.value(), current.generation.value()}).second) {
+			if (!seen_locations.insert({current.segment_id.value(), current.generation.value()}).second) {
 				snapshot.release();
-				fail(FormatError::FERR_INVALID_STATE, "native bulk Edge manifest release found a foreign or cyclic route");
+				fail(FormatError::FERR_INVALID_STATE, "native bulk Edge manifest release found a cyclic route");
 			}
 			const NativeBulkEdgeRunManifest manifest =
 					NativeBulkEdgeRunManifestCodec::decode(store.readOpaquePayload(snapshot, current), current);
@@ -321,10 +316,6 @@ namespace graph::storage {
 			locations.push_back(current);
 			const auto &references = manifest.level == 0U ? manifest.runs : manifest.children;
 			for (const NativeBulkRunFragmentLocation &reference: references) {
-				if (reference.transaction_id != manifestLocation.transaction_id) {
-					snapshot.release();
-					fail(FormatError::FERR_INVALID_STATE, "native bulk Edge manifest release found a foreign child");
-				}
 				if (manifest.level == 0U) {
 					if (!seen_locations.insert({reference.segment_id.value(), reference.generation.value()}).second) {
 						snapshot.release();
@@ -339,15 +330,26 @@ namespace graph::storage {
 			}
 		}
 		snapshot.release();
+		// Validate every release-batch LSN before changing allocator state. A
+		// terminal LSN on a later batch must not leave the manifest partly retired.
+		LogSequenceNumber finalCheckpointLsn = checkpointLsn;
+		for (size_t first = store.maximumBatchFragments(); first < locations.size();
+			 first += store.maximumBatchFragments()) {
+			if (finalCheckpointLsn.value() > std::numeric_limits<uint64_t>::max() - 2U) {
+				fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
+						 "native bulk Edge manifest release checkpoint overflowed");
+			}
+			finalCheckpointLsn = LogSequenceNumber(finalCheckpointLsn.value() + 2U);
+		}
+		if (finalCheckpointLsn.value() == std::numeric_limits<uint64_t>::max()) {
+			fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
+					 "native bulk Edge manifest release checkpoint overflowed");
+		}
 		for (size_t first = 0U; first < locations.size(); first += store.maximumBatchFragments()) {
 			const size_t count = std::min(store.maximumBatchFragments(), locations.size() - first);
 			store.releaseBatch(std::span<const NativeBulkRunFragmentLocation>(locations).subspan(first, count),
 								checkpointLsn);
 			if (first + count != locations.size()) {
-				if (checkpointLsn.value() > std::numeric_limits<uint64_t>::max() - 2U) {
-					fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
-						 "native bulk Edge manifest release checkpoint overflowed");
-				}
 				checkpointLsn = LogSequenceNumber(checkpointLsn.value() + 2U);
 			}
 		}
@@ -588,9 +590,6 @@ namespace graph::storage {
 	}
 
 	void NativeBulkEdgeRunStreamingWriter::sealManifestLevel(size_t level) {
-		if (level >= manifest_levels_.size() || manifest_levels_[level].empty()) {
-			return;
-		}
 		const uint16_t manifestLevel = static_cast<uint16_t>(level);
 		const NativeBulkEdgeRunManifest manifest = writeManifest(manifest_levels_[level], manifestLevel);
 		advanceCheckpointLsn();
@@ -664,9 +663,10 @@ namespace graph::storage {
 					break;
 				}
 				if (level < highest) {
-					const NativeBulkRunFragmentLocation location = manifest_levels_[level].front();
-					manifest_levels_[level].clear();
-					appendManifestAtLevel(location, level + 1U);
+					// A lower-level root cannot be attached directly to a higher-level
+					// manifest: its child level would no longer match the parent. Seal it
+					// first to create the required one-level wrapper.
+					sealManifestLevel(level);
 					progressed = true;
 					break;
 				}

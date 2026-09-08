@@ -8,6 +8,7 @@ import sys
 import subprocess
 import argparse
 import json
+import re
 from pathlib import Path
 
 IGNORE_PATTERNS = [
@@ -208,10 +209,21 @@ def _catch_block_lines(lines, start_line):
 
 
 def apply_source_exclusions(file_coverage, source_path):
+    # LLVM can emit a zero-count synthetic region for interface-only headers
+    # (pure virtual declarations and out-of-line definitions). Such a file has
+    # no executable body to exercise; report it as N/A instead of presenting a
+    # misleading 0% module that cannot be improved with a unit test.
+    if _is_declaration_only_header(file_coverage, source_path):
+        return {key: _metric(0, 0) for key in ("lines", "regions", "branches", "functions")}
     excluded_lines = excluded_source_lines(source_path)
     summary = file_coverage["summary"]
     if not excluded_lines:
         metrics = {key: _normalize_metric(value) for key, value in summary.items()}
+        if _is_header_source(source_path):
+            # LLVM counts every template instantiation in a header separately.
+            # A source line is covered when any instantiation executes it.
+            metrics["lines"] = _adjust_lines(file_coverage["segments"], summary["lines"], set())
+            metrics["regions"] = _adjust_regions(file_coverage["segments"], summary["regions"], set(), source_path)
         metrics["branches"] = _adjust_branches(file_coverage.get("branches", []), summary["branches"], set())
         return metrics
     return {
@@ -220,6 +232,19 @@ def apply_source_exclusions(file_coverage, source_path):
         "branches": _adjust_branches(file_coverage.get("branches", []), summary["branches"], excluded_lines),
         "functions": _adjust_functions(file_coverage["segments"], summary["functions"], source_path),
     }
+
+
+def _is_declaration_only_header(file_coverage, source_path):
+    if not _is_header_source(source_path):
+        return False
+    source = Path(source_path).read_text()
+    # A function body is the executable unit that can be reached by a test.
+    # Class/namespace braces and pure-virtual declarations do not match this
+    # deliberately conservative pattern.
+    has_function_body = re.search(r"\)\s*(?:const\s*)?(?:noexcept\s*)?(?:override\s*)?\{", source)
+    if has_function_body:
+        return False
+    return not any(segment[2] > 0 for segment in file_coverage.get("segments", []))
 
 
 def _adjust_lines(segments, raw, excluded_lines):

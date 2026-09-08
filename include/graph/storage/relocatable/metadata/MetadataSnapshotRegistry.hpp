@@ -55,7 +55,7 @@ namespace graph::storage {
 		MetadataWriteGuard(MetadataWriteGuard &&) = delete;
 		MetadataWriteGuard &operator=(MetadataWriteGuard &&) = delete;
 
-		[[nodiscard]] bool isValid() const { return state_ != nullptr && lock_.owns_lock(); }
+		[[nodiscard]] bool isValid() const { return lock_.owns_lock(); }
 		void release();
 
 	private:

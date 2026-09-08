@@ -37,6 +37,7 @@ namespace graph::query::planner {
 		EXPECT_EQ(names, expected);
 		EXPECT_TRUE(execution::LogicalPlanProcedureRuntime::supportsNativeProcedure("dbms.setConfig"));
 		EXPECT_FALSE(execution::LogicalPlanProcedureRuntime::supportsNativeProcedure("unknown.procedure"));
+		EXPECT_EQ(registry.getDescriptor("unknown.procedure"), nullptr);
 	}
 
 	TEST(NativeProcedureRegistryTest, ExposesMutationMetadataForReadOnlyValidation) {

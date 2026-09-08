@@ -94,7 +94,7 @@ TEST_F(RelocatableBTreePageStoreTest, RejectsInvalidBoundsAndConcurrentOrPostFin
 	EXPECT_EQ(readAll(source()), (std::vector<BTreePageEntry>{{smallKey(1U), 1U}, {smallKey(2U), 2U}}));
 
 	ExternalBTreeEntrySorter bounded({2U, 128U, 2U});
-	std::vector<std::byte> oversized(4000U, std::byte{'x'});
+	std::vector<std::byte> oversized(100U, std::byte{'x'});
 	expectFormatError([&] { bounded.add({std::move(oversized), 1U}); }, FormatError::FERR_INVALID_STATE);
 	ExternalBTreeEntrySorter maximumKey({2U, 5000U, 2U});
 	std::vector<std::byte> overIndexKeyBound(4097U, std::byte{'x'});
@@ -136,4 +136,37 @@ TEST_F(RelocatableBTreePageStoreTest, PreservesBoundarySizedRunsAndMaximumAllowe
 	const OrderedBTreeEntrySource source = sorter.finish();
 	EXPECT_EQ(readAll(source()), expected);
 	EXPECT_EQ(readAll(source()), expected);
+}
+
+TEST_F(RelocatableBTreePageStoreTest, PreservesDuplicateKeyOrderAcrossReducedAnonymousRuns) {
+	// Each 64-byte run holds exactly one small entry. Five equal keys therefore
+	// force repeated two-way reductions before the final cursor is opened.
+	ExternalBTreeEntrySorter sorter({8U, 64U, 2U});
+	const std::vector<BTreePageEntry> expected = {
+			{smallKey(7U), 1U}, {smallKey(7U), 2U}, {smallKey(7U), 3U},
+			{smallKey(7U), 4U}, {smallKey(7U), 5U},
+	};
+	for (const BTreePageEntry &entry: expected) {
+		sorter.add(entry);
+	}
+
+	const OrderedBTreeEntrySource source = sorter.finish();
+	EXPECT_EQ(readAll(source()), expected);
+	EXPECT_EQ(readAll(source()), expected);
+
+	// Reduction must retain source order within each equal-key group while still
+	// ordering distinct groups globally. This mixes the two comparator paths.
+	ExternalBTreeEntrySorter mixed({8U, 64U, 2U});
+	for (const BTreePageEntry &entry: std::vector<BTreePageEntry>{{smallKey(2U), 1U},
+																  {smallKey(1U), 10U},
+																  {smallKey(2U), 2U},
+																  {smallKey(1U), 11U},
+																  {smallKey(2U), 3U}}) {
+		mixed.add(entry);
+	}
+	EXPECT_EQ(readAll(mixed.finish()()), (std::vector<BTreePageEntry>{{smallKey(1U), 10U},
+																	  {smallKey(1U), 11U},
+																	  {smallKey(2U), 1U},
+																	  {smallKey(2U), 2U},
+																	  {smallKey(2U), 3U}}));
 }

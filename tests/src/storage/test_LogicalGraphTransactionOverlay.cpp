@@ -440,6 +440,45 @@ namespace graph::storage {
 		EXPECT_GT(retry.stats.exact_overlay_candidate_scans, 0U);
 	}
 
+	TEST(LogicalGraphTransactionOverlayTest, VectorSnapshotDelegatesTheReadSurfaceAcrossOverlayRevisions) {
+		InMemoryLogicalTransaction transaction;
+		LogicalGraphTransactionOverlay overlay(transaction);
+		std::unique_ptr<LogicalGraphVectorSearchSnapshot> snapshot = overlay.openLogicalGraphVectorSearchSnapshot();
+
+		EXPECT_EQ(snapshot->readNode(1U).node_id, 1U);
+		EXPECT_TRUE(snapshot->containsNode(1U));
+		EXPECT_EQ(snapshot->readEdge(10U).edge_id, 10U);
+		EXPECT_FALSE(snapshot->findNodesByExactProperties({"Base"}, {}, 2U, 2U).has_value());
+		EXPECT_EQ(snapshot->scanNodesAfter(0U, 2U, 1U).nodes.size(), 2U);
+		EXPECT_EQ(snapshot->scanAdjacentEdges(1U, LogicalGraphReadDirection::LGRD_OUTGOING, std::nullopt, 1U)
+				  .edges.size(),
+			  1U);
+		size_t visitedNodes = 0U;
+		snapshot->visitNodes(2U, [&visitedNodes](const LogicalGraphNode &) {
+			++visitedNodes;
+			return true;
+		});
+		EXPECT_EQ(visitedNodes, 2U);
+		size_t visitedEdges = 0U;
+		snapshot->visitEdges(1U, [&visitedEdges](const LogicalGraphEdge &) {
+			++visitedEdges;
+			return true;
+		});
+		EXPECT_EQ(visitedEdges, 1U);
+		EXPECT_TRUE(snapshot->mutationFence().has_value());
+		EXPECT_EQ(snapshot->mutationFence()->logical_revision, 0U);
+
+		const uint64_t created = overlay.createLogicalNodes({{{"Added"}, {}}}).front();
+		EXPECT_EQ(snapshot->readNode(created).node_id, created);
+		EXPECT_TRUE(snapshot->containsNode(created));
+		EXPECT_EQ(snapshot->scanNodesAfter(2U, 2U, 1U).nodes,
+				  (std::vector<LogicalGraphNode>{{created, {"Added"}}}));
+		EXPECT_EQ(snapshot->mutationFence()->logical_revision, 1U);
+
+		static_cast<void>(transaction.commit());
+		EXPECT_THROW(static_cast<void>(snapshot->containsNode(1U)), std::logic_error);
+	}
+
 	TEST(LogicalGraphTransactionOverlayTest, SharesTheBaseMetadataPageBudgetAcrossItsNodeOverlay) {
 		// A relocatable base scan needs at least a directory root and leaf. The overlay
 		// must forward that budget instead of constraining every probe to one page.
@@ -476,11 +515,17 @@ namespace graph::storage {
 			}
 			return std::vector<LogicalGraphNode>{};
 		};
-		LogicalGraphTransactionOverlay overlay(transaction);
-		std::unique_ptr<LogicalGraphReadSnapshot> snapshot = overlay.openLogicalGraphReadSnapshot();
-		const auto findByName = [&snapshot](std::string_view name) {
-			return snapshot->findNodesByExactProperties({"Base"}, {{"name", PropertyValue(std::string(name))}}, 2U, 1U);
-		};
+	LogicalGraphTransactionOverlay overlay(transaction);
+	std::unique_ptr<LogicalGraphReadSnapshot> snapshot = overlay.openLogicalGraphReadSnapshot();
+	EXPECT_THROW(static_cast<void>(snapshot->findNodesByExactProperties(
+				 {"Base"}, {{"name", PropertyValue("Ada")}}, 0U, 1U)),
+			 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(snapshot->findNodesByExactProperties(
+				 {"Base"}, {{"name", PropertyValue("Ada")}}, 1U, 0U)),
+			 std::invalid_argument);
+	const auto findByName = [&snapshot](std::string_view name) {
+		return snapshot->findNodesByExactProperties({"Base"}, {{"name", PropertyValue(std::string(name))}}, 2U, 1U);
+	};
 
 		ASSERT_TRUE(findByName("Ada").has_value());
 		EXPECT_EQ(findByName("Ada")->front().node_id, 1U);
@@ -497,6 +542,18 @@ namespace graph::storage {
 		const uint64_t created = overlay.createLogicalNodes({{{"Base"}, {{"name", PropertyValue("Ada")}}}}).front();
 		ASSERT_TRUE(findByName("Ada").has_value());
 		EXPECT_EQ(findByName("Ada")->front().node_id, created);
+	}
+
+	TEST(LogicalGraphTransactionOverlayTest, PreservesTheOptionalExactLookupFallback) {
+		InMemoryLogicalTransaction transaction;
+		LogicalGraphTransactionOverlay overlay(transaction);
+		std::unique_ptr<LogicalGraphReadSnapshot> snapshot = overlay.openLogicalGraphReadSnapshot();
+
+		// A backend without a complete index lookup must leave the runtime on its
+		// bounded scan path rather than returning an incomplete overlay result.
+		EXPECT_EQ(snapshot->findNodesByExactProperties(
+					  {"Base"}, {{"name", PropertyValue("Ada")}}, 1U, 1U),
+				  std::nullopt);
 	}
 
 	TEST(LogicalGraphTransactionOverlayTest, RejectsMismatchedFenceAndReadOnlyStaging) {

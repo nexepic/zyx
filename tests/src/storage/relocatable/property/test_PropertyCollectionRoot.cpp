@@ -125,6 +125,17 @@ TEST(RelocatablePropertyCollectionRootTest, RejectsInvalidOwnerIdentitiesAndToke
 	invalid.entries.back().key_token = 1U;
 	expectFormatError([&] { static_cast<void>(EntityPropertyCollectionRootCodec::encode(invalid)); },
 					  FormatError::FERR_INVALID_HEADER);
+
+	std::vector<PropertyCollectionRootEntry> invalidPayloadEntries = root().entries;
+	invalidPayloadEntries.front().key_token = 0U;
+	expectFormatError(
+			[&] { static_cast<void>(EntityPropertyLargeValuePayloadCodec::encode(invalidPayloadEntries)); },
+			FormatError::FERR_INVALID_HEADER);
+	invalidPayloadEntries = root().entries;
+	invalidPayloadEntries.back().key_token = 1U;
+	expectFormatError(
+			[&] { static_cast<void>(EntityPropertyLargeValuePayloadCodec::encode(invalidPayloadEntries)); },
+			FormatError::FERR_INVALID_HEADER);
 }
 
 TEST(RelocatablePropertyCollectionRootTest, FailsClosedForMalformedPersistentBytes) {

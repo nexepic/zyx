@@ -8,6 +8,8 @@
 
 #include "graph/storage/relocatable/entity/NativeBulkEdgePrivateFamilyMaterializer.hpp"
 
+#include <limits>
+
 #include "graph/debug/PerfTrace.hpp"
 
 namespace graph::storage {
@@ -20,8 +22,11 @@ namespace graph::storage {
 					  const NativeBulkEdgePrivateFamilyMaterializationOptions &options,
 					  const NativeGraphPrivateSegmentReader &reader, const NativeGraphPrivateSegmentWriter &writer,
 					  const NativeGraphPrivateSegmentFence &fence) {
-			if (!source || options.maximum_records == 0U || options.maximum_token_entries == 0U ||
-				options.maximum_sort_run_bytes <= RSS_NATIVE_BULK_RUN_HEADER_BYTES || !reader || !writer || !fence) {
+			if (!source || options.maximum_records == 0U ||
+				options.maximum_records == std::numeric_limits<size_t>::max() || options.maximum_token_entries == 0U ||
+				options.maximum_token_entries == std::numeric_limits<size_t>::max() ||
+				options.maximum_sort_run_bytes <= RSS_NATIVE_BULK_RUN_HEADER_BYTES ||
+				options.maximum_sort_run_bytes == std::numeric_limits<size_t>::max() || !reader || !writer || !fence) {
 				fail(FormatError::FERR_INVALID_HEADER,
 					 "native bulk Edge private family materializer requires bounded source and private callbacks");
 			}

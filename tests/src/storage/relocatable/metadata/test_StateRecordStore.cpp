@@ -121,6 +121,16 @@ protected:
 	}
 };
 
+TEST_F(RelocatableStateRecordStoreTest, ReportsOnlyItsConstructionMetadataStore) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+	SlottedPagePool pages(io, *metadata);
+	StateRecordStore store(pages, *metadata);
+	EXPECT_TRUE(store.usesMetadataStore(*metadata));
+
+	auto reopenedMetadata = RelocatableMetadataStore::open(io);
+	EXPECT_FALSE(store.usesMetadataStore(*reopenedMetadata));
+}
+
 TEST_F(RelocatableStateRecordStoreTest, MaterializesIdempotentRecordsAndReopensTheirLocations) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
 	StateLocation first;
@@ -537,6 +547,58 @@ TEST_F(RelocatableStateRecordStoreTest, RejectsCorruptedLargeValueMaintenanceJou
 	LargeValueMaintenanceJournalStore reopenedJournal(reopenedStates, *reopened, journalOptions);
 	MetadataSnapshotPin snapshot = reopened->openSnapshot();
 	expectFormatError([&] { static_cast<void>(reopenedJournal.load(snapshot)); }, FormatError::FERR_CHECKSUM_MISMATCH);
+}
+
+TEST_F(RelocatableStateRecordStoreTest, JournalStoreRejectsStaleEvidenceAndInvalidDurableStateIdentity) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+	SlottedPagePool pages(io, *metadata);
+	StateRecordStore states(pages, *metadata);
+	const LargeValueMaintenanceJournalStoreOptions journalOptions{options(), 83U};
+	LargeValueMaintenanceJournalStore journalStore(states, *metadata, journalOptions);
+	EXPECT_THROW(static_cast<void>(LargeValueMaintenanceJournalStore(states, *metadata, {options(), 0U})),
+			 std::invalid_argument);
+	auto foreignMetadata = RelocatableMetadataStore::open(io);
+	EXPECT_THROW(static_cast<void>(LargeValueMaintenanceJournalStore(states, *foreignMetadata, journalOptions)),
+			 std::invalid_argument);
+
+	MetadataSnapshotPin emptySnapshot = metadata->openSnapshot();
+	EXPECT_EQ(journalStore.load(emptySnapshot), std::nullopt);
+	emptySnapshot.release();
+
+	// A State route alone is not sufficient evidence: the record must retain the
+	// journal key and inline representation before recovery attempts to decode it.
+	const LargeValueMaintenanceJournalStoreOptions invalidIdentityOptions{options(), 84U};
+	LargeValueMaintenanceJournalStore invalidIdentityStore(states, *metadata, invalidIdentityOptions);
+	static_cast<void>(states.upsert(record(invalidIdentityOptions.state_id), options()));
+	MetadataSnapshotPin invalidIdentitySnapshot = metadata->openSnapshot();
+	expectFormatError([&] { static_cast<void>(invalidIdentityStore.load(invalidIdentitySnapshot)); },
+					  FormatError::FERR_INVALID_STATE);
+	invalidIdentitySnapshot.release();
+
+	const LargeValueMaintenanceJournalStoreOptions externalValueOptions{options(), 85U};
+	LargeValueMaintenanceJournalStore externalValueStore(states, *metadata, externalValueOptions);
+	static_cast<void>(states.upsert({externalValueOptions.state_id, std::string(RSS_LARGE_VALUE_MAINTENANCE_JOURNAL_KEY),
+									 StateRecordStorageKind::SRS_LARGE_VALUE, LargeValueId(3U), {}}, options()));
+	MetadataSnapshotPin externalValueSnapshot = metadata->openSnapshot();
+	expectFormatError([&] { static_cast<void>(externalValueStore.load(externalValueSnapshot)); },
+					  FormatError::FERR_INVALID_STATE);
+	externalValueSnapshot.release();
+
+	LargeValueMaintenanceJournal valid;
+	valid.scan_generation = Generation(3U);
+	valid.phase = LargeValueMaintenanceJournalPhase::LVMJP_SCAN_ENTITY_PROPERTIES;
+	valid.candidate_value_ids = {LargeValueId(3U)};
+	MetadataSnapshotPin beforeSave = metadata->openSnapshot();
+	const LargeValueMaintenanceJournalSave saved = journalStore.saveAfterScan(beforeSave, valid);
+	beforeSave.release();
+	EXPECT_EQ(saved.journal.scan_generation, Generation(4U));
+
+	MetadataSnapshotPin staleSnapshot = metadata->openSnapshot();
+	LargeValueMaintenanceJournal stale = valid;
+	expectFormatError([&] { static_cast<void>(journalStore.saveAfterScan(staleSnapshot, stale)); },
+					  FormatError::FERR_INVALID_STATE);
+	EXPECT_EQ(journalStore.load(staleSnapshot), saved.journal);
+	staleSnapshot.release();
 }
 
 TEST(LargeValueMaintenanceJournalCodecTest, RejectsNoncanonicalOrInconsistentEvidence) {

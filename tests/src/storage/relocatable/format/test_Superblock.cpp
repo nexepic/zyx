@@ -263,6 +263,10 @@ TEST(RelocatableSuperblockTest, ClassifiesEveryEmergencyReserveDescriptorComplet
 	EXPECT_TRUE(absent.isAbsent());
 	EXPECT_FALSE(absent.isValid());
 
+	auto slotOnly = absent;
+	slotOnly.physical_slot = PhysicalSlotId(2U);
+	EXPECT_FALSE(slotOnly.isAbsent());
+
 	auto poolOnly = absent;
 	poolOnly.pool_token = SegmentId(RSS_INITIAL_METADATA_EMERGENCY_RESERVE_POOL_TOKEN);
 	EXPECT_FALSE(poolOnly.isAbsent());
@@ -326,6 +330,7 @@ TEST(RelocatableSuperblockTest, AllowsEmptyRootsAndSelectsTheNewestValidGenerati
 
 TEST(RelocatableSuperblockTest, PersistsTheTypedPageDirectoryBootstrapFlag) {
 	Superblock superblock = validSuperblock(7U, 50U);
+	EXPECT_FALSE(superblock.usesPageDirectoryBootstrap());
 	superblock.flags = RSS_SUPERBLOCK_FLAG_PAGE_DIRECTORY_BOOTSTRAP;
 	const auto encoded = SuperblockCodec::encode(superblock);
 	EXPECT_EQ(LittleEndianCodec::readU32(encoded, FLAGS_OFFSET), RSS_SUPERBLOCK_FLAG_PAGE_DIRECTORY_BOOTSTRAP);

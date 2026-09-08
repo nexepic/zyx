@@ -348,6 +348,58 @@ TEST_F(RelocatableCompactionCoordinatorTest, EvacuatesPropertyPagesAndReleasesAn
 	EXPECT_THROW(static_cast<void>(scanner.scan()), FormatException);
 }
 
+TEST_F(RelocatableCompactionCoordinatorTest, EvacuatesEveryOtherSupportedGenericSlottedPoolKind) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	SlottedPagePool pages(io, *metadata);
+
+	const auto compactOnePage = [&](SegmentKind poolKind, PageOwnerKind ownerKind, SegmentId sourceSegment,
+								  SegmentId destinationSegment, PageId sourcePageId, PageId destinationPageId,
+								  PhysicalSlotId sourceSlot, PhysicalSlotId destinationSlot,
+								  LogSequenceNumber firstLsn) {
+		const PageOwnerHeader owner{sourcePageId, 99U, ownerKind, 0U, RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES,
+									Generation(1U), firstLsn};
+		SlottedPage sourcePage = SlottedPage::create(owner);
+		const TestSlottedPageRecord record = testRecord(sourcePageId.value());
+		const SlottedSlotReference slot = sourcePage.insert(TestSlottedPageRecordCodec::encode(record));
+		SlottedPagePoolAllocationRequest sourceRequest = propertyRequest(sourceSegment, sourcePageId);
+		sourceRequest.pool_kind = poolKind;
+		sourceRequest.page_owner_kind = ownerKind;
+		ASSERT_TRUE(pages.allocatePage(sourceRequest, sourcePage, sourceSlot, sourceSlot, firstLsn).has_value());
+
+		const PageOwnerHeader destinationOwner{destinationPageId, 99U, ownerKind, 0U,
+											RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, Generation(1U),
+											LogSequenceNumber(firstLsn.value() + 1U)};
+		SlottedPage destinationPage = SlottedPage::create(destinationOwner);
+		SlottedPagePoolAllocationRequest destinationRequest = propertyRequest(destinationSegment, destinationPageId);
+		destinationRequest.pool_kind = poolKind;
+		destinationRequest.page_owner_kind = ownerKind;
+		ASSERT_TRUE(pages.allocatePage(destinationRequest, destinationPage, destinationSlot, destinationSlot,
+										   LogSequenceNumber(firstLsn.value() + 1U))
+						.has_value());
+
+		RelocatableCompactionCoordinator coordinator(pages, *metadata);
+		const RelocatableSlottedPoolCompactionResult result = coordinator.compactSlottedPool(
+				{sourceSegment, destinationSegment, 1U, LogSequenceNumber(firstLsn.value() + 2U)});
+		EXPECT_EQ(result.status, RelocatableCompactionStatus::VCS_COMPLETED);
+		EXPECT_EQ(result.moved_pages, 1U);
+		EXPECT_TRUE(result.source_empty);
+		EXPECT_TRUE(result.source_retired);
+		EXPECT_TRUE(result.source_released);
+
+		const MetadataSnapshotPin snapshot = metadata->openSnapshot();
+		EXPECT_EQ(metadata->findPageLocation(snapshot, sourcePageId).segment_id, destinationSegment);
+		EXPECT_EQ(metadata->findCatalog(snapshot, sourceSegment).state, SegmentState::SGS_OBSOLETE);
+		EXPECT_FALSE(metadata->isPhysicalSlotAllocated(snapshot, sourceSlot));
+		EXPECT_EQ(TestSlottedPageRecordCodec::decode(pages.read(snapshot, sourcePageId).read(slot)), record);
+	};
+
+	compactOnePage(SegmentKind::SGK_STATE_PAGE_POOL, PageOwnerKind::POK_STATE, SegmentId(73U), SegmentId(74U),
+				   PageId(103U), PageId(104U), PhysicalSlotId(42U), PhysicalSlotId(43U), LogSequenceNumber(2U));
+	compactOnePage(SegmentKind::SGK_VECTOR_ADJACENCY_POOL, PageOwnerKind::POK_VECTOR_ADJACENCY, SegmentId(75U),
+				   SegmentId(76U), PageId(105U), PageId(106U), PhysicalSlotId(44U), PhysicalSlotId(45U),
+				   LogSequenceNumber(7U));
+}
+
 TEST_F(RelocatableCompactionCoordinatorTest, RetainsRetiredPoolUntilTheLastSnapshotDrains) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
 	SlottedPagePool pages(io, *metadata);

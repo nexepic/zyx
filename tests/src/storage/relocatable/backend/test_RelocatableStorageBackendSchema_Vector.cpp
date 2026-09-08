@@ -108,6 +108,25 @@ TEST_F(RelocatableStorageBackendSchemaTest, SearchesSnapshotPinnedLogicalVectorS
 	backend.close();
 }
 
+TEST_F(RelocatableStorageBackendSchemaTest, ReturnsNoHitsBeforeAVectorIndexHasMatchingProperties) {
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	static_cast<void>(backend.createLogicalNodes({{{"Empty"}, {}}}));
+	static_cast<void>(
+			backend.createLogicalNodeVectorIndex({"empty_embedding", "Empty", "embedding", 2U, "l2"}));
+
+	auto snapshot = backend.openLogicalGraphVectorSearchSnapshot();
+	ASSERT_NE(snapshot, nullptr);
+	const LogicalGraphVectorSearchRequest request{
+			"empty_embedding", {1.0F, 0.0F}, 1U, LogicalGraphVectorSearchMode::LGVSM_AUTO, 1U, 1U};
+	const LogicalGraphVectorSearchResult result = snapshot->searchLogicalVector(request);
+	EXPECT_TRUE(result.hits.empty());
+	EXPECT_EQ(result.stats.scanned_mapping_entries, 0U);
+	EXPECT_EQ(result.stats.raw_vector_reads, 0U);
+	snapshot.reset();
+	backend.close();
+}
+
 TEST_F(RelocatableStorageBackendSchemaTest, UsesPublishedAdjacencyCandidatesWithExactRawRefinement) {
 	auto vectorValue = [](double first, double second) {
 		return graph::PropertyValue(
@@ -988,5 +1007,41 @@ TEST_F(RelocatableStorageBackendSchemaTest, TrainsAndReusesAPersistentPqGenerati
 	const LogicalGraphVectorTrainingResult afterReopen = reopened.trainLogicalVector({"person_embedding", 16U, 16U});
 	EXPECT_TRUE(afterReopen.trained);
 	EXPECT_TRUE(afterReopen.reused_existing_generation);
+	reopened.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest, PersistsPqSubspaceSelectionForDivisibleAndPrimeDimensions) {
+	auto vectorValue = [](size_t dimensions, double offset) {
+		std::vector<graph::PropertyValue> values;
+		values.reserve(dimensions);
+		for (size_t index = 0U; index < dimensions; ++index) {
+			values.emplace_back(offset + static_cast<double>(index));
+		}
+		return graph::PropertyValue(std::move(values));
+	};
+
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	static_cast<void>(backend.createLogicalNodes(
+				{{{"Embedding"}, {{"divisible", vectorValue(16U, 0.0)}, {"prime", vectorValue(17U, 0.0)}}},
+				 {{"Embedding"}, {{"divisible", vectorValue(16U, 1.0)}, {"prime", vectorValue(17U, 1.0)}}}}));
+	const LogicalGraphIndexDefinition divisible =
+			backend.createLogicalNodeVectorIndex({"divisible_embedding", "Embedding", "divisible", 16U, "l2"});
+	const LogicalGraphIndexDefinition prime =
+			backend.createLogicalNodeVectorIndex({"prime_embedding", "Embedding", "prime", 17U, "l2"});
+
+	EXPECT_TRUE(backend.trainLogicalVector({"divisible_embedding", 16U, 16U}).trained);
+	EXPECT_TRUE(backend.trainLogicalVector({"prime_embedding", 16U, 16U}).trained);
+	const VectorManifest divisibleManifest = readVectorManifest(divisible.index_id);
+	const VectorManifest primeManifest = readVectorManifest(prime.index_id);
+	EXPECT_EQ(readVectorCodebookManifest(divisibleManifest.codebook_id).header.subspace_count, 2U);
+	EXPECT_EQ(readVectorCodebookManifest(primeManifest.codebook_id).header.subspace_count, 1U);
+	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+	backend.close();
+
+	RelocatableStorageBackend reopened(options());
+	reopened.open();
+	EXPECT_TRUE(reopened.trainLogicalVector({"divisible_embedding", 16U, 16U}).reused_existing_generation);
+	EXPECT_TRUE(reopened.trainLogicalVector({"prime_embedding", 16U, 16U}).reused_existing_generation);
 	reopened.close();
 }

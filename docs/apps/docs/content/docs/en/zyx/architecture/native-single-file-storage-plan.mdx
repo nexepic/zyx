@@ -4155,3 +4155,111 @@ No recursive deletion of an entire legacy tree is permitted while one of its exc
 | `RETIRED` | Consolidated removal of legacy test-observer and lifecycle-wiring wrappers | An exact consumer audit found `DataManager::setWALManager()` only forwarded to `TransactionContext`, `DataManager::setDeletionFlagReference()` only assigned the deletion flag pointer, and `FileStorage::getStorageIO()`, `getIDAllocators()`, `getStorageWriter()`, and `getFileHeaderManager()` were read only by legacy physical/WAL tests. `FileStorage::getDataManager()` had one real production consumer, the legacy `TransactionManager`; it is physically removed from the public surface and `TransactionManager` uses friend access to the same private `dataManager` owner. Tests use the existing friend-based `DataManagerTestAccess` / `FileStorageTestAccess`. WAL wiring, deletion marking, recovery construction, and cross-platform I/O behavior are unchanged. A clean configure and complete quick suite `native-20260822T135319-54200` passed with two isolated shards (`exit_code: 0`), clean CTest registration, bilingual documentation links, and diff checks; coverage was Region 93.70%, Function 98.40%, Line 93.34%, Branch 86.20%. This is one local milestone with adjacent legacy-storage cleanup. |
 
 | `RETIRED` | Legacy pointer and test-observer forwarding adapters | An exact consumer audit found `BaseEntityManager::getDataManagerPtr()` was used only by the base implementation and its Node, Edge, Property, Blob, Index, and State manager subclasses, where it merely returned the same protected `dataManager_` pointer. `TransactionContext::getWALManager()` likewise only returned its private pointer to friend `DataManager`; its public `undoLog()`, `pendingWalChanges()`, and `pendingWalAddsByType()` observers existed only for legacy white-box tests. `FileHeaderManager::getFileHeader()` only returned the same mutable header to `SegmentAllocator` and four legacy white-box assertions. No public API, Driver ABI, binding, app, benchmark, WAL/recovery, native-runtime, or documentation consumer uses these adapters. They are physically removed: production owners use existing private members while narrow `TransactionContextTestAccess` and `FileHeaderManagerTestAccess` preserve every test observation. Allocation, property/blob handling, traversal link/unlink, transaction bookkeeping, WAL flush, rollback, header-chain updates, and recovery behavior are unchanged. Ten affected legacy test translation units and all affected production units pass project-dependency C++20 syntax-only compilation; `test_Transaction.cpp` still exposes only its pre-existing `Transaction::CheckpointPolicy` drift. Complete native quick suite `native-20260823T131252-2884` passed with two isolated shards, clean CTest registration, and a diff check. Coverage was Region 93.70%, Function 98.40%, Line 93.34%, Branch 86.20%. This is one local cleanup milestone. |
+
+## 23. Framework-Level Read-Path Optimization and Implementation Gaps
+
+This section records the framework-level gaps exposed by benchmark comparison and the implementation sequence that closes them. These are not
+workload-specific tricks. They must not reintroduce Segment Chains, per-node adjacency roots, Edge linked lists, a second database file, or
+query-specific fast paths. Every change remains within the single-file format, A/B Superblock, generation-aware Catalog/Page Directory, shared
+Buffer Pool, global key-only adjacency Packed B+Tree, and no-migration policy. A faster write path does not mean that the read path is complete;
+the Stage 2, 4, 5, 6, and 8 production-read gates therefore remain open until this section is implemented and verified. Existing "native core"
+statements mean correctness-core completion only.
+
+### 23.1 Benchmark evidence and measurement contract
+
+The current and historical architecture were compared on the same macOS arm64 host, AppleClang 17, Conan toolchain, Release configuration,
+smoke dataset, and seed. The historical binary was rebuilt from a separate worktree whose commit is not a linear ancestor of the current branch,
+so the result is a reference baseline, not a strict before/after claim. `load_nodes_edges` is roughly twice as fast in the current architecture,
+while read paths regressed by tens to thousands of times for label/property scans, relationship scans, one- and two-hop expansion, shortest-path
+chains, top-k sorting, and indexed point/equality/range lookups. Exact p50/p95/p99, RSS, database size, and logical/physical byte counts must be
+stored in reproducible benchmark artifacts rather than encoded as format constants.
+
+Profiles show repeated metadata-directory lookup, page-route lookup, Catalog and segment validation, page reads, payload copies, slotted-page
+decoding, and complete property-root decoding on node scans. Relationship-property filters materialize complete Edges repeatedly, and shortest
+path reads complete Edge and Node objects even when only topology is needed. Every phase below must record structural counters as well as wall-clock
+time.
+
+### 23.2 Phased implementation
+
+#### Phase 0: freeze observable contracts again
+
+- Freeze scan, indexed, multihop, and write workloads across smoke, small, million-scale, and ten-million-scale corpora, with opened, warm, and
+  cold-ish modes.
+- Record p50/p95/p99, RSS, file size, logical/physical read and write bytes, and deterministic structural counters.
+- Count Page Directory lookups, Catalog lookups, envelope/control validations, typed payload-copy bytes, B+Tree root descents, complete entity
+  materializations, decoded property count, and dynamic allocations.
+- Establish the current baseline first; an optimization is accepted only when it improves more than one workload class without changing results.
+
+#### Phase 1: add `NativeReadSession`
+
+Introduce a snapshot-bound read session owning a `MetadataSnapshotPin`, bounded PageId-to-PageLocation and SegmentId-to-CatalogEntry caches,
+validated envelope/control views, a snapshot-local token dictionary, and Directory/B+Tree cursor state. Caches are generation-scoped and bounded
+by entries or bytes. Physical offsets remain inside storage and never cross into query, binding, or public ABI layers.
+
+#### Phase 2: add zero-copy typed page views
+
+Separate `PinnedTypedPageView`, `DecodedRecordView`, and `MutableOwnedPage`. A reader keeps a Buffer Pool pin and references bytes only after checksum,
+owner, generation, and slot-generation validation. Mutation continues to use owning COW representations. A cache hit must not copy an entire page
+payload or bypass integrity validation.
+
+#### Phase 3: unify streaming Directory/B+Tree APIs
+
+Provide `pointLookup(key)`, `multiLookup(sorted keys)`, and `openRangeCursor(lower, upper)` for Entity Map, Property Directory, indexes, and adjacency.
+Each range cursor descends the root once, streams leaf/sibling pages, emits callbacks or spans instead of constructing unbounded vectors, and may use
+bounded sibling prefetch. Cursors carry logical continuation only; physical PageIds never leak.
+
+#### Phase 4: true Entity-page scans
+
+Add a page-local EntityId array to Entity Pages so full scans enumerate live slots in page/bitmap order without an Entity Map lookup per entity.
+Use an Entity Map range cursor only when ID order is required. Sort and group batch point reads by PageId, pin each distinct page once, then restore
+caller order. Add a counter-based regression proving that the per-entity tree lookup pattern is gone.
+
+#### Phase 5: selective, tiered Property storage
+
+Use the hierarchy: no property means no directory entry; a small set uses a packed shared slotted record; a large set uses a shared overflow/per-key
+tree; one oversized value uses `LargeValueRef`. Sort the Property-token offset directory and support binary search/selective decode. Full decode is
+allowed only for `properties(n)`, `keys(n)`, or an explicitly complete result. Overflow records are keyed by
+`(EntityKind, EntityId, PropertyToken)`. A size/pressure solver with hysteresis chooses representations; no fixed property-count assumption is allowed.
+Small mutation batches use sorted `multiLookup`, never a full Property Directory mirror.
+
+#### Phase 6: projection-aware delayed materialization
+
+Add a query-text-independent `EntityReadShape` carrying entity identity, label/type token, requested Property tokens, and an `all Properties` flag.
+Internal rows hold an `EntityRef` and selected-field cache by default instead of eagerly constructing full `LogicalGraphNode`/`LogicalGraphEdge` values.
+Public result types may still materialize at the boundary. Execution carries token IDs and resolves names only at result or binding boundaries.
+
+#### Phase 7: topology-first adjacency
+
+Implement three cursor layers: `AdjacencyKeyCursor` returns EdgeIds, `EdgeTopologyBatchCursor` returns endpoint/type tokens, and
+`EdgeMaterializationCursor` reads selected or full Properties only after a predicate passes and output requires it. Degree/count, relationship-type filters,
+and shortest path must not touch unrelated Property pages; relationship-property predicates decode only requested tokens. Resolve EdgeIds in Entity-page
+batches and pin each distinct page once. Do not add a type-qualified tree or per-node persistent delta unless measurement independently justifies it.
+
+#### Phase 8: separate index candidates from entity reads
+
+The index layer returns an `IndexCandidateBatch` containing EntityId, covered values, and root/snapshot identity. Runtime validates liveness, evaluates
+covered predicates directly, and loads only missing requested fields; it must not reread a complete Node after an index hit. Full cross-store integrity
+checks belong to an integrity scanner or paranoid mode, not every normal query.
+
+#### Phase 9: scale writes and maintenance
+
+Keep format semantics while adding target-page grouping, one COW candidate per page, sorted directory merges, incremental free-space indexes, and a
+shared B+Tree WriteBatch for online and bulk paths. Do not add an adjacency-only write buffer. A general bounded write buffer may be considered only after
+measured COW write amplification proves it necessary.
+
+### 23.3 Structural acceptance gates
+
+- Full Entity scans must not perform one independent Entity Map tree lookup per entity.
+- Envelope/control validation must be reusable within one snapshot/segment.
+- A Buffer Pool hit must not copy a complete page payload.
+- A B+Tree range cursor descends the root once; adjacency count never reads Property pages.
+- Shortest path never reads unrelated Properties; an index-candidate path never reads the same entity twice.
+- Requesting one Property decodes one Property; a batch point lookup pins each distinct Entity Page at most once.
+- Cache, cursor, batch, and materialization memory is bounded.
+- Relocation, old snapshots, split/merge, reopen, and checksum/owner/generation corruption preserve results or fail closed.
+- Each phase adds pin-lifetime, cursor-continuation, selective/full-equivalence, topology/full-Edge-equivalence, and deterministic-counter tests.
+- Run final four-dimensional coverage only after the source set is stable. Coverage is a final gate, not the current blocker; do not inflate it with
+  mocks, fabricated corruption, impossible plans, TTY/I/O failures, or scale workloads.
+
+The production-read status for Stages 2, 4, 5, 6, and 8 can be closed only after these gates pass. Until then they remain correctness-core complete,
+not production-read complete.

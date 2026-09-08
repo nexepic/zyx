@@ -22,6 +22,17 @@ TEST_F(RelocatableMetadataStoreTest, MetadataStoreLifecyclePreservesAnAlreadyAll
 	EXPECT_TRUE(recovered.metadata_emergency_reserve.isValid());
 }
 
+TEST_F(RelocatableMetadataStoreTest, MetadataStoreLifecycleRejectsMissingAndMismatchedFileStates) {
+	const Superblock initial = superblock(1U, 1U);
+	const std::shared_ptr<StorageIO> missing;
+	EXPECT_THROW(initializeRelocatableMetadataFile(missing, initial), std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(recoverRelocatableMetadataSuperblock(missing)), std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(recoverRelocatableMetadataSuperblock(io)), FormatException);
+
+	initializeRelocatableMetadataFile(io, initial);
+	EXPECT_THROW(initializeRelocatableMetadataFile(io, initial), FormatException);
+}
+
 TEST_F(RelocatableMetadataStoreTest, CompleteInitializationPublishesBootstrapBeforeStandaloneReopen) {
 	auto store = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
 	MetadataSnapshotPin snapshot = store->openSnapshot();

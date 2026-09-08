@@ -159,7 +159,6 @@ namespace graph::storage {
 
 		EntityLabelOverflowReference overflow;
 		bool retiredEmptyLabelPage = false;
-		bool sourceSlotRemoved = false;
 		std::optional<LoadedLabelPage> source;
 		if (!previous.isEmpty()) {
 			source.emplace(loadLabelPage(snapshot, previous.page_id));
@@ -190,33 +189,26 @@ namespace graph::storage {
 						pools.empty()
 								? std::nullopt
 								: pages_.findBestFitPageForRecord(snapshot, pools, PageOwnerKind::POK_ENTITY_LABEL,
-																		 recordBytes);
+																					 recordBytes);
 				if (placement.has_value()) {
-					if (source.has_value() && placement->page_id == source->page.pageId()) {
-						const SlottedSlotReference sourceSlot{previous.page_id, previous.slot_id,
-															  previous.slot_generation};
-						source->page.erase(sourceSlot);
-						sourceSlotRemoved = true;
-						const SlottedSlotReference slot = source->page.insert(encoded);
+					// A source overwrite can fail only when its immutable snapshot page
+					// cannot fit this record. The same snapshot's best-fit lookup therefore
+					// cannot select that source page as an insertion target.
+					LoadedLabelPage target = loadLabelPage(snapshot, placement->page_id);
+					try {
+						const SlottedSlotReference slot = target.page.insert(encoded);
 						overflow = asOverflowReference(slot);
+						PageOwnerHeader owner = ownerFor(target.page.pageId(), target.contents.pool,
+																	 PageOwnerKind::POK_ENTITY_LABEL, checkpointLsn);
+						target.page.rebindOwner(owner);
+						replacements.push_back({target.contents.pool, target.contents.location,
+															PageOwnerKind::POK_ENTITY_LABEL,
+															target.contents.owner.committed_lsn, target.page.serialize(),
+															target.page.stats().contiguous_free_bytes, false});
 						inserted = true;
-					} else {
-						LoadedLabelPage target = loadLabelPage(snapshot, placement->page_id);
-						try {
-							const SlottedSlotReference slot = target.page.insert(encoded);
-							overflow = asOverflowReference(slot);
-							PageOwnerHeader owner = ownerFor(target.page.pageId(), target.contents.pool,
-															 PageOwnerKind::POK_ENTITY_LABEL, checkpointLsn);
-							target.page.rebindOwner(owner);
-							replacements.push_back({target.contents.pool, target.contents.location,
-													PageOwnerKind::POK_ENTITY_LABEL,
-													target.contents.owner.committed_lsn, target.page.serialize(),
-													target.page.stats().contiguous_free_bytes, false});
-							inserted = true;
-						} catch (const FormatException &error) {
-							if (error.error() != FormatError::FERR_INVALID_STATE) {
-								throw;
-							}
+					} catch (const FormatException &error) {
+						if (error.error() != FormatError::FERR_INVALID_STATE) {
+							throw;
 						}
 					}
 				}
@@ -268,33 +260,28 @@ namespace graph::storage {
 		}
 
 		if (source.has_value()) {
-			const bool sourceAlreadyStaged =
-					std::ranges::any_of(replacements, [&source](const StagedReplacement &staged) {
-						return staged.expected_location.page_id == source->contents.location.page_id;
-					});
-			if (!sourceAlreadyStaged && !sourceSlotRemoved && (previous != overflow || !needsOverflow)) {
+			// A failed source overwrite cannot be selected by the immutable best-fit
+			// lookup, so no earlier replacement can refer to this source page.
+			if (previous != overflow || !needsOverflow) {
 				const SlottedSlotReference sourceSlot{previous.page_id, previous.slot_id, previous.slot_generation};
 				source->page.erase(sourceSlot);
 			}
-			if (!sourceAlreadyStaged) {
-				if (source->page.stats().live_slot_count == 0U) {
-					replacements.push_back({source->contents.pool,
-											source->contents.location,
-											PageOwnerKind::POK_ENTITY_LABEL,
-											source->contents.owner.committed_lsn,
-											{},
-											0U,
-											true});
-					retiredEmptyLabelPage = true;
-				} else {
-					PageOwnerHeader owner = ownerFor(source->page.pageId(), source->contents.pool,
-													 PageOwnerKind::POK_ENTITY_LABEL, checkpointLsn);
-					source->page.rebindOwner(owner);
-					replacements.push_back({source->contents.pool, source->contents.location,
-											PageOwnerKind::POK_ENTITY_LABEL, source->contents.owner.committed_lsn,
-											source->page.serialize(), source->page.stats().contiguous_free_bytes,
-											false});
-				}
+			if (source->page.stats().live_slot_count == 0U) {
+				replacements.push_back({source->contents.pool,
+										source->contents.location,
+										PageOwnerKind::POK_ENTITY_LABEL,
+										source->contents.owner.committed_lsn,
+										{},
+										0U,
+										true});
+				retiredEmptyLabelPage = true;
+			} else {
+				PageOwnerHeader owner = ownerFor(source->page.pageId(), source->contents.pool,
+												 PageOwnerKind::POK_ENTITY_LABEL, checkpointLsn);
+				source->page.rebindOwner(owner);
+				replacements.push_back({source->contents.pool, source->contents.location,
+										PageOwnerKind::POK_ENTITY_LABEL, source->contents.owner.committed_lsn,
+										source->page.serialize(), source->page.stats().contiguous_free_bytes, false});
 			}
 		}
 

@@ -222,13 +222,21 @@ TEST_F(RelocatableMetadataStoreTest, RejectsForgedEntityReplacementPoolAndLocati
 		first.expected_pool = currentPool;
 		first.expected_location = currentLocation;
 		first.replacement_new_pool = EntityPageFreshPoolDestination{SegmentId(32U), currentPool.owner_id, Generation(1U), PhysicalSlotId(41U), PhysicalSlotId(41U)};
-		EntityPageReplacementRequest conflicting = first;
-		conflicting.replacement_new_pool->last_slot = PhysicalSlotId(42U);
-		const std::array<EntityPageReplacementRequest, 2U> requests{{first, conflicting}};
-		expectFormatError([&] { static_cast<void>(store->mutateNativeGraphPagesWithLargeValues(
-				requests, noEntityAppends, noEntityPools, noPropertyReplacements, noPropertyBatches,
-				noLargeValues, {}, LogSequenceNumber(3U), materializer, {})); }, FormatError::FERR_INVALID_STATE);
-		EXPECT_FALSE(materialized);
+		const auto rejectConflictingFreshIdentity = [&](const std::function<void(EntityPageFreshPoolDestination &)> &forge) {
+			EntityPageReplacementRequest conflicting = first;
+			forge(*conflicting.replacement_new_pool);
+			const std::array<EntityPageReplacementRequest, 2U> requests{{first, conflicting}};
+			expectFormatError([&] { static_cast<void>(store->mutateNativeGraphPagesWithLargeValues(
+					requests, noEntityAppends, noEntityPools, noPropertyReplacements, noPropertyBatches,
+					noLargeValues, {}, LogSequenceNumber(3U), materializer, {})); }, FormatError::FERR_INVALID_STATE);
+			EXPECT_FALSE(materialized);
+		};
+		// Both requests name the same fresh Segment. Each remaining identity field
+		// must match before the coordinator can reserve or materialize that pool.
+		rejectConflictingFreshIdentity([](auto &pool) { pool.pool_owner_id = 902U; });
+		rejectConflictingFreshIdentity([](auto &pool) { pool.generation = Generation(2U); });
+		rejectConflictingFreshIdentity([](auto &pool) { pool.first_slot = PhysicalSlotId(42U); });
+		rejectConflictingFreshIdentity([](auto &pool) { pool.last_slot = PhysicalSlotId(42U); });
 	}
 	reject([&](auto &request) {
 		request.replacement_pool = currentPool;

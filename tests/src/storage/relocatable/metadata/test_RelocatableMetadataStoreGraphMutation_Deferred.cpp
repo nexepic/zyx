@@ -114,6 +114,58 @@ TEST_F(RelocatableMetadataStoreTest, BuildsAndRewindsAnUnpublishedBulkRunInsideO
 			}));
 }
 
+TEST_F(RelocatableMetadataStoreTest,
+	   RejectsAnExternalPrivateTailThatIsNotTheCurrentFileSuffixBeforePublication) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	MetadataSnapshotPin before = store->openSnapshot();
+	const Generation beforeGeneration = before.superblock().generation;
+	before.release();
+
+	NativeGraphDerivedStateMutation derived;
+	derived.private_segment_plan = {SegmentKind::SGK_BULK_SCRATCH,
+								  91U,
+								  PhysicalSlotId(40U),
+								  PhysicalSlotId(40U),
+								  RSS_ENVELOPE_BYTES,
+								  {},
+								  1U};
+	// The candidate layout is valid, but this source reservation cannot name the
+	// current file suffix and must never enter a published allocator generation.
+	derived.external_private_tail_reservation = {
+			PhysicalSlotId(std::numeric_limits<uint64_t>::max()),
+			PhysicalSlotId(std::numeric_limits<uint64_t>::max())};
+	const std::array<EntityPageReplacementRequest, 0U> noEntityReplacements{};
+	const std::array<EntityPageAppendBatchRequest, 0U> noEntityAppends{};
+	const std::array<EntityPageNewPoolBatchRequest, 0U> noEntityPools{};
+	const std::array<NativeGraphPropertyPageReplacementRequest, 0U> noPropertyReplacements{};
+	const std::array<NativeGraphPropertyPageBatchRequest, 0U> noPropertyBatches{};
+	const std::array<NativeGraphLargeValueMutation, 0U> noLargeValues{};
+
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->mutateNativeGraphPagesWithLargeValues(
+						noEntityReplacements, noEntityAppends, noEntityPools, noPropertyReplacements,
+						noPropertyBatches, noLargeValues, derived, LogSequenceNumber(2U),
+						[](std::span<EntityPageReplacementMaterialization>,
+						   std::span<EntityPageAppendBatchMaterialization>,
+						   std::span<EntityPageNewPoolBatchMaterialization>,
+						   std::span<NativeGraphPropertyPageReplacementMaterialization>,
+						   std::span<NativeGraphPropertyPageBatchMaterialization>,
+						   std::span<LargeValueMaterializationResult>) {},
+						[](std::vector<std::vector<IndexTreeMutationPoolBatch>> &) {}, {}, {}, {}, {}, {},
+						MetadataPublishOptions{}, NativeGraphLogicalIdReservation{}, std::nullopt,
+						[](const NativeGraphPrivateSegmentSet &, size_t) {
+							return std::vector<std::byte>{std::byte{0x5A}};
+						}));
+			},
+			FormatError::FERR_INVALID_STATE);
+
+	MetadataSnapshotPin unchanged = store->openSnapshot();
+	EXPECT_EQ(unchanged.superblock().generation, beforeGeneration);
+	unchanged.release();
+	EXPECT_NO_THROW(static_cast<void>(store->reserveNativeGraphLogicalIds(1U, 0U)));
+}
+
 TEST_F(RelocatableMetadataStoreTest, PlannerFailuresReleasePrivateSnapshotAndCandidateSlotsForEveryPlanningStage) {
 	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
 	const auto expectPlannerFailure = [&store](const NativeGraphDeferredIndexPlanner &deferred,
@@ -716,6 +768,58 @@ TEST_F(RelocatableMetadataStoreTest,
 	EXPECT_FALSE(reopened->isPhysicalSlotAllocated(recovered, PhysicalSlotId(43U)));
 	EXPECT_FALSE(reopened->isPhysicalSlotAllocated(recovered, PhysicalSlotId(44U)));
 	recovered.release();
+
+	// A streamed publication may remove an obsolete derived root without first
+	// materializing a replacement tree. The source root and its page retirement
+	// remain authenticated by the writer-owned planning snapshot.
+	NativeGraphDerivedStateMutation retirement;
+	NativeGraphPrivateSegmentRequest retirementScratch;
+	retirementScratch.kind = SegmentKind::SGK_BULK_SCRATCH;
+	retirementScratch.owner_id = 81U;
+	retirementScratch.first_slot = PhysicalSlotId(43U);
+	retirementScratch.last_slot = PhysicalSlotId(43U);
+	retirementScratch.payload.assign(17U, std::byte{0x3CU});
+	retirement.private_segments.push_back(std::move(retirementScratch));
+	bool retirementPreparerCalled = false;
+	const Superblock retired = reopened->mutateNativeGraphPagesWithLargeValues(
+			noEntityReplacements, noEntityAppends, noEntityPools, noPropertyReplacements, noPropertyBatches,
+			noLargeValues, retirement, LogSequenceNumber(3U),
+			[](std::span<EntityPageReplacementMaterialization>, std::span<EntityPageAppendBatchMaterialization>,
+			   std::span<EntityPageNewPoolBatchMaterialization>,
+			   std::span<NativeGraphPropertyPageReplacementMaterialization>,
+			   std::span<NativeGraphPropertyPageBatchMaterialization>, std::span<LargeValueMaterializationResult>) {},
+			[](std::vector<std::vector<IndexTreeMutationPoolBatch>> &) {}, {}, {}, {}, {}, {}, MetadataPublishOptions{},
+			NativeGraphLogicalIdReservation{}, std::nullopt, {}, {},
+			[&retirementPreparerCalled, root, rootPage](const NativeGraphDeferredIndexPlanningContext &) {
+				NativeGraphDeferredIndexPlan plan;
+				plan.mutation.index_id = RSS_GLOBAL_ADJACENCY_INDEX_ID;
+				plan.mutation.expected_root = root;
+				plan.mutation.retire_root = true;
+				IndexTreeMutationPoolRequest sourcePool;
+				sourcePool.segment_id = rootPage.segment_id;
+				sourcePool.expected_retirements.push_back({rootPage, LogSequenceNumber(2U)});
+				plan.mutation.pool_requests.push_back(std::move(sourcePool));
+				plan.preparer = [&retirementPreparerCalled](std::vector<IndexTreeMutationPoolBatch> &batches) {
+					ASSERT_EQ(batches.size(), 1U);
+					ASSERT_EQ(batches.front().expected_retirements.size(), 1U);
+					retirementPreparerCalled = true;
+				};
+				return plan;
+			});
+	EXPECT_TRUE(retirementPreparerCalled);
+	EXPECT_EQ(retired.generation, Generation(3U));
+	MetadataSnapshotPin retiredSnapshot = reopened->openSnapshot();
+	EXPECT_FALSE(reopened->findIndexRootOptional(retiredSnapshot, RSS_GLOBAL_ADJACENCY_INDEX_ID).has_value());
+	EXPECT_FALSE(reopened->findPageLocationOptional(retiredSnapshot, root.root_page_id).has_value());
+	retiredSnapshot.release();
+
+	reopened.reset();
+	auto retiredReopened = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin retiredRecovered = retiredReopened->openSnapshot();
+	EXPECT_EQ(retiredRecovered.superblock(), retired);
+	EXPECT_FALSE(retiredReopened->findIndexRootOptional(retiredRecovered, RSS_GLOBAL_ADJACENCY_INDEX_ID).has_value());
+	EXPECT_FALSE(retiredReopened->findPageLocationOptional(retiredRecovered, root.root_page_id).has_value());
+	retiredRecovered.release();
 }
 
 TEST_F(RelocatableMetadataStoreTest, DeferredIndexPlansPublishCatalogAndAdjacencyRootsInOneGeneration) {
@@ -1039,6 +1143,54 @@ TEST_F(RelocatableMetadataStoreTest, PublishesFreshDerivedIndexRootAtomicallyAnd
 	EXPECT_EQ(rootPage.segment_id, store->findCatalog(current, rootPage.segment_id).segment_id);
 	EXPECT_TRUE(store->isPhysicalSlotAllocated(current, PhysicalSlotId(40U)));
 	current.release();
+
+	const auto rejectsBeforeMaterialization = [&](NativeGraphDerivedStateMutation rejected) {
+		bool rejectedGraphMaterializerCalled = false;
+		bool rejectedIndexMaterializerCalled = false;
+		expectFormatError(
+				[&] {
+					static_cast<void>(store->mutateNativeGraphPagesWithLargeValues(
+							noEntityReplacements, noEntityAppends, noEntityPools, noPropertyReplacements,
+							noPropertyBatches, noLargeValues, rejected, LogSequenceNumber(3U),
+							[&](std::span<EntityPageReplacementMaterialization>,
+									std::span<EntityPageAppendBatchMaterialization>,
+									std::span<EntityPageNewPoolBatchMaterialization>,
+									std::span<NativeGraphPropertyPageReplacementMaterialization>,
+									std::span<NativeGraphPropertyPageBatchMaterialization>,
+									std::span<LargeValueMaterializationResult>) {
+								rejectedGraphMaterializerCalled = true;
+							},
+							[&](std::vector<std::vector<IndexTreeMutationPoolBatch>> &) {
+								rejectedIndexMaterializerCalled = true;
+							}));
+				},
+				FormatError::FERR_INVALID_STATE);
+		EXPECT_FALSE(rejectedGraphMaterializerCalled);
+		EXPECT_FALSE(rejectedIndexMaterializerCalled);
+	};
+
+	// The root mapping is a compare-and-publish fence. A repeated creation and
+	// a stale pinned generation must fail before either materializer sees work.
+	{
+		NativeGraphDerivedStateMutation duplicateCreate;
+		NativeGraphIndexTreeMutation duplicate;
+		duplicate.index_id = root.index_id;
+		duplicate.new_pool_requests.push_back({PhysicalSlotId(41U), PhysicalSlotId(41U), duplicate.index_id, 1U});
+		duplicate.replacement_root = NativeGraphIndexTreeAppendedPageReference{0U, 0U, true};
+		duplicateCreate.index_tree_mutations.push_back(std::move(duplicate));
+		rejectsBeforeMaterialization(std::move(duplicateCreate));
+	}
+	{
+		NativeGraphDerivedStateMutation staleRoot;
+		NativeGraphIndexTreeMutation replacement;
+		replacement.index_id = root.index_id;
+		replacement.expected_root = root;
+		replacement.expected_root->root_generation = Generation(root.root_generation.value() + 1U);
+		replacement.pool_requests.push_back({rootPage.segment_id, {}, 1U, {}});
+		replacement.replacement_root = NativeGraphIndexTreeAppendedPageReference{0U, 0U, false};
+		staleRoot.index_tree_mutations.push_back(std::move(replacement));
+		rejectsBeforeMaterialization(std::move(staleRoot));
+	}
 
 	store.reset();
 	auto reopened = RelocatableMetadataStore::open(io);

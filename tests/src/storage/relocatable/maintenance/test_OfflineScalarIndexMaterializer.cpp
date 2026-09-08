@@ -343,6 +343,133 @@ TEST_F(RelocatableOfflineScalarIndexMaterializerTest, MaterializesAndResumesLogi
 			FormatError::FERR_INVALID_STATE);
 }
 
+TEST_F(RelocatableOfflineScalarIndexMaterializerTest, SkipsNodesWithoutPropertyRootsDuringPropertyMaterialization) {
+	auto metadata = RelocatableMetadataStore::initializeNew(destination_io, initialSuperblock());
+	SlottedPagePool pool(destination_io, *metadata);
+	populateNative(destination_io, *metadata, pool);
+	EntityPageStore entities(destination_io, *metadata);
+	{
+		const MetadataSnapshotPin snapshot = metadata->openSnapshot();
+		NodeEntityRecord nodeWithoutProperties;
+		nodeWithoutProperties.inline_label_ids[0] = 11U;
+		nodeWithoutProperties.inline_label_count = 1U;
+		static_cast<void>(
+				entities.insertNode(snapshot, PageId(101U), 3U, nodeWithoutProperties, nextCheckpointLsn(*metadata)));
+	}
+	EntityLabelSetStore labels(destination_io, *metadata, pool);
+	BTreePageStore pages(pool, *metadata);
+	PropertyCollectionRootStore roots(pool, *metadata);
+	SystemCatalog catalog(pages, *metadata);
+	NativeGraphWritePlanner planner(*metadata, entities, labels, roots, pages, catalogPlannerOptions());
+	publishPropertyTokens(catalog, planner, {"name"});
+
+	const std::array<IndexDefinition, 1U> definitions{IndexDefinition{17U,
+			"node_name",
+			IndexDefinitionEntityKind::IDEK_NODE,
+			IndexDefinitionKind::IDK_PROPERTY,
+			0U,
+			{"name"},
+			0U,
+			""}};
+	const OfflineScalarIndexMaterializationResult result = OfflineScalarIndexMaterializer::materialize(
+			definitions, pages, entities, labels, roots, catalog, *metadata, indexOptions());
+	EXPECT_EQ(result.materialized_indexes, 1U);
+	EXPECT_EQ(result.indexed_entries, 2U);
+
+	const MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	const BTreeIndex index(17U, pages, *metadata);
+	EXPECT_EQ(index.find(snapshot, IndexKeyCodec::encodeEntryKey(PropertyValue("Alice"), 1U)),
+			  std::optional<uint64_t>(1U));
+	EXPECT_EQ(index.find(snapshot, IndexKeyCodec::encodeEntryKey(PropertyValue("Bob"), 2U)),
+			  std::optional<uint64_t>(2U));
+	EXPECT_EQ(index.scan(snapshot, std::nullopt, 3U).size(), 2U);
+}
+
+TEST_F(RelocatableOfflineScalarIndexMaterializerTest,
+	   SkipsPropertyValuesThatExceedTheScalarIndexKeyCapacity) {
+	auto metadata = RelocatableMetadataStore::initializeNew(destination_io, initialSuperblock());
+	SlottedPagePool pool(destination_io, *metadata);
+	populateNative(destination_io, *metadata, pool);
+	EntityPageStore entities(destination_io, *metadata);
+	EntityLabelSetStore labels(destination_io, *metadata, pool);
+	BTreePageStore pages(pool, *metadata);
+	PropertyCollectionRootStore roots(pool, *metadata);
+	SystemCatalog catalog(pages, *metadata);
+	NativeGraphWritePlanner planner(*metadata, entities, labels, roots, pages, catalogPlannerOptions());
+	publishPropertyTokens(catalog, planner, {"oversized"});
+
+	MetadataSnapshotPin tokenSnapshot = metadata->openSnapshot();
+	const std::optional<uint32_t> token = catalog.findPropertyToken(tokenSnapshot, "oversized");
+	ASSERT_TRUE(token.has_value());
+	tokenSnapshot.release();
+	const std::string oversized(RSS_INDEX_KEY_MAX_BYTES, 'x');
+	const std::array propertyRoots{
+			PropertyCollectionRoot{2U, Node::typeId, {{*token, PropertyValue(oversized)}}},
+	};
+	const PropertyCollectionRootStoreOptions rootOptions{PhysicalSlotId(40U), PhysicalSlotId(59U), 401U};
+	static_cast<void>(test::publishPropertyRoots(entities, roots, *metadata, propertyRoots, rootOptions));
+
+	const std::array<IndexDefinition, 1U> definitions{{
+			{18U,
+			 "oversized_property",
+			 IndexDefinitionEntityKind::IDEK_NODE,
+			 IndexDefinitionKind::IDK_PROPERTY,
+			 0U,
+			 {"oversized"},
+			 0U,
+			 ""},
+	}};
+	const OfflineScalarIndexMaterializationResult result = OfflineScalarIndexMaterializer::materialize(
+			definitions, pages, entities, labels, roots, catalog, *metadata, indexOptions());
+	EXPECT_EQ(result.materialized_indexes, 1U);
+	EXPECT_EQ(result.indexed_entries, 1U);
+
+	const MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	const BTreeIndex index(18U, pages, *metadata);
+	EXPECT_EQ(index.find(snapshot, IndexKeyCodec::encodeEntryKey(PropertyValue("Alice"), 1U)),
+			  std::optional<uint64_t>(1U));
+	EXPECT_EQ(index.scan(snapshot, std::nullopt, 2U).size(), 1U);
+}
+
+TEST_F(RelocatableOfflineScalarIndexMaterializerTest,
+	   SkipsDeclaredPropertiesThatAreAbsentBetweenStoredPropertyTokens) {
+	auto metadata = RelocatableMetadataStore::initializeNew(destination_io, initialSuperblock());
+	SlottedPagePool pool(destination_io, *metadata);
+	populateNative(destination_io, *metadata, pool);
+	EntityPageStore entities(destination_io, *metadata);
+	EntityLabelSetStore labels(destination_io, *metadata, pool);
+	BTreePageStore pages(pool, *metadata);
+	PropertyCollectionRootStore roots(pool, *metadata);
+	SystemCatalog catalog(pages, *metadata);
+	NativeGraphWritePlanner planner(*metadata, entities, labels, roots, pages, catalogPlannerOptions());
+	publishPropertyTokens(catalog, planner, {"first", "middle", "last"});
+
+	const std::array propertyRoots{
+			PropertyCollectionRoot{1U, Node::typeId, {{1U, PropertyValue("Alice")}, {3U, PropertyValue("A")}}},
+			PropertyCollectionRoot{2U, Node::typeId, {{1U, PropertyValue("Bob")}, {3U, PropertyValue("B")}}},
+	};
+	const PropertyCollectionRootStoreOptions rootOptions{PhysicalSlotId(40U), PhysicalSlotId(59U), 401U};
+	static_cast<void>(test::publishPropertyRoots(entities, roots, *metadata, propertyRoots, rootOptions));
+
+	const std::array<IndexDefinition, 1U> definitions{{
+			{19U,
+			 "declared_but_absent",
+			 IndexDefinitionEntityKind::IDEK_NODE,
+			 IndexDefinitionKind::IDK_PROPERTY,
+			 0U,
+			 {"middle"},
+			 0U,
+			 ""},
+	}};
+	const OfflineScalarIndexMaterializationResult result = OfflineScalarIndexMaterializer::materialize(
+			definitions, pages, entities, labels, roots, catalog, *metadata, indexOptions());
+	EXPECT_EQ(result.materialized_indexes, 1U);
+	EXPECT_EQ(result.indexed_entries, 0U);
+
+	const MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	EXPECT_TRUE(BTreeIndex(19U, pages, *metadata).scan(snapshot, std::nullopt, 1U).empty());
+}
+
 TEST_F(RelocatableOfflineScalarIndexMaterializerTest, RejectsInvalidOptionsBeforeScanningDestinationData) {
 	auto metadata = RelocatableMetadataStore::initializeNew(destination_io, initialSuperblock());
 	SlottedPagePool pool(destination_io, *metadata);
@@ -403,6 +530,56 @@ TEST_F(RelocatableOfflineScalarIndexMaterializerTest,
 	MetadataSnapshotPin after = metadata->openSnapshot();
 	EXPECT_EQ(after.superblock().generation, generation);
 	after.release();
+}
+
+TEST_F(RelocatableOfflineScalarIndexMaterializerTest,
+	   RejectsEveryDestinationStoreBoundToADifferentMetadataStore) {
+	auto metadata = RelocatableMetadataStore::initializeNew(destination_io, initialSuperblock());
+	SlottedPagePool pool(destination_io, *metadata);
+	EntityPageStore entities(destination_io, *metadata);
+	EntityLabelSetStore labels(destination_io, *metadata, pool);
+	PropertyCollectionRootStore roots(pool, *metadata);
+	BTreePageStore catalogPages(pool, *metadata);
+	SystemCatalog catalog(catalogPages, *metadata);
+
+	// The materializer must not mix a page store from another physical database.
+	auto foreignMetadata = RelocatableMetadataStore::initializeNew(wal_io, initialSuperblock());
+	SlottedPagePool foreignPool(wal_io, *foreignMetadata);
+	BTreePageStore foreignPages(foreignPool, *foreignMetadata);
+	EntityPageStore foreignEntities(wal_io, *foreignMetadata);
+	EntityLabelSetStore foreignLabels(wal_io, *foreignMetadata, foreignPool);
+	PropertyCollectionRootStore foreignRoots(foreignPool, *foreignMetadata);
+	SystemCatalog foreignCatalog(foreignPages, *foreignMetadata);
+	expectFormatError(
+			[&] {
+				static_cast<void>(OfflineScalarIndexMaterializer::materialize(
+						{}, foreignPages, entities, labels, roots, catalog, *metadata, indexOptions()));
+			},
+			FormatError::FERR_INVALID_STATE);
+	expectFormatError(
+			[&] {
+				static_cast<void>(OfflineScalarIndexMaterializer::materialize(
+						{}, catalogPages, foreignEntities, labels, roots, catalog, *metadata, indexOptions()));
+			},
+			FormatError::FERR_INVALID_STATE);
+	expectFormatError(
+			[&] {
+				static_cast<void>(OfflineScalarIndexMaterializer::materialize(
+						{}, catalogPages, entities, foreignLabels, roots, catalog, *metadata, indexOptions()));
+			},
+			FormatError::FERR_INVALID_STATE);
+	expectFormatError(
+			[&] {
+				static_cast<void>(OfflineScalarIndexMaterializer::materialize(
+						{}, catalogPages, entities, labels, foreignRoots, catalog, *metadata, indexOptions()));
+			},
+			FormatError::FERR_INVALID_STATE);
+	expectFormatError(
+			[&] {
+				static_cast<void>(OfflineScalarIndexMaterializer::materialize(
+						{}, catalogPages, entities, labels, roots, foreignCatalog, *metadata, indexOptions()));
+			},
+			FormatError::FERR_INVALID_STATE);
 }
 
 TEST_F(RelocatableOfflineScalarIndexMaterializerTest,

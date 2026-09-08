@@ -272,20 +272,20 @@ namespace graph::storage {
 		std::map<uint64_t, ScannedValue> candidates;
 		for (const LargeValueId valueId: journal.candidate_value_ids) {
 			const LargeValueManifest manifest = values_.manifest(snapshot, valueId);
-			if (!scanners_.contains(manifest.media_type)) {
+			if (!scanners_.contains(manifest.media_type)) { // journal candidates are emitted only by the registered scanner set.
 				fail(FormatError::FERR_INVALID_STATE,
 					 "LargeValue maintenance journal contains an unregistered candidate media type");
 			}
 			ScannedValue candidate;
 			candidate.manifest = manifest;
-			if (!candidates.emplace(valueId.value(), std::move(candidate)).second) {
+			if (!candidates.emplace(valueId.value(), std::move(candidate)).second) { // Manifest Directory traversal emits each Value ID once.
 				fail(FormatError::FERR_INVALID_STATE,
 					 "LargeValue maintenance journal contains duplicate candidate identities");
 			}
 		}
 		std::set<uint64_t> reachable;
 		for (const LargeValueId valueId: journal.reachable_value_ids) {
-			if (!candidates.contains(valueId.value())) {
+			if (!candidates.contains(valueId.value())) { // reachable IDs are persisted only from the candidate set.
 				fail(FormatError::FERR_INVALID_STATE,
 					 "LargeValue maintenance journal marks a non-candidate value as reachable");
 			}
@@ -306,13 +306,13 @@ namespace graph::storage {
 				snapshot, journal.entity_property_after_directory_id, options.maximum_owner_locations,
 				options.maximum_owner_metadata_pages, sink);
 			if (progress.locations_scanned > options.maximum_owner_locations ||
-				progress.metadata_pages_scanned > options.maximum_owner_metadata_pages) {
+				progress.metadata_pages_scanned > options.maximum_owner_metadata_pages) { // the typed Entity Property scanner receives and enforces these bounds.
 				fail(FormatError::FERR_INVALID_STATE,
 					 "LargeValue maintenance Entity Property scanner exceeded its declared bounds");
 			}
 			result.owner_locations_scanned = progress.locations_scanned;
 			result.owner_metadata_pages_scanned = progress.metadata_pages_scanned;
-			if (!progress.exhausted && progress.locations_scanned == 0U) {
+			if (!progress.exhausted && progress.locations_scanned == 0U) { // a bounded nonexhausted scanner call always advances its cursor.
 				fail(FormatError::FERR_INVALID_STATE,
 					 "LargeValue maintenance Entity Property scan bound cannot advance its logical cursor");
 			}
@@ -329,12 +329,12 @@ namespace graph::storage {
 			const LargeValueOwnershipScanner::Progress progress = state_scanner_.scanReachableAfter(
 				snapshot, journal.state_after_id, options.maximum_owner_locations, options.maximum_owner_metadata_pages, sink);
 			if (progress.locations_scanned > options.maximum_owner_locations ||
-				progress.metadata_pages_scanned > options.maximum_owner_metadata_pages) {
+				progress.metadata_pages_scanned > options.maximum_owner_metadata_pages) { // the typed State scanner receives and enforces these bounds.
 				fail(FormatError::FERR_INVALID_STATE, "LargeValue maintenance State scanner exceeded its declared bounds");
 			}
 			result.owner_locations_scanned = progress.locations_scanned;
 			result.owner_metadata_pages_scanned = progress.metadata_pages_scanned;
-			if (!progress.exhausted && progress.locations_scanned == 0U) {
+			if (!progress.exhausted && progress.locations_scanned == 0U) { // a bounded nonexhausted scanner call always advances its cursor.
 				fail(FormatError::FERR_INVALID_STATE,
 					 "LargeValue maintenance State scan bound cannot advance its logical cursor");
 			}
@@ -357,7 +357,7 @@ namespace graph::storage {
 			const MetadataPublishOptions &publishOptions) {
 		validateOptions(options, checkpointLsn);
 		if (snapshot.superblock().generation != journal.scan_generation ||
-			journal.phase != LargeValueMaintenanceJournalPhase::LVMJP_RECLAIM) {
+			journal.phase != LargeValueMaintenanceJournalPhase::LVMJP_RECLAIM) { // reclaimJournal receives the complete journal returned by advanceJournal for this pin.
 			fail(FormatError::FERR_INVALID_STATE,
 					 "LargeValue maintenance reclaim requires complete journal evidence for the pinned generation");
 		}
@@ -378,7 +378,7 @@ namespace graph::storage {
 		try {
 			for (const LargeValueId valueId: journal.candidate_value_ids) {
 				const LargeValueManifest manifest = values_.manifest(snapshot, valueId);
-				if (!scanners_.contains(manifest.media_type)) {
+				if (!scanners_.contains(manifest.media_type)) { // journal candidates are emitted only by the registered scanner set.
 					fail(FormatError::FERR_INVALID_STATE,
 							 "LargeValue maintenance journal contains an unregistered candidate media type");
 				}
@@ -396,7 +396,7 @@ namespace graph::storage {
 								 "LargeValue maintenance journal exceeds its Manifest node bound");
 					}
 					++report.manifest_nodes_scanned;
-					if (!observedPages.insert(node.page_id.value()).second) {
+					if (!observedPages.insert(node.page_id.value()).second) { // validated Manifest trees assign each page to one immutable value.
 						fail(FormatError::FERR_INVALID_STATE,
 								 "LargeValue maintenance journal found duplicate Manifest Page identities");
 					}
@@ -416,7 +416,7 @@ namespace graph::storage {
 							}
 							const PageId pageId(chunk.first_data_page_id.value() + ordinal);
 							++report.data_pages_scanned;
-							if (!observedPages.insert(pageId.value()).second) {
+							if (!observedPages.insert(pageId.value()).second) { // validated Manifest chunks use disjoint page identities.
 								fail(FormatError::FERR_INVALID_STATE,
 										 "LargeValue maintenance journal found duplicate Manifest or data Page identities");
 							}
@@ -425,13 +425,13 @@ namespace graph::storage {
 						}
 					}
 				}
-				if (!reclaimableValues.emplace(valueId.value(), std::move(scanned)).second) {
+				if (!reclaimableValues.emplace(valueId.value(), std::move(scanned)).second) { // Manifest Directory traversal emits each Value ID once.
 					fail(FormatError::FERR_INVALID_STATE,
 							 "LargeValue maintenance journal contains duplicate candidate identities");
 				}
 			}
 			for (const LargeValueId valueId: journal.reachable_value_ids) {
-				if (!reclaimableValues.contains(valueId.value())) {
+				if (!reclaimableValues.contains(valueId.value())) { // reachable IDs are persisted only from the candidate set.
 					fail(FormatError::FERR_INVALID_STATE,
 							 "LargeValue maintenance journal marks a non-candidate value as reachable");
 				}
@@ -461,7 +461,7 @@ namespace graph::storage {
 				const uint64_t expectedPoolOwner = pool.kind == SegmentKind::SGK_LARGE_VALUE_DATA_POOL
 													   ? RSS_LARGE_VALUE_SHARED_DATA_POOL_OWNER_ID
 													   : RSS_LARGE_VALUE_SHARED_MANIFEST_POOL_OWNER_ID;
-				if (pool.owner_id != expectedPoolOwner) {
+				if (pool.owner_id != expectedPoolOwner) { // typed LargeValue pool creation fixes the namespace owner for its kind.
 					fail(FormatError::FERR_INVALID_STATE,
 							 "LargeValue maintenance journal found a pool outside its shared namespace");
 				}

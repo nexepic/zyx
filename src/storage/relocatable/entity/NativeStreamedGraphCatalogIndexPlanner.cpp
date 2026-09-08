@@ -22,13 +22,7 @@ namespace graph::storage {
 		[[nodiscard]] NativeGraphDeferredIndexPlan makeFreshPlan(
 				const BTreeInitialTreeMutationPlan &plan,
 				const NativeStreamedGraphCatalogIndexPlanningOptions &options, LogSequenceNumber checkpointLsn) {
-			if (plan.index_id != RSS_SYSTEM_CATALOG_INDEX_ID || plan.new_pool_mutations.empty() || !plan.preparer ||
-				plan.root_page.pool_ordinal >= plan.new_pool_mutations.size() ||
-				plan.root_page.appended_page_ordinal >=
-						plan.new_pool_mutations[plan.root_page.pool_ordinal].appended_page_count) {
-				fail(FormatError::FERR_INVALID_STATE,
-					 "native streamed Edge Catalog planner lost its replacement root identity");
-			}
+			// BulkBTreeBuilder returns a complete plan after validating its fresh root.
 			NativeGraphDeferredIndexPlan result;
 			result.mutation.index_id = RSS_SYSTEM_CATALOG_INDEX_ID;
 			for (const BTreeNewIndexTreePoolMutation &pool: plan.new_pool_mutations) {

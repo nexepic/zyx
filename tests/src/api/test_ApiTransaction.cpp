@@ -242,6 +242,62 @@ TEST_F(CppApiTest, ColumnarBulkInsertValidatesShape) {
 	EXPECT_EQ(emptyEdges.size(), 1U);
 }
 
+TEST_F(CppApiTest, TransactionColumnarBulkInsertValidatesEveryPropertyColumnShape) {
+	auto txn = db->beginBulkTransaction();
+
+	EXPECT_THROW(static_cast<void>(txn.createNodesColumnar(
+			"BadTransactionColumn", 2U, {zyx::PropertyColumn{"value", {int64_t{1}}}})),
+			std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(txn.createNodesColumnar(
+			"BadTransactionColumn", 1U, {zyx::PropertyColumn{"", {int64_t{1}}}})),
+			std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(txn.createNodesColumnar(
+			"BadTransactionColumn", 1U,
+			{zyx::PropertyColumn{"value", {int64_t{1}}}, zyx::PropertyColumn{"value", {int64_t{2}}}})),
+			std::invalid_argument);
+
+	// The failed requests must not leave a partially staged batch behind. A
+	// valid row after the rejects proves the transaction remains usable.
+	const auto ids = txn.createNodesColumnar("TransactionColumn", 1U,
+			{zyx::PropertyColumn{"value", {int64_t{7}}}});
+	ASSERT_EQ(ids.size(), 1U);
+	txn.commit();
+
+	auto result = db->execute("MATCH (n:TransactionColumn) RETURN n.value");
+	ASSERT_TRUE(result.isSuccess()) << result.getError();
+	ASSERT_TRUE(result.hasNext());
+	result.next();
+	ASSERT_EQ(std::get<int64_t>(result.get("n.value")), 7);
+}
+
+TEST_F(CppApiTest, TransactionColumnarEdgeWritesValidatePropertyColumnsBeforeEndpoints) {
+	auto txn = db->beginTransaction();
+	const auto ids = txn.createNodes("TransactionColumnarShape", {{{"v", int64_t{1}}}, {{"v", int64_t{2}}}});
+	ASSERT_EQ(ids.size(), 2U);
+
+	EXPECT_THROW(static_cast<void>(txn.createEdgesColumnar(
+			"BadTransactionEdgeColumn", {ids[0]}, {ids[1]}, {zyx::PropertyColumn{"", {int64_t{1}}}})),
+			std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(txn.createEdgesColumnar(
+			"BadTransactionEdgeColumn", {ids[0]}, {ids[1]}, {zyx::PropertyColumn{"v", {}}})),
+			std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(txn.createEdgesColumnar(
+			"BadTransactionEdgeColumn", {ids[0]}, {ids[1]},
+			{zyx::PropertyColumn{"v", {int64_t{1}}}, zyx::PropertyColumn{"v", {int64_t{2}}}})),
+			std::invalid_argument);
+
+	const auto edgeIds = txn.createEdgesColumnar("TransactionEdgeColumn", {ids[0]}, {ids[1]},
+			{zyx::PropertyColumn{"weight", {int64_t{3}}}});
+	ASSERT_EQ(edgeIds.size(), 1U);
+	txn.commit();
+
+	auto result = db->execute("MATCH ()-[e:TransactionEdgeColumn]->() RETURN e.weight");
+	ASSERT_TRUE(result.isSuccess()) << result.getError();
+	ASSERT_TRUE(result.hasNext());
+	result.next();
+	ASSERT_EQ(std::get<int64_t>(result.get("e.weight")), 3);
+}
+
 TEST_F(CppApiTest, TransactionColumnarEdgesReportStructuredEndpointErrorsWithoutStagingRows) {
 	auto txn = db->beginTransaction();
 	const std::vector<int64_t> ids = txn.createNodes("TransactionColumnarEndpoint", {
@@ -476,6 +532,44 @@ TEST_F(CppApiTest, TransactionExecuteOnMovedFromReturnsError) {
 	EXPECT_EQ(res.getError(), "Transaction is not active");
 	EXPECT_FALSE(res.hasNext());
 	txn2.rollback();
+}
+
+TEST_F(CppApiTest, MovedFromTransactionRejectsDirectGraphOperationsWithoutWriting) {
+	auto active = db->beginTransaction();
+	zyx::Transaction unavailable = std::move(active);
+
+	EXPECT_FALSE(active.isActive());
+	EXPECT_FALSE(active.isReadOnly());
+	const auto parameterized = active.execute("RETURN $value", {{"value", int64_t{1}}});
+	EXPECT_FALSE(parameterized.isSuccess());
+	EXPECT_EQ(parameterized.getError(), "Transaction is not active");
+	const zyx::PreparedQuery prepared = db->query().unwind({int64_t{1}}, "value").returning({"value"}).build();
+	const auto preparedResult = active.execute(prepared);
+	EXPECT_FALSE(preparedResult.isSuccess());
+	EXPECT_EQ(preparedResult.getError(), "Transaction is not active");
+	EXPECT_THROW(static_cast<void>(active.createNode("UnavailableTransaction", {})), std::logic_error);
+	EXPECT_THROW(static_cast<void>(active.createNode(std::vector<std::string>{"UnavailableTransaction"}, {})),
+			 std::logic_error);
+	EXPECT_THROW(static_cast<void>(active.createNodes(
+				"UnavailableTransaction", {{{"value", int64_t{1}}}})), std::logic_error);
+	EXPECT_THROW(static_cast<void>(active.createNodesColumnar(
+				"UnavailableTransaction", 1U, {zyx::PropertyColumn{"value", {int64_t{1}}}})), std::logic_error);
+	EXPECT_THROW(static_cast<void>(active.createEdge(1, 2, "UNAVAILABLE", {})), std::logic_error);
+	EXPECT_THROW(static_cast<void>(active.createEdges(
+				"UNAVAILABLE", {{1, 2, {{"value", int64_t{1}}}}})), std::logic_error);
+	EXPECT_THROW(static_cast<void>(active.createEdgesColumnar(
+				"UNAVAILABLE", {1}, {2}, {zyx::PropertyColumn{"value", {int64_t{1}}}})), std::logic_error);
+	EXPECT_THROW(static_cast<void>(active.getShortestPath(1, 2)), std::logic_error);
+	EXPECT_THROW(active.bfs(1, [](const zyx::Node &) { return true; }), std::logic_error);
+
+	// Each rejected direct operation must leave the database unchanged.
+	auto count = db->execute("MATCH (n) RETURN count(n) AS count");
+	ASSERT_TRUE(count.isSuccess()) << count.getError();
+	ASSERT_TRUE(count.hasNext());
+	count.next();
+	ASSERT_EQ(std::get<int64_t>(count.get("count")), 0);
+
+	unavailable.rollback();
 }
 
 TEST_F(CppApiTest, TransactionExecuteErrorPaths) {

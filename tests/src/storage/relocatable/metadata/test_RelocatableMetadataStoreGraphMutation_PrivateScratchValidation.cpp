@@ -116,8 +116,8 @@ TEST_F(RelocatableMetadataStoreTest, RejectsEveryMalformedPrivateScratchRequestB
 							   std::span<EntityPageAppendBatchMaterialization>,
 							   std::span<EntityPageNewPoolBatchMaterialization>,
 							   std::span<NativeGraphPropertyPageReplacementMaterialization>,
-							   std::span<NativeGraphPropertyPageBatchMaterialization>,
-							   std::span<LargeValueMaterializationResult>) {},
+							std::span<NativeGraphPropertyPageBatchMaterialization>,
+							std::span<LargeValueMaterializationResult>) {},
 							[](std::vector<std::vector<IndexTreeMutationPoolBatch>> &) {}));
 				},
 				FormatError::FERR_INVALID_HEADER);
@@ -272,7 +272,12 @@ TEST_F(RelocatableMetadataStoreTest, RejectsMalformedCompactPrivateScratchPlansB
 							   std::span<NativeGraphPropertyPageReplacementMaterialization>,
 							   std::span<NativeGraphPropertyPageBatchMaterialization>,
 							   std::span<LargeValueMaterializationResult>) {},
-							[](std::vector<std::vector<IndexTreeMutationPoolBatch>> &) {}));
+							[](std::vector<std::vector<IndexTreeMutationPoolBatch>> &) {}, {}, {},
+							std::span<const PageRetirement>{}, std::span<const LargeValueId>{}, {},
+							MetadataPublishOptions{}, NativeGraphLogicalIdReservation{}, std::nullopt,
+							[](const NativeGraphPrivateSegmentSet &, size_t) {
+								return NativeGraphPrivateSegmentReservation::payload();
+							}));
 				},
 				FormatError::FERR_INVALID_HEADER);
 		MetadataSnapshotPin unchanged = store->openSnapshot();
@@ -347,6 +352,16 @@ TEST_F(RelocatableMetadataStoreTest, RejectsMalformedDerivedIndexDefinitionsBefo
 		mutation.expected_root = {mutation.index_id, PageId(9U), Generation(1U)};
 		mutation.pool_requests.push_back({SegmentId(21U), {}, 1U, {}});
 		mutation.replacement_root = NativeGraphIndexTreeAppendedPageReference{0U, 0U, false};
+		return mutation;
+	};
+	const auto retiredRoot = [] {
+		NativeGraphIndexTreeMutation mutation;
+		mutation.index_id = 77U;
+		mutation.expected_root = {mutation.index_id, PageId(9U), Generation(1U)};
+		const PageLocation rootLocation{
+				PageId(9U), SegmentId(21U), RSS_PAGE_POOL_FIRST_DATA_FRAME, Generation(1U), 0U};
+		mutation.pool_requests.push_back({SegmentId(21U), {}, 0U, {{rootLocation, LogSequenceNumber(1U)}}});
+		mutation.retire_root = true;
 		return mutation;
 	};
 	const auto rejectsBeforeMaterialization = [&](NativeGraphDerivedStateMutation derived) {
@@ -473,6 +488,66 @@ TEST_F(RelocatableMetadataStoreTest, RejectsMalformedDerivedIndexDefinitionsBefo
 		derived.index_tree_mutations.push_back(std::move(mutation));
 		rejectsBeforeMaterialization(std::move(derived));
 	}
+
+	// A root retirement is a public, immutable publication request. Its retired
+	// root must be pinned and it cannot mix retirement with replacement work.
+	{
+		NativeGraphDerivedStateMutation derived;
+		auto mutation = retiredRoot();
+		mutation.expected_root.reset();
+		derived.index_tree_mutations.push_back(std::move(mutation));
+		rejectsBeforeMaterialization(std::move(derived));
+	}
+	{
+		NativeGraphDerivedStateMutation derived;
+		auto mutation = retiredRoot();
+		mutation.new_pool_requests.push_back({PhysicalSlotId(40U), PhysicalSlotId(40U), mutation.index_id, 1U});
+		derived.index_tree_mutations.push_back(std::move(mutation));
+		rejectsBeforeMaterialization(std::move(derived));
+	}
+	{
+		NativeGraphDerivedStateMutation derived;
+		auto mutation = retiredRoot();
+		mutation.replacement_root = NativeGraphIndexTreeAppendedPageReference{0U, 0U, false};
+		derived.index_tree_mutations.push_back(std::move(mutation));
+		rejectsBeforeMaterialization(std::move(derived));
+	}
+	{
+		NativeGraphDerivedStateMutation derived;
+		auto mutation = retiredRoot();
+		mutation.stable_replacement_root = PageId(10U);
+		derived.index_tree_mutations.push_back(std::move(mutation));
+		rejectsBeforeMaterialization(std::move(derived));
+	}
+	{
+		NativeGraphDerivedStateMutation derived;
+		auto mutation = retiredRoot();
+		mutation.pool_requests.clear();
+		derived.index_tree_mutations.push_back(std::move(mutation));
+		rejectsBeforeMaterialization(std::move(derived));
+	}
+	{
+		NativeGraphDerivedStateMutation derived;
+		auto mutation = retiredRoot();
+		mutation.pool_requests.front().expected_replacements.push_back(
+				{PageId(10U), SegmentId(21U), RSS_PAGE_POOL_FIRST_DATA_FRAME, Generation(1U), 0U});
+		derived.index_tree_mutations.push_back(std::move(mutation));
+		rejectsBeforeMaterialization(std::move(derived));
+	}
+	{
+		NativeGraphDerivedStateMutation derived;
+		auto mutation = retiredRoot();
+		mutation.pool_requests.front().appended_page_count = 1U;
+		derived.index_tree_mutations.push_back(std::move(mutation));
+		rejectsBeforeMaterialization(std::move(derived));
+	}
+	{
+		NativeGraphDerivedStateMutation derived;
+		auto mutation = retiredRoot();
+		mutation.pool_requests.front().expected_retirements.clear();
+		derived.index_tree_mutations.push_back(std::move(mutation));
+		rejectsBeforeMaterialization(std::move(derived));
+	}
 }
 
 TEST_F(RelocatableMetadataStoreTest, RejectsIncoherentLargeValueAndRetirementIndexInputsBeforePublication) {
@@ -542,7 +617,17 @@ TEST_F(RelocatableMetadataStoreTest, RejectsIncoherentLargeValueAndRetirementInd
 	const auto rejectIndex = [&](NativeGraphIndexTreeMutation mutation) {
 		NativeGraphDerivedStateMutation derived;
 		derived.index_tree_mutations.push_back(std::move(mutation));
-		rejects(std::move(derived));
+		// These cases target the index-request header checks. Do not attach the
+		// deliberately incomplete LargeValue retirement fixture above: its
+		// content-index gate would reject first and mask the intended validation.
+		expectFormatError(
+				[&] {
+					static_cast<void>(store->mutateNativeGraphPagesWithLargeValues(
+							noEntityReplacements, noEntityAppends, noEntityPools, noPropertyReplacements,
+							noPropertyBatches, noLargeValues, derived, LogSequenceNumber(2U), graphPreparer,
+							derivedPreparer));
+				},
+				FormatError::FERR_INVALID_HEADER);
 	};
 	{
 		auto mutation = pinnedIndex();
@@ -579,7 +664,7 @@ TEST_F(RelocatableMetadataStoreTest, RejectsIncoherentLargeValueAndRetirementInd
 	}
 	{
 		auto mutation = pinnedIndex();
-		mutation.stable_replacement_root = {};
+		mutation.stable_replacement_root = PageId{};
 		rejectIndex(std::move(mutation));
 	}
 
@@ -599,7 +684,7 @@ TEST_F(RelocatableMetadataStoreTest, RejectsIncoherentLargeValueAndRetirementInd
 	}
 }
 
-TEST_F(RelocatableMetadataStoreTest, RejectsIncompleteVectorBootstrapMappingRootsBeforeMaterialization) {
+TEST_F(RelocatableMetadataStoreTest, RejectsMalformedVectorBootstrapHeadersAndIncompleteMappingRootsBeforeMaterialization) {
 	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
 	const std::array<EntityPageReplacementRequest, 0U> noEntityReplacements{};
 	const std::array<EntityPageAppendBatchRequest, 0U> noEntityAppends{};
@@ -681,6 +766,32 @@ TEST_F(RelocatableMetadataStoreTest, RejectsIncompleteVectorBootstrapMappingRoot
 		mutation.last_slot = PhysicalSlotId(42U);
 		return mutation;
 	};
+	const auto rejectBootstrap = [&](const std::function<void(NativeGraphVectorBootstrapMutation &)> &forge) {
+		NativeGraphDerivedStateMutation derived;
+		auto mutation = bootstrap();
+		forge(mutation);
+		derived.vector_bootstraps.push_back(std::move(mutation));
+		rejectsBeforeMaterialization(std::move(derived));
+	};
+
+	// The coordinator accepts these public Vector bootstrap headers directly.
+	// Reject each independently supplied identity and resource bound before it
+	// can reserve a Raw or Manifest page.
+	rejectBootstrap([](auto &mutation) { mutation.index_id = 0U; });
+	rejectBootstrap([](auto &mutation) { mutation.vector_node_mapping_index_id = 0U; });
+	rejectBootstrap([](auto &mutation) { mutation.vector_node_mapping_index_id = mutation.index_id; });
+	rejectBootstrap([](auto &mutation) { mutation.first_vector_id = 0U; });
+	rejectBootstrap([](auto &mutation) { mutation.vector_count = 0U; });
+	rejectBootstrap([](auto &mutation) { mutation.dimensions = 0U; });
+	rejectBootstrap([](auto &mutation) { mutation.metric = static_cast<VectorDistanceMetric>(255U); });
+	rejectBootstrap([](auto &mutation) { mutation.raw_page_count = 0U; });
+	rejectBootstrap([](auto &mutation) { mutation.raw_page_count = 2U; });
+	rejectBootstrap([](auto &mutation) { mutation.first_slot = {}; });
+	rejectBootstrap([](auto &mutation) { mutation.last_slot = {}; });
+	rejectBootstrap([](auto &mutation) {
+		mutation.first_slot = PhysicalSlotId(43U);
+		mutation.last_slot = PhysicalSlotId(42U);
+	});
 
 	// A Vector bootstrap cannot expose Raw or Manifest pages unless both semantic
 	// mapping trees are new immutable roots in the same publication.
@@ -743,11 +854,7 @@ TEST_F(RelocatableMetadataStoreTest, RejectsMalformedVectorDeltaHeadersAndUnmatc
 		mutation.last_slot = PhysicalSlotId(41U);
 		return mutation;
 	};
-	const auto reject = [&](const std::function<void(NativeGraphVectorDeltaMutation &)> &forge) {
-		NativeGraphDerivedStateMutation derived;
-		auto mutation = validDelta();
-		forge(mutation);
-		derived.vector_deltas.push_back(std::move(mutation));
+	const auto expectRejected = [&](NativeGraphDerivedStateMutation derived, FormatError expectedError) {
 		bool graphPreparerCalled = false;
 		bool derivedPreparerCalled = false;
 		bool vectorPreparerCalled = false;
@@ -765,10 +872,17 @@ TEST_F(RelocatableMetadataStoreTest, RejectsMalformedVectorDeltaHeadersAndUnmatc
 							[&](std::vector<std::vector<IndexTreeMutationPoolBatch>> &) { derivedPreparerCalled = true; },
 							{}, [&](std::vector<NativeGraphVectorDeltaMaterialization> &) { vectorPreparerCalled = true; }));
 				},
-				FormatError::FERR_INVALID_HEADER);
+				expectedError);
 		EXPECT_FALSE(graphPreparerCalled);
 		EXPECT_FALSE(derivedPreparerCalled);
 		EXPECT_FALSE(vectorPreparerCalled);
+	};
+	const auto reject = [&](const std::function<void(NativeGraphVectorDeltaMutation &)> &forge) {
+		NativeGraphDerivedStateMutation derived;
+		auto mutation = validDelta();
+		forge(mutation);
+		derived.vector_deltas.push_back(std::move(mutation));
+		expectRejected(std::move(derived), FormatError::FERR_INVALID_HEADER);
 	};
 
 	// The coordinator accepts Vector plans from the graph planner. Check every
@@ -810,4 +924,47 @@ TEST_F(RelocatableMetadataStoreTest, RejectsMalformedVectorDeltaHeadersAndUnmatc
 	reject([](auto &mutation) { mutation.first_slot = {}; });
 	reject([](auto &mutation) { mutation.last_slot = {}; });
 	reject([](auto &mutation) { mutation.first_slot = PhysicalSlotId(42U); mutation.last_slot = PhysicalSlotId(41U); });
+
+	const auto pinnedMapping = [](uint64_t indexId, PageId rootPageId) {
+		NativeGraphIndexTreeMutation mapping;
+		mapping.index_id = indexId;
+		mapping.expected_root = {indexId, rootPageId, Generation(1U)};
+		const PageLocation replacement{
+				rootPageId, SegmentId(indexId), RSS_PAGE_POOL_FIRST_DATA_FRAME, Generation(1U), 0U};
+		mapping.pool_requests.push_back({SegmentId(indexId), {replacement}, 0U, {}});
+		return mapping;
+	};
+
+	// Supply each preceding mapping fence in turn. This makes the later
+	// transition clauses observable without materializing data or vector pages.
+	{
+		NativeGraphDerivedStateMutation derived;
+		auto mutation = validDelta();
+		derived.index_tree_mutations.push_back(
+				pinnedMapping(mutation.index_id, mutation.expected_node_mapping_root.root_page_id));
+		derived.vector_deltas.push_back(std::move(mutation));
+		expectRejected(std::move(derived), FormatError::FERR_INVALID_HEADER);
+	}
+	{
+		NativeGraphDerivedStateMutation derived;
+		auto mutation = validDelta();
+		derived.index_tree_mutations = {
+				pinnedMapping(mutation.index_id, mutation.expected_node_mapping_root.root_page_id),
+				pinnedMapping(mutation.vector_node_mapping_index_id,
+							  mutation.expected_vector_node_mapping_root.root_page_id)};
+		derived.vector_deltas.push_back(std::move(mutation));
+		expectRejected(std::move(derived), FormatError::FERR_INVALID_HEADER);
+	}
+	{
+		NativeGraphDerivedStateMutation derived;
+		auto mutation = validDelta();
+		derived.index_tree_mutations = {
+				pinnedMapping(mutation.index_id, mutation.expected_node_mapping_root.root_page_id),
+				pinnedMapping(mutation.vector_node_mapping_index_id,
+							  mutation.expected_vector_node_mapping_root.root_page_id),
+				pinnedMapping(mutation.delta_mapping_index_id,
+							  mutation.expected_delta_mapping_root->root_page_id)};
+		derived.vector_deltas.push_back(std::move(mutation));
+		expectRejected(std::move(derived), FormatError::FERR_INVALID_STATE);
+	}
 }

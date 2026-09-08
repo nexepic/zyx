@@ -95,6 +95,13 @@ TEST_F(LogTest, DoesNotPrintDebugLogsWhenDisabled) {
 	ASSERT_TRUE(cerr_buffer.str().empty());
 }
 
+TEST_F(LogTest, DoesNotFormatParameterizedDebugLogsWhenDisabled) {
+	ASSERT_FALSE(graph::log::Log::isDebugEnabled());
+	graph::log::Log::debug("This formatted debug message must remain hidden: {}", 789);
+	ASSERT_TRUE(cout_buffer.str().empty());
+	ASSERT_TRUE(cerr_buffer.str().empty());
+}
+
 // Test that debug logs are printed when debug mode is enabled
 TEST_F(LogTest, PrintsDebugLogsWhenEnabled) {
 	graph::log::Log::setDebug(true);

@@ -7,6 +7,7 @@
  **/
 
 #include <functional>
+#include <limits>
 #include <optional>
 #include <string>
 #include <vector>
@@ -90,7 +91,12 @@ TEST(NativeBulkEdgeMaterializerTest, RejectsUnleasedUnorderedOverboundAndUnresol
 	});
 	expectFormatError([&] {
 		NativeBulkEdgeMaterializer::materialize(source({record(100U, 1U, 2U, "UNKNOWN")}), lease, 2U, resolvers(),
-															 [](NativeBulkEdgeMaterializedRecord &&) {});
+																			 [](NativeBulkEdgeMaterializedRecord &&) {});
+	});
+	expectFormatError([&] {
+		NativeBulkEdgeMaterializer::materialize(source({record(100U, 1U, 2U)}), lease,
+																		 std::numeric_limits<size_t>::max(), resolvers(),
+																		 [](NativeBulkEdgeMaterializedRecord &&) {});
 	});
 }
 
@@ -116,4 +122,74 @@ TEST(NativeBulkEdgeMaterializerTest, RejectsMalformedRecordAndUnorderedLeaseBefo
 		NativeBulkEdgeMaterializer::materialize(source({record(100U, 1U, 2U)}), unorderedLease, 2U, resolvers(),
 															 [](NativeBulkEdgeMaterializedRecord &&) {});
 	});
+}
+
+TEST(NativeBulkEdgeMaterializerTest, RejectsMissingContractsAndInvalidLeaseRangesBeforeReadingTheSource) {
+	const std::vector<NativeGraphLogicalIdLeaseRange> validLease{{100U, 2U}};
+	const NativeBulkEdgeRecordSource validSource = source({record(100U, 1U, 2U)});
+	const NativeBulkEdgeMaterializerResolvers validResolvers = resolvers();
+	const NativeBulkEdgeMaterializedRecordVisitor validVisitor = [](NativeBulkEdgeMaterializedRecord &&) {};
+
+	const NativeBulkEdgeRecordSource missingSource;
+	expectFormatError([&] {
+		NativeBulkEdgeMaterializer::materialize(missingSource, validLease, 1U, validResolvers, validVisitor);
+	});
+	expectFormatError([&] {
+		NativeBulkEdgeMaterializer::materialize(validSource, {}, 1U, validResolvers, validVisitor);
+	});
+	expectFormatError([&] {
+		NativeBulkEdgeMaterializer::materialize(validSource, validLease, 0U, validResolvers, validVisitor);
+	});
+
+	NativeBulkEdgeMaterializerResolvers missingRelationshipResolver = validResolvers;
+	missingRelationshipResolver.relationship_type_token = {};
+	expectFormatError([&] {
+		NativeBulkEdgeMaterializer::materialize(validSource, validLease, 1U, missingRelationshipResolver, validVisitor);
+	});
+	NativeBulkEdgeMaterializerResolvers missingPropertyResolver = validResolvers;
+	missingPropertyResolver.property_key_token = {};
+	expectFormatError([&] {
+		NativeBulkEdgeMaterializer::materialize(validSource, validLease, 1U, missingPropertyResolver, validVisitor);
+	});
+
+	const NativeBulkEdgeMaterializedRecordVisitor missingVisitor;
+	expectFormatError([&] {
+		NativeBulkEdgeMaterializer::materialize(validSource, validLease, 1U, validResolvers, missingVisitor);
+	});
+
+	const std::vector<std::vector<NativeGraphLogicalIdLeaseRange>> invalidLeases{
+			{{0U, 1U}}, {{100U, 0U}}, {{std::numeric_limits<uint64_t>::max(), 2U}}};
+	for (const std::vector<NativeGraphLogicalIdLeaseRange> &invalidLease: invalidLeases) {
+		expectFormatError([&] {
+			NativeBulkEdgeMaterializer::materialize(validSource, invalidLease, 1U, validResolvers, validVisitor);
+		});
+	}
+	const std::vector<NativeGraphLogicalIdLeaseRange> disjointLease{{100U, 1U}, {102U, 1U}};
+	expectFormatError([&] {
+		NativeBulkEdgeMaterializer::materialize(source({}), disjointLease, 2U, validResolvers, validVisitor);
+	});
+}
+
+TEST(NativeBulkEdgeMaterializerTest, RejectsUnresolvableTokensBeforeEmittingARecord) {
+	const std::vector<NativeGraphLogicalIdLeaseRange> lease{{100U, 1U}};
+	bool emitted = false;
+	const NativeBulkEdgeMaterializedRecordVisitor visitor = [&emitted](NativeBulkEdgeMaterializedRecord &&) {
+		emitted = true;
+	};
+	NativeBulkEdgeMaterializerResolvers zeroTypeResolver = resolvers();
+	zeroTypeResolver.relationship_type_token = [](std::string_view) { return std::optional<uint64_t>(0U); };
+	expectFormatError([&] {
+		NativeBulkEdgeMaterializer::materialize(source({record(100U, 1U, 2U)}), lease, 1U, zeroTypeResolver, visitor);
+	});
+	NativeBulkEdgeMaterializerResolvers zeroPropertyResolver = resolvers();
+	zeroPropertyResolver.property_key_token = [](std::string_view) { return std::optional<uint32_t>(0U); };
+	expectFormatError([&] {
+		NativeBulkEdgeMaterializer::materialize(source({record(100U, 1U, 2U)}), lease, 1U, zeroPropertyResolver, visitor);
+	});
+	NativeBulkEdgeRecord unknownProperty = record(100U, 1U, 2U);
+	unknownProperty.properties = {{"unknown", graph::PropertyValue(int64_t(1))}};
+	expectFormatError([&] {
+		NativeBulkEdgeMaterializer::materialize(source({std::move(unknownProperty)}), lease, 1U, resolvers(), visitor);
+	});
+	EXPECT_FALSE(emitted);
 }

@@ -323,6 +323,49 @@ TEST_F(IntegrationSubqueryFeaturesTest, CallSubquery_WriteOnlyDistinctsOuterResu
 	EXPECT_EQ(val(persisted, "count"), "3");
 }
 
+TEST_F(IntegrationSubqueryFeaturesTest, CallSubquery_WriteOnlyDistinctsRepeatedNodeResultsAfterMutation) {
+	execute("CREATE (:SubqWriteDistinctNode {value: 7})");
+	execute("MATCH (seed:SubqWriteDistinctNode) CREATE (seed)-[:REPEATED]->(:SubqWriteDistinctTarget)");
+	execute("MATCH (seed:SubqWriteDistinctNode) CREATE (seed)-[:REPEATED]->(:SubqWriteDistinctTarget)");
+
+	const auto result = execute(
+			"MATCH (seed:SubqWriteDistinctNode)-[:REPEATED]->() "
+			"CALL { WITH seed CREATE (:SubqWriteDistinctNodeChild {copied: seed.value}) } "
+			"RETURN DISTINCT seed");
+	// DISTINCT compares durable node identities after all outer rows have
+	// completed their mutations, so two repeated input rows yield one node result
+	// but still publish two child Nodes.
+	ASSERT_EQ(result.rowCount(), 1UL);
+
+	const auto persisted = execute("MATCH (child:SubqWriteDistinctNodeChild) RETURN count(child) AS count");
+	ASSERT_EQ(persisted.rowCount(), 1UL);
+	EXPECT_EQ(val(persisted, "count"), "2");
+}
+
+TEST_F(IntegrationSubqueryFeaturesTest, CallSubquery_WriteOnlyDistinctsRepeatedRelationshipResultsAfterMutation) {
+	execute("CREATE (:SubqWriteDistinctEdgeSource {value: 9})");
+	execute("CREATE (:SubqWriteDistinctEdgeTarget)");
+	execute(
+			"MATCH (source:SubqWriteDistinctEdgeSource), (target:SubqWriteDistinctEdgeTarget) "
+			"CREATE (source)-[:REPEATED]->(target)");
+	execute(
+			"MATCH (source:SubqWriteDistinctEdgeSource), (target:SubqWriteDistinctEdgeTarget) "
+			"CREATE (source)-[:REPEATED]->(target)");
+
+	const auto result = execute(
+			"MATCH (source:SubqWriteDistinctEdgeSource)-[edge:REPEATED]->(target:SubqWriteDistinctEdgeTarget), "
+			"(source)-[other:REPEATED]->(target) "
+			"CALL { WITH edge CREATE (:SubqWriteDistinctEdgeChild) } "
+			"RETURN DISTINCT edge");
+	// The pair of relationship patterns repeats each durable Edge once. DISTINCT
+	// therefore must use relationship identity, independently of Node identity.
+	ASSERT_EQ(result.rowCount(), 2UL);
+
+	const auto persisted = execute("MATCH (child:SubqWriteDistinctEdgeChild) RETURN count(child) AS count");
+	ASSERT_EQ(persisted.rowCount(), 1UL);
+	EXPECT_EQ(val(persisted, "count"), "4");
+}
+
 TEST_F(IntegrationSubqueryFeaturesTest, CallSubquery_InTransactionsExportsCreatedValuesPerBatch) {
 	execute("CREATE (:SubqWriteBatchExport {value: 3})");
 	execute("CREATE (:SubqWriteBatchExport {value: 1})");
@@ -350,6 +393,34 @@ TEST_F(IntegrationSubqueryFeaturesTest, CallSubquery_InTransactionsExportsCreate
 	const auto persisted = execute("MATCH (child:SubqBatchExportedChild) RETURN count(child) AS count");
 	ASSERT_EQ(persisted.rowCount(), 1UL);
 	EXPECT_EQ(val(persisted, "count"), "3");
+}
+
+TEST_F(IntegrationSubqueryFeaturesTest, CallSubquery_InTransactionsExportsNodeAndEdgeValuesPerBatch) {
+	execute("CREATE (:SubqBatchEntityExport {value: 1})");
+	execute("CREATE (:SubqBatchEntityExport {value: 2})");
+
+	const auto result = execute(
+			"MATCH (seed:SubqBatchEntityExport) "
+			"CALL { WITH seed CREATE (seed)-[edge:SubqBatchEntityLink]->(seed) "
+			"RETURN seed, edge } IN TRANSACTIONS OF 1 ROWS "
+			"RETURN seed, edge");
+	ASSERT_EQ(result.rowCount(), 2UL);
+	for (const auto &row: result.getRows()) {
+		const auto &node = row.at("seed").asLogicalNode();
+		const auto &edge = row.at("edge").asLogicalEdge();
+		EXPECT_EQ(node.labels, (std::vector<std::string>{"SubqBatchEntityExport"}));
+		EXPECT_EQ(edge.type, "SubqBatchEntityLink");
+		EXPECT_EQ(edge.source_node_id, node.node_id);
+		EXPECT_EQ(edge.target_node_id, node.node_id);
+	}
+
+	db->close();
+	db->open();
+	const auto persisted = execute(
+			"MATCH (seed:SubqBatchEntityExport)-[:SubqBatchEntityLink]->(seed) "
+			"RETURN count(seed) AS count");
+	ASSERT_EQ(persisted.rowCount(), 1UL);
+	EXPECT_EQ(val(persisted, "count"), "2");
 }
 
 TEST_F(IntegrationSubqueryFeaturesTest, CallSubquery_InTransactionsExportsUpdatedValuesPerBatch) {

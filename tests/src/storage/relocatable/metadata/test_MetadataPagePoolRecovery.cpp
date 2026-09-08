@@ -375,6 +375,46 @@ TEST_F(RelocatableMetadataPagePoolTest, RootDiscoveryUsesBootstrapRoutesWhenPhys
 	EXPECT_NO_THROW(static_cast<void>(MetadataPagePoolAllocator(io, routed, MetadataPagePoolOpenMode::CPOM_ROOT_RECOVER)));
 }
 
+TEST_F(RelocatableMetadataPagePoolTest, RootRecoveryRejectsInvisibleOrIncompleteBootstrapHeaders) {
+	const Superblock initial = superblock(1U, 1U);
+	SuperblockFile bootstrap(io);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(io, initial);
+	MetadataPagePoolAllocator allocator(io, initial);
+	CatalogTree tree(pages, allocator);
+	const Superblock populated = tree.upsertAndPublish(
+			bootstrap, initial, std::vector{entry(1U, 101U, 2U, 2U)}, LogSequenceNumber(2U));
+	MetadataPagePoolAllocator migrationAllocator(io, populated);
+	MetadataPageFile migrationPages(io, populated);
+	MetadataWriteBatch migration(migrationAllocator, populated, LogSequenceNumber(3U));
+	static_cast<void>(MetadataPageRouteDirectory(migrationPages).prepareInitialBootstrapMigration(migration));
+	migration.publish(bootstrap);
+	Superblock routed = migration.candidate();
+	routed.catalog_root = {};
+	routed.allocator_root = {};
+
+	PageDirectoryBootstrap header = migrationPages.readPageDirectoryBootstrap(routed.page_directory_root);
+	header.committed_lsn = LogSequenceNumber(routed.checkpoint_lsn.value() + 1U);
+	migrationPages.writePageDirectoryBootstrap(routed.page_directory_root, header);
+	expectFormatError([&] { migrationAllocator.validateReachability(routed); }, FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				static_cast<void>(
+						MetadataPagePoolAllocator(io, routed, MetadataPagePoolOpenMode::CPOM_ROOT_RECOVER));
+			},
+			FormatError::FERR_INVALID_HEADER);
+
+	header.committed_lsn = routed.checkpoint_lsn;
+	header.metadata_page_directory_root = {};
+	migrationPages.writePageDirectoryBootstrap(routed.page_directory_root, header);
+	expectFormatError(
+			[&] {
+				static_cast<void>(
+						MetadataPagePoolAllocator(io, routed, MetadataPagePoolOpenMode::CPOM_ROOT_RECOVER));
+			},
+			FormatError::FERR_INVALID_HEADER);
+}
+
 TEST_F(RelocatableMetadataPagePoolTest, DiscoveryOnlyOpenAcceptsAnEmptyMetadataTail) {
 	const Superblock initial = superblock(1U, 1U);
 	SuperblockFile bootstrap(io);

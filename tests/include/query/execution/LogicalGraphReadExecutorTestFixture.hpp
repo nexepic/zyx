@@ -70,6 +70,9 @@ namespace {
 		bool enable_exact_node_lookup = false;
 		bool enable_range_node_lookup = false;
 		bool enable_composite_range_node_lookup = false;
+		std::optional<std::vector<LogicalGraphNode>> exact_lookup_result;
+		std::optional<std::vector<LogicalGraphNode>> range_lookup_result;
+		std::optional<std::vector<LogicalGraphNode>> composite_range_lookup_result;
 		std::optional<LogicalGraphPropertyRange> expected_range_lookup;
 		std::optional<LogicalGraphCompositePropertyRange> expected_composite_range_lookup;
 		std::shared_ptr<size_t> edge_topology_scan_count;
@@ -127,6 +130,9 @@ namespace {
 				properties != std::vector<std::pair<std::string, PropertyValue>>{{"age", PropertyValue(42)}}) {
 				throw std::runtime_error("test logical graph exact lookup received an unexpected request");
 			}
+			if (data_.exact_lookup_result.has_value()) {
+				return *data_.exact_lookup_result;
+			}
 			return std::vector<LogicalGraphNode>{data_.nodes.at(1U)};
 		}
 
@@ -145,6 +151,9 @@ namespace {
 				range != expected) {
 				throw std::runtime_error("test logical graph range lookup received an unexpected request");
 			}
+			if (data_.range_lookup_result.has_value()) {
+				return *data_.range_lookup_result;
+			}
 			return std::vector<LogicalGraphNode>{data_.nodes.at(1U), data_.nodes.at(2U)};
 		}
 
@@ -160,6 +169,9 @@ namespace {
 			if (maximumNodes == 0U || maximumPropertyEntries == 0U || labels != std::vector<std::string>{"Person"} ||
 				!data_.expected_composite_range_lookup.has_value() || request != *data_.expected_composite_range_lookup) {
 				throw std::runtime_error("test logical graph composite range lookup received an unexpected request");
+			}
+			if (data_.composite_range_lookup_result.has_value()) {
+				return *data_.composite_range_lookup_result;
 			}
 			return std::vector<LogicalGraphNode>{data_.nodes.at(1U)};
 		}
@@ -386,7 +398,7 @@ namespace {
 		return result;
 	}
 
-	[[nodiscard]] LogicalGraphReadExecutionBounds bounds() { return {3U, 2U, 4U, 10U}; }
+	[[maybe_unused]] [[nodiscard]] LogicalGraphReadExecutionBounds bounds() { return {3U, 2U, 4U, 10U}; }
 
 	[[nodiscard]] LogicalPlanReadRuntimeBounds runtimeBounds() {
 		return {
@@ -434,7 +446,7 @@ namespace {
 		[[nodiscard]] std::unique_ptr<logical::LogicalOperator> detachChild(size_t) override { return nullptr; }
 	};
 
-	[[nodiscard]] LogicalPropertyPredicate predicate(std::string key, LogicalPropertyPredicateOp op, PropertyValue value,
+	[[maybe_unused]] [[nodiscard]] LogicalPropertyPredicate predicate(std::string key, LogicalPropertyPredicateOp op, PropertyValue value,
 															std::optional<PropertyValue> upper = std::nullopt) {
 		LogicalPropertyPredicate result;
 		result.property_key = std::move(key);
