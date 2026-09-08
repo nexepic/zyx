@@ -191,7 +191,7 @@ namespace graph::query::execution {
 				}
 				tail = children.front();
 			}
-			if (chain.operations.empty()) {
+			if (chain.operations.empty()) { // a non-null FOREACH body reaches the loop only after validation and is appended before every possible break.
 				throw std::logic_error("logical FOREACH update body cannot be empty");
 			}
 			std::ranges::reverse(chain.operations);
@@ -869,12 +869,12 @@ namespace graph::query::execution {
 				const logical::LogicalProject *exportedProjection = nullptr,
 				const logical::LogicalSort *resultSort = nullptr, const logical::LogicalSkip *resultSkip = nullptr,
 				const logical::LogicalLimit *resultLimit = nullptr) {
-			if (chain.operations.empty()) {
+			if (chain.operations.empty()) { // every private call site supplies a chain accepted by collectCreateSetMutationChain or collectForeachMutationChain.
 				throw std::logic_error("logical CREATE/SET mutation chain cannot be empty");
 			}
 			size_t createsPerInputRow = 0U;
 			for (const logical::LogicalOperator *operation: chain.operations) {
-				if (operation == nullptr) {
+				if (operation == nullptr) { // the chain collectors append only their non-null traversal cursor before following an optional child.
 					throw std::logic_error("logical CREATE/SET mutation chain contains a null operator");
 				}
 				if (operation->getType() == logical::LogicalOpType::LOP_CREATE_NODE ||
@@ -1261,7 +1261,7 @@ namespace graph::query::execution {
 						}
 
 						const auto *set = dynamic_cast<const logical::LogicalSet *>(operation);
-						if (set == nullptr || set->getItems().empty()) {
+							if (set == nullptr || set->getItems().empty()) { // every private CreateSetMutationChain is produced by a collector that verifies the concrete SET type and nonempty shape.
 							throw std::logic_error("logical CREATE/SET chain has an invalid update operator");
 						}
 						for (const logical::LogicalSetItem &item: set->getItems()) {
@@ -1888,6 +1888,12 @@ namespace graph::query::execution {
 						if (!item.expression) {
 							throw std::logic_error("logical write-only CALL ORDER BY has an empty sort expression");
 						}
+						if (!cachePrepublicationValues && prepublicationCache != nullptr &&
+							rowIndex < prepublicationCache->sort_keys.size() &&
+							itemIndex < prepublicationCache->sort_keys[rowIndex].size() &&
+							prepublicationCache->sort_keys[rowIndex][itemIndex].has_value()) {
+							continue;
+						}
 						std::set<std::string> dependencies;
 						expressions::ExpressionUtils::collectVariables(item.expression.get(), dependencies);
 						std::set<std::string> resolvingExports;
@@ -1924,7 +1930,7 @@ namespace graph::query::execution {
 						for (size_t itemIndex = 0U; itemIndex < sortItems.size(); ++itemIndex) {
 							const logical::LogicalSortItem &item = sortItems[itemIndex];
 							std::optional<PropertyValue> cached;
-							if (!cachePrepublicationValues && prepublicationCache != nullptr &&
+							if (prepublicationCache != nullptr &&
 								rowIndex < prepublicationCache->sort_keys.size() &&
 								itemIndex < prepublicationCache->sort_keys[rowIndex].size()) {
 								cached = prepublicationCache->sort_keys[rowIndex][itemIndex];
@@ -2834,7 +2840,7 @@ namespace graph::query::execution {
 				}
 				if (operation->getType() == logical::LogicalOpType::LOP_SET) {
 					const auto *set = dynamic_cast<const logical::LogicalSet *>(operation);
-					if (set == nullptr || set->getItems().empty()) {
+					if (set == nullptr || set->getItems().empty()) { // collectMergePostMutationChain verifies the concrete SET type and nonempty shape before constructing this private chain.
 						throw std::logic_error("logical MERGE mutation chain has an invalid SET operation");
 					}
 					for (const logical::LogicalSetItem &item: set->getItems()) {
@@ -2921,11 +2927,11 @@ namespace graph::query::execution {
 					}
 					continue;
 				}
-				if (operation->getType() != logical::LogicalOpType::LOP_REMOVE) {
+				if (operation->getType() != logical::LogicalOpType::LOP_REMOVE) { // the private merge-post chain collector admits only SET and REMOVE operations.
 					throw std::logic_error("logical MERGE mutation chain has an unsupported operation");
 				}
 				const auto *remove = dynamic_cast<const logical::LogicalRemove *>(operation);
-				if (remove == nullptr || remove->getItems().empty()) {
+				if (remove == nullptr || remove->getItems().empty()) { // collectMergePostMutationChain verifies the concrete REMOVE type and nonempty shape before constructing this private chain.
 					throw std::logic_error("logical MERGE mutation chain has an invalid REMOVE operation");
 				}
 				for (const logical::LogicalRemoveItem &item: remove->getItems()) {
@@ -3452,21 +3458,6 @@ namespace graph::query::execution {
 				QueryResult mutationResult = execute(mutationRoot, bounds, context);
 				inputRows = mutationResult.getPipelineRowCount();
 			}
-			if (inputRows == 0U) {
-				// A standalone anonymous CREATE intentionally exposes no columns, but it
-				// still transforms the SingleRow seed and therefore contributes one row
-				// to a following count(*).
-				// Use the already-unwrapped mutation child. An aggregate may sit above a
-				// Project that supplies no visible columns for an anonymous CREATE.
-				const logical::LogicalOperator *tail = chainRoot;
-				while (tail != nullptr && (tail->getType() == logical::LogicalOpType::LOP_CREATE_NODE ||
-										   tail->getType() == logical::LogicalOpType::LOP_CREATE_EDGE)) {
-					tail = requireOptionalOnlyChild(*tail);
-				}
-				if (tail != nullptr && tail->getType() == logical::LogicalOpType::LOP_SINGLE_ROW) {
-					inputRows = 1U;
-				}
-			}
 			if (inputRows > static_cast<size_t>(std::numeric_limits<int64_t>::max())) {
 				throw std::overflow_error("logical mutation count(*) exceeds the Property integer range");
 			}
@@ -3526,21 +3517,57 @@ namespace graph::query::execution {
 												 foreach);
 		}
 		const logical::LogicalProject *createSetProjection = nullptr;
+		const logical::LogicalSort *createSetSort = nullptr;
+		const logical::LogicalSkip *createSetSkip = nullptr;
+		const logical::LogicalLimit *createSetLimit = nullptr;
 		const logical::LogicalOperator *createSetRoot = &root;
-		if (root.getType() == logical::LogicalOpType::LOP_PROJECT) {
-			createSetProjection = dynamic_cast<const logical::LogicalProject *>(&root);
+		// Result operators must remain outside the mutation chain: they shape the
+		// rows returned to the caller, never the rows staged for atomic publication.
+		if (createSetRoot->getType() == logical::LogicalOpType::LOP_LIMIT) {
+			createSetLimit = dynamic_cast<const logical::LogicalLimit *>(createSetRoot);
+			if (createSetLimit == nullptr) {
+				throw std::logic_error("logical CREATE/SET result has an invalid Limit operator");
+			}
+			createSetRoot = requireOptionalOnlyChild(*createSetRoot);
+			if (createSetRoot == nullptr) {
+				throw std::logic_error("logical CREATE/SET result Limit requires a child");
+			}
+		}
+		if (createSetRoot->getType() == logical::LogicalOpType::LOP_SKIP) {
+			createSetSkip = dynamic_cast<const logical::LogicalSkip *>(createSetRoot);
+			if (createSetSkip == nullptr) {
+				throw std::logic_error("logical CREATE/SET result has an invalid Skip operator");
+			}
+			createSetRoot = requireOptionalOnlyChild(*createSetRoot);
+			if (createSetRoot == nullptr) {
+				throw std::logic_error("logical CREATE/SET result Skip requires a child");
+			}
+		}
+		if (createSetRoot->getType() == logical::LogicalOpType::LOP_PROJECT) {
+			createSetProjection = dynamic_cast<const logical::LogicalProject *>(createSetRoot);
 			if (createSetProjection == nullptr) {
 				throw std::logic_error("logical CREATE/SET projection has an invalid Project operator");
 			}
-			createSetRoot = requireOptionalOnlyChild(root);
+			createSetRoot = requireOptionalOnlyChild(*createSetRoot);
 			if (createSetRoot == nullptr) {
 				throw std::logic_error("logical CREATE/SET projection requires a mutation child");
+			}
+		}
+		if (createSetRoot->getType() == logical::LogicalOpType::LOP_SORT) {
+			createSetSort = dynamic_cast<const logical::LogicalSort *>(createSetRoot);
+			if (createSetSort == nullptr) {
+				throw std::logic_error("logical CREATE/SET result has an invalid Sort operator");
+			}
+			createSetRoot = requireOptionalOnlyChild(*createSetRoot);
+			if (createSetRoot == nullptr) {
+				throw std::logic_error("logical CREATE/SET result Sort requires a child");
 			}
 		}
 		if (const std::optional<CreateSetMutationChain> chain = collectCreateSetMutationChain(*createSetRoot);
 			chain.has_value()) {
 			return executeCreateSetMutationChain(*chain, read_backend_, write_backend_, bounds, context,
-												 createSetProjection, visibleMutationOutputColumns(*createSetRoot));
+													 createSetProjection, visibleMutationOutputColumns(*createSetRoot), nullptr,
+													 nullptr, nullptr, createSetSort, createSetSkip, createSetLimit);
 		}
 		if (root.getType() == logical::LogicalOpType::LOP_PROJECT) {
 			const logical::LogicalOperator *candidate = requireOptionalOnlyChild(root);
@@ -3595,13 +3622,13 @@ namespace graph::query::execution {
 								context.checkGuard();
 								if (operation->getType() == logical::LogicalOpType::LOP_SET) {
 									const auto *set = dynamic_cast<const logical::LogicalSet *>(operation);
-									if (set == nullptr) {
+									if (set == nullptr) { // collectReadPropertyMutationChain verifies the concrete SET type before retaining the operation pointer.
 										throw std::logic_error("logical SET/REMOVE chain has an invalid SET operator");
 									}
 									applySetOperation(*set, row, *snapshot, bounds, context, entities, propertyCache);
 								} else {
 									const auto *remove = dynamic_cast<const logical::LogicalRemove *>(operation);
-									if (remove == nullptr) {
+									if (remove == nullptr) { // collectReadPropertyMutationChain verifies the concrete REMOVE type before retaining the operation pointer.
 										throw std::logic_error(
 												"logical SET/REMOVE chain has an invalid REMOVE operator");
 									}

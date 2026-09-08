@@ -28,6 +28,14 @@ TEST_SHARDS="${ZYX_TEST_SHARDS:-}"
 # Keep each invocation's profiles separate so a report can be tied to exactly
 # one test execution rather than accidentally merging a stale background run.
 TEST_RUN_ID="${ZYX_TEST_RUN_ID:-native-$(date +%Y%m%dT%H%M%S)-$$}"
+KEEP_COVERAGE_ARTIFACTS="${ZYX_TEST_KEEP_COVERAGE_ARTIFACTS:-false}"
+
+# The run id becomes part of paths later removed by cleanup; keep it to one
+# directory name even when a caller supplies it explicitly.
+if ! [[ "$TEST_RUN_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+    echo -e "${RED}Error: ZYX_TEST_RUN_ID may contain only letters, digits, '.', '_', and '-'.${NC}" >&2
+    exit 1
+fi
 PROFILES_DIR="$COVERAGE_ROOT/runs/$TEST_RUN_ID/raw"
 FAILED_SHARD_LOG_DIR="$COVERAGE_ROOT/runs/$TEST_RUN_ID/failed-shards"
 
@@ -41,17 +49,6 @@ if [ ! -f "$TEST_RUNNER" ]; then
 fi
 if [ ! -f "$SHARD_RUNNER" ]; then
     echo -e "${RED}Error: $SHARD_RUNNER not found.${NC}"
-    exit 1
-fi
-
-if [ -z "$TEST_SHARDS" ]; then
-    case "$OSTYPE" in
-        darwin*|linux*) TEST_SHARDS=2 ;;
-        *) TEST_SHARDS=1 ;;
-    esac
-fi
-if ! [[ "$TEST_SHARDS" =~ ^[1-9][0-9]*$ ]]; then
-    echo -e "${RED}Error: ZYX_TEST_SHARDS must be a positive integer.${NC}"
     exit 1
 fi
 
@@ -75,8 +72,38 @@ if ! mkdir "$LOCK_DIR" 2>/dev/null; then
 fi
 printf '%s\n' "$$" > "$LOCK_DIR/pid"
 
+# A forced termination bypasses the EXIT trap and can leave a prior run's raw
+# profiles and shard logs behind. Ordinary runs never need those artifacts;
+# an explicit diagnostic run opts out of this reclamation.
+if [ "$KEEP_COVERAGE_ARTIFACTS" != "true" ]; then
+  rm -rf "$COVERAGE_ROOT/runs" 2>/dev/null || true
+fi
+
 cleanup() {
   local status=$?
+  # Raw profiles and shard logs are input to this invocation's report only.
+  # Keep them only when an explicit diagnostic investigation needs them.
+  if [ "$KEEP_COVERAGE_ARTIFACTS" != "true" ]; then
+    rm -rf "$COVERAGE_ROOT/runs/$TEST_RUN_ID" 2>/dev/null || true
+    # The runner result is printed to stdout and is not needed after the report.
+    rm -f "$TEST_RESULT_FILE" 2>/dev/null || true
+    # The merged profile is only an intermediate report input; it is regenerated
+    # on the next run and should not accumulate in the build directory.
+    rm -f "$BUILD_DIR/code.profdata" 2>/dev/null || true
+    # A direct test invocation can leave LLVM's default fallback profile here.
+    # It carries no report state and is always recreated when needed.
+    rm -f "$BUILD_DIR/default.profraw" 2>/dev/null || true
+    # Some direct test invocations write LLVM's fallback profile to the
+    # repository root. It is likewise disposable coverage intermediate data.
+    rm -f "default.profraw" 2>/dev/null || true
+    # This invocation writes all raw profiles below its run directory. Avoid a
+    # full build-cache scan here so routine focused tests remain fast.
+    find . -maxdepth 1 -type f -name '*.profraw' -delete 2>/dev/null || true
+    # Remove only empty parents, preserving an explicitly requested HTML report.
+    rmdir "$COVERAGE_ROOT/runs" "$COVERAGE_ROOT" 2>/dev/null || true
+  fi
+  # CTest's last-run log is diagnostic output, not coverage state.
+  rm -f "$BUILD_DIR/Testing/Temporary/LastTest.log" 2>/dev/null || true
   rm -rf "$LOCK_DIR" 2>/dev/null || true
   exit "$status"
 }
@@ -142,10 +169,30 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [ -z "$TEST_SHARDS" ]; then
+    # A filtered run is an iterative, per-module coverage check. One process
+    # avoids shard setup overhead and leaves one unambiguous profile to inspect.
+    if [ -n "$GTEST_FILTER" ]; then
+        TEST_SHARDS=1
+    else
+        case "$OSTYPE" in
+            darwin*|linux*) TEST_SHARDS=2 ;;
+            *) TEST_SHARDS=1 ;;
+        esac
+    fi
+fi
+if ! [[ "$TEST_SHARDS" =~ ^[1-9][0-9]*$ ]]; then
+    echo -e "${RED}Error: ZYX_TEST_SHARDS must be a positive integer.${NC}"
+    exit 1
+fi
+
 if [ -n "$GTEST_FILTER" ]; then
     TEST_ARGS=("--gtest_filter=$GTEST_FILTER")
     echo -e "${BLUE}>>> GoogleTest filter: $GTEST_FILTER${NC}"
 else
+    if [ "${#REPORT_ARGS[@]}" -gt 0 ]; then
+        echo -e "${YELLOW}>>> Coverage detail does not limit tests; add --gtest-filter with exact test names for an iterative file check.${NC}"
+    fi
     # Keep a complete test run's output bounded in CI and terminal harnesses.
     # Failed suites and the final GoogleTest summary remain visible.
     export ZYX_TEST_TERSE_OUTPUT=1

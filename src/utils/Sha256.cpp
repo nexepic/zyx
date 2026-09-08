@@ -102,6 +102,9 @@ namespace graph::utils {
 			if (tail_size_ == tail_.size()) {
 				transform(state_, tail_);
 				tail_size_ = 0U;
+			} else {
+				// The new input extends, but does not complete, the existing tail.
+				return;
 			}
 		}
 		while (bytes.size() - consumed >= tail_.size()) {

@@ -423,3 +423,38 @@ TEST_F(CppApiTest, PreparedQuerySupportsDetachDelete) {
 	ASSERT_TRUE(edgeMissing.isSuccess()) << edgeMissing.getError();
 	EXPECT_FALSE(edgeMissing.hasNext());
 }
+
+TEST_F(CppApiTest, PreparedQuerySupportsOptionalClausesAndPropertyRemoval) {
+	const zyx::Result created = db->execute(
+			db->query()
+					.createNode("plain", "", {{"removable", int64_t{7}}})
+					.remove("plain", "removable", false)
+					.returning({"plain"})
+					.build());
+	ASSERT_TRUE(created.isSuccess()) << created.getError();
+	ASSERT_TRUE(created.hasNext());
+	created.next();
+	const auto plain = std::get<std::shared_ptr<zyx::Node>>(created.get("plain"));
+	ASSERT_NE(plain, nullptr);
+	EXPECT_TRUE(plain->labels.empty());
+	EXPECT_FALSE(plain->properties.contains("removable"));
+
+	const zyx::Result matched = db->execute(db->query().match("node").returning({"node"}).build());
+	ASSERT_TRUE(matched.isSuccess()) << matched.getError();
+	EXPECT_TRUE(matched.hasNext());
+
+	const zyx::Result chainedUnwind = db->execute(
+			db->query().match("node").unwind({int64_t{1}}, "value").returning({"value"}).build());
+	ASSERT_TRUE(chainedUnwind.isSuccess()) << chainedUnwind.getError();
+	ASSERT_TRUE(chainedUnwind.hasNext());
+	chainedUnwind.next();
+	EXPECT_EQ(std::get<int64_t>(chainedUnwind.get("value")), 1);
+
+	const zyx::Result defaultNamedIndex =
+			db->execute(db->query().createIndex("PreparedOptional", "value").build());
+	ASSERT_TRUE(defaultNamedIndex.isSuccess()) << defaultNamedIndex.getError();
+
+	EXPECT_NO_THROW((void)db->query().match("_", "_").build());
+	EXPECT_THROW((void)db->query().match("", "PreparedOptional").build(), std::invalid_argument);
+	EXPECT_THROW((void)db->query().match(std::string(257U, 'v'), "PreparedOptional").build(), std::invalid_argument);
+}

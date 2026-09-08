@@ -94,8 +94,7 @@ namespace graph::storage {
 		void validateNodeReference(const LogicalGraphMutationBatch &batch,
 								   const LogicalGraphMutationEntityReference &reference, const char *operation) {
 			validateReference(batch, reference, operation);
-			if (reference.entity_kind != LogicalGraphMutationEntityKind::LGMK_NODE ||
-				reference.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_EDGE) {
+			if (reference.entity_kind != LogicalGraphMutationEntityKind::LGMK_NODE) {
 				throw std::invalid_argument(std::string(operation) + " requires a Node reference");
 			}
 		}
@@ -155,10 +154,11 @@ namespace graph::storage {
 			std::unordered_set<uint64_t> deletedNodes;
 			deletedNodes.reserve(batch.node_deletes.size());
 			for (const LogicalGraphNodeDeleteRequest &request: batch.node_deletes) {
-				if (request.node_id == 0U || !deletedNodes.insert(request.node_id).second ||
-					(request.detach && request.maximum_detach_edges == 0U)) {
-					throw std::invalid_argument(
-							"native logical graph mutation requires unique Node deletes and positive detach bounds");
+			if (request.node_id == 0U || !deletedNodes.insert(request.node_id).second ||
+				(request.detach && (request.maximum_detach_edges == 0U ||
+									request.maximum_detach_edges == std::numeric_limits<size_t>::max()))) {
+				throw std::invalid_argument(
+						"native logical graph mutation requires unique Node deletes and positive finite detach bounds");
 				}
 			}
 			for (const LogicalGraphBatchEdgeCreateRequest &request: batch.edge_creates) {
@@ -287,15 +287,11 @@ namespace graph::storage {
 
 		[[nodiscard]] uint64_t resolveEntityId(const LogicalGraphMutationEntityReference &reference,
 											   const LogicalGraphMutationBatchResult &result) {
-			switch (reference.reference_kind) {
-				case LogicalGraphMutationReferenceKind::LGRK_PERSISTED:
-					return reference.value;
-				case LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE:
-					return result.created_node_ids.at(static_cast<size_t>(reference.value));
-				case LogicalGraphMutationReferenceKind::LGRK_CREATED_EDGE:
-					return result.created_edge_ids.at(static_cast<size_t>(reference.value));
-			}
-			throw std::logic_error("native logical graph mutation has an invalid resolved reference");
+			// Edge endpoints were validated as persisted or batch-created Nodes before
+			// execution begins; created Edges cannot be endpoints of another Edge.
+			return reference.reference_kind == LogicalGraphMutationReferenceKind::LGRK_PERSISTED
+					   ? reference.value
+					   : result.created_node_ids.at(static_cast<size_t>(reference.value));
 		}
 
 		[[nodiscard]] uint64_t resolveSupportEntityId(const ConstraintSupportTreeMutationPlan &plan,

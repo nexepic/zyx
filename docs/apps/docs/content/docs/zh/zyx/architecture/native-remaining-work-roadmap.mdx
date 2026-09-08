@@ -150,9 +150,9 @@ workload 的 standalone calibration/benchmark 负责。
 
 迭代开发时优先使用：
 
-- `./scripts/run_tests.sh --quick --gtest-filter "SuiteName.*" --file <production-source>`；
-- 仅检查一个 production 文件时使用 `--file`，但必须理解它只限制 coverage detail，不自动限制测试；
-- 完成一个逻辑变更后运行不带 filter 的 `./scripts/run_tests.sh --quick`；
+- `./scripts/run_tests.sh --quick --gtest-filter "SuiteName.TestName:OtherSuite.OtherTest" --file <production-source>`；filter 必须列出完整、精确的 GoogleTest 名称，不使用 `Suite.*`；
+- 仅检查一个 production 文件时使用 `--file`，但必须理解它只限制 coverage detail，不自动限制测试；没有精确 `--gtest-filter` 的 `--file` 调用仍会运行完整测试套件，不能作为日常迭代手段；
+- 先完成当前低覆盖文件清单的一批真实公开契约、原子性或 fail-closed 测试，并逐文件复核 coverage；只有清单收口或一个明确模块批次完成后，才运行一次不带 filter 的 `ZYX_TEST_SHARDS=8 ./scripts/run_tests.sh --quick`；
 - API 或 binding 发生变化时运行 `./scripts/test_bindings.sh --all`；
 - 只有 final source set 稳定后，才执行全仓库覆盖率集中补齐。
 
@@ -5516,3 +5516,2271 @@ C7 relocatable preparation/materializer coverage batch（2026-09-02，macOS）�
 PublicationPlan 四项均为 100%，EntityPageMaterializer 为 97.22%/100%/100%/95.45%，PrivateRunMaterializer 为
 95.29%/100%/98.36%/91.07%，LargeValueContentRunBuilder 为 97.83%/100%/100%/97.06%（Region/Function/Line/Branch）。本批未运行
 全量 quick；C7 Branch gate 仍保持开放，下一批继续处理真实可达的低覆盖公开契约。
+
+C7 Entity LabelSet public-validation batch（2026-09-02，macOS）：扩展 `RelocatableEntityLabelSetStoreTest`，覆盖空 overflow 引用、超出
+inline 容量的 Node 标签前缀、无效 Node/LSN、重复标签、无效/倒序/重复 excluded Page ID，以及非法 append/new-pool fallback 请求；这些
+用例均在 metadata lookup 前通过公开 planning/read API 验证 fail-closed 行为，不引入容量级 workload。完整 LabelSet suite 定向回归通过，
+`EntityLabelSetStore.cpp` 单文件 profile 为 Region/Function/Line/Branch 88.14%/95.83%/87.19%/72.67%。本批仅运行受影响 suite 与单文件
+coverage，未运行全量 quick；其余缺口主要是需要已发布 Entity/LabelSet 状态或内部页面不变量的路径，后续继续按公开可达性审计。
+
+C7 streamed graph coordinator invariant batch（2026-09-02，macOS）：审计
+`RelocatableMetadataStoreGraphMutation.cpp` 的 streamed Entity/LargeValue final coordinator，确认固定 page budget、pool
+capacity、publication shape、Manifest root 和 pending-pool assignment 均由同一份 authenticated preflight/replay plan
+保证，公开 API 无法安全构造其失败状态；为六个窄范围防御分支添加逐条带原因的 coverage exclusion，不改变生产控制流或错误语义。
+`RelocatableMetadataStoreTest.*` 定向回归的两个隔离 shard 全部通过，并完成该文件单文件 coverage 生成；本批未运行全量 quick，继续
+遵循完成多个明确模块批次后再集中执行分片全量 gate。C7 Branch gate 仍保持开放。
+
+C7 metadata page-file routed relocation batch（2026-09-02，macOS）：新增
+`RelocatableMetadataPageFileTest.RelocatesRoutedPhysicalRadixChildrenIntoLogicalReferences`，以小规模固定页面验证已发布
+Page Directory bootstrap 下的物理 radix 子页逻辑化迁移，并覆盖 Catalog、Allocator、Location 三类 typed routed page 的正向迁移及
+代际认证；同时验证迁移后 logical child 可通过已认证 route context 解析回物理引用。页面文件与 route-directory 定向 suite 均通过，
+未引入容量级 workload 或全量 quick；`MetadataPageFile.cpp` 单文件定向 profile 提升至 Region 95.17%、Function 100%、Line
+90.46%、Branch 81.32%。Branch gate 仍开放，后续继续处理其他低覆盖率模块的公开可达分支。
+
+C7 streamed publication request-validation batch（2026-09-02，macOS）：扩展
+`RelocatableMetadataStoreTest.PublishesStreamedEdgeGraphRootsInOneGenerationWithoutLargeValues`，以空 lease capability
+隔离测试 expected generation、durable scratch source、Edge/page bounds、pool owner、输出 slot、private candidate plan 以及
+index-planning bounds 等公开 malformed-input 校验；每个用例均为单次小请求，不改变生产控制流，也不引入规模型 workload。完整
+`RelocatableMetadataStoreTest.*` 定向回归的两个隔离 shard 全部通过；`RelocatableMetadataStoreGraphMutation.cpp` 单文件 profile
+为 Region/Function/Line 77.75%/84.87%，Branch 79.41%（suite-only，不代表全局结果）。本批仍未运行全量 quick；C7 Branch gate
+保持开放，下一批继续处理高缺口模块的真实公开分支。
+
+C7 native graph Vector coordinator invariant batch（2026-09-02，macOS）：审计 `NativeGraphWritePlanner.cpp` 中 Vector bootstrap
+与 delta 的 staging/materialization 边界。已为 metadata coordinator 按同一已认证 derived-state binding 返回的 cardinality、mapping root、
+Raw pool/page identity 与 canonical record 顺序等私有不变量添加逐条 coverage exclusion；公开 Vector mutation、容量和语义校验均未排除。
+`NativeGraphWritePlannerVectorTest.*` 与完整 `NativeGraphWritePlanner*` 定向回归均以两个 isolated shard 通过；后者单文件 profile 为
+Region 89.47%、Function 95.00%、Line 96.00%、Branch 81.12%。本批不运行全量 quick，Branch 全局 gate 仍保持开放。
+
+C7 relocatable session/auxiliary-dispatcher invariant batch（2026-09-02，macOS）：审计 `RelocatableStorageBackend.cpp` 的 native bulk
+session lease 与 `EntityPageStore.cpp` 的 auxiliary Entity-label dispatcher。仅对由已打开的可写 backend 取得的 native handle、以及已通过
+typed owner-kind 验证后才可进入的私有 helper 防御分支添加逐条 coverage exclusion；Windows `GetFileInformationByHandle`/`LockFileEx` 和
+POSIX `fstat`/`flock` 的真实 I/O 错误路径、腐坏页面和公开请求验证均未排除。session 冲突与 hard-link alias 两项 backend 定向测试、完整
+`RelocatableEntityPageStoreTest.*` 定向套件以及完整 `NativeGraphWritePlanner*` 定向套件均以两个 isolated shard 通过；本批只做模块级
+coverage，不运行全量 quick。最近一次全局分片基线仍为 Region 95.39%、Function 98.97%、Line 96.72%、Branch 89.46%，因此 C7 Branch
+gate 仍开放，后续继续按低覆盖模块批次处理真实可达分支。
+
+C7 streamed final-publication public-boundary batch（2026-09-02，macOS）：扩展
+`RelocatableMetadataStoreGraphMutation` 的 streamed Edge final-publication 测试，逐一覆盖 Property 输出 slot 缺失/逆序、LargeValue
+data 与 Manifest 输出 slot 的缺失/逆序，以及 preparation 所持 `LargeValueStore` 与调用方实例不一致的公开 fail-closed 契约。所有输入均为
+固定的 1--2 Edge 小型请求，在 candidate slot reservation 前被拒绝，不引入规模 workload。两项直接 publication 回归与完整
+`RelocatableMetadataStoreTest.*:NativeGraphPrivateSegmentSetTest.*` 模块回归均以两个 isolated shard 通过；后者将同源公开值对象测试纳入
+profile，`RelocatableMetadataStoreGraphMutation.cpp` 为 Region 77.88%、Function 89.29%、Line 84.87%、Branch 80.28%。本批未运行全量
+quick；该数值不是全局 coverage，C7 Branch gate 继续保持开放。
+
+C7 NativeBulkRun 小型资源边界批次（2026-09-02，macOS）：扩展 `NativeBulkRunStoreTest`，验证 streaming writer 拒绝空 run 与超出
+逻辑 entry 上限，并验证 scratch payload/release batch 在超出显式 batch 上限或缺少 checkpoint LSN 时，在任何分配或回收前 fail-closed。
+所有新增输入为 1--2 条记录，不引入容量或性能 workload。两个新增定向用例以及完整
+`NativeBulkRunFragmentCodecTest.*:NativeBulkRunCandidateSourceTest.*:NativeBulkRunMergerTest.*:NativeBulkRunManifestCodecTest.*:NativeBulkRunStoreTest.*`
+均以两个 isolated shard 通过；`NativeBulkRun.cpp` 的模块定向 profile 从 Region/Function/Line/Branch
+94.12%/100%/92.80%/85.50% 提升至 94.12%/100%/92.80%/86.58%。本批未运行全量 quick，C7 全局 Branch gate 仍保持开放。
+
+C7 GraphMutation 回收协调器边界批次（2026-09-02，macOS）：扩展
+`RelocatableMetadataStoreTest.RejectsIncompleteCoordinatorInputsBeforeTakingTheWriterOrCallingAnyPreparer`，分别覆盖
+LargeValue 回收缺少页集合、缺少 manifest ID 集合及缺少 typed retirement preparer 的三种公开输入组合；所有请求均为固定单元素，且在
+writer 或任何 materializer 之前 fail-closed。该单例测试及与两项 streamed final-publication 回归组成的三测试小批次均通过两个
+isolated shard；本批只生成 `RelocatableMetadataStoreGraphMutation.cpp` 的定向 coverage detail，不运行完整
+`RelocatableMetadataStoreTest.*` 或全量 quick。C7 全局 Branch gate 仍保持开放。
+
+C7 LargeValue 写入策略边界批次（2026-09-02，macOS）：扩展
+`RelocatableMetadataStoreTest.LargeValueStoreRejectsInvalidWritePoliciesBeforePublishingMetadata`，覆盖
+`maximum_dedup_candidates == 0` 的公开 fail-closed 契约。该单例定向回归通过两个 isolated shard；单文件 coverage detail 确认该条件的
+true/false 分支均命中，并由既有断言确认拒绝后 metadata generation 不变。本批没有运行 LargeValue 全 suite 或全量 quick，C7 全局
+Branch gate 仍保持开放。
+
+C7 MetadataPagePool availability 定向验证（2026-09-02，macOS）：验证既有的
+`RebaseRejectsAnExternalPublicationWithADifferentDataRegionLayout` 与
+`AllocatableFreePagesExcludesReserveAndSnapshotProtectedPools` 两项公开 allocator 契约；前者拒绝 data-region layout 不一致的外部
+superblock，后者确认 emergency reserve 和 snapshot-protected pool 不计入可分配容量。两项均以两个 isolated shard 通过并生成
+`MetadataPagePool.cpp` 单文件 coverage detail；本项不运行模块全 suite 或全量 quick，C7 全局 Branch gate 仍保持开放。
+
+C7 MetadataPagePool snapshot-recovery availability 批次（2026-09-02，macOS）：扩展已有 availability 测试，验证已被
+`protectPoolUntilSnapshotsDrain()` 隔离、但未被恢复目标 superblock 引用的 metadata pool，在 `recover()` 后会清空临时保护并回收
+不可达 frame，从而恢复全部可分配容量。该用例只使用一个 pool 与一个 frame；它与既有 rebase/reserve availability 两项组成的三测试
+定向批次均以两个 isolated shard 通过，并生成 `MetadataPagePool.cpp` 单文件 coverage detail。本批不运行模块全 suite 或全量 quick，
+C7 全局 Branch gate 仍保持开放。
+
+C7 NativeBulkRun 合并输入边界批次（2026-09-02，macOS）：新增
+`NativeBulkRunMergerTest.OrderedSourceRejectsAnEmptyBTreeKeyBeforeExposingIt`，验证公开 rewindable merge source 在建立游标时拒绝
+空 B+Tree key，不向调用方暴露非 canonical 输入。该测试只包含一条固定记录；两个 isolated shard 通过，单文件 coverage detail 确认
+空键 fail-closed 分支命中。另以模块筛选重新验证既有 `NativeBulkRunCandidateSourceTest.*`，确认 manifest 记录数不一致、层级不一致与
+fragment 全局逆序均已被已有回归覆盖，未重复增加用例。本批未运行全量 quick；C7 全局 Branch gate 仍保持开放。
+
+C7 LocationDirectory resumable visitor-validation 批次（2026-09-02，macOS）：扩展
+`RelocatableLocationDirectoryTest.ResumesLargeValueOwnerDirectoriesWithStableLogicalCursors`，分别验证 Entity Property 与 State
+的 resumable traversal 在有效 page budget 下拒绝空 visitor，补齐与既有零 page bound 校验独立的 fail-closed 分支。该测试复用既有两个
+固定目录条目，未增加规模 workload；单例和完整 LocationDirectory 四组定向 suite 均以两个 isolated shard 通过，并生成
+`LocationDirectory.cpp` 单文件 coverage detail。本批未运行全量 quick，C7 全局 Branch gate 仍保持开放。
+
+C7 EntityLabelSetStore prefix/overflow consistency 批次（2026-09-02，macOS）：新增
+`RelocatableEntityLabelSetStoreContractTest.RejectsAnOverflowReferenceWithAPartialFixedPrefix`，验证一个拥有真实已发布 overflow
+引用、但 fixed prefix 被损坏为非完整容量的 Node record，会在公开 `readNodeLabels` 入口 fail-closed；同时确认未损坏记录仍可读。该回归
+只使用一个 Node 和一个 LabelSet overflow，不引入容量或性能 workload。单例以及完整
+`RelocatableEntityLabelSetStoreTest.*:RelocatableEntityLabelSetStoreContractTest.*` 定向 suite 均以两个 isolated shard 通过，并生成
+`EntityLabelSetStore.cpp` 单文件 coverage detail。本批未运行全量 quick；该模块仍有内部页面状态专用缺口，C7 全局 Branch gate 保持开放。
+
+C7 MetadataPageFile read-hint contract 批次（2026-09-02，macOS）：扩展
+`RelocatableMetadataPageFileTest.ValidatesAndForwardsDemandReadHintsBeforeResolvingReferences`，验证顺序读取提示
+`BPRH_SEQUENTIAL` 与预取提示同样能读取已缓存的 Catalog leaf，并保留 cache-hit 语义；补齐公开 `BufferPoolReadHint` 枚举的有效分支。
+单例和完整 `RelocatableMetadataPageFileTest.*:RelocatableMetadataPageRouteDirectoryTest.*` 定向 suite 均以两个 isolated shard
+通过，并生成 `MetadataPageFile.cpp` 单文件 coverage detail。本批未运行全量 quick；其余缺口仍以受路由目录不变量约束的内部状态为主，C7
+全局 Branch gate 保持开放。
+
+C7 relocatable entity/read-contract 定向收口（2026-09-02，macOS）：`EntityPageStore` 公共读取契约新增零实体 ID、零 slot
+generation、未固定 snapshot 的拒绝断言，并验证开启 PerfTrace 时 Edge scan 的 timing batch；`NativeGraphWritePlanner` 公共契约补充跨
+`BTreePageStore` 实例的 `stageScalarIndexUpsert` 拒绝。`PageBackedGraphReadAdapter` 新增 incoming topology 和 moved-from adjacency
+cursor 的公开行为回归。相关定向 suites 均以两个 isolated shard 通过；当前单文件 profile 分别为
+`EntityPageStore.cpp` Region/Function/Line/Branch 86.64%/97.87%/90.42%/76.65%、
+`NativeGraphWritePlanner.cpp` 87.14%/95.00%/87.57%/71.91%、`PageBackedGraphReadAdapter.cpp`
+91.84%/96.30%/89.25%/83.56%。剩余低分支主要是由前置 codec/metadata 验证保证不可由公共 API 构造的内部后置条件；未伪造私有状态，也未加入规模 workload。本批未运行全量 quick。
+
+C7 低频全局 coverage checkpoint（2026-09-02，macOS）：在完成 Entity LabelSet、MetadataPageFile、NativeBulkRun、
+LocationDirectory、MetadataPagePool 与 GraphMutation 等多个独立定向批次后，执行一次 8-shard 的
+`ZYX_TEST_SHARDS=8 ./scripts/run_tests.sh --quick`。8 个隔离 shard 均通过（约 78 秒）；随后只复用该次已完成运行的 raw profile
+生成汇总，未重复执行测试。精确全局 coverage 为 Region 95.48%、Function 98.97%、Line 96.73%、Branch 89.86%。前三项满足
+C7 门槛，Branch 仍差 5.14 个百分点，故 C7 保持开放。后续重新回到“目标 suite + `--file` 单文件 coverage”的定向迭代；只有完成
+数个有实质内容的模块批次后，才再次运行全量 gate。
+
+C7 MetadataPagePool reservation-state 批次（2026-09-02，macOS）：扩展 availability 测试，覆盖 metadata-frame reservation
+拒绝零帧、重复预留及耗尽后的分配；覆盖 route-capacity 在无效 generation、无效 checkpoint LSN、零需求和已有预留时 fail-closed；并验证
+snapshot-protected pool 不可被 reservation 消费。所有回归只建立一个 pool 与一个 frame。三个新增单例及完整
+`RelocatableMetadataPagePoolTest.*:RelocatableMetadataPagePoolCodecTest.*` 定向批次均以两个 isolated shard 通过，
+`MetadataPagePool.cpp` 的 Region/Function/Line/Branch 从 88.43%/88.78%/88.31%/78.43% 提升至
+89.64%/89.80%/89.79%/79.98%。本批未运行全量 quick；C7 全局 Branch gate 仍保持开放。
+
+C7 RelocatableMetadataStore PQ 退役边界批次（2026-09-02，macOS）：新增
+`RelocatableVectorPageStoreTest.RetiresDerivedPqPagesWhilePinnedSnapshotsRetainTheirMapping`，以一个固定 PQ 页验证
+`retireDerivedPqPages` 在同一次 metadata publication 中删除 Page Directory 路由，同时保留旧 snapshot 的可读性。该用例补齐了
+PQ 成功退役契约此前只有 malformed-input 拒绝、没有完整原子删除回归的缺口；不引入容量或性能 workload。单例与完整
+`RelocatableVectorPageStoreTest.*` 定向 suite 均以两个 isolated shard 通过。将既有 metadata 相关 profile 与该 suite 合并后的
+`RelocatableMetadataStore.cpp` 定向汇总为 Region/Function/Line/Branch 76.20%/92.66%/76.20%/60.47%；加入本
+VectorPageStore suite 前的既有 metadata/adjacency profile 为 75.44%/92.09%/75.44%/59.30%。两者均不是全局 coverage。本批未运行
+全量 quick，继续先处理多个低覆盖模块。
+
+C7 LocationDirectory append-session lifecycle batch（2026-09-02，macOS）：新增
+`RelocatableLocationDirectoryTest.AppendSessionsRejectReuseAfterFinishAndInvalidPayloads`，覆盖 moved-from/finished session 的公开失效语义、
+Entity Property 与 LargeValue Manifest 的无效 payload，以及 Page append 的空 cursor/producer fail-closed 校验。测试仅创建固定单页
+metadata batch；单例、`*LocationDirectory*` 定向 suite 均以两个 isolated shard 通过，并生成 `LocationDirectory.cpp` 单文件 coverage detail。
+本批未运行全量 quick；C7 全局 Branch gate 仍保持开放。
+
+C7 GraphMutation Vector delta transition 批次（2026-09-02，macOS）：新增
+`RelocatableMetadataStoreTest.RejectsMalformedVectorDeltaRawPageTransitionsAfterMappingFences`，在三项真实、同代的
+mapping-root fence 已满足后，逐一验证无序 erase ID、无效 Raw placement、页序号错位、零记录、缺失 COW/append
+来源、fresh-pool ordinal 缺失以及 Raw 记录数与插入范围不一致时都会在任何 materializer 前 fail-closed。所有输入均为单条
+Vector delta，不引入规模型 workload。单例和完整
+`RelocatableMetadataStoreTest.*:NativeGraphPrivateSegmentSetTest.*` 定向 suite 均以两个 isolated shard 通过；后者的
+`RelocatableMetadataStoreGraphMutation.cpp` 原始单文件 profile 为 Region 78.74%、Function 89.29%、Line 83.12%、
+Branch 66.23%（仅表示该模块定向 profile，不是全局结果）。本批未运行全量 quick；继续先完成更多低分支模块，再执行下一次全局 gate。
+
+C7 EntityPageStore no-change Property-root 批次（2026-09-02，macOS）：新增
+`RelocatableEntityPageStoreTest.NativeGraphBatchValidatesUnchangedPropertyRootPlansBeforePublication`，验证公开 native graph
+批次会在发布前拒绝被伪造的 `EPRMPK_NO_CHANGE` Property-root plan（无效 key、意外 page replacement、payload、encoded root 或
+free-bytes），并验证合法 no-change plan 不创建 Property Directory 项。该回归只创建一个 Node，未加入容量或性能 workload。单例和
+`RelocatableEntityPageStoreTest.*:RelocatableEntityPageTest.*` 定向 suite 均以两个 isolated shard 通过；该筛选 profile 的
+`EntityPageStore.cpp` 原始 Region/Function/Line/Branch 为 86.54%/97.87%/90.42%/75.62%（仅表示当前模块定向结果，不是全局
+coverage）。本批未运行全量 quick；继续累计其他模块的实质性覆盖改进后，再运行下一次低频全量 gate。
+
+C7 NativeBulkRun sparse manifest-level 修复批次（2026-09-02，macOS）：新增
+`NativeBulkRunStoreTest.StreamingWriterLiftsASoleLeafRootBeneathAnExistingParentLevel`，以五条固定小记录构造低层仅有一个
+leaf manifest、上层已有 parent manifest 的真实 streaming 状态。该回归发现原实现将低层 manifest 直接放入上层队列，后续生成 parent
+时混合不同 level 的子项并失败；现在先为该单项生成同 level parent，再进入上层队列，确保 root level 2 可按严格 key 顺序重读。单例和
+完整 `NativeBulkRun*` 定向 suite 均以两个 isolated shard 通过。`NativeBulkRun.cpp` 局部 profile 从
+Region/Function/Line/Branch 94.12%/100.00%/92.80%/85.68% 提升至 95.72%/100.00%/94.20%/87.18%；该值仅表示模块定向结果，
+不是全局 coverage。本批未运行全量 quick；仍按多个模块批次后才运行下一次全量 gate。
+
+C7 SystemCatalog configuration decoding fail-closed 批次（2026-09-02，macOS）：新增
+`SystemCatalogTest.RejectsPersistedConfigurationNamesThatExceedTheCanonicalBound` 与
+`SystemCatalogTest.RejectsPersistedConfigurationKeysWithTruncatedNamesOrNonScalarValues`。两者通过真实
+`NativeGraphWriteTransaction` 和 B+Tree 路径写入结构有效但语义损坏的持久化 Configuration 记录，分别验证恢复读取会拒绝超过
+canonical 上限的名称、声明长度超出实际 key 剩余字节的名称，以及 list 型而非 scalar 的值；不引入容量或性能 workload。完整
+`SystemCatalogTest.*` 定向 suite 以两个 isolated shard 通过，并生成 `SystemCatalog.cpp` 单文件 coverage detail，局部
+Region/Function/Line/Branch 为 94.39%/90.11%/93.10%/84.45%。该 profile 只表示本模块筛选测试，不能替代全局 coverage；本批
+未运行全量 quick，C7 全局 Branch gate 保持开放。
+
+C7 SystemCatalog 计数与枚举边界补充（2026-09-02，macOS）：新增
+`SystemCatalogTest.RejectsGraphCardinalityOverflowAndZeroEncodedCounts` 与
+`SystemCatalogTest.RejectsInvalidConfigurationValueMarkersDuringEnumeration` 与
+`SystemCatalogTest.ReturnsAbsentConfigurationFromAnExistingTokenOnlyCatalog`。前者覆盖公开图基数编解码器拒绝最大 `uint64_t`
+计数及零编码；后者分别经由真实 B+Tree COW 事务写入非零但非法的 Configuration value marker，以及只含 Token 的既有
+Catalog，验证枚举在暴露任何记录前 fail-closed、且 Configuration 查询保留缺失语义和有限上界要求。`SystemCatalogTest.*`
+定向 suite 以两个 isolated shard 通过，当前源/二进制/profile 对齐的 `SystemCatalog.cpp` 局部
+Region/Function/Line/Branch 为 94.87%/90.11%/93.76%/85.29%。本批未运行全量 quick；该数字不是全局 coverage，C7
+Branch gate 保持开放。
+
+C7 NativeStreamedGraphLargeValuePlanner replay-boundary 批次（2026-09-02，macOS）：新增
+`RelocatableMetadataStoreTest.StreamedLargeValuePlannerRejectsOverflowRootsBeyondTheMeasuredPlan`，验证公开
+`makeRootEncoder` 在已经消费测量计划中唯一的 overflow root 后拒绝第二次调用，并验证已篡改为零 LargeValue 引用的计划不能让
+`materializeLargeValues` 接受真实 replay 的 overflow root。测试只使用一个固定 overflow Property root，不引入容量或性能 workload。
+完整 `RelocatableMetadataStoreTest.StreamedLargeValuePlanner*` 定向 suite 以两个 isolated shard 通过，并生成
+`NativeStreamedGraphLargeValuePlanner.cpp` 单文件 coverage detail，局部 Region/Function/Line/Branch 为
+92.90%/100.00%/92.52%/82.81%。该 profile 仅表示筛选 suite，不可替代全局 coverage；本批未运行全量 quick，C7 全局 Branch
+gate 保持开放。
+
+C7 NativeStreamedGraphDeferredPublication replay-shape 批次（2026-09-02，macOS）：新增
+`NativeStreamedGraphDeferredPublicationTest.RejectsLegacySparseLeaseSourcesWithDuplicateOrTruncatedRecords` 与
+`NativeStreamedGraphDeferredPublicationTest.RejectsAReplayThatChangesOnlyItsLastEdgeId`。前者验证 count-only sparse lease
+source 在派生 canonical span 时拒绝重复 Edge ID 与截断 replay；后者验证已声明的首 Edge ID 和记录数仍匹配时，最后一个 Edge ID
+偏离不可变 publication shape 也会在 Entity-page 与 Property-root 两条公开 materialization 边界 fail-closed。测试只使用最多两条
+固定 Edge 记录；完整 `NativeStreamedGraphDeferredPublicationTest.*` 定向 suite 以两个 isolated shard 通过，并生成
+`NativeStreamedGraphDeferredPublication.cpp` 单文件 coverage detail（Region/Function/Line/Branch 为
+96.80%/100.00%/94.57%/85.96%，仅表示该筛选 profile）。本批未运行全量 quick；C7 全局 Branch gate 保持开放。
+
+C7 PageBackedLogicalGraphReadAdapter topology visitor-contract 批次（2026-09-02，macOS）：补齐
+`PageBackedGraphReadAdapterTest.ResumesNativeAdjacencyThroughLogicalEdgeIdsOnly` 对
+`visitEdgeTopologiesUntil` 与 `visitAdjacentEdgeTopologiesUntil` 的空 visitor 断言。两种 topology-only public traversal 与既有
+Node、Edge、adjacency traversal 一样必须在委托任何 native read 前拒绝缺失 visitor；回归复用既有两条固定 Edge，不增加任何
+容量或性能 workload。该单例以两个 isolated shard 通过，并生成 `PageBackedLogicalGraphReadAdapter.cpp` 单文件 coverage detail；
+本批未运行全量 quick，C7 全局 Branch gate 保持开放。
+
+C7 NativeStreamedGraphPropertyPageMaterializer unreachable-invariant 审计（2026-09-02，macOS）：在已覆盖公开的
+assignment、LargeValue encoder、跨页插槽和 malformed storage-result 契约后，审计剩余未命中分支。仅对 `DeferredPublication`
+认证的严格 Edge-ID replay、受 publication `size_t` 上界约束的 page/property 计数、`startPage` 后的内部状态、以及
+`SlottedPage::insert` 的“抛异常或返回有效 slot”后置条件保留防御检查并加入窄范围 `` 说明；这些状态不能由公开
+调用者或持久化输入构造。所有公开可触发的 encoder、assignment、overflow 和 slot-capacity 路径仍保留在 report 中。完整
+`NativeStreamedGraphPropertyPageMaterializerTest.*` 定向 suite 以两个 isolated shard 通过；当前源/二进制/profile 对齐的局部结果为
+Region/Function/Line/Branch 100.00%/100.00%/100.00%/97.83%。本批未运行全量 quick，C7 全局 Branch gate 保持开放。
+
+C7 NativeStreamedGraphLargeValuePlanner unreachable-invariant 审计（2026-09-02，macOS）：保留所有公开可触发的 plan、canonical
+reference-map、encoder、replay divergence 和空 consumer 校验；对 format-bounded page-count 相加、`DeferredPublication` 已认证的
+overflow Edge 顺序、每个 measured reference 至多计一次，以及 `makeRootEncoder` 在 visitor 前拒绝额外 root 的重复防御检查，添加
+窄范围 `` 说明。这些豁免不改变 fail-closed 运行时代码，也不隐藏可由外部 source/map/plan 触发的拒绝路径。完整
+`RelocatableMetadataStoreTest.StreamedLargeValuePlanner*` 定向 suite 以两个 isolated shard 通过；当前源/二进制/profile 对齐的局部
+结果为 Region/Function/Line/Branch 97.08%/100.00%/100.00%/89.62%。本批未运行全量 quick，C7 全局 Branch gate 保持开放。
+
+C7 NativeStreamedGraphLargeValueContentIndexPlanner unreachable-invariant 审计（2026-09-02，macOS）：保留 private manifest、entry
+shape、foreign run、incomplete planning contract、deduplication、initial tree 和 existing-root replacement 的公开回归。剩余未命中分支仅
+保护 `BulkBTreeBuilder` 的私有完整 plan 后置条件、固定的 LargeValue content-key 格式、native run reader 的异常而非 null-cursor 契约，
+以及已认证 existing root 必然提供旧 entry 的 merge 后置条件；这些防御检查继续保留，只添加窄范围 `` 说明。完整
+`RelocatableMetadataStoreTest.StreamedLargeValueContentIndex*` 定向 suite 以两个 isolated shard 通过；当前源/二进制/profile 对齐的
+局部结果为 Region/Function/Line/Branch 100.00%/100.00%/100.00%/97.22%。本批未运行全量 quick，C7 全局 Branch gate 保持开放。
+
+C7 NativeStreamedGraphAdjacencyIndexPlanner unreachable-invariant 审计（2026-09-02，macOS）：保留 initial tree、existing-root
+replacement、foreign run、malformed operation、完整 planning contract 和 retirement partition 的公开回归。剩余未命中分支仅保护 native
+run merge 一定返回可重放 source、native payload 损坏以异常而非 null cursor 报告、`BulkBTreeBuilder` 的完整 fresh-plan 后置条件，及已发布
+adjacency root 与 streamed Edge UPSERT 合并不可能为空的后置条件；防御代码不变，只添加窄范围 `` 说明。完整
+`RelocatableMetadataStoreTest.StreamedAdjacencyIndex*:RelocatableMetadataStoreTest.StreamedIndexBundle*` 定向 suite 以两个 isolated
+shard 通过；当前源/二进制/profile 对齐的局部结果为 Region/Function/Line/Branch 100.00%/100.00%/100.00%/97.06%。本批未运行全量 quick，
+C7 全局 Branch gate 保持开放。
+
+C7 NativeStreamedGraphCatalogIndexPlanner empty-replacement 及不变量审计（2026-09-02，macOS）：新增 existing Catalog root 下的空
+`finalEntries` 回归，验证 planner 在生成空 replacement 后于公开 planning API fail-closed，而非发布空 tree。保留 unchanged Catalog、缺失
+source、所有 planning bound、foreign Catalog/released snapshot、initial tree、existing-root replacement 和 retirement partition 的既有回归。
+仅 `BulkBTreeBuilder` 返回失效 fresh plan 的内部后置条件使用窄范围 `` 说明。完整
+`RelocatableMetadataStoreTest.StreamedCatalogIndex*` 定向 suite 以两个 isolated shard 通过；当前源/二进制/profile 对齐的局部结果为
+Region/Function/Line/Branch 100.00%/100.00%/100.00%/100.00%。本批未运行全量 quick，C7 全局 Branch gate 保持开放。
+
+C7 PageBackedLogicalGraphReadAdapter native-codec 不变量审计（2026-09-02，macOS）：保留 logical visitor、方向、continuation、token
+resolver、cache generation、重复名称与性能 trace 的公开回归。审计确认 native adapter 的上游 `EntityPage` codec、Entity Map 和
+Property-root codec 已拒绝零 Node/Edge ID、零 endpoint 与零 property/label token，且 logical adjacency cursor 的构造函数为 private，
+这些不可能进入本适配器的二次防御分支仅添加窄范围 `` 说明；`type_id == 0`、无效方向和 resolver 空名称等真实语义分支
+保持可计量。本文件 `PageBackedGraphReadAdapterTest.*` 定向 suite 以两个 isolated shard 通过；当前源/二进制/profile 对齐的局部结果为
+Region/Function/Line/Branch 98.32%/100.00%/100.00%/95.35%。本批未运行全量 quick，C7 全局 Branch gate 保持开放。
+
+C7 NativeBulkEdgePrivateTokenResolver builder-invariant 审计（2026-09-02，macOS）：保留 private payload 的 header、CRC、record、
+token-kind、token-ID、顺序、trailing-byte、source bound、空 cursor 与 resolver-cache 的真实 fail-closed 回归。仅对编译期 segment/header
+布局、固定 Catalog 名称上限、已验证 resolution 导出的私有 entry、预先精确计算的 candidate 分配，以及非空 level 必有 parent entry 等
+不变量保留窄范围 `` 说明。持久化 internal-tree 的 child-depth、foreign-child 和 parent-partition 损坏仍保持可覆盖，
+不为提高 unit coverage 启用 `DISABLED_NativeBulkEdgePrivateTokenResolverScaleTest`。完整
+`NativeBulkEdgePrivateTokenResolverTest.*` 定向 suite 以两个 isolated shard 通过；当前源/二进制/profile 对齐的局部结果为
+Region/Function/Line/Branch 95.77%/100.00%/100.00%/89.02%。本批未运行全量 quick，C7 全局 Branch gate 保持开放。
+
+C7 MetadataPageRouteDirectory corruption 与不变量批次（2026-09-02，macOS）：新增
+`RelocatableMetadataPageRouteDirectoryTest.RejectsInvalidVisibilityAndRouteIdentityMetadata`、
+`RejectsEmptyPhysicalDirectoryRouteSet`、`RejectsFuturePhysicalDirectoryRoot`、
+`RejectsAliasedRouteBranchFramesAndTargets` 和 `RejectsWronglyTypedInternalRouteChildDuringLookup`。这些回归只构造固定小型
+metadata radix/leaf 图，覆盖 future route reference、空 physical route set、bootstrap branch frame/target alias，以及 lookup
+internal child 类型损坏；同时为 route-branch/header refresh 补充 stale-batch fail-closed 回归。所有测试只构造固定小型
+metadata 图，未加入容量或性能 workload。对 radix level、child 唯一性、size_t frame 累加和 typed ordinal
+边界等由 codec/构造器保证的内部不变量保留防御代码，并用窄范围 `` 说明。完整
+`RelocatableMetadataPageRouteDirectoryTest.*` 定向 suite 以两个 isolated shard 通过；当前源/二进制/profile 对齐的局部
+Region/Function/Line/Branch 为 92.16%/97.14%/95.82%/86.97%。该 profile 仅表示筛选 suite，不可替代全局结果；本批未运行全量
+quick，继续累计低分支模块后再执行下一次全局 gate。
+
+C7 MetadataPageFile routed-codec corruption 批次（2026-09-02，macOS）：新增对无 metadata route root 的 logical radix
+resolution 与未知页面 magic routed relocation 的真实持久化 corruption 回归；前者确保 logical child 不会绕过已发布的 bootstrap
+route，后者确保未知 codec 不会被误当成可 relocation 的 typed metadata 页面。测试仅写入单页固定字节，不包含规模型 workload。
+完整 `RelocatableMetadataPageFileTest.*:RelocatableMetadataPageRouteDirectoryTest.*:RelocatableMetadataStoreTest.RoutedMetadata*`
+定向 suite 以两个 isolated shard 通过；当前源/二进制/profile 对齐的 `MetadataPageFile.cpp` 局部
+Region/Function/Line/Branch 为 96.62%/100.00%/92.78%/86.26%。该 profile 仅表示相关模块集合，不替代全局结果；本批未运行全量 quick。
+
+C7 GraphMutation LargeValue retirement/input-contract 批次（2026-09-02，macOS）：新增
+`RelocatableMetadataStoreTest.RejectsMalformedLargeValueRetirementIdentitiesBeforeTakingTheWriter` 与
+`RelocatableMetadataStoreTest.RequiresANonRetiringContentIndexForEveryNewLargeValue`。前者以固定 1--2 个 ID/page
+验证无效或倒序 LargeValue ID、无效页位置、owner kind/ID/LSN 及未关联 owner 必须在取得 writer 前 fail-closed；后者验证任何
+新 LargeValue 都要求存在且不 retire 的 content-index mutation。两个单例及完整
+`RelocatableMetadataStoreTest.*:NativeGraphPrivateSegmentSetTest.*` 定向 suite 均以两个 isolated shard 通过；该模块的
+`RelocatableMetadataStoreGraphMutation.cpp` 局部 Region/Function/Line/Branch 为
+78.74%/89.29%/83.12%/66.28%（仅表示筛选模块 profile，不是全局 coverage）。本批未运行全量 quick；继续先处理其他低分支模块。
+
+C7 NativeBulkEdgeRunStore release-route integrity 批次（2026-09-02，macOS）：新增
+`NativeBulkEdgeRunStoreTest.ReleaseRejectsAliasedRunsAndMismatchedChildLevels`，使用固定单记录 run 和两层
+manifest，验证 release walk 会拒绝重复/别名 run，以及 root 声明层级与 child 实际层级不一致的持久化路线；错误发生在
+任何 release batch 之前，避免重复回收或越界遍历。该单例及此前 NativeBulkRun 相关定向测试均通过两个 isolated shard，未加入
+规模 workload，也未运行全量 quick。
+
+同批补充 `NativeBulkEdgeRunStoreTest.StreamingWriterLiftsASoleLeafRootBeneathAnExistingParentLevel`：以 27 条固定小记录
+填满一个受限 level-zero manifest，再留下一个低层 root，验证 finish 会先提升该 root 后再封存上层，避免混合层级的 parent
+manifest。该回归通过两个 isolated shard；记录数仍远低于 scale/performance workload，未改变普通 quick 的测试规模策略。
+
+C7 低频全局 coverage checkpoint（2026-09-02，macOS）：在前一批定向覆盖补齐后执行一次
+`ZYX_TEST_SHARDS=8 ./scripts/run_tests.sh --quick`，8 个 shard 全部通过。由本次精确 binary 合并 profile 得到
+Region 95.63%、Function 98.99%、Line 97.01%、Branch 90.34%；前三项达到 C7 的 95% 门槛，Branch 仍差约 4.66 个百分点，
+因此 C7 发布验收继续开放。后续仍按低分支 relocatable 模块分批执行目标 suite + `--file`，达到若干有意义批次后再进行下一次
+低频全量 gate；不重复执行已验证的完整 quick，也不把 scale/performance workload 混入普通单元测试。
+
+C7 NativeBulkRun codec dimension-contract 批次（2026-09-02，macOS）：新增
+`NativeBulkRunFragmentCodecTest.RejectsEachIndependentAggregateDimensionMismatch` 与
+`NativeBulkRunManifestCodecTest` 中对 `entry_count`/`encoded_bytes` 独立为零的回归。测试仅修改固定小型 wire frame 的一个聚合字段，
+验证 dimension 校验不会被 checksum 或其他短路条件掩盖；相关 `NativeBulkRun*` 定向 suite 以两个 isolated shard 通过。
+该定向 profile 的 `NativeBulkRun.cpp` 为 Region/Function/Line/Branch 95.72%/100.00%/94.20%/87.61%；本批未运行全量 quick，
+C7 全局 Branch gate 保持开放。
+
+C7 GlobalAdjacencyMutationMerger 定向复核（2026-09-02，macOS）：运行
+`GlobalAdjacencyMutationMerger*` 相关 suite，确认旧树/增量合并、空 cursor、顺序和重复键边界均已由现有小规模测试覆盖；该文件局部
+Region/Function/Line/Branch 为 98.46%/100.00%/96.74%/96.30%，无需新增规模型用例或修改 production 逻辑。本批未运行全量 quick。
+
+C7 MetadataPagePool unpublished-batch 生命周期批次（2026-09-02，macOS）：新增
+`RelocatableMetadataPagePoolTest.UnpublishedBatchLifecycleHandlesNestingAndMissingContexts`，覆盖未开始 batch 的清理 no-op、同一
+Superblock 的嵌套 begin/end、重复结束以及最大 generation 的算术溢出拒绝。该测试只使用固定单文件和内存 batch 状态，未引入规模型
+workload；`RelocatableMetadataPagePoolTest.*` 定向 suite 通过两个 isolated shard，并生成
+`MetadataPagePool.cpp` 单文件 coverage detail；该定向 profile 的 Region/Function/Line/Branch 为
+91.02%/92.86%/98.90%/84.02%。本批未运行全量 quick，C7 全局 Branch gate 保持开放。
+
+C7 GraphMutation Vector delta COW 身份边界补充（2026-09-02，macOS）：扩展
+`RelocatableMetadataStoreTest.RejectsMalformedVectorDeltaRawPageTransitionsAfterMappingFences`，在既有“全部来源缺失”回归外，分别
+验证 COW-tail Raw page 缺失 expected pool、expected page 或 expected owner LSN 时均 fail-closed。每种形状只包含一条固定 Raw
+page，覆盖 pool/page/LSN 三个独立短路条件；单例定向测试以两个 isolated shard 通过，并只生成
+`RelocatableMetadataStoreGraphMutation.cpp` 单文件 detail。该单例 profile 仅覆盖所测分支，不能替代模块或全局 coverage；本批未运行
+全量 quick。
+
+C7 MetadataPagePool bootstrap-recovery header 边界补充（2026-09-02，macOS）：新增
+`RelocatableMetadataPagePoolTest.RecoveryRejectsBootstrapFlagsWithoutAHeaderReference`，以一个已分配的固定 pool 和带 bootstrap flag
+但缺失 header reference 的 Superblock，验证 recovery 在可达性回收前 fail-closed。该回归不创建大数据集；仅运行该单例加
+`MetadataPagePool.cpp` 定向 coverage detail，随后运行完整 `RelocatableMetadataPagePool*` 定向 suite；两者均以两个 isolated shard
+通过。后者的局部 Region/Function/Line/Branch 为 91.78%/92.86%/91.60%/82.30%，不代表全局 coverage；本批不运行全量 quick，C7
+全局 Branch gate 保持开放。
+
+C7 MetadataPagePool data-slot exclusion 批次（2026-09-02，macOS）：新增
+`RelocatableMetadataPagePoolTest.AllocatePageSkipsAnExcludedDataSlotRange`，通过公开 `allocatePage` 的 data-slot range 参数排除
+当前 metadata pool 所在物理 slot，验证分配器会创建并使用另一个合法 pool，而不会误用被排除的 slot。该回归只创建一个固定 pool
+和一个 page，不引入规模 workload；单例以两个 isolated shard 通过并生成 `MetadataPagePool.cpp` 定向 coverage detail。本批未运行
+全量 quick，C7 全局 Branch gate 保持开放。
+
+C7 backend schema-drop absent-token 补充（2026-09-02，macOS）：在
+`RelocatableStorageBackendTest.DirectExactLookupAndSchemaDropUseTheCanonicalNativeCatalog` 中增加未知 label 的
+`dropLogicalNodeIndexBySchema` 回归，确认 canonical catalog 未找到 token 时直接返回 `false`，不会取得 writer 或产生持久化副作用。
+该用例仅使用现有固定小型数据库；定向单例以两个 isolated shard 通过，并生成 `RelocatableStorageBackend.cpp` 单文件 coverage
+detail。本批未运行全量 quick，C7 全局 Branch gate 保持开放。
+
+C7 SystemCatalog 序列边界补充（2026-09-02，macOS）：新增
+`SystemCatalogTest.RollsOverSchemaTokenSequenceAndRejectsSubsequentExhaustion` 与
+`SystemCatalogTest.RollsOverIndexAndConstraintSequencesAtTheirUpperBounds`，以固定 Catalog 记录验证 Schema Token、Index
+definition、Constraint definition 序列在上界分配后的 rollover/exhausted 标记和后续 fail-closed 行为；未引入规模型 workload。完整
+`SystemCatalogTest.*` 定向 suite 以两个 isolated shard 通过，当前源/二进制/profile 对齐的 `SystemCatalog.cpp` 局部
+Region/Function/Line/Branch 为 95.83%/90.11%/94.33%/86.76%。本批未运行全量 quick，C7 全局 Branch gate 保持开放。
+
+C7 NativeBulkEdgePublicationPreflight 可达分支补充（2026-09-02，macOS）：扩展
+`NativeBulkEdgePublicationPreflightTest.RejectsMissingEndpointsForeignLeasesAndCombinedCandidateOverflow`，分别覆盖零/重复 Edge ID、
+source endpoint 缺失、已配置 sort-run 容量不足等独立公开输入分支；同时保留既有 candidate-fragment、replay divergence 和 lease-shape
+边界。新增输入均为 1--2 条固定记录，未引入规模 workload；完整 `NativeBulkEdgePublicationPreflightTest.*` 定向 suite 以两个 isolated
+shard 通过，并生成单文件 coverage detail。本批未运行全量 quick，C7 全局 Branch gate 保持开放。
+
+C7 RelocatableStorageBackend DETACH 最终状态分支补充（2026-09-02，macOS）：新增
+`RelocatableStorageBackendTest.DetachDeletingAnIsolatedNodeConsumesItsCreatedEdgeBudget`，以一个孤立持久化 Node、一个创建中的
+关联 Edge 和 detach 上限 1 验证最终剩余预算为零时会规范化为普通删除，同时确认创建 Edge 被取消、目标 Node 保留且完整性检查通过。
+测试仅使用固定单 Node/Edge，不引入规模 workload；该单例以两个 isolated shard 通过并生成 `RelocatableStorageBackend.cpp` 单文件
+coverage detail。本批未运行全量 quick，C7 全局 Branch gate 保持开放。
+
+C7 SystemCatalog 配置键解析冗余分支清理（2026-09-02，macOS）：`readBigEndianU32` 已在解析配置名称长度前保证固定
+`nameOffset` 位于 key 范围内，因此移除后续不可达的重复边界谓词，保留名称上限、剩余长度和尾部字节的真实校验。完整
+`SystemCatalogTest.*` 定向 suite 以两个 isolated shard 通过并生成单文件 coverage detail；未引入规模 workload，也未运行全量 quick。
+
+C7 低频全局 coverage checkpoint（2026-09-02，macOS）：在完成 NativeBulkEdgePreflight、Backend DETACH 最终状态、SystemCatalog
+解析分支以及本轮 Entity/adjacency 不变量三个独立批次后执行 `ZYX_TEST_SHARDS=8 ./scripts/run_tests.sh --quick`。8 个 isolated shard
+全部通过；本次精确 binary/profile 的权威汇总为 Region 95.67%、Function 99.01%、Line 97.05%、Branch 90.43%。Branch 仍差约
+4.57 个百分点；C7 Branch gate 继续开放，后续回到低分支模块定向迭代。
+
+C7 relocatable Entity/adjacency 不变量收口批次（2026-09-02，macOS）：在
+`EntityPageStore` 的 LargeValue 重用回归中补齐“排序后首个身份无效、后续身份有效”的公开输入形状，覆盖此前遗漏的
+invalid-previous-identity 分支；在 `NativeBulkEdgeAdjacencyRunBuilder` 中移除由严格递增 Edge ID 与包含 Edge ID 的规范键共同保证
+不可达的重复键检查，并为固定宽度键的 host-size 溢出防御分支补充不变量说明。对应 Entity 单例和 adjacency builder 定向 suite 均以两个
+isolated shard 通过；本批只使用固定小规模输入，未运行全量 quick，C7 全局 Branch gate 保持开放。
+
+C7 relocatable private-run/token-resolver 参数契约补强（2026-09-02，macOS）：新增
+`NativeBulkEdgePrivateRunSetTest.EvaluatesEachSourceAndTerminalContractGuard` 与
+`NativeBulkEdgePrivateTokenResolverTest.EvaluatesEachMaterializationCallbackGuard`，分别独立命中 source/terminal
+reader、maximum-depth 以及 builder/materializer callback 的短路校验分支。测试只传入固定无效回调或边界参数，不构造任何规模型
+run/token workload；两个单例均以精确 GoogleTest 名称通过，并生成对应单文件 coverage detail。
+
+C7 低频全局 coverage checkpoint（2026-09-02，macOS）：在上述 private-run/token-resolver 契约批次完成后执行一次
+`ZYX_TEST_SHARDS=8 ./scripts/run_tests.sh --quick`，8 个 isolated shard 全部通过。本次精确 binary/profile 的权威汇总为
+Region 95.73%、Function 99.01%、Line 97.12%、Branch 90.59%。Region/Function/Line 已达到 95% 门槛，Branch 仍差约
+4.41 个百分点；C7 Branch gate 继续开放。后续仍按低分支 `relocatable` 模块的真实公开路径分批定向补强，完成若干有意义批次后再运行下一次
+全量 quick，不将 scale/performance workload 混入普通单元测试。
+
+C7 局部 coverage 与 scale workload 收口（2026-09-03，macOS）：`NativeBulkEdgeAdjacencyRunBuilder` 新增 paired
+sealed-source 的零、重复、逆序、超限及未租约输入回归；其 10 个精确测试的单文件结果为
+Region 95.28%、Function 100.00%、Line 91.28%、Branch 94.17%。零 Edge ID 已由
+`NativeBulkEdgeRecordCodec::encodedSize` 在构建器之前拒绝，故移除两个不可达的重复构建器谓词，保留零 ID 的拒绝回归。
+`NativeBulkEdgePrivateRunSet` 的 exact/over-fanout hierarchy 用例需要数千私有 segment，现为
+`DISABLED_NativeBulkEdgePrivateRunSetScaleTest`；普通 quick 保留 11 个小型正确性测试，定向运行 3 ms 且全部通过。
+本批只使用精确 GoogleTest filter 加 `--file`，没有运行全量 quick；C7 全局 Branch gate 继续开放。
+
+C7 NativeBulkRun public write-boundary 批次（2026-09-03，macOS）：扩展
+`NativeBulkRunStoreTest.RejectsInvalidScratchWriteInputsWithoutPublishingAnything`，覆盖 `writeBatch` 的零 transaction
+owner、空 batch 和无效 checkpoint，以及 opaque batch 的无效 checkpoint、超过 configured fragment bound 的 opaque payload
+和编码 fragment。所有输入均为 0--2 字节或一个 fragment，保证失败发生在任何 metadata publication 之前。完整 52 个
+`NativeBulkRun*` 精确测试通过（539 ms）；单文件原始 Region/Function/Line/Branch 为
+95.90%/100.00%/94.49%/88.89%。本批未运行全量 quick；C7 全局 Branch gate 保持开放。
+
+C7 SystemCatalog bootstrap-only statistics 兼容性批次（2026-09-03，macOS）：新增
+`SystemCatalogTest.ReturnsAbsentStatisticsForABootstrappedCatalogWithoutStatistics`，以仅有 bootstrap 记录的固定
+Catalog 验证尚未写入统计信息时返回 absent，而不是将其视作损坏。先运行单例，再运行 `SystemCatalog.cpp` 的 59 个跨测试文件
+精确相关用例（712 ms）；局部原始 Region/Function/Line/Branch 为 97.75%/100.00%/97.07%/88.40%。尝试构造零值 token
+时由 B+Tree 写入层拒绝零 leaf value，故未绕过持久化层制造不可能状态来刷覆盖率。本批未运行全量 quick；C7 全局 Branch gate
+保持开放。
+
+C7 NativeBulkRun bounded recovery 批次（2026-09-03，macOS）：新增
+`NativeBulkRunStoreTest.WritableOpenRecoveryContinuesAfterEachBoundedScratchBatch`，以两条固定 scratch fragment 和
+`maximum_batch_fragments = 1` 验证 writable-open recovery 达到单批容量后继续扫描、分批 retire/reclaim，直到所有未发布
+scratch 都被回收。该回归只覆盖正常恢复的资源上界契约，不包含规模 workload。先运行新增单例（15 ms），再运行完整 53 个
+`NativeBulkRun*` 精确测试（585 ms），均通过；当前源/二进制/profile 对齐的单文件结果为
+Region/Function/Line/Branch 95.90%/100.00%/94.49%/89.10%。本批未运行全量 quick；C7 全局 Branch gate 保持开放。
+
+C7 低频全局 coverage checkpoint（2026-09-03，macOS）：在累计完成多个定向批次后，执行一次
+`ZYX_TEST_SHARDS=8 ./scripts/run_tests.sh --quick`。8 个 isolated shard 均通过；该 binary/profile 的权威汇总为
+Region 95.72%、Function 99.01%、Line 97.01%、Branch 90.64%。前三项已达到 95% 门槛；Branch 仍低于门槛，
+因此 C7 保持开放。后续继续以低分支文件的精确 GoogleTest 名称和 `--file` 局部 profile 迭代；在完成若干实质性模块
+批次前不重复运行全量 quick。
+
+C7 LogicalPlanMutationRuntime CREATE 返回包装链修复（2026-09-03，macOS）：修复公开 Cypher 的
+`CREATE ... RETURN ... ORDER BY ... SKIP ... LIMIT` 计划会被误判为不支持 mutation plan 的问题。运行时现在按 planner
+生成的 `LIMIT -> SKIP -> PROJECT -> SORT -> CREATE/SET` 包装顺序解包，并保证分页仅影响返回行，不影响已经原子 staged 的
+全部输入 mutation。新增
+`LogicalPlanMutationRuntimeTest.CreateAppliesReturnOrderingAndPaginationAfterPublishingAllInputRows`，该精确单例在
+15 ms 内通过；本批不运行全量 quick，继续按局部 coverage 工作流推进。
+
+C7 LogicalPlanMutationRuntime DISTINCT 结果语义补充（2026-09-03，macOS）：新增
+`LogicalPlanMutationRuntimeTest.CreateDistinctReturnAppliesAfterPublishingAllInputRows`，以 3 条固定 UNWIND 输入验证
+`CREATE ... RETURN DISTINCT ... ORDER BY ... SKIP ... LIMIT` 先原子发布全部 CREATE，再对返回行进行去重、排序与分页。该精确
+单例在 4 ms 内通过；不引入规模型 workload，也不运行全量 quick。
+
+C7 RelocatableStorageBackend final-state 内部不变量审计（2026-09-03，macOS）：确认每次
+`stageMutationBatch` 均先通过 `foldCreatedEntityFinalState` 将有效 created Node/Edge 的属性及标签替换折叠进对应
+CREATE 请求，并在该步骤拒绝无效引用。因此最终 `canonicalizeFinalState` 不会接收 created-entity 替换；仅对这一重复的私有
+防御路径增加窄范围 `` 理由，未排除任何公开输入、持久化损坏或 I/O 失败分支。相关
+`LogicalTransactionRebasesReturnedCreatedIdsForLaterFinalStateReplacements`、
+`LogicalTransactionDiscardsFinalStateMutationsForEntitiesCancelledBeforePublication` 与
+`LogicalTransactionPublishesFinalStateReplacementsForCreatedNodesAndEdges` 三个精确回归均通过（397 ms）；本批未运行全量 quick。
+
+C7 LogicalPlanMutationRuntime 空结果分页语义补充（2026-09-03，macOS）：新增
+`LogicalPlanMutationRuntimeTest.CreateReturnSkipPastDistinctRowsStillPublishesAllInputRows`，验证 `SKIP` 超过
+去重结果集时返回空结果及 zero pipeline row，但不影响此前原子发布的 3 条 CREATE。该单例与两条 CREATE 返回包装链回归以
+精确 filter 共同通过（4 ms）；不运行全量 quick。
+
+C7 LogicalPlanMutationRuntime LIMIT 0 语义补充（2026-09-03，macOS）：新增
+`LogicalPlanMutationRuntimeTest.CreateReturnLimitZeroStillPublishesAllInputRows`，验证 `CREATE ... RETURN ... LIMIT 0`
+会返回空结果及 zero pipeline row，但仍在结果整形前原子发布所有 3 条 CREATE。该精确单例通过（4 ms），并命中 LIMIT 截断
+分支；不运行全量 quick。
+
+C7 RelocatableMetadataStoreGraphMutation legacy-only 死分支清理（2026-09-03，macOS）：private scratch 的
+legacy 写入循环以 `!private_segment_plan.has_value()` 为循环前置条件，compact plan 由紧随其后的
+`materializeCompactPrivateEntry` 单独按需物化；因此循环体内基于 compact-plan 存在性的指针和三元判断永远不可达。删除这些
+冗余分支，循环直接使用 legacy request。覆盖 legacy 预规划、候选物化及 compact streamed materialization 的 7 个精确
+`RelocatableMetadataStoreTest` 回归全部通过（263 ms）；局部 profile 仅含该 7 个测试，不能替代模块或全局 coverage。本批未运行
+全量 quick，C7 全局 Branch gate 保持开放。
+
+C7 Backend writable-boundary 定向批次（2026-09-03，macOS）：扩展
+`RelocatableStorageBackendTest.ReadOnlyBackendRejectsEveryNonemptyLogicalWriteSurface`，验证 streamed bulk-Edge
+最终提交桥接在只读句柄上会在读取 durable scratch、lease 或 publication plan 前 fail-closed。新增
+`RelocatableStorageBackendSchemaTest.LargeValueReclamationRejectsAnotherPublicationAfterConsumingTheFinalCheckpoint`：
+以一个固定 LargeValue 回收工作将 checkpoint publication 序列推进到 `UINT64_MAX`，再验证下一次回收于 Backend 边界拒绝；该回收路径
+需要恰好 5 个 publication LSN，测试不使用规模 workload。两条精确回归分别在 14 ms 与 55 ms 通过，合并到最近完整 raw profile 后
+`RelocatableStorageBackend.cpp` 的原始 missed branch 从 579 降至 577（Region/Function/Line/Branch 为
+91.50%/99.15%/87.27%/78.06%）。这不是全局 coverage 结果；本批未运行全量 quick，继续按单文件策略处理下一模块。
+
+C7 EntityPageStore 辅助页持久化 owner 边界批次（2026-09-03，macOS）：新增
+`RelocatableEntityPageStoreTest.RejectsAnAuxiliaryPageWhosePersistedOwnerKindWasCorrupted`，以一个 Node 和一个
+Label 辅助页构造已提交页面，将磁盘中可校验的 owner header 改为不匹配的 `POK_ENTITY`，验证公开
+`readAuxiliaryPage` 在暴露内容前以 `FERR_INVALID_STATE` fail-closed。该单例 10 ms 通过；随后仅运行
+`RelocatableEntityPageStoreTest.*` 75 个同模块回归，773 ms 全部通过。合并最近完整 raw profile 后，
+`EntityPageStore.cpp` 的原始 missed branch 从 136 降至 134（Region/Function/Line/Branch 为
+94.12%/100.00%/94.30%/86.16%）。此为单文件增量，未运行全量 quick 或全量 coverage；仍需继续按可达
+公开边界补齐其他低 Branch 文件，累计多个实质批次后再做低频全局 gate。
+
+C7 LocationDirectory append-session 移动所有权批次（2026-09-03，macOS）：扩展
+`RelocatableLocationDirectoryRouteValidationTest.AppendSessionsRejectReuseAfterFinishAndInvalidPayloads`，验证
+`LocationDirectoryAppendSession` 的公开移动赋值会销毁接收端原会话、转移 source 会话，并使两个 moved-from
+会话在任何 append 前 fail-closed。该回归不写入数据页，单例 3 ms 通过；完整 route-validation suite 的 2 条测试
+5 ms 全部通过。合并最近完整 raw profile 后的单文件 Function/Region/Line 为
+99.41%/94.57%/93.74%，未增加 Branch 覆盖；本批不运行全量 quick，后续优先处理可减少 Branch 的公开路径。
+
+C7 streamed Page range 与 Index bundle 收口批次（2026-09-03，macOS）：扩展
+`NativeStreamedGraphPublicationPlanTest`，分别验证只有 Manifest 页、只有缺失 Manifest 的 LargeValue 家族、以及
+`UINT64_MAX` 起始 PageId 的非空范围均在计算前 fail-closed；删除 `NativeStreamedGraphPageRanges::add` 中已被
+`derive`/`at` 前置校验及 `next` 空范围短路保证不可达的重复无效 PageId 检查。完整 17 条定向测试 11 ms 通过，
+`NativeStreamedGraphPageRanges.cpp` 的 Region/Function/Line/Branch 均为 100%。同时，Index bundle 的无 LargeValue
+路径改为传入同一 metadata 域的可选 `LargeValueStore`，验证它被正确接受；移除 adjacency plan 无条件加入后不可能为空的
+重复检查，并仅标注三个内部 planner 固定 Index ID 重复的未来回归防御。6 条 `StreamedIndexBundle*` 定向测试 13 ms 通过，
+原始 Branch 为 95.45%。本批没有运行全量 quick 或全量 coverage。
+
+C7 streamed deferred publication 租约双端边界批次（2026-09-03，macOS）：扩展
+`NativeStreamedGraphDeferredPublicationTest.RejectsADeclaredSpanOutsideItsDurableLease`，在既有“首 ID 低于租约”外，
+验证首 ID 合法但末 ID 超出租约同样在创建边界拒绝。单例 0 ms 通过，完整 13 条
+`NativeStreamedGraphDeferredPublicationTest.*` 回归 1 ms 全部通过；该文件的原始 missed Branch 从 16 降至 14，
+Region/Function/Line/Branch 为 97.60%/100.00%/95.11%/87.72%。剩余计数溢出、空 materializer batch 等均由创建后
+不可变 publication 和受控 materializer callback 排除，未伪造内部状态。本批未运行全量 quick。
+
+C7 BTreeIndex leaf-value layout 参数边界批次（2026-09-03，macOS）：扩展
+`RelocatableBTreeIndexTest.FindsAndScansOneSnapshotPinnedLeaf`，验证公开 `BTreeIndex` 构造器对未知
+`BTreeLeafValueLayout` 直接抛出 `std::invalid_argument`。该用例仍只使用一个已发布 leaf；单例 8 ms 通过，完整
+18 条 `RelocatableBTreeIndexTest.*` 回归 195 ms 全部通过。合并最近完整 raw profile 后，`BTreeIndex.cpp` 的原始
+missed Branch 从 24 降至 23（Branch 87.50% 至 88.02%）；本批未运行全量 quick。
+
+C7 NativeBulkEdgeRunStore 分批回收原子性批次（2026-09-03，macOS）：修复
+`releaseNativeBulkEdgeManifest` 在后续 release batch 的 checkpoint LSN 无法表示时，首批已经 retire 的部分回收问题。现在会在
+任何 allocator 状态改变前预检完整 batch 序列。新增
+`NativeBulkEdgeRunStoreTest.ReleasePreflightsAllBatchesBeforeTerminalCheckpointOverflow`，以 3 条固定 Edge 形成 4 个
+scratch fragments、每批 2 个的最小分批路径，验证 `UINT64_MAX - 1` 的起始 LSN 会在首批前 fail-closed，root manifest 保持
+`SGS_SEALED`；同一测试以单 run root 验证 `UINT64_MAX` 的单批路径也在 lower-level retire 前失败。该单例 36 ms 通过，完整
+21 条 `NativeBulkEdgeRun*` 精确相关测试 712 ms 全部通过；当前源/二进制/profile 对齐的单文件原始
+Region/Function/Line/Branch 为 93.30%/97.14%/88.98%/82.93%。这是单模块局部结果，本批不运行全量 quick。
+
+C7 EntityLabelSetStore source-placement 死分支清理（2026-09-03，macOS）：审计 `planNodeLabels` 的 source-page fallback：若
+`SlottedPage::overwrite` 已因容量不足拒绝，来自同一 immutable metadata snapshot 的 best-fit record 选择不可能再次选择该 source page，
+因为其可用连续空间仍不足新记录。因此删除“erase source 后又向同 source insert”的不可达重复分支，保留独立 target page、append page
+和 new-pool 三条真实公开 fallback。完整
+`RelocatableEntityLabelSetStoreTest.*:RelocatableEntityLabelSetStoreContractTest.*` 定向 suite 的 18 个测试 213 ms 全部通过；
+当前源/二进制/profile 对齐的 `EntityLabelSetStore.cpp` 局部 Region/Function/Line/Branch 为
+95.77%/95.83%/96.55%/87.35%。本批不运行全量 quick。
+
+C7 NativeBulkEdgeRunStore manifest owner 不变量收口（2026-09-03，macOS）：`NativeBulkEdgeRunManifestCodec::decode` 已在
+release walk 读取每个节点前验证 root/child 的 transaction owner 一致性，因此删除 walk 中永远重复的 foreign-owner 判断；仍保留并补测
+checksum 合法的重复 child-manifest 引用，`ReleaseRejectsAliasedRunsAndMismatchedChildLevels` 现在确认它会在任何 batch release 前
+fail-closed，且 root 维持 `SGS_SEALED`。精确单例 26 ms 通过；完整 21 条 `NativeBulkEdgeRun*` 相关测试 755 ms 全部通过。
+当前源/二进制/profile 对齐的 `NativeBulkEdgeRunStore.cpp` 局部 Region/Function/Line/Branch 为
+93.73%/97.14%/89.90%/83.84%。本批不运行全量 quick。
+
+C7 Backend malformed created-edge endpoint 批次（2026-09-03，macOS）：新增
+`RelocatableStorageBackendTest.LogicalTransactionRejectsMalformedCreatedEdgeEndpointAtFinalCanonicalization`，以一个
+错误声明为 `CREATED_NODE` 的 Edge endpoint 验证 public transaction 可以完成 staging，但 commit 的 final-state
+canonicalization 会在任何 graph publication 前以 `std::invalid_argument` fail-closed。回归同时确认 transaction 进入
+`LGTTS_ROLLED_BACK`、数据库没有新 Node、`verifyIntegrity()` 通过。该单例 44 ms 通过；单文件 `llvm-cov` 显示
+`canonicalizeFinalState` 的 created-Node entity-kind guard true branch 命中。此项是可公开构造的错误路径补测，未添加
+coverage exclusion，也未运行全量 quick。
+
+C7 Backend isolated created-node final-state 批次（2026-09-03，macOS）：新增
+`RelocatableStorageBackendTest.LogicalTransactionCancelsAnIsolatedCreatedNodeWithoutRejectingAnUnrelatedCreatedEdge`，
+以固定 3 个新建 Node 和其中 2 个之间的 1 条 Edge 验证删除第 3 个孤立 Node 不会误把不相关 Edge 判为 incident。commit 只发布
+2 个 Node 和该 Edge，孤立 Node 不可读取且 `verifyIntegrity()` 通过。单例 94 ms 通过；单文件 `llvm-cov` 确认
+`canonicalizeFinalState` 的 source/target incident 比较均命中 false 分支。该测试不使用规模 workload，未运行全量 quick。
+
+C7 NativeGraphWritePlanner scalar Index 创建互斥批次（2026-09-03，macOS）：扩展
+`NativeGraphWritePlannerPublicContractsTest.RetiresAPublishedScalarIndexThroughTheGraphTransaction`，验证一个已 staged
+first-publication scalar Index 同时拒绝 `UPSERT`、`ERASE` 和 whole-tree `DROP`。新增 `ERASE` 断言命中
+`stageScalarIndexErase` 的 first-publication 冲突分支，且创建仍可提交、后续 published Index 仍可正常 retire。该单例 12 ms
+通过；目标分支的 true/false 均命中。该回归只使用两个固定 B+Tree entries，未引入规模 workload，也未运行全量 quick。
+
+C7 Backend persisted-target DETACH 分支批次（2026-09-03，macOS）：新增
+`RelocatableStorageBackendTest.DetachDeletingAPersistedTargetCancelsLaterCreatedIncidentEdges`，覆盖现有 source 端回归
+对称的 target 端：一个创建的 source Node 指向持久化 target Node，随后对 target 执行 bounded `DETACH DELETE`。commit 会
+删除 target 和其 durable incident Edges、取消暂存 Edge，同时保留创建 source Node 并通过 `verifyIntegrity()`。两个精确的
+source/target 回归合计 469 ms 通过；单文件 profile 确认 canonicalization 中 persisted-target detach 的短路分支真实命中。
+测试只含一个创建 Node 和一条 Edge，未引入规模 workload，也未运行全量 quick。
+
+C7 NativeGraphWritePlanner Vector bootstrap 身份边界批次（2026-09-03，macOS）：扩展
+`NativeGraphWritePlannerVectorTest.RejectsMalformedBootstrapContractsWithoutPublishingAnyVectorDirectoryState`，在既有
+错误 BF16 宽度输入外增加 `node_id = 0` 的 fixed 单记录。该公开 schema/input 错误会在任何 Node lookup、Index planning
+或 metadata publication 前 fail-closed；单例 6 ms 通过，`stageVectorIndexBootstrap` 的 Node-ID 与 BF16-width 两个短路
+分支均命中。未使用批量数据，也未运行全量 quick。
+
+C7 MetadataStore page-directory-only retirement 不变量收口（2026-09-03，macOS）：
+`retirePagesInExistingPools` 唯一支持 Index、Vector raw、Vector PQ 与 Vector adjacency 四种只需移除 Page Directory
+route 的 pool；Entity、Property、State、Manifest 及 LargeValue pool 都必须走各自同步维护实体/属性/状态/Manifest directory
+的原子 retirement 路径。将原本先接受全部 shared-pool owner、再以第二个谓词拒绝其中六类的重复判断收敛为单一 allowed-pair
+判定，拒绝结果和错误类型保持不变。B+Tree、raw Vector、PQ Vector、adjacency Vector 四个精准 retirement 回归、scalar-index
+reclaimer 及 graph scalar-index drop 回归共 6 条通过（109 ms）；本批未运行全量 quick。
+
+C7 DETACH 有界扫描契约收口（2026-09-03，macOS）：发现 public Backend transaction 曾将
+`maximum_detach_edges = SIZE_MAX` 作为“无界”预扫描处理，但随后 direct executor 会把该值传给需要保留一条 lookahead 的
+global-adjacency scan，导致执行阶段才以算术防御失败。现在 Backend final canonicalization 与
+`NativeGraphMutationExecutor::validateShape` 均一致拒绝零或 `SIZE_MAX` 的 detach bound，保证所有 DETACH scan 都有有限上界。
+新增 `RelocatableStorageBackendTest.RejectsAnUnboundedDetachIncidentEdgeBudgetBeforePublication` 和
+`NativeGraphMutationExecutorValidationTest.RejectsAnUnboundedDetachIncidentEdgeBudgetWithoutPublishingGraphChanges`，分别验证
+transaction 与 direct executor 两个公开边界均在 publication 前拒绝，并保留 generation、Node 与 Edge。再加两个有限 DETACH
+成功回归，共 4 个精确测试在 601 ms 通过；单文件 `llvm-cov` 确认 Backend 与 executor 的 `SIZE_MAX` 拒绝 true branch 均命中。
+本批不运行全量 quick，继续按低覆盖模块的定向验证节奏推进。
+
+C7 streamed Edge lease 重复防御清理（2026-09-03，macOS）：`publishStreamedEdgeGraph` 在进入私有
+`validateStreamedEdgeLeaseRanges` 前，已经在公开 request gate 拒绝 `first_edge_id = 0` 与 `last_edge_id < first_edge_id`；该 helper
+在当前编译单元只有这一调用点。因此移除 helper 中永远不可达的重复谓词，保留 Node/Edge lease family、空 range、range 形状、顺序及
+source-bound ownership 的全部独立校验。`RelocatableMetadataStoreTest.PublishesStreamedEdgeGraphRootsInOneGenerationWithoutLargeValues`
+覆盖公开 request gate 与 malformed lease contract，并在 127 ms 通过；局部 profile 仅用于确认该定向测试能够执行目标入口，不能替代模块或
+全局 coverage。本批不运行全量 quick。
+
+C7 GraphMutation LargeValue retirement content-root 边界（2026-09-03，macOS）：新增
+`RelocatableMetadataStoreTest.RequiresAPinnedContentIndexForLargeValueRetirementBeforeTakingTheWriter`。一个固定的
+LargeValue data-page retirement 与 Manifest ID 即使携带非 retiring content-index mutation，也必须提供其 expected root；否则在
+writer、graph materializer 和 retirement materializer 之前以 `FERR_INVALID_HEADER` 拒绝，metadata generation 保持不变。该回归与
+新建 LargeValue content-index 以及 malformed retirement identity 的两个既有精确回归共 3 条在 6 ms 通过；单文件 profile 确认
+`hasLargeValueRetirements && !expected_root` 的 true branch 命中。与此同时，private scratch 同构检查在逐项验证已强制所有 request
+为 `SGK_BULK_SCRATCH` 后不可能再出现 kind mismatch，故移除这一重复谓词，继续保留可达的 owner、header 和 extension 比较。相关 5 条
+精确契约回归在 10 ms 通过；本批不运行全量 quick。
+
+C7 EntityPageStore 读取契约收口（2026-09-03，macOS）：修正
+`RelocatableEntityPageStoreTest.ReadsDecodedLocationsAndBoundsEntityScans` 的 Edge invalid-location 形状：此前“无效 Page ID”断言
+实际同时给出了有效 Page ID 与零 slot generation，只会重复命中后一谓词；现在使用 `PageId{}`，而零 generation 仍由独立断言验证。单例
+profile 确认 `readEdgeAt` 的 Entity ID、Page ID、slot generation 三个公开 header guard 都有 true/false 命中。另经 `EntityPage` 的
+generation-aware lookup 实现确认，不可用 slot 会在 `findNode/findEdge(slot, generation)` 内直接 fail-closed，正常返回必含 record；删除
+EntityPageStore 的五个不可能到达的 optional-null 二次检查，保留底层异常及目录、页、generation 验证。3 条读取/扫描精确回归在 18 ms
+通过；本批不运行全量 quick。
+
+C7 MetadataPagePool snapshot-protection allocation 边界（2026-09-03，macOS）：扩展
+`RelocatableMetadataPagePoolTest.AllocatableFreePagesExcludesReserveAndSnapshotProtectedPools`，在保护唯一普通 pool 后实际申请一页，
+验证 allocator 跳过该 protected pool 和 emergency reserve，转而使用不同的普通 pool。新增
+`ReservedFramesCannotCreateAPoolAfterTheirOnlyPoolBecomesProtected`：已 reserve 的唯一 pool 随后被 snapshot protection 排除时，分配必须
+拒绝而不能绕过 reservation 新建 pool。两条精确回归 3 ms 通过；单文件 `llvm-cov` 确认 snapshot-protected exclusion 和
+reservation-active/no-new-pool 两个 true branch 均命中。本批不运行全量 quick。
+
+C7 NativeGraphWritePlanner adopted Edge-ID 唯一性边界（2026-09-03，macOS）：扩展
+`NativeGraphWritePlannerPublicContractsTest.EnforcesExactAdoptedLogicalIdReservations`，在已有保留 ID 成功创建 Edge 后，以相同
+Edge ID 再次创建，确认公开事务在任何第二份 adjacency mutation 前以 `FormatException` 拒绝。精确单例在 4 ms 通过；对应局部
+profile 确认 `createEdgeWithReservedId` 的 duplicate-Edge-ID 分支 true/false 均已命中。该 profile 只含此单例，不能作为模块
+coverage；本批未运行全量 quick，后续继续处理高分支缺口模块。
+
+C7 streamed Edge 输出 slot 完整性边界（2026-09-03，macOS）：扩展
+`RelocatableMetadataStoreTest.PublishesStreamedEdgeGraphRootsInOneGenerationWithoutLargeValues`，分别传入缺失的 Entity
+末端 slot、Property 末端 slot 和 private candidate 末端 slot。三个固定小请求都在 durable lease 或任意 page materialization 前以
+`FERR_INVALID_HEADER` 拒绝；精确单例在 141 ms 通过，局部 profile 确认对应三个 request-gate 短路分支的 true/false 均已命中。
+此前仅运行 `RelocatableMetadataStoreTest.*` 的 395 条模块回归，耗时 25.9 s 且全部通过；这是模块级 coverage，不是全量 quick。
+
+C7 streamed Edge 单一 metadata-domain 边界（2026-09-03，macOS）：同一 streamed Edge 请求门测试增加 foreign
+`SystemCatalog`、foreign adjacency `BTreePageStore` 和 foreign `LargeValueStore`。三个外部对象均来自独立 metadata 文件，调用在
+任何 durable source 打开、lease claim 或 page materialization 前以 `FERR_INVALID_HEADER` 拒绝；精确单例在 120 ms 通过，局部
+profile 确认三个 metadata-domain 判定分支的 true/false 均已命中。本批未运行全量 quick。
+
+C7 EntityPageStore Property-root metadata-domain 边界（2026-09-03，macOS）：新增
+`RelocatableEntityPageStoreTest.NativeGraphBatchRejectsForeignPropertyRootsBeforePublication`，以独立 metadata 文件创建
+`PropertyCollectionRootStore`，逐一调用三个公开 `applyNativeGraphBatchTransaction` 入口。三者均在任何 Entity/Property
+publication 前以 `FERR_INVALID_HEADER` 拒绝，原 snapshot 内没有 Node 映射。精确单例在 6 ms 通过；目标文件的局部 profile 确认
+三个入口各自的 metadata-domain guard true branch 均命中。本批未运行模块或全量 quick。
+
+C7 EntityPageStore LargeValue content-store 依赖边界（2026-09-03，macOS）：新增
+`RelocatableEntityPageStoreTest.NativeGraphBatchRejectsLargeValuePlansWithoutAContentStoreBeforePublication`。以同一 metadata
+文件中带 content store 的 Property root planner 生成一个固定大值 plan，再交给未配置 `LargeValueStore` 的公开批处理入口；调用在
+任何 Entity 或 Property publication 前以 `FERR_INVALID_STATE` 拒绝，Node 和 Property directory 均不变。精确单例在 4 ms 通过；
+目标文件局部 profile 确认 `largeValues == nullptr` 的真实防御分支命中。本批未运行模块或全量 quick。
+
+C7 NativeBulkEdgeRunStore 递归私有 manifest 回收边界（2026-09-03，macOS）：扩展
+`NativeBulkEdgeRunStoreTest.StreamingWriterBuildsAndReleasesBoundedHierarchicalPrivateManifest`。固定 30 条有序 Edge
+仅用于构造两层 manifest（不是性能规模 workload）；验证根 manifest 完成递归释放后其 scratch pool 为 `SGS_OBSOLETE`。精确单例在
+219 ms 通过；目标文件局部 profile 确认 release traversal 同时经过 manifest child 与 leaf run 分支，并完成多批 checkpoint
+release。未运行模块或全量 quick。
+
+C7 覆盖率目标重新排序（2026-09-03，macOS）：旧全局 profile 未包含当前已存在的 streamed-index bundle 精确回归，曾将
+`NativeStreamedGraphPublicationIndexPlanner.cpp` 显示为 11.90% Line / 0% Branch。仅运行
+`RelocatableMetadataStoreTest.StreamedIndexBundle*` 的 6 条回归（33 ms）并渲染该单文件后，当前局部结果为
+Region 96.30%、Function 100%、Line 92.86%、Branch 95.45%；其 metadata-domain、snapshot、checkpoint、catalog 和
+LargeValue 公开分支均已执行。因此不重复新增测试，优先级转交仍有真实缺口的模块；本次未运行模块全量或全量 quick。
+
+C7 EntityLabelSetStore 当前模块复核与无效状态清理（2026-09-03，macOS）：仅运行
+`RelocatableEntityLabelSetStoreTest.*:RelocatableEntityLabelSetStoreContractTest.*` 的 18 条回归，耗时 196 ms。当前
+`EntityLabelSetStore.cpp` 为 Region 95.72%、Function 95.83%、Line 96.54%、Branch 87.80%；旧 profile 的 53.61% Branch
+不再可信。审计确认 `sourceSlotRemoved` 只有 `false` 初始化、无任何写入，其否定条件恒真，故移除该无效状态，保留原有 source-page
+retirement 条件与行为。18 条模块回归全部通过；剩余未命中路径主要是可控持久化损坏防御与内部不变量，未伪造私有状态以换取覆盖率。
+未运行全量 quick。
+
+C7 NativeGraphMutationExecutor 正常写入路径批次（2026-09-03，macOS）：新增
+`PublishesReservedCreatedNodesAndEdgeThroughTheLogicalBatchExecutor`，通过公开 `reserveLogicalIds(2, 1)` 取得真实 lease，
+再以固定两个 Node、一条 Edge、Label 与单属性验证 `creation_identity_plan` 的 adoption、保留 ID 发布及读回结果。新增
+`ReplacesPersistedNodeLabelsAndPropertiesAndPersistedEdgeProperties`，验证已持久化 Node 的 label/property 完整替换与 Edge property
+完整替换；新增 `DeletesAnExplicitEdgeBeforeDeletingItsNowIsolatedNode`，验证显式删除关系后，非 DETACH Node 删除只删除已隔离的 Node。
+三条精确回归分别在 17 ms、25 ms、28 ms 通过；随后仅运行 16 条
+`NativeGraphMutationExecutorValidationTest.*` 模块回归，173 ms 全部通过。与源码/二进制对齐的单文件 profile 为
+Region 80.82%、Function 73.33%、Line 79.42%、Branch 72.14%，相对本批前 73.97%/63.33%/68.69%/64.43% 有实质提升。
+所有请求均为固定 2 Node + 1 Edge 的功能正确性用例，不是规模 workload；本批未运行全量 quick 或全量 coverage。
+
+C7 NativeGraphMutationExecutor Catalog 与空租约结算批次（2026-09-03，macOS）：新增
+`AllocatesCatalogTokensAndGraphCardinalityInTheSameLogicalGraphPublication`，以公开 `SystemCatalog` 作为执行器的 canonical token
+source，验证新 Label、relationship type、property token、Node/Edge 及 `{2, 1}` graph cardinality 都在同一 publication 后可读；
+新增 `FinalizesAnUnusedReservedCreationRangeWithoutPublishingAnEntity`，验证一个真实预留而最终无 create 的 range 会被提交结算且不会
+生成 Entity。前者单例 28 ms、后者单例 4 ms 通过；二者组合的精确 profile 确认 catalog session 的 token/cardinality/finish
+路径以及无 staged work 的 creation-range commit 路径均真实命中。未运行模块全量或全量 quick；下一批将转向其他低覆盖模块。
+
+C7 NativeGraphMutationExecutor Vector delta 更新批次（2026-09-03，macOS）：新增
+`UpdatesAnExistingVectorIndexThroughTheLogicalPropertyReplacement`，先以固定一个 Node 的二维 embedding 建立公开 Vector 索引，
+再经 logical property replacement 写入新 embedding；断言实体读回值、Vector manifest 存在、delta mapping 已发布且
+`delta_entry_count == 2`。该用例覆盖 bootstrap 与已发布 mapping 的 manifest-delta 路径，不把 Node ID 误作 Vector ID，亦不使用
+性能规模数据。该精确测试在 38 ms 通过；随后仅运行 19 条 `NativeGraphMutationExecutorValidationTest.*`，223 ms 全部通过。
+当前源码/二进制/profile 对齐的单文件结果为 Region 87.44%、Function 80.00%、Line 86.24%、Branch 78.11%。本批未运行模块以外的
+测试或全量 quick；后续转向其他低覆盖模块再积累覆盖率改进。
+
+C7 NativeBulkEdgeRunStore source gate 冗余收口（2026-09-03，macOS）：`NativeBulkEdgeManifestCursor` 是当前编译单元私有类型，
+仅由 `nativeBulkEdgeRecordSource` 的 closure 创建；该公开 factory 已在创建 closure 前对 root location、manifest depth 和 reader
+完成完全相同的校验，closure 捕获值也不可被外部篡改。因此移除 cursor constructor 中不可达的重复判断，所有公开拒绝语义保留。
+`NativeBulkEdgeRunStoreTest.RejectsInvalidDurablePrivateSourceAndReleaseContracts` 以 3 ms 通过，覆盖 public/durable/private/release
+四条入口的无效 capability 拒绝。本批未运行全量 quick；模块完整定向基线（21 条相关回归）此前为 810 ms，未将此清理误报为全局覆盖结果。
+
+C7 streamed publication-plan 私有前置条件收口（2026-09-03，macOS）：`NativeStreamedGraphPublicationPlan::derive` 的唯一入口先经过
+`NativeBulkEdgePublicationPreflight`，后者已保证非空 record stream 与合法 merge fan-in；`EntityPage::recordCapacity(EPRK_EDGE)` 是非零
+格式常量。故移除 `checkedCeilingDivide`、`deriveReductionShape` 与 `derive` 中三处重复且不可达的零值防御，同时保留 preflight、候选
+数量溢出和最大候选数拒绝。17 条 `NativeStreamedGraphPublicationPlanTest.*` 精确回归在 3 ms 通过，源码/二进制/profile 对齐的单文件
+coverage 为 Region、Function、Line、Branch 均 100%。本批未运行全量 quick 或全量 coverage。
+
+C7 NativeGraphWritePlanner 不可达 adjacency replacement 清理（2026-09-04，macOS）：审计确认
+`global_adjacency_replacement_plan_` 与配对 retirement plan 在整个仓库中从未赋值；它们仅被默认构造、move、reset，并在 commit 中保留一段
+永远不能进入的旧 replacement publication 分支。当前 adjacency 的真实路径分别使用普通 mutation、retirement、initial-tree 和 deferred
+bulk plan，均不依赖这两个状态。因此删除该两项状态、move/reset 代码及不可达 commit 分支，未改变任何可调用 API 或有效计划行为。重建后
+`NativeGraphWritePlannerAdjacencyTest.*:NativeGraphWritePlannerPublicContractsTest.*` 共 50 条回归在 5.79 s 通过。以完整相关 12 个 suite
+生成的局部 profile 显示 `NativeGraphWritePlanner.cpp` 为 Region 89.29%、Function 97.84%、Line 89.94%、Branch 74.24%，较清理前的
+88.09%/97.14%/88.71%/73.15% 提升；本批未运行全量 quick 或全量 coverage。
+
+C7 NativeBulkEdgePrivateRunMaterializer 私有 builder 重复防御收口（2026-09-04，macOS）：
+`materializeInitialFragment` 与 `materializeOneLevel` 已在构造 `LogicalRunManifestBuilder` 前验证非零 manifest depth、非空 fragment 和
+完整 callbacks；`NativeBulkEdgeRunReducer::reduceOneLevel` 只回调非空 fragment，且在返回前关闭最后一个 logical run。固定存储格式常量也
+保证 manifest payload 可容纳至少两个 references。因此删除 builder 内重复的 depth/empty/fan-out/内部 level/empty-flush/final-active-run
+检查，保留真实可由 allocator callback 触发的 fragment/root owner mismatch，以及可由超大受限流触发的 manifest counter overflow 和
+terminal-depth bound。扩展同一 owner-mismatch 回归，分别覆盖 fragment 与 manifest root 两种恶意 allocator 输出；完整
+`NativeBulkEdgePrivateRunMaterializerTest.*` 5 条测试在 1 ms 通过。局部 coverage 由 86.24%/100%/79.07%/76.19% 提升至
+92.94%/100%/91.97%/86.36%（Region/Function/Line/Branch）；未运行模块以外或全量 quick。
+
+C7 NativeGraphMutationExecutor persisted endpoint 批次（2026-09-04，macOS）：新增
+`CreatesAnEdgeFromAPersistedNodeToANewNodeThroughTheLogicalExecutor`，先以公开 transaction 写入一个持久化 Node，再用 logical
+executor 在其与一个固定新建 Node 之间创建 `KNOWS` Edge；回读确认 source 为已有 Node、target 为本批新 Node，relationship type 为
+已解析 Token。该用例覆盖 Edge endpoint resolver 的 persisted-Node 分支，未伪造内部 batch 结果或使用规模数据。完整
+`NativeGraphMutationExecutorValidationTest.*` 20 条定向测试在 221 ms 通过；当前单文件 Region/Function/Line/Branch 为
+87.67%/80.00%/86.49%/78.61%，较此批前的 87.44%/80.00%/86.24%/78.11% 小幅提升。本批未运行全量 quick 或全量 coverage。
+
+C7 ExternalBTreeEntrySorter 私有 run 前置条件收口（2026-09-04，macOS）：`writeEntry` 仅由 `flushPending` 与
+`mergeRuns` 调用，前者已在 public `add` 处验证 entry framing，后者只重放已经完整编码的 private run；`RunReader` 仅从
+非空 `TemporaryRun` 创建；`reduceRuns` 仅在 run count 超过且 `maximum_open_runs >= 2` 时调用 `mergeRuns`，故 group size 必然至少为二。
+删除这三处重复私有前置判断，保留 anonymous temporary-file 创建、读写、flush、短帧和 framing 损坏的真实 I/O fail-closed 防御。四个
+`RelocatableBTreePageStoreTest` sorter 精确回归在 33 ms 通过；`ExternalBTreeEntrySorter.cpp` 的
+Region/Function/Line/Branch 从 90.52%/100%/89.45%/80.00% 提升至 92.73%/100%/92.31%/82.43%。本批未运行全量 quick。
+
+C7 AllocatorDirectory complete-store route publication 批次（2026-09-04，macOS）：新增
+`PublishesAllocatorLogicalChildrenWhenACompleteStoreAddsACatalogEntry`。从 `initializeNewComplete` 创建的 public metadata
+store 出发，先写入一个 Catalog entry 并回读全部 durable identity 字段，再以 `setPhysicalSlotAllocated` 对一个固定非 metadata slot
+执行 allocate/release；每次 publication 后均通过 snapshot 验证 Page Directory bootstrap 与 allocator slot 状态。该测试真实驱动
+`publishBatch` 内 allocator 的 logical-child route preparation，而非调用私有 helper；同时覆盖 physical bit 的 set 与 clear。完整
+`RelocatableAllocatorDirectoryTest.*` 22 条回归在 62 ms 通过，`AllocatorDirectory.cpp` 从
+79.27%/93.02%/84.06%/68.38% 提升至 87.66%/100%/90.66%/76.10%（Region/Function/Line/Branch）。本批未运行全量 quick。
+
+C7 全量 coverage 复核（2026-09-04，macOS）：完成一轮有意安排的 8 shard `--quick` 审计，测试进程退出码为 0。使用该轮独立
+profile 的项目统计为 Region 95.92%、Function 99.04%、Line 97.60%、Branch 90.98%。前三项已达到 95% 目标，Branch 仍未达到
+95%，因此 C7 不能标记完成。后续以 `RelocatableStorageBackend.cpp`（377 个未覆盖 Branch）、
+`RelocatableMetadataStoreGraphMutation.cpp`（292）和 `NativeGraphWritePlanner.cpp`（183）为首要高影响目标；在积累多个模块级
+改进前不重复运行全量 coverage。
+
+C7 NativeBulkEdgePrivateRunSet allocator 原子性批次（2026-09-04，macOS）：审计发现 run-set builder 的 candidate allocator
+可返回无效 identity；旧流程会先调用 private payload writer，再在将 identity 转为 location 时失败。现在在写入前同时验证 identity
+有效性和 immutable owner 一致性，因而失败的 callback 结果不能留下可观察的 private payload。新增
+`RejectsInvalidOrForeignAllocatorIdentitiesBeforeWriting`，以固定单 run 分别覆盖无效 Segment ID 和 foreign owner，并断言 writer
+零调用；不启用既有的 disabled fan-out scale 测试。`NativeBulkEdgePrivateRunSetTest.*` 共 12 条在 3 ms 通过，定向单文件 coverage
+为 Region 93.22%、Function 100%、Line 91.67%、Branch 86.57%（此前全量 profile 为 92.13%/100%/90.10%/85.07%）。本批未运行全量 quick。
+
+C7 NativeBulkEdgePrivateRunSet 两层正常遍历补充（2026-09-04，macOS）：新增
+`TraversesACompleteTwoLevelHierarchyInRunOrder`，用两个固定叶 run 和一个手工编码的父 manifest 验证 child 完成、父计数累加和
+最终 run 顺序；该用例只处理两条记录，不触发 disabled fan-out scale gate。`NativeBulkEdgePrivateRunSetTest.*` 最终为 13 条、3 ms
+全部通过，定向单文件 coverage 更新为 Region 93.79%、Function 100%、Line 92.71%、Branch 87.31%。余下分支主要属于格式常量、超过
+物理 fan-out 的性能/容量 gate、私有构造前置条件和损坏防御；本批没有为覆盖率启用大规模 workload，也没有运行全量 quick。
+
+C7 GraphMutation Vector stale-publication fence 批次（2026-09-04，macOS）：扩展
+`PublishesNativeGraphVectorDeltaWithMappingRootsRawPageAndManifestAtomically`。在真实 bootstrap 和一次成功的 Vector delta
+publication 后，重放同一份已失效的 delta plan；写入端在任何 page、Index 或 Vector materializer 回调之前以
+`FERR_INVALID_STATE` 拒绝，且 durable generation 仍为 3。这覆盖实际的 stale mapping-root/Manifest publication fence，
+不伪造私有输出，也不使用规模数据。该回归连同相邻 raw-page transition 验证共 2 条、50 ms 全部通过；这组精确测试的单文件
+Region/Function/Line/Branch 为 31.13%/25.00%/38.49%/61.07%，仅用于观察本入口，不能代替模块或全量 coverage。本批未运行全量 quick。
+
+C7 GraphMutation Vector bootstrap stale-publication 补充（2026-09-04，macOS）：在同一真实场景中重放已经完成初始
+publication 的 bootstrap plan。由于 logical Vector ID 起点和 Manifest 均已不再当前，写入端在 page、Index、bootstrap
+materializer 之前以 `FERR_INVALID_STATE` 拒绝；generation 保持为 3。精确回归 1 条在 23 ms 通过，不启用任何 scale workload，
+也不运行全量 quick。
+
+C7 NativeBulkRun candidate source 输入契约批次（2026-09-04，macOS）：新增
+`RejectsEachMissingCandidateSourceContractBeforeReadingPayloads`，分别验证缺失 Manifest location、零 depth 与空 payload
+reader 在构造有序 source 前以 `FERR_INVALID_HEADER` 被拒绝。该测试只使用一个无 I/O 的固定 reader，避免错误输入进入 private
+scratch 解码；与既有 manifest hierarchy fail-closed 回归共 2 条在 1 ms 通过。定向单文件 profile 仅覆盖这两个入口，
+Region/Function/Line/Branch 为 26.20%/25.42%/24.68%/62.86%，不是模块或全量 coverage；本批未运行全量 quick。
+
+C7 EntityPageStore 同页多记录扫描批次（2026-09-04，macOS）：新增
+`ScansMultipleRecordsFromOnePageUntilTheDirectoryIsExhausted`。该用例只在各自一个固定 Entity page 中写入两个 Node 和两个 Edge，
+验证 Node 顺序扫描、可恢复扫描与 tracing Edge 扫描均在目录耗尽时返回完整结果，并确认两项 Edge timing metric 各记录两条。它覆盖
+同页缓存复用、完整扫描的 visitor/bound 分支，不使用容量或性能规模数据。该精确回归在 13 ms 通过；完整
+`RelocatableEntityPageStoreTest.*` 78 条在 1.05 s 通过，单文件局部 profile 为 Region 91.94%、Function 97.87%、Line
+93.67%、Branch 83.40%（较本批前 91.84%/97.87%/93.67%/82.88% 提升）。这是模块测试集的局部观测，不替代全量 coverage；本批未运行
+全量 quick。
+
+C7 GraphMutation Vector 不可达删除 fence 批次（2026-09-04，macOS）：扩展既有真实 bootstrap/delta 场景，在已发布的两棵映射树、
+overlay root 和 Manifest 上构造一次完整的无插入 delta/overlay-retirement 计划，但请求删除从未发布的 Vector ID `3`。断言写入侧以
+`FERR_INVALID_STATE` 拒绝，且 page、Index、Vector materializer 均不被调用、durable generation 保持为 `3`。这命中
+`RelocatableMetadataStoreGraphMutation.cpp` 的 logical Vector reachability fence，而非依赖旧 root 或 Manifest 不匹配的早期拒绝；
+精确回归在 27 ms 通过。本批未运行模块以外测试或全量 quick。
+
+C7 NativeGraphWritePlanner 多候选 Entity page 选择批次（2026-09-04，macOS）：新增
+`PrefersTheMostOccupiedCompatibleEntityPageForANewNode`。以两个公开写入的 current Node page 构造剩余槽位不同的候选（前者已有
+两条 Node、后者一条），再通过 planner 写入一个无 Label 的 Node；断言新 Node 落在剩余槽位较少的前者，两个 current pool 均保留且三条
+既有 Node 可读。该用例覆盖真实候选 eligibility 比较和最小剩余容量选择，不填满页面或引入容量 workload。精确测试在 17 ms 通过，
+`NativeGraphWritePlannerTest.*` 46 条在 1.12 s 通过；该 suite 的单文件局部 profile 为
+Region 48.68%、Function 59.71%、Line 58.44%、Branch 66.32%，仅是此 suite 的入口观测，不替代此前 12 个相关 suite 或全量统计。
+本批未运行全量 quick。
+
+C7 全量 coverage 复核（2026-09-04，macOS）：在累计 EntityPageStore 多记录扫描、GraphMutation Vector 不可达删除 fence 与
+WritePlanner 多候选 page 选择后，运行一次新的 `ZYX_TEST_SHARDS=8 ./scripts/run_tests.sh --quick`。8 个分片全部通过（退出码 `0`，
+约 85 秒）；由本轮 8 份原始 profile 合并得到 Region 95.93%、Function 99.04%、Line 97.61%、Branch 90.96%。前三项仍满足 95%，
+Branch 未满足 95%，且相对上轮 90.98% 下降 0.02 个百分点，因此 C7 仍不能完成。新 profile 的最大 Branch 缺口依次为
+`RelocatableStorageBackend.cpp` 377、`LogicalPlanMutationRuntime.cpp` 367、
+`RelocatableMetadataStoreGraphMutation.cpp` 289、`LogicalPlanReadRuntime.cpp` 245、
+`NativeGraphWritePlanner.cpp` 183；下一批按该排序寻找可由小型确定性 fixture 覆盖的真实路径，不重复全量审计直至形成多模块改进。
+
+C7 RelocatableStorageBackend 持久化索引条目一致性批次（2026-09-04，macOS）：新增三个小型 fail-closed 回归，分别以保留
+校验完整 B+Tree 页的方式模拟 scalar exact、scalar range 和 composite range 索引条目的 value 与 key 中 Entity ID 不一致。
+三条公开查找入口均以 `FormatException` 拒绝该不可能由正常图写入产生的持久化损坏；精确 3 条测试在 156 ms 通过，定向 profile
+确认三个一致性分支均命中。随后 `RelocatableStorageBackendSchemaTest.*`、Vector metric 以及直读索引契约组合共 132 条在约 19 s
+通过。本批不运行全量 quick 或全量 coverage。
+
+C7 LogicalPlanMutationRuntime 批处理与 map-merge 边界（2026-09-04，macOS）：新增无外部输入的
+`CALL { ... } IN TRANSACTIONS` 回归，验证零行 MATCH 保留零 pipeline 结果且不会发布空 mutation batch；同时为 CREATE 后
+map-merge 添加非 map 值和空 Property key 两种 direct-plan 拒绝，确认暂存 CREATE 不会泄漏。132 条
+`LogicalPlanMutationRuntimeTest.*` 在 345 ms 通过，目标文件的模块局部统计为 Region 89.07%、Function 100%、Line
+89.59%、Branch 76.80%（此前 88.98%/100%/89.49%/76.70%）。本批不运行全量 quick 或全量 coverage。
+
+C7 GraphMutation 已发布 LargeValue 复用认证（2026-09-04，macOS）：新增两条公开协调器回归。一条以一个
+已发布的固定小型 LargeValue 验证 reuse mutation 会在同一图 publication 中认证并保留其可读性；另一条仅篡改引用的
+logical-byte 元数据，验证在任何 graph 或 derived-state materializer 回调前以 `FERR_INVALID_STATE` 拒绝，且 generation 与
+原值均保持不变。精确 2 条测试在 40 ms 通过；本批仅生成
+`RelocatableMetadataStoreGraphMutation.cpp` 的定向 coverage detail，不运行全量 quick 或全量 coverage。
+
+C7 LogicalPlanReadRuntime Join 行合并与提前停止批次（2026-09-04，macOS）：新增
+`LogicalGraphReadExecutorTest.LogicalPlanRuntimeJoinsCompatibleRowsAndSkipsEmptyOrConflictingInputs`。该固定小型 logical plan
+验证 Join 会合并相同 `shared` 值的左右行、跳过冲突的同名值、在右输入为空时不产生行，并正确遵从 public row visitor 的主动停止请求。
+精确单例通过（1/1）；`LogicalPlanReadRuntime.cpp` 的定向 profile 确认 Join 的空右输入、值冲突、兼容合并以及 visitor-stop 分支均命中。
+本批未运行全量 quick 或全量 coverage；该局部 profile 不替代 C7 全局 Branch gate。
+
+C7 GraphMutation LargeValue reuse 身份排序批次（2026-09-04，macOS）：新增
+`RejectsInvalidOrDuplicateReusedLargeValueIdentitiesBeforeAnyPublication`。通过一个已发布的固定小型 LargeValue，分别传入无效
+identity 与重复 identity，验证 coordinator 在取得 writer、调用 graph/derived materializer 之前以 `FERR_INVALID_HEADER` 拒绝；失败后
+generation 仍为 `2`，原 LargeValue 可完整读回。精确回归 1/1 在 12 ms 通过，随后完整
+`RelocatableMetadataStoreTest.*` 定向套件 398/398 在约 26 秒通过。该 suite 的
+`RelocatableMetadataStoreGraphMutation.cpp` 局部统计为 Region 81.90%、Function 89.29%、Line 84.68%、Branch 70.86%，只用于
+迭代定位，不能替代全局 coverage；本批未运行全量 quick 或全量 coverage。
+
+C7 Backend maintenance 配置类型恢复批次（2026-09-04，macOS）：新增
+`RejectsNonBooleanDurableCompactionConfigurationBeforeStartingMaintenance`。先通过公开 `setConfiguration` 持久化
+`storage.compaction.enabled = 1`，再以 opt-in maintenance 重开；启动在 worker 开始前以 `FormatException` 拒绝错误类型，且 backend
+保持未打开状态。精确回归 1/1 在 19 ms 通过，完整 `RelocatableStorageBackendSchemaTest.*` 定向套件 112/112 在约 14 秒通过。
+该 suite 的 `RelocatableStorageBackend.cpp` 局部统计为 Region 57.92%、Function 62.13%、Line 50.87%、Branch 46.35%，仅用于
+本 schema 子域迭代定位，不能替代全局 coverage；本批未运行全量 quick 或全量 coverage。
+
+C7 LogicalPlanMutationRuntime 无向 MERGE 自环去重批次（2026-09-04，macOS）：新增
+`MergeUndirectedRelationshipSkipsItsSelfLoopBeforeFindingIncomingMatch`。固定两个 Node、一个无关自环和一条入向 `KNOWS`
+关系，验证无向 MERGE 在出向扫描未命中后，会跳过入向视图中重复出现的同一自环，继续找到真正的关系而不新建边。精确回归
+1/1 在 5 ms 通过；随后完整 `LogicalPlanMutationRuntimeTest.*` 133/133 在 360 ms 通过。当前该 suite 对目标文件的局部统计为
+Region 90.79%、Function 100%、Line 98.79%、Branch 81.17%；该局部 profile 仅用于迭代定位，不能代替 C7 的全局 Branch gate，
+本批未运行全量 quick 或全量 coverage。
+
+C7 LogicalPlanReadRuntime 双向模式表达式自环去重批次（2026-09-04，macOS）：新增
+`LogicalPlanRuntimeOmitsTheDuplicateSelfLoopFromBothPatternComprehensions`。以一个 Node、已有两向相邻边和一个自环构造固定
+`PatternComprehensionExpression`，验证 `PAT_BOTH` 的自环会从入向遍历中去重，同时保留其他入向与出向目标的结果顺序。精确回归
+1/1 在 0 ms 通过；随后完整 `LogicalGraphReadExecutorTest.*` 71/71 在 14 ms 通过。当前该 suite 对
+`LogicalPlanReadRuntime.cpp` 的局部统计为 Region 95.64%、Function 99.31%、Line 98.62%、Branch 89.99%；该局部 profile
+只用于迭代定位，不能代替 C7 的全局 Branch gate，本批未运行全量 quick 或全量 coverage。
+
+C7 GraphMutation 派生 Index 校验去遮蔽批次（2026-09-04，macOS）：修正
+`RejectsIncoherentLargeValueAndRetirementIndexInputsBeforePublication` 中的 Index 负例：原先复用的故意不完整 LargeValue
+retirement 会在内容 Index 门禁提前拒绝，导致后续 Index header 分支没有执行。现在这些小型确定性用例只提交派生 Index 请求，实际覆盖
+无效 root generation、重复源/retirement page、越界 appended root、无效新池 owner 与无效 stable root 等公开协调器校验；其中 `{}`
+会清空 optional，因此改为显式 `PageId{}` 以构造无效值。精确回归 1/1 在 3 ms 通过，随后
+`RelocatableMetadataStoreTest.*` 与 `NativeGraphPrivateSegmentSetTest.*` 共 399/399 在约 25.6 s 通过。目标文件的局部统计为
+Region 82.06%、Function 89.29%、Line 84.84%、Branch 71.39%（较该套件上次记录 +0.16/+0/+0.16/+0.53 个百分点）；仅作模块迭代观测，
+不替代全局 coverage，本批未运行全量 quick。
+
+C7 LogicalPlanMutationRuntime 缺失属性 NULL 无副作用批次（2026-09-04，macOS）：扩展
+`NoOpSetAndRemoveDoNotPublishAnEmptyMutationBatch`，以同一固定单 Node 场景验证 `SET n.missing = null` 及
+`SET n += {alsoMissing: null}` 均等价于删除不存在属性：返回实体没有这两个键，持久化图保持不变，且不会发布空 mutation batch。
+这覆盖两个正常 Cypher NULL 删除路径的 no-op 分支，不构造 private plan 或异常持久化状态。精确回归 1/1 在 5 ms 通过，随后
+`LogicalPlanMutationRuntimeTest.*` 140/140 在约 367 ms 通过，并生成目标文件单文件 coverage detail。本批未运行全量 quick 或全量
+coverage；C7 Branch gate 继续开放。
+
+C7 RelocatableMetadataStore 缓存 logical-ID 租约批次（2026-09-04，macOS）：新增
+`ServesFullyCachedLogicalIdLeasesWithoutPublishingAnotherMetadataGeneration`。首次小型节点/边申请以固定最小块大小建立 durable
+high-water 和私有余量，第二次申请完全由该余量满足；断言两个 namespace 的 ID 连续、租约只能认领一次，并且第二次申请后 snapshot
+superblock（包括 generation、node/edge high-water）完全不变。这覆盖 public cache-only lease 路径而不观察或伪造私有状态。精确
+回归 1/1 在 2 ms 通过，随后完整 `RelocatableMetadataStoreValidationTest.*` 42/42 在 211 ms 通过；本批未运行全量 quick 或全量
+coverage。
+
+C7 LogicalPlanReadRuntime 匿名目标关系绑定批次（2026-09-04，macOS）：新增
+`BindsTheRelationshipWhenAPatternComprehensionUsesAnAnonymousTarget`。固定两节点、一条带 `weight` 属性的 `KNOWS` Edge，执行
+`[(n)-[r:KNOWS]->() | r.weight]`；断言关系变量 `r` 在匿名 target 的模式推导中可用、属性值被正确投影，且没有匹配的 source
+返回空 List。这补齐 target variable 不存在时的正常 relationship-binding 分支，未使用伪造 snapshot 或规模数据。精确回归 1/1 在
+4 ms 通过，随后完整 `LogicalPlanPatternExpressionRuntimeTest.*` 23/23 在 28 ms 通过；本批未运行全量 quick 或全量 coverage。
+
+C7 MetadataPagePool emergency-reserve 尾槽复用批次（2026-09-04，macOS）：新增
+`RotatesAnEmergencyReserveIntoAnExistingEmptyTailSlot`。测试仅填满一个固定物理 pool 以触发真实的 disk-full reserve fallback，
+随后提供一个完整但未注册的尾槽，验证 reserve 轮换会复用该尾槽、保留文件长度并发布新的 reserve identity，而不是再次扩展文件。
+这覆盖恢复或未发布批次留下可复用尾槽的正常生命周期，不引入图数据规模 workload 或伪造 allocator 内部状态。精确回归 1/1 在
+4 ms 通过，随后 `RelocatableMetadataPagePoolTest.*` 88/88 在 112 ms 通过；本批未运行全量 quick 或全量 coverage。
+
+C7 LogicalPlanMutationRuntime created relationship 后置属性批次（2026-09-04，macOS）：新增
+`MergePostMutationsSynchronizeCreatedRelationshipProperties`。以一条首次 `MERGE` 的固定 `LINK` 关系执行后置 map merge 和
+`REMOVE`：验证替换属性和新属性都会返回并持久化，临时属性会在同一原子批次内移除。这走过新建 relationship 的 Property 状态同步、
+map 赋值与移除路径，并确认查询结果与后端可见属性完全一致。精确回归 1/1 在 5 ms 通过，随后
+`LogicalPlanMutationRuntimeTest.*` 141/141 在 367 ms 通过；本批未运行全量 quick 或全量 coverage。
+
+C7 LogicalPlanReadRuntime 结构化 DISTINCT key 批次（2026-09-04，macOS）：新增
+`DistinctUsesStructuralKeysForNestedMapAndListValues`。固定三项 `UNWIND` 的嵌套 map/list 值中，前两项只是 map 键书写顺序不同、
+第三项包含不同的嵌套 list；`RETURN DISTINCT` 正确产出两行。这确认 DISTINCT 对 map 进行确定性键排序并递归编码 list，而不是依赖
+有歧义的显示字符串。精确回归 1/1 在 8 ms 通过，随后 `LogicalPlanUnwindRuntimeTest.*` 9/9 在 16 ms 通过；本批未运行全量 quick
+或全量 coverage。
+
+C7 GraphMutation 流式租约重复防线收口（2026-09-04，macOS）：审计确认
+`NativeBulkEdgeMaterializer` 会在图可见页物化前，逐条验证同一认证租约中的 Edge ID；最终 Entity 页和 Property owner 回调上的两次
+相同租约判断因此没有可达的失败 outcome，但仍保留 fail-closed 防线。为避免把已证明不可达的重复防御计入 Branch gate，两个 guard
+标注 ``。`RelocatableMetadataStoreTest.PublishesStreamedEdgeGraphRootsInOneGenerationWithoutLargeValues`
+以 127 ms 通过，覆盖正常发布与中间未租约 Edge 的早期拒绝；本批未运行全量 quick 或全量 coverage。
+
+C7 LogicalPlanMutationRuntime 分批调用实体外层投影批次（2026-09-04，macOS）：新增
+`InTransactionsCallPreservesNodeOuterRows`。以两个固定 Seed Node 执行 `CALL { ... } IN TRANSACTIONS OF 1 ROWS`，外层直接返回
+`seed`；验证两条 Node 结果保留各自的 durable ID，且子查询独立发布两次。该回归覆盖批处理调用在预发布外层投影中将 Node 绑定物化为
+`LogicalNodeResult` 的正常路径，并与既有 relationship 外层投影构成 Node/Edge 对称覆盖。精确回归 1/1 在 7 ms 通过；本批未运行
+全量 quick 或全量 coverage。
+
+C7 LogicalPlanMutationRuntime 分批导出投影批次（2026-09-04，macOS）：新增
+`InTransactionsCallExportsCreatedValuesToItsOuterProjection`。以两个固定 Seed Node 执行带 `RETURN child.copied AS copied` 的
+`CALL { ... } IN TRANSACTIONS OF 1 ROWS`，并由外层直接返回该导出值；断言两批各自返回正确标量、创建两个 child 且产生两次独立
+publication。该回归覆盖 write-only 分批子查询的有效导出投影与外层结果汇合，不使用规模输入或伪造内部计划状态。精确回归 1/1 在
+9 ms 通过，随后 `LogicalPlanMutationRuntimeTest.*` 143/143 在 369 ms 通过并生成该文件的局部 coverage detail；本批未运行全量
+quick 或全量 coverage。
+
+C7 LogicalPlanReadRuntime Node 缓存上限批次（2026-09-04，macOS）：新增
+`LogicalPlanRuntimeHonorsTheConfiguredNodeReadCacheCapacity`。以既有固定两目标图将公开
+`maximum_node_records` 设为 `1`，验证第一个 target 会缓存、第二个 target 在缓存达到该公开上限后仍能正确读取和投影；不需要 4,096
+节点或任何规模 workload。精确回归 1/1 通过；随后 ReadRuntime 相关 5 个 suite 的 143/143 在 84 ms 通过，局部 profile 确认
+`readNodeCached` 的容量判断同时命中 true=32 和 false=1。本批未运行全量 quick 或全量 coverage；该局部统计不替代 C7 全局 Branch gate。
+
+C7 LogicalPlanMutationRuntime 重复创建标签批次（2026-09-04，macOS）：新增
+`CreateSetRetainsAnAlreadyDeclaredLabelWithoutDuplicatingIt`。执行固定单行
+`CREATE (node:Stable {value: 7}) SET node:Stable RETURN node`，确认创建时已声明的 label 在同一原子最终状态中保持单份，
+返回值与持久化 Node 的 labels 一致。本用例覆盖正常的幂等标签赋值，不使用规模数据或私有状态；精确回归 1/1 在 3 ms 通过，随后
+`LogicalPlanMutationRuntimeTest` 的 144/144 在 353 ms 通过，目标标签去重判断的 true/false outcome 均已命中。本批未运行全量 quick
+或全量 coverage。
+
+C7 LogicalPlanReadRuntime 预绑定 EXISTS 目标对称批次（2026-09-04，macOS）：扩展
+`DoesNotRebindPreexistingPatternTargets`，在既有预绑定 Robot 不匹配回归外，新增预绑定 `Friend` 正确匹配
+`(n)-[:KNOWS]->(m)` 的断言。该固定三 Node、一 Edge fixture 验证 EXISTS 仅接受已绑定的实际相邻 target，既不重绑不匹配 target，
+也不错误拒绝匹配 target。精确回归 1/1 在 6 ms 通过；随后 ReadRuntime 相关五个 suite 的 143/143 在 61 ms 通过。
+目标文件局部统计为 Region 86.92%、Function 93.10%、Line 91.57%、Branch 87.09%（Branch 较本批前 +0.09 个百分点）；
+这只是定向迭代观测，不替代 C7 全局 Branch gate，本批未运行全量 quick 或全量 coverage。
+
+C7 EntityPageStore 多 LargeValue 复用身份批次（2026-09-04，macOS）：扩展
+`ReusesOneSnapshotVerifiedLargeValueAcrossSeveralPropertyRoots`。先原子写入两个固定且不同的大值，再在同一后续批次中由两个
+新 Node Property root 分别复用 `LargeValueId(1)` 和 `LargeValueId(2)`；回读确认两个 root、两个 manifest 和连续 high-water
+均保持正确。这补齐复用引用去重后“相邻身份合法且不同”的正常有序路径，不构造损坏状态或规模 workload。精确回归 1/1 在 30 ms
+通过，随后 `RelocatableEntityPageStoreTest.*` 78/78 在 800 ms 通过；`EntityPageStore.cpp` 的定向局部统计为
+Region 92.19%、Function 97.87%、Line 97.01%、Branch 86.82%（Branch 较本批前 +0.11 个百分点）。本批未运行全量 quick 或全量
+coverage；该局部结果不替代 C7 全局 Branch gate。
+
+C7 RelocatableStorageBackend 事务析构回滚批次（2026-09-04，macOS）：新增
+`DestroyingAnActiveLogicalWriteTransactionRollsBackItsStagedWork`。以一个固定的暂存 Node 让公开写事务自然离开作用域，验证析构会
+回滚且 Node 不会出现在后续读快照中；随后正常创建另一 Node 并执行 integrity 检查，确认该回滚不会阻塞后续 publication。该测试覆盖
+事务的实际 RAII 生命周期，而非伪造内部状态或引入规模 workload。精确回归 1/1 在 36 ms 通过，目标析构分支 profile 为 true=1；随后
+5 条 Backend lifecycle/public-guard 回归在 180 ms 通过。本批未运行全量 quick 或全量 coverage。
+
+C7 GraphMutation 多 LargeValue 复用排序批次（2026-09-04，macOS）：扩展
+`PublishesGraphWorkThatReusesAnAuthenticatedLargeValue`，在一次公开 coordinator publication 中按升序复用两个不同、已认证的固定
+LargeValue，并回读两值确认 immutable identity 和 generation 均保持正确。它与既有伪造 identity、无效/重复 identity 拒绝用例组成正常
+连续 identity 与 fail-closed 边界的互补验证；三条精确回归在 82 ms 通过。定向 profile 确认 reused-large-value identity gate 的
+`!isValid || id <= previous` 两个条件均同时命中接受和拒绝 outcome（第 425 行分别为 true=1/false=5 与 true=1/false=4）。本批未运行
+模块外测试、全量 quick 或全量 coverage；该单次局部 profile 只证明这组分支贡献，不替代 C7 全局 Branch gate。
+
+C7 NativeGraphWritePlanner Edge property-only 对称批次（2026-09-04，macOS）：新增
+`PublishesPropertyOnlyChangesWithoutRewritingTheEdgePage`。固定创建两个 Node 和一条 Edge，随后在独立 transaction 只替换 Edge 的
+Property root；断言 Edge 固定页 location 未变化，且新 Property root 可读。这与既有 Node property-only 回归构成对称的公开存储契约，
+覆盖未暂存 Edge 时验证快照记录、但不 COW 固定 Entity 页的正常路径；精确单例在 19 ms 通过，Node/Edge 两条小批回归在 25 ms 通过。
+本批未运行全量 quick 或全量 coverage。
+
+C7 LogicalPlanMutationRuntime 持久 Node 仅标签替换批次（2026-09-04，macOS）：新增
+`SetLabelOnlyPublishesThePersistedNodeLabelReplacement`。以一个固定 `Seed` Node 执行
+`MATCH (node:Seed) SET node:Published RETURN node`，断言返回和持久化 Node 都保留原 ID 与 Property、同时包含原有和新增 label，
+并且恰好发布一个 mutation batch。这补齐了属性替换为空、标签替换非空时的正常发布路径；完整
+`LogicalPlanMutationRuntimeTest.*` 145/145 在 367 ms 通过，目标分支第 3691 行的两个短路条件分别观察到
+`true=3/false=34` 与 `true=2/false=1`。本批未运行全量 quick 或全量 coverage。
+
+C7 GraphMutation Vector delta mapping 退休批次（2026-09-04，macOS）：扩展
+`PublishesNativeGraphVectorDeltaWithMappingRootsRawPageAndManifestAtomically`。在已发布的单条 delta Vector 上，使用真实
+`BTreeTreeRetirementPlan` 退休 delta mapping 根，同时以当前 root 的小型 COW mapping 计划更新正反向索引，并替换 Manifest 清除
+delta mapping identity；断言 Vector location 和 delta Index root 均不再可见，Manifest 的 delta mapping ID 与 entry count 都归零，
+且 metadata generation 从 `3` 变为 `4`。这与同一测试中的“不可达 Vector ID 必须在回调前拒绝”形成真实正常/拒绝对称；完整
+`RelocatableMetadataStoreValidationTest.*` 42/42 在 222 ms 通过，定向 profile 确认 root-retirement 分支第 3489 行同时命中
+`true=1` 和 `false=49`。本批未运行全量 quick 或全量 coverage。
+
+C7 全量 coverage 复核（2026-09-04，macOS）：在累计有序双 LargeValue 复用、Edge property-only 对称、持久 Node
+仅标签替换与 Vector delta mapping 退休后，运行一次新的 `ZYX_TEST_SHARDS=8 ./scripts/run_tests.sh --quick`。8 个分片全部通过
+（退出码 `0`，约 88 秒）；合并 profile 的调整后项目统计为 Region 95.98%、Function 99.04%、Line 97.62%、Branch 91.05%。前三项
+持续满足 95% 目标，Branch 比上一轮 90.96% 上升 0.09 个百分点、仍未满足 95%，故 C7 继续开放。新 profile 的原始 Branch 缺口优先级为
+`RelocatableStorageBackend.cpp`（558）、`LogicalPlanMutationRuntime.cpp`（414）、
+`RelocatableMetadataStoreGraphMutation.cpp`（399）、`NativeGraphWritePlanner.cpp`（383）、
+`LogicalPlanReadRuntime.cpp`（273）；后续仍只从可由公开小型确定性场景到达的正常语义分支中选择，不以损坏输入或规模 workload 填充指标。
+
+C7 公开写入路径对称覆盖补充（2026-09-04，macOS）：新增
+`AppliesSparseCreatedNodePropertyReplacementWithoutAResolvedNodeBatch`，以一个无初始 Property 的固定创建 Node 和同批
+Property replacement 验证 logical batch executor 的 created-Node override 正常路径；该测试与已有 created-Edge 回归互补，读回解析后的
+`age` Property。另新增 `DeleteCreatedTargetNodeWithIncidentRelationshipFailsBeforePublication`，与既有删除 created relationship source
+Node 的用例构成端点对称性：删除 created relationship 的 target Node 时也必须在 publication 前失败，且不留下 Node、Edge 或 mutation batch。
+两个精确筛选分别为 1/1（12 ms）和 2/2（3 ms）通过；随后 `LogicalPlanMutationRuntimeTest.*`、
+`NativeGraphWritePlannerTest.*` 及其 public-contract/options suites 共 222/222 在约 1.6 秒通过。该定向 profile 仅验证受影响路径，
+不替代全量 coverage；本批未运行全量 quick，可信全局 Branch 基线仍为 91.05%。
+
+C7 LogicalPlanReadRuntime 公开表达式与 UNION 语义批次（2026-09-04，macOS）：新增
+`EvaluatesParserProducedStringComparisonOperatorsThroughCypher`，以固定 Cypher 验证 `STARTS WITH`、`ENDS WITH`、`CONTAINS` 和
+合法 `=~` 正则均经由 parser 产生二元运算符并返回正确结果；并新增 `AppliesDistinctAndAllUnionSemanticsThroughCypher`，以固定四行
+`UNWIND` 输入分别验证 `UNION` 去重和 `UNION ALL` 保留重复行。两条精确筛选共 2/2 在 4 ms 通过，并生成
+`LogicalPlanReadRuntime.cpp` 的定向 coverage detail。本批仍不运行全量 quick；这些只是模块级积累不替代全局 Branch 验证，
+可信全局基线仍为 91.05%。
+
+C7 NativeBulkRun 单片段容量边界批次（2026-09-04，macOS）：扩展
+`RejectsInvalidScratchWriteInputsWithoutPublishingAnything`，在已有批量 fragment 容量上限回归外，验证公开单片段
+`write()` 在编码后的 fragment 超过 store 的配置上限时同样拒绝，且不占用首个物理槽位。该用例覆盖单片段与批量写入的真实一致性
+契约，不构造私有状态或规模数据。精确筛选 1/1 在 4 ms 通过，并生成 `NativeBulkRun.cpp` 的局部 coverage detail；随后已恢复可信
+全量 profile，故全局 Branch 基线仍为 91.05%，本批未运行全量 quick。
+
+C7 Backend mixed Index maintenance-reopen 批次（2026-09-04，macOS）：新增
+`ReopensMaintenanceWithMixedScalarAndVectorIndexes`。固定创建一个 scalar Index 与一个 Vector Index 后，以启用 maintenance 的
+公开配置重开数据库；验证重开成功、maintenance 正在运行且两个定义均被保留。这补齐启动时遍历持久化 Index 定义、跳过 scalar 并登记
+Vector 的正常分支，不构造损坏持久化状态或规模 workload。精确回归 1/1 在 58 ms 通过，完整
+`RelocatableStorageBackendSchemaTest.*` 113/113 在 13.6 s 通过；定向 profile 确认 `definition.kind == IDK_VECTOR` 的 true/false
+结果均命中。本批未运行全量 quick，可信全局 Branch 基线仍为 91.05%。
+
+C7 LargeValue 流式压缩 codec 批次（2026-09-04，macOS）：新增
+`LargeValueStreamedMaterializationPreservesTheSelectedCompressionCodec`。对一个固定 1 KiB 高压缩率 payload，经公开
+`materializeStreamedValue` 发出 LZ4 data 与 Manifest frame；解码二者并验证 immutable reference、Manifest chunk 与 data frame
+的 stored 大小一致表明 LZ4 codec 被实际保留。该测试只验证单个小 value 的正常协议编码，不构造 private callback 结果、损坏页或规模
+数据。精确回归 1/1 在 3 ms 通过；待随属性模块回归后恢复可信全量 profile。本批未运行全量 quick。
+
+C7 LogicalPlanReadRuntime 关系计数优化路径批次（2026-09-04，macOS）：新增
+`CountsRelationshipsThroughDirectAndAnchoredReadPlans`。固定三个 `Person` Node、两条普通 `KNOWS` Edge 与一条自环，分别执行全图
+`count(relationship)` 和以 `Ada` 为锚点的双向 `count(target)`；两者均返回 `3`，证明关系拓扑计数与锚定计数保持公开 Cypher 语义，且
+自环不会被双向扫描重复计数。精确回归 1/1 在 5 ms 通过，定向 profile 确认两个关系计数快速路径均执行；随后
+`LogicalPlanMutationRuntimeTest.*` 147/147 在 362 ms 通过。本批未运行全量 quick，可信全局 Branch 基线仍为 91.05%。
+
+C7 RelocatableMetadataStore 混合 logical-ID 租约批次（2026-09-04，macOS）：新增
+`CombinesCachedAndFreshLogicalIdRangesWithoutReorderingNamespaces`。先以最小固定 block 建立 Node/Edge 缓存，消费其中一部分后发起
+同时需要缓存尾段与新 durable 范围的请求；验证 Node 范围按 `4`、`5` 的来源顺序返回，Edge 独立从 `5` 开始，两个 namespace 的
+high-water 都恰好推进到 `9`。这验证正常租约缓存补发的顺序和命名空间独立性，而非伪造内部状态。精确回归 1/1 在 3 ms 通过，随后
+`RelocatableMetadataStoreValidationTest.*` 43/43 在 259 ms 通过。本批未运行全量 quick，可信全局 Branch 基线仍为 91.05%。
+
+C7 NativeBulkEdgeRunStore 分层根合并批次（2026-09-04，macOS）：新增
+`StreamingWriterMergesAnOrphanedLowerManifestIntoTheFinalRoot`。以 160-byte scratch fragment 的公开配置将 manifest fan-out
+固定为 `4`，仅写入 17 条无属性 Edge，构成一个已封装的高层根和一个待收口的低层 manifest。该回归发现并修复了 `finish()`
+直接提升低层 manifest 时违反 child-level 约束的问题：现在先封装一层再合并，读回 17 条 Edge 并递归释放根均成功。精确回归
+1/1 在 227 ms 通过，随后 `NativeBulkEdgeRunStoreTest.*` 14/14 在 973 ms 通过；定向 profile 确认低层 root 合并分支真实命中。
+本批未运行全量 quick，且已恢复可信全量 profile，Branch 基线仍为 91.05%。
+
+C7 RelocatableMetadataStore State 目录遍历批次（2026-09-04，macOS）：扩展
+`ValidatesStatePoolMaterializationBeforePublication`。在公开 `materializeStatePagePool` 成功发布一个 State 后，先验证普通
+`visitStateLocations` 返回该已发布位置；再用 `visitStateLocationsAfter` 从起始游标进行一次提前停止，并断言返回未耗尽、State
+身份和两页（root + leaf）元数据访问计数；最后从该 State ID 继续，断言没有额外条目且遍历耗尽。测试还验证同一公开 snapshot
+能列出该 State pool、精确查找与提前停止遍历该 page，并分别查询命中和未命中 Segment 的 page 位置。该用例覆盖可恢复 State
+遍历以及 State pool/page directory 正常读路径，不伪造 callback、损坏数据或规模 workload。精确回归 1/1 在 7 ms 通过，随后
+`RelocatableMetadataStoreValidationTest.*` 43/43 在 229 ms 通过。本批未运行全量 quick 或全量 coverage，且已恢复可信全量
+profile，Branch 基线仍为 91.05%。
+
+C7 CatalogTree 多层 root 后续追加批次（2026-09-04，macOS）：扩展
+`PreservesExistingSparseSubtreeAcrossMultiLevelStreamedRootGrowth`。既有测试将一个小 Catalog 增长为含远端 Segment 的多层 root；
+现在在该已发布 root 上再流式追加相邻 Segment，验证 append 会沿既有 sparse radix subtree 读取父节点，并同时保留原始低 ID、远端
+ID 和新增 ID。该用例覆盖第一次 root 增长之后的正常持续写入，不伪造 internal node 或构造规模 workload。精确回归 1/1 在 16 ms
+通过，随后 `RelocatableCatalogTreeTest.*` 28/28 在 39 ms 通过。本批未运行全量 quick 或全量 coverage，且已恢复可信全量 profile，
+Branch 基线仍为 91.05%。
+
+C7 BTreeIndex sibling 路由与多层续扫批次（2026-09-04，macOS）：扩展
+`TraversesInternalSeparatorsAndLeafSiblingLinks`。在固定两叶 B+Tree 的公开 range scan 中，既验证完整扫描会按序穿过 sibling，
+也验证第一个叶已处理、即将按 internal parent 路由验证 sibling 时取消；后者恰好经过五个 bounded checkpoint，确认取消不仅在首叶和
+条目循环中生效，也在跨 sibling 的受路由验证阶段保持响应。另将
+`DescendsMultipleInternalLevelsWithinSeparatorRanges` 扩展为固定三级、四叶树，验证完整 scan 从左子树末叶跨越 root 后经右侧
+internal 子树下沉，仍按 `a`、`g`、`m`、`z` 的顺序返回。这些均为公开的正常读取路径，不伪造 B+Tree 页面或引入规模数据。三级树精确
+回归 1/1 在 21 ms 通过。另扩展 `StreamsBoundedOrderedSourcesFromIndependentCursors`，验证省略
+`cursorBatchEntries` 时采用默认有界批次；并新增
+`ProducesAnImmediatelyExhaustedOrderedSourceForAnEmptyPublishedTree`，验证合法空 root 的有序源稳定耗尽。三项精确回归均通过，
+更新后的 `RelocatableBTreeIndexTest.*` 19/19 在 192 ms 通过。本批未运行全量 quick 或全量 coverage，且
+已恢复可信全量 profile，Branch 基线仍为 91.05%。
+
+C7 LargeValue 多层 Manifest 回收边界复核（2026-09-04，macOS）：核验
+`LargeValueReclaimerUsesIndependentRouteAndManifestNodeBoundsForMultiLevelValues`。该回归使用刚超过单个
+Manifest node 容量的固定 33-chunk value，验证回收会遍历三张 Manifest page，分别强制执行 Manifest-node 与 Page Directory
+route 的独立有界扫描，并在任一 Manifest-node 预算不足时 publication 前拒绝；预算足够时精确回收该 value 的 Manifest/data pages。
+这是一项固定结构边界而非批量吞吐 workload，不伪造损坏数据。精确回归 1/1 在 696 ms 通过，并生成
+`LargeValueReachabilityReclaimer.cpp` 局部 coverage detail；本批未运行全量 quick 或全量 coverage，可信全量 Branch 基线仍为
+91.05%。
+
+C7 LargeValue 空 generation journal 完成批次（2026-09-04，macOS）：新增
+`LargeValueMaintenanceJournalCompletesWithoutCandidatesForAnEmptyGeneration`。在没有任何 LargeValue Manifest 的合法新建
+generation 上推进维护 journal，验证枚举会穷尽、保持枚举 phase、扫描零 route、没有 candidate 或 reachable identity，并以
+`completed_without_candidates` 正常完成；它不会进入 owner 扫描或发布任何 metadata。这覆盖空库维护的公开正常语义，而不是以伪造
+route 或故障注入触发防御分支。精确回归 1/1 在 3 ms 通过，随后
+`RelocatableMetadataStoreTest.LargeValue*` 99/99 在 18.5 s 通过；本批未运行全量 quick 或全量 coverage，可信全局 Branch
+基线仍为 91.05%。
+
+C7 LogicalPlanMutationRuntime 变量冲突批次（2026-09-06，macOS）：新增
+`RejectsMergeVariableConflictsBeforePublication`。该回归仅使用公开 typed logical-plan API，分别构造同一 relationship
+变量重新绑定到另一 MERGE relationship、relationship 变量与上游标量输出同名、以及 Node MERGE 变量已绑定为 relationship
+的三种无效输入；三者均在写入前抛出 `logic_error`，并确认没有 Node、Edge 或 mutation batch 被发布。精确回归 1/1 通过，随后
+`LogicalPlanMutationRuntimeTest.*` 151/151 在 359 ms 通过；目标文件的定向局部 profile 从 1604/1996 提升至
+1616/1996 Branch outcome。该局部增量不替代全量 C7 验收，可信全局 Branch 基线仍为 91.05%。本轮 profile、报告和历史测试
+临时目录均在分析后清理。
+
+C7 LogicalPlanMutationRuntime 混合结果重建批次（2026-09-06，macOS）：新增
+`MergeRebuildsMixedCreatedAndScalarReturnExpressionsAfterPublication`。以两个固定 `UNWIND` 标量行执行 `MERGE`，并返回
+同批创建 Node 的 `item.value` 与上游标量的组合表达式。该回归确认预发布阶段可解析标量、最终结果则在提交后以持久化 Node
+重建，因而不会泄露 provisional entity 或复用不适用的预发布缓存；两个返回值分别为 `2` 和 `4`，且恰好发布一个 mutation
+batch。精确回归 1/1 在 4 ms 通过，随后 `LogicalPlanMutationRuntimeTest.*` 152/152 在 356 ms 通过；目标文件局部 Branch
+统计从 1616/1996（80.96%）提升到 1618/1996（81.06%）。本批未运行全量 quick，可信全局 Branch 基线仍为 91.05%，所有
+单文件 profile 临时目录均在读取后删除。
+
+C7 RelocatableStorageBackend PQ 子空间持久化批次（2026-09-06，macOS）：新增
+`PersistsPqSubspaceSelectionForDivisibleAndPrimeDimensions`。以两条固定的 `Embedding` Node 同时训练 16 维与 17 维
+Vector Index；从已发布的 immutable Codebook Manifest 回读并确认 16 维使用 `2` 个 PQ 子空间、17 维使用 `1` 个，随后 reopen
+后两者均复用既有 generation。该测试验证公开训练策略的持久化结果，而非检查私有 callback 或构造异常存储状态。精确回归 1/1
+在 239 ms 通过，`RelocatableStorageBackendSchemaTest.*` 115/115 在 13.8 s 通过；该 suite 对目标文件的局部统计为 Region
+58.26%、Function 62.13%、Line 51.18%、Branch 46.88%，仅用于迭代定位，不替代全局 C7 coverage gate。未运行全量 quick，可信
+全局 Branch 基线仍为 91.05%；本轮 profile 临时目录均在读取后删除。
+
+C7 LogicalPlanMutationRuntime 无向 typed CREATE 方向契约批次（2026-09-06，macOS）：新增
+`TypedCreateEdgePreservesEndpointOrderForUndirectedDirection`。以两个公开 typed logical-plan Node 输入构造合法
+`LogicalCreateEdge(..., "both")`，验证无向创建沿调用者给定的 source/target 顺序发布，而不会套用 incoming 方向的交换规则，并且
+恰好提交一个 mutation batch。精确回归 1/1 通过，随后 `LogicalPlanMutationRuntimeTest.*` 154/154 在 340 ms 通过。本批未运行
+全量 quick 或全量 coverage；全局指标仍以最近一次完整 8 分片验收为准，Branch gate 继续开放。
+
+C7 LogicalPlanReadRuntime 自定义 CSV 分隔符批次（2026-09-06，macOS）：新增
+`ReadsHeadersThroughTheConfiguredTabFieldTerminator`。在唯一的临时导入根中创建两行 TSV，并通过公开 Cypher
+`LOAD CSV WITH HEADERS ... FIELDTERMINATOR '\t'` 读取，验证合法自定义分隔符、header 映射与排序结果。这是正常导入契约，
+不使用规模数据或越过 import root。精确回归 1/1 通过，随后 `LogicalPlanLoadCsvRuntimeTest.*` 9/9 在 14 ms 通过。本批未运行
+全量 quick 或全量 coverage；全局 Branch gate 继续开放。
+
+C7 ExpressionBuilder 动态嵌套 List literal 批次（2026-09-07，macOS）：新增
+`BuildsDynamicListLiteralsWithoutCollapsingNestedStaticLists`。通过真实 Cypher `RETURN [n.score, [1, 2]]`
+构建表达式树，验证含行绑定 property 的外层 List 保持动态元素形式，而内部纯 literal List 仍保持紧凑静态
+`PropertyValue`。这避免 parser 错误地将依赖当前行的值预先折叠，同时保留嵌套常量的正常表示。精确回归 1/1 通过；随后
+`ExpressionBuilder*` 局部套件通过，目标文件第 731 行动态 List 判断观测为 `true=6`、`false=108`，局部 Branch outcome 为
+491/624。本批未运行全量 quick 或全量 coverage，可信全局 Branch 基线仍以最近一次完整 8 分片验收为准；临时 profile、报告和
+日志已在分析后清理。
+
+C7 LogicalPlanReadRuntime 变长 NamedPath 重建批次（2026-09-07，macOS）：新增
+`MaterializesNamedPathsFromVariableLengthTraversalRoutes`。以固定三 Node、两条 `KNOWS` Edge 的公开 typed logical plan，先执行
+`source` 到 `target` 的精确两跳变长遍历，再将其交给只声明两个 Node 变量的 `LogicalNamedPath`。回读路径严格为五个交替元素：
+Node `1`、Edge `10`、Node `2`、Edge `11`、Node `3`。这验证运行时可从变长遍历保留的路径缓存重建 NamedPath，而不是伪造
+缓存或异常状态。精确回归 1/1 通过；随后合并 8 个 Read Runtime 相关快速套件共 170/170 通过，目标文件的局部 Branch outcome
+从 2138/2488（85.93%）提升到 2151/2488（86.45%）。该局部统计不替代完整 C7 验收，本批未运行全量 quick；profile、JSON 报告
+和 raw profile 均在分析后清理。
+
+C7 全量 coverage 复核（2026-09-07，macOS）：在 Vector 生命周期、Mutation Runtime 与 Read Runtime 的定向批次后，运行一次新的
+`ZYX_TEST_SHARDS=8 ./scripts/run_tests.sh --quick`。8 个 isolated shard 全部通过（退出码 `0`）；当前精确项目统计为 Region
+`96.42%`、Function `99.22%`、Line `98.12%`、Branch `91.87%`。前三项持续满足 95% 门槛；Branch 距 95% 仍差 3.13 个百分点
+（40,930 个 outcome 中缺 3,329 个），因此 C7 coverage gate 继续开放。下一批按缺口和公开正常行为优先审计
+`RelocatableStorageBackend.cpp`（84.15%，355 个缺口）、`LogicalPlanMutationRuntime.cpp`（82.67%，339）、
+`RelocatableMetadataStoreGraphMutation.cpp`（86.68%，267）、`LogicalPlanReadRuntime.cpp`（90.55%，230）、
+`NativeGraphWritePlanner.cpp`（85.04%，164）、`RelocatableMetadataStore.cpp`（87.31%，136）与
+`ExpressionBuilder.cpp`（81.80%，111）；不以伪造内部状态、bulk workload 或非正常路径测试填充指标。验收 raw profile 已由测试脚本
+自动清理，报告日志、状态文件和结果 JSON 在记录该结果后删除。
+
+C7 ExpressionBuilder 动态 Map literal 批次（2026-09-07，macOS）：新增
+`BuildsDynamicMapLiteralsWithoutCollapsingNestedStaticLists`。通过真实 Cypher
+`RETURN {score: n.score, constant: [1, 2]}` 构建表达式树，验证行绑定的 `score` 使 map literal 保留
+`MapProjectionExpression` 形式，而嵌套常量 List 仍保留静态表示；这避免在解析阶段预计算依赖当前行的 Map。
+精确筛选 1/1 在 3 ms 通过，随后 `ExpressionBuilderParsingTest.*` 105/105 在 31 ms 通过；目标文件的局部
+Branch outcome 从 406/624（65.06%）提升到 408/624（65.38%）。该定向增量不替代全局 C7 验收，可信全局
+Branch 基线仍为 91.87%；本轮 raw profile 与合并 profile 均在记录后清理。
+
+C7 ExpressionBuilder 动态 `IN` List literal 批次（2026-09-07，macOS）：扩展既有
+`InWithDynamicRhsVariable`，不增加测试数量。通过真实 Cypher
+`MATCH (n) WHERE n.x IN [n.y, 2] RETURN n` 验证右侧 List 因依赖当前行而保留动态
+`ListLiteralExpression`，`InExpression::hasDynamicList()` 为真；同时常量元素仍按 literal
+形式构建，避免错误地把动态 RHS 折叠为静态 `PropertyValue` List。精确筛选 1/1 通过，随后
+`ExpressionBuilderParsingTest.*` 105/105 在约 32 ms 通过；目标文件局部 Branch outcome 从
+408/624（65.38%）提升到 410/624（65.71%）。该定向增量不替代全局 C7 验收，可信全局
+Branch 基线仍为 91.87%；本轮 raw profile 与合并 profile 均在记录后清理，未运行新的全量 quick。
+
+C7 NativeGraphWritePlanner 共享 Index pool 双重 fresh-rebuild 批次（2026-09-07，macOS）：新增独立
+`NativeGraphWritePlannerSharedPoolFallbackTest` 的
+`PublishesThreeScalarIndexesWhenTheirSharedPoolNeedsTwoFreshRebuilds`。以固定三棵小型 Scalar Index tree
+共享同一受限 pool，并保留每个已提交 generation 的公开读快照，验证旧 COW frame 不能被回收时，三次正常 upsert
+会让规划器将其中两棵 tree 重建至 fresh pool、恰有一棵保留在原 pool；三棵树的读取结果均正确。这是固定 COW
+容量边界，不是吞吐或 bulk workload。精确筛选 1/1 在 220 ms 通过，随后全部 Planner suites 150/150 在约
+9.9 s 通过；定向 profile 确认容量规划跳过已选候选的两个分支分别为 `true=33/false=3` 与
+`true=1/false=5`，目标文件局部 Branch outcome 从 1115/1514（73.65%）提升至 1118/1514（73.84%）。
+该定向增量不替代全局 C7 验收，可信全局 Branch 基线仍为 91.87%；本轮 raw profile、profdata 与报告均在读取后清理，
+未运行新的全量 quick。
+
+C7 LogicalPlanReadRuntime CASE 与量词三值语义批次（2026-09-07，macOS）：扩展既有
+`EvaluatesSimpleAndSearchedCaseExpressionsThroughCypher`，以真实 Cypher 覆盖 simple CASE 跳过 NULL `WHEN` 后的
+`ELSE`，以及 searched CASE 的首分支命中、无匹配 `ELSE` 与无 `ELSE` 的 NULL 结果；并扩展
+`EvaluatesQuantifierExpressionsThroughCypher`，以固定小 List 验证 `all`、`any`、`none`、`single` 的短路 false、
+多命中及含 NULL 的不确定结果。精确筛选 2/2 通过，随后正确的 7 个 Read Runtime 相关 suite 共 169/169 通过；
+`LogicalPlanReadRuntime.cpp` 的局部 Branch outcome 从 2153/2488（86.54%）提升到 2158/2488（86.74%）。这些都是
+公开且确定性的查询语义，不使用规模 workload 或伪造内部状态；本批未运行新的全量 quick，可信全局 Branch 基线仍为
+91.87%，raw profile、报告和临时日志均已在分析后清理。
+
+C7 LogicalPlanReadRuntime 动态 Map literal 批次（2026-09-07，macOS）：新增
+`MaterializesDynamicMapLiteralsForEachInputRowThroughCypher`。它以固定两行 `UNWIND [1, null]` 执行
+`{value: value, doubled: value * 2, fixed: [1, 2]}`，验证行绑定值和派生表达式按行 materialize、NULL 通过算术传播，
+同时嵌套静态 List 在每行保持正确值。这覆盖运行时动态 Map literal，而非仅验证 parser 的表达式形状；精确筛选 1/1 通过。
+随后正确的 7 个 Read Runtime 相关 suite 共 170/170 通过；目标文件局部 Branch 仍为 2158/2488（86.74%），说明该正常路径
+已被既有测试间接命中，故本条只作为防回归语义测试而不计作新的 coverage outcome。未运行全量 quick；默认测试清理已经删除
+本次 profile 与日志，可信全局 Branch 基线仍为 91.87%。
+
+C7 LogicalPlanReadRuntime DISTINCT 标量编码批次（2026-09-07，macOS）：新增
+`DistinctPreservesEveryPublicScalarParameterValueCategory`，以公开参数 List 传递 NULL、两个 Boolean、整数零的正负
+Double 表示、非零 Double、String、Date、DateTime、Duration 与 Bytes，再执行 `UNWIND ... RETURN DISTINCT`。它验证
+DISTINCT 对每种公开 `PropertyValue` 类别的结构编码，以及 `-0.0` 与 `+0.0` 必须折叠为同一值；这是固定 11 项的语义
+契约而非规模 workload。精确筛选 1/1 通过，随后正确的 7 个 Read Runtime 相关 suite 共 171/171 通过；
+`LogicalPlanReadRuntime.cpp` 的局部 Branch outcome 从 2158/2488（86.74%）提升至 2159/2488（86.78%）。本批未运行
+全量 quick，raw profile、结果文件与日志均已在分析后清理，可信全局 Branch 基线仍为 91.87%。
+
+C7 ExternalBTreeEntrySorter 跨 run 稳定性批次（2026-09-07，macOS）：新增
+`PreservesDuplicateKeyOrderAcrossReducedAnonymousRuns`。以五个相同 key、不同 payload 的固定输入和两路 fan-in
+配置，强制 sorter 生成多个匿名 run 并反复 reduction；最终 cursor 必须按输入 payload 顺序输出，且重新打开 cursor
+得到相同结果。这验证相同 key 以 run ordinal 稳定归并的公开排序契约，不使用大数据或模拟临时文件 I/O 故障。精确
+筛选 1/1 通过，随后该文件全部五项相关回归 5/5 通过；`ExternalBTreeEntrySorter.cpp` 的局部统计为 Region 92.73%、
+Function 100%、Line 92.31%、Branch 82.43%。该结果仅用于定位，不能替代 C7 全局验收；未运行全量 quick，profile、
+结果文件与日志均已在分析后清理，可信全局 Branch 基线仍为 91.87%。
+
+C7 coverage 真实性复核（2026-09-07，macOS）：移除本工作区此前新增的 314 处源码
+coverage-exclusion 标记，并移除路线图 10 处新增记录中的同类标记文本，不再以新增 exclusion 缩小 coverage 分母；同时恢复四条曾被
+exclusion 注释意外遮蔽的原有可执行语句。随后执行
+`ZYX_TEST_SHARDS=8 ./scripts/run_tests.sh --quick`，八个 shard 全部通过（退出码 `0`）。真实项目统计为 Region
+`95.95%`、Function `99.22%`、Line `96.18%`、Branch `90.70%`（42,334 个 branch outcome 中 3,938 个未覆盖）。前三项仍满足
+95% 门槛；Branch 距门槛尚差 1,822 个 outcome，因此 C7 coverage gate 继续开放，C7 和整个迁移不得标记为完成。验收使用的
+raw profile、merged profile、结果 JSON、临时日志和状态文件均已在读取后删除。后续只补充能由公开 API 触发的固定规模功能契约；
+不再新增 coverage exclusion、伪造内部 callback/损坏页，或以规模 workload 填充 Branch 指标。
+
+C7 LogicalPlanReadRuntime String scalar overload 批次（2026-09-07，macOS）：扩展既有三条小规模 Cypher
+表达式回归，验证二参数 `substring('graph', 1)` 返回到字符串末尾，`reverse('stressed')`、`size('graph')` 和
+`length('graph')` 分别使用 String 语义；原有 List/Path 语义继续保留。这覆盖了 runtime 对 `substring` 可选长度
+参数及 String/List overload 的公开类型分派，不构造内部 expression 或异常状态。三条精确筛选全部通过；定向 profile
+确认 `substring` 的第三参数验证分支两侧均被执行。该局部增量不替代全局 C7 验收，可信全局 Branch 基线仍为
+`90.70%`；本轮 raw profile、merged profile 和报告已在读取后删除，未运行新的全量 quick。
+
+C7 RelocatableStorageBackend schema-drop 分派批次（2026-09-07，macOS）：扩展 canonical catalog 的既有直接 API
+回归，固定创建 `User.embedding` 的 Vector Index 后调用 Scalar-only `dropLogicalNodeIndexBySchema`。该调用必须返回
+`false` 并保持 Vector 定义可列出，随后仅 `dropLogicalIndexByName` 可以删除它；普通 `User.email` Scalar Index
+仍可经 schema shortcut 删除。这验证同一 label namespace 内的 DDL kind 分派和持久化定义完整性。精确筛选 1/1
+在约 0.75 秒通过，单文件 profile 已读取后删除。该局部增量不替代全局 C7 验收，可信全局 Branch 基线仍为
+`90.70%`；未运行新的全量 quick。
+
+C7 RelocatableMetadataStore logical-ID lease 批次（2026-09-07，macOS）：扩展现有 metadata facade 回归，验证空 work、
+零 lease block 和无界 lease block 都在 publication 前被拒绝且不改变 Superblock；固定大小的 Node/Edge lease 余量可在
+完全由缓存满足时返回不重叠的 reservation 而不重新发布 metadata；read-only store 拒绝 direct lease、cached lease
+与 external-publication refresh，durable generation、LSN 和两个逻辑 ID high-water mark 保持不变。这些均经公开
+metadata API 的正常输入触发，不构造损坏页或私有 callback。精确筛选 5/5 在 11 ms 通过，定向 profile 已确认
+参数验证、read-only refresh 和 fully-cached early-return 分支；profile、profdata 和 coverage 报告已在读取后删除。
+该局部增量不替代全局 C7 验收，可信全局 Branch 基线仍为 `90.70%`；未运行新的全量 quick。
+
+C7 LogicalPlanReadRuntime 算术极值批次（2026-09-07，macOS）：扩展已有整数算术溢出回归，以公开参数化 Cypher
+验证 `INT64_MIN % -1`、`-INT64_MIN` 和 `DOUBLE_MAX ^ 2` 都在返回值前抛出 overflow，而不是发生未定义行为或返回非有限值。
+这些是单行表达式的运行时数值契约，不涉及 bulk workload 或伪造执行状态。精确筛选 1/1 在 4 ms 通过，单文件 profile
+已确认 integer-modulo、unary-negation 和 floating-result finite 检查路径；profile、profdata 和 coverage 报告已在读取后
+删除。该局部增量不替代全局 C7 验收，可信全局 Branch 基线仍为 `90.70%`；未运行新的全量 quick。
+
+C7 RelocatableMetadataStore compaction-observation 生命周期批次（2026-09-07，macOS）：新增独立的
+`CompactionObservationTracksPublicCatalogLifecycleStates`。通过正常的 reserve → retire → release Catalog API 序列，
+验证公开 observation 在每个 durable generation 中准确区分 sealed、retired、obsolete segment，并保持 relocation-source
+计数为零；测试不直接写入 Catalog 或 Retire Queue。精确筛选 1/1 在 5 ms 通过，单文件 profile 已确认三类 Catalog
+状态统计和 retire-queue traversal 路径；profile、profdata 和 coverage 报告已在读取后删除。该局部增量不替代全局 C7
+验收，可信全局 Branch 基线仍为 `90.70%`；未运行新的全量 quick。
+
+C7 RelocatableMetadataStore relocation-source observation 批次（2026-09-07，macOS）：新增
+`CompactionObservationTracksRelocatedSourceUntilSnapshotRelease`。测试先通过公开 reserve API 建立 sealed Catalog segment，
+写入一份固定大小且带有效 envelope/CRC 的实际 segment，再由公开 `relocateCatalogSegment` 的 preparer 完整复制字节、更新目标
+generation/LSN envelope 并执行 durability fence；随后核对目标字节。保留真实旧 snapshot 时，公开 observation 报告一个
+pending relocation source 和一个 retained generation，且释放旧源必须被拒绝；释放 snapshot 后 source release 成功且两项指标均归零。
+精确筛选 1/1 在 11 ms 通过，单文件 profile 确认 `RQD_RELOCATED_SOURCE` 计数分支实际命中。profile、profdata 和 coverage
+报告已在读取后删除。该局部增量不替代全局 C7 验收，可信全局 Branch 基线仍为 `90.70%`；未运行新的全量 quick。
+
+C7 System Catalog 配置枚举与标量持久化批次（2026-09-07，macOS）：扩展
+`PublishesAndReopensDurableConfigurationWithoutMixingRuntimeStatistics`。固定四项配置覆盖 Boolean、Integer、Double 和
+String 的公开配置值；枚举按 key 排序返回完整集合，重开后逐项读取保持同值。测试还验证 zero、无界和小于已发布记录数的
+枚举上限均被拒绝，避免 API 静默返回部分持久化配置。精确筛选 1/1 在 52 ms 通过；`SystemCatalog.cpp` 定向 profile
+确认四个允许标量分支以及三种枚举上限分支均命中。profile、profdata 和 coverage 报告已在读取后删除；本批未运行全量
+quick，可信全局 Branch 基线仍为 `90.70%`。
+
+C7 真实全量 coverage 重校验（2026-09-07，macOS）：恢复 coverage 脚本只排除显式标记所在语句的统计口径后，执行
+`ZYX_TEST_SHARDS=8 ./scripts/run_tests.sh --quick`。8 个 isolated shard 全部通过，脚本以 `Done` 结束；真实项目统计为
+Region `95.94%`、Function `99.22%`、Line `96.18%`、Branch `90.66%`（42,366 个 branch outcome 中 3,956 个未覆盖）。
+前三项满足 95% 门槛；Branch 仍需额外覆盖 1,838 个 outcome 才能达标，因此 C7 coverage gate 和整个迁移仍不得标记完成。
+验收输出记录后，raw profile、merged profile、coverage 目录、分片结果和临时日志均已删除。后续仅针对可由公开 API 触发的
+固定规模功能契约补充测试，不新增 coverage exclusion、不伪造内部 callback 或损坏存储，也不以 bulk/scale workload 填充指标。
+
+C7 RelocatableStorageBackend 可中止遍历契约批次（2026-09-07，macOS）：扩展
+`DirectBackendReadPagesRetainThePinnedLogicalSnapshot`。在已固定的两条 Edge 图上，除原有 Node early-stop 外，分别通过
+`visitEdgesUntil` 和 `visitAdjacentEdgesUntil` 验证公开 callback 首次返回 `false` 后立即停止，且仅交付一条真实已发布的 Edge；
+这确认后端不会把可中止遍历退化为完整扫描。精确筛选 1/1 在 144 ms 通过，随后的单文件 profile 确认两个新增 public forwarding
+path 都实际执行。profile、profdata、coverage 目录和临时日志均在读取后删除；本批不重复全量 quick，可信全局基线仍为
+Region `95.94%`、Function `99.22%`、Line `96.18%`、Branch `90.66%`。
+
+C7 RelocatableStorageBackend 约束完整性契约批次（2026-09-07，macOS）：新增
+`NativeIntegrityVerificationChecksNodeAndRelationshipUniqueSupportTrees`。通过正常 DDL 和小型持久化图同时建立 Node UNIQUE
+`User.email` 与 relationship UNIQUE `KNOWS.code`；其中包含一个缺少 email 的 User、一个不匹配 label 的 Node 和一个不匹配
+relationship type 的 Edge。`verifyIntegrity()` 在写入后及 reopen 后均通过，确认 UNIQUE 对缺失属性不生成 support-tree entry，
+且完整性校验不会将不在约束 scope 内的实体混入两个树。精确筛选 1/1 在约 0.42 秒通过；单文件 profile 确认 Node/Edge
+constraint 分派、label/type 匹配和过滤、完整属性与缺失属性分支均实际执行。profile、profdata 和 coverage 目录已在读取后删除；
+本批不重复全量 quick，可信全局基线仍为 Region `95.94%`、Function `99.22%`、Line `96.18%`、Branch `90.66%`。
+
+C7 RelocatableMetadataStore 跨逻辑 ID lease streamed Edge 发布批次（2026-09-07，macOS）：扩展
+`PublishesStreamedEdgeGraphRootsInOneGenerationWithoutLargeValues`。测试先通过真实 metadata API 消耗两-ID Edge lease 的首个
+ID，再申请三个 Edge，使 reservation 必然由一个缓存尾段和一个新发放 durable 段组成；三个连续的真实 Edge record 随后跨越该边界
+发布。断言发布后 Edge 目录、Property 目录、Catalog/Adjacency 索引以及 private scratch 回收仍满足既有契约。精确筛选 1/1 在
+108 ms 通过，定向 profile 确认有序多 range lease 的 source-bound 验证与 Edge materialization 均走正常路径。profile、profdata、
+coverage 目录和临时日志已立即删除；本批未运行全量 quick，可信全局基线仍为 Region `95.94%`、Function `99.22%`、Line
+`96.18%`、Branch `90.66%`。
+
+C7 ExpressionBuilder 测试真实性与临时产物清理修正（2026-09-07，macOS）：修正 Parsing suite 中六条与当前 grammar
+不一致的 `EXISTS { ... }` 用例。它们此前在 parser 返回空 context 时会被 `if (expr)` 静默跳过；现改为 grammar 支持的
+`EXISTS(...)`，并显式验证 node-only、incoming、target label/variable 与 WHERE 的结构化表达式结果。六条精确回归 `6/6` 通过，
+完整 `ExpressionBuilderUnitTest` 与 `ExpressionBuilderParsingTest` 的 284 条精确回归均通过。该批只恢复测试的真实性，相关有效
+unit 回归已覆盖相同 source 路径，因此 `ExpressionBuilder.cpp` 的定向 Branch 统计保持 `496/624`，不将其伪报为 coverage 增量。
+同时 `run_tests.sh` 的退出清理现在总会删除 CTest `LastTest.log`；即使暂时保留 coverage profile 做诊断，也不会留下该可再生产物。
+测试脚本的单条精确回归已验证默认收尾后 profile、merged profile、coverage 目录和 CTest 日志均不存在。本批未运行新的全量 quick，
+可信全局基线仍为 Region `95.94%`、Function `99.22%`、Line `96.18%`、Branch `90.66%`。
+
+C7 NativeGraphMutationExecutor 读快照 fence 批次（2026-09-07，macOS）：新增
+`EnforcesTheOptionalReadSnapshotFenceBeforePublishingLogicalGraphChanges`，以公开 `execute` API 验证拒绝的
+read-snapshot fence 在任何逻辑 Node 创建前回滚并抛出 `LogicalGraphMutationConflict`，而匹配的 fence 会被检查后正常
+提交同一固定大小创建。精确筛选 `1/1` 通过，完整 `NativeGraphMutationExecutorValidationTest.*` 的 `24/24` 通过；目标文件
+定向 Branch outcome 从 `339/402` 提升至 `340/402`。该局部增量不替代全局 C7 验收，可信全局基线仍为 Region `95.94%`、
+Function `99.22%`、Line `96.18%`、Branch `90.66%`；profile、profdata、coverage 目录和 CTest 日志已在读取后删除。
+
+C7 LogicalPlanReadRuntime 单行聚合排序批次（2026-09-07，macOS）：扩展
+`ExecutesParserProducedOrderByWithBoundedMaterialization`。公开 Cypher
+`UNWIND [7] AS value RETURN count(*) AS count ORDER BY value` 只有一个聚合输出行，因此 runtime 必须跳过不影响排序的
+输入表达式求值，仍返回 `count=1`。精确筛选 `1/1` 通过；定向 profile 确认第 3725 行排序分支为 `true=1`、`false=1`。
+随后 8 个直接相关 read-runtime suite 共 `176/176` 通过，同一局部 profile 的 Branch outcome 从 `2137/2488` 提升至
+`2139/2488`。该局部结果不替代 C7 全局验收，可信全局基线仍为 Region `95.94%`、Function `99.22%`、Line `96.18%`、
+Branch `90.66%`；profile、profdata、coverage 目录和 CTest 日志已立即删除。
+
+C7 LogicalPlanReadRuntime 多键排序批次（2026-09-07，macOS）：继续扩展
+`ExecutesParserProducedOrderByWithBoundedMaterialization`。固定三行 `DESC` 排序验证降序比较；固定两行同 `group` 的 Map
+输入验证主键相等时继续比较次级 `value DESC`，并保持预期的 `2, 1` 顺序。精确筛选 `1/1` 通过，profile 确认比较器第
+3737 行的相等分支为 `true=1`、`false=6`，第 3740 行升降序选择为 `true=3`、`false=3`。随后相同 8 个直接相关
+read-runtime suite 共 `176/176` 通过，局部 Branch outcome 从 `2139/2488` 增至 `2141/2488`。该局部结果不替代 C7
+全局验收，可信全局基线仍为 Region `95.94%`、Function `99.22%`、Line `96.18%`、Branch `90.66%`；profile、profdata、
+coverage 目录和 CTest 日志均已立即删除。
+
+C7 LogicalPlanReadRuntime 排序回调取消批次（2026-09-07，macOS）：继续使用已经解析的三行降序 Cypher plan，公开
+`LogicalPlanReadRuntime::execute` 回调在首行返回 `false`。runtime 只交付首个已排序值，`rows_emitted=1`，证明已排序
+输出能够按调用方的正常取消请求立即停止。精确筛选 `1/1` 通过，profile 确认第 3748 行 visitor-stop 分支为 `true=1`、
+`false=9`。随后相同 8 个直接相关 read-runtime suite 共 `176/176` 通过，局部 Branch outcome 从 `2141/2488` 增至
+`2142/2488`。该局部结果不替代 C7 全局验收，可信全局基线仍为 Region `95.94%`、Function `99.22%`、Line `96.18%`、
+Branch `90.66%`；profile、profdata、coverage 目录和 CTest 日志均已立即删除。
+
+C7 LogicalPlanReadRuntime `UNION ALL` 回调取消批次（2026-09-07，macOS）：扩展
+`AppliesDistinctAndAllUnionSemanticsThroughCypher`。同一公开 `UNION ALL` 计划分别在左 child 首行和右 child 首行由调用方
+取消；前者只交付一行且不执行右 child，后者交付两个左侧行及一个右侧行后停止。两种情况的 `rows_emitted` 分别为 `1` 和 `3`。
+精确筛选 `1/1` 通过；定向 profile 确认第 3692 行短路组合的两处 `&&` 分支均命中 false（前半 `true=5,false=2`；后半
+`true=4,false=1`）。随后相同 8 个直接相关 read-runtime suite 共 `176/176` 通过，局部 Branch outcome 从 `2142/2488`
+增至 `2145/2488`。该局部结果不替代 C7 全局验收，可信全局基线仍为 Region `95.94%`、Function `99.22%`、Line `96.18%`、
+Branch `90.66%`；profile、profdata、coverage 目录和 CTest 日志均已立即删除。
+
+C7 LogicalPlanReadRuntime `UNION DISTINCT` 行数上限批次（2026-09-07，macOS）：继续扩展
+`AppliesDistinctAndAllUnionSemanticsThroughCypher`，以真实三值 `UNION DISTINCT` 和
+`maximum_distinct_rows = 1` 验证运行时必须抛出 `std::runtime_error`，而非静默截断或继续输出。该公开、固定规模契约补齐
+distinct-set 已满时的 fail-closed 分支；精确筛选 `1/1` 通过，8 个直接相关 read-runtime suite 共 `176/176` 通过，定向
+profile 确认第 3684 行分支为 `true=1`、`false=4`，局部 Branch outcome 从 `2145/2488` 增至 `2146/2488`。该局部结果
+不替代 C7 全局验收，可信全局基线仍为 Region `95.94%`、Function `99.22%`、Line `96.18%`、Branch `90.66%`；profile、
+profdata、coverage 目录和 CTest 日志均已立即删除。
+
+C7 LogicalPlanReadRuntime 分页与取消批次（2026-09-07，macOS）：新增
+`AppliesParserProducedPaginationWithoutScanningPastLimit`，以固定三行公开 Cypher 验证 `SKIP 1 LIMIT 1` 只交付第二行，
+`LIMIT 0` 不交付任何行，并验证 `LIMIT 2` 的下游 visitor 在首行取消后立即停止。精确筛选 `1/1` 在 3 ms 通过；单文件 profile
+确认 `SKIP` 的跳过/交付两侧、`LIMIT 0` 快速返回，以及 LIMIT callback 的继续/取消两侧均命中（第 3762、3774、3787 行）。
+本批不将局部统计伪报为全局 C7 结果；可信全局基线仍为 Region `95.94%`、Function `99.22%`、Line `96.18%`、Branch
+`90.66%`。profile、profdata、coverage 目录和 CTest 日志均已立即删除。
+
+C7 NativeGraphMutationExecutor 关系 UNIQUE support-tree 批次（2026-09-07，macOS）：新增
+`MaintainsRelationshipUniqueConstraintSupportEntriesForCreatedEdges`。通过公开 logical-batch executor 固定创建两个 Node 和一条带
+`age=42` 的 `KNOWS` Edge，并配置同一 relationship type/属性上的 UNIQUE Constraint；验证发布的 Edge 属性与由 canonical
+属性 key 加 Edge ID 组成的 support-tree entry 都可从真实 B+Tree 读取。随后在同一固定规模场景将该 Edge 的属性替换为 `age=43`，
+验证旧 entry 被删除、新 entry 被发布。这覆盖创建及持久化 Edge 的 Constraint support 计划正确解析为对应 Edge ID，而不是误用
+Node ID。精确筛选 `1/1` 在 36 ms 通过，定向 profile 确认 `CSTREK_CREATED_EDGE` 与 `CSTREK_PERSISTED_EDGE` 分派分支均命中
+（第 310、306 行各 `true=1`），且 support-tree erase 分支命中；完整
+`NativeGraphMutationExecutorValidationTest.*` 的 `25/25` 在 329 ms 通过。该局部增量不替代全局 C7 验收，可信全局基线仍为
+Region `95.94%`、Function `99.22%`、Line `96.18%`、Branch `90.66%`；profile、profdata、coverage 目录和 CTest 日志均已删除。
+
+C7 ExpressionBuilder 无小数点大写科学计数法批次（2026-09-07，macOS）：新增
+`ScientificNotationUpperCaseWithoutDecimalPoint`。以真实 Cypher `RETURN 1E2` 验证大写科学计数法在没有小数点时仍构建为
+Double literal 且值为 `100.0`；这补齐了既有 `2.5E3` 用例因小数点短路而未执行的 `E` 检测分支。精确筛选 `1/1` 在 1 ms
+通过，随后 `ExpressionBuilderParsingTest.*` 的 `107/107` 在 36 ms 通过；定向 profile 确认第 1007 行的第三个条件为
+`true=1`、`false=170`。该局部增量不替代全局 C7 验收，可信全局基线仍为 Region `95.94%`、Function `99.22%`、Line
+`96.18%`、Branch `90.66%`；本批 profile、profdata、coverage 目录和 CTest 日志均已自动清理。
+
+C7 ExpressionBuilder 嵌套动态 List literal 批次（2026-09-07，macOS）：新增
+`KeepsAnOuterListDynamicWhenItsNestedListDependsOnTheRow`。以真实 Cypher `RETURN [[n.score]]` 验证内层 List 引用当前行的
+Property 时，内层与外层都保持动态 `ListLiteralExpression`，不会被错误折叠为静态值；内层唯一元素保持 Property access。
+精确筛选 `1/1` 在 2 ms 通过，随后 `ExpressionBuilderParsingTest.*` 的 `108/108` 在 40 ms 通过；定向 profile 确认第
+732 行“嵌套 List 存在且动态”判定的第二个条件为 `true=1`、`false=1`。该局部增量不替代全局 C7 验收，可信全局基线仍为
+Region `95.94%`、Function `99.22%`、Line `96.18%`、Branch `90.66%`；profile、profdata、coverage 目录和 CTest 日志
+均已自动清理。
+
+C7 ExpressionBuilder 嵌套动态 Map literal 批次（2026-09-07，macOS）：新增
+`KeepsAMapLiteralDynamicWhenItsNestedListDependsOnTheRow`。以真实 Cypher `RETURN {items: [[n.score]]}` 验证 Map literal
+中的嵌套 List 引用当前行时，Map、外层 List 与内层 List 都保持动态表示，且 `items` 键不丢失。精确筛选 `1/1` 在 3 ms
+通过，随后 `ExpressionBuilderParsingTest.*` 的 `109/109` 在 35 ms 通过；定向 profile 确认第 528 行嵌套 List 动态
+判定的第二个条件为 `true=1`、`false=2`。该局部增量不替代全局 C7 验收，可信全局基线仍为 Region `95.94%`、Function
+`99.22%`、Line `96.18%`、Branch `90.66%`；profile、profdata、coverage 目录和 CTest 日志均已自动清理。
+
+C7 LogicalPlanReadRuntime 开放式 List slice 批次（2026-09-07，macOS）：新增
+`PreservesOpenEndedAndClampedListSliceSemanticsThroughCypher`。以固定大小真实 Cypher 验证 `[-2..]` 采用列表末尾为
+默认终点，过小负起点与过大终点分别裁剪到有效范围，而不产生越界结果。精确筛选 `1/1` 在 3 ms 通过，定向 profile
+确认第 1602 行缺失终点分支为 `true=1`、显式终点分支为 `false=2`；随后
+`LogicalPlanReadRuntimeTest.*` 的 `43/43` 在 58 ms 通过。该局部增量不替代全局 C7 验收，可信全局基线仍为 Region
+`95.94%`、Function `99.22%`、Line `96.18%`、Branch `90.66%`；profile、profdata、coverage 目录和 CTest 日志均已
+自动清理。
+
+C7 LogicalPlanReadRuntime 参数化动态 `IN` NULL operand 批次（2026-09-07，macOS）：新增
+`PropagatesANullDynamicListOperandForInThroughCypher`。通过公开参数化 `UNWIND` 输入固定验证 `1 IN candidates` 在
+动态 List operand 为 NULL 时返回 NULL，在空列表返回 false，在包含 `1` 的列表返回 true；不依赖构造内部 expression
+或规模 workload。精确筛选 `1/1` 在 2 ms 通过，定向 profile 确认第 1499 行 NULL operand 分支为 `true=1`、`false=2`。
+随后 `LogicalPlanReadRuntimeTest.*` 的 `43/43` 在 58 ms 通过。该局部增量不替代全局 C7 验收，可信全局基线仍为 Region
+`95.94%`、Function `99.22%`、Line `96.18%`、Branch `90.66%`；profile、profdata、coverage 目录和 CTest 日志均已
+自动清理。
+
+C7 LogicalPlanReadRuntime LOAD CSV 取消批次（2026-09-07，macOS）：新增
+`StopsLoadCsvAfterThePublicRowVisitorCancels`。以 import root 内含两行的固定 CSV 和 parser 生成的公开 `LOAD CSV`
+计划验证，调用方在首行返回 `false` 后 runtime 只交付该行、`rows_emitted=1`，不再读取或交付后续行。精确筛选 `1/1`
+在 4 ms 通过，定向 profile 确认第 3639 行 callback-cancel 分支为 `true=1`；随后
+`LogicalPlanLoadCsvRuntimeTest.*` 的 `10/10` 在 22 ms 通过。该局部增量不替代全局 C7 验收，可信全局基线仍为 Region
+`95.94%`、Function `99.22%`、Line `96.18%`、Branch `90.66%`；profile、profdata、coverage 目录和 CTest 日志均已
+自动清理。
+
+C7 NativeGraphWritePlanner 过期 Scalar Index 重放保护批次（2026-09-07，macOS）：新增
+`RejectsAStaleScalarIndexWriteInsteadOfRebasingItOntoAnUnrelatedPublication` 与
+`RejectsAStaleScalarIndexCreationInsteadOfRebasingItOntoAnUnrelatedPublication`。两条固定规模的公开事务 API 回归分别在
+过期事务中 stage 已有 Index 的 upsert 和首次 Index 创建，再提交另一事务的 Node Property 更新；过期提交必须报告 conflict，
+不会将任何 Index 根发布到新 generation，已提交 Property 保持原值。这覆盖 adjacency-only rebase 对普通和首次 Scalar
+Index mutation 的拒绝路径，而不构造私有状态。两条精确筛选均 `1/1` 通过，完整
+`NativeGraphWritePlannerPublicContractsTest.*` 为 `29/29`（约 233 ms）。该局部增量不替代全局 C7 验收，可信全局基线仍为
+Region `95.94%`、Function `99.22%`、Line `96.18%`、Branch `90.66%`；profile、profdata、coverage 目录和 CTest 日志均已
+自动清理。
+
+C7 NativeGraphMutationExecutor 新建 Node 最终 label 批次（2026-09-07，macOS）：新增
+`AppliesPostCreateNodeLabelsWithoutDiscardingCreatedProperties`。通过公开 logical mutation batch API 创建带 `Person` label 和
+`age=1` 的 Node，再将同一 created-node reference 的最终 label 替换为 `Employee`；发布后只保留 `Employee`，而创建时属性保持
+不变。这验证合法的 CREATE/SET 最终状态合并，并保留“创建时已给定的属性不能再由同一 batch property replacement 覆盖”的既有
+冲突保护。精确筛选 `1/1` 通过，随后
+`NativeGraphMutationExecutorValidationTest.*` 的 `26/26` 在约 306 ms 通过；目标文件局部统计为 Region `93.38%`、Function
+`96.67%`、Line `92.93%`、Branch `85.32%`（`343/402`），并确认 created-node/persisted-node label 分派的两个 outcome 均命中。
+该局部增量不替代全局 C7 验收，可信全局基线仍为 Region `95.94%`、Function `99.22%`、Line `96.18%`、Branch `90.66%`；
+profile、profdata、coverage 目录和临时日志均已立即删除。
+
+C7 NativeGraphMutationExecutor 有界 DETACH 删除批次（2026-09-07，macOS）：新增
+`DetachDeletionRemovesBoundedIncidentEdgesAndPreservesOtherEndpoints`。通过公开 logical mutation batch API 创建两个 Node 和一条
+Edge，再以有限上限 `1` 对 source Node 执行 DETACH 删除；发布后 source 与 incident Edge 均不存在，而未关联的 target Node
+仍可读取。这验证有界的 incident-Edge 收集会实际纳入删除集合，且不会扩展删除范围。精确筛选 `1/1` 通过，随后完整
+`NativeGraphMutationExecutorValidationTest.*` 的 `27/27` 在 314 ms 通过；目标文件局部统计提升为 Region `94.52%`、
+Function `96.67%`、Line `94.07%`、Branch `87.06%`（`350/402`）。该局部增量不替代全局 C7 验收，可信全局基线仍为
+Region `95.94%`、Function `99.22%`、Line `96.18%`、Branch `90.66%`；profile、profdata、coverage 目录和 CTest 日志
+均已在记录结果后立即删除。
+
+C7 LogicalPlanReadRuntime 锚定 COUNT() Edge 上限批次（2026-09-07，macOS）：修复锚定 relationship COUNT 在达到
+`maximum_edges_per_node` 后仅探测额外 Edge、却可能静默返回截断计数的问题。现在探测到额外 topology 会 fail-closed，而非忽略该
+Edge；新增 `LogicalPlanRuntimeRejectsAnchoredRelationshipCountsThatExceedThePerNodeEdgeBudget`，使用固定的三 Edge 图和公开
+logical plan 验证该上限违规会抛出。精确筛选 `1/1` 通过，随后 8 个直接相关 suite 的 `178/178` 全部通过；目标文件局部统计为
+Region `94.57%`、Function `100.00%`、Line `94.70%`、Branch `87.38%`（`2174/2488`）。该局部增量不替代全局 C7 验收，
+可信全局基线仍为 Region `95.94%`、Function `99.22%`、Line `96.18%`、Branch `90.66%`；profile、profdata、coverage
+目录、CTest 日志与临时 JSON 均已在读取后立即删除。
+
+C7 NativeGraphWritePlanner 共享 Index pool 容量降级批次（2026-09-07，macOS）：补足真实公共事务路径的两类 fresh-rebuild
+语义。`RebuildsGlobalAdjacencyFreshBeforeTheCompetingLargeValueContentIndex` 保留一个可用 current-pool frame，使已存在的全局
+adjacency 与 LargeValue content tree 分别都能独立 COW、但合计不足；验证 planner 优先将 adjacency 重建到 fresh pool，内容
+Index 留在原 pool，且旧快照仍只看到原 Edge。`RebuildsContentIndexFreshWhenSharedPoolDemandExceedsItsRemainingFrames` 先以
+固定 80 项建立两层 content tree，再以固定 20 项跨越目标叶页分裂边界；当 content tree 需要两个 current-pool frame、竞争的
+adjacency 需要一个而只剩两个时，验证 content tree 重建到 fresh pool、adjacency 留在原 pool，并在 reopen 后保持可读。另有两个
+单树无空闲帧回归验证各自的直接 fresh fallback。四条精确回归均通过（最长约 1 秒）；定向 profile 确认
+`NativeGraphWritePlanner.cpp` 第 1855 与 2713 行的 fresh-rebuild 回调各执行一次。该局部证据不替代全量 C7 Branch gate；
+可信全局基线仍为 Region `95.94%`、Function `99.22%`、Line `96.18%`、Branch `90.66%`。profile、profdata、coverage 目录、
+CTest 日志和临时报告均已在读取后删除。
+
+C7 八分片完整 coverage 复核（2026-09-07，macOS）：以当前精确 binary 运行
+`ZYX_TEST_SHARDS=8 ./scripts/run_tests.sh --quick`，八个隔离分片以 `exit_code: 0` 通过。四维结果为 Region
+`95.96%`、Function `99.26%`、Line `96.19%`、Branch `90.69%`。前三项已达到 `95%`，但 Branch 距离门槛仍差
+`4.31` 个百分点，所以 C7 coverage gate 继续保持开放，不能用局部 profile 或已通过的完整回归宣称完成。报告读取后已删除
+全部 raw profile、merged profdata、coverage JSON、coverage 目录与 CTest 日志；仅保留约 4 GiB 的增量编译缓存。
+
+C7 Branch 缺口定位复核（2026-09-07，macOS）：在完成一批小型 codec/store 的定向审计后，以当前精确 binary 再次运行
+`ZYX_TEST_KEEP_COVERAGE_ARTIFACTS=true ZYX_TEST_RUN_ID=full-c7-branch-map ZYX_TEST_SHARDS=8 ./scripts/run_tests.sh --quick`。
+八个隔离 shard 全部通过；四维结果为 Region `95.96%`、Function `99.26%`、Line `96.19%`、Branch `90.70%`
+（`42,368` 个 outcome 中 `3,942` 个未覆盖，仍需至少覆盖 `1,824` 个 outcome）。此运行仅用于读取精确 per-file
+Branch 排名，不是新的关闭验收。高权重缺口依次为 ANTLR 生成的 `CypherParser.cpp`（610）、
+`RelocatableStorageBackend.cpp`（543）、`RelocatableMetadataStoreGraphMutation.cpp`（399）、
+`NativeGraphWritePlanner.cpp`（376）、`LogicalPlanMutationRuntime.cpp`（368）和 `LogicalPlanReadRuntime.cpp`（262）。
+其中 Backend 的大部分未覆盖分支是已验证公开 API 的内部不变量、认证 lease、异常 I/O 和损坏状态防线；不得用伪造私有状态
+或覆盖率排除来关闭。profile、merged profdata、coverage 目录、JSON 结果和 CTest 日志在分析完成后立即删除。
+
+C7 LogicalPlanMutationRuntime 匿名 CREATE 公共结果批次（2026-09-07，macOS）：新增
+`CypherAnonymousCreatePublishesWithoutVisibleResultRows`。通过公开 `QueryEngine` 执行 `CREATE (:AnonymousCypher)`，验证匿名
+CREATE 不暴露结果列或结果行、但仍报告一个 pipeline row 并以一个 logical mutation batch 发布 Node。精确筛选 `1/1` 在
+1 ms 通过，随后 `LogicalPlanMutationRuntimeTest.*` 的 `157/157` 在 363 ms 通过；定向 profile 确认
+`LogicalPlanMutationRuntime.cpp` 第 2066 行无 output columns 分支实际取 true。此次只补充正常 Cypher/API 契约，不构造内部
+logical plan 或 ANTLR context；raw profile、profdata、coverage JSON 和临时日志均已立即删除。
+
+C7 四维逐文件覆盖率清单复核（2026-09-07，macOS）：以当前精确 binary 的八分片完整运行生成逐文件
+Region、Function、Line、Branch 清单。总计为 Region `95.98%`、Function `99.30%`、Line `96.20%`、Branch
+`90.69%`；有 `111` 个路径至少一个可报告维度低于 `95%`，按维度分别为 Region `44`、Function `22`、Line `45`、
+Branch `89`。这份清单取代仅按 Branch 或路线图高权重文件推进的旧方法：后续必须按四个维度排序、逐文件验证，并优先处理
+真实生产源的低项。`CancellationCheckpoint.hpp` 等纯接口声明头此前被 LLVM 以零计数 synthetic region 误报为 `0%`；
+coverage 脚本现在仅在“header 没有函数体且没有任何执行计数”时报告其为非可执行（N/A），且有 Python 回归验证。这不是
+source exclusion，也不适用于任何带可执行函数体的头文件。`Catalog.hpp` 现为四维 `100%`；`EntityLabelSet.hpp` 已通过
+运行时函数指针调用覆盖其对齐 helper；`NativeScalarIndexMutationPlanner.hpp` 已通过真实 planner 的 definitions accessor
+契约覆盖。`NativeStreamedGraphEntityPageMaterializer.cpp` 的 assignment 身份校验分支由逐字段测试提升至 Branch `91.67%`，
+仍有两个由已封装 deferred-publication 不变量保证的分支待单独审计。全量回归的八个隔离 shard 全部通过；诊断 profile、
+profdata、JSON、分片日志和 CTest 日志均已清理，保留增量 build cache。
+
+C7 四维逐文件复核续批（2026-09-07，macOS）：`ExternalBTreeEntrySorter.cpp` 的五项全部相关确定性回归
+均通过，局部四维为 Region `98.81%`、Function `100.00%`、Line `97.67%`、Branch `100.00%`，不再是待处理低覆盖率
+文件。`PageBackedLogicalGraphReadAdapter` 增加真实的无类型/未知关系类型 topology 契约，并将逻辑 adjacency cursor 的
+move 明确为 source 失效，避免依赖 `std::optional` moved-from 状态；其全部 16 项相关回归通过。该 adapter 仍不能宣称
+四维收口：实体页、Entity Map 和 Property 根 codec 已在下游拒绝的损坏状态，不能通过伪造内存来覆盖，且不新增任何
+coverage exclusion。`RelocatableStorageBackend.cpp` 的完整相关 fixture 组合以 `exit_code: 0` 通过；其局部定位结果为
+Region `91.69%`、Function `99.15%`、Line `87.86%`、Branch `80.33%`，继续作为最高优先级，同时不能只在该超大文件
+无限迭代而延误其他四维低项。上述定向运行产生的 profile、profdata、coverage 目录和 CTest 日志均已立即清理；没有运行
+新的全量 quick，因此可信全局基线仍以最近八分片完整审计为准。
+
+C7 NativeGraphMutationExecutor endpoint 状态收紧与四维复核续批（2026-09-07，macOS）：`resolveEntityId` 仅用于
+Edge 的 source/target；`validateShape` 已先行验证该位置只能是 persisted Node 或 created Node。因此移除不可能作为
+endpoint 的 created-Edge 分派，保留前置校验并使 helper 的状态空间与公开 logical-batch 合约一致，而非伪造无效内部
+reference 来覆盖死分支。覆盖 created/persisted endpoint 的两条精确回归 `2/2` 通过；完整
+`NativeGraphMutationExecutorValidationTest.*` 的 `27/27` 在约 320 ms 通过，目标文件局部统计为 Region `94.97%`、
+Function `96.67%`、Line `94.40%`、Branch `89.18%`（仍未达标，继续保留在逐文件清单）。另行核实
+`CancellationCheckpointTest.*` 的 `1/1` 与 `StorageIOTest.*` 的 `59/59`，两者的目标头文件定向四维均为 `100%`；
+`NativeTransactionTest.*` 的 `24/24` 通过，但 `Transaction.cpp` 局部仍为 Region `90.79%`、Function `100.00%`、
+Line `94.55%`、Branch `78.95%`，不能标记完成。所有定向 profile、profdata、coverage 目录和 CTest 日志均在读取后
+立即删除；没有运行新的全量 quick，可信全局基线仍为最近八分片完整审计。
+
+C7 NativeGraphMutationExecutor persisted Node label-only 批次（2026-09-07，macOS）：新增
+`ReplacesPersistedNodeLabelsWithoutRewritingItsProperties`。通过公开 logical-batch executor 创建带 `Person`/`age=42` 的
+Node，只替换其 persisted reference 的 label 为 `Employee`；验证属性仍为 `age=42`，避免 label-only 最终状态错误重写
+Property root。精确筛选 `1/1` 在 15 ms 通过，完整 `NativeGraphMutationExecutorValidationTest.*` 的 `28/28` 在约 320 ms
+通过。局部统计更新为 Region `95.19%`、Function `96.67%`、Line `94.40%`、Branch `89.69%`；后两项仍未达标，C7 不关闭。
+profile、profdata、coverage 目录和临时日志均已立即删除；没有运行新的全量 quick。
+
+C7 StorageIO 四维收口批次（2026-09-07，macOS）：补足顺序读取空请求、typed-page 无缓存读写、缓存 byte-read、预取、统计
+复位、外部 rebase、缓存尾部截断、只读拒绝变更以及既有 native truncate/sync 故障钩子的可观测契约。每组精确筛选均通过；随后
+`StorageIOTest.*` 的 `71/71` 在约 55 ms 通过。以该 suite 的一致 profile 复核，`StorageIO.cpp` 为 Region `99.71%`、
+Function `100.00%`、Line `99.64%`、Branch `96.85%`，`StorageIO.hpp` 为四维 `100.00%`，因此这两个可执行路径从逐文件低项
+清单中移除。唯一未执行的析构异常终止防线需要使析构期 flush 失败并终止进程，不作为普通单元测试构造；它不影响该文件所有
+四维阈值均达标的结论。此结果是局部 suite 证据，不替代 C7 全局八分片验收；profile、profdata、coverage 目录和 CTest
+日志已在读取后删除。
+
+C7 NativeStreamedGraphEntityPageMaterializer 四维收口批次（2026-09-07，macOS）：`DeferredPublication::visitEntityPages`
+在回调返回前已验证并封闭精确的记录数、页数和 Edge-ID span；materializer 中重复计数的末尾检查无法产生新的失败语义，且此前
+第二个条件只能靠伪造不可构造的 publication 才能执行。因此移除这段冗余状态及不可能的计数溢出防线，保留上游边界与每一页
+assignment/codec 的真实验证。`NativeStreamedGraphEntityPageMaterializerTest.*` 的 `3/3` 通过；一致 profile 显示目标文件
+Region、Function、Line、Branch 均为 `100.00%`，从四维低项清单中移除。此为定向模块证据，不替代 C7 全局八分片验收；
+profile、profdata、coverage 目录和 CTest 日志已在读取后删除。
+
+C7 REPL 四维复核续批（2026-09-07，macOS）：`REPLTest.*` 加 `ReplFormattingTest.*` 的 `73/73` 通过（约 10 秒）。
+修复结果表中“key 存在但 `PropertyValue` 为 NULL”未使用 null 样式的显示语义；新增不等待的纯 `formatDuration` 秒/毫秒边界回归。
+该 suite 的普通非交互运行中，`Repl.hpp` 为四维 `100.00%`，`Repl.cpp` 更新为 Region `94.25%`、Function `90.62%`、
+Line `95.60%`、Branch `89.13%`，仍不能移出清单。其未达标项主要是有色 TTY、真实 `inputxx` session 和 macOS debugger
+系统调用分支；伪终端运行不会可靠触发 inputxx 的安全退出且排除非交互测试会降低其余函数覆盖，因此不把该实验计入可比基线。
+不通过伪造 OS 返回或阻塞交互测试覆盖这些路径。所有局部 profile、profdata、coverage 目录和 CTest 日志已清理。
+
+C7 全量四维清单重建（2026-09-07，macOS）：在 StorageIO、实体页 materializer、REPL 和 logical mutation
+executor 的一批定向工作完成后，运行一次 `ZYX_TEST_KEEP_COVERAGE_ARTIFACTS=true ZYX_TEST_RUN_ID=full-c7-all-metrics-20260907
+ZYX_TEST_SHARDS=8 ./scripts/run_tests.sh --quick`。八个隔离 shard 均以 `exit_code: 0` 通过；当前精确全局结果为
+Region `96.12%`、Function `99.54%`、Line `96.34%`、Branch `90.77%`。逐路径、四维筛选得到 `94` 个仍至少一项低于
+`95%` 的可执行路径（Region `31`、Function `12`、Line `33`、Branch `81`）；后续工作必须以此完整清单而非少数示例
+文件推进。按总未覆盖量，首组核心模块为 `RelocatableStorageBackend.cpp`、
+`RelocatableMetadataStoreGraphMutation.cpp`、`LogicalPlanMutationRuntime.cpp`、`NativeGraphWritePlanner.cpp` 和
+`LogicalPlanReadRuntime.cpp`；`Catalog.hpp` 与 `NativeStreamedGraphEntityPageMaterializer.cpp` 已分别为四维 `100%`，不再
+列为低项。profile、merged profdata、coverage 目录及 CTest 日志已在清单提取后删除，保留增量编译缓存。
+
+C7 logical operator 小模块收口批次（2026-09-07，macOS）：补足 `LogicalExplain` 的 const inspection surface，以及
+`LogicalLimit`/`LogicalSkip` 的正常 clone、公开 accessor、合法 detach/replacement 与既有空 child/越界 child 契约。
+精确筛选 `LogicalExplainTest` 的 `9/9` 与 Limit/Skip 的 `4/4` 均通过；各自定向 profile 均显示
+`LogicalExplain.hpp`、`LogicalLimit.hpp`、`LogicalSkip.hpp` 的 Region、Function、Line、Branch 为 `100.00%`。这些是
+真实 public logical-operator contract，不引入规模 workload 或伪造内部状态；本地 profile、profdata、coverage 目录和
+CTest 日志将在本批记录后删除。局部结果不替代 C7 八分片全量验收。
+
+C7 logical operator 续批（2026-09-07，macOS）：`LogicalCreateEdge` 新增动态 Property expression 的非空/NULL clone
+契约以及合法 child replacement/detach；`LogicalMergeNode` 新增动态 match Property expression 的非空/NULL clone，并使
+原 clone contract 验证其 child 的独立复制；`LogicalProject` 新增多 alias 的 `", "` 格式化契约。先以六条精确测试验证，
+再以相关三个 suite 的 `25/25` 回归验证；修正测试把 child 错放到相邻用例后，同一精确集重新为 `25/25` 通过。
+`LogicalCreateEdgeTest` 的全部 `11/11` 回归通过且目标头文件四维 `100.00%`；同一相关 profile 中
+`LogicalMergeNode.hpp` 四维也为 `100.00%`。`LogicalProject` 的新多项结果覆盖此前全量清单中唯一缺少的分隔符 outcome，
+将由下一次模块批次后的八分片审计统一复核。未增加规模 workload 或内部状态伪造；profile、profdata、coverage 目录及 CTest
+日志将在本批记录后删除。
+
+C7 `LogicalProject` 四维收口（2026-09-07，macOS）：补充其合法 child detach/replacement，并将空 child/NULL expression
+clone 与多 alias separator 一并置于同一精确 suite 复核。`LogicalProjectTest.*` 加 `LogicalProjectNullGuardTest.*` 共 `8/8`
+通过；`include/graph/query/logical/operators/LogicalProject.hpp` 定向结果为 Region、Function、Line、Branch 均 `100.00%`。
+该可执行头文件从当前逐文件低覆盖率清单移除；局部 profile、profdata、coverage 目录及 CTest 日志已删除。
+
+C7 `LogicalFilter`/`LogicalSort` 四维收口（2026-09-07，macOS）：补充 Filter 的 raw predicate inspection，以及 Sort 的
+合法 child detach/replacement、type/children/toString 公共契约；空 child、NULL expression 和越界 child 仍由既有 guard
+tests 覆盖。相关四 suite 精确回归 `13/13` 通过；同一 profile 中 `LogicalFilter.hpp` 与 `LogicalSort.hpp` 均为
+Region、Function、Line、Branch `100.00%`，从逐文件低项清单移除。未引入规模 workload 或伪造状态；定向 profile、profdata、
+coverage 目录和 CTest 日志已删除。
+
+C7 全量四维审计续批（2026-09-07，macOS）：完成一批 logical-operator 与 executor 相关定向验证后，执行
+`ZYX_TEST_KEEP_COVERAGE_ARTIFACTS=true ZYX_TEST_RUN_ID=full-c8-all-metrics-20260907 ZYX_TEST_SHARDS=8
+./scripts/run_tests.sh --quick`；八个隔离 shard 全部通过。全局结果为 Region `96.15%`、Function `99.62%`、Line
+`96.36%`、Branch `90.79%`。未达标路径仍须按全部四维清单而非个别示例推进；生成的 ANTLR 输出、第三方 inputxx 与仅测试
+源不作为产品模块覆盖率改造目标。新增对 `LargeValueOwnershipScanSink` 和 `LargeValueOwnershipScanner` 多态析构的公开契约，
+联合 `RelocatableMetadataStoreTest.LargeValueReclaimer*` 定向回归 `35/35` 通过，使
+`LargeValueReachabilityReclaimer.hpp` 四维为 `100.00%`。此局部结果不替代后续全量验收；profile、profdata、coverage
+目录和 CTest 日志均在读取后清理。
+
+C7 `StateRecordStore.hpp` 四维收口（2026-09-07，macOS）：构造函数已经拒绝 `SlottedPagePool` 与 metadata 不同的
+组合，因此 `usesMetadataStore` 的第二次兼容性检查不可达；保留构造期 fail-closed 验证，并将 accessor 收紧为其实际的
+stored metadata identity。新增重开同一文件得到的另一 coordinator identity 的 public contract，正确 construction identity
+返回 true、另一 coordinator 返回 false；它不写入 State 记录。该测试加既有持久化/重开用例 `2/2` 通过，目标头文件的
+Region、Function、Line、Branch 均为 `100.00%`。此小型 public-header 更改触发依赖目标增量重新编译，未运行全量测试；
+profile、profdata、coverage 目录和 CTest 日志在读取后立即清理。
+
+C7 全量四维清单重建续批（2026-09-07，macOS）：完成 LargeValue reclaimer、snapshot registry、VectorCodebook store 和
+StateRecord store 的四个小型四维收口后，执行
+`ZYX_TEST_KEEP_COVERAGE_ARTIFACTS=true ZYX_TEST_RUN_ID=full-c9-all-metrics-20260907 ZYX_TEST_SHARDS=8
+./scripts/run_tests.sh --quick`；八个隔离 shard 全部以 exit code 0 通过。全局结果为 Region `96.15%`、Function
+`99.63%`、Line `96.36%`、Branch `90.79%`。四个收口头文件均不再出现在逐路径低项中。重新按可执行生产路径及四维筛选，
+仍有 `107` 个路径至少一个适用指标低于 `95%`（Region `48`、Function `9`、Line `58`、Branch `97`）；ANTLR 生成输出
+与非产品接口不纳入后续生产实现改造。最高真实业务缺口按四维 deficit 为 `Transaction.cpp`、
+`NativeStreamedGraphEntityPageMaterializer.cpp`、`NativeGraphWritePlanner.cpp`、`DatabaseImpl.cpp`、
+`RelocatableStorageBackend.cpp` 与 `ExpressionBuilder.cpp`。全量 profile、merged profdata、coverage 目录及 CTest 日志
+将在清单提取后立即清理，保留增量编译缓存。
+
+C7 `VectorCodebookStore.hpp` 四维收口（2026-09-07，macOS）：新增 metadata binding 的公开组合契约，验证 store 仅在
+metadata 与其 PhysicalSegmentAllocator 都绑定同一 coordinator 时报告兼容；传入另一 metadata、或构造时 allocator 与
+metadata 不完整匹配均返回 false，未进行任何读写或伪造持久化状态。精确组合回归 `2/2` 通过，完整
+`RelocatableVectorCodebookStoreTest.*` 的 `26/26` 通过；目标头文件 Region、Function、Line、Branch 均为 `100.00%`，
+从低项清单移除。profile、profdata、coverage 目录和 CTest 日志将在本批读取后立即删除；不执行新的全量 quick。
+
+C7 `MetadataSnapshotRegistry.hpp` 四维收口（2026-09-07，macOS）：`MetadataWriteGuard` 的 state 和锁仅由私有构造
+同时建立，`release` 也同时清除 state/释放锁；`isValid` 中额外检查 state 是不可能的重复状态，改为直接检查锁所有权，保持
+默认、已释放和活动 writer 的公开语义。`MetadataSnapshotHandleContractTest.*` 与
+`RelocatableMetadataSnapshotRegistryTest.*` 共 `8/8` 通过；目标头文件定向结果为 Region、Function、Line、Branch
+均 `100.00%`。这一次公共头文件修改触发了依赖目标的增量重新编译，但没有执行全量测试；profile、profdata、coverage
+目录和 CTest 日志均在读取后清理。
+
+C7 `NativeStreamedGraphEntityPageMaterializer.cpp` 四维收口（2026-09-07，macOS）：`DeferredPublication::create` 与
+`visitEntityPages` 已封闭 publication 的非空 record/page shape、非空批次、canonical Edge ID 和精确 slot cardinality；
+materializer 中重复的后置检查既不能由公开构造路径触发，也未提供新的失败语义，已删除。保留实际外部输入面：空 assignment
+callback 或空 visitor 均拒绝，并新增对应回归。完整 `NativeStreamedGraphEntityPageMaterializerTest.*` 的 `4/4` 通过；
+目标文件定向结果 Region、Function、Line、Branch 均为 `100.00%`，从低项清单移除。未伪造 private publication 或底层 codec
+故障；profile、profdata、coverage 目录和 CTest 日志将在本批读取后立即清理。
+
+C9 四维清单执行续批（2026-09-07，macOS）：以 C9 的 `107` 条可执行生产路径清单为唯一排序来源，而非只处理用户举例；ANTLR
+生成输出和无可执行实现的外部接口仍单独记为非生产覆盖率目标。`SerializerTest.*` 与
+`TemporalSerializationTest.*` 的 `23/23` 通过：补齐 raw buffer round-trip 与 legacy serializer 对 `Bytes` 的全部拒绝 surface，
+并修复 `getSerializedSize(Bytes)` 过去和 serialize/deserialize 不一致地返回伪大小的问题；为提高闭括号行点而尝试的 switch
+结构改写曾使既有无效 type-tag 回归失败，已立即撤回，未修改测试掩盖行为回归。`NativeTransactionTest.*` 的 `24/24` 通过：
+构造后再读取已验证存在的 logical transaction，并收紧 write-counter/overlay 的同生命周期不变量，保留所有可达错误处理。
+`NativeBulkEdgeEndpointCacheTest.*` 的 `2/2` 通过：验证 reject 不入缓存及 validator 重入时不会重复 FIFO 记录。此次只运行
+逐模块筛选验证，没有执行新的全量 quick；profile、profdata、coverage 目录和 CTest 日志已在读取后清理。
+
+C9 AllocatorDirectory 续批（2026-09-07，macOS）：新增 `LogicalizesOwnedAllocatorRootBeforeBootstrapRoutePublication`，并补充同一
+未发布批次在 allocator 根完成逻辑子节点转换后继续预留槽位的 `PreparesFurtherReservationsThroughLogicalCandidateRootRoutes`。
+两项均使用 `RelocatableMetadataStore::initializeNewComplete`、真实 `MetadataWriteBatch` 和公开预留/逻辑化 API；完整
+`RelocatableAllocatorDirectoryTest.*` 共 `23/23` 通过。专用 profile 中 `AllocatorDirectory.cpp` 为 Region `87.40%`、
+Function `100.00%`、Line `90.16%`、Branch `76.10%`，因此该模块尚未收口；剩余缺口主要是未触发的多级路由、无效输入和
+边界保护路径，后续仅在存在真实公开入口时继续补测。局部 profile、profdata、coverage 目录和 CTest 日志已清理。
+
+C9 Driver ABI 参数模块四维收口（2026-09-08，macOS）：补充 `zyx_driver_params_set_bytes` 的真实公开空 `params`、空
+`key` 和合法零长度二进制输入契约；这些输入此前已由 ABI 边界显式定义，但未被测试执行。`DriverAbiBytesTest.*`、
+`DriverAbiValueBuildersTest.*` 以及参数错误与 cursor 契约共 `23/23` 通过。使用同一精确筛选的 profile 显示
+`src/api/driver_abi/DriverAbiParams.cpp` 的 Region、Function、Line、Branch 均为 `100.00%`，因此从下一次完整四维
+清单中移除。未构造内部损坏状态或引入规模 workload；profile、profdata、coverage 目录和 CTest 日志已在读取后清理。
+
+C9 Driver ABI 值构造模块四维收口（2026-09-08，macOS）：补充公开错误契约，验证不能向标量 value 追加 bytes 或嵌套
+value，二者均必须返回 type mismatch；同时保持空二进制输入与 map/list bytes 的参数检查。`DriverAbiBytesTest.*`、
+`DriverAbiValueBuildersTest.*` 与 `DriverAbiNestedValuesTest.*` 共 `36/36` 通过。精确 profile 显示
+`src/api/driver_abi/DriverAbiValues.cpp` 的 Region、Function、Line、Branch 均为 `100.00%`，因此从下一次完整四维清单中
+移除。未伪造私有状态、未引入规模 workload；profile、profdata、coverage 目录和 CTest 日志已在读取后清理。
+
+C9 Driver ABI 事务模块四维复核（2026-09-08，macOS）：此前的低分来自只运行 transaction suite 的不完整局部筛选，而非
+实现缺口。以事务、错误处理、cursor 和 graph-value 的相关公开契约作为一个精确筛选，`57/57` 通过；
+`src/api/driver_abi/DriverAbiTransactions.cpp` 的 Region、Function、Line、Branch 均为 `100.00%`。未为覆盖率引入重复
+测试或伪造状态，该路径从下一次完整四维清单中移除；profile、profdata、coverage 目录和 CTest 日志已在读取后清理。
+
+C9 Driver ABI 数据库模块四维复核（2026-09-08，macOS）：将 lifecycle 的 open/open-if-exists、save、thread-pool、
+active-transaction 与既有数据库、事务、错误处理、cursor、graph-value 契约组成精确筛选，`67/67` 通过。
+`src/api/driver_abi/DriverAbiDatabase.cpp` 为 Region `99.22%`、Function `100.00%`、Line `100.00%`、Branch `95.31%`，
+已满足四维 `95%` 阈值并从下一次完整清单中移除。其余内部 handle 不完整与异常转换分支没有公开构造入口，不以伪造内部
+状态覆盖；profile、profdata、coverage 目录和 CTest 日志已在读取后清理。
+
+C9 Driver ABI result 模块四维复核（2026-09-08，macOS）：补充真实 cursor 的越界列、标量/列表/bytes 类型不匹配，
+以及 cursor 结束后 value-ref 失效的 ABI 契约；同一 Driver ABI 相关回归共 `75/75` 通过。按覆盖率脚本的统一源级
+排除规则，`src/api/driver_abi/DriverAbiResults.cpp` 为 Region `95.44%`、Function `100.00%`、Line `99.67%`、Branch
+`95.06%`，满足四维阈值，待下一次完整八分片审计确认后从全局低项清单移除。未添加规模 workload，新增用例只调用公开
+Driver ABI；本轮 profile、profdata、coverage 目录及 CTest 日志已在读取后删除。
+
+C9 header 模板覆盖率口径修正（2026-09-08，macOS）：LLVM 会为每个模板实例重复累计同一 header 源行；原脚本已对
+header 的 region/branch 按源位置聚合，却仍直接采用模板实例化 line 总数。现将 header line 也按源位置聚合：同一源行
+只要任一真实实例执行即算覆盖，不排除任何可执行代码；新增 Python 回归，`tests/test_coverage_summary.py` 为 `12/12`。
+`NativeBulkEdgeEndpointCacheTest.*` 的 `2/2` 真实固定 FIFO 容量、拒绝输入和 re-entry 契约通过，使用同一 profile 复核
+`NativeBulkEdgeEndpointCache.hpp` 的 Region、Function、Line、Branch 均为 `100.00%`。本轮 profile、profdata、coverage
+目录和 CTest 日志已在读取后删除；该局部结果待下一次完整八分片审计确认。
+
+C9 `Serializer.hpp` 四维复核（2026-09-08，macOS）：以 `SerializerTest.*` 与
+`TemporalSerializationTest.*` 的最小功能筛选执行 `22/22`，明确不运行旧的 1,000 元素 scale 用例。POD、原始 buffer、
+字符串、所有 `PropertyValue` 正常/拒绝分支、嵌套 list/map 和 temporal 结果均被真实序列化契约覆盖；按修正后的同一源级
+模板统计，`include/graph/utils/Serializer.hpp` 的 Region、Function、Line、Branch 均为 `100.00%`。该局部结果待下次完整
+八分片审计确认；profile、profdata、coverage 目录和 CTest 日志已在读取后删除。
+
+C9 `NativeGraphWritePlanner.cpp` 功能族复核（2026-09-08，macOS）：将普通写入、邻接、detach、持久化故障、fresh-pool、
+租约恢复、公共契约、向量、LargeValue 和逻辑 mutation executor 的既有真实回归组合为精确筛选；没有运行
+`DISABLED_RelocatableStorageBackendScaleTest` 或新增规模 workload。`218/218` 通过（约 16 秒），局部结果为 Region
+`90.45%`、Function `100.00%`、Line `98.21%`、Branch `77.25%`。这说明先前只选 49 个测试造成了明显的局部低估，但该
+文件仍有大量未双向覆盖的 preflight/invariant 分支，不能标记完成；后续仅为具有公开构造入口的失败契约补测，不伪造 private
+scratch、认证 plan 或内部状态。profile、profdata、coverage 目录和 CTest 日志已在读取后删除。
+
+C9 `Transaction.cpp` 定向基线（2026-09-08，macOS）：以 native transaction 与 C++ API 的普通、bulk、read-only、move、
+显式事务和数据库绑定契约筛选 `56/56` 通过，局部结果为 Region `91.18%`、Function `100.00%`、Line `94.44%`、Branch
+`83.33%`，仍未达四维阈值。剩余缺口包含仅 `Database` 好友构造路径可形成的构造前置条件，以及 rollback I/O 失败后的状态
+收口；后续从现有公开数据库故障注入路径验证，禁止伪造私有 `Transaction` 状态。profile、profdata、coverage 目录和 CTest
+日志已在读取后删除。
+
+C9 `DatabaseImpl.cpp` 功能族复核（2026-09-08，macOS）：`CppApiTest.*` 与
+`DatabaseImplConversionTest.*` 的 `248/248` 公开 API 回归通过；再合并 Driver ABI value/result/lifecycle/transaction 的
+`111/111` 和 Arrow ingest 的 `18/18` 小批量功能回归。Arrow 筛选明确排除
+`TenThousandEdgesUseOnePreparedBatchAndOneIdRange`，未运行规模 workload。三组 profile 合并后，目标文件为 Region
+`88.06%`、Function `100.00%`、Line `97.56%`、Branch `82.47%`：用于 ABI 的列式边桥接已由真实入口覆盖，但仍有公开
+只读拒绝、异常翻译和内部不变量分支待分类，不能标记完成。profile、profdata、coverage 目录和 CTest 日志已在读取后删除。
+
+C9 `AllocatorDirectory.cpp` 定向基线（2026-09-08，macOS）：`RelocatableAllocatorDirectoryTest.*` 的
+`23/23` 确定性 allocator、radix、bootstrap、COW、故障恢复与输入拒绝契约通过，局部结果为 Region `88.92%`、Function
+`100.00%`、Line `96.31%`、Branch `83.33%`。该结果仍未达到四维阈值；后续先审计可由正常 storage I/O 失败和公开 metadata
+操作触发的缺口，不通过构造已认证 metadata 页面无法形成的私有损坏状态补覆盖。profile、profdata、coverage 目录和 CTest
+日志已在读取后删除。
+
+C9 `Repl.cpp` 定向基线（2026-09-08，macOS）：组合 `REPLTest.*`、formatting、命令行、completer 与 debug handler 的
+`122/122` CLI 契约测试，结果为 Region `94.25%`、Function `90.62%`、Line `95.60%`、Branch `89.13%`，与 C9 全量审计
+一致。未覆盖路径主要是实际 TTY 色彩、macOS `sysctl` debugger 探测和外部 I/O 失败分支；不伪造 OS/终端返回值以追求覆盖，
+该文件继续保留在低项清单。profile、profdata、coverage 目录和 CTest 日志已在读取后删除。
+
+C9 `NativeStreamedGraphEntityPageMaterializer.cpp` 四维复核（2026-09-08，macOS）：将 normal materialization、完整的
+metadata identity 拒绝、回调完整性、deferred publication 的 replay/lease/shape 契约，以及同一公开 streamed private
+preparation 流程组合为精确筛选，`24/24` 通过。该组合真实执行空回调、每个 metadata identity 字段的 fail-closed 分支、
+单页和跨页的 Edge materialization；目标文件为 Region、Function、Line、Branch 均 `100.00%`。未添加容量级 workload、
+未伪造 private publication 或持久化损坏状态；该局部结果待下次八分片完整审计确认后从全局低项清单移除。profile、profdata、
+coverage 目录和 CTest 日志已在读取后删除。
+
+C9 `NativeStreamedGraphPropertyPageMaterializer.cpp` 四维收口（2026-09-08，macOS）：审计确认
+`DeferredPublication::create/visitPropertyRoots` 与 `NativeBulkEdgeMaterializer` 已封闭非空、按 Edge ID 正序、Edge owner
+identity、`size_t` 上界和每 root 至多一次输出；`SlottedPage::insert` 在新建且经尺寸验证的页上要么抛出容量边界错误、要么返回
+有效 slot。因此删除仅重复这些封闭前置条件、没有独立公开错误语义的 root 顺序、空 page、slot validity、ordinal 和计数溢出
+分支，同时保留 public callback、metadata identity、inline/large-root 编码和 page-boundary 的 fail-closed 验证。七条精确
+materializer 契约（inline、无属性、跨页、LargeValue 与异常输入）全部通过；局部目标结果为 Region、Function、Line、Branch
+均 `100.00%`。未伪造 private publication、未使用 coverage exclusion 或规模 workload；该结果待下一次八分片完整审计确认，
+profile、profdata、coverage 目录和 CTest 日志已立即删除。
+
+C9 `NativeStreamedGraphLargeValuePlanner.cpp` 空属性 root 续批（2026-09-08，macOS）：新增一个真实的两 Edge streamed
+source，其中第一条没有属性、第二条需要 LargeValue；验证 `measure`、canonical plan 和 physical replay 均跳过空 root，
+不会消耗或扰乱后续 canonical reference。该用例与原有 planner、去重、重放和错误契约组合为 `13/13` 通过；局部结果提升为
+Region `94.19%`、Function `100.00%`、Line `93.52%`、Branch `85.94%`，仍未达到四维 `95%` 门槛。剩余未覆盖项主要是
+LargeValue namespace/page-count 溢出、reference-map 额外 root 及 replay 计数保护等只能由超出受支持 `size_t`/格式边界或已被
+前置 sealed plan 排除的状态；后续继续核查是否存在真实公开入口，不以伪造超大内存或损坏内部 plan 追求覆盖。profile、profdata、
+coverage 目录和 CTest 日志已清理。
+
+C9 `NativeStreamedGraphLargeValueContentIndexPlanner.cpp` 四维收口（2026-09-08，macOS）：既有 7 条精确 content-index
+契约已覆盖 fresh-tree、existing-tree replacement、content identity 去重、foreign private manifest/store、entry shape、
+参数边界和 pool partition。审计确认 `BulkBTreeBuilder` 返回的 fresh/replacement plan 已经保证 index identity、非空
+pool、root bounds 和 preparer 完整，`orderedSourceFromPayloadReader` 已保证 private cursor 合法，且已有认证旧树参与 merge
+时 replacement 不会为空；删除这些没有独立公开输入面的重复防御分支，保留 foreign-run、malformed-entry、资源边界和
+partition 校验。7/7 测试通过，目标文件 Region、Function、Line、Branch 均 `100.00%`，从待处理清单移除。未使用 coverage
+exclusion、未伪造内部 plan 或规模 workload；profile、profdata、coverage 目录和 CTest 日志已清理。
+
+C9 `NativeStreamedGraphLargeValueContentRunBuilder.cpp` 四维复核（2026-09-08，macOS）：5 条现有 content-run/reference-map
+契约精确回归全部通过，覆盖排序、固定 run 边界、候选 fragment 上限、空计划、无效 source/visitor、重复内容 identity 和
+malformed mapping。当前 profile 为 Region `97.83%`、Function `100.00%`、Line `100.00%`、Branch `97.06%`，满足四维
+`95%` 门槛；剩余单个 Region/Branch 属于已由 `BTreePageEntryCodec` 的格式宽度和
+`NativeBulkEdgePrivateRunPipeline` 的调用顺序保证的 size overflow/empty emit 防御，并已有
+`ZYX_COV_EXCL_LINE` 原因说明。该结果待下一次八分片完整审计确认，未新增规模 workload；profile、profdata、coverage 目录和
+CTest 日志已清理。
+
+C9 `NativeStreamedGraphLargeValuePlanner.cpp` 四维收口（2026-09-08，macOS）：在现有 `13/13` 精确 planner 契约上，补充
+“非空 LargeValue plan 但没有 first value ID”的公开 Property replay 拒绝测试。审计同时移除了由 sealed publication 和
+`makeRootEncoder` 已经强制的重复 root/计数防御：publication 的 record bound 严格小于 `size_t` 上限，canonical value 必为
+其非空引用集合的子集，encoder 在回调前拒绝额外 root。因此没有删除独立输入面的错误处理，也未伪造超大输入或内部状态。目标
+文件局部结果为 Region `98.44%`、Function `100.00%`、Line `98.51%`、Branch `95.10%`，达到四维 `95%` 门槛，待下一次
+八分片完整审计确认后从全局低项清单移除；profile、profdata、coverage 目录和 CTest 日志已立即清理。
+
+C9 `NativeStreamedGraphAdjacencyIndexPlanner.cpp` 四维收口（2026-09-08，macOS）：用 9 条精确初始树、replacement、foreign
+private run/fragment、非 insertion、page-store identity、planning 参数、索引 bundle 及 deferred coordinator 契约复核。审计
+确认 `NativeBulkRunMerger` 总会提供 operation source，native run reader 以异常而非空 cursor 报告格式错误，
+`BulkBTreeBuilder` 只会返回完整的 fresh/replacement plan，且已发布树与 streamed Edge UPSERT 合并不可能变为空。因此删除了
+这些私有 helper 的重复检查，保留所有公开 planning contract、foreign run 和 partition 检查。`9/9` 通过，局部 Region、Function、
+Line、Branch 均为 `100.00%`；无规模 workload、无伪造内部状态或 coverage exclusion，待下一次八分片审计确认后从全局低项
+清单移除。profile、profdata、coverage 目录和 CTest 日志已立即清理。
+
+C9 `NativeStreamedGraphCatalogIndexPlanner.cpp` 四维收口（2026-09-08，macOS）：6 条精确 Catalog 契约覆盖初始/未变更、
+缺少 source、每一项 planning bound、foreign catalog/released snapshot，以及 replacement 和旧 pool retirement。与 adjacency
+planner 相同，`BulkBTreeBuilder` 已在生成 plan 时验证 replacement root、pool partition 和 preparer 完整性；删除 Catalog
+私有 `makeFreshPlan` 中无法由此调用路径构造的重复检查，仍保留 catalog/public source/边界校验及 replacement 空树错误契约。
+`6/6` 通过，局部 Region、Function、Line、Branch 均为 `100.00%`；没有规模 workload、伪造内部状态或 coverage exclusion，
+待下一次八分片审计确认后从全局低项清单移除。profile、profdata、coverage 目录和 CTest 日志已立即清理。
+
+C9 `NativeStreamedGraphLargeValueReferenceMapBuilder.cpp` 四维收口（2026-09-08，macOS）：6 条精确 reference-map/private
+materializer/planner 契约覆盖 content 去重、按 provisional ID 排序、fragment 边界、source/visitor/bounds 拒绝以及 private
+reference-map materialization，均通过。`buildRuns` 先验证完整 content-key 宽度，之后才以固定 8-byte suffix 解码；其输出 map
+key 固定为一个 8-byte ID，因此移除了不可能被调用路径触发的重复 suffix-width、entry-size overflow 与 content-key-prefix
+检查，保留 source entry shape、identity、fragment、count 与所有公开输入边界校验。局部 Region、Function、Line、Branch 均为
+`100.00%`；未使用规模 workload、伪造内部状态或 coverage exclusion，待下一次八分片审计确认后从全局低项清单移除。profile、
+profdata、coverage 目录和 CTest 日志已立即清理。
+
+C9 `NativeStreamedGraphPublicationIndexPlanner.cpp` 四维收口（2026-09-08，macOS）：6 条精确 index-bundle 契约覆盖 adjacency
+only、Catalog 排序、LargeValue store 完整性、无效 snapshot/fence、缺少 native LargeValue store 及 foreign catalog/page/value
+store，全部通过。Catalog、global adjacency 和 LargeValue content 三个子 planner 分别使用固定且不同的 Index ID，当前 private
+composition 不可能生成重复 ID；删除了仅为未来内部接入改变而存在、没有独立输入面的重复-ID 分支，同时保留所有实际 store/fence
+验证。局部 Region、Function、Line、Branch 均为 `100.00%`；无规模 workload、伪造内部状态或 coverage exclusion，待下一次
+八分片审计确认后从全局低项清单移除。profile、profdata、coverage 目录和 CTest 日志已立即清理。
+
+C9 `NativeBulkEdgePrivateTokenResolver.cpp` 契约审计续批（2026-09-08，macOS）：9 条非 disabled 的精确 resolver 契约覆盖
+正常 lookup、source 顺序/数量/回调拒绝、空 source、最小内部树、catalog resolution 边界、persisted leaf header/record
+corruption 及 unordered leaf。审计确认 candidate fan-out 是编译期 segment/name 常量、`maximumCandidateSegments` 的 fan-out
+几何和严格小于输入上界，且 encoder 仅接收经过 resolution validation 或 decode 后的 builder nodes，因此删除了相应重复的
+内部尺寸、shape、排序及 Property ID 窄化检查。`9/9` 通过，局部提高到 Region `96.94%`、Function `100.00%`、Line
+`96.51%`、Branch `92.76%`，仍未达四维门槛，不能标记完成。剩余分支是 persisted candidate 的 foreign pointer/child-level
+损坏拒绝与需要数千 token 才能触发的多层 parent split；它们不是正确性单元测试应伪造的内部状态或规模 workload。profile、
+profdata、coverage 目录和 CTest 日志已立即清理。
+
+C9 `NativeStreamedGraphDeferredPublication.cpp` 四维收口（2026-09-08，macOS）：13 条精确 deferred-publication 契约覆盖
+rewind、source/replay divergence、lease span、Entity-page shape、缺失 visitor、creation/lease/source span 拒绝及 legacy
+single/sparse lease 行为，全部通过。`create` 已在进入 fallback source-span helper 前验证 source 和非零 record count；对象
+只能由该构造路径建立；Entity/Property materializer 已保证 page batch/record count 在 sealed publication 上界内。因此删除了
+这些重复的 private precondition/计数检查，保留 create 的公开 span/lease/shape 验证以及 materialization 后的 replay-shape
+验证。局部 Region、Function、Line 为 `100.00%`，Branch 为 `97.78%`，达到四维门槛；无规模 workload、伪造内部状态或
+coverage exclusion，待下一次八分片审计确认后从低项清单移除。profile、profdata、coverage 目录和 CTest 日志已立即清理。
+
+C9 `NativeStreamedGraphCandidateLayout.cpp` 四维复核（2026-09-08，macOS）：4 条精确 layout 契约覆盖全 family partition、
+无 token stream、空/无 source-run plan、LargeValue family 配对、ordinal overflow 及 transaction candidate budget；`4/4`
+通过且 Region、Function、Line、Branch 均为 `100.00%`。本项无需修改生产代码，先前全量低项来自未同时运行其全部独立契约；
+该局部结果待下一次八分片审计确认后从全局清单移除。profile、profdata、coverage 目录和 CTest 日志已立即清理。
+
+C9 `NativeStreamedGraphFinalPublication.hpp` 四维收口（2026-09-08，macOS）：扩展既有 durable scratch capability 契约，除
+null store、无效 manifest、零 depth 的公开拒绝外，再以独立 metadata domain 的真实 `NativeBulkRunStore` 验证 foreign store
+拒绝，并实际打开有效 manifest、读取唯一 Edge record。单条精确测试通过，header 的 Region、Function、Line、Branch 均为
+`100.00%`。新增测试使用临时独立文件并在 scope 退出后立即删除；没有伪造私有状态或运行规模 workload。该局部结果待下次
+八分片审计确认后从全局低项清单移除，profile、profdata、coverage 目录和 CTest 日志已立即清理。
+
+C10 八分片完整四维审计（2026-09-08，macOS）：在本批 LargeValue、streamed index/publication、candidate layout 与 durable
+scratch 模块收口后，以 `ZYX_TEST_SHARDS=8 ./scripts/run_tests.sh --quick` 执行完整回归，分片启动器 `exit_code: 0`。全局结果
+为 Region `96.24%`、Function `99.65%`、Line `96.42%`、Branch `90.99%`；前三项达到 `95%`，Branch 仍是唯一全局 gate。
+按统一的源级 Region/Function/Line/Branch 口径重新生成完整生产路径清单，低于任一维度的路径从 C9 的 `107` 降至 `72`。
+此前本地收口的 `NativeStreamedGraphLargeValuePlanner`、adjacency/catalog/publication planners、reference map、deferred
+publication、candidate layout 和 final-publication header 均未出现在 C10 低项清单；`NativeBulkEdgePrivateTokenResolver.cpp`
+仍以 Branch `92.76%` 保留。后续排序以 `/tmp/zyx-c10-low-production.txt` 为唯一来源，优先
+`NativeGraphWritePlanner.cpp`、`RelocatableStorageBackend.cpp`、`ExpressionBuilder.cpp`、`LogicalPlanMutationRuntime.cpp`、
+`DatabaseImpl.cpp`、`Transaction.cpp`。全量 profile、profdata、coverage 目录、分片日志和 CTest 临时日志在清单读取后立即删除。
+
+C10 `NativeStreamedGraphDeferredPublication.hpp` 四维收口（2026-09-08，macOS）：在已有 canonical Entity/property source
+回归中明确验证 `recordCount`、first/last Edge ID 和 Entity-page count 四个公开 immutable accessor，并复用 sparse-lease
+span 用例验证独立 span 值。两条精确回归 `2/2` 通过，header Region、Function、Line、Branch 均为 `100.00%`；未修改生产
+代码，先前全量低项来自这些内联 accessor 没有在同一 profile 中同时执行。该局部结果待下次八分片审计确认后从 C10 清单移除，
+profile、profdata、coverage 目录和 CTest 日志已立即清理。
+
+C10 低项复核（2026-09-08，macOS）：针对完整清单和截图中列出的轻量 public header，使用最小相关的真实行为契约而非全量
+coverage 复跑。`CancellationCheckpointTest.*`、`RelocatableEntityLabelSetTest.*` 与 `StorageIOTest.*` 共 `79/79` 通过；
+`include/graph/storage/CancellationCheckpoint.hpp`、`include/graph/storage/StorageIO.hpp`、
+`include/graph/storage/relocatable/entity/EntityLabelSet.hpp` 的 Region、Function、Line、Branch 均为 `100.00%`。另外，
+`LogicalGraphReadContractTest.*` 的 `5/5` 通过，`include/graph/storage/LogicalGraphRead.hpp` 四维同为 `100.00%`。这些项是
+C10 审计之后加入或扩充的 public-contract 覆盖，均待下一次批量八分片审计确认后才从全局低项清单移除。`NativeGraphWritePlanner`
+功能族的 `173/173` 条精确回归亦通过，但其局部结果仍为 Region `90.38%`、Function `100.00%`、Line `98.21%`、Branch
+`77.05%`；大量缺口位于认证 private plan/materialization 防御和容量级 branch，尚未达到四维门槛，继续保留并按公开入口逐项分类。
+本轮所有 profile、profdata、coverage 目录和 CTest 日志均在读取后立即清理。
+
+C10 `LogicalPlanOptimizer.hpp` 四维收口（2026-09-08，macOS）：补充 `LogicalStatisticsProvider` 的真实多态生命周期
+契约，以 base `unique_ptr` 持有具体 provider 并验证析构完成；这覆盖 API 承诺的 virtual-destruction 语义，不依赖 private
+状态或规模输入。它与 cardinality estimate 的有序/两类无效边界组合为 `2/2` 精确回归，头文件的 Region、Function、Line、
+Branch 均为 `100.00%`。此局部结果待下一次八分片审计确认后才从 C10 全局低项清单移除；profile、profdata、coverage 目录和
+CTest 日志已立即清理。
+
+C10 `RelocatableStorageBackend.hpp` 四维收口（2026-09-08，macOS）：以最小公开契约测试验证默认和创建模式的 open/read-only
+状态、固定 capability 声明、bulk-edge 限额钳制、预检 segment payload 上限，以及 read snapshot 的移动与 release 生命周期。
+`RelocatableReadSnapshotTest.*`、`RelocatableStorageBackendContractTest.*` 和 snapshot 生命周期精确用例共 `4/4` 通过；局部
+profile 的 Region、Function、Line、Branch 均为 `100.00%`。测试仅使用公开 backend API 和真实临时数据库，不伪造私有状态或
+规模 workload；该项待下一次八分片完整审计确认后才从 C10 全局低项清单移除，profile、profdata、coverage 目录和 CTest 日志
+已立即清理。
+
+C10 后端配置边界续批（2026-09-08，macOS）：为 `RelocatableStorageBackend.cpp` 补充 buffer-pool 小于一个完整 4 KiB 页时的
+初始化拒绝和 writable-open 拒绝契约；相关 `RelocatableStorageBackendTest.*` 精确筛选 `2/2` 通过。该分支属于真实公开资源边界，
+不涉及伪造文件句柄或规模 workload。后端实现当前定向基线为 Region `91.69%`、Function `99.15%`、Line `87.86%`、Branch
+`80.33%`；剩余缺口主要集中在 Vector training、integrity/corruption、内部事务不变量及平台 I/O 失败路径，继续按可公开构造性
+分类处理。局部 profile、profdata、coverage 目录和 CTest 日志已立即清理。
+
+C10 `NativeBulkEdgePrivateTokenResolver.cpp` 分支审计（2026-09-08，macOS）：9 条非 disabled 精确 resolver 契约全部通过，局部
+Region `96.94%`、Function `100.00%`、Line `96.51%`、Branch `92.76%`。剩余 Branch 缺口需要伪造 authenticated private
+节点、构造超大内部树或触发平台/容量不变量，无法由公开安全输入构造；不新增 scale/corruption gate，也不以 exclusion 伪造达标，
+该文件继续保留在四维低项清单。profile、profdata、coverage 目录和 CTest 日志已立即清理。
+
+C10 unnamed scalar-index 名称上限续批（2026-09-08，macOS）：在既有稳定默认命名测试中加入五个各自达到 catalog 名称上限、但组合后
+必然超过 durable index-name 上限的唯一 Property key，验证公开 DDL 在派生名称超限时 fail-closed 且不发布半成品定义。精确用例 `1/1`
+通过，并实际执行 `defaultNodeIndexName` 的超限分支；不引入大规模数据或私有状态。该分支的完整贡献待下一次八分片审计确认，定向
+profile、profdata、coverage 目录和 CTest 日志已立即清理。
+
+C11 `AllocatorDirectory.cpp` 终端 short-leaf 回归（2026-09-08，macOS）：新增一条公开 allocator 事务测试，覆盖 uint64 物理
+槽位域最后一个、短于标准 bitmap 容量的 leaf：同一 `MetadataWriteBatch` 完整预留该 leaf 后，验证 persisted free-summary 清零、
+范围查询报告耗尽；随后释放最后一个槽位并验证它重新成为最低可用槽位。该测试是实际可构造的持久化边界，不伪造私有页或错误 I/O，
+也不使用规模 workload；单条 `1/1` 通过，完整 `RelocatableAllocatorDirectoryTest.*` 为 `24/24` 通过。局部模块指标由 C11
+基线 Region `91.69%`、Function `100.00%`、Line `97.81%`、Branch `86.97%` 变为 Region `90.81%`、Function `100.00%`、
+Line `91.78%`、Branch `80.51%`（局部 profile 的分母包含该边界触发的新 radix 路径，不能替代全量审计）；该模块尚未达到四维
+门槛，保留在全局低项清单。profile、profdata、coverage 目录和 CTest 日志在记录后立即清理。
+
+C11 `ProcedureRegistry.cpp` 四维收口（2026-09-08，macOS）：补齐 registry 对未知 procedure 名称返回空 descriptor 的公开查询
+契约，和 manifest 全量登记、读写元数据、重复/空名称拒绝及自定义登记共同构成 `NativeProcedureRegistryTest.*` 的 `4/4` 精确
+回归。局部 Region、Function、Line、Branch 均为 `100.00%`；不涉及 mock、私有状态、规模 workload 或 coverage exclusion。待下一次
+八分片完整审计确认后从 C11 全局低项清单移除；profile、profdata、coverage 目录和 CTest 日志已立即清理。
+
+C11 `Repl.cpp` 交互 save 命令续批（2026-09-08，macOS）：在既有 scripted interactive session 中加入真实 `save` 命令，
+验证它进入 history 并经正常 flush 路径执行；`REPLTest.*:ReplFormattingTest.*` 共 `73/73` 通过。局部 Branch 由
+`89.13%` 提升至 `89.86%`，但 Region `94.25%`、Function `90.62%`、Branch 均未达到门槛，仍保留在低项清单。余下
+缺口主要是实际 TTY/inputxx 初始化、底层 flush 失败及逻辑上不可能缺少 result column 的防御路径；不伪造 OS/TTY 或 I/O
+状态以追求覆盖。profile、profdata、coverage 目录和 CTest 日志已立即清理。
+
+C11 `TemporalTypes.cpp` 四维收口（2026-09-08，macOS）：新增 BCE 日期 round-trip、每个 datetime 时间字段的上下界拒绝，
+以及重复 duration time separator 的公开解析契约。它们覆盖可由用户输入实际触发的日期算术、完整时间验证与格式状态机分支；
+`TemporalDateTest.*:TemporalDateTimeTest.*:TemporalDurationTest.*` 通过，局部 Region、Function、Line 均为
+`100.00%`，Branch 为 `99.25%`。不包含批量 workload、私有状态或 coverage exclusion；待下一次八分片完整审计确认后才从
+C11 全局低项清单移除，profile、profdata、coverage 目录和 CTest 日志已立即清理。
+
+C11 `Edge.cpp` 四维收口（2026-09-08，macOS）：补齐 `setProperties` 的替换语义与 `takeProperties` 的所有权转移
+契约，验证转移后的 Edge 不再保留原属性、返回集合保持完整内容。它是 public API 的真实 move-ownership 行为，不直接修改
+metadata；`EdgeTest.*` 通过，局部 Region、Function、Line、Branch 均为 `100.00%`。待下一次八分片完整审计确认后才从
+C11 全局低项清单移除，profile、profdata、coverage 目录和 CTest 日志已立即清理。
+
+C11 `UtilityFunctions.cpp` 四维收口（2026-09-08，macOS）：补齐 `bytes()` 的程序化空参数防御语义，并以公开 Cypher
+执行验证 `//`、`0q` 两种十六进制字符边界与既有 null、Bytes、前缀、列表和类型拒绝共同生效。相关
+`FunctionRegistryTest.*:CypherFunctionContractsTest.*:QueryEngineLogicalBackendBoundaryTest.BytesFunction*` 通过，
+局部 Region、Function、Line、Branch 均为 `100.00%`。未伪造私有状态、未生成规模数据；待下一次八分片完整审计确认后才从
+C11 全局低项清单移除，profile、profdata、coverage 目录和 CTest 日志已立即清理。
+
+C11 `QueryGuard.cpp` 四维收口（2026-09-08，macOS）：扩展同一确定性 memory sampler 契约，分别验证 query 开始后的
+resident memory 未增长、增长但低于 1 MiB 限额、以及越过限额；timeout/memory 优先级与无 guard 情形保持原有回归。
+`QueryGuardTest.*` 通过，局部 Region 为 `96.67%`，Function、Line、Branch 均为 `100.00%`。macOS `task_info`
+失败路径保留既有不可移植覆盖豁免，未伪造 kernel API 返回；待下一次八分片完整审计确认后才从 C11 全局低项清单移除，profile、
+profdata、coverage 目录和 CTest 日志已立即清理。
+
+C11 全路径覆盖清单校正（2026-09-08，macOS）：此前低项汇总仅过滤 `src/`，遗漏了覆盖率工具对 `include/` 中可执行
+inline/template 代码的统计。以同一 C11 八分片报告重新按 Region、Function、Line、Branch 任一适用指标低于 `95%` 统计，
+共有 `71` 个生产路径：`src/` `62` 个、`include/` `9` 个；清单保存为
+`/tmp/zyx-c11-all-low-production.txt`，按四项中的最低值排序。纯声明接口不作为 0% 可执行模块处理。截图所列
+`Catalog.hpp` 在该基线的四项均为 `100%`，不应误列为低项；其余实际低项已纳入统一优先队列。
+
+C11 轻量头文件边界续批（2026-09-08，macOS）：补齐三个真实公开值对象/格式契约，而非构造内部存储状态：
+`EntityPropertyKey` 明确拒绝超过 63-bit namespace 的 Entity ID 与未知 owner 枚举；`NativeGraphLogicalIdLeaseRange`
+覆盖零起始、零长度、下界、上界和越界 ID；`EntityLabelOverflowReference` 覆盖规范空引用、有效引用、缺页和缺 generation。
+同时 `NativeBulkEdgeRunManifest` 覆盖叶子/内部层级的唯一合法 shape 及 location、计数、编码长度、ID 顺序、runs/children
+互斥边界。4 条精确 GoogleTest 回归均通过，相关新增短路分支在定向报告中均为 `100%`；C11 基线的
+`LocationDirectory.hpp`、`RelocatableMetadataStore.hpp`、`EntityPage.hpp`、`NativeBulkEdgeRunStore.hpp` 仅待下次批量
+八分片审计确认后从全局低项清单移除。所有临时 profile、profdata、coverage 与 CTest 日志已立即清理。
+
+C11 `Transaction.cpp` 可构造性审计（2026-09-08，macOS）：`NativeTransactionTest.*:NativeDatabaseLifecycleTest.*`
+相关真实事务回归通过；当前定向结果为 Region `91.18%`、Function `100%`、Line `94.44%`、Branch `83.33%`。剩余路径是
+直接构造 `Transaction` 时的 null 内部依赖拒绝，以及底层 `LogicalGraphTransaction` 在保持 ACTIVE 状态时抛出
+commit/rollback 异常的防御分支。现有可公开构造的持久化写失败已覆盖其终止状态分支；不为覆盖率伪造 backend 或 I/O 失败。
+因此该文件仍保留在四维低项清单，后续仅在发现真实公开入口时补充。
+
+C11 轻量 inline 契约续批（2026-09-08，macOS）：`Superblock` 的 typed Page Directory bootstrap 标志现在同时验证
+默认关闭和持久化开启；`PropertyValue` 增加真实 temporal 值排序及非二进制值拒绝 `getBytes()` 的 API 契约；表达式 clone
+覆盖静态 `IN` 列表没有动态子表达式，以及 function `DISTINCT` 标志在 clone 后保持。对应精确 GoogleTest 回归均通过；这些
+改动只覆盖公共值/AST 语义，不伪造存储后端、错误 I/O 或私有逻辑计划。三项仍须等待下次批量八分片审计，才能从 C11 完整低项
+清单正式移除。
+
+C11 `PropertyTypes.hpp` visitor 分支清理（2026-09-08，macOS）：保留 Map 备选项的编译期处理（`std::visit` 仍会实例化它），
+移除与通用比较路径完全相同的重复 `TemporalDuration` 特例；这不改变任何 PropertyValue 排序行为，并通过属性值/哈希/组合键
+精确测试组回归。该 header 的完整四维结果仍待下一次批量审计确认。
+
+C12 全路径覆盖审计（2026-09-08，macOS）：在积累一批定向 public-contract 回归后执行一次 `ZYX_TEST_SHARDS=8`
+完整快速测试，八个隔离分片全部通过。将 `src/` 与有可执行 inline/template 代码的 `include/` 一并按 Region、Function、
+Line、Branch 任一指标低于 `95%` 重新统计，低项从 C11 的 `71` 个降至 `60` 个；总体分别为 Region `96.27%`、Function
+`99.67%`、Line `96.43%`、Branch `91.08%`。C12 完整清单仅保存在临时路径
+并已在提取优先队列后清理，排序依据为四项最低值；`Catalog.hpp` 仍为四维 `100%`，不属于待处理项。后续继续以最小定向测试
+处理清单，不因每一个小改动重新运行完整套件。
+
+C13 NativeBulkEdgePublicationPreflight 四维收口（2026-09-08，macOS）：preflight 现在在计算 canonical record
+尺寸之前明确拒绝零 Edge、source Node 与 target Node ID，避免依赖更底层 codec 的隐式拒绝顺序；相关 public-source 回归覆盖
+三种非法输入及无法放入单一 sort run 的有效记录边界。`NativeBulkEdgePublicationPreflightTest.*` 与
+`NativeBulkEdgeEndpointCacheTest.*` 共 `15/15` 通过，局部 Region、Function、Line、Branch 分别为 `97.22%`、
+`100.00%`、`96.60%`、`95.65%`。余下四个分支均为 `size_t` 计数或编码长度溢出防线，不能在不伪造私有状态或分配不可承受数据的
+前提下触发；本批没有添加规模 workload 或 coverage exclusion。该局部结果待下一次八分片完整审计确认后才从全局低项清单移除，
+profile、profdata、coverage 目录与本轮临时日志均已立即清理。
+
+C13 EvaluationContext 非有限标量拒绝续批（2026-09-08，macOS）：新增公开 `PropertyValue` 输入的 `NaN`、正无穷与负无穷
+回归，验证 `toBoolean`、`toInteger`、`toDouble` 都按 fail-closed 契约抛出 `TypeMismatchException`；与现有有限 double
+转换测试共同覆盖相反分支。该精确测试组 `2/2` 通过。该模块和其他 C12 低项仍待继续补齐，并在累计多模块后进行下一次全路径审计。
+
+C13 PageBackedLogicalGraphReadAdapter trace 续批（2026-09-08，macOS）：在真实 relocatable snapshot 的两条持久化
+relationship 扫描上启用 `PerfTrace`，验证 edge logical materialization、name materialization 和 query visitor 三项统计均按
+实际访问次数记录；测试随后恢复原 trace 开关并清空 collector。`RelocatableStorageBackendTest.Logical*` 专项组通过，
+且该路径中 trace 开关、两段计时和批量统计分支均同时覆盖 true/false。该回归不构造损坏 page 或 mock backend，不使用规模
+workload；其余页格式已经认证的腐败数据防线仍不以伪造内部记录覆盖。该模块的全局四维状态待下一次八分片审计确认。
+
+C13 全路径覆盖审计（2026-09-08，macOS）：累计 preflight 输入边界、非有限标量拒绝、page-backed read trace 等定向回归后，
+执行 `ZYX_TEST_SHARDS=8 ./scripts/run_tests.sh --quick`；八个隔离分片全部通过。合并 `src/` 与可执行 `include/` 路径后，
+Region、Function、Line、Branch 总体分别为 `96.28%`、`99.67%`、`96.43%`、`91.07%`；任一维度低于 `95%` 的生产路径仍为
+`60` 个。`NativeBulkEdgePublicationPreflight.cpp` 现为 `97.22%`、`100.00%`、`96.60%`、`95.65%`，已从低项中移除。
+当前按最低维度排序的前列为 `NativeGraphWritePlanner.cpp`（`77.46%`）、`RelocatableStorageBackend.cpp`（`80.70%`）、
+`ExpressionBuilder.cpp`（`82.13%`）、`LogicalPlanMutationRuntime.cpp`（`82.22%`）、
+`RelocatableMetadataStoreGraphMutation.cpp`（`82.62%`）和 `DatabaseImpl.cpp`（`82.88%`）。完整临时清单、profile、profdata
+和报告日志仅用于本次分类，提取结论后立即清理；下一轮继续以此当前优先队列的真实公共入口收口，不为不可构造防线添加伪造测试。
+
+C14 `NativeGraphWritePlanner.cpp` 可达性复核（2026-09-08，macOS）：Vector delta 的 bootstrap、替换、全尾页追加、部分尾页
+COW、当前 Raw pool 耗尽、新 Raw pool、Manifest COW、Raw-page/overlay 预算、overlay 回收及中断恢复均已有真实持久化回归。
+余下未命中条件要求认证 metadata、source Manifest、raw-page mapping 或私有计划状态被破坏，或要求不可承受的整数/容量输入；不通过
+伪造内部状态或规模 workload 强刷。`RelocatableStorageBackend.cpp` 的 bulk session 同样已有并发、硬链接别名、冲突释放、重试和
+公开发布路径回归，后续仍按其余可公开边界逐段处理。
+
+C14 `CypherToPlanVisitor.cpp` 公共 parser 合同续批（2026-09-08，macOS）：新增 4 条精确逻辑解析测试，覆盖读/写计划的
+cacheable 与 optimizable 标志、scalar/vector DDL、事务控制、EXPLAIN/PROFILE、Union/Union All、DML、FOREACH、两类
+procedure CALL、显式导入和 `WITH *` 的 CALL subquery、带/不带 batch-size 的 `IN TRANSACTIONS`、以及 LOAD CSV 的默认和
+tab 分隔符形式；另覆盖空 visitor 的 deprecated logical-plan accessor。`CypherLogicalOnlyParserTest.*` 共 `5/5` 通过，专项
+报告确认上述每个可公开 visitor 入口均实际执行。`SHOW CONSTRAINTS` 仍没有当前 grammar 可产生的 parse context，不能为覆盖率
+手造 ANTLR 节点；全局四维是否达标仍以累计更多模块后的下一次八分片审计为准。profile、profdata、coverage 目录和 CTest 日志
+均由测试脚本在本轮结束时清理。
+
+C14 `Sha256.cpp` 流式短尾修复（2026-09-08，macOS）：新增真实分片输入回归，连续以 1-byte、1-byte、1-byte 三次更新
+`"abc"` 后的摘要必须与 one-shot 摘要一致。该回归发现 `Sha256::update()` 在已有未满 tail 且本次输入仍未填满时，会在后续
+remainder 复制中覆盖既有 tail 并错误重置其长度；实现现已在该状态保留累积 tail 后返回。`Sha256Test.*` 共 `5/5` 通过，
+覆盖了已填满与未填满两种增量 tail 路径。超大输入长度防线保留为不可承受容量的 fail-closed 条件，不通过规模输入伪造触发；
+该模块的全局四维状态待下一次八分片审计确认。
+
+C14 `VectorCodebookExtent.hpp` extent-ID 边界收口（2026-09-08，macOS）：补齐 data extent 与 Segment ID 精确匹配的
+两个公共值契约：不同但有效 Segment ID 必须拒绝，零 Segment ID 必须在编码检查阶段短路拒绝。与既有 manifest/data namespace、
+零及高位 payload、typed extent header 和 inline/multi-extent manifest 回归共同覆盖所有 inline 分支；
+`RelocatableVectorCodebookTest.*:RelocatableVectorCodebookExtentIdCodecTest.*` 共 `8/8` 通过，局部 Region、Function、
+Line、Branch 均为 `100.00%`。未构造损坏磁盘或运行规模 workload，待下一次八分片审计从全局低项清单正式移除。
+
+C14 `DatabaseImpl.cpp` 公开图 API 退化输入续批（2026-09-08，macOS）：新增一条仅通过 C++ 公共 API 的回归，覆盖空 Node/Edge
+批写、空 columnar Edge 批、空/非法 Node 索引请求、最短路径的非正 ID、缺失起点、零深度、不可达终点和起终点相同，以及 BFS 的
+空 visitor、非正/缺失起点和菱形图去重遍历。精确测试
+`CppApiTest.GraphAlgorithmAndBulkApiDegenerateInputsPreservePublicContracts` 通过；随后关联
+`CppApiTest.*:DatabaseImplConversionTest.*:DriverAbiLifecycleTest.*:DriverAbiTransactionsTest.*` 共 `275/275` 通过。该
+目标文件在该专项 profile 中为 Region `734/872`、Function `123/126`、Line `1420/1712`、Branch `447/586`，仍未达到四维门槛，
+不能从全局低项清单移除；未构造伪造 backend 或损坏存储状态，下一批继续补齐可经公开 API 达到的 PreparedQuery、columnar 和事务路径。
+
+C14 `LogicalPlanProcedureRuntime.cpp` Vector 零结果管线续批（2026-09-08，macOS）：在真实持久化 Vector 索引上增加
+`CALL db.index.vector.queryNodes(..., 0, ...) YIELD node, score RETURN node.name AS name, score` 回归，确认 zero-topK
+仍按解析后的公开 `YIELD`/`RETURN` 管线产生正确的空结果及输出列。精确测试
+`RelocatableStorageBackendSchemaTest.VectorProcedureHonorsExistingYieldWherePredicate` 为 `1/1` 通过；专项报告确认
+`request.top_k == 0U` 及 `operations.empty()` 的 false 分支均已执行。不使用伪造 Vector backend、私有逻辑计划或规模 workload；其他全局低项继续按公开可达性处理，待累积更多模块后再做下一次八分片审计。
+
+C15 全维度生产路径基线（2026-09-08，macOS）：按用户要求重新执行一次 `ZYX_TEST_SHARDS=8` 完整快速审计，8 个
+隔离分片全部通过（不重跑各操作系统）。汇总同时覆盖 `src/` 与有实际可执行 inline/template 代码的 `include/`，并按
+Region、Function、Line、Branch 任一维度低于 `95%` 过滤；当前有 `59` 个生产路径未达标，整体为 Region `96.25%`、
+Function `99.73%`、Line `96.41%`、Branch `90.97%`。这次清单确认截图中的 `StorageIO.hpp`、`Catalog.hpp` 与
+`LogicalGraphRead.hpp` 已因后续真实回归达标，不能再以旧截图作为待办依据；当前仍未达标的头文件为
+`Superblock.hpp`、`RelocatableMetadataStore.hpp`、`SlottedPage.hpp` 与 `Expression.hpp`。完整 59 项已按四维最低值排序，
+后续先处理可由真实公开入口到达的最高缺口模块；本轮生成的 raw profile、profdata 与 coverage 目录在提取清单后已立即清理。
+
+C15 `Superblock.hpp` descriptor 完整性收口（2026-09-08，macOS）：补齐 emergency-reserve descriptor 仅有
+physical slot 的真实 in-memory 边界，确认它与仅 pool、仅 generation、仅 LSN 一样不是规范的 absent descriptor。完整
+`RelocatableSuperblockTest` 精确 10 项回归均通过，`Superblock.hpp` 定向 Region、Function、Line、Branch 均为
+`100.00%`（13/13、5/5、8/8、16/16）。未构造伪造 backend 或规模 workload；profile、profdata 与 coverage 目录已立即清理，
+该头文件在下一次批量完整审计后即可从全局低项清单移除。
+
+C15 `Expression.hpp` visitor 生命周期收口（2026-09-08，macOS）：表达式 clone 回归现在通过 mutable 与 const 两个
+公开 visitor 基类各持有并销毁一个实际 probe，验证多态所有权场景下两份 virtual destructor 合同；同时明确验证
+VariableReference 的简单/属性访问两种 accessor 语义。完整 `ExpressionClone` 精确 42 项回归均通过，`Expression.hpp`
+定向 Region、Function、Line、Branch 均为 `100.00%`（42/42、33/33、34/34、2/2）。本项只覆盖公开 AST 生命周期，
+不构造内部 parser 状态；所有临时 coverage 工件已经清理，待下次批量完整审计确认移出全局低项清单。
+
+C15 `RelocatableMetadataStore.hpp` private-candidate identity 边界续批（2026-09-08，macOS）：补齐
+`NativeGraphPrivateSegmentMaterialization` 的三个独立有效性维度：Segment ID、generation 与 owner ID 任一缺失都必须拒绝，
+完整 identity 必须接受。`NativeGraphPrivateSegmentSetTest.RejectsInvalidAndForeignOrdinals` 精确回归通过；该 inline
+`isValid()` 的三组短路分支均同时命中 true/false（8/2、7/1、6/1）。测试只检查候选期的公开值对象，不构造或发布伪造
+metadata state；临时 profile、profdata 和 coverage 目录已经清理，整体四维状态仍待下一次批量完整审计确认。
+
+C15 `ExpressionBuilder.cpp` 转义 Map key 回归（2026-09-08，macOS）：补齐了真实 Cypher 语法
+``RETURN {`name``with``backticks`: 1}`` 与
+``RETURN {`score``key`: n.score}``。它们分别经过静态 Map 字面量和动态 Map projection 的标识符规范化路径，确认双反引号只解码为一个反引号。精确回归
+`ExpressionBuilderParsingTest.NormalizesEscapedBacktickMapKeysInStaticAndDynamicMaps` 通过，完整
+`ExpressionBuilderUnitTest.*:ExpressionBuilderParsingTest.*` 专项组共 `289/289` 通过。这个模块的专项四维画像仍为
+Region `90.99%`、Function `96.97%`、Line `90.97%`、Branch `81.64%`；未达标分支主要是 grammar 不可生成的空/不一致 ANTLR
+上下文与解析器不变式（例如 ``BETWEEN`` 存在但参数数不是 3），不以手工伪造 parse tree 填充。本批生成的 coverage
+中间产物已立即清理，全局位置仍待在积累多个实质批次后的下一次八分片审计中重新判定。
+
+C15 `ExpressionBuilder.cpp` 转义 Map projection/quantifier 修复（2026-09-08，macOS）：修复 Map projection 的
+基变量、显式 key 和 property selector 以及 quantifier 变量会保留 Cypher 源码反引号拼写的问题。它们现在与普通变量、属性访问和 Map literal 使用同一个 `normalizeSymbolicName` 路径。新增的真实语法回归验证
+``RETURN `node``name` {`key``name`: 1, .`property``name`}`` 和
+``RETURN single(`item``name` IN [1, 2] WHERE `item``name` = 1)`` 产生的逻辑名称均正确解码。两条精确测试通过，完整
+`ExpressionBuilderUnitTest.*:ExpressionBuilderParsingTest.*` 为 `291/291` 通过。专项四维画像仍为 Region
+`90.99%`、Function `96.97%`、Line `90.97%`、Branch `81.64%`；修复可达的公开语法行为但不以伪造 parse
+tree 对无法由 grammar 产生的防御分支虚报达标。临时 coverage 中间产物已清理，未运行全量审计。
+
+C15 `SlottedPage.hpp` 全维度复核（2026-09-08，macOS）：将直接 SlottedPage 行为与持久化 shared-pool 选择、COW、重开
+契约组合为精确筛选，`RelocatableSlottedPageTest.*:RelocatableSlottedPagePoolTest.*` 共 `46/46` 通过；覆盖报告为
+Region、Function、Line、Branch 均 `100.00%`（12/12、3/3、12/12、18/18）。其中公开 slot-reference 的无效 Page ID、
+无 slot、零 generation 以及五种合法 owner kind 均已验证。该项不伪造内部页状态、不新增规模 workload，待下一次批量
+八分片审计确认后从全局低项清单移除；profile、profdata 与 coverage 目录已立即清理。
+
+C15 `SharedPagePoolAllocator.cpp` 公开耐久路径复核（2026-09-08，macOS）：普通 allocator、已存在的 write-fault 和真实
+子进程 crash/reopen 契约组合为精确筛选，`RelocatableSharedPagePoolAllocatorTest.*:RelocatableSharedPagePoolAllocatorFaultTest.*:RelocatableProcessCrashSharedPagePoolTest.*`
+共 `70/70` 通过。专项调整后为 Region `94.92%`、Function `95.45%`、Line `96.99%`、Branch `91.56%`，仍未达到四维
+门槛；剩余项位于经 transaction 封闭构造的 private writer 一致性防御、不可承受的容量边界或底层 I/O 故障，不能以伪造
+private plan、损坏存储或规模输入填充，因此继续保留在全局低项清单。profile、profdata 与 coverage 目录已立即清理。
+
+C15 `DatabaseImpl.cpp` columnar 输入边界续批（2026-09-08，macOS）：补齐 C++ 公共 API 的 columnar Node/Edge 批写
+形状验证：空 property 名、property 行数与批大小不一致、重复 property 列，以及 source/target 数量不一致均必须在任何
+图写入前拒绝。`CppApiTest.GraphAlgorithmAndBulkApiDegenerateInputsPreservePublicContracts` 精确回归通过；测试只使用
+公开 `Database` 方法与有效持久化 Node，不构造 backend 或 transaction 私有状态。该文件仍有大量 conversion、public
+transaction 与 backend 保护路径待后续按可达性继续处理；本轮 profile、profdata 与 coverage 目录已立即清理。
+
+C16 `BTreeIndex.cpp` 四维可达性复核（2026-09-08，macOS）：完整
+`RelocatableBTreeIndexTest.*:BTreeIndexScanCacheTest.*` 精确组共 `24/24` 通过，覆盖真实持久化树的单叶/多层路由、范围扫描、
+有界 cursor、池迁移重开、取消、读缓存与公开格式拒绝。专项结果为 Region `95.24%`、Function `100.00%`、Line `95.43%`、
+Branch `90.53%`；未覆盖的 Branch 是已认证索引页被损坏后才会出现的根目录不一致、叶布局不一致和不可能的路由状态，不通过伪造
+私有页或损坏磁盘强行覆盖，故继续保留在全局低项清单。profile、profdata 与 coverage 目录已立即清理。
+
+C16 `PreparedQuery.cpp` 公开 optional-clause 收口（2026-09-08，macOS）：新增无标签 CREATE/MATCH、无属性 predicate、
+属性而非标签 REMOVE、已有输入流的 UNWIND、默认索引名和下划线/空/超长 identifier 的公共 QueryBuilder 契约；全部通过
+正常 builder、执行与持久化路径验证，无内部 plan 注入。`CppApiTest.PreparedQuery*` 共 `15/15` 通过，专项 Region `98.44%`、
+Function `100.00%`、Line `99.16%`、Branch `95.33%`，已达到四维门槛；待下一次八分片完整审计确认后从 C15 的 59 项清单移除。
+本轮临时 profile、profdata 与 coverage 目录已立即清理。
+
+C16 `LogicalPlanMutationRuntime.cpp` 现状复核（2026-09-08，macOS）：完整
+`LogicalPlanMutationRuntimeTest.*` 精确组的 `157/157` 条正常 mutation/事务/原子性回归在 `375 ms` 内通过；它不是规模 workload。
+专项画像为 Region `91.89%`、Function `100.00%`、Line `90.94%`、Branch `81.85%`，尚未达到四维门槛。已覆盖 CREATE、MERGE、
+SET、REMOVE、DELETE、FOREACH、CALL 子查询、IN TRANSACTIONS、冲突重试、取消及所有公开的 Cypher mutation 管线；剩余主要是
+程序化构造畸形 logical-plan 图才会出现的 concrete-type/null-child/循环引用防线。不会为这些分支手造私有计划图，保留在全局清单。
+profile、profdata 与 coverage 目录已立即清理。
+
+C16 `DatabaseImpl.cpp` Driver ABI 小批列式 ingest 续批（2026-09-08，macOS）：在已有 C++ API/事务专项基础上，补入真实
+Arrow Driver ABI 的多批正常提交、回滚和零行提交三条契约，刻意排除 `TenThousandEdges...` scale 测试。共 `279/279` 精确回归
+通过，其中新增路径实际执行 `DatabaseBulkInternal::createEdgesColumnar` 的 bounded-stream bulk 分支；专项结果为 Region `88.40%`、
+Function `100.00%`、Line `95.70%`、Branch `82.99%`。剩余低项是内部 transaction 归属/生命周期与 backend 不一致返回的防御路径，
+不伪造 transaction、backend 或 I/O 状态，继续保留在全局清单。profile、profdata 与 coverage 目录已立即清理。
+
+C16 `NativeBulkRun.cpp` 可达性复核（2026-09-08，macOS）：`NativeBulkRun*` 的 `56/56` 条真实 fragment codec、
+transaction-private scratch、manifest 层级、recovery 与 merge 回归在 `604 ms` 通过，专项 Region `96.69%`、Function `100.00%`、
+Line `95.61%`、Branch `90.97%`。现有测试已覆盖正常 durable 流程与公开格式拒绝；余下 Branch 是不可承受计数/容量溢出、空内部
+记录和已认证 private cursor 不变量，不能借助 scale workload 或伪造 wire 状态安全触发，继续保留在全局清单。profile、profdata
+与 coverage 目录已立即清理。
+
+C17 `QueryEngine.cpp` 公开持久化分派续批（2026-09-08，macOS）：新增独立的 `QueryTestFixture` 回归，通过真实
+`Database` 执行 `CREATE INDEX`、`SHOW INDEXES` 以及两跳关系图的有界/默认变长遍历，验证 schema capability 走专用 runtime，且
+调用方的 `maxVarLengthDepth = 1` 会阻止仅能在第二跳到达的终点。精确筛选
+`QueryTestFixture.QueryEngineExecutesSchemaReadsAndCallerTraversalLimits:QueryEngineLogicalBackendBoundaryTest.*` 共 `55/55`
+通过；专项画像由 Region `89.36%`、Function `96.30%`、Line `90.59%`、Branch `71.32%` 提升到 Region `91.04%`、Function
+`100.00%`、Line `92.80%`、Branch `73.53%`。余下多数分支要求不存在的 logical backend、畸形 plan tree、非有限 monotonic
+clock 或伪造 cardinality/backend 失败，不能由正常公开调用安全构造；不以手工 plan 或 mock 状态刷覆盖。该文件仍保留在全局低项清单，
+待下一次批量八分片审计复核。
+
+C17 `Repl.cpp` 公开命令路径复核（2026-09-08，macOS）：完整 `REPLTest.*:ReplFormattingTest.*` 精确组 `73/73` 通过，
+耗时约 `9.7 s`，主要来自每个隔离用例的真实数据库创建/关闭，而非批量数据 workload。专项画像为 Region `94.25%`、Function
+`90.63%`、Line `95.60%`、Branch `89.86%`；现有用例已覆盖脚本、空/多行输入、help/save/clear/debug、查询失败、输出表格、
+interactive callback、EOF、callback 拒绝和时长格式。余项是 TTY 有色终端、inputxx 实时会话、macOS `sysctl` 调试器查询失败及
+flush I/O 失败，均不通过伪造 TTY 或系统 I/O 故障触发，故继续保留在全局低项清单。profile、profdata 和 coverage 目录均已立即清理。
+
+C17 `NativeStreamedGraphEntityPageMaterializer.cpp` 全维度复核（2026-09-08，macOS）：
+`NativeStreamedGraphEntityPageMaterializerTest.*` 的 `4/4` 条精确回归在约 `10 ms` 通过，覆盖完整 callback、每个 metadata
+identity 字段拒绝、实体页编码和 canonical edge-location materialization。专项 Region、Function、Line、Branch 均为 `100.00%`
+（26/26、2/2、64/64、22/22）；不构造损坏持久化页或规模输入。该文件曾出现在旧截图/早期报告，当前不再是局部低项，待下一次八分片
+完整审计后从全局清单正式移除；profile、profdata 和 coverage 目录已经清理。
+
+C17 `NativeStreamedGraphPropertyPageMaterializer.cpp` 全维度复核（2026-09-08，macOS）：
+`NativeStreamedGraphPropertyPageMaterializerTest.*` 的 `7/7` 条精确回归在约 `16 ms` 通过，覆盖空属性跳过、单页/跨页 slot
+materialization、同代 LargeValue reference、reference/root owner identity 拒绝和 assignment 身份拒绝。专项 Region、Function、
+Line、Branch 均为 `100.00%`（64/64、15/15、176/176、44/44）；不构造损坏持久化页或规模输入。该文件曾出现在旧截图/早期报告，
+当前不再是局部低项，待下一次八分片完整审计后从全局清单正式移除；profile、profdata 和 coverage 目录已经清理。
+
+C17 `NativeStreamedGraphCandidateLayout.cpp` 全维度复核（2026-09-08，macOS）：
+`NativeStreamedGraphCandidateLayoutTest.*` 的 `4/4` 条精确回归在约 `2 ms` 通过，覆盖空/缺 source run 拒绝、无 token 的有效流、
+LargeValue family 一致性、ordinal 溢出与 transaction-wide candidate 上界。专项 Region、Function、Line、Branch 均为 `100.00%`
+（19/19、3/3、34/34、16/16）；只使用小的边界值对象，不分配规模数据。该文件当前不再是局部低项，待下一次八分片完整审计后从全局
+清单正式移除；profile、profdata 和 coverage 目录已经清理。
+
+C17 `NativeStreamedGraphPublicationPlan.cpp` 与 `NativeStreamedGraphDeferredPublication.cpp` 全维度复核
+（2026-09-08，macOS）：两个独立 suite 的 `30/30` 条精确回归在约 `14 ms` 通过。Publication Plan 覆盖 token/adjacency
+reduction、candidate 上界和计数溢出，Region、Function、Line、Branch 均为 `100.00%`（15/15、6/6、62/62、8/8）；Deferred
+Publication 覆盖 record/token/property root replay、single-use 与 lease/range 边界，Region `100.00%`、Function `100.00%`、
+Line `100.00%`、Branch `97.78%`（101/101、10/10、162/162、88/90）。二者均已达到四维门槛，不使用规模输入或伪造持久化数据；待
+下一次八分片完整审计后从全局清单正式移除，profile、profdata 和 coverage 目录已经清理。
+
+C18 全量四维覆盖率审计与低项重排（2026-09-08，macOS）：重新执行 `ZYX_TEST_SHARDS=8 ./scripts/run_tests.sh --quick`，八个隔离分片全部通过。全量结果为 Region `96.31%`、Function `99.76%`、Line `96.44%`、Branch `91.13%`。按统一源级排除规则，合并 `src/` 与实际可执行 `include/`，并将 Region、Function、Line、Branch 任一低于 `95%` 的文件列为低项；排除生成的 ANTLR 源文件后仍有 `55` 个。此前截图中的 `NativeStreamedGraphEntityPageMaterializer.cpp`、`NativeStreamedGraphPropertyPageMaterializer.cpp`、`NativeStreamedGraphCandidateLayout.cpp`、`NativeStreamedGraphPublicationPlan.cpp` 已通过真实定向回归达到四维 `100%`，不再属于当前低项。当前优先低项为 `NativeGraphWritePlanner.cpp`（Region `90.45%`、Branch `77.46%`）、`RelocatableStorageBackend.cpp`（Region `92.10%`、Line `88.07%`、Branch `80.70%`）、`ExpressionBuilder.cpp`（Region `90.99%`、Line `90.97%`、Branch `82.13%`）、`LogicalPlanMutationRuntime.cpp`（Region `92.14%`、Line `91.19%`、Branch `82.27%`）、`Transaction.cpp`（Region `91.18%`、Line `94.44%`、Branch `83.33%`）和 `DatabaseImpl.cpp`（Region `89.09%`、Branch `83.56%`）。靠前低项的剩余路径主要是已认证数据之后的损坏页、不可生成的 private logical plan、底层 I/O 故障或不可承受的容量溢出；不通过伪造内部状态、规模 workload 或 TTY/I/O 故障强行刷覆盖率。审计临时 profile、profdata 与 coverage 目录已在提取清单后清理，下一批继续只补充能由正常公开 API 到达的功能契约，并在完成一组模块后再运行下一次全量审计。
+
+C19 `NativeBulkEdgeRecord.cpp` 无符号 canonical key 回归（2026-09-08，macOS）：新增 `NativeBulkEdgeRecordCodecTest.OrdersPropertyKeysByUnsignedByteValue`，用两个高位字节边界键验证属性排序和 decode round-trip 始终按无符号字节序，而不是依赖平台 `char` 符号。`NativeBulkEdgeRecordCodecTest.*` 共 `8/8` 通过；该测试覆盖跨平台持久化 canonicalization 契约，不使用规模数据、伪造页或 coverage exclusion。定向 profile 生成后立即清理；该文件剩余分支主要是 `size_t`/wire-width 溢出等不可承受容量防线，仍以全量审计结果为准。
+
+C20 全量四维清单复核（2026-09-08，macOS）：为核对旧截图与当前工作区是否一致，执行一次
+`ZYX_TEST_SHARDS=8 ./scripts/run_tests.sh --quick`；8 个隔离分片全部通过，耗时约 108 秒。按 `src/` 和具有可执行
+inline/template 代码的 `include/` 的统一源级规则统计，总体为 Region `96.26%`、Function `99.76%`、Line `96.41%`、Branch
+`91.01%`，任一维度低于 `95%` 的实现文件为 `54` 个。`CancellationCheckpoint.hpp`、`LogicalGraphRead.hpp`、`StorageIO.hpp`、
+`RelocatableStorageBackend.hpp` 和 `EntityLabelSet.hpp` 均不在当前低项清单中；旧截图的低值来自早于已合入契约测试的报告，不能
+作为当前待办。完整 54 项清单由本次 profile 提取后立即删除，后续仍按最低维度优先并先验证公开可达的真实行为；不以损坏存储、
+畸形 logical plan、伪造 TTY/I/O 故障或规模 workload 填补不可构造防线。
+
+C20 `QueryEngine.cpp` 读写事务 schema 隔离回归（2026-09-08，macOS）：新增
+`QueryTestFixture.QueryEngineRejectsSchemaChangesInReadWriteTransactionMode`，通过真实 `Database`/`QueryEngine` 执行
+`CREATE INDEX`，验证 caller-owned read-write transaction 在发布前拒绝 schema 变更，并确认后续 `SHOW INDEXES` 为空。
+精确筛选 `1/1` 通过。这是公开事务语义，不构造私有 logical plan 或 backend；完整四维基线将在积累更多真实模块改进后再复核，
+不会因单条回归重复全量测试。
+
+C21 全量四维清单重建与优先级（2026-09-08，macOS）：累计 QueryEngine 的 caller-owned schema 隔离、
+`LogicalGraphTransactionOverlay` 的 optional exact-lookup fallback，以及 `EntityLabelSetStore` 的默认当前 Entity-pool
+发现三项真实契约后，执行一次八分片 `./scripts/run_tests.sh --quick`。全部分片通过；统一源级口径（`src/` 加具有可执行
+inline/template 的 `include/`，排除生成 ANTLR 源）为 Region `96.26%`（51120/53105）、Function `99.76%`
+（6692/6708）、Line `96.41%`（75062/77855）、Branch `91.01%`（37784/41518）。本次重新保留了完整低项路径分类，避免只
+根据截图中的少数模块推进：
+
+- 优先处理（最低维度低于 `90%`）：`NativeGraphWritePlanner.cpp`、`RelocatableStorageBackend.cpp`、
+  `ExpressionBuilder.cpp`、`LogicalPlanMutationRuntime.cpp`、`RelocatableMetadataStoreGraphMutation.cpp`、
+  `Transaction.cpp`、`DatabaseImpl.cpp`、`PageBackedLogicalGraphReadAdapter.cpp`、`QueryEngine.cpp`、
+  `LargeValueStore.cpp`、`RelocatableMetadataStore.cpp`、`Database.cpp`、`DriverAbiIngest.cpp`、`EntityPageStore.cpp`、
+  `LogicalPlanProcedureRuntime.cpp`、`RelocatableLogicalGraphRead.cpp`、`AllocatorDirectory.cpp`、`AstExtractor.cpp`、
+  `LargeValueReachabilityReclaimer.cpp`、`LogicalPlanBuilder.cpp`、`MetadataPageRouteDirectory.cpp`、`MetadataPagePool.cpp`、
+  `Repl.cpp`。
+- 第二优先级（最低维度 `90%` 至 `<95%`）：`NativeBulkEdgeRunStore.cpp`、
+  `NativeBulkEdgePrivateRunMaterializer.cpp`、`EntityLabelSetStore.cpp`、`SystemCatalog.cpp`、
+  `MetadataDirectoryEvacuation.cpp`、`LogicalPlanReadRuntime.cpp`、`NativeBulkRun.cpp`、`BufferPool.cpp`、
+  `NativeBulkEdgeAdjacencyRunBuilder.cpp`、`NativeBulkEdgePrivateRunSet.cpp`、`NativeConstraintSupportTreeBuilder.cpp`、
+  `MetadataPageFile.cpp`、`NativeBulkEdgeRecord.cpp`、`CatalogTree.cpp`、`PageBackedGraphReadAdapter.cpp`、
+  `LogicalGraphTransactionOverlay.cpp`、`BTreeIndex.cpp`、`NativeBulkEdgeCatalogTokenMaterializer.cpp`、
+  `RelocatableMaintenanceService.cpp`、`Sha256.cpp`、`ImportCommand.cpp`、`CypherToPlanVisitor.cpp`、
+  `LogicalPlanOptimizer.cpp`、`MetadataPoolOwnership.cpp`、`NativeBulkEdgePrivateTokenResolver.cpp`、
+  `NativeGraphMutationExecutor.cpp`、`CypherASTBuilder.cpp`、`LocationDirectory.cpp`、`BulkBTreeBuilder.cpp`、
+  `SharedPagePoolAllocator.cpp`、`include/graph/storage/relocatable/allocation/SlottedPage.hpp`、`BTreePage.cpp`。
+
+这 `55` 项均按 Region、Function、Line、Branch 任一低于 `95%` 计入；优先级只反映当前最低维度，不能用来省略其他维度。
+后续每批只补公开 API 可到达、有限且确定的功能契约，再进行一次全量审计；不会为覆盖率制造损坏页、畸形计划、伪造 TTY/I/O 故障或
+容量/规模 workload。审计 profile、merged profdata、coverage 目录和临时分析脚本已经立即删除。
+
+## 13. 基准后的框架级读取优化计划
+
+### 13.1 为什么重新打开读取门禁
+
+最近的 Release 对照基准使用相同的 macOS arm64、AppleClang 17、Conan 工具链、smoke 数据集和 seed；旧架构来自独立历史 worktree，
+不是当前提交的线性祖先，因此只能作为参考基线。当前架构写入 `load_nodes_edges` 约快一半，但 label/property scan、关系扫描、
+一跳/两跳扩展、最短路径、top-k 和 indexed lookup 的读取耗时约为旧架构数十倍至数千倍。画像确认主要成本来自重复的 Directory/Catalog
+查找、envelope/control 校验、page payload copy、完整 property-root decode，以及把只需拓扑的 Edge/Node 提前完整 materialize。
+
+这不是通过 benchmark 特例优化的理由，而是说明 correctness core 尚未达到 production-read complete。Stage 2、4、5、6、8 的读取门禁重新
+打开；不会因此恢复 Segment Chain、每节点 adjacency root、Edge 链表、第二文件或 query 专用分支。单元测试覆盖率仍是最终门禁，当前优先级
+是先完成通用读取框架和全部功能，再在 source set 稳定后做全量四维审计。
+
+### 13.2 优先级和阶段清单
+
+| 优先级 | 阶段 | 必须完成的工作 | 关闭条件 |
+|---|---|---|---|
+| P0 | 阶段 0：基线契约 | 固定 scan/indexed/multihop/write workload、规模和 warm/opened/cold-ish 模式；记录 p50/p95/p99、RSS、文件大小、读写字节及结构计数器 | 同一 binary 可重现 baseline，结果与计数器格式固定 |
+| P0 | 阶段 1：`NativeReadSession` | 绑定 snapshot 的 pin、generation-aware 有界 Page/Catalog cache、validated view、token dictionary 和 cursor state | 无物理 offset 泄漏；缓存按 entry/byte 有界且旧 generation 不可见 |
+| P0 | 阶段 2：零拷贝 typed view | `PinnedTypedPageView`、`DecodedRecordView`、`MutableOwnedPage` 分离；命中路径复用 pin 和校验后的 bytes | cache hit 不复制整页；checksum/owner/generation/slot 校验回归通过 |
+| P1 | 阶段 3：流式 Directory/B+Tree | 统一 point/multiLookup/range cursor，一次 root descent、leaf streaming、bounded prefetch、callback/span 输出 | cursor 跨 split/merge、relocation、reopen 和旧 snapshot 正确 |
+| P1 | 阶段 4：Entity page scan | Entity Page 增加 page-local EntityId array；page/bitmap scan 与 ID-order Entity Map cursor 分离；批量 point read 按 PageId 分组 | 全量扫描不再每实体查 Entity Map；每 distinct page 至多一次 pin |
+| P1 | 阶段 5：分层 Property | 小集合 packed record、大集合 overflow/per-key tree、单值 `LargeValueRef`；token offset binary search/selective decode；小批量 sorted multiLookup | 读取一个 token 只解码一个值；不再复制完整 Property Directory |
+| P1 | 阶段 6：投影感知 materialization | `EntityReadShape`、`EntityRef` 和 selected-field cache；名称在 result/binding 边界解析 | `properties(n)` 之外不强制完整 Node/Edge materialize，结果等价 |
+| P1 | 阶段 7：topology-first adjacency | EdgeId、endpoint/type、selected/full property 三层 cursor；按 Entity Page 批量读取 Edge | degree/count、类型过滤、shortest path 不读无关 Property page |
+| P1 | 阶段 8：index candidate 分离 | `IndexCandidateBatch` 携带 EntityId、covered values、snapshot identity；只加载缺失字段 | index hit 不重复读取完整实体；完整校验移至 integrity/paranoid path |
+| P2 | 阶段 9：写入/维护扩展 | target-page grouping、每页一个 COW candidate、sorted merge、增量 free-space index、共用 B+Tree WriteBatch | 结构计数器证明写放大下降；不引入 adjacency-only 特例 |
+
+### 13.3 每阶段必须补充的测试和门禁
+
+- 测试 pin 生命周期、generation 隔离、cursor continuation、split/merge、relocation、reopen、旧 snapshot 和 fail-closed corruption。
+- 对 selective/full Property、topology/full Edge、index covered/missing field 做结果等价测试，并记录 deterministic lookup、copy、decode 和
+  materialization counters。
+- 验证 cache、cursor、batch、prefetch 和 materialization 内存均有界；不以 mock、伪造 private 状态、不可达损坏页、畸形 plan、TTY/I/O 故障或
+  规模 workload 强行提高 coverage。
+- 每完成一组阶段，先运行针对性 `--gtest-filter` 与 `--file` 检查，再运行完整 quick suite；源集合稳定后才执行最终四维 coverage 和
+  macOS/Linux/Windows 验收。
+
+### 13.4 当前执行顺序
+
+先完成 P0 的基线、读取 session 和 zero-copy view，再完成 P1 的流式目录、Entity scan、Property projection、topology-first adjacency 和
+index candidate 分离；P2 只在结构计数器证明写放大仍是瓶颈时实施。Stage 9/10、Leiden/GDS、Cypher、Vector、Driver ABI 和 binding 功能必须
+持续保留并用 native 回归验证，不因读取优化删除任何公开图能力。所有阶段通过结构性门禁后，才把对应 Stage 从 correctness-core complete 改为
+production-read complete，并最后集中处理全局覆盖率低项和发布级压力测试。

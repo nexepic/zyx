@@ -54,6 +54,7 @@ namespace {
 		std::vector<Superblock> endedBatches;
 		size_t metadataReservationCalls = 0U;
 		size_t metadataReservationReleases = 0U;
+		std::vector<PhysicalSlotId> ensuredMetadataPoolSlots;
 		uint64_t nextPageId = 1;
 		uint64_t nextSlot = 1;
 
@@ -93,6 +94,13 @@ namespace {
 			++metadataReservationCalls;
 		}
 		void releaseMetadataFrames() noexcept override { ++metadataReservationReleases; }
+		std::vector<PhysicalSlotId>
+		ensureMetadataFrameCapacity(Generation, LogSequenceNumber, size_t, std::span<const PhysicalSlotId>,
+									std::span<const PhysicalSlotRange>, const MetadataSlotReservationLookup *) override {
+			std::vector<PhysicalSlotId> result = ensuredMetadataPoolSlots;
+			ensuredMetadataPoolSlots.clear();
+			return result;
+		}
 	};
 
 } // namespace
@@ -139,6 +147,7 @@ TEST_F(RelocatableMetadataWriteBatchTest, ValidatesConstructionAllocatorResultsA
 	MetadataWriteBatch batch(allocator, initial, LogSequenceNumber(2));
 	allocator.pageIds.push_back(MetadataPageId{});
 	expectFormatError([&] { static_cast<void>(batch.allocateMetadataPageId()); }, FormatError::FERR_INVALID_STATE);
+	EXPECT_EQ(batch.allocateMetadataPageId(), MetadataPageId(1U));
 	allocator.pageReferences.push_back(PhysicalPageRef{});
 	expectFormatError([&] { static_cast<void>(batch.allocatePage()); }, FormatError::FERR_INVALID_STATE);
 	allocator.pageReferences.push_back(PhysicalPageRef{PhysicalSlotId(1), 1, Generation(1)});
@@ -232,14 +241,24 @@ TEST_F(RelocatableMetadataWriteBatchTest, RecordsFinalMetadataPageRouteFromOwned
 	ScriptedPageAllocator allocator;
 	MetadataWriteBatch batch(allocator, superblock(1U, 1U), LogSequenceNumber(2U));
 	const PhysicalPageRef reference = batch.allocatePage();
+	EXPECT_TRUE(batch.ownsAllocatedPage(reference));
+	EXPECT_FALSE(batch.ownsAllocatedPage({PhysicalSlotId(99U), 1U, batch.generation()}));
+	EXPECT_EQ(batch.pendingMetadataPageRoute(MetadataPageId{}), std::nullopt);
+	EXPECT_EQ(batch.pendingMetadataPageRoute(MetadataPageId(8U)), std::nullopt);
 	batch.registerMetadataPageRoute(MetadataPageId(8U), reference);
 	EXPECT_EQ(batch.metadataPageRoutes(), (std::vector<MetadataPageRoute>{{MetadataPageId(8U), reference}}));
+	EXPECT_EQ(batch.pendingMetadataPageRoute(MetadataPageId(8U)), reference);
 
 	const PhysicalPageRef replacement = batch.allocatePage();
 	batch.registerMetadataPageRoute(MetadataPageId(8U), replacement);
 	EXPECT_EQ(batch.metadataPageRoutes(), (std::vector<MetadataPageRoute>{{MetadataPageId(8U), replacement}}));
 	expectFormatError(
 			[&] { batch.registerMetadataPageRoute(MetadataPageId(9U), {PhysicalSlotId(99U), 1U, Generation(2U)}); },
+			FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { batch.registerMetadataPageRoute(MetadataPageId(9U), PhysicalPageRef{}); },
+			FormatError::FERR_INVALID_STATE);
+	expectFormatError(
+			[&] { batch.registerMetadataPageRoute(MetadataPageId(9U), {PhysicalSlotId(99U), 1U, Generation(1U)}); },
 			FormatError::FERR_INVALID_STATE);
 	expectFormatError([&] { batch.registerMetadataPageRoute(MetadataPageId{}, reference); },
 					  FormatError::FERR_INVALID_STATE);
@@ -249,10 +268,33 @@ TEST_F(RelocatableMetadataWriteBatchTest, ReleasesMetadataFrameReservationWhenAb
 	ScriptedPageAllocator allocator;
 	{
 		MetadataWriteBatch batch(allocator, superblock(1U, 1U), LogSequenceNumber(2U));
+		expectFormatError([&] { batch.reserveMetadataFrames(0U); }, FormatError::FERR_INVALID_STATE);
 		batch.reserveMetadataFrames(2U);
+		// Bootstrap route frames are a one-shot reservation. A second request
+		// cannot replace an outstanding lease or make its eventual cleanup ambiguous.
+		expectFormatError([&] { batch.reserveMetadataFrames(1U); }, FormatError::FERR_INVALID_STATE);
 		EXPECT_EQ(allocator.metadataReservationCalls, 1U);
 		EXPECT_EQ(allocator.metadataReservationReleases, 0U);
 	}
+	EXPECT_EQ(allocator.metadataReservationReleases, 1U);
+}
+
+TEST_F(RelocatableMetadataWriteBatchTest, TracksNewPoolsCreatedForBootstrapRouteCapacity) {
+	ScriptedPageAllocator allocator;
+	allocator.ensuredMetadataPoolSlots = {PhysicalSlotId(11U), PhysicalSlotId(13U)};
+	{
+		MetadataWriteBatch batch(allocator, superblock(1U, 1U), LogSequenceNumber(2U));
+		expectFormatError([&] { static_cast<void>(batch.ensureMetadataFrameCapacity(0U)); },
+					  FormatError::FERR_INVALID_STATE);
+		EXPECT_EQ(batch.ensureMetadataFrameCapacity(2U), 2U);
+		EXPECT_EQ(batch.createdPoolCount(), 2U);
+		EXPECT_EQ(batch.createdPoolSlot(0U), PhysicalSlotId(11U));
+		EXPECT_EQ(batch.createdPoolSlot(1U), PhysicalSlotId(13U));
+		batch.reserveMetadataFrames(1U);
+		expectFormatError([&] { static_cast<void>(batch.ensureMetadataFrameCapacity(1U)); },
+					  FormatError::FERR_INVALID_STATE);
+	}
+	EXPECT_EQ(allocator.abandonedPools, (std::vector<PhysicalSlotId>{PhysicalSlotId(11U), PhysicalSlotId(13U)}));
 	EXPECT_EQ(allocator.metadataReservationReleases, 1U);
 }
 
@@ -272,6 +314,34 @@ TEST_F(RelocatableMetadataWriteBatchTest, ReservesContiguousLogicalPageIdRangesW
 	EXPECT_EQ(finalRange.allocateLogicalPageIdRange(2U), PageId(std::numeric_limits<uint64_t>::max() - 1U));
 	EXPECT_EQ(finalRange.candidate().next_logical_page_id, 0U);
 	expectFormatError([&] { static_cast<void>(finalRange.allocateLogicalPageIdRange(1U)); },
+					  FormatError::FERR_ARITHMETIC_OVERFLOW);
+
+	Superblock nearMaximum = initial;
+	nearMaximum.next_logical_page_id = std::numeric_limits<uint64_t>::max() - 1U;
+	MetadataWriteBatch overflowingRange(allocator, nearMaximum, LogSequenceNumber(2U));
+	expectFormatError([&] { static_cast<void>(overflowingRange.allocateLogicalPageIdRange(3U)); },
+					  FormatError::FERR_ARITHMETIC_OVERFLOW);
+}
+
+TEST_F(RelocatableMetadataWriteBatchTest, ReservesContiguousLogicalSegmentIdRangesWithoutAIdentityVector) {
+	ScriptedPageAllocator allocator;
+	const Superblock initial = superblock(1U, 1U);
+	MetadataWriteBatch batch(allocator, initial, LogSequenceNumber(2U));
+	EXPECT_EQ(batch.allocateLogicalSegmentIdRange(3U), SegmentId(1U));
+	EXPECT_EQ(batch.candidate().next_logical_segment_id, 4U);
+	EXPECT_EQ(batch.allocateLogicalSegmentId(), SegmentId(4U));
+	expectFormatError([&] { static_cast<void>(batch.allocateLogicalSegmentIdRange(0U)); },
+					  FormatError::FERR_ARITHMETIC_OVERFLOW);
+
+	Superblock nearMaximum = initial;
+	nearMaximum.next_logical_segment_id = std::numeric_limits<uint64_t>::max() - 1U;
+	MetadataWriteBatch overflowingRange(allocator, nearMaximum, LogSequenceNumber(2U));
+	expectFormatError([&] { static_cast<void>(overflowingRange.allocateLogicalSegmentIdRange(3U)); },
+					  FormatError::FERR_ARITHMETIC_OVERFLOW);
+	EXPECT_EQ(overflowingRange.allocateLogicalSegmentIdRange(2U),
+			  SegmentId(std::numeric_limits<uint64_t>::max() - 1U));
+	EXPECT_EQ(overflowingRange.candidate().next_logical_segment_id, 0U);
+	expectFormatError([&] { static_cast<void>(overflowingRange.allocateLogicalSegmentIdRange(1U)); },
 					  FormatError::FERR_ARITHMETIC_OVERFLOW);
 }
 
@@ -316,6 +386,10 @@ TEST_F(RelocatableMetadataWriteBatchTest, AllocatesAndObservesLogicalEntityIdsWi
 	batch.observeLogicalEdgeId(19U);
 	EXPECT_EQ(batch.candidate().next_logical_node_id, 10U);
 	EXPECT_EQ(batch.candidate().next_logical_edge_id, 20U);
+	batch.observeLogicalNodeId(1U);
+	batch.observeLogicalEdgeId(1U);
+	EXPECT_EQ(batch.candidate().next_logical_node_id, 10U);
+	EXPECT_EQ(batch.candidate().next_logical_edge_id, 20U);
 	expectFormatError([&] { batch.observeLogicalNodeId(0U); }, FormatError::FERR_INVALID_HEADER);
 	expectFormatError([&] { batch.observeLogicalEdgeId(0U); }, FormatError::FERR_INVALID_HEADER);
 
@@ -357,6 +431,15 @@ TEST_F(RelocatableMetadataWriteBatchTest, ReservesLogicalEntityIdRangesInConstan
 	expectFormatError([&] { static_cast<void>(batch.allocateLogicalNodeIdRange(0U)); },
 					  FormatError::FERR_ARITHMETIC_OVERFLOW);
 	expectFormatError([&] { static_cast<void>(batch.allocateLogicalEdgeIdRange(0U)); },
+					  FormatError::FERR_ARITHMETIC_OVERFLOW);
+
+	Superblock nearMaximum = initial;
+	nearMaximum.next_logical_node_id = std::numeric_limits<uint64_t>::max() - 1U;
+	nearMaximum.next_logical_edge_id = std::numeric_limits<uint64_t>::max() - 1U;
+	MetadataWriteBatch overflowingRanges(allocator, nearMaximum, LogSequenceNumber(2U));
+	expectFormatError([&] { static_cast<void>(overflowingRanges.allocateLogicalNodeIdRange(3U)); },
+					  FormatError::FERR_ARITHMETIC_OVERFLOW);
+	expectFormatError([&] { static_cast<void>(overflowingRanges.allocateLogicalEdgeIdRange(3U)); },
 					  FormatError::FERR_ARITHMETIC_OVERFLOW);
 }
 
@@ -423,6 +506,15 @@ TEST_F(RelocatableMetadataWriteBatchTest, AllocatesAndObservesDerivedValueAndTok
 	expectFormatError([&] { static_cast<void>(finalRange.allocateLargeValueIdRange(1U)); },
 					  FormatError::FERR_ARITHMETIC_OVERFLOW);
 	expectFormatError([&] { static_cast<void>(batch.allocateLargeValueIdRange(0U)); },
+					  FormatError::FERR_ARITHMETIC_OVERFLOW);
+
+	Superblock overflowingRanges = initial;
+	overflowingRanges.next_large_value_id = std::numeric_limits<uint64_t>::max() - 1U;
+	overflowingRanges.next_property_key_token = static_cast<uint64_t>(std::numeric_limits<uint32_t>::max()) + 1U;
+	MetadataWriteBatch invalidRanges(allocator, overflowingRanges, LogSequenceNumber(2U));
+	expectFormatError([&] { static_cast<void>(invalidRanges.allocateLargeValueIdRange(3U)); },
+					  FormatError::FERR_ARITHMETIC_OVERFLOW);
+	expectFormatError([&] { static_cast<void>(invalidRanges.allocatePropertyKeyToken()); },
 					  FormatError::FERR_ARITHMETIC_OVERFLOW);
 }
 
@@ -660,4 +752,90 @@ TEST_F(RelocatableMetadataWriteBatchTest, ObservingMaximumLogicalIdentifiersPerm
 	expectFormatError([&] { static_cast<void>(batch.allocatePropertyKeyToken()); },
 					  FormatError::FERR_ARITHMETIC_OVERFLOW);
 	expectFormatError([&] { static_cast<void>(batch.allocateSchemaTokenId()); }, FormatError::FERR_ARITHMETIC_OVERFLOW);
+}
+
+TEST_F(RelocatableMetadataWriteBatchTest, TracksDataReservationsAndDeferredBootstrapRoots) {
+	ScriptedPageAllocator allocator;
+	MetadataWriteBatch batch(allocator, superblock(1U, 1U), LogSequenceNumber(2U));
+
+	EXPECT_FALSE(batch.isDataSlotReserved(PhysicalSlotId{}));
+	EXPECT_FALSE(batch.dataSlotRangeContaining(PhysicalSlotId{}).has_value());
+	expectFormatError([&] { batch.reserveDataSlotRange({}); }, FormatError::FERR_INVALID_STATE);
+	batch.reserveDataSlotRange({PhysicalSlotId(20U), PhysicalSlotId(22U)});
+	EXPECT_TRUE(batch.isDataSlotReserved(PhysicalSlotId(20U)));
+	EXPECT_TRUE(batch.isDataSlotReserved(PhysicalSlotId(21U)));
+	EXPECT_TRUE(batch.isDataSlotReserved(PhysicalSlotId(22U)));
+	EXPECT_FALSE(batch.isDataSlotReserved(PhysicalSlotId(19U)));
+	EXPECT_FALSE(batch.isDataSlotReserved(PhysicalSlotId(23U)));
+	const auto containing = batch.dataSlotRangeContaining(PhysicalSlotId(21U));
+	ASSERT_TRUE(containing.has_value());
+	EXPECT_EQ(containing->first, PhysicalSlotId(20U));
+	EXPECT_EQ(containing->last, PhysicalSlotId(22U));
+	EXPECT_FALSE(batch.dataSlotRangeContaining(PhysicalSlotId(23U)).has_value());
+
+	// Repeating a single-slot reservation is idempotent, while ranges overlap
+	// neither a prior range nor a prior single-slot reservation.
+	batch.reserveDataSlot(PhysicalSlotId(30U));
+	batch.reserveDataSlot(PhysicalSlotId(30U));
+	EXPECT_TRUE(batch.isDataSlotReserved(PhysicalSlotId(30U)));
+	expectFormatError([&] { batch.reserveDataSlotRange({PhysicalSlotId(29U), PhysicalSlotId(31U)}); },
+					  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { batch.reserveDataSlotRange({PhysicalSlotId(21U), PhysicalSlotId(24U)}); },
+					  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { batch.reserveDataSlotRange({PhysicalSlotId(18U), PhysicalSlotId(21U)}); },
+					  FormatError::FERR_INVALID_STATE);
+
+	batch.trackUnpublishedPool(PhysicalSlotId(40U));
+	EXPECT_TRUE(batch.isMetadataPoolSlot(PhysicalSlotId(40U)));
+	EXPECT_FALSE(batch.isMetadataPoolSlot(PhysicalSlotId{}));
+	expectFormatError([&] { batch.trackUnpublishedPool(PhysicalSlotId(40U)); }, FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { batch.trackUnpublishedPool(PhysicalSlotId{}); }, FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { batch.reserveDataSlot(PhysicalSlotId(40U)); }, FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { batch.reserveDataSlotRange({PhysicalSlotId(39U), PhysicalSlotId(41U)}); },
+					  FormatError::FERR_INVALID_STATE);
+	batch.reserveDataSlot(PhysicalSlotId(50U));
+	expectFormatError([&] { batch.trackUnpublishedPool(PhysicalSlotId(50U)); }, FormatError::FERR_INVALID_STATE);
+
+	const PhysicalPageRef pendingRoot = batch.allocatePage();
+	expectFormatError([&] { batch.setPendingBootstrapDataRoot(pendingRoot); }, FormatError::FERR_INVALID_STATE);
+	const PhysicalPageRef bootstrapRoot = batch.allocatePage();
+	batch.setPageDirectoryBootstrapRoot(bootstrapRoot);
+	batch.setPendingBootstrapDataRoot(pendingRoot);
+	EXPECT_EQ(batch.pendingBootstrapDataRoot(), pendingRoot);
+
+	MetadataEmergencyReserveDescriptor reserve;
+	reserve.physical_slot = PhysicalSlotId(2U);
+	reserve.pool_token = SegmentId(RSS_INITIAL_METADATA_EMERGENCY_RESERVE_POOL_TOKEN);
+	reserve.generation = batch.generation();
+	reserve.committed_lsn = batch.checkpointLsn();
+	batch.setMetadataEmergencyReserve(reserve);
+	EXPECT_EQ(batch.candidate().metadata_emergency_reserve, reserve);
+	reserve.generation = Generation(1U);
+	expectFormatError([&] { batch.setMetadataEmergencyReserve(reserve); }, FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableMetadataWriteBatchTest, RejectsCapacityRequestsAfterPublicationAndPublishesAllDeferredRoots) {
+	const Superblock initial = superblock(1U, 1U);
+	SuperblockFile bootstrap(io);
+	bootstrap.initializeNew(initial);
+
+	ScriptedPageAllocator allocator;
+	MetadataWriteBatch batch(allocator, initial, LogSequenceNumber(2U));
+	const PhysicalPageRef root = batch.allocatePage();
+	batch.setCatalogRoot(root);
+	batch.setVectorLocationDirectoryRoot(root);
+	batch.setVectorManifestDirectoryRoot(root);
+	batch.setStateDirectoryRoot(root);
+	batch.setRetireQueueRoot(root);
+	batch.reserveMetadataFrames(1U);
+	batch.publish(bootstrap);
+
+	EXPECT_EQ(bootstrap.recover().vector_location_directory_root, root);
+	EXPECT_EQ(bootstrap.recover().vector_manifest_directory_root, root);
+	EXPECT_EQ(bootstrap.recover().state_directory_root, root);
+	EXPECT_EQ(bootstrap.recover().retire_queue_root, root);
+	EXPECT_EQ(allocator.metadataReservationReleases, 1U);
+	expectFormatError([&] { batch.reserveMetadataFrames(1U); }, FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(batch.ensureMetadataFrameCapacity(1U)); },
+					  FormatError::FERR_INVALID_STATE);
 }

@@ -118,7 +118,8 @@ namespace graph {
 			if (data.index() != other.data.index()) return data.index() < other.data.index();
 			// Same type — MAP is not orderable
 			if (std::holds_alternative<MapType>(data)) return false;
-			// For non-MAP types, delegate to variant comparison
+			// Maps return above at runtime, but std::visit still instantiates every
+			// alternative, including the unordered Map representation.
 			return std::visit([&other]<typename T>(const T& val) -> bool {
 				if constexpr (std::is_same_v<std::decay_t<T>, MapType>) {
 					return false;
@@ -126,8 +127,6 @@ namespace graph {
 					return std::lexicographical_compare(val.begin(), val.end(),
 											   std::get<Bytes>(other.data).begin(),
 											   std::get<Bytes>(other.data).end());
-				} else if constexpr (std::is_same_v<std::decay_t<T>, TemporalDuration>) {
-					return val < std::get<T>(other.data);
 				} else {
 					return val < std::get<T>(other.data);
 				}

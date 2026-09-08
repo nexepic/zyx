@@ -6,6 +6,7 @@
  * License: Apache-2.0
  **/
 
+#include <array>
 #include <optional>
 #include <string>
 #include <utility>
@@ -88,6 +89,45 @@ TEST(NativeStreamedGraphEntityPageMaterializerTest, RejectsAnIncompleteMetadataA
 			NativeStreamedGraphEntityPageMaterializer::materialize(
 					deferred,
 					[](size_t) { return NativeStreamedGraphEntityPageAssignment{}; },
-					[](NativeStreamedGraphEntityPage &&) {}),
+				[](NativeStreamedGraphEntityPage &&) {}),
 			FormatException);
+}
+
+TEST(NativeStreamedGraphEntityPageMaterializerTest, RequiresBothPublicationCallbacks) {
+	const NativeStreamedGraphDeferredPublication deferred = publication({record(100U)});
+	EXPECT_THROW(NativeStreamedGraphEntityPageMaterializer::materialize(
+				 deferred, NativeStreamedGraphEntityPageAssignmentSource{},
+				 [](NativeStreamedGraphEntityPage &&) {}),
+			 FormatException);
+	EXPECT_THROW(NativeStreamedGraphEntityPageMaterializer::materialize(
+				 deferred, [](size_t ordinal) { return NativeStreamedGraphEntityPageAssignment{owner(ordinal)}; },
+				 NativeStreamedGraphEntityPageVisitor{}),
+			 FormatException);
+}
+
+TEST(NativeStreamedGraphEntityPageMaterializerTest, RejectsEveryInvalidMetadataIdentityField) {
+	const NativeStreamedGraphDeferredPublication deferred = publication({record(100U)});
+	using Mutator = void (*)(PageOwnerHeader &);
+	const std::array<Mutator, 7> invalidFields = {
+		[](PageOwnerHeader &value) { value.page_id = PageId{}; },
+		[](PageOwnerHeader &value) { value.owner_id = 0U; },
+		[](PageOwnerHeader &value) { value.kind = PageOwnerKind::POK_NONE; },
+		[](PageOwnerHeader &value) { value.flags = 1U; },
+		[](PageOwnerHeader &value) { value.payload_bytes = 1U; },
+		[](PageOwnerHeader &value) { value.generation = Generation{}; },
+		[](PageOwnerHeader &value) { value.committed_lsn = LogSequenceNumber{}; },
+	};
+
+	for (const Mutator mutate: invalidFields) {
+		EXPECT_THROW(
+				NativeStreamedGraphEntityPageMaterializer::materialize(
+						deferred,
+						[mutate](size_t) {
+							PageOwnerHeader value = owner(0U);
+							mutate(value);
+							return NativeStreamedGraphEntityPageAssignment{value};
+						},
+						[](NativeStreamedGraphEntityPage &&) {}),
+				FormatException);
+	}
 }

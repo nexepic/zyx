@@ -490,6 +490,15 @@ TEST_F(LogicalExplainTest, BasicConstruction) {
     EXPECT_NE(explain.getInnerPlan(), nullptr);
 }
 
+TEST_F(LogicalExplainTest, ExposesTheInnerPlanThroughTheConstInspectionSurface) {
+    LogicalExplain explain(std::make_unique<LogicalNodeScan>("n"));
+
+    const LogicalExplain &inspection = explain;
+    const auto *inner = inspection.getInnerPlan();
+    ASSERT_NE(inner, nullptr);
+    EXPECT_EQ(inner->getType(), LogicalOpType::LOP_NODE_SCAN);
+}
+
 TEST_F(LogicalExplainTest, OutputVariables_Admin) {
     auto inner = std::make_unique<LogicalNodeScan>("n");
     LogicalExplain explain(std::move(inner));

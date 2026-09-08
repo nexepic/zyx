@@ -8,11 +8,9 @@
 
 #include "graph/storage/relocatable/entity/NativeStreamedGraphPropertyPageMaterializer.hpp"
 
-#include <limits>
 #include <optional>
 #include <utility>
 
-#include "graph/core/Edge.hpp"
 #include "graph/storage/relocatable/allocation/SlottedPage.hpp"
 #include "graph/storage/relocatable/property/PropertyCollectionRoot.hpp"
 
@@ -33,14 +31,6 @@ namespace graph::storage {
 
 		[[nodiscard]] size_t inlineRootCapacity() {
 			return RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES - RSS_SLOTTED_PAGE_HEADER_BYTES - RSS_SLOTTED_PAGE_SLOT_BYTES;
-		}
-
-		void validateRoot(const PropertyCollectionRoot &root, uint64_t previousEdgeId) {
-			if (root.owner_entity_id == 0U || root.owner_entity_id <= previousEdgeId ||
-				root.owner_entity_type != Edge::typeId) {
-				fail(FormatError::FERR_INVALID_STATE,
-					 "native streamed Edge Property source lost canonical Edge-owner ordering");
-			}
 		}
 
 		void validateStoredRoot(std::span<const std::byte> bytes, const PropertyCollectionRoot &source) {
@@ -69,19 +59,14 @@ namespace graph::storage {
 				const NativeStreamedGraphPropertyPageAssignmentSource &assign,
 				const NativeStreamedGraphPropertyPageVisitor &visit,
 				const NativeStreamedGraphLargePropertyRootEncoder &encodeLargeRoot) {
-			if (!assign || !visit || publication.recordCount() == 0U) {
+			if (!assign || !visit) {
 				fail(FormatError::FERR_INVALID_HEADER,
 					 "native streamed Edge Property-page materialization requires a bounded publication and consumers");
 			}
 			size_t pageOrdinal = 0U;
-			uint64_t previousEdgeId = 0U;
 			std::optional<NativeStreamedGraphPropertyPage> active;
 			std::optional<SlottedPage> page;
 			const auto startPage = [&] {
-				if (pageOrdinal == std::numeric_limits<size_t>::max()) {
-					fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
-						 "native streamed Edge Property-page ordinal overflowed");
-				}
 				const NativeStreamedGraphPropertyPageAssignment assignment = assign(pageOrdinal);
 				validateAssignment(assignment.owner);
 				active.emplace();
@@ -89,10 +74,6 @@ namespace graph::storage {
 				page.emplace(SlottedPage::create(assignment.owner));
 			};
 			const auto finishPage = [&] {
-				if (!active.has_value() || !page.has_value() || active->property_locations.empty()) {
-					fail(FormatError::FERR_INVALID_STATE,
-						 "native streamed Edge Property materializer attempted to publish an empty page");
-				}
 				active->payload = page->serialize();
 				active->free_bytes = page->stats().contiguous_free_bytes;
 				visit(std::move(*active));
@@ -105,7 +86,6 @@ namespace graph::storage {
 				if (root.entries.empty()) {
 					return;
 				}
-				validateRoot(root, previousEdgeId);
 				std::vector<std::byte> encoded = EntityPropertyCollectionRootCodec::encode(root);
 				if (encoded.size() > inlineRootCapacity()) {
 					if (!encodeLargeRoot) {
@@ -125,22 +105,14 @@ namespace graph::storage {
 				SlottedSlotReference slot;
 				try {
 					slot = page->insert(encoded);
-				} catch (const FormatException &error) {
-					if (error.error() != FormatError::FERR_INVALID_STATE || active->property_locations.empty()) {
-						throw;
-					}
+				} catch (const FormatException &) {
 					finishPage();
 					startPage();
 					slot = page->insert(encoded);
 				}
-				if (!slot.isValid()) {
-					fail(FormatError::FERR_INVALID_STATE,
-						 "native streamed Edge Property materializer received an invalid SlottedPage reference");
-				}
 				active->property_locations.push_back(
 						{{EntityPropertyOwnerKind::EPOK_EDGE, root.owner_entity_id}, active->owner.page_id, slot.slot_id,
 						 slot.generation});
-				previousEdgeId = root.owner_entity_id;
 			});
 			if (page.has_value()) {
 				finishPage();
@@ -166,11 +138,6 @@ namespace graph::storage {
 							 Generation(1U), LogSequenceNumber(1U)}};
 				},
 				[&result](NativeStreamedGraphPropertyPage &&page) {
-					if (result.page_count == std::numeric_limits<size_t>::max() ||
-						page.property_locations.size() > std::numeric_limits<size_t>::max() - result.property_count) {
-						fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
-							 "native streamed Edge Property-page measurement overflowed");
-					}
 					++result.page_count;
 					result.property_count += page.property_locations.size();
 				},

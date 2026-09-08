@@ -171,10 +171,14 @@ namespace graph::query {
 			[[nodiscard]] std::optional<storage::LogicalGraphCardinalityStatistics>
 			readLogicalGraphCardinalityStatistics() const override {
 				++statistics_reads;
+				if (fail_statistics_read) {
+					throw std::runtime_error("test statistics service is unavailable");
+				}
 				return statistics;
 			}
 
 			storage::LogicalGraphCardinalityStatistics statistics{7U, 11U};
+			bool fail_statistics_read = false;
 			mutable size_t snapshot_opens = 0U;
 			mutable size_t statistics_reads = 0U;
 		};
@@ -652,6 +656,61 @@ namespace graph::query {
 		EXPECT_NE(dynamic_cast<const logical::LogicalTraversal *>(join->getRight()), nullptr);
 		EXPECT_EQ(backend->statistics_reads, 1U);
 		EXPECT_EQ(backend->snapshot_opens, 0U);
+	}
+
+	TEST(QueryEngineLogicalBackendBoundaryTest, FallsBackSafelyWhenOptionalCardinalityStatisticsAreUnavailableOrMalformed) {
+		auto unavailableBackend = std::make_shared<StatisticsLogicalGraphReadBackend>();
+		unavailableBackend->fail_statistics_read = true;
+		QueryEngine unavailableEngine(unavailableBackend);
+		EXPECT_NE(unavailableEngine.buildPlan("MATCH (node) RETURN node").root, nullptr);
+		EXPECT_EQ(unavailableBackend->statistics_reads, 1U);
+		EXPECT_EQ(unavailableBackend->snapshot_opens, 0U);
+
+		// An Edge without a Node is a corrupt catalog summary. It must disable the
+		// estimate instead of giving the optimizer a fabricated traversal cost.
+		auto malformedBackend = std::make_shared<StatisticsLogicalGraphReadBackend>();
+		malformedBackend->statistics = {0U, 1U};
+		QueryEngine malformedEngine(malformedBackend);
+		EXPECT_NE(malformedEngine.buildPlan("MATCH (source)-[edge]->(target) RETURN target").root, nullptr);
+		EXPECT_EQ(malformedBackend->statistics_reads, 1U);
+		EXPECT_EQ(malformedBackend->snapshot_opens, 0U);
+
+		// A genuinely empty graph remains a valid zero-cardinality traversal
+		// estimate, including when the optimized path contains a traversal node.
+		auto emptyBackend = std::make_shared<StatisticsLogicalGraphReadBackend>();
+		emptyBackend->statistics = {0U, 0U};
+		QueryEngine emptyEngine(emptyBackend);
+		EXPECT_NE(emptyEngine.buildPlan("MATCH (source)-[edge]->(target) RETURN target").root, nullptr);
+		EXPECT_EQ(emptyBackend->statistics_reads, 1U);
+		EXPECT_EQ(emptyBackend->snapshot_opens, 0U);
+	}
+
+	TEST(QueryEngineLogicalBackendBoundaryTest, IdentifiesItsReadBackendAndAcceptsAnEmptyTransactionOverlayPlan) {
+		auto readBackend = std::make_shared<UnusedLogicalGraphReadBackend>();
+		auto writeBackend = std::make_shared<RecordingLogicalGraphWriteBackend>();
+		auto otherReadBackend = std::make_shared<UnusedLogicalGraphReadBackend>();
+		QueryEngine engine(readBackend, writeBackend);
+
+		EXPECT_TRUE(engine.usesLogicalReadBackend(*readBackend));
+		EXPECT_FALSE(engine.usesLogicalReadBackend(*otherReadBackend));
+		QueryPlan emptyPlan;
+		EXPECT_TRUE(engine.executePlanWithLogicalTransactionOverlay(
+						std::move(emptyPlan), QueryContext{}, *readBackend, *writeBackend)
+						.isEmpty());
+	}
+
+	TEST(QueryEngineLogicalBackendBoundaryTest, ClearsCachedReadPlansWhenBuildingSchemaMutationPlans) {
+		auto backend = std::make_shared<UnusedLogicalGraphReadBackend>();
+		QueryEngine engine(backend);
+		const std::string cachedQuery = "MATCH (node) RETURN node";
+
+		ASSERT_NE(engine.buildPlan(cachedQuery).root, nullptr);
+		EXPECT_EQ(engine.getPlanCache().size(), 1U);
+		ASSERT_NE(engine.buildPlan("CREATE INDEX ON :CacheInvalidation(name)").root, nullptr);
+		EXPECT_EQ(engine.getPlanCache().size(), 0U);
+
+		ASSERT_NE(engine.buildPlan(cachedQuery).root, nullptr);
+		EXPECT_EQ(engine.getPlanCache().hits(), 0U);
 	}
 
 	TEST(QueryEngineLogicalBackendBoundaryTest, RejectsIncompleteExecutionBackendBoundariesBeforeOpeningASnapshot) {

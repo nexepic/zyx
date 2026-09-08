@@ -96,6 +96,12 @@ namespace graph::query {
 			TSSM_INVALID_FENCE,
 		};
 
+		enum class TestInlinePropertyMode {
+			TIPM_VALID,
+			TIPM_EMPTY_KEY,
+			TIPM_DUPLICATE_KEY,
+		};
+
 		[[nodiscard]] PropertyMap toPropertyMap(const std::vector<storage::LogicalGraphWriteProperty> &properties) {
 			PropertyMap result;
 			result.reserve(properties.size());
@@ -109,8 +115,9 @@ namespace graph::query {
 
 		class TestLogicalGraphSnapshot final : public storage::LogicalGraphReadSnapshot {
 		public:
-			explicit TestLogicalGraphSnapshot(TestGraph graph, TestSnapshotMode mode = TestSnapshotMode::TSSM_VALID) :
-				graph_(std::move(graph)), mode_(mode) {}
+			explicit TestLogicalGraphSnapshot(TestGraph graph, TestSnapshotMode mode = TestSnapshotMode::TSSM_VALID,
+										  TestInlinePropertyMode propertyMode = TestInlinePropertyMode::TIPM_VALID) :
+				graph_(std::move(graph)), mode_(mode), property_mode_(propertyMode) {}
 
 			[[nodiscard]] storage::LogicalGraphNode readNode(uint64_t nodeId) const override {
 				const auto found = graph_.nodes.find(nodeId);
@@ -123,6 +130,7 @@ namespace graph::query {
 					properties.push_back({key, value});
 				}
 				std::ranges::sort(properties, {}, &storage::LogicalGraphPropertyEntry::key);
+				appendMalformedPropertyEntry(properties);
 				return {nodeId, found->second.labels, std::move(properties)};
 			}
 
@@ -137,6 +145,7 @@ namespace graph::query {
 					properties.push_back({key, value});
 				}
 				std::ranges::sort(properties, {}, &storage::LogicalGraphPropertyEntry::key);
+				appendMalformedPropertyEntry(properties);
 				return {edgeId, found->second.source, found->second.target, found->second.type, std::move(properties)};
 			}
 
@@ -248,8 +257,17 @@ namespace graph::query {
 			}
 
 		private:
+			void appendMalformedPropertyEntry(std::vector<storage::LogicalGraphPropertyEntry> &properties) const {
+				if (property_mode_ == TestInlinePropertyMode::TIPM_EMPTY_KEY) {
+					properties.push_back({"", PropertyValue(int64_t{1})});
+				} else if (property_mode_ == TestInlinePropertyMode::TIPM_DUPLICATE_KEY && !properties.empty()) {
+					properties.push_back({properties.front().key, properties.front().value});
+				}
+			}
+
 			TestGraph graph_;
 			TestSnapshotMode mode_;
+			TestInlinePropertyMode property_mode_;
 		};
 
 		class TestLogicalGraph final : public storage::LogicalGraphReadBackend,
@@ -260,7 +278,7 @@ namespace graph::query {
 				if (snapshot_mode_ == TestSnapshotMode::TSSM_NULL) {
 					return nullptr;
 				}
-				return std::make_unique<TestLogicalGraphSnapshot>(graph_, snapshot_mode_);
+				return std::make_unique<TestLogicalGraphSnapshot>(graph_, snapshot_mode_, property_mode_);
 			}
 
 			[[nodiscard]] std::vector<uint64_t>
@@ -406,6 +424,7 @@ namespace graph::query {
 			void rejectNextMutation() { remaining_mutation_conflicts_ = 1U; }
 			void rejectMutationAttempts(size_t count) { remaining_mutation_conflicts_ = count; }
 			void setSnapshotMode(TestSnapshotMode mode) { snapshot_mode_ = mode; }
+			void setInlinePropertyMode(TestInlinePropertyMode mode) { property_mode_ = mode; }
 			void setDelayAfterMutationBatch(std::chrono::milliseconds delay) {
 				graph_.delay_after_mutation_batch = delay;
 			}
@@ -413,6 +432,7 @@ namespace graph::query {
 		private:
 			TestGraph graph_;
 			TestSnapshotMode snapshot_mode_ = TestSnapshotMode::TSSM_VALID;
+			TestInlinePropertyMode property_mode_ = TestInlinePropertyMode::TIPM_VALID;
 			 size_t remaining_mutation_conflicts_ = 0U;
 		};
 

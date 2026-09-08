@@ -31,7 +31,7 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] uint64_t leafOrdinal(MetadataPageId pageId) {
-			if (!pageId.isValid()) {
+			if (!pageId.isValid()) { // route leaf codecs reject zero logical identities before traversal.
 				throwRouteDirectoryError(FormatError::FERR_INVALID_HEADER,
 									"metadata PageId route requires a nonzero identity");
 			}
@@ -48,7 +48,7 @@ namespace graph::storage {
 
 		void validateVisible(Generation generation, LogSequenceNumber lsn, const Superblock &superblock,
 							 const char *message) {
-			if (!generation.isValid() || !lsn.isValid() || generation > superblock.generation ||
+			if (!generation.isValid() || !lsn.isValid() || generation > superblock.generation || // metadata page codecs require valid generation and LSN fields.
 				lsn > superblock.checkpoint_lsn) {
 				throwRouteDirectoryError(FormatError::FERR_INVALID_HEADER, message);
 			}
@@ -63,7 +63,7 @@ namespace graph::storage {
 		[[nodiscard]] uint64_t radixFactor(uint16_t level) {
 			uint64_t factor = 1U;
 			for (uint16_t index = 0U; index < level; ++index) {
-				if (factor > std::numeric_limits<uint64_t>::max() / RSS_CATALOG_RADIX_FANOUT) {
+				if (factor > std::numeric_limits<uint64_t>::max() / RSS_CATALOG_RADIX_FANOUT) { // the radix codec bounds levels to the fixed identity domain.
 					throwRouteDirectoryError(FormatError::FERR_ARITHMETIC_OVERFLOW,
 										"metadata PageId route radix level exceeds the identity domain");
 				}
@@ -88,7 +88,7 @@ namespace graph::storage {
 			page.committed_lsn = batch.checkpointLsn();
 			for (const Child &child: children) {
 				const uint32_t index = static_cast<uint32_t>(child.ordinal % RSS_CATALOG_RADIX_FANOUT);
-				if (!child.reference.isValid() || page.children[index].isValid()) {
+				if (!child.reference.isValid() || page.children[index].isValid()) { // buildFromCompleteRouteSet emits unique valid children.
 					throwRouteDirectoryError(FormatError::FERR_INVALID_STATE,
 										"metadata PageId route radix construction has an invalid child");
 				}
@@ -110,7 +110,7 @@ namespace graph::storage {
 			}
 			size_t frames = children.size(); // One route leaf per occupied leaf ordinal.
 			const auto addChecked = [&frames](size_t count) {
-				if (count > std::numeric_limits<size_t>::max() - frames) {
+				if (count > std::numeric_limits<size_t>::max() - frames) { // route vectors and frame counts share the size_t allocation bound.
 					throwRouteDirectoryError(FormatError::FERR_ARITHMETIC_OVERFLOW,
 										  "metadata PageId bootstrap frame count overflows size_t");
 				}
@@ -217,7 +217,7 @@ namespace graph::storage {
 				begin = end;
 			}
 			children = std::move(parents);
-			if (level == RSS_CATALOG_RADIX_MAX_LEVEL) {
+			if (level == RSS_CATALOG_RADIX_MAX_LEVEL) { // valid uint64 logical IDs cannot require another radix level.
 				throwRouteDirectoryError(FormatError::FERR_ARITHMETIC_OVERFLOW,
 										"metadata PageId route set exceeds the radix identity domain");
 			}
@@ -281,7 +281,7 @@ namespace graph::storage {
 				if (!child.isValid()) {
 					continue;
 				}
-				if (index != 0U && factor > (std::numeric_limits<uint64_t>::max() - ordinalBase) / index) {
+				if (index != 0U && factor > (std::numeric_limits<uint64_t>::max() - ordinalBase) / index) { // codec-bounded radix paths stay inside the logical ordinal domain.
 					throwRouteDirectoryError(FormatError::FERR_ARITHMETIC_OVERFLOW,
 											"metadata PageId route graph ordinal overflows");
 				}
@@ -306,7 +306,7 @@ namespace graph::storage {
 					const AllocatorLeafPage leaf = pages_.readAllocatorLeaf(child);
 					validateVisible(leaf.generation, leaf.committed_lsn, superblock,
 									"metadata PageId route graph has a future Allocator leaf");
-					if (ordinal > (std::numeric_limits<uint64_t>::max() - 1U) / RSS_ALLOCATOR_PAGE_SLOT_CAPACITY ||
+					if (ordinal > (std::numeric_limits<uint64_t>::max() - 1U) / RSS_ALLOCATOR_PAGE_SLOT_CAPACITY || // allocator radix ordinals are bounded by the typed slot domain.
 						leaf.first_slot != PhysicalSlotId(ordinal * RSS_ALLOCATOR_PAGE_SLOT_CAPACITY + 1U)) {
 						throwRouteDirectoryError(FormatError::FERR_INVALID_HEADER,
 												"metadata PageId route graph has a misrouted Allocator leaf");
@@ -449,7 +449,7 @@ namespace graph::storage {
 					continue;
 				}
 				validateReference(child, superblock, "metadata PageId route branch has an invalid child reference");
-				if (index != 0U && factor > (std::numeric_limits<uint64_t>::max() - ordinalBase) / index) {
+				if (index != 0U && factor > (std::numeric_limits<uint64_t>::max() - ordinalBase) / index) { // codec-bounded radix paths stay inside the logical ordinal domain.
 					throwRouteDirectoryError(FormatError::FERR_ARITHMETIC_OVERFLOW,
 											"metadata PageId route branch ordinal overflows");
 				}

@@ -6,8 +6,9 @@
  * License: Apache-2.0
  **/
 
-#include <optional>
 #include <array>
+#include <limits>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -46,18 +47,20 @@ namespace {
 			size_t ordinal = 0U;
 			return [records, ordinal]() mutable -> std::optional<NativeBulkEdgeRecord> {
 				return ordinal == records.size() ? std::nullopt
-										  : std::optional<NativeBulkEdgeRecord>(records[ordinal++]);
+												 : std::optional<NativeBulkEdgeRecord>(records[ordinal++]);
 			};
 		};
 	}
 
 	NativeBulkEdgePrivateFamilyMaterializationOptions options() {
-		return {16U, 64U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES,
-				{2U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 64U, 4U,
-				 NativeBulkEdgeRunDuplicatePolicy::NBERDP_REJECT}};
+		return {16U,
+				64U,
+				RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES,
+				{2U, RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES, 64U, 4U, NativeBulkEdgeRunDuplicatePolicy::NBERDP_REJECT}};
 	}
 
-	std::vector<std::vector<std::byte>> replay(const PrivateCandidates &candidates, NativeBulkRunFragmentLocation root) {
+	std::vector<std::vector<std::byte>> replay(const PrivateCandidates &candidates,
+											   NativeBulkRunFragmentLocation root) {
 		std::vector<std::vector<std::byte>> keys;
 		OrderedBTreeEntryCursor cursor = NativeBulkRunStore::orderedSourceFromPayloadReader(
 				root, 4U, [&candidates](const NativeBulkRunFragmentLocation &location) {
@@ -99,10 +102,11 @@ TEST(NativeBulkEdgePrivateFamilyMaterializerTest, MaterializesTokensAndBothAdjac
 			  (std::vector<std::vector<std::byte>>{
 					  NativeBulkEdgeTokenRunBuilder::encodeKey(NativeBulkEdgeTokenKind::NBETK_PROPERTY, "cost"),
 					  NativeBulkEdgeTokenRunBuilder::encodeKey(NativeBulkEdgeTokenKind::NBETK_PROPERTY, "weight"),
-					  NativeBulkEdgeTokenRunBuilder::encodeKey(NativeBulkEdgeTokenKind::NBETK_RELATIONSHIP_TYPE, "REL")}));
+					  NativeBulkEdgeTokenRunBuilder::encodeKey(NativeBulkEdgeTokenKind::NBETK_RELATIONSHIP_TYPE,
+															   "REL")}));
 
 	const NativeBulkEdgePrivateAdjacencyRoots adjacency = NativeBulkEdgePrivateFamilyMaterializer::materializeAdjacency(
-		records, edgeLease, candidates.identities, {96U, 96U}, {192U, 96U}, familyOptions, candidates.reader(),
+			records, edgeLease, candidates.identities, {96U, 96U}, {192U, 96U}, familyOptions, candidates.reader(),
 			writer, [] {});
 	EXPECT_EQ(replay(candidates, adjacency.outgoing),
 			  (std::vector<std::vector<std::byte>>{
@@ -123,6 +127,107 @@ TEST(NativeBulkEdgePrivateFamilyMaterializerTest, AllowsAnEdgeStreamWithoutToken
 	const auto writer = [&](const NativeGraphPrivateSegmentMaterialization &identity, std::vector<std::byte> payload) {
 		candidates.write(identity, std::move(payload));
 	};
-	EXPECT_FALSE(NativeBulkEdgePrivateFamilyMaterializer::materializeTokens(
-			source({record}), candidates.identities, {0U, 0U}, options(), candidates.reader(), writer, [] {}).has_value());
+	EXPECT_FALSE(NativeBulkEdgePrivateFamilyMaterializer::materializeTokens(source({record}), candidates.identities,
+													{0U, 0U}, options(), candidates.reader(),
+													writer, [] {})
+						 .has_value());
+
+	NativeBulkEdgeRecord tokenized = record;
+	tokenized.type = "REL";
+	EXPECT_THROW(static_cast<void>(NativeBulkEdgePrivateFamilyMaterializer::materializeTokens(
+					 source({tokenized}), candidates.identities, {0U, 0U}, options(), candidates.reader(), writer, [] {})),
+				 FormatException);
+}
+
+TEST(NativeBulkEdgePrivateFamilyMaterializerTest, RejectsIncompleteScopedContractsBeforeWritingCandidates) {
+	PrivateCandidates candidates;
+	NativeBulkEdgeRecord record;
+	record.edge_id = 100U;
+	record.source_node_id = 1U;
+	record.target_node_id = 2U;
+	const NativeBulkEdgeRecordSource records = source({record});
+	const std::array<NativeGraphLogicalIdLeaseRange, 1U> edgeLease{{{100U, 1U}}};
+	const NativeGraphPrivateSegmentWriter writer = [&](const NativeGraphPrivateSegmentMaterialization &identity,
+													   std::vector<std::byte> payload) {
+		candidates.write(identity, std::move(payload));
+	};
+	const NativeGraphPrivateSegmentFence fence = [] {};
+	const NativeGraphPrivateSegmentReader noReader;
+	const NativeGraphPrivateSegmentWriter noWriter;
+	const NativeGraphPrivateSegmentFence noFence;
+	const auto expectFormatFailure = [](const auto &operation) {
+		EXPECT_THROW(static_cast<void>(operation()), FormatException);
+	};
+	const NativeBulkEdgeRecordSource noSource;
+	expectFormatFailure([&] {
+		return NativeBulkEdgePrivateFamilyMaterializer::materializeTokens(
+				noSource, candidates.identities, {0U, 1U}, options(), candidates.reader(), writer, fence);
+	});
+	NativeBulkEdgePrivateFamilyMaterializationOptions invalidOptions = options();
+	invalidOptions.maximum_records = 0U;
+	expectFormatFailure([&] {
+		return NativeBulkEdgePrivateFamilyMaterializer::materializeTokens(
+				records, candidates.identities, {0U, 1U}, invalidOptions, candidates.reader(), writer, fence);
+	});
+	invalidOptions = options();
+	invalidOptions.maximum_records = std::numeric_limits<size_t>::max();
+	expectFormatFailure([&] {
+		return NativeBulkEdgePrivateFamilyMaterializer::materializeTokens(
+				records, candidates.identities, {0U, 1U}, invalidOptions, candidates.reader(), writer, fence);
+	});
+	invalidOptions = options();
+	invalidOptions.maximum_token_entries = 0U;
+	expectFormatFailure([&] {
+		return NativeBulkEdgePrivateFamilyMaterializer::materializeTokens(
+				records, candidates.identities, {0U, 1U}, invalidOptions, candidates.reader(), writer, fence);
+	});
+	invalidOptions = options();
+	invalidOptions.maximum_token_entries = std::numeric_limits<size_t>::max();
+	expectFormatFailure([&] {
+		return NativeBulkEdgePrivateFamilyMaterializer::materializeTokens(
+				records, candidates.identities, {0U, 1U}, invalidOptions, candidates.reader(), writer, fence);
+	});
+	invalidOptions = options();
+	invalidOptions.maximum_sort_run_bytes = RSS_NATIVE_BULK_RUN_HEADER_BYTES;
+	expectFormatFailure([&] {
+		return NativeBulkEdgePrivateFamilyMaterializer::materializeTokens(
+				records, candidates.identities, {0U, 1U}, invalidOptions, candidates.reader(), writer, fence);
+	});
+	invalidOptions = options();
+	invalidOptions.maximum_sort_run_bytes = std::numeric_limits<size_t>::max();
+	expectFormatFailure([&] {
+		return NativeBulkEdgePrivateFamilyMaterializer::materializeTokens(
+				records, candidates.identities, {0U, 1U}, invalidOptions, candidates.reader(), writer, fence);
+	});
+	expectFormatFailure([&] {
+		return NativeBulkEdgePrivateFamilyMaterializer::materializeTokens(records, candidates.identities, {0U, 1U},
+																		  options(), noReader, writer, fence);
+	});
+	expectFormatFailure([&] {
+		return NativeBulkEdgePrivateFamilyMaterializer::materializeTokens(
+				records, candidates.identities, {0U, 1U}, options(), candidates.reader(), noWriter, fence);
+	});
+	expectFormatFailure([&] {
+		return NativeBulkEdgePrivateFamilyMaterializer::materializeTokens(
+				records, candidates.identities, {0U, 1U}, options(), candidates.reader(), writer, noFence);
+	});
+	const std::array<NativeGraphLogicalIdLeaseRange, 0U> noLease{};
+	expectFormatFailure([&] {
+		return NativeBulkEdgePrivateFamilyMaterializer::materializeAdjacency(records, noLease, candidates.identities,
+																			 {0U, 1U}, {1U, 1U}, options(),
+																			 candidates.reader(), writer, fence);
+	});
+	expectFormatFailure([&] {
+		return NativeBulkEdgePrivateFamilyMaterializer::materializeAdjacency(records, edgeLease, candidates.identities,
+																			 {0U, 0U}, {1U, 1U}, options(),
+																			 candidates.reader(), writer, fence);
+	});
+	expectFormatFailure([&] {
+		return NativeBulkEdgePrivateFamilyMaterializer::materializeAdjacency(records, edgeLease, candidates.identities,
+																			 {0U, 1U}, {1U, 0U}, options(),
+																			 candidates.reader(), writer, fence);
+	});
+	for (const auto &payload: candidates.payloads) {
+		EXPECT_FALSE(payload.has_value());
+	}
 }

@@ -84,31 +84,35 @@ namespace relocatable_storage_backend_test {
 			uint64_t mentions_edge_id = 0U;
 		};
 
-		// Build integration data through the public logical writer. Tests that read
-		// the clean format must not inject fixed-record or legacy Property-ID bytes.
+		// Build integration data through the public logical writer. Submit each
+		// entity kind as one batch so the fixture does not pay four publication
+		// fences before every backend test.
 		[[nodiscard]] NativeGraphFixture materializeNativeGraphFixture() {
 			materializeNativeDatabase();
-			zyx::Database database(data_path_.string());
-			database.open();
+			RelocatableStorageBackendOptions options = backendOptions();
+			options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+			RelocatableStorageBackend backend(std::move(options));
+			backend.open();
 			NativeGraphFixture fixture;
-			const int64_t person = database.createNode(std::vector<std::string>{"Person"},
-					{{"alpha", int64_t(42)}, {"beta", std::string("value")}});
-			const int64_t unlabeled = database.createNode(std::vector<std::string>{}, {});
-			if (person <= 0 || unlabeled <= 0) {
-				database.close();
+			const std::vector<uint64_t> nodeIds = backend.createLogicalNodes(
+				{{{"Person"}, {{"alpha", PropertyValue(int64_t(42))}, {"beta", PropertyValue("value")}}},
+				 {{}, {}}});
+			if (nodeIds.size() != 2U) {
+				backend.close();
 				throw std::runtime_error("native graph fixture could not allocate its seed Nodes");
 			}
-			const int64_t knows = database.createEdge(person, person, "KNOWS", {{"alpha", int64_t(7)}});
-			const int64_t mentions = database.createEdge(person, person, "MENTIONS", {});
-			if (knows <= 0 || mentions <= 0) {
-				database.close();
+			const std::vector<uint64_t> edgeIds = backend.createLogicalEdges(
+				{{nodeIds[0], nodeIds[0], "KNOWS", {{"alpha", PropertyValue(int64_t(7))}}},
+				 {nodeIds[0], nodeIds[0], "MENTIONS", {}}});
+			if (edgeIds.size() != 2U) {
+				backend.close();
 				throw std::runtime_error("native graph fixture could not allocate its seed Edges");
 			}
-			fixture.person_node_id = static_cast<uint64_t>(person);
-			fixture.unlabeled_node_id = static_cast<uint64_t>(unlabeled);
-			fixture.knows_edge_id = static_cast<uint64_t>(knows);
-			fixture.mentions_edge_id = static_cast<uint64_t>(mentions);
-			database.close();
+			fixture.person_node_id = nodeIds[0];
+			fixture.unlabeled_node_id = nodeIds[1];
+			fixture.knows_edge_id = edgeIds[0];
+			fixture.mentions_edge_id = edgeIds[1];
+			backend.close();
 			return fixture;
 		}
 

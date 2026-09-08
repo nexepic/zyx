@@ -262,6 +262,22 @@ TEST_F(BufferPoolTest, TypedPageRangesCoalesceSequentialMissesAndStopAtFileEnd) 
 	EXPECT_EQ(pool_->stats().resident_bytes, RSS_BUFFER_POOL_PAGE_BYTES);
 }
 
+TEST_F(BufferPoolTest, TypedPageRangesRejectPrivateCowPagesAndReturnZeroPastEndOfFile) {
+	open(1U);
+	pool_ = createPool(2U);
+	std::array<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> bytes{};
+
+	EXPECT_EQ(pool_->readPages({RSS_BUFFER_POOL_PAGE_BYTES, 7U}, bytes), 0U);
+	{
+		auto privatePage = pool_->allocatePrivate({0U, 7U});
+		privatePage.mutableBytes().front() = std::byte{0xC4U};
+	}
+
+	// A private COW frame remains unpublished after its writer releases it.
+	EXPECT_THROW(static_cast<void>(pool_->readPages({0U, 7U}, bytes)), std::logic_error);
+	EXPECT_THROW(pool_->writePages({0U, 8U}, bytes), std::logic_error);
+}
+
 TEST_F(BufferPoolTest, TypedPageWriteThroughFlushesAndDropsOverlappingCacheViews) {
 	open(2U);
 	pool_ = createPool(2U);

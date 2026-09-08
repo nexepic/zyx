@@ -66,6 +66,9 @@ TEST_F(NodeTest, SetGetLabelId) {
 	node.setLabelId(testLabelId);
 
 	EXPECT_EQ(node.getLabelId(), testLabelId);
+	node.setLabelId(0);
+	EXPECT_EQ(node.getLabelId(), 0);
+	EXPECT_EQ(node.getLabelCount(), 0U);
 }
 
 TEST_F(NodeTest, MultiLabelRejectsZeroDuplicateAndOverflow) {

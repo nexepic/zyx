@@ -659,3 +659,72 @@ TEST_F(RelocatableEntityLabelSetStoreTest, RejectsStaleForeignAndNoncanonicalLab
 	EXPECT_EQ(labelsStore.readNodeLabels(current, persisted), overflow);
 	current.release();
 }
+
+TEST_F(RelocatableEntityLabelSetStoreTest, RejectsInvalidPublicLabelPlansBeforeAnyMetadataLookup) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	SlottedPagePool pages(io, *metadata);
+	EntityLabelSetStore labelsStore(io, *metadata, pages);
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	const std::vector<uint64_t> inlineLabels = labels(7U, RSS_ENTITY_INLINE_LABEL_CAPACITY);
+	NodeEntityRecord malformedNode;
+	malformedNode.inline_label_count = static_cast<uint8_t>(RSS_ENTITY_INLINE_LABEL_CAPACITY + 1U);
+	expectFormatError([&] { static_cast<void>(labelsStore.readNodeLabels(snapshot, malformedNode)); },
+					  FormatError::FERR_INVALID_STATE);
+
+	EntityLabelOverflowReference emptyReference;
+	expectFormatError([&] { static_cast<void>(labelsStore.read(snapshot, emptyReference)); },
+					  FormatError::FERR_INVALID_HEADER);
+
+	EntityLabelSetWritePlan invalidExcluded;
+	invalidExcluded.excluded_page_ids = {PageId{}};
+	expectFormatError(
+			[&] { static_cast<void>(labelsStore.planNodeLabels(snapshot, 1U, inlineLabels, invalidExcluded,
+											 LogSequenceNumber(2U))); },
+			FormatError::FERR_INVALID_HEADER);
+	invalidExcluded.excluded_page_ids = {PageId(2U), PageId(1U)};
+	expectFormatError(
+			[&] { static_cast<void>(labelsStore.planNodeLabels(snapshot, 1U, inlineLabels, invalidExcluded,
+											 LogSequenceNumber(2U))); },
+			FormatError::FERR_INVALID_HEADER);
+	invalidExcluded.excluded_page_ids = {PageId(1U), PageId(1U)};
+	expectFormatError(
+			[&] { static_cast<void>(labelsStore.planNodeLabels(snapshot, 1U, inlineLabels, invalidExcluded,
+											 LogSequenceNumber(2U))); },
+			FormatError::FERR_INVALID_HEADER);
+
+	const std::vector<uint64_t> duplicateLabels = {7U, 7U, 9U};
+	expectFormatError(
+			[&] { static_cast<void>(labelsStore.planNodeLabels(snapshot, 1U, duplicateLabels, {}, LogSequenceNumber(2U))); },
+			FormatError::FERR_INVALID_HEADER);
+
+	expectFormatError(
+			[&] { static_cast<void>(labelsStore.planNodeLabels(snapshot, 0U, inlineLabels, {}, LogSequenceNumber(2U))); },
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] { static_cast<void>(labelsStore.planNodeLabels(snapshot, 1U, inlineLabels, {}, LogSequenceNumber{})); },
+			FormatError::FERR_INVALID_HEADER);
+
+	NodeEntityRecord nodeTemplate;
+	EntityLabelSetWritePlan invalidAppend;
+	invalidAppend.append_page = EntityLabelSetAppendRequest{SegmentId{}, PageId(101U)};
+	expectFormatError(
+			[&] { static_cast<void>(labelsStore.planInitialNodeLabels(snapshot, nodeTemplate,
+														 labels(7U, RSS_ENTITY_INLINE_LABEL_CAPACITY + 1U), invalidAppend,
+														 LogSequenceNumber(2U))); },
+			FormatError::FERR_INVALID_HEADER);
+
+	EntityLabelSetWritePlan invalidNewPool;
+	invalidNewPool.new_pool = EntityLabelSetNewPoolRequest{SegmentId(31U), 0U, Generation(1U), PageId(102U),
+																 PhysicalSlotId(40U), PhysicalSlotId(40U)};
+	expectFormatError(
+			[&] { static_cast<void>(labelsStore.planInitialNodeLabels(snapshot, nodeTemplate,
+														 labels(7U, RSS_ENTITY_INLINE_LABEL_CAPACITY + 1U), invalidNewPool,
+														 LogSequenceNumber(2U))); },
+			FormatError::FERR_INVALID_HEADER);
+
+	expectFormatError(
+			[&] { static_cast<void>(labelsStore.planInitialNodeLabels(snapshot, nodeTemplate, inlineLabels, {},
+														 LogSequenceNumber{})); },
+			FormatError::FERR_INVALID_HEADER);
+	snapshot.release();
+}

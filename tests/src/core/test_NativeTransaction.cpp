@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <stdexcept>
 #include <thread>
 
 #include <gtest/gtest.h>
@@ -583,6 +584,23 @@ TEST_F(NativeTransactionTest, ReadOnlyTransactionPinsItsStartingGenerationAcross
 	EXPECT_EQ(engine_->execute("MATCH (:PinnedSnapshot) RETURN 1").rowCount(), 2U);
 
 	reader.commit();
+}
+
+TEST_F(NativeTransactionTest, RejectsExecutionThroughAnUnrelatedQueryEngine) {
+	const auto otherPath = std::filesystem::temp_directory_path() / "zyx_native_transaction_other.zyx";
+	std::error_code error;
+	std::filesystem::remove(otherPath, error);
+	auto otherDatabase = std::make_unique<Database>(otherPath.string(), storage::OpenMode::OPEN_CREATE_NEW_FILE);
+	otherDatabase->open();
+
+	auto transaction = database_->beginTransaction();
+	EXPECT_THROW(static_cast<void>(transaction.execute(*otherDatabase->getQueryEngine(), "RETURN 1")),
+				 std::invalid_argument);
+	EXPECT_TRUE(transaction.isActive());
+	transaction.rollback();
+
+	otherDatabase->close();
+	std::filesystem::remove(otherPath, error);
 }
 
 } // namespace

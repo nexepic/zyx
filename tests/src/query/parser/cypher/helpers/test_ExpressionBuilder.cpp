@@ -13,6 +13,7 @@
 #include "antlr4-runtime.h"
 #include "helpers/ExpressionBuilder.hpp"
 #include "graph/query/expressions/Expression.hpp"
+#include "graph/query/expressions/ExistsExpression.hpp"
 #include "graph/query/expressions/ListLiteralExpression.hpp"
 #include "graph/query/expressions/ShortestPathExpression.hpp"
 
@@ -328,6 +329,14 @@ TEST_F(ExpressionBuilderUnitTest, EvaluateLiteralExpression_String) {
 	ASSERT_NE(expr, nullptr);
 	auto result = ExpressionBuilder::evaluateLiteralExpression(expr);
 	EXPECT_EQ(result.getType(), graph::PropertyType::STRING);
+}
+
+TEST_F(ExpressionBuilderUnitTest, EvaluateLiteralExpressionDecodesCypherStringEscapes) {
+	auto* expr = parseReturnExpr("RETURN 'a\\b\\t\\n\\f\\r\\\"\\\'\\\\\\u0041'");
+	ASSERT_NE(expr, nullptr);
+	const auto result = ExpressionBuilder::evaluateLiteralExpression(expr);
+	ASSERT_EQ(result.getType(), graph::PropertyType::STRING);
+	EXPECT_EQ(std::get<std::string>(result.getVariant()), std::string("a\b\t\n\f\r\"'\\A"));
 }
 
 TEST_F(ExpressionBuilderUnitTest, EvaluateLiteralExpression_Boolean) {
@@ -929,51 +938,84 @@ TEST_F(ExpressionBuilderUnitTest, MapLiteralEmpty) {
 TEST_F(ExpressionBuilderUnitTest, ExistsExpressionOutgoing) {
 	// Uses the existsExpression grammar rule: EXISTS((n)-[:KNOWS]->())
 	auto* expr = parseReturnExpr("RETURN EXISTS((n)-[:KNOWS]->())");
-	if (expr) {
-		auto result = ExpressionBuilder::buildExpression(expr);
-		EXPECT_NE(result, nullptr);
-	}
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	const auto* exists = dynamic_cast<const ExistsExpression*>(result.get());
+	ASSERT_NE(exists, nullptr);
+	EXPECT_EQ(exists->getSourceVar(), "n");
+	EXPECT_EQ(exists->getRelType(), "KNOWS");
+	EXPECT_EQ(exists->getDirection(), PatternDirection::PAT_OUTGOING);
+	EXPECT_TRUE(exists->getTargetVar().empty());
+	EXPECT_FALSE(exists->hasWhereClause());
 }
 
 TEST_F(ExpressionBuilderUnitTest, ExistsExpressionIncoming) {
 	auto* expr = parseReturnExpr("RETURN EXISTS((n)<-[:LIKES]-())");
-	if (expr) {
-		auto result = ExpressionBuilder::buildExpression(expr);
-		EXPECT_NE(result, nullptr);
-	}
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	const auto* exists = dynamic_cast<const ExistsExpression*>(result.get());
+	ASSERT_NE(exists, nullptr);
+	EXPECT_EQ(exists->getSourceVar(), "n");
+	EXPECT_EQ(exists->getRelType(), "LIKES");
+	EXPECT_EQ(exists->getDirection(), PatternDirection::PAT_INCOMING);
+	EXPECT_TRUE(exists->getTargetVar().empty());
 }
 
 TEST_F(ExpressionBuilderUnitTest, ExistsExpressionWithTargetLabel) {
 	auto* expr = parseReturnExpr("RETURN EXISTS((n)-[:KNOWS]->(:Person))");
-	if (expr) {
-		auto result = ExpressionBuilder::buildExpression(expr);
-		EXPECT_NE(result, nullptr);
-	}
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	const auto* exists = dynamic_cast<const ExistsExpression*>(result.get());
+	ASSERT_NE(exists, nullptr);
+	EXPECT_EQ(exists->getTargetLabel(), "Person");
+	EXPECT_TRUE(exists->getTargetVar().empty());
+}
+
+TEST_F(ExpressionBuilderUnitTest, ExistsExpressionWithAnonymousSourceAndUntypedRelationship) {
+	auto* expr = parseReturnExpr("RETURN EXISTS(()-[relationship]->(:Person))");
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	const auto* exists = dynamic_cast<const ExistsExpression*>(result.get());
+	ASSERT_NE(exists, nullptr);
+	EXPECT_TRUE(exists->getSourceVar().empty());
+	EXPECT_TRUE(exists->getRelType().empty());
+	EXPECT_EQ(exists->getTargetLabel(), "Person");
+	EXPECT_TRUE(exists->getTargetVar().empty());
+	EXPECT_EQ(exists->getDirection(), PatternDirection::PAT_OUTGOING);
+	EXPECT_FALSE(exists->hasStructuredPattern());
 }
 
 TEST_F(ExpressionBuilderUnitTest, ExistsExpressionUndirected) {
 	auto* expr = parseReturnExpr("RETURN EXISTS((n)-[:KNOWS]-())");
-	if (expr) {
-		auto result = ExpressionBuilder::buildExpression(expr);
-		EXPECT_NE(result, nullptr);
-	}
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	const auto* exists = dynamic_cast<const ExistsExpression*>(result.get());
+	ASSERT_NE(exists, nullptr);
+	EXPECT_EQ(exists->getDirection(), PatternDirection::PAT_BOTH);
 }
 
 TEST_F(ExpressionBuilderUnitTest, ExistsExpressionWithWhere) {
 	auto* expr = parseReturnExpr("RETURN EXISTS((n)-[:KNOWS]->(m) WHERE m.age > 21)");
-	if (expr) {
-		auto result = ExpressionBuilder::buildExpression(expr);
-		EXPECT_NE(result, nullptr);
-	}
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	const auto* exists = dynamic_cast<const ExistsExpression*>(result.get());
+	ASSERT_NE(exists, nullptr);
+	EXPECT_EQ(exists->getTargetVar(), "m");
+	EXPECT_TRUE(exists->hasWhereClause());
 }
 
 TEST_F(ExpressionBuilderUnitTest, ExistsExpressionSimpleNode) {
 	// EXISTS with just a node pattern (no chain) - covers the "no chain" fallthrough
 	auto* expr = parseReturnExpr("RETURN EXISTS((n))");
-	if (expr) {
-		auto result = ExpressionBuilder::buildExpression(expr);
-		EXPECT_NE(result, nullptr);
-	}
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	const auto* exists = dynamic_cast<const ExistsExpression*>(result.get());
+	ASSERT_NE(exists, nullptr);
+	EXPECT_EQ(exists->getSourceVar(), "n");
+	EXPECT_EQ(exists->getDirection(), PatternDirection::PAT_BOTH);
+	EXPECT_TRUE(exists->getRelType().empty());
+	EXPECT_TRUE(exists->getTargetLabel().empty());
+	EXPECT_FALSE(exists->hasWhereClause());
 }
 
 // ============== DISTINCT function modifier ==============
@@ -989,10 +1031,9 @@ TEST_F(ExpressionBuilderUnitTest, DistinctFunctionCall) {
 
 TEST_F(ExpressionBuilderUnitTest, NumericParameter) {
 	auto* expr = parseReturnExpr("RETURN $1");
-	if (expr) {
-		auto result = ExpressionBuilder::buildExpression(expr);
-		EXPECT_NE(result, nullptr);
-	}
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	EXPECT_NE(result, nullptr);
 }
 
 TEST_F(ExpressionBuilderUnitTest, NamedParameter) {

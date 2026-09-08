@@ -14,6 +14,7 @@
 #include <memory>
 #include <span>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 #include <boost/uuid/uuid.hpp>
@@ -223,6 +224,19 @@ TEST(RelocatableEntityPropertyKeyTest, EncodesNodeAndEdgeNamespacesWithoutProper
 
 	expectFormatError(
 			[&] { static_cast<void>(EntityPropertyKey{EntityPropertyOwnerKind::EPOK_NODE, 0U}.directoryId()); },
+					  FormatError::FERR_INVALID_HEADER);
+	// The directory key reserves its high bit for the owner namespace; callers
+	// must not be able to encode an Entity ID outside the remaining 63-bit range.
+	expectFormatError(
+			[&] {
+				static_cast<void>(
+						EntityPropertyKey{EntityPropertyOwnerKind::EPOK_NODE, UINT64_C(1) << 63U}.directoryId());
+			},
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				static_cast<void>(EntityPropertyKey{static_cast<EntityPropertyOwnerKind>(0U), 7U}.directoryId());
+			},
 			FormatError::FERR_INVALID_HEADER);
 	expectFormatError([&] { static_cast<void>(EntityPropertyKey::fromDirectoryId(0U)); },
 					  FormatError::FERR_INVALID_HEADER);
@@ -775,6 +789,25 @@ TEST_F(RelocatableLocationDirectoryTest, AppendSessionsRejectMismatchedLocationT
 				static_cast<void>(directory.beginAppendLargeValueManifestLocations(batch, {}, LargeValueId(1U), 1U));
 			},
 			FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableLocationDirectoryTest, MovedFromAppendSessionsAreInactive) {
+	const Superblock initial = superblock();
+	SuperblockFile bootstrap(dataIo);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(dataIo, initial);
+	MetadataPagePoolAllocator allocator(dataIo, initial);
+	LocationDirectory directory(pages, allocator);
+	MetadataWriteBatch batch(allocator, initial, LogSequenceNumber(2U));
+
+	auto source = directory.beginAppendPageLocations(batch, 1U, 1U, 1U);
+	auto destination = std::move(source);
+	EXPECT_FALSE(source.isFinished());
+	expectFormatError([&] { source.finish(); }, FormatError::FERR_INVALID_STATE);
+
+	destination.append(PageLocation{PageId(1U), SegmentId(1U), 1U, Generation(1U), 0U});
+	destination.finish();
+	EXPECT_TRUE(destination.isFinished());
 }
 
 TEST_F(RelocatableLocationDirectoryTest, AcceptsAProducerThatPushesMappingsWithoutAnIntermediateVector) {
@@ -1708,6 +1741,10 @@ TEST_F(RelocatableLocationDirectoryTest, ResumesLargeValueOwnerDirectoriesWithSt
 						directory.visitStatesAfter(published, 0U, 0U, [](const StateLocation &) { return true; }));
 			},
 			FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { static_cast<void>(directory.visitEntityPropertiesAfter(published, 0U, 2U, {})); },
+				  FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { static_cast<void>(directory.visitStatesAfter(published, 0U, 2U, {})); },
+				  FormatError::FERR_INVALID_HEADER);
 }
 
 TEST_F(RelocatableLocationDirectoryTest, TraversesEveryTypedDirectoryAndHonorsEarlyStopContracts) {
@@ -1919,6 +1956,8 @@ TEST_F(RelocatableLocationDirectoryTest, PublishesAndReclaimsRetireQueueEntriesT
 	EXPECT_TRUE(firstPublished.retire_queue_root.isValid());
 	EXPECT_EQ(directory.findRetireQueueEntryOptional(firstPublished, PhysicalSlotId(7)),
 			  std::optional<RetireQueueEntry>(first[0]));
+	expectFormatError([&] { static_cast<void>(directory.findRetireQueueEntryOptional(firstPublished, PhysicalSlotId{})); },
+				  FormatError::FERR_INVALID_HEADER);
 
 	const RetireQueueEntry updated{PhysicalSlotId(7), SegmentId(11), Generation(3),
 								   RetireQueueDisposition::RQD_RELOCATED_SOURCE};
@@ -1944,4 +1983,51 @@ TEST_F(RelocatableLocationDirectoryTest, PublishesAndReclaimsRetireQueueEntriesT
 	MetadataWriteBatch invalidBatch(allocator, secondPublished, LogSequenceNumber(4));
 	expectFormatError([&] { directory.prepareReplaceRetireQueue(invalidBatch, duplicate, {}); },
 					  FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableLocationDirectoryTest, RejectsAllStreamedTypedRangeAndSourceBoundariesBeforeAppending) {
+	const Superblock initial = superblock();
+	SuperblockFile bootstrap(dataIo);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(dataIo, initial);
+	MetadataPagePoolAllocator allocator(dataIo, initial);
+	LocationDirectory directory(pages, allocator);
+	MetadataWriteBatch batch(allocator, initial, LogSequenceNumber(2U));
+
+	const uint64_t maximumEdgeId = (UINT64_C(1) << 63U) - 1U;
+	expectFormatError(
+			[&] { static_cast<void>(directory.beginAppendEdgePropertyLocations(batch, 3U, 2U, 1U)); },
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				static_cast<void>(directory.beginAppendEdgePropertyLocations(batch, 1U, maximumEdgeId + 1U, 1U));
+			},
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				static_cast<void>(directory.beginAppendLargeValueManifestLocations(
+						batch, LargeValueId(2U), LargeValueId(1U), 1U));
+			},
+			FormatError::FERR_INVALID_HEADER);
+
+	expectFormatError(
+			[&] {
+				directory.prepareAppendPageLocations(batch, 1U, 1U, 1U, LocationDirectory::PageLocationCursor{});
+			},
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				directory.prepareAppendPageLocations(batch, 1U, 1U, 1U, LocationDirectory::PageLocationProducer{});
+			},
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				directory.prepareAppendEdgePageLocations(batch, 1U, 1U, 1U, LocationDirectory::EdgePageLocationCursor{});
+			},
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				directory.prepareAppendEdgePageLocations(batch, 1U, 1U, 1U, LocationDirectory::EdgePageLocationProducer{});
+			},
+			FormatError::FERR_INVALID_HEADER);
 }

@@ -248,7 +248,7 @@ namespace graph::storage {
 									 continuation->previous_edge_id};
 		}
 		const size_t boundedRecords = std::min(maximumRecords, maximum_adjacency_edges_);
-		if (boundedRecords == 0U) {
+		if (boundedRecords == 0U) { // constructor validation keeps both bounds positive.
 			throwAdapterError(FormatError::FERR_INVALID_STATE,
 							  "page-backed graph adjacency scan has an invalid configured edge bound");
 		}
@@ -274,14 +274,14 @@ namespace graph::storage {
 		for (size_t ordinal = 0U; ordinal < resultCount; ++ordinal) {
 			const uint64_t edgeId = edgeIds.edge_ids[ordinal];
 			const EdgeEntityRecord edge = entities_.readEdge(snapshot, edgeId);
-			if (!endpointMatches(edge)) {
+			if (!endpointMatches(edge)) { // adjacency and Entity Map records share one pinned publication.
 				throwAdapterError(FormatError::FERR_INVALID_STATE,
 								  "page-backed graph adjacency record has an inconsistent endpoint");
 			}
 			result.edges.push_back(materializeEdge(snapshot, edgeId, edge, propertyCursor));
 		}
 		if (edgeIds.edge_ids.size() > resultCount) {
-			if (result.edges.empty()) {
+			if (result.edges.empty()) { // a continuation requires a positive bounded result count.
 				throwAdapterError(FormatError::FERR_INVALID_STATE,
 								  "page-backed adjacency scan cannot return a continuation without an Edge");
 			}
@@ -332,7 +332,7 @@ namespace graph::storage {
 			if (!page.continuation.has_value()) {
 				return true;
 			}
-			if (page.edges.empty() || page.edges.size() > remaining) {
+			if (page.edges.empty() || page.edges.size() > remaining) { // the internal cursor returns only bounded nonempty continuation pages.
 				throwAdapterError(FormatError::FERR_INVALID_STATE,
 								  "page-backed graph adjacency cursor returned an invalid bounded page");
 			}
@@ -365,7 +365,7 @@ namespace graph::storage {
 				const bool endpointMatches = direction == PageBackedGraphReadDirection::PBGRD_OUTGOING
 													 ? edge.source_node_id == nodeId
 													 : edge.target_node_id == nodeId;
-				if (!endpointMatches) {
+				if (!endpointMatches) { // adjacency and Entity Map records share one pinned publication.
 					throwAdapterError(FormatError::FERR_INVALID_STATE,
 									  "page-backed graph adjacency topology has an inconsistent endpoint");
 				}
@@ -383,21 +383,21 @@ namespace graph::storage {
 		bool stoppedByVisitor = false;
 		static_cast<void>(entities_.visitEdgesUntil(
 				snapshot, std::numeric_limits<size_t>::max(), [&](uint64_t edgeId, const EdgeEntityRecord &edge) {
-					if (requested == edgeIds.edge_ids.size()) {
+					if (requested == edgeIds.edge_ids.size()) { // the callback stops after accepting the final requested Edge.
 						return false;
 					}
 					const uint64_t wanted = edgeIds.edge_ids[requested];
 					if (edgeId < wanted) {
 						return true;
 					}
-					if (edgeId > wanted) {
+					if (edgeId > wanted) { // the immutable Entity Map contains every published adjacency Edge.
 						throwAdapterError(FormatError::FERR_INVALID_STATE,
 										  "page-backed graph adjacency topology references a missing Edge");
 					}
 					const bool endpointMatches = direction == PageBackedGraphReadDirection::PBGRD_OUTGOING
 														 ? edge.source_node_id == nodeId
 														 : edge.target_node_id == nodeId;
-					if (!endpointMatches) {
+					if (!endpointMatches) { // adjacency and Entity Map records share one pinned publication.
 						throwAdapterError(FormatError::FERR_INVALID_STATE,
 										  "page-backed graph adjacency topology has an inconsistent endpoint");
 					}
@@ -411,7 +411,7 @@ namespace graph::storage {
 		if (stoppedByVisitor) {
 			return false;
 		}
-		if (requested != edgeIds.edge_ids.size()) {
+		if (requested != edgeIds.edge_ids.size()) { // the immutable Entity Map contains every published adjacency Edge.
 			throwAdapterError(FormatError::FERR_INVALID_STATE,
 							  "page-backed graph adjacency topology Entity Map is missing an Edge");
 		}

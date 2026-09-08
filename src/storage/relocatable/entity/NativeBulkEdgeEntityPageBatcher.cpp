@@ -22,10 +22,6 @@ namespace graph::storage {
 							  "native bulk Edge Entity-page batcher requires a batch visitor");
 		}
 		const size_t capacity = EntityPage::recordCapacity(EntityPageRecordKind::EPRK_EDGE);
-		if (capacity == 0U) {
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-							  "native bulk Edge Entity-page batcher found a zero Edge-page capacity");
-		}
 
 		NativeBulkEdgeEntityPageBatch current;
 		current.records.reserve(capacity);

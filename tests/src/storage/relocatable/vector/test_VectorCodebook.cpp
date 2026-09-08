@@ -430,6 +430,7 @@ TEST(RelocatableVectorCodebookTest, RejectsMalformedInlineAndMultiExtentManifest
 	VectorCodebookManifest inlineManifest;
 	inlineManifest.header = header();
 	inlineManifest.inline_payload = payload();
+	EXPECT_TRUE(inlineManifest.isInline());
 	const std::vector<std::byte> encodedInline = VectorCodebookManifestCodec::encode(inlineManifest);
 	EXPECT_EQ(VectorCodebookManifestCodec::decode(encodedInline), inlineManifest);
 	EXPECT_EQ(VectorCodebookManifestCodec::requiredDataExtentCount(0U), 0U);
@@ -442,6 +443,7 @@ TEST(RelocatableVectorCodebookTest, RejectsMalformedInlineAndMultiExtentManifest
 					  FormatError::FERR_INVALID_HEADER);
 
 	const VectorCodebookManifest multi = multiExtentManifest();
+	EXPECT_FALSE(multi.isInline());
 	const std::vector<std::byte> encodedMulti = VectorCodebookManifestCodec::encode(multi);
 	EXPECT_EQ(VectorCodebookManifestCodec::decode(encodedMulti), multi);
 	VectorCodebookManifest wrongCount = multi;
@@ -565,6 +567,20 @@ protected:
 	}
 };
 
+TEST_F(RelocatableVectorCodebookStoreTest, ReportsOnlyItsCompleteMetadataBinding) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	PhysicalSegmentAllocator segments(io, *metadata);
+	VectorCodebookStore store(segments, *metadata);
+	EXPECT_TRUE(store.usesMetadataStore(*metadata));
+
+	auto otherMetadata = RelocatableMetadataStore::initializeNew(walIo, initialSuperblock());
+	EXPECT_FALSE(store.usesMetadataStore(*otherMetadata));
+
+	PhysicalSegmentAllocator otherSegments(walIo, *otherMetadata);
+	VectorCodebookStore mismatchedStore(otherSegments, *metadata);
+	EXPECT_FALSE(mismatchedStore.usesMetadataStore(*metadata));
+}
+
 TEST_F(RelocatableVectorCodebookStoreTest, MaterializesReopensAndRejectsDuplicateImmutableCodebooks) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
 	PhysicalSegmentAllocator segments(io, *metadata);
@@ -657,6 +673,8 @@ TEST(RelocatableVectorCodebookExtentIdCodecTest, UsesDisjointManifestAndDataName
 	EXPECT_TRUE(VectorCodebookExtentIdCodec::isManifestExtentForCodebook(manifest, codebookId));
 	EXPECT_FALSE(VectorCodebookExtentIdCodec::isDataExtentId(manifest));
 	EXPECT_TRUE(VectorCodebookExtentIdCodec::isDataExtentForSegment(data, dataSegment));
+	EXPECT_FALSE(VectorCodebookExtentIdCodec::isDataExtentForSegment(data, SegmentId(codebookId + 1U)));
+	EXPECT_FALSE(VectorCodebookExtentIdCodec::isDataExtentForSegment(data, SegmentId{}));
 }
 
 TEST(RelocatableVectorCodebookExtentIdCodecTest, RejectsZeroAndHighBitPayloads) {

@@ -90,6 +90,90 @@ namespace graph::query {
 		EXPECT_EQ(backend->graph().mutation_batches, 1U);
 	}
 
+	TEST(LogicalPlanMutationRuntimeTest, MergeRebuildsMixedCreatedAndScalarReturnExpressionsAfterPublication) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		QueryEngine engine(backend, backend);
+
+		// The scalar is available before publication, while item is assigned a
+		// durable ID only by the committed batch. The combined expression must
+		// therefore be evaluated against both phases without leaking a provisional
+		// entity into the returned result.
+		const QueryResult result = engine.execute(
+				"UNWIND [1, 2] AS value "
+				"MERGE (item:AtomicMerge {value: value}) "
+				"RETURN item.value + value AS doubled");
+
+		ASSERT_EQ(result.rowCount(), 2U);
+		EXPECT_EQ(result.getRows()[0U].at("doubled").asPrimitive(), PropertyValue(2));
+		EXPECT_EQ(result.getRows()[1U].at("doubled").asPrimitive(), PropertyValue(4));
+		EXPECT_EQ(backend->countNodesWithLabel("AtomicMerge"), 2U);
+		EXPECT_EQ(backend->graph().mutation_batches, 1U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, CreateAppliesReturnOrderingAndPaginationAfterPublishingAllInputRows) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		QueryEngine engine(backend, backend);
+
+		// Result pagination controls only what the caller sees. All UNWIND rows
+		// still participate in the one atomic CREATE publication before sorting.
+		const QueryResult result = engine.execute(
+				"UNWIND [1, 3, 2] AS value "
+				"CREATE (:AtomicCreate {value: value}) "
+				"RETURN value AS orderedValue ORDER BY orderedValue DESC SKIP 1 LIMIT 1");
+		ASSERT_EQ(result.rowCount(), 1U);
+		EXPECT_EQ(result.getRows().front().at("orderedValue").asPrimitive(), PropertyValue(2));
+		EXPECT_EQ(backend->countNodesWithLabel("AtomicCreate"), 3U);
+		EXPECT_EQ(backend->graph().mutation_batches, 1U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, CreateDistinctReturnAppliesAfterPublishingAllInputRows) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		QueryEngine engine(backend, backend);
+
+		// DISTINCT and pagination reshape only the result. Duplicate input rows must
+		// still be written before the one atomic mutation batch is published.
+		const QueryResult result = engine.execute(
+				"UNWIND [1, 1, 2] AS value "
+				"CREATE (:AtomicDistinctCreate {value: value}) "
+				"RETURN DISTINCT value AS orderedValue ORDER BY orderedValue DESC SKIP 1 LIMIT 1");
+		ASSERT_EQ(result.rowCount(), 1U);
+		EXPECT_EQ(result.getRows().front().at("orderedValue").asPrimitive(), PropertyValue(1));
+		EXPECT_EQ(backend->countNodesWithLabel("AtomicDistinctCreate"), 3U);
+		EXPECT_EQ(backend->graph().mutation_batches, 1U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, CreateReturnSkipPastDistinctRowsStillPublishesAllInputRows) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		QueryEngine engine(backend, backend);
+
+		// An empty paginated result is not an empty mutation. CREATE must publish
+		// every input row before a SKIP beyond the distinct result set is applied.
+		const QueryResult result = engine.execute(
+				"UNWIND [1, 1, 2] AS value "
+				"CREATE (:AtomicSkippedCreate {value: value}) "
+				"RETURN DISTINCT value AS orderedValue ORDER BY orderedValue DESC SKIP 2 LIMIT 1");
+		EXPECT_EQ(result.rowCount(), 0U);
+		EXPECT_EQ(result.getPipelineRowCount(), 0U);
+		EXPECT_EQ(backend->countNodesWithLabel("AtomicSkippedCreate"), 3U);
+		EXPECT_EQ(backend->graph().mutation_batches, 1U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, CreateReturnLimitZeroStillPublishesAllInputRows) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		QueryEngine engine(backend, backend);
+
+		// LIMIT 0 discards visible rows only; it must not suppress the CREATE
+		// statements that were staged before result shaping begins.
+		const QueryResult result = engine.execute(
+				"UNWIND [1, 2, 3] AS value "
+				"CREATE (:AtomicLimitedCreate {value: value}) "
+				"RETURN value AS orderedValue ORDER BY orderedValue DESC LIMIT 0");
+		EXPECT_EQ(result.rowCount(), 0U);
+		EXPECT_EQ(result.getPipelineRowCount(), 0U);
+		EXPECT_EQ(backend->countNodesWithLabel("AtomicLimitedCreate"), 3U);
+		EXPECT_EQ(backend->graph().mutation_batches, 1U);
+	}
+
 	TEST(LogicalPlanMutationRuntimeTest, MergeRejectsAnOverBoundInputWithoutPublishingItsPrefix) {
 		auto backend = std::make_shared<TestLogicalGraph>();
 		LogicalReadExecutionOptions options;
@@ -142,6 +226,52 @@ namespace graph::query {
 		EXPECT_EQ(result.getRows().at(1).at("value").asPrimitive(), PropertyValue(2));
 		EXPECT_EQ(mergeResultExpressionCalls.load(std::memory_order_relaxed), 2);
 		EXPECT_EQ(backend->countNodesWithLabel("AtomicMerge"), 2U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, CreateCachesPrepublicationSortKeys) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		QueryEngine engine(backend, backend);
+		registerCountingMergeResultExpression();
+		mergeResultExpressionCalls.store(0, std::memory_order_relaxed);
+
+		const QueryResult result = engine.execute(
+				"UNWIND [1, 2] AS value "
+				"CREATE (:AtomicCreate {value: value}) "
+				"RETURN value AS value ORDER BY testMergeResultCounter()");
+
+		ASSERT_EQ(result.rowCount(), 2U);
+		EXPECT_EQ(result.getRows().at(0).at("value").asPrimitive(), PropertyValue(1));
+		EXPECT_EQ(result.getRows().at(1).at("value").asPrimitive(), PropertyValue(2));
+		// The volatile scalar sort key is evaluated during pre-publication
+		// validation and reused after the durable batch is published.
+		EXPECT_EQ(mergeResultExpressionCalls.load(std::memory_order_relaxed), 2);
+		EXPECT_EQ(backend->countNodesWithLabel("AtomicCreate"), 2U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, CreateReevaluatesSortKeysThatDependOnDurableEntityIds) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		QueryEngine engine(backend, backend);
+
+		const QueryResult result = engine.execute(
+				"UNWIND [1, 2] AS value "
+				"CREATE (item:AtomicCreate {value: value}) "
+				"RETURN id(item) AS itemId ORDER BY itemId DESC");
+
+		ASSERT_EQ(result.rowCount(), 2U);
+		EXPECT_EQ(result.getRows().at(0).at("itemId").asPrimitive(), PropertyValue(2));
+		EXPECT_EQ(result.getRows().at(1).at("itemId").asPrimitive(), PropertyValue(1));
+		EXPECT_EQ(backend->countNodesWithLabel("AtomicCreate"), 2U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, CreateRejectsEntitySortKeysBeforePublishingTheBatch) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		QueryEngine engine(backend, backend);
+
+		EXPECT_THROW(static_cast<void>(engine.execute(
+					 "CREATE (item:AtomicCreate) RETURN item ORDER BY item")),
+				 std::logic_error);
+		EXPECT_EQ(backend->countNodesWithLabel("AtomicCreate"), 0U);
+		EXPECT_EQ(backend->graph().mutation_batches, 0U);
 	}
 
 	TEST(LogicalPlanMutationRuntimeTest, MergeDoesNotPublishWhenItsReturnExpressionFails) {
@@ -272,7 +402,40 @@ namespace graph::query {
 		EXPECT_EQ(backend->graph().mutation_batches, 1U);
 	}
 
-	TEST(LogicalPlanMutationRuntimeTest, MatchCreateThenSetPublishesPersistedAndCreatedFinalStatesTogether) {
+TEST(LogicalPlanMutationRuntimeTest, CreateSetRetainsAnAlreadyDeclaredLabelWithoutDuplicatingIt) {
+	auto backend = std::make_shared<TestLogicalGraph>();
+	QueryEngine engine(backend, backend);
+
+		const QueryResult result = engine.execute("CREATE (node:Stable {value: 7}) SET node:Stable RETURN node");
+
+		ASSERT_EQ(result.rowCount(), 1U);
+		const LogicalNodeResult &node = result.getRows().front().at("node").asLogicalNode();
+		EXPECT_EQ(node.labels, (std::vector<std::string>{"Stable"}));
+		EXPECT_EQ(node.properties.at("value"), PropertyValue(7));
+		ASSERT_EQ(backend->graph().nodes.size(), 1U);
+	EXPECT_EQ(backend->graph().nodes.begin()->second.labels, node.labels);
+	EXPECT_EQ(backend->graph().mutation_batches, 1U);
+}
+
+TEST(LogicalPlanMutationRuntimeTest, SetLabelOnlyPublishesThePersistedNodeLabelReplacement) {
+	auto backend = std::make_shared<TestLogicalGraph>();
+	const uint64_t nodeId = backend->addNode({"Seed"}, {{"value", PropertyValue(7)}});
+	QueryEngine engine(backend, backend);
+
+	const QueryResult result = engine.execute("MATCH (node:Seed) SET node:Published RETURN node");
+
+	ASSERT_EQ(result.rowCount(), 1U);
+	const LogicalNodeResult &node = result.getRows().front().at("node").asLogicalNode();
+	EXPECT_EQ(node.node_id, nodeId);
+	EXPECT_EQ(node.properties, (PropertyMap{{"value", PropertyValue(7)}}));
+	EXPECT_TRUE(std::ranges::find(node.labels, "Seed") != node.labels.end());
+	EXPECT_TRUE(std::ranges::find(node.labels, "Published") != node.labels.end());
+	EXPECT_EQ(backend->graph().nodes.at(nodeId).labels, node.labels);
+	EXPECT_EQ(backend->graph().nodes.at(nodeId).properties, node.properties);
+	EXPECT_EQ(backend->graph().mutation_batches, 1U);
+}
+
+TEST(LogicalPlanMutationRuntimeTest, MatchCreateThenSetPublishesPersistedAndCreatedFinalStatesTogether) {
 		auto backend = std::make_shared<TestLogicalGraph>();
 		const uint64_t seedId = backend->addNode({"Seed"}, {{"value", PropertyValue(4)}});
 		QueryEngine engine(backend, backend);
@@ -319,6 +482,28 @@ namespace graph::query {
 		EXPECT_FALSE(updatedEdge.properties.contains("stale"));
 		EXPECT_EQ(backend->graph().edges.at(edgeId).properties, updatedEdge.properties);
 		EXPECT_EQ(backend->graph().nodes.at(second).properties.at("name"), PropertyValue("Bob"));
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, SetOnRelationshipDoesNotLeakItsPropertyCacheIntoEndpointBindings) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		QueryEngine engine(backend, backend);
+
+		static_cast<void>(engine.execute(
+				"CREATE (source:Source {name: 'source'})-"
+				"[:LINK {weight: 1}]->(target:Target {name: 'target'})"));
+		const QueryResult result = engine.execute(
+				"MATCH (source:Source {name: 'source'})-[relationship:LINK]->(target:Target {name: 'target'}) "
+				"SET relationship.weight = relationship.weight + 1 RETURN source, relationship, target");
+
+		ASSERT_EQ(result.rowCount(), 1U);
+		const QueryResult::Row &row = result.getRows().front();
+		const LogicalNodeResult &source = row.at("source").asLogicalNode();
+		const LogicalEdgeResult &relationship = row.at("relationship").asLogicalEdge();
+		const LogicalNodeResult &target = row.at("target").asLogicalNode();
+		EXPECT_EQ(source.properties, (PropertyMap{{"name", PropertyValue("source")}}));
+		EXPECT_EQ(target.properties, (PropertyMap{{"name", PropertyValue("target")}}));
+		EXPECT_EQ(relationship.properties, (PropertyMap{{"weight", PropertyValue(2)}}));
+		EXPECT_EQ(backend->graph().edges.at(relationship.edge_id).properties, relationship.properties);
 	}
 
 	TEST(LogicalPlanMutationRuntimeTest, CreateChainUpdatesPersistedRelationshipAndPublishesOneFinalState) {
@@ -426,7 +611,7 @@ namespace graph::query {
 		QueryEngine engine(backend, backend);
 
 		QueryResult created = engine.execute(
-				"MERGE (n:Person {name: 'Ada'}) SET n:CreatedMarker, n += {legacy: 1} RETURN n");
+				"MERGE (n:Person {name: 'Ada'}) SET n:CreatedMarker, n:Person, n += {legacy: 1} RETURN n");
 		ASSERT_EQ(created.rowCount(), 1U);
 		const LogicalNodeResult &createdNode = created.getRows().front().at("n").asLogicalNode();
 		EXPECT_TRUE(std::ranges::find(createdNode.labels, "Person") != createdNode.labels.end());
@@ -435,17 +620,51 @@ namespace graph::query {
 		EXPECT_EQ(backend->graph().mutation_batches, 1U);
 
 		QueryResult matched = engine.execute(
-				"MERGE (n:Person {name: 'Ada'}) SET n:Active, n += {legacy: null, score: 4} "
-				"REMOVE n:CreatedMarker RETURN n");
+				"MERGE (n:Person {name: 'Ada'}) SET n:Active, n:Person, n += {legacy: null, alreadyAbsent: null, score: 4} "
+				"REMOVE n:CreatedMarker, n:AlreadyAbsent RETURN n");
 		ASSERT_EQ(matched.rowCount(), 1U);
 		const LogicalNodeResult &matchedNode = matched.getRows().front().at("n").asLogicalNode();
 		EXPECT_TRUE(std::ranges::find(matchedNode.labels, "Person") != matchedNode.labels.end());
 		EXPECT_TRUE(std::ranges::find(matchedNode.labels, "Active") != matchedNode.labels.end());
 		EXPECT_TRUE(std::ranges::find(matchedNode.labels, "CreatedMarker") == matchedNode.labels.end());
 		EXPECT_FALSE(matchedNode.properties.contains("legacy"));
+		EXPECT_FALSE(matchedNode.properties.contains("alreadyAbsent"));
 		EXPECT_EQ(matchedNode.properties.at("score"), PropertyValue(4));
 		EXPECT_EQ(backend->countNodesWithLabel("Person"), 1U);
 		EXPECT_EQ(backend->graph().mutation_batches, 2U);
+
+		const QueryResult noOp =
+				engine.execute("MERGE (n:Person {name: 'Ada'}) SET n:Person REMOVE n:AlreadyAbsent RETURN n");
+		ASSERT_EQ(noOp.rowCount(), 1U);
+		EXPECT_EQ(noOp.getRows().front().at("n").asLogicalNode().node_id, matchedNode.node_id);
+		EXPECT_EQ(backend->graph().mutation_batches, 2U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, MergeAppliesRuntimeMapParametersToCreatedAndMatchedNodes) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		QueryEngine engine(backend, backend);
+		QueryContext context;
+		context.parameters.emplace(
+				"patch", PropertyValue(PropertyValue::MapType{{"remove", PropertyValue()},
+																						  {"alreadyAbsent", PropertyValue()}, {"added", PropertyValue(4)}}));
+
+		const QueryResult created = engine.execute(
+				"MERGE (node:RuntimeMap {key: 'one', remove: 'temporary'}) SET node += $patch RETURN node", context);
+		ASSERT_EQ(created.rowCount(), 1U);
+		const LogicalNodeResult &createdNode = created.getRows().front().at("node").asLogicalNode();
+		EXPECT_EQ(createdNode.properties.at("key"), PropertyValue("one"));
+		EXPECT_EQ(createdNode.properties.at("added"), PropertyValue(4));
+		EXPECT_FALSE(createdNode.properties.contains("remove"));
+		EXPECT_FALSE(createdNode.properties.contains("alreadyAbsent"));
+
+		const QueryResult matched =
+				engine.execute("MERGE (node:RuntimeMap {key: 'one'}) SET node += $patch RETURN node", context);
+		ASSERT_EQ(matched.rowCount(), 1U);
+		const LogicalNodeResult &matchedNode = matched.getRows().front().at("node").asLogicalNode();
+		EXPECT_EQ(matchedNode.node_id, createdNode.node_id);
+		EXPECT_EQ(matchedNode.properties.at("added"), PropertyValue(4));
+		EXPECT_EQ(backend->countNodesWithLabel("RuntimeMap"), 1U);
+		EXPECT_EQ(backend->graph().mutation_batches, 1U);
 	}
 
 	TEST(LogicalPlanMutationRuntimeTest, MutationAggregatesPreserveInputRowsAcrossSetAndMerge) {
@@ -541,6 +760,19 @@ namespace graph::query {
 
 		EXPECT_THROW(static_cast<void>(engine.execute(
 					 "CREATE (deleted:Ephemeral)-[:LINK]->(:Retained {value: 7}) DELETE deleted")),
+				 std::logic_error);
+		EXPECT_EQ(backend->countNodesWithLabel("Ephemeral"), 0U);
+		EXPECT_EQ(backend->countNodesWithLabel("Retained"), 0U);
+		EXPECT_EQ(backend->edgeCount(), 0U);
+		EXPECT_EQ(backend->graph().mutation_batches, 0U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, DeleteCreatedTargetNodeWithIncidentRelationshipFailsBeforePublication) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		QueryEngine engine(backend, backend);
+
+		EXPECT_THROW(static_cast<void>(engine.execute(
+					 "CREATE (:Retained {value: 7})-[:LINK]->(deleted:Ephemeral) DELETE deleted")),
 				 std::logic_error);
 		EXPECT_EQ(backend->countNodesWithLabel("Ephemeral"), 0U);
 		EXPECT_EQ(backend->countNodesWithLabel("Retained"), 0U);
@@ -653,7 +885,7 @@ namespace graph::query {
 
 		QueryContext createdContext;
 		createdContext.parameters.emplace("patch", PropertyValue(PropertyValue::MapType{{"added", PropertyValue(4)},
-																						{"remove", PropertyValue()}}));
+																						{"remove", PropertyValue()}, {"alreadyAbsent", PropertyValue()}}));
 		QueryResult createdResult = engine.execute(
 				"CREATE (n:Created {keep: 3, remove: 'temporary'}) SET n += $patch RETURN n", createdContext);
 		ASSERT_EQ(createdResult.rowCount(), 1U);
@@ -661,6 +893,7 @@ namespace graph::query {
 		EXPECT_EQ(createdNode.properties.at("keep"), PropertyValue(3));
 		EXPECT_EQ(createdNode.properties.at("added"), PropertyValue(4));
 		EXPECT_FALSE(createdNode.properties.contains("remove"));
+		EXPECT_FALSE(createdNode.properties.contains("alreadyAbsent"));
 		EXPECT_EQ(backend->graph().nodes.at(createdNode.node_id).properties, createdNode.properties);
 	}
 
@@ -674,13 +907,16 @@ namespace graph::query {
 		// is already true. Publishing an empty batch would unnecessarily advance the
 		// native graph generation and force concurrent snapshots to retry.
 		const QueryResult result = engine.execute(
-				"MATCH (node:Existing) SET node.value = 7, node:Existing "
+				"MATCH (node:Existing) SET node.value = 7, node.missingByNull = null, "
+				"node += {alsoMissing: null}, node:Existing "
 				"REMOVE node.missing, node:Missing RETURN node");
 
 		ASSERT_EQ(result.rowCount(), 1U);
 		const LogicalNodeResult &returned = result.getRows().front().at("node").asLogicalNode();
 		EXPECT_EQ(returned.node_id, nodeId);
 		EXPECT_EQ(returned.labels, (std::vector<std::string>{"Existing"}));
+		EXPECT_FALSE(returned.properties.contains("missingByNull"));
+		EXPECT_FALSE(returned.properties.contains("alsoMissing"));
 		EXPECT_EQ(returned.properties, backend->graph().nodes.at(nodeId).properties);
 		EXPECT_EQ(backend->graph().mutation_batches, 0U);
 	}

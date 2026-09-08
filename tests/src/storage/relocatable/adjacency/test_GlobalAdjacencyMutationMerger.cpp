@@ -70,4 +70,25 @@ namespace graph::storage {
 		EXPECT_THROW(static_cast<void>(collect(overbound)), FormatException);
 	}
 
+	TEST(GlobalAdjacencyMutationMergerTest, RejectsMissingSourcesAndMalformedEntriesBeforeMerging) {
+		const OrderedBTreeEntrySource valid = source({entry(0x10U, 0U)});
+		EXPECT_THROW(static_cast<void>(GlobalAdjacencyMutationMerger::merge({}, valid, 1U)), FormatException);
+		EXPECT_THROW(static_cast<void>(GlobalAdjacencyMutationMerger::merge(valid, {}, 1U)), FormatException);
+		EXPECT_THROW(static_cast<void>(GlobalAdjacencyMutationMerger::merge(valid, valid, 0U)), FormatException);
+
+		const OrderedBTreeEntrySource emptyCursor = [] { return OrderedBTreeEntryCursor{}; };
+		EXPECT_THROW(static_cast<void>(collect(GlobalAdjacencyMutationMerger::merge(emptyCursor, valid, 1U))), FormatException);
+		EXPECT_THROW(static_cast<void>(collect(GlobalAdjacencyMutationMerger::merge(valid, emptyCursor, 1U))), FormatException);
+
+		const OrderedBTreeEntrySource emptyOld = source({entry(0x00U, 0U)});
+		const OrderedBTreeEntrySource malformedOld = source({entry(0x10U, 1U)});
+		EXPECT_THROW(static_cast<void>(collect(GlobalAdjacencyMutationMerger::merge(malformedOld, valid, 1U))), FormatException);
+		const OrderedBTreeEntrySource malformedUpdate = source({entry(0x10U, 0U)});
+		EXPECT_THROW(static_cast<void>(collect(GlobalAdjacencyMutationMerger::merge(emptyOld, malformedUpdate, 1U))), FormatException);
+		const OrderedBTreeEntrySource emptyKey = source({{{}, 0U}});
+		EXPECT_THROW(static_cast<void>(collect(GlobalAdjacencyMutationMerger::merge(emptyKey, valid, 1U))), FormatException);
+		const OrderedBTreeEntrySource emptyUpdateKey = source({{{}, 1U}});
+		EXPECT_THROW(static_cast<void>(collect(GlobalAdjacencyMutationMerger::merge(valid, emptyUpdateKey, 1U))), FormatException);
+	}
+
 } // namespace graph::storage

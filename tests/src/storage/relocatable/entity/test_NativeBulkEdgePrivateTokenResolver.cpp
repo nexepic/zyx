@@ -143,6 +143,14 @@ TEST(NativeBulkEdgePrivateTokenResolverTest,
 				 candidates.identities, {candidates.identities.size(), 1U}, oneEntry, 1U, candidates.reader(), noWrite,
 				 [] {})),
 			 FormatException);
+	// The candidate reservation is validated against the declared bounded
+	// maximum before the source is consumed, even when this particular source
+	// would emit only one entry.
+	const size_t threeCandidateBound = 127U;
+	ASSERT_EQ(NativeBulkEdgePrivateTokenResolver::maximumCandidateSegments(threeCandidateBound), 3U);
+	EXPECT_THROW(static_cast<void>(NativeBulkEdgePrivateTokenResolver::materialize(
+				 candidates.identities, {0U, 2U}, oneEntry, threeCandidateBound, candidates.reader(), noWrite, [] {})),
+			 FormatException);
 
 	const NativeBulkEdgeCatalogTokenResolutionSource unopened = [] {
 		return NativeBulkEdgeCatalogTokenResolutionCursor{};
@@ -247,6 +255,27 @@ TEST(NativeBulkEdgePrivateTokenResolverTest, RejectsZeroBoundsAndInvalidCatalogR
 								  std::numeric_limits<uint32_t>::max() + 1ULL, true}}),
 				 1U, candidates.reader(), writer, [] {})),
 				 FormatException);
+}
+
+TEST(NativeBulkEdgePrivateTokenResolverTest, EvaluatesEachMaterializationCallbackGuard) {
+	PrivateCandidates candidates;
+	const NativeBulkEdgePrivateCandidateRange range{0U, 1U};
+	const auto oneEntry = resolutionSource(
+			{{NativeBulkEdgeTokenKind::NBETK_PROPERTY, "property", 1U, true}});
+	const auto writer = [](const NativeGraphPrivateSegmentMaterialization &, std::vector<std::byte>) {};
+	const auto fence = [] {};
+
+	// Keep each callback/bound failure independent so short-circuit validation
+	// remains observable and callers receive the same fail-closed contract.
+	EXPECT_THROW(static_cast<void>(NativeBulkEdgePrivateTokenResolver::materialize(
+				candidates.identities, range, {}, 1U, candidates.reader(), writer, fence)), FormatException);
+	EXPECT_THROW(static_cast<void>(NativeBulkEdgePrivateTokenResolver::materialize(
+				candidates.identities, range, oneEntry, std::numeric_limits<size_t>::max(), candidates.reader(), writer,
+				fence)), FormatException);
+	EXPECT_THROW(static_cast<void>(NativeBulkEdgePrivateTokenResolver::materialize(
+				candidates.identities, range, oneEntry, 1U, {}, writer, fence)), FormatException);
+	EXPECT_THROW(static_cast<void>(NativeBulkEdgePrivateTokenResolver::materialize(
+				candidates.identities, range, oneEntry, 1U, candidates.reader(), writer, {})), FormatException);
 }
 
 // Building an internal resolver node requires a capacity-sized set of maximal

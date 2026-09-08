@@ -223,3 +223,77 @@ TEST_F(RelocatableMetadataStoreTest, CatalogSegmentRetirementCoordinatorRejectsS
 	expectFormatError([&] { components.segmentRetirement.prepareRetiredRelease(releaseBatch, stale); },
 					  FormatError::FERR_INVALID_STATE);
 }
+
+TEST_F(RelocatableMetadataStoreTest, CatalogSegmentRetirementCoordinatorPublishesAndReleasesOneSealedSegment) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	CatalogSlotReservationRequest request = reservationRequest(RSS_FIRST_ALLOCATABLE_SEGMENT_ID, 1U);
+	request.kind = SegmentKind::SGK_CODEBOOK_EXTENT;
+	request.require_absent = true;
+	ASSERT_TRUE(store->reserveFirstFreeAndUpsertCatalog(request, PhysicalSlotId(40U), PhysicalSlotId(40U),
+																 LogSequenceNumber(2U))
+					.has_value());
+	MetadataSnapshotPin snapshot = store->openSnapshot();
+	const Superblock current = snapshot.superblock();
+	snapshot.release();
+	store.reset();
+
+	MetadataRetirementComponents components(io, current);
+	MetadataWriteBatch emptyBatch(components.pools, current, LogSequenceNumber(3U));
+	expectFormatError([&] { components.segmentRetirement.prepareRetirements(emptyBatch, {}); },
+					  FormatError::FERR_INVALID_HEADER);
+	MetadataWriteBatch duplicateBatch(components.pools, current, LogSequenceNumber(3U));
+	const std::array duplicateRequests{
+			CatalogSegmentRetirementRequest{request.segment_id, request.segment_generation},
+			CatalogSegmentRetirementRequest{request.segment_id, request.segment_generation},
+	};
+	expectFormatError([&] { components.segmentRetirement.prepareRetirements(duplicateBatch, duplicateRequests); },
+					  FormatError::FERR_INVALID_HEADER);
+	MetadataWriteBatch invalidIdentityBatch(components.pools, current, LogSequenceNumber(3U));
+	const std::array invalidSegmentId{CatalogSegmentRetirementRequest{SegmentId{}, request.segment_generation}};
+	expectFormatError(
+			[&] { components.segmentRetirement.prepareRetirements(invalidIdentityBatch, invalidSegmentId); },
+			FormatError::FERR_INVALID_HEADER);
+	MetadataWriteBatch invalidGenerationBatch(components.pools, current, LogSequenceNumber(3U));
+	const std::array invalidGeneration{CatalogSegmentRetirementRequest{request.segment_id, Generation{}}};
+	expectFormatError(
+			[&] { components.segmentRetirement.prepareRetirements(invalidGenerationBatch, invalidGeneration); },
+			FormatError::FERR_INVALID_HEADER);
+
+	MetadataWriteBatch retirementBatch(components.pools, current, LogSequenceNumber(3U));
+	components.segmentRetirement.prepareRetirement(retirementBatch, request.segment_id, request.segment_generation);
+	retirementBatch.publish(components.bootstrap);
+	const Superblock retired = retirementBatch.candidate();
+	const RetireQueueEntry queued = components.segmentRetirement.validateRetiredRelease(
+			retired, request.segment_id, request.segment_generation);
+	EXPECT_EQ(components.catalog.find(retired, request.segment_id).state, SegmentState::SGS_RETIRED);
+	EXPECT_TRUE(components.allocator.isAllocated(retired, queued.physical_slot));
+
+	MetadataWriteBatch releaseBatch(components.pools, retired, LogSequenceNumber(4U));
+	components.segmentRetirement.prepareRetiredRelease(releaseBatch, queued);
+	releaseBatch.publish(components.bootstrap);
+	const Superblock released = releaseBatch.candidate();
+	EXPECT_EQ(components.catalog.find(released, request.segment_id).state, SegmentState::SGS_OBSOLETE);
+	EXPECT_FALSE(components.allocator.isAllocated(released, queued.physical_slot));
+	EXPECT_FALSE(components.locations.findRetireQueueEntryOptional(released, queued.physical_slot).has_value());
+}
+
+TEST_F(RelocatableMetadataStoreTest, CatalogSegmentRetirementCoordinatorRetiresAnEmptySharedPagePool) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	CatalogSlotReservationRequest request = reservationRequest(RSS_FIRST_ALLOCATABLE_SEGMENT_ID, 1U);
+	request.kind = SegmentKind::SGK_PROPERTY_PAGE_POOL;
+	request.require_absent = true;
+	ASSERT_TRUE(store->reserveFirstFreeAndUpsertCatalog(request, PhysicalSlotId(40U), PhysicalSlotId(40U),
+																 LogSequenceNumber(2U))
+					.has_value());
+	MetadataSnapshotPin snapshot = store->openSnapshot();
+	const Superblock current = snapshot.superblock();
+	snapshot.release();
+	store.reset();
+
+	MetadataRetirementComponents components(io, current);
+	MetadataWriteBatch retirementBatch(components.pools, current, LogSequenceNumber(3U));
+	EXPECT_NO_THROW(components.segmentRetirement.prepareRetirement(
+			retirementBatch, request.segment_id, request.segment_generation));
+	retirementBatch.publish(components.bootstrap);
+	EXPECT_EQ(components.catalog.find(retirementBatch.candidate(), request.segment_id).state, SegmentState::SGS_RETIRED);
+}

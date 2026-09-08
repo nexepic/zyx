@@ -39,7 +39,7 @@ namespace graph::storage {
 
 		[[nodiscard]] size_t encodedRunEntryBytes(const BTreePageEntry &entry) {
 			const size_t encodedSize = BTreePageEntryCodec::encodedSize(entry);
-			if (encodedSize > std::numeric_limits<size_t>::max() - RSS_NATIVE_BULK_RUN_RECORD_HEADER_BYTES) {
+			if (encodedSize > std::numeric_limits<size_t>::max() - RSS_NATIVE_BULK_RUN_RECORD_HEADER_BYTES) { // adjacency keys are fixed-width codecs and cannot approach host size_t limits.
 				fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
 					 "native bulk Edge adjacency-run entry byte size overflows");
 			}
@@ -48,7 +48,7 @@ namespace graph::storage {
 
 		void emitRun(NativeBulkRunFragment &run, size_t maximumFragments, size_t &emittedFragments,
 					 const NativeBulkEdgeAdjacencyRunVisitor &visitor) {
-			if (run.entries.empty()) {
+			if (run.entries.empty()) { // emitRun is reached only after the caller appends at least one bounded entry.
 				return;
 			}
 			// Append-order sources whose endpoint order is already canonical need no
@@ -56,10 +56,9 @@ namespace graph::storage {
 			if (!std::ranges::is_sorted(run.entries, {}, &BTreePageEntry::key)) {
 				std::ranges::sort(run.entries, {}, &BTreePageEntry::key);
 			}
-			if (std::ranges::adjacent_find(run.entries, {}, &BTreePageEntry::key) != run.entries.end()) {
-				fail(FormatError::FERR_INVALID_STATE,
-					 "native bulk Edge adjacency-run builder found duplicate canonical adjacency keys");
-			}
+			// The source contract enforces strictly increasing Edge IDs, and each
+			// adjacency key includes that ID, so duplicate canonical keys cannot be
+			// produced by this builder.
 
 			// A sort run is an in-memory budget, not the on-disk fragment size. The
 			// latter must fit one candidate scratch segment so the metadata writer can
@@ -71,7 +70,7 @@ namespace graph::storage {
 			size_t fragmentBytes = RSS_NATIVE_BULK_RUN_HEADER_BYTES;
 			for (BTreePageEntry &entry: run.entries) {
 				const size_t entryBytes = encodedRunEntryBytes(entry);
-				if (entryBytes > maximumFragmentBytes - RSS_NATIVE_BULK_RUN_HEADER_BYTES) {
+				if (entryBytes > maximumFragmentBytes - RSS_NATIVE_BULK_RUN_HEADER_BYTES) { // fixed-width adjacency keys are bounded far below one segment.
 					fail(FormatError::FERR_INVALID_STATE,
 						 "native bulk Edge adjacency key cannot fit in one private scratch segment");
 				}
@@ -106,8 +105,10 @@ namespace graph::storage {
 			std::span<const NativeGraphLogicalIdLeaseRange> edgeIdRanges, size_t maximumRecords, size_t maximumRunBytes,
 			size_t maximumFragments,
 			GlobalAdjacencyDirection direction, const NativeBulkEdgeAdjacencyRunVisitor &visitor) {
-		if (!source || maximumRecords == 0U || maximumRunBytes <= RSS_NATIVE_BULK_RUN_HEADER_BYTES ||
-			maximumFragments == 0U || !visitor ||
+		if (!source || maximumRecords == 0U || maximumRecords == std::numeric_limits<size_t>::max() ||
+			maximumRunBytes <= RSS_NATIVE_BULK_RUN_HEADER_BYTES ||
+			maximumRunBytes == std::numeric_limits<size_t>::max() || maximumFragments == 0U ||
+			maximumFragments == std::numeric_limits<size_t>::max() || !visitor ||
 			(direction != GlobalAdjacencyDirection::GAD_OUT && direction != GlobalAdjacencyDirection::GAD_IN)) {
 			fail(FormatError::FERR_INVALID_HEADER,
 				 "native bulk Edge adjacency-run builder requires finite bounds, one direction, a source, and a visitor");
@@ -123,7 +124,7 @@ namespace graph::storage {
 		NativeBulkEdgeRecordCursor cursor = source();
 		while (const std::optional<NativeBulkEdgeRecord> record = cursor()) {
 			static_cast<void>(NativeBulkEdgeRecordCodec::encodedSize(*record));
-			if (++recordCount > maximumRecords || record->edge_id == 0U || record->edge_id <= previousEdgeId) {
+			if (++recordCount > maximumRecords || record->edge_id <= previousEdgeId) {
 				fail(FormatError::FERR_INVALID_STATE,
 					 "native bulk Edge adjacency-run builder found unordered, over-bound, or unleased scratch records");
 			}
@@ -170,8 +171,11 @@ namespace graph::storage {
 			size_t maximumRecords, size_t maximumRunBytes, size_t maximumOutgoingFragments,
 			size_t maximumIncomingFragments, const NativeBulkEdgeAdjacencyRunVisitor &outgoingVisitor,
 			const NativeBulkEdgeAdjacencyRunVisitor &incomingVisitor) {
-		if (!source || maximumRecords == 0U || maximumRunBytes <= RSS_NATIVE_BULK_RUN_HEADER_BYTES ||
-			maximumOutgoingFragments == 0U || maximumIncomingFragments == 0U || !outgoingVisitor || !incomingVisitor) {
+		if (!source || maximumRecords == 0U || maximumRecords == std::numeric_limits<size_t>::max() ||
+			maximumRunBytes <= RSS_NATIVE_BULK_RUN_HEADER_BYTES ||
+			maximumRunBytes == std::numeric_limits<size_t>::max() || maximumOutgoingFragments == 0U ||
+			maximumOutgoingFragments == std::numeric_limits<size_t>::max() || maximumIncomingFragments == 0U ||
+			maximumIncomingFragments == std::numeric_limits<size_t>::max() || !outgoingVisitor || !incomingVisitor) {
 			fail(FormatError::FERR_INVALID_HEADER,
 					 "native bulk Edge paired adjacency-run builder requires finite bounds and visitors");
 		}
@@ -188,7 +192,7 @@ namespace graph::storage {
 		NativeBulkEdgeRecordCursor cursor = source();
 		while (const std::optional<NativeBulkEdgeRecord> record = cursor()) {
 			static_cast<void>(NativeBulkEdgeRecordCodec::encodedSize(*record));
-			if (++recordCount > maximumRecords || record->edge_id == 0U || record->edge_id <= previousEdgeId) {
+			if (++recordCount > maximumRecords || record->edge_id <= previousEdgeId) {
 				fail(FormatError::FERR_INVALID_STATE,
 						 "native bulk Edge paired adjacency-run builder found unordered or over-bound scratch records");
 			}

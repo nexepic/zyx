@@ -76,7 +76,7 @@ namespace graph::storage {
 					return MetadataDirectoryRootOrdinal::MDRO_STATE;
 				case MetadataDirectoryType::MDT_RETIRE_QUEUE:
 					return MetadataDirectoryRootOrdinal::MDRO_RETIRE_QUEUE;
-				default:
+				default: // reconcileMetadataPagePoolLocked calls rootOrdinal only for its fixed non-Page directory list.
 					throwCatalogPoolError(FormatError::FERR_INVALID_ENUM,
 										  "relocatable metadata pool has no typed root ordinal");
 			}
@@ -98,7 +98,7 @@ namespace graph::storage {
 				throwCatalogPoolError(FormatError::FERR_INVALID_HEADER,
 									  "Page Directory bootstrap has invalid visibility or route branch");
 			}
-			if (directoryType == MetadataDirectoryType::MDT_PAGE) {
+			if (directoryType == MetadataDirectoryType::MDT_PAGE) { // Page Directory routing is handled by reconcileMetadataPagePoolLocked before its non-Page root loop.
 				return bootstrap.data_page_directory_root;
 			}
 			const MetadataPageId rootId =
@@ -413,12 +413,6 @@ namespace graph::storage {
 								 return range.contains(slot);
 							 });
 		};
-		const auto dataSlotExcluded = [&excludedDataSlotRanges, reservationLookup](PhysicalSlotId slot) {
-			return reservationLookup != nullptr
-						   ? reservationLookup->isDataSlotReserved(slot)
-						   : std::ranges::any_of(excludedDataSlotRanges,
-												 [slot](PhysicalSlotRange range) { return range.contains(slot); });
-		};
 		auto pool = allocation_cursor_slot_.has_value() ? pools_.lower_bound(*allocation_cursor_slot_) : pools_.begin();
 		if (pool == pools_.end() && allocation_cursor_slot_.has_value()) {
 			pool = pools_.begin();
@@ -426,7 +420,6 @@ namespace graph::storage {
 		std::optional<PhysicalSlotId> createdPoolSlot;
 		const auto usable = [&](const auto &candidate) {
 			return !excluded(candidate->second.header.physical_slot) &&
-				   !dataSlotExcluded(candidate->second.header.physical_slot) &&
 				   (!emergency_reserve_.isValid() ||
 					candidate->second.header.physical_slot != emergency_reserve_.physical_slot) &&
 				   candidate->second.header.allocated_frames != RSS_METADATA_PAGE_POOL_VALID_FRAME_MASK;
@@ -457,7 +450,7 @@ namespace graph::storage {
 				pool = pools_.find(created.header.physical_slot.value());
 			} catch (const std::system_error &error) {
 				if (!isNoSpaceError(error) || !emergency_reserve_.isValid() ||
-					excluded(emergency_reserve_.physical_slot) || dataSlotExcluded(emergency_reserve_.physical_slot)) {
+					excluded(emergency_reserve_.physical_slot)) {
 					throw;
 				}
 				pool = pools_.find(emergency_reserve_.physical_slot.value());
@@ -1756,6 +1749,8 @@ namespace graph::storage {
 												  Generation generation, LogSequenceNumber checkpointLsn,
 												  uint32_t flags, bool reuseExistingSlot) {
 		requireHealthyLocked();
+		// createPoolLocked and both reserve callers validate the identity and reserve an
+		// unoccupied slot before entering this private final-write primitive.
 		if (!physicalSlot.isValid() || !segmentId.isValid() || !generation.isValid() || !checkpointLsn.isValid() ||
 			pools_.contains(physicalSlot.value())) {
 			throwCatalogPoolError(FormatError::FERR_INVALID_STATE,

@@ -33,6 +33,7 @@
 #include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
 #include "storage/relocatable/TestSlottedPageRecord.hpp"
 #include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
+#include "graph/storage/relocatable/maintenance/LargeValueReachabilityReclaimer.hpp"
 #include "graph/storage/relocatable/maintenance/RelocatableMaintenanceService.hpp"
 #include "graph/storage/relocatable/vector/VectorCodebookStore.hpp"
 #include "graph/storage/relocatable/vector/VectorManifestStore.hpp"
@@ -187,6 +188,26 @@ namespace {
 		result.last_manifest_slot = PhysicalSlotId(90U);
 		result.kind = LargeValueKind::LVK_BYTES;
 		result.media_type = "application/octet-stream";
+		return result;
+	}
+
+	LargeValueReachabilityReclaimOptions largeValueReclaimOptions() {
+		LargeValueReachabilityReclaimOptions result;
+		result.maximum_manifest_locations = 16U;
+		result.maximum_manifest_metadata_pages = 16U;
+		result.maximum_manifest_nodes = 16U;
+		result.maximum_owner_locations = 16U;
+		result.maximum_owner_metadata_pages = 16U;
+		result.maximum_data_pages = 16U;
+		result.maximum_retirements = 31U;
+		result.maximum_page_locations = 128U;
+		result.maximum_pools = 16U;
+		result.first_index_slot = PhysicalSlotId(1U);
+		result.last_index_slot = PhysicalSlotId(999U);
+		result.first_journal_state_slot = PhysicalSlotId(1000U);
+		result.last_journal_state_slot = PhysicalSlotId(1015U);
+		result.journal_state_page_owner_id = 0x4C564D4AU;
+		result.journal_state_id = 0x4C564D4AU;
 		return result;
 	}
 
@@ -1100,6 +1121,42 @@ TEST_F(RelocatableMaintenanceServiceTest, RejectsInvalidRequestsAndFaultsClosedW
 	lifecycleService.resume();
 	EXPECT_EQ(lifecycleService.metrics().loop.state, RelocatableMaintenanceLoopState::VMLS_RUNNING);
 	 lifecycleService.stop();
+}
+
+TEST_F(RelocatableMaintenanceServiceTest, CompletesEmptyLargeValueReclamationAndValidatesAdmissionBounds) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io_, initialSuperblock());
+	PhysicalSegmentAllocator physical(io_, *metadata);
+	SlottedPagePool pages(io_, *metadata);
+	BTreePageStore btreePages(pages, *metadata);
+	VectorPageStore vectorPages(io_, *metadata);
+	VectorManifestStore vectorManifests(io_, *metadata);
+	EntityPageStore entities(io_, *metadata);
+	std::mutex publicationMutex;
+	VectorCodebookStore codebooks(physical, *metadata);
+	LargeValueStore largeValues(io_, *metadata);
+	RelocatableMaintenanceOptions options;
+	options.loop.minimum_cycle_interval = std::chrono::milliseconds(1);
+	RelocatableMaintenanceService service(pages, btreePages, vectorPages, vectorManifests, entities, codebooks,
+			largeValues, physical, *metadata, publicationMutex, options);
+
+	LargeValueReachabilityReclaimOptions invalid = largeValueReclaimOptions();
+	invalid.journal_state_id = 0U;
+	EXPECT_THROW(static_cast<void>(service.enqueueLargeValueReachabilityReclamation(invalid)), std::invalid_argument);
+	invalid = largeValueReclaimOptions();
+	invalid.maximum_retirements = std::numeric_limits<size_t>::max();
+	EXPECT_THROW(static_cast<void>(service.enqueueLargeValueReachabilityReclamation(invalid)), std::overflow_error);
+	invalid = largeValueReclaimOptions();
+	invalid.maximum_retirements = 32U;
+	EXPECT_THROW(static_cast<void>(service.enqueueLargeValueReachabilityReclamation(invalid)), std::length_error);
+
+	const LargeValueReachabilityReclaimOptions reclaim = largeValueReclaimOptions();
+	EXPECT_EQ(service.enqueueLargeValueReachabilityReclamation(reclaim), 1U);
+	EXPECT_EQ(service.enqueueLargeValueReachabilityReclamation(reclaim), 0U);
+	service.start();
+	ASSERT_TRUE(waitUntil([&] { return service.metrics().loop.completed_tasks == 1U; }));
+	EXPECT_EQ(service.metrics().loop.rewritten_bytes, 0U);
+	EXPECT_EQ(service.metrics().loop.reclaimed_physical_bytes, 0U);
+	service.stop();
 }
 
 TEST_F(RelocatableMaintenanceServiceTest, EnqueuesTypedVectorBaseRebuildAfterAdmission) {

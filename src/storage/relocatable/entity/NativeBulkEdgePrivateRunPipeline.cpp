@@ -53,8 +53,10 @@ namespace graph::storage {
 		void validate(const NativeBulkEdgePrivateRunPipelineOptions &options,
 					  const NativeGraphPrivateSegmentReader &reader, const NativeGraphPrivateSegmentWriter &writer,
 					  const NativeGraphPrivateSegmentFence &fence) {
-			if (options.maximum_open_runs < 2U || options.maximum_fragment_bytes <= RSS_NATIVE_BULK_RUN_HEADER_BYTES ||
-				options.maximum_entries == 0U || options.maximum_manifest_depth == 0U || !reader || !writer || !fence) {
+			if (options.maximum_open_runs < 2U || options.maximum_open_runs == std::numeric_limits<size_t>::max() ||
+				options.maximum_fragment_bytes <= RSS_NATIVE_BULK_RUN_HEADER_BYTES ||
+				options.maximum_entries == 0U || options.maximum_entries == std::numeric_limits<size_t>::max() ||
+				options.maximum_manifest_depth == 0U || !reader || !writer || !fence) {
 				fail(FormatError::FERR_INVALID_HEADER,
 					 "native bulk Edge private run pipeline requires finite bounds and scoped private callbacks");
 			}

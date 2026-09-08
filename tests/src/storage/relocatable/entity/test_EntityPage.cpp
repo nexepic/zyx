@@ -65,6 +65,24 @@ namespace {
 
 } // namespace
 
+TEST(EntityLabelOverflowReferenceTest, DistinguishesTheCanonicalEmptyReferenceFromValidAndMalformedReferences) {
+	const EntityLabelOverflowReference empty;
+	const EntityLabelOverflowReference valid{PageId(81U), 4U, 2U};
+	const EntityLabelOverflowReference missingPage{{}, 4U, 2U};
+	const EntityLabelOverflowReference missingGeneration{PageId(81U), 4U, 0U};
+	const EntityLabelOverflowReference pageOnly{PageId(81U), 0U, 0U};
+	const EntityLabelOverflowReference slotOnly{{}, 4U, 0U};
+	const EntityLabelOverflowReference generationOnly{{}, 0U, 2U};
+
+	EXPECT_TRUE(empty.isEmpty());
+	EXPECT_FALSE(pageOnly.isEmpty());
+	EXPECT_FALSE(slotOnly.isEmpty());
+	EXPECT_FALSE(generationOnly.isEmpty());
+	EXPECT_TRUE(valid.isValid());
+	EXPECT_FALSE(missingPage.isValid());
+	EXPECT_FALSE(missingGeneration.isValid());
+}
+
 TEST(RelocatableEntityPageTest, NodeAndEdgeCodecsRejectNonCanonicalRecords) {
 	const NodeEntityRecord inputNode = node();
 	const NodeEntityRecordCodec::Bytes encodedNode = NodeEntityRecordCodec::encode(inputNode);
@@ -94,6 +112,12 @@ TEST(RelocatableEntityPageTest, NodeAndEdgeCodecsRejectNonCanonicalRecords) {
 					  FormatError::FERR_INVALID_HEADER);
 	invalidNode = inputNode;
 	invalidNode.label_overflow = {PageId(81U), 4U, 0U};
+	expectFormatError([&] { static_cast<void>(NodeEntityRecordCodec::encode(invalidNode)); },
+					  FormatError::FERR_INVALID_HEADER);
+	invalidNode = inputNode;
+	invalidNode.inline_label_count = 2U;
+	invalidNode.inline_label_ids[2] = 0U;
+	invalidNode.label_overflow = {PageId(81U), 4U, 2U};
 	expectFormatError([&] { static_cast<void>(NodeEntityRecordCodec::encode(invalidNode)); },
 					  FormatError::FERR_INVALID_HEADER);
 	invalidNode = inputNode;
@@ -246,6 +270,28 @@ TEST(RelocatableEntityPageTest, EdgeBatchInsertIsAtomicAndPreservesDurableSlotGe
 	}
 }
 
+TEST(RelocatableEntityPageTest, EdgeBatchInsertHandlesEmptyBatchesAndRejectsNodePages) {
+	EntityPage edgePage = EntityPage::create(owner(), EntityPageRecordKind::EPRK_EDGE);
+	const std::vector<EdgeEntityRecord> empty;
+	EXPECT_TRUE(edgePage.insertEdges(empty).empty());
+	EXPECT_EQ(edgePage.header().live_count, 0U);
+
+	EntityPage nodePage = EntityPage::create(owner(), EntityPageRecordKind::EPRK_NODE);
+	expectFormatError([&] { static_cast<void>(nodePage.insertEdges(empty)); }, FormatError::FERR_INVALID_STATE);
+}
+
+TEST(RelocatableEntityPageTest, EdgeBatchInsertSkipsLiveSlotsAndPreflightsCapacity) {
+	EntityPage page = EntityPage::create(owner(), EntityPageRecordKind::EPRK_EDGE);
+	ASSERT_EQ(page.insert(edge()), 0U);
+	const std::array<EdgeEntityRecord, 2U> records{
+			edge(), EdgeEntityRecord{.source_node_id = 12U, .target_node_id = 13U, .type_id = 17U}};
+	const std::vector<uint16_t> slots = page.insertEdges(records);
+	ASSERT_EQ(slots, (std::vector<uint16_t>{1U, 2U}));
+
+	std::vector<EdgeEntityRecord> overCapacity(page.header().slot_capacity, edge());
+	expectFormatError([&] { static_cast<void>(page.insertEdges(overCapacity)); }, FormatError::FERR_INVALID_STATE);
+}
+
 TEST(RelocatableEntityPageTest, HeaderAndOwnerValidationFailClosed) {
 	EntityPage page = EntityPage::create(owner(), EntityPageRecordKind::EPRK_NODE);
 	EntityPageHeader header = page.header();
@@ -387,4 +433,6 @@ TEST(RelocatableEntityPageTest, RejectsAReusedSlotWhoseGenerationIsExhausted) {
 	refreshPageChecksums(bytes);
 	EntityPage exhaustedEdge = EntityPage::open(owner(), bytes);
 	expectFormatError([&] { static_cast<void>(exhaustedEdge.insert(edge())); }, FormatError::FERR_ARITHMETIC_OVERFLOW);
+	const std::array<EdgeEntityRecord, 1U> batch{edge()};
+	expectFormatError([&] { static_cast<void>(exhaustedEdge.insertEdges(batch)); }, FormatError::FERR_ARITHMETIC_OVERFLOW);
 }

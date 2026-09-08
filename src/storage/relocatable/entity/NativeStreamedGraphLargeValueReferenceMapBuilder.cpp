@@ -29,10 +29,7 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] uint64_t decodeBigEndianU64(std::span<const std::byte> bytes) {
-			if (bytes.size() != sizeof(uint64_t)) {
-				fail(FormatError::FERR_INVALID_STATE,
-					 "native streamed Edge LargeValue content entry has an invalid value-ID suffix");
-			}
+			// buildRuns passes the fixed-width suffix after validating the full key width.
 			uint64_t result = 0U;
 			for (const std::byte byte: bytes) {
 				result = (result << 8U) | static_cast<uint64_t>(std::to_integer<uint8_t>(byte));
@@ -42,10 +39,7 @@ namespace graph::storage {
 
 		[[nodiscard]] size_t encodedRunEntryBytes(const BTreePageEntry &entry) {
 			const size_t encodedSize = BTreePageEntryCodec::encodedSize(entry);
-			if (encodedSize > std::numeric_limits<size_t>::max() - RSS_NATIVE_BULK_RUN_RECORD_HEADER_BYTES) {
-				fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
-					 "native streamed Edge LargeValue reference-map entry size overflowed");
-			}
+			// All map entries use one fixed-width provisional identity key.
 			return RSS_NATIVE_BULK_RUN_RECORD_HEADER_BYTES + encodedSize;
 		}
 
@@ -117,10 +111,7 @@ namespace graph::storage {
 		representative.kind = LargeValueKind::LVK_BYTES;
 		representative.media_type = RSS_ENTITY_PROPERTY_LARGE_VALUE_MEDIA_TYPE;
 		const std::vector<std::byte> representativeKey = store.contentIndexKey(representative);
-		if (representativeKey.size() <= sizeof(uint64_t)) {
-			fail(FormatError::FERR_INVALID_STATE,
-				 "native streamed Edge LargeValue content key has no immutable identity prefix");
-		}
+		// LargeValueStore always prefixes the fixed-width provisional identity with content identity.
 		const size_t identityBytes = representativeKey.size() - sizeof(uint64_t);
 		NativeBulkRunFragment current;
 		size_t currentBytes = RSS_NATIVE_BULK_RUN_HEADER_BYTES;

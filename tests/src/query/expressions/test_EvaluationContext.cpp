@@ -20,6 +20,8 @@
 
 #include "query/expressions/ExpressionsTestFixture.hpp"
 
+#include <limits>
+
 // ============================================================================
 // EvaluationContext Tests
 // ============================================================================
@@ -449,6 +451,13 @@ TEST_F(ExpressionsTest, EvaluationContext_GetRecord) {
 	EXPECT_EQ(&context.getRecord(), &record);
 }
 
+TEST_F(ExpressionsTest, EvaluationContext_ExposesConfiguredCollectionLimit) {
+	const ScalarFunctionEvaluationLimits limits{7U};
+	EvaluationContext limited(record_, {}, limits);
+	EXPECT_EQ(limited.maximumCollectionElements(), 7U);
+	EXPECT_EQ(context_->maximumCollectionElements(), 0U);
+}
+
 TEST_F(ExpressionsTest, EvaluationContext_SetAndClearVariable) {
 	// Test setVariable and clearVariable methods
 	Record record;
@@ -610,6 +619,17 @@ TEST_F(ExpressionsTest, EvaluationContext_ResolvesParametersMapsAndEveryNonScala
 		EXPECT_TRUE(EvaluationContext::toBoolean(*value));
 		EXPECT_THROW(static_cast<void>(EvaluationContext::toInteger(*value)), TypeMismatchException);
 		EXPECT_THROW(static_cast<void>(EvaluationContext::toDouble(*value)), TypeMismatchException);
+	}
+}
+
+TEST_F(ExpressionsTest, EvaluationContext_RejectsNonFiniteDoublesBeforeScalarConversion) {
+	for (const double value: {std::numeric_limits<double>::infinity(),
+							  -std::numeric_limits<double>::infinity(),
+							  std::numeric_limits<double>::quiet_NaN()}) {
+		const PropertyValue nonFinite(value);
+		EXPECT_THROW(static_cast<void>(EvaluationContext::toBoolean(nonFinite)), TypeMismatchException);
+		EXPECT_THROW(static_cast<void>(EvaluationContext::toInteger(nonFinite)), TypeMismatchException);
+		EXPECT_THROW(static_cast<void>(EvaluationContext::toDouble(nonFinite)), TypeMismatchException);
 	}
 }
 

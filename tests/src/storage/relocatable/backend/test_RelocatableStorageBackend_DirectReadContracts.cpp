@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp"
@@ -19,6 +20,74 @@
 
 using namespace graph::storage;
 using namespace relocatable_storage_backend_test;
+
+TEST(RelocatableReadSnapshotTest, DefaultSnapshotIsInvalidUntilBackedByAPinnedBackendGeneration) {
+	const RelocatableReadSnapshot snapshot;
+	EXPECT_FALSE(snapshot.isValid());
+}
+
+TEST(RelocatableStorageBackendContractTest, ReportsFixedCapabilitiesAndClampsBulkAdmissionLimits) {
+	RelocatableStorageBackendOptions options;
+	options.maximum_bulk_edge_transaction_records = 64U;
+	options.bulk_edge_id_lease_block_records = 128U;
+	options.maximum_bulk_edge_append_records = 128U;
+	options.bulk_edge_sort_run_bytes = RSS_SEGMENT_SIZE;
+	options.maximum_bulk_edge_sort_runs = 3U;
+	options.maximum_bulk_edge_candidate_pages = 5U;
+	options.maximum_bulk_edge_append_bytes = 4096U;
+	RelocatableStorageBackend backend(std::move(options));
+
+	EXPECT_FALSE(backend.isOpen());
+	EXPECT_TRUE(backend.isReadOnly());
+	EXPECT_EQ(backend.formatKind(), StorageFormatKind::SFM_RELOCATABLE);
+	EXPECT_EQ(backend.capabilities(), (StorageBackendCapabilities{true, true, true, true, false}));
+	EXPECT_FALSE(backend.hasIndeterminateWriteOutcome());
+	EXPECT_FALSE(backend.maintenanceEnabled());
+	EXPECT_FALSE(backend.nativeMaintenanceAvailable());
+	EXPECT_EQ(backend.options().maximum_bulk_edge_transaction_records, 64U);
+	EXPECT_EQ(backend.maximumNativeBulkEdgeTransactionRecords(), 64U);
+	EXPECT_EQ(backend.nativeBulkEdgeIdLeaseBlockRecords(), 64U);
+	EXPECT_EQ(backend.maximumNativeBulkEdgeAppendRecords(), 64U);
+	EXPECT_EQ(backend.maximumNativeBulkEdgeAppendBytes(), 4096U);
+	const NativeBulkEdgePublicationPreflightOptions preflight = backend.nativeBulkEdgePublicationPreflightOptions();
+	EXPECT_EQ(preflight.maximum_records, 64U);
+	EXPECT_EQ(preflight.sort_run_bytes, static_cast<size_t>(RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES));
+	EXPECT_EQ(preflight.maximum_sort_runs, 3U);
+	EXPECT_EQ(preflight.maximum_candidate_fragments, 5U);
+}
+
+TEST(RelocatableStorageBackendContractTest, ReportsWritableBeforeOpeningACreateModeBackend) {
+	RelocatableStorageBackendOptions options;
+	options.open_mode = OpenMode::OPEN_CREATE_NEW_FILE;
+	RelocatableStorageBackend backend(std::move(options));
+
+	EXPECT_FALSE(backend.isReadOnly());
+}
+
+TEST_F(RelocatableStorageBackendTest, ReadSnapshotRetainsItsPinAcrossMovesAndBecomesInvalidOnRelease) {
+	materializeNativeDatabase();
+	RelocatableStorageBackendOptions options = backendOptions();
+	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(std::move(options));
+	backend.open();
+
+	RelocatableReadSnapshot original = backend.openSnapshot();
+	ASSERT_TRUE(original.isValid());
+	EXPECT_TRUE(original.superblock().generation.isValid());
+	EXPECT_TRUE(original.metadataSnapshot().isValid());
+
+	RelocatableReadSnapshot moved(std::move(original));
+	EXPECT_FALSE(original.isValid());
+	ASSERT_TRUE(moved.isValid());
+
+	RelocatableReadSnapshot assigned;
+	assigned = std::move(moved);
+	EXPECT_FALSE(moved.isValid());
+	ASSERT_TRUE(assigned.isValid());
+	assigned.release();
+	EXPECT_FALSE(assigned.isValid());
+	backend.close();
+}
 
 TEST_F(RelocatableStorageBackendTest, LogicalPlanRuntimeExecutesRelocatableNodeAndAdjacencyPagesOnOneSnapshot) {
 	const NativeGraphFixture fixture = materializeNativeGraphFixture();
@@ -156,6 +225,23 @@ TEST_F(RelocatableStorageBackendTest, DirectBackendReadPagesRetainThePinnedLogic
 		return false;
 	}));
 	EXPECT_EQ(visited, std::vector<uint64_t>{fixture.person_node_id});
+	std::vector<uint64_t> visitedEdges;
+	EXPECT_FALSE(backend.visitEdgesUntil(snapshot, 8U, [&visitedEdges](const LogicalGraphEdge &edge) {
+		visitedEdges.push_back(edge.edge_id);
+		return false;
+	}));
+	ASSERT_EQ(visitedEdges.size(), 1U);
+	EXPECT_TRUE(visitedEdges.front() == fixture.knows_edge_id || visitedEdges.front() == fixture.mentions_edge_id);
+	std::vector<uint64_t> visitedAdjacentEdges;
+	EXPECT_FALSE(backend.visitAdjacentEdgesUntil(
+			snapshot, fixture.person_node_id, LogicalGraphReadDirection::LGRD_OUTGOING, 8U,
+			[&visitedAdjacentEdges](const LogicalGraphEdge &edge) {
+				visitedAdjacentEdges.push_back(edge.edge_id);
+				return false;
+			}));
+	ASSERT_EQ(visitedAdjacentEdges.size(), 1U);
+	EXPECT_TRUE(visitedAdjacentEdges.front() == fixture.knows_edge_id ||
+				visitedAdjacentEdges.front() == fixture.mentions_edge_id);
 	snapshot.release();
 	backend.close();
 }
@@ -216,6 +302,23 @@ TEST_F(RelocatableStorageBackendTest, DirectTraversalContractsRejectMissingVisit
 	// Every rejected precondition is read-only; the snapshot remains valid after
 	// the complete validation matrix and can still resolve its original Node.
 	EXPECT_EQ(backend.readNode(snapshot, fixture.person_node_id).node_id, fixture.person_node_id);
+	snapshot.release();
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, DirectSchemaTokenLookupRejectsAmbiguousNamesAcrossDomains) {
+	materializeNativeDatabase();
+	RelocatableStorageBackendOptions options = backendOptions();
+	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(std::move(options));
+	backend.open();
+
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes({{{"Shared"}, {}}, {{}, {}}});
+	ASSERT_EQ(nodes.size(), 2U);
+	ASSERT_EQ(backend.createLogicalEdges({{nodes[0], nodes[1], "Shared", {}}}).size(), 1U);
+
+	RelocatableReadSnapshot snapshot = backend.openSnapshot();
+	EXPECT_THROW(static_cast<void>(backend.findSchemaTokenId(snapshot, "Shared")), FormatException);
 	snapshot.release();
 	backend.close();
 }
@@ -357,6 +460,13 @@ TEST_F(RelocatableStorageBackendTest, DirectExactLookupAndSchemaDropUseTheCanoni
 			{{{"User"}, {{"email", graph::PropertyValue(std::string("ada@example.test"))},
 						 {"display_name", graph::PropertyValue(std::string("Ada"))}}}});
 	ASSERT_EQ(users.size(), 1U);
+	static_cast<void>(backend.createLogicalConstraint(
+			{"account_handle_key", LogicalGraphConstraintEntityKind::LGCEK_NODE,
+			 LogicalGraphConstraintKind::LGCK_NODE_KEY, "Account", {"handle"},
+			 LogicalGraphConstraintPropertyType::LGCPT_NONE}));
+	const std::vector<uint64_t> accounts =
+			backend.createLogicalNodes({{{"Account"}, {{"handle", graph::PropertyValue("primary")}}}});
+	ASSERT_EQ(accounts.size(), 1U);
 
 	RelocatableReadSnapshot snapshot = backend.openSnapshot();
 	EXPECT_EQ(backend.findNodesByExactProperties(snapshot, {}, {}, 1U, 1U), std::nullopt);
@@ -387,19 +497,73 @@ TEST_F(RelocatableStorageBackendTest, DirectExactLookupAndSchemaDropUseTheCanoni
 	ASSERT_TRUE(matched.has_value());
 	ASSERT_EQ(matched->size(), 1U);
 	EXPECT_EQ(matched->front().node_id, users.front());
+	const auto nodeKeyMatch = backend.findNodesByExactProperties(
+			snapshot, {"Account"}, {{"handle", graph::PropertyValue("primary")}}, 1U, 1U);
+	ASSERT_TRUE(nodeKeyMatch.has_value());
+	ASSERT_EQ(nodeKeyMatch->size(), 1U);
+	EXPECT_EQ(nodeKeyMatch->front().node_id, accounts.front());
 	const auto missing = backend.findNodesByExactProperties(
 			snapshot, {"User"}, {{"email", graph::PropertyValue(std::string("missing@example.test"))}}, 1U, 2U);
 	ASSERT_TRUE(missing.has_value());
 	EXPECT_TRUE(missing->empty());
 	snapshot.release();
 
+	// A schema drop for an unknown label must stop at catalog lookup without
+	// allocating a writer or mutating any durable state.
+	EXPECT_FALSE(backend.dropLogicalNodeIndexBySchema("Unknown", "email"));
+	const LogicalGraphIndexDefinition vector =
+			backend.createLogicalNodeVectorIndex({"user_embedding_index", "User", "embedding", 2U, "l2"});
+	// The schema shortcut identifies Scalar Indexes only. A Vector Index with the
+	// same label/property namespace remains durable until its named DDL drop.
+	EXPECT_FALSE(backend.dropLogicalNodeIndexBySchema("User", "embedding"));
 	static_cast<void>(backend.createLogicalNodeIndex({"user_email_index", "User", {"email"}}));
 	EXPECT_TRUE(backend.dropLogicalNodeIndexBySchema("User", "email"));
 	EXPECT_FALSE(backend.dropLogicalNodeIndexBySchema("User", "email"));
 	EXPECT_THROW(static_cast<void>(backend.dropLogicalNodeIndexBySchema("", "email")), std::invalid_argument);
 	EXPECT_THROW(static_cast<void>(backend.dropLogicalNodeIndexBySchema("User", "")), std::invalid_argument);
+	EXPECT_EQ(backend.listLogicalIndexes(8U), std::vector<LogicalGraphIndexDefinition>{vector});
+	EXPECT_TRUE(backend.dropLogicalIndexByName(vector.name));
 	EXPECT_TRUE(backend.listLogicalIndexes(8U).empty());
 	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest,
+		NativeIntegrityVerificationChecksNodeAndRelationshipUniqueSupportTrees) {
+	materializeNativeDatabase();
+	RelocatableStorageBackendOptions options = backendOptions();
+	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(std::move(options));
+	backend.open();
+
+	// UNIQUE permits a missing Property while NODE KEY does not. The integrity
+	// scan must preserve that distinction while checking both entity domains.
+	static_cast<void>(backend.createLogicalConstraint(
+			{"user_email_unique", LogicalGraphConstraintEntityKind::LGCEK_NODE,
+			 LogicalGraphConstraintKind::LGCK_UNIQUE, "User", {"email"},
+			 LogicalGraphConstraintPropertyType::LGCPT_NONE}));
+	static_cast<void>(backend.createLogicalConstraint(
+			{"knows_code_unique", LogicalGraphConstraintEntityKind::LGCEK_EDGE,
+			 LogicalGraphConstraintKind::LGCK_UNIQUE, "KNOWS", {"code"},
+			 LogicalGraphConstraintPropertyType::LGCPT_NONE}));
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes(
+			{{{"User"}, {{"email", graph::PropertyValue("ada@example.test")}}},
+			 {{"User"}, {}},
+			 {{"Other"}, {{"email", graph::PropertyValue("ignored@example.test")}}}});
+	ASSERT_EQ(nodes.size(), 3U);
+	const std::vector<uint64_t> edges = backend.createLogicalEdges(
+			{{nodes[0], nodes[2], "KNOWS", {{"code", graph::PropertyValue("k-1")}}},
+			 {nodes[2], nodes[0], "", {{"code", graph::PropertyValue("k-1")}}}});
+	ASSERT_EQ(edges.size(), 2U);
+
+	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+	backend.close();
+
+	RelocatableStorageBackendOptions reopenOptions = backendOptions();
+	reopenOptions.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend reopened(std::move(reopenOptions));
+	reopened.open();
+	EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity()));
+	reopened.close();
 }
 
 TEST_F(RelocatableStorageBackendTest, DirectRangeLookupsUseTheCanonicalNativeIndexes) {
@@ -432,6 +596,59 @@ TEST_F(RelocatableStorageBackendTest, DirectRangeLookupsUseTheCanonicalNativeInd
 	EXPECT_EQ(scalarRange->at(1).node_id, nodes.at(1));
 	EXPECT_EQ(scalarRange->at(2).node_id, nodes.at(2));
 
+	// Exact scalar lookup preserves every matching Node and rejects a caller
+	// bound that would silently truncate the native Index result.
+	const auto duplicateExact = backend.findNodesByExactProperties(
+			snapshot, {"Person"}, {{"score", graph::PropertyValue(int64_t{42})}}, 2U, 3U);
+	ASSERT_TRUE(duplicateExact.has_value());
+	ASSERT_EQ(duplicateExact->size(), 2U);
+	EXPECT_EQ(duplicateExact->at(0).node_id, nodes.at(1));
+	EXPECT_EQ(duplicateExact->at(1).node_id, nodes.at(2));
+	EXPECT_THROW(static_cast<void>(backend.findNodesByExactProperties(
+				snapshot, {"Person"}, {{"score", graph::PropertyValue(int64_t{42})}}, 1U, 3U)),
+			 FormatException);
+
+	// Equality follows the same native scalar index and returns an explicit
+	// empty result when the encoded key has no candidate.
+	const auto emptyExact = backend.findNodesByExactProperties(
+			snapshot, {"Person"}, {{"score", graph::PropertyValue(int64_t{43})}}, 3U, 3U);
+	ASSERT_TRUE(emptyExact.has_value());
+	EXPECT_TRUE(emptyExact->empty());
+
+	// A composite index does not impersonate a single-property index. The
+	// caller must use its bounded scan fallback when no matching index shape is
+	// available for the predicate.
+	EXPECT_EQ(backend.findNodesByExactProperties(
+			  snapshot, {"Person"}, {{"city", graph::PropertyValue("Shanghai")}}, 3U, 3U),
+			  std::nullopt);
+	EXPECT_EQ(backend.findNodesByPropertyRange(
+			  snapshot, {"Person"},
+			  {"city", graph::PropertyValue("Beijing"), graph::PropertyValue("Shanghai"), true, true}, 3U, 3U),
+			  std::nullopt);
+	EXPECT_EQ(backend.findNodesByCompositePropertyRange(
+			  snapshot, {"Person"},
+			  {{{"score", graph::PropertyValue(int64_t{42})}},
+			   {"city", graph::PropertyValue("Beijing"), graph::PropertyValue("Shanghai"), true, true}},
+			  3U, 3U),
+			  std::nullopt);
+
+	// A valid scalar index lookup can be empty without falling back to a page
+	// scan. The lower bound is beyond the final canonical index entry here.
+	const auto emptyScalarRange = backend.findNodesByPropertyRange(
+			snapshot, {"Person"}, {"score", graph::PropertyValue(int64_t{43}), graph::PropertyValue(), true, true},
+			3U, 3U);
+	ASSERT_TRUE(emptyScalarRange.has_value());
+	EXPECT_TRUE(emptyScalarRange->empty());
+
+	// The ordered scalar traversal stops when it reaches the first value above
+	// its inclusive upper bound, after retaining its preceding matching entry.
+	const auto scalarUpperBounded = backend.findNodesByPropertyRange(
+			snapshot, {"Person"}, {"score", graph::PropertyValue(), graph::PropertyValue(int64_t{7}), true, true},
+			3U, 3U);
+	ASSERT_TRUE(scalarUpperBounded.has_value());
+	ASSERT_EQ(scalarUpperBounded->size(), 1U);
+	EXPECT_EQ(scalarUpperBounded->front().node_id, nodes.at(0));
+
 	const LogicalGraphCompositePropertyRange compositeRange{
 			{{"city", graph::PropertyValue("Shanghai")}},
 			{"age", graph::PropertyValue(int64_t{29}), graph::PropertyValue(int64_t{31}), true, false}};
@@ -441,6 +658,28 @@ TEST_F(RelocatableStorageBackendTest, DirectRangeLookupsUseTheCanonicalNativeInd
 	ASSERT_EQ(compositeMatches->size(), 2U);
 	EXPECT_EQ(compositeMatches->at(0).node_id, nodes.at(0));
 	EXPECT_EQ(compositeMatches->at(1).node_id, nodes.at(2));
+
+	// The ordered composite scan must stop at the first entry beyond its upper
+	// bound, rather than treating it as a later candidate from the same prefix.
+	const auto compositeUpperBounded = backend.findNodesByCompositePropertyRange(
+			snapshot, {"Person"},
+			{{{"city", graph::PropertyValue("Shanghai")}},
+			 {"age", graph::PropertyValue(int64_t{29}), graph::PropertyValue(int64_t{29}), true, true}},
+			3U, 3U);
+	ASSERT_TRUE(compositeUpperBounded.has_value());
+	ASSERT_EQ(compositeUpperBounded->size(), 1U);
+	EXPECT_EQ(compositeUpperBounded->front().node_id, nodes.at(2));
+
+	// A non-existent equality prefix starts before the first stored prefix. The
+	// composite index must terminate at that different prefix rather than
+	// returning an unrelated row.
+	const auto emptyCompositePrefix = backend.findNodesByCompositePropertyRange(
+			snapshot, {"Person"},
+			{{{"city", graph::PropertyValue("Amsterdam")}},
+			 {"age", graph::PropertyValue(int64_t{0}), graph::PropertyValue(), true, true}},
+			3U, 3U);
+	ASSERT_TRUE(emptyCompositePrefix.has_value());
+	EXPECT_TRUE(emptyCompositePrefix->empty());
 	snapshot.release();
 	backend.close();
 }
@@ -464,6 +703,9 @@ TEST_F(RelocatableStorageBackendTest, DirectNativeIndexesPreserveExactAndOpenRan
 	ASSERT_EQ(nodes.size(), 3U);
 	static_cast<void>(backend.createLogicalNodeIndex({"person_score", "Person", {"score"}}));
 	static_cast<void>(backend.createLogicalNodeIndex({"person_city", "Person", {"city"}}));
+	// A same-width index with the same range suffix is not usable unless its
+	// equality prefix has the requested property order.
+	static_cast<void>(backend.createLogicalNodeIndex({"person_score_age", "Person", {"score", "age"}}));
 	static_cast<void>(backend.createLogicalNodeIndex({"person_city_age", "Person", {"city", "age"}}));
 
 	RelocatableReadSnapshot snapshot = backend.openSnapshot();

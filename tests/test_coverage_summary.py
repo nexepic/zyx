@@ -69,6 +69,35 @@ def test_source_exclusion_adjustment_preserves_files_without_markers(tmp_path):
     }
 
 
+def test_declaration_only_headers_are_reported_as_non_executable(tmp_path):
+    repo_root = Path(__file__).resolve().parents[1]
+    sys.path.insert(0, str(repo_root / "scripts"))
+    import generate_coverage
+
+    source_file = tmp_path / "Interface.hpp"
+    source_file.write_text(
+        "class Interface {\n"
+        "public:\n"
+        "  virtual ~Interface() = default;\n"
+        "  virtual void check() const = 0;\n"
+        "};\n"
+    )
+    file_coverage = {
+        "segments": [[3, 3, 0, True, True, False]],
+        "branches": [],
+        "summary": {
+            "lines": {"count": 1, "covered": 0, "percent": 0.0},
+            "regions": {"count": 1, "covered": 0, "percent": 0.0},
+            "branches": {"count": 0, "covered": 0, "notcovered": 0, "percent": 0.0},
+            "functions": {"count": 1, "covered": 0, "percent": 0.0},
+        },
+    }
+
+    adjusted = generate_coverage.apply_source_exclusions(file_coverage, source_file)
+    assert all(metric == {"count": 0, "covered": 0, "notcovered": 0, "percent": 100.0}
+               for metric in adjusted.values())
+
+
 def test_find_test_binaries_ignores_executable_scripts(tmp_path):
     repo_root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(repo_root / "scripts"))
@@ -190,6 +219,24 @@ def test_source_exclusion_adjustment_treats_continued_marker_as_statement_prefix
     assert adjusted["lines"]["count"] == 1
 
 
+def test_source_exclusion_does_not_extend_past_a_terminated_marker_line(tmp_path):
+    repo_root = Path(__file__).resolve().parents[1]
+    sys.path.insert(0, str(repo_root / "scripts"))
+    import generate_coverage
+
+    source_file = tmp_path / "TerminatedMarker.cpp"
+    source_file.write_text(
+        "int value() {\n"
+        "  return 1; // ZYX_COV_EXCL_LINE\n"
+        "}\n"
+        "bool still_measurable(bool value) {\n"
+        "  return value;\n"
+        "}\n"
+    )
+
+    assert generate_coverage.excluded_source_lines(source_file) == {2}
+
+
 def test_branch_adjustment_ignores_folded_zero_count_branches(tmp_path):
     repo_root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(repo_root / "scripts"))
@@ -246,6 +293,38 @@ def test_region_adjustment_aggregates_template_instantiations_by_source_site(tmp
 
     adjusted = generate_coverage.apply_source_exclusions(file_coverage, source_file)
 
+    assert adjusted["regions"] == {"count": 2, "covered": 2, "notcovered": 0, "percent": 100.0}
+
+
+def test_header_line_adjustment_aggregates_template_instantiations_without_markers(tmp_path):
+    repo_root = Path(__file__).resolve().parents[1]
+    sys.path.insert(0, str(repo_root / "scripts"))
+    import generate_coverage
+
+    source_file = tmp_path / "TemplatedHeader.hpp"
+    source_file.write_text(
+        "template <typename T>\n"
+        "int value(T value) { return value ? 1 : 0; }\n"
+    )
+    file_coverage = {
+        "segments": [
+            [2, 1, 4, True, True, False],
+            [2, 1, 0, True, True, False],
+            [2, 30, 0, True, True, False],
+            [2, 30, 3, True, True, False],
+        ],
+        "branches": [],
+        "summary": {
+            "lines": {"count": 2, "covered": 1, "percent": 50.0},
+            "regions": {"count": 4, "covered": 2, "percent": 50.0},
+            "branches": {"count": 0, "covered": 0, "notcovered": 0, "percent": 100.0},
+            "functions": {"count": 2, "covered": 2, "percent": 100.0},
+        },
+    }
+
+    adjusted = generate_coverage.apply_source_exclusions(file_coverage, source_file)
+
+    assert adjusted["lines"] == {"count": 1, "covered": 1, "notcovered": 0, "percent": 100.0}
     assert adjusted["regions"] == {"count": 2, "covered": 2, "notcovered": 0, "percent": 100.0}
 
 

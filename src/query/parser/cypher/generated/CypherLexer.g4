@@ -161,7 +161,9 @@ DecimalInteger : [0-9]+ ;
 
 DoubleLiteral  : ([0-9]+ '.' [0-9]+ | '.' [0-9]+ | [0-9]+) ('e' [+-]? [0-9]+)? ;
 
-ID : [a-z_] [a-z0-9_]* | '`' .*? '`' ;
+// A quoted identifier escapes a literal backtick by doubling it.  Matching the
+// escape pair before the closing delimiter keeps the whole identifier token intact.
+ID : [a-z_] [a-z0-9_]* | '`' ( '``' | ~'`' )* '`' ;
 
 StringLiteral
     : '"' ( ~('"'|'\\'|'\r'|'\n') | EscapeSequence )* '"'

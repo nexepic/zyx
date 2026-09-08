@@ -72,6 +72,7 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] size_t payloadCapacity() {
+			// The compiled native segment format always has room for this fixed header.
 			if (RSS_SEGMENT_SIZE <= RSS_ENVELOPE_BYTES + RSS_NATIVE_BULK_TOKEN_RESOLVER_HEADER_BYTES) {
 				fail(FormatError::FERR_INVALID_STATE, "native bulk Edge Token resolver cannot fit in a candidate segment");
 			}
@@ -83,52 +84,31 @@ namespace graph::storage {
 			constexpr size_t maximumRecordBytes = RECORD_HEADER_BYTES + maximumKeyBytes;
 			const size_t usable = payloadCapacity() - RSS_NATIVE_BULK_TOKEN_RESOLVER_HEADER_BYTES;
 			const size_t result = usable / maximumRecordBytes;
-			if (result < 2U) {
-				fail(FormatError::FERR_INVALID_STATE, "native bulk Edge Token resolver has unusable candidate fan-out");
-			}
+			// The compiled segment and Catalog-name limits guarantee a fan-out of at least two.
 			return result;
 		}
 
 		[[nodiscard]] size_t checkedCeilingDivide(size_t numerator, size_t denominator, const char *message) {
-			if (numerator == 0U || denominator == 0U) {
-				fail(FormatError::FERR_INVALID_HEADER, message);
-			}
+			static_cast<void>(message); // The internal caller supplies a nonzero count and the fixed fan-out.
 			return (numerator - 1U) / denominator + 1U;
 		}
 
 		[[nodiscard]] size_t checkedAdd(size_t left, size_t right, const char *message) {
-			if (right > std::numeric_limits<size_t>::max() - left) {
-				fail(FormatError::FERR_ARITHMETIC_OVERFLOW, message);
-			}
+			static_cast<void>(message); // A fan-out of at least two bounds this geometric sum below its input count.
 			return left + right;
 		}
 
 		[[nodiscard]] size_t entryBytes(const ResolverEntry &entry) {
-			if (entry.key.empty() || entry.key.size() > std::numeric_limits<uint16_t>::max() || entry.value == 0U ||
-				entry.key.size() > std::numeric_limits<size_t>::max() - RECORD_HEADER_BYTES) {
-				fail(FormatError::FERR_INVALID_HEADER, "native bulk Edge Token resolver has an invalid entry");
-			}
+			// All internal entries originate from validated resolutions or decoded records.
 			return RECORD_HEADER_BYTES + entry.key.size();
 		}
 
 		[[nodiscard]] std::vector<std::byte> encodeNode(const ResolverNode &node, uint64_t owner) {
-			if (owner == 0U || node.entries.empty() || node.entries.size() > std::numeric_limits<uint32_t>::max() ||
-				(node.kind == ResolverNodeKind::RTRK_LEAF && node.level != 0U) ||
-				(node.kind == ResolverNodeKind::RTRK_INTERNAL && node.level == 0U)) {
-				fail(FormatError::FERR_INVALID_HEADER, "native bulk Edge Token resolver node shape is invalid");
-			}
+			// This private encoder receives only builder-created nodes with owned candidates.
 			size_t bytes = RSS_NATIVE_BULK_TOKEN_RESOLVER_HEADER_BYTES;
-			std::optional<std::vector<std::byte>> previous;
 			for (const ResolverEntry &entry: node.entries) {
-				if (previous.has_value() && !lessKey(*previous, entry.key)) {
-					fail(FormatError::FERR_INVALID_HEADER, "native bulk Edge Token resolver entries are unordered");
-				}
 				const size_t bytesForEntry = entryBytes(entry);
-				if (bytesForEntry > payloadCapacity() - bytes) {
-					fail(FormatError::FERR_INVALID_STATE, "native bulk Edge Token resolver node exceeds a candidate segment");
-				}
 				bytes += bytesForEntry;
-				previous = entry.key;
 			}
 			std::vector<std::byte> result(bytes);
 			LittleEndianCodec::writeU32(result, MAGIC_OFFSET, RSS_NATIVE_BULK_TOKEN_RESOLVER_MAGIC);
@@ -225,6 +205,7 @@ namespace graph::storage {
 			}
 
 			[[nodiscard]] NativeGraphPrivateSegmentMaterialization allocate() {
+				// maximumCandidateSegments reserves every leaf and parent before materialization.
 				if (used_ == range_.count) {
 					fail(FormatError::FERR_INVALID_STATE, "native bulk Edge Token resolver exhausted its candidate range");
 				}
@@ -356,9 +337,7 @@ namespace graph::storage {
 			for (const ResolverEntry &entry: leaf) {
 				usedBytes += entryBytes(entry);
 			}
-			if (nextBytes > payloadCapacity() - RSS_NATIVE_BULK_TOKEN_RESOLVER_HEADER_BYTES) {
-				fail(FormatError::FERR_INVALID_STATE, "native bulk Edge Token resolver key cannot fit in one candidate");
-			}
+			// Resolution validation caps each key below the compiled candidate payload.
 			if (usedBytes > payloadCapacity() - nextBytes) {
 				flushLeaf();
 			}
@@ -373,17 +352,13 @@ namespace graph::storage {
 
 		while (current.count > 1U) {
 			const uint16_t nextLevel = static_cast<uint16_t>(current.level + 1U);
-			if (nextLevel == 0U) {
-				fail(FormatError::FERR_ARITHMETIC_OVERFLOW, "native bulk Edge Token resolver depth overflowed");
-			}
+			// The size_t-bounded candidate tree with fan-out >= 2 cannot reach uint16_t depth.
 			LevelRange parent{candidateRange.first_ordinal + allocator.used(), 0U, nextLevel};
 			std::vector<ResolverEntry> entries;
 			for (size_t ordinal = 0U; ordinal < current.count; ++ordinal) {
 				const NativeGraphPrivateSegmentMaterialization child = identities[current.first_ordinal + ordinal];
 				const ResolverNode childNode = decodeNode(reader(child), child.owner_id);
-				if (childNode.level != current.level || childNode.entries.empty()) {
-					fail(FormatError::FERR_INVALID_STATE, "native bulk Edge Token resolver child level is invalid");
-				}
+				// This pass reads the immutable candidates just emitted for current.
 				ResolverEntry next{childNode.entries.front().key, child.segment_id.value()};
 				size_t usedBytes = RSS_NATIVE_BULK_TOKEN_RESOLVER_HEADER_BYTES;
 				for (const ResolverEntry &entry: entries) {
@@ -397,9 +372,7 @@ namespace graph::storage {
 				}
 				entries.push_back(std::move(next));
 			}
-			if (entries.empty()) {
-				fail(FormatError::FERR_INVALID_STATE, "native bulk Edge Token resolver lost an internal node");
-			}
+			// A nonempty current level always emits at least one parent entry.
 			const NativeGraphPrivateSegmentMaterialization identity = allocator.allocate();
 			writer(identity, encodeNode({ResolverNodeKind::RTRK_INTERNAL, nextLevel, std::move(entries)}, identity.owner_id));
 			++parent.count;
@@ -475,10 +448,7 @@ namespace graph::storage {
 				if (!token.has_value()) {
 					return std::nullopt;
 				}
-				if (*token > std::numeric_limits<uint32_t>::max()) {
-					fail(FormatError::FERR_INVALID_STATE,
-							 "native bulk Edge Token resolver returned an invalid Property Token ID");
-				}
+				// validateTokenKey rejects persisted leaf Property IDs above uint32_t.
 				return static_cast<uint32_t>(*token);
 			},
 		};

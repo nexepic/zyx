@@ -1675,10 +1675,10 @@ namespace graph::storage {
 													  const VectorAdjacencyMultiPoolMaterializationPreparer &preparer,
 													  const MetadataPublishOptions &options);
 		[[nodiscard]] Superblock materializeNewVectorManifestPage(uint64_t indexId, PhysicalSlotId firstSlot,
-																  PhysicalSlotId lastSlot,
-																  LogSequenceNumber checkpointLsn,
-																  const NewVectorManifestPagePreparer &preparer,
-																  const MetadataPublishOptions &options);
+																						  PhysicalSlotId lastSlot,
+																						  LogSequenceNumber checkpointLsn,
+																						  const NewVectorManifestPagePreparer &preparer,
+																						  const MetadataPublishOptions &options);
 		// Atomically removes a proven-unreachable page set from the Page Directory.
 		// Typed reclaimers reach this only through their validating stores, so callers
 		// cannot issue an arbitrary metadata-only page erase. Optional Vector IDs
@@ -1687,12 +1687,12 @@ namespace graph::storage {
 		// persistent content-index entry must be erased through the native graph
 		// LargeValue publication boundary in the same generation.
 		[[nodiscard]] Superblock retirePagesInExistingPools(Generation expectedMetadataGeneration,
-															std::span<const IndexRootLocation> erasedRoots,
-															std::span<const PageRetirement> retirements,
-															LogSequenceNumber checkpointLsn,
-															const ExistingPoolPagesRetirementPreparer &preparer,
-															const MetadataPublishOptions &options = {},
-															std::span<const uint64_t> erasedVectorIds = {});
+																						std::span<const IndexRootLocation> erasedRoots,
+																						std::span<const PageRetirement> retirements,
+																						LogSequenceNumber checkpointLsn,
+																						const ExistingPoolPagesRetirementPreparer &preparer,
+																						const MetadataPublishOptions &options = {},
+																						std::span<const uint64_t> erasedVectorIds = {});
 		[[nodiscard]] Superblock retireVectorCodebookExtents(Generation expectedMetadataGeneration,
 															 std::span<const ExtentRetirement> retirements,
 															 LogSequenceNumber checkpointLsn,

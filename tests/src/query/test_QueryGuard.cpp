@@ -55,9 +55,15 @@ TEST(QueryGuardTest, MemoryLimit_ThrowsWhenExceeded) {
 }
 
 TEST(QueryGuardTest, MemoryLimit_AllowsPreexistingProcessMemoryAndCanBeDisabledByLaterQuery) {
-	std::array<size_t, 3U> samples{256U * 1024U * 1024U, 256U * 1024U * 1024U, 256U * 1024U * 1024U};
+	std::array<size_t, 4U> samples{
+			256U * 1024U * 1024U,
+			256U * 1024U * 1024U,
+			256U * 1024U * 1024U + 512U * 1024U,
+			256U * 1024U * 1024U,
+	};
 	size_t next = 0U;
 	QueryGuard limited(0, 1, [&]() { return samples[std::min(next++, samples.size() - 1U)]; });
+	EXPECT_NO_THROW(limited.checkNow());
 	EXPECT_NO_THROW(limited.checkNow());
 	QueryGuard disabled(0, 0, [&]() { return samples.back(); });
 	EXPECT_NO_THROW(disabled.checkNow());

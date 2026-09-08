@@ -227,6 +227,8 @@ namespace graph::utils {
 						size += sizeof(int64_t);
 					} else if constexpr (std::is_same_v<T, TemporalDuration>) {
 						size += sizeof(int64_t) * 3;
+					} else if constexpr (std::is_same_v<T, PropertyValue::Bytes>) {
+						throw std::runtime_error("binary PropertyValue requires the native property codec");
 					}
 				},
 				value.getVariant());

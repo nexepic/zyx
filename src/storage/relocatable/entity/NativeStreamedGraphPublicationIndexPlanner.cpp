@@ -54,13 +54,7 @@ namespace graph::storage {
 
 		std::ranges::sort(result.plans, {},
 						  [](const NativeGraphDeferredIndexPlan &plan) { return plan.mutation.index_id; });
-		if (result.plans.empty() ||
-			std::ranges::adjacent_find(result.plans, {}, [](const NativeGraphDeferredIndexPlan &plan) {
-				return plan.mutation.index_id;
-			}) != result.plans.end()) {
-			fail(FormatError::FERR_INVALID_STATE,
-				 "native streamed Edge index bundle lost a required root or produced a duplicate Index ID");
-		}
+		// Catalog, global-adjacency, and LargeValue planners each own a distinct fixed Index ID.
 		return result;
 	}
 

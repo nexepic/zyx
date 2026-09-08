@@ -311,8 +311,6 @@ namespace graph::storage {
 		std::optional<BTreeStructuralMutationPlan> global_adjacency_plan_;
 		std::optional<BTreeTreeRetirementPlan> global_adjacency_retirement_plan_;
 		std::optional<BTreeInitialTreeMutationPlan> global_adjacency_initial_plan_;
-		std::optional<BTreeInitialTreeMutationPlan> global_adjacency_replacement_plan_;
-		std::optional<BTreeTreeRetirementPlan> global_adjacency_replacement_retirement_plan_;
 		// Large adjacency batches are encoded into candidate-only scratch and
 		// rebuilt under the metadata writer fence. This applies to both first-tree
 		// creation and replacement of an existing root.

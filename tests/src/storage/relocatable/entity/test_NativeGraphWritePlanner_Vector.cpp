@@ -360,6 +360,10 @@ TEST_F(NativeGraphWritePlannerVectorTest, RejectsMalformedBootstrapContractsWith
 	wrongWidth.encoded_bfloat16.pop_back();
 	std::array<NativeGraphVectorBootstrapRecord, 1U> wrongWidthRecords = {{wrongWidth}};
 	expectRejectedBeforeRecordLookup(vectorDefinition(), wrongWidthRecords, vectorOptions());
+	NativeGraphVectorBootstrapRecord zeroNodeId = placeholder.front();
+	zeroNodeId.node_id = 0U;
+	std::array<NativeGraphVectorBootstrapRecord, 1U> zeroNodeIdRecords = {{zeroNodeId}};
+	expectRejectedBeforeRecordLookup(vectorDefinition(), zeroNodeIdRecords, vectorOptions());
 
 	NativeGraphWriteTransaction duplicate = planner.beginTransaction();
 	const uint64_t nodeId = duplicate.createNode(std::array<uint64_t, 1U>{7U});
@@ -591,9 +595,46 @@ TEST_F(NativeGraphWritePlannerVectorTest,
 			 {}},
 	}};
 	EXPECT_THROW(invalidKind.stageVectorIndexDelta(*indexes_, *raw_pages_, *manifests_, vectorDefinition(), unknownKind,
-												   vectorDeltaOptions()),
-				 FormatException);
+													   vectorDeltaOptions()),
+			 FormatException);
 	invalidKind.rollback();
+
+	// These fields form one public semantic-mutation contract. Validate every
+	// caller-provided identity and payload shape before planning a durable delta.
+	const auto expectRejectedSemanticMutation = [&](NativeVectorMutation mutation) {
+		NativeGraphWriteTransaction transaction = planner.beginTransaction();
+		const std::array<NativeVectorMutation, 1U> mutations = {{std::move(mutation)}};
+		EXPECT_THROW(transaction.stageVectorIndexDelta(*indexes_, *raw_pages_, *manifests_, vectorDefinition(),
+															mutations, vectorDeltaOptions()),
+					 FormatException);
+		EXPECT_TRUE(transaction.isActive());
+		transaction.rollback();
+	};
+	const NativeVectorMutation validErase{NativeVectorMutationKind::NVMK_ERASE,
+										 vectorDefinition().index_id,
+										 nodeId,
+										 vectorDefinition().vector_dimensions,
+										 VectorDistanceMetric::VDM_L2,
+										 {}};
+	NativeVectorMutation wrongIndex = validErase;
+	wrongIndex.index_id += 1U;
+	expectRejectedSemanticMutation(std::move(wrongIndex));
+	NativeVectorMutation zeroNode = validErase;
+	zeroNode.node_id = 0U;
+	expectRejectedSemanticMutation(std::move(zeroNode));
+	NativeVectorMutation wrongDimensions = validErase;
+	wrongDimensions.dimensions += 1U;
+	expectRejectedSemanticMutation(std::move(wrongDimensions));
+	NativeVectorMutation wrongMetric = validErase;
+	wrongMetric.metric = VectorDistanceMetric::VDM_COSINE;
+	expectRejectedSemanticMutation(std::move(wrongMetric));
+	NativeVectorMutation eraseWithPayload = validErase;
+	eraseWithPayload.encoded_bfloat16 = {std::byte{0x10U}};
+	expectRejectedSemanticMutation(std::move(eraseWithPayload));
+	NativeVectorMutation insertWithWrongWidth = validErase;
+	insertWithWrongWidth.kind = NativeVectorMutationKind::NVMK_INSERT;
+	insertWithWrongWidth.encoded_bfloat16 = {std::byte{0x10U}};
+	expectRejectedSemanticMutation(std::move(insertWithWrongWidth));
 
 	NativeGraphWriteTransaction duplicate = planner.beginTransaction();
 	const std::array<NativeVectorMutation, 2U> duplicateErases = {{
@@ -1068,6 +1109,100 @@ TEST_F(NativeGraphWritePlannerVectorTest, PublishesAdditionalRawPagesWhenDeltaOu
 					  .find(after, VectorSemanticCodec::nodeMappingKey(secondNodeId)),
 			  std::optional<uint64_t>(3U));
 
+	after.release();
+	before.release();
+}
+
+TEST_F(NativeGraphWritePlannerVectorTest, AppendsAFullTailDeltaPageToItsExistingRawPool) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *indexes_, plannerOptions());
+	IndexDefinition definition = vectorDefinition();
+	definition.index_id = 80U;
+	definition.name = "native-vector-raw-pool-append";
+	definition.vector_dimensions = RSS_VECTOR_SEMANTIC_MAX_DIMENSIONS;
+	const std::vector<std::byte> encoded(static_cast<size_t>(definition.vector_dimensions) * sizeof(uint16_t),
+										 std::byte{0x3F});
+	ASSERT_EQ(VectorPageStore::rawSlotCapacity(static_cast<uint32_t>(sizeof(uint64_t) + encoded.size())), 1U);
+
+	NativeGraphWriteTransaction bootstrap = planner.beginTransaction();
+	const uint64_t baseNodeId = bootstrap.createNode(std::array<uint64_t, 1U>{7U});
+	const std::array<NativeGraphVectorBootstrapRecord, 1U> records = {{{baseNodeId, encoded}}};
+	bootstrap.stageVectorIndexBootstrap(*indexes_, *raw_pages_, *manifests_, definition, records, vectorOptions());
+	ASSERT_TRUE(bootstrap.commit().committed());
+
+	MetadataSnapshotPin before = metadata_->openSnapshot();
+	const VectorManifest beforeManifest = manifests_->read(before, definition.index_id).manifest();
+	const PageLocation fullTail = metadata_->findPageLocation(before, beforeManifest.raw_write_tail_page_id);
+	ASSERT_EQ(raw_pages_->read(before, fullTail.page_id).header().live_count, 1U);
+
+	NativeGraphWriteTransaction delta = planner.beginTransaction();
+	const uint64_t insertedNodeId = delta.createNode(std::array<uint64_t, 1U>{7U});
+	const std::array<NativeVectorMutation, 1U> insertion = {{
+			{NativeVectorMutationKind::NVMK_INSERT, definition.index_id, insertedNodeId, definition.vector_dimensions,
+			 VectorDistanceMetric::VDM_L2, encoded},
+	}};
+	delta.stageVectorIndexDelta(*indexes_, *raw_pages_, *manifests_, definition, insertion, vectorDeltaOptions());
+	ASSERT_TRUE(delta.commit().committed());
+
+	MetadataSnapshotPin after = metadata_->openSnapshot();
+	const VectorLocation insertedLocation = metadata_->findVectorLocation(after, 2U);
+	const PageLocation appendedPage = metadata_->findPageLocation(after, insertedLocation.page_id);
+	EXPECT_EQ(appendedPage.segment_id, fullTail.segment_id);
+	EXPECT_NE(appendedPage.page_id, fullTail.page_id);
+	EXPECT_EQ(raw_pages_->read(after, insertedLocation.page_id).header().live_count, 1U);
+	EXPECT_EQ(BTreeIndex(definition.index_id, *indexes_, *metadata_)
+					  .find(after, VectorSemanticCodec::nodeMappingKey(insertedNodeId)),
+			  std::optional<uint64_t>(2U));
+
+	after.release();
+	before.release();
+}
+
+TEST_F(NativeGraphWritePlannerVectorTest, ReplacesAPartialRawTailAndAppendsTheRemainingDeltaInOnePool) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *indexes_, plannerOptions());
+	IndexDefinition definition = vectorDefinition();
+	definition.index_id = 81U;
+	definition.name = "native-vector-partial-tail";
+	definition.vector_dimensions = 800U;
+	const std::vector<std::byte> encoded(static_cast<size_t>(definition.vector_dimensions) * sizeof(uint16_t),
+										 std::byte{0x3F});
+	ASSERT_EQ(VectorPageStore::rawSlotCapacity(static_cast<uint32_t>(sizeof(uint64_t) + encoded.size())), 2U);
+
+	NativeGraphWriteTransaction bootstrap = planner.beginTransaction();
+	const uint64_t baseNodeId = bootstrap.createNode(std::array<uint64_t, 1U>{7U});
+	bootstrap.stageVectorIndexBootstrap(*indexes_, *raw_pages_, *manifests_, definition,
+										  std::array<NativeGraphVectorBootstrapRecord, 1U>{{{baseNodeId, encoded}}},
+										  vectorOptions());
+	ASSERT_TRUE(bootstrap.commit().committed());
+
+	MetadataSnapshotPin before = metadata_->openSnapshot();
+	const VectorManifest beforeManifest = manifests_->read(before, definition.index_id).manifest();
+	const PageLocation oldTail = metadata_->findPageLocation(before, beforeManifest.raw_write_tail_page_id);
+	EXPECT_EQ(raw_pages_->read(before, oldTail.page_id).header().live_count, 1U);
+
+	NativeGraphWriteTransaction delta = planner.beginTransaction();
+	const uint64_t firstNodeId = delta.createNode(std::array<uint64_t, 1U>{7U});
+	const uint64_t secondNodeId = delta.createNode(std::array<uint64_t, 1U>{7U});
+	const std::array<NativeVectorMutation, 2U> insertions = {{
+			{NativeVectorMutationKind::NVMK_INSERT, definition.index_id, firstNodeId, definition.vector_dimensions,
+			 VectorDistanceMetric::VDM_L2, encoded},
+			{NativeVectorMutationKind::NVMK_INSERT, definition.index_id, secondNodeId, definition.vector_dimensions,
+			 VectorDistanceMetric::VDM_L2, encoded},
+	}};
+	delta.stageVectorIndexDelta(*indexes_, *raw_pages_, *manifests_, definition, insertions, vectorDeltaOptions());
+	ASSERT_TRUE(delta.commit().committed());
+
+	MetadataSnapshotPin after = metadata_->openSnapshot();
+	const VectorLocation firstLocation = metadata_->findVectorLocation(after, 2U);
+	const VectorLocation secondLocation = metadata_->findVectorLocation(after, 3U);
+	const PageLocation replacedTail = metadata_->findPageLocation(after, firstLocation.page_id);
+	const PageLocation appendedPage = metadata_->findPageLocation(after, secondLocation.page_id);
+	EXPECT_EQ(firstLocation.page_id, beforeManifest.raw_write_tail_page_id);
+	EXPECT_EQ(replacedTail.segment_id, oldTail.segment_id);
+	EXPECT_EQ(appendedPage.segment_id, oldTail.segment_id);
+	EXPECT_NE(appendedPage.page_id, oldTail.page_id);
+	EXPECT_EQ(raw_pages_->read(after, firstLocation.page_id).header().live_count, 2U);
+	EXPECT_EQ(raw_pages_->read(after, secondLocation.page_id).header().live_count, 1U);
+	EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io_, *metadata_).scan()));
 	after.release();
 	before.release();
 }

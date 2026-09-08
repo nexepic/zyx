@@ -3651,3 +3651,105 @@ classification、consumer audit 和 native replacement 证明其必要性，再�
 | `RETIRED` | 旧测试观察与生命周期 wiring wrapper 合并清理 | 精确 consumer audit 确认 `DataManager::setWALManager()` 只转发到 `TransactionContext`，`DataManager::setDeletionFlagReference()` 只写入删除标记指针；`FileStorage::getStorageIO()`、`getIDAllocators()`、`getStorageWriter()` 和 `getFileHeaderManager()` 只被 legacy physical/WAL tests 读取，`FileStorage::getDataManager()` 的唯一 production consumer 是 legacy `TransactionManager`。现物理删除这些旧 wrapper/getter，`TransactionManager` 通过 friend 直接访问同一 private `dataManager` owner，测试通过既有 friend access 的 `DataManagerTestAccess` / `FileStorageTestAccess` 读取真实 owner；WAL、删除标记、recovery 构造和跨平台 I/O 行为不变。clean configure 与完整 quick suite `native-20260822T135319-54200` 以两个 isolated shard 通过，CTest registration、双语文档链接和 diff check 均通过；coverage 为 Region 93.70%、Function 98.40%、Line 93.34%、Branch 86.20%。本项与相邻旧 storage surface 合并为一个本地里程碑提交。 |
 
 | `RETIRED` | legacy pointer 与 test-observer forwarding adapter | 精确 consumer audit 确认 `BaseEntityManager::getDataManagerPtr()` 只被 base implementation 及 Node、Edge、Property、Blob、Index、State manager subclass 使用，且只返回同一受保护的 `dataManager_` 指针；`TransactionContext::getWALManager()` 同样只将其 private pointer 返回给 friend `DataManager`，其公开 `undoLog()`、`pendingWalChanges()`、`pendingWalAddsByType()` observer 只服务 legacy 白盒测试；`FileHeaderManager::getFileHeader()` 也只将同一可变 header 交给 `SegmentAllocator` 和四条 legacy 白盒 assertion。没有 public API、Driver ABI、binding、app、benchmark、WAL/recovery、native runtime 或文档 consumer。现物理删除这些 adapter：production owner 直接访问既有 private member，窄化的 `TransactionContextTestAccess` / `FileHeaderManagerTestAccess` 保留所有测试观察。allocation、property/blob、traversal link/unlink、transaction bookkeeping、WAL flush、rollback、header-chain 更新与 recovery 行为不变。十个受影响 legacy test translation unit 与所有受影响 production unit 通过项目依赖的 C++20 syntax-only 编译；`test_Transaction.cpp` 仍只暴露既有的 `Transaction::CheckpointPolicy` drift。完整 native quick suite `native-20260823T131252-2884` 以两个 isolated shard 通过，CTest registration 与 diff check 均通过；coverage 为 Region 93.70%、Function 98.40%、Line 93.34%、Branch 86.20%。本项构成一个本地清理里程碑。 |
+
+## 23. 框架级读取路径优化与实现差距
+
+本节记录基准对比后发现的框架级问题和后续实现方案。它们不是针对某一个 benchmark 的特例，也不是重新引入
+Segment Chain、每节点 adjacency root、Edge 双向链表、第二数据库文件或 query-specific fast path。所有优化必须继续服从本方案的
+单文件、A/B Superblock、generation-aware Catalog/Page Directory、共享 Buffer Pool、全局 key-only adjacency Packed B+Tree 和无迁移约束。
+当前 write path 已改善并不表示 read path 已完成；此前 Stage 2、4、5、6、8 中标记为 native core 的内容，应理解为 correctness core，
+其生产级读取门禁仍需按本节重新验收。
+
+### 23.1 基准证据和测量口径
+
+在同一台 macOS arm64 机器、AppleClang 17、Conan 工具链、Release、相同 smoke 数据集和 seed 下，对当前架构和独立重建的旧架构进行
+对照。旧架构来自历史 worktree，commit 与当前分支不是线性祖先关系，因此结果是参考基线而非严格 before/after 证明。当前架构的
+`load_nodes_edges` 约快一半，但读取路径明显退化：`label_scan_filter`、`all_nodes_property_filter`、`label_multi_property_filter`、
+`relationship_type_scan`、`relationship_property_filter`、`one_hop_expand`、`two_hop_expand`、`shortest_path_chain`、`topk_property_sort`、
+`point_lookup_indexed`、`property_equality_indexed` 和 `property_range_indexed` 分别约为旧架构的数十倍至数千倍耗时。精确数字、p50/p95/p99、
+RSS、数据库大小和读写字节必须进入可复现 benchmark artifact，不能写成架构常量。
+
+画像显示，节点属性扫描的主要成本集中在反复的 metadata directory lookup、page route lookup、Catalog/segment 校验、page read、
+payload copy、slotted-page decode 和完整 property-root decode；关系属性过滤还会逐条 materialize 完整 Edge；最短路径会为只需要拓扑的
+访问读取完整 Edge 和 Node。后续每个阶段都必须同时记录正确性和这些结构性计数，避免只看 wall-clock。
+
+### 23.2 分阶段实现
+
+#### 阶段 0：重新冻结可观察契约
+
+- 固定 scan、indexed、multihop、write 四类 workload，并覆盖 smoke、small、百万级、千万级规模，以及 opened/warm/cold-ish 模式。
+- 记录 p50/p95/p99、RSS、文件大小、逻辑/物理读写字节；输出 deterministic structural counters。
+- 增加 Page Directory lookup、Catalog lookup、envelope/control validation、typed payload-copy bytes、B+Tree root descent、完整实体
+  materialization、decoded property count 和动态分配次数计数器。
+- 先建立当前实现的 baseline，再逐阶段比较；任何优化必须在多类 workload 上有效且不改变公开结果。
+
+#### 阶段 1：引入 `NativeReadSession`
+
+创建绑定到单一 metadata snapshot 的只读 session，持有 `MetadataSnapshotPin`、有界的 PageId 到 PageLocation 缓存、有界的 SegmentId
+到 CatalogEntry 缓存、已经验证的 envelope/control view、snapshot-local token dictionary 和 Directory/B+Tree cursor 状态。缓存按 generation
+隔离，并按 entry 或 byte 数量有界；物理 offset 只能在 storage 层内部流动，不能泄露到 query、binding 或 public ABI。
+
+#### 阶段 2：增加零拷贝 typed page view
+
+区分 `PinnedTypedPageView`、`DecodedRecordView` 和 `MutableOwnedPage`。读路径保留 Buffer Pool pin，typed view 只引用已经完成 checksum、
+owner、generation、slot-generation 校验的 bytes；写路径继续使用拥有所有权的 COW 表示。禁止 cache hit 再复制完整 payload，禁止绕过现有
+完整性校验。
+
+#### 阶段 3：统一 Directory/B+Tree 流式 API
+
+为 Entity Map、Property Directory、Index 和 adjacency 提供统一的 `pointLookup(key)`、`multiLookup(sorted keys)`、
+`openRangeCursor(lower, upper)`。range cursor 只下降一次 root，沿 leaf/sibling 流式读取，使用 callback 或 span 输出而不是一次性构造完整
+vector，并允许有界 sibling prefetch。cursor 只保存逻辑 continuation，不能暴露物理 PageId。
+
+#### 阶段 4：真正的 Entity page scan
+
+在 Entity Page 中增加 page-local EntityId array，使全量扫描可以按 page/bitmap 顺序直接枚举 live slot；需要 ID 顺序时另用 Entity Map
+range cursor。批量 point lookup 先按 PageId 排序分组，每个 distinct page 只 pin 一次，再恢复调用者顺序。必须验证 scan 不再为每个实体执行一次
+独立 Entity Map tree lookup。
+
+#### 阶段 5：选择性、分层 Property 存储
+
+采用“无 property 无目录项；小集合使用 packed shared slotted record；大集合使用 shared overflow/per-key tree；单个超大 value 使用
+`LargeValueRef`”的层级。Property token offset directory 必须排序并支持 binary search/selective decode；完整 decode 只允许出现在
+`properties(n)`、`keys(n)` 或明确要求完整结果时。overflow key 使用 `(EntityKind, EntityId, PropertyToken)`，布局选择由空间/压力求解器和
+带 hysteresis 的阈值决定，不得依赖固定 property 数量。小批量更新使用 sorted `multiLookup`，不得构造整个 Property Directory 镜像。
+
+#### 阶段 6：投影感知和延迟 materialization
+
+增加与 Cypher 文本无关的 `EntityReadShape`，携带实体身份、label/type token、请求的 Property token 和 `all Properties` 标志。内部 query
+row 默认只保存 `EntityRef` 和选定字段 cache，不再强制创建完整 `LogicalGraphNode`/`LogicalGraphEdge`；公共结果仍可在边界处 materialize 完整
+类型。执行阶段保留 token ID，只在 result/binding 边界解析名称。
+
+#### 阶段 7：topology-first adjacency
+
+实现三层 cursor：`AdjacencyKeyCursor` 只返回 EdgeId，`EdgeTopologyBatchCursor` 返回 endpoint/type token，`EdgeMaterializationCursor`
+只在过滤通过且确有需要时读取 selected/full Properties。degree/count、关系类型过滤和 shortest path 不得触碰无关 Property page；关系属性
+谓词只解码请求 token。EdgeId 应按 Entity Page 批量解析，每个 distinct page 只 pin 一次。除非基准证明必要，不增加 type-qualified adjacency
+tree 或 per-Node persistent delta。
+
+#### 阶段 8：索引候选与实体读取解耦
+
+Index 层返回 `IndexCandidateBatch`，包含 EntityId、索引中已覆盖的值以及 root/snapshot identity。runtime 只验证候选存活状态，对 covered
+predicate 直接求值，仅加载缺失的请求字段，避免 index hit 后重复读取完整 Node。全量跨 store integrity cross-check 移到 integrity scanner 或
+paranoid mode，不放在每次正常查询路径。
+
+#### 阶段 9：写入和维护扩展
+
+保持现有格式语义，增加 target-page grouping、每页一个 COW candidate、sorted directory merge、增量 free-space index，以及 online/bulk
+共用的 B+Tree WriteBatch。禁止为 adjacency 单独引入 special-case write buffer；只有在测得 COW write amplification 后，才讨论通用且有界的
+write buffer。
+
+### 23.3 结构性验收门禁
+
+- 全量 Entity scan 不得对每个实体执行独立 Entity Map tree lookup。
+- 同一 snapshot/segment 的 envelope/control 校验必须可复用，不能重复执行。
+- Buffer Pool 命中不得复制完整 page payload。
+- B+Tree range cursor 只下降一次 root；adjacency count 不得读取 Property page。
+- shortest path 不得读取无关 Properties；index candidate 路径不得两次读取同一实体。
+- 请求一个 Property 只解码一个 Property；批量 point lookup 对每个 distinct Entity Page 至多一次 pin。
+- 所有 cache、cursor、batch 和 materialization 内存必须有界。
+- relocation、旧 snapshot、split/merge、reopen、checksum/owner/generation corruption 必须保持结果一致或 fail closed。
+- 每阶段补充 pin lifetime、cursor continuation、selective/full equivalence、topology/full Edge equivalence 和 deterministic counter tests。
+- 在源集合稳定后才执行最终四维 coverage；覆盖率是最终门禁，不得以 mock、伪造损坏页、畸形 plan、TTY/I/O 故障或规模 workload 刷数。
+
+阶段 2、4、5、6、8 的“生产读取完成”状态必须在上述门禁全部通过后重新关闭；在此之前只能标记为 correctness core complete。

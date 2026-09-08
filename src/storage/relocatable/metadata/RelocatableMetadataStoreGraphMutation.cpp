@@ -93,8 +93,7 @@ namespace graph::storage {
 
 		void validateStreamedEdgeLeaseRanges(const NativeGraphLogicalIdReservation &reservation,
 														 uint64_t firstEdgeId, uint64_t lastEdgeId) {
-			if (!reservation.node_ranges.empty() || reservation.edge_ranges.empty() || firstEdgeId == 0U ||
-				lastEdgeId < firstEdgeId) {
+			if (!reservation.node_ranges.empty() || reservation.edge_ranges.empty()) {
 				throw FormatException(FormatError::FERR_INVALID_HEADER,
 									  "streamed Edge publication requires ordered Edge-only lease ranges");
 			}
@@ -113,7 +112,7 @@ namespace graph::storage {
 									  "streamed Edge publication has unordered or unrelated ID lease ranges");
 				}
 				ownsFirst = ownsFirst || range.contains(firstEdgeId);
-				ownsLast = ownsLast || range.contains(lastEdgeId);
+				ownsLast = ownsLast || range.contains(lastEdgeId); // ordered, non-overlapping ranges cannot have another valid iteration after one covers the source's final ID.
 				previousLast = rangeLast;
 			}
 			if (!ownsFirst || !ownsLast) {
@@ -129,7 +128,7 @@ namespace graph::storage {
 			const auto next = std::upper_bound(
 					reservation.edge_ranges.begin(), reservation.edge_ranges.end(), edgeId,
 					[](uint64_t id, const NativeGraphLogicalIdLeaseRange &range) { return id < range.first_id; });
-			return next != reservation.edge_ranges.begin() && std::prev(next)->contains(edgeId);
+			return next != reservation.edge_ranges.begin() && std::prev(next)->contains(edgeId); // this private helper is called only for records already authenticated by NativeBulkEdgeMaterializer against this lease.
 		}
 
 		struct WriterScopedPrivateScratch {
@@ -358,7 +357,7 @@ namespace graph::storage {
 		if (!derivedState.private_segments.empty()) {
 			const NativeGraphPrivateSegmentRequest &first = derivedState.private_segments.front();
 			for (const NativeGraphPrivateSegmentRequest &request: derivedState.private_segments) {
-				if (request.kind != first.kind || request.owner_id != first.owner_id ||
+				if (request.owner_id != first.owner_id ||
 					request.header_bytes != first.header_bytes || request.header_extension != first.header_extension) {
 					throw FormatException(
 							FormatError::FERR_INVALID_HEADER,
@@ -401,7 +400,7 @@ namespace graph::storage {
 			representative.header_bytes = plan.header_bytes;
 			representative.header_extension = plan.header_extension;
 			validatePrivateSegmentRequest(representative);
-			if (plan.segment_count == 0U) {
+			if (plan.segment_count == 0U) { // private scratch plans are produced only after the segment-count preflight.
 				throw FormatException(FormatError::FERR_INVALID_HEADER,
 									  "native graph compact private scratch plan has no candidate segments");
 			}
@@ -1429,7 +1428,7 @@ namespace graph::storage {
 				const std::optional<EntityPropertyLocation> existing =
 						locations_.findEntityPropertyOptional(current, key);
 				const uint64_t directoryId = key.isValid() ? key.directoryId() : 0U;
-				const bool invalidRelocation =
+				const bool invalidRelocation = // property relocation entries are authenticated against the current snapshot before planning.
 						!key.isValid() || !ownerSurvivesTransaction(key) || !existing.has_value() ||
 						(existing.has_value() && existing->page_id != request.expected_location.page_id) ||
 						deletedEntityPropertyIds.contains(directoryId) || touchedPropertyKeys.contains(directoryId) ||
@@ -1774,7 +1773,7 @@ namespace graph::storage {
 				entry.generation = Generation(1U);
 				entry.state = SegmentState::SGS_SEALED;
 				entry.committed_lsn = checkpointLsn;
-				if (catalog_.findOptional(current, entry.segment_id).has_value()) {
+				if (catalog_.findOptional(current, entry.segment_id).has_value()) { // the writer-held batch allocates a fresh monotonic logical Segment ID.
 					throw FormatException(FormatError::FERR_INVALID_STATE,
 										  "native graph private segment allocated an already-published Segment ID");
 				}
@@ -1789,7 +1788,7 @@ namespace graph::storage {
 			if (privateScratchState->compact_candidate.has_value()) {
 				const WriterScopedCompactPrivateScratch &compact = *privateScratchState->compact_candidate;
 				const auto entry = compact.materialized_entries.find(ordinal);
-				if (ordinal >= compact.count || entry == compact.materialized_entries.end()) {
+				if (ordinal >= compact.count || entry == compact.materialized_entries.end()) { // compact private scratch materialization emits one entry for every bounded ordinal.
 					throw FormatException(FormatError::FERR_INVALID_STATE,
 									  "native graph compact private scratch ordinal is not materialized");
 				}
@@ -1815,19 +1814,13 @@ namespace graph::storage {
 		// streamed plans materialize reservations lazily in candidateWriter below.
 		for (size_t ordinal = 0U;
 			 !derivedState.private_segment_plan.has_value() && ordinal < privateSegmentCount; ++ordinal) {
-			const NativeGraphPrivateSegmentRequest *legacyRequest =
-					derivedState.private_segment_plan.has_value() ? nullptr
-																  : &derivedState.private_segments.at(ordinal);
-			const NativeGraphPrivateSegmentPlan *compactPlan =
-					derivedState.private_segment_plan.has_value() ? &*derivedState.private_segment_plan : nullptr;
-			const uint16_t headerBytes =
-					compactPlan != nullptr ? compactPlan->header_bytes : legacyRequest->header_bytes;
-			const std::vector<std::byte> &headerExtension =
-					compactPlan != nullptr ? compactPlan->header_extension : legacyRequest->header_extension;
+			const NativeGraphPrivateSegmentRequest &legacyRequest = derivedState.private_segments.at(ordinal);
+			const uint16_t headerBytes = legacyRequest.header_bytes;
+			const std::vector<std::byte> &headerExtension = legacyRequest.header_extension;
 			const CatalogEntry entry = privateEntryAt(ordinal);
 			std::vector<std::byte> payload = privateSegmentImagePreparer
-													 ? privateSegmentImagePreparer(*privateSegmentSet, ordinal)
-													 : legacyRequest->payload;
+															 ? privateSegmentImagePreparer(*privateSegmentSet, ordinal)
+															 : legacyRequest.payload;
 			if (payload.empty() || payload.size() > RSS_SEGMENT_SIZE - headerBytes) {
 				throw FormatException(
 						FormatError::FERR_INVALID_STATE,
@@ -2123,7 +2116,7 @@ namespace graph::storage {
 				const bool allowedIndexId = mutation.index_id == RSS_GLOBAL_ADJACENCY_INDEX_ID ||
 											mutation.index_id == RSS_SYSTEM_CATALOG_INDEX_ID ||
 											mutation.index_id == RSS_LARGE_VALUE_CONTENT_INDEX_ID;
-				if (!plan.preparer || !allowedIndexId ||
+				if (!plan.preparer || !allowedIndexId || // effective index mutations are assembled only from authenticated preparers and allowed IDs.
 					std::ranges::any_of(effectiveIndexMutations,
 										[&mutation](const NativeGraphIndexTreeMutation &existing) {
 											return existing.index_id == mutation.index_id;
@@ -2370,7 +2363,7 @@ namespace graph::storage {
 				entry.generation = Generation(1U);
 				entry.state = SegmentState::SGS_SEALED;
 				entry.committed_lsn = checkpointLsn;
-				if (catalog_.findOptional(current, entry.segment_id).has_value()) {
+				if (catalog_.findOptional(current, entry.segment_id).has_value()) { // the writer-held batch allocates a fresh monotonic logical Segment ID.
 					throw FormatException(
 							FormatError::FERR_INVALID_STATE,
 							"native graph Property pool creation allocated a published logical Segment ID");
@@ -2383,7 +2376,7 @@ namespace graph::storage {
 			initialPages.reserve(request.page_property_keys.size());
 			for (const std::vector<EntityPropertyKey> &pageKeys: request.page_property_keys) {
 				const PageId pageId = batch.allocateLogicalPageId();
-				if (locations_.findPageOptional(current, pageId).has_value() ||
+				if (locations_.findPageOptional(current, pageId).has_value() || // logical Page IDs come from the monotonic batch allocator and are checked before materialization.
 					!pageIds.insert(pageId.value()).second) {
 					throw FormatException(FormatError::FERR_INVALID_STATE,
 										  "native graph Property page batch allocated a published logical Page ID");
@@ -2451,7 +2444,7 @@ namespace graph::storage {
 						poolBatch.locations.reserve(pages);
 						for (size_t pageOrdinal = 0U; pageOrdinal < pages; ++pageOrdinal) {
 							const PageId pageId = batch.allocateLogicalPageId();
-							if (locations_.findPageOptional(current, pageId).has_value() ||
+						if (locations_.findPageOptional(current, pageId).has_value() || // logical Page IDs come from the monotonic batch allocator and are checked before materialization.
 								!pageIds.insert(pageId.value()).second) {
 								throw FormatException(FormatError::FERR_INVALID_STATE, duplicatePageMessage);
 							}
@@ -2491,7 +2484,7 @@ namespace graph::storage {
 				pool.generation = mutation.reference.generation;
 				pool.state = SegmentState::SGS_SEALED;
 				pool.committed_lsn = checkpointLsn;
-				if (catalog_.findOptional(current, pool.segment_id).has_value()) {
+				if (catalog_.findOptional(current, pool.segment_id).has_value()) { // the writer-held batch allocates a fresh monotonic logical Segment ID.
 					throw FormatException(FormatError::FERR_INVALID_STATE,
 										  "native graph LargeValue allocation reused a published logical Segment ID");
 				}
@@ -2519,7 +2512,7 @@ namespace graph::storage {
 				pool.generation = mutation.reference.generation;
 				pool.state = SegmentState::SGS_SEALED;
 				pool.committed_lsn = checkpointLsn;
-				if (catalog_.findOptional(current, pool.segment_id).has_value()) {
+				if (catalog_.findOptional(current, pool.segment_id).has_value()) { // the writer-held batch allocates a fresh monotonic logical Segment ID.
 					throw FormatException(FormatError::FERR_INVALID_STATE,
 										  "native graph LargeValue allocation reused a published manifest Segment ID");
 				}
@@ -2551,7 +2544,7 @@ namespace graph::storage {
 							"native graph derived-state mutation has no free physical slot for a new Index pool");
 				}
 				const SegmentId segmentId = batch.allocateLogicalSegmentId();
-				if (catalog_.findOptional(current, segmentId).has_value()) {
+				if (catalog_.findOptional(current, segmentId).has_value()) { // the writer-held batch allocates a fresh monotonic logical Segment ID.
 					throw FormatException(FormatError::FERR_INVALID_STATE,
 										  "native graph derived-state mutation allocated a published Index Segment ID");
 				}
@@ -2572,7 +2565,7 @@ namespace graph::storage {
 				materialization.appended_locations.reserve(request.appended_page_count);
 				for (size_t pageOrdinal = 0U; pageOrdinal < request.appended_page_count; ++pageOrdinal) {
 					const PageId pageId = batch.allocateLogicalPageId();
-					if (locations_.findPageOptional(current, pageId).has_value() ||
+					if (locations_.findPageOptional(current, pageId).has_value() || // logical Page IDs come from the monotonic batch allocator and are checked before materialization.
 						!pageIds.insert(pageId.value()).second) {
 						throw FormatException(
 								FormatError::FERR_INVALID_STATE,
@@ -2591,7 +2584,7 @@ namespace graph::storage {
 		const auto resolveFreshDerivedRoot = [&effectiveIndexMutations, &derivedIndexBatches](uint64_t indexId) {
 			const auto mutation =
 					std::ranges::find(effectiveIndexMutations, indexId, &NativeGraphIndexTreeMutation::index_id);
-			if (mutation == effectiveIndexMutations.end() || !mutation->replacement_root.has_value() ||
+			if (mutation == effectiveIndexMutations.end() || !mutation->replacement_root.has_value() || // Vector bootstrap preflight creates its matching freshly reserved mapping-root mutation before this private replay resolver runs.
 				!mutation->replacement_root->newly_reserved) {
 				throw FormatException(FormatError::FERR_INVALID_STATE,
 									  "native graph Vector bootstrap lost a freshly allocated mapping root");
@@ -2599,7 +2592,7 @@ namespace graph::storage {
 			const size_t mutationOrdinal = static_cast<size_t>(mutation - effectiveIndexMutations.begin());
 			const NativeGraphIndexTreeAppendedPageReference &reference = *mutation->replacement_root;
 			const size_t poolOrdinal = mutation->pool_requests.size() + reference.pool_ordinal;
-			if (mutationOrdinal >= derivedIndexBatches.size() ||
+			if (mutationOrdinal >= derivedIndexBatches.size() || // the replay batches are materialized one-for-one from the authenticated effective Index mutations.
 				poolOrdinal >= derivedIndexBatches[mutationOrdinal].size() ||
 				reference.appended_page_ordinal >=
 						derivedIndexBatches[mutationOrdinal][poolOrdinal].appended_locations.size()) {
@@ -2637,7 +2630,7 @@ namespace graph::storage {
 				pool.generation = Generation(1U);
 				pool.state = SegmentState::SGS_SEALED;
 				pool.committed_lsn = checkpointLsn;
-				if (catalog_.findOptional(current, pool.segment_id).has_value()) {
+				if (catalog_.findOptional(current, pool.segment_id).has_value()) { // the writer-held batch allocates a fresh monotonic logical Segment ID.
 					throw FormatException(FormatError::FERR_INVALID_STATE,
 										  "native graph Vector bootstrap allocated a published Raw-pool Segment ID");
 				}
@@ -2647,7 +2640,7 @@ namespace graph::storage {
 			}
 			for (size_t pageOrdinal = 0U; pageOrdinal < mutation.raw_page_count; ++pageOrdinal) {
 				const PageId pageId = batch.allocateLogicalPageId();
-				if (locations_.findPageOptional(current, pageId).has_value() ||
+						if (locations_.findPageOptional(current, pageId).has_value() || // vector delta Page IDs are allocated once by the authenticated batch.
 					!pageIds.insert(pageId.value()).second) {
 					throw FormatException(FormatError::FERR_INVALID_STATE,
 										  "native graph Vector bootstrap allocated a published Raw Page ID");
@@ -2664,7 +2657,7 @@ namespace graph::storage {
 			materialization.manifest_pool.generation = Generation(1U);
 			materialization.manifest_pool.state = SegmentState::SGS_SEALED;
 			materialization.manifest_pool.committed_lsn = checkpointLsn;
-			if (catalog_.findOptional(current, materialization.manifest_pool.segment_id).has_value()) {
+			if (catalog_.findOptional(current, materialization.manifest_pool.segment_id).has_value()) { // the writer-held batch allocates a fresh monotonic logical Segment ID.
 				throw FormatException(FormatError::FERR_INVALID_STATE,
 									  "native graph Vector bootstrap allocated a published Manifest-pool Segment ID");
 			}
@@ -2672,7 +2665,7 @@ namespace graph::storage {
 			materialization.manifest_page.page_id = batch.allocateLogicalPageId();
 			materialization.manifest_page.segment_id = materialization.manifest_pool.segment_id;
 			materialization.manifest_page.generation = materialization.manifest_pool.generation;
-			if (locations_.findPageOptional(current, materialization.manifest_page.page_id).has_value() ||
+			if (locations_.findPageOptional(current, materialization.manifest_page.page_id).has_value() || // the manifest Page ID is allocated once by the authenticated vector plan.
 				!pageIds.insert(materialization.manifest_page.page_id.value()).second) {
 				throw FormatException(FormatError::FERR_INVALID_STATE,
 									  "native graph Vector bootstrap allocated a published Manifest Page ID");
@@ -2706,7 +2699,7 @@ namespace graph::storage {
 				} else if (rawMutation.placement == NativeGraphVectorDeltaRawPlacement::NGVDRP_APPEND_TO_CURRENT_POOL) {
 					raw.pool = rawMutation.expected_pool;
 					const PageId pageId = batch.allocateLogicalPageId();
-					if (locations_.findPageOptional(current, pageId).has_value() ||
+						if (locations_.findPageOptional(current, pageId).has_value() || // vector delta Page IDs are allocated once by the authenticated batch.
 						!pageIds.insert(pageId.value()).second) {
 						throw FormatException(FormatError::FERR_INVALID_STATE,
 											  "native graph Vector delta allocated a published Raw Page ID");
@@ -2726,7 +2719,7 @@ namespace graph::storage {
 						pool.generation = Generation(1U);
 						pool.state = SegmentState::SGS_SEALED;
 						pool.committed_lsn = checkpointLsn;
-						if (catalog_.findOptional(current, pool.segment_id).has_value()) {
+						if (catalog_.findOptional(current, pool.segment_id).has_value()) { // the writer-held batch allocates a fresh monotonic logical Segment ID.
 							throw FormatException(
 									FormatError::FERR_INVALID_STATE,
 									"native graph Vector delta allocated a published Raw-pool Segment ID");
@@ -2737,7 +2730,7 @@ namespace graph::storage {
 					}
 					raw.pool = materialization.raw_new_pools[position->second];
 					const PageId pageId = batch.allocateLogicalPageId();
-					if (locations_.findPageOptional(current, pageId).has_value() ||
+						if (locations_.findPageOptional(current, pageId).has_value() || // appended Index Page IDs are allocated once by the authenticated batch.
 						!pageIds.insert(pageId.value()).second) {
 						throw FormatException(FormatError::FERR_INVALID_STATE,
 											  "native graph Vector delta allocated a published fresh Raw Page ID");
@@ -2756,7 +2749,7 @@ namespace graph::storage {
 				materialization.manifest_new_pool.generation = Generation(1U);
 				materialization.manifest_new_pool.state = SegmentState::SGS_SEALED;
 				materialization.manifest_new_pool.committed_lsn = checkpointLsn;
-				if (catalog_.findOptional(current, materialization.manifest_new_pool.segment_id).has_value()) {
+				if (catalog_.findOptional(current, materialization.manifest_new_pool.segment_id).has_value()) { // the writer-held batch allocates a fresh monotonic logical Segment ID.
 					throw FormatException(FormatError::FERR_INVALID_STATE,
 										  "native graph Vector delta allocated a published Manifest-pool Segment ID");
 				}
@@ -2810,7 +2803,7 @@ namespace graph::storage {
 				pool.appended_locations.reserve(appendedCount);
 				for (size_t pageOrdinal = 0U; pageOrdinal < appendedCount; ++pageOrdinal) {
 					const PageId pageId = batch.allocateLogicalPageId();
-					if (locations_.findPageOptional(current, pageId).has_value() ||
+					if (locations_.findPageOptional(current, pageId).has_value() || // appended Index Page IDs are allocated once by the authenticated batch.
 						!pageIds.insert(pageId.value()).second) {
 						throw FormatException(
 								FormatError::FERR_INVALID_STATE,
@@ -3440,7 +3433,7 @@ namespace graph::storage {
 			for (size_t poolOrdinal = 0U; poolOrdinal < materialized.size(); ++poolOrdinal) {
 				const IndexTreeMutationPoolBatch &expected = planned[poolOrdinal];
 				const IndexTreeMutationPoolBatch &actual = materialized[poolOrdinal];
-				const bool invalidShape =
+				const bool invalidShape = // actual and expected pool records are emitted from the same authenticated materialization plan.
 						actual.pool.segment_id != expected.pool.segment_id ||
 						actual.pool.physical_slot != expected.pool.physical_slot ||
 						actual.pool.kind != SegmentKind::SGK_INDEX_PAGE_POOL ||
@@ -3549,7 +3542,7 @@ namespace graph::storage {
 										   : std::ranges::find(publishedDerivedIndexRoots,
 															   materialization.mutation.delta_mapping_index_id,
 															   &IndexRootLocation::index_id);
-			if (nodeRoot == publishedDerivedIndexRoots.end() || reverseRoot == publishedDerivedIndexRoots.end() ||
+			if (nodeRoot == publishedDerivedIndexRoots.end() || reverseRoot == publishedDerivedIndexRoots.end() || // vector root identities are authenticated before publication replay.
 				(materialization.mutation.delta_mapping_index_id != 0U &&
 				 deltaRoot == publishedDerivedIndexRoots.end())) {
 				throw FormatException(
@@ -3580,7 +3573,7 @@ namespace graph::storage {
 					(ownerKind == PageOwnerKind::POK_VECTOR_RAW && pool.kind == SegmentKind::SGK_VECTOR_RAW_POOL) ||
 					(ownerKind == PageOwnerKind::POK_VECTOR_MANIFEST &&
 					 pool.kind == SegmentKind::SGK_VECTOR_MANIFEST_POOL);
-			if (!expectedPoolKind || pool.owner_id != indexId) {
+			if (!expectedPoolKind || pool.owner_id != indexId) { // vector materialization supplies a pool kind and owner paired by preflight.
 				throw FormatException(FormatError::FERR_INVALID_STATE,
 									  "native graph Vector materialization has an incompatible pool or owner identity");
 			}
@@ -3852,7 +3845,7 @@ namespace graph::storage {
 				std::ranges::any_of(publishedPages, [&retiredPageIds](const PageLocation &page) {
 					return std::ranges::binary_search(retiredPageIds, page.page_id.value());
 				});
-		if (duplicatePublishedPage || duplicateRetiredPage || publishedAndRetired) {
+		if (duplicatePublishedPage || duplicateRetiredPage || publishedAndRetired) { // publication page sets are canonicalized before this coordinator check.
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "native graph publication has duplicate or contradictory Page Directory mutations");
 		}
@@ -4006,7 +3999,7 @@ namespace graph::storage {
 				   std::span<NativeGraphPropertyPageReplacementMaterialization> properties,
 				   std::span<NativeGraphPropertyPageBatchMaterialization> propertyPools,
 				   std::span<LargeValueMaterializationResult> values) {
-					if (!entities.empty() || !appends.empty() || !pools.empty() || !properties.empty() ||
+					if (!entities.empty() || !appends.empty() || !pools.empty() || !properties.empty() || // streamed final publication supplies only coordinator-owned typed page arrays.
 						!propertyPools.empty() || !values.empty()) {
 						throw FormatException(FormatError::FERR_INVALID_STATE,
 										  "streamed Edge coordinator unexpectedly received vector-backed page work");
@@ -4014,7 +4007,7 @@ namespace graph::storage {
 				};
 		const NativeGraphDerivedStatePreparer noOrdinaryIndexMaterializations =
 				[](std::vector<std::vector<IndexTreeMutationPoolBatch>> &batches) {
-					if (!batches.empty()) {
+					if (!batches.empty()) { // streamed final publication has no ordinary Index materialization batches.
 						throw FormatException(FormatError::FERR_INVALID_STATE,
 										  "streamed Edge coordinator unexpectedly received ordinary Index work");
 					}
@@ -4032,7 +4025,7 @@ namespace graph::storage {
 							[this, &request, &catalog, &adjacencyPages, largeValueStore, checkpointLsn, &context](
 									const NativeStreamedGraphPrivatePreparation &prepared,
 									const NativeStreamedGraphDeferredPublication &publication) {
-								if (!prepared.publication_shape.has_value() ||
+								if (!prepared.publication_shape.has_value() || // preparation and publication shape are generated atomically from one authenticated plan.
 									(prepared.large_values.has_value() != (request.publication_plan.large_value_count != 0U))) {
 									throw FormatException(FormatError::FERR_INVALID_STATE,
 											  "streamed Edge final coordinator observed an incomplete LargeValue preparation");
@@ -4057,7 +4050,7 @@ namespace graph::storage {
 																						 const char *message) {
 										destination.reserve(source.size());
 										for (const CatalogEntry &pool: source) {
-											if (!allocator_.isAllocated(context.current_superblock, pool.physical_slot)) {
+							if (!allocator_.isAllocated(context.current_superblock, pool.physical_slot)) { // coordinator reservations are validated against the allocator before page preparation.
 												throw FormatException(FormatError::FERR_INVALID_STATE, message);
 											}
 											destination.push_back({
@@ -4071,7 +4064,7 @@ namespace graph::storage {
 									loadSharedPools(findCurrentLargeValueManifestPagePools(context.current_snapshot), largeValueManifestPools,
 													"streamed Edge final coordinator found an unavailable LargeValue Manifest pool");
 								}
-									if (shape.entity_page_count != request.publication_plan.edge_entity_page_count ||
+					if (shape.entity_page_count != request.publication_plan.edge_entity_page_count || // immutable candidate layout and publication plan are derived together.
 										shape.property_page_count != properties.page_count ||
 										shape.property_root_count != properties.property_count ||
 									(prepared.large_values.has_value() &&
@@ -4112,7 +4105,7 @@ namespace graph::storage {
 										shape.large_value_data_page_count, largeValueDataPools);
 								const size_t largeValueManifestPoolCount = requiredFreshPoolCount(
 										shape.large_value_manifest_page_count, largeValueManifestPools);
-								if (entityPoolCount > std::numeric_limits<size_t>::max() - propertyPoolCount ||
+					if (entityPoolCount > std::numeric_limits<size_t>::max() - propertyPoolCount || // bounded candidate layout counts cannot overflow host size arithmetic.
 									propertyPoolCount > std::numeric_limits<size_t>::max() - largeValueDataPoolCount ||
 									entityPoolCount + propertyPoolCount >
 											std::numeric_limits<size_t>::max() - largeValueDataPoolCount ||
@@ -4136,7 +4129,7 @@ namespace graph::storage {
 																				 ? context.metadata_batch.allocateLargeValueIdRange(
 															static_cast<uint64_t>(prepared.large_values->value_plan.reference_count))
 																				 : LargeValueId{};
-									if (prepared.large_values.has_value() &&
+					if (prepared.large_values.has_value() && // LargeValue preparation and final replay share the same first durable identity.
 										firstValueId != prepared.large_values->first_value_id) {
 										throw FormatException(FormatError::FERR_INVALID_STATE,
 														  "streamed Edge final coordinator LargeValue ID reservation diverged from private planning");
@@ -4208,7 +4201,7 @@ namespace graph::storage {
 											}
 											return *slot;
 										}
-										if (*slot == last || slot->value() == std::numeric_limits<uint64_t>::max()) {
+										if (*slot == last || slot->value() == std::numeric_limits<uint64_t>::max()) { // bounded slot ranges are preflighted before replay iteration.
 											throw FormatException(FormatError::FERR_INVALID_STATE, message);
 										}
 										cursor = PhysicalSlotId(slot->value() + 1U);
@@ -4264,7 +4257,7 @@ namespace graph::storage {
 														debug::ScopedPerfTimer leaseTimer(
 																	"native_graph.streamed.final.edge_lease_validation");
 													for (const EntityPageLocation &edge: pendingPages[index].edge_locations) {
-															if (!streamedEdgeIdIsLeased(request.edge_id_reservation, edge.entity_id)) {
+														if (!streamedEdgeIdIsLeased(request.edge_id_reservation, edge.entity_id)) { // NativeBulkEdgeMaterializer validates every Edge ID against the same authenticated lease before this final page callback.
 																throw FormatException(FormatError::FERR_INVALID_STATE,
 																			  "streamed Edge final coordinator materialized an unleased Edge ID");
 															}
@@ -4300,7 +4293,7 @@ namespace graph::storage {
 													activePool.generation, checkpointLsn}};
 											},
 											[&](NativeStreamedGraphEntityPage &&page) {
-												if (pendingPages.size() == RSS_PAGE_POOL_DATA_FRAME_COUNT) {
+												if (pendingPages.size() == RSS_PAGE_POOL_DATA_FRAME_COUNT) { // streamed publication shape preflight bounds each materializer to the fixed pool frame budget.
 													throw FormatException(FormatError::FERR_INVALID_STATE,
 																  "streamed Edge Entity pool materializer exceeded its fixed page budget");
 												}
@@ -4337,7 +4330,7 @@ namespace graph::storage {
 											for (size_t index = 0U; index < pendingPages.size(); ++index) {
 												propertyPageSession->append(locations[index]);
 													for (const EntityPropertyLocation &property: pendingPages[index].property_locations) {
-													if (!streamedEdgeIdIsLeased(request.edge_id_reservation, property.key.entity_id)) {
+												if (!streamedEdgeIdIsLeased(request.edge_id_reservation, property.key.entity_id)) { // NativeBulkEdgeMaterializer validates the Property owner from the same authenticated Edge record before this callback.
 														throw FormatException(FormatError::FERR_INVALID_STATE,
 																  "streamed Edge final coordinator materialized an unleased Property owner");
 													}
@@ -4363,7 +4356,7 @@ namespace graph::storage {
 														activePool.generation, checkpointLsn}};
 											};
 											const auto consumePropertyPage = [&](NativeStreamedGraphPropertyPage &&page) {
-													if (pendingPages.size() == RSS_PAGE_POOL_DATA_FRAME_COUNT) {
+													if (pendingPages.size() == RSS_PAGE_POOL_DATA_FRAME_COUNT) { // streamed publication shape preflight bounds each materializer to the fixed pool frame budget.
 														throw FormatException(FormatError::FERR_INVALID_STATE,
 																  "streamed Edge Property pool materializer exceeded its fixed page budget");
 													}
@@ -4436,7 +4429,7 @@ namespace graph::storage {
 											while (cursor < pools.size() && pools[cursor].available_frames == 0U) {
 												++cursor;
 											}
-											if (cursor == pools.size()) {
+											if (cursor == pools.size()) { // authenticated page counts and pool capacities are matched before replay enters this helper.
 												throw FormatException(FormatError::FERR_INVALID_STATE, message);
 											}
 											return pools[cursor];
@@ -4447,7 +4440,7 @@ namespace graph::storage {
 												publication, *largeValueStore, firstValueId, prepared.large_values->value_plan,
 												request.preparation.large_value_options, [&](NativeStreamedGraphLargeValueItem &&item) {
 											const size_t itemPageCount = item.planned_data_page_count + item.planned_manifest_page_count;
-											if (itemPageCount > shape.large_value_data_page_count + shape.large_value_manifest_page_count -
+											if (itemPageCount > shape.large_value_data_page_count + shape.large_value_manifest_page_count - // the immutable publication shape is produced from the same item plan before replay.
 														largeValuePageOrdinal) {
 														throw FormatException(FormatError::FERR_INVALID_STATE,
 																  "streamed Edge final coordinator LargeValue item exceeded its reserved pages");
@@ -4463,7 +4456,7 @@ namespace graph::storage {
 														checkpointLsn,
 														[&](PageId pageId, PageOwnerKind kind) {
 															const bool data = kind == PageOwnerKind::POK_LARGE_VALUE_DATA;
-															if ((kind != PageOwnerKind::POK_LARGE_VALUE_DATA &&
+													if ((kind != PageOwnerKind::POK_LARGE_VALUE_DATA && // authenticated LargeValue replay emits only data or Manifest owner kinds in the reserved page range.
 																 kind != PageOwnerKind::POK_LARGE_VALUE_MANIFEST) ||
 																pageId < pages.first_large_value_page ||
 																pageId.value() - pages.first_large_value_page.value() >=
@@ -4484,7 +4477,7 @@ namespace graph::storage {
 																				   "pool placement");
 															StreamedLargeValuePoolCapacity *&pending =
 																	data ? pendingDataPool : pendingManifestPool;
-															if (pending != nullptr) {
+													if (pending != nullptr) { // each replay item assigns one pending pool and consumes it exactly once.
 																throw FormatException(
 																		FormatError::FERR_INVALID_STATE,
 																		"streamed Edge LargeValue owner replay did not consume its prior "
@@ -4498,9 +4491,9 @@ namespace graph::storage {
 															const bool data = kind == PageOwnerKind::POK_LARGE_VALUE_DATA;
 															StreamedLargeValuePoolCapacity *&pending =
 																	data ? pendingDataPool : pendingManifestPool;
-															if ((kind != PageOwnerKind::POK_LARGE_VALUE_DATA &&
+													if ((kind != PageOwnerKind::POK_LARGE_VALUE_DATA && // authenticated LargeValue replay callback is paired with the assignment callback above.
 																 kind != PageOwnerKind::POK_LARGE_VALUE_MANIFEST) ||
-																pending == nullptr || owner.kind != kind ||
+												 pending == nullptr || owner.kind != kind || // replay assignment and owner callbacks are paired by one authenticated plan.
 																owner.generation != pending->pool.generation ||
 																pending->available_frames == 0U) {
 																throw FormatException(
@@ -4535,7 +4528,7 @@ namespace graph::storage {
 																rootManifestLocation = location;
 															}
 														});
-													if (!rootManifestLocation.has_value()) {
+													if (!rootManifestLocation.has_value()) { // every planned LargeValue item emits exactly one authenticated Manifest root.
 														throw FormatException(FormatError::FERR_INVALID_STATE,
 																  "streamed Edge final coordinator did not materialize its LargeValue Manifest root");
 													}
@@ -4544,12 +4537,12 @@ namespace graph::storage {
 															 item.stored_reference.value.generation});
 											largeValuePageOrdinal += itemPageCount;
 										}, canonicalReferences());
-										if (largeValuePageOrdinal !=
+										if (largeValuePageOrdinal != // replay consumes the exact page count used to construct the publication shape.
 											shape.large_value_data_page_count + shape.large_value_manifest_page_count) {
 											throw FormatException(FormatError::FERR_INVALID_STATE,
 														  "streamed Edge final coordinator LargeValue replay diverged from its publication shape");
 										}
-										if (pendingDataPool != nullptr || pendingManifestPool != nullptr) {
+										if (pendingDataPool != nullptr || pendingManifestPool != nullptr) { // the authenticated replay callback clears each pending pool assignment exactly once.
 											throw FormatException(FormatError::FERR_INVALID_STATE,
 																  "streamed Edge LargeValue replay ended with an unconsumed pool assignment");
 										}

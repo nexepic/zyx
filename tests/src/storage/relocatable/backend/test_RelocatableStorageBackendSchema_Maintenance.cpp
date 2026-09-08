@@ -74,6 +74,40 @@ TEST_F(RelocatableStorageBackendSchemaTest, ReclaimsUnreachableLargeValuePropert
 }
 
 TEST_F(RelocatableStorageBackendSchemaTest,
+	   LargeValueReclamationRejectsAnotherPublicationAfterConsumingTheFinalCheckpoint) {
+	RelocatableStorageBackend writer(options());
+	writer.open();
+	const std::string payload(8U * 1024U, 'z');
+	const std::vector<uint64_t> nodes =
+			writer.createLogicalNodes({{{"Document"}, {{"body", graph::PropertyValue(payload)}}}});
+	ASSERT_EQ(nodes.size(), 1U);
+	writer.deleteLogicalNodes({{nodes.front(), false, 0U}});
+	writer.close();
+
+	{
+		auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
+		ASSERT_TRUE(data->is_open());
+		auto io = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		SuperblockFile superblocks(io);
+		Superblock finalPublication = superblocks.recover();
+		ASSERT_LT(finalPublication.generation.value(), std::numeric_limits<uint64_t>::max());
+		finalPublication.generation = Generation(finalPublication.generation.value() + 1U);
+		finalPublication.checkpoint_lsn = LogSequenceNumber(std::numeric_limits<uint64_t>::max() - 5U);
+		superblocks.publish(finalPublication);
+		io->sync();
+		io.reset();
+		data->close();
+	}
+
+	RelocatableStorageBackend exhausted(options());
+	exhausted.open();
+	EXPECT_EQ(exhausted.reclaimUnreachableLargeValues(largeValueReclaimOptions()).retired_values, 1U);
+	EXPECT_THROW(static_cast<void>(exhausted.reclaimUnreachableLargeValues(largeValueReclaimOptions())),
+			 FormatException);
+	exhausted.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest,
 	   EnqueuesLargeValueReachabilityReclamationThroughTheBoundedMaintenanceWorker) {
 	RelocatableStorageBackendOptions configured = options();
 	RelocatableMaintenanceOptions maintenance;
@@ -946,6 +980,22 @@ TEST_F(RelocatableStorageBackendSchemaTest, AppliesAndRecoversDurableCompactionE
 	reopened.close();
 }
 
+TEST_F(RelocatableStorageBackendSchemaTest, RejectsNonBooleanDurableCompactionConfigurationBeforeStartingMaintenance) {
+	RelocatableStorageBackendOptions enabled = options();
+	enabled.maintenance = RelocatableMaintenanceOptions{};
+	RelocatableStorageBackend backend(enabled);
+	backend.open();
+
+	// The direct backend configuration API is public, so reopen must protect the
+	// maintenance lifecycle from a persisted value with the wrong logical type.
+	backend.setConfiguration("storage.compaction.enabled", graph::PropertyValue(int64_t{1}));
+	backend.close();
+
+	RelocatableStorageBackend reopened(enabled);
+	EXPECT_THROW(reopened.open(), FormatException);
+	EXPECT_FALSE(reopened.isOpen());
+}
+
 TEST_F(RelocatableStorageBackendSchemaTest, RejectsBackgroundMaintenanceOnAReadOnlyOpen) {
 	RelocatableStorageBackendOptions readOnly = options();
 	readOnly.open_mode = OpenMode::OPEN_READ_ONLY_EXISTING_FILE;
@@ -953,6 +1003,24 @@ TEST_F(RelocatableStorageBackendSchemaTest, RejectsBackgroundMaintenanceOnAReadO
 	RelocatableStorageBackend backend(readOnly);
 	EXPECT_THROW(backend.open(), std::invalid_argument);
 	EXPECT_FALSE(backend.isOpen());
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest, ReopensMaintenanceWithMixedScalarAndVectorIndexes) {
+	RelocatableStorageBackend writer(options());
+	writer.open();
+	const LogicalGraphIndexDefinition scalar =
+			writer.createLogicalNodeIndex({"person_score", "Person", {"score"}});
+	const LogicalGraphIndexDefinition vector =
+			writer.createLogicalNodeVectorIndex({"person_embedding", "Person", "embedding", 2U, "l2"});
+	writer.close();
+
+	RelocatableStorageBackendOptions maintained = options();
+	maintained.maintenance = RelocatableMaintenanceOptions{};
+	RelocatableStorageBackend reopened(maintained);
+	ASSERT_NO_THROW(reopened.open());
+	EXPECT_TRUE(reopened.maintenanceEnabled());
+	EXPECT_EQ(reopened.listLogicalIndexes(8U), (std::vector<LogicalGraphIndexDefinition>{scalar, vector}));
+	reopened.close();
 }
 
 TEST_F(RelocatableStorageBackendSchemaTest, EnforcesTheVectorDdlTypedPageBudgetBeforePublication) {

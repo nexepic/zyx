@@ -41,6 +41,10 @@ protected:
 		if (fs::exists(testFilePath))
 			fs::remove_all(testFilePath);
 		db = std::make_unique<graph::Database>(testFilePath.string());
+		// Query fixtures are functional tests; keep each isolated database small so
+		// parallel test shards do not oversubscribe the host. Algorithms that test
+		// parallel scheduling construct an explicit ThreadPool in their own fixture.
+		db->setThreadPoolSize(1U);
 		db->open();
 	}
 

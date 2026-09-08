@@ -22,10 +22,13 @@
 #include "CypherParserImpl.hpp"
 #include "graph/core/Types.hpp"
 #include "graph/query/execution/LogicalPlanReadRuntime.hpp"
+#include "graph/query/expressions/ExistsExpression.hpp"
+#include "graph/query/expressions/PatternComprehensionExpression.hpp"
 #include "graph/query/expressions/ShortestPathExpression.hpp"
 #include "graph/query/logical/operators/LogicalJoin.hpp"
 #include "graph/query/logical/operators/LogicalNodeScan.hpp"
 #include "graph/query/logical/operators/LogicalProject.hpp"
+#include "graph/query/logical/operators/LogicalSingleRow.hpp"
 #include "graph/storage/LogicalGraphRead.hpp"
 
 using namespace graph;
@@ -255,6 +258,53 @@ TEST(LogicalPlanPatternExpressionRuntimeTest, ExecutesExistsWithTypedTargetAndSc
 	EXPECT_EQ(result.getRows().front().at("name").asPrimitive(), PropertyValue("Ada"));
 }
 
+TEST(LogicalPlanPatternExpressionRuntimeTest, ExcludesExistingRelationshipsThatFailTheExistsWherePredicate) {
+	PatternExpressionBackend backend;
+	LogicalPlanReadRuntime runtime(backend);
+	QueryPlan plan = parse(
+			"MATCH (n:Person) WHERE EXISTS((n)-[:KNOWS]->(m:Friend) WHERE m.age > 30) RETURN n.name AS name");
+	ASSERT_NE(plan.root, nullptr);
+
+	EXPECT_EQ(runtime.executeToQueryResult(*plan.root, bounds()).rowCount(), 0U);
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, EvaluatesLengthForANamedSingleRelationshipPath) {
+	PatternExpressionBackend backend;
+	LogicalPlanReadRuntime runtime(backend);
+	QueryPlan plan = parse(
+			"MATCH p=(a:Person)-[:KNOWS]->(b:Friend) "
+			"RETURN length(p) AS relationship_count, size(nodes(p)) AS node_count, "
+			"size(relationships(p)) AS relationship_list_count");
+	ASSERT_NE(plan.root, nullptr);
+
+	const QueryResult result = runtime.executeToQueryResult(*plan.root, bounds());
+	ASSERT_EQ(result.rowCount(), 1U);
+	const auto &row = result.getRows().front();
+	EXPECT_EQ(row.at("relationship_count").asPrimitive(), PropertyValue(1));
+	EXPECT_EQ(row.at("node_count").asPrimitive(), PropertyValue(2));
+	EXPECT_EQ(row.at("relationship_list_count").asPrimitive(), PropertyValue(1));
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, ResolvesParameterizedNodePropertyPredicatesAtExecutionTime) {
+	PatternExpressionBackend backend;
+	LogicalPlanReadRuntime runtime(backend);
+
+	logical::LogicalNodeScan scan("n", {"Person"});
+	scan.setParameterPropertyPredicates({{"name", "name"}});
+	QueryContext context;
+	context.parameters.emplace("name", PropertyValue("Ada"));
+	const QueryResult matching = runtime.executeToQueryResult(scan, bounds(), context);
+	ASSERT_EQ(matching.rowCount(), 1U);
+	EXPECT_EQ(matching.getRows().front().at("n").asLogicalNode().node_id, 1U);
+
+	context.parameters.insert_or_assign("name", PropertyValue());
+	const QueryResult nullPredicate = runtime.executeToQueryResult(scan, bounds(), context);
+	EXPECT_EQ(nullPredicate.rowCount(), 0U);
+
+	QueryContext missingParameter;
+	EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(scan, bounds(), missingParameter)), std::runtime_error);
+}
+
 TEST(LogicalPlanPatternExpressionRuntimeTest, EvaluatesEntityIntrospectionFunctionsFromParserProducedPlans) {
 	PatternExpressionBackend backend;
 	LogicalPlanReadRuntime runtime(backend);
@@ -309,6 +359,147 @@ TEST(LogicalPlanPatternExpressionRuntimeTest, ProducesCompletePatternComprehensi
 	EXPECT_EQ(result.getRows().front().at("ages").asPrimitive(),
 			  PropertyValue(std::vector<PropertyValue>{PropertyValue(30)}));
 	EXPECT_EQ(result.getRows().back().at("ages").asPrimitive(), PropertyValue(std::vector<PropertyValue>{}));
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest,
+	 BindsTheRelationshipWhenAPatternComprehensionUsesAnAnonymousTarget) {
+	PatternExpressionGraph graph = makeDefaultPatternExpressionGraph();
+	graph.edges.at(10U).properties.push_back({"weight", PropertyValue(int64_t{7})});
+	PatternExpressionBackend backend(std::move(graph));
+	LogicalPlanReadRuntime runtime(backend);
+	QueryPlan plan = parse(
+			"MATCH (n:Person) RETURN n.name AS name, [(n)-[r:KNOWS]->() | r.weight] AS weights");
+	ASSERT_NE(plan.root, nullptr);
+
+	const QueryResult result = runtime.executeToQueryResult(*plan.root, bounds());
+	ASSERT_EQ(result.rowCount(), 2U);
+	EXPECT_EQ(result.getRows().front().at("name").asPrimitive(), PropertyValue("Ada"));
+	EXPECT_EQ(result.getRows().front().at("weights").asPrimitive(),
+			  PropertyValue(std::vector<PropertyValue>{PropertyValue(int64_t{7})}));
+	EXPECT_EQ(result.getRows().back().at("weights").asPrimitive(), PropertyValue(std::vector<PropertyValue>{}));
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest,
+	 PreservesUndirectedPatternSemanticsAcrossSelfLoopsTypesAndTargetLabels) {
+	PatternExpressionGraph graph;
+	graph.nodes.emplace(1U, LogicalGraphNode{1U, {"Seed"}, {}});
+	graph.nodes.emplace(2U, LogicalGraphNode{2U, {"Friend"}, {{"age", PropertyValue(30)}}});
+	graph.nodes.emplace(3U, LogicalGraphNode{3U, {"Other"}, {}});
+	// A correct undirected traversal observes the self-loop in both directions,
+	// but returns it only once. The other two edges exercise type and label
+	// filtering without requiring a larger graph fixture.
+	graph.edges.emplace(10U, LogicalGraphEdge{10U, 1U, 1U, "KNOWS"});
+	graph.edges.emplace(11U, LogicalGraphEdge{11U, 1U, 2U, "KNOWS"});
+	graph.edges.emplace(12U, LogicalGraphEdge{12U, 3U, 1U, "OTHER"});
+	PatternExpressionBackend backend(std::move(graph));
+	LogicalPlanReadRuntime runtime(backend);
+	QueryPlan plan = parse("MATCH (n:Seed) RETURN [(n)-[:KNOWS]-(m:Friend) | m.age] AS ages");
+	ASSERT_NE(plan.root, nullptr);
+
+	const QueryResult result = runtime.executeToQueryResult(*plan.root, bounds());
+	ASSERT_EQ(result.rowCount(), 1U);
+	EXPECT_EQ(result.getRows().front().at("ages").asPrimitive(),
+			  PropertyValue(std::vector<PropertyValue>{PropertyValue(30)}));
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, DoesNotRebindPreexistingPatternTargets) {
+	PatternExpressionBackend backend;
+	LogicalPlanReadRuntime runtime(backend);
+
+	QueryPlan matchingExistsPlan = parse(
+			"MATCH (n:Person), (m:Friend) WHERE EXISTS((n)-[:KNOWS]->(m)) RETURN n.name AS name");
+	ASSERT_NE(matchingExistsPlan.root, nullptr);
+	const QueryResult matching = runtime.executeToQueryResult(*matchingExistsPlan.root, bounds());
+	ASSERT_EQ(matching.rowCount(), 1U);
+	EXPECT_EQ(matching.getRows().front().at("name").asPrimitive(), PropertyValue("Ada"));
+
+	QueryPlan existsPlan = parse(
+			"MATCH (n:Person), (m:Robot) WHERE EXISTS((n)-[:KNOWS]->(m)) RETURN n.name AS name");
+	ASSERT_NE(existsPlan.root, nullptr);
+	EXPECT_EQ(runtime.executeToQueryResult(*existsPlan.root, bounds()).rowCount(), 0U);
+
+	QueryPlan comprehensionPlan = parse(
+			"MATCH (n:Person), (m:Robot) RETURN n.name AS name, [(n)-[:KNOWS]->(m) | m.age] AS ages");
+	ASSERT_NE(comprehensionPlan.root, nullptr);
+	const QueryResult result = runtime.executeToQueryResult(*comprehensionPlan.root, bounds());
+	ASSERT_EQ(result.rowCount(), 2U);
+	for (const auto &row: result.getRows()) {
+		EXPECT_EQ(row.at("ages").asPrimitive(), PropertyValue(std::vector<PropertyValue>{}));
+	}
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, EvaluatesStructuredNodeOnlyPatternsAndMissingSourceBindings) {
+	PatternExpressionBackend backend;
+	LogicalPlanReadRuntime runtime(backend);
+
+	std::vector<logical::LogicalProjectItem> missingExistsItems;
+	missingExistsItems.emplace_back(std::make_shared<expressions::ExistsExpression>(
+														"(n)", "n", "", "", expressions::PatternDirection::PAT_OUTGOING),
+														"exists");
+	logical::LogicalProject missingExists(std::make_unique<logical::LogicalSingleRow>(), std::move(missingExistsItems));
+	const QueryResult missingExistsResult = runtime.executeToQueryResult(missingExists, bounds());
+	ASSERT_EQ(missingExistsResult.rowCount(), 1U);
+	EXPECT_EQ(missingExistsResult.getRows().front().at("exists").asPrimitive(), PropertyValue(false));
+
+	std::vector<logical::LogicalProjectItem> unstructuredExistsItems;
+	unstructuredExistsItems.emplace_back(std::make_shared<expressions::ExistsExpression>("(n)"), "exists");
+	logical::LogicalProject unstructuredExists(std::make_unique<logical::LogicalSingleRow>(),
+				std::move(unstructuredExistsItems));
+	const QueryResult unstructuredExistsResult = runtime.executeToQueryResult(unstructuredExists, bounds());
+	ASSERT_EQ(unstructuredExistsResult.rowCount(), 1U);
+	EXPECT_EQ(unstructuredExistsResult.getRows().front().at("exists").asPrimitive(), PropertyValue(false));
+
+	std::vector<logical::LogicalProjectItem> nodeOnlyExistsItems;
+	nodeOnlyExistsItems.emplace_back(std::make_shared<expressions::ExistsExpression>(
+														"(n)", "n", "", "", expressions::PatternDirection::PAT_OUTGOING),
+														"exists");
+	logical::LogicalProject nodeOnlyExists(
+				std::make_unique<logical::LogicalNodeScan>("n", std::vector<std::string>{"Person"}),
+				std::move(nodeOnlyExistsItems));
+	const QueryResult nodeOnlyExistsResult = runtime.executeToQueryResult(nodeOnlyExists, bounds());
+	ASSERT_EQ(nodeOnlyExistsResult.rowCount(), 2U);
+	for (const auto &row: nodeOnlyExistsResult.getRows()) {
+		EXPECT_EQ(row.at("exists").asPrimitive(), PropertyValue(true));
+	}
+
+	auto mapValue = std::make_unique<expressions::LiteralExpression>(std::string("mapped"));
+	std::vector<logical::LogicalProjectItem> missingComprehensionItems;
+	missingComprehensionItems.emplace_back(std::make_shared<expressions::PatternComprehensionExpression>(
+														"(n)", "n", "target", "", "", expressions::PatternDirection::PAT_OUTGOING,
+														std::move(mapValue)),
+														"values");
+	logical::LogicalProject missingComprehension(std::make_unique<logical::LogicalSingleRow>(),
+				std::move(missingComprehensionItems));
+	const QueryResult missingComprehensionResult = runtime.executeToQueryResult(missingComprehension, bounds());
+	ASSERT_EQ(missingComprehensionResult.rowCount(), 1U);
+	EXPECT_EQ(missingComprehensionResult.getRows().front().at("values").asPrimitive(),
+				  PropertyValue(std::vector<PropertyValue>{}));
+
+	std::vector<logical::LogicalProjectItem> unstructuredComprehensionItems;
+	unstructuredComprehensionItems.emplace_back(std::make_shared<expressions::PatternComprehensionExpression>(
+														"(n)", "target",
+														std::make_unique<expressions::LiteralExpression>(std::string("mapped"))),
+														"values");
+	logical::LogicalProject unstructuredComprehension(std::make_unique<logical::LogicalSingleRow>(),
+				std::move(unstructuredComprehensionItems));
+	EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(unstructuredComprehension, bounds())), std::logic_error);
+
+	std::vector<logical::LogicalProjectItem> nodeOnlyComprehensionItems;
+	nodeOnlyComprehensionItems.emplace_back(std::make_shared<expressions::PatternComprehensionExpression>(
+														"(n)", "n", "target", "", "", expressions::PatternDirection::PAT_OUTGOING,
+														std::make_unique<expressions::LiteralExpression>(std::string("mapped"))),
+														"values");
+	logical::LogicalProject nodeOnlyComprehension(
+				std::make_unique<logical::LogicalNodeScan>("n", std::vector<std::string>{"Person"}),
+				std::move(nodeOnlyComprehensionItems));
+	const QueryResult nodeOnlyComprehensionResult = runtime.executeToQueryResult(nodeOnlyComprehension, bounds());
+	ASSERT_EQ(nodeOnlyComprehensionResult.rowCount(), 2U);
+	for (const auto &row: nodeOnlyComprehensionResult.getRows()) {
+		const PropertyValue values = row.at("values").asPrimitive();
+		ASSERT_EQ(values.getType(), PropertyType::LIST);
+		ASSERT_EQ(values.getList().size(), 1U);
+		EXPECT_EQ(values.getList().front(), PropertyValue("mapped"));
+	}
 }
 
 TEST(LogicalPlanPatternExpressionRuntimeTest, RejectsTruncatedPatternComprehensionInsteadOfReturningAPrefix) {

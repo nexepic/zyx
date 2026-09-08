@@ -28,10 +28,7 @@ namespace graph::storage {
 			return left + right;
 		}
 
-		[[nodiscard]] size_t checkedCeilingDivide(size_t numerator, size_t denominator, const char *message) {
-			if (numerator == 0U || denominator == 0U) { // ZYX_COV_EXCL_LINE: all callers validate positive counts and fan-in before deriving a plan.
-				fail(FormatError::FERR_INVALID_HEADER, message);
-			}
+		[[nodiscard]] size_t checkedCeilingDivide(size_t numerator, size_t denominator) {
 			return (numerator - 1U) / denominator + 1U;
 		}
 
@@ -41,18 +38,13 @@ namespace graph::storage {
 		};
 
 		[[nodiscard]] ReductionShape deriveReductionShape(size_t initialRuns, size_t maximumFanIn) {
-		if (maximumFanIn < 2U) { // ZYX_COV_EXCL_LINE: publication preflight rejects fan-in below two before this helper is reached.
-				fail(FormatError::FERR_INVALID_HEADER,
-					 "native streamed Edge publication requires a usable merge fan-in");
-			}
 			if (initialRuns == 0U) {
 				return {};
 			}
 			ReductionShape result{NativeBulkEdgePrivateRunPipeline::maximumCandidateSegments(initialRuns, maximumFanIn),
 								  0U};
 			for (size_t levelRuns = initialRuns; levelRuns > 1U;) {
-				const size_t nextLevelRuns = checkedCeilingDivide(
-						levelRuns, maximumFanIn, "native streamed Edge merge level has an invalid fan-in");
+				const size_t nextLevelRuns = checkedCeilingDivide(levelRuns, maximumFanIn);
 				result.passes = checkedAdd(result.passes, 1U, "native streamed Edge merge pass count overflowed");
 				levelRuns = nextLevelRuns;
 			}
@@ -78,10 +70,6 @@ namespace graph::storage {
 		const NativeBulkEdgePublicationPreflightResult preflight =
 				NativeBulkEdgePublicationPreflight::validate(source, edgeIdRanges, options, persistedNodeExists);
 		const size_t entityCapacity = EntityPage::recordCapacity(EntityPageRecordKind::EPRK_EDGE);
-		if (entityCapacity == 0U || preflight.record_count == 0U) { // ZYX_COV_EXCL_LINE: EntityPage capacity is a nonzero format constant and preflight rejects empty sources.
-			fail(FormatError::FERR_INVALID_STATE,
-				 "native streamed Edge publication cannot derive an Entity-page batch shape");
-		}
 
 		const ReductionShape token = deriveReductionShape(preflight.token_fragments, options.maximum_sort_runs);
 		const ReductionShape outgoing =
@@ -92,8 +80,7 @@ namespace graph::storage {
 		result.record_count = preflight.record_count;
 		result.first_edge_id = preflight.first_edge_id;
 		result.last_edge_id = preflight.last_edge_id;
-		result.edge_entity_page_count = checkedCeilingDivide(preflight.record_count, entityCapacity,
-														 "native streamed Edge Entity-page count is invalid");
+		result.edge_entity_page_count = checkedCeilingDivide(preflight.record_count, entityCapacity);
 		result.property_root_count = preflight.property_root_count;
 		result.large_value_count = preflight.large_value_count;
 		result.source_run_count = preflight.source_run_count;

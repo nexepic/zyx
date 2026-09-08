@@ -45,13 +45,6 @@ namespace graph::storage {
 		makeFreshPlan(const BTreeInitialTreeMutationPlan &plan,
 					  const NativeStreamedGraphLargeValueContentIndexPlanningOptions &options,
 					  LogSequenceNumber checkpointLsn) {
-			if (plan.index_id != RSS_LARGE_VALUE_CONTENT_INDEX_ID || plan.new_pool_mutations.empty() ||
-				!plan.preparer || plan.root_page.pool_ordinal >= plan.new_pool_mutations.size() ||
-				plan.root_page.appended_page_ordinal >=
-						plan.new_pool_mutations[plan.root_page.pool_ordinal].appended_page_count) {
-				fail(FormatError::FERR_INVALID_STATE,
-					 "native streamed Edge LargeValue content-index planner lost a fresh root identity");
-			}
 			NativeGraphDeferredIndexPlan result;
 			result.mutation.index_id = RSS_LARGE_VALUE_CONTENT_INDEX_ID;
 			for (const BTreeNewIndexTreePoolMutation &pool: plan.new_pool_mutations) {
@@ -68,18 +61,10 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] OrderedBTreeEntrySource canonicalContentEntries(OrderedBTreeEntrySource entries,
-																				  size_t keyBytes) {
-			if (!entries || keyBytes <= sizeof(uint64_t)) {
-				fail(FormatError::FERR_INVALID_HEADER,
-					 "native streamed Edge LargeValue content index requires fixed identity-bearing keys");
-			}
+																 size_t keyBytes) {
 			const size_t identityBytes = keyBytes - sizeof(uint64_t);
 			return [entries = std::move(entries), keyBytes, identityBytes] {
 				OrderedBTreeEntryCursor cursor = entries();
-				if (!cursor) {
-					fail(FormatError::FERR_INVALID_STATE,
-						 "native streamed Edge LargeValue content index could not open its private run");
-				}
 				auto previousIdentity = std::make_shared<std::vector<std::byte>>();
 				return [cursor = std::move(cursor), previousIdentity, keyBytes, identityBytes]() mutable
 						   -> std::optional<BTreePageEntry> {
@@ -110,7 +95,7 @@ namespace graph::storage {
 		if (!store.usesMetadataStore(metadata) || !privateRunRoot.isValid() || !planning.current_snapshot.isValid() ||
 			!options.first_slot.isValid() || !options.last_slot.isValid() || options.first_slot > options.last_slot ||
 			options.maximum_entries == 0U || options.maximum_pages == 0U || options.maximum_manifest_depth == 0U ||
-			!checkpointLsn.isValid()) {
+			!planning.private_segment_reader || !checkpointLsn.isValid()) {
 			fail(FormatError::FERR_INVALID_HEADER,
 				 "native streamed Edge LargeValue content-index planner requires a fenced private source and bounds");
 		}
@@ -152,10 +137,6 @@ namespace graph::storage {
 															RSS_LARGE_VALUE_CONTENT_INDEX_ID, merged, build);
 		const BTreeTreeRetirementPlan retirement = store.contentIndex().planTreeRetirement(
 				planning.current_snapshot, RSS_LARGE_VALUE_CONTENT_INDEX_ID, options.maximum_pages);
-		if (replacement.entry_count == 0U) {
-			fail(FormatError::FERR_INVALID_STATE,
-				 "native streamed Edge LargeValue content-index merge unexpectedly produced an empty replacement");
-		}
 		NativeGraphDeferredIndexPlan result = makeFreshPlan(replacement, options, checkpointLsn);
 		result.mutation.expected_root = retirement.expected_root;
 		result.mutation.pool_requests = retirement.pool_requests;

@@ -58,14 +58,6 @@ namespace graph::storage {
 			return result;
 		}
 
-		[[nodiscard]] NativeBulkRunFragmentLocation
-		locationFor(const NativeGraphPrivateSegmentMaterialization &identity) {
-			if (!identity.isValid()) {
-				fail(FormatError::FERR_INVALID_STATE, "native bulk Edge private run-set received an invalid identity");
-			}
-			return {identity.segment_id, identity.generation, identity.owner_id};
-		}
-
 		[[nodiscard]] NativeGraphPrivateSegmentMaterialization
 		identityFor(const NativeGraphPrivateSegmentSet &identities, NativeBulkRunFragmentLocation location) {
 			return identities[identities.ordinalOf(
@@ -77,9 +69,6 @@ namespace graph::storage {
 			PrivateRunSetCursor(const NativeGraphPrivateSegmentSet &identities, NativeBulkRunFragmentLocation root,
 								uint16_t maximumDepth, NativeGraphPrivateSegmentReader reader) :
 				identities_(identities), maximum_depth_(maximumDepth), reader_(std::move(reader)) {
-				if (maximum_depth_ == 0U || !reader_) {
-					fail(FormatError::FERR_INVALID_HEADER, "native bulk Edge private run-set cursor is invalid");
-				}
 				stack_.push_back({read(root), 0U});
 			}
 
@@ -292,9 +281,7 @@ namespace graph::storage {
 	void NativeBulkEdgePrivateRunSetBuilder::flushLevel(uint16_t level) {
 		auto items = std::move(levels_[level]);
 		levels_[level].clear();
-		if (items.empty()) {
-			return;
-		}
+		// This private helper is called only after a level receives at least one item.
 		NativeBulkEdgePrivateRunSetManifest manifest;
 		manifest.level = level;
 		auto &references = level == 0U ? manifest.runs : manifest.children;
@@ -310,12 +297,13 @@ namespace graph::storage {
 		}
 		const std::vector<std::byte> payload = NativeBulkEdgePrivateRunSetCodec::encode(manifest);
 		const NativeGraphPrivateSegmentMaterialization identity = allocate_candidate_();
-		if (identity.owner_id != items.front().first.transaction_id) {
+		if (!identity.isValid() || identity.owner_id != items.front().first.transaction_id) {
 			fail(FormatError::FERR_INVALID_STATE,
-				 "native bulk Edge private run-set crosses candidate-owner boundaries");
+					 "native bulk Edge private run-set crosses candidate-owner boundaries");
 		}
 		write_candidate_(identity, payload);
-		appendAtLevel(static_cast<uint16_t>(level + 1U), locationFor(identity), manifest.run_count);
+		appendAtLevel(static_cast<uint16_t>(level + 1U),
+					  {identity.segment_id, identity.generation, identity.owner_id}, manifest.run_count);
 	}
 
 	NativeBulkRunFragmentLocation NativeBulkEdgePrivateRunSetBuilder::finish() {

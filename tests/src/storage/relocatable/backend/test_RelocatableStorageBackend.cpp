@@ -14,6 +14,7 @@
 
 #include "graph/storage/relocatable/vector/VectorAdjacency.hpp"
 #include "graph/storage/relocatable/vector/VectorDeltaMapping.hpp"
+#include "graph/storage/relocatable/entity/NativeStreamedGraphPublicationPlan.hpp"
 #include "graph/storage/relocatable/index/NativeBulkRun.hpp"
 
 #ifdef _WIN32
@@ -486,6 +487,10 @@ TEST_F(RelocatableStorageBackendTest, NativeInitializationRejectsUnsafeModesAndP
 	RelocatableStorageBackendOptions nonCreate = backendOptions();
 	nonCreate.open_mode = OpenMode::OPEN_EXISTING_FILE;
 	EXPECT_THROW(static_cast<void>(RelocatableStorageBackend::initializeNew(std::move(nonCreate))), std::invalid_argument);
+	RelocatableStorageBackendOptions undersizedPool = backendOptions();
+	undersizedPool.open_mode = OpenMode::OPEN_CREATE_NEW_FILE;
+	undersizedPool.buffer_pool_bytes = RSS_BUFFER_POOL_PAGE_BYTES - 1U;
+	EXPECT_THROW(static_cast<void>(RelocatableStorageBackend::initializeNew(std::move(undersizedPool))), std::invalid_argument);
 
 	RelocatableStorageBackendOptions emptyPath = backendOptions();
 	emptyPath.open_mode = OpenMode::OPEN_CREATE_NEW_FILE;
@@ -496,6 +501,21 @@ TEST_F(RelocatableStorageBackendTest, NativeInitializationRejectsUnsafeModesAndP
 	absentParent.open_mode = OpenMode::OPEN_CREATE_NEW_FILE;
 	absentParent.data_path = data_path_.parent_path() / "relocatable_missing_parent" / "database.dat";
 	EXPECT_THROW(static_cast<void>(RelocatableStorageBackend::initializeNew(std::move(absentParent))), std::runtime_error);
+
+	const std::filesystem::path nonDirectoryParent = data_path_.string() + ".parent";
+	{
+		std::ofstream parentFile(nonDirectoryParent, std::ios::binary | std::ios::trunc);
+		ASSERT_TRUE(parentFile.is_open());
+		parentFile << "not a directory";
+	}
+	RelocatableStorageBackendOptions nonDirectoryParentPath = backendOptions();
+	nonDirectoryParentPath.open_mode = OpenMode::OPEN_CREATE_NEW_FILE;
+	nonDirectoryParentPath.data_path = nonDirectoryParent / "database.dat";
+	EXPECT_THROW(static_cast<void>(RelocatableStorageBackend::initializeNew(std::move(nonDirectoryParentPath))),
+			 std::runtime_error);
+	std::error_code removeParentError;
+	EXPECT_TRUE(std::filesystem::remove(nonDirectoryParent, removeParentError));
+	EXPECT_FALSE(removeParentError);
 
 	{
 		std::ofstream existing(data_path_, std::ios::binary | std::ios::trunc);
@@ -646,6 +666,10 @@ TEST_F(RelocatableStorageBackendTest, WritableOpenRejectsEveryUnboundedOrInconsi
 	};
 	const size_t unbounded = std::numeric_limits<size_t>::max();
 
+	// A backend cannot construct a page pool without at least one complete raw
+	// page; reject this before touching the existing database file.
+	expectRejected([](auto &options) { options.buffer_pool_bytes = RSS_BUFFER_POOL_PAGE_BYTES - 1U; });
+
 	expectRejected([](auto &options) { options.maximum_index_definitions = 0U; });
 	expectRejected([unbounded](auto &options) { options.maximum_index_definitions = unbounded; });
 	expectRejected([](auto &options) { options.maximum_constraint_definitions = 0U; });
@@ -761,6 +785,18 @@ TEST_F(RelocatableStorageBackendTest, ReadOnlyBackendRejectsEveryNonemptyLogical
 	LogicalGraphMutationBatch write;
 	write.node_creates = {{{"forbidden"}, {}}};
 	EXPECT_THROW(static_cast<void>(backend.executeLogicalGraphMutationBatch(write)), std::logic_error);
+
+	// The streamed bulk publisher is an internal bridge, but it is still a
+	// mutating entry point and must reject a read-only handle before it inspects
+	// the durable scratch source or its publication inputs.
+	RelocatableStorageBackendOptions writerOptions = backendOptions();
+	writerOptions.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend writer(std::move(writerOptions));
+	writer.open();
+	const std::unique_ptr<NativeBulkRunStore> scratch = writer.createNativeBulkRunStore();
+	const LogicalGraphMutationFence writerFence = writer.currentNativeLogicalGraphMutationFence();
+	EXPECT_THROW(backend.commitNativeStreamedBulkEdges(*scratch, {}, {}, {}, writerFence), std::logic_error);
+	writer.close();
 	backend.close();
 }
 
@@ -1166,6 +1202,13 @@ TEST_F(RelocatableStorageBackendTest, LogicalTransactionPreviewReservesOneStable
 	differentShape.node_creates.push_back({{"Previewed"}, {}});
 	EXPECT_THROW(static_cast<void>(transaction->previewMutationBatch(differentShape)), std::logic_error);
 	EXPECT_THROW(static_cast<void>(transaction->stageMutationBatch(differentShape)), std::logic_error);
+
+	// Matching the Node count alone is insufficient: the outstanding lease also
+	// fixes the Edge creation shape for the statement that may consume it.
+	LogicalGraphMutationBatch differentEdgeShape = oneNode;
+	differentEdgeShape.edge_creates.push_back({});
+	EXPECT_THROW(static_cast<void>(transaction->previewMutationBatch(differentEdgeShape)), std::logic_error);
+	EXPECT_THROW(static_cast<void>(transaction->stageMutationBatch(differentEdgeShape)), std::logic_error);
 
 	const LogicalGraphMutationBatchResult staged = transaction->stageMutationBatch(std::move(oneNode));
 	EXPECT_EQ(staged, firstPreview);

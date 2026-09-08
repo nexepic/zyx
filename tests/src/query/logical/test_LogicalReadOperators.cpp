@@ -144,6 +144,7 @@ TEST_F(LogicalFilterTest, BasicConstruction) {
 
     EXPECT_EQ(filter.getType(), LogicalOpType::LOP_FILTER);
     EXPECT_NE(filter.getPredicate(), nullptr);
+    EXPECT_EQ(filter.getPredicateRaw(), filter.getPredicate().get());
     ASSERT_EQ(filter.getChildren().size(), 1u);
     EXPECT_NE(filter.getChildren()[0], nullptr);
 }
@@ -235,6 +236,15 @@ TEST_F(LogicalProjectTest, DistinctFlag) {
     EXPECT_NE(project.toString().find("Distinct"), std::string::npos);
 }
 
+TEST_F(LogicalProjectTest, FormatsMultipleAliasesWithThePublicSeparatorContract) {
+	std::vector<LogicalProjectItem> items;
+	items.emplace_back(makeVarRefExpr("n"), "node");
+	items.emplace_back(makeVarRefExpr("m"), "other");
+	LogicalProject project(std::make_unique<LogicalNodeScan>("n"), std::move(items));
+
+	EXPECT_EQ(project.toString(), "Project(node, other)");
+}
+
 TEST_F(LogicalProjectTest, OutputVariablesMatchAliases) {
     auto child = std::make_unique<LogicalNodeScan>("n");
     std::vector<LogicalProjectItem> items;
@@ -260,6 +270,19 @@ TEST_F(LogicalProjectTest, RequiredColumns) {
     project.setRequiredColumns(cols);
     EXPECT_EQ(project.getRequiredColumns().size(), 1u);
     EXPECT_NE(project.getRequiredColumns().find("n"), project.getRequiredColumns().end());
+}
+
+TEST_F(LogicalProjectTest, ReplacesAndDetachesItsOnlyChild) {
+	std::vector<LogicalProjectItem> items;
+	items.emplace_back(makeVarRefExpr("n"), "n");
+	LogicalProject project(std::make_unique<LogicalNodeScan>("input"), std::move(items));
+
+	const std::unique_ptr<LogicalOperator> detached = project.detachChild(0U);
+	ASSERT_NE(detached, nullptr);
+	EXPECT_EQ(project.getChildren().front(), nullptr);
+	project.setChild(0U, std::make_unique<LogicalNodeScan>("replacement"));
+	ASSERT_NE(project.getChildren().front(), nullptr);
+	EXPECT_EQ(project.getOutputVariables(), (std::vector<std::string>{"n"}));
 }
 
 TEST_F(LogicalProjectTest, Clone) {
@@ -390,6 +413,22 @@ TEST_F(LogicalSortTest, OutputVariablesPassThrough) {
     auto vars = sort.getOutputVariables();
     ASSERT_EQ(vars.size(), 1u);
     EXPECT_EQ(vars[0], "n");
+    EXPECT_EQ(sort.toString(), "Sort");
+    ASSERT_EQ(sort.getChildren().size(), 1U);
+    EXPECT_NE(sort.getChildren().front(), nullptr);
+}
+
+TEST_F(LogicalSortTest, ReplacesAndDetachesItsOnlyChild) {
+	std::vector<LogicalSortItem> sortItems;
+	sortItems.emplace_back(makeVarRefExpr("n"), true);
+	LogicalSort sort(std::make_unique<LogicalNodeScan>("input"), std::move(sortItems));
+
+	const std::unique_ptr<LogicalOperator> detached = sort.detachChild(0U);
+	ASSERT_NE(detached, nullptr);
+	EXPECT_EQ(sort.getChildren().front(), nullptr);
+	sort.setChild(0U, std::make_unique<LogicalNodeScan>("replacement"));
+	ASSERT_NE(sort.getChildren().front(), nullptr);
+	EXPECT_EQ(sort.getOutputVariables(), (std::vector<std::string>{"replacement"}));
 }
 
 TEST_F(LogicalSortTest, Clone) {

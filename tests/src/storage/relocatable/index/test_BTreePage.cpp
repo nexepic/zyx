@@ -273,6 +273,18 @@ TEST(RelocatableBTreePageCodecTest, FindsKeysAcrossPackedRestartGroups) {
 	EXPECT_FALSE(PackedBTreePageCodec::find(BTreeNodeKind::BPN_LEAF, encoded, missing).has_value());
 }
 
+TEST(RelocatableBTreePageCodecTest, RoundTripsAnOrderedKeyThatExtendsItsPredecessor) {
+	const std::vector<BTreePageEntry> entries = {
+			{{std::byte{'p'}}, 1U},
+			{{std::byte{'p'}, std::byte{'r'}}, 2U},
+			{{std::byte{'p'}, std::byte{'r'}, std::byte{'e'}}, 3U},
+	};
+	const std::vector<std::byte> encoded = PackedBTreePageCodec::encode(BTreeNodeKind::BPN_LEAF, entries);
+	EXPECT_EQ(PackedBTreePageCodec::decode(BTreeNodeKind::BPN_LEAF, encoded), entries);
+	EXPECT_EQ(PackedBTreePageCodec::find(BTreeNodeKind::BPN_LEAF, encoded, entries[1U].key),
+			  std::optional<BTreePageEntry>(entries[1U]));
+}
+
 TEST(RelocatableBTreePageCodecTest, RejectsOrCanonicallyRoundTripsDeterministicFuzzedPackedPayloads) {
 	// A deterministic corpus makes format failures reproducible on every platform.
 	std::mt19937_64 random(0x5A59585F42545245ULL);

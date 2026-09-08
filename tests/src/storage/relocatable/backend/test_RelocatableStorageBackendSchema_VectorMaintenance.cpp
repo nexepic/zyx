@@ -1009,6 +1009,12 @@ TEST_F(RelocatableStorageBackendSchemaTest, VectorProcedureHonorsExistingYieldWh
 			engine.execute("CALL db.index.vector.queryNodes('person_embedding', 2, [1.0, -2.0]) YIELD node, score "
 						   "RETURN score LIMIT 0");
 	EXPECT_TRUE(emptyPage.isEmpty());
+
+	const graph::query::QueryResult zeroTopK =
+			engine.execute("CALL db.index.vector.queryNodes('person_embedding', 0, [1.0, -2.0]) YIELD node, score "
+						   "RETURN node.name AS name, score");
+	EXPECT_EQ(zeroTopK.getColumns(), (std::vector<std::string>{"name", "score"}));
+	EXPECT_TRUE(zeroTopK.isEmpty());
 	backend->close();
 }
 

@@ -546,6 +546,56 @@ TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgeCommitReusesNonConsecutive
 	reopened.close();
 }
 
+TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgeCommitReusesLargeValuePoolsAcrossTransactions) {
+	materializeNativeDatabase();
+	RelocatableStorageBackendOptions options = backendOptions();
+	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(std::move(options));
+	backend.open();
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes({{{"BulkSource"}, {}}, {{"BulkTarget"}, {}}});
+	ASSERT_EQ(nodes.size(), 2U);
+
+	const auto publish = [&](const std::string &type, const std::string &payload) {
+		std::unique_ptr<LogicalGraphTransaction> transaction = backend.beginLogicalGraphTransaction(false);
+		auto *const bulk = dynamic_cast<LogicalGraphBoundedBulkEdgeTransaction *>(transaction.get());
+		EXPECT_NE(bulk, nullptr);
+		if (bulk == nullptr) return uint64_t{0U};
+		const std::array<uint64_t, 1U> sources{nodes[0]};
+		const std::array<uint64_t, 1U> targets{nodes[1]};
+		const std::array<PropertyValue, 1U> payloads{PropertyValue(payload)};
+		const std::array<LogicalGraphBulkEdgePropertyColumn, 1U> columns{{{"payload", payloads}}};
+		const std::vector<uint64_t> staged = bulk->appendPersistedBulkEdges({type, sources, targets, columns});
+		EXPECT_EQ(staged.size(), 1U);
+		if (staged.size() != 1U) return uint64_t{0U};
+		EXPECT_NO_THROW(static_cast<void>(transaction->commit()));
+		return staged.front();
+	};
+
+	const std::string firstPayload(RSS_SEGMENT_SIZE / 2U, 'a');
+	const std::string secondPayload(RSS_SEGMENT_SIZE / 2U, 'b');
+	const uint64_t firstEdgeId = publish("BULK_LARGE_VALUE_FIRST", firstPayload);
+	const uint64_t secondEdgeId = publish("BULK_LARGE_VALUE_SECOND", secondPayload);
+	ASSERT_NE(firstEdgeId, 0U);
+	ASSERT_NE(secondEdgeId, 0U);
+
+	const auto assertPublishedValues = [&](RelocatableStorageBackend &candidate) {
+		std::unique_ptr<LogicalGraphReadSnapshot> snapshot = candidate.openLogicalGraphReadSnapshot();
+		EXPECT_EQ(snapshot->readEdge(firstEdgeId).properties,
+				  (std::vector<LogicalGraphPropertyEntry>{{"payload", PropertyValue(firstPayload)}}));
+		EXPECT_EQ(snapshot->readEdge(secondEdgeId).properties,
+				  (std::vector<LogicalGraphPropertyEntry>{{"payload", PropertyValue(secondPayload)}}));
+	};
+	assertPublishedValues(backend);
+	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+	backend.close();
+
+	RelocatableStorageBackend reopened(backendOptions());
+	reopened.open();
+	assertPublishedValues(reopened);
+	EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity()));
+	reopened.close();
+}
+
 TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgeCommitPublishesParallelSelfLoopAndDistinctTypesInOneGeneration) {
 	materializeNativeDatabase();
 	RelocatableStorageBackendOptions options = backendOptions();
@@ -819,12 +869,19 @@ TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgeRebasesAcrossHandlesWithMa
 	EXPECT_EQ(transaction->state(), LogicalGraphTransactionState::LGTTS_COMMITTED);
 	transaction.reset();
 	EXPECT_TRUE(backend.nativeMaintenanceEnabled());
+	// A rebase reconstructs graph-facing stores and their token resolvers. Verify
+	// that the refreshed handle can publish a normal mutation before it is closed.
+	const std::vector<uint64_t> postRebase =
+			backend.createLogicalNodes({{{"PostRebase"}, {{"verified", PropertyValue(int64_t{1})}}}});
+	ASSERT_EQ(postRebase.size(), 1U);
 
 	std::unique_ptr<LogicalGraphReadSnapshot> snapshot = backend.openLogicalGraphReadSnapshot();
 	EXPECT_EQ(snapshot->readEdge(external.front()),
 			  LogicalGraphEdge(external.front(), nodes[0], nodes[1], "MAINTENANCE_EXTERNAL", {}));
 	EXPECT_EQ(snapshot->readEdge(staged.front()),
 			  LogicalGraphEdge(staged.front(), nodes[0], nodes[1], "BULK_MAINTENANCE_REBASE", {}));
+	EXPECT_EQ(snapshot->readNode(postRebase.front()),
+			  LogicalGraphNode(postRebase.front(), {"PostRebase"}, {{"verified", PropertyValue(int64_t{1})}}));
 	snapshot.reset();
 	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
 	backend.close();
@@ -836,6 +893,8 @@ TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgeRebasesAcrossHandlesWithMa
 			  LogicalGraphEdge(external.front(), nodes[0], nodes[1], "MAINTENANCE_EXTERNAL", {}));
 	EXPECT_EQ(reopenedSnapshot->readEdge(staged.front()),
 			  LogicalGraphEdge(staged.front(), nodes[0], nodes[1], "BULK_MAINTENANCE_REBASE", {}));
+	EXPECT_EQ(reopenedSnapshot->readNode(postRebase.front()),
+			  LogicalGraphNode(postRebase.front(), {"PostRebase"}, {{"verified", PropertyValue(int64_t{1})}}));
 	reopenedSnapshot.reset();
 	EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity()));
 	reopened.close();
@@ -1534,14 +1593,27 @@ TEST_F(RelocatableStorageBackendTest, StreamedBulkEdgeRejectsAnOrdinaryStagedMut
 	const std::vector<uint64_t> nodes = backend.createLogicalNodes({{{"BulkSource"}, {}}, {{"BulkTarget"}, {}}});
 	ASSERT_EQ(nodes.size(), 2U);
 
+	// A preview owns a durable creation lease even before any ordinary mutation is
+	// staged, so it must also prevent switching the transaction to bulk mode.
+	std::unique_ptr<LogicalGraphTransaction> previewTransaction = backend.beginLogicalGraphTransaction(false);
+	LogicalGraphMutationBatch previewed;
+	previewed.node_creates = {{{"Previewed"}, {}}};
+	ASSERT_EQ(previewTransaction->previewMutationBatch(previewed).created_node_ids.size(), 1U);
+	auto *const previewBulk = dynamic_cast<LogicalGraphBoundedBulkEdgeTransaction *>(previewTransaction.get());
+	ASSERT_NE(previewBulk, nullptr);
+	const std::array<uint64_t, 1U> source{nodes[0]};
+	const std::array<uint64_t, 1U> target{nodes[1]};
+	EXPECT_THROW(static_cast<void>(previewBulk->appendPersistedBulkEdges({"MIXED_PREVIEW", source, target, {}})),
+			 std::logic_error);
+	EXPECT_FALSE(previewBulk->hasStreamedBulkEdges());
+	EXPECT_NO_THROW(previewTransaction->rollback());
+
 	std::unique_ptr<LogicalGraphTransaction> transaction = backend.beginLogicalGraphTransaction(false);
 	LogicalGraphMutationBatch ordinaryBatch;
 	ordinaryBatch.node_creates = {{{"Ordinary"}, {}}};
 	ASSERT_EQ(transaction->stageMutationBatch(std::move(ordinaryBatch)).created_node_ids.size(), 1U);
 	auto *const bulk = dynamic_cast<LogicalGraphBoundedBulkEdgeTransaction *>(transaction.get());
 	ASSERT_NE(bulk, nullptr);
-	const std::array<uint64_t, 1U> source{nodes[0]};
-	const std::array<uint64_t, 1U> target{nodes[1]};
 	EXPECT_THROW(static_cast<void>(bulk->appendPersistedBulkEdges({"MIXED_MODE", source, target, {}})),
 			 std::logic_error);
 	EXPECT_FALSE(bulk->hasStreamedBulkEdges());

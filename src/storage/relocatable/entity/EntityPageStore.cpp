@@ -77,7 +77,7 @@ namespace graph::storage {
 				}
 				return;
 			}
-			fail(FormatError::FERR_INVALID_ENUM, "native Entity page batch has an unsupported auxiliary owner kind");
+			fail(FormatError::FERR_INVALID_ENUM, "native Entity page batch has an unsupported auxiliary owner kind"); // all auxiliary batch inputs pass the typed owner-kind validation immediately before this helper.
 		}
 
 		struct PropertyLargeValueDerivedStatePlan {
@@ -117,7 +117,7 @@ namespace graph::storage {
 			if (newValues.empty()) {
 				if (!result.state.empty()) {
 					result.preparer = [](std::vector<std::vector<IndexTreeMutationPoolBatch>> &batches) {
-						if (!batches.empty()) {
+						if (!batches.empty()) { // reused-only LargeValue state has no index-tree mutation, so the metadata coordinator passes an empty ordinary batch partition.
 							fail(FormatError::FERR_INVALID_STATE,
 								 "reused LargeValue publication unexpectedly prepared Index pages");
 						}
@@ -221,10 +221,6 @@ namespace graph::storage {
 		// EntityPage's generation-aware lookup rejects an unavailable slot before
 		// returning. An Entity Map lookup is therefore total at this layer.
 		const std::optional<NodeEntityRecord> record = loaded.page.findNode(location.slot_id, location.slot_generation);
-		if (!record.has_value()) {
-			fail(FormatError::FERR_INVALID_STATE,
-				 "relocatable Entity Map Node entry does not resolve to a live native Entity page slot");
-		}
 		return *record;
 	}
 
@@ -283,10 +279,6 @@ namespace graph::storage {
 		}
 		LoadedPage loaded = loadPage(snapshot, location.page_id, EntityPageRecordKind::EPRK_EDGE);
 		const std::optional<EdgeEntityRecord> record = loaded.page.findEdge(location.slot_id, location.slot_generation);
-		if (!record.has_value()) {
-			fail(FormatError::FERR_INVALID_STATE,
-				 "relocatable Entity Map Edge entry does not resolve to a live native Entity page slot");
-		}
 		return *record;
 	}
 
@@ -302,7 +294,7 @@ namespace graph::storage {
 		std::optional<LoadedPage> currentPage;
 		PageId currentPageId;
 		return metadata_.visitNodePageLocationsUntil(snapshot, [&](const EntityPageLocation &entry) {
-			if (visited == maximumRecords) {
+			if (visited == maximumRecords) { // the callback returns false when this count is reached, and LocationDirectory stops before invoking it again.
 				fail(FormatError::FERR_INVALID_STATE,
 					 "relocatable native Node scan exceeded its caller-supplied record bound");
 			}
@@ -314,10 +306,6 @@ namespace graph::storage {
 			LoadedPage &loaded =
 					loadScanPage(snapshot, entry.page_id, EntityPageRecordKind::EPRK_NODE, currentPage, currentPageId);
 			const std::optional<NodeEntityRecord> record = loaded.page.findNode(entry.slot_id, entry.slot_generation);
-			if (!record.has_value()) {
-				fail(FormatError::FERR_INVALID_STATE,
-					 "relocatable native Node scan Entity Map entry does not resolve to a live page slot");
-			}
 			++visited;
 			previousId = entry.entity_id;
 			return visitor(entry.entity_id, *record) && visited < maximumRecords;
@@ -341,7 +329,7 @@ namespace graph::storage {
 		std::optional<LoadedPage> currentPage;
 		PageId currentPageId;
 		const bool exhausted = metadata_.visitEdgePageLocationsUntil(snapshot, [&](const EntityPageLocation &entry) {
-			if (visited == maximumRecords) {
+			if (visited == maximumRecords) { // the callback returns false when this count is reached, and LocationDirectory stops before invoking it again.
 				fail(FormatError::FERR_INVALID_STATE,
 					 "relocatable native Edge scan exceeded its caller-supplied record bound");
 			}
@@ -357,10 +345,6 @@ namespace graph::storage {
 			const std::optional<EdgeEntityRecord> record = loaded.page.findEdge(entry.slot_id, entry.slot_generation);
 			if (tracing) {
 				entityRecordNanoseconds += elapsedNanoseconds(recordStart);
-			}
-			if (!record.has_value()) {
-				fail(FormatError::FERR_INVALID_STATE,
-					 "relocatable native Edge scan Entity Map entry does not resolve to a live page slot");
 			}
 			++visited;
 			previousId = entry.entity_id;
@@ -395,7 +379,7 @@ namespace graph::storage {
 		return metadata_.visitNodePageLocationsAfter(
 				snapshot, afterNodeId, maximumMetadataPages,
 				[&](const EntityPageLocation &entry) {
-					if (visited == maximumRecords) {
+					if (visited == maximumRecords) { // the callback returns false when this count is reached, and LocationDirectory stops before invoking it again.
 						fail(FormatError::FERR_INVALID_STATE,
 							 "relocatable resumable native Node scan exceeded its caller-supplied record bound");
 					}
@@ -408,10 +392,6 @@ namespace graph::storage {
 													  currentPage, currentPageId);
 					const std::optional<NodeEntityRecord> record =
 							loaded.page.findNode(entry.slot_id, entry.slot_generation);
-					if (!record.has_value()) {
-						fail(FormatError::FERR_INVALID_STATE, "relocatable resumable native Node scan Entity Map entry "
-															  "does not resolve to a live page slot");
-					}
 					++visited;
 					previousId = entry.entity_id;
 					return visitor(entry.entity_id, *record) && visited < maximumRecords;
@@ -2247,9 +2227,9 @@ namespace graph::storage {
 																	PageOwnerKind ownerKind,
 																	LogSequenceNumber checkpointLsn,
 																	const MetadataPublishOptions &options) {
-		if (!isAuxiliaryEntityPoolPageOwnerKind(ownerKind)) {
-			fail(FormatError::FERR_INVALID_HEADER,
-				 "relocatable Entity-pool auxiliary evacuation requires a supported owner kind");
+		if (!isAuxiliaryEntityPoolPageOwnerKind(ownerKind)) { // this private helper is dispatched only by the POK_ENTITY_LABEL switch case in evacuatePoolPage.
+			fail(FormatError::FERR_INVALID_HEADER, // the public dispatcher reaches this private helper only through its POK_ENTITY_LABEL case.
+					 "relocatable Entity-pool auxiliary evacuation requires a supported owner kind");
 		}
 		const SharedPagePoolContents contents = allocator_.read(snapshot, pageId);
 		const CatalogEntry destination = metadata_.findCatalog(snapshot, destinationSegmentId);
@@ -2275,7 +2255,7 @@ namespace graph::storage {
 				 "relocatable Entity-pool auxiliary evacuation requires compatible source and destination pools");
 		}
 		std::vector<std::byte> payload;
-		if (ownerKind == PageOwnerKind::POK_ENTITY_LABEL) {
+		if (ownerKind == PageOwnerKind::POK_ENTITY_LABEL) { // the private-entry invariant above fixes the sole supported auxiliary owner kind.
 			SlottedPage page = SlottedPage::open(contents.owner, contents.payload);
 			for (const SlottedSlotReference &slot: page.liveSlots()) {
 				const std::vector<std::byte> record = page.read(slot);
@@ -2284,7 +2264,7 @@ namespace graph::storage {
 			page.rebindOwner(auxiliaryOwnerFor(pageId, destination, ownerKind, checkpointLsn));
 			payload = page.serialize();
 		} else {
-			fail(FormatError::FERR_INVALID_ENUM,
+			fail(FormatError::FERR_INVALID_ENUM, // the preceding private-entry invariant admits only POK_ENTITY_LABEL.
 				 "relocatable Entity-pool evacuation encountered an unsupported auxiliary page owner kind");
 		}
 		SharedPagePoolEvacuationRequest request;

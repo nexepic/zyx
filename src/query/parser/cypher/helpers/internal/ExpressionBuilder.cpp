@@ -645,7 +645,7 @@ std::unique_ptr<Expression> ExpressionBuilder::buildQuantifierExpression(CypherP
 	else throw std::runtime_error("Unknown quantifier function in: " + ctx->getText());
 
 	// Extract variable name
-	std::string variable = ctx->variable()->getText();
+	std::string variable = normalizeSymbolicName(ctx->variable()->getText());
 
 	// Build list expression (first expression after IN)
 	auto expressions = ctx->expression();
@@ -1023,7 +1023,7 @@ PropertyValue ExpressionBuilder::parseValue(CypherParser::LiteralContext *ctx) {
 		auto exprs = mapLit->expression();
 		std::unordered_map<std::string, PropertyValue> map;
 		for (size_t i = 0; i < keys.size() && i < exprs.size(); ++i) {
-			map[keys[i]->getText()] = evaluateLiteralExpression(exprs[i]);
+			map[normalizeSymbolicName(keys[i]->getText())] = evaluateLiteralExpression(exprs[i]);
 		}
 		return PropertyValue(std::move(map));
 	}
@@ -1484,7 +1484,7 @@ std::unique_ptr<Expression> ExpressionBuilder::buildShortestPathExpression(Cyphe
 std::unique_ptr<Expression> ExpressionBuilder::buildMapProjectionExpression(CypherParser::MapProjectionContext *ctx) {
 	if (!ctx) return nullptr;
 
-	std::string variable = ctx->variable()->getText();
+	std::string variable = normalizeSymbolicName(ctx->variable()->getText());
 
 	std::vector<MapProjectionItem> items;
 	for (auto* elemCtx : ctx->mapProjectionElement()) {
@@ -1493,12 +1493,12 @@ std::unique_ptr<Expression> ExpressionBuilder::buildMapProjectionExpression(Cyph
 			items.emplace_back(MapProjectionItemType::MPROP_ALL_PROPERTIES, "");
 		} else if (elemCtx->COLON()) {
 			// key: expr
-			std::string key = elemCtx->propertyKeyName()->getText();
+			std::string key = normalizeSymbolicName(elemCtx->propertyKeyName()->getText());
 			auto expr = buildExpression(elemCtx->expression());
 			items.emplace_back(MapProjectionItemType::MPROP_LITERAL, key, std::move(expr));
 		} else if (elemCtx->propertyKeyName()) {
 			// .name
-			std::string key = elemCtx->propertyKeyName()->getText();
+			std::string key = normalizeSymbolicName(elemCtx->propertyKeyName()->getText());
 			items.emplace_back(MapProjectionItemType::MPROP_PROPERTY, key);
 		}
 	}

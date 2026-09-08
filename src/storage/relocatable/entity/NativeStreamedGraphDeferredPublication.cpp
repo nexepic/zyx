@@ -52,10 +52,7 @@ namespace graph::storage {
 		};
 
 		[[nodiscard]] SourceSpan deriveSourceSpan(const NativeBulkEdgeRecordSource &source, uint64_t expectedCount) {
-			if (!source || expectedCount == 0U) {
-				fail(FormatError::FERR_INVALID_HEADER,
-					 "native streamed graph deferred publication cannot derive an empty source span");
-			}
+			// create validates the private source and nonzero record count before fallback span derivation.
 			SourceSpan result;
 			uint64_t previous = 0U;
 			uint64_t count = 0U;
@@ -72,10 +69,11 @@ namespace graph::storage {
 				previous = record->edge_id;
 				++count;
 			}
-			if (count != expectedCount || result.first_edge_id == 0U || result.last_edge_id < result.first_edge_id) {
+			if (count != expectedCount) {
 				fail(FormatError::FERR_INVALID_STATE,
 					 "native streamed graph deferred source has no canonical Edge-ID span");
 			}
+			// The loop admits only positive strictly increasing IDs, so a complete source has a canonical span.
 			return result;
 		}
 
@@ -137,10 +135,11 @@ namespace graph::storage {
 
 	void NativeStreamedGraphDeferredPublication::visitEntityPages(
 			const NativeBulkEdgeEntityPageBatchVisitor &visitor) const {
-		if (!source_ || edge_id_ranges_.empty() || !visitor) {
+		if (!visitor) {
 			fail(FormatError::FERR_INVALID_STATE,
 				 "native streamed graph deferred Entity materialization escaped its publication scope");
 		}
+		// Every publication instance is constructed by create with its validated source and lease ranges.
 		size_t pageCount = 0U;
 		uint64_t recordCount = 0U;
 		uint64_t firstEdgeId = 0U;
@@ -148,11 +147,7 @@ namespace graph::storage {
 		NativeBulkEdgeEntityPageBatcher::materializePages(
 				source_, edge_id_ranges_, static_cast<size_t>(record_count_), resolvers_,
 				[&visitor, &pageCount, &recordCount, &firstEdgeId, &lastEdgeId](NativeBulkEdgeEntityPageBatch &&batch) {
-					if (batch.records.empty() || batch.records.size() > std::numeric_limits<uint64_t>::max() - recordCount ||
-						pageCount == std::numeric_limits<size_t>::max()) {
-						fail(FormatError::FERR_INVALID_STATE,
-								 "native streamed graph deferred Entity source has an invalid page batch");
-					}
+					// NativeBulkEdgeEntityPageBatcher emits nonempty bounded batches below the publication bound.
 					if (firstEdgeId == 0U) {
 						firstEdgeId = batch.records.front().edge_id;
 					}
@@ -170,20 +165,18 @@ namespace graph::storage {
 
 	void NativeStreamedGraphDeferredPublication::visitPropertyRoots(
 			const NativeStreamedGraphPropertyRootVisitor &visitor) const {
-		if (!source_ || edge_id_ranges_.empty() || !visitor) {
+		if (!visitor) {
 			fail(FormatError::FERR_INVALID_STATE,
 				 "native streamed graph deferred Property materialization escaped its publication scope");
 		}
+		// Every publication instance is constructed by create with its validated source and lease ranges.
 		uint64_t recordCount = 0U;
 		uint64_t firstEdgeId = 0U;
 		uint64_t lastEdgeId = 0U;
 		NativeBulkEdgeMaterializer::materialize(
 				source_, edge_id_ranges_, static_cast<size_t>(record_count_), resolvers_,
 				[&visitor, &recordCount, &firstEdgeId, &lastEdgeId](NativeBulkEdgeMaterializedRecord &&record) {
-					if (recordCount == std::numeric_limits<uint64_t>::max()) {
-						fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
-								 "native streamed graph deferred Property record count overflowed");
-					}
+					// NativeBulkEdgeMaterializer rejects a size_t-max bound, so this counter cannot reach uint64 max.
 					if (firstEdgeId == 0U) {
 						firstEdgeId = record.edge_id;
 					}

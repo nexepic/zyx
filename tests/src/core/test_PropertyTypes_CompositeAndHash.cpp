@@ -3,10 +3,11 @@
  * @brief Focused tests for CompositeKey and hash/ordering branches.
  */
 
-#include <gtest/gtest.h>
-
+#include <cstddef>
 #include <string>
 #include <vector>
+
+#include <gtest/gtest.h>
 
 #include "graph/core/PropertyTypes.hpp"
 
@@ -38,6 +39,39 @@ TEST(PropertyTypesOrderingTest, PropertyValueLessThanCoversMonostateAndBoolVisit
 	PropertyValue trueValue(true);
 	EXPECT_TRUE(falseValue < trueValue);
 	EXPECT_FALSE(trueValue < falseValue);
+}
+
+TEST(PropertyTypesOrderingTest, TemporalValuesUseTheirOwnPublicOrderingContracts) {
+	EXPECT_LT(PropertyValue(graph::TemporalDate{1}), PropertyValue(graph::TemporalDate{2}));
+	EXPECT_LT(PropertyValue(graph::TemporalDateTime{1}), PropertyValue(graph::TemporalDateTime{2}));
+	EXPECT_LT(PropertyValue(graph::TemporalDuration{1, 2, 3}),
+			  PropertyValue(graph::TemporalDuration{1, 2, 4}));
+}
+
+TEST(PropertyTypesAccessTest, TemporalValuesRetainTypeNamesAndIsoFormatting) {
+	const PropertyValue date(graph::TemporalDate::fromISO("2024-01-15"));
+	const PropertyValue dateTime(graph::TemporalDateTime::fromISO("2024-01-15T13:45:30"));
+	const PropertyValue duration(graph::TemporalDuration::fromISO("P1Y2M3DT4H5M6S"));
+
+	EXPECT_EQ(date.getType(), graph::PropertyType::DATE);
+	EXPECT_EQ(date.typeName(), "DATE");
+	EXPECT_EQ(date.toString(), "2024-01-15");
+	EXPECT_EQ(graph::getPropertyType(date), graph::PropertyType::DATE);
+	EXPECT_EQ(dateTime.getType(), graph::PropertyType::DATETIME);
+	EXPECT_EQ(dateTime.typeName(), "DATETIME");
+	EXPECT_EQ(dateTime.toString(), "2024-01-15T13:45:30");
+	EXPECT_EQ(graph::getPropertyType(dateTime), graph::PropertyType::DATETIME);
+	EXPECT_EQ(duration.getType(), graph::PropertyType::DURATION);
+	EXPECT_EQ(duration.typeName(), "DURATION");
+	EXPECT_EQ(duration.toString(), "P1Y2M3DT4H5M6S");
+	EXPECT_EQ(graph::getPropertyType(duration), graph::PropertyType::DURATION);
+}
+
+TEST(PropertyTypesAccessTest, BinaryAccessorRejectsOtherPropertyKinds) {
+	const PropertyValue bytes(PropertyValue::Bytes{std::byte{0xAB}});
+	EXPECT_EQ(bytes.getBytes(), (PropertyValue::Bytes{std::byte{0xAB}}));
+	EXPECT_THROW(PropertyValue("not bytes").getBytes(), std::runtime_error);
+	EXPECT_THROW(PropertyValue(std::vector<PropertyValue>{}).getBytes(), std::runtime_error);
 }
 
 TEST(PropertyTypesHashTest, PropertyValueHashCoversBoolDoubleAndVector) {

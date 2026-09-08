@@ -22,6 +22,7 @@
 #include "graph/query/logical/operators/LogicalVarLengthTraversal.hpp"
 
 using namespace graph;
+using namespace graph::query;
 using namespace graph::query::execution;
 using namespace graph::storage;
 namespace logical = graph::query::logical;
@@ -147,4 +148,67 @@ TEST(LogicalPlanVarLengthRuntimeTest, BuildsAValidatedNamedPathUsingTheExistingP
 	EXPECT_EQ(values[1].getMap().at("_id"), PropertyValue(10));
 	EXPECT_EQ(values[2].getMap().at("_type"), PropertyValue("node"));
 	EXPECT_EQ(values[2].getMap().at("_id"), PropertyValue(2));
+}
+
+TEST(LogicalPlanVarLengthRuntimeTest, MaterializesNamedPathsFromVariableLengthTraversalRoutes) {
+	PathBackend backend;
+	LogicalPlanReadRuntime runtime(backend);
+	auto traversal = std::make_unique<logical::LogicalVarLengthTraversal>(
+			std::make_unique<logical::LogicalNodeScan>("source", std::vector<std::string>{"Source"}), "source", "",
+			"target", "KNOWS", "out", 2, 2, std::vector<std::string>{"Target"});
+	logical::LogicalNamedPath path(std::move(traversal), "p", std::vector<std::string>{"source", "target"},
+								  std::vector<std::string>{});
+
+	const QueryResult result = runtime.executeToQueryResult(path, bounds());
+	ASSERT_EQ(result.rowCount(), 1U);
+	const std::vector<PropertyValue> &values = result.getRows().front().at("p").asPrimitive().getList();
+	ASSERT_EQ(values.size(), 5U);
+	EXPECT_EQ(values[0].getMap().at("_id"), PropertyValue(1));
+	EXPECT_EQ(values[1].getMap().at("_id"), PropertyValue(10));
+	EXPECT_EQ(values[2].getMap().at("_id"), PropertyValue(2));
+	EXPECT_EQ(values[3].getMap().at("_id"), PropertyValue(11));
+	EXPECT_EQ(values[4].getMap().at("_id"), PropertyValue(3));
+}
+
+TEST(LogicalPlanVarLengthRuntimeTest, TraversesIncomingAndBothDirectionsWithTargetBounds) {
+	PathBackend backend;
+	LogicalPlanReadRuntime runtime(backend);
+
+	logical::LogicalVarLengthTraversal incoming(
+			std::make_unique<logical::LogicalNodeScan>("target", std::vector<std::string>{"Target"}), "target", "",
+			"source", "KNOWS", "in", 1, 1, std::vector<std::string>{"Middle"});
+	const QueryResult incomingResult = runtime.executeToQueryResult(incoming, bounds());
+	ASSERT_EQ(incomingResult.rowCount(), 1U);
+	EXPECT_EQ(incomingResult.getRows().front().at("source").asLogicalNode().node_id, 2U);
+
+	logical::LogicalVarLengthTraversal both(
+			std::make_unique<logical::LogicalNodeScan>("middle", std::vector<std::string>{"Middle"}), "middle", "",
+			"neighbor", "KNOWS", "both", 1, 1);
+	const QueryResult bothResult = runtime.executeToQueryResult(both, bounds());
+	ASSERT_EQ(bothResult.rowCount(), 2U);
+	EXPECT_EQ(bothResult.getRows()[0].at("neighbor").asLogicalNode().node_id, 3U);
+	EXPECT_EQ(bothResult.getRows()[1].at("neighbor").asLogicalNode().node_id, 1U);
+}
+
+TEST(LogicalPlanVarLengthRuntimeTest, RejectsInvalidDirectionDepthAndSourceShapes) {
+	PathBackend backend;
+	LogicalPlanReadRuntime runtime(backend);
+	const auto scan = [] { return std::make_unique<logical::LogicalNodeScan>("source"); };
+
+	logical::LogicalVarLengthTraversal unknownDirection(scan(), "source", "", "target", "KNOWS", "sideways", 1, 1);
+	EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(unknownDirection, bounds())), std::invalid_argument);
+	logical::LogicalVarLengthTraversal negativeMinimum(scan(), "source", "", "target", "KNOWS", "out", -1, 1);
+	EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(negativeMinimum, bounds())), std::invalid_argument);
+	logical::LogicalVarLengthTraversal reversedRange(scan(), "source", "", "target", "KNOWS", "out", 2, 1);
+	EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(reversedRange, bounds())), std::invalid_argument);
+	logical::LogicalVarLengthTraversal namedEdges(scan(), "source", "edges", "target", "KNOWS", "out", 1, 1);
+	EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(namedEdges, bounds())), std::invalid_argument);
+
+	QueryContext negativeDepth;
+	negativeDepth.maxVarLengthDepth = -1;
+	logical::LogicalVarLengthTraversal bounded(scan(), "source", "", "target", "KNOWS", "out", 1, 1);
+	EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(bounded, bounds(), negativeDepth)), std::invalid_argument);
+	QueryContext tooShallow;
+	tooShallow.maxVarLengthDepth = 0;
+	EXPECT_EQ(runtime.executeToQueryResult(bounded, bounds(), tooShallow).rowCount(), 0U);
 }

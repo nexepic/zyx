@@ -166,13 +166,17 @@ namespace graph::storage {
 		size_t sourceRunBytes = RSS_NATIVE_BULK_EDGE_RUN_HEADER_BYTES;
 		NativeBulkEdgeRecordCursor cursor = source();
 		while (const std::optional<NativeBulkEdgeRecord> record = cursor()) {
+			if (record->edge_id == 0U || record->source_node_id == 0U || record->target_node_id == 0U) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native bulk Edge publication preflight requires nonzero logical identities");
+			}
 			const size_t encodedBytes = NativeBulkEdgeRecordCodec::encodedSize(*record);
 			if (encodedBytes > std::numeric_limits<size_t>::max() - RSS_NATIVE_BULK_RUN_RECORD_HEADER_BYTES) {
 				fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
 					 "native bulk Edge publication preflight source record size overflowed");
 			}
 			const size_t sourceRecordBytes = encodedBytes + RSS_NATIVE_BULK_RUN_RECORD_HEADER_BYTES;
-			if (result.record_count == options.maximum_records || record->edge_id == 0U ||
+			if (result.record_count == options.maximum_records ||
 				record->edge_id <= previousEdgeId || !isLeased(edgeIdRanges, record->edge_id) ||
 				!validatedEndpoints.validate(record->source_node_id, persistedNodeExists) ||
 				!validatedEndpoints.validate(record->target_node_id, persistedNodeExists) ||
@@ -211,7 +215,9 @@ namespace graph::storage {
 			}
 			checkedIncrement(result.record_count, "native bulk Edge publication preflight record count overflowed");
 		}
-		if (result.record_count == 0U || result.first_edge_id == 0U || result.last_edge_id < result.first_edge_id) {
+		// Per-record validation already enforces positive, strictly increasing Edge IDs;
+		// only an empty source remains possible at this boundary.
+		if (result.record_count == 0U) {
 			fail(FormatError::FERR_INVALID_STATE,
 				 "native bulk Edge publication preflight requires a nonempty sealed source");
 		}

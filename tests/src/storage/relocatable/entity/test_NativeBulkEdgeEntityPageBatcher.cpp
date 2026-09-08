@@ -77,11 +77,30 @@ namespace graph::storage {
 		EXPECT_EQ(batches[1].records.front().edge_id, 100U + capacity);
 	}
 
-	TEST(NativeBulkEdgeEntityPageBatcherTest, RejectsMissingBatchVisitorBeforeReadingTheSource) {
+TEST(NativeBulkEdgeEntityPageBatcherTest, RejectsMissingBatchVisitorBeforeReadingTheSource) {
 		const NativeGraphLogicalIdLeaseRange lease{100U, 1U};
 		EXPECT_THROW(NativeBulkEdgeEntityPageBatcher::materializePages(
 						 source({record(100U)}), std::span(&lease, 1U), 1U, resolvers(), {}),
-				 FormatException);
+					 FormatException);
+}
+
+TEST(NativeBulkEdgeEntityPageBatcherTest, DoesNotEmitAnEmptyTailAfterAnExactlyFullPage) {
+	const size_t capacity = EntityPage::recordCapacity(EntityPageRecordKind::EPRK_EDGE);
+	ASSERT_GT(capacity, 0U);
+	std::vector<NativeBulkEdgeRecord> records;
+	records.reserve(capacity);
+	for (size_t ordinal = 0U; ordinal < capacity; ++ordinal) {
+		records.push_back(record(100U + ordinal));
 	}
+	const NativeGraphLogicalIdLeaseRange lease{100U, static_cast<uint64_t>(records.size())};
+	size_t emittedBatches = 0U;
+	NativeBulkEdgeEntityPageBatcher::materializePages(
+			source(std::move(records)), std::span(&lease, 1U), capacity, resolvers(),
+			[&emittedBatches, capacity](NativeBulkEdgeEntityPageBatch &&batch) {
+				++emittedBatches;
+				EXPECT_EQ(batch.records.size(), capacity);
+			});
+	EXPECT_EQ(emittedBatches, 1U);
+}
 
 } // namespace graph::storage

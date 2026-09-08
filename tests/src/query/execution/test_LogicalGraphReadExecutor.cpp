@@ -357,6 +357,33 @@ TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeCachesRepeatedAdjacencyTarg
 	EXPECT_EQ(stats.edges_scanned, 3U);
 }
 
+TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeHonorsTheConfiguredNodeReadCacheCapacity) {
+	LogicalGraphFixtureData data = graphData();
+	const auto nodeReads = std::make_shared<size_t>(0U);
+	data.node_read_count = nodeReads;
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalPlanReadRuntime runtime(backend);
+	logical::LogicalTraversal root(
+			std::make_unique<logical::LogicalNodeScan>("source", std::vector<std::string>{"VIP"}), "source", "edge",
+			"target", "", "out");
+	LogicalPlanReadRuntimeBounds traversalBounds = runtimeBounds();
+	// The cache shares the public Node-record bound, so two targets exercise the
+	// bounded fallback without requiring a scale-sized graph.
+	traversalBounds.maximum_node_records = 1U;
+	traversalBounds.maximum_edges_per_node = 2U;
+	std::vector<uint64_t> targetIds;
+
+	const LogicalPlanReadRuntimeStats stats = runtime.execute(
+			root, traversalBounds, [&targetIds](const LogicalPlanReadRow &row) {
+				targetIds.push_back(std::get<LogicalGraphNode>(row.values.at("target")).node_id);
+				return true;
+			});
+
+	EXPECT_EQ(targetIds, (std::vector<uint64_t>{2U, 3U}));
+	EXPECT_EQ(*nodeReads, 2U);
+	EXPECT_EQ(stats, (LogicalPlanReadRuntimeStats{1U, 2U, 0U, 2U}));
+}
+
 TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeDirectlyCountsUnanchoredRelationships) {
 	LogicalGraphFixtureData data = graphData();
 	const auto topologyScans = std::make_shared<size_t>(0U);
@@ -391,6 +418,24 @@ TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeDirectlyCountsUnanchoredRel
 	EXPECT_EQ(*recordScans, 0U);
 	EXPECT_EQ(*nodeReads, 0U);
 	EXPECT_EQ(*nodeExistenceProbes, 2U);
+
+	// COUNT(*) has no aggregate argument but is still eligible for the same
+	// topology-only path. With no relationship type filter it counts every
+	// bounded relationship exactly once.
+	auto allTraversal = std::make_unique<logical::LogicalTraversal>(
+			std::make_unique<logical::LogicalNodeScan>("source"), "source", "edge", "target", "", "out");
+	logical::LogicalAggregate allRoot(std::move(allTraversal), {}, {{"count", nullptr, "all_relationships"}});
+	std::vector<PropertyValue> allCounts;
+	const LogicalPlanReadRuntimeStats allStats = runtime.execute(
+			allRoot, runtimeBounds(), [&allCounts](const LogicalPlanReadRow &row) {
+				allCounts.push_back(std::get<PropertyValue>(row.values.at("all_relationships")));
+				return true;
+			});
+	EXPECT_EQ(allCounts, (std::vector<PropertyValue>{PropertyValue(int64_t{3})}));
+	EXPECT_EQ(allStats, (LogicalPlanReadRuntimeStats{0U, 3U, 0U, 1U}));
+	EXPECT_EQ(*topologyScans, 2U);
+	EXPECT_EQ(*recordScans, 0U);
+	EXPECT_EQ(*nodeReads, 0U);
 }
 
 TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeDirectCountFallsBackWhenExistenceProbesAreUnavailable) {
@@ -460,6 +505,131 @@ TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeDirectCountFallsBackWhenExi
 	}));
 	EXPECT_EQ(counts, (std::vector<PropertyValue>{PropertyValue(int64_t(2))}));
 	EXPECT_EQ(*nodeReads, 2U);
+}
+
+TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeCountsAnchoredRelationshipsAcrossBothDirections) {
+	LogicalGraphFixtureData data = graphData();
+	const auto nodeReads = std::make_shared<size_t>(0U);
+	data.node_read_count = nodeReads;
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalPlanReadRuntime runtime(backend);
+	LogicalPlanReadRuntimeBounds bounds = runtimeBounds();
+	bounds.maximum_edges_per_node = 3U;
+
+	const auto countTargets = [&](std::vector<std::string> targetLabels) {
+		auto traversal = std::make_unique<logical::LogicalTraversal>(
+				std::make_unique<logical::LogicalNodeScan>("source", std::vector<std::string>{"VIP"}), "source", "edge",
+				"target", "KNOWS", "both", std::move(targetLabels));
+		logical::LogicalAggregate root(
+				std::move(traversal), {},
+				{{"count", sharedExpression(std::make_unique<expressions::VariableReferenceExpression>("target")),
+				  "target_count"}});
+		std::vector<PropertyValue> counts;
+		const LogicalPlanReadRuntimeStats stats = runtime.execute(
+				root, bounds, [&counts](const LogicalPlanReadRow &row) {
+					counts.push_back(std::get<PropertyValue>(row.values.at("target_count")));
+					return true;
+				});
+		EXPECT_EQ(counts.size(), 1U);
+		return std::pair{counts.front(), stats};
+	};
+
+	// The anchored fast path must count one matching outgoing and one matching
+	// incoming relationship, while skipping a differently typed outgoing edge.
+	const auto [personCount, personStats] = countTargets({"Person"});
+	EXPECT_EQ(personCount, PropertyValue(int64_t{2}));
+	EXPECT_EQ(personStats, (LogicalPlanReadRuntimeStats{3U, 3U, 0U, 1U}));
+	EXPECT_EQ(*nodeReads, 1U);
+
+	// A target predicate is evaluated from the same bounded topology traversal;
+	// it cannot turn a nonmatching endpoint into an aggregate input row.
+	const auto [deviceCount, deviceStats] = countTargets({"Device"});
+	EXPECT_EQ(deviceCount, PropertyValue(int64_t{0}));
+	EXPECT_EQ(deviceStats, (LogicalPlanReadRuntimeStats{3U, 3U, 0U, 1U}));
+	EXPECT_EQ(*nodeReads, 2U);
+}
+
+TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeCountsABidirectionalSelfLoopOnlyOnce) {
+	LogicalGraphFixtureData data = graphData();
+	data.edges.emplace(13U, LogicalGraphEdge{13U, 1U, 1U, "KNOWS"});
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalPlanReadRuntime runtime(backend);
+	LogicalPlanReadRuntimeBounds bounds = runtimeBounds();
+	bounds.maximum_edges_per_node = 5U;
+	bounds.maximum_adjacency_page_records = 2U;
+
+	auto traversal = std::make_unique<logical::LogicalTraversal>(
+			std::make_unique<logical::LogicalNodeScan>("source", std::vector<std::string>{"VIP"}), "source", "edge",
+			"target", "KNOWS", "both");
+	logical::LogicalAggregate root(
+			std::move(traversal), {},
+			{{"count", sharedExpression(std::make_unique<expressions::VariableReferenceExpression>("target")),
+			  "target_count"}});
+
+	std::vector<PropertyValue> counts;
+	const LogicalPlanReadRuntimeStats stats = runtime.execute(
+			root, bounds, [&counts](const LogicalPlanReadRow &row) {
+				counts.push_back(std::get<PropertyValue>(row.values.at("target_count")));
+				return true;
+			});
+
+	// The self-loop is visible in both adjacency directions but denotes one
+	// relationship, so only the outgoing visit may contribute it to COUNT().
+	EXPECT_EQ(counts, (std::vector<PropertyValue>{PropertyValue(int64_t{3})}));
+	EXPECT_EQ(stats, (LogicalPlanReadRuntimeStats{3U, 5U, 0U, 1U}));
+}
+
+TEST(LogicalGraphReadExecutorTest,
+	 LogicalPlanRuntimeRejectsAnchoredRelationshipCountsThatExceedThePerNodeEdgeBudget) {
+	TestLogicalGraphBackend backend(graphData());
+	LogicalPlanReadRuntime runtime(backend);
+	LogicalPlanReadRuntimeBounds bounds = runtimeBounds();
+	bounds.maximum_edges_per_node = 2U;
+
+	// The VIP source has two outgoing relationships and one incoming relationship.
+	// The aggregate must reject that third relationship rather than return a truncated count.
+	auto traversal = std::make_unique<logical::LogicalTraversal>(
+			std::make_unique<logical::LogicalNodeScan>("source", std::vector<std::string>{"VIP"}), "source", "edge",
+			"target", "", "both");
+	logical::LogicalAggregate root(
+			std::move(traversal), {},
+			{{"count", sharedExpression(std::make_unique<expressions::VariableReferenceExpression>("target")),
+			  "target_count"}});
+
+	EXPECT_THROW(static_cast<void>(runtime.execute(root, bounds, [](const LogicalPlanReadRow &) { return true; })),
+			 std::runtime_error);
+}
+
+TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeCountsIncomingRelationshipsWithoutMaterializingTargets) {
+	LogicalGraphFixtureData data = graphData();
+	const auto nodeReads = std::make_shared<size_t>(0U);
+	const auto nodeExistenceProbes = std::make_shared<size_t>(0U);
+	data.node_read_count = nodeReads;
+	data.node_existence_probe_count = nodeExistenceProbes;
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalPlanReadRuntime runtime(backend);
+
+	auto traversal = std::make_unique<logical::LogicalTraversal>(
+			std::make_unique<logical::LogicalNodeScan>("source", std::vector<std::string>{"VIP"}), "source", "edge",
+			"target", "", "in");
+	logical::LogicalAggregate root(
+			std::move(traversal), {},
+			{{"count", sharedExpression(std::make_unique<expressions::VariableReferenceExpression>("target")),
+			  "target_count"}});
+
+	std::vector<PropertyValue> counts;
+	const LogicalPlanReadRuntimeStats stats = runtime.execute(
+			root, runtimeBounds(), [&counts](const LogicalPlanReadRow &row) {
+				counts.push_back(std::get<PropertyValue>(row.values.at("target_count")));
+				return true;
+			});
+
+	// Without target predicates, the anchored aggregate verifies the endpoint
+	// through the snapshot probe instead of materializing an unused Node.
+	EXPECT_EQ(counts, (std::vector<PropertyValue>{PropertyValue(int64_t{1})}));
+	EXPECT_EQ(stats, (LogicalPlanReadRuntimeStats{3U, 1U, 0U, 1U}));
+	EXPECT_EQ(*nodeReads, 0U);
+	EXPECT_EQ(*nodeExistenceProbes, 1U);
 }
 
 TEST(LogicalGraphReadExecutorTest, RejectsMalformedAggregateExtraArgumentsAtTheLogicalBoundary) {
@@ -557,6 +727,10 @@ TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeMaterializationCachesAndFai
 
 	MissingOutputLogicalSingleRow malformedRoot;
 	EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(malformedRoot, runtimeBounds())), std::runtime_error);
+	graph::query::QueryContext context;
+	MissingOutputLogicalSingleRow malformedWithContext;
+	EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(malformedWithContext, runtimeBounds(), context)),
+			 std::runtime_error);
 }
 
 TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeBindsParametersAndHonorsQueryContext) {
@@ -1287,6 +1461,48 @@ TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeCoversScalarNullAndFailClos
 				 std::logic_error);
 }
 
+TEST(LogicalGraphReadExecutorTest, EvaluatesEntityIntrospectionFunctionsAgainstSnapshotBindings) {
+	TestLogicalGraphBackend backend(graphData());
+	LogicalPlanReadRuntime runtime(backend);
+	std::unique_ptr<LogicalGraphReadSnapshot> snapshot = backend.openLogicalGraphReadSnapshot();
+	ASSERT_NE(snapshot, nullptr);
+
+	LogicalPlanReadRow row;
+	row.values.emplace("node", snapshot->readNode(1U));
+	row.values.emplace("edge", snapshot->readEdge(10U));
+	row.values.emplace("scalar", PropertyValue(7));
+	row.values.emplace("map", PropertyValue(PropertyValue::MapType{{"enabled", PropertyValue(true)}}));
+	graph::query::QueryContext context;
+	const auto evaluate = [&](std::string function, std::string variable) {
+		std::vector<std::unique_ptr<expressions::Expression>> arguments;
+		arguments.push_back(std::make_unique<expressions::VariableReferenceExpression>(std::move(variable)));
+		expressions::FunctionCallExpression expression(std::move(function), std::move(arguments));
+		return LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(*snapshot, expression, row, runtimeBounds(), context);
+	};
+
+	EXPECT_EQ(evaluate("id", "node"), LogicalPlanReadValue(PropertyValue(1)));
+	EXPECT_EQ(evaluate("id", "edge"), LogicalPlanReadValue(PropertyValue(10)));
+	EXPECT_EQ(evaluate("type", "edge"), LogicalPlanReadValue(PropertyValue("KNOWS")));
+	EXPECT_EQ(evaluate("labels", "node"),
+			  LogicalPlanReadValue(PropertyValue(std::vector<PropertyValue>{PropertyValue("Person"), PropertyValue("VIP")})));
+	const PropertyValue keys = std::get<PropertyValue>(evaluate("keys", "node"));
+	EXPECT_EQ(keys.getType(), PropertyType::LIST);
+	EXPECT_EQ(keys.getList().size(), 2U);
+	const PropertyValue properties = std::get<PropertyValue>(evaluate("properties", "edge"));
+	EXPECT_EQ(properties.getType(), PropertyType::MAP);
+	EXPECT_EQ(properties.getMap().at("weight"), PropertyValue(2));
+	EXPECT_EQ(evaluate("properties", "map"),
+			  LogicalPlanReadValue(PropertyValue(PropertyValue::MapType{{"enabled", PropertyValue(true)}})));
+	EXPECT_EQ(evaluate("keys", "map"),
+			  LogicalPlanReadValue(PropertyValue(std::vector<PropertyValue>{PropertyValue("enabled")})));
+
+	EXPECT_THROW(static_cast<void>(evaluate("labels", "edge")), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(evaluate("type", "node")), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(evaluate("id", "scalar")), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(evaluate("keys", "scalar")), std::runtime_error);
+	EXPECT_THROW(static_cast<void>(evaluate("properties", "scalar")), std::runtime_error);
+}
+
 TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeResolvesNodeEdgeAndMapPropertiesWithoutDuplicateReads) {
 	LogicalGraphFixtureData data = graphData();
 	data.nodes.at(1U).properties.emplace_back("attributes",
@@ -1308,6 +1524,16 @@ TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeResolvesNodeEdgeAndMapPrope
 	mapItems.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("attributes", "missing"),
 						  "mapMissing");
 	mapItems.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("attributes", "answer"), "answer");
+	std::vector<std::unique_ptr<expressions::Expression>> propertyArguments;
+	propertyArguments.push_back(std::make_unique<expressions::VariableReferenceExpression>("attributes"));
+	mapItems.emplace_back(std::make_shared<expressions::FunctionCallExpression>(
+							 std::string("properties"), std::move(propertyArguments)),
+						  "allAttributes");
+	std::vector<std::unique_ptr<expressions::Expression>> keyArguments;
+	keyArguments.push_back(std::make_unique<expressions::VariableReferenceExpression>("attributes"));
+	mapItems.emplace_back(std::make_shared<expressions::FunctionCallExpression>(std::string("keys"),
+							 std::move(keyArguments)),
+						  "attributeKeys");
 	mapItems.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("age", "anything"),
 						  "scalarMissing");
 	logical::LogicalProject mapRoot(std::move(nodeProject), std::move(mapItems));
@@ -1320,6 +1546,10 @@ TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeResolvesNodeEdgeAndMapPrope
 	ASSERT_EQ(mapRows.size(), 1U);
 	EXPECT_EQ(std::get<PropertyValue>(mapRows.front().values.at("answer")), PropertyValue(42));
 	EXPECT_EQ(std::get<PropertyValue>(mapRows.front().values.at("mapMissing")), PropertyValue());
+	EXPECT_EQ(std::get<PropertyValue>(mapRows.front().values.at("allAttributes")),
+			  PropertyValue(PropertyValue::MapType{{"answer", PropertyValue(42)}}));
+	EXPECT_EQ(std::get<PropertyValue>(mapRows.front().values.at("attributeKeys")),
+			  PropertyValue(std::vector<PropertyValue>{PropertyValue("answer")}));
 	EXPECT_EQ(std::get<PropertyValue>(mapRows.front().values.at("scalarMissing")), PropertyValue());
 	EXPECT_EQ(mapStats, (LogicalPlanReadRuntimeStats{3U, 0U, 1U, 1U}));
 

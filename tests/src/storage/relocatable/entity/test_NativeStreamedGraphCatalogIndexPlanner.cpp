@@ -185,6 +185,12 @@ namespace graph::storage {
 		initialSnapshot.release();
 
 		MetadataSnapshotPin replacementSnapshot = metadata->openSnapshot();
+		expectFormatError(
+				[&] {
+					static_cast<void>(NativeStreamedGraphCatalogIndexPlanner::plan(
+							catalog, *metadata, sourceFor({}), true, options, replacementSnapshot, LogSequenceNumber(3U)));
+				},
+				FormatError::FERR_INVALID_STATE);
 		const NativeGraphDeferredIndexPlan replacement = *NativeStreamedGraphCatalogIndexPlanner::plan(
 				catalog, *metadata, sourceFor({{{std::byte{0x11}}, 7U}, {{std::byte{0x22}}, 9U}}), true, options,
 				replacementSnapshot, LogSequenceNumber(3U));

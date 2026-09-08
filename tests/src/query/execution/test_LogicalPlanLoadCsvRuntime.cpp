@@ -13,6 +13,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
@@ -21,6 +22,9 @@
 
 #include "CypherParserImpl.hpp"
 #include "graph/query/execution/LogicalPlanReadRuntime.hpp"
+#include "graph/query/logical/operators/LogicalLoadCsv.hpp"
+#include "graph/query/logical/operators/LogicalProject.hpp"
+#include "graph/query/logical/operators/LogicalSingleRow.hpp"
 #include "graph/storage/LogicalGraphRead.hpp"
 
 namespace graph::query::execution {
@@ -149,6 +153,41 @@ namespace graph::query::execution {
 		EXPECT_EQ(result.getRows().front().at("value").asPrimitive(), PropertyValue("encoded"));
 	}
 
+	TEST_F(LogicalPlanLoadCsvRuntimeTest, ReadsHeadersThroughTheConfiguredTabFieldTerminator) {
+		const fs::path tsv = writeFile("people.tsv", "name\trole\nAda\tengineer\nGrace\tcompiler\n");
+		CsvOnlyBackend backend;
+		LogicalPlanReadRuntime runtime(backend);
+		QueryPlan plan = parse("LOAD CSV WITH HEADERS FROM '" + fileUri(tsv) +
+				"' AS row FIELDTERMINATOR '\\t' RETURN row.name AS name, row.role AS role ORDER BY name");
+		ASSERT_NE(plan.root, nullptr);
+
+		const QueryResult result = runtime.executeToQueryResult(*plan.root, bounds(), context());
+		ASSERT_EQ(result.rowCount(), 2U);
+		EXPECT_EQ(result.getRows()[0].at("name").asPrimitive(), PropertyValue("Ada"));
+		EXPECT_EQ(result.getRows()[0].at("role").asPrimitive(), PropertyValue("engineer"));
+		EXPECT_EQ(result.getRows()[1].at("name").asPrimitive(), PropertyValue("Grace"));
+		EXPECT_EQ(result.getRows()[1].at("role").asPrimitive(), PropertyValue("compiler"));
+	}
+
+	TEST_F(LogicalPlanLoadCsvRuntimeTest, StopsLoadCsvAfterThePublicRowVisitorCancels) {
+		const fs::path csv = writeFile("cancel.csv", "first\nsecond\n");
+		CsvOnlyBackend backend;
+		LogicalPlanReadRuntime runtime(backend);
+		QueryPlan plan = parse("LOAD CSV FROM '" + fileUri(csv) + "' AS row RETURN row");
+		ASSERT_NE(plan.root, nullptr);
+
+		std::vector<PropertyValue> delivered;
+		const LogicalPlanReadRuntimeStats stats = runtime.execute(
+				*plan.root, bounds(), [&delivered](const LogicalPlanReadRow &row) {
+					delivered.push_back(std::get<PropertyValue>(row.values.at("row")));
+					return false;
+				},
+				context());
+		EXPECT_EQ(stats, (LogicalPlanReadRuntimeStats{0U, 0U, 0U, 1U}));
+		ASSERT_EQ(delivered.size(), 1U);
+		EXPECT_EQ(delivered.front().getList(), (std::vector<PropertyValue>{PropertyValue("first")}));
+	}
+
 	TEST_F(LogicalPlanLoadCsvRuntimeTest, RejectsRemoteUrisAndFilesOutsideTheConfiguredRoot) {
 		CsvOnlyBackend backend;
 		LogicalPlanReadRuntime runtime(backend);
@@ -198,11 +237,18 @@ namespace graph::query::execution {
 		nonStringUri.parameters.emplace("uri", PropertyValue(7));
 		EXPECT_THROW(static_cast<void>(execute(nonStringUri)), std::invalid_argument);
 
-		for (const std::string &uri: {"file:///broken%", "file:///broken%0", "file:///broken%GG", "file:///broken%00"}) {
+		for (const std::string &uri: {"file://", "file:///broken%", "file:///broken%0", "file:///broken%GG",
+									   "file:///broken%g0", "file:///broken%0G", "file:///broken%00"}) {
 			QueryContext malformed = context();
 			malformed.parameters.emplace("uri", PropertyValue(uri));
 			EXPECT_THROW(static_cast<void>(execute(malformed)), std::invalid_argument) << uri;
 		}
+		QueryContext embeddedNul = context();
+		std::string nulUri = fileUri(root_ / "nul.csv");
+		nulUri.push_back('\0');
+		nulUri += "tail";
+		embeddedNul.parameters.emplace("uri", PropertyValue(std::move(nulUri)));
+		EXPECT_THROW(static_cast<void>(execute(embeddedNul)), std::invalid_argument);
 
 		QueryContext missingFile = context();
 		missingFile.parameters.emplace("uri", PropertyValue(fileUri(root_ / "missing.csv")));
@@ -281,6 +327,42 @@ namespace graph::query::execution {
 		QueryPlan headerPlan = parse("LOAD CSV WITH HEADERS FROM '" + fileUri(duplicateHeaders) + "' AS row RETURN row");
 		EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*headerPlan.root, bounds(), context())),
 				 std::runtime_error);
+	}
+
+	TEST_F(LogicalPlanLoadCsvRuntimeTest, RejectsMalformedLogicalLoadCsvContractsAndRowVariableRebinding) {
+		const fs::path csv = writeFile("contract.csv", "value\nentry\n");
+		CsvOnlyBackend backend;
+		LogicalPlanReadRuntime runtime(backend);
+		const auto uri = std::make_shared<expressions::LiteralExpression>(fileUri(csv));
+
+		logical::LogicalLoadCsv missingUrl(nullptr, {}, "row");
+		EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(missingUrl, bounds(), context())), std::invalid_argument);
+
+		logical::LogicalLoadCsv missingRow(nullptr, uri, "");
+		EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(missingRow, bounds(), context())), std::invalid_argument);
+
+		logical::LogicalLoadCsv noContext(nullptr, uri, "row");
+		EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(noContext, bounds())), std::runtime_error);
+
+		for (const std::string &delimiter: {"", "\n", "\"", "123456789"}) {
+			logical::LogicalLoadCsv invalidDelimiter(nullptr, uri, "row", false, delimiter);
+			EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(invalidDelimiter, bounds(), context())),
+						 std::invalid_argument);
+		}
+
+		logical::LogicalLoadCsv bareInput(nullptr, uri, "row");
+		const QueryResult bareResult = runtime.executeToQueryResult(bareInput, bounds(), context());
+		ASSERT_EQ(bareResult.rowCount(), 2U);
+		EXPECT_EQ(bareResult.getRows().front().at("row").asPrimitive(),
+				  PropertyValue(std::vector<PropertyValue>{PropertyValue("value")}));
+		EXPECT_EQ(bareResult.getRows().back().at("row").asPrimitive(),
+				  PropertyValue(std::vector<PropertyValue>{PropertyValue("entry")}));
+
+		std::vector<logical::LogicalProjectItem> items;
+		items.emplace_back(std::make_shared<expressions::LiteralExpression>("already-bound"), "row");
+		auto input = std::make_unique<logical::LogicalProject>(std::make_unique<logical::LogicalSingleRow>(), std::move(items));
+		logical::LogicalLoadCsv rebindsRow(std::move(input), uri, "row");
+		EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(rebindsRow, bounds(), context())), std::runtime_error);
 	}
 
 } // namespace graph::query::execution

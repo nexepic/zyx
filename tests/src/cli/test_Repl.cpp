@@ -21,16 +21,23 @@
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
 #include <sstream>
 #include <iostream>
+#include <optional>
+#include <vector>
 
 #include "graph/cli/Repl.hpp"
 #include "graph/core/Database.hpp"
 
 namespace fs = std::filesystem;
+
+namespace graph {
+	std::string formatDuration(std::chrono::steady_clock::duration elapsed);
+}
 
 class REPLTest : public ::testing::Test {
 protected:
@@ -111,6 +118,11 @@ protected:
 		}
 	}
 };
+
+TEST(ReplFormattingTest, FormatsSubsecondAndSecondDurationsWithoutWaiting) {
+	EXPECT_EQ(graph::formatDuration(std::chrono::milliseconds(12)), "12.00ms");
+	EXPECT_EQ(graph::formatDuration(std::chrono::milliseconds(1234)), "1.23s");
+}
 
 // Test executing a simple single-line script
 TEST_F(REPLTest, RunSimpleScript) {
@@ -795,6 +807,93 @@ TEST_F(REPLTest, RunBasicWithSave) {
 		output.find("Storage not accessible") != std::string::npos ||
 		!output.empty()
 	);
+}
+
+TEST_F(REPLTest, DirectCommandDispatchCoversSystemAndErrorPaths) {
+	graph::REPLTest testRepl(*db);
+	std::ostringstream output;
+	std::ostringstream errors;
+	std::streambuf *oldOut = std::cout.rdbuf(output.rdbuf());
+	std::streambuf *oldErr = std::cerr.rdbuf(errors.rdbuf());
+
+	testRepl.printBannerPublic(true);
+	testRepl.printBannerPublic(false);
+	testRepl.printHelpPublic();
+	testRepl.handleCommandPublic("clear;");
+	testRepl.handleCommandPublic("RETURN 1;");
+	testRepl.handleCommandPublic("THIS IS NOT CYPHER;");
+
+	std::cout.rdbuf(oldOut);
+	std::cerr.rdbuf(oldErr);
+	EXPECT_NE(output.str().find("Basic Mode"), std::string::npos);
+	EXPECT_NE(output.str().find("Commands"), std::string::npos);
+	EXPECT_NE(errors.str().find("Error:"), std::string::npos);
+}
+
+TEST_F(REPLTest, RunUsesBasicModeWhenInputIsNotInteractive) {
+	graph::REPLTest testRepl(*db);
+	std::istringstream input("exit\n");
+	std::streambuf *oldIn = std::cin.rdbuf(input.rdbuf());
+	EXPECT_NO_THROW(testRepl.run());
+	std::cin.rdbuf(oldIn);
+	const auto &commands = graph::REPL::getCommandNames();
+	EXPECT_EQ(commands, (std::vector<std::string>{"help", "save", "clear", "exit", "debug"}));
+}
+
+TEST_F(REPLTest, ScriptedInteractiveSessionPreservesPromptHistoryAndCommandSemantics) {
+	graph::REPLTest testRepl(*db);
+	std::vector<std::optional<std::string>> lines = {
+			"   ",
+			"help",
+			"clear",
+			"save",
+			"CREATE (n:Interactive {",
+			"id: 1",
+			"});",
+			"CREATE (n:InteractiveBlank {id: 2})",
+			"",
+			"exit",
+	};
+	std::vector<std::string> prompts;
+	std::vector<std::string> history;
+	size_t nextLine = 0U;
+	std::ostringstream output;
+	std::streambuf *oldOut = std::cout.rdbuf(output.rdbuf());
+
+	testRepl.runInteractivePublic(
+			[&](const std::string &prompt) -> std::optional<std::string> {
+				prompts.push_back(prompt);
+				return lines.at(nextLine++);
+			},
+			[&](const std::string &entry) { history.push_back(entry); });
+
+	std::cout.rdbuf(oldOut);
+	ASSERT_EQ(history.size(), 5U);
+	EXPECT_EQ(history[0], "help");
+	EXPECT_EQ(history[1], "clear");
+	EXPECT_EQ(history[2], "save");
+	EXPECT_EQ(history[3], "CREATE (n:Interactive {\nid: 1\n});");
+	EXPECT_EQ(history[4], "CREATE (n:InteractiveBlank {id: 2})");
+	ASSERT_GE(prompts.size(), 4U);
+	EXPECT_NE(prompts[0].find(">"), std::string::npos);
+	EXPECT_NE(prompts[5].find("     \u00b7\u00b7\u00b7"), std::string::npos);
+	EXPECT_NE(output.str().find("Commands"), std::string::npos);
+
+	auto result = db->getQueryEngine()->execute("MATCH (n:Interactive) RETURN n.id AS id");
+	ASSERT_EQ(result.rowCount(), 1U);
+	EXPECT_EQ(result.getRows().front().at("id").asPrimitive().toString(), "1");
+	EXPECT_EQ(db->getQueryEngine()->execute("MATCH (n:InteractiveBlank) RETURN n").rowCount(), 1U);
+}
+
+TEST_F(REPLTest, ScriptedInteractiveSessionRejectsMissingCallbacksAndStopsAtEndOfInput) {
+	graph::REPLTest testRepl(*db);
+	const std::function<std::optional<std::string>(const std::string &)> noReader;
+	const std::function<void(const std::string &)> noHistory;
+	EXPECT_THROW(testRepl.runInteractivePublic(noReader, [](const std::string &) {}), std::invalid_argument);
+	EXPECT_THROW(testRepl.runInteractivePublic([](const std::string &) { return std::optional<std::string>(); }, noHistory),
+			 std::invalid_argument);
+	EXPECT_NO_THROW(testRepl.runInteractivePublic(
+			[](const std::string &) { return std::optional<std::string>(); }, [](const std::string &) {}));
 }
 
 // Test runBasic with multiline query (triggers buffer logic)

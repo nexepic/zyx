@@ -210,3 +210,10 @@ TEST_F(FunctionRegistryTest, RandomUUIDFunction) {
 	EXPECT_EQ(uuid.length(), 36u);
 	EXPECT_EQ(uuid[14], '4'); // version 4
 }
+
+TEST_F(FunctionRegistryTest, BytesFunctionReturnsNullForAProgrammaticEmptyArgumentList) {
+	const ScalarFunction *function = registry->lookupScalarFunction("bytes");
+	ASSERT_NE(function, nullptr);
+	EXPECT_FALSE(function->validateArgCount(0U));
+	EXPECT_TRUE(EvaluationContext::isNull(function->evaluate({}, *context_)));
+}

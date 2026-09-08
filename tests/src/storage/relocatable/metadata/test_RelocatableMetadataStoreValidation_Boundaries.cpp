@@ -309,6 +309,109 @@ TEST_F(RelocatableMetadataStoreValidationTest, ValidatesEntityPropertyPoolMateri
 			FormatError::FERR_INVALID_STATE);
 }
 
+TEST_F(RelocatableMetadataStoreValidationTest, ValidatesStatePoolMaterializationBeforePublication) {
+	auto store = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	const StatePagePoolPreparer validPreparer =
+			[](const CatalogEntry &pool, PageId pageId, PageLocation &page, StateLocation &state) {
+				page = {pageId, pool.segment_id, RSS_PAGE_POOL_FIRST_DATA_FRAME, pool.generation, 0U};
+				state = {state.state_id, pageId, 0U, 1U};
+			};
+
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->materializeStatePagePool(
+						0U, 0U, PhysicalSlotId{}, PhysicalSlotId{}, LogSequenceNumber{}, {}));
+			},
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->materializeStatePagePool(
+						17U, 19U, PhysicalSlotId(41U), PhysicalSlotId(40U), LogSequenceNumber(2U), validPreparer));
+			},
+			FormatError::FERR_INVALID_HEADER);
+
+	// A typed preparer cannot alter the writer-owned page or State identity.
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->materializeStatePagePool(
+						17U, 19U, PhysicalSlotId(40U), PhysicalSlotId(40U), LogSequenceNumber(2U),
+						[](const CatalogEntry &, PageId, PageLocation &page, StateLocation &) {
+							page.page_index = 0U;
+						}));
+			},
+			FormatError::FERR_INVALID_STATE);
+	MetadataSnapshotPin afterRejectedPreparer = store->openSnapshot();
+	EXPECT_FALSE(store->findStateLocationOptional(afterRejectedPreparer, 19U).has_value());
+	EXPECT_FALSE(store->isPhysicalSlotAllocated(afterRejectedPreparer, PhysicalSlotId(40U)));
+	afterRejectedPreparer.release();
+
+	static_cast<void>(store->setPhysicalSlotAllocated(PhysicalSlotId(41U), true, LogSequenceNumber(3U)));
+	const std::optional<StatePagePoolMaterialization> unavailable = store->materializeStatePagePool(
+			17U, 20U, PhysicalSlotId(41U), PhysicalSlotId(41U), LogSequenceNumber(4U), validPreparer);
+	EXPECT_FALSE(unavailable.has_value());
+	static_cast<void>(store->setPhysicalSlotAllocated(PhysicalSlotId(41U), false, LogSequenceNumber(5U)));
+
+	const std::optional<StatePagePoolMaterialization> published = store->materializeStatePagePool(
+			17U, 19U, PhysicalSlotId(40U), PhysicalSlotId(40U), LogSequenceNumber(6U), validPreparer);
+	ASSERT_TRUE(published.has_value());
+	EXPECT_EQ(published->state.state_id, 19U);
+	MetadataSnapshotPin snapshot = store->openSnapshot();
+	std::vector<StateLocation> visited;
+	store->visitStateLocations(snapshot, [&visited](const StateLocation &state) { visited.push_back(state); });
+	ASSERT_EQ(visited.size(), 1U);
+	EXPECT_EQ(visited.front(), published->state);
+	std::vector<StateLocation> resumed;
+	size_t visitedMetadataPages = 0U;
+	EXPECT_FALSE(store->visitStateLocationsAfter(
+			snapshot, 0U, 2U,
+			[&resumed](const StateLocation &state) {
+				resumed.push_back(state);
+				return false;
+			},
+			&visitedMetadataPages));
+	EXPECT_EQ(resumed, (std::vector<StateLocation>{published->state}));
+	EXPECT_EQ(visitedMetadataPages, 2U);
+
+	resumed.clear();
+	visitedMetadataPages = 0U;
+	EXPECT_TRUE(store->visitStateLocationsAfter(
+			snapshot, published->state.state_id, 2U,
+			[&resumed](const StateLocation &state) {
+				resumed.push_back(state);
+				return true;
+			},
+			&visitedMetadataPages));
+	EXPECT_TRUE(resumed.empty());
+	EXPECT_EQ(visitedMetadataPages, 2U);
+
+	const std::vector<CatalogEntry> statePools = store->findCurrentStatePagePools(snapshot, 17U);
+	ASSERT_EQ(statePools.size(), 1U);
+	EXPECT_EQ(statePools.front().segment_id, published->pool.segment_id);
+	EXPECT_EQ(statePools.front().physical_slot, published->pool.physical_slot);
+	EXPECT_EQ(statePools.front().kind, SegmentKind::SGK_STATE_PAGE_POOL);
+	EXPECT_EQ(statePools.front().owner_id, 17U);
+	EXPECT_EQ(statePools.front().generation, published->pool.generation);
+	EXPECT_EQ(statePools.front().state, SegmentState::SGS_SEALED);
+	EXPECT_EQ(statePools.front().committed_lsn, published->pool.committed_lsn);
+	EXPECT_EQ(store->findPageLocation(snapshot, published->page.page_id), published->page);
+	EXPECT_EQ(store->findPageLocationOptional(snapshot, published->page.page_id), published->page);
+	std::vector<PageLocation> pageLocations;
+	EXPECT_FALSE(store->visitPageLocationsUntil(snapshot, [&pageLocations](const PageLocation &page) {
+		pageLocations.push_back(page);
+		return false;
+	}));
+	EXPECT_EQ(pageLocations, (std::vector<PageLocation>{published->page}));
+	EXPECT_EQ(store->findPageLocationsForSegment(snapshot, published->page.segment_id), pageLocations);
+	EXPECT_TRUE(store->findPageLocationsForSegment(snapshot, SegmentId(99U)).empty());
+	snapshot.release();
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->materializeStatePagePool(
+						17U, 19U, PhysicalSlotId(41U), PhysicalSlotId(41U), LogSequenceNumber(7U), validPreparer));
+			},
+			FormatError::FERR_INVALID_STATE);
+}
+
 TEST_F(RelocatableMetadataStoreValidationTest, RejectsInvalidExtents) {
 	auto store = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
 	const ExtentLocation malformedExtent{ExtentId(101), SegmentId(31), RSS_PAGE_POOL_FIRST_DATA_FRAME + 1U,
@@ -472,4 +575,136 @@ TEST_F(RelocatableMetadataStoreValidationTest, FiltersIneligiblePoolsAndValidate
 						.has_value());
 	const RelocatableTailTruncationResult tail = store->truncateReleasedTail();
 	EXPECT_EQ(tail.status, RelocatableTailTruncationStatus::VTTS_NOTHING_TO_TRUNCATE);
+}
+
+TEST_F(RelocatableMetadataStoreValidationTest, RejectsReleasedSnapshotPinsAcrossPublicDirectoryBoundaries) {
+	auto store = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	MetadataSnapshotPin released = store->openSnapshot();
+	released.release();
+	const auto expectRejected = [](const auto &operation) {
+		expectFormatError([&operation] { operation(); }, FormatError::FERR_INVALID_STATE);
+	};
+
+	// A released pin must not be reusable as a read capability. Each public
+	// directory entry point rejects it before examining caller-supplied IDs.
+	expectRejected([&] { static_cast<void>(store->findCatalog(released, SegmentId(1U))); });
+	expectRejected([&] { static_cast<void>(store->findRetireQueueEntryOptional(released, PhysicalSlotId(1U))); });
+	expectRejected([&] { store->visitRetireQueueEntries(released, [](const RetireQueueEntry &) {}); });
+	expectRejected([&] { store->visitCatalogEntries(released, [](const CatalogEntry &) {}); });
+	expectRejected([&] { static_cast<void>(store->findCurrentIndexPagePools(released)); });
+	expectRejected([&] { static_cast<void>(store->findCurrentEntityPagePools(released)); });
+	expectRejected([&] { static_cast<void>(store->findCurrentVectorAdjacencyPagePools(released)); });
+	expectRejected([&] { static_cast<void>(store->findCurrentVectorRawPagePools(released)); });
+	expectRejected([&] { static_cast<void>(store->findRetiredVectorRawPagePools(released)); });
+	expectRejected([&] { static_cast<void>(store->findCurrentVectorPqPagePools(released)); });
+	expectRejected([&] { static_cast<void>(store->findCurrentLargeValueDataPagePools(released)); });
+	expectRejected([&] { static_cast<void>(store->findCurrentLargeValueManifestPagePools(released)); });
+	expectRejected([&] { static_cast<void>(store->findCurrentPropertyPagePools(released, 1U)); });
+	expectRejected([&] { static_cast<void>(store->findCurrentStatePagePools(released, 1U)); });
+
+	expectRejected([&] { static_cast<void>(store->findPageLocation(released, PageId(1U))); });
+	expectRejected([&] { static_cast<void>(store->findPageLocationOptional(released, PageId(1U))); });
+	expectRejected([&] { static_cast<void>(store->findExtentLocation(released, ExtentId(1U))); });
+	expectRejected([&] { static_cast<void>(store->findExtentLocationOptional(released, ExtentId(1U))); });
+	expectRejected([&] { static_cast<void>(store->findNodePageLocation(released, 1U)); });
+	expectRejected([&] { static_cast<void>(store->findEdgePageLocation(released, 1U)); });
+	expectRejected([&] { static_cast<void>(store->findNodePageLocationOptional(released, 1U)); });
+	expectRejected([&] { static_cast<void>(store->findEdgePageLocationOptional(released, 1U)); });
+	expectRejected([&] { store->visitNodePageLocations(released, [](const EntityPageLocation &) {}); });
+	expectRejected([&] { store->visitEdgePageLocations(released, [](const EntityPageLocation &) {}); });
+	expectRejected([&] { static_cast<void>(store->visitNodePageLocationsUntil(released, [](const EntityPageLocation &) {
+		return true;
+	})); });
+	expectRejected([&] { static_cast<void>(store->visitEdgePageLocationsUntil(released, [](const EntityPageLocation &) {
+		return true;
+	})); });
+	expectRejected([&] { static_cast<void>(store->visitNodePageLocationsAfter(
+			released, 0U, 1U, [](const EntityPageLocation &) { return true; })); });
+	expectRejected([&] { static_cast<void>(store->visitPageLocationsUntil(released, [](const PageLocation &) { return true; })); });
+	expectRejected([&] { store->visitEntityPropertyLocations(released, [](const EntityPropertyLocation &) {}); });
+	expectRejected([&] { static_cast<void>(store->visitEntityPropertyLocationsAfter(
+			released, 0U, 1U, [](const EntityPropertyLocation &) { return true; })); });
+	expectRejected([&] { store->visitStateLocations(released, [](const StateLocation &) {}); });
+	expectRejected([&] { static_cast<void>(store->visitStateLocationsAfter(
+			released, 0U, 1U, [](const StateLocation &) { return true; })); });
+	expectRejected([&] { store->visitExtentLocations(released, [](const ExtentLocation &) {}); });
+	expectRejected([&] { store->visitIndexRoots(released, [](const IndexRootLocation &) {}); });
+	expectRejected([&] { store->visitVectorLocations(released, [](const VectorLocation &) {}); });
+	expectRejected([&] { store->visitVectorManifestLocations(released, [](const VectorManifestLocation &) {}); });
+	expectRejected([&] { static_cast<void>(store->visitVectorManifestLocationsAfter(
+			released, 0U, 1U, [](const VectorManifestLocation &) { return true; })); });
+	expectRejected([&] { store->visitLargeValueManifestLocations(released, [](const LargeValueManifestLocation &) {}); });
+	expectRejected([&] { static_cast<void>(store->visitLargeValueManifestLocationsAfter(
+			released, 0U, 1U, [](const LargeValueManifestLocation &) { return true; })); });
+
+	expectRejected([&] { static_cast<void>(store->findEntityPropertyLocation(released, {})); });
+	expectRejected([&] { static_cast<void>(store->findEntityPropertyLocationOptional(released, {})); });
+	expectRejected([&] { static_cast<void>(store->findStateLocation(released, 1U)); });
+	expectRejected([&] { static_cast<void>(store->findStateLocationOptional(released, 1U)); });
+	expectRejected([&] { static_cast<void>(store->findVectorLocation(released, 1U)); });
+	expectRejected([&] { static_cast<void>(store->findVectorLocationOptional(released, 1U)); });
+	expectRejected([&] { static_cast<void>(store->findVectorManifest(released, 1U)); });
+	expectRejected([&] { static_cast<void>(store->findVectorManifestOptional(released, 1U)); });
+	expectRejected([&] { static_cast<void>(store->findLargeValueManifest(released, LargeValueId(1U))); });
+	expectRejected([&] { static_cast<void>(store->findLargeValueManifestOptional(released, LargeValueId(1U))); });
+	expectRejected([&] { static_cast<void>(store->findIndexRoot(released, 1U)); });
+	expectRejected([&] { static_cast<void>(store->findIndexRootOptional(released, 1U)); });
+	expectRejected([&] { static_cast<void>(store->findPageLocationsForSegment(released, SegmentId(1U))); });
+	expectRejected([&] { static_cast<void>(store->isPhysicalSlotAllocated(released, PhysicalSlotId(1U))); });
+
+	MetadataSnapshotPin active = store->openSnapshot();
+	std::function<void(const CatalogEntry &)> noCatalogVisitor;
+	std::function<bool(const EntityPageLocation &)> noEntityVisitor;
+	EXPECT_THROW(store->visitCatalogEntries(active, noCatalogVisitor), FormatException);
+	EXPECT_THROW(static_cast<void>(store->visitNodePageLocationsUntil(active, noEntityVisitor)), FormatException);
+	// Traversal callbacks are required read capabilities. Rejecting an empty
+	// callback before consulting the directory keeps every facade fail-closed.
+	std::function<void(const RetireQueueEntry &)> noRetireQueueVisitor;
+	std::function<void(const EntityPageLocation &)> noEntityLocationVisitor;
+	std::function<bool(const PageLocation &)> noPageLocationVisitor;
+	std::function<void(const EntityPropertyLocation &)> noPropertyLocationVisitor;
+	std::function<bool(const EntityPropertyLocation &)> noResumablePropertyLocationVisitor;
+	std::function<void(const StateLocation &)> noStateLocationVisitor;
+	std::function<bool(const StateLocation &)> noResumableStateLocationVisitor;
+	std::function<void(const ExtentLocation &)> noExtentLocationVisitor;
+	std::function<void(const IndexRootLocation &)> noIndexRootVisitor;
+	std::function<void(const VectorLocation &)> noVectorLocationVisitor;
+	std::function<void(const VectorManifestLocation &)> noVectorManifestVisitor;
+	std::function<bool(const VectorManifestLocation &)> noResumableVectorManifestVisitor;
+	std::function<void(const LargeValueManifestLocation &)> noLargeValueManifestVisitor;
+	std::function<bool(const LargeValueManifestLocation &)> noResumableLargeValueManifestVisitor;
+	const auto expectInvalidVisitor = [](const auto &operation) {
+		expectFormatError(operation, FormatError::FERR_INVALID_STATE);
+	};
+	expectInvalidVisitor([&] { store->visitRetireQueueEntries(active, noRetireQueueVisitor); });
+	expectInvalidVisitor([&] { store->visitNodePageLocations(active, noEntityLocationVisitor); });
+	expectInvalidVisitor([&] { store->visitEdgePageLocations(active, noEntityLocationVisitor); });
+	expectInvalidVisitor([&] { static_cast<void>(store->visitEdgePageLocationsUntil(active, noEntityVisitor)); });
+	expectInvalidVisitor([&] { static_cast<void>(store->visitPageLocationsUntil(active, noPageLocationVisitor)); });
+	expectInvalidVisitor([&] { store->visitEntityPropertyLocations(active, noPropertyLocationVisitor); });
+	expectInvalidVisitor([&] {
+		static_cast<void>(store->visitEntityPropertyLocationsAfter(active, 0U, 1U, noResumablePropertyLocationVisitor));
+	});
+	expectInvalidVisitor([&] { store->visitStateLocations(active, noStateLocationVisitor); });
+	expectInvalidVisitor([&] {
+		static_cast<void>(store->visitStateLocationsAfter(active, 0U, 1U, noResumableStateLocationVisitor));
+	});
+	expectInvalidVisitor([&] { store->visitExtentLocations(active, noExtentLocationVisitor); });
+	expectInvalidVisitor([&] { store->visitIndexRoots(active, noIndexRootVisitor); });
+	expectInvalidVisitor([&] { store->visitVectorLocations(active, noVectorLocationVisitor); });
+	expectInvalidVisitor([&] { store->visitVectorManifestLocations(active, noVectorManifestVisitor); });
+	expectInvalidVisitor([&] {
+		static_cast<void>(store->visitVectorManifestLocationsAfter(active, 0U, 1U, noResumableVectorManifestVisitor));
+	});
+	expectInvalidVisitor([&] { store->visitLargeValueManifestLocations(active, noLargeValueManifestVisitor); });
+	expectInvalidVisitor([&] {
+		static_cast<void>(store->visitLargeValueManifestLocationsAfter(
+				active, 0U, 1U, noResumableLargeValueManifestVisitor));
+	});
+	EXPECT_THROW(static_cast<void>(store->visitNodePageLocationsAfter(active, 0U, 0U,
+			[](const EntityPageLocation &) { return true; })), FormatException);
+	EXPECT_THROW(static_cast<void>(store->findEntityPropertyLocation(active, {})), FormatException);
+	EXPECT_THROW(static_cast<void>(store->findEntityPropertyLocationOptional(active, {})), FormatException);
+	EXPECT_THROW(static_cast<void>(store->findPageLocationsForSegment(active, SegmentId{})), FormatException);
+	active.release();
 }

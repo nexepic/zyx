@@ -190,6 +190,8 @@ TEST_F(RelocatableSharedPagePoolAllocatorTest, AtomicallyCreatesReadsAndReopensT
 	EXPECT_EQ(contents.pool_header.allocated_frames, 1U);
 	EXPECT_EQ(contents.owner.kind, PageOwnerKind::POK_INDEX);
 	EXPECT_EQ(contents.payload, std::vector<std::byte>(payload.begin(), payload.end()));
+	EXPECT_EQ(allocator.read(snapshot, PageId(91), BufferPoolReadHint::BPRH_SEQUENTIAL).payload,
+			  std::vector<std::byte>(payload.begin(), payload.end()));
 	snapshot.release();
 
 	store.reset();
@@ -746,6 +748,7 @@ TEST_F(RelocatableSharedPagePoolAllocatorTest, PreservesEveryDeclaredSharedPoolA
 	};
 	const std::array cases = {
 			PoolCase{SegmentKind::SGK_ENTITY_PAGE_POOL, PageOwnerKind::POK_ENTITY},
+			PoolCase{SegmentKind::SGK_ENTITY_PAGE_POOL, PageOwnerKind::POK_ENTITY_LABEL},
 			PoolCase{SegmentKind::SGK_PROPERTY_PAGE_POOL, PageOwnerKind::POK_PROPERTY},
 			PoolCase{SegmentKind::SGK_INDEX_PAGE_POOL, PageOwnerKind::POK_INDEX},
 			PoolCase{SegmentKind::SGK_VECTOR_RAW_POOL, PageOwnerKind::POK_VECTOR_RAW},

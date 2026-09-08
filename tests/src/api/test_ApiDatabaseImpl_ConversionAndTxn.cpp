@@ -5,10 +5,22 @@
 
 #include <algorithm>
 #include <chrono>
+#include <functional>
+#include <limits>
 #include <unordered_map>
 #include <vector>
 
 #include "ApiTestFixture.hpp"
+
+namespace zyx {
+int64_t checkedPublicEntityId(uint64_t id, const char *entityName);
+}
+
+TEST(DatabaseImplConversionTest, RejectsLogicalIdsOutsideThePublicSignedRange) {
+	const uint64_t maximumPublicId = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+	EXPECT_EQ(zyx::checkedPublicEntityId(maximumPublicId, "Node"), std::numeric_limits<int64_t>::max());
+	EXPECT_THROW(static_cast<void>(zyx::checkedPublicEntityId(maximumPublicId + 1U, "Node")), std::overflow_error);
+}
 
 TEST_F(CppApiTest, VectorFloatPropertyConversionRoundTrip) {
 	std::unordered_map<std::string, zyx::Value> props;
@@ -380,6 +392,21 @@ TEST_F(CppApiTest, EntityStreamPreservesEmptyLabelsForUnlabeledNodes) {
 	EXPECT_EQ(std::get<std::string>(res.get("name")), "NoLabel");
 }
 
+TEST_F(CppApiTest, SingleLabelDirectWriteMapsAnEmptyLabelToAnUnlabeledNode) {
+	const int64_t nodeId = db->createNode("", {{"name", std::string("empty-single-label")}});
+
+	auto result = db->execute("MATCH (n {name: 'empty-single-label'}) RETURN n");
+	ASSERT_TRUE(result.isSuccess()) << result.getError();
+	ASSERT_TRUE(result.hasNext());
+	result.next();
+	const auto node = std::get<std::shared_ptr<zyx::Node>>(result.get("n"));
+	ASSERT_NE(node, nullptr);
+	EXPECT_EQ(node->id, nodeId);
+	EXPECT_TRUE(node->labels.empty());
+	EXPECT_TRUE(node->label.empty());
+	EXPECT_FALSE(result.hasNext());
+}
+
 TEST_F(CppApiTest, DefaultAndCursorBoundaryTypedResultValuesReturnNull) {
 	zyx::Result empty;
 	EXPECT_TRUE(std::holds_alternative<std::monostate>(zyx::detail::getTypedResultValue(empty, 0)));
@@ -459,6 +486,74 @@ TEST_F(CppApiTest, CreateEdgesShortestPathAndBfsUseImplicitTransactions) {
 	}));
 	EXPECT_NE(std::find(visited.begin(), visited.end(), first), visited.end());
 	EXPECT_NE(std::find(visited.begin(), visited.end(), last), visited.end());
+}
+
+TEST_F(CppApiTest, GraphAlgorithmAndBulkApiDegenerateInputsPreservePublicContracts) {
+	EXPECT_TRUE(db->createNodes("NoRows", {}).empty());
+	EXPECT_TRUE(db->createEdges("NoRows", {}).empty());
+	EXPECT_TRUE(db->createEdgesColumnar("NoRows", {}, {}, {}).empty());
+	EXPECT_THROW(static_cast<void>(db->createNodesColumnar("ColumnarValidation", 1U, {{"", {int64_t{1}}}})),
+			 std::invalid_argument);
+	EXPECT_THROW(
+			static_cast<void>(db->createNodesColumnar("ColumnarValidation", 2U, {{"value", {int64_t{1}}}})),
+			std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(db->createNodesColumnar(
+					 "ColumnarValidation", 1U, {{"value", {int64_t{1}}}, {"value", {int64_t{2}}}})),
+			std::invalid_argument);
+	EXPECT_TRUE(db->createNodePropertyIndexes("NoIndexes", {}));
+	EXPECT_THROW(static_cast<void>(db->createNodePropertyIndexes("", {"value"})), std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(db->createNodePropertyIndexes("NoIndexes", {""})), std::invalid_argument);
+
+	const int64_t start = db->createNode("ApiGraph", {{"name", std::string("start")}});
+	const int64_t middle = db->createNode("ApiGraph", {{"name", std::string("middle")}});
+	const int64_t end = db->createNode("ApiGraph", {{"name", std::string("end")}});
+	const int64_t disconnected = db->createNode("ApiGraph", {{"name", std::string("disconnected")}});
+	const std::vector<int64_t> edgeIds =
+			db->createEdges("API_GRAPH", {{start, middle, {}}, {start, end, {}}, {middle, end, {}}});
+	ASSERT_FALSE(edgeIds.empty());
+	EXPECT_THROW(static_cast<void>(db->createEdgesColumnar("COLUMNAR_VALIDATION", {start}, {}, {})),
+			 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(
+				db->createEdgesColumnar("COLUMNAR_VALIDATION", {start}, {middle}, {{"weight", {int64_t{1}, int64_t{2}}}})),
+			 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(db->createEdgesColumnar(
+					 "COLUMNAR_VALIDATION", {start}, {middle}, {{"weight", {int64_t{1}}}, {"weight", {int64_t{2}}}})),
+			 std::invalid_argument);
+
+	EXPECT_TRUE(db->getShortestPath(0, end, 3).empty());
+	EXPECT_TRUE(db->getShortestPath(start, 0, 3).empty());
+	EXPECT_TRUE(db->getShortestPath(999'999, end, 3).empty());
+	EXPECT_TRUE(db->getShortestPath(start, end, 0).empty());
+	EXPECT_TRUE(db->getShortestPath(start, disconnected, 3).empty());
+
+	const std::vector<zyx::Node> sameNodePath = db->getShortestPath(start, start, 0);
+	ASSERT_EQ(sameNodePath.size(), 1U);
+	EXPECT_EQ(sameNodePath.front().id, start);
+	const std::vector<zyx::Node> directPath = db->getShortestPath(start, end, 3);
+	ASSERT_EQ(directPath.size(), 2U);
+	EXPECT_EQ(directPath.front().id, start);
+	EXPECT_EQ(directPath.back().id, end);
+
+	std::vector<int64_t> visited;
+	db->bfs(start, [&](const zyx::Node &node) {
+		visited.push_back(node.id);
+		return true;
+	});
+	EXPECT_EQ(std::count(visited.begin(), visited.end(), end), 1);
+	EXPECT_EQ(visited.size(), 3U);
+
+	bool called = false;
+	db->bfs(0, [&](const zyx::Node &) {
+		called = true;
+		return true;
+	});
+	db->bfs(999'999, [&](const zyx::Node &) {
+		called = true;
+		return true;
+	});
+	EXPECT_FALSE(called);
+	const std::function<bool(const zyx::Node &)> missingVisitor;
+	EXPECT_THROW(db->bfs(start, missingVisitor), std::invalid_argument);
 }
 
 // ============================================================================

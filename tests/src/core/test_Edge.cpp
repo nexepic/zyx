@@ -130,6 +130,21 @@ TEST_F(EdgeTest, PropertyOperations) {
 	EXPECT_EQ(properties.at(key2), value2);
 }
 
+TEST_F(EdgeTest, ReplacesAndTransfersProperties) {
+	graph::Edge edge;
+	std::unordered_map<std::string, graph::PropertyValue> properties;
+	properties.emplace("weight", graph::PropertyValue(42));
+	properties.emplace("label", graph::PropertyValue("transfer"));
+
+	edge.setProperties(std::move(properties));
+	EXPECT_EQ(edge.getProperties().size(), 2U);
+
+	auto transferred = edge.takeProperties();
+	EXPECT_EQ(transferred.size(), 2U);
+	EXPECT_EQ(transferred.at("weight"), graph::PropertyValue(42));
+	EXPECT_TRUE(edge.getProperties().empty());
+}
+
 TEST_F(EdgeTest, PropertyRemoval) {
 	graph::Edge edge;
 	const std::string key = "removable";
@@ -290,4 +305,3 @@ TEST_F(EdgeTest, HasPropertyEntityWithStorageTypeButZeroId) {
 	EXPECT_EQ(edge.getPropertyEntityId(), 0);
 	EXPECT_FALSE(edge.hasPropertyEntity());
 }
-

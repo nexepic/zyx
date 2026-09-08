@@ -88,6 +88,28 @@ TEST_F(NativeGraphWritePlannerLeaseRecoveryTest,
 	rejectedRange.node_ranges = {{firstNodeId + 1U, 1U}};
 	EXPECT_FALSE(metadata_->claimNativeGraphLogicalIdReservation(rejectedRange));
 	transaction.rollback();
+
+	// Node and Edge leases have independent limits. The Edge path must reject
+	// before acquiring a second capability just as the Node path does.
+	MetadataSnapshotPin beforeEdgeReservation = metadata_->openSnapshot();
+	const uint64_t firstEdgeId = beforeEdgeReservation.superblock().next_logical_edge_id;
+	beforeEdgeReservation.release();
+	NativeGraphWriteTransaction edgeTransaction = planner.beginTransaction();
+	edgeTransaction.reserveEdgeIds(1U);
+	MetadataSnapshotPin afterFirstEdgeReservation = metadata_->openSnapshot();
+	const Superblock afterFirstEdgeLease = afterFirstEdgeReservation.superblock();
+	ASSERT_EQ(afterFirstEdgeLease.next_logical_edge_id, firstEdgeId + 1U);
+	afterFirstEdgeReservation.release();
+
+	EXPECT_THROW(edgeTransaction.reserveEdgeIds(1U), FormatException);
+	EXPECT_TRUE(edgeTransaction.isActive());
+	MetadataSnapshotPin afterRejectedEdgeReservation = metadata_->openSnapshot();
+	EXPECT_EQ(afterRejectedEdgeReservation.superblock(), afterFirstEdgeLease);
+	afterRejectedEdgeReservation.release();
+	NativeGraphLogicalIdReservation rejectedEdgeRange;
+	rejectedEdgeRange.edge_ranges = {{firstEdgeId + 1U, 1U}};
+	EXPECT_FALSE(metadata_->claimNativeGraphLogicalIdReservation(rejectedEdgeRange));
+	edgeTransaction.rollback();
 }
 
 TEST_F(NativeGraphWritePlannerLeaseRecoveryTest, RejectsMalformedMixedReservationWithoutPartiallyAdoptingIt) {

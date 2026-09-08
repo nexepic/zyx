@@ -74,6 +74,13 @@ TEST_F(RelocatableStorageBackendSchemaTest, DerivesStableNamesForUnnamedScalarAn
 			backend.createLogicalNodeVectorIndex({"", "Person", "embedding", 2U, "INNER_PRODUCT"});
 	EXPECT_EQ(vector.name, "index_vector_node_6_Person_9_embedding_2_ip");
 	EXPECT_EQ(vector.vector_metric, "ip");
+	// Unnamed indexes derive a durable name from the complete schema. A valid
+	// catalog token can still make that derived name exceed its persisted bound.
+	const std::vector<std::string> longProperties{
+			std::string(1024U, 'a'), std::string(1024U, 'b'), std::string(1024U, 'c'), std::string(1024U, 'd'),
+			std::string(1024U, 'e')};
+	EXPECT_THROW(static_cast<void>(backend.createLogicalNodeIndex({"", "LongSchema", longProperties})),
+			 std::invalid_argument);
 	EXPECT_EQ(backend.listLogicalIndexes(8U), (std::vector<LogicalGraphIndexDefinition>{scalar, vector}));
 	backend.close();
 }
@@ -236,13 +243,15 @@ TEST_F(RelocatableStorageBackendSchemaTest, PersistsEveryLogicalConstraintKindAn
 											 LogicalGraphConstraintKind::LGCK_NODE_KEY,
 											 "Person",
 											 {"key_one", "key_two"},
-											 LogicalGraphConstraintPropertyType::LGCPT_NONE}),
+																		 LogicalGraphConstraintPropertyType::LGCPT_NONE}),
 	};
+	EXPECT_THROW(static_cast<void>(backend.listLogicalConstraints(created.size() - 1U)), FormatException);
 	EXPECT_EQ(backend.listLogicalConstraints(16U), created);
 	backend.close();
 
 	RelocatableStorageBackend reopened(options());
 	reopened.open();
+	EXPECT_THROW(static_cast<void>(reopened.listLogicalConstraints(created.size() - 1U)), FormatException);
 	EXPECT_EQ(reopened.listLogicalConstraints(16U), created);
 	reopened.close();
 }
@@ -253,10 +262,20 @@ TEST_F(RelocatableStorageBackendSchemaTest, PublishesAndReopensDurableConfigurat
 	EXPECT_EQ(backend.findConfiguration("query.timeout_ms"), std::nullopt);
 	backend.setConfiguration("query.timeout_ms", graph::PropertyValue(int64_t{30}));
 	backend.setConfiguration("query.slow_log.enabled", graph::PropertyValue(true));
+	backend.setConfiguration("query.memory_ratio", graph::PropertyValue(0.75));
+	backend.setConfiguration("query.profile_name", graph::PropertyValue("native"));
 	backend.setConfiguration("query.timeout_ms", graph::PropertyValue(int64_t{45}));
+	// Enumeration is deliberately bounded: callers must not receive a partial
+	// durable configuration set when their advertised capacity is too small.
+	EXPECT_THROW(static_cast<void>(backend.readConfigurations(0U)), FormatException);
+	EXPECT_THROW(static_cast<void>(backend.readConfigurations(1U)), FormatException);
+	EXPECT_THROW(static_cast<void>(backend.readConfigurations(3U)), FormatException);
+	EXPECT_THROW(static_cast<void>(backend.readConfigurations(std::numeric_limits<size_t>::max())), FormatException);
 	EXPECT_EQ(backend.readConfigurations(4U),
-			  (std::vector<LogicalGraphConfiguration>{{"query.slow_log.enabled", graph::PropertyValue(true)},
-													  {"query.timeout_ms", graph::PropertyValue(int64_t{45})}}));
+			  (std::vector<LogicalGraphConfiguration>{{"query.memory_ratio", graph::PropertyValue(0.75)},
+														  {"query.profile_name", graph::PropertyValue("native")},
+														  {"query.slow_log.enabled", graph::PropertyValue(true)},
+														  {"query.timeout_ms", graph::PropertyValue(int64_t{45})}}));
 	EXPECT_THROW(backend.setConfiguration("query.invalid", graph::PropertyValue(std::vector<graph::PropertyValue>{
 																   graph::PropertyValue(true)})),
 				 FormatException);
@@ -273,6 +292,8 @@ TEST_F(RelocatableStorageBackendSchemaTest, PublishesAndReopensDurableConfigurat
 	reopened.open();
 	EXPECT_EQ(reopened.findConfiguration("query.timeout_ms"), graph::PropertyValue(int64_t{45}));
 	EXPECT_EQ(reopened.findConfiguration("query.slow_log.enabled"), graph::PropertyValue(true));
+	EXPECT_EQ(reopened.findConfiguration("query.memory_ratio"), graph::PropertyValue(0.75));
+	EXPECT_EQ(reopened.findConfiguration("query.profile_name"), graph::PropertyValue("native"));
 	reopened.resetIoStats();
 	EXPECT_EQ(reopened.findConfiguration("query.timeout_ms"), graph::PropertyValue(int64_t{45}));
 	reopened.close();
@@ -1220,6 +1241,79 @@ TEST_F(RelocatableStorageBackendSchemaTest, RejectsPersistedUniqueSupportTreeEnt
 	corrupted.close();
 }
 
+TEST_F(RelocatableStorageBackendSchemaTest, RejectsPersistedScalarIndexEntriesWithMismatchedEntityValues) {
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes(
+			{{{"Person"}, {{"score", graph::PropertyValue(int64_t{42})}}}});
+	ASSERT_EQ(nodes.size(), 1U);
+	const LogicalGraphIndexDefinition index = backend.createLogicalNodeIndex({"person_score", "Person", {"score"}});
+	backend.close();
+
+	const std::vector<std::byte> key = IndexKeyCodec::encodeEntryKey(graph::PropertyValue(int64_t{42}), nodes.front());
+	// Keep the page structurally valid while modelling a stale durable payload
+	// that cannot be created through the public graph writer.
+	overwriteBTreeLeafEntry(index.index_id, key, {key, nodes.front() + 1U});
+
+	RelocatableStorageBackend corrupted(options());
+	corrupted.open();
+	RelocatableReadSnapshot snapshot = corrupted.openSnapshot();
+	EXPECT_THROW(static_cast<void>(corrupted.findNodesByExactProperties(
+				snapshot, {"Person"}, {{"score", graph::PropertyValue(int64_t{42})}}, 1U, 1U)),
+			 FormatException);
+	snapshot.release();
+	corrupted.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest, RejectsPersistedScalarRangeIndexEntriesWithMismatchedEntityValues) {
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes(
+			{{{"Person"}, {{"score", graph::PropertyValue(int64_t{42})}}}});
+	ASSERT_EQ(nodes.size(), 1U);
+	const LogicalGraphIndexDefinition index = backend.createLogicalNodeIndex({"person_score", "Person", {"score"}});
+	backend.close();
+
+	const std::vector<std::byte> key = IndexKeyCodec::encodeEntryKey(graph::PropertyValue(int64_t{42}), nodes.front());
+	overwriteBTreeLeafEntry(index.index_id, key, {key, nodes.front() + 1U});
+
+	RelocatableStorageBackend corrupted(options());
+	corrupted.open();
+	RelocatableReadSnapshot snapshot = corrupted.openSnapshot();
+	EXPECT_THROW(static_cast<void>(corrupted.findNodesByPropertyRange(
+				snapshot, {"Person"},
+				{"score", graph::PropertyValue(int64_t{42}), graph::PropertyValue(), true, true}, 1U, 1U)),
+			 FormatException);
+	snapshot.release();
+	corrupted.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest, RejectsPersistedCompositeRangeIndexEntriesWithMismatchedEntityValues) {
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes(
+			{{{"Person"}, {{"city", graph::PropertyValue("Shanghai")}, {"age", graph::PropertyValue(int64_t{30})}}}});
+	ASSERT_EQ(nodes.size(), 1U);
+	const LogicalGraphIndexDefinition index =
+			backend.createLogicalNodeIndex({"person_city_age", "Person", {"city", "age"}});
+	backend.close();
+
+	const std::vector<graph::PropertyValue> values = {graph::PropertyValue("Shanghai"), graph::PropertyValue(int64_t{30})};
+	const std::vector<std::byte> key = IndexKeyCodec::encodeCompositeEntryKey(values, nodes.front());
+	overwriteBTreeLeafEntry(index.index_id, key, {key, nodes.front() + 1U});
+
+	RelocatableStorageBackend corrupted(options());
+	corrupted.open();
+	RelocatableReadSnapshot snapshot = corrupted.openSnapshot();
+	const LogicalGraphCompositePropertyRange request{
+			{{"city", graph::PropertyValue("Shanghai")}},
+			{"age", graph::PropertyValue(int64_t{30}), graph::PropertyValue(), true, true}};
+	EXPECT_THROW(static_cast<void>(corrupted.findNodesByCompositePropertyRange(snapshot, {"Person"}, request, 1U, 2U)),
+			 FormatException);
+	snapshot.release();
+	corrupted.close();
+}
+
 TEST_F(RelocatableStorageBackendSchemaTest, ResolvesExactScalarAndCompositeNodeLookupsThroughPinnedIndexes) {
 	RelocatableStorageBackend backend(options());
 	backend.open();
@@ -1363,6 +1457,29 @@ TEST_F(RelocatableStorageBackendSchemaTest, ResolvesScalarNodeRangesThroughPinne
 	ASSERT_EQ(open->size(), 2U);
 	EXPECT_EQ(open->at(0).node_id, nodes.at(1));
 	EXPECT_EQ(open->at(1).node_id, nodes.at(2));
+	const auto reversed = lookup(graph::PropertyValue(int64_t{50}), graph::PropertyValue(int64_t{7}));
+	ASSERT_TRUE(reversed.has_value());
+	EXPECT_TRUE(reversed->empty());
+	const auto emptyExclusive =
+			lookup(graph::PropertyValue(int64_t{42}), graph::PropertyValue(int64_t{42}), false, true);
+	ASSERT_TRUE(emptyExclusive.has_value());
+	EXPECT_TRUE(emptyExclusive->empty());
+	const auto unknownLabel = snapshot->findNodesByPropertyRange(
+			{"MissingLabel"}, {"score", graph::PropertyValue(int64_t{7}), graph::PropertyValue(), true, true}, 4U,
+			1U);
+	ASSERT_TRUE(unknownLabel.has_value());
+	EXPECT_TRUE(unknownLabel->empty());
+	const auto unknownProperty = snapshot->findNodesByPropertyRange(
+			{"Person"}, {"missing", graph::PropertyValue(int64_t{7}), graph::PropertyValue(), true, true}, 4U, 1U);
+	ASSERT_TRUE(unknownProperty.has_value());
+	EXPECT_TRUE(unknownProperty->empty());
+	EXPECT_EQ(snapshot->findNodesByPropertyRange(
+				  {"Person", "Other"}, {"score", graph::PropertyValue(int64_t{7}), graph::PropertyValue(), true, true},
+				  4U, 1U),
+			  std::nullopt);
+	EXPECT_EQ(snapshot->findNodesByPropertyRange(
+				  {"Person"}, {"", graph::PropertyValue(int64_t{7}), graph::PropertyValue(), true, true}, 4U, 1U),
+			  std::nullopt);
 	EXPECT_THROW(static_cast<void>(lookup(graph::PropertyValue(int64_t{42}), graph::PropertyValue(), true, true, 2U)),
 				 FormatException);
 	EXPECT_EQ(lookup(graph::PropertyValue(std::vector<graph::PropertyValue>{graph::PropertyValue(int64_t{7})}),
@@ -1493,6 +1610,10 @@ TEST_F(RelocatableStorageBackendSchemaTest, PublishesScalarIndexBatchesOnlyAfter
 	EXPECT_LT(created[0].index_id, created[1].index_id);
 	EXPECT_EQ(created[0].kind, LogicalGraphIndexKind::LGIK_PROPERTY);
 	EXPECT_EQ(created[1].kind, LogicalGraphIndexKind::LGIK_PROPERTY);
+	RelocatableReadSnapshot snapshot = backend.openSnapshot();
+	EXPECT_THROW(static_cast<void>(backend.readIndexDefinitions(snapshot, 1U)), FormatException);
+	EXPECT_EQ(backend.readIndexDefinitions(snapshot, 2U).size(), 2U);
+	snapshot.release();
 	EXPECT_EQ(backend.listLogicalIndexes(8U), created);
 	backend.close();
 
@@ -1529,9 +1650,30 @@ TEST_F(RelocatableStorageBackendSchemaTest, RejectsFailedScalarIndexBatchWithout
 	constrained.close();
 }
 
+TEST_F(RelocatableStorageBackendSchemaTest, RejectsScalarIndexesThatExceedThePublishedDefinitionCapacity) {
+	RelocatableStorageBackendOptions constrainedOptions = options();
+	constrainedOptions.maximum_index_definitions = 1U;
+	RelocatableStorageBackend backend(std::move(constrainedOptions));
+	backend.open();
+
+	const LogicalGraphIndexDefinition first = backend.createLogicalNodeIndex({"person_score", "Person", {"score"}});
+	EXPECT_THROW(static_cast<void>(backend.createLogicalNodeIndex({"person_rank", "Person", {"rank"}})),
+			 FormatException);
+	EXPECT_EQ(backend.listLogicalIndexes(1U), std::vector<LogicalGraphIndexDefinition>{first});
+	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+	backend.close();
+}
+
 TEST_F(RelocatableStorageBackendSchemaTest, RejectsInvalidOrExistingScalarIndexBatchesBeforePublication) {
 	RelocatableStorageBackend backend(options());
 	backend.open();
+	const std::vector<LogicalGraphNodeIndexCreateRequest> empty;
+	EXPECT_THROW(static_cast<void>(backend.createLogicalNodeIndexes(empty)), std::invalid_argument);
+	EXPECT_TRUE(backend.listLogicalIndexes(8U).empty());
+	const std::vector<LogicalGraphNodeIndexCreateRequest> tooMany(options().maximum_index_definitions + 1U);
+	EXPECT_THROW(static_cast<void>(backend.createLogicalNodeIndexes(tooMany)), std::invalid_argument);
+	EXPECT_TRUE(backend.listLogicalIndexes(8U).empty());
+
 	const std::vector<LogicalGraphNodeIndexCreateRequest> duplicateSchema = {
 			{"person_score_first", "Person", {"score"}}, {"person_score_second", "Person", {"score"}}};
 	EXPECT_THROW(static_cast<void>(backend.createLogicalNodeIndexes(duplicateSchema)), std::invalid_argument);

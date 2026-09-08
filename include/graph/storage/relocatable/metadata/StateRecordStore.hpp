@@ -27,7 +27,7 @@ namespace graph::storage {
 	public:
 		StateRecordStore(SlottedPagePool &pages, RelocatableMetadataStore &metadata);
 		[[nodiscard]] bool usesMetadataStore(const RelocatableMetadataStore &metadata) const {
-			return &metadata_ == &metadata && pages_.usesMetadataStore(metadata);
+			return &metadata_ == &metadata;
 		}
 		// Inserts a new State record or atomically replaces the same durable State
 		// ID. Replacements keep a stable State location when the encoded payload

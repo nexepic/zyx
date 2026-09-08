@@ -49,6 +49,27 @@ namespace graph::storage {
 					 }});
 		}
 
+		[[nodiscard]] NativeStreamedGraphDeferredPublication inlineRootPublication(uint64_t edgeId) {
+			const NativeBulkEdgeRecordSource source = [edgeId] {
+				return [edgeId, emitted = false]() mutable -> std::optional<NativeBulkEdgeRecord> {
+					if (emitted) {
+						return std::nullopt;
+					}
+					emitted = true;
+					return NativeBulkEdgeRecord{edgeId, 1U, 2U, "REL", {{"body", graph::PropertyValue("small")}}};
+				};
+			};
+			const std::array<NativeGraphLogicalIdLeaseRange, 1U> lease = {{NativeGraphLogicalIdLeaseRange{edgeId, 1U}}};
+			return NativeStreamedGraphDeferredPublication::create(
+					source, lease, {1U, 1U},
+					{[](std::string_view name) -> std::optional<uint64_t> {
+						 return name == "REL" ? std::optional<uint64_t>(7U) : std::nullopt;
+					 },
+					 [](std::string_view name) -> std::optional<uint32_t> {
+						 return name == "body" ? std::optional<uint32_t>(9U) : std::nullopt;
+					 }});
+		}
+
 		[[nodiscard]] NativeStreamedGraphDeferredPublication duplicateLargeRootPublication() {
 			const NativeBulkEdgeRecordSource source = [] {
 				return [ordinal = 0U]() mutable -> std::optional<NativeBulkEdgeRecord> {
@@ -67,6 +88,45 @@ namespace graph::storage {
 			const std::array<NativeGraphLogicalIdLeaseRange, 1U> lease = {{NativeGraphLogicalIdLeaseRange{1U, 3U}}};
 			return NativeStreamedGraphDeferredPublication::create(
 					source, lease, {3U, 1U},
+					{[](std::string_view) -> std::optional<uint64_t> { return 7U; },
+					 [](std::string_view) -> std::optional<uint32_t> { return 9U; }});
+		}
+
+		[[nodiscard]] NativeStreamedGraphDeferredPublication mixedRootPublication() {
+			const NativeBulkEdgeRecordSource source = [] {
+				return [ordinal = 0U]() mutable -> std::optional<NativeBulkEdgeRecord> {
+					if (ordinal == 2U) {
+						return std::nullopt;
+					}
+					const uint64_t edgeId = 30U + ordinal++;
+					return NativeBulkEdgeRecord{
+							edgeId, 1U, 2U, "REL",
+							{{"body", graph::PropertyValue(edgeId == 30U ? "small" : std::string(5000U, 'x'))}}};
+				};
+			};
+			const std::array<NativeGraphLogicalIdLeaseRange, 1U> lease = {{NativeGraphLogicalIdLeaseRange{30U, 2U}}};
+			return NativeStreamedGraphDeferredPublication::create(
+					source, lease, {2U, 1U},
+					{[](std::string_view) -> std::optional<uint64_t> { return 7U; },
+					 [](std::string_view) -> std::optional<uint32_t> { return 9U; }});
+		}
+
+		[[nodiscard]] NativeStreamedGraphDeferredPublication emptyAndLargeRootPublication() {
+			const NativeBulkEdgeRecordSource source = [] {
+				return [ordinal = 0U]() mutable -> std::optional<NativeBulkEdgeRecord> {
+					if (ordinal == 2U) {
+						return std::nullopt;
+					}
+					const uint64_t edgeId = 40U + ordinal++;
+					return NativeBulkEdgeRecord{edgeId, 1U, 2U, "REL",
+											  edgeId == 40U ? std::vector<LogicalGraphWriteProperty>{}
+														 : std::vector<LogicalGraphWriteProperty>{
+																	 {"body", graph::PropertyValue(std::string(5000U, 'x'))}}};
+				};
+			};
+			const std::array<NativeGraphLogicalIdLeaseRange, 1U> lease = {{NativeGraphLogicalIdLeaseRange{40U, 2U}}};
+			return NativeStreamedGraphDeferredPublication::create(
+					source, lease, {2U, 1U},
 					{[](std::string_view) -> std::optional<uint64_t> { return 7U; },
 					 [](std::string_view) -> std::optional<uint32_t> { return 9U; }});
 		}
@@ -181,6 +241,33 @@ namespace graph::storage {
 		EXPECT_EQ(pageCount, plan.property_pages.page_count);
 	}
 
+	TEST_F(RelocatableMetadataStoreTest, StreamedLargeValuePlannerReplaysInlinePropertiesWithoutALargeValueLease) {
+		auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+		LargeValueStore values(io, *metadata);
+		const NativeStreamedGraphDeferredPublication publication = inlineRootPublication(17U);
+		const NativeStreamedGraphLargeValuePlan plan =
+				NativeStreamedGraphLargeValuePlanner::measure(publication, values);
+		EXPECT_EQ(plan.reference_count, 0U);
+		EXPECT_EQ(plan.value_count, 0U);
+		EXPECT_EQ(plan.data_page_count, 0U);
+		EXPECT_EQ(plan.manifest_page_count, 0U);
+
+		size_t pageCount = 0U;
+		NativeStreamedGraphLargeValuePlanner::materializePropertyPages(
+				publication, values, LargeValueId{}, plan, {},
+				[](size_t ordinal) {
+					return NativeStreamedGraphPropertyPageAssignment{
+							{PageId(250U + ordinal), 37U, PageOwnerKind::POK_PROPERTY, 0U,
+							 RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, Generation(1U), LogSequenceNumber(2U)}};
+				},
+				[&pageCount](NativeStreamedGraphPropertyPage &&) { ++pageCount; });
+		NativeStreamedGraphLargeValuePlanner::materializeLargeValues(
+				publication, values, LargeValueId{}, plan, {},
+				[](NativeStreamedGraphLargeValueItem &&) { ADD_FAILURE() << "inline roots must not emit LargeValues"; });
+
+		EXPECT_EQ(pageCount, plan.property_pages.page_count);
+	}
+
 	TEST_F(RelocatableMetadataStoreTest, StreamedLargeValuePlannerRewritesDuplicateReferencesAndMaterializesCanonicalsOnce) {
 		auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
 		LargeValueStore values(io, *metadata);
@@ -223,6 +310,55 @@ namespace graph::storage {
 		EXPECT_EQ(stored[0].value.value_id, LargeValueId(1U));
 		EXPECT_EQ(stored[1].value.value_id, LargeValueId(2U));
 		EXPECT_EQ(stored[2].value.value_id, LargeValueId(1U));
+	}
+
+	TEST_F(RelocatableMetadataStoreTest, StreamedLargeValuePlannerCanonicalizesOverflowRootsWhileLeavingInlineRootsUntouched) {
+		auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+		LargeValueStore values(io, *metadata);
+		const NativeStreamedGraphDeferredPublication publication = mixedRootPublication();
+		const NativeStreamedGraphLargeValuePlan measured =
+				NativeStreamedGraphLargeValuePlanner::measure(publication, values);
+		ASSERT_EQ(measured.reference_count, 1U);
+		ASSERT_EQ(measured.value_count, 1U);
+
+		const NativeStreamedGraphLargeValuePlan canonical = NativeStreamedGraphLargeValuePlanner::deriveCanonicalPlan(
+				publication, values, LargeValueId(1U), measured, {},
+				referenceMap({{referenceMapKey(1U), 1U}}));
+		EXPECT_EQ(canonical.reference_count, 1U);
+		EXPECT_EQ(canonical.value_count, 1U);
+		EXPECT_EQ(canonical.data_page_count, measured.data_page_count);
+		EXPECT_EQ(canonical.manifest_page_count, measured.manifest_page_count);
+
+		std::vector<LargeValueId> materialized;
+		NativeStreamedGraphLargeValuePlanner::materializeLargeValues(
+				publication, values, LargeValueId(1U), canonical, {},
+				[&materialized](NativeStreamedGraphLargeValueItem &&item) {
+					materialized.push_back(item.stored_reference.value.value_id);
+				},
+				referenceMap({{referenceMapKey(1U), 1U}}));
+		EXPECT_EQ(materialized, (std::vector<LargeValueId>{LargeValueId(1U)}));
+	}
+
+	TEST_F(RelocatableMetadataStoreTest, StreamedLargeValuePlannerSkipsEmptyRootsDuringCanonicalAndPhysicalReplay) {
+		auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+		LargeValueStore values(io, *metadata);
+		const NativeStreamedGraphDeferredPublication publication = emptyAndLargeRootPublication();
+		const NativeStreamedGraphLargeValuePlan measured =
+				NativeStreamedGraphLargeValuePlanner::measure(publication, values);
+		ASSERT_EQ(measured.reference_count, 1U);
+		ASSERT_EQ(measured.value_count, 1U);
+
+		const NativeStreamedGraphLargeValuePlan canonical = NativeStreamedGraphLargeValuePlanner::deriveCanonicalPlan(
+				publication, values, LargeValueId(1U), measured, {}, referenceMap({{referenceMapKey(1U), 1U}}));
+		std::vector<LargeValueId> materialized;
+		NativeStreamedGraphLargeValuePlanner::materializeLargeValues(
+				publication, values, LargeValueId(1U), canonical, {},
+				[&materialized](NativeStreamedGraphLargeValueItem &&item) {
+					materialized.push_back(item.stored_reference.value.value_id);
+				},
+				referenceMap({{referenceMapKey(1U), 1U}}));
+
+		EXPECT_EQ(materialized, (std::vector<LargeValueId>{LargeValueId(1U)}));
 	}
 
 	TEST_F(RelocatableMetadataStoreTest, StreamedLargeValuePlannerRejectsAReplayThatDropsAnOverflowRoot) {
@@ -348,6 +484,16 @@ namespace graph::storage {
 						publication, values, LargeValueId(1U), plan, {},
 						[](size_t) { return NativeStreamedGraphPropertyPageAssignment{}; }, {}),
 				FormatException);
+		EXPECT_THROW(
+				NativeStreamedGraphLargeValuePlanner::materializePropertyPages(
+						publication, values, LargeValueId{}, plan, {},
+						[](size_t ordinal) {
+							return NativeStreamedGraphPropertyPageAssignment{
+									{PageId(490U + ordinal), 53U, PageOwnerKind::POK_PROPERTY, 0U,
+									 RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, Generation(1U), LogSequenceNumber(2U)}};
+						},
+						[](NativeStreamedGraphPropertyPage &&) {}),
+				FormatException);
 		EXPECT_THROW(NativeStreamedGraphLargeValuePlanner::materializeLargeValues(
 						publication, values, LargeValueId{}, plan, {}, [](NativeStreamedGraphLargeValueItem &&) {}),
 				 FormatException);
@@ -379,6 +525,30 @@ namespace graph::storage {
 						publication, values, LargeValueId(1U), missingMeasuredManifest, {},
 						[](NativeStreamedGraphLargeValueItem &&) {}),
 				 FormatException);
+	}
+
+	TEST_F(RelocatableMetadataStoreTest, StreamedLargeValuePlannerRejectsOverflowRootsBeyondTheMeasuredPlan) {
+		auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+		LargeValueStore values(io, *metadata);
+		const NativeStreamedGraphDeferredPublication publication = largeRootPublication(16U);
+		const NativeStreamedGraphLargeValuePlan plan =
+				NativeStreamedGraphLargeValuePlanner::measure(publication, values);
+		const PropertyCollectionRoot root{16U, Edge::typeId, {{9U, graph::PropertyValue(std::string(5000U, 'x'))}}};
+		const NativeStreamedGraphLargePropertyRootEncoder encoder =
+				NativeStreamedGraphLargeValuePlanner::makeRootEncoder(values, LargeValueId(1U), plan, {},
+																	  [](NativeStreamedGraphLargeValueItem &&) {});
+
+		EXPECT_NO_THROW(static_cast<void>(encoder(root, EntityPropertyCollectionRootCodec::encode(root))));
+		EXPECT_THROW(static_cast<void>(encoder(root, EntityPropertyCollectionRootCodec::encode(root))),
+					 FormatException);
+
+		NativeStreamedGraphLargeValuePlan missingOverflowPlan = plan;
+		missingOverflowPlan.reference_count = 0U;
+		missingOverflowPlan.value_count = 0U;
+		EXPECT_THROW(NativeStreamedGraphLargeValuePlanner::materializeLargeValues(
+							 publication, values, LargeValueId(1U), missingOverflowPlan, {},
+							 [](NativeStreamedGraphLargeValueItem &&) {}),
+					 FormatException);
 	}
 
 	TEST_F(RelocatableMetadataStoreTest, StreamedLargeValuePlannerRejectsDivergentCanonicalReferenceSources) {

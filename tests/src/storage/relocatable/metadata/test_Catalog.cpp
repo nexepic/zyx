@@ -248,6 +248,7 @@ TEST(RelocatableCatalogTest, RejectsInvalidOrStaleLifecycleRequests) {
 	SnapshotPin movedSnapshot = std::move(snapshot);
 	EXPECT_FALSE(snapshot.isValid());
 	EXPECT_TRUE(movedSnapshot.isValid());
+	EXPECT_EQ(movedSnapshot.lsn(), LogSequenceNumber(1));
 
 	catalog.retire(building.segment_id, building.generation, LogSequenceNumber(3));
 	expectFormatError([&] { catalog.retire(building.segment_id, building.generation, LogSequenceNumber(4)); },

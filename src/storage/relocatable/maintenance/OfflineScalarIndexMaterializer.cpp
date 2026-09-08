@@ -270,7 +270,7 @@ namespace graph::storage {
 		if (definitions.size() > options.maximum_definitions || !pages.usesMetadataStore(metadata) ||
 			!entities.usesMetadataStore(metadata) || !labels.usesMetadataStore(metadata) ||
 			!properties.usesMetadataStore(metadata) ||
-			!catalog.usesMetadataStore(metadata)) { // ZYX_COV_EXCL_LINE: destination stores are paired at construction.
+			!catalog.usesMetadataStore(metadata)) {
 			fail(FormatError::FERR_INVALID_STATE,
 				 "offline scalar-index materialization has too many definitions or inconsistent destination stores");
 		}

@@ -6,6 +6,7 @@
  * License: Apache-2.0
  **/
 
+#include <limits>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -96,6 +97,37 @@ TEST(NativeBulkEdgePrivateRunMaterializerTest, PersistsEachLogicalOutputAsOneRew
 	EXPECT_EQ(keys, (std::vector<uint8_t>{0x10U, 0x20U, 0x30U}));
 }
 
+TEST(NativeBulkEdgePrivateRunMaterializerTest, MaterializesAnInitialFragmentAndSealsItsManifest) {
+	PrivateCandidates candidates;
+	const NativeBulkRunFragment fragment{{entry(0x2aU, 99U)}};
+	const NativeBulkRunFragmentLocation root =
+			NativeBulkEdgePrivateRunMaterializer::materializeInitialFragment(
+					fragment, 2U, [&] { return candidates.allocate(); },
+					[&](const NativeGraphPrivateSegmentMaterialization &identity, std::vector<std::byte> payload) {
+						candidates.write(identity, std::move(payload));
+					});
+
+	ASSERT_TRUE(root.isValid());
+	ASSERT_EQ(candidates.payloads.size(), 2U);
+	const NativeBulkRunManifest manifest = NativeBulkRunManifestCodec::decode(
+				candidates.payloads.back(), root);
+	ASSERT_EQ(manifest.level, 0U);
+	ASSERT_EQ(manifest.entry_count, 1U);
+	ASSERT_EQ(manifest.fragments.size(), 1U);
+	EXPECT_EQ(manifest.encoded_bytes, candidates.payloads.front().size());
+	EXPECT_EQ(manifest.fragments.front().segment_id, SegmentId(100U));
+	EXPECT_EQ(manifest.fragments.front().generation, Generation(7U));
+	EXPECT_EQ(manifest.fragments.front().transaction_id, 88U);
+
+	const NativeBulkEdgePrivateCandidateAllocator invalidAllocator = [] {
+		return NativeGraphPrivateSegmentMaterialization{};
+	};
+	EXPECT_THROW(static_cast<void>(NativeBulkEdgePrivateRunMaterializer::materializeInitialFragment(
+					fragment, 1U, invalidAllocator,
+					[](const NativeGraphPrivateSegmentMaterialization &, std::vector<std::byte>) {})),
+				 FormatException);
+}
+
 TEST(NativeBulkEdgePrivateRunMaterializerTest, KeepsSplitFragmentsUnderOneManifestAndRejectsCandidateOwnerMismatch) {
 	PrivateCandidates candidates;
 	const BTreePageEntry first = entry(0x10U, 1U);
@@ -121,7 +153,7 @@ TEST(NativeBulkEdgePrivateRunMaterializerTest, KeepsSplitFragmentsUnderOneManife
 	PrivateCandidates ownerMismatch;
 	size_t allocationCount = 0U;
 	EXPECT_THROW(NativeBulkEdgePrivateRunMaterializer::materializeOneLevel(
-						 source({{entry(0x10U, 1U)}}), options(),
+						 source({{first, entry(0x20U, 2U)}}), splitOptions,
 						 [&] {
 							 NativeGraphPrivateSegmentMaterialization identity = ownerMismatch.allocate();
 							 if (++allocationCount == 2U) {
@@ -129,9 +161,22 @@ TEST(NativeBulkEdgePrivateRunMaterializerTest, KeepsSplitFragmentsUnderOneManife
 							 }
 							 return identity;
 						 },
-						 [&](const NativeGraphPrivateSegmentMaterialization &identity, std::vector<std::byte> payload) {
-							 ownerMismatch.write(identity, std::move(payload));
+						 [](const NativeGraphPrivateSegmentMaterialization &, std::vector<std::byte>) {},
+						 [](NativeBulkRunFragmentLocation) {}),
+				 FormatException);
+
+	PrivateCandidates rootOwnerMismatch;
+	allocationCount = 0U;
+	EXPECT_THROW(NativeBulkEdgePrivateRunMaterializer::materializeOneLevel(
+						 source({{entry(0x30U, 3U)}}), options(),
+						 [&] {
+							 NativeGraphPrivateSegmentMaterialization identity = rootOwnerMismatch.allocate();
+							 if (++allocationCount == 2U) {
+								 identity.owner_id = 89U;
+							 }
+							 return identity;
 						 },
+						 [](const NativeGraphPrivateSegmentMaterialization &, std::vector<std::byte>) {},
 						 [](NativeBulkRunFragmentLocation) {}),
 				 FormatException);
 }
@@ -156,4 +201,91 @@ TEST(NativeBulkEdgePrivateRunMaterializerTest, CoalescesTokenDuplicatesOnlyWhenT
 		keys.push_back(std::to_integer<uint8_t>(next->key.front()));
 	}
 	EXPECT_EQ(keys, (std::vector<uint8_t>{0x10U, 0x20U}));
+}
+
+TEST(NativeBulkEdgePrivateRunMaterializerTest, RejectsIncompletePrivateMaterializationContracts) {
+	const NativeBulkRunFragment fragment{{entry(0x10U, 1U)}};
+	const NativeBulkEdgePrivateCandidateAllocator allocator = [] {
+		return NativeGraphPrivateSegmentMaterialization{SegmentId(100U), Generation(7U), 88U};
+	};
+	const NativeBulkEdgePrivateCandidateWriter writer = [](const NativeGraphPrivateSegmentMaterialization &,
+														   std::vector<std::byte>) {};
+	const NativeBulkEdgePrivateRunRootVisitor visitor = [](NativeBulkRunFragmentLocation) {};
+	const NativeBulkEdgePrivateCandidateAllocator noAllocator;
+	const NativeBulkEdgePrivateCandidateWriter noWriter;
+	const NativeBulkEdgePrivateRunRootVisitor noVisitor;
+	const NativeBulkEdgeRunSource noSource;
+	const auto expectFormatFailure = [](const auto &operation) {
+		EXPECT_THROW(static_cast<void>(operation()), FormatException);
+	};
+
+	expectFormatFailure([&] {
+		return NativeBulkEdgePrivateRunMaterializer::materializeInitialFragment(fragment, 0U, allocator, writer);
+	});
+	expectFormatFailure([&] {
+		return NativeBulkEdgePrivateRunMaterializer::materializeInitialFragment(fragment, 1U, noAllocator, writer);
+	});
+	expectFormatFailure([&] {
+		return NativeBulkEdgePrivateRunMaterializer::materializeInitialFragment(fragment, 1U, allocator, noWriter);
+	});
+	expectFormatFailure([&] {
+		return NativeBulkEdgePrivateRunMaterializer::materializeInitialFragment({}, 1U, allocator, writer);
+	});
+	expectFormatFailure([&] {
+		NativeBulkEdgePrivateRunMaterializer::materializeOneLevel(noSource, options(), allocator, writer, visitor);
+	});
+	NativeBulkEdgePrivateRunMaterializationOptions invalidOptions = options();
+	invalidOptions.maximum_open_runs = 1U;
+	expectFormatFailure([&] {
+		NativeBulkEdgePrivateRunMaterializer::materializeOneLevel(source({{entry(0x10U, 1U)}}), invalidOptions,
+																		  allocator, writer, visitor);
+	});
+	invalidOptions = options();
+	invalidOptions.maximum_open_runs = std::numeric_limits<size_t>::max();
+	expectFormatFailure([&] {
+		NativeBulkEdgePrivateRunMaterializer::materializeOneLevel(source({{entry(0x10U, 1U)}}), invalidOptions,
+																		  allocator, writer, visitor);
+	});
+	invalidOptions = options();
+	invalidOptions.maximum_fragment_bytes = RSS_NATIVE_BULK_RUN_HEADER_BYTES;
+	expectFormatFailure([&] {
+		NativeBulkEdgePrivateRunMaterializer::materializeOneLevel(source({{entry(0x10U, 1U)}}), invalidOptions,
+																  allocator, writer, visitor);
+	});
+	invalidOptions = options();
+	invalidOptions.maximum_entries = 0U;
+	expectFormatFailure([&] {
+		NativeBulkEdgePrivateRunMaterializer::materializeOneLevel(source({{entry(0x10U, 1U)}}), invalidOptions,
+																		  allocator, writer, visitor);
+	});
+	invalidOptions = options();
+	invalidOptions.maximum_entries = std::numeric_limits<size_t>::max();
+	expectFormatFailure([&] {
+		NativeBulkEdgePrivateRunMaterializer::materializeOneLevel(source({{entry(0x10U, 1U)}}), invalidOptions,
+																		  allocator, writer, visitor);
+	});
+	invalidOptions = options();
+	invalidOptions.maximum_manifest_depth = 0U;
+	expectFormatFailure([&] {
+		NativeBulkEdgePrivateRunMaterializer::materializeOneLevel(source({{entry(0x10U, 1U)}}), invalidOptions,
+																  allocator, writer, visitor);
+	});
+	expectFormatFailure([&] {
+		NativeBulkEdgePrivateRunMaterializer::materializeOneLevel(source({{entry(0x10U, 1U)}}), options(), noAllocator,
+																  writer, visitor);
+	});
+	expectFormatFailure([&] {
+		NativeBulkEdgePrivateRunMaterializer::materializeOneLevel(source({{entry(0x10U, 1U)}}), options(), allocator,
+																  noWriter, visitor);
+	});
+	expectFormatFailure([&] {
+		NativeBulkEdgePrivateRunMaterializer::materializeOneLevel(source({{entry(0x10U, 1U)}}), options(), allocator,
+																  writer, noVisitor);
+	});
+	invalidOptions = options();
+	invalidOptions.maximum_fragment_bytes = RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES + 1U;
+	expectFormatFailure([&] {
+		NativeBulkEdgePrivateRunMaterializer::materializeOneLevel(source({{entry(0x10U, 1U)}}), invalidOptions,
+																  allocator, writer, visitor);
+	});
 }

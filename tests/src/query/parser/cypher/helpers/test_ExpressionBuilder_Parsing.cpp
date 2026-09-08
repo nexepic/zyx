@@ -20,7 +20,13 @@
 #include "antlr4-runtime.h"
 #include "helpers/ExpressionBuilder.hpp"
 #include "graph/query/expressions/Expression.hpp"
+#include "graph/query/expressions/ExistsExpression.hpp"
+#include "graph/query/expressions/ListLiteralExpression.hpp"
+#include "graph/query/expressions/MapProjectionExpression.hpp"
 #include "graph/query/expressions/ParameterExpression.hpp"
+#include "graph/query/expressions/PatternComprehensionExpression.hpp"
+#include "graph/query/expressions/QuantifierFunctionExpression.hpp"
+#include "graph/query/expressions/ShortestPathExpression.hpp"
 #include "graph/core/PropertyTypes.hpp"
 
 using namespace graph::parser::cypher::helpers;
@@ -138,14 +144,13 @@ TEST_F(ExpressionBuilderParsingTest, XorExpression) {
 
 TEST_F(ExpressionBuilderParsingTest, BetweenExpression) {
 	auto* expr = parseWhereExpr("MATCH (n) WHERE n.age BETWEEN 18 AND 65 RETURN n");
-	if (expr) {
-		auto result = ExpressionBuilder::buildExpression(expr);
-		ASSERT_NE(result, nullptr);
-		// BETWEEN produces (expr >= lo) AND (expr <= hi)
-		auto* andExpr = dynamic_cast<BinaryOpExpression*>(result.get());
-		ASSERT_NE(andExpr, nullptr);
-		EXPECT_EQ(andExpr->getOperator(), BinaryOperatorType::BOP_AND);
-	}
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	ASSERT_NE(result, nullptr);
+	// BETWEEN produces (expr >= lo) AND (expr <= hi)
+	auto* andExpr = dynamic_cast<BinaryOpExpression*>(result.get());
+	ASSERT_NE(andExpr, nullptr);
+	EXPECT_EQ(andExpr->getOperator(), BinaryOperatorType::BOP_AND);
 }
 
 // ============================================================================
@@ -248,6 +253,16 @@ TEST_F(ExpressionBuilderParsingTest, ScientificNotationUpperCase) {
 	EXPECT_DOUBLE_EQ(litExpr->getDoubleValue(), 2500.0);
 }
 
+TEST_F(ExpressionBuilderParsingTest, ScientificNotationUpperCaseWithoutDecimalPoint) {
+	auto* expr = parseReturnExpr("RETURN 1E2");
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	const auto* literal = dynamic_cast<const LiteralExpression*>(result.get());
+	ASSERT_NE(literal, nullptr);
+	EXPECT_TRUE(literal->isDouble());
+	EXPECT_DOUBLE_EQ(literal->getDoubleValue(), 100.0);
+}
+
 // ============================================================================
 // Unary plus (line 410: ctx->PLUS() path)
 // ============================================================================
@@ -265,10 +280,9 @@ TEST_F(ExpressionBuilderParsingTest, UnaryPlus) {
 
 TEST_F(ExpressionBuilderParsingTest, UnaryMinusOnVariable) {
 	auto* expr = parseReturnExpr("MATCH (n) RETURN -n.age");
-	if (expr) {
-		auto result = ExpressionBuilder::buildExpression(expr);
-		ASSERT_NE(result, nullptr);
-	}
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	ASSERT_NE(result, nullptr);
 }
 
 // ============================================================================
@@ -291,17 +305,18 @@ TEST_F(ExpressionBuilderParsingTest, UnaryMinusDouble) {
 // ============================================================================
 
 TEST_F(ExpressionBuilderParsingTest, MapLiteralExpression) {
-	auto* expr = parseReturnExpr("RETURN {a: 1, b: 'hello'}");
+	auto* expr = parseReturnExpr("RETURN {`items`: [1, 2], enabled: true}");
 	ASSERT_NE(expr, nullptr);
-	// Map literals may throw during build if implementation treats them as list;
-	// just verify the parser handles it without crashing.
-	try {
-		auto result = ExpressionBuilder::buildExpression(expr);
-		// If it succeeds, the result should be non-null
-		EXPECT_NE(result, nullptr);
-	} catch (const std::exception&) {
-		// Known limitation: map literals may not be fully supported in expression builder
-	}
+	auto result = ExpressionBuilder::buildExpression(expr);
+	auto* literal = dynamic_cast<LiteralExpression *>(result.get());
+	ASSERT_NE(literal, nullptr);
+	const graph::PropertyValue &map = literal->getPropertyValue();
+	ASSERT_EQ(map.getType(), graph::PropertyType::MAP);
+	EXPECT_EQ(map.getMap().at("items"),
+			  graph::PropertyValue(std::vector<graph::PropertyValue>{graph::PropertyValue(1),
+																			 graph::PropertyValue(2)}));
+	EXPECT_EQ(map.getMap().at("enabled"), graph::PropertyValue(true));
+	EXPECT_EQ(ExpressionBuilder::evaluateLiteralExpression(expr), map);
 }
 
 // ============================================================================
@@ -310,13 +325,12 @@ TEST_F(ExpressionBuilderParsingTest, MapLiteralExpression) {
 
 TEST_F(ExpressionBuilderParsingTest, CountStar) {
 	auto* expr = parseReturnExpr("MATCH (n) RETURN count(*)");
-	if (expr) {
-		auto result = ExpressionBuilder::buildExpression(expr);
-		ASSERT_NE(result, nullptr);
-		auto* funcExpr = dynamic_cast<FunctionCallExpression*>(result.get());
-		ASSERT_NE(funcExpr, nullptr);
-		EXPECT_EQ(funcExpr->getFunctionName(), "count");
-	}
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	ASSERT_NE(result, nullptr);
+	auto* funcExpr = dynamic_cast<FunctionCallExpression*>(result.get());
+	ASSERT_NE(funcExpr, nullptr);
+	EXPECT_EQ(funcExpr->getFunctionName(), "count");
 }
 
 // ============================================================================
@@ -555,10 +569,9 @@ TEST_F(ExpressionBuilderParsingTest, BooleanFalseLiteral) {
 
 TEST_F(ExpressionBuilderParsingTest, DistinctFunctionCall) {
 	auto* expr = parseReturnExpr("MATCH (n) RETURN count(DISTINCT n.name)");
-	if (expr) {
-		auto result = ExpressionBuilder::buildExpression(expr);
-		ASSERT_NE(result, nullptr);
-	}
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	ASSERT_NE(result, nullptr);
 }
 
 // ============================================================================
@@ -620,10 +633,9 @@ TEST_F(ExpressionBuilderParsingTest, EvaluateLiteralExpressionList) {
 
 TEST_F(ExpressionBuilderParsingTest, PropertyWithListIndex) {
 	auto* expr = parseReturnExpr("MATCH (n) RETURN n.items[0]");
-	if (expr) {
-		auto result = ExpressionBuilder::buildExpression(expr);
-		ASSERT_NE(result, nullptr);
-	}
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	ASSERT_NE(result, nullptr);
 }
 
 // ============================================================================
@@ -706,6 +718,76 @@ TEST_F(ExpressionBuilderParsingTest, ExtractListNonLiteralItem) {
 	ASSERT_GE(listValues.size(), 0UL);
 }
 
+TEST_F(ExpressionBuilderParsingTest, BuildsDynamicListLiteralsWithoutCollapsingNestedStaticLists) {
+	auto* expr = parseReturnExpr("RETURN [n.score, [1, 2]]");
+	ASSERT_NE(expr, nullptr);
+
+	auto result = ExpressionBuilder::buildExpression(expr);
+	auto* list = dynamic_cast<ListLiteralExpression*>(result.get());
+	ASSERT_NE(list, nullptr);
+	EXPECT_FALSE(list->isStatic());
+	ASSERT_EQ(list->getElements().size(), 2U);
+	EXPECT_EQ(list->getElements()[0]->getExpressionType(), ExpressionType::PROPERTY_ACCESS);
+
+	const auto* nested = dynamic_cast<const ListLiteralExpression*>(list->getElements()[1].get());
+	ASSERT_NE(nested, nullptr);
+	EXPECT_TRUE(nested->isStatic());
+	EXPECT_EQ(nested->getValue(),
+			  graph::PropertyValue(std::vector<graph::PropertyValue>{graph::PropertyValue(1), graph::PropertyValue(2)}));
+}
+
+TEST_F(ExpressionBuilderParsingTest, KeepsAnOuterListDynamicWhenItsNestedListDependsOnTheRow) {
+	auto* expr = parseReturnExpr("RETURN [[n.score]]");
+	ASSERT_NE(expr, nullptr);
+
+	auto result = ExpressionBuilder::buildExpression(expr);
+	auto* outer = dynamic_cast<ListLiteralExpression*>(result.get());
+	ASSERT_NE(outer, nullptr);
+	EXPECT_FALSE(outer->isStatic());
+	ASSERT_EQ(outer->getElements().size(), 1U);
+
+	const auto* nested = dynamic_cast<const ListLiteralExpression*>(outer->getElements().front().get());
+	ASSERT_NE(nested, nullptr);
+	EXPECT_FALSE(nested->isStatic());
+	ASSERT_EQ(nested->getElements().size(), 1U);
+	EXPECT_EQ(nested->getElements().front()->getExpressionType(), ExpressionType::PROPERTY_ACCESS);
+}
+
+TEST_F(ExpressionBuilderParsingTest, BuildsDynamicMapLiteralsWithoutCollapsingNestedStaticLists) {
+	auto* expr = parseReturnExpr("RETURN {score: n.score, constant: [1, 2]}");
+	ASSERT_NE(expr, nullptr);
+
+	auto result = ExpressionBuilder::buildExpression(expr);
+	auto* map = dynamic_cast<MapProjectionExpression*>(result.get());
+	ASSERT_NE(map, nullptr);
+	EXPECT_TRUE(map->isMapLiteral());
+	ASSERT_EQ(map->getItems().size(), 2U);
+	EXPECT_EQ(map->getItems()[0].key, "score");
+	EXPECT_EQ(map->getItems()[0].expression->getExpressionType(), ExpressionType::PROPERTY_ACCESS);
+	EXPECT_EQ(map->getItems()[1].key, "constant");
+	const auto* nested = dynamic_cast<const ListLiteralExpression*>(map->getItems()[1].expression.get());
+	ASSERT_NE(nested, nullptr);
+	EXPECT_TRUE(nested->isStatic());
+}
+
+TEST_F(ExpressionBuilderParsingTest, KeepsAMapLiteralDynamicWhenItsNestedListDependsOnTheRow) {
+	auto* expr = parseReturnExpr("RETURN {items: [[n.score]]}");
+	ASSERT_NE(expr, nullptr);
+
+	auto result = ExpressionBuilder::buildExpression(expr);
+	auto* map = dynamic_cast<MapProjectionExpression*>(result.get());
+	ASSERT_NE(map, nullptr);
+	ASSERT_EQ(map->getItems().size(), 1U);
+	EXPECT_EQ(map->getItems().front().key, "items");
+
+	const auto* outer = dynamic_cast<const ListLiteralExpression*>(map->getItems().front().expression.get());
+	ASSERT_NE(outer, nullptr);
+	EXPECT_FALSE(outer->isStatic());
+	const auto* nested = dynamic_cast<const ListLiteralExpression*>(outer->getElements().front().get());
+	ASSERT_NE(nested, nullptr);
+	EXPECT_FALSE(nested->isStatic());
+}
+
 // ============================================================================
 // IN with non-literal list RHS (line 273-278 dynamic IN path)
 // ============================================================================
@@ -714,7 +796,19 @@ TEST_F(ExpressionBuilderParsingTest, InWithDynamicRhsVariable) {
 	auto* expr = parseWhereExpr("MATCH (n) WHERE n.x IN n.items RETURN n");
 	ASSERT_NE(expr, nullptr);
 	auto result = ExpressionBuilder::buildExpression(expr);
-	ASSERT_NE(result, nullptr);
+	auto* variableList = dynamic_cast<InExpression*>(result.get());
+	ASSERT_NE(variableList, nullptr);
+	EXPECT_TRUE(variableList->hasDynamicList());
+
+	auto* dynamicLiteralExpr = parseWhereExpr("MATCH (n) WHERE n.x IN [n.y, 2] RETURN n");
+	ASSERT_NE(dynamicLiteralExpr, nullptr);
+	auto dynamicLiteral = ExpressionBuilder::buildExpression(dynamicLiteralExpr);
+	auto* dynamicList = dynamic_cast<InExpression*>(dynamicLiteral.get());
+	ASSERT_NE(dynamicList, nullptr);
+	ASSERT_TRUE(dynamicList->hasDynamicList());
+	const auto* list = dynamic_cast<const ListLiteralExpression*>(dynamicList->getListExpression());
+	ASSERT_NE(list, nullptr);
+	EXPECT_FALSE(list->isStatic());
 }
 
 // ============================================================================
@@ -755,11 +849,14 @@ TEST_F(ExpressionBuilderParsingTest, PatternComprehensionNoWhere) {
 // ============================================================================
 
 TEST_F(ExpressionBuilderParsingTest, ExistsNoChain) {
-	auto* expr = parseWhereExpr("MATCH (n) WHERE EXISTS { (n) } RETURN n");
-	if (expr) {
-		auto result = ExpressionBuilder::buildExpression(expr);
-		ASSERT_NE(result, nullptr);
-	}
+	auto* expr = parseWhereExpr("MATCH (n) WHERE EXISTS((n)) RETURN n");
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	const auto* exists = dynamic_cast<const ExistsExpression*>(result.get());
+	ASSERT_NE(exists, nullptr);
+	EXPECT_EQ(exists->getSourceVar(), "n");
+	EXPECT_EQ(exists->getDirection(), PatternDirection::PAT_BOTH);
+	EXPECT_FALSE(exists->hasWhereClause());
 }
 
 // ============================================================================
@@ -798,10 +895,9 @@ TEST_F(ExpressionBuilderParsingTest, QuantifierAsFunction) {
 TEST_F(ExpressionBuilderParsingTest, AllShortestPathsWithRange) {
 	auto* expr = parseReturnExpr(
 		"RETURN allShortestPaths((a)-[*1..5]->(b))");
-	if (expr) {
-		auto result = ExpressionBuilder::buildExpression(expr);
-		ASSERT_NE(result, nullptr);
-	}
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	ASSERT_NE(result, nullptr);
 }
 
 // ============================================================================
@@ -843,10 +939,9 @@ TEST_F(ExpressionBuilderParsingTest, PropertyThenListIndex) {
 
 TEST_F(ExpressionBuilderParsingTest, NumericParameter) {
 	auto* expr = parseReturnExpr("RETURN $1");
-	if (expr) {
-		auto result = ExpressionBuilder::buildExpression(expr);
-		ASSERT_NE(result, nullptr);
-	}
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	ASSERT_NE(result, nullptr);
 }
 
 // ============================================================================
@@ -854,11 +949,14 @@ TEST_F(ExpressionBuilderParsingTest, NumericParameter) {
 // ============================================================================
 
 TEST_F(ExpressionBuilderParsingTest, ExistsIncomingDirection) {
-	auto* expr = parseWhereExpr("MATCH (n) WHERE EXISTS { (n)<-[:R]-() } RETURN n");
-	if (expr) {
-		auto result = ExpressionBuilder::buildExpression(expr);
-		ASSERT_NE(result, nullptr);
-	}
+	auto* expr = parseWhereExpr("MATCH (n) WHERE EXISTS((n)<-[:R]-(m)) RETURN n");
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	const auto* exists = dynamic_cast<const ExistsExpression*>(result.get());
+	ASSERT_NE(exists, nullptr);
+	EXPECT_EQ(exists->getDirection(), PatternDirection::PAT_INCOMING);
+	EXPECT_EQ(exists->getRelType(), "R");
+	EXPECT_EQ(exists->getTargetVar(), "m");
 }
 
 // ============================================================================
@@ -880,10 +978,9 @@ TEST_F(ExpressionBuilderParsingTest, PatternComprehensionWithWhere) {
 TEST_F(ExpressionBuilderParsingTest, ShortestPathIncoming) {
 	auto* expr = parseReturnExpr(
 		"RETURN shortestPath((a)<-[*]-(b))");
-	if (expr) {
-		auto result = ExpressionBuilder::buildExpression(expr);
-		ASSERT_NE(result, nullptr);
-	}
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	ASSERT_NE(result, nullptr);
 }
 
 // ============================================================================
@@ -1009,11 +1106,14 @@ TEST_F(ExpressionBuilderParsingTest, ListComprehensionWithWhereAndMap) {
 // ============================================================================
 
 TEST_F(ExpressionBuilderParsingTest, ExistsWithWhere) {
-	auto* expr = parseWhereExpr("MATCH (n) WHERE EXISTS { (n)-[:R]->(m) WHERE m.age > 10 } RETURN n");
-	if (expr) {
-		auto result = ExpressionBuilder::buildExpression(expr);
-		ASSERT_NE(result, nullptr);
-	}
+	auto* expr = parseWhereExpr("MATCH (n) WHERE EXISTS((n)-[:R]->(m) WHERE m.age > 10) RETURN n");
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	const auto* exists = dynamic_cast<const ExistsExpression*>(result.get());
+	ASSERT_NE(exists, nullptr);
+	EXPECT_EQ(exists->getDirection(), PatternDirection::PAT_OUTGOING);
+	EXPECT_EQ(exists->getTargetVar(), "m");
+	EXPECT_TRUE(exists->hasWhereClause());
 }
 
 // ============================================================================
@@ -1021,11 +1121,13 @@ TEST_F(ExpressionBuilderParsingTest, ExistsWithWhere) {
 // ============================================================================
 
 TEST_F(ExpressionBuilderParsingTest, ExistsNoChainWithWhere) {
-	auto* expr = parseWhereExpr("MATCH (n) WHERE EXISTS { (n) WHERE n.val > 0 } RETURN n");
-	if (expr) {
-		auto result = ExpressionBuilder::buildExpression(expr);
-		ASSERT_NE(result, nullptr);
-	}
+	auto* expr = parseWhereExpr("MATCH (n) WHERE EXISTS((n) WHERE n.val > 0) RETURN n");
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	const auto* exists = dynamic_cast<const ExistsExpression*>(result.get());
+	ASSERT_NE(exists, nullptr);
+	EXPECT_EQ(exists->getSourceVar(), "n");
+	EXPECT_TRUE(exists->hasWhereClause());
 }
 
 // ============================================================================
@@ -1034,10 +1136,9 @@ TEST_F(ExpressionBuilderParsingTest, ExistsNoChainWithWhere) {
 
 TEST_F(ExpressionBuilderParsingTest, ShortestPathWithMinMaxRange) {
 	auto* expr = parseReturnExpr("RETURN shortestPath((a)-[*2..5]->(b))");
-	if (expr) {
-		auto result = ExpressionBuilder::buildExpression(expr);
-		ASSERT_NE(result, nullptr);
-	}
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	ASSERT_NE(result, nullptr);
 }
 
 // ============================================================================
@@ -1046,10 +1147,9 @@ TEST_F(ExpressionBuilderParsingTest, ShortestPathWithMinMaxRange) {
 
 TEST_F(ExpressionBuilderParsingTest, ShortestPathWithSingleRange) {
 	auto* expr = parseReturnExpr("RETURN shortestPath((a)-[*..3]->(b))");
-	if (expr) {
-		auto result = ExpressionBuilder::buildExpression(expr);
-		ASSERT_NE(result, nullptr);
-	}
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	ASSERT_NE(result, nullptr);
 }
 
 // ============================================================================
@@ -1106,11 +1206,10 @@ TEST_F(ExpressionBuilderParsingTest, OrExpression) {
 TEST_F(ExpressionBuilderParsingTest, EvaluateLiteralComplexExpression) {
 	// A variable reference is not evaluable as a literal, hits the catch path
 	auto* expr = parseReturnExpr("MATCH (n) RETURN n.x + n.y");
-	if (expr) {
-		auto result = ExpressionBuilder::evaluateLiteralExpression(expr);
-		// Returns empty PropertyValue from catch block
-		EXPECT_EQ(result.getType(), graph::PropertyType::NULL_TYPE);
-	}
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::evaluateLiteralExpression(expr);
+	// Returns empty PropertyValue from catch block
+	EXPECT_EQ(result.getType(), graph::PropertyType::NULL_TYPE);
 }
 
 // ============================================================================
@@ -1155,10 +1254,9 @@ TEST_F(ExpressionBuilderParsingTest, PatternComprehensionIncoming) {
 
 TEST_F(ExpressionBuilderParsingTest, ShortestPathNoRelType) {
 	auto* expr = parseReturnExpr("RETURN shortestPath((a)-[*]->(b))");
-	if (expr) {
-		auto result = ExpressionBuilder::buildExpression(expr);
-		ASSERT_NE(result, nullptr);
-	}
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	ASSERT_NE(result, nullptr);
 }
 
 // ============================================================================
@@ -1166,11 +1264,13 @@ TEST_F(ExpressionBuilderParsingTest, ShortestPathNoRelType) {
 // ============================================================================
 
 TEST_F(ExpressionBuilderParsingTest, ExistsWithTargetLabel) {
-	auto* expr = parseWhereExpr("MATCH (n) WHERE EXISTS { (n)-[:R]->(:Person) } RETURN n");
-	if (expr) {
-		auto result = ExpressionBuilder::buildExpression(expr);
-		ASSERT_NE(result, nullptr);
-	}
+	auto* expr = parseWhereExpr("MATCH (n) WHERE EXISTS((n)-[:R]->(:Person)) RETURN n");
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	const auto* exists = dynamic_cast<const ExistsExpression*>(result.get());
+	ASSERT_NE(exists, nullptr);
+	EXPECT_EQ(exists->getTargetLabel(), "Person");
+	EXPECT_TRUE(exists->getTargetVar().empty());
 }
 
 // ============================================================================
@@ -1178,9 +1278,147 @@ TEST_F(ExpressionBuilderParsingTest, ExistsWithTargetLabel) {
 // ============================================================================
 
 TEST_F(ExpressionBuilderParsingTest, ExistsWithTargetVariable) {
-	auto* expr = parseWhereExpr("MATCH (n) WHERE EXISTS { (n)-[:R]->(m) } RETURN n");
-	if (expr) {
-		auto result = ExpressionBuilder::buildExpression(expr);
-		ASSERT_NE(result, nullptr);
-	}
+	auto* expr = parseWhereExpr("MATCH (n) WHERE EXISTS((n)-[:R]->(m)) RETURN n");
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	const auto* exists = dynamic_cast<const ExistsExpression*>(result.get());
+	ASSERT_NE(exists, nullptr);
+	EXPECT_EQ(exists->getSourceVar(), "n");
+	EXPECT_EQ(exists->getTargetVar(), "m");
+}
+
+TEST_F(ExpressionBuilderParsingTest, EvaluatesNegativeIntegerAndDoubleLiterals) {
+	auto* integer = parseReturnExpr("RETURN -42");
+	ASSERT_NE(integer, nullptr);
+	EXPECT_EQ(ExpressionBuilder::evaluateLiteralExpression(integer), graph::PropertyValue(-42));
+
+	auto* decimal = parseReturnExpr("RETURN -3.5");
+	ASSERT_NE(decimal, nullptr);
+	EXPECT_EQ(ExpressionBuilder::evaluateLiteralExpression(decimal), graph::PropertyValue(-3.5));
+}
+
+TEST_F(ExpressionBuilderParsingTest, EvaluatesParenthesizedStaticLiteralValues) {
+	auto* list = parseReturnExpr("RETURN ([1, 2, 3])");
+	ASSERT_NE(list, nullptr);
+	EXPECT_EQ(ExpressionBuilder::evaluateLiteralExpression(list),
+			  graph::PropertyValue(std::vector<graph::PropertyValue>{graph::PropertyValue(1),
+																							  graph::PropertyValue(2),
+																							  graph::PropertyValue(3)}));
+
+	auto* negative = parseReturnExpr("RETURN (-42)");
+	ASSERT_NE(negative, nullptr);
+	EXPECT_EQ(ExpressionBuilder::evaluateLiteralExpression(negative), graph::PropertyValue(-42));
+}
+
+TEST_F(ExpressionBuilderParsingTest, NormalizesEscapedBacktickVariableNames) {
+	auto* expr = parseReturnExpr("RETURN `name``with``backticks`");
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	auto* variable = dynamic_cast<VariableReferenceExpression *>(result.get());
+	ASSERT_NE(variable, nullptr);
+	EXPECT_EQ(variable->getVariableName(), "name`with`backticks");
+}
+
+TEST_F(ExpressionBuilderParsingTest, NormalizesEscapedBacktickPropertyNames) {
+	auto* expr = parseReturnExpr("RETURN `node``name`.`property``name`");
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	auto* property = dynamic_cast<VariableReferenceExpression *>(result.get());
+	ASSERT_NE(property, nullptr);
+	EXPECT_TRUE(property->hasProperty());
+	EXPECT_EQ(property->getVariableName(), "node`name");
+	EXPECT_EQ(property->getPropertyName(), "property`name");
+}
+
+TEST_F(ExpressionBuilderParsingTest, NormalizesPlainBacktickNames) {
+	auto* variableExpr = parseReturnExpr("RETURN `plain name`");
+	ASSERT_NE(variableExpr, nullptr);
+	auto variableResult = ExpressionBuilder::buildExpression(variableExpr);
+	auto* variable = dynamic_cast<VariableReferenceExpression *>(variableResult.get());
+	ASSERT_NE(variable, nullptr);
+	EXPECT_EQ(variable->getVariableName(), "plain name");
+
+	auto* propertyExpr = parseReturnExpr("RETURN `plain node`.`plain property`");
+	ASSERT_NE(propertyExpr, nullptr);
+	auto propertyResult = ExpressionBuilder::buildExpression(propertyExpr);
+	auto* property = dynamic_cast<VariableReferenceExpression *>(propertyResult.get());
+	ASSERT_NE(property, nullptr);
+	EXPECT_EQ(property->getVariableName(), "plain node");
+	EXPECT_EQ(property->getPropertyName(), "plain property");
+}
+
+TEST_F(ExpressionBuilderParsingTest, NormalizesEscapedBacktickMapKeysInStaticAndDynamicMaps) {
+	auto* staticExpr = parseReturnExpr("RETURN {`name``with``backticks`: 1}");
+	ASSERT_NE(staticExpr, nullptr);
+	auto staticResult = ExpressionBuilder::buildExpression(staticExpr);
+	auto* staticLiteral = dynamic_cast<LiteralExpression *>(staticResult.get());
+	ASSERT_NE(staticLiteral, nullptr);
+	EXPECT_EQ(staticLiteral->getPropertyValue().getMap().at("name`with`backticks"), graph::PropertyValue(1));
+
+	auto* dynamicExpr = parseReturnExpr("RETURN {`score``key`: n.score}");
+	ASSERT_NE(dynamicExpr, nullptr);
+	auto dynamicResult = ExpressionBuilder::buildExpression(dynamicExpr);
+	auto* dynamicMap = dynamic_cast<MapProjectionExpression *>(dynamicResult.get());
+	ASSERT_NE(dynamicMap, nullptr);
+	ASSERT_EQ(dynamicMap->getItems().size(), 1U);
+	EXPECT_EQ(dynamicMap->getItems().front().key, "score`key");
+}
+
+TEST_F(ExpressionBuilderParsingTest, NormalizesEscapedBacktickMapProjectionNames) {
+	auto* expr = parseReturnExpr("RETURN `node``name` {`key``name`: 1, .`property``name`}");
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	auto* projection = dynamic_cast<MapProjectionExpression *>(result.get());
+	ASSERT_NE(projection, nullptr);
+	EXPECT_EQ(projection->getVariable(), "node`name");
+	ASSERT_EQ(projection->getItems().size(), 2U);
+	EXPECT_EQ(projection->getItems()[0].key, "key`name");
+	EXPECT_EQ(projection->getItems()[1].key, "property`name");
+}
+
+TEST_F(ExpressionBuilderParsingTest, NormalizesEscapedBacktickQuantifierVariables) {
+	auto* expr = parseReturnExpr("RETURN single(`item``name` IN [1, 2] WHERE `item``name` = 1)");
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	auto* quantifier = dynamic_cast<QuantifierFunctionExpression *>(result.get());
+	ASSERT_NE(quantifier, nullptr);
+	EXPECT_EQ(quantifier->getVariable(), "item`name");
+}
+
+TEST_F(ExpressionBuilderParsingTest, BuildsConjoinedPredicates) {
+	auto* expr = parseWhereExpr("MATCH (n) WHERE n.active AND n.visible RETURN n");
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	auto* conjunction = dynamic_cast<BinaryOpExpression *>(result.get());
+	ASSERT_NE(conjunction, nullptr);
+	EXPECT_EQ(conjunction->getOperator(), BinaryOperatorType::BOP_AND);
+}
+
+TEST_F(ExpressionBuilderParsingTest, BuildsExactAndOpenEndedShortestPathRanges) {
+	auto* exactExpr = parseReturnExpr("RETURN shortestPath((source)-[:ROAD*2]->(target))");
+	ASSERT_NE(exactExpr, nullptr);
+	auto exactResult = ExpressionBuilder::buildExpression(exactExpr);
+	auto* exact = dynamic_cast<ShortestPathExpression *>(exactResult.get());
+	ASSERT_NE(exact, nullptr);
+	EXPECT_EQ(exact->getMinHops(), 2);
+	EXPECT_EQ(exact->getMaxHops(), 2);
+
+	auto* minimumExpr = parseReturnExpr("RETURN shortestPath((source)-[:ROAD*2..]->(target))");
+	ASSERT_NE(minimumExpr, nullptr);
+	auto minimumResult = ExpressionBuilder::buildExpression(minimumExpr);
+	auto* minimum = dynamic_cast<ShortestPathExpression *>(minimumResult.get());
+	ASSERT_NE(minimum, nullptr);
+	EXPECT_EQ(minimum->getMinHops(), 2);
+	EXPECT_EQ(minimum->getMaxHops(), 15);
+}
+
+TEST_F(ExpressionBuilderParsingTest, BuildsPatternComprehensionWithRelationshipVariableAndTargetLabel) {
+	auto* expr = parseReturnExpr("RETURN [(source)-[relationship:ROAD]->(target:City) | relationship.distance]");
+	ASSERT_NE(expr, nullptr);
+	auto result = ExpressionBuilder::buildExpression(expr);
+	auto* comprehension = dynamic_cast<PatternComprehensionExpression *>(result.get());
+	ASSERT_NE(comprehension, nullptr);
+	EXPECT_EQ(comprehension->getRelationshipVar(), "relationship");
+	EXPECT_EQ(comprehension->getTargetLabel(), "City");
+	EXPECT_EQ(comprehension->getRelType(), "ROAD");
 }

@@ -158,6 +158,24 @@ protected:
 		return result;
 	}
 
+	[[nodiscard]] VectorCodebookManifest readVectorCodebookManifest(uint64_t codebookId) const {
+		auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
+		if (!data->is_open()) {
+			throw std::runtime_error("schema test could not reopen its relocatable Vector Codebook file");
+		}
+		auto dataIo = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		auto metadata = RelocatableMetadataStore::open(dataIo);
+		PhysicalSegmentAllocator segments(dataIo, *metadata);
+		VectorCodebookStore codebooks(segments, *metadata);
+		MetadataSnapshotPin snapshot = metadata->openSnapshot();
+		const VectorCodebookManifest result = codebooks.manifest(snapshot, codebookId);
+		snapshot.release();
+		metadata.reset();
+		dataIo.reset();
+		data->close();
+		return result;
+	}
+
 	// Writes a checksummed Manifest payload while retaining its durable page owner.
 	// Tests use this only to model an already-persisted torn/corrupt generation.
 	void overwriteVectorManifest(const VectorManifest &manifest) const {
@@ -378,6 +396,49 @@ protected:
 		const CatalogEntry pool = metadata->findCatalog(snapshot, location.segment_id);
 		const uint64_t offset = PhysicalSegmentAllocator::checkedSlotOffset(snapshot.superblock().data_region_offset,
 																			pool.physical_slot) +
+								static_cast<uint64_t>(location.page_index) * RSS_PAGE_SIZE;
+		snapshot.release();
+		const std::vector<std::byte> bytes = rewritten.serialize();
+		dataIo->writeAt(offset + RSS_PAGE_OWNER_HEADER_BYTES, bytes.data(), bytes.size());
+		dataIo->sync();
+		metadata.reset();
+		dataIo.reset();
+		data->close();
+	}
+
+	// Appends a separately ordered, checksummed leaf entry to model a durable
+	// stale mapping that the normal graph writer cannot create.
+	void appendBTreeLeafEntry(uint64_t indexId, BTreePageEntry appended) const {
+		auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
+		ASSERT_TRUE(data->is_open());
+		auto dataIo = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		auto metadata = RelocatableMetadataStore::open(dataIo);
+		SlottedPagePool pages(dataIo, *metadata);
+		BTreePageStore trees(pages, *metadata);
+		MetadataSnapshotPin snapshot = metadata->openSnapshot();
+		const IndexRootLocation root = metadata->findIndexRoot(snapshot, indexId);
+		BTreePage original = trees.read(snapshot, root.root_page_id);
+		BTreePageHeader header = original.header();
+		ASSERT_EQ(header.kind, BTreeNodeKind::BPN_LEAF);
+		std::vector<BTreePageEntry> entries = original.entries();
+		entries.push_back(std::move(appended));
+		std::ranges::sort(entries, {}, &BTreePageEntry::key);
+		header.entry_count = 0U;
+		const PageOwnerHeader owner{header.page_id,
+									header.index_id,
+									PageOwnerKind::POK_INDEX,
+									0U,
+									RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES,
+									header.generation,
+									original.slottedPage().ownerCommittedLsn()};
+		BTreePage rewritten = BTreePage::create(owner, header);
+		for (const BTreePageEntry &entry: entries) {
+			rewritten.insert(entry);
+		}
+		const PageLocation location = metadata->findPageLocation(snapshot, root.root_page_id);
+		const CatalogEntry pool = metadata->findCatalog(snapshot, location.segment_id);
+		const uint64_t offset = PhysicalSegmentAllocator::checkedSlotOffset(snapshot.superblock().data_region_offset,
+																		pool.physical_slot) +
 								static_cast<uint64_t>(location.page_index) * RSS_PAGE_SIZE;
 		snapshot.release();
 		const std::vector<std::byte> bytes = rewritten.serialize();

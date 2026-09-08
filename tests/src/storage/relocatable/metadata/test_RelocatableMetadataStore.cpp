@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cerrno>
+#include <limits>
 #include <map>
 #include <system_error>
 #include <vector>
@@ -3047,6 +3048,82 @@ TEST_F(RelocatableMetadataStoreTest, LeasesLogicalGraphIdsFromDurableRangesWitho
 	EXPECT_EQ(snapshot.superblock().next_logical_node_id, 6U);
 	EXPECT_EQ(snapshot.superblock().next_logical_edge_id, 6U);
 	snapshot.release();
+}
+
+TEST_F(RelocatableMetadataStoreTest, LogicalGraphIdLeasesRejectInvalidRequestsWithoutPublication) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	MetadataSnapshotPin before = store->openSnapshot();
+	const Superblock expected = before.superblock();
+	before.release();
+
+	expectFormatError(
+			[&] { static_cast<void>(store->reserveNativeGraphLogicalIds(0U, 0U)); },
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] { static_cast<void>(store->acquireNativeGraphLogicalIds(0U, 0U, 1U)); },
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] { static_cast<void>(store->acquireNativeGraphLogicalIds(1U, 0U, 0U)); },
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->acquireNativeGraphLogicalIds(
+						1U, 0U, std::numeric_limits<uint64_t>::max()));
+			},
+			FormatError::FERR_INVALID_HEADER);
+
+	MetadataSnapshotPin after = store->openSnapshot();
+	EXPECT_EQ(after.superblock().generation, expected.generation);
+	EXPECT_EQ(after.superblock().checkpoint_lsn, expected.checkpoint_lsn);
+	EXPECT_EQ(after.superblock().next_logical_node_id, expected.next_logical_node_id);
+	EXPECT_EQ(after.superblock().next_logical_edge_id, expected.next_logical_edge_id);
+}
+
+TEST_F(RelocatableMetadataStoreTest, LogicalGraphIdLeasesServeFullyCachedReservationsWithoutRepublishing) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	const NativeGraphLogicalIdReservation first = store->acquireNativeGraphLogicalIds(1U, 1U, 4U);
+	EXPECT_EQ(first.node_ranges, (std::vector<NativeGraphLogicalIdLeaseRange>{{1U, 1U}}));
+	EXPECT_EQ(first.edge_ranges, (std::vector<NativeGraphLogicalIdLeaseRange>{{1U, 1U}}));
+
+	MetadataSnapshotPin afterFirstLease = store->openSnapshot();
+	const Superblock published = afterFirstLease.superblock();
+	EXPECT_EQ(published.next_logical_node_id, 5U);
+	EXPECT_EQ(published.next_logical_edge_id, 5U);
+	afterFirstLease.release();
+
+	const NativeGraphLogicalIdReservation cached = store->acquireNativeGraphLogicalIds(2U, 3U, 4U);
+	EXPECT_EQ(cached.node_ranges, (std::vector<NativeGraphLogicalIdLeaseRange>{{2U, 2U}}));
+	EXPECT_EQ(cached.edge_ranges, (std::vector<NativeGraphLogicalIdLeaseRange>{{2U, 3U}}));
+	EXPECT_TRUE(store->claimNativeGraphLogicalIdReservation(first));
+	EXPECT_TRUE(store->claimNativeGraphLogicalIdReservation(cached));
+
+	MetadataSnapshotPin afterCachedLease = store->openSnapshot();
+	EXPECT_EQ(afterCachedLease.superblock().generation, published.generation);
+	EXPECT_EQ(afterCachedLease.superblock().checkpoint_lsn, published.checkpoint_lsn);
+	EXPECT_EQ(afterCachedLease.superblock().next_logical_node_id, published.next_logical_node_id);
+	EXPECT_EQ(afterCachedLease.superblock().next_logical_edge_id, published.next_logical_edge_id);
+}
+
+TEST_F(RelocatableMetadataStoreTest, ReadOnlyMetadataStoreRejectsLeasesAndRefreshWithoutPublication) {
+	auto writable = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	MetadataSnapshotPin before = writable->openSnapshot();
+	const Superblock expected = before.superblock();
+	before.release();
+	auto readOnly = RelocatableMetadataStore::openReadOnly(io);
+
+	expectFormatError(
+			[&] { static_cast<void>(readOnly->reserveNativeGraphLogicalIds(1U, 0U)); },
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] { static_cast<void>(readOnly->acquireNativeGraphLogicalIds(1U, 0U, 1U)); },
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { readOnly->refreshAfterExternalPublication(); }, FormatError::FERR_INVALID_STATE);
+
+	MetadataSnapshotPin after = writable->openSnapshot();
+	EXPECT_EQ(after.superblock().generation, expected.generation);
+	EXPECT_EQ(after.superblock().checkpoint_lsn, expected.checkpoint_lsn);
+	EXPECT_EQ(after.superblock().next_logical_node_id, expected.next_logical_node_id);
+	EXPECT_EQ(after.superblock().next_logical_edge_id, expected.next_logical_edge_id);
 }
 
 TEST_F(RelocatableMetadataStoreTest, RebasesASequentialWriterOnlyAfterItsLocalSnapshotsAreReleased) {

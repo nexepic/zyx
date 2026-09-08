@@ -8,6 +8,7 @@
 
 #include <limits>
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -139,8 +140,7 @@ TEST(NativeStreamedGraphPublicationPlanTest, FinalPublicationShapeKeepsOnlyScala
 	largeValues.data_page_count = 11U;
 	largeValues.manifest_page_count = 5U;
 
-	const NativeStreamedGraphPublicationShape shape =
-			NativeStreamedGraphPublicationShape::derive(plan, largeValues);
+	const NativeStreamedGraphPublicationShape shape = NativeStreamedGraphPublicationShape::derive(plan, largeValues);
 	EXPECT_EQ(shape.entity_page_count, 2U);
 	EXPECT_EQ(shape.property_page_count, 4U);
 	EXPECT_EQ(shape.property_root_count, 7U);
@@ -206,6 +206,66 @@ TEST(NativeStreamedGraphPublicationPlanTest, FinalPublicationShapeRejectsInvalid
 	largeValues.data_page_count = 1U;
 	largeValues.manifest_page_count = 0U;
 	EXPECT_THROW(static_cast<void>(NativeStreamedGraphPublicationShape::derive(plan, largeValues)), FormatException);
+
+	NativeStreamedGraphPublicationPlan tooManyProperties = plan;
+	tooManyProperties.property_root_count = 2U;
+	tooManyProperties.large_value_count = 0U;
+	NativeStreamedGraphLargeValuePlan noLargeValues;
+	EXPECT_THROW(static_cast<void>(NativeStreamedGraphPublicationShape::derive(tooManyProperties, noLargeValues)),
+				 FormatException);
+}
+
+TEST(NativeStreamedGraphPublicationPlanTest, FinalPublicationShapeValidatesEachCardinalityContractIndependently) {
+	const auto valid = [] {
+		NativeStreamedGraphPublicationPlan plan;
+		plan.record_count = 2U;
+		plan.edge_entity_page_count = 1U;
+		plan.property_root_count = 1U;
+		plan.large_value_count = 1U;
+		NativeStreamedGraphLargeValuePlan values;
+		values.property_pages = {1U, 1U};
+		values.reference_count = 1U;
+		values.value_count = 1U;
+		values.data_page_count = 1U;
+		values.manifest_page_count = 1U;
+		return std::pair{plan, values};
+	};
+
+	{
+		auto [plan, values] = valid();
+		values.reference_count = 0U;
+		EXPECT_THROW(static_cast<void>(NativeStreamedGraphPublicationShape::derive(plan, values)), FormatException);
+	}
+	{
+		auto [plan, values] = valid();
+		values.value_count = 0U;
+		EXPECT_THROW(static_cast<void>(NativeStreamedGraphPublicationShape::derive(plan, values)), FormatException);
+	}
+	{
+		auto [plan, values] = valid();
+		values.value_count = 2U;
+		EXPECT_THROW(static_cast<void>(NativeStreamedGraphPublicationShape::derive(plan, values)), FormatException);
+	}
+	{
+		auto [plan, values] = valid();
+		values.property_pages.property_count = 0U;
+		EXPECT_THROW(static_cast<void>(NativeStreamedGraphPublicationShape::derive(plan, values)), FormatException);
+	}
+	{
+		auto [plan, values] = valid();
+		values.property_pages.page_count = 0U;
+		EXPECT_THROW(static_cast<void>(NativeStreamedGraphPublicationShape::derive(plan, values)), FormatException);
+	}
+	{
+		auto [plan, values] = valid();
+		values.data_page_count = 0U;
+		EXPECT_THROW(static_cast<void>(NativeStreamedGraphPublicationShape::derive(plan, values)), FormatException);
+	}
+	{
+		auto [plan, values] = valid();
+		values.manifest_page_count = 0U;
+		EXPECT_THROW(static_cast<void>(NativeStreamedGraphPublicationShape::derive(plan, values)), FormatException);
+	}
 }
 
 TEST(NativeStreamedGraphPublicationPlanTest, FinalPublicationShapeRejectsPublicPageCounterOverflow) {
@@ -250,8 +310,8 @@ TEST(NativeStreamedGraphPublicationPlanTest, PageRangesRejectNoncanonicalOrOverf
 	overflowing.entity_page_count = 1U;
 	overflowing.total_public_page_count = 2U;
 	overflowing.property_page_count = 1U;
-	EXPECT_THROW(static_cast<void>(NativeStreamedGraphPageRanges::derive(
-					 PageId(std::numeric_limits<uint64_t>::max()), overflowing)),
+	EXPECT_THROW(static_cast<void>(NativeStreamedGraphPageRanges::derive(PageId(std::numeric_limits<uint64_t>::max()),
+																		 overflowing)),
 				 FormatException);
 
 	NativeStreamedGraphPublicationShape incompleteLargeValue;
@@ -260,4 +320,124 @@ TEST(NativeStreamedGraphPublicationPlanTest, PageRangesRejectNoncanonicalOrOverf
 	incompleteLargeValue.total_public_page_count = 1U;
 	EXPECT_THROW(static_cast<void>(NativeStreamedGraphPageRanges::derive(PageId(1U), incompleteLargeValue)),
 				 FormatException);
+}
+
+TEST(NativeStreamedGraphPublicationPlanTest, RejectsInvalidMergeFanInBeforeReadingTheSource) {
+	NativeBulkEdgeRecord value = record(1U, "REL");
+	const std::vector<NativeGraphLogicalIdLeaseRange> lease{{1U, 1U}};
+	const size_t runBytes = RSS_NATIVE_BULK_RUN_HEADER_BYTES + NativeBulkEdgeRecordCodec::encodedSize(value) +
+							RSS_NATIVE_BULK_RUN_RECORD_HEADER_BYTES + 1U;
+	NativeBulkEdgePublicationPreflightOptions invalid = options(runBytes, 128U);
+	invalid.maximum_sort_runs = 0U;
+	EXPECT_THROW(static_cast<void>(NativeStreamedGraphPublicationPlan::derive(source({value}), lease, invalid,
+																			  [](uint64_t) { return true; })),
+				 FormatException);
+	invalid.maximum_sort_runs = 1U;
+	EXPECT_THROW(static_cast<void>(NativeStreamedGraphPublicationPlan::derive(source({value}), lease, invalid,
+																			  [](uint64_t) { return true; })),
+				 FormatException);
+}
+
+TEST(NativeStreamedGraphPublicationPlanTest, RejectsCandidateCountArithmeticOverflow) {
+	NativeStreamedGraphPublicationPlan plan;
+	plan.token_candidate_segments = std::numeric_limits<size_t>::max();
+	plan.token_resolver_candidate_segments = 1U;
+	EXPECT_THROW(static_cast<void>(plan.maximumCandidateSegmentCount()), FormatException);
+}
+
+TEST(NativeStreamedGraphPublicationPlanTest, RejectsPageRangeShapesWithMissingRequiredFamilies) {
+	NativeStreamedGraphPublicationShape shape;
+	shape.entity_page_count = 1U;
+	shape.total_public_page_count = 1U;
+
+	NativeStreamedGraphPublicationShape dataWithoutLargeValue = shape;
+	dataWithoutLargeValue.large_value_data_page_count = 1U;
+	dataWithoutLargeValue.total_public_page_count = 2U;
+	EXPECT_THROW(static_cast<void>(NativeStreamedGraphPageRanges::derive(PageId(1U), dataWithoutLargeValue)),
+				 FormatException);
+
+	NativeStreamedGraphPublicationShape manifestWithoutLargeValue = shape;
+	manifestWithoutLargeValue.large_value_manifest_page_count = 1U;
+	manifestWithoutLargeValue.total_public_page_count = 2U;
+	EXPECT_THROW(static_cast<void>(NativeStreamedGraphPageRanges::derive(PageId(1U), manifestWithoutLargeValue)),
+				 FormatException);
+
+	NativeStreamedGraphPublicationShape incompleteLargeValue = shape;
+	incompleteLargeValue.large_value_count = 1U;
+	incompleteLargeValue.property_page_count = 1U;
+	incompleteLargeValue.total_public_page_count = 2U;
+	EXPECT_THROW(static_cast<void>(NativeStreamedGraphPageRanges::derive(PageId(1U), incompleteLargeValue)),
+				 FormatException);
+
+	NativeStreamedGraphPublicationShape missingLargeValueManifest = shape;
+	missingLargeValueManifest.large_value_count = 1U;
+	missingLargeValueManifest.property_page_count = 1U;
+	missingLargeValueManifest.large_value_data_page_count = 1U;
+	missingLargeValueManifest.total_public_page_count = 3U;
+	EXPECT_THROW(static_cast<void>(NativeStreamedGraphPageRanges::derive(PageId(1U), missingLargeValueManifest)),
+				 FormatException);
+
+	NativeStreamedGraphPublicationShape noEntity = shape;
+	noEntity.entity_page_count = 0U;
+	noEntity.total_public_page_count = 0U;
+	EXPECT_THROW(static_cast<void>(NativeStreamedGraphPageRanges::derive(PageId(1U), noEntity)), FormatException);
+}
+
+TEST(NativeStreamedGraphPublicationPlanTest, RejectsInvalidFirstPageAndChecksEmptyOptionalRanges) {
+	NativeStreamedGraphPublicationShape shape;
+	shape.entity_page_count = 1U;
+	shape.total_public_page_count = 1U;
+	EXPECT_THROW(static_cast<void>(NativeStreamedGraphPageRanges::derive(PageId{}, shape)), FormatException);
+
+	const NativeStreamedGraphPageRanges ranges = NativeStreamedGraphPageRanges::derive(PageId(7U), shape);
+	EXPECT_EQ(ranges.first_property_page, PageId(8U));
+	EXPECT_FALSE(ranges.first_large_value_page.isValid());
+	EXPECT_THROW(static_cast<void>(ranges.propertyPageAt(0U)), FormatException);
+	EXPECT_THROW(static_cast<void>(ranges.largeValuePageAt(0U)), FormatException);
+}
+
+TEST(NativeStreamedGraphPublicationPlanTest, RejectsPageRangeArithmeticOverflowAndInvalidAccessState) {
+	NativeStreamedGraphPublicationShape propertyDataOverflow;
+	propertyDataOverflow.entity_page_count = 1U;
+	propertyDataOverflow.property_page_count = std::numeric_limits<size_t>::max();
+	propertyDataOverflow.large_value_data_page_count = 1U;
+	propertyDataOverflow.large_value_count = 1U;
+	propertyDataOverflow.large_value_manifest_page_count = 1U;
+	propertyDataOverflow.total_public_page_count = std::numeric_limits<size_t>::max();
+	EXPECT_THROW(static_cast<void>(NativeStreamedGraphPageRanges::derive(PageId(1U), propertyDataOverflow)),
+				 FormatException);
+
+	NativeStreamedGraphPublicationShape manifestOverflow;
+	manifestOverflow.entity_page_count = 1U;
+	manifestOverflow.property_page_count = std::numeric_limits<size_t>::max() - 1U;
+	manifestOverflow.large_value_count = 1U;
+	manifestOverflow.large_value_data_page_count = 1U;
+	manifestOverflow.large_value_manifest_page_count = 1U;
+	manifestOverflow.total_public_page_count = std::numeric_limits<size_t>::max();
+	EXPECT_THROW(static_cast<void>(NativeStreamedGraphPageRanges::derive(PageId(1U), manifestOverflow)),
+				 FormatException);
+
+	NativeStreamedGraphPublicationShape entityOverflow;
+	entityOverflow.entity_page_count = std::numeric_limits<size_t>::max();
+	entityOverflow.property_page_count = 1U;
+	entityOverflow.total_public_page_count = std::numeric_limits<size_t>::max();
+	EXPECT_THROW(static_cast<void>(NativeStreamedGraphPageRanges::derive(PageId(1U), entityOverflow)), FormatException);
+
+	NativeStreamedGraphPublicationShape pageIdOverflow;
+	pageIdOverflow.entity_page_count = 2U;
+	pageIdOverflow.total_public_page_count = 2U;
+	EXPECT_THROW(static_cast<void>(NativeStreamedGraphPageRanges::derive(PageId(std::numeric_limits<uint64_t>::max()),
+																		 pageIdOverflow)),
+				 FormatException);
+
+	NativeStreamedGraphPublicationShape zeroTotal = entityOverflow;
+	zeroTotal.entity_page_count = 1U;
+	zeroTotal.property_page_count = 0U;
+	zeroTotal.total_public_page_count = 0U;
+	EXPECT_THROW(static_cast<void>(NativeStreamedGraphPageRanges::derive(PageId(1U), zeroTotal)), FormatException);
+
+	NativeStreamedGraphPageRanges uninitialized;
+	EXPECT_THROW(static_cast<void>(uninitialized.entityPageAt(0U)), FormatException);
+	EXPECT_THROW(static_cast<void>(uninitialized.propertyPageAt(0U)), FormatException);
+	EXPECT_THROW(static_cast<void>(uninitialized.largeValuePageAt(0U)), FormatException);
 }

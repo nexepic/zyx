@@ -48,6 +48,21 @@ namespace graph::query::optimization {
 			}
 		};
 
+		class LifetimeStatisticsProvider final : public LogicalStatisticsProvider {
+		public:
+			explicit LifetimeStatisticsProvider(bool &destroyed) : destroyed_(destroyed) {}
+
+			~LifetimeStatisticsProvider() override { destroyed_ = true; }
+
+			[[nodiscard]] std::optional<LogicalCardinalityEstimate>
+			estimate(const logical::LogicalOperator &) const noexcept override {
+				return std::nullopt;
+			}
+
+		private:
+			bool &destroyed_;
+		};
+
 		class VariableStatisticsProvider final : public LogicalStatisticsProvider {
 		public:
 			[[nodiscard]] std::optional<LogicalCardinalityEstimate>
@@ -65,6 +80,23 @@ namespace graph::query::optimization {
 				return std::nullopt;
 			}
 		};
+
+		TEST(LogicalCardinalityEstimateTest, AcceptsOrderedBoundsAndRejectsInconsistentEstimates) {
+			EXPECT_TRUE((LogicalCardinalityEstimate{0U, 0U, 0U}.isValid()));
+			EXPECT_TRUE((LogicalCardinalityEstimate{3U, 5U, 8U}.isValid()));
+			EXPECT_FALSE((LogicalCardinalityEstimate{6U, 5U, 8U}.isValid()));
+			EXPECT_FALSE((LogicalCardinalityEstimate{3U, 9U, 8U}.isValid()));
+		}
+
+		TEST(LogicalStatisticsProviderContractTest, DestroysProvidersPolymorphically) {
+			bool destroyed = false;
+			{
+				std::unique_ptr<LogicalStatisticsProvider> provider =
+						std::make_unique<LifetimeStatisticsProvider>(destroyed);
+				EXPECT_FALSE(destroyed);
+			}
+			EXPECT_TRUE(destroyed);
+		}
 
 		class DeclaredLimitWithoutLimitImplementation final : public logical::LogicalOperator {
 		public:
@@ -118,6 +150,37 @@ namespace graph::query::optimization {
 			[[nodiscard]] std::string toString() const override { return "BrokenNodeScan"; }
 			void setChild(size_t, std::unique_ptr<logical::LogicalOperator>) override {}
 			[[nodiscard]] std::unique_ptr<logical::LogicalOperator> detachChild(size_t) override { return nullptr; }
+		};
+
+		class LogicalFilterWithNoChildren final : public logical::LogicalFilter {
+		public:
+			LogicalFilterWithNoChildren() : LogicalFilter(nullptr, std::make_shared<expressions::LiteralExpression>(true)) {}
+
+			[[nodiscard]] std::vector<logical::LogicalOperator *> getChildren() const override { return {}; }
+			void setChild(size_t, std::unique_ptr<logical::LogicalOperator>) override {}
+			[[nodiscard]] std::unique_ptr<logical::LogicalOperator> detachChild(size_t) override { return nullptr; }
+		};
+
+		class LogicalFilterWithTransientNullChild final : public logical::LogicalFilter {
+		public:
+			LogicalFilterWithTransientNullChild(std::unique_ptr<logical::LogicalOperator> child,
+												std::shared_ptr<expressions::Expression> predicate) :
+					LogicalFilter(std::move(child), std::move(predicate)) {}
+
+			[[nodiscard]] std::vector<logical::LogicalOperator *> getChildren() const override {
+				if (children_calls_++ == 0U) {
+					return {const_cast<logical::LogicalNodeScan *>(&probe_)};
+				}
+				return {nullptr};
+			}
+			void setChild(size_t, std::unique_ptr<logical::LogicalOperator>) override {}
+			[[nodiscard]] std::unique_ptr<logical::LogicalOperator> detachChild(size_t) override {
+				return std::make_unique<logical::LogicalNodeScan>("n");
+			}
+
+		private:
+			mutable size_t children_calls_ = 0U;
+			logical::LogicalNodeScan probe_{"n"};
 		};
 
 		class BrokenLogicalLimit final : public logical::LogicalLimit {
@@ -183,6 +246,26 @@ namespace graph::query::optimization {
 			EXPECT_EQ(scan->getVariable(), "node");
 			ASSERT_EQ(scan->getLabels().size(), 1U);
 			EXPECT_EQ(scan->getLabels().front(), "Person");
+		}
+
+		TEST(LogicalPlanOptimizerTest, LeavesAFilterWithAnInvalidChildShapeUntouched) {
+			const LogicalOptimizationResult result =
+					LogicalPlanOptimizer{}.optimize(std::make_unique<LogicalFilterWithNoChildren>());
+			ASSERT_NE(result.root, nullptr);
+			EXPECT_EQ(result.rewrite_count, 0U);
+			EXPECT_EQ(result.root->getType(), logical::LogicalOpType::LOP_FILTER);
+		}
+
+		TEST(LogicalPlanOptimizerTest, LeavesAFilterWhoseNodeScanTypeIsNotItsConcreteClassUntouched) {
+			auto predicate = std::make_shared<expressions::BinaryOpExpression>(
+					std::make_unique<expressions::VariableReferenceExpression>("n", "key"),
+					expressions::BinaryOperatorType::BOP_EQUAL,
+					std::make_unique<expressions::LiteralExpression>(int64_t{7}));
+			auto root = std::make_unique<logical::LogicalFilter>(
+					std::make_unique<DeclaredNodeScanWithoutNodeScanImplementation>(), std::move(predicate));
+			const LogicalOptimizationResult result = LogicalPlanOptimizer{}.optimize(std::move(root));
+			ASSERT_NE(result.root, nullptr);
+			EXPECT_EQ(result.rewrite_count, 0U);
 		}
 
 		TEST(LogicalPlanOptimizerTest, PushesLimitBelowAValidNonDistinctProjection) {
@@ -510,6 +593,42 @@ namespace graph::query::optimization {
 			EXPECT_FALSE(range.maxInclusive);
 		}
 
+		TEST(LogicalPlanOptimizerTest, ReplacesLooserRangeBoundsWithStricterEndpoints) {
+			auto lower = std::make_unique<expressions::BinaryOpExpression>(
+					std::make_unique<expressions::VariableReferenceExpression>("n", "age"),
+					expressions::BinaryOperatorType::BOP_GREATER_EQUAL,
+					std::make_unique<expressions::LiteralExpression>(int64_t{10}));
+			auto stricterLower = std::make_unique<expressions::BinaryOpExpression>(
+					std::make_unique<expressions::VariableReferenceExpression>("n", "age"),
+					expressions::BinaryOperatorType::BOP_GREATER,
+					std::make_unique<expressions::LiteralExpression>(int64_t{20}));
+			auto upper = std::make_unique<expressions::BinaryOpExpression>(
+					std::make_unique<expressions::VariableReferenceExpression>("n", "age"),
+					expressions::BinaryOperatorType::BOP_LESS_EQUAL,
+					std::make_unique<expressions::LiteralExpression>(int64_t{50}));
+			auto stricterUpper = std::make_unique<expressions::BinaryOpExpression>(
+					std::make_unique<expressions::VariableReferenceExpression>("n", "age"),
+					expressions::BinaryOperatorType::BOP_LESS,
+					std::make_unique<expressions::LiteralExpression>(int64_t{40}));
+			auto predicate = std::make_shared<expressions::BinaryOpExpression>(
+					std::make_unique<expressions::BinaryOpExpression>(
+							std::make_unique<expressions::BinaryOpExpression>(std::move(lower),
+										expressions::BinaryOperatorType::BOP_AND, std::move(stricterLower)),
+							expressions::BinaryOperatorType::BOP_AND, std::move(upper)),
+					expressions::BinaryOperatorType::BOP_AND, std::move(stricterUpper));
+			auto root = std::make_unique<logical::LogicalFilter>(
+					std::make_unique<logical::LogicalNodeScan>("n"), std::move(predicate));
+			const LogicalOptimizationResult result = LogicalPlanOptimizer{}.optimize(std::move(root));
+			ASSERT_NE(result.root, nullptr);
+			const auto *filter = dynamic_cast<const logical::LogicalFilter *>(result.root.get());
+			ASSERT_NE(filter, nullptr);
+			const auto *scan = dynamic_cast<const logical::LogicalNodeScan *>(filter->getChildren().front());
+			ASSERT_NE(scan, nullptr);
+			ASSERT_EQ(scan->getRangePredicates().size(), 1U);
+			EXPECT_EQ(scan->getRangePredicates().front().minValue, PropertyValue(int64_t{20}));
+			EXPECT_EQ(scan->getRangePredicates().front().maxValue, PropertyValue(int64_t{40}));
+		}
+
 		TEST(LogicalPlanOptimizerTest, LeavesMalformedOrConflictingExistingScanPredicatesUntouched) {
 			const auto makeEqualityFilter = [](std::unique_ptr<logical::LogicalNodeScan> scan) {
 				return std::make_unique<logical::LogicalFilter>(
@@ -650,6 +769,33 @@ namespace graph::query::optimization {
 					std::shared_ptr<expressions::Expression>(
 							makeEquality(std::make_unique<expressions::LiteralExpression>(int64_t{7}))));
 			EXPECT_EQ(LogicalPlanOptimizer{}.optimize(std::move(declaredNodeScan)).rewrite_count, 0U);
+
+			auto emptyVariable = makeFilter(makeEquality(std::make_unique<expressions::LiteralExpression>(int64_t{7})), "");
+			EXPECT_EQ(LogicalPlanOptimizer{}.optimize(std::move(emptyVariable)).rewrite_count, 0U);
+
+			auto nullRightOperand = makeFilter(std::make_unique<expressions::BinaryOpExpression>(
+					std::make_unique<expressions::VariableReferenceExpression>("n", "key"),
+					expressions::BinaryOperatorType::BOP_EQUAL,
+					std::unique_ptr<expressions::Expression>{}));
+			EXPECT_EQ(LogicalPlanOptimizer{}.optimize(std::move(nullRightOperand)).rewrite_count, 0U);
+
+			// The optimizer validates the child list during traversal and re-checks it
+			// before applying a rewrite. A transient malformed view must fail closed.
+			auto transientPredicate = makeEquality(std::make_unique<expressions::LiteralExpression>(int64_t{7}));
+			auto transient = std::make_unique<LogicalFilterWithTransientNullChild>(
+					std::make_unique<logical::LogicalNodeScan>("n"),
+					std::shared_ptr<expressions::Expression>(std::move(transientPredicate)));
+			EXPECT_EQ(LogicalPlanOptimizer{}.optimize(std::move(transient)).rewrite_count, 0U);
+
+			auto compositeRangeScan = std::make_unique<logical::LogicalNodeScan>("n");
+			compositeRangeScan->setCompositeEquality({{"key"}, {PropertyValue(int64_t{1})}});
+			auto compositeRange = std::make_unique<logical::LogicalFilter>(
+					std::move(compositeRangeScan),
+					std::make_shared<expressions::BinaryOpExpression>(
+							std::make_unique<expressions::VariableReferenceExpression>("n", "key"),
+							expressions::BinaryOperatorType::BOP_GREATER,
+							std::make_unique<expressions::LiteralExpression>(int64_t{7})));
+			EXPECT_EQ(LogicalPlanOptimizer{}.optimize(std::move(compositeRange)).rewrite_count, 0U);
 		}
 
 		TEST(LogicalPlanOptimizerTest, LeavesMalformedOrOverflowingWindowsForRuntimeValidation) {

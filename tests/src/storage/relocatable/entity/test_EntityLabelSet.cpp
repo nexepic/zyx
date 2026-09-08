@@ -57,6 +57,8 @@ TEST(RelocatableEntityLabelSetTest, RoundTripsCanonicalNonzeroSortedLabels) {
 	EXPECT_EQ(LittleEndianCodec::readU32(bytes, PAYLOAD_BYTES_OFFSET), labels.size() * sizeof(uint64_t));
 	EXPECT_EQ(LittleEndianCodec::readU32(bytes, FLAGS_OFFSET), 0U);
 	EXPECT_EQ(EntityLabelSetCodec::decode(bytes), std::vector<uint64_t>(labels.begin(), labels.end()));
+	const auto alignRecordBytes = &alignEntityLabelSetRecordBytes;
+	EXPECT_EQ(alignRecordBytes(bytes.size() - 1U), bytes.size());
 }
 
 TEST(RelocatableEntityLabelSetTest, RejectsEmptyZeroUnorderedAndDuplicateLabels) {

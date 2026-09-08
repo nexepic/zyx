@@ -8,6 +8,8 @@
 
 #include "query/execution/LogicalPlanMutationRuntimeTestFixture.hpp"
 
+#include "graph/query/logical/operators/LogicalTraversal.hpp"
+
 namespace graph::query {
 
 	TEST(LogicalPlanMutationRuntimeTest, MergeUsesOneAtomicBatchAndSelectsOnCreateOrOnMatch) {
@@ -30,6 +32,14 @@ namespace graph::query {
 		EXPECT_EQ(std::get<int64_t>(matched.getRows().front().at("created").asPrimitive().getVariant()), 2);
 		EXPECT_TRUE(std::get<bool>(matched.getRows().front().at("seen").asPrimitive().getVariant()));
 		EXPECT_EQ(backend->countNodesWithLabel("Person"), 1U);
+		EXPECT_EQ(backend->graph().mutation_batches, 2U);
+
+		const QueryResult noOp = engine.execute(
+				"MERGE (n:Person {name: 'Ada'}) ON MATCH SET n.seen = true, n.missing = null RETURN n");
+		ASSERT_EQ(noOp.rowCount(), 1U);
+		const LogicalNodeResult &unchanged = noOp.getRows().front().at("n").asLogicalNode();
+		EXPECT_TRUE(std::get<bool>(unchanged.properties.at("seen").getVariant()));
+		EXPECT_FALSE(unchanged.properties.contains("missing"));
 		EXPECT_EQ(backend->graph().mutation_batches, 2U);
 
 		QueryResult combined =
@@ -63,6 +73,29 @@ namespace graph::query {
 		EXPECT_FALSE(backend->graph().nodes.contains(nodeId));
 		EXPECT_EQ(backend->countNodesWithLabel("Ephemeral"), 0U);
 		EXPECT_EQ(backend->graph().mutation_batches, 1U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, CountsRelationshipsThroughDirectAndAnchoredReadPlans) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		QueryEngine engine(backend, backend);
+
+		static_cast<void>(engine.execute(
+				"CREATE (ada:Person {name: 'Ada'}), (bob:Person {name: 'Bob'}), (cora:Person {name: 'Cora'})"));
+		static_cast<void>(engine.execute(
+				"MATCH (ada:Person {name: 'Ada'}), (bob:Person {name: 'Bob'}), (cora:Person {name: 'Cora'}) "
+				"CREATE (ada)-[:KNOWS]->(bob), (ada)-[:KNOWS]->(cora), (ada)-[:KNOWS]->(ada)"));
+
+		const QueryResult direct =
+				engine.execute("MATCH ()-[relationship:KNOWS]->() RETURN count(relationship) AS relationshipCount");
+		ASSERT_EQ(direct.rowCount(), 1U);
+		EXPECT_EQ(direct.getRows().front().at("relationshipCount").asPrimitive(), PropertyValue(3));
+
+		const QueryResult anchored = engine.execute(
+				"MATCH (source:Person {name: 'Ada'})-[relationship:KNOWS]-(target:Person) "
+				"RETURN count(target) AS targetCount");
+		ASSERT_EQ(anchored.rowCount(), 1U);
+		// The self-loop is visible in both directions but is one logical match.
+		EXPECT_EQ(anchored.getRows().front().at("targetCount").asPrimitive(), PropertyValue(3));
 	}
 
 	TEST(LogicalPlanMutationRuntimeTest, MergeDeduplicatesCreatedPatternsAcrossInputRowsAndMergesRelationships) {
@@ -127,6 +160,70 @@ namespace graph::query {
 		EXPECT_EQ(edge.type, "KNOWS");
 		EXPECT_EQ(edge.properties.at("since"), PropertyValue(int64_t(2026)));
 		EXPECT_EQ(backend->edgeCount(), 1U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, MergeOnMatchMapPatchReplacesAndMaterializesRelationshipProperties) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		QueryEngine engine(backend, backend);
+
+		static_cast<void>(engine.execute(
+				"CREATE (source:Source {name: 'source'})-"
+				"[:LINK {weight: 1, stale: true}]->(target:Target {name: 'target'})"));
+		const size_t batchesBefore = backend->graph().mutation_batches;
+
+		const QueryResult result = engine.execute(
+				"MATCH (source:Source {name: 'source'}), (target:Target {name: 'target'}) "
+				"MERGE (source)-[relationship:LINK]->(target) "
+				"ON MATCH SET relationship += {weight: 2, stale: null} RETURN relationship");
+
+		ASSERT_EQ(result.rowCount(), 1U);
+		const LogicalEdgeResult &relationship = result.getRows().front().at("relationship").asLogicalEdge();
+		EXPECT_EQ(relationship.type, "LINK");
+		EXPECT_EQ(relationship.properties.at("weight"), PropertyValue(2));
+		EXPECT_FALSE(relationship.properties.contains("stale"));
+		EXPECT_EQ(backend->graph().edges.at(relationship.edge_id).properties, relationship.properties);
+		EXPECT_EQ(backend->graph().mutation_batches, batchesBefore + 1U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, MergePostMutationsSynchronizeCreatedRelationshipProperties) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		QueryEngine engine(backend, backend);
+
+		const QueryResult result = engine.execute(
+				"MERGE (source:Source {name: 'source'})-"
+				"[relationship:LINK {weight: 1}]->(target:Target {name: 'target'}) "
+				"SET relationship += {weight: 2, added: true, transient: 'remove'} "
+				"REMOVE relationship.transient RETURN relationship");
+
+		ASSERT_EQ(result.rowCount(), 1U);
+		const LogicalEdgeResult &relationship = result.getRows().front().at("relationship").asLogicalEdge();
+		EXPECT_EQ(relationship.properties.at("weight"), PropertyValue(2));
+		EXPECT_EQ(relationship.properties.at("added"), PropertyValue(true));
+		EXPECT_FALSE(relationship.properties.contains("transient"));
+		EXPECT_EQ(backend->graph().edges.at(relationship.edge_id).properties, relationship.properties);
+		EXPECT_EQ(backend->graph().mutation_batches, 1U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, MergeUndirectedRelationshipSkipsItsSelfLoopBeforeFindingIncomingMatch) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		static_cast<void>(backend->addNode({"Person"}, {{"name", PropertyValue("Ada")}}));
+		static_cast<void>(backend->addNode({"Person"}, {{"name", PropertyValue("Bob")}}));
+		QueryEngine engine(backend, backend);
+
+		// The self-loop is visible through both adjacency directions. An undirected
+		// MERGE must not inspect it twice before finding Bob's incoming relationship.
+		static_cast<void>(engine.execute(
+				"MATCH (ada:Person {name: 'Ada'}), (bob:Person {name: 'Bob'}) "
+				"CREATE (ada)-[:OTHER]->(ada), (bob)-[:KNOWS {since: 2026}]->(ada)"));
+		const QueryResult result = engine.execute(
+				"MATCH (ada:Person {name: 'Ada'}), (bob:Person {name: 'Bob'}) "
+				"MERGE (ada)-[relationship:KNOWS {since: 2026}]-(bob) RETURN relationship");
+
+		ASSERT_EQ(result.rowCount(), 1U);
+		const LogicalEdgeResult &edge = result.getRows().front().at("relationship").asLogicalEdge();
+		EXPECT_EQ(edge.type, "KNOWS");
+		EXPECT_EQ(edge.properties.at("since"), PropertyValue(int64_t(2026)));
+		EXPECT_EQ(backend->edgeCount(), 2U);
 	}
 
 	TEST(LogicalPlanMutationRuntimeTest, MergeIncomingSelfLoopRemainsVisibleToTheIncomingDirection) {
@@ -205,6 +302,82 @@ namespace graph::query {
 		EXPECT_EQ(backend->graph().mutation_batches, 1U);
 	}
 
+	TEST(LogicalPlanMutationRuntimeTest, CreateDistinctMaterializesLogicalNodeAndRelationshipIdentity) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const uint64_t sourceId = backend->addNode({"Source"}, {});
+		const uint64_t targetId = backend->addNode({"Target"}, {});
+		QueryEngine engine(backend, backend);
+
+		static_cast<void>(engine.execute(
+				"MATCH (source:Source), (target:Target) CREATE (source)-[:LINK]->(target)"));
+		const QueryResult nodeResult = engine.execute(
+				"MATCH (node:Source) UNWIND [1, 2] AS copy "
+				"CREATE (:DistinctNodeChild {copy: copy}) RETURN DISTINCT node");
+		ASSERT_EQ(nodeResult.rowCount(), 1U);
+		EXPECT_EQ(nodeResult.getRows().front().at("node").asLogicalNode().node_id, sourceId);
+		// DISTINCT reshapes only the result: every input row remains part of the
+		// one atomic CREATE publication.
+		EXPECT_EQ(backend->countNodesWithLabel("DistinctNodeChild"), 2U);
+
+		const QueryResult edgeResult = engine.execute(
+				"MATCH ()-[relationship:LINK]->() UNWIND [1, 2] AS copy "
+				"CREATE (:DistinctRelationshipChild {copy: copy}) RETURN DISTINCT relationship");
+		ASSERT_EQ(edgeResult.rowCount(), 1U);
+		const LogicalEdgeResult &relationship = edgeResult.getRows().front().at("relationship").asLogicalEdge();
+		EXPECT_EQ(relationship.source_node_id, sourceId);
+		EXPECT_EQ(relationship.target_node_id, targetId);
+		EXPECT_EQ(relationship.type, "LINK");
+		EXPECT_EQ(backend->countNodesWithLabel("DistinctRelationshipChild"), 2U);
+		EXPECT_EQ(backend->graph().mutation_batches, 3U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, CreateDistinctRetainsDifferentLogicalEntityIdentities) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const uint64_t firstSource = backend->addNode({"Source"}, {});
+		const uint64_t secondSource = backend->addNode({"Source"}, {});
+		QueryEngine engine(backend, backend);
+
+		const QueryResult nodeResult = engine.execute(
+				"MATCH (node:Source) CREATE (:DistinctNodeChild) RETURN DISTINCT node");
+		ASSERT_EQ(nodeResult.rowCount(), 2U);
+		std::set<uint64_t> nodeIds;
+		for (const QueryResult::Row &row: nodeResult.getRows()) {
+			nodeIds.insert(row.at("node").asLogicalNode().node_id);
+		}
+		EXPECT_EQ(nodeIds, (std::set<uint64_t>{firstSource, secondSource}));
+		EXPECT_EQ(backend->countNodesWithLabel("DistinctNodeChild"), 2U);
+
+		static_cast<void>(engine.execute(
+				"MATCH (source:Source) CREATE (source)-[:LINK]->(:Target)"));
+		const QueryResult relationshipResult =
+				engine.execute("MATCH ()-[relationship:LINK]->() CREATE (:DistinctRelationshipChild) "
+							   "RETURN DISTINCT relationship");
+		ASSERT_EQ(relationshipResult.rowCount(), 2U);
+		std::set<uint64_t> relationshipIds;
+		for (const QueryResult::Row &row: relationshipResult.getRows()) {
+			relationshipIds.insert(row.at("relationship").asLogicalEdge().edge_id);
+		}
+		EXPECT_EQ(relationshipIds.size(), 2U);
+		EXPECT_EQ(backend->countNodesWithLabel("DistinctRelationshipChild"), 2U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, CreateDeleteRemapsTheSurvivingRelationshipResult) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		QueryEngine engine(backend, backend);
+
+		const QueryResult result = engine.execute(
+				"CREATE (source:Keep), (target:Keep), (discarded:Discard), "
+				"(discarded)-[temporary:TEMPORARY]->(discarded), (source)-[link:LINK]->(target) "
+				"DELETE temporary, discarded RETURN link");
+
+		ASSERT_EQ(result.rowCount(), 1U);
+		const LogicalEdgeResult &link = result.getRows().front().at("link").asLogicalEdge();
+		EXPECT_EQ(link.type, "LINK");
+		EXPECT_EQ(backend->edgeCount(), 1U);
+		EXPECT_TRUE(backend->graph().edges.contains(link.edge_id));
+		EXPECT_EQ(backend->graph().mutation_batches, 1U);
+	}
+
 	TEST(LogicalPlanMutationRuntimeTest, WriteOnlyCallSubqueryRebindsEveryOuterRowIntoOneAtomicBatch) {
 		auto backend = std::make_shared<TestLogicalGraph>();
 		const uint64_t firstSeed = backend->addNode({"Seed"}, {});
@@ -243,6 +416,31 @@ namespace graph::query {
 		EXPECT_EQ(backend->graph().mutation_batches, 1U);
 	}
 
+	TEST(LogicalPlanMutationRuntimeTest, WriteOnlyCallSubqueryCreatesAndDeletesGraphEntitiesAtomically) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const uint64_t source = backend->addNode({"Source"}, {});
+		const uint64_t target = backend->addNode({"Target"}, {});
+		QueryEngine engine(backend, backend);
+
+		const QueryResult created = engine.execute(
+				"MATCH (source:Source), (target:Target) "
+				"CALL { WITH source, target CREATE (source)-[:CALL_LINK]->(target) } RETURN source, target");
+		ASSERT_EQ(created.rowCount(), 1U);
+		ASSERT_EQ(backend->edgeCount(), 1U);
+		const TestEdge &edge = backend->graph().edges.begin()->second;
+		EXPECT_EQ(edge.source, source);
+		EXPECT_EQ(edge.target, target);
+		EXPECT_EQ(edge.type, "CALL_LINK");
+		EXPECT_EQ(backend->graph().mutation_batches, 1U);
+
+		static_cast<void>(engine.execute(
+				"MATCH ()-[relationship:CALL_LINK]->() CALL { WITH relationship DELETE relationship }"));
+		EXPECT_TRUE(backend->graph().nodes.contains(source));
+		EXPECT_TRUE(backend->graph().nodes.contains(target));
+		EXPECT_EQ(backend->edgeCount(), 0U);
+		EXPECT_EQ(backend->graph().mutation_batches, 2U);
+	}
+
 	TEST(LogicalPlanMutationRuntimeTest, InTransactionsCallUsesConfiguredIndependentPublicationBatches) {
 		auto backend = std::make_shared<TestLogicalGraph>();
 		static_cast<void>(backend->addNode({"Seed"}, {{"value", PropertyValue(3)}}));
@@ -279,6 +477,123 @@ namespace graph::query {
 		ASSERT_EQ(result.rowCount(), 3U);
 		EXPECT_EQ(backend->countNodesWithLabel("DefaultBatchedChild"), 3U);
 		EXPECT_EQ(backend->graph().mutation_batches, 1U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, InTransactionsCallExportsCreatedValuesToItsOuterProjection) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		static_cast<void>(backend->addNode({"Seed"}, {{"value", PropertyValue(3)}}));
+		static_cast<void>(backend->addNode({"Seed"}, {{"value", PropertyValue(4)}}));
+		QueryEngine engine(backend, backend);
+
+		const QueryResult result = engine.execute(
+				"MATCH (seed:Seed) "
+				"CALL { WITH seed CREATE (child:ExportedBatchChild {copied: seed.value}) "
+				"RETURN child.copied AS copied } IN TRANSACTIONS OF 1 ROWS "
+				"RETURN copied");
+
+		ASSERT_EQ(result.rowCount(), 2U);
+		std::vector<PropertyValue> copiedValues;
+		for (const QueryResult::Row &row: result.getRows()) {
+			copiedValues.push_back(row.at("copied").asPrimitive());
+		}
+		std::ranges::sort(copiedValues);
+		EXPECT_EQ(copiedValues, (std::vector<PropertyValue>{PropertyValue(3), PropertyValue(4)}));
+		EXPECT_EQ(backend->countNodesWithLabel("ExportedBatchChild"), 2U);
+		EXPECT_EQ(backend->graph().mutation_batches, 2U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, InTransactionsCallReturnsItsExportedColumnsWithoutAnOuterProjection) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		QueryEngine engine(backend, backend);
+
+		const QueryResult result = engine.execute(
+				"UNWIND [3, 4] AS value "
+				"CALL { WITH value CREATE (child:StandaloneBatchChild {copied: value}) "
+				"RETURN child.copied AS copied } IN TRANSACTIONS OF 1 ROWS");
+
+		ASSERT_EQ(result.getColumns(), (std::vector<std::string>{"copied"}));
+		ASSERT_EQ(result.rowCount(), 2U);
+		std::vector<PropertyValue> copiedValues;
+		for (const QueryResult::Row &row: result.getRows()) {
+			copiedValues.push_back(row.at("copied").asPrimitive());
+		}
+		std::ranges::sort(copiedValues);
+		EXPECT_EQ(copiedValues, (std::vector<PropertyValue>{PropertyValue(3), PropertyValue(4)}));
+		EXPECT_EQ(backend->countNodesWithLabel("StandaloneBatchChild"), 2U);
+		EXPECT_EQ(backend->graph().mutation_batches, 2U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, InTransactionsCallPreservesNodeOuterRows) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const uint64_t firstSeed = backend->addNode({"Seed"}, {{"value", PropertyValue(3)}});
+		const uint64_t secondSeed = backend->addNode({"Seed"}, {{"value", PropertyValue(4)}});
+		QueryEngine engine(backend, backend);
+
+		const QueryResult result = engine.execute(
+				"MATCH (seed:Seed) CALL { WITH seed CREATE (:NodeBatchChild {copied: seed.value}) } "
+				"IN TRANSACTIONS OF 1 ROWS RETURN seed");
+
+		ASSERT_EQ(result.rowCount(), 2U);
+		std::set<uint64_t> returnedIds;
+		for (const QueryResult::Row &row: result.getRows()) {
+			const LogicalNodeResult &seed = row.at("seed").asLogicalNode();
+			returnedIds.insert(seed.node_id);
+		}
+		EXPECT_EQ(returnedIds, (std::set<uint64_t>{firstSeed, secondSeed}));
+		EXPECT_EQ(backend->countNodesWithLabel("NodeBatchChild"), 2U);
+		EXPECT_EQ(backend->graph().mutation_batches, 2U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, InTransactionsCallPreservesRelationshipOuterRows) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const uint64_t sourceId = backend->addNode({"Source"}, {});
+		const uint64_t targetId = backend->addNode({"Target"}, {});
+		QueryEngine engine(backend, backend);
+		static_cast<void>(engine.execute(
+				"MATCH (source:Source), (target:Target) CREATE (source)-[:LINK {weight: 7}]->(target)"));
+
+		auto input = std::make_unique<logical::LogicalTraversal>(
+				std::make_unique<logical::LogicalNodeScan>("source", std::vector<std::string>{"Source"}), "source",
+				"relationship", "target", "LINK", "out", std::vector<std::string>{"Target"});
+		auto import = std::make_unique<logical::LogicalProject>(
+				std::make_unique<logical::LogicalSingleRow>(),
+				std::vector<logical::LogicalProjectItem>{
+						{std::make_shared<expressions::VariableReferenceExpression>("relationship"), "relationship"}});
+		auto body = std::make_unique<logical::LogicalCreateNode>(
+				"child", std::vector<std::string>{"RelationshipBatchChild"}, PropertyMap{},
+				std::unordered_map<std::string, std::shared_ptr<expressions::Expression>>{}, std::move(import));
+		auto call = std::make_unique<logical::LogicalCallSubquery>(
+				std::move(input), std::move(body), std::vector<std::string>{"relationship"}, std::vector<std::string>{},
+				true, 1);
+		logical::LogicalProject outer(
+				std::move(call), std::vector<logical::LogicalProjectItem>{
+						{std::make_shared<expressions::VariableReferenceExpression>("relationship"), "relationship"}});
+
+		execution::LogicalPlanMutationRuntime runtime(*backend, *backend);
+		const QueryResult result = runtime.execute(outer, nativeMutationBounds(), QueryContext{});
+
+		ASSERT_EQ(result.rowCount(), 1U);
+		const LogicalEdgeResult &relationship = result.getRows().front().at("relationship").asLogicalEdge();
+		EXPECT_EQ(relationship.type, "LINK");
+		EXPECT_EQ(relationship.properties.at("weight"), PropertyValue(7));
+		EXPECT_EQ(relationship.source_node_id, sourceId);
+		EXPECT_EQ(relationship.target_node_id, targetId);
+		EXPECT_EQ(backend->countNodesWithLabel("RelationshipBatchChild"), 1U);
+		EXPECT_EQ(backend->graph().mutation_batches, 2U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, InTransactionsCallWithNoInputRowsDoesNotPublishAnEmptyBatch) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		QueryEngine engine(backend, backend);
+
+		const QueryResult result = engine.execute(
+				"MATCH (seed:Missing) CALL { WITH seed CREATE (:UnreachableBatch {copied: seed.value}) } "
+				"IN TRANSACTIONS OF 1 ROWS RETURN seed.value AS value");
+
+		EXPECT_EQ(result.rowCount(), 0U);
+		EXPECT_EQ(result.getPipelineRowCount(), 0U);
+		EXPECT_EQ(backend->countNodesWithLabel("UnreachableBatch"), 0U);
+		EXPECT_EQ(backend->graph().mutation_batches, 0U);
 	}
 
 	TEST(LogicalPlanMutationRuntimeTest, WriteOnlyCallAppliesImportedSetAndRemoveUpdatesAtomically) {
@@ -807,6 +1122,35 @@ namespace graph::query {
 		EXPECT_EQ(backend->graph().mutation_batches, 1U);
 	}
 
+	TEST(LogicalPlanMutationRuntimeTest, AnonymousCreatePublishesWithoutExposingAnonymousBindings) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		execution::LogicalPlanMutationRuntime runtime(*backend, *backend);
+		logical::LogicalCreateNode create(
+				"", std::vector<std::string>{"Anonymous"}, PropertyMap{},
+				std::unordered_map<std::string, std::shared_ptr<expressions::Expression>>{},
+				std::make_unique<logical::LogicalSingleRow>());
+
+		const QueryResult result = runtime.execute(create, nativeMutationBounds(), QueryContext{});
+
+		EXPECT_EQ(result.rowCount(), 0U);
+		EXPECT_EQ(result.getPipelineRowCount(), 1U);
+		EXPECT_EQ(backend->countNodesWithLabel("Anonymous"), 1U);
+		EXPECT_EQ(backend->graph().mutation_batches, 1U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, CypherAnonymousCreatePublishesWithoutVisibleResultRows) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		QueryEngine engine(backend, backend);
+
+		const QueryResult result = engine.execute("CREATE (:AnonymousCypher)");
+
+		EXPECT_TRUE(result.getColumns().empty());
+		EXPECT_EQ(result.rowCount(), 0U);
+		EXPECT_EQ(result.getPipelineRowCount(), 1U);
+		EXPECT_EQ(backend->countNodesWithLabel("AnonymousCypher"), 1U);
+		EXPECT_EQ(backend->graph().mutation_batches, 1U);
+	}
+
 	TEST(LogicalPlanMutationRuntimeTest, CountStarAggregateAcceptsAProjectWrappedAnonymousCreateAndRejectsNonCanonicalForms) {
 		auto backend = std::make_shared<TestLogicalGraph>();
 		execution::LogicalPlanMutationRuntime runtime(*backend, *backend);
@@ -877,6 +1221,50 @@ namespace graph::query {
 		EXPECT_EQ(edge.source, source);
 		EXPECT_EQ(edge.target, target);
 		EXPECT_EQ(edge.type, "COUNTED");
+		EXPECT_EQ(backend->graph().mutation_batches, 1U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, TypedCreateEdgePreservesIncomingDirectionEndpointOrder) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const uint64_t source = backend->addNode({"Source"}, {});
+		const uint64_t target = backend->addNode({"Target"}, {});
+		execution::LogicalPlanMutationRuntime runtime(*backend, *backend);
+
+		auto sourceScan = std::make_unique<logical::LogicalNodeScan>("source", std::vector<std::string>{"Source"});
+		auto targetScan = std::make_unique<logical::LogicalNodeScan>("target", std::vector<std::string>{"Target"});
+		auto input = std::make_unique<logical::LogicalJoin>(std::move(sourceScan), std::move(targetScan));
+		logical::LogicalCreateEdge create(
+				"relationship", "INCOMING", PropertyMap{}, "source", "target", std::move(input), "in");
+
+		const QueryResult result = runtime.execute(create, nativeMutationBounds(), QueryContext{});
+		ASSERT_EQ(result.rowCount(), 1U);
+		ASSERT_EQ(backend->edgeCount(), 1U);
+		const TestEdge &edge = backend->graph().edges.begin()->second;
+		EXPECT_EQ(edge.source, target);
+		EXPECT_EQ(edge.target, source);
+		EXPECT_EQ(edge.type, "INCOMING");
+		EXPECT_EQ(backend->graph().mutation_batches, 1U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, TypedCreateEdgePreservesEndpointOrderForUndirectedDirection) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const uint64_t source = backend->addNode({"Source"}, {});
+		const uint64_t target = backend->addNode({"Target"}, {});
+		execution::LogicalPlanMutationRuntime runtime(*backend, *backend);
+
+		auto sourceScan = std::make_unique<logical::LogicalNodeScan>("source", std::vector<std::string>{"Source"});
+		auto targetScan = std::make_unique<logical::LogicalNodeScan>("target", std::vector<std::string>{"Target"});
+		auto input = std::make_unique<logical::LogicalJoin>(std::move(sourceScan), std::move(targetScan));
+		logical::LogicalCreateEdge create(
+				"relationship", "UNDIRECTED", PropertyMap{}, "source", "target", std::move(input), "both");
+
+		const QueryResult result = runtime.execute(create, nativeMutationBounds(), QueryContext{});
+		ASSERT_EQ(result.rowCount(), 1U);
+		ASSERT_EQ(backend->edgeCount(), 1U);
+		const TestEdge &edge = backend->graph().edges.begin()->second;
+		EXPECT_EQ(edge.source, source);
+		EXPECT_EQ(edge.target, target);
+		EXPECT_EQ(edge.type, "UNDIRECTED");
 		EXPECT_EQ(backend->graph().mutation_batches, 1U);
 	}
 

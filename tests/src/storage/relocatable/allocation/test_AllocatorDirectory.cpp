@@ -153,6 +153,51 @@ TEST_F(RelocatableAllocatorDirectoryTest, ResolvesAllocatorRootThroughPublishedM
 	snapshot.release();
 }
 
+TEST_F(RelocatableAllocatorDirectoryTest, LogicalizesOwnedAllocatorRootBeforeBootstrapRoutePublication) {
+	auto metadata = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	const Superblock current = snapshot.superblock();
+	snapshot.release();
+
+	ASSERT_TRUE(current.usesPageDirectoryBootstrap());
+	MetadataPageFile pages(io, current);
+	MetadataPagePoolAllocator allocator(io, current, MetadataPagePoolOpenMode::CPOM_ROOT_RECOVER);
+	AllocatorDirectory directory(pages, allocator);
+	MetadataWriteBatch batch(allocator, current, LogSequenceNumber(current.checkpoint_lsn.value() + 1U));
+
+	const std::optional<PhysicalSlotId> reserved =
+			directory.prepareReserveFirstFree(batch, PhysicalSlotId(1U), PhysicalSlotId(256U));
+	ASSERT_TRUE(reserved.has_value());
+	ASSERT_TRUE(batch.ownsAllocatedPage(batch.candidate().allocator_root));
+	EXPECT_FALSE(pages.readMetadataRadixUnresolved(batch.candidate().allocator_root).logical_children_enabled);
+
+	directory.prepareLogicalRootChildren(batch);
+	EXPECT_TRUE(pages.readMetadataRadixUnresolved(batch.candidate().allocator_root).logical_children_enabled);
+}
+
+TEST_F(RelocatableAllocatorDirectoryTest, PreparesFurtherReservationsThroughLogicalCandidateRootRoutes) {
+	auto metadata = RelocatableMetadataStore::initializeNewComplete(io, superblock(1U, 1U));
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	const Superblock current = snapshot.superblock();
+	snapshot.release();
+
+	MetadataPageFile pages(io, current);
+	MetadataPagePoolAllocator allocator(io, current, MetadataPagePoolOpenMode::CPOM_ROOT_RECOVER);
+	AllocatorDirectory directory(pages, allocator);
+	MetadataWriteBatch batch(allocator, current, LogSequenceNumber(current.checkpoint_lsn.value() + 1U));
+
+	const std::optional<PhysicalSlotId> first =
+			directory.prepareReserveFirstFree(batch, PhysicalSlotId(1U), PhysicalSlotId(256U));
+	ASSERT_TRUE(first.has_value());
+	directory.prepareLogicalRootChildren(batch);
+	ASSERT_TRUE(pages.readMetadataRadixUnresolved(batch.candidate().allocator_root).logical_children_enabled);
+
+	const std::optional<PhysicalSlotId> second =
+			directory.prepareReserveFirstFree(batch, PhysicalSlotId(first->value() + 1U), PhysicalSlotId(256U));
+	ASSERT_TRUE(second.has_value());
+	EXPECT_GT(second->value(), first->value());
+}
+
 TEST_F(RelocatableAllocatorDirectoryTest, PublishesCopyOnWriteSlotTransitionsAndPreservesOldRoots) {
 	const Superblock initial = superblock(1, 1);
 	SuperblockFile bootstrap(io);
@@ -558,6 +603,38 @@ TEST_F(RelocatableAllocatorDirectoryTest, ScansAcrossBitmapBytesAndSkipsUnavaila
 	EXPECT_EQ(directory.findFirstFree(current, PhysicalSlotId(201),
 									  PhysicalSlotId(RSS_ALLOCATOR_PAGE_SLOT_CAPACITY + 1U)),
 			  PhysicalSlotId(RSS_ALLOCATOR_PAGE_SLOT_CAPACITY + 1U));
+}
+
+TEST_F(RelocatableAllocatorDirectoryTest, HandlesPartiallySizedTerminalLeafAndClearsItsSummary) {
+	const Superblock initial = superblock(1, 1);
+	SuperblockFile bootstrap(io);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(io, initial);
+	MetadataPagePoolAllocator allocator(io, initial);
+	AllocatorDirectory directory(pages, allocator);
+
+	// The final physical slot falls in a leaf whose usable bitmap is shorter
+	// than the normal 256-slot capacity. Reserve every slot in one batch so the
+	// persisted summary must transition from free to full without a workload loop
+	// of individual publications.
+	const uint64_t lastValue = std::numeric_limits<uint64_t>::max();
+	const uint64_t firstValue = lastValue - static_cast<uint64_t>((lastValue - 1U) % RSS_ALLOCATOR_PAGE_SLOT_CAPACITY);
+	const PhysicalSlotId first(firstValue);
+	const PhysicalSlotId last(lastValue);
+	MetadataWriteBatch batch(allocator, initial, LogSequenceNumber(2));
+	for (uint64_t value = first.value(); value <= last.value(); ++value) {
+		directory.prepareSetAllocated(batch, PhysicalSlotId(value), true);
+		if (value == last.value()) {
+			break;
+		}
+	}
+	batch.publish(bootstrap);
+	const Superblock full = bootstrap.recover();
+	EXPECT_FALSE(directory.findFirstFree(full, first, last).has_value());
+
+	const Superblock released = directory.setAllocatedAndPublish(
+			bootstrap, full, last, false, LogSequenceNumber(3));
+	EXPECT_EQ(directory.findFirstFree(released, first, last), last);
 }
 
 TEST_F(RelocatableAllocatorDirectoryTest, FindsSparseFreeRadixRoutesWithoutScanningEveryPhysicalSlot) {

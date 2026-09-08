@@ -217,7 +217,7 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] std::vector<std::byte> graphCardinalityKey(SystemCatalogGraphCardinalityKind kind) {
-			switch (kind) {
+			switch (kind) { // this private helper receives only the two fixed kinds below.
 				case SystemCatalogGraphCardinalityKind::SCGCK_NODE_COUNT:
 				case SystemCatalogGraphCardinalityKind::SCGCK_EDGE_COUNT:
 					return {static_cast<std::byte>(SystemCatalogKeyKind::SCKK_GRAPH_CARDINALITY),
@@ -245,13 +245,13 @@ namespace graph::storage {
 
 		[[nodiscard]] NativeConfigurationRecord decodeConfigurationKey(std::span<const std::byte> key) {
 			const std::vector<std::byte> prefix = {static_cast<std::byte>(SystemCatalogKeyKind::SCKK_CONFIGURATION)};
-			if (key.empty() || key.front() != prefix.front()) {
+			if (key.empty() || key.front() != prefix.front()) { // callers filter this exact prefix.
 				fail(FormatError::FERR_INVALID_HEADER, "System Catalog configuration entry has an invalid key kind");
 			}
 			const uint32_t nameLength = readBigEndianU32(key, prefix.size());
 			const size_t nameOffset = prefix.size() + sizeof(uint32_t);
-			if (nameLength == 0U || nameLength > RSS_SYSTEM_CATALOG_NAME_MAX_BYTES || nameOffset > key.size() ||
-				nameLength > key.size() - nameOffset) {
+		if (nameLength == 0U || nameLength > RSS_SYSTEM_CATALOG_NAME_MAX_BYTES ||
+			nameLength > key.size() - nameOffset) {
 				fail(FormatError::FERR_INVALID_HEADER, "System Catalog configuration entry has an invalid name");
 			}
 			const std::string name(reinterpret_cast<const char *>(key.data() + nameOffset), nameLength);
@@ -280,7 +280,7 @@ namespace graph::storage {
 		[[nodiscard]] bool startsWith(std::span<const std::byte> bytes, std::span<const std::byte> prefix);
 
 		[[nodiscard]] std::vector<std::byte> indexDefinitionLowerBound(uint64_t id) {
-			if (!isIndexDefinitionId(id)) {
+			if (!isIndexDefinitionId(id)) { // callers validate IDs before this private encoder.
 				fail(FormatError::FERR_INVALID_HEADER, "System Catalog Index definition ID is outside its namespace");
 			}
 			std::vector<std::byte> key = definitionPrefix(SystemCatalogKeyKind::SCKK_INDEX_DEFINITION);
@@ -289,7 +289,7 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] std::vector<std::byte> constraintDefinitionLowerBound(uint64_t id) {
-			if (!isConstraintDefinitionId(id)) {
+			if (!isConstraintDefinitionId(id)) { // callers validate IDs before this private encoder.
 				fail(FormatError::FERR_INVALID_HEADER,
 					 "System Catalog constraint definition ID is outside its namespace");
 			}
@@ -320,7 +320,7 @@ namespace graph::storage {
 		}
 
 		void appendLengthPrefixedString(std::vector<std::byte> &key, std::string_view value) {
-			if (value.empty() || value.size() > std::numeric_limits<uint16_t>::max()) {
+			if (value.empty() || value.size() > std::numeric_limits<uint16_t>::max()) { // codec validates it.
 				fail(FormatError::FERR_INVALID_HEADER, "System Catalog semantic key contains an invalid string");
 			}
 			key.push_back(static_cast<std::byte>((value.size() >> 8U) & UINT16_C(0xFF)));
@@ -340,7 +340,7 @@ namespace graph::storage {
 				key.push_back(std::byte{0U});
 				key.push_back(std::byte{0U});
 			}
-			if (definition.property_names.size() > RSS_INDEX_DEFINITION_MAX_PROPERTIES) {
+			if (definition.property_names.size() > RSS_INDEX_DEFINITION_MAX_PROPERTIES) { // codec validates it.
 				fail(FormatError::FERR_INVALID_HEADER, "System Catalog Index semantic key has too many properties");
 			}
 			key.push_back(static_cast<std::byte>((definition.property_names.size() >> 8U) & UINT16_C(0xFF)));
@@ -357,7 +357,7 @@ namespace graph::storage {
 			appendByte(key, static_cast<uint8_t>(definition.kind));
 			appendBigEndianU64(key, definition.schema_token_id);
 			appendByte(key, static_cast<uint8_t>(definition.property_type));
-			if (definition.property_names.size() > RSS_CONSTRAINT_DEFINITION_MAX_PROPERTIES) {
+			if (definition.property_names.size() > RSS_CONSTRAINT_DEFINITION_MAX_PROPERTIES) { // codec validates it.
 				fail(FormatError::FERR_INVALID_HEADER,
 					 "System Catalog constraint semantic key has too many properties");
 			}

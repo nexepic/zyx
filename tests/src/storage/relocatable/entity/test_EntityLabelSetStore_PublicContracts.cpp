@@ -184,6 +184,10 @@ TEST_F(RelocatableEntityLabelSetStoreContractTest, RejectsInvalidUpdatePlansBefo
 	expectFormatError(
 			[&] { static_cast<void>(store.planNodeLabels(snapshot, 1001U, overflow, invalidAppend, LogSequenceNumber(3U))); },
 			FormatError::FERR_INVALID_HEADER);
+	invalidAppend = appendTo(31U, 0U);
+	expectFormatError(
+			[&] { static_cast<void>(store.planNodeLabels(snapshot, 1001U, overflow, invalidAppend, LogSequenceNumber(3U))); },
+			FormatError::FERR_INVALID_HEADER);
 	EntityLabelSetWritePlan invalidNewPool;
 	invalidNewPool.new_pool = EntityLabelSetNewPoolRequest{};
 	expectFormatError(
@@ -225,6 +229,28 @@ TEST_F(RelocatableEntityLabelSetStoreContractTest, UsesExistingTypedPageForIniti
 	snapshot.release();
 }
 
+TEST_F(RelocatableEntityLabelSetStoreContractTest, DiscoversTheCurrentEntityPoolWhenNoCandidateListIsSupplied) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore entities(io, *metadata);
+	ASSERT_TRUE(entities.allocateNode(nodePool(31U, 901U, 101U, 40U), 1001U, node(7U), LogSequenceNumber(2U))
+				.has_value());
+	SlottedPagePool pages(io, *metadata);
+	static_cast<void>(pages.appendEmptyPage(labelPage(31U, 901U, 102U), LogSequenceNumber(3U)));
+	EntityLabelSetStore store(io, *metadata, pages);
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+
+	// An empty candidate list is the public default: use the current sealed
+	// Entity pools rather than requiring callers to duplicate catalog state.
+	const EntityLabelSetInitialNodePlan planned = store.planInitialNodeLabels(
+			snapshot, node(101U), labels(101U, RSS_ENTITY_INLINE_LABEL_CAPACITY + 2U), {}, LogSequenceNumber(4U));
+
+	ASSERT_EQ(planned.auxiliary_pages.replacements.size(), 1U);
+	EXPECT_TRUE(planned.auxiliary_pages.appends.empty());
+	EXPECT_TRUE(planned.auxiliary_pages.new_pools.empty());
+	EXPECT_EQ(planned.overflow.page_id, PageId(102U));
+	snapshot.release();
+}
+
 TEST_F(RelocatableEntityLabelSetStoreContractTest, RejectsPageIdCollisionsForUpdateAndInitialFallbacks) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
 	EntityPageStore entities(io, *metadata);
@@ -255,5 +281,55 @@ TEST_F(RelocatableEntityLabelSetStoreContractTest, RejectsPageIdCollisionsForUpd
 																			 LogSequenceNumber(3U))); },
 			FormatError::FERR_INVALID_STATE);
 	EXPECT_EQ(entities.readNode(snapshot, 1001U), initial);
+	snapshot.release();
+}
+
+TEST_F(RelocatableEntityLabelSetStoreContractTest,
+		FallsBackToANewPoolWhenTheRequestedAppendPageIsAlreadyPublished) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore entities(io, *metadata);
+	ASSERT_TRUE(
+			entities.allocateNode(nodePool(31U, 901U, 101U, 40U), 1001U, node(7U), LogSequenceNumber(2U)).has_value());
+	SlottedPagePool pages(io, *metadata);
+	EntityLabelSetStore store(io, *metadata, pages);
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+
+	EntityLabelSetWritePlan plan = appendTo(31U, 101U);
+	plan.new_pool = EntityLabelSetNewPoolRequest{
+			SegmentId(32U), 902U, Generation(1U), PageId(102U), PhysicalSlotId(41U), PhysicalSlotId(41U)};
+	const EntityLabelSetInitialNodePlan planned = store.planInitialNodeLabels(
+			snapshot, node(101U), labels(101U, RSS_ENTITY_INLINE_LABEL_CAPACITY + 1U), plan, LogSequenceNumber(3U));
+
+	// The existing Entity page cannot be reused as a LabelSet append frame. The
+	// supplied new-pool fallback remains a valid, unpublished destination.
+	EXPECT_TRUE(planned.auxiliary_pages.appends.empty());
+	ASSERT_EQ(planned.auxiliary_pages.new_pools.size(), 1U);
+	EXPECT_EQ(planned.auxiliary_pages.new_pools.front().segment_id, SegmentId(32U));
+	EXPECT_EQ(planned.overflow.page_id, PageId(102U));
+	EXPECT_FALSE(metadata->findPageLocationOptional(snapshot, PageId(102U)).has_value());
+	snapshot.release();
+}
+
+TEST_F(RelocatableEntityLabelSetStoreContractTest, RejectsAnOverflowReferenceWithAPartialFixedPrefix) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore entities(io, *metadata);
+	ASSERT_TRUE(
+			entities.allocateNode(nodePool(31U, 901U, 101U, 40U), 1001U, node(7U), LogSequenceNumber(2U)).has_value());
+	SlottedPagePool pages(io, *metadata);
+	EntityLabelSetStore store(io, *metadata, pages);
+	const std::vector<uint64_t> complete = labels(7U, RSS_ENTITY_INLINE_LABEL_CAPACITY + 1U);
+
+	MetadataSnapshotPin writeSnapshot = metadata->openSnapshot();
+	static_cast<void>(store.updateNodeLabels(writeSnapshot, 1001U, complete, appendTo(31U, 102U), LogSequenceNumber(3U)));
+	writeSnapshot.release();
+
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	const NodeEntityRecord persisted = entities.readNode(snapshot, 1001U);
+	ASSERT_TRUE(persisted.label_overflow.isValid());
+	NodeEntityRecord malformed = persisted;
+	--malformed.inline_label_count;
+	expectFormatError([&] { static_cast<void>(store.readNodeLabels(snapshot, malformed)); },
+				  FormatError::FERR_INVALID_STATE);
+	EXPECT_EQ(store.readNodeLabels(snapshot, persisted), complete);
 	snapshot.release();
 }

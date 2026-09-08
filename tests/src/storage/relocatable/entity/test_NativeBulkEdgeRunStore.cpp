@@ -9,7 +9,9 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <limits>
 #include <memory>
+#include <vector>
 
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
@@ -52,7 +54,76 @@ namespace {
 		return result;
 	}
 
+	void refreshManifestChecksums(std::vector<std::byte> &bytes) {
+		LittleEndianCodec::writeU32(bytes, 56U, 0U);
+		LittleEndianCodec::writeU32(bytes, 60U, 0U);
+		LittleEndianCodec::writeU32(
+				bytes, 56U,
+				graph::utils::calculateCrc(bytes.data() + RSS_NATIVE_BULK_EDGE_MANIFEST_HEADER_BYTES,
+										 bytes.size() - RSS_NATIVE_BULK_EDGE_MANIFEST_HEADER_BYTES));
+		LittleEndianCodec::writeU32(bytes, 60U,
+				graph::utils::calculateCrc(bytes.data(), RSS_NATIVE_BULK_EDGE_MANIFEST_HEADER_BYTES));
+	}
+
 } // namespace
+
+TEST(NativeGraphLogicalIdLeaseRangeTest, ContainsOnlyIdsInsideANonEmptyIssuedRange) {
+	const NativeGraphLogicalIdLeaseRange zeroFirst{0U, 1U};
+	const NativeGraphLogicalIdLeaseRange zeroCount{100U, 0U};
+	const NativeGraphLogicalIdLeaseRange range{100U, 3U};
+	EXPECT_FALSE(zeroFirst.contains(0U));
+	EXPECT_FALSE(zeroCount.contains(100U));
+	EXPECT_FALSE(range.contains(99U));
+	EXPECT_TRUE(range.contains(100U));
+	EXPECT_TRUE(range.contains(102U));
+	EXPECT_FALSE(range.contains(103U));
+}
+
+TEST(NativeBulkEdgeRunManifestTest, AcceptsOnlyCanonicalLeafAndInternalHierarchyShapes) {
+	const NativeBulkRunFragmentLocation location{SegmentId(41U), Generation(3U), 71U};
+	NativeBulkEdgeRunManifest leaf;
+	leaf.location = location;
+	leaf.runs = {location};
+	leaf.record_count = 1U;
+	leaf.encoded_bytes = 16U;
+	leaf.first_edge_id = 10U;
+	leaf.last_edge_id = 10U;
+	EXPECT_TRUE(leaf.isValid());
+
+	NativeBulkEdgeRunManifest internal = leaf;
+	internal.level = 1U;
+	internal.runs.clear();
+	internal.children = {location};
+	EXPECT_TRUE(internal.isValid());
+
+	NativeBulkEdgeRunManifest invalid = leaf;
+	invalid.location = {};
+	EXPECT_FALSE(invalid.isValid());
+	invalid = leaf;
+	invalid.record_count = 0U;
+	EXPECT_FALSE(invalid.isValid());
+	invalid = leaf;
+	invalid.encoded_bytes = 0U;
+	EXPECT_FALSE(invalid.isValid());
+	invalid = leaf;
+	invalid.first_edge_id = 0U;
+	EXPECT_FALSE(invalid.isValid());
+	invalid = leaf;
+	invalid.last_edge_id = 9U;
+	EXPECT_FALSE(invalid.isValid());
+	invalid = leaf;
+	invalid.runs.clear();
+	EXPECT_FALSE(invalid.isValid());
+	invalid = leaf;
+	invalid.children = {location};
+	EXPECT_FALSE(invalid.isValid());
+	invalid = internal;
+	invalid.runs = {location};
+	EXPECT_FALSE(invalid.isValid());
+	invalid = internal;
+	invalid.children.clear();
+	EXPECT_FALSE(invalid.isValid());
+}
 
 class NativeBulkEdgeRunStoreTest : public ::testing::Test {
 protected:
@@ -89,7 +160,7 @@ protected:
 	}
 };
 
-TEST_F(NativeBulkEdgeRunStoreTest, StreamingWriterBuildsBoundedHierarchicalPrivateManifest) {
+TEST_F(NativeBulkEdgeRunStoreTest, StreamingWriterBuildsAndReleasesBoundedHierarchicalPrivateManifest) {
 	NativeBulkEdgeRunStreamingWriter writer(*store_, 71U,
 			{RSS_NATIVE_BULK_EDGE_RUN_HEADER_BYTES + NativeBulkEdgeRecordCodec::encodedSize(edge(1U)) + 8U, 30U, 4U},
 			LogSequenceNumber(2U));
@@ -112,6 +183,13 @@ TEST_F(NativeBulkEdgeRunStoreTest, StreamingWriterBuildsBoundedHierarchicalPriva
 	// a per-run publisher would end at generation 67 instead of 37.
 	EXPECT_EQ(snapshot.superblock().generation, Generation(37U));
 	snapshot.release();
+
+	// This fixed-size hierarchy must be released through both manifest levels;
+	// a root-only release would leave its private descendants reachable.
+	releaseNativeBulkEdgeManifest(*store_, manifest.location, LogSequenceNumber(80U));
+	snapshot = metadata_->openSnapshot();
+	EXPECT_EQ(metadata_->findCatalog(snapshot, manifest.location.segment_id).state, SegmentState::SGS_OBSOLETE);
+	snapshot.release();
 }
 
 TEST_F(NativeBulkEdgeRunStoreTest, DurableScratchSourceValidatesEveryPublicCapability) {
@@ -122,6 +200,11 @@ TEST_F(NativeBulkEdgeRunStoreTest, DurableScratchSourceValidatesEveryPublicCapab
 	const NativeBulkEdgeRunManifest manifest = writer.finish();
 	NativeStreamedGraphDurableScratchSource valid{store_.get(), manifest.location, 2U};
 	EXPECT_TRUE(valid.isValidFor(*metadata_));
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	NativeBulkEdgeRecordCursor records = valid.open(snapshot)();
+	ASSERT_TRUE(records().has_value());
+	EXPECT_FALSE(records().has_value());
+	snapshot.release();
 
 	NativeStreamedGraphDurableScratchSource missingStore = valid;
 	missingStore.store = nullptr;
@@ -132,6 +215,22 @@ TEST_F(NativeBulkEdgeRunStoreTest, DurableScratchSourceValidatesEveryPublicCapab
 	NativeStreamedGraphDurableScratchSource missingDepth = valid;
 	missingDepth.maximum_manifest_depth = 0U;
 	EXPECT_FALSE(missingDepth.isValidFor(*metadata_));
+	const std::filesystem::path foreignPath = path_.string() + ".foreign";
+	{
+		auto foreignFile = std::make_shared<std::fstream>(
+				foreignPath, std::ios::in | std::ios::out | std::ios::binary | std::ios::trunc);
+		ASSERT_TRUE(foreignFile->is_open());
+		auto foreignIo = std::make_shared<StorageIO>(foreignFile, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		auto foreignMetadata = RelocatableMetadataStore::initializeNew(foreignIo, superblock());
+		PhysicalSegmentAllocator foreignPhysical(foreignIo, *foreignMetadata);
+		NativeBulkRunStore foreignStore(foreignPhysical, *foreignMetadata,
+									  {PhysicalSlotId(40U), PhysicalSlotId(120U), 512U, 2U, 4U});
+		NativeStreamedGraphDurableScratchSource foreignStoreSource = valid;
+		foreignStoreSource.store = &foreignStore;
+		EXPECT_FALSE(foreignStoreSource.isValidFor(*metadata_));
+	}
+	std::error_code foreignError;
+	std::filesystem::remove(foreignPath, foreignError);
 
 	const auto rejectsOnOpen = [](NativeStreamedGraphDurableScratchSource source) {
 		EXPECT_THROW(static_cast<void>(source.open(MetadataSnapshotPin{})), FormatException);
@@ -177,8 +276,15 @@ TEST_F(NativeBulkEdgeRunStoreTest, StreamingWriterRejectsOutOfOrderAndOversizedR
 			LogSequenceNumber(2U));
 	writer.add(edge(2U));
 	expectFormatError([&] { writer.add(edge(1U)); }, FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { writer.add(edge(0U)); }, FormatError::FERR_INVALID_STATE);
 
-	NativeBulkEdgeRunStreamingWriter tooSmall(*store_, 72U,
+	NativeBulkEdgeRunStreamingWriter bounded(*store_, 72U,
+			{RSS_NATIVE_BULK_EDGE_RUN_HEADER_BYTES + NativeBulkEdgeRecordCodec::encodedSize(edge(1U)) + 8U, 1U, 4U},
+			LogSequenceNumber(2U));
+	bounded.add(edge(1U));
+	expectFormatError([&] { bounded.add(edge(2U)); }, FormatError::FERR_INVALID_STATE);
+
+	NativeBulkEdgeRunStreamingWriter tooSmall(*store_, 73U,
 			{RSS_NATIVE_BULK_EDGE_RUN_HEADER_BYTES + 1U, 3U, 4U}, LogSequenceNumber(2U));
 	expectFormatError([&] { tooSmall.add(edge(1U)); }, FormatError::FERR_INVALID_STATE);
 }
@@ -209,6 +315,17 @@ TEST_F(NativeBulkEdgeRunStoreTest, StreamingWriterRejectsInvalidLifecycleCapabil
 	NativeBulkEdgeRunStreamingOptions largeRun = valid;
 	largeRun.maximum_run_bytes = store_->maximumFragmentBytes() + 1U;
 	rejectConstruction(71U, largeRun, LogSequenceNumber(2U));
+	// A store that can encode fewer than two manifest references cannot form a
+	// bounded hierarchy, even if the requested run itself fits its payload.
+	NativeBulkRunStore oneReferenceStore(*physical_, *metadata_,
+			{PhysicalSlotId(40U), PhysicalSlotId(120U),
+			 RSS_NATIVE_BULK_EDGE_MANIFEST_HEADER_BYTES + RSS_NATIVE_BULK_EDGE_MANIFEST_REFERENCE_BYTES, 2U, 4U});
+	expectFormatError(
+			[&] {
+				static_cast<void>(NativeBulkEdgeRunStreamingWriter(
+						oneReferenceStore, 71U, {RSS_NATIVE_BULK_EDGE_RUN_HEADER_BYTES, 1U, 2U}, LogSequenceNumber(2U)));
+			},
+			FormatError::FERR_INVALID_HEADER);
 
 	NativeBulkEdgeRunStreamingWriter writer(*store_, 71U, valid, LogSequenceNumber(2U));
 	// Empty streams cannot allocate a scratch hierarchy, and a malformed refresh
@@ -217,12 +334,55 @@ TEST_F(NativeBulkEdgeRunStoreTest, StreamingWriterRejectsInvalidLifecycleCapabil
 	expectFormatError([&] { writer.abort(LogSequenceNumber(2U)); }, FormatError::FERR_INVALID_STATE);
 	expectFormatError([&] { writer.refreshCheckpointFloor(LogSequenceNumber{}); }, FormatError::FERR_INVALID_STATE);
 
+	NativeBulkEdgeRunStreamingWriter invalidAbort(*store_, 72U, valid, LogSequenceNumber(2U));
+	invalidAbort.add(edge(1U));
+	expectFormatError([&] { invalidAbort.abort(LogSequenceNumber{}); }, FormatError::FERR_INVALID_STATE);
+
 	writer.add(edge(1U));
 	const NativeBulkEdgeRunManifest manifest = writer.finish();
 	EXPECT_TRUE(manifest.isValid());
 	expectFormatError([&] { writer.add(edge(2U)); }, FormatError::FERR_INVALID_STATE);
 	expectFormatError([&] { static_cast<void>(writer.finish()); }, FormatError::FERR_INVALID_STATE);
 	expectFormatError([&] { writer.refreshCheckpointFloor(LogSequenceNumber(3U)); }, FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(NativeBulkEdgeRunStoreTest, StreamingWriterRejectsCheckpointAdvanceOverflowBeforeManifestPublication) {
+	NativeBulkEdgeRunStreamingWriter writer(*store_, 71U,
+			{RSS_NATIVE_BULK_EDGE_RUN_HEADER_BYTES + NativeBulkEdgeRecordCodec::encodedSize(edge(1U)) + 8U, 1U, 2U},
+			LogSequenceNumber(std::numeric_limits<uint64_t>::max() - 1U));
+	writer.add(edge(1U));
+
+	// Flushing the private run consumes a two-step checkpoint interval. The
+	// writer must reject the unrepresentable successor before encoding a root
+	// manifest with an invalid publication checkpoint.
+	expectFormatError([&] { static_cast<void>(writer.finish()); }, FormatError::FERR_ARITHMETIC_OVERFLOW);
+}
+
+TEST_F(NativeBulkEdgeRunStoreTest, StreamingWriterRejectsManifestDepthExhaustionAtBoundedFanout) {
+	const auto compactEdge = [](uint64_t id) {
+		NativeBulkEdgeRecord record;
+		record.edge_id = id;
+		record.source_node_id = id + 100U;
+		record.target_node_id = id + 200U;
+		record.type = "E";
+		return record;
+	};
+	const size_t maximumRunBytes =
+			RSS_NATIVE_BULK_EDGE_RUN_HEADER_BYTES + NativeBulkEdgeRecordCodec::encodedSize(compactEdge(1U)) + 8U;
+	ASSERT_LE(maximumRunBytes, RSS_NATIVE_BULK_EDGE_MANIFEST_HEADER_BYTES +
+							RSS_NATIVE_BULK_EDGE_MANIFEST_REFERENCE_BYTES * 3U);
+	NativeBulkRunStore boundedStore(*physical_, *metadata_,
+			{PhysicalSlotId(40U), PhysicalSlotId(120U),
+			 RSS_NATIVE_BULK_EDGE_MANIFEST_HEADER_BYTES + RSS_NATIVE_BULK_EDGE_MANIFEST_REFERENCE_BYTES * 3U, 1U, 1U});
+	NativeBulkEdgeRunStreamingWriter writer(boundedStore, 71U, {maximumRunBytes, 4U, 1U}, LogSequenceNumber(2U));
+	writer.add(compactEdge(1U));
+	writer.add(compactEdge(2U));
+	writer.add(compactEdge(3U));
+
+	// Three private runs fill the three-reference manifest fan-out. The next run
+	// would require a level-one parent, which is outside the caller's explicit
+	// depth budget and must fail before accepting that record.
+	expectFormatError([&] { writer.add(compactEdge(4U)); }, FormatError::FERR_INVALID_STATE);
 }
 
 TEST_F(NativeBulkEdgeRunStoreTest, RewindableSourceAndRecursiveReleasePreserveThenReclaimEveryPrivateRecord) {
@@ -253,6 +413,29 @@ TEST_F(NativeBulkEdgeRunStoreTest, RewindableSourceAndRecursiveReleasePreserveTh
 	snapshot = metadata_->openSnapshot();
 	EXPECT_EQ(metadata_->findCatalog(snapshot, manifest.location.segment_id).state, SegmentState::SGS_OBSOLETE);
 	snapshot.release();
+}
+
+TEST_F(NativeBulkEdgeRunStoreTest, DurableSourcePinsOneFreshSnapshotForEveryRewind) {
+	NativeBulkEdgeRunStreamingWriter writer(*store_, 71U,
+			{RSS_NATIVE_BULK_EDGE_RUN_HEADER_BYTES + NativeBulkEdgeRecordCodec::encodedSize(edge(1U)) + 8U, 6U, 4U},
+			LogSequenceNumber(2U));
+	for (uint64_t id = 1U; id <= 6U; ++id) {
+		writer.add(edge(id));
+	}
+	const NativeBulkEdgeRunManifest manifest = writer.finish();
+
+	const NativeBulkEdgeRecordSource source = nativeBulkEdgeRecordSource(*store_, manifest.location, 4U);
+	for (size_t pass = 0U; pass < 2U; ++pass) {
+		NativeBulkEdgeRecordCursor cursor = source();
+		for (uint64_t expected = 1U; expected <= 6U; ++expected) {
+			const std::optional<NativeBulkEdgeRecord> record = cursor();
+			ASSERT_TRUE(record.has_value());
+			EXPECT_EQ(record->edge_id, expected);
+		}
+		EXPECT_FALSE(cursor().has_value());
+	}
+
+	releaseNativeBulkEdgeManifest(*store_, manifest.location, LogSequenceNumber(40U));
 }
 
 TEST_F(NativeBulkEdgeRunStoreTest, RewindableSourceTraversesParentManifestAndRejectsAnInvalidSourceContract) {
@@ -417,6 +600,9 @@ TEST_F(NativeBulkEdgeRunStoreTest, RefreshesTheActiveCheckpointFloorAndClampsASt
 			RSS_NATIVE_BULK_EDGE_RUN_HEADER_BYTES + NativeBulkEdgeRecordCodec::encodedSize(edge(1U)) + 8U, 1U, 2U};
 	NativeBulkEdgeRunStreamingWriter writer(*store_, 71U, options, LogSequenceNumber(2U));
 	writer.refreshCheckpointFloor(LogSequenceNumber(20U));
+	// Refreshing with an earlier publication floor must not move a writer back
+	// into an already consumed LSN range.
+	writer.refreshCheckpointFloor(LogSequenceNumber(2U));
 	writer.add(edge(1U));
 	const NativeBulkEdgeRunManifest manifest = writer.finish();
 	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
@@ -443,6 +629,104 @@ TEST_F(NativeBulkEdgeRunStoreTest, ReleaseRejectsAcyclicManifestHierarchyBeyondT
 
 	expectFormatError([&] { releaseNativeBulkEdgeManifest(*store_, root, LogSequenceNumber(30U)); },
 			FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(NativeBulkEdgeRunStoreTest, ReleasePreflightsAllBatchesBeforeTerminalCheckpointOverflow) {
+	NativeBulkEdgeRunStreamingWriter writer(*store_, 71U,
+			{RSS_NATIVE_BULK_EDGE_RUN_HEADER_BYTES + NativeBulkEdgeRecordCodec::encodedSize(edge(1U)) + 8U, 3U, 2U},
+			LogSequenceNumber(2U));
+	writer.add(edge(1U));
+	writer.add(edge(2U));
+	writer.add(edge(3U));
+	const NativeBulkEdgeRunManifest manifest = writer.finish();
+
+	// This root comprises four scratch fragments and the fixture releases two at
+	// a time. A terminal second batch must be rejected before the first batch.
+	expectFormatError([&] {
+		releaseNativeBulkEdgeManifest(*store_, manifest.location,
+				LogSequenceNumber(std::numeric_limits<uint64_t>::max() - 1U));
+	}, FormatError::FERR_ARITHMETIC_OVERFLOW);
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_EQ(metadata_->findCatalog(snapshot, manifest.location.segment_id).state, SegmentState::SGS_SEALED);
+	snapshot.release();
+
+	NativeBulkEdgeRunStreamingWriter singleWriter(*store_, 72U,
+			{RSS_NATIVE_BULK_EDGE_RUN_HEADER_BYTES + NativeBulkEdgeRecordCodec::encodedSize(edge(4U)) + 8U, 1U, 2U},
+			LogSequenceNumber(20U));
+	singleWriter.add(edge(4U));
+	const NativeBulkEdgeRunManifest singleManifest = singleWriter.finish();
+	// A single terminal release batch is rejected by the same preflight rather
+	// than relying on the lower-level retire operation after the walk completes.
+	expectFormatError([&] {
+		releaseNativeBulkEdgeManifest(*store_, singleManifest.location,
+				LogSequenceNumber(std::numeric_limits<uint64_t>::max()));
+	}, FormatError::FERR_ARITHMETIC_OVERFLOW);
+	snapshot = metadata_->openSnapshot();
+	EXPECT_EQ(metadata_->findCatalog(snapshot, singleManifest.location.segment_id).state, SegmentState::SGS_SEALED);
+	snapshot.release();
+}
+
+TEST_F(NativeBulkEdgeRunStoreTest, ReleaseRejectsAliasedRunsAndMismatchedChildLevels) {
+	const NativeBulkEdgeRun run{{edge(1U)}};
+	const NativeBulkRunFragmentLocation runLocation = store_->writeOpaquePayload(
+			71U, NativeBulkEdgeRunCodec::encode(run), LogSequenceNumber(20U));
+
+	// A duplicated run reference would otherwise make the same scratch segment
+	// eligible for retirement twice. The release walk must fail closed before
+	// issuing any release batch.
+	NativeBulkEdgeRunManifest aliased;
+	aliased.runs = {runLocation, runLocation};
+	aliased.record_count = 2U;
+	aliased.encoded_bytes = 2U * NativeBulkEdgeRunCodec::encodedSize(run);
+	aliased.first_edge_id = 1U;
+	aliased.last_edge_id = 1U;
+	const NativeBulkRunFragmentLocation aliasedLocation = store_->writeOpaquePayload(
+			71U, NativeBulkEdgeRunManifestCodec::encode(aliased), LogSequenceNumber(22U));
+	expectFormatError([&] {
+		releaseNativeBulkEdgeManifest(*store_, aliasedLocation, LogSequenceNumber(30U));
+	}, FormatError::FERR_INVALID_STATE);
+
+	// A level-two root may only point at level-one children. Codec-valid bytes
+	// are still checked against the expected hierarchy during release.
+	NativeBulkEdgeRunManifest levelZeroChild;
+	levelZeroChild.runs = {runLocation};
+	levelZeroChild.record_count = 1U;
+	levelZeroChild.encoded_bytes = NativeBulkEdgeRunCodec::encodedSize(run);
+	levelZeroChild.first_edge_id = 1U;
+	levelZeroChild.last_edge_id = 1U;
+	const NativeBulkRunFragmentLocation childLocation = store_->writeOpaquePayload(
+			71U, NativeBulkEdgeRunManifestCodec::encode(levelZeroChild), LogSequenceNumber(24U));
+	NativeBulkEdgeRunManifest mismatchedRoot;
+	mismatchedRoot.level = 2U;
+	mismatchedRoot.children = {childLocation};
+	mismatchedRoot.record_count = 1U;
+	mismatchedRoot.encoded_bytes = levelZeroChild.encoded_bytes;
+	mismatchedRoot.first_edge_id = 1U;
+	mismatchedRoot.last_edge_id = 1U;
+	const NativeBulkRunFragmentLocation rootLocation = store_->writeOpaquePayload(
+			71U, NativeBulkEdgeRunManifestCodec::encode(mismatchedRoot), LogSequenceNumber(26U));
+	expectFormatError([&] {
+		releaseNativeBulkEdgeManifest(*store_, rootLocation, LogSequenceNumber(30U));
+	}, FormatError::FERR_INVALID_STATE);
+
+	// A checksum-valid parent may repeat one child location. The walk must reject
+	// the cycle-like alias before submitting its accumulated release locations.
+	NativeBulkEdgeRunManifest duplicatedChildRoot;
+	duplicatedChildRoot.level = 1U;
+	duplicatedChildRoot.children = {childLocation, childLocation};
+	duplicatedChildRoot.record_count = 2U;
+	duplicatedChildRoot.encoded_bytes = 2U * levelZeroChild.encoded_bytes;
+	duplicatedChildRoot.first_edge_id = 1U;
+	duplicatedChildRoot.last_edge_id = 1U;
+	const NativeBulkRunFragmentLocation duplicatedChildRootLocation = store_->writeOpaquePayload(
+			71U, NativeBulkEdgeRunManifestCodec::encode(duplicatedChildRoot), LogSequenceNumber(28U));
+	expectFormatError([&] {
+		releaseNativeBulkEdgeManifest(*store_, duplicatedChildRootLocation, LogSequenceNumber(30U));
+	}, FormatError::FERR_INVALID_STATE);
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_EQ(metadata_->findCatalog(snapshot, duplicatedChildRootLocation.segment_id).state, SegmentState::SGS_SEALED);
+	snapshot.release();
 }
 
 TEST(NativeBulkEdgeRunManifestCodecTest, RejectsChecksumAndSelfReferenceCorruption) {
@@ -474,6 +758,48 @@ TEST(NativeBulkEdgeRunManifestCodecTest, RejectsChecksumAndSelfReferenceCorrupti
 		graph::utils::calculateCrc(selfReference.data(), RSS_NATIVE_BULK_EDGE_MANIFEST_HEADER_BYTES));
 	expectFormatError([&] { static_cast<void>(NativeBulkEdgeRunManifestCodec::decode(selfReference, location)); },
 		FormatError::FERR_INVALID_HEADER);
+
+	// A checksummed payload with an invalid child identity must be rejected just
+	// as early as a self-reference, before it can enter a release walk.
+	auto invalidReference = encoded;
+	LittleEndianCodec::writeU64(invalidReference, RSS_NATIVE_BULK_EDGE_MANIFEST_HEADER_BYTES, 0U);
+	refreshManifestChecksums(invalidReference);
+	expectFormatError([&] { static_cast<void>(NativeBulkEdgeRunManifestCodec::decode(invalidReference, location)); },
+		FormatError::FERR_INVALID_HEADER);
+}
+
+TEST(NativeBulkEdgeRunManifestCodecTest, RejectsEveryChecksumValidMalformedInboundHeaderField) {
+	NativeBulkEdgeRunManifest manifest;
+	manifest.runs = {{SegmentId(9U), Generation(1U), 71U}};
+	manifest.record_count = 1U;
+	manifest.encoded_bytes = 88U;
+	manifest.first_edge_id = 3U;
+	manifest.last_edge_id = 3U;
+	const NativeBulkRunFragmentLocation location{SegmentId(10U), Generation(1U), 71U};
+	const std::vector<std::byte> encoded = NativeBulkEdgeRunManifestCodec::encode(manifest);
+
+	const auto rejects = [&encoded, location](const std::function<void(std::vector<std::byte> &)> &mutate) {
+		std::vector<std::byte> corrupt = encoded;
+		mutate(corrupt);
+		refreshManifestChecksums(corrupt);
+		expectFormatError([&] { static_cast<void>(NativeBulkEdgeRunManifestCodec::decode(corrupt, location)); },
+					  FormatError::FERR_INVALID_HEADER);
+	};
+
+	// Each field is independently checked before persisted bytes are trusted.
+	expectFormatError([&] { static_cast<void>(NativeBulkEdgeRunManifestCodec::decode(encoded, {})); },
+		FormatError::FERR_INVALID_HEADER);
+	rejects([](std::vector<std::byte> &bytes) { LittleEndianCodec::writeU32(bytes, 0U, 0U); });
+	rejects([](std::vector<std::byte> &bytes) { LittleEndianCodec::writeU16(bytes, 4U, 0U); });
+	rejects([](std::vector<std::byte> &bytes) { LittleEndianCodec::writeU16(bytes, 6U, 0U); });
+	rejects([](std::vector<std::byte> &bytes) { LittleEndianCodec::writeU16(bytes, 8U, 1U); });
+	rejects([](std::vector<std::byte> &bytes) { LittleEndianCodec::writeU32(bytes, 12U, 0U); });
+	rejects([](std::vector<std::byte> &bytes) { LittleEndianCodec::writeU32(bytes, 12U, 2U); });
+	rejects([](std::vector<std::byte> &bytes) { LittleEndianCodec::writeU64(bytes, 48U, 72U); });
+	rejects([](std::vector<std::byte> &bytes) { LittleEndianCodec::writeU64(bytes, 64U, 1U); });
+	rejects([](std::vector<std::byte> &bytes) { LittleEndianCodec::writeU64(bytes, 72U, 1U); });
+	rejects([](std::vector<std::byte> &bytes) { LittleEndianCodec::writeU64(bytes, 80U, 1U); });
+	rejects([](std::vector<std::byte> &bytes) { LittleEndianCodec::writeU64(bytes, 88U, 1U); });
 }
 
 TEST(NativeBulkEdgeRunManifestCodecTest, RejectsInvalidOutboundManifestShapesBeforeWritingPrivateScratch) {
@@ -569,6 +895,76 @@ TEST(NativeBulkEdgeRunManifestCodecTest, RewindableSourceRejectsAggregateDiverge
 	NativeBulkEdgeRecordCursor cursor = source();
 	ASSERT_TRUE(cursor().has_value());
 	EXPECT_THROW(static_cast<void>(cursor()), FormatException);
+}
+
+TEST(NativeBulkEdgeRunManifestCodecTest, RewindableSourceRejectsADeclaredRecordCountAboveItsDescendants) {
+	const NativeBulkRunFragmentLocation runLocation{SegmentId(9U), Generation(1U), 71U};
+	const NativeBulkRunFragmentLocation manifestLocation{SegmentId(10U), Generation(1U), 71U};
+	const NativeBulkEdgeRun run{{edge(3U)}};
+	const std::vector<std::byte> runBytes = NativeBulkEdgeRunCodec::encode(run);
+
+	NativeBulkEdgeRunManifest manifest;
+	manifest.runs = {runLocation};
+	// The manifest is wire-valid, but its declared cardinality must agree with
+	// the fully decoded private run before the cursor reports end of input.
+	manifest.record_count = 2U;
+	manifest.encoded_bytes = NativeBulkEdgeRunCodec::encodedSize(run);
+	manifest.first_edge_id = 3U;
+	manifest.last_edge_id = 3U;
+	const std::vector<std::byte> manifestBytes = NativeBulkEdgeRunManifestCodec::encode(manifest);
+
+	const NativeBulkEdgeRecordSource source = nativeBulkEdgeRecordSource(
+			manifestLocation, 1U,
+			[runLocation, manifestLocation, runBytes, manifestBytes](const NativeBulkRunFragmentLocation &location) {
+				if (location == runLocation) {
+					return runBytes;
+				}
+				if (location == manifestLocation) {
+					return manifestBytes;
+				}
+				throw FormatException(FormatError::FERR_INVALID_STATE,
+								  "test reader received a foreign native bulk Edge scratch location");
+			});
+	NativeBulkEdgeRecordCursor cursor = source();
+	ASSERT_TRUE(cursor().has_value());
+	EXPECT_THROW(static_cast<void>(cursor()), FormatException);
+}
+
+TEST(NativeBulkEdgeRunManifestCodecTest, RewindableSourceRejectsDeclaredEndpointIdsOutsideItsDescendants) {
+	const NativeBulkRunFragmentLocation runLocation{SegmentId(9U), Generation(1U), 71U};
+	const NativeBulkRunFragmentLocation manifestLocation{SegmentId(10U), Generation(1U), 71U};
+	const NativeBulkEdgeRun run{{edge(3U)}};
+	const std::vector<std::byte> runBytes = NativeBulkEdgeRunCodec::encode(run);
+
+	const auto reject = [&](uint64_t firstEdgeId, uint64_t lastEdgeId) {
+		NativeBulkEdgeRunManifest manifest;
+		manifest.runs = {runLocation};
+		manifest.record_count = 1U;
+		manifest.encoded_bytes = NativeBulkEdgeRunCodec::encodedSize(run);
+		manifest.first_edge_id = firstEdgeId;
+		manifest.last_edge_id = lastEdgeId;
+		const std::vector<std::byte> manifestBytes = NativeBulkEdgeRunManifestCodec::encode(manifest);
+		const NativeBulkEdgeRecordSource source = nativeBulkEdgeRecordSource(
+				manifestLocation, 1U,
+				[runLocation, manifestLocation, runBytes, manifestBytes](const NativeBulkRunFragmentLocation &location) {
+					if (location == runLocation) {
+						return runBytes;
+					}
+					if (location == manifestLocation) {
+						return manifestBytes;
+					}
+					throw FormatException(FormatError::FERR_INVALID_STATE,
+									  "test reader received a foreign native bulk Edge scratch location");
+				});
+		NativeBulkEdgeRecordCursor cursor = source();
+		ASSERT_TRUE(cursor().has_value());
+		EXPECT_THROW(static_cast<void>(cursor()), FormatException);
+	};
+
+	// Each endpoint is stored independently in the manifest and must be checked
+	// against the same decoded descendants before the source is accepted.
+	reject(2U, 3U);
+	reject(3U, 4U);
 }
 
 TEST(NativeBulkEdgeRunManifestCodecTest, RewindableSourceRejectsARecordBeyondItsDeclaredRootCount) {
@@ -730,4 +1126,94 @@ TEST(NativeBulkEdgeRunManifestCodecTest, RewindableSourceRejectsForeignOutOfOrde
 								  "test reader received a foreign native bulk Edge scratch location");
 			});
 	EXPECT_THROW(static_cast<void>(foreignSource()), FormatException);
+}
+
+TEST(NativeBulkEdgeRunManifestCodecTest, RewindableSourceRejectsARepeatedChildManifestBeforeDuplicateRecordsEscape) {
+	const NativeBulkRunFragmentLocation runLocation{SegmentId(9U), Generation(1U), 71U};
+	const NativeBulkRunFragmentLocation childLocation{SegmentId(10U), Generation(1U), 71U};
+	const NativeBulkRunFragmentLocation rootLocation{SegmentId(11U), Generation(1U), 71U};
+	const NativeBulkEdgeRun run{{edge(3U)}};
+	const std::vector<std::byte> runBytes = NativeBulkEdgeRunCodec::encode(run);
+
+	NativeBulkEdgeRunManifest child;
+	child.runs = {runLocation};
+	child.record_count = 1U;
+	child.encoded_bytes = NativeBulkEdgeRunCodec::encodedSize(run);
+	child.first_edge_id = 3U;
+	child.last_edge_id = 3U;
+	const std::vector<std::byte> childBytes = NativeBulkEdgeRunManifestCodec::encode(child);
+
+	NativeBulkEdgeRunManifest root;
+	root.level = 1U;
+	root.children = {childLocation, childLocation};
+	root.record_count = 2U;
+	root.encoded_bytes = 2U * child.encoded_bytes;
+	root.first_edge_id = 3U;
+	root.last_edge_id = 3U;
+	const std::vector<std::byte> rootBytes = NativeBulkEdgeRunManifestCodec::encode(root);
+
+	const NativeBulkEdgeRecordSource source = nativeBulkEdgeRecordSource(
+			rootLocation, 2U,
+			[runLocation, childLocation, rootLocation, runBytes, childBytes, rootBytes](
+					const NativeBulkRunFragmentLocation &location) {
+				if (location == runLocation) {
+					return runBytes;
+				}
+				if (location == childLocation) {
+					return childBytes;
+				}
+				if (location == rootLocation) {
+					return rootBytes;
+				}
+				throw FormatException(FormatError::FERR_INVALID_STATE,
+								  "test reader received a foreign native bulk Edge scratch location");
+			});
+	NativeBulkEdgeRecordCursor cursor = source();
+	ASSERT_TRUE(cursor().has_value());
+	EXPECT_THROW(static_cast<void>(cursor()), FormatException);
+}
+
+TEST_F(NativeBulkEdgeRunStoreTest, StreamingWriterMergesAnOrphanedLowerManifestIntoTheFinalRoot) {
+	// A four-reference manifest fan-out forces the finalization path to carry one
+	// completed lower-level manifest into an already populated higher level.
+	const auto compactEdge = [](uint64_t id) {
+		NativeBulkEdgeRecord result;
+		result.edge_id = id;
+		result.source_node_id = id + 100U;
+		result.target_node_id = id + 200U;
+		result.type = "E";
+		return result;
+	};
+	NativeBulkRunStore compactStore(*physical_, *metadata_,
+			{PhysicalSlotId(40U), PhysicalSlotId(120U), 160U, 1U, 4U});
+	NativeBulkEdgeRunStreamingWriter writer(compactStore, 71U,
+			{RSS_NATIVE_BULK_EDGE_RUN_HEADER_BYTES + NativeBulkEdgeRecordCodec::encodedSize(compactEdge(1U)) + 8U, 17U,
+					4U},
+			LogSequenceNumber(2U));
+	for (uint64_t id = 1U; id <= 17U; ++id) {
+		writer.add(compactEdge(id));
+	}
+	const NativeBulkEdgeRunManifest manifest = writer.finish();
+	EXPECT_TRUE(manifest.isValid());
+	EXPECT_EQ(manifest.record_count, 17U);
+	EXPECT_EQ(manifest.first_edge_id, 1U);
+	EXPECT_EQ(manifest.last_edge_id, 17U);
+	EXPECT_GE(manifest.level, 2U);
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	const NativeBulkEdgeRecordSource source = nativeBulkEdgeRecordSource(
+			manifest.location, 4U,
+			[&compactStore, &snapshot](const NativeBulkRunFragmentLocation &location) {
+				return compactStore.readOpaquePayload(snapshot, location);
+			});
+	NativeBulkEdgeRecordCursor cursor = source();
+	for (uint64_t expected = 1U; expected <= 17U; ++expected) {
+		const std::optional<NativeBulkEdgeRecord> record = cursor();
+		ASSERT_TRUE(record.has_value());
+		EXPECT_EQ(record->edge_id, expected);
+	}
+	EXPECT_FALSE(cursor().has_value());
+	snapshot.release();
+
+	releaseNativeBulkEdgeManifest(compactStore, manifest.location, LogSequenceNumber(80U));
 }

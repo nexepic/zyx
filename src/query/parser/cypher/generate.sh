@@ -10,6 +10,8 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Find Java runtime - try multiple methods
 JAVA_CMD=""
 
@@ -57,8 +59,8 @@ echo "Using Java: $JAVA_CMD"
 
 # ANTLR4 configuration
 ANTLR_VERSION="4.13.1"
-ANTLR_JAR="antlr-${ANTLR_VERSION}-complete.jar"
-OUTPUT_DIR="generated"
+ANTLR_JAR="${SCRIPT_DIR}/antlr-${ANTLR_VERSION}-complete.jar"
+OUTPUT_DIR="${SCRIPT_DIR}/generated"
 
 # Download ANTLR4 if not present
 if [ ! -f "$ANTLR_JAR" ]; then
@@ -76,11 +78,15 @@ echo ""
 echo "=========================================="
 echo "Generating ANTLR4 C++ sources"
 echo "=========================================="
-echo "Grammar files: CypherLexer.g4, CypherParser.g4"
+echo "Grammar files: generated/CypherLexer.g4, generated/CypherParser.g4"
 echo "Output directory: $OUTPUT_DIR"
 echo ""
 
-# Generate Lexer first (Parser depends on it)
+# The checked-in grammar sources live alongside their generated C++ artifacts.
+# Generate in that directory so ANTLR writes the replacement artifacts in place.
+pushd "$OUTPUT_DIR" >/dev/null
+
+# Generate Lexer first (Parser depends on it).
 echo "Generating Lexer..."
 "$JAVA_CMD" -jar "$ANTLR_JAR" \
     -Dlanguage=Cpp \
@@ -94,10 +100,7 @@ echo "Generating Parser..."
     -no-listener \
     CypherParser.g4
 
-# Move generated files to the output directory
-echo ""
-echo "Moving generated files to $OUTPUT_DIR/..."
-mv -f CypherLexer.* CypherParser.* CypherParserBaseVisitor.* CypherParserVisitor.* "$OUTPUT_DIR/" 2>/dev/null || true
+popd >/dev/null
 
 echo ""
 echo "=========================================="

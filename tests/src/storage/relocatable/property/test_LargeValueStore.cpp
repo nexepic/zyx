@@ -387,6 +387,14 @@ TEST_F(RelocatableMetadataStoreTest, LargeValueStoreDeduplicatesFullContentIdent
 	EXPECT_TRUE(afterReopen.content_deduplicated);
 	EXPECT_EQ(afterReopen.dedup_candidates_scanned, 1U);
 	MetadataSnapshotPin snapshot = reopened->openSnapshot();
+	const std::optional<LargeValueRef> directDuplicate =
+			reopenedStore.findContentDuplicate(snapshot, input, writeOptions().kind, writeOptions().media_type, 1U);
+	ASSERT_TRUE(directDuplicate.has_value());
+	EXPECT_EQ(*directDuplicate, first.reference);
+	const std::vector<std::byte> differentInput = bytes(input.size() + 1U);
+	EXPECT_FALSE(reopenedStore.findContentDuplicate(snapshot, differentInput, writeOptions().kind,
+															 writeOptions().media_type, 1U)
+					 .has_value());
 	EXPECT_EQ(reopenedStore.read(snapshot, afterReopen.reference), input);
 	const BTreeIndex contentIndex(RSS_LARGE_VALUE_CONTENT_INDEX_ID, reopenedStore.contentIndex(), *reopened);
 	EXPECT_EQ(contentIndex.scan(snapshot, std::nullopt, 2U).size(), 1U);
@@ -579,6 +587,9 @@ TEST_F(RelocatableMetadataStoreTest, LargeValueStoreRejectsInvalidWritePoliciesB
 	expectRejected(invalid);
 	invalid = writeOptions();
 	invalid.extent_class = static_cast<LargeValueExtentClass>(0xFFFFU);
+	expectRejected(invalid);
+	invalid = writeOptions();
+	invalid.maximum_dedup_candidates = 0U;
 	expectRejected(invalid);
 
 	const LargeValueCompressionOptions compression{};

@@ -268,6 +268,32 @@ TEST_F(DriverAbiGraphValuesTest, DirectCreateGraphAcceptsNullProperties) {
     EXPECT_EQ(error, nullptr);
 }
 
+TEST_F(DriverAbiGraphValuesTest, QueryResultsExposeTemporalValuesAsIsoStrings) {
+    zyx_driver_result_t *result = nullptr;
+    ASSERT_EQ(zyx_driver_db_execute(db,
+                                    "RETURN date('2024-06-15'), datetime('2024-06-15T10:30:00'), "
+                                    "duration('P1Y2M3DT4H5M6S')",
+                                    nullptr, &result, &error),
+              ZYX_DRIVER_OK);
+    ASSERT_NE(result, nullptr);
+    ASSERT_EQ(zyx_driver_result_next(result, &error), ZYX_DRIVER_ROW);
+
+    const char *date = nullptr;
+    const char *dateTime = nullptr;
+    const char *duration = nullptr;
+    ASSERT_EQ(zyx_driver_result_get_string(result, 0, &date, &error), ZYX_DRIVER_OK);
+    ASSERT_EQ(zyx_driver_result_get_string(result, 1, &dateTime, &error), ZYX_DRIVER_OK);
+    ASSERT_EQ(zyx_driver_result_get_string(result, 2, &duration, &error), ZYX_DRIVER_OK);
+    ASSERT_NE(date, nullptr);
+    ASSERT_NE(dateTime, nullptr);
+    ASSERT_NE(duration, nullptr);
+    EXPECT_STREQ(date, "2024-06-15");
+    EXPECT_NE(std::string(dateTime).find("2024-06-15T10:30:00"), std::string::npos);
+    EXPECT_EQ(duration[0], 'P');
+    EXPECT_EQ(error, nullptr);
+    zyx_driver_result_free(result);
+}
+
 TEST_F(DriverAbiGraphValuesTest, NodeExposesPluralLabelsAndPropertiesJson) {
     zyx_driver_result_t *result = nullptr;
 
@@ -545,6 +571,42 @@ TEST_F(DriverAbiGraphValuesTest, GraphGetterErrorsPreserveStatusWithoutErrorOut)
     EXPECT_EQ(zyx_driver_result_get_edge_target_id(result, 1, nullptr, nullptr), ZYX_DRIVER_INVALID_ARGUMENT);
     EXPECT_EQ(zyx_driver_result_get_edge_type(result, 1, nullptr, nullptr), ZYX_DRIVER_INVALID_ARGUMENT);
     EXPECT_EQ(zyx_driver_result_get_entity_properties_json(result, 0, nullptr, nullptr), ZYX_DRIVER_INVALID_ARGUMENT);
+
+    zyx_driver_result_free(result);
+}
+
+TEST_F(DriverAbiGraphValuesTest, EntityPropertiesJsonEncodesPersistedBytesAsCanonicalHex) {
+    zyx_driver_params_t *params = nullptr;
+    zyx_driver_result_t *result = nullptr;
+    const std::vector<uint8_t> payload{0x00U, 0x10U, 0xA5U, 0xFFU};
+
+    ASSERT_EQ(zyx_driver_params_create(&params, &error), ZYX_DRIVER_OK);
+    ASSERT_EQ(zyx_driver_params_set_bytes(params, "payload", payload.data(), payload.size(), &error),
+              ZYX_DRIVER_OK);
+
+    int64_t nodeId = 0;
+    ASSERT_EQ(zyx_driver_db_create_node(db, "JsonBytes", params, &nodeId, &error), ZYX_DRIVER_OK);
+    ASSERT_GT(nodeId, 0);
+    zyx_driver_params_free(params, &error);
+    params = nullptr;
+
+    ASSERT_EQ(zyx_driver_db_execute(db, "MATCH (node:JsonBytes) RETURN node", nullptr, &result, &error),
+              ZYX_DRIVER_OK);
+    ASSERT_EQ(zyx_driver_result_next(result, &error), ZYX_DRIVER_ROW);
+    const char *propertiesJson = nullptr;
+    ASSERT_EQ(zyx_driver_result_get_entity_properties_json(result, 0U, &propertiesJson, &error), ZYX_DRIVER_OK);
+    ASSERT_NE(propertiesJson, nullptr);
+    EXPECT_NE(std::string(propertiesJson).find("\"payload\":{\"$zyx_bytes\":\"0010a5ff\"}"),
+              std::string::npos);
+
+    zyx_driver_value_ref_t node{};
+    ASSERT_EQ(zyx_driver_result_get_value(result, 0U, &node, &error), ZYX_DRIVER_OK);
+    propertiesJson = nullptr;
+    ASSERT_EQ(zyx_driver_value_ref_get_entity_properties_json(nullptr, &node, &propertiesJson, &error),
+              ZYX_DRIVER_OK);
+    ASSERT_NE(propertiesJson, nullptr);
+    EXPECT_NE(std::string(propertiesJson).find("\"payload\":{\"$zyx_bytes\":\"0010a5ff\"}"),
+              std::string::npos);
 
     zyx_driver_result_free(result);
 }

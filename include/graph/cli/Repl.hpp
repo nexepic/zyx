@@ -19,6 +19,11 @@
  **/
 
 #pragma once
+#include <functional>
+#include <optional>
+#include <string>
+#include <vector>
+
 #include "DebugCommandHandler.hpp"
 #include "graph/core/Database.hpp"
 
@@ -36,6 +41,10 @@ namespace graph {
 		Database &db;
 		void handleCommand(const std::string &command) const;
 		void runBasic() const; // Fallback for non-TTY environments
+		// Keeps the command lifecycle independent from the terminal implementation.
+		// Production supplies inputxx callbacks; tests use scripted callbacks.
+		void runInteractive(const std::function<std::optional<std::string>(const std::string &)> &readLine,
+							const std::function<void(const std::string &)> &addHistory) const;
 		void printBanner(bool basicMode) const;
 		void printHelp() const;
 		void echoMultilineBuffer(const std::string &buffer) const;
@@ -51,6 +60,13 @@ namespace graph {
 
 		// Expose private methods for testing
 		void runBasicPublic() const { REPL::runBasic(); }
+		void handleCommandPublic(const std::string &command) const { REPL::handleCommand(command); }
+		void printBannerPublic(bool basicMode) const { REPL::printBanner(basicMode); }
+		void printHelpPublic() const { REPL::printHelp(); }
+		void runInteractivePublic(const std::function<std::optional<std::string>(const std::string &)> &readLine,
+								  const std::function<void(const std::string &)> &addHistory) const {
+			REPL::runInteractive(readLine, addHistory);
+		}
 	};
 
 } // namespace graph
