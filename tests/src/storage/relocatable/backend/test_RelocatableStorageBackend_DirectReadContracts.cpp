@@ -17,6 +17,7 @@
 #include "storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp"
 
 #include "CypherParserImpl.hpp"
+#include "graph/debug/PerfTrace.hpp"
 
 using namespace graph::storage;
 using namespace relocatable_storage_backend_test;
@@ -68,6 +69,7 @@ TEST_F(RelocatableStorageBackendTest, ReadSnapshotRetainsItsPinAcrossMovesAndBec
 	materializeNativeDatabase();
 	RelocatableStorageBackendOptions options = backendOptions();
 	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	const RelocatableStorageBackendOptions reopenOptions = options;
 	RelocatableStorageBackend backend(std::move(options));
 	backend.open();
 
@@ -101,6 +103,7 @@ TEST_F(RelocatableStorageBackendTest, LogicalPlanRuntimeExecutesRelocatableNodeA
 			.maximum_node_page_records = 1U,
 			.maximum_metadata_pages_per_node_page = 8U,
 			.maximum_edges_per_node = 2U,
+			.maximum_edge_records = 4U,
 			.maximum_adjacency_page_records = 1U,
 			.maximum_property_entries = 2U,
 			.maximum_rows = 4U,
@@ -139,6 +142,7 @@ TEST_F(RelocatableStorageBackendTest, LogicalPlanRuntimeUsesNativeScalarAndCompo
 			.maximum_node_page_records = 2U,
 			.maximum_metadata_pages_per_node_page = 8U,
 			.maximum_edges_per_node = 2U,
+			.maximum_edge_records = 8U,
 			.maximum_adjacency_page_records = 2U,
 			.maximum_property_entries = 4U,
 			.maximum_rows = 8U,
@@ -198,8 +202,17 @@ TEST_F(RelocatableStorageBackendTest, DirectBackendReadPagesRetainThePinnedLogic
 	EXPECT_EQ(backend.readEdge(snapshot, fixture.knows_edge_id).type, "KNOWS");
 	EXPECT_TRUE(backend.containsLogicalNode(snapshot, fixture.unlabeled_node_id));
 	EXPECT_FALSE(backend.containsLogicalNode(snapshot, fixture.mentions_edge_id + 100U));
+	const std::vector<uint64_t> endpointIds{fixture.person_node_id, fixture.unlabeled_node_id,
+			fixture.mentions_edge_id + 100U};
+	const std::vector<bool> endpointPresence = backend.containsLogicalNodesSorted(snapshot, endpointIds);
+	EXPECT_EQ(endpointPresence, (std::vector<bool>{true, true, false}));
+	EXPECT_THROW(static_cast<void>(backend.containsLogicalNodesSorted(
+			 snapshot, std::vector<uint64_t>{fixture.unlabeled_node_id, fixture.person_node_id})), std::invalid_argument);
+	std::unique_ptr<LogicalGraphReadSnapshot> logicalSnapshot = backend.openLogicalGraphReadSnapshot();
+	ASSERT_NE(logicalSnapshot, nullptr);
+	EXPECT_EQ(logicalSnapshot->containsNodesSorted(endpointIds), endpointPresence);
 	EXPECT_THROW(static_cast<void>(backend.enqueueLargeValuePageCompaction(SegmentId(1U), SegmentId(2U), 1U)),
-			 std::logic_error);
+				 std::logic_error);
 
 	const LogicalGraphNodePage first = backend.scanNodesAfter(snapshot, 0U, 1U, 8U);
 	ASSERT_EQ(first.nodes.size(), 1U);
@@ -209,6 +222,7 @@ TEST_F(RelocatableStorageBackendTest, DirectBackendReadPagesRetainThePinnedLogic
 	ASSERT_EQ(second.nodes.size(), 1U);
 	EXPECT_EQ(second.nodes.front().node_id, fixture.unlabeled_node_id);
 	EXPECT_THROW(static_cast<void>(backend.scanNodesAfter(snapshot, 0U, 0U, 8U)), FormatException);
+	logicalSnapshot.reset();
 
 	const LogicalGraphAdjacencyPage firstAdjacency = backend.scanAdjacentEdges(
 			snapshot, fixture.person_node_id, LogicalGraphReadDirection::LGRD_OUTGOING, std::nullopt, 1U);
@@ -682,6 +696,193 @@ TEST_F(RelocatableStorageBackendTest, DirectRangeLookupsUseTheCanonicalNativeInd
 	EXPECT_TRUE(emptyCompositePrefix->empty());
 	snapshot.release();
 	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, ShapedEdgeBatchSpansEntityPagesAndPreservesLogicalOrder) {
+	materializeNativeDatabase();
+	RelocatableStorageBackendOptions options = backendOptions();
+	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(std::move(options));
+	backend.open();
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes({{{"Source"}, {}}, {{"Target"}, {}}});
+	ASSERT_EQ(nodes.size(), 2U);
+	std::vector<LogicalGraphEdgeCreateRequest> requests;
+	requests.reserve(600U);
+	for (size_t index = 0U; index < 600U; ++index) {
+		requests.push_back({nodes.front(), nodes.back(), "LINK", {{"ordinal", PropertyValue(static_cast<int64_t>(index))}}});
+	}
+	const std::vector<uint64_t> edgeIds = backend.createLogicalEdges(requests);
+	ASSERT_EQ(edgeIds.size(), requests.size());
+
+	const bool valuesWereEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	std::unique_ptr<LogicalGraphReadSnapshot> snapshot = backend.openLogicalGraphReadSnapshot();
+	ASSERT_NE(snapshot, nullptr);
+	const std::optional<uint32_t> ordinalToken = snapshot->findPropertyToken("ordinal");
+	ASSERT_TRUE(ordinalToken.has_value());
+	const std::vector<LogicalGraphEdge> edges = snapshot->readEdgesShapedSorted(
+			edgeIds, EntityReadShape{.include_type = true, .property_tokens = {*ordinalToken}});
+	const std::array<std::string_view, 1U> ordinalKey{"ordinal"};
+	const std::vector<std::vector<PropertyValue>> selectedColumns =
+			snapshot->readEdgePropertyColumnsSorted(edgeIds, ordinalKey);
+	const graph::debug::PerfTrace::Snapshot trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
+
+	ASSERT_EQ(edges.size(), edgeIds.size());
+	for (size_t index = 0U; index < edges.size(); ++index) {
+		EXPECT_EQ(edges[index].edge_id, edgeIds[index]);
+		EXPECT_EQ(edges[index].source_node_id, nodes.front());
+		EXPECT_EQ(edges[index].target_node_id, nodes.back());
+		EXPECT_EQ(edges[index].type, "LINK");
+		ASSERT_EQ(edges[index].properties.size(), 1U);
+		EXPECT_EQ(edges[index].properties.front().key, "ordinal");
+		EXPECT_EQ(edges[index].properties.front().value, PropertyValue(static_cast<int64_t>(index)));
+	}
+	ASSERT_EQ(selectedColumns.size(), 1U);
+	ASSERT_EQ(selectedColumns.front().size(), edgeIds.size());
+	for (size_t index = 0U; index < selectedColumns.front().size(); ++index) {
+		EXPECT_EQ(selectedColumns.front()[index], PropertyValue(static_cast<int64_t>(index)));
+	}
+	ASSERT_TRUE(trace.contains("native_graph.read.edge_sorted_batch_calls"));
+	EXPECT_EQ(trace.at("native_graph.read.edge_sorted_batch_calls").totalValue, 1);
+	ASSERT_TRUE(trace.contains("native_graph.read.edge_sorted_batch_entries"));
+	EXPECT_EQ(trace.at("native_graph.read.edge_sorted_batch_entries").totalValue,
+			static_cast<int64_t>(edgeIds.size()));
+	ASSERT_TRUE(trace.contains("native_graph.read.edge_sorted_batch_directory_range_calls"));
+	EXPECT_EQ(trace.at("native_graph.read.edge_sorted_batch_directory_range_calls").totalValue, 1);
+	ASSERT_TRUE(trace.contains("native_graph.read.edge_sorted_batch_unique_io_ids"));
+	EXPECT_EQ(trace.at("native_graph.read.edge_sorted_batch_unique_io_ids").totalValue,
+			static_cast<int64_t>(edgeIds.size()));
+	ASSERT_TRUE(trace.contains("native_graph.read.edge_sorted_batch_entity_page_pins"));
+	EXPECT_GT(trace.at("native_graph.read.edge_sorted_batch_entity_page_pins").totalValue, 1);
+	EXPECT_LE(trace.at("native_graph.read.edge_sorted_batch_entity_page_pins").totalValue,
+			static_cast<int64_t>(edgeIds.size()));
+	ASSERT_TRUE(trace.contains("native_graph.read.edge_selected_property_output_values"));
+	EXPECT_EQ(trace.at("native_graph.read.edge_selected_property_output_values").totalValue,
+			static_cast<int64_t>(edgeIds.size()));
+	ASSERT_TRUE(trace.contains("native_graph.read.edge_selected_property_output_payload_bytes"));
+	EXPECT_GT(trace.at("native_graph.read.edge_selected_property_output_payload_bytes").totalValue, 0);
+	ASSERT_TRUE(trace.contains("native_graph.read.edge_selected_column_output_values"));
+	EXPECT_EQ(trace.at("native_graph.read.edge_selected_column_output_values").totalValue,
+			static_cast<int64_t>(edgeIds.size()));
+	ASSERT_TRUE(trace.contains("native_graph.read.edge_selected_column_output_payload_bytes"));
+	EXPECT_GT(trace.at("native_graph.read.edge_selected_column_output_payload_bytes").totalValue, 0);
+	const std::array<uint64_t, 2U> unorderedIds{edgeIds[1U], edgeIds[0U]};
+	EXPECT_THROW(static_cast<void>(snapshot->readEdgesShapedSorted(
+			unorderedIds, EntityReadShape{.include_type = true})), std::exception);
+	const std::array<uint64_t, 2U> duplicateIds{edgeIds[0U], edgeIds[0U]};
+	EXPECT_THROW(static_cast<void>(snapshot->readEdgesShapedSorted(
+			duplicateIds, EntityReadShape{.include_type = true})), std::exception);
+	snapshot.reset();
+	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, ShapedEdgeBatchReadsLargeValuePropertyColumn) {
+	materializeNativeDatabase();
+	RelocatableStorageBackendOptions options = backendOptions();
+	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend backend(std::move(options));
+	backend.open();
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes({{{"Source"}, {}}, {{"Target"}, {}}});
+	ASSERT_EQ(nodes.size(), 2U);
+	const std::string body(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES + 97U, 'x');
+	const std::vector<uint64_t> edgeIds = backend.createLogicalEdges(
+			{{nodes.front(), nodes.back(), "PAYLOAD", {{"body", PropertyValue(body)}}}});
+	ASSERT_EQ(edgeIds.size(), 1U);
+
+	std::unique_ptr<LogicalGraphReadSnapshot> snapshot = backend.openLogicalGraphReadSnapshot();
+	ASSERT_NE(snapshot, nullptr);
+	const std::optional<uint32_t> bodyToken = snapshot->findPropertyToken("body");
+	ASSERT_TRUE(bodyToken.has_value());
+	const std::vector<LogicalGraphEdge> edges = snapshot->readEdgesShapedSorted(
+			edgeIds, EntityReadShape{.include_type = true, .property_tokens = {*bodyToken}});
+	ASSERT_EQ(edges.size(), 1U);
+	ASSERT_EQ(edges.front().edge_id, edgeIds.front());
+	ASSERT_EQ(edges.front().source_node_id, nodes.front());
+	ASSERT_EQ(edges.front().target_node_id, nodes.back());
+	ASSERT_EQ(edges.front().type, "PAYLOAD");
+	ASSERT_EQ(edges.front().properties.size(), 1U);
+	EXPECT_EQ(edges.front().properties.front().key, "body");
+	EXPECT_EQ(edges.front().properties.front().value, PropertyValue(body));
+
+	snapshot.reset();
+	backend.close();
+
+	RelocatableStorageBackendOptions reopenOptions = backendOptions();
+	reopenOptions.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend reopened(std::move(reopenOptions));
+	reopened.open();
+	std::unique_ptr<LogicalGraphReadSnapshot> reopenedSnapshot = reopened.openLogicalGraphReadSnapshot();
+	ASSERT_NE(reopenedSnapshot, nullptr);
+	const std::optional<uint32_t> reopenedBodyToken = reopenedSnapshot->findPropertyToken("body");
+	ASSERT_TRUE(reopenedBodyToken.has_value());
+	const std::vector<LogicalGraphEdge> reopenedEdges = reopenedSnapshot->readEdgesShapedSorted(
+			edgeIds, EntityReadShape{.property_tokens = {*reopenedBodyToken}});
+	ASSERT_EQ(reopenedEdges.size(), 1U);
+	ASSERT_EQ(reopenedEdges.front().properties.size(), 1U);
+	EXPECT_EQ(reopenedEdges.front().properties.front().value, PropertyValue(body));
+	reopenedSnapshot.reset();
+	EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity()));
+	reopened.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, ShapedEdgeBatchPreservesOldSnapshotAcrossPropertyReplacement) {
+	materializeNativeDatabase();
+	RelocatableStorageBackendOptions options = backendOptions();
+	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	const RelocatableStorageBackendOptions reopenOptions = options;
+	RelocatableStorageBackend backend(std::move(options));
+	backend.open();
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes({{{"Source"}, {}}, {{"Target"}, {}}});
+	ASSERT_EQ(nodes.size(), 2U);
+	const std::vector<uint64_t> edgeIds = backend.createLogicalEdges(
+			{{nodes.front(), nodes.back(), "VERSIONED", {{"body", PropertyValue("old")}}}});
+	ASSERT_EQ(edgeIds.size(), 1U);
+	std::unique_ptr<LogicalGraphReadSnapshot> oldSnapshot = backend.openLogicalGraphReadSnapshot();
+	ASSERT_NE(oldSnapshot, nullptr);
+	const std::optional<uint32_t> oldToken = oldSnapshot->findPropertyToken("body");
+	ASSERT_TRUE(oldToken.has_value());
+	const auto readBody = [&](const LogicalGraphReadSnapshot &snapshot) {
+		const std::vector<LogicalGraphEdge> result = snapshot.readEdgesShapedSorted(
+				edgeIds, EntityReadShape{.property_tokens = {*oldToken}});
+			if (result.size() != 1U || result.front().properties.size() != 1U) {
+				throw std::runtime_error("versioned Edge shaped read returned an unexpected shape");
+			}
+			return result.front().properties.front().value;
+		};
+	EXPECT_EQ(readBody(*oldSnapshot), PropertyValue("old"));
+
+	backend.replaceLogicalEdgeProperties({{edgeIds.front(), {{"body", PropertyValue("new")}}}});
+	EXPECT_EQ(readBody(*oldSnapshot), PropertyValue("old"));
+	std::unique_ptr<LogicalGraphReadSnapshot> currentSnapshot = backend.openLogicalGraphReadSnapshot();
+	ASSERT_NE(currentSnapshot, nullptr);
+	const std::optional<uint32_t> currentToken = currentSnapshot->findPropertyToken("body");
+	ASSERT_TRUE(currentToken.has_value());
+	const std::vector<LogicalGraphEdge> current = currentSnapshot->readEdgesShapedSorted(
+			edgeIds, EntityReadShape{.property_tokens = {*currentToken}});
+	ASSERT_EQ(current.size(), 1U);
+	ASSERT_EQ(current.front().properties.size(), 1U);
+	EXPECT_EQ(current.front().properties.front().value, PropertyValue("new"));
+	currentSnapshot.reset();
+	oldSnapshot.reset();
+	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+	backend.close();
+
+	RelocatableStorageBackend reopened(reopenOptions);
+	reopened.open();
+	std::unique_ptr<LogicalGraphReadSnapshot> reopenedSnapshot = reopened.openLogicalGraphReadSnapshot();
+	ASSERT_NE(reopenedSnapshot, nullptr);
+	const std::optional<uint32_t> reopenedToken = reopenedSnapshot->findPropertyToken("body");
+	ASSERT_TRUE(reopenedToken.has_value());
+	const std::vector<LogicalGraphEdge> reopenedEdges = reopenedSnapshot->readEdgesShapedSorted(
+			edgeIds, EntityReadShape{.property_tokens = {*reopenedToken}});
+	ASSERT_EQ(reopenedEdges.size(), 1U);
+	ASSERT_EQ(reopenedEdges.front().properties.front().value, PropertyValue("new"));
+	reopenedSnapshot.reset();
+	EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity()));
+	reopened.close();
 }
 
 TEST_F(RelocatableStorageBackendTest, DirectNativeIndexesPreserveExactAndOpenRangeSemantics) {

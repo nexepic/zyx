@@ -47,6 +47,20 @@ namespace graph::storage {
 		BTreePageStore *indexes = nullptr;
 		NativeGraphWritePlannerOptions options;
 		std::mutex publication_mutex;
+		struct InsertionTarget {
+			PageId page_id{};
+			EntityPageRecordKind kind = EntityPageRecordKind::EPRK_NODE;
+			CatalogEntry pool;
+			uint16_t remaining = 0U;
+		};
+		struct InsertionTargetCache {
+			PhysicalPageRef node_directory_root{};
+			PhysicalPageRef edge_directory_root{};
+			std::vector<InsertionTarget> targets;
+			bool valid = false;
+		};
+		std::mutex insertion_cache_mutex;
+		InsertionTargetCache insertion_cache;
 	};
 
 	namespace {
@@ -65,15 +79,14 @@ namespace graph::storage {
 				   static_cast<size_t>(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES);
 		}
 
-		[[nodiscard]] size_t nativeBulkRunFragmentCount(
+		[[nodiscard]] NativeBulkRunFragmentLayout planDeferredAdjacencyFragments(
 				std::span<const BTreeScalarIndexOperation> operations) {
 			if (operations.empty()) { // ZYX_COV_EXCL_LINE: the deferred planner sets this helper only after canonical operations are present.
 				fail(FormatError::FERR_INVALID_STATE,
 					 "native graph deferred adjacency bulk run requires ordered operations");
 			}
 			const size_t payloadLimit = RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES;
-			size_t fragments = 1U;
-			size_t encodedBytes = RSS_NATIVE_BULK_RUN_HEADER_BYTES;
+			NativeBulkRunFragmentLayoutBuilder builder(payloadLimit);
 			for (const BTreeScalarIndexOperation &operation: operations) {
 				if ((operation.kind != BTreeScalarIndexOperationKind::BSIOP_UPSERT && // ZYX_COV_EXCL_LINE: canonicalGlobalAdjacencyOperations emits only key-only upserts or erases.
 					 operation.kind != BTreeScalarIndexOperationKind::BSIOP_ERASE) ||
@@ -81,55 +94,42 @@ namespace graph::storage {
 					fail(FormatError::FERR_INVALID_STATE,
 							 "native graph deferred adjacency bulk run received a noncanonical operation");
 				}
-				const uint64_t operationTag = operation.kind == BTreeScalarIndexOperationKind::BSIOP_UPSERT ? 1U : 2U;
 				const size_t entryBytes = RSS_NATIVE_BULK_RUN_RECORD_HEADER_BYTES +
-								  BTreePageEntryCodec::encode({operation.key, operationTag}).size();
+								  RSS_BTREE_ENTRY_HEADER_BYTES + operation.key.size();
 				if (entryBytes > payloadLimit - RSS_NATIVE_BULK_RUN_HEADER_BYTES) { // bounded record sizing rejects oversized keys before fragment encoding.
 					fail(FormatError::FERR_INVALID_HEADER,
 						 "native graph adjacency key cannot fit in one bounded scratch fragment");
 				}
-				if (encodedBytes > payloadLimit - entryBytes) { // each bounded operation is validated before aggregation.
-					++fragments;
-					encodedBytes = RSS_NATIVE_BULK_RUN_HEADER_BYTES;
-				}
-				encodedBytes += entryBytes;
+				builder.append(entryBytes);
 			}
+			NativeBulkRunFragmentLayout layout = builder.finish();
 			const size_t manifestCapacity =
 					(payloadLimit - RSS_NATIVE_BULK_RUN_MANIFEST_HEADER_BYTES) / RSS_NATIVE_BULK_RUN_MANIFEST_ENTRY_BYTES;
-			// The counter starts at one and only increases when a fragment is split,
-			// so zero is not a representable state here.
-			if (fragments > manifestCapacity) { // ZYX_COV_EXCL_LINE: the bounded operation and segment contracts cap fragment fan-out before this helper is called.
+			if (layout.fragments.size() > manifestCapacity) { // ZYX_COV_EXCL_LINE: the bounded operation and segment contracts cap fragment fan-out before this helper is called.
 				fail(FormatError::FERR_INVALID_STATE,
 					 "native graph adjacency bulk run exceeds one bounded manifest fan-out");
 			}
-			return fragments;
+			return layout;
 		}
 
 		[[nodiscard]] NativeBulkRunFragment deferredAdjacencyFragment(
-				std::span<const BTreeScalarIndexOperation> operations, size_t fragmentOrdinal) {
-			const size_t payloadLimit = RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES;
-			size_t currentFragment = 0U;
-			size_t encodedBytes = RSS_NATIVE_BULK_RUN_HEADER_BYTES;
+				std::span<const BTreeScalarIndexOperation> operations, const NativeBulkRunFragmentRange &range) {
+			if (range.entry_count == 0U || range.first_entry_ordinal > operations.size() ||
+				range.entry_count > operations.size() - range.first_entry_ordinal) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "native graph deferred adjacency bulk run received an invalid planned source range");
+			}
 			NativeBulkRunFragment fragment;
-			for (const BTreeScalarIndexOperation &operation: operations) {
+			fragment.entries.reserve(range.entry_count);
+			for (const BTreeScalarIndexOperation &operation:
+				 operations.subspan(range.first_entry_ordinal, range.entry_count)) {
 				const uint64_t operationTag = operation.kind == BTreeScalarIndexOperationKind::BSIOP_UPSERT ? 1U : 2U;
-				const size_t entryBytes = RSS_NATIVE_BULK_RUN_RECORD_HEADER_BYTES +
-								  BTreePageEntryCodec::encode({operation.key, operationTag}).size();
-				if (encodedBytes > payloadLimit - entryBytes) { // each bounded operation is validated before fragment extraction.
-					if (currentFragment == fragmentOrdinal) { // each fragment ordinal is requested only once by the bounded reader.
-						return fragment;
-					}
-					++currentFragment;
-					encodedBytes = RSS_NATIVE_BULK_RUN_HEADER_BYTES;
-					fragment.entries.clear();
-				}
 				// Scratch preserves the final-state operation tag. Final adjacency
 				// leaves remain key-only; the tag is consumed only by the deferred
 				// merge before any public B+Tree page is materialized.
 				fragment.entries.push_back({operation.key, operationTag});
-				encodedBytes += entryBytes;
 			}
-			if (currentFragment != fragmentOrdinal || fragment.entries.empty()) { // ZYX_COV_EXCL_LINE: callers iterate only the fragment count returned by nativeBulkRunFragmentCount.
+			if (fragment.entries.empty()) { // ZYX_COV_EXCL_LINE: the immutable layout contains only nonempty ranges.
 				fail(FormatError::FERR_INVALID_STATE,
 					 "native graph deferred adjacency bulk run lost a planned scratch fragment");
 			}
@@ -352,28 +352,20 @@ namespace graph::storage {
 		};
 
 		[[nodiscard]] bool isCurrentPool(const CatalogEntry &pool) {
-			return pool.kind == SegmentKind::SGK_ENTITY_PAGE_POOL && pool.state == SegmentState::SGS_SEALED &&
-				   pool.segment_id.isValid() && pool.generation.isValid();
+			const uint8_t valid = static_cast<uint8_t>(pool.kind == SegmentKind::SGK_ENTITY_PAGE_POOL) &
+								  static_cast<uint8_t>(pool.state == SegmentState::SGS_SEALED) &
+								  static_cast<uint8_t>(pool.segment_id.isValid()) &
+								  static_cast<uint8_t>(pool.generation.isValid());
+			return valid != 0U;
 		}
 
 	} // namespace
 
 	NativeGraphWriteTransaction::NativeGraphWriteTransaction(std::shared_ptr<NativeGraphWritePlannerContext> context,
 															 MetadataSnapshotPin snapshot) :
-		context_(std::move(context)), snapshot_(std::move(snapshot)),
-		state_(NativeGraphWriteTransactionState::NGWTS_ACTIVE) {
-		if (context_ == nullptr || context_->metadata == nullptr || context_->entities == nullptr || // ZYX_COV_EXCL_LINE: this private constructor is reached only through beginTransaction after context assembly.
-			context_->labels == nullptr || context_->properties == nullptr || context_->indexes == nullptr ||
-			!snapshot_.isValid()) {
-			fail(FormatError::FERR_INVALID_STATE,
-				 "native graph write transaction requires an attached planner and active metadata snapshot");
-		}
+			context_(std::move(context)), snapshot_(std::move(snapshot)),
+			state_(NativeGraphWriteTransactionState::NGWTS_ACTIVE) {
 		next_vector_id_ = snapshot_.superblock().next_logical_vector_id;
-		if (snapshot_.superblock().next_logical_node_id == 0U || snapshot_.superblock().next_logical_edge_id == 0U || // ZYX_COV_EXCL_LINE: opening a metadata snapshot validates all logical-ID high-water marks.
-			next_vector_id_ == 0U) {
-			fail(FormatError::FERR_INVALID_STATE,
-				 "native graph write transaction received an invalid logical ID high-water mark");
-		}
 	}
 
 	NativeGraphWriteTransaction::~NativeGraphWriteTransaction() { rollback(); }
@@ -431,7 +423,7 @@ namespace graph::storage {
 	}
 
 	bool NativeGraphWriteTransaction::isActive() const {
-		return state_ == NativeGraphWriteTransactionState::NGWTS_ACTIVE && context_ != nullptr && snapshot_.isValid(); // only the private constructor can set ACTIVE, with a complete context and valid snapshot; moves and terminal transitions clear state before releasing either capability.
+		return state_ == NativeGraphWriteTransactionState::NGWTS_ACTIVE;
 	}
 
 	const Superblock &NativeGraphWriteTransaction::baseSuperblock() const {
@@ -445,8 +437,7 @@ namespace graph::storage {
 	}
 
 	void NativeGraphWriteTransaction::requireActive(const char *operation) const {
-		if (!isActive() || context_->metadata == nullptr || context_->entities == nullptr || // ZYX_COV_EXCL_LINE: public terminal-state checks prevent entering this private guard with a partial context.
-			context_->labels == nullptr || context_->properties == nullptr || context_->indexes == nullptr) {
+		if (!isActive()) {
 			fail(FormatError::FERR_INVALID_STATE, "native graph write transaction is no longer active");
 		}
 		static_cast<void>(operation);
@@ -634,10 +625,6 @@ namespace graph::storage {
 			static_cast<void>(context_->entities->readNode(snapshot_, nodeId));
 		};
 		validateNode();
-		if (context_->indexes == nullptr || !context_->indexes->usesMetadataStore(*context_->metadata)) { // planner context is assembled with one validated metadata domain.
-			fail(FormatError::FERR_INVALID_STATE,
-				 "native graph incident Edge enumeration requires the global adjacency B+Tree");
-		}
 		// The snapshot still contains Edges erased earlier in this write
 		// transaction. Account for each final-state tombstone before choosing the
 		// bounded raw scan, then apply the complete adjacency overlay before
@@ -1601,9 +1588,6 @@ namespace graph::storage {
 		if (global_adjacency_operations_.empty()) {
 			return;
 		}
-		if (context_->indexes == nullptr || !context_->indexes->usesMetadataStore(*context_->metadata)) { // transaction context is assembled with one validated local B+Tree store.
-			fail(FormatError::FERR_INVALID_STATE, "native graph global adjacency requires a local B+Tree page store");
-		}
 		const std::vector<BTreeScalarIndexOperation> &operations = canonicalGlobalAdjacencyOperations();
 		if (operations.empty()) { // provisional Edge deletion removes its keys before planning; any other nonempty staged vector remains nonempty after canonicalization.
 			return;
@@ -1672,26 +1656,63 @@ namespace graph::storage {
 			return false;
 		}
 
-		size_t erasedEdgeCount = 0U;
+		std::vector<uint64_t> nodeIds;
+		nodeIds.reserve(nodes_.size());
+		for (const auto &[nodeId, change]: nodes_) {
+			static_cast<void>(change);
+			nodeIds.push_back(nodeId);
+		}
+		const std::vector<std::optional<NodeEntityRecord>> nodeRecords =
+				nodeIds.empty() ? std::vector<std::optional<NodeEntityRecord>>()
+									: context_->entities->readNodesSorted(current, nodeIds);
+		if (nodeRecords.size() != nodeIds.size()) {
+			fail(FormatError::FERR_INVALID_STATE, "native graph adjacency rebase changed Node batch cardinality");
+		}
+		const auto nodeRecordFor = [&](uint64_t nodeId) -> const std::optional<NodeEntityRecord> & {
+			const auto iterator = std::ranges::lower_bound(nodeIds, nodeId);
+			if (iterator == nodeIds.end() || *iterator != nodeId) {
+				fail(FormatError::FERR_INVALID_STATE, "native graph adjacency rebase lost a Node mutation ID");
+			}
+			return nodeRecords[static_cast<size_t>(iterator - nodeIds.begin())];
+		};
 		for (const auto &[nodeId, change]: nodes_) {
 			if (change.erased || (change.labels.has_value() && !change.inserted)) {
 				return false;
 			}
 			if (change.inserted) {
-				if (context_->metadata->findNodePageLocationOptional(current, nodeId).has_value()) {
+				if (nodeRecordFor(nodeId).has_value()) {
 					return false;
 				}
-			} else if (!context_->metadata->findNodePageLocationOptional(current, nodeId).has_value() ||
-					   context_->entities->readNode(current, nodeId) != change.record) {
+			} else if (!nodeRecordFor(nodeId).has_value() || *nodeRecordFor(nodeId) != change.record) {
 				return false;
 			}
 		}
+
+		size_t erasedEdgeCount = 0U;
+		std::vector<uint64_t> edgeIds;
+		edgeIds.reserve(edges_.size());
+		for (const auto &[edgeId, change]: edges_) {
+			static_cast<void>(change);
+			edgeIds.push_back(edgeId);
+		}
+		const std::vector<std::optional<EdgeEntityRecord>> edgeRecords =
+				edgeIds.empty() ? std::vector<std::optional<EdgeEntityRecord>>()
+										: context_->entities->readEdgesSorted(current, edgeIds);
+		if (edgeRecords.size() != edgeIds.size()) {
+			fail(FormatError::FERR_INVALID_STATE, "native graph adjacency rebase changed Edge batch cardinality");
+		}
+		const auto edgeRecordFor = [&](uint64_t edgeId) -> const std::optional<EdgeEntityRecord> & {
+			const auto iterator = std::ranges::lower_bound(edgeIds, edgeId);
+			if (iterator == edgeIds.end() || *iterator != edgeId) {
+				fail(FormatError::FERR_INVALID_STATE, "native graph adjacency rebase lost an Edge mutation ID");
+			}
+			return edgeRecords[static_cast<size_t>(iterator - edgeIds.begin())];
+		};
 		for (const auto &[edgeId, change]: edges_) {
 			const EntityPropertyKey propertyKey{EntityPropertyOwnerKind::EPOK_EDGE, edgeId};
 			const auto property = properties_.find(propertyKey.directoryId());
 			if (change.inserted) {
-				if (property != properties_.end() ||
-					context_->metadata->findEdgePageLocationOptional(current, edgeId).has_value()) {
+				if (property != properties_.end() || edgeRecordFor(edgeId).has_value()) {
 					return false;
 				}
 				continue;
@@ -1699,8 +1720,7 @@ namespace graph::storage {
 			if (!change.erased || property == properties_.end() || property->second.owner_entity_id != edgeId ||
 				property->second.owner_entity_type != Edge::typeId ||
 				!property->second.entries.empty() ||
-				!context_->metadata->findEdgePageLocationOptional(current, edgeId).has_value() ||
-				context_->entities->readEdge(current, edgeId) != change.record) {
+				!edgeRecordFor(edgeId).has_value() || *edgeRecordFor(edgeId) != change.record) {
 				return false;
 			}
 			++erasedEdgeCount;
@@ -1872,22 +1892,34 @@ namespace graph::storage {
 			candidates.push_back(std::move(contentCandidate));
 		}
 
+		const auto addDemand = [&](size_t candidateOrdinal, BTreePageStore *reclaimer, SegmentId segmentId,
+								   size_t requiredFrames) {
+			if (requiredFrames == 0U) {
+				return;
+			}
+			auto [position, inserted] =
+				demands.try_emplace(segmentId.value(), PoolDemand{reclaimer, segmentId, 0U});
+			static_cast<void>(inserted);
+			if (requiredFrames > std::numeric_limits<size_t>::max() - position->second.required_frames) {
+				fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
+						"native graph staged scalar Index frame demand overflows host address space");
+			}
+			position->second.required_frames += requiredFrames;
+			contributions[segmentId.value()].push_back({candidateOrdinal, requiredFrames});
+		};
 		for (size_t candidateOrdinal = 0U; candidateOrdinal < candidates.size(); ++candidateOrdinal) {
 			const Candidate &candidate = candidates[candidateOrdinal];
 			for (const IndexTreeMutationPoolRequest &pool: candidate.requests()) {
-				const size_t requiredFrames = pool.expected_replacements.size() + pool.appended_page_count;
-				if (requiredFrames == 0U) {
-					continue;
-				}
-				auto [position, inserted] =
-					demands.try_emplace(pool.segment_id.value(), PoolDemand{candidate.reclaimer, pool.segment_id, 0U});
-				static_cast<void>(inserted);
-				if (requiredFrames > std::numeric_limits<size_t>::max() - position->second.required_frames) {
-					fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
-						 "native graph staged scalar Index frame demand overflows host address space");
-				}
-				position->second.required_frames += requiredFrames;
-				contributions[pool.segment_id.value()].push_back({candidateOrdinal, requiredFrames});
+				// A cross-pool replacement consumes a frame from the destination, while
+				// appends and same-pool replacements consume frames from the source.
+				// Keep those demands separate so a full source pool does not trigger a
+				// needless dense rebuild when a compatible destination has capacity.
+				const SegmentId replacementPool = pool.replacement_segment_id.isValid()
+						? pool.replacement_segment_id
+						: pool.segment_id;
+				addDemand(candidateOrdinal, candidate.reclaimer, replacementPool,
+						pool.expected_replacements.size());
+				addDemand(candidateOrdinal, candidate.reclaimer, pool.segment_id, pool.appended_page_count);
 			}
 		}
 
@@ -2273,38 +2305,97 @@ namespace graph::storage {
 			CatalogEntry pool;
 			uint16_t remaining = 0U;
 			bool planned = false;
+			bool cached = false;
 		};
+		const bool needsNodeInsertSearch = std::ranges::any_of(nodes_, [](const auto &entry) {
+			return entry.second.inserted && !entry.second.erased;
+		});
+		const bool needsEdgeInsertSearch = std::ranges::any_of(edges_, [](const auto &entry) {
+			return entry.second.inserted && !entry.second.erased;
+		});
 		std::map<uint64_t, EntityPageRecordKind> currentEntityPageKinds;
-		context_->metadata->visitNodePageLocations(snapshot_, [&](const EntityPageLocation &location) {
-			const auto [iterator, inserted] =
-					currentEntityPageKinds.emplace(location.page_id.value(), EntityPageRecordKind::EPRK_NODE);
-			if (!inserted && iterator->second != EntityPageRecordKind::EPRK_NODE) {
-				fail(FormatError::FERR_INVALID_STATE,
-					 "native graph write found one Page ID in both Node and Edge maps");
-			}
-		});
-		context_->metadata->visitEdgePageLocations(snapshot_, [&](const EntityPageLocation &location) {
-			const auto [iterator, inserted] =
-					currentEntityPageKinds.emplace(location.page_id.value(), EntityPageRecordKind::EPRK_EDGE);
-			if (!inserted && iterator->second != EntityPageRecordKind::EPRK_EDGE) {
-				fail(FormatError::FERR_INVALID_STATE,
-					 "native graph write found one Page ID in both Node and Edge maps");
-			}
-		});
 		std::vector<ExistingInsertCandidate> existingInsertCandidates;
 		existingInsertCandidates.reserve(currentEntityPageKinds.size());
-		for (const auto &[pageValue, kind]: currentEntityPageKinds) {
-			const PageId pageId(pageValue);
-			const PageLocation location = context_->metadata->findPageLocation(snapshot_, pageId);
-			const CatalogEntry pool = context_->metadata->findCatalog(snapshot_, location.segment_id);
-			if (!isCurrentPool(pool) || location.generation != pool.generation) {
-				fail(FormatError::FERR_INVALID_STATE,
-					 "native graph write found an Entity Map page outside a current Entity pool");
+		const auto targetKindIndex = [](EntityPageRecordKind kind) -> size_t {
+			if (kind == EntityPageRecordKind::EPRK_NODE) {
+				return 0U;
 			}
-			const uint16_t remaining = context_->entities->freeSlotCount(snapshot_, pageId, kind);
-			if (remaining != 0U) {
-				existingInsertCandidates.push_back({pageId, kind, pool, remaining, false});
+			if (kind == EntityPageRecordKind::EPRK_EDGE) {
+				return 1U;
 			}
+			fail(FormatError::FERR_INVALID_STATE, "native graph write encountered an unknown Entity record kind");
+		};
+		// All pages observed in one snapshot belong to a stable Catalog
+		// generation. Cache the pool descriptor per segment while checking free
+		// insertion slots instead of descending the Catalog once per page.
+		std::map<uint64_t, CatalogEntry> currentEntityPools;
+		std::vector<NativeGraphWritePlannerContext::InsertionTarget> priorInsertionTargets;
+		bool priorInsertionCacheValid = false;
+		bool usedInsertionTargetCache = false;
+		{
+			std::lock_guard cacheLock(context_->insertion_cache_mutex);
+			const auto &cache = context_->insertion_cache;
+			priorInsertionCacheValid = cache.valid;
+			priorInsertionTargets = cache.targets;
+			// Directory roots are physical COW identities and can change after an
+			// unrelated insertion. Cached logical PageIds remain usable; each selected
+			// candidate is re-authenticated lazily against the current snapshot below.
+			const auto hasCachedKind = [&](EntityPageRecordKind kind) {
+				return std::ranges::any_of(cache.targets, [kind](const auto &target) { return target.kind == kind; });
+			};
+			usedInsertionTargetCache = cache.valid &&
+					(!needsNodeInsertSearch || hasCachedKind(EntityPageRecordKind::EPRK_NODE)) &&
+					(!needsEdgeInsertSearch || hasCachedKind(EntityPageRecordKind::EPRK_EDGE));
+			if (usedInsertionTargetCache) {
+				existingInsertCandidates.reserve(cache.targets.size());
+				for (const auto &target : cache.targets) {
+					existingInsertCandidates.push_back(
+							{target.page_id, target.kind, target.pool, target.remaining, false, true});
+					currentEntityPools.emplace(target.pool.segment_id.value(), target.pool);
+				}
+				debug::PerfTrace::addValue("native_graph.commit.entity_insert_target_cache_hits", 1);
+			}
+		}
+		if (!usedInsertionTargetCache) {
+			// Updates/deletes never need an insertion target. Avoid walking the
+			// complete Entity Directory in those transactions; mixed writes inspect
+			// only the kind that can consume a free slot.
+			if (needsNodeInsertSearch) {
+				context_->metadata->visitNodePageLocations(snapshot_, [&](const EntityPageLocation &location) {
+					debug::PerfTrace::addValue("native_graph.commit.entity_insert_node_directory_pages", 1);
+					currentEntityPageKinds.emplace(location.page_id.value(), EntityPageRecordKind::EPRK_NODE);
+				});
+			}
+			if (needsEdgeInsertSearch) {
+				context_->metadata->visitEdgePageLocations(snapshot_, [&](const EntityPageLocation &location) {
+					debug::PerfTrace::addValue("native_graph.commit.entity_insert_edge_directory_pages", 1);
+					currentEntityPageKinds.emplace(location.page_id.value(), EntityPageRecordKind::EPRK_EDGE);
+				});
+			}
+			for (const auto &[pageValue, kind]: currentEntityPageKinds) {
+				const PageId pageId(pageValue);
+				const PageLocation location = context_->metadata->findPageLocation(snapshot_, pageId);
+				auto poolIterator = currentEntityPools.find(location.segment_id.value());
+				if (poolIterator == currentEntityPools.end()) {
+					debug::PerfTrace::addValue("native_graph.commit.entity_insert_catalog_lookups", 1);
+					poolIterator = currentEntityPools.emplace(location.segment_id.value(),
+							context_->metadata->findCatalog(snapshot_, location.segment_id)).first;
+				}
+				const CatalogEntry &pool = poolIterator->second;
+				if (!isCurrentPool(pool) || location.generation != pool.generation) {
+					fail(FormatError::FERR_INVALID_STATE,
+							"native graph write found an Entity Map page outside a current Entity pool");
+				}
+				const uint16_t remaining = context_->entities->freeSlotCount(snapshot_, pageId, kind);
+				if (remaining != 0U) {
+					existingInsertCandidates.push_back({pageId, kind, pool, remaining, false, false});
+				}
+			}
+		}
+		std::array<std::set<std::pair<uint16_t, size_t>>, 2U> existingInsertOrder;
+		for (size_t ordinal = 0U; ordinal < existingInsertCandidates.size(); ++ordinal) {
+			existingInsertOrder[targetKindIndex(existingInsertCandidates[ordinal].kind)].emplace(
+					existingInsertCandidates[ordinal].remaining, ordinal);
 		}
 
 		const auto ensureMutation = [&](PageId pageId, EntityPageRecordKind kind) -> EntityPageBatchMutation & {
@@ -2317,7 +2408,13 @@ namespace graph::storage {
 				return mutation;
 			}
 			const PageLocation location = context_->metadata->findPageLocation(snapshot_, pageId);
-			const CatalogEntry pool = context_->metadata->findCatalog(snapshot_, location.segment_id);
+			auto poolIterator = currentEntityPools.find(location.segment_id.value());
+			if (poolIterator == currentEntityPools.end()) {
+				debug::PerfTrace::addValue("native_graph.commit.entity_mutation_catalog_lookups", 1);
+				poolIterator = currentEntityPools.emplace(location.segment_id.value(),
+						context_->metadata->findCatalog(snapshot_, location.segment_id)).first;
+			}
+			const CatalogEntry &pool = poolIterator->second;
 			if (!isCurrentPool(pool) || location.generation != pool.generation) {
 				fail(FormatError::FERR_INVALID_STATE, "native graph write selected a stale Entity page pool");
 			}
@@ -2333,12 +2430,50 @@ namespace graph::storage {
 			mutationOrdinals.emplace(pageId.value(), ordinal);
 			return mutations.back();
 		};
+		// Resolve existing entities through one ordered Directory range per record
+		// kind. Each selected page is still authenticated by ensureMutation(), but
+		// large update/delete batches no longer pay one root-to-leaf descent per ID.
+		std::vector<uint64_t> nodeMutationIds;
+		std::vector<uint64_t> edgeMutationIds;
+		for (const auto &[nodeId, change]: nodes_) {
+			if (!change.inserted) {
+				nodeMutationIds.push_back(nodeId);
+			}
+		}
+		for (const auto &[edgeId, change]: edges_) {
+			if (!change.inserted) {
+				edgeMutationIds.push_back(edgeId);
+			}
+		}
+		std::vector<std::optional<EntityPageLocation>> nodeMutationLocations(nodeMutationIds.size());
+		std::vector<std::optional<EntityPageLocation>> edgeMutationLocations(edgeMutationIds.size());
+		if (!nodeMutationIds.empty()) {
+			context_->metadata->findNodePageLocationsSorted(snapshot_, nodeMutationIds, nodeMutationLocations);
+		}
+		if (!edgeMutationIds.empty()) {
+			context_->metadata->findEdgePageLocationsSorted(snapshot_, edgeMutationIds, edgeMutationLocations);
+		}
+		const auto requireMutationLocation = [](uint64_t entityId, const std::vector<uint64_t> &ids,
+				const std::vector<std::optional<EntityPageLocation>> &locations,
+				const char *message) -> EntityPageLocation {
+			const auto iterator = std::ranges::lower_bound(ids, entityId);
+			if (iterator == ids.end() || *iterator != entityId) {
+				throw std::logic_error(message);
+			}
+			const size_t ordinal = static_cast<size_t>(iterator - ids.begin());
+			if (!locations[ordinal].has_value()) {
+				fail(FormatError::FERR_INVALID_STATE, message);
+			}
+			return *locations[ordinal];
+		};
 
 		for (const auto &[nodeId, change]: nodes_) {
 			if (change.inserted) {
 				continue;
 			}
-			const EntityPageLocation location = context_->metadata->findNodePageLocation(snapshot_, nodeId);
+			const EntityPageLocation location = requireMutationLocation(
+				nodeId, nodeMutationIds, nodeMutationLocations,
+				"native graph write could not resolve an existing Node mutation location");
 			EntityPageBatchMutation &mutation = ensureMutation(location.page_id, EntityPageRecordKind::EPRK_NODE);
 			if (change.erased) {
 				mutation.erased_node_ids.push_back(nodeId);
@@ -2350,7 +2485,9 @@ namespace graph::storage {
 			if (change.inserted) {
 				continue;
 			}
-			const EntityPageLocation location = context_->metadata->findEdgePageLocation(snapshot_, edgeId);
+			const EntityPageLocation location = requireMutationLocation(
+				edgeId, edgeMutationIds, edgeMutationLocations,
+				"native graph write could not resolve an existing Edge mutation location");
 			EntityPageBatchMutation &mutation = ensureMutation(location.page_id, EntityPageRecordKind::EPRK_EDGE);
 			if (change.erased) {
 				mutation.erased_edge_ids.push_back(edgeId);
@@ -2373,11 +2510,20 @@ namespace graph::storage {
 			uint16_t remaining = 0U;
 		};
 		std::vector<OpenTarget> targets;
+		// Keep open insertion targets ordered by remaining capacity. The previous
+		// linear best-fit scan made a large batch O(records * targets); this index
+		// keeps page grouping deterministic while reducing selection to O(log N).
+		std::array<std::set<std::pair<uint16_t, size_t>>, 2U> targetOrder;
+		const auto addTarget = [&](OpenTarget target) {
+			const size_t ordinal = targets.size();
+			targets.push_back(target);
+			targetOrder[targetKindIndex(target.kind)].emplace(target.remaining, ordinal);
+		};
 		for (const auto &[pageValue, ordinal]: mutationOrdinals) {
 			const EntityPageBatchMutation &mutation = mutations[ordinal];
 			const uint16_t remaining = remainingSlots.at(pageValue);
 			if (remaining != 0U) {
-				targets.push_back({mutation.record_kind, OpenTargetStorage::OTS_MUTATION, ordinal, remaining});
+				addTarget({mutation.record_kind, OpenTargetStorage::OTS_MUTATION, ordinal, remaining});
 			}
 		}
 		// LabelSet pages allocated above are initial frames of the same physical
@@ -2428,62 +2574,92 @@ namespace graph::storage {
 			appends.push_back({{*pool, reservePage()}, kind, {}, {}});
 			return {kind, OpenTargetStorage::OTS_APPEND, ordinal, EntityPage::recordCapacity(kind)};
 		};
+		const auto refreshCachedCandidate = [&](ExistingInsertCandidate &candidate) {
+			if (!candidate.cached) {
+				return candidate.remaining != 0U;
+			}
+			const std::optional<PageLocation> location =
+					context_->metadata->findPageLocationOptional(snapshot_, candidate.page_id);
+			if (!location.has_value()) {
+				candidate.remaining = 0U;
+				return false;
+			}
+			const CatalogEntry pool = context_->metadata->findCatalog(snapshot_, location->segment_id);
+			if (!isCurrentPool(pool) || location->generation != pool.generation) {
+				candidate.remaining = 0U;
+				return false;
+			}
+			candidate.pool = pool;
+			currentEntityPools.insert_or_assign(pool.segment_id.value(), pool);
+			candidate.remaining = context_->entities->freeSlotCount(snapshot_, candidate.page_id, candidate.kind);
+			return candidate.remaining != 0U;
+		};
 		const auto insertNew = [&](uint64_t entityId, const auto &record, EntityPageRecordKind kind) {
-			OpenTarget *target = nullptr;
-			for (OpenTarget &candidate: targets) {
-				if (candidate.kind == kind && candidate.remaining != 0U &&
-					(target == nullptr || candidate.remaining < target->remaining)) {
-					target = &candidate;
-				}
+			const size_t kindIndex = targetKindIndex(kind);
+			std::optional<size_t> targetOrdinal;
+			if (!targetOrder[kindIndex].empty()) {
+				targetOrdinal = targetOrder[kindIndex].begin()->second;
 			}
-			if (target == nullptr) {
-				auto candidate = std::min_element(
-						existingInsertCandidates.begin(), existingInsertCandidates.end(),
-						[&](const ExistingInsertCandidate &left, const ExistingInsertCandidate &right) {
-							const bool leftEligible = left.kind == kind && !left.planned && left.remaining != 0U &&
-													  reservedFrames[left.pool.segment_id.value()] <
-															  freeFrames[left.pool.segment_id.value()];
-							const bool rightEligible = right.kind == kind && !right.planned && right.remaining != 0U &&
-													   reservedFrames[right.pool.segment_id.value()] <
-															   freeFrames[right.pool.segment_id.value()];
-							if (leftEligible != rightEligible) {
-								return leftEligible;
-							}
-							return leftEligible && left.remaining < right.remaining;
-						});
-				const bool candidateEligible = candidate != existingInsertCandidates.end() && candidate->kind == kind &&
-											   !candidate->planned && candidate->remaining != 0U &&
-											   reservedFrames[candidate->pool.segment_id.value()] <
-													   freeFrames[candidate->pool.segment_id.value()];
-				if (candidateEligible) {
-					static_cast<void>(ensureMutation(candidate->page_id, kind));
-					const size_t ordinal = mutationOrdinals.at(candidate->page_id.value());
-					candidate->planned = true;
-					targets.push_back({kind, OpenTargetStorage::OTS_MUTATION, ordinal, candidate->remaining});
-					target = &targets.back();
+			if (!targetOrdinal.has_value()) {
+				std::optional<size_t> candidateOrdinal;
+				for (auto iterator = existingInsertOrder[kindIndex].begin();
+						iterator != existingInsertOrder[kindIndex].end();) {
+					const auto [indexedRemaining, ordinal] = *iterator++;
+					ExistingInsertCandidate &candidate = existingInsertCandidates[ordinal];
+					if (candidate.cached && candidate.remaining != indexedRemaining) {
+						existingInsertOrder[kindIndex].erase({indexedRemaining, ordinal});
+						if (refreshCachedCandidate(candidate)) {
+							existingInsertOrder[kindIndex].emplace(candidate.remaining, ordinal);
+						}
+						continue;
+					}
+					if (candidate.cached && !refreshCachedCandidate(candidate)) {
+						existingInsertOrder[kindIndex].erase({indexedRemaining, ordinal});
+						continue;
+					}
+					if (!candidate.planned && candidate.remaining != 0U &&
+							reservedFrames[candidate.pool.segment_id.value()] < freeFrames[candidate.pool.segment_id.value()]) {
+						candidateOrdinal = ordinal;
+						break;
+					}
+				}
+				if (candidateOrdinal.has_value()) {
+					ExistingInsertCandidate &candidate = existingInsertCandidates[*candidateOrdinal];
+					static_cast<void>(ensureMutation(candidate.page_id, kind));
+					const size_t ordinal = mutationOrdinals.at(candidate.page_id.value());
+					candidate.planned = true;
+					addTarget({kind, OpenTargetStorage::OTS_MUTATION, ordinal, candidate.remaining});
+					targetOrdinal = targets.size() - 1U;
 				} else {
-					targets.push_back(createAppendEntityPage(kind));
-					target = &targets.back();
+					addTarget(createAppendEntityPage(kind));
+					targetOrdinal = targets.size() - 1U;
 				}
 			}
+			OpenTarget &target = targets[*targetOrdinal];
+			// The selected target is the smallest remaining page. Re-key it after
+			// consuming one slot so the next insert keeps the same best-fit order.
+			targetOrder[kindIndex].erase({target.remaining, *targetOrdinal});
 			if constexpr (std::is_same_v<std::decay_t<decltype(record)>, NodeEntityRecord>) {
-				if (target->storage == OpenTargetStorage::OTS_MUTATION) {
-					mutations[target->ordinal].node_insertions.push_back({entityId, record});
-				} else if (target->storage == OpenTargetStorage::OTS_APPEND) {
-					appends[target->ordinal].node_insertions.push_back({entityId, record});
+				if (target.storage == OpenTargetStorage::OTS_MUTATION) {
+					mutations[target.ordinal].node_insertions.push_back({entityId, record});
+				} else if (target.storage == OpenTargetStorage::OTS_APPEND) {
+					appends[target.ordinal].node_insertions.push_back({entityId, record});
 				} else {
-					newPools[target->ordinal].node_insertions.push_back({entityId, record});
+					newPools[target.ordinal].node_insertions.push_back({entityId, record});
 				}
 			} else {
-				if (target->storage == OpenTargetStorage::OTS_MUTATION) {
-					mutations[target->ordinal].edge_insertions.push_back({entityId, record});
-				} else if (target->storage == OpenTargetStorage::OTS_APPEND) {
-					appends[target->ordinal].edge_insertions.push_back({entityId, record});
+				if (target.storage == OpenTargetStorage::OTS_MUTATION) {
+					mutations[target.ordinal].edge_insertions.push_back({entityId, record});
+				} else if (target.storage == OpenTargetStorage::OTS_APPEND) {
+					appends[target.ordinal].edge_insertions.push_back({entityId, record});
 				} else {
-					newPools[target->ordinal].edge_insertions.push_back({entityId, record});
+					newPools[target.ordinal].edge_insertions.push_back({entityId, record});
 				}
 			}
-			--target->remaining;
+			--target.remaining;
+			if (target.remaining != 0U) {
+				targetOrder[kindIndex].emplace(target.remaining, *targetOrdinal);
+			}
 		};
 
 		for (const auto &[nodeId, change]: nodes_) {
@@ -2496,6 +2672,36 @@ namespace graph::storage {
 				insertNew(edgeId, change.record, EntityPageRecordKind::EPRK_EDGE);
 			}
 		}
+		// Record the generic page-grouping result once the bounded target index has
+		// assigned every insertion.  These counters attribute write amplification
+		// without exposing physical locations to the logical API.
+		size_t insertionTargetPages = 0U;
+		size_t insertionTargetRecords = 0U;
+		const auto accountInsertionTargets = [&](const auto &batches) {
+			for (const auto &batch: batches) {
+				if (batch.node_insertions.size() > std::numeric_limits<size_t>::max() - batch.edge_insertions.size()) {
+					fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
+						"native graph insertion target record count overflowed");
+				}
+				const size_t records = batch.node_insertions.size() + batch.edge_insertions.size();
+				if (records != 0U) {
+					if (insertionTargetPages == std::numeric_limits<size_t>::max() ||
+						insertionTargetRecords > std::numeric_limits<size_t>::max() - records) {
+						fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
+							"native graph insertion target accounting overflowed");
+					}
+					++insertionTargetPages;
+					insertionTargetRecords += records;
+				}
+			}
+		};
+		accountInsertionTargets(mutations);
+		accountInsertionTargets(appends);
+		accountInsertionTargets(newPools);
+		debug::PerfTrace::addValue("native_graph.commit.entity_insert_target_pages",
+				static_cast<int64_t>(insertionTargetPages));
+		debug::PerfTrace::addValue("native_graph.commit.entity_insert_target_records",
+				static_cast<int64_t>(insertionTargetRecords));
 
 		std::vector<EntityPropertyRootMutationPlan> propertyPlans;
 		propertyPlans.reserve(properties_.size());
@@ -2524,7 +2730,8 @@ namespace graph::storage {
 		NativeGraphDeferredIndexPlanner deferredIndexPlanner;
 		if (global_adjacency_deferred_bulk_) {
 			const std::vector<BTreeScalarIndexOperation> &operations = canonicalGlobalAdjacencyOperations();
-			const size_t fragmentCount = nativeBulkRunFragmentCount(operations);
+			const NativeBulkRunFragmentLayout fragmentLayout = planDeferredAdjacencyFragments(operations);
+			const size_t fragmentCount = fragmentLayout.fragments.size();
 			deferredAdjacencyOperations = &operations;
 			// Scratch candidates are a private append-only suffix, not allocator
 			// destinations for final graph pages. Do not inherit the final-page
@@ -2534,15 +2741,22 @@ namespace graph::storage {
 					RSS_GLOBAL_ADJACENCY_INDEX_ID, PhysicalSlotId(1U),
 					PhysicalSlotId(std::numeric_limits<uint64_t>::max()),
 					RSS_ENVELOPE_BYTES, {}, fragmentCount + 1U};
-			privateSegmentImagePreparer = [operations = deferredAdjacencyOperations, fragmentCount](
+			privateSegmentImagePreparer = [operations = deferredAdjacencyOperations, fragmentLayout](
 					const NativeGraphPrivateSegmentSet &identities,
 					size_t ordinal) -> std::vector<std::byte> {
-					if (operations == nullptr || identities.size() != fragmentCount + 1U || ordinal >= identities.size()) { // ZYX_COV_EXCL_LINE: metadata invokes this callback with the immutable partition it just validated.
+				const size_t fragmentCount = fragmentLayout.fragments.size();
+				if (operations == nullptr || identities.size() != fragmentCount + 1U || ordinal >= identities.size()) { // ZYX_COV_EXCL_LINE: metadata invokes this callback with the immutable partition it just validated.
 					fail(FormatError::FERR_INVALID_STATE,
 						 "native graph deferred adjacency bulk run lost its scratch identity partition");
 				}
 				if (ordinal < fragmentCount) {
-					return NativeBulkRunFragmentCodec::encode(deferredAdjacencyFragment(*operations, ordinal));
+					std::vector<std::byte> encoded = NativeBulkRunFragmentCodec::encode(
+							deferredAdjacencyFragment(*operations, fragmentLayout.fragments[ordinal]));
+					if (encoded.size() != fragmentLayout.fragments[ordinal].encoded_bytes) {
+						fail(FormatError::FERR_INVALID_STATE,
+							 "native graph deferred adjacency source changed after fragment planning");
+					}
+					return encoded;
 				}
 				NativeBulkRunManifest manifest;
 				manifest.fragments.reserve(fragmentCount);
@@ -2551,10 +2765,7 @@ namespace graph::storage {
 					manifest.fragments.push_back({identity.segment_id, identity.generation, identity.owner_id});
 				}
 				manifest.entry_count = operations->size();
-				for (size_t fragmentOrdinal = 0U; fragmentOrdinal < fragmentCount; ++fragmentOrdinal) {
-					manifest.encoded_bytes += NativeBulkRunFragmentCodec::encode(
-							deferredAdjacencyFragment(*operations, fragmentOrdinal)).size();
-				}
+				manifest.encoded_bytes = fragmentLayout.encoded_bytes;
 				return NativeBulkRunManifestCodec::encode(manifest);
 			};
 			deferredIndexPlanner = [indexes = context_->indexes, metadata = context_->metadata,
@@ -3356,6 +3567,82 @@ namespace graph::storage {
 			};
 		}
 
+		const auto refreshInsertionTargetCache = [&](const EntityPageBatchResult &published) noexcept {
+			try {
+				MetadataSnapshotPin nextSnapshot = context_->metadata->openSnapshot();
+				std::map<std::pair<uint64_t, uint16_t>, NativeGraphWritePlannerContext::InsertionTarget> targets;
+				// Preserve untouched targets for update/delete-only transactions and for
+				// COW publications that changed a Directory root. PageIds are logical and
+				// never reused; the next insertion lazily re-authenticates each target.
+				if (priorInsertionCacheValid) {
+					for (const auto &target: priorInsertionTargets) {
+						targets[{target.page_id.value(), static_cast<uint16_t>(target.kind)}] = target;
+					}
+				}
+				for (const ExistingInsertCandidate &candidate: existingInsertCandidates) {
+					if (candidate.remaining != 0U) {
+						targets[{candidate.page_id.value(), static_cast<uint16_t>(candidate.kind)}] =
+								{candidate.page_id, candidate.kind, candidate.pool, candidate.remaining};
+					}
+				}
+				for (size_t ordinal = 0U; ordinal < mutations.size(); ++ordinal) {
+					const EntityPageBatchMutation &mutation = mutations[ordinal];
+					const uint16_t oldRemaining = remainingSlots.at(mutation.page_id.value());
+					const size_t inserted = mutation.record_kind == EntityPageRecordKind::EPRK_NODE
+							? mutation.node_insertions.size() : mutation.edge_insertions.size();
+					const size_t erased = mutation.record_kind == EntityPageRecordKind::EPRK_NODE
+							? mutation.erased_node_ids.size() : mutation.erased_edge_ids.size();
+					const auto key = std::make_pair(mutation.page_id.value(), static_cast<uint16_t>(mutation.record_kind));
+					if (ordinal >= published.pages.size() || published.pages[ordinal].page_retired ||
+							inserted > static_cast<size_t>(oldRemaining) + erased) {
+						targets.erase(key);
+						continue;
+					}
+					const uint16_t remaining = static_cast<uint16_t>(static_cast<size_t>(oldRemaining) + erased - inserted);
+					if (remaining == 0U) {
+						targets.erase(key);
+						continue;
+					}
+					const PageLocation location = context_->metadata->findPageLocation(nextSnapshot, mutation.page_id);
+					const CatalogEntry pool = context_->metadata->findCatalog(nextSnapshot, location.segment_id);
+					targets[key] = {mutation.page_id, mutation.record_kind, pool, remaining};
+				}
+				const auto addFreshTarget = [&](PageId pageId, EntityPageRecordKind kind, size_t inserted) {
+					const uint16_t capacity = EntityPage::recordCapacity(kind);
+					if (inserted >= capacity) return;
+					const PageLocation location = context_->metadata->findPageLocation(nextSnapshot, pageId);
+					const CatalogEntry pool = context_->metadata->findCatalog(nextSnapshot, location.segment_id);
+					targets[{pageId.value(), static_cast<uint16_t>(kind)}] =
+							{pageId, kind, pool, static_cast<uint16_t>(capacity - inserted)};
+				};
+				for (const EntityPageBatchAppend &append: appends) {
+					addFreshTarget(append.request.page_id, append.record_kind,
+							append.record_kind == EntityPageRecordKind::EPRK_NODE ? append.node_insertions.size()
+																								 : append.edge_insertions.size());
+				}
+				for (const EntityPageBatchNewPool &newPool: newPools) {
+					addFreshTarget(newPool.request.page_id, newPool.record_kind,
+							newPool.record_kind == EntityPageRecordKind::EPRK_NODE ? newPool.node_insertions.size()
+																								 : newPool.edge_insertions.size());
+				}
+				std::lock_guard cacheLock(context_->insertion_cache_mutex);
+				context_->insertion_cache.targets.clear();
+				context_->insertion_cache.targets.reserve(targets.size());
+				for (const auto &[key, target]: targets) {
+					static_cast<void>(key);
+					context_->insertion_cache.targets.push_back(target);
+				}
+				context_->insertion_cache.node_directory_root = nextSnapshot.superblock().node_entity_directory_root;
+				context_->insertion_cache.edge_directory_root = nextSnapshot.superblock().edge_entity_directory_root;
+				context_->insertion_cache.valid = true;
+				nextSnapshot.release();
+			} catch (...) {
+				std::lock_guard cacheLock(context_->insertion_cache_mutex);
+				context_->insertion_cache.valid = false;
+				context_->insertion_cache.targets.clear();
+			}
+		};
+
 		try {
 			std::vector<uint64_t> vectorRebuildIndexIds;
 			for (const StagedVectorDelta &staged: vector_deltas_) {
@@ -3372,6 +3659,7 @@ namespace graph::storage {
 						publishOptions, logicalIds, vectorBootstrapPreparer, vectorDeltaPreparer,
 						privateSegmentImagePreparer, {}, deferredIndexPlanner, {});
 			}();
+			refreshInsertionTargetCache(published);
 			snapshot_.release();
 			state_ = NativeGraphWriteTransactionState::NGWTS_COMMITTED;
 			return {NativeGraphWriteCommitOutcome::NGWCO_COMMITTED, published.superblock,
@@ -3388,9 +3676,7 @@ namespace graph::storage {
 			NativeGraphLogicalIdReservation logicalIds;
 			logicalIds.node_ranges = node_id_ranges_;
 			logicalIds.edge_ranges = edge_id_ranges_;
-			if (context_ != nullptr && context_->metadata != nullptr) { // an active transaction originates from the fully assembled planner context; moves clear the source state before it can roll back.
-				context_->metadata->abandonNativeGraphLogicalIdReservation(logicalIds);
-			}
+			context_->metadata->abandonNativeGraphLogicalIdReservation(logicalIds);
 			snapshot_.release();
 			state_ = NativeGraphWriteTransactionState::NGWTS_ROLLED_BACK;
 		}
@@ -3402,8 +3688,11 @@ namespace graph::storage {
 													 NativeGraphWritePlannerOptions options) :
 		context_(std::make_shared<NativeGraphWritePlannerContext>()) {
 		validatePlannerOptions(options);
-		if (!entities.usesMetadataStore(metadata) || !labels.usesMetadataStore(metadata) ||
-			!properties.usesMetadataStore(metadata) || !indexes.usesMetadataStore(metadata)) {
+		const uint8_t foreignDomain = static_cast<uint8_t>(!entities.usesMetadataStore(metadata)) |
+									  static_cast<uint8_t>(!labels.usesMetadataStore(metadata)) |
+									  static_cast<uint8_t>(!properties.usesMetadataStore(metadata)) |
+									  static_cast<uint8_t>(!indexes.usesMetadataStore(metadata));
+		if (foreignDomain != 0U) {
 			throw std::invalid_argument("native graph write planner requires one metadata storage domain");
 		}
 		context_->metadata = &metadata;
@@ -3415,15 +3704,14 @@ namespace graph::storage {
 	}
 
 	NativeGraphWriteTransaction NativeGraphWritePlanner::beginTransaction() {
-		if (context_ == nullptr || context_->metadata == nullptr || context_->entities == nullptr || // beginTransaction retains the complete context assembled by the planner constructor.
-			context_->labels == nullptr || context_->properties == nullptr || context_->indexes == nullptr) {
+		if (context_ == nullptr) {
 			fail(FormatError::FERR_INVALID_STATE, "native graph write planner is detached from storage");
 		}
 		return NativeGraphWriteTransaction(context_, context_->metadata->openSnapshot());
 	}
 
 	NativeGraphLogicalIdReservation NativeGraphWritePlanner::reserveLogicalIds(uint64_t nodeCount, uint64_t edgeCount) {
-		if (context_ == nullptr || context_->metadata == nullptr || (nodeCount == 0U && edgeCount == 0U) ||
+		if (context_ == nullptr || (nodeCount == 0U && edgeCount == 0U) ||
 			nodeCount > static_cast<uint64_t>(context_->options.maximum_logical_id_reservation) ||
 			edgeCount > static_cast<uint64_t>(context_->options.maximum_logical_id_reservation)) {
 			fail(FormatError::FERR_INVALID_HEADER,

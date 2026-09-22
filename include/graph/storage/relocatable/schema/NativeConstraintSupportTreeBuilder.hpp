@@ -36,6 +36,9 @@ namespace graph::storage {
 		size_t sort_run_bytes = 0U;
 		size_t maximum_sort_runs = 0U;
 		size_t maximum_collisions = 0U;
+		// Validation is performed in bounded selected-column batches rather than
+		// reopening one complete Entity for every sorted support-tree entry.
+		size_t validation_batch_entries = 256U;
 	};
 
 	// Builds a bounded, rewindable native support-tree plan without publishing

@@ -20,6 +20,7 @@
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/StorageIO.hpp"
 #include "graph/storage/relocatable/entity/EntityPageStore.hpp"
+#include "graph/storage/relocatable/entity/NativeReadSession.hpp"
 
 using namespace graph::storage;
 
@@ -112,7 +113,7 @@ protected:
 	}
 };
 
-TEST_F(EntityPageStoreScanCacheTest, NodeScansStreamOneMapLeafAndOneEntityFramePerContiguousRun) {
+TEST_F(EntityPageStoreScanCacheTest, NodeScansStreamPhysicalEntityFramesWithoutWalkingTheEntityMap) {
 	io_->resetBufferPoolStats();
 	std::vector<uint64_t> firstIds;
 	EXPECT_TRUE(entities_->visitNodesUntil(snapshot_, 8U, [&](uint64_t nodeId, const NodeEntityRecord &) {
@@ -129,8 +130,11 @@ TEST_F(EntityPageStoreScanCacheTest, NodeScansStreamOneMapLeafAndOneEntityFrameP
 	}));
 	EXPECT_EQ(secondIds, firstIds);
 	const BufferPoolStats afterSecond = io_->bufferPoolStats();
-	EXPECT_EQ(scanPageReadDelta(afterFirst, afterSecond), 2U * RSS_PAGE_SIZE);
-	EXPECT_EQ(afterSecond.misses, afterFirst.misses + 2U);
+	// The physical scan streams both Page Directory leaves and both mixed-kind
+	// Entity frames. It deliberately avoids the former point-lookup side effect
+	// that admitted directory leaves into the cache.
+	EXPECT_EQ(scanPageReadDelta(afterFirst, afterSecond), 4U * RSS_PAGE_SIZE);
+	EXPECT_EQ(afterSecond.misses, afterFirst.misses + 4U);
 	EXPECT_EQ(afterSecond.resident_bytes, afterFirst.resident_bytes);
 
 	std::vector<uint64_t> resumedIds;
@@ -142,12 +146,14 @@ TEST_F(EntityPageStoreScanCacheTest, NodeScansStreamOneMapLeafAndOneEntityFrameP
 			}));
 	EXPECT_EQ(resumedIds, (std::vector<uint64_t>{1002U, 1003U}));
 	const BufferPoolStats afterResumed = io_->bufferPoolStats();
-	EXPECT_EQ(scanPageReadDelta(afterSecond, afterResumed), 2U * RSS_PAGE_SIZE);
-	EXPECT_EQ(afterResumed.misses, afterSecond.misses + 2U);
-	EXPECT_EQ(afterResumed.resident_bytes, afterSecond.resident_bytes);
+	// Ordered resume deliberately retains the Entity Map path. Its radix route
+	// and Entity frame are distinct from the unordered physical scan contract.
+	EXPECT_EQ(scanPageReadDelta(afterSecond, afterResumed), 4U * RSS_PAGE_SIZE);
+	EXPECT_EQ(afterResumed.misses, afterSecond.misses + 4U);
+	EXPECT_EQ(afterResumed.resident_bytes, afterSecond.resident_bytes + 2U * RSS_PAGE_SIZE);
 }
 
-TEST_F(EntityPageStoreScanCacheTest, EdgeScansStreamMapAndEntityFramesWhilePointReadsRemainResident) {
+TEST_F(EntityPageStoreScanCacheTest, EdgeScansStreamPhysicalEntityFramesWhilePointReadsRemainResident) {
 	io_->resetBufferPoolStats();
 	std::vector<uint64_t> firstIds;
 	EXPECT_TRUE(entities_->visitEdgesUntil(snapshot_, 8U, [&](uint64_t edgeId, const EdgeEntityRecord &) {
@@ -164,15 +170,15 @@ TEST_F(EntityPageStoreScanCacheTest, EdgeScansStreamMapAndEntityFramesWhilePoint
 	}));
 	EXPECT_EQ(secondIds, firstIds);
 	const BufferPoolStats afterSecond = io_->bufferPoolStats();
-	EXPECT_EQ(scanPageReadDelta(afterFirst, afterSecond), 2U * RSS_PAGE_SIZE);
-	EXPECT_EQ(afterSecond.misses, afterFirst.misses + 2U);
+	EXPECT_EQ(scanPageReadDelta(afterFirst, afterSecond), 4U * RSS_PAGE_SIZE);
+	EXPECT_EQ(afterSecond.misses, afterFirst.misses + 4U);
 	EXPECT_EQ(afterSecond.resident_bytes, afterFirst.resident_bytes);
 
 	EXPECT_EQ(entities_->readEdge(snapshot_, 2001U), edge(1001U, 1002U, 41U));
 	const BufferPoolStats afterFirstPoint = io_->bufferPoolStats();
-	EXPECT_EQ(scanPageReadDelta(afterSecond, afterFirstPoint), 2U * RSS_PAGE_SIZE);
-	EXPECT_EQ(afterFirstPoint.misses, afterSecond.misses + 2U);
-	EXPECT_EQ(afterFirstPoint.resident_bytes, afterSecond.resident_bytes + 2U * RSS_PAGE_SIZE);
+	EXPECT_EQ(scanPageReadDelta(afterSecond, afterFirstPoint), 4U * RSS_PAGE_SIZE);
+	EXPECT_EQ(afterFirstPoint.misses, afterSecond.misses + 4U);
+	EXPECT_EQ(afterFirstPoint.resident_bytes, afterSecond.resident_bytes + 4U * RSS_PAGE_SIZE);
 
 	EXPECT_EQ(entities_->readEdge(snapshot_, 2001U), edge(1001U, 1002U, 41U));
 	const BufferPoolStats afterSecondPoint = io_->bufferPoolStats();
@@ -195,4 +201,29 @@ TEST_F(EntityPageStoreScanCacheTest, EdgeScanRecordsPerfTraceWhenTracingIsEnable
 	EXPECT_EQ(edgeIds, (std::vector<uint64_t>{2001U, 2002U, 2003U}));
 	EXPECT_TRUE(trace.contains("native_graph.read.edge_entity_record"));
 	EXPECT_TRUE(trace.contains("native_graph.read.edge_entity_visitor"));
+	ASSERT_TRUE(trace.contains("native_graph.read.edge_page_scan.pages"));
+	ASSERT_TRUE(trace.contains("native_graph.read.edge_page_scan.records"));
+	EXPECT_EQ(trace.at("native_graph.read.edge_page_scan.pages").totalValue, 1);
+	EXPECT_EQ(trace.at("native_graph.read.edge_page_scan.records").totalValue, 3);
+}
+
+TEST_F(EntityPageStoreScanCacheTest, SnapshotBoundReadSessionReusesValidatedEntityPoolCatalog) {
+	NativeReadSession session;
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+
+	EXPECT_TRUE(entities_->visitNodesUntil(snapshot_, 8U,
+			[](uint64_t, const NodeEntityRecord &) { return true; }, &session));
+	EXPECT_TRUE(entities_->visitEdgesUntil(snapshot_, 8U,
+			[](uint64_t, const EdgeEntityRecord &) { return true; }, &session));
+
+	const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(false);
+	ASSERT_TRUE(trace.contains("native_graph.read.entity_pool_catalog_scan"));
+	ASSERT_TRUE(trace.contains("native_graph.read.entity_pool_cache_hit"));
+	ASSERT_TRUE(trace.contains("native_graph.read.shared_page_known_location_pin"));
+	EXPECT_EQ(trace.at("native_graph.read.entity_pool_catalog_scan").totalValue, 1);
+	EXPECT_EQ(trace.at("native_graph.read.entity_pool_cache_hit").totalValue, 1);
+	EXPECT_EQ(trace.at("native_graph.read.shared_page_known_location_pin").totalValue, 4);
+	EXPECT_FALSE(trace.contains("native_graph.read.shared_page_route_resolution"));
 }

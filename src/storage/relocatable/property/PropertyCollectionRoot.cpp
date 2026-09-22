@@ -72,42 +72,132 @@ namespace graph::storage {
 
 		[[nodiscard]] std::vector<std::byte> encodeEntries(std::span<const PropertyCollectionRootEntry> entries) {
 			requireU32Size(entries.size(), "relocatable Property collection root has too many entries");
-			std::vector<std::byte> payload;
+			if (entries.size() > std::numeric_limits<size_t>::max() / sizeof(uint32_t)) {
+				throwRootError(FormatError::FERR_ARITHMETIC_OVERFLOW,
+							   "relocatable Property collection root offset directory is too large");
+			}
+			const size_t directoryBytes = entries.size() * sizeof(uint32_t);
+			std::vector<std::byte> entryBytes;
+			std::vector<uint32_t> offsets;
+			offsets.reserve(entries.size());
 			uint32_t previousToken = 0U;
 			for (const PropertyCollectionRootEntry &entry: entries) {
 				if (entry.key_token == 0U || entry.key_token <= previousToken) {
 					throwRootError(FormatError::FERR_INVALID_HEADER,
 							   "relocatable Property collection root tokens are not strictly ordered");
 				}
-				appendU32(payload, entry.key_token);
-				CanonicalPropertyValueCodec::append(payload, entry.value);
+				const size_t entryOffset = directoryBytes + entryBytes.size();
+				requireU32Size(entryOffset, "relocatable Property collection root entry offset is too large");
+				offsets.push_back(static_cast<uint32_t>(entryOffset));
+				appendU32(entryBytes, entry.key_token);
+				CanonicalPropertyValueCodec::append(entryBytes, entry.value);
 				previousToken = entry.key_token;
 			}
+			std::vector<std::byte> payload(directoryBytes);
+			for (size_t index = 0U; index < offsets.size(); ++index) {
+				LittleEndianCodec::writeU32(payload, index * sizeof(uint32_t), offsets[index]);
+			}
+			payload.insert(payload.end(), entryBytes.begin(), entryBytes.end());
 			requireU32Size(payload.size(), "relocatable Property collection root payload is too large");
 			return payload;
 		}
 
-		void decodeEntries(PropertyCollectionRoot &root, std::span<const std::byte> payload, uint32_t entryCount) {
-			if (entryCount > payload.size() / 10U) {
+		[[nodiscard]] size_t offsetDirectoryBytes(const std::span<const std::byte> payload,
+																			  const uint32_t entryCount) {
+			if (entryCount > payload.size() / sizeof(uint32_t)) {
 				throwRootError(FormatError::FERR_INVALID_HEADER,
-							   "relocatable Property collection root entry count exceeds its payload");
+							   "relocatable Property collection root offset directory exceeds its payload");
 			}
+			return static_cast<size_t>(entryCount) * sizeof(uint32_t);
+		}
+
+		[[nodiscard]] std::pair<size_t, size_t>
+		entryBounds(const std::span<const std::byte> payload, const size_t directoryBytes, const uint32_t entryCount,
+					const uint32_t index) {
+			if (index >= entryCount) {
+				throwRootError(FormatError::FERR_INVALID_HEADER,
+							   "relocatable Property collection root entry index is outside its directory");
+			}
+			const size_t start = LittleEndianCodec::readU32(payload, static_cast<size_t>(index) * sizeof(uint32_t));
+			const size_t end = index + 1U == entryCount
+							   ? payload.size()
+							   : LittleEndianCodec::readU32(payload, static_cast<size_t>(index + 1U) * sizeof(uint32_t));
+			if (start < directoryBytes || start >= end || end > payload.size() || end - start < sizeof(uint32_t)) {
+				throwRootError(FormatError::FERR_INVALID_HEADER,
+							   "relocatable Property collection root offset directory is noncanonical");
+			}
+			return {start, end};
+		}
+
+		void validateOffsetDirectory(const std::span<const std::byte> payload, const size_t directoryBytes,
+																 const uint32_t entryCount) {
+			size_t expectedStart = directoryBytes;
+			uint32_t previousToken = 0U;
+			for (uint32_t index = 0U; index < entryCount; ++index) {
+				const auto [start, end] = entryBounds(payload, directoryBytes, entryCount, index);
+				const uint32_t token = LittleEndianCodec::readU32(payload, start);
+				if (start != expectedStart || token == 0U || token <= previousToken) {
+					throwRootError(FormatError::FERR_INVALID_HEADER,
+								   "relocatable Property collection root offset directory is not canonical");
+				}
+				expectedStart = end;
+				previousToken = token;
+			}
+			if (expectedStart != payload.size()) {
+				throwRootError(FormatError::FERR_INVALID_HEADER,
+							   "relocatable Property collection root offset directory leaves trailing bytes");
+			}
+		}
+
+		[[nodiscard]] bool containsTokenInEntries(const std::span<const std::byte> payload,
+																		 const uint32_t entryCount, const uint32_t keyToken) {
+			if (keyToken == 0U) {
+				throwRootError(FormatError::FERR_INVALID_HEADER,
+									"relocatable Property selection requires a nonzero token");
+			}
+			const size_t directoryBytes = offsetDirectoryBytes(payload, entryCount);
+			validateOffsetDirectory(payload, directoryBytes, entryCount);
+			uint32_t lower = 0U;
+			uint32_t upper = entryCount;
+			while (lower < upper) {
+				const uint32_t middle = lower + (upper - lower) / 2U;
+				const auto [start, end] = entryBounds(payload, directoryBytes, entryCount, middle);
+				static_cast<void>(end);
+				const uint32_t token = LittleEndianCodec::readU32(payload, start);
+				if (token < keyToken) {
+					lower = middle + 1U;
+				} else {
+					upper = middle;
+				}
+			}
+			if (lower == entryCount) {
+				return false;
+			}
+			const auto [start, end] = entryBounds(payload, directoryBytes, entryCount, lower);
+			static_cast<void>(end);
+			return LittleEndianCodec::readU32(payload, start) == keyToken;
+		}
+
+		void decodeEntries(PropertyCollectionRoot &root, std::span<const std::byte> payload, uint32_t entryCount) {
+			const size_t directoryBytes = offsetDirectoryBytes(payload, entryCount);
+			validateOffsetDirectory(payload, directoryBytes, entryCount);
 			root.entries.reserve(entryCount);
-			size_t offset = 0;
-		uint32_t previousToken = 0;
-		for (uint32_t index = 0; index < entryCount; ++index) {
-			const uint32_t token = LittleEndianCodec::readU32(payload, offset);
+			uint32_t previousToken = 0U;
+			for (uint32_t index = 0U; index < entryCount; ++index) {
+				const auto [start, end] = entryBounds(payload, directoryBytes, entryCount, index);
+				size_t offset = start;
+				const uint32_t token = LittleEndianCodec::readU32(payload, offset);
 				offset += sizeof(token);
 				if (token == 0U || token <= previousToken) {
 					throwRootError(FormatError::FERR_INVALID_HEADER,
 								   "relocatable Property collection root tokens are not strictly ordered");
 				}
 				root.entries.push_back({token, CanonicalPropertyValueCodec::decodeNext(payload, offset)});
+				if (offset != end) {
+					throwRootError(FormatError::FERR_INVALID_HEADER,
+								   "relocatable Property collection root entry length disagrees with its offset directory");
+				}
 				previousToken = token;
-			}
-			if (offset != payload.size()) {
-				throwRootError(FormatError::FERR_INVALID_HEADER,
-							   "relocatable Property collection root payload has trailing bytes");
 			}
 		}
 
@@ -139,6 +229,62 @@ namespace graph::storage {
 		return bytes;
 	}
 
+	[[nodiscard]] std::vector<std::optional<PropertyCollectionRootEntry>>
+	decodeSelectedEntriesValidated(const std::span<const std::byte> payload, const size_t directoryBytes,
+										 const uint32_t entryCount, const std::span<const uint32_t> requestedTokens) {
+		std::vector<std::optional<PropertyCollectionRootEntry>> result(requestedTokens.size());
+		uint32_t previousToken = 0U;
+		for (size_t requestedIndex = 0U; requestedIndex < requestedTokens.size(); ++requestedIndex) {
+			const uint32_t requestedToken = requestedTokens[requestedIndex];
+			if (requestedToken == 0U || requestedToken <= previousToken) {
+				throwRootError(FormatError::FERR_INVALID_HEADER,
+							   "relocatable Property selection requires strictly increasing nonzero tokens");
+			}
+			previousToken = requestedToken;
+			uint32_t lower = 0U;
+			uint32_t upper = entryCount;
+			while (lower < upper) {
+				const uint32_t middle = lower + (upper - lower) / 2U;
+				const auto [start, end] = entryBounds(payload, directoryBytes, entryCount, middle);
+				static_cast<void>(end);
+				const uint32_t token = LittleEndianCodec::readU32(payload, start);
+				if (token == 0U) {
+					throwRootError(FormatError::FERR_INVALID_HEADER,
+								   "relocatable Property collection root offset directory references an invalid token");
+				}
+				if (token < requestedToken) {
+					lower = middle + 1U;
+				} else {
+					upper = middle;
+				}
+			}
+			if (lower == entryCount) {
+				continue;
+			}
+			const auto [start, end] = entryBounds(payload, directoryBytes, entryCount, lower);
+			const uint32_t token = LittleEndianCodec::readU32(payload, start);
+			if (token != requestedToken) {
+				continue;
+			}
+			size_t offset = start + sizeof(uint32_t);
+			PropertyValue value = CanonicalPropertyValueCodec::decodeNext(payload, offset);
+			if (offset != end) {
+				throwRootError(FormatError::FERR_INVALID_HEADER,
+							   "relocatable Property collection root selected entry length is noncanonical");
+			}
+			result[requestedIndex] = PropertyCollectionRootEntry{token, std::move(value)};
+		}
+		return result;
+	}
+
+	[[nodiscard]] std::vector<std::optional<PropertyCollectionRootEntry>>
+	decodeSelectedEntries(const std::span<const std::byte> payload, const uint32_t entryCount,
+										 const std::span<const uint32_t> requestedTokens) {
+		const size_t directoryBytes = offsetDirectoryBytes(payload, entryCount);
+		validateOffsetDirectory(payload, directoryBytes, entryCount);
+		return decodeSelectedEntriesValidated(payload, directoryBytes, entryCount, requestedTokens);
+	}
+
 	PropertyCollectionRoot EntityPropertyCollectionRootCodec::decode(std::span<const std::byte> bytes) {
 		if (bytes.size() < RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES) {
 			throwRootError(FormatError::FERR_BUFFER_TOO_SMALL, "relocatable Entity Property root is truncated");
@@ -160,6 +306,11 @@ namespace graph::storage {
 			throwRootError(FormatError::FERR_INVALID_HEADER,
 						   "relocatable Entity Property root payload length does not match its bytes");
 		}
+		if (LittleEndianCodec::readU64(bytes, ENTITY_OWNER_ID_OFFSET) == 0U ||
+			!isOwnerType(LittleEndianCodec::readU32(bytes, ENTITY_OWNER_TYPE_OFFSET))) {
+			throwRootError(FormatError::FERR_INVALID_HEADER,
+						   "relocatable Entity Property root has an invalid owner");
+		}
 		PropertyCollectionRoot root;
 		root.owner_entity_id = LittleEndianCodec::readU64(bytes, ENTITY_OWNER_ID_OFFSET);
 		root.owner_entity_type = LittleEndianCodec::readU32(bytes, ENTITY_OWNER_TYPE_OFFSET);
@@ -167,6 +318,115 @@ namespace graph::storage {
 					  LittleEndianCodec::readU32(bytes, ENTITY_ENTRY_COUNT_OFFSET));
 		validateOwnerAndEntries(root);
 		return root;
+	}
+
+	PropertyCollectionRoot EntityPropertyCollectionRootCodec::decodeOwner(const std::span<const std::byte> bytes) {
+		if (bytes.size() < RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES) {
+			throwRootError(FormatError::FERR_BUFFER_TOO_SMALL, "relocatable Entity Property root is truncated");
+		}
+		const uint8_t invalid =
+				static_cast<uint8_t>(LittleEndianCodec::readU32(bytes, 0U) != RSS_ENTITY_PROPERTY_COLLECTION_ROOT_MAGIC) |
+				static_cast<uint8_t>(LittleEndianCodec::readU16(bytes, 4U) != RSS_ENTITY_PROPERTY_COLLECTION_ROOT_VERSION) |
+				static_cast<uint8_t>(LittleEndianCodec::readU16(bytes, 6U) != RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES) |
+				static_cast<uint8_t>(LittleEndianCodec::readU32(bytes, ENTITY_RESERVED_OFFSET) != 0U) |
+				static_cast<uint8_t>(LittleEndianCodec::readU32(bytes, ENTITY_PAYLOAD_BYTES_OFFSET) !=
+									 bytes.size() - RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES) |
+				static_cast<uint8_t>(LittleEndianCodec::readU64(bytes, ENTITY_OWNER_ID_OFFSET) == 0U) |
+				static_cast<uint8_t>(!isOwnerType(LittleEndianCodec::readU32(bytes, ENTITY_OWNER_TYPE_OFFSET)));
+		if (invalid != 0U) {
+			throwRootError(FormatError::FERR_INVALID_HEADER, "relocatable Entity Property root header is invalid");
+		}
+		return {LittleEndianCodec::readU64(bytes, ENTITY_OWNER_ID_OFFSET),
+				LittleEndianCodec::readU32(bytes, ENTITY_OWNER_TYPE_OFFSET), {}};
+	}
+
+	std::optional<PropertyCollectionRootEntry>
+	EntityPropertyCollectionRootCodec::decodeSelected(const std::span<const std::byte> bytes, const uint32_t keyToken) {
+		const std::array<uint32_t, 1U> tokens{keyToken};
+		return decodeSelected(bytes, tokens).front();
+	}
+
+	bool EntityPropertyCollectionRootCodec::containsToken(const std::span<const std::byte> bytes,
+																							 const uint32_t keyToken) {
+			if (bytes.size() < RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES) {
+				throwRootError(FormatError::FERR_BUFFER_TOO_SMALL, "relocatable Entity Property root is truncated");
+			}
+			if (LittleEndianCodec::readU32(bytes, 0U) != RSS_ENTITY_PROPERTY_COLLECTION_ROOT_MAGIC ||
+				LittleEndianCodec::readU16(bytes, 4U) != RSS_ENTITY_PROPERTY_COLLECTION_ROOT_VERSION ||
+				LittleEndianCodec::readU16(bytes, 6U) != RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES ||
+				LittleEndianCodec::readU32(bytes, ENTITY_RESERVED_OFFSET) != 0U) {
+				throwRootError(FormatError::FERR_INVALID_HEADER, "relocatable Entity Property root header is invalid");
+			}
+			const uint32_t payloadBytes = LittleEndianCodec::readU32(bytes, ENTITY_PAYLOAD_BYTES_OFFSET);
+		if (payloadBytes != bytes.size() - RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES) {
+			throwRootError(FormatError::FERR_INVALID_HEADER,
+									"relocatable Entity Property root payload length does not match its bytes");
+		}
+		// The point-presence API is also a public codec boundary. Validate the
+		// owner just as selected/full decode does before trusting its directory.
+		static_cast<void>(decodeOwner(bytes));
+		const auto payload = bytes.subspan(RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES);
+		return containsTokenInEntries(payload, LittleEndianCodec::readU32(bytes, ENTITY_ENTRY_COUNT_OFFSET), keyToken);
+	}
+
+	std::vector<std::optional<PropertyCollectionRootEntry>>
+	EntityPropertyCollectionRootCodec::decodeSelected(const std::span<const std::byte> bytes,
+																			 const std::span<const uint32_t> keyTokens) {
+		if (bytes.size() < RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES) {
+			throwRootError(FormatError::FERR_BUFFER_TOO_SMALL, "relocatable Entity Property root is truncated");
+		}
+		if (LittleEndianCodec::readU32(bytes, 0U) != RSS_ENTITY_PROPERTY_COLLECTION_ROOT_MAGIC ||
+			LittleEndianCodec::readU16(bytes, 4U) != RSS_ENTITY_PROPERTY_COLLECTION_ROOT_VERSION ||
+			LittleEndianCodec::readU16(bytes, 6U) != RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES ||
+			LittleEndianCodec::readU32(bytes, ENTITY_RESERVED_OFFSET) != 0U) {
+			throwRootError(FormatError::FERR_INVALID_HEADER, "relocatable Entity Property root header is invalid");
+		}
+		const uint32_t payloadBytes = LittleEndianCodec::readU32(bytes, ENTITY_PAYLOAD_BYTES_OFFSET);
+		if (payloadBytes != bytes.size() - RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES) {
+			throwRootError(FormatError::FERR_INVALID_HEADER,
+						   "relocatable Entity Property root payload length does not match its bytes");
+		}
+		if (LittleEndianCodec::readU64(bytes, ENTITY_OWNER_ID_OFFSET) == 0U ||
+			!isOwnerType(LittleEndianCodec::readU32(bytes, ENTITY_OWNER_TYPE_OFFSET))) {
+			throwRootError(FormatError::FERR_INVALID_HEADER, "relocatable Entity Property root has an invalid owner");
+		}
+		return decodeSelectedEntries(bytes.subspan(RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES),
+																				 LittleEndianCodec::readU32(bytes, ENTITY_ENTRY_COUNT_OFFSET), keyTokens);
+	}
+
+	std::pair<size_t, std::vector<std::optional<PropertyCollectionRootEntry>>>
+	EntityPropertyCollectionRootCodec::decodeSelectedAndCount(const std::span<const std::byte> bytes,
+																					 const std::span<const uint32_t> keyTokens) {
+				if (bytes.size() < RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES) {
+					throwRootError(FormatError::FERR_BUFFER_TOO_SMALL, "relocatable Entity Property root is truncated");
+				}
+				if (LittleEndianCodec::readU32(bytes, 0U) != RSS_ENTITY_PROPERTY_COLLECTION_ROOT_MAGIC ||
+					LittleEndianCodec::readU16(bytes, 4U) != RSS_ENTITY_PROPERTY_COLLECTION_ROOT_VERSION ||
+					LittleEndianCodec::readU16(bytes, 6U) != RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES ||
+					LittleEndianCodec::readU32(bytes, ENTITY_RESERVED_OFFSET) != 0U) {
+					throwRootError(FormatError::FERR_INVALID_HEADER, "relocatable Entity Property root header is invalid");
+				}
+				const uint32_t payloadBytes = LittleEndianCodec::readU32(bytes, ENTITY_PAYLOAD_BYTES_OFFSET);
+				if (payloadBytes != bytes.size() - RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES ||
+					LittleEndianCodec::readU64(bytes, ENTITY_OWNER_ID_OFFSET) == 0U ||
+					!isOwnerType(LittleEndianCodec::readU32(bytes, ENTITY_OWNER_TYPE_OFFSET))) {
+					throwRootError(FormatError::FERR_INVALID_HEADER,
+									   "relocatable Entity Property root header or owner is invalid");
+				}
+				const uint32_t entryCount = LittleEndianCodec::readU32(bytes, ENTITY_ENTRY_COUNT_OFFSET);
+				const std::span<const std::byte> payload = bytes.subspan(RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES);
+				const size_t directoryBytes = offsetDirectoryBytes(payload, entryCount);
+				validateOffsetDirectory(payload, directoryBytes, entryCount);
+				return {entryCount, decodeSelectedEntriesValidated(payload, directoryBytes, entryCount, keyTokens)};
+	}
+
+	size_t EntityPropertyCollectionRootCodec::entryCount(const std::span<const std::byte> bytes) {
+		static_cast<void>(decodeOwner(bytes));
+		const uint32_t entryCount = LittleEndianCodec::readU32(bytes, ENTITY_ENTRY_COUNT_OFFSET);
+		const std::span<const std::byte> payload = bytes.subspan(RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES);
+		const size_t directoryBytes = offsetDirectoryBytes(payload, entryCount);
+		validateOffsetDirectory(payload, directoryBytes, entryCount);
+		return entryCount;
 	}
 
 	std::vector<std::byte>
@@ -201,6 +461,92 @@ namespace graph::storage {
 		decodeEntries(decoded, bytes.subspan(RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES),
 					  LittleEndianCodec::readU32(bytes, LARGE_VALUE_PAYLOAD_ENTRY_COUNT_OFFSET));
 		return std::move(decoded.entries);
+	}
+
+	std::optional<PropertyCollectionRootEntry>
+	EntityPropertyLargeValuePayloadCodec::decodeSelected(const std::span<const std::byte> bytes,
+																			 const uint32_t keyToken) {
+		const std::array<uint32_t, 1U> tokens{keyToken};
+		return decodeSelected(bytes, tokens).front();
+	}
+
+	bool EntityPropertyLargeValuePayloadCodec::containsToken(const std::span<const std::byte> bytes,
+																							 const uint32_t keyToken) {
+			if (bytes.size() < RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES) {
+				throwRootError(FormatError::FERR_BUFFER_TOO_SMALL, "Entity Property LargeValue payload is truncated");
+			}
+			const uint8_t invalid =
+					static_cast<uint8_t>(LittleEndianCodec::readU32(bytes, 0U) != RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_MAGIC) |
+					static_cast<uint8_t>(LittleEndianCodec::readU16(bytes, 4U) != RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_VERSION) |
+					static_cast<uint8_t>(LittleEndianCodec::readU16(bytes, 6U) != RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES) |
+					static_cast<uint8_t>(LittleEndianCodec::readU32(bytes, LARGE_VALUE_PAYLOAD_BYTES_OFFSET) !=
+										 bytes.size() - RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES);
+			if (invalid != 0U) {
+				throwRootError(FormatError::FERR_INVALID_HEADER, "Entity Property LargeValue payload header is invalid");
+			}
+			return containsTokenInEntries(bytes.subspan(RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES),
+																	 LittleEndianCodec::readU32(bytes, LARGE_VALUE_PAYLOAD_ENTRY_COUNT_OFFSET), keyToken);
+	}
+
+	std::vector<std::optional<PropertyCollectionRootEntry>>
+	EntityPropertyLargeValuePayloadCodec::decodeSelected(const std::span<const std::byte> bytes,
+																			 const std::span<const uint32_t> keyTokens) {
+		if (bytes.size() < RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES) {
+			throwRootError(FormatError::FERR_BUFFER_TOO_SMALL, "Entity Property LargeValue payload is truncated");
+		}
+		const uint8_t invalid =
+				static_cast<uint8_t>(LittleEndianCodec::readU32(bytes, 0U) != RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_MAGIC) |
+				static_cast<uint8_t>(LittleEndianCodec::readU16(bytes, 4U) != RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_VERSION) |
+				static_cast<uint8_t>(LittleEndianCodec::readU16(bytes, 6U) != RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES) |
+				static_cast<uint8_t>(LittleEndianCodec::readU32(bytes, LARGE_VALUE_PAYLOAD_BYTES_OFFSET) !=
+									 bytes.size() - RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES);
+		if (invalid != 0U) {
+			throwRootError(FormatError::FERR_INVALID_HEADER, "Entity Property LargeValue payload header is invalid");
+		}
+		return decodeSelectedEntries(bytes.subspan(RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES),
+																				 LittleEndianCodec::readU32(bytes, LARGE_VALUE_PAYLOAD_ENTRY_COUNT_OFFSET), keyTokens);
+	}
+
+	std::pair<size_t, std::vector<std::optional<PropertyCollectionRootEntry>>>
+	EntityPropertyLargeValuePayloadCodec::decodeSelectedAndCount(const std::span<const std::byte> bytes,
+																					 const std::span<const uint32_t> keyTokens) {
+		if (bytes.size() < RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES) {
+			throwRootError(FormatError::FERR_BUFFER_TOO_SMALL, "Entity Property LargeValue payload is truncated");
+		}
+		const uint8_t invalid =
+				static_cast<uint8_t>(LittleEndianCodec::readU32(bytes, 0U) != RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_MAGIC) |
+				static_cast<uint8_t>(LittleEndianCodec::readU16(bytes, 4U) != RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_VERSION) |
+				static_cast<uint8_t>(LittleEndianCodec::readU16(bytes, 6U) != RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES) |
+				static_cast<uint8_t>(LittleEndianCodec::readU32(bytes, LARGE_VALUE_PAYLOAD_BYTES_OFFSET) !=
+											 bytes.size() - RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES);
+		if (invalid != 0U) {
+			throwRootError(FormatError::FERR_INVALID_HEADER, "Entity Property LargeValue payload header is invalid");
+		}
+		const uint32_t entryCount = LittleEndianCodec::readU32(bytes, LARGE_VALUE_PAYLOAD_ENTRY_COUNT_OFFSET);
+		const std::span<const std::byte> payload = bytes.subspan(RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES);
+		const size_t directoryBytes = offsetDirectoryBytes(payload, entryCount);
+		validateOffsetDirectory(payload, directoryBytes, entryCount);
+		return {entryCount, decodeSelectedEntriesValidated(payload, directoryBytes, entryCount, keyTokens)};
+	}
+
+	size_t EntityPropertyLargeValuePayloadCodec::entryCount(const std::span<const std::byte> bytes) {
+		if (bytes.size() < RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES) {
+			throwRootError(FormatError::FERR_BUFFER_TOO_SMALL, "Entity Property LargeValue payload is truncated");
+		}
+		const uint8_t invalid =
+				static_cast<uint8_t>(LittleEndianCodec::readU32(bytes, 0U) != RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_MAGIC) |
+				static_cast<uint8_t>(LittleEndianCodec::readU16(bytes, 4U) != RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_VERSION) |
+				static_cast<uint8_t>(LittleEndianCodec::readU16(bytes, 6U) != RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES) |
+				static_cast<uint8_t>(LittleEndianCodec::readU32(bytes, LARGE_VALUE_PAYLOAD_BYTES_OFFSET) !=
+									 bytes.size() - RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES);
+		if (invalid != 0U) {
+			throwRootError(FormatError::FERR_INVALID_HEADER, "Entity Property LargeValue payload header is invalid");
+		}
+		const uint32_t entryCount = LittleEndianCodec::readU32(bytes, LARGE_VALUE_PAYLOAD_ENTRY_COUNT_OFFSET);
+		const std::span<const std::byte> payload = bytes.subspan(RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES);
+		const size_t directoryBytes = offsetDirectoryBytes(payload, entryCount);
+		validateOffsetDirectory(payload, directoryBytes, entryCount);
+		return entryCount;
 	}
 
 	bool EntityPropertyLargeValuePayloadCodec::hasMagic(const std::span<const std::byte> bytes) {

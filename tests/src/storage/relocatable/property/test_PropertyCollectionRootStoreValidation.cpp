@@ -41,7 +41,9 @@ namespace graph::storage {
 		[[nodiscard]] static PropertyCollectionRoot decodeEntityRoot(
 				const PropertyCollectionRootStore &store, const MetadataSnapshotPin &snapshot,
 				const EntityPropertyKey &key, const EntityPropertyLocation &location, const SlottedPage &page) {
-			return store.decodeEntityRoot(snapshot, key, location, page);
+			const std::vector<std::byte> bytes =
+					page.read({location.page_id, location.slot_id, location.slot_generation});
+			return store.decodeEntityRoot(snapshot, key, location, page.pageId(), page.ownerKind(), bytes);
 		}
 	};
 
@@ -383,6 +385,28 @@ TEST_F(PropertyCollectionRootStoreValidationTest, DecodeAndMovedCursorRejectFore
 	snapshot.release();
 }
 
+TEST_F(PropertyCollectionRootStoreValidationTest, SelectiveReadsPreserveOwnerAndMissingValueContracts) {
+	PropertyCollectionRoot original = root(1001U, 3U, "selected value");
+	original.entries.push_back({7U, graph::PropertyValue(int64_t(42))});
+	publishNodeAndRoot(original);
+
+	const EntityPropertyKey key{EntityPropertyOwnerKind::EPOK_NODE, original.owner_entity_id};
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	const auto selected = properties_->readEntityPropertyOptional(snapshot, key, 7U);
+	ASSERT_TRUE(selected.has_value());
+	EXPECT_EQ(*selected, original.entries.back());
+	PropertyCollectionRootScanCursor cursor = properties_->openScanCursor(snapshot);
+	EXPECT_EQ(cursor.readEntityPropertyOptional(snapshot, key, 3U),
+			  std::optional<PropertyCollectionRootEntry>(original.entries.front()));
+	EXPECT_FALSE(properties_->readEntityPropertyOptional(snapshot, key, 5U).has_value());
+	EXPECT_FALSE(properties_->readEntityPropertyOptional(
+				 snapshot, {EntityPropertyOwnerKind::EPOK_NODE, 1002U}, 7U)
+					 .has_value());
+	expectFormatError([&] { static_cast<void>(properties_->readEntityPropertyOptional(snapshot, key, 0U)); },
+					  FormatError::FERR_INVALID_HEADER);
+	snapshot.release();
+}
+
 TEST_F(PropertyCollectionRootStoreValidationTest, ReadsRejectUnusableTypedPropertyPayloads) {
 	const EntityPropertyKey missingStoreKey{EntityPropertyOwnerKind::EPOK_NODE, 1001U};
 	static_cast<void>(publishPropertyPayload(
@@ -456,6 +480,27 @@ TEST_F(PropertyCollectionRootStoreValidationTest, ReadsRejectLargeValuePayloadOw
 	expectFormatError(
 			[&] { static_cast<void>(propertiesWithLargeValues.readEntity(snapshot, foreignTypeKey)); },
 			FormatError::FERR_INVALID_STATE);
+	snapshot.release();
+}
+
+TEST_F(PropertyCollectionRootStoreValidationTest, SelectiveReadsSupportCanonicalLargeValuePayloads) {
+	LargeValueStore largeValues(io_, *metadata_);
+	PropertyCollectionRootStore propertiesWithLargeValues(*pages_, largeValues, *metadata_);
+	const PropertyCollectionRoot original{1001U,
+									 graph::Node::typeId,
+									 {{3U, graph::PropertyValue("large selected value")}, {7U, graph::PropertyValue(int64_t(42))}}};
+	const LargeValueWriteResult written = largeValues.write(
+			EntityPropertyLargeValuePayloadCodec::encode(original.entries), largeValueOptions(), nextCheckpointLsn());
+	const EntityPropertyKey key{EntityPropertyOwnerKind::EPOK_NODE, original.owner_entity_id};
+	const EntityPropertyLargeValueReference reference{
+				original.owner_entity_id, original.owner_entity_type, written.reference};
+	static_cast<void>(publishPropertyPayload(key, EntityPropertyLargeValueReferenceCodec::encode(reference),
+															 PhysicalSlotId(41U)));
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_EQ(propertiesWithLargeValues.readEntityPropertyOptional(snapshot, key, 3U),
+			  std::optional<PropertyCollectionRootEntry>(original.entries.front()));
+	EXPECT_FALSE(propertiesWithLargeValues.readEntityPropertyOptional(snapshot, key, 5U).has_value());
 	snapshot.release();
 }
 

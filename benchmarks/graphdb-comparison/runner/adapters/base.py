@@ -456,16 +456,20 @@ class BenchmarkAdapter:
         adapter_factory: Callable[[], "BenchmarkAdapter"],
         execution_mode: str,
     ) -> WorkloadResult:
-        adapter = adapter_factory()
-        adapter.setup()
         try:
-            loaded = adapter.load_nodes_edges()
-            if loaded is None:
-                raise ValueError("load_nodes_edges returned None")
-            adapter.validate("load_nodes_edges", int(loaded))
-            return adapter.run_workload(workload, warmup, iterations, execution_mode=execution_mode)
-        finally:
-            adapter.teardown()
+            query_warmup = 0 if execution_mode == OPENED_EXECUTION_MODE else warmup
+            for _ in range(query_warmup):
+                self._run_isolated_query(workload, adapter_factory)
+
+            samples: list[Sample] = []
+            for iteration in range(iterations):
+                latency_ms = self._run_isolated_query(workload, adapter_factory)
+                samples.append(self._sample(workload, iteration, latency_ms))
+            return WorkloadResult(self.database, workload, self.scale, "ok", samples=samples)
+        except UnsupportedWorkload as exc:
+            return WorkloadResult(self.database, workload, self.scale, "unsupported", error=str(exc))
+        except Exception as exc:
+            return WorkloadResult(self.database, workload, self.scale, "failed", error=str(exc))
 
     def _run_isolated_load(self, adapter_factory: Callable[[], "BenchmarkAdapter"]) -> None:
         adapter = adapter_factory()

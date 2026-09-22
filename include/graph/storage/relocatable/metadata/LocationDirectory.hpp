@@ -12,11 +12,13 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <span>
 #include <vector>
 
+#include "graph/storage/CancellationCheckpoint.hpp"
 #include "graph/storage/relocatable/metadata/CatalogRadix.hpp"
 
 namespace graph::storage {
@@ -210,6 +212,33 @@ namespace graph::storage {
 	class LocationDirectory;
 	struct Superblock;
 
+	// A forward-only logical range over one immutable directory snapshot. The
+	// cursor retains only the current leaf and one radix route, so continuation
+	// never restarts at the root and memory remains bounded by format depth.
+	class LocationDirectoryRangeCursor final {
+	public:
+		LocationDirectoryRangeCursor(const LocationDirectoryRangeCursor &) = delete;
+		LocationDirectoryRangeCursor &operator=(const LocationDirectoryRangeCursor &) = delete;
+		LocationDirectoryRangeCursor(LocationDirectoryRangeCursor &&) noexcept;
+		LocationDirectoryRangeCursor &operator=(LocationDirectoryRangeCursor &&) noexcept;
+		~LocationDirectoryRangeCursor();
+
+		[[nodiscard]] std::optional<LocationLeafEntry> next();
+		// Skips directly to the first entry at or after `minimumLogicalId` without
+		// rereading the root. Calls must be monotonic for an already-consumed cursor.
+		[[nodiscard]] std::optional<LocationLeafEntry> nextAtOrAfter(uint64_t minimumLogicalId);
+		[[nodiscard]] size_t metadataPagesRead() const noexcept;
+		[[nodiscard]] bool exhausted() const noexcept;
+
+	private:
+		struct Impl;
+		explicit LocationDirectoryRangeCursor(std::unique_ptr<Impl> implementation) noexcept;
+
+		std::unique_ptr<Impl> implementation_;
+
+		friend class LocationDirectory;
+	};
+
 	// Owns one bounded append-only path for a streamed logical-location
 	// directory. It is deliberately narrow: only new contiguous IDs or explicitly
 	// sparse monotonic Edge/Edge-Property IDs can be appended, which keeps
@@ -322,6 +351,11 @@ namespace graph::storage {
 		// The publication gate logicalizes every typed non-bootstrap root afterward.
 		void prepareLogicalRootChildren(MetadataWriteBatch &batch);
 
+		[[nodiscard]] LocationDirectoryRangeCursor openRangeCursor(
+				const Superblock &superblock, MetadataDirectoryType directoryType, uint64_t lowerInclusive = 1U,
+				uint64_t upperInclusive = std::numeric_limits<uint64_t>::max(),
+				const CancellationCheckpoint *cancellation = nullptr) const;
+
 		[[nodiscard]] PageLocation findPage(const Superblock &superblock, PageId pageId) const;
 		[[nodiscard]] ExtentLocation findExtent(const Superblock &superblock, ExtentId extentId) const;
 		[[nodiscard]] std::optional<PageLocation> findPageOptional(const Superblock &superblock, PageId pageId) const;
@@ -333,10 +367,24 @@ namespace graph::storage {
 																					 uint64_t nodeId) const;
 		[[nodiscard]] std::optional<EntityPageLocation> findEdgePageLocationOptional(const Superblock &superblock,
 																					 uint64_t edgeId) const;
+		// Resolves one strictly increasing Entity-ID batch through a single
+		// directory range cursor. Results preserve input order and leave absent
+		// logical IDs empty.
+		void findEntityPageLocationsSorted(const Superblock &superblock, MetadataDirectoryType directoryType,
+																std::span<const uint64_t> entityIds,
+																std::span<std::optional<EntityPageLocation>> results,
+																const CancellationCheckpoint *cancellation = nullptr) const;
 		[[nodiscard]] EntityPropertyLocation findEntityProperty(const Superblock &superblock,
 																const EntityPropertyKey &key) const;
 		[[nodiscard]] std::optional<EntityPropertyLocation>
 		findEntityPropertyOptional(const Superblock &superblock, const EntityPropertyKey &key) const;
+		// Resolves one caller-bounded, strictly ordered key batch with a single
+		// retained radix traversal. Results preserve input order and distinguish a
+		// missing owner from malformed directory state.
+		void findEntityPropertiesSorted(
+				const Superblock &superblock, std::span<const EntityPropertyKey> keys,
+				std::span<std::optional<EntityPropertyLocation>> results,
+				const CancellationCheckpoint *cancellation = nullptr) const;
 		[[nodiscard]] StateLocation findState(const Superblock &superblock, uint64_t stateId) const;
 		[[nodiscard]] std::optional<StateLocation> findStateOptional(const Superblock &superblock,
 																	 uint64_t stateId) const;

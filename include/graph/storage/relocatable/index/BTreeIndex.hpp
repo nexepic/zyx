@@ -28,6 +28,32 @@ namespace graph::storage {
 	// traversal, so every PageId resolves against one metadata generation.
 	class BTreeIndex final {
 	public:
+		// A cursor batch is an execution bound, not a persisted page-capacity
+		// assumption. Callers may request a smaller bound when their own resource
+		// policy requires it.
+		static constexpr size_t DEFAULT_CURSOR_BATCH_ENTRIES = 256U;
+
+		// A range cursor is bound to one caller-owned metadata snapshot. It keeps
+		// one decoded leaf and its root-to-leaf route, so resuming does not restart
+		// a root descent or retain an unbounded history of visited leaves.
+		class RangeCursor final {
+		public:
+			~RangeCursor();
+			RangeCursor(const RangeCursor &) = delete;
+			RangeCursor &operator=(const RangeCursor &) = delete;
+			RangeCursor(RangeCursor &&) noexcept;
+			RangeCursor &operator=(RangeCursor &&) noexcept;
+
+			[[nodiscard]] std::optional<BTreePageEntry> next();
+
+		private:
+			struct State;
+			friend class BTreeIndex;
+			explicit RangeCursor(std::unique_ptr<State> state);
+
+			std::unique_ptr<State> state_;
+		};
+
 		BTreeIndex(uint64_t indexId, BTreePageStore &pages, RelocatableMetadataStore &metadata,
 					   BTreeLeafValueLayout leafValueLayout = BTreeLeafValueLayout::BLVL_U64);
 
@@ -38,7 +64,14 @@ namespace graph::storage {
 																	   size_t maximumEntries,
 																	   BufferPoolReadHint initialLeafReadHint = BufferPoolReadHint::BPRH_SEQUENTIAL,
 																	   const CancellationCheckpoint *cancellation = nullptr,
-																	   bool excludeLowerBound = false) const;
+																					 bool excludeLowerBound = false) const;
+		// Opens a true continuation cursor. Unlike repeatedly calling scan() with
+		// the previous key, this descends from the root exactly once.
+		[[nodiscard]] RangeCursor openRangeCursor(
+				const MetadataSnapshotPin &snapshot, std::optional<std::span<const std::byte>> lowerBound,
+				size_t maximumEntries,
+				BufferPoolReadHint initialLeafReadHint = BufferPoolReadHint::BPRH_SEQUENTIAL,
+				bool excludeLowerBound = false, const CancellationCheckpoint *cancellation = nullptr) const;
 		// Produces fresh, sequential cursors over one pinned tree without retaining
 		// the full tree in memory. The snapshot must outlive every opened cursor.
 		[[nodiscard]] OrderedBTreeEntrySource orderedSource(const MetadataSnapshotPin &snapshot,
@@ -52,6 +85,11 @@ namespace graph::storage {
 			size_t child_index = 0U;
 			std::optional<std::vector<std::byte>> parent_lower_inclusive;
 			std::optional<std::vector<std::byte>> parent_upper_exclusive;
+			// The route is already authenticated while descending from the root.
+			// Retain the decoded routing entries so successor-leaf traversal does
+			// not reread the same internal pages for every leaf in this cursor.
+			BTreePageHeader header{};
+			std::vector<BTreePageEntry> entries;
 		};
 
 		struct LeafRoute {
@@ -68,7 +106,8 @@ namespace graph::storage {
 											  std::vector<TraversalStep> *traversal = nullptr) const;
 		[[nodiscard]] LeafRoute advanceToExpectedSiblingLeaf(const MetadataSnapshotPin &snapshot,
 																 std::vector<TraversalStep> &traversal,
-																 const CancellationCheckpoint *cancellation) const;
+																					 const CancellationCheckpoint *cancellation) const;
+		[[nodiscard]] std::optional<BTreePageEntry> nextRangeCursor(RangeCursor::State &state) const;
 
 		uint64_t index_id_ = 0;
 		BTreePageStore &pages_;

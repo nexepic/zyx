@@ -1594,6 +1594,28 @@ TEST_F(RelocatableLocationDirectoryTest, SupportsEveryTypedDirectoryLookupAndTra
 	expectFormatError([&] { directory.visitPages(published, {}); }, FormatError::FERR_INVALID_HEADER);
 }
 
+TEST_F(RelocatableLocationDirectoryTest, ComposesRepeatedTypedDirectoryMutationsWithinOnePublication) {
+	const Superblock initial = superblock();
+	SuperblockFile bootstrap(dataIo);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(dataIo, initial);
+	MetadataPagePoolAllocator allocator(dataIo, initial);
+	LocationDirectory directory(pages, allocator);
+
+	const EntityPageLocation first{101U, PageId(12U), 0U, 1U};
+	const EntityPageLocation second{202U, PageId(13U), 1U, 1U};
+	MetadataWriteBatch batch(allocator, initial, LogSequenceNumber(2U));
+	// Two independent planners can contribute to the same typed directory. The
+	// second COW root must be based on the first root in this batch.
+	directory.prepareReplaceNodePageLocations(batch, std::span(&first, 1U), {});
+	directory.prepareReplaceNodePageLocations(batch, std::span(&second, 1U), {});
+	batch.publish(bootstrap);
+
+	const Superblock published = batch.candidate();
+	EXPECT_EQ(directory.findNodePageLocation(published, first.entity_id), first);
+	EXPECT_EQ(directory.findNodePageLocation(published, second.entity_id), second);
+}
+
 TEST_F(RelocatableLocationDirectoryTest, ResumesVectorManifestTraversalWithinAnExplicitMetadataPageBudget) {
 	const Superblock initial = superblock();
 	SuperblockFile bootstrap(dataIo);

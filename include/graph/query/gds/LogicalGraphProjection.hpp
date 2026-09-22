@@ -57,9 +57,14 @@ namespace graph::query::gds {
 	};
 
 	struct LogicalProjectionBuildBounds {
+		static constexpr size_t DEFAULT_MAXIMUM_PROPERTY_BYTES = 64U * 1024U * 1024U;
 		size_t maximum_nodes = 0U;
 		size_t maximum_metadata_pages = 0U;
 		size_t maximum_edges_per_node = 0U;
+		// Bounds the transient selected weight column independently from the
+		// adjacency cardinality. A large Property must fail closed before the
+		// projection retains an unbounded decoded column.
+		size_t maximum_property_bytes = DEFAULT_MAXIMUM_PROPERTY_BYTES;
 	};
 
 	// Projection construction may scan a large graph. The callback keeps its

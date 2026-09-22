@@ -247,6 +247,11 @@ namespace graph::query {
 			std::chrono::milliseconds training_preview_delay{0};
 			std::chrono::milliseconds training_commit_delay{0};
 			std::chrono::milliseconds projection_scan_delay{0};
+			mutable size_t topology_scans = 0U;
+			mutable size_t node_batch_reads = 0U;
+			mutable std::vector<size_t> node_batch_sizes;
+			mutable size_t batched_existence_scans = 0U;
+			mutable size_t full_adjacency_scans = 0U;
 		};
 
 		class ProcedureLogicalGraphSnapshot final : public storage::LogicalGraphVectorSearchSnapshot {
@@ -257,8 +262,47 @@ namespace graph::query {
 				const auto node = state_->nodes.find(nodeId);
 				return node == state_->nodes.end() ? storage::LogicalGraphNode{} : node->second;
 			}
+			[[nodiscard]] std::vector<storage::LogicalGraphNode> readNodesShapedSorted(
+					const std::span<const uint64_t> nodeIds, const storage::EntityReadShape &shape) const override {
+				++state_->node_batch_reads;
+				state_->node_batch_sizes.push_back(nodeIds.size());
+				static_cast<void>(shape);
+				uint64_t previous = 0U;
+				for (const uint64_t nodeId: nodeIds) {
+					if (nodeId == 0U || nodeId <= previous) {
+						throw std::invalid_argument("test Vector snapshot received an invalid sorted Node batch");
+					}
+					previous = nodeId;
+				}
+				std::vector<storage::LogicalGraphNode> result;
+				result.reserve(nodeIds.size());
+				for (const uint64_t nodeId: nodeIds) {
+					const auto node = state_->nodes.find(nodeId);
+					if (node == state_->nodes.end()) {
+						throw std::runtime_error("test Vector snapshot lost a requested Node");
+					}
+					result.push_back(node->second);
+				}
+				return result;
+			}
 			[[nodiscard]] bool containsNode(uint64_t nodeId) const override {
 				return state_->nodes.contains(nodeId);
+			}
+			[[nodiscard]] bool supportsNodeExistenceProbes() const override { return true; }
+			[[nodiscard]] std::vector<bool> containsNodesSorted(
+					const std::span<const uint64_t> nodeIds) const override {
+				++state_->batched_existence_scans;
+				std::vector<bool> result;
+				result.reserve(nodeIds.size());
+				uint64_t previous = 0U;
+				for (const uint64_t nodeId: nodeIds) {
+					if (nodeId == 0U || nodeId <= previous) {
+						throw std::invalid_argument("test snapshot received an invalid sorted Node batch");
+					}
+					previous = nodeId;
+					result.push_back(state_->nodes.contains(nodeId));
+				}
+				return result;
 			}
 			[[nodiscard]] storage::LogicalGraphEdge readEdge(uint64_t edgeId) const override {
 				const auto edge = std::ranges::find(state_->edges, edgeId, &storage::LogicalGraphEdge::edge_id);
@@ -298,6 +342,10 @@ namespace graph::query {
 			[[nodiscard]] storage::LogicalGraphAdjacencyPage
 			scanAdjacentEdges(uint64_t, storage::LogicalGraphReadDirection,
 							  std::optional<storage::LogicalGraphAdjacencyContinuation>, size_t) const override;
+			[[nodiscard]] storage::LogicalGraphAdjacencyTopologyPage scanAdjacentEdgeTopologies(
+					uint64_t nodeId, storage::LogicalGraphReadDirection direction,
+					std::optional<storage::LogicalGraphAdjacencyContinuation> continuation,
+					size_t maximumRecords) const override;
 			void visitEdges(size_t, const std::function<bool(const storage::LogicalGraphEdge &)> &) const override {
 				throw std::logic_error("scalar procedure test must not scan relationships");
 			}
@@ -345,6 +393,7 @@ namespace graph::query {
 				uint64_t nodeId, storage::LogicalGraphReadDirection direction,
 				std::optional<storage::LogicalGraphAdjacencyContinuation> continuation, size_t maximumRecords) const {
 			std::vector<storage::LogicalGraphEdge> edges;
+			++state_->full_adjacency_scans;
 			for (const storage::LogicalGraphEdge &edge: state_->edges) {
 				const bool matches = direction == storage::LogicalGraphReadDirection::LGRD_OUTGOING
 									 ? edge.source_node_id == nodeId
@@ -370,6 +419,41 @@ namespace graph::query {
 			storage::LogicalGraphAdjacencyPage page;
 			page.edges.insert(page.edges.end(), edges.begin() + static_cast<std::ptrdiff_t>(begin),
 							  edges.begin() + static_cast<std::ptrdiff_t>(begin + count));
+			if (begin + count < edges.size() && count != 0U) {
+				page.continuation = {page.edges.back().edge_id, edges[begin + count].edge_id};
+			}
+			return page;
+		}
+
+		storage::LogicalGraphAdjacencyTopologyPage ProcedureLogicalGraphSnapshot::scanAdjacentEdgeTopologies(
+				uint64_t nodeId, storage::LogicalGraphReadDirection direction,
+				std::optional<storage::LogicalGraphAdjacencyContinuation> continuation, size_t maximumRecords) const {
+			++state_->topology_scans;
+			std::vector<storage::LogicalGraphEdgeTopology> edges;
+			for (const storage::LogicalGraphEdge &edge: state_->edges) {
+				const bool matches = direction == storage::LogicalGraphReadDirection::LGRD_OUTGOING
+						? edge.source_node_id == nodeId : edge.target_node_id == nodeId;
+				if (matches) {
+					edges.push_back({edge.edge_id, edge.source_node_id, edge.target_node_id, edge.type});
+				}
+			}
+			std::ranges::sort(edges, {}, &storage::LogicalGraphEdgeTopology::edge_id);
+			if (state_->return_nonmonotonic_adjacency_page && edges.size() > 1U) {
+				std::swap(edges[0], edges[1]);
+			}
+			size_t begin = 0U;
+			if (continuation.has_value()) {
+				const auto next = std::ranges::find(edges, continuation->next_edge_id,
+																 &storage::LogicalGraphEdgeTopology::edge_id);
+				if (next == edges.end()) {
+					return {};
+				}
+				begin = static_cast<size_t>(std::distance(edges.begin(), next));
+			}
+			const size_t count = std::min(maximumRecords, edges.size() - begin);
+			storage::LogicalGraphAdjacencyTopologyPage page;
+			page.edges.insert(page.edges.end(), edges.begin() + static_cast<std::ptrdiff_t>(begin),
+					edges.begin() + static_cast<std::ptrdiff_t>(begin + count));
 			if (begin + count < edges.size() && count != 0U) {
 				page.continuation = {page.edges.back().edge_id, edges[begin + count].edge_id};
 			}
@@ -1288,6 +1372,9 @@ namespace graph::query {
 		EXPECT_EQ(result.getRows()[0].at("node").asLogicalNode().node_id, 1U);
 		EXPECT_EQ(result.getRows()[2].at("node").asLogicalNode().node_id, 3U);
 		EXPECT_EQ(backend->search_snapshot_opens, 0U);
+		EXPECT_GT(backend->state->topology_scans, 0U);
+		EXPECT_GT(backend->state->batched_existence_scans, 0U);
+		EXPECT_EQ(backend->state->full_adjacency_scans, 0U);
 
 		const QueryResult tooShallow = engine.execute("CALL algo.shortestPath(1, 3, 1)");
 		EXPECT_TRUE(tooShallow.isEmpty());
@@ -2101,11 +2188,68 @@ namespace graph::query {
 		backend->state->search_result.hits = {{firstNode.node_id, 0.0F}, {secondNode.node_id, 1.0F}};
 		logical::LogicalSort equalSortKeys(searchCall(), {{literalSortKey, true}});
 		EXPECT_NO_THROW(static_cast<void>(execute(equalSortKeys)));
+		EXPECT_GT(backend->state->node_batch_reads, 0U);
 		const auto score = std::make_shared<expressions::VariableReferenceExpression>("score");
 		logical::LogicalSort ascendingScoreSort(searchCall(), {{score, true}});
 		EXPECT_NO_THROW(static_cast<void>(execute(ascendingScoreSort)));
 		logical::LogicalSort descendingScoreSort(searchCall(), {{score, false}});
 		EXPECT_NO_THROW(static_cast<void>(execute(descendingScoreSort)));
+	}
+
+	TEST(QueryEngineLogicalBackendBoundaryTest, VectorProcedureEnforcesMaterializedByteBoundForCompleteNodes) {
+		auto backend = std::make_shared<RecordingVectorProcedureBackend>();
+		LogicalReadExecutionOptions options;
+		options.bounds.maximum_materialized_bytes = 512U;
+		execution::LogicalPlanProcedureRuntime runtime(*backend, backend.get(), backend.get());
+		logical::LogicalCallProcedure search(
+				"db.index.vector.queryNodes",
+				{PropertyValue("memory_embedding"), PropertyValue(int64_t{1}),
+						PropertyValue(std::vector<PropertyValue>{PropertyValue(1.0)})});
+		storage::LogicalGraphNode node;
+		node.node_id = 1U;
+		node.labels = {"Memory"};
+		node.properties = {{"body", PropertyValue(std::string(4096U, 'x'))}};
+		backend->state->nodes = {{node.node_id, node}};
+		backend->state->search_result.hits = {{node.node_id, 0.0F}};
+
+		EXPECT_THROW(static_cast<void>(runtime.execute(
+				search, options.bounds, options.maximum_vector_mapping_entries, options.maximum_raw_vector_reads,
+				options.vector_candidate_search_budget, options.vector_candidate_refinement_budget,
+				options.maximum_vector_training_records, options.maximum_vector_training_pages,
+				options.maximum_gds_algorithm_edges, options.maximum_gds_algorithm_iterations,
+				options.maximum_gds_algorithm_work_units, QueryContext{})),
+				std::runtime_error);
+	}
+
+	TEST(QueryEngineLogicalBackendBoundaryTest, VectorProcedureMaterializesLargeHitSetsInBoundedNodeBatches) {
+		auto backend = std::make_shared<RecordingVectorProcedureBackend>();
+		LogicalReadExecutionOptions options;
+		// A small byte budget must reduce the physical Node batch before complete
+		// Property payloads are copied, rather than allowing the default 256 rows
+		// to be staged and rejected only after the read.
+		options.bounds.maximum_materialized_bytes = 1024U;
+		execution::LogicalPlanProcedureRuntime runtime(*backend, backend.get(), backend.get());
+		logical::LogicalCallProcedure search(
+				"db.index.vector.queryNodes",
+				{PropertyValue("memory_embedding"), PropertyValue(int64_t{300}),
+						PropertyValue(std::vector<PropertyValue>{PropertyValue(1.0)})});
+		for (uint64_t id = 1U; id <= 300U; ++id) {
+			storage::LogicalGraphNode node;
+			node.node_id = id;
+			node.labels = {"Memory"};
+			backend->state->nodes.emplace(id, std::move(node));
+			backend->state->search_result.hits.push_back({id, static_cast<float>(id)});
+		}
+		const QueryResult result = runtime.execute(
+				search, options.bounds, options.maximum_vector_mapping_entries, options.maximum_raw_vector_reads,
+				options.vector_candidate_search_budget, options.vector_candidate_refinement_budget,
+				options.maximum_vector_training_records, options.maximum_vector_training_pages,
+				options.maximum_gds_algorithm_edges, options.maximum_gds_algorithm_iterations,
+				options.maximum_gds_algorithm_work_units, QueryContext{});
+		EXPECT_EQ(result.rowCount(), 300U);
+		EXPECT_GE(backend->state->node_batch_reads, 2U);
+		ASSERT_FALSE(backend->state->node_batch_sizes.empty());
+		EXPECT_LT(*std::ranges::max_element(backend->state->node_batch_sizes), 256U);
 	}
 
 } // namespace graph::query

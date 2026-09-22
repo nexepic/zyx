@@ -264,6 +264,13 @@ TEST_F(RelocatableLocationDirectoryRouteValidationTest, RejectsMalformedPublishe
 						wrongLevelNodeRoot, 0U, 2U, [](const EntityPageLocation &) { return true; }));
 			},
 			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				LocationDirectoryRangeCursor cursor = directory.openRangeCursor(
+						wrongLevelNodeRoot, MetadataDirectoryType::MDT_NODE_ENTITY);
+				static_cast<void>(cursor.next());
+			},
+			FormatError::FERR_INVALID_HEADER);
 	const PhysicalPageRef newerInternal =
 			writeInternal(CatalogRadixPageKind::CRPK_INTERNAL, MetadataDirectoryType::MDT_PAGE, 0, Generation(2));
 	expectPrepareError(writeRoot(MetadataDirectoryType::MDT_PAGE, CatalogRadixPageKind::CRPK_ROOT, 1, newerInternal, 1),

@@ -55,40 +55,55 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] bool hasSameNewEntityPoolIdentity(const EntityPageNewPoolBatchRequest &left,
-															const EntityPageNewPoolBatchRequest &right) {
+																		const EntityPageNewPoolBatchRequest &right) {
 			const CatalogSlotReservationRequest &leftReservation = left.reservation;
 			const CatalogSlotReservationRequest &rightReservation = right.reservation;
-			return leftReservation.segment_id == rightReservation.segment_id &&
-				   leftReservation.kind == rightReservation.kind &&
-				   leftReservation.owner_id == rightReservation.owner_id &&
-				   leftReservation.segment_generation == rightReservation.segment_generation &&
-				   leftReservation.state == rightReservation.state &&
-				   leftReservation.require_absent == rightReservation.require_absent &&
-				   left.first_slot == right.first_slot && left.last_slot == right.last_slot;
+			const uint8_t same = static_cast<uint8_t>(leftReservation.segment_id == rightReservation.segment_id) &
+								 static_cast<uint8_t>(leftReservation.kind == rightReservation.kind) &
+								 static_cast<uint8_t>(leftReservation.owner_id == rightReservation.owner_id) &
+								 static_cast<uint8_t>(leftReservation.segment_generation ==
+														  rightReservation.segment_generation) &
+								 static_cast<uint8_t>(leftReservation.state == rightReservation.state) &
+								 static_cast<uint8_t>(leftReservation.require_absent ==
+														  rightReservation.require_absent) &
+								 static_cast<uint8_t>(left.first_slot == right.first_slot) &
+								 static_cast<uint8_t>(left.last_slot == right.last_slot);
+			return same != 0U;
 		}
 
 		[[nodiscard]] bool hasSameFreshEntityPoolIdentity(const EntityPageFreshPoolDestination &left,
 														  const EntityPageFreshPoolDestination &right) {
-			return left.segment_id == right.segment_id && left.pool_owner_id == right.pool_owner_id &&
-				   left.generation == right.generation && left.first_slot == right.first_slot &&
-				   left.last_slot == right.last_slot;
+			const uint8_t same = static_cast<uint8_t>(left.segment_id == right.segment_id) &
+								 static_cast<uint8_t>(left.pool_owner_id == right.pool_owner_id) &
+								 static_cast<uint8_t>(left.generation == right.generation) &
+								 static_cast<uint8_t>(left.first_slot == right.first_slot) &
+								 static_cast<uint8_t>(left.last_slot == right.last_slot);
+			return same != 0U;
 		}
 
 		[[nodiscard]] bool hasSameFreshEntityPoolIdentity(const EntityPageFreshPoolDestination &destination,
 														  const EntityPageNewPoolBatchRequest &request) {
 			const CatalogSlotReservationRequest &reservation = request.reservation;
-			return destination.segment_id == reservation.segment_id &&
-				   destination.pool_owner_id == reservation.owner_id &&
-				   destination.generation == reservation.segment_generation &&
-				   destination.first_slot == request.first_slot && destination.last_slot == request.last_slot &&
-				   reservation.kind == SegmentKind::SGK_ENTITY_PAGE_POOL &&
-				   reservation.state == SegmentState::SGS_SEALED && reservation.require_absent;
+			const uint8_t same = static_cast<uint8_t>(destination.segment_id == reservation.segment_id) &
+								 static_cast<uint8_t>(destination.pool_owner_id == reservation.owner_id) &
+								 static_cast<uint8_t>(destination.generation == reservation.segment_generation) &
+								 static_cast<uint8_t>(destination.first_slot == request.first_slot) &
+								 static_cast<uint8_t>(destination.last_slot == request.last_slot) &
+								 static_cast<uint8_t>(reservation.kind == SegmentKind::SGK_ENTITY_PAGE_POOL) &
+								 static_cast<uint8_t>(reservation.state == SegmentState::SGS_SEALED) &
+								 static_cast<uint8_t>(reservation.require_absent);
+			return same != 0U;
 		}
 
 		[[nodiscard]] bool hasSameCatalogEntry(const CatalogEntry &left, const CatalogEntry &right) {
-			return left.segment_id == right.segment_id && left.physical_slot == right.physical_slot &&
-				   left.kind == right.kind && left.owner_id == right.owner_id && left.generation == right.generation &&
-				   left.state == right.state && left.committed_lsn == right.committed_lsn;
+			const uint8_t same = static_cast<uint8_t>(left.segment_id == right.segment_id) &
+								 static_cast<uint8_t>(left.physical_slot == right.physical_slot) &
+								 static_cast<uint8_t>(left.kind == right.kind) &
+								 static_cast<uint8_t>(left.owner_id == right.owner_id) &
+								 static_cast<uint8_t>(left.generation == right.generation) &
+								 static_cast<uint8_t>(left.state == right.state) &
+								 static_cast<uint8_t>(left.committed_lsn == right.committed_lsn);
+			return same != 0U;
 		}
 
 		void validateStreamedEdgeLeaseRanges(const NativeGraphLogicalIdReservation &reservation,
@@ -111,8 +126,8 @@ namespace graph::storage {
 					throw FormatException(FormatError::FERR_INVALID_HEADER,
 									  "streamed Edge publication has unordered or unrelated ID lease ranges");
 				}
-				ownsFirst = ownsFirst || range.contains(firstEdgeId);
-				ownsLast = ownsLast || range.contains(lastEdgeId); // ordered, non-overlapping ranges cannot have another valid iteration after one covers the source's final ID.
+				ownsFirst |= range.contains(firstEdgeId);
+				ownsLast |= range.contains(lastEdgeId);
 				previousLast = rangeLast;
 			}
 			if (!ownsFirst || !ownsLast) {
@@ -493,6 +508,8 @@ namespace graph::storage {
 						static_cast<uint8_t>(!pool.segment_id.isValid()) |
 						static_cast<uint8_t>(pool.expected_replacements.empty() && pool.appended_page_count == 0U &&
 											 pool.expected_retirements.empty()) |
+						static_cast<uint8_t>(pool.replacement_segment_id.isValid() &&
+											 pool.expected_replacements.empty()) |
 						static_cast<uint8_t>(pool.appended_page_count > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
 						static_cast<uint8_t>(!mutationPoolIds.insert(pool.segment_id.value()).second);
 				if (invalidPool != 0U) {
@@ -1060,6 +1077,21 @@ namespace graph::storage {
 					throw FormatException(FormatError::FERR_INVALID_STATE,
 										  "native graph derived-state mutation requires current owned Index pools");
 				}
+				CatalogEntry replacementPool = pool;
+				if (request.replacement_segment_id.isValid()) {
+					replacementPool = catalog_.find(current, request.replacement_segment_id);
+					const uint8_t invalidReplacementPool =
+							static_cast<uint8_t>(replacementPool.segment_id == pool.segment_id) |
+							static_cast<uint8_t>(replacementPool.kind != SegmentKind::SGK_INDEX_PAGE_POOL) |
+							static_cast<uint8_t>(replacementPool.owner_id != pool.owner_id) |
+							static_cast<uint8_t>(replacementPool.state != SegmentState::SGS_SEALED) |
+							static_cast<uint8_t>(!allocator_.isAllocated(current, replacementPool.physical_slot));
+					if (invalidReplacementPool != 0U) {
+						throw FormatException(
+								FormatError::FERR_INVALID_STATE,
+								"native graph derived-state mutation has an unavailable cross-pool Index replacement destination");
+					}
+				}
 				const auto validateSource = [this, &current, &pool, &pageIds](const PageLocation &location,
 																			  const char *message) {
 					const PageLocation visible = locations_.findPage(current, location.page_id);
@@ -1089,18 +1121,83 @@ namespace graph::storage {
 								   request.expected_replacements,
 								   {},
 								   false,
-								   request.expected_retirements});
+								   request.expected_retirements,
+								   0U,
+								   replacementPool});
 			}
 			derivedIndexBatches.push_back(std::move(batches));
 		}
 
-		const auto validateInserted = [this, &current](std::span<const EntityPageLocation> locations, PageId pageId,
-													   bool nodes, std::set<uint64_t> &seen, const char *message) {
+		// Resolve all Entity IDs touched by this publication through one ordered
+		// Directory walk per entity kind. This avoids a radix descent for every
+		// insert/erase when a batch contains many entries from the same leaves.
+		std::vector<uint64_t> validationNodeIds;
+		std::vector<uint64_t> validationEdgeIds;
+		const auto collectValidationIds = [&validationNodeIds, &validationEdgeIds](
+				std::span<const EntityPageLocation> insertedNodes, std::span<const uint64_t> erasedNodes,
+				std::span<const EntityPageLocation> insertedEdges, std::span<const uint64_t> erasedEdges) {
+			for (const EntityPageLocation &location: insertedNodes) {
+				if (location.entity_id != 0U) validationNodeIds.push_back(location.entity_id);
+			}
+			for (const uint64_t entityId: erasedNodes) {
+				if (entityId != 0U) validationNodeIds.push_back(entityId);
+			}
+			for (const EntityPageLocation &location: insertedEdges) {
+				if (location.entity_id != 0U) validationEdgeIds.push_back(location.entity_id);
+			}
+			for (const uint64_t entityId: erasedEdges) {
+				if (entityId != 0U) validationEdgeIds.push_back(entityId);
+			}
+		};
+		for (const EntityPageReplacementRequest &request: requests) {
+			collectValidationIds(request.inserted_nodes, request.erased_node_ids, request.inserted_edges,
+								request.erased_edge_ids);
+		}
+		for (const EntityPageAppendBatchRequest &request: appendRequests) {
+			collectValidationIds(request.inserted_nodes, std::span<const uint64_t>{}, request.inserted_edges,
+								std::span<const uint64_t>{});
+		}
+		for (const EntityPageNewPoolBatchRequest &request: newPoolRequests) {
+			collectValidationIds(request.inserted_nodes, std::span<const uint64_t>{}, request.inserted_edges,
+								std::span<const uint64_t>{});
+		}
+		const auto prepareValidationIds = [](std::vector<uint64_t> &ids) {
+			std::ranges::sort(ids);
+			ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
+		};
+		prepareValidationIds(validationNodeIds);
+		prepareValidationIds(validationEdgeIds);
+		std::vector<std::optional<EntityPageLocation>> validationNodeLocations(validationNodeIds.size());
+		std::vector<std::optional<EntityPageLocation>> validationEdgeLocations(validationEdgeIds.size());
+		if (!validationNodeIds.empty()) {
+			locations_.findEntityPageLocationsSorted(current, MetadataDirectoryType::MDT_NODE_ENTITY, validationNodeIds,
+												validationNodeLocations);
+		}
+		if (!validationEdgeIds.empty()) {
+			locations_.findEntityPageLocationsSorted(current, MetadataDirectoryType::MDT_EDGE_ENTITY, validationEdgeIds,
+												validationEdgeLocations);
+		}
+		const auto findValidationLocation = [](uint64_t entityId, const std::vector<uint64_t> &ids,
+															const std::vector<std::optional<EntityPageLocation>> &locations)
+															-> std::optional<EntityPageLocation> {
+			if (entityId == 0U) {
+				return std::nullopt;
+			}
+			const auto iterator = std::ranges::lower_bound(ids, entityId);
+			if (iterator == ids.end() || *iterator != entityId) {
+				return std::nullopt;
+			}
+			return locations[static_cast<size_t>(iterator - ids.begin())];
+		};
+		const auto validateInserted = [&validationNodeIds, &validationEdgeIds, &validationNodeLocations,
+										&validationEdgeLocations, &findValidationLocation](
+										std::span<const EntityPageLocation> locations, PageId pageId, bool nodes,
+										std::set<uint64_t> &seen, const char *message) {
 			uint64_t previous = 0U;
 			for (const EntityPageLocation &location: locations) {
-				const std::optional<EntityPageLocation> existing =
-						nodes ? locations_.findNodePageLocationOptional(current, location.entity_id)
-							  : locations_.findEdgePageLocationOptional(current, location.entity_id);
+				const std::optional<EntityPageLocation> existing = nodes
+						? findValidationLocation(location.entity_id, validationNodeIds, validationNodeLocations)
+						: findValidationLocation(location.entity_id, validationEdgeIds, validationEdgeLocations);
 				const uint8_t invalid = static_cast<uint8_t>(location.entity_id == 0U) |
 										static_cast<uint8_t>(location.entity_id <= previous) |
 										static_cast<uint8_t>(location.page_id != pageId) |
@@ -1114,13 +1211,15 @@ namespace graph::storage {
 				previous = location.entity_id;
 			}
 		};
-		const auto validateErasures = [this, &current](std::span<const uint64_t> entityIds, PageId pageId, bool nodes,
-													   std::set<uint64_t> &seen, const char *message) {
+		const auto validateErasures = [&validationNodeIds, &validationEdgeIds, &validationNodeLocations,
+													 &validationEdgeLocations, &findValidationLocation](
+															std::span<const uint64_t> entityIds, PageId pageId, bool nodes,
+															std::set<uint64_t> &seen, const char *message) {
 			uint64_t previous = 0U;
 			for (const uint64_t entityId: entityIds) {
-				const std::optional<EntityPageLocation> existing =
-						nodes ? locations_.findNodePageLocationOptional(current, entityId)
-							  : locations_.findEdgePageLocationOptional(current, entityId);
+				const std::optional<EntityPageLocation> existing = nodes
+						? findValidationLocation(entityId, validationNodeIds, validationNodeLocations)
+						: findValidationLocation(entityId, validationEdgeIds, validationEdgeLocations);
 				const uint8_t invalid = static_cast<uint8_t>(entityId == 0U) |
 										static_cast<uint8_t>(entityId <= previous) |
 										static_cast<uint8_t>(!existing.has_value()) |
@@ -1332,19 +1431,130 @@ namespace graph::storage {
 		};
 		registerDeletedEntityProperties(erasedNodes, EntityPropertyOwnerKind::EPOK_NODE);
 		registerDeletedEntityProperties(erasedEdges, EntityPropertyOwnerKind::EPOK_EDGE);
+		std::map<uint64_t, bool> existingNodePropertyOwners;
+		std::map<uint64_t, bool> existingEdgePropertyOwners;
 		const auto ownerSurvivesTransaction = [this, &current, &insertedNodeIds, &erasedNodeIds, &insertedEdgeIds,
-											   &erasedEdgeIds](const EntityPropertyKey &key) {
+																					 &erasedEdgeIds, &existingNodePropertyOwners,
+																					 &existingEdgePropertyOwners](const EntityPropertyKey &key) {
 			switch (key.owner_kind) {
 				case EntityPropertyOwnerKind::EPOK_NODE:
-					return !erasedNodeIds.contains(key.entity_id) &&
-						   (insertedNodeIds.contains(key.entity_id) ||
-							locations_.findNodePageLocationOptional(current, key.entity_id).has_value());
+					if (erasedNodeIds.contains(key.entity_id)) {
+						return false;
+					}
+					if (insertedNodeIds.contains(key.entity_id)) {
+						return true;
+					}
+					if (const auto iterator = existingNodePropertyOwners.find(key.entity_id);
+						iterator != existingNodePropertyOwners.end()) {
+						return iterator->second;
+					}
+					return locations_.findNodePageLocationOptional(current, key.entity_id).has_value();
 				case EntityPropertyOwnerKind::EPOK_EDGE:
-					return !erasedEdgeIds.contains(key.entity_id) &&
-						   (insertedEdgeIds.contains(key.entity_id) ||
-							locations_.findEdgePageLocationOptional(current, key.entity_id).has_value());
+					if (erasedEdgeIds.contains(key.entity_id)) {
+						return false;
+					}
+					if (insertedEdgeIds.contains(key.entity_id)) {
+						return true;
+					}
+					if (const auto iterator = existingEdgePropertyOwners.find(key.entity_id);
+						iterator != existingEdgePropertyOwners.end()) {
+						return iterator->second;
+					}
+					return locations_.findEdgePageLocationOptional(current, key.entity_id).has_value();
 			}
 			return false;
+		};
+
+		// Resolve every Property owner touched by this publication through one
+		// ordered Directory walk. Property replacement validation used to perform
+		// a root-to-leaf lookup for each entry, which amplified COW publication
+		// cost with the number of properties in the batch. Invalid keys are kept
+		// out of the batch so the validation below can preserve its fail-closed
+		// error path without asking the Directory to interpret an invalid ID.
+		std::vector<EntityPropertyKey> propertyLookupKeys;
+		const auto collectPropertyLookupKey = [&propertyLookupKeys](const EntityPropertyKey &key) {
+			// Keep the legacy validation order: malformed keys fail with the
+			// Directory's INVALID_HEADER before any publication-local lookup is
+			// attempted. Valid keys alone enter the ordered batch.
+			if (!key.isValid()) {
+				static_cast<void>(key.directoryId());
+			}
+			propertyLookupKeys.push_back(key);
+		};
+		for (const NativeGraphPropertyPageReplacementRequest &request: propertyReplacements) {
+			for (const EntityPropertyLocation &location: request.upserted_properties) {
+				collectPropertyLookupKey(location.key);
+			}
+			for (const EntityPropertyKey &key: request.erased_properties) {
+				collectPropertyLookupKey(key);
+			}
+			for (const EntityPropertyKey &key: request.relocated_properties) {
+				collectPropertyLookupKey(key);
+			}
+		}
+		for (const NativeGraphPropertyPageBatchRequest &request: propertyPageBatchRequests) {
+			for (const std::vector<EntityPropertyKey> &pageKeys: request.page_property_keys) {
+				for (const EntityPropertyKey &key: pageKeys) {
+					collectPropertyLookupKey(key);
+				}
+			}
+		}
+		for (const uint64_t entityId: erasedNodes) {
+			collectPropertyLookupKey({EntityPropertyOwnerKind::EPOK_NODE, entityId});
+		}
+		for (const uint64_t entityId: erasedEdges) {
+			collectPropertyLookupKey({EntityPropertyOwnerKind::EPOK_EDGE, entityId});
+		}
+		std::vector<uint64_t> propertyNodeOwnerIds;
+		std::vector<uint64_t> propertyEdgeOwnerIds;
+		for (const EntityPropertyKey &key: propertyLookupKeys) {
+			(key.owner_kind == EntityPropertyOwnerKind::EPOK_NODE ? propertyNodeOwnerIds : propertyEdgeOwnerIds)
+					.push_back(key.entity_id);
+		}
+		const auto prepareOwnerLookupIds = [](std::vector<uint64_t> &ids) {
+			std::ranges::sort(ids);
+			ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
+		};
+		prepareOwnerLookupIds(propertyNodeOwnerIds);
+		prepareOwnerLookupIds(propertyEdgeOwnerIds);
+		std::vector<std::optional<EntityPageLocation>> propertyNodeOwnerLocations(propertyNodeOwnerIds.size());
+		std::vector<std::optional<EntityPageLocation>> propertyEdgeOwnerLocations(propertyEdgeOwnerIds.size());
+		if (!propertyNodeOwnerIds.empty()) {
+			locations_.findEntityPageLocationsSorted(
+					current, MetadataDirectoryType::MDT_NODE_ENTITY, propertyNodeOwnerIds, propertyNodeOwnerLocations);
+		}
+		if (!propertyEdgeOwnerIds.empty()) {
+			locations_.findEntityPageLocationsSorted(
+					current, MetadataDirectoryType::MDT_EDGE_ENTITY, propertyEdgeOwnerIds, propertyEdgeOwnerLocations);
+		}
+		for (size_t index = 0U; index < propertyNodeOwnerIds.size(); ++index) {
+			existingNodePropertyOwners.emplace(propertyNodeOwnerIds[index], propertyNodeOwnerLocations[index].has_value());
+		}
+		for (size_t index = 0U; index < propertyEdgeOwnerIds.size(); ++index) {
+			existingEdgePropertyOwners.emplace(propertyEdgeOwnerIds[index], propertyEdgeOwnerLocations[index].has_value());
+		}
+		std::ranges::sort(propertyLookupKeys, {}, &EntityPropertyKey::directoryId);
+		propertyLookupKeys.erase(
+				std::unique(propertyLookupKeys.begin(), propertyLookupKeys.end(), [](const EntityPropertyKey &left,
+																									 const EntityPropertyKey &right) {
+					return left.directoryId() == right.directoryId();
+				}),
+				propertyLookupKeys.end());
+		std::vector<std::optional<EntityPropertyLocation>> propertyLookupResults(propertyLookupKeys.size());
+		if (!propertyLookupKeys.empty()) {
+			locations_.findEntityPropertiesSorted(current, propertyLookupKeys, propertyLookupResults);
+		}
+		std::map<uint64_t, std::optional<EntityPropertyLocation>> existingPropertyLocations;
+		for (size_t index = 0U; index < propertyLookupKeys.size(); ++index) {
+			existingPropertyLocations.emplace(propertyLookupKeys[index].directoryId(), std::move(propertyLookupResults[index]));
+		}
+		const auto findExistingProperty = [&existingPropertyLocations](const EntityPropertyKey &key)
+				-> std::optional<EntityPropertyLocation> {
+			if (!key.isValid()) {
+				return std::nullopt;
+			}
+			const auto iterator = existingPropertyLocations.find(key.directoryId());
+			return iterator == existingPropertyLocations.end() ? std::nullopt : iterator->second;
 		};
 
 		std::set<uint64_t> touchedPropertyKeys;
@@ -1387,7 +1597,7 @@ namespace graph::storage {
 			}
 			for (const EntityPropertyLocation &location: request.upserted_properties) {
 				const std::optional<EntityPropertyLocation> existing =
-						locations_.findEntityPropertyOptional(current, location.key);
+						findExistingProperty(location.key);
 				const uint8_t invalidLocation =
 						static_cast<uint8_t>(!location.key.isValid()) |
 						static_cast<uint8_t>(!ownerSurvivesTransaction(location.key)) |
@@ -1410,7 +1620,7 @@ namespace graph::storage {
 			}
 			for (const EntityPropertyKey &key: request.erased_properties) {
 				const std::optional<EntityPropertyLocation> existing =
-						locations_.findEntityPropertyOptional(current, key);
+						findExistingProperty(key);
 				const uint8_t invalidErase =
 						static_cast<uint8_t>(!key.isValid()) | static_cast<uint8_t>(!existing.has_value()) |
 						static_cast<uint8_t>(existing.has_value() &&
@@ -1426,7 +1636,7 @@ namespace graph::storage {
 			}
 			for (const EntityPropertyKey &key: request.relocated_properties) {
 				const std::optional<EntityPropertyLocation> existing =
-						locations_.findEntityPropertyOptional(current, key);
+						findExistingProperty(key);
 				const uint64_t directoryId = key.isValid() ? key.directoryId() : 0U;
 				const bool invalidRelocation = // property relocation entries are authenticated against the current snapshot before planning.
 						!key.isValid() || !ownerSurvivesTransaction(key) || !existing.has_value() ||
@@ -1543,7 +1753,7 @@ namespace graph::storage {
 				}
 				for (const EntityPropertyKey &key: pageKeys) {
 					const std::optional<EntityPropertyLocation> existing =
-							locations_.findEntityPropertyOptional(current, key);
+							findExistingProperty(key);
 					const uint64_t directoryId = key.isValid() ? key.directoryId() : 0U;
 					const auto relocation = relocatedPropertySources.find(directoryId);
 					const bool relocatesExisting = existing.has_value();
@@ -1642,13 +1852,13 @@ namespace graph::storage {
 									  "native graph page transaction has duplicate explicit Entity Property deletion");
 			}
 		}
-		const auto collectErasedEntityProperties = [this, &current, &touchedPropertyKeys, &erasedEntityProperties,
-													&explicitlyErasedEntityPropertyIds](
+		const auto collectErasedEntityProperties = [&findExistingProperty, &touchedPropertyKeys, &erasedEntityProperties,
+																								&explicitlyErasedEntityPropertyIds](
 														   std::span<const uint64_t> entityIds,
 														   EntityPropertyOwnerKind ownerKind) {
 			for (const uint64_t entityId: entityIds) {
 				const EntityPropertyKey key{ownerKind, entityId};
-				if (key.isValid() && locations_.findEntityPropertyOptional(current, key).has_value()) {
+				if (key.isValid() && findExistingProperty(key).has_value()) {
 					if (explicitlyErasedEntityPropertyIds.contains(key.directoryId())) {
 						// The matching Property-page COW has already claimed this
 						// directory erase, so do not emit a duplicate deletion.
@@ -1999,22 +2209,32 @@ namespace graph::storage {
 				throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "native graph private scratch reader cannot resolve a non-candidate segment");
 			}
-			const size_t ordinal = privateSegmentSet->ordinalOf(identity);
-			// A reader may be the first consumer of a compact candidate. Materialize
-			// its authenticated reservation so the normal reservation validation below
-			// remains the fail-closed result for an unwritten payload.
-			materializeCompactPrivateEntry(ordinal);
-			const CatalogEntry entry = privateEntryAt(ordinal);
-			const uint16_t headerBytes = privateHeaderBytesAt(ordinal);
+			CatalogEntry entry;
+			uint16_t headerBytes = 0U;
+			{
+				debug::ScopedPerfTimer resolveTimer("native_graph.streamed.private_scratch_resolve");
+				const size_t ordinal = privateSegmentSet->ordinalOf(identity);
+				// A reader may be the first consumer of a compact candidate. Materialize
+				// its authenticated reservation so the normal reservation validation below
+				// remains the fail-closed result for an unwritten payload.
+				materializeCompactPrivateEntry(ordinal);
+				entry = privateEntryAt(ordinal);
+				headerBytes = privateHeaderBytesAt(ordinal);
+			}
 			std::vector<std::byte> image(RSS_SEGMENT_SIZE);
 			const uint64_t offset = PhysicalSegmentAllocator::checkedSlotOffset(
 					privateScratchState->superblock.data_region_offset, entry.physical_slot);
-			const size_t bytesRead = io_->readPages({offset, entry.generation.value()}, image.data(), image.size(),
-					BufferPoolReadHint::BPRH_SEQUENTIAL);
+			size_t bytesRead = 0U;
+			{
+				debug::ScopedPerfTimer readTimer("native_graph.streamed.private_scratch_physical_read");
+				bytesRead = io_->readPages({offset, entry.generation.value()}, image.data(), image.size(),
+						BufferPoolReadHint::BPRH_SEQUENTIAL);
+			}
 			if (bytesRead != image.size()) {
 				throw FormatException(FormatError::FERR_BUFFER_TOO_SMALL,
 								  "native graph private scratch reader found a truncated candidate segment");
 			}
+			debug::ScopedPerfTimer validationTimer("native_graph.streamed.private_scratch_validate_copy");
 			const SegmentEnvelope envelope =
 					SegmentEnvelopeCodec::decode(std::span<const std::byte>(image.data(), RSS_ENVELOPE_BYTES));
 			const uint8_t invalid =
@@ -2155,7 +2375,8 @@ namespace graph::storage {
 				for (const IndexTreeMutationPoolRequest &request: mutation.pool_requests) {
 					if (!request.segment_id.isValid() ||
 						(request.expected_replacements.empty() && request.appended_page_count == 0U &&
-						 request.expected_retirements.empty()) ||
+							 request.expected_retirements.empty()) ||
+						(request.replacement_segment_id.isValid() && request.expected_replacements.empty()) ||
 						request.appended_page_count > RSS_PAGE_POOL_DATA_FRAME_COUNT ||
 						!sourcePoolIds.insert(request.segment_id.value()).second) {
 						throw FormatException(FormatError::FERR_INVALID_STATE,
@@ -2167,6 +2388,18 @@ namespace graph::storage {
 						throw FormatException(
 								FormatError::FERR_INVALID_STATE,
 								"native graph deferred Index planner references an unavailable source pool");
+					}
+					CatalogEntry replacementPool = pool;
+					if (request.replacement_segment_id.isValid()) {
+						replacementPool = catalog_.find(current, request.replacement_segment_id);
+						if (replacementPool.segment_id == pool.segment_id ||
+							replacementPool.kind != SegmentKind::SGK_INDEX_PAGE_POOL ||
+							replacementPool.owner_id != pool.owner_id || replacementPool.state != SegmentState::SGS_SEALED ||
+							!allocator_.isAllocated(current, replacementPool.physical_slot)) {
+							throw FormatException(
+									FormatError::FERR_INVALID_STATE,
+									"native graph deferred Index planner references an unavailable cross-pool replacement destination");
+						}
 					}
 					for (const IndexTreePageRetirement &retirement: request.expected_retirements) {
 						const PageLocation visible = locations_.findPage(current, retirement.location.page_id);
@@ -2184,12 +2417,14 @@ namespace graph::storage {
 								 retirement.location.generation == mutation.expected_root->root_generation);
 					}
 					batches.push_back({pool,
-									   request.expected_replacements,
-									   {},
-									   request.expected_replacements,
-									   {},
-									   false,
-									   request.expected_retirements});
+								   request.expected_replacements,
+								   {},
+								   request.expected_replacements,
+								   {},
+								   false,
+								   request.expected_retirements,
+								   0U,
+								   replacementPool});
 				}
 				if (mutation.expected_root.has_value() && !retiredExpectedRoot) {
 					throw FormatException(FormatError::FERR_INVALID_STATE,
@@ -3441,6 +3676,13 @@ namespace graph::storage {
 						actual.pool.generation != expected.pool.generation ||
 						actual.pool.state != SegmentState::SGS_SEALED || actual.pool.state != expected.pool.state ||
 						actual.pool.committed_lsn != expected.pool.committed_lsn ||
+						actual.replacement_pool.segment_id != expected.replacement_pool.segment_id ||
+						actual.replacement_pool.physical_slot != expected.replacement_pool.physical_slot ||
+						actual.replacement_pool.kind != expected.replacement_pool.kind ||
+						actual.replacement_pool.owner_id != expected.replacement_pool.owner_id ||
+						actual.replacement_pool.generation != expected.replacement_pool.generation ||
+						actual.replacement_pool.state != expected.replacement_pool.state ||
+						actual.replacement_pool.committed_lsn != expected.replacement_pool.committed_lsn ||
 						actual.expected_replacements != expected.expected_replacements ||
 						actual.appended_page_ids != expected.appended_page_ids ||
 						actual.expected_retirements != expected.expected_retirements ||
@@ -3454,12 +3696,13 @@ namespace graph::storage {
 							"native graph derived-state preparer changed an Index pool identity or page shape");
 				}
 				const auto validatePublishedLocation =
-						[&destinationFrames, &publishedDerivedIndexPages, &actual, &mutation,
-						 &registerDerivedIndexPublication](const PageLocation &location, PageId expectedPageId) {
+						[&destinationFrames, &publishedDerivedIndexPages, &mutation,
+						 &registerDerivedIndexPublication](const PageLocation &location, PageId expectedPageId,
+														 const CatalogEntry &expectedPool) {
 							const uint8_t invalid =
 									static_cast<uint8_t>(location.page_id != expectedPageId) |
-									static_cast<uint8_t>(location.segment_id != actual.pool.segment_id) |
-									static_cast<uint8_t>(location.generation != actual.pool.generation) |
+									static_cast<uint8_t>(location.segment_id != expectedPool.segment_id) |
+									static_cast<uint8_t>(location.generation != expectedPool.generation) |
 									static_cast<uint8_t>(location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
 									static_cast<uint8_t>(location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
 									static_cast<uint8_t>(location.free_bytes > RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES) |
@@ -3472,15 +3715,16 @@ namespace graph::storage {
 										"native graph derived-state preparer returned an invalid Index page frame");
 							}
 							publishedDerivedIndexPages.push_back(location);
-							registerDerivedIndexPublication(actual.pool, location, mutation.index_id);
+							registerDerivedIndexPublication(expectedPool, location, mutation.index_id);
 						};
 				for (size_t pageOrdinal = 0U; pageOrdinal < actual.replacement_locations.size(); ++pageOrdinal) {
 					validatePublishedLocation(actual.replacement_locations[pageOrdinal],
-											  actual.expected_replacements[pageOrdinal].page_id);
+											  actual.expected_replacements[pageOrdinal].page_id,
+											  actual.replacement_pool.segment_id.isValid() ? actual.replacement_pool : actual.pool);
 				}
 				for (size_t pageOrdinal = 0U; pageOrdinal < actual.appended_locations.size(); ++pageOrdinal) {
 					validatePublishedLocation(actual.appended_locations[pageOrdinal],
-											  actual.appended_page_ids[pageOrdinal]);
+											  actual.appended_page_ids[pageOrdinal], actual.pool);
 				}
 				for (const IndexTreePageRetirement &retirement: actual.expected_retirements) {
 					retiredPageIds.push_back(retirement.location.page_id.value());
@@ -3999,8 +4243,13 @@ namespace graph::storage {
 				   std::span<NativeGraphPropertyPageReplacementMaterialization> properties,
 				   std::span<NativeGraphPropertyPageBatchMaterialization> propertyPools,
 				   std::span<LargeValueMaterializationResult> values) {
-					if (!entities.empty() || !appends.empty() || !pools.empty() || !properties.empty() || // streamed final publication supplies only coordinator-owned typed page arrays.
-						!propertyPools.empty() || !values.empty()) {
+					const uint8_t unexpectedWork = static_cast<uint8_t>(!entities.empty()) |
+														 static_cast<uint8_t>(!appends.empty()) |
+														 static_cast<uint8_t>(!pools.empty()) |
+														 static_cast<uint8_t>(!properties.empty()) |
+														 static_cast<uint8_t>(!propertyPools.empty()) |
+														 static_cast<uint8_t>(!values.empty());
+					if (unexpectedWork != 0U) {
 						throw FormatException(FormatError::FERR_INVALID_STATE,
 										  "streamed Edge coordinator unexpectedly received vector-backed page work");
 					}

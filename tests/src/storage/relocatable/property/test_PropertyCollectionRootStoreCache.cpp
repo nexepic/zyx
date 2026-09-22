@@ -11,6 +11,7 @@
 #include <fstream>
 #include <functional>
 #include <memory>
+#include <stdexcept>
 #include <system_error>
 
 #include <boost/uuid/random_generator.hpp>
@@ -20,6 +21,7 @@
 #include "graph/core/Node.hpp"
 #include "graph/storage/StorageIO.hpp"
 #include "graph/storage/relocatable/entity/EntityPageStore.hpp"
+#include "graph/storage/relocatable/entity/NativeReadSession.hpp"
 #include "graph/storage/relocatable/property/PropertyCollectionRootStore.hpp"
 
 using namespace graph::storage;
@@ -55,6 +57,11 @@ namespace {
 			EXPECT_EQ(error.error(), expected);
 		}
 	}
+
+	class ThrowOnCancellationCheck final : public CancellationCheckpoint {
+	public:
+		void check() const override { throw std::runtime_error("cancelled before Property scan I/O"); }
+	};
 
 } // namespace
 
@@ -164,6 +171,116 @@ TEST_F(PropertyCollectionRootStoreCacheTest, PointReadsAdmitOneSharedOwnedFrame)
 	EXPECT_EQ(io_->bufferPoolStats().disk_read_bytes, afterRepeat.disk_read_bytes);
 }
 
+TEST_F(PropertyCollectionRootStoreCacheTest, ReadsSortedSelectedPropertiesThroughOneDirectoryMergeAndPageRead) {
+	const EntityPropertyKey missing{EntityPropertyOwnerKind::EPOK_NODE, 1003U};
+	const std::array<EntityPropertyKey, 3U> keys{first_key_, second_key_, missing};
+	std::array<std::optional<PropertyCollectionRootEntry>, 3U> values;
+	values[2] = PropertyCollectionRootEntry{3U, graph::PropertyValue("stale output")};
+	io_->resetBufferPoolStats();
+	const BufferPoolStats before = io_->bufferPoolStats();
+
+	properties_->readEntityPropertiesOptionalSorted(snapshot_, keys, 3U, values);
+
+	ASSERT_TRUE(values[0].has_value());
+	EXPECT_EQ(values[0]->key_token, 3U);
+	EXPECT_EQ(values[0]->value, graph::PropertyValue("first shared Property root"));
+	EXPECT_FALSE(values[1].has_value());
+	EXPECT_FALSE(values[2].has_value());
+	const BufferPoolStats after = io_->bufferPoolStats();
+	EXPECT_EQ(after.disk_read_bytes, before.disk_read_bytes + RSS_PAGE_SIZE);
+	EXPECT_EQ(after.misses, before.misses + 1U);
+
+	const std::array<EntityPropertyKey, 2U> unordered{second_key_, first_key_};
+	std::array<std::optional<PropertyCollectionRootEntry>, 2U> unorderedValues;
+	expectFormatError(
+			[&] { properties_->readEntityPropertiesOptionalSorted(snapshot_, unordered, 3U, unorderedValues); },
+			FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(PropertyCollectionRootStoreCacheTest, ReadsMultipleSelectedColumnsThroughOneDirectoryMergeAndPageRead) {
+	const EntityPropertyKey missing{EntityPropertyOwnerKind::EPOK_NODE, 1003U};
+	const std::array<EntityPropertyKey, 3U> keys{first_key_, second_key_, missing};
+	const std::array<uint32_t, 2U> tokens{3U, 5U};
+	std::array<std::optional<PropertyCollectionRootEntry>, 6U> values;
+	io_->resetBufferPoolStats();
+	const BufferPoolStats before = io_->bufferPoolStats();
+
+	properties_->readEntityPropertiesOptionalSorted(snapshot_, keys, tokens, values);
+
+	ASSERT_TRUE(values[0].has_value());
+	EXPECT_EQ(values[0]->value, graph::PropertyValue("first shared Property root"));
+	EXPECT_FALSE(values[1].has_value());
+	EXPECT_FALSE(values[2].has_value());
+	ASSERT_TRUE(values[3].has_value());
+	EXPECT_EQ(values[3]->value, graph::PropertyValue("second shared Property root"));
+	EXPECT_FALSE(values[4].has_value());
+	EXPECT_FALSE(values[5].has_value());
+	const BufferPoolStats after = io_->bufferPoolStats();
+	EXPECT_EQ(after.disk_read_bytes, before.disk_read_bytes + RSS_PAGE_SIZE);
+	EXPECT_EQ(after.misses, before.misses + 1U);
+
+	const std::array<uint32_t, 2U> unorderedTokens{5U, 3U};
+	expectFormatError(
+			[&] { properties_->readEntityPropertiesOptionalSorted(snapshot_, keys, unorderedTokens, values); },
+			FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(PropertyCollectionRootStoreCacheTest, ReadsPropertyCountsThroughOneDirectoryMergeAndPageRead) {
+	const EntityPropertyKey missing{EntityPropertyOwnerKind::EPOK_NODE, 1003U};
+	const std::array<EntityPropertyKey, 3U> keys{first_key_, second_key_, missing};
+	std::array<std::optional<size_t>, 3U> counts;
+	io_->resetBufferPoolStats();
+	const BufferPoolStats before = io_->bufferPoolStats();
+
+	properties_->readEntityPropertyCountsSorted(snapshot_, keys, counts);
+
+	ASSERT_TRUE(counts[0].has_value());
+	EXPECT_EQ(*counts[0], 1U);
+	ASSERT_TRUE(counts[1].has_value());
+	EXPECT_EQ(*counts[1], 1U);
+	ASSERT_TRUE(counts[2].has_value());
+	EXPECT_EQ(*counts[2], 0U);
+	const BufferPoolStats after = io_->bufferPoolStats();
+	EXPECT_EQ(after.disk_read_bytes, before.disk_read_bytes + RSS_PAGE_SIZE);
+	EXPECT_EQ(after.misses, before.misses + 1U);
+
+	const std::array<EntityPropertyKey, 2U> unordered{second_key_, first_key_};
+	std::array<std::optional<size_t>, 2U> unorderedCounts;
+	expectFormatError(
+			[&] { properties_->readEntityPropertyCountsSorted(snapshot_, unordered, unorderedCounts); },
+			FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(PropertyCollectionRootStoreCacheTest, ReadsSelectedValuesAndCountsThroughOneDirectoryMerge) {
+	const EntityPropertyKey missing{EntityPropertyOwnerKind::EPOK_NODE, 1003U};
+	const std::array<EntityPropertyKey, 3U> keys{first_key_, second_key_, missing};
+	const std::array<uint32_t, 2U> tokens{3U, 5U};
+	std::array<std::optional<PropertyCollectionRootEntry>, 6U> values;
+	std::array<std::optional<size_t>, 3U> counts;
+	io_->resetBufferPoolStats();
+	const BufferPoolStats before = io_->bufferPoolStats();
+
+	properties_->readEntityPropertiesAndCountsOptionalSorted(snapshot_, keys, tokens, values, counts);
+
+	ASSERT_TRUE(values[0].has_value());
+	EXPECT_EQ(values[0]->value, graph::PropertyValue("first shared Property root"));
+	EXPECT_FALSE(values[1].has_value());
+	EXPECT_FALSE(values[2].has_value());
+	ASSERT_TRUE(values[3].has_value());
+	EXPECT_EQ(values[3]->value, graph::PropertyValue("second shared Property root"));
+	EXPECT_FALSE(values[4].has_value());
+	EXPECT_FALSE(values[5].has_value());
+	ASSERT_TRUE(counts[0].has_value());
+	ASSERT_TRUE(counts[1].has_value());
+	ASSERT_TRUE(counts[2].has_value());
+	EXPECT_EQ(*counts[0], 1U);
+	EXPECT_EQ(*counts[1], 1U);
+	EXPECT_EQ(*counts[2], 0U);
+	const BufferPoolStats after = io_->bufferPoolStats();
+	EXPECT_EQ(after.disk_read_bytes, before.disk_read_bytes + RSS_PAGE_SIZE);
+	EXPECT_EQ(after.misses, before.misses + 1U);
+}
+
 TEST_F(PropertyCollectionRootStoreCacheTest, ScanCursorRetainsOneDecodedPageWithoutResidentPollution) {
 	io_->resetBufferPoolStats();
 	const BufferPoolStats before = io_->bufferPoolStats();
@@ -193,6 +310,95 @@ TEST_F(PropertyCollectionRootStoreCacheTest, ScanCursorRetainsOneDecodedPageWith
 	EXPECT_EQ(afterRepeated.disk_read_bytes, before.disk_read_bytes + 2U * RSS_PAGE_SIZE);
 	EXPECT_EQ(afterRepeated.misses, before.misses + 2U);
 	EXPECT_EQ(afterRepeated.resident_bytes, before.resident_bytes);
+}
+
+TEST_F(PropertyCollectionRootStoreCacheTest, NativeReadSessionReusesOneCursorForOrderedSelectedProperties) {
+	io_->resetBufferPoolStats();
+	const BufferPoolStats before = io_->bufferPoolStats();
+	NativeReadSession session;
+	PropertyCollectionRootScanCursor &cursor = session.propertyCursor(*properties_, snapshot_);
+	EXPECT_EQ(cursor.readEntityPropertyOptional(snapshot_, first_key_, 3U),
+			  std::optional<PropertyCollectionRootEntry>(first_root_.entries.front()));
+	const BufferPoolStats afterFirst = io_->bufferPoolStats();
+	EXPECT_EQ(afterFirst.disk_read_bytes, before.disk_read_bytes + RSS_PAGE_SIZE);
+	EXPECT_EQ(afterFirst.misses, before.misses + 1U);
+	EXPECT_EQ(afterFirst.resident_bytes, before.resident_bytes);
+
+	EXPECT_EQ(session.propertyCursor(*properties_, snapshot_).readEntityPropertyOptional(snapshot_, second_key_, 5U),
+			  std::optional<PropertyCollectionRootEntry>(second_root_.entries.front()));
+	const BufferPoolStats afterSecond = io_->bufferPoolStats();
+	EXPECT_EQ(afterSecond.disk_read_bytes, afterFirst.disk_read_bytes);
+	EXPECT_EQ(afterSecond.misses, afterFirst.misses);
+	EXPECT_EQ(afterSecond.resident_bytes, before.resident_bytes);
+	EXPECT_FALSE(session.propertyCursor(*properties_, snapshot_)
+					.readEntityPropertyOptional(snapshot_, second_key_, 99U)
+					.has_value());
+}
+
+	TEST_F(PropertyCollectionRootStoreCacheTest, CursorBatchDecodesMultipleTokensWithoutReopeningSharedPage) {
+	NativeReadSession session;
+	PropertyCollectionRootScanCursor &cursor = session.propertyCursor(*properties_, snapshot_);
+	const std::array<EntityPropertyKey, 2U> keys{first_key_, second_key_};
+	const std::array<uint32_t, 2U> tokens{3U, 5U};
+	std::array<std::optional<PropertyCollectionRootEntry>, 4U> values;
+	io_->resetBufferPoolStats();
+	const BufferPoolStats before = io_->bufferPoolStats();
+
+	cursor.readEntityPropertiesOptionalSorted(snapshot_, keys, tokens, values);
+
+	ASSERT_TRUE(values[0].has_value());
+	EXPECT_EQ(values[0]->value, graph::PropertyValue("first shared Property root"));
+	EXPECT_FALSE(values[1].has_value());
+	EXPECT_FALSE(values[2].has_value());
+	ASSERT_TRUE(values[3].has_value());
+	EXPECT_EQ(values[3]->value, graph::PropertyValue("second shared Property root"));
+	const BufferPoolStats after = io_->bufferPoolStats();
+	EXPECT_EQ(after.disk_read_bytes, before.disk_read_bytes + RSS_PAGE_SIZE);
+	EXPECT_EQ(after.misses, before.misses + 1U);
+}
+
+	TEST_F(PropertyCollectionRootStoreCacheTest, CursorCountBatchReusesTheOrderedDirectoryAndPageRoute) {
+		NativeReadSession session;
+		PropertyCollectionRootScanCursor &cursor = session.propertyCursor(*properties_, snapshot_);
+		const std::array<EntityPropertyKey, 2U> keys{first_key_, second_key_};
+		std::array<std::optional<size_t>, 2U> counts;
+		io_->resetBufferPoolStats();
+		const BufferPoolStats before = io_->bufferPoolStats();
+
+		cursor.readEntityPropertyCountsSorted(snapshot_, keys, counts);
+
+		ASSERT_TRUE(counts[0].has_value());
+		ASSERT_TRUE(counts[1].has_value());
+		EXPECT_EQ(*counts[0], 1U);
+		EXPECT_EQ(*counts[1], 1U);
+		const BufferPoolStats afterFirst = io_->bufferPoolStats();
+		EXPECT_EQ(afterFirst.disk_read_bytes, before.disk_read_bytes + RSS_PAGE_SIZE);
+		EXPECT_EQ(afterFirst.misses, before.misses + 1U);
+
+		std::array<std::optional<size_t>, 2U> repeated;
+		cursor.readEntityPropertyCountsSorted(snapshot_, keys, repeated);
+		EXPECT_EQ(repeated, counts);
+		const BufferPoolStats afterRepeat = io_->bufferPoolStats();
+		EXPECT_EQ(afterRepeat.disk_read_bytes, afterFirst.disk_read_bytes);
+		EXPECT_EQ(afterRepeat.misses, afterFirst.misses);
+		EXPECT_GT(afterRepeat.hits, afterFirst.hits);
+	}
+
+	TEST_F(PropertyCollectionRootStoreCacheTest, ScanCursorStreamsOrderedOwnersAndFallsBackForOutOfOrderReads) {
+	PropertyCollectionRootScanCursor cursor = properties_->openScanCursor(snapshot_);
+	const EntityPropertyKey beforeFirst{EntityPropertyOwnerKind::EPOK_NODE, 1000U};
+
+	// A normal Entity scan encounters missing and present owners in increasing
+	// logical-ID order. The cursor must preserve that exact optional-read
+	// contract while advancing one bounded directory stream.
+	EXPECT_EQ(cursor.readEntityOptional(snapshot_, beforeFirst), std::nullopt);
+	EXPECT_EQ(cursor.readEntityOptional(snapshot_, first_key_), std::optional(first_root_));
+	EXPECT_EQ(cursor.readEntityOptional(snapshot_, second_key_), std::optional(second_root_));
+
+	// Direct callers are allowed to reuse a cursor in a different order. They do
+	// not inherit an ambiguous partially consumed stream; correctness wins over
+	// the scan optimization and the ordinary point lookup remains available.
+	EXPECT_EQ(cursor.readEntityOptional(snapshot_, first_key_), std::optional(first_root_));
 }
 
 TEST_F(PropertyCollectionRootStoreCacheTest, CursorRejectsInvalidKeysAndForeignOrNewerSnapshotsBeforeDataIo) {
@@ -227,4 +433,12 @@ TEST_F(PropertyCollectionRootStoreCacheTest, CursorRejectsInvalidKeysAndForeignO
 					  FormatError::FERR_INVALID_STATE);
 	EXPECT_EQ(io_->bufferPoolStats().disk_read_bytes, 0U);
 	newer.release();
+}
+
+TEST_F(PropertyCollectionRootStoreCacheTest, CursorPropagatesCancellationBeforeDirectoryOrPropertyIo) {
+	ThrowOnCancellationCheck cancellation;
+	io_->resetBufferPoolStats();
+	PropertyCollectionRootScanCursor cursor = properties_->openScanCursor(snapshot_, &cancellation);
+	EXPECT_THROW(static_cast<void>(cursor.readEntityOptional(snapshot_, first_key_)), std::runtime_error);
+	EXPECT_EQ(io_->bufferPoolStats().disk_read_bytes, 0U);
 }

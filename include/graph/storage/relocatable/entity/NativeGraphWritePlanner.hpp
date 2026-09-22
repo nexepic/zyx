@@ -334,6 +334,10 @@ namespace graph::storage {
 		[[nodiscard]] NativeGraphLogicalIdReservation reserveLogicalIds(uint64_t nodeCount, uint64_t edgeCount);
 
 	private:
+		// Construction installs one immutable, complete storage domain. Copies and
+		// live transactions retain it through shared ownership; only a moved-from
+		// planner has no context. ACTIVE transactions therefore always own a valid
+		// snapshot and every component referenced by the context.
 		std::shared_ptr<NativeGraphWritePlannerContext> context_;
 	};
 

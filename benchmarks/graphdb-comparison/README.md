@@ -67,6 +67,11 @@ from a freshly prepared adapter/database handle while excluding data load time f
 query latency. `cold-ish` is not an OS page cache flush; it is a repeatable first-query-after-open/setup
 path for comparing optimistic warm-cache results against a less cache-amortized path.
 
+Mutating workloads use a freshly loaded database for every warmup and measured sample in every
+execution mode. Database cloning/loading and opening remain outside the measured operation latency.
+This keeps every mutation sample on the same logical baseline and prevents warmup or earlier
+iterations from changing the input cardinality of later samples.
+
 For optimization validation, run the matrix wrapper so every round covers both cache-sensitive and
 steady-state paths across small and medium data sizes:
 

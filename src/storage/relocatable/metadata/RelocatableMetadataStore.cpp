@@ -1069,7 +1069,9 @@ namespace graph::storage {
 			const uint8_t invalidRequest =
 					static_cast<uint8_t>(!request.segment_id.isValid()) |
 					static_cast<uint8_t>(request.expected_replacements.empty() && request.appended_page_count == 0U &&
-										 request.expected_retirements.empty());
+											 request.expected_retirements.empty()) |
+					static_cast<uint8_t>(request.replacement_segment_id.isValid() &&
+											 request.expected_replacements.empty());
 			// ZYX_COV_EXCL_START: the B+Tree planner groups each validated pool exactly once.
 			if (invalidRequest != 0U || !requestedPools.insert(request.segment_id).second) {
 				throw FormatException(
@@ -1176,6 +1178,21 @@ namespace graph::storage {
 						FormatError::FERR_INVALID_STATE,
 						"relocatable multi-pool B+Tree mutation requires current allocated index page pools");
 			}
+			CatalogEntry replacementPool = pool;
+			if (request.replacement_segment_id.isValid()) {
+				replacementPool = catalog_.find(current, request.replacement_segment_id);
+				const uint8_t invalidReplacementPool =
+						static_cast<uint8_t>(replacementPool.segment_id == pool.segment_id) |
+						static_cast<uint8_t>(replacementPool.kind != SegmentKind::SGK_INDEX_PAGE_POOL) |
+						static_cast<uint8_t>(replacementPool.state != SegmentState::SGS_SEALED) |
+						static_cast<uint8_t>(replacementPool.owner_id != pool.owner_id) |
+						static_cast<uint8_t>(!allocator_.isAllocated(current, replacementPool.physical_slot));
+				if (invalidReplacementPool != 0U) {
+					throw FormatException(
+							FormatError::FERR_INVALID_STATE,
+							"relocatable multi-pool B+Tree mutation has an unavailable cross-pool replacement destination");
+				}
+			}
 			for (const PageLocation &expected: request.expected_replacements) {
 				const PageLocation visible = locations_.findPage(current, expected.page_id);
 				const uint8_t invalidReplacement =
@@ -1205,13 +1222,13 @@ namespace graph::storage {
 							"relocatable multi-pool B+Tree mutation has a stale, foreign, or invalid retirement page");
 				}
 			}
-			batches.push_back({pool,
-							   request.expected_replacements,
-							   {},
-							   request.expected_replacements,
-							   {},
-							   false,
-							   request.expected_retirements});
+			IndexTreeMutationPoolBatch poolBatch;
+			poolBatch.pool = pool;
+			poolBatch.expected_replacements = request.expected_replacements;
+			poolBatch.replacement_locations = request.expected_replacements;
+			poolBatch.expected_retirements = request.expected_retirements;
+			poolBatch.replacement_pool = replacementPool;
+			batches.push_back(std::move(poolBatch));
 		}
 
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
@@ -1232,7 +1249,11 @@ namespace graph::storage {
 			pool.state = SegmentState::SGS_SEALED;
 			pool.committed_lsn = checkpointLsn;
 			catalog_.prepareUpsert(batch, std::span(&pool, 1));
-			batches.push_back({pool, {}, {}, {}, {}, true, {}});
+			IndexTreeMutationPoolBatch poolBatch;
+			poolBatch.pool = pool;
+			poolBatch.newly_reserved = true;
+			poolBatch.replacement_pool = pool;
+			batches.push_back(std::move(poolBatch));
 		}
 		for (size_t poolIndex = 0; poolIndex < batches.size(); ++poolIndex) {
 			IndexTreeMutationPoolBatch &poolBatch = batches[poolIndex];
@@ -1275,11 +1296,12 @@ namespace graph::storage {
 									  "relocatable multi-pool B+Tree preparer changed its batch cardinality");
 			}
 			// ZYX_COV_EXCL_STOP
-			auto validatePublishedLocation = [&](const PageLocation &location, PageId expectedPageId) {
+			auto validatePublishedLocation = [&](const PageLocation &location, PageId expectedPageId,
+																	const CatalogEntry &expectedPool) {
 				const uint8_t invalidLocation =
 						static_cast<uint8_t>(location.page_id != expectedPageId) |
-						static_cast<uint8_t>(location.segment_id != poolBatch.pool.segment_id) |
-						static_cast<uint8_t>(location.generation != poolBatch.pool.generation) |
+						static_cast<uint8_t>(location.segment_id != expectedPool.segment_id) |
+						static_cast<uint8_t>(location.generation != expectedPool.generation) |
 						static_cast<uint8_t>(location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
 						static_cast<uint8_t>(location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
 						static_cast<uint8_t>(location.free_bytes > RSS_PAGE_SIZE);
@@ -1296,11 +1318,13 @@ namespace graph::storage {
 			};
 			for (size_t index = 0; index < poolBatch.replacement_locations.size(); ++index) {
 				validatePublishedLocation(poolBatch.replacement_locations[index],
-										  poolBatch.expected_replacements[index].page_id);
+										  poolBatch.expected_replacements[index].page_id,
+										  poolBatch.replacement_pool.segment_id.isValid() ? poolBatch.replacement_pool : poolBatch.pool);
 				publishedLocations.push_back(poolBatch.replacement_locations[index]);
 			}
 			for (size_t index = 0; index < poolBatch.appended_locations.size(); ++index) {
-				validatePublishedLocation(poolBatch.appended_locations[index], poolBatch.appended_page_ids[index]);
+				validatePublishedLocation(poolBatch.appended_locations[index], poolBatch.appended_page_ids[index],
+										  poolBatch.pool);
 				publishedLocations.push_back(poolBatch.appended_locations[index]);
 			}
 			for (const IndexTreePageRetirement &retirement: poolBatch.expected_retirements) {
@@ -3367,6 +3391,30 @@ namespace graph::storage {
 		return locations_.findEdgePageLocationOptional(snapshot.superblock(), edgeId);
 	}
 
+	void RelocatableMetadataStore::findNodePageLocationsSorted(
+			const MetadataSnapshotPin &snapshot, const std::span<const uint64_t> nodeIds,
+			const std::span<std::optional<EntityPageLocation>> results,
+			const CancellationCheckpoint *cancellation) const {
+		if (!snapshots_.owns(snapshot)) {
+			throw FormatException(FormatError::FERR_INVALID_STATE,
+									"relocatable Node multi-lookup requires this store's active snapshot");
+		}
+		locations_.findEntityPageLocationsSorted(snapshot.superblock(), MetadataDirectoryType::MDT_NODE_ENTITY,
+																			 nodeIds, results, cancellation);
+	}
+
+	void RelocatableMetadataStore::findEdgePageLocationsSorted(
+			const MetadataSnapshotPin &snapshot, const std::span<const uint64_t> edgeIds,
+			const std::span<std::optional<EntityPageLocation>> results,
+			const CancellationCheckpoint *cancellation) const {
+		if (!snapshots_.owns(snapshot)) {
+			throw FormatException(FormatError::FERR_INVALID_STATE,
+									"relocatable Edge multi-lookup requires this store's active snapshot");
+		}
+		locations_.findEntityPageLocationsSorted(snapshot.superblock(), MetadataDirectoryType::MDT_EDGE_ENTITY,
+																			 edgeIds, results, cancellation);
+	}
+
 	void RelocatableMetadataStore::visitNodePageLocations(
 			const MetadataSnapshotPin &snapshot, const std::function<void(const EntityPageLocation &)> &visitor) const {
 		if (!snapshots_.owns(snapshot) || !visitor) {
@@ -3450,6 +3498,17 @@ namespace graph::storage {
 								  "snapshot and a visitor");
 		}
 		locations_.visitEntityProperties(snapshot.superblock(), visitor);
+	}
+
+	LocationDirectoryRangeCursor RelocatableMetadataStore::openEntityPropertyLocationRangeCursor(
+			const MetadataSnapshotPin &snapshot, const uint64_t lowerDirectoryId, const uint64_t upperDirectoryId,
+			const CancellationCheckpoint *cancellation) const {
+		if (!snapshots_.owns(snapshot)) {
+			throw FormatException(FormatError::FERR_INVALID_STATE,
+							  "relocatable Entity Property range cursor requires this store's active snapshot");
+		}
+		return locations_.openRangeCursor(snapshot.superblock(), MetadataDirectoryType::MDT_ENTITY_PROPERTY,
+									  lowerDirectoryId, upperDirectoryId, cancellation);
 	}
 
 	bool RelocatableMetadataStore::visitEntityPropertyLocationsAfter(
@@ -3575,6 +3634,17 @@ namespace graph::storage {
 								  "relocatable optional Entity Property lookup requires a valid key and snapshot");
 		}
 		return locations_.findEntityPropertyOptional(snapshot.superblock(), key);
+	}
+
+	void RelocatableMetadataStore::findEntityPropertyLocationsSorted(
+			const MetadataSnapshotPin &snapshot, const std::span<const EntityPropertyKey> keys,
+			const std::span<std::optional<EntityPropertyLocation>> results,
+			const CancellationCheckpoint *cancellation) const {
+		if (!snapshots_.owns(snapshot)) {
+			throw FormatException(FormatError::FERR_INVALID_STATE,
+							  "relocatable Entity Property multi-lookup requires this store's active snapshot");
+		}
+		locations_.findEntityPropertiesSorted(snapshot.superblock(), keys, results, cancellation);
 	}
 
 	StateLocation RelocatableMetadataStore::findStateLocation(const MetadataSnapshotPin &snapshot,

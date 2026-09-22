@@ -184,6 +184,21 @@ namespace graph::storage {
 		return page;
 	}
 
+	std::optional<SlottedPagePinnedRead>
+	SlottedPagePool::readPinned(const MetadataSnapshotPin &snapshot, const PageId pageId,
+									 BufferPoolReadHint hint) const {
+		std::optional<SharedPagePoolPinnedView> contents = pool_.readPinned(snapshot, pageId, hint);
+		if (!contents.has_value()) {
+			return std::nullopt;
+		}
+		SlottedPageReadView page = SlottedPageReadView::open(contents->owner, contents->payload());
+		if (contents->location.free_bytes != page.stats().contiguous_free_bytes) {
+			throw FormatException(FormatError::FERR_INVALID_STATE,
+								  "relocatable pinned slotted page free-space index disagrees with its page payload");
+		}
+		return SlottedPagePinnedRead{std::move(*contents), std::move(page)};
+	}
+
 	SharedPagePoolAllocation SlottedPagePool::replacePage(const SlottedPage &page, LogSequenceNumber checkpointLsn,
 														  const MetadataPublishOptions &options) {
 		const std::vector<std::byte> bytes = page.serialize();

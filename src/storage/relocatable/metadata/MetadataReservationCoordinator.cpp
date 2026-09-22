@@ -9,13 +9,16 @@
 #include "graph/storage/relocatable/metadata/MetadataReservationCoordinator.hpp"
 
 #include <cstdint>
+#include <algorithm>
 #include <limits>
 #include <ranges>
+#include <span>
 #include <vector>
 
 #include "graph/storage/relocatable/allocation/AllocatorDirectory.hpp"
 #include "graph/storage/relocatable/metadata/CatalogTree.hpp"
 #include "graph/storage/relocatable/metadata/MetadataWriteBatch.hpp"
+#include "graph/debug/PerfTrace.hpp"
 
 namespace graph::storage {
 
@@ -53,15 +56,52 @@ namespace graph::storage {
 			previous = request.segment_id;
 		}
 
+		// Reservation requests are already required to be strictly ordered.  Keep
+		// validation of every referenced page logarithmic instead of rescanning the
+		// complete request list for each mapping in a bulk publication.
 		const auto findRequestedLocation = [&requests](SegmentId segmentId, Generation generation) {
-			return std::ranges::find_if(requests, [segmentId, generation](const CatalogSlotReservationRequest &request) {
-				return request.segment_id == segmentId && request.segment_generation == generation;
-			});
+			const auto iterator = std::lower_bound(
+					requests.begin(), requests.end(), segmentId,
+					[](const CatalogSlotReservationRequest &request, SegmentId id) { return request.segment_id < id; });
+			if (iterator == requests.end() || iterator->segment_id != segmentId ||
+				iterator->segment_generation != generation) {
+				return requests.end();
+			}
+			return iterator;
 		};
 		const auto validateRequestedLocation = [&findRequestedLocation, &requests](SegmentId segmentId,
 																					 Generation generation) {
 			return findRequestedLocation(segmentId, generation) != requests.end();
 		};
+		// Build one immutable page-id index for all typed references.  The old
+		// nested linear scans made validation quadratic for large streamed Edge
+		// publications; sorted lookup keeps memory bounded and deterministic.
+		std::vector<size_t> pageOrder(input.pages.size());
+		for (size_t index = 0U; index < pageOrder.size(); ++index) {
+			pageOrder[index] = index;
+		}
+		std::ranges::sort(pageOrder, [&input](size_t left, size_t right) {
+			return input.pages[left].page_id < input.pages[right].page_id;
+		});
+		for (size_t index = 1U; index < pageOrder.size(); ++index) {
+			if (input.pages[pageOrder[index - 1U]].page_id == input.pages[pageOrder[index]].page_id) {
+				throw FormatException(FormatError::FERR_INVALID_STATE,
+						"relocatable combined location reservation contains duplicate Page IDs");
+			}
+		}
+		const auto findPageById = [&pageOrder, &input](PageId pageId) -> const PageLocation * {
+			const auto iterator = std::lower_bound(pageOrder.begin(), pageOrder.end(), pageId,
+					[&input](size_t index, PageId id) { return input.pages[index].page_id < id; });
+			if (iterator == pageOrder.end() || input.pages[*iterator].page_id != pageId) {
+				return nullptr;
+			}
+			return &input.pages[*iterator];
+		};
+		if (debug::PerfTrace::areValuesEnabled() && !input.pages.empty()) {
+			debug::PerfTrace::addValue("native_graph.commit.metadata_reservation_page_index_builds", 1);
+			debug::PerfTrace::addValue("native_graph.commit.metadata_reservation_page_index_entries",
+					static_cast<int64_t>(input.pages.size()));
+		}
 		for (const PageLocation &location: input.pages) {
 			if (!validateRequestedLocation(location.segment_id, location.generation)) {
 				throw FormatException(
@@ -79,10 +119,10 @@ namespace graph::storage {
 
 		const auto validateEntityPageLocations = [&](std::span<const EntityPageLocation> locations) {
 			for (const EntityPageLocation &location: locations) {
-				const auto page = std::ranges::find(input.pages, location.page_id, &PageLocation::page_id);
+				const PageLocation *page = findPageById(location.page_id);
 				if (location.entity_id == 0U || !location.page_id.isValid() ||
 					location.slot_id == std::numeric_limits<uint16_t>::max() || location.slot_generation == 0U ||
-					page == input.pages.end()) {
+					page == nullptr) {
 					throw FormatException(
 							FormatError::FERR_INVALID_STATE,
 							"relocatable combined Entity Map reservation has an invalid Page Directory target");
@@ -99,9 +139,9 @@ namespace graph::storage {
 		validateEntityPageLocations(input.entity_page_edges);
 
 		for (const VectorManifestLocation &manifest: input.manifests) {
-			const auto page = std::ranges::find(input.pages, manifest.manifest_page_id, &PageLocation::page_id);
+			const PageLocation *page = findPageById(manifest.manifest_page_id);
 			if (manifest.index_id == 0U || !manifest.manifest_page_id.isValid() || !manifest.generation.isValid() ||
-				page == input.pages.end()) {
+				page == nullptr) {
 				throw FormatException(
 						FormatError::FERR_INVALID_STATE,
 						"relocatable combined manifest reservation has an invalid manifest Page Directory target");

@@ -155,9 +155,9 @@ TEST(RelocatableEntityPageTest, NodePageReusesSlotsWithDurableGenerationsAndSurv
 	EXPECT_EQ(initial.live_count, 0U);
 	EXPECT_GT(initial.slot_capacity, 1U);
 	EXPECT_EQ(initial.bitmap_bytes, (initial.slot_capacity + 7U) / 8U);
-	expectFormatError([&] { static_cast<void>(page.insert(edge())); }, FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(page.insert(1001U, edge())); }, FormatError::FERR_INVALID_STATE);
 
-	const uint16_t first = page.insert(node());
+	const uint16_t first = page.insert(1001U, node());
 	EXPECT_EQ(first, 0U);
 	EXPECT_EQ(page.slotGeneration(first), 1U);
 	ASSERT_TRUE(page.findNode(first).has_value());
@@ -165,14 +165,15 @@ TEST(RelocatableEntityPageTest, NodePageReusesSlotsWithDurableGenerationsAndSurv
 
 	NodeEntityRecord second = node();
 	second.inline_label_ids = {11U, 13U, 17U};
-	const uint16_t secondSlot = page.insert(second);
+	const uint16_t secondSlot = page.insert(1002U, second);
 	EXPECT_EQ(secondSlot, 1U);
 	page.erase(first, 1U);
 	EXPECT_FALSE(page.findNode(first).has_value());
 	expectFormatError([&] { static_cast<void>(page.findNode(first, 1U)); }, FormatError::FERR_INVALID_STATE);
-	const uint16_t reused = page.insert(node());
+	const uint16_t reused = page.insert(1003U, node());
 	EXPECT_EQ(reused, first);
 	EXPECT_EQ(page.slotGeneration(reused), 2U);
+	EXPECT_EQ(page.entityId(reused), 1003U);
 	expectFormatError([&] { page.replace(reused, 1U, second); }, FormatError::FERR_INVALID_STATE);
 	EXPECT_EQ(*page.findNode(reused, 2U), node());
 
@@ -189,9 +190,32 @@ TEST(RelocatableEntityPageTest, NodePageReusesSlotsWithDurableGenerationsAndSurv
 	EXPECT_FALSE(reopened.findNode(reopened.header().slot_capacity).has_value());
 }
 
+TEST(RelocatableEntityPageTest, ReadViewAuthenticatesPinnedBytesAndDecodesOnlyRequestedSlots) {
+	EntityPage page = EntityPage::create(owner(), EntityPageRecordKind::EPRK_NODE);
+	const uint16_t slot = page.insert(1001U, node());
+	const std::vector<std::byte> bytes = page.serialize();
+
+	const EntityPageReadView view = EntityPageReadView::open(owner(), bytes);
+	EXPECT_EQ(view.header(), page.header());
+	ASSERT_TRUE(view.findNode(slot, 1U).has_value());
+	EXPECT_EQ(*view.findNode(slot, 1U), node());
+	EXPECT_EQ(*view.findNode(slot, 1U, 1001U), node());
+	EXPECT_EQ(view.entityId(slot), 1001U);
+	EXPECT_EQ(view.slotGeneration(slot), 1U);
+	expectFormatError([&] { static_cast<void>(view.findNode(slot, 1U, 1002U)); },
+					  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(view.findNode(slot, 2U)); }, FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(view.findEdge(slot, 1U)); }, FormatError::FERR_INVALID_STATE);
+
+	std::vector<std::byte> corrupt = bytes;
+	corrupt.back() = std::byte{1};
+	expectFormatError([&] { static_cast<void>(EntityPageReadView::open(owner(), corrupt)); },
+				  FormatError::FERR_CHECKSUM_MISMATCH);
+}
+
 TEST(RelocatableEntityPageTest, SlotBoundaryChecksDoNotMutatePagesAndMoveOperationsPreserveRecords) {
 	EntityPage page = EntityPage::create(owner(), EntityPageRecordKind::EPRK_NODE);
-	const uint16_t slot = page.insert(node());
+	const uint16_t slot = page.insert(1001U, node());
 	NodeEntityRecord replacement = node();
 	replacement.inline_label_ids = {11U, 13U, 17U};
 	expectFormatError([&] { page.replace(slot, 2U, replacement); }, FormatError::FERR_INVALID_STATE);
@@ -201,13 +225,15 @@ TEST(RelocatableEntityPageTest, SlotBoundaryChecksDoNotMutatePagesAndMoveOperati
 	expectFormatError([&] { static_cast<void>(page.slotGeneration(page.header().slot_capacity)); },
 					  FormatError::FERR_INVALID_HEADER);
 	page.erase(slot);
+	EXPECT_EQ(page.entityId(slot), 0U);
 	expectFormatError([&] { page.replace(slot, replacement); }, FormatError::FERR_INVALID_STATE);
 	expectFormatError([&] { page.erase(slot, 1U); }, FormatError::FERR_INVALID_STATE);
 
+	uint64_t nextNodeId = 1002U;
 	while (page.header().live_count < page.header().slot_capacity) {
-		static_cast<void>(page.insert(node()));
+		static_cast<void>(page.insert(nextNodeId++, node()));
 	}
-	expectFormatError([&] { static_cast<void>(page.insert(node())); }, FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(page.insert(nextNodeId, node())); }, FormatError::FERR_INVALID_STATE);
 	EntityPage moved(std::move(page));
 	EXPECT_TRUE(moved.findNode(0U).has_value());
 	EntityPage assigned = EntityPage::create(owner(PageId(42U)), EntityPageRecordKind::EPRK_NODE);
@@ -222,16 +248,21 @@ TEST(RelocatableEntityPageTest, EdgePageUsesFixedCapacityAndRejectsCrossKindOper
 	EntityPage page = EntityPage::create(owner(), EntityPageRecordKind::EPRK_EDGE);
 	EXPECT_EQ(page.header().record_bytes, RSS_ENTITY_EDGE_RECORD_BYTES);
 	EXPECT_GT(page.header().slot_capacity, 1U);
-	const uint16_t first = page.insert(edge());
+	const uint16_t first = page.insert(2001U, edge());
 	EXPECT_EQ(first, 0U);
 	EXPECT_EQ(*page.findEdge(first, 1U), edge());
 	expectFormatError([&] { static_cast<void>(page.findEdge(first, 0U)); }, FormatError::FERR_INVALID_STATE);
-	expectFormatError([&] { static_cast<void>(page.insert(node())); }, FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(page.insert(2002U, node())); }, FormatError::FERR_INVALID_STATE);
 	expectFormatError([&] { static_cast<void>(page.findNode(first)); }, FormatError::FERR_INVALID_STATE);
 	expectFormatError([&] { page.replace(first, node()); }, FormatError::FERR_INVALID_STATE);
 
 	EdgeEntityRecord replacement = edge();
 	replacement.type_id = 101U;
+	expectFormatError([&] { static_cast<void>(page.findEdge(first, 1U, 2002U)); },
+					  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { page.replace(first, 1U, 2002U, replacement); },
+					  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { page.erase(first, 1U, 2002U); }, FormatError::FERR_INVALID_STATE);
 	page.replace(first, 1U, replacement);
 	EXPECT_EQ(*page.findEdge(first, 1U), replacement);
 	page.erase(first, 1U);
@@ -241,38 +272,52 @@ TEST(RelocatableEntityPageTest, EdgePageUsesFixedCapacityAndRejectsCrossKindOper
 	expectFormatError([&] { page.replace(first, replacement); }, FormatError::FERR_INVALID_STATE);
 	expectFormatError([&] { page.erase(first); }, FormatError::FERR_INVALID_STATE);
 
+	uint64_t nextEdgeId = 2002U;
 	while (page.header().live_count < page.header().slot_capacity) {
-		static_cast<void>(page.insert(edge()));
+		static_cast<void>(page.insert(nextEdgeId++, edge()));
 	}
-	expectFormatError([&] { static_cast<void>(page.insert(edge())); }, FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(page.insert(nextEdgeId, edge())); }, FormatError::FERR_INVALID_STATE);
 }
 
 TEST(RelocatableEntityPageTest, EdgeBatchInsertIsAtomicAndPreservesDurableSlotGenerations) {
 	EntityPage page = EntityPage::create(owner(), EntityPageRecordKind::EPRK_EDGE);
-	std::vector<EdgeEntityRecord> records{edge(), {.source_node_id = 12U, .target_node_id = 13U, .type_id = 17U},
-										 {.source_node_id = 14U, .target_node_id = 15U, .type_id = 18U}};
+	std::vector<IdentifiedEdgeEntityRecord> records{
+			{2001U, edge()},
+			{2002U, {.source_node_id = 12U, .target_node_id = 13U, .type_id = 17U}},
+			{2003U, {.source_node_id = 14U, .target_node_id = 15U, .type_id = 18U}}};
 	const std::vector<uint16_t> slots = page.insertEdges(records);
 	ASSERT_EQ(slots.size(), records.size());
 	for (size_t index = 0U; index < records.size(); ++index) {
 		EXPECT_EQ(slots[index], index);
 		EXPECT_EQ(page.slotGeneration(slots[index]), 1U);
-		EXPECT_EQ(*page.findEdge(slots[index], 1U), records[index]);
+		EXPECT_EQ(page.entityId(slots[index]), records[index].entity_id);
+		EXPECT_EQ(*page.findEdge(slots[index], 1U), records[index].record);
 	}
 	const std::vector<std::byte> beforeFailure = page.serialize();
-	std::vector<EdgeEntityRecord> invalid{{.source_node_id = 16U, .target_node_id = 17U, .type_id = 19U},
-										 {.source_node_id = 0U, .target_node_id = 18U, .type_id = 20U}};
+	std::vector<IdentifiedEdgeEntityRecord> invalid{
+			{2004U, {.source_node_id = 16U, .target_node_id = 17U, .type_id = 19U}},
+			{2005U, {.source_node_id = 0U, .target_node_id = 18U, .type_id = 20U}}};
 	expectFormatError([&] { static_cast<void>(page.insertEdges(invalid)); }, FormatError::FERR_INVALID_HEADER);
+	EXPECT_EQ(page.serialize(), beforeFailure);
+	const std::array<IdentifiedEdgeEntityRecord, 1U> zeroId{{{0U, edge()}}};
+	expectFormatError([&] { static_cast<void>(page.insertEdges(zeroId)); }, FormatError::FERR_INVALID_HEADER);
+	EXPECT_EQ(page.serialize(), beforeFailure);
+	const std::array<IdentifiedEdgeEntityRecord, 2U> duplicateIds{{{2004U, edge()}, {2004U, edge()}}};
+	expectFormatError([&] { static_cast<void>(page.insertEdges(duplicateIds)); }, FormatError::FERR_INVALID_HEADER);
+	EXPECT_EQ(page.serialize(), beforeFailure);
+	const std::array<IdentifiedEdgeEntityRecord, 1U> existingId{{{2001U, edge()}}};
+	expectFormatError([&] { static_cast<void>(page.insertEdges(existingId)); }, FormatError::FERR_INVALID_STATE);
 	EXPECT_EQ(page.serialize(), beforeFailure);
 
 	EntityPage reopened = EntityPage::open(owner(), page.serialize());
 	for (size_t index = 0U; index < records.size(); ++index) {
-		EXPECT_EQ(*reopened.findEdge(slots[index], 1U), records[index]);
+		EXPECT_EQ(*reopened.findEdge(slots[index], 1U), records[index].record);
 	}
 }
 
 TEST(RelocatableEntityPageTest, EdgeBatchInsertHandlesEmptyBatchesAndRejectsNodePages) {
 	EntityPage edgePage = EntityPage::create(owner(), EntityPageRecordKind::EPRK_EDGE);
-	const std::vector<EdgeEntityRecord> empty;
+	const std::vector<IdentifiedEdgeEntityRecord> empty;
 	EXPECT_TRUE(edgePage.insertEdges(empty).empty());
 	EXPECT_EQ(edgePage.header().live_count, 0U);
 
@@ -282,13 +327,18 @@ TEST(RelocatableEntityPageTest, EdgeBatchInsertHandlesEmptyBatchesAndRejectsNode
 
 TEST(RelocatableEntityPageTest, EdgeBatchInsertSkipsLiveSlotsAndPreflightsCapacity) {
 	EntityPage page = EntityPage::create(owner(), EntityPageRecordKind::EPRK_EDGE);
-	ASSERT_EQ(page.insert(edge()), 0U);
-	const std::array<EdgeEntityRecord, 2U> records{
-			edge(), EdgeEntityRecord{.source_node_id = 12U, .target_node_id = 13U, .type_id = 17U}};
+	ASSERT_EQ(page.insert(2001U, edge()), 0U);
+	const std::array<IdentifiedEdgeEntityRecord, 2U> records{
+			IdentifiedEdgeEntityRecord{2002U, edge()},
+			IdentifiedEdgeEntityRecord{2003U, {.source_node_id = 12U, .target_node_id = 13U, .type_id = 17U}}};
 	const std::vector<uint16_t> slots = page.insertEdges(records);
 	ASSERT_EQ(slots, (std::vector<uint16_t>{1U, 2U}));
 
-	std::vector<EdgeEntityRecord> overCapacity(page.header().slot_capacity, edge());
+	std::vector<IdentifiedEdgeEntityRecord> overCapacity;
+	overCapacity.reserve(page.header().slot_capacity);
+	for (uint64_t edgeId = 3000U; edgeId < 3000U + page.header().slot_capacity; ++edgeId) {
+		overCapacity.push_back({edgeId, edge()});
+	}
 	expectFormatError([&] { static_cast<void>(page.insertEdges(overCapacity)); }, FormatError::FERR_INVALID_STATE);
 }
 
@@ -346,7 +396,7 @@ TEST(RelocatableEntityPageTest, HeaderAndOwnerValidationFailClosed) {
 
 TEST(RelocatableEntityPageTest, OpenRejectsChecksumAndLayoutCorruption) {
 	EntityPage page = EntityPage::create(owner(), EntityPageRecordKind::EPRK_NODE);
-	ASSERT_EQ(page.insert(node()), 0U);
+	ASSERT_EQ(page.insert(1001U, node()), 0U);
 	const std::vector<std::byte> bytes = page.serialize();
 	auto corrupt = bytes;
 	corrupt.back() = std::byte{1};
@@ -356,7 +406,9 @@ TEST(RelocatableEntityPageTest, OpenRejectsChecksumAndLayoutCorruption) {
 	expectFormatError([&] { static_cast<void>(EntityPage::open(owner(), corrupt)); }, FormatError::FERR_CHECKSUM_MISMATCH);
 
 	corrupt = bytes;
-	LittleEndianCodec::writeU32(corrupt, 80U, 0U);
+	const EntityPageHeader header = page.header();
+	const size_t firstGenerationOffset = RSS_ENTITY_PAGE_HEADER_BYTES + header.bitmap_bytes;
+	LittleEndianCodec::writeU32(corrupt, firstGenerationOffset, 0U);
 	refreshPageChecksums(corrupt);
 	expectFormatError([&] { static_cast<void>(EntityPage::open(owner(), corrupt)); }, FormatError::FERR_INVALID_HEADER);
 	corrupt = bytes;
@@ -375,9 +427,9 @@ TEST(RelocatableEntityPageTest, OpenRejectsChecksumAndLayoutCorruption) {
 	refreshPageChecksums(corrupt);
 	expectFormatError([&] { static_cast<void>(EntityPage::open(owner(), corrupt)); }, FormatError::FERR_RESERVED_BITS);
 	corrupt = bytes;
-	const EntityPageHeader header = page.header();
 	const size_t recordOffset = RSS_ENTITY_PAGE_HEADER_BYTES + header.bitmap_bytes +
-								  static_cast<size_t>(header.slot_capacity) * sizeof(uint32_t);
+								  static_cast<size_t>(header.slot_capacity) * sizeof(uint32_t) +
+								  static_cast<size_t>(header.slot_capacity) * sizeof(uint64_t);
 	corrupt[recordOffset + header.record_bytes] = std::byte{1};
 	refreshPageChecksums(corrupt);
 	expectFormatError([&] { static_cast<void>(EntityPage::open(owner(), corrupt)); }, FormatError::FERR_INVALID_HEADER);
@@ -387,12 +439,56 @@ TEST(RelocatableEntityPageTest, OpenRejectsChecksumAndLayoutCorruption) {
 	expectFormatError([&] { static_cast<void>(EntityPage::open(owner(), corrupt)); }, FormatError::FERR_INVALID_HEADER);
 }
 
+TEST(RelocatableEntityPageTest, EnumeratesLiveSlotsWithPageLocalIdsAndRejectsDuplicateIdentities) {
+	EntityPage nodePage = EntityPage::create(owner(), EntityPageRecordKind::EPRK_NODE);
+	const uint16_t first = nodePage.insert(1003U, node());
+	NodeEntityRecord secondRecord = node();
+	secondRecord.inline_label_ids = {11U, 13U, 17U};
+	const uint16_t second = nodePage.insert(1001U, secondRecord);
+	nodePage.erase(first, 1U, 1003U);
+	const uint16_t reused = nodePage.insert(1005U, node());
+	ASSERT_EQ(reused, first);
+
+	const EntityPageReadView nodeView = EntityPageReadView::open(owner(), nodePage.serialize());
+	std::vector<uint64_t> nodeIds;
+	EXPECT_TRUE(nodeView.visitNodesUntil(
+			4U, [&](const uint64_t entityId, const uint16_t slot, const uint32_t generation,
+						const NodeEntityRecord &) {
+				nodeIds.push_back(entityId);
+				EXPECT_EQ(nodeView.entityId(slot), entityId);
+				EXPECT_EQ(nodeView.slotGeneration(slot), generation);
+				return true;
+			}));
+	EXPECT_EQ(nodeIds, (std::vector<uint64_t>{1005U, 1001U}));
+	EXPECT_FALSE(nodeView.visitNodesUntil(1U, [](uint64_t, uint16_t, uint32_t, const NodeEntityRecord &) {
+		return true;
+	}));
+	expectFormatError(
+			[&] { static_cast<void>(nodeView.visitEdgesUntil(1U, [](uint64_t, uint16_t, uint32_t,
+																 const EdgeEntityRecord &) { return true; })); },
+			FormatError::FERR_INVALID_STATE);
+
+	expectFormatError([&] { static_cast<void>(nodePage.insert(0U, node())); }, FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { static_cast<void>(nodePage.insert(1001U, node())); }, FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { nodePage.replace(second, 1U, 1005U, node()); }, FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { nodePage.erase(second, 1U, 1005U); }, FormatError::FERR_INVALID_STATE);
+
+	std::vector<std::byte> duplicate = nodePage.serialize();
+	const EntityPageHeader header = nodePage.header();
+	const size_t entityIdsOffset = RSS_ENTITY_PAGE_HEADER_BYTES + header.bitmap_bytes +
+									static_cast<size_t>(header.slot_capacity) * sizeof(uint32_t);
+	LittleEndianCodec::writeU64(duplicate, entityIdsOffset + static_cast<size_t>(second) * sizeof(uint64_t), 1005U);
+	refreshPageChecksums(duplicate);
+	expectFormatError([&] { static_cast<void>(EntityPage::open(owner(), duplicate)); },
+					  FormatError::FERR_INVALID_HEADER);
+}
+
 TEST(RelocatableEntityPageTest, RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation) {
 	EntityPage nodePage = EntityPage::create(owner(), EntityPageRecordKind::EPRK_NODE);
-	ASSERT_EQ(nodePage.insert(node()), 0U);
+	ASSERT_EQ(nodePage.insert(1001U, node()), 0U);
 	EntityPage edgePage = EntityPage::create(owner(), EntityPageRecordKind::EPRK_EDGE);
-	ASSERT_EQ(edgePage.insert(edge()), 0U);
-	ASSERT_EQ(edgePage.insert({.source_node_id = 12U, .target_node_id = 13U, .type_id = 17U}), 1U);
+	ASSERT_EQ(edgePage.insert(2001U, edge()), 0U);
+	ASSERT_EQ(edgePage.insert(2002U, {.source_node_id = 12U, .target_node_id = 13U, .type_id = 17U}), 1U);
 	const std::array<std::vector<std::byte>, 2> encodedPages{nodePage.serialize(), edgePage.serialize()};
 
 	for (size_t pageIndex = 0U; pageIndex < encodedPages.size(); ++pageIndex) {
@@ -424,7 +520,8 @@ TEST(RelocatableEntityPageTest, RejectsAReusedSlotWhoseGenerationIsExhausted) {
 	LittleEndianCodec::writeU32(bytes, firstGenerationOffset, std::numeric_limits<uint32_t>::max());
 	refreshPageChecksums(bytes);
 	EntityPage exhausted = EntityPage::open(owner(), bytes);
-	expectFormatError([&] { static_cast<void>(exhausted.insert(node())); }, FormatError::FERR_ARITHMETIC_OVERFLOW);
+	expectFormatError([&] { static_cast<void>(exhausted.insert(1001U, node())); },
+					  FormatError::FERR_ARITHMETIC_OVERFLOW);
 
 	EntityPage emptyEdge = EntityPage::create(owner(), EntityPageRecordKind::EPRK_EDGE);
 	bytes = emptyEdge.serialize();
@@ -432,7 +529,8 @@ TEST(RelocatableEntityPageTest, RejectsAReusedSlotWhoseGenerationIsExhausted) {
 	LittleEndianCodec::writeU32(bytes, edgeGenerationOffset, std::numeric_limits<uint32_t>::max());
 	refreshPageChecksums(bytes);
 	EntityPage exhaustedEdge = EntityPage::open(owner(), bytes);
-	expectFormatError([&] { static_cast<void>(exhaustedEdge.insert(edge())); }, FormatError::FERR_ARITHMETIC_OVERFLOW);
-	const std::array<EdgeEntityRecord, 1U> batch{edge()};
+	expectFormatError([&] { static_cast<void>(exhaustedEdge.insert(2001U, edge())); },
+					  FormatError::FERR_ARITHMETIC_OVERFLOW);
+	const std::array<IdentifiedEdgeEntityRecord, 1U> batch{IdentifiedEdgeEntityRecord{2001U, edge()}};
 	expectFormatError([&] { static_cast<void>(exhaustedEdge.insertEdges(batch)); }, FormatError::FERR_ARITHMETIC_OVERFLOW);
 }

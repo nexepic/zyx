@@ -53,12 +53,6 @@ namespace graph::storage {
 			return std::ranges::binary_search(labels, labelId);
 		}
 
-		[[nodiscard]] const PropertyValue *findValue(const PropertyCollectionRoot &root, uint32_t token) {
-			const auto entry =
-					std::ranges::lower_bound(root.entries, token, {}, &PropertyCollectionRootEntry::key_token);
-			return entry == root.entries.end() || entry->key_token != token ? nullptr : &entry->value;
-		}
-
 		void updateSemantic(RelocatableVectorSemanticScanResult &result,
 							const RelocatableVectorSemanticRecord &record) {
 			std::array<std::byte, sizeof(uint64_t) * 2U> identity{};
@@ -108,38 +102,58 @@ namespace graph::storage {
 			uint64_t vectorsForIndex = 0;
 			std::vector<RelocatableVectorSemanticRecord> batch;
 			batch.reserve(options.maximum_batch_records);
-			PropertyCollectionRootScanCursor propertyCursor = properties.openScanCursor(snapshot);
+			std::vector<uint64_t> pendingNodeIds;
+			pendingNodeIds.reserve(options.maximum_batch_records);
+			const auto flush = [&]() {
+				if (pendingNodeIds.empty()) {
+					return;
+				}
+				// Entity Map traversal is page-oriented. Keep the semantic stream
+				// deterministic and resolve this bounded owner batch with one
+				// Directory merge and one read per distinct Property page.
+				std::ranges::sort(pendingNodeIds);
+				pendingNodeIds.erase(std::ranges::unique(pendingNodeIds).begin(), pendingNodeIds.end());
+				std::vector<EntityPropertyKey> keys;
+				keys.reserve(pendingNodeIds.size());
+				for (const uint64_t nodeId: pendingNodeIds) {
+					keys.push_back({EntityPropertyOwnerKind::EPOK_NODE, nodeId});
+				}
+				std::vector<std::optional<PropertyCollectionRootEntry>> selected(keys.size());
+				properties.readEntityPropertiesOptionalSorted(snapshot, keys, *token, selected);
+				for (size_t index = 0U; index < pendingNodeIds.size(); ++index) {
+					if (!selected[index].has_value()) {
+						continue;
+					}
+					if (vectorsForIndex == options.maximum_vectors_per_index) {
+						fail(FormatError::FERR_INVALID_STATE,
+								"relocatable Vector semantic scan exceeded its configured per-index vector bound");
+					}
+					RelocatableVectorSemanticRecord record;
+					record.index_id = definition.index_id;
+					record.node_id = pendingNodeIds[index];
+					record.raw_bfloat16 = VectorSemanticCodec::encodeBFloat16(selected[index]->value,
+							definition.vector_dimensions);
+					updateSemantic(result, record);
+					batch.push_back(std::move(record));
+					++vectorsForIndex;
+					if (batch.size() == options.maximum_batch_records) {
+						consumer(batch);
+						batch.clear();
+					}
+				}
+				pendingNodeIds.clear();
+			};
 			metadata.visitNodePageLocations(snapshot, [&](const EntityPageLocation &location) {
 				const NodeEntityRecord node = entities.readNodeAt(snapshot, location);
 				if (!nodeHasLabel(labels.readNodeLabels(snapshot, node), definition.label_token_id)) {
 					return;
 				}
-				const EntityPropertyKey propertyKey{EntityPropertyOwnerKind::EPOK_NODE, location.entity_id};
-				const std::optional<PropertyCollectionRoot> root =
-						propertyCursor.readEntityOptional(snapshot, propertyKey);
-				if (!root.has_value()) {
-					return;
-				}
-				const PropertyValue *value = findValue(*root, *token);
-				if (value == nullptr) {
-					return;
-				}
-				if (vectorsForIndex == options.maximum_vectors_per_index) {
-					fail(FormatError::FERR_INVALID_STATE,
-						 "relocatable Vector semantic scan exceeded its configured per-index vector bound");
-				}
-				RelocatableVectorSemanticRecord record;
-				record.index_id = definition.index_id;
-				record.node_id = location.entity_id;
-				record.raw_bfloat16 = VectorSemanticCodec::encodeBFloat16(*value, definition.vector_dimensions);
-				updateSemantic(result, record);
-				batch.push_back(std::move(record));
-				++vectorsForIndex;
-				if (batch.size() == options.maximum_batch_records) {
-					consumer(batch);
-					batch.clear();
+				pendingNodeIds.push_back(location.entity_id);
+				if (pendingNodeIds.size() == options.maximum_batch_records) {
+					flush();
 				}
 			});
+			flush();
 			if (!batch.empty()) {
 				consumer(batch);
 			}

@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <array>
 #include <bitset>
+#include <cstring>
 #include <limits>
 #include <map>
 #include <memory>
@@ -22,6 +23,7 @@
 #include "graph/storage/relocatable/metadata/MetadataPageFile.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp"
 #include "graph/storage/relocatable/metadata/MetadataWriteBatch.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/utils/ChecksumUtils.hpp"
 
 namespace graph::storage {
@@ -315,8 +317,8 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] PhysicalPageRef rootFor(MetadataPageFile &pages, const Superblock &superblock,
-											  MetadataDirectoryType directoryType,
-											  const MetadataWriteBatch *batch = nullptr) {
+													  MetadataDirectoryType directoryType,
+													  const MetadataWriteBatch *batch = nullptr) {
 			if (directoryType == MetadataDirectoryType::MDT_PAGE) {
 				if (batch != nullptr) {
 					if (const std::optional<PhysicalPageRef> pending = batch->pendingBootstrapDataRoot();
@@ -332,6 +334,18 @@ namespace graph::storage {
 				validateVisible(bootstrap.generation, bootstrap.committed_lsn, superblock,
 								"Page Directory bootstrap is newer than its Superblock");
 				return bootstrap.data_page_directory_root;
+			}
+
+			// A typed directory may be prepared more than once in one metadata
+			// batch.  Once its candidate root is owned by that batch, it is the
+			// authoritative COW source even before the final Superblock switch.
+			// Without this check a second mutation would restart from the published
+			// root and silently discard the first mutation.
+			if (batch != nullptr) {
+				const PhysicalPageRef candidateRoot = physicalRootFor(batch->candidate(), directoryType);
+				if (candidateRoot.isValid() && batch->ownsAllocatedPage(candidateRoot)) {
+					return candidateRoot;
+				}
 			}
 
 			const PhysicalPageRef physicalRoot = physicalRootFor(superblock, directoryType);
@@ -367,6 +381,100 @@ namespace graph::storage {
 			std::map<uint32_t, std::unique_ptr<MutableNode>> node_children;
 			std::map<uint32_t, std::unique_ptr<MutableLeaf>> leaf_children;
 		};
+
+		struct PreparedFrameCursor final {
+			std::span<const PhysicalPageRef> frames;
+			size_t next = 0U;
+
+			[[nodiscard]] PhysicalPageRef take() {
+				if (next >= frames.size()) {
+					throwLocationDirectoryError(FormatError::FERR_INVALID_STATE,
+											"relocatable location tree exhausted its prepared metadata frames");
+				}
+				return frames[next++];
+			}
+		};
+
+		class PreparedPageWriter final {
+		public:
+			static constexpr size_t MAX_BATCH_PAGES = 128U;
+
+			PreparedPageWriter(MetadataPageFile &pages, MetadataWriteBatch &batch) : pageFile_(pages), batch_(batch) {}
+
+			PreparedPageWriter(const PreparedPageWriter &) = delete;
+			PreparedPageWriter &operator=(const PreparedPageWriter &) = delete;
+
+			void enqueue(PhysicalPageRef reference, const std::array<std::byte, RSS_PAGE_SIZE> &bytes) {
+				if (!reference.isValid() || reference.generation != batch_.generation()) {
+					throwLocationDirectoryError(FormatError::FERR_INVALID_STATE,
+											"relocatable location tree prepared an invalid metadata page reference");
+				}
+				pending_pages_.push_back({reference, bytes});
+				if (pending_pages_.size() >= MAX_BATCH_PAGES) {
+					flush();
+				}
+			}
+
+			void flush() {
+				size_t offset = 0U;
+				while (offset < pending_pages_.size()) {
+					const PhysicalPageRef first = pending_pages_[offset].reference;
+					size_t count = 1U;
+					while (offset + count < pending_pages_.size() && count < MAX_BATCH_PAGES) {
+						const PhysicalPageRef previous = pending_pages_[offset + count - 1U].reference;
+						const PhysicalPageRef next = pending_pages_[offset + count].reference;
+						if (next.generation != first.generation || next.physical_slot != first.physical_slot ||
+							next.frame_index != static_cast<uint8_t>(previous.frame_index + 1U)) {
+							break;
+						}
+						++count;
+					}
+					std::vector<std::byte> buffer(count * RSS_PAGE_SIZE);
+					for (size_t index = 0U; index < count; ++index) {
+						std::memcpy(buffer.data() + index * RSS_PAGE_SIZE, pending_pages_[offset + index].bytes.data(), RSS_PAGE_SIZE);
+					}
+					pageFile_.storageIO()->writePages({pageFile_.pageOffset(first), first.generation.value()}, buffer.data(),
+												 buffer.size());
+					offset += count;
+				}
+				pending_pages_.clear();
+			}
+
+		private:
+			struct PendingPage final {
+				PhysicalPageRef reference;
+				std::array<std::byte, RSS_PAGE_SIZE> bytes{};
+			};
+
+			MetadataPageFile &pageFile_;
+			MetadataWriteBatch &batch_;
+			std::vector<PendingPage> pending_pages_;
+		};
+
+		[[nodiscard]] size_t writePageCount(const MutableNode &node) {
+			size_t count = 1U;
+			if (node.page.level == 0U) {
+				if (node.leaf_children.size() > std::numeric_limits<size_t>::max() - count) {
+					throwLocationDirectoryError(FormatError::FERR_ARITHMETIC_OVERFLOW,
+											"relocatable location tree write-page count overflows");
+				}
+				return count + node.leaf_children.size();
+			}
+			for (const auto &[index, child]: node.node_children) {
+				static_cast<void>(index);
+				const size_t childCount = writePageCount(*child);
+				if (childCount > std::numeric_limits<size_t>::max() - count) {
+					throwLocationDirectoryError(FormatError::FERR_ARITHMETIC_OVERFLOW,
+											"relocatable location tree write-page count overflows");
+				}
+				count += childCount;
+			}
+			return count;
+		}
+
+		[[nodiscard]] PhysicalPageRef takeWriteFrame(MetadataWriteBatch &batch, PreparedFrameCursor *cursor) {
+			return cursor == nullptr ? batch.allocatePage() : cursor->take();
+		}
 
 		[[nodiscard]] std::unique_ptr<MutableNode> makeNode(MetadataDirectoryType type, CatalogRadixPageKind kind,
 															uint16_t level, Generation generation,
@@ -575,13 +683,29 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] PhysicalPageRef writeLeaf(MutableLeaf &leaf, Generation generation, LogSequenceNumber lsn,
-												MetadataPageFile &pages, MetadataWriteBatch &batch) {
+												MetadataPageFile &pages, MetadataWriteBatch &batch,
+												PreparedFrameCursor *preparedFrames = nullptr,
+												PreparedPageWriter *preparedWriter = nullptr) {
 			leaf.page.generation = generation;
 			leaf.page.committed_lsn = lsn;
 			validatePage(leaf.page);
-			const PhysicalPageRef reference = batch.allocatePage();
-			pages.writeLocationLeaf(reference, leaf.page);
-			batch.registerMetadataPageRoute(leaf.page.page_id, reference);
+			PhysicalPageRef reference;
+			{
+				debug::ScopedPerfTimer timer("native_graph.directory.write_tree.allocate_page");
+				reference = takeWriteFrame(batch, preparedFrames);
+			}
+			{
+				debug::ScopedPerfTimer timer("native_graph.directory.write_tree.write_leaf");
+				if (preparedWriter == nullptr) {
+					pages.writeLocationLeaf(reference, leaf.page);
+				} else {
+					preparedWriter->enqueue(reference, LocationLeafPageCodec::encode(leaf.page));
+				}
+			}
+			{
+				debug::ScopedPerfTimer timer("native_graph.directory.write_tree.register_route");
+				batch.registerMetadataPageRoute(leaf.page.page_id, reference);
+			}
 			return reference;
 		}
 
@@ -655,25 +779,43 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] PhysicalPageRef writeNode(MutableNode &node, CatalogRadixPageKind kind, Generation generation,
-												LogSequenceNumber lsn, MetadataPageFile &pages,
-												MetadataWriteBatch &batch) {
+											LogSequenceNumber lsn, MetadataPageFile &pages,
+											MetadataWriteBatch &batch,
+											PreparedFrameCursor *preparedFrames = nullptr,
+											PreparedPageWriter *preparedWriter = nullptr) {
 			node.page.kind = kind;
 			normalizePhysicalChildren(node.page);
 			node.page.generation = generation;
 			node.page.committed_lsn = lsn;
 			if (node.page.level == 0U) {
 				for (auto &[index, leaf]: node.leaf_children) {
-					node.page.children[index] = writeLeaf(*leaf, generation, lsn, pages, batch);
+					node.page.children[index] =
+							writeLeaf(*leaf, generation, lsn, pages, batch, preparedFrames, preparedWriter);
 				}
 			} else {
 				for (auto &[index, child]: node.node_children) {
 					node.page.children[index] =
-							writeNode(*child, CatalogRadixPageKind::CRPK_INTERNAL, generation, lsn, pages, batch);
+							writeNode(*child, CatalogRadixPageKind::CRPK_INTERNAL, generation, lsn, pages, batch,
+									  preparedFrames, preparedWriter);
 				}
 			}
-			const PhysicalPageRef reference = batch.allocatePage();
-			pages.writeMetadataRadix(reference, node.page);
-			batch.registerMetadataPageRoute(node.page.page_id, reference);
+			PhysicalPageRef reference;
+			{
+				debug::ScopedPerfTimer timer("native_graph.directory.write_tree.allocate_page");
+				reference = takeWriteFrame(batch, preparedFrames);
+			}
+			{
+				debug::ScopedPerfTimer timer("native_graph.directory.write_tree.write_radix");
+				if (preparedWriter == nullptr) {
+					pages.writeMetadataRadix(reference, node.page);
+				} else {
+					preparedWriter->enqueue(reference, MetadataRadixPageCodec::encode(node.page));
+				}
+			}
+			{
+				debug::ScopedPerfTimer timer("native_graph.directory.write_tree.register_route");
+				batch.registerMetadataPageRoute(node.page.page_id, reference);
+			}
 			return reference;
 		}
 
@@ -831,6 +973,279 @@ namespace graph::storage {
 
 	LocationDirectory::LocationDirectory(MetadataPageFile &pages, MetadataPageAllocator &allocator) :
 		pages_(pages), allocator_(allocator) {}
+
+	struct LocationDirectoryRangeCursor::Impl final {
+		struct RouteFrame final {
+			CatalogRadixPage page;
+			PhysicalPageRef reference{};
+			uint64_t ordinal_base = 0U;
+			uint32_t next_child = 0U;
+		};
+
+		MetadataPageFile *pages = nullptr;
+		Superblock superblock;
+		MetadataDirectoryType directory_type = MetadataDirectoryType::MDT_PAGE;
+		uint64_t next_logical_id = 1U;
+		uint64_t upper_logical_id = std::numeric_limits<uint64_t>::max();
+		const CancellationCheckpoint *cancellation = nullptr;
+		std::vector<RouteFrame> route;
+		std::optional<LocationLeafPage> leaf;
+		size_t leaf_entry_index = 0U;
+		uint64_t leaf_ordinal = 0U;
+		std::optional<uint64_t> previous_leaf_ordinal;
+		size_t metadata_pages_read = 0U;
+		bool initialized = false;
+		bool exhausted = false;
+
+		void checkCancellation() const {
+			if (cancellation != nullptr) {
+				cancellation->check();
+			}
+		}
+
+		void initialize() {
+			if (initialized || exhausted) {
+				return;
+			}
+			initialized = true;
+			checkCancellation();
+			const PhysicalPageRef rootReference = rootFor(*pages, superblock, directory_type);
+			if (!rootReference.isValid()) {
+				exhausted = true;
+				return;
+			}
+			checkCancellation();
+			CatalogRadixPage root =
+					pages->readMetadataRadix(rootReference, superblock, BufferPoolReadHint::BPRH_SEQUENTIAL);
+			++metadata_pages_read;
+			debug::PerfTrace::addValue("native_graph.read.directory_range_cursor_root_descents", 1);
+			debug::PerfTrace::addValue("native_graph.read.directory_range_cursor_metadata_pages", 1);
+			if (root.kind != CatalogRadixPageKind::CRPK_ROOT || root.directory_type != directory_type ||
+				root.level > RSS_CATALOG_RADIX_MAX_LEVEL) {
+				throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
+										"relocatable location range cursor has an invalid directory root");
+			}
+			validateVisible(root.generation, root.committed_lsn, superblock,
+							"relocatable location range cursor root is newer than its Superblock");
+			route.reserve(static_cast<size_t>(RSS_CATALOG_RADIX_MAX_LEVEL) + 1U);
+			route.push_back({std::move(root), rootReference, 0U, 0U});
+		}
+
+		[[nodiscard]] bool referenceIsOnRoute(const PhysicalPageRef reference) const {
+			return std::ranges::any_of(route, [reference](const RouteFrame &frame) {
+				return frame.reference == reference;
+			});
+		}
+
+		[[nodiscard]] bool loadNextLeaf() {
+			initialize();
+			leaf.reset();
+			leaf_entry_index = 0U;
+			const uint64_t minimumOrdinal = leafOrdinal(next_logical_id);
+			const uint64_t maximumOrdinal = leafOrdinal(upper_logical_id);
+			while (!route.empty()) {
+				RouteFrame &frame = route.back();
+				const uint64_t factor = radixFactor(frame.page.level);
+				bool descended = false;
+				while (frame.next_child < RSS_CATALOG_RADIX_FANOUT) {
+					const uint32_t childIndex = frame.next_child++;
+					if (childIndex != 0U &&
+						factor > (std::numeric_limits<uint64_t>::max() - frame.ordinal_base) / childIndex) {
+						throwLocationDirectoryError(
+								FormatError::FERR_ARITHMETIC_OVERFLOW,
+								"relocatable location range cursor exceeds the logical-ID domain");
+					}
+					const uint64_t childOrdinal =
+							frame.ordinal_base + static_cast<uint64_t>(childIndex) * factor;
+					if (childOrdinal > maximumOrdinal) {
+						frame.next_child = RSS_CATALOG_RADIX_FANOUT;
+						break;
+					}
+					const bool endsBeforeMinimum =
+							childOrdinal < minimumOrdinal && factor <= minimumOrdinal - childOrdinal;
+					if (endsBeforeMinimum) {
+						continue;
+					}
+					const PhysicalPageRef childReference = frame.page.children[childIndex];
+					if (!childReference.isValid()) {
+						continue;
+					}
+					if (referenceIsOnRoute(childReference)) {
+						throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
+											"relocatable location range cursor found a cyclic radix route");
+					}
+					checkCancellation();
+					if (frame.page.level == 0U) {
+						LocationLeafPage candidate =
+								pages->readLocationLeaf(childReference, BufferPoolReadHint::BPRH_SEQUENTIAL);
+						++metadata_pages_read;
+						debug::PerfTrace::addValue("native_graph.read.directory_range_cursor_metadata_pages", 1);
+						if (candidate.directory_type != directory_type) {
+							throwLocationDirectoryError(
+									FormatError::FERR_INVALID_HEADER,
+									"relocatable location range cursor leaf has an unexpected type");
+						}
+						validateRoute(candidate, childOrdinal, superblock);
+						if (previous_leaf_ordinal.has_value() && childOrdinal <= *previous_leaf_ordinal) {
+							throwLocationDirectoryError(
+									FormatError::FERR_INVALID_HEADER,
+									"relocatable location range cursor leaf order is not strictly increasing");
+						}
+						previous_leaf_ordinal = childOrdinal;
+						leaf_ordinal = childOrdinal;
+						leaf_entry_index = static_cast<size_t>(std::lower_bound(
+								candidate.entries.begin(), candidate.entries.end(), next_logical_id,
+								[](const LocationLeafEntry &entry, const uint64_t id) {
+									return entry.logical_id < id;
+								}) -
+														 candidate.entries.begin());
+						leaf.emplace(std::move(candidate));
+						if (leaf_entry_index < leaf->entries.size() &&
+							leaf->entries[leaf_entry_index].logical_id <= upper_logical_id) {
+							return true;
+						}
+						leaf.reset();
+						continue;
+					}
+
+					CatalogRadixPage child =
+						pages->readMetadataRadix(childReference, superblock, BufferPoolReadHint::BPRH_SEQUENTIAL);
+					++metadata_pages_read;
+					debug::PerfTrace::addValue("native_graph.read.directory_range_cursor_metadata_pages", 1);
+					if (child.kind != CatalogRadixPageKind::CRPK_INTERNAL ||
+						child.directory_type != directory_type || child.level + 1U != frame.page.level) {
+						throwLocationDirectoryError(
+								FormatError::FERR_INVALID_HEADER,
+								"relocatable location range cursor has an invalid internal route");
+					}
+					validateVisible(child.generation, child.committed_lsn, superblock,
+								"relocatable location range cursor internal page is newer than its Superblock");
+					if (route.size() >= static_cast<size_t>(RSS_CATALOG_RADIX_MAX_LEVEL) + 1U) {
+						throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
+											"relocatable location range cursor exceeds the maximum radix depth");
+					}
+					route.push_back({std::move(child), childReference, childOrdinal, 0U});
+					descended = true;
+					break;
+				}
+				if (!descended && frame.next_child >= RSS_CATALOG_RADIX_FANOUT) {
+					route.pop_back();
+				}
+			}
+			exhausted = true;
+			return false;
+		}
+
+		[[nodiscard]] std::optional<LocationLeafEntry> nextEntry() {
+			checkCancellation();
+			if (exhausted) {
+				return std::nullopt;
+			}
+			for (;;) {
+				if (!leaf.has_value()) {
+					if (!loadNextLeaf()) {
+						return std::nullopt;
+					}
+				} else {
+					leaf_entry_index = static_cast<size_t>(std::lower_bound(
+							leaf->entries.begin() + static_cast<std::ptrdiff_t>(leaf_entry_index),
+							leaf->entries.end(), next_logical_id,
+							[](const LocationLeafEntry &entry, const uint64_t id) {
+								return entry.logical_id < id;
+							}) -
+												 leaf->entries.begin());
+				}
+				if (leaf_entry_index >= leaf->entries.size()) {
+					leaf.reset();
+					continue;
+				}
+				const LocationLeafEntry result = leaf->entries[leaf_entry_index++];
+				if (result.logical_id > upper_logical_id) {
+					exhausted = true;
+					leaf.reset();
+					return std::nullopt;
+				}
+				if (result.logical_id == std::numeric_limits<uint64_t>::max()) {
+					exhausted = true;
+					leaf.reset();
+				} else {
+					next_logical_id = result.logical_id + 1U;
+				}
+				return result;
+			}
+		}
+
+		[[nodiscard]] std::optional<LocationLeafEntry> nextAtOrAfter(const uint64_t minimumLogicalId) {
+			if (minimumLogicalId == 0U) {
+				throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
+										"relocatable location range cursor seek requires a positive logical ID");
+			}
+			if (minimumLogicalId < next_logical_id) {
+				throwLocationDirectoryError(FormatError::FERR_INVALID_STATE,
+										"relocatable location range cursor cannot seek backwards");
+			}
+			if (minimumLogicalId > upper_logical_id) {
+				exhausted = true;
+				leaf.reset();
+				return std::nullopt;
+			}
+			next_logical_id = minimumLogicalId;
+			if (leaf.has_value() && leaf_ordinal < leafOrdinal(minimumLogicalId)) {
+				leaf.reset();
+			}
+			return nextEntry();
+		}
+	};
+
+	LocationDirectoryRangeCursor::LocationDirectoryRangeCursor(std::unique_ptr<Impl> implementation) noexcept :
+		implementation_(std::move(implementation)) {}
+	LocationDirectoryRangeCursor::LocationDirectoryRangeCursor(LocationDirectoryRangeCursor &&) noexcept = default;
+	LocationDirectoryRangeCursor &
+	LocationDirectoryRangeCursor::operator=(LocationDirectoryRangeCursor &&) noexcept = default;
+	LocationDirectoryRangeCursor::~LocationDirectoryRangeCursor() = default;
+
+	std::optional<LocationLeafEntry> LocationDirectoryRangeCursor::next() {
+		if (implementation_ == nullptr) {
+			throwLocationDirectoryError(FormatError::FERR_INVALID_STATE,
+									"relocatable location range cursor has no snapshot-bound state");
+		}
+		return implementation_->nextEntry();
+	}
+
+	std::optional<LocationLeafEntry>
+	LocationDirectoryRangeCursor::nextAtOrAfter(const uint64_t minimumLogicalId) {
+		if (implementation_ == nullptr) {
+			throwLocationDirectoryError(FormatError::FERR_INVALID_STATE,
+									"relocatable location range cursor has no snapshot-bound state");
+		}
+		return implementation_->nextAtOrAfter(minimumLogicalId);
+	}
+
+	size_t LocationDirectoryRangeCursor::metadataPagesRead() const noexcept {
+		return implementation_ == nullptr ? 0U : implementation_->metadata_pages_read;
+	}
+
+	bool LocationDirectoryRangeCursor::exhausted() const noexcept {
+		return implementation_ == nullptr || implementation_->exhausted;
+	}
+
+	LocationDirectoryRangeCursor LocationDirectory::openRangeCursor(
+			const Superblock &superblock, const MetadataDirectoryType directoryType, const uint64_t lowerInclusive,
+			const uint64_t upperInclusive, const CancellationCheckpoint *cancellation) const {
+		static_cast<void>(SuperblockCodec::encode(superblock));
+		if (!isLocationDirectoryType(directoryType) || lowerInclusive == 0U || lowerInclusive > upperInclusive) {
+			throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
+									"relocatable location range cursor requires a valid type and logical range");
+		}
+		auto implementation = std::make_unique<LocationDirectoryRangeCursor::Impl>();
+		implementation->pages = &pages_;
+		implementation->superblock = superblock;
+		implementation->directory_type = directoryType;
+		implementation->next_logical_id = lowerInclusive;
+		implementation->upper_logical_id = upperInclusive;
+		implementation->cancellation = cancellation;
+		return LocationDirectoryRangeCursor(std::move(implementation));
+	}
 
 	struct LocationDirectoryAppendSession::Impl final {
 		struct PendingNode final {
@@ -1474,6 +1889,7 @@ namespace graph::storage {
 
 	void LocationDirectory::prepareUpsert(MetadataWriteBatch &batch, MetadataDirectoryType directoryType,
 										  std::span<const LocationLeafEntry> entries) {
+		debug::ScopedPerfTimer prepareTimer("native_graph.directory.prepare_upsert");
 		if (!batch.usesAllocator(allocator_) || entries.empty()) {
 			throwLocationDirectoryError(FormatError::FERR_INVALID_STATE,
 										"relocatable location directory needs one matching metadata batch and entries");
@@ -1511,11 +1927,31 @@ namespace graph::storage {
 				root = std::move(grown);
 			}
 		}
-		for (const LocationLeafEntry &entry: entries) {
-			applyMutation(*root, entry, directoryType, generation, lsn, current, pages_, batch);
+		{
+			debug::ScopedPerfTimer mutationTimer("native_graph.directory.prepare_upsert.apply_mutations");
+			for (const LocationLeafEntry &entry: entries) {
+				applyMutation(*root, entry, directoryType, generation, lsn, current, pages_, batch);
+			}
 		}
-		const PhysicalPageRef newRoot =
-				writeNode(*root, CatalogRadixPageKind::CRPK_ROOT, generation, lsn, pages_, batch);
+		const size_t allocatedBefore = batch.allocatedPageCount();
+		PhysicalPageRef newRoot;
+		{
+			debug::ScopedPerfTimer writeTimer("native_graph.directory.prepare_upsert.write_tree");
+			const std::vector<PhysicalPageRef> preparedFrames = batch.allocatePages(writePageCount(*root));
+			PreparedFrameCursor cursor{preparedFrames};
+			PreparedPageWriter writer(pages_, batch);
+			newRoot =
+					writeNode(*root, CatalogRadixPageKind::CRPK_ROOT, generation, lsn, pages_, batch, &cursor, &writer);
+			writer.flush();
+			if (cursor.next != preparedFrames.size()) {
+				throwLocationDirectoryError(FormatError::FERR_INVALID_STATE,
+										"relocatable location tree did not consume every prepared metadata frame");
+			}
+		}
+		if (debug::PerfTrace::areValuesEnabled()) {
+			debug::PerfTrace::addValue("native_graph.commit.directory_publication_pages",
+					static_cast<int64_t>(batch.allocatedPageCount() - allocatedBefore));
+		}
 		switch (directoryType) {
 			case MetadataDirectoryType::MDT_PAGE:
 				publishPageDirectoryRoot(batch, newRoot);
@@ -1538,6 +1974,7 @@ namespace graph::storage {
 	void LocationDirectory::prepareReplace(MetadataWriteBatch &batch, MetadataDirectoryType directoryType,
 										   std::span<const LocationLeafEntry> entries,
 										   std::span<const uint64_t> erasedLogicalIds) {
+		debug::ScopedPerfTimer prepareTimer("native_graph.directory.prepare_replace");
 		if (!batch.usesAllocator(allocator_) || (entries.empty() && erasedLogicalIds.empty())) {
 			throwLocationDirectoryError(
 					FormatError::FERR_INVALID_STATE,
@@ -1593,14 +2030,34 @@ namespace graph::storage {
 				root = std::move(grown);
 			}
 		}
-		for (const LocationLeafEntry &entry: entries) {
-			applyMutation(*root, entry, directoryType, generation, lsn, current, pages_, batch);
+		{
+			debug::ScopedPerfTimer mutationTimer("native_graph.directory.prepare_replace.apply_mutations");
+			for (const LocationLeafEntry &entry: entries) {
+				applyMutation(*root, entry, directoryType, generation, lsn, current, pages_, batch);
+			}
+			for (uint64_t logicalId: erasedLogicalIds) {
+				applyErase(*root, logicalId, directoryType, generation, lsn, current, pages_, &batch);
+			}
 		}
-		for (uint64_t logicalId: erasedLogicalIds) {
-			applyErase(*root, logicalId, directoryType, generation, lsn, current, pages_, &batch);
+		const size_t allocatedBefore = batch.allocatedPageCount();
+		PhysicalPageRef newRoot;
+		{
+			debug::ScopedPerfTimer writeTimer("native_graph.directory.prepare_replace.write_tree");
+			const std::vector<PhysicalPageRef> preparedFrames = batch.allocatePages(writePageCount(*root));
+			PreparedFrameCursor cursor{preparedFrames};
+			PreparedPageWriter writer(pages_, batch);
+			newRoot =
+					writeNode(*root, CatalogRadixPageKind::CRPK_ROOT, generation, lsn, pages_, batch, &cursor, &writer);
+			writer.flush();
+			if (cursor.next != preparedFrames.size()) {
+				throwLocationDirectoryError(FormatError::FERR_INVALID_STATE,
+										"relocatable location tree did not consume every prepared metadata frame");
+			}
 		}
-		const PhysicalPageRef newRoot =
-				writeNode(*root, CatalogRadixPageKind::CRPK_ROOT, generation, lsn, pages_, batch);
+		if (debug::PerfTrace::areValuesEnabled()) {
+			debug::PerfTrace::addValue("native_graph.commit.directory_publication_pages",
+					static_cast<int64_t>(batch.allocatedPageCount() - allocatedBefore));
+		}
 		switch (directoryType) {
 			case MetadataDirectoryType::MDT_PAGE:
 				publishPageDirectoryRoot(batch, newRoot);
@@ -2039,7 +2496,7 @@ namespace graph::storage {
 	}
 
 	std::optional<EntityPageLocation> LocationDirectory::findEdgePageLocationOptional(const Superblock &superblock,
-																					  uint64_t edgeId) const {
+																						  uint64_t edgeId) const {
 		const std::optional<LocationLeafEntry> entry =
 				findOptional(superblock, MetadataDirectoryType::MDT_EDGE_ENTITY, edgeId);
 		if (!entry.has_value()) {
@@ -2047,6 +2504,59 @@ namespace graph::storage {
 		}
 		return EntityPageLocation{edgeId, PageId(entry->segment_id.value()), entry->first_page,
 								  static_cast<uint32_t>(entry->generation.value())};
+	}
+
+	void LocationDirectory::findEntityPageLocationsSorted(
+			const Superblock &superblock, const MetadataDirectoryType directoryType,
+			const std::span<const uint64_t> entityIds,
+			const std::span<std::optional<EntityPageLocation>> results,
+			const CancellationCheckpoint *cancellation) const {
+		if (directoryType != MetadataDirectoryType::MDT_NODE_ENTITY &&
+			directoryType != MetadataDirectoryType::MDT_EDGE_ENTITY) {
+			throwLocationDirectoryError(FormatError::FERR_INVALID_ENUM,
+															"relocatable Entity multi-lookup requires a Node or Edge directory");
+		}
+		if (entityIds.size() != results.size()) {
+			throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
+															"relocatable Entity multi-lookup requires equal ID and result spans");
+		}
+		std::fill(results.begin(), results.end(), std::nullopt);
+		if (entityIds.empty()) {
+			return;
+		}
+		debug::PerfTrace::addValue("native_graph.read.entity_directory_batch_requests", 1);
+		debug::PerfTrace::addValue("native_graph.read.entity_directory_batch_ids",
+				static_cast<int64_t>(entityIds.size()));
+		uint64_t previousId = 0U;
+		for (const uint64_t entityId: entityIds) {
+			if (entityId == 0U || entityId <= previousId) {
+				throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
+															"relocatable Entity multi-lookup IDs must be strictly ordered and nonzero");
+			}
+			previousId = entityId;
+		}
+
+		LocationDirectoryRangeCursor cursor = openRangeCursor(
+				superblock, directoryType, entityIds.front(), entityIds.back(), cancellation);
+		std::optional<LocationLeafEntry> pending;
+		for (size_t index = 0U; index < entityIds.size(); ++index) {
+			const uint64_t requested = entityIds[index];
+			if (pending.has_value() && pending->logical_id < requested) {
+				pending.reset();
+			}
+			if (!pending.has_value()) {
+				pending = cursor.nextAtOrAfter(requested);
+			}
+			if (!pending.has_value()) {
+				break;
+			}
+			if (pending->logical_id != requested) {
+				continue;
+			}
+			results[index] = EntityPageLocation{requested, PageId(pending->segment_id.value()), pending->first_page,
+															static_cast<uint32_t>(pending->generation.value())};
+			pending.reset();
+		}
 	}
 
 	EntityPropertyLocation LocationDirectory::findEntityProperty(const Superblock &superblock,
@@ -2065,6 +2575,55 @@ namespace graph::storage {
 		}
 		return EntityPropertyLocation{key, PageId(entry->segment_id.value()), entry->first_page,
 									  static_cast<uint32_t>(entry->generation.value())};
+	}
+
+	void LocationDirectory::findEntityPropertiesSorted(
+			const Superblock &superblock, const std::span<const EntityPropertyKey> keys,
+			const std::span<std::optional<EntityPropertyLocation>> results,
+			const CancellationCheckpoint *cancellation) const {
+		if (keys.size() != results.size()) {
+			throwLocationDirectoryError(
+					FormatError::FERR_INVALID_HEADER,
+					"relocatable Entity Property multi-lookup requires equal key and result spans");
+		}
+		std::fill(results.begin(), results.end(), std::nullopt);
+		if (keys.empty()) {
+			return;
+		}
+		uint64_t previousDirectoryId = 0U;
+		for (const EntityPropertyKey &key: keys) {
+			const uint64_t directoryId = key.directoryId();
+			if (directoryId <= previousDirectoryId) {
+				throwLocationDirectoryError(
+						FormatError::FERR_INVALID_HEADER,
+						"relocatable Entity Property multi-lookup keys must be strictly ordered");
+			}
+			previousDirectoryId = directoryId;
+		}
+
+		LocationDirectoryRangeCursor cursor = openRangeCursor(
+				superblock, MetadataDirectoryType::MDT_ENTITY_PROPERTY, keys.front().directoryId(),
+				keys.back().directoryId(), cancellation);
+		std::optional<LocationLeafEntry> pending;
+		for (size_t index = 0U; index < keys.size(); ++index) {
+			const uint64_t requested = keys[index].directoryId();
+			if (pending.has_value() && pending->logical_id < requested) {
+				pending.reset();
+			}
+			if (!pending.has_value()) {
+				pending = cursor.nextAtOrAfter(requested);
+			}
+			if (!pending.has_value()) {
+				break;
+			}
+			if (pending->logical_id != requested) {
+				continue;
+			}
+			results[index] = EntityPropertyLocation{
+					keys[index], PageId(pending->segment_id.value()), pending->first_page,
+					static_cast<uint32_t>(pending->generation.value())};
+			pending.reset();
+		}
 	}
 
 	StateLocation LocationDirectory::findState(const Superblock &superblock, uint64_t stateId) const {

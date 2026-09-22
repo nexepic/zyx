@@ -8,7 +8,10 @@
 
 #include "query/execution/LogicalGraphReadExecutorTestFixture.hpp"
 
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/query/optimization/LogicalPlanOptimizer.hpp"
+#include "graph/query/logical/operators/LogicalUnion.hpp"
+#include "graph/query/logical/operators/LogicalUnwind.hpp"
 
 TEST(LogicalGraphReadExecutorTest, StreamsFilteredNodesThroughTheLogicalSnapshot) {
 	TestLogicalGraphBackend backend(graphData());
@@ -29,6 +32,57 @@ TEST(LogicalGraphReadExecutorTest, StreamsFilteredNodesThroughTheLogicalSnapshot
 																	{{"age", PropertyValue(42)}, {"status", PropertyValue("online")}}},
 																	std::nullopt, std::nullopt}));
 	EXPECT_EQ(stats, (LogicalGraphReadExecutionStats{3U, 1U, 0U, 0U, 2U, 1U}));
+}
+
+TEST(LogicalGraphReadExecutorTest, LabelOnlyNativeScanMaterializesOnlyMatchingNodes) {
+	LogicalGraphFixtureData data = graphData();
+	data.enable_native_ref_scans = true;
+	const auto nodeReads = std::make_shared<size_t>(0U);
+	data.node_read_count = nodeReads;
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalGraphReadExecutor executor(backend);
+	LogicalGraphReadRequest request;
+	request.source_filter.required_labels = {"Person"};
+	request.bounds = bounds();
+	std::vector<LogicalGraphReadRow> rows;
+
+	const LogicalGraphReadExecutionStats stats =
+			executor.execute(request, [&rows](const LogicalGraphReadRow &row) {
+				rows.push_back(row);
+				return true;
+			});
+
+	EXPECT_EQ(rows.size(), 2U);
+	EXPECT_EQ(stats.nodes_scanned, 3U);
+	EXPECT_EQ(stats.nodes_matched, 2U);
+	EXPECT_EQ(*nodeReads, 2U);
+}
+
+TEST(LogicalGraphReadExecutorTest, LabelOnlyNativeScanAvoidsRejectedExpansionSources) {
+	LogicalGraphFixtureData data = graphData();
+	data.enable_native_ref_scans = true;
+	data.enable_native_adjacent_topology = true;
+	const auto nodeReads = std::make_shared<size_t>(0U);
+	data.node_read_count = nodeReads;
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalGraphReadExecutor executor(backend);
+	LogicalGraphReadRequest request;
+	request.source_filter.required_labels = {"Person"};
+	request.expansion = LogicalGraphExpansion{};
+	request.bounds = bounds();
+	std::vector<LogicalGraphReadRow> rows;
+
+	const LogicalGraphReadExecutionStats stats = executor.execute(request, [&rows](const LogicalGraphReadRow &row) {
+		rows.push_back(row);
+	});
+
+	// Nodes 1 and 2 are valid sources; Node 3 is rejected by the label cursor
+	// before a complete source object is materialized. The three target reads
+	// remain necessary for the three emitted expansions.
+	EXPECT_EQ(rows.size(), 3U);
+	EXPECT_EQ(stats.nodes_scanned, 3U);
+	EXPECT_EQ(stats.nodes_matched, 2U);
+	EXPECT_EQ(*nodeReads, 5U);
 }
 
 TEST(LogicalGraphReadExecutorTest, OmitsEntitiesWithoutTheRequiredProperty) {
@@ -110,6 +164,392 @@ TEST(LogicalGraphReadExecutorTest, ExpandsOutgoingEdgesAndFiltersBothEndpoints) 
 	EXPECT_EQ(rows.front().edge->edge_id, 10U);
 	EXPECT_EQ(rows.front().target_node->node_id, 2U);
 	EXPECT_EQ(stats, (LogicalGraphReadExecutionStats{3U, 1U, 2U, 1U, 1U, 1U}));
+}
+
+TEST(LogicalGraphReadExecutorTest, BatchesSelectedEdgePropertiesBeforeMaterializingMatches) {
+	LogicalGraphFixtureData data = graphData();
+	data.enable_native_adjacent_topology = true;
+	data.edges.emplace(13U, LogicalGraphEdge{13U, 1U, 2U, "KNOWS", {{"weight", PropertyValue(2)}}});
+	const auto selectedColumnReads = std::make_shared<size_t>(0U);
+	data.edge_property_column_read_count = selectedColumnReads;
+	const auto edgeBatchReads = std::make_shared<size_t>(0U);
+	data.edge_batch_read_count = edgeBatchReads;
+	const auto nodeBatchReads = std::make_shared<size_t>(0U);
+	const auto nodePointReads = std::make_shared<size_t>(0U);
+	data.node_batch_read_count = nodeBatchReads;
+	data.node_read_count = nodePointReads;
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalGraphReadExecutor executor(backend);
+	LogicalGraphReadRequest request;
+	request.source_filter.required_labels = {"VIP"};
+	LogicalGraphExpansion expansion;
+	expansion.direction = LogicalGraphReadDirection::LGRD_OUTGOING;
+	expansion.edge_filter.relationship_type = "KNOWS";
+	expansion.edge_filter.property_predicates = {predicate("weight", LogicalPropertyPredicateOp::LPP_EQ, PropertyValue(2))};
+	expansion.target_filter.required_labels = {"Person"};
+	request.expansion = std::move(expansion);
+	request.bounds = bounds();
+	request.bounds.maximum_edges_per_node = 3U;
+	std::vector<LogicalGraphReadRow> rows;
+
+	const LogicalGraphReadExecutionStats stats = executor.execute(request, [&rows](const LogicalGraphReadRow &row) {
+		rows.push_back(row);
+		return true;
+	});
+
+	ASSERT_EQ(rows.size(), 2U);
+	ASSERT_TRUE(rows.front().edge.has_value());
+	EXPECT_EQ(rows.front().edge->edge_id, 10U);
+	EXPECT_EQ(rows.back().edge->edge_id, 13U);
+	EXPECT_EQ(rows.front().target_node->node_id, 2U);
+	EXPECT_EQ(rows.back().target_node->node_id, 2U);
+	EXPECT_EQ(stats.edges_scanned, 3U);
+	EXPECT_EQ(stats.edges_matched, 2U);
+	EXPECT_EQ(*selectedColumnReads, 1U);
+	// Each bounded page performs one type-only authentication batch followed by
+	// one complete batch containing only type-matching Edges.
+	EXPECT_EQ(*edgeBatchReads, 2U);
+	EXPECT_EQ(*nodeBatchReads, 1U);
+	EXPECT_EQ(*nodePointReads, 0U);
+}
+
+TEST(LogicalGraphReadExecutorTest, FiltersRelationshipTypeBeforeFullEdgeMaterialization) {
+	LogicalGraphFixtureData data = graphData();
+	data.enable_native_adjacent_topology = true;
+	data.edges.at(11U).properties = {{"weight", PropertyValue(2)}};
+	const auto requests = std::make_shared<std::vector<std::pair<std::vector<uint64_t>, EntityReadShape>>>();
+	data.edge_batch_read_requests = requests;
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalGraphReadExecutor executor(backend);
+	LogicalGraphReadRequest request;
+	request.source_filter.required_labels = {"VIP"};
+	LogicalGraphExpansion expansion;
+	expansion.direction = LogicalGraphReadDirection::LGRD_OUTGOING;
+	expansion.edge_filter.relationship_type = "KNOWS";
+	expansion.edge_filter.property_predicates = {
+			predicate("weight", LogicalPropertyPredicateOp::LPP_EQ, PropertyValue(2))};
+	request.expansion = std::move(expansion);
+	request.bounds = bounds();
+
+	std::vector<LogicalGraphReadRow> rows;
+	static_cast<void>(executor.execute(request, [&rows](const LogicalGraphReadRow &row) {
+		rows.push_back(row);
+		return true;
+	}));
+
+	ASSERT_EQ(rows.size(), 1U);
+	ASSERT_TRUE(rows.front().edge.has_value());
+	EXPECT_EQ(rows.front().edge->edge_id, 10U);
+	ASSERT_EQ(requests->size(), 2U);
+	EXPECT_EQ((*requests)[0].first, (std::vector<uint64_t>{10U, 11U}));
+	EXPECT_TRUE((*requests)[0].second.include_type);
+	EXPECT_FALSE((*requests)[0].second.all_properties);
+	EXPECT_EQ((*requests)[1].first, (std::vector<uint64_t>{10U}));
+	EXPECT_TRUE((*requests)[1].second.include_type);
+	EXPECT_TRUE((*requests)[1].second.all_properties);
+}
+
+TEST(LogicalGraphReadExecutorTest, RejectsMismatchedSelectedEdgeBatchEndpoints) {
+	LogicalGraphFixtureData data = graphData();
+	data.enable_native_adjacent_topology = true;
+	data.return_mismatched_edge_batch_endpoint = true;
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalGraphReadExecutor executor(backend);
+	LogicalGraphReadRequest request;
+	request.source_filter.required_labels = {"VIP"};
+	LogicalGraphExpansion expansion;
+	expansion.direction = LogicalGraphReadDirection::LGRD_OUTGOING;
+	expansion.edge_filter.relationship_type = "KNOWS";
+	expansion.edge_filter.property_predicates = {
+			predicate("weight", LogicalPropertyPredicateOp::LPP_EQ, PropertyValue(2))};
+	request.expansion = std::move(expansion);
+	request.bounds = bounds();
+
+	EXPECT_THROW(static_cast<void>(executor.execute(request, [](const LogicalGraphReadRow &) {
+		return true;
+	})), std::runtime_error);
+}
+
+TEST(LogicalGraphReadExecutorTest, BoundsSelectedEdgePropertyBatchesForSupernodes) {
+	LogicalGraphFixtureData data = graphData();
+	data.enable_native_adjacent_topology = true;
+	const auto selectedColumnReads = std::make_shared<size_t>(0U);
+	const auto edgeBatchReads = std::make_shared<size_t>(0U);
+	data.edge_property_column_read_count = selectedColumnReads;
+	data.edge_batch_read_count = edgeBatchReads;
+	for (uint64_t edgeId = 100U; edgeId < 357U; ++edgeId) {
+		data.edges.emplace(edgeId, LogicalGraphEdge{edgeId, 1U, 2U, "KNOWS", {{"weight", PropertyValue(int64_t{2})}}});
+	}
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalGraphReadExecutor executor(backend);
+	LogicalGraphReadRequest request;
+	request.source_filter.required_labels = {"VIP"};
+	LogicalGraphExpansion expansion;
+	expansion.direction = LogicalGraphReadDirection::LGRD_OUTGOING;
+	expansion.edge_filter.relationship_type = "KNOWS";
+	expansion.edge_filter.property_predicates = {predicate("weight", LogicalPropertyPredicateOp::LPP_EQ,
+			PropertyValue(int64_t{2}))};
+	request.expansion = std::move(expansion);
+	request.bounds = bounds();
+	request.bounds.maximum_edges_per_node = 300U;
+	request.bounds.maximum_rows = 300U;
+
+	std::vector<uint64_t> edgeIds;
+	const LogicalGraphReadExecutionStats stats = executor.execute(request, [&edgeIds](const LogicalGraphReadRow &row) {
+		edgeIds.push_back(row.edge->edge_id);
+		return true;
+	});
+
+	EXPECT_EQ(edgeIds.size(), 258U);
+	EXPECT_TRUE(std::ranges::is_sorted(edgeIds));
+	EXPECT_EQ(stats.edges_scanned, 259U);
+	EXPECT_EQ(stats.edges_matched, 258U);
+	EXPECT_EQ(*selectedColumnReads, 2U);
+	// Two topology pages each perform a type-only batch and a filtered complete
+	// batch; rejected relationship types never enter the latter.
+	EXPECT_EQ(*edgeBatchReads, 4U);
+}
+
+TEST(LogicalGraphReadExecutorTest, UsesTopologyOnlyAdjacencyBeforeMaterializingMatchedEdges) {
+		LogicalGraphFixtureData data = graphData();
+		data.enable_native_adjacent_topology = true;
+		data.enable_native_adjacent_topology_pages = true;
+	const auto topologyScans = std::make_shared<size_t>(0U);
+	const auto fullEdgeScans = std::make_shared<size_t>(0U);
+	const auto nodeBatchReads = std::make_shared<size_t>(0U);
+	data.edge_topology_scan_count = topologyScans;
+	data.edge_record_scan_count = fullEdgeScans;
+	data.node_batch_read_count = nodeBatchReads;
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalGraphReadExecutor executor(backend);
+	LogicalGraphReadRequest request;
+	request.source_filter.required_labels = {"VIP"};
+	LogicalGraphExpansion expansion;
+	expansion.direction = LogicalGraphReadDirection::LGRD_OUTGOING;
+	expansion.edge_filter.relationship_type = "KNOWS";
+	expansion.target_filter.required_labels = {"Person"};
+	request.expansion = std::move(expansion);
+	request.bounds = bounds();
+	std::vector<LogicalGraphReadRow> rows;
+
+	const LogicalGraphReadExecutionStats stats =
+			executor.execute(request, [&rows](const LogicalGraphReadRow &row) {
+			rows.push_back(row);
+			return true;
+		});
+
+	ASSERT_EQ(rows.size(), 1U);
+	ASSERT_TRUE(rows.front().edge.has_value());
+	EXPECT_EQ(rows.front().edge->edge_id, 10U);
+	EXPECT_EQ(stats.edges_scanned, 2U);
+	EXPECT_EQ(stats.edges_matched, 1U);
+	EXPECT_EQ(*topologyScans, 1U);
+	EXPECT_EQ(*fullEdgeScans, 0U);
+	EXPECT_EQ(*nodeBatchReads, 1U);
+}
+
+TEST(LogicalGraphReadExecutorTest, BatchesUnfilteredTopologyEdgeAndTargetMaterialization) {
+	LogicalGraphFixtureData data = graphData();
+	data.enable_native_adjacent_topology = true;
+	data.enable_native_adjacent_topology_pages = true;
+	const auto edgeBatchReads = std::make_shared<size_t>(0U);
+	const auto nodeBatchReads = std::make_shared<size_t>(0U);
+	const auto nodePointReads = std::make_shared<size_t>(0U);
+	data.edge_batch_read_count = edgeBatchReads;
+	data.node_batch_read_count = nodeBatchReads;
+	data.node_read_count = nodePointReads;
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalGraphReadExecutor executor(backend);
+	LogicalGraphReadRequest request;
+	request.source_filter.required_labels = {"VIP"};
+	LogicalGraphExpansion expansion;
+	expansion.direction = LogicalGraphReadDirection::LGRD_OUTGOING;
+	request.expansion = std::move(expansion);
+	request.bounds = bounds();
+	std::vector<uint64_t> edgeIds;
+
+	static_cast<void>(executor.execute(request, [&edgeIds](const LogicalGraphReadRow &row) {
+		edgeIds.push_back(row.edge->edge_id);
+		return true;
+	}));
+
+	EXPECT_EQ(edgeIds, (std::vector<uint64_t>{10U, 11U}));
+	EXPECT_EQ(*edgeBatchReads, 1U);
+	EXPECT_EQ(*nodeBatchReads, 1U);
+	EXPECT_EQ(*nodePointReads, 0U);
+}
+
+TEST(LogicalGraphReadExecutorTest, RejectsMismatchedTopologyPageBatchEndpoints) {
+	LogicalGraphFixtureData data = graphData();
+	data.enable_native_adjacent_topology = true;
+	data.enable_native_adjacent_topology_pages = true;
+	data.return_mismatched_edge_batch_endpoint = true;
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalGraphReadExecutor executor(backend);
+	LogicalGraphReadRequest request;
+	request.source_filter.required_labels = {"VIP"};
+	LogicalGraphExpansion expansion;
+	expansion.direction = LogicalGraphReadDirection::LGRD_OUTGOING;
+	request.expansion = std::move(expansion);
+	request.bounds = bounds();
+
+	EXPECT_THROW(static_cast<void>(executor.execute(request, [](const LogicalGraphReadRow &) {
+		return true;
+	})), std::runtime_error);
+}
+
+TEST(LogicalGraphReadExecutorTest, RejectsNonMonotonicTopologyPageBeforeMaterialization) {
+	LogicalGraphFixtureData data = graphData();
+	data.enable_native_adjacent_topology = true;
+	data.enable_native_adjacent_topology_pages = true;
+	data.return_nonmonotonic_adjacency_page = true;
+	const auto edgeBatchReads = std::make_shared<size_t>(0U);
+	data.edge_batch_read_count = edgeBatchReads;
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalGraphReadExecutor executor(backend);
+	LogicalGraphReadRequest request;
+	request.source_filter.required_labels = {"VIP"};
+	LogicalGraphExpansion expansion;
+	expansion.direction = LogicalGraphReadDirection::LGRD_OUTGOING;
+	request.expansion = std::move(expansion);
+	request.bounds = bounds();
+
+	EXPECT_THROW(static_cast<void>(executor.execute(request, [](const LogicalGraphReadRow &) {
+		return true;
+	})), std::runtime_error);
+	EXPECT_EQ(*edgeBatchReads, 0U);
+}
+
+TEST(LogicalGraphReadExecutorTest, RejectsTopologyPageThatDoesNotResumeAtContinuation) {
+	LogicalGraphFixtureData data = graphData();
+	data.enable_native_adjacent_topology = true;
+	data.enable_native_adjacent_topology_pages = true;
+	data.return_mismatched_topology_page_start = true;
+	for (uint64_t edgeId = 12U; edgeId <= 266U; ++edgeId) {
+		data.edges.insert_or_assign(edgeId, LogicalGraphEdge{edgeId, 1U, 2U, "KNOWS"});
+	}
+	const auto edgeBatchReads = std::make_shared<size_t>(0U);
+	data.edge_batch_read_count = edgeBatchReads;
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalGraphReadExecutor executor(backend);
+	LogicalGraphReadRequest request;
+	request.source_filter.required_labels = {"VIP"};
+	LogicalGraphExpansion expansion;
+	expansion.direction = LogicalGraphReadDirection::LGRD_OUTGOING;
+	request.expansion = std::move(expansion);
+	request.bounds = bounds();
+	request.bounds.maximum_edges_per_node = 257U;
+	request.bounds.maximum_rows = 257U;
+
+	EXPECT_THROW(static_cast<void>(executor.execute(request, [](const LogicalGraphReadRow &) {
+		return true;
+	})), std::runtime_error);
+	// The first bounded page is valid. The malformed second page is rejected
+	// before its Edge IDs reach the complete-record batch reader.
+	EXPECT_EQ(*edgeBatchReads, 1U);
+}
+
+TEST(LogicalGraphReadExecutorTest, DeduplicatesTargetsWithinTopologyBatch) {
+	LogicalGraphFixtureData data = graphData();
+	data.enable_native_adjacent_topology = true;
+	data.enable_native_adjacent_topology_pages = true;
+	data.edges.emplace(13U, LogicalGraphEdge{13U, 1U, 2U, "KNOWS"});
+	const auto nodeBatchReads = std::make_shared<size_t>(0U);
+	data.node_batch_read_count = nodeBatchReads;
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalGraphReadExecutor executor(backend);
+	LogicalGraphReadRequest request;
+	request.source_filter.required_labels = {"VIP"};
+	LogicalGraphExpansion expansion;
+	expansion.direction = LogicalGraphReadDirection::LGRD_OUTGOING;
+	expansion.edge_filter.relationship_type = "KNOWS";
+	expansion.target_filter.required_labels = {"Person"};
+	request.expansion = std::move(expansion);
+	request.bounds = bounds();
+	request.bounds.maximum_edges_per_node = 3U;
+	std::vector<LogicalGraphReadRow> rows;
+
+	static_cast<void>(executor.execute(request, [&rows](const LogicalGraphReadRow &row) {
+		rows.push_back(row);
+		return true;
+	}));
+	ASSERT_EQ(rows.size(), 2U);
+	EXPECT_EQ(rows[0].target_node->node_id, 2U);
+	EXPECT_EQ(rows[1].target_node->node_id, 2U);
+	EXPECT_EQ(*nodeBatchReads, 1U);
+}
+
+TEST(LogicalGraphReadExecutorTest, BoundsTopologyLabelBatchesForSupernodes) {
+	LogicalGraphFixtureData data = graphData();
+	data.enable_native_adjacent_topology = true;
+	data.enable_native_adjacent_topology_pages = true;
+	const auto topologyScans = std::make_shared<size_t>(0U);
+	const auto edgeBatchReads = std::make_shared<size_t>(0U);
+	const auto nodeBatchReads = std::make_shared<size_t>(0U);
+	data.edge_topology_scan_count = topologyScans;
+	data.edge_batch_read_count = edgeBatchReads;
+	data.node_batch_read_count = nodeBatchReads;
+	// The fixture already has one matching outgoing KNOWS Edge. Add enough
+	// parallel Edges to cross the executor's bounded topology page size.
+	for (uint64_t edgeId = 100U; edgeId < 357U; ++edgeId) {
+		data.edges.emplace(edgeId, LogicalGraphEdge{edgeId, 1U, 2U, "KNOWS"});
+	}
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalGraphReadExecutor executor(backend);
+	LogicalGraphReadRequest request;
+	request.source_filter.required_labels = {"VIP"};
+	LogicalGraphExpansion expansion;
+	expansion.direction = LogicalGraphReadDirection::LGRD_OUTGOING;
+	expansion.edge_filter.relationship_type = "KNOWS";
+	expansion.target_filter.required_labels = {"Person"};
+	request.expansion = std::move(expansion);
+	request.bounds = bounds();
+	request.bounds.maximum_edges_per_node = 300U;
+	request.bounds.maximum_rows = 300U;
+
+	std::vector<uint64_t> edgeIds;
+	const LogicalGraphReadExecutionStats stats = executor.execute(request, [&edgeIds](const LogicalGraphReadRow &row) {
+		edgeIds.push_back(row.edge->edge_id);
+		return true;
+	});
+
+	EXPECT_EQ(edgeIds.size(), 258U);
+	EXPECT_TRUE(std::ranges::is_sorted(edgeIds));
+	EXPECT_EQ(stats.edges_scanned, 259U);
+	EXPECT_EQ(stats.edges_matched, 258U);
+	// 258 topology records require two bounded pages rather than a single
+	// maximum_edges_per_node-sized request; matching Edge and target batches
+	// follow the same page boundary.
+	EXPECT_EQ(*topologyScans, 2U);
+	EXPECT_EQ(*edgeBatchReads, 2U);
+	EXPECT_EQ(*nodeBatchReads, 2U);
+}
+
+TEST(LogicalGraphReadExecutorTest, BatchesTargetLabelsWithoutTopologyPageApi) {
+	LogicalGraphFixtureData data = graphData();
+	data.enable_native_ref_scans = true;
+	data.enable_native_adjacent_topology = true;
+	const auto labelBatchReads = std::make_shared<size_t>(0U);
+	data.node_label_batch_read_count = labelBatchReads;
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalGraphReadExecutor executor(backend);
+	LogicalGraphReadRequest request;
+	request.source_filter.required_labels = {"VIP"};
+	LogicalGraphExpansion expansion;
+	expansion.direction = LogicalGraphReadDirection::LGRD_OUTGOING;
+	expansion.edge_filter.relationship_type = "KNOWS";
+	expansion.target_filter.required_labels = {"Person"};
+	request.expansion = std::move(expansion);
+	request.bounds = bounds();
+	std::vector<LogicalGraphReadRow> rows;
+
+	static_cast<void>(executor.execute(request, [&rows](const LogicalGraphReadRow &row) {
+		rows.push_back(row);
+		return true;
+	}));
+	ASSERT_EQ(rows.size(), 1U);
+	EXPECT_EQ(rows.front().target_node->node_id, 2U);
+	EXPECT_EQ(*labelBatchReads, 1U);
 }
 
 TEST(LogicalGraphReadExecutorTest, ExpandsIncomingEdgesWithDirectionValidation) {
@@ -249,6 +689,9 @@ TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeStreamsFilterProjectSkipAnd
 	auto skip = std::make_unique<logical::LogicalSkip>(std::move(project), 1);
 	logical::LogicalLimit root(std::move(skip), 1);
 	std::vector<PropertyValue> ages;
+	const bool valuesWereEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
 
 	const LogicalPlanReadRuntimeStats stats =
 			runtime.execute(root, runtimeBounds(), [&ages](const LogicalPlanReadRow &row) {
@@ -262,6 +705,50 @@ TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeStreamsFilterProjectSkipAnd
 
 	EXPECT_EQ(ages, (std::vector<PropertyValue>{PropertyValue(30)}));
 	EXPECT_EQ(stats, (LogicalPlanReadRuntimeStats{2U, 0U, 2U, 1U}));
+	const auto trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
+	ASSERT_TRUE(trace.contains("logical_plan.skip.discarded_rows"));
+	ASSERT_TRUE(trace.contains("logical_plan.limit.delivered_rows"));
+	ASSERT_TRUE(trace.contains("logical_plan.limit.early_stop"));
+	EXPECT_EQ(trace.at("logical_plan.skip.discarded_rows").totalValue, 1);
+	EXPECT_EQ(trace.at("logical_plan.limit.delivered_rows").totalValue, 1);
+	EXPECT_EQ(trace.at("logical_plan.limit.early_stop").totalValue, 1);
+}
+
+TEST(LogicalGraphReadExecutorTest, SharedPropertyBatchReportsSelectionAndByteAccounting) {
+	LogicalGraphFixtureData data = graphData();
+	data.enable_native_ref_scans = true;
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalPlanReadRuntime runtime(backend);
+	auto predicate = std::make_shared<expressions::BinaryOpExpression>(
+			std::make_unique<expressions::VariableReferenceExpression>("n", "age"),
+			expressions::BinaryOperatorType::BOP_GREATER,
+			std::make_unique<expressions::LiteralExpression>(int64_t{40}));
+	logical::LogicalFilter root(
+			std::make_unique<logical::LogicalNodeScan>("n", std::vector<std::string>{"Person"}), std::move(predicate));
+	const bool valuesWereEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	std::vector<uint64_t> ids;
+	const LogicalPlanReadRuntimeStats stats = runtime.execute(root, runtimeBounds(), [&ids](const LogicalPlanReadRow &row) {
+			ids.push_back(std::get<storage::LogicalGraphNode>(row.values.at("n")).node_id);
+			return true;
+		});
+	const graph::debug::PerfTrace::Snapshot trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
+
+	EXPECT_EQ(ids, std::vector<uint64_t>{1U});
+	EXPECT_EQ(stats.nodes_scanned, 3U);
+	ASSERT_TRUE(trace.contains("logical_plan.batch.flushes"));
+	ASSERT_TRUE(trace.contains("logical_plan.batch.rows"));
+	ASSERT_TRUE(trace.contains("logical_plan.selection.selected_rows"));
+	ASSERT_TRUE(trace.contains("logical_plan.selection.rejected_rows"));
+	ASSERT_TRUE(trace.contains("logical_plan.batch.materialized_bytes"));
+	EXPECT_EQ(trace.at("logical_plan.batch.flushes").totalValue, 1);
+	EXPECT_EQ(trace.at("logical_plan.batch.rows").totalValue, 2);
+	EXPECT_EQ(trace.at("logical_plan.selection.selected_rows").totalValue, 1);
+	EXPECT_EQ(trace.at("logical_plan.selection.rejected_rows").totalValue, 1);
+	EXPECT_GT(trace.at("logical_plan.batch.materialized_bytes").totalValue, 0);
 }
 
 TEST(LogicalGraphReadExecutorTest, OptimizedLimitSkipPreservesStreamingRowsAndStopSignal) {
@@ -539,14 +1026,16 @@ TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeCountsAnchoredRelationships
 	const auto [personCount, personStats] = countTargets({"Person"});
 	EXPECT_EQ(personCount, PropertyValue(int64_t{2}));
 	EXPECT_EQ(personStats, (LogicalPlanReadRuntimeStats{3U, 3U, 0U, 1U}));
-	EXPECT_EQ(*nodeReads, 1U);
+	// Target label validation now uses the storage-neutral sorted label batch;
+	// it does not require complete Node reads.
+	EXPECT_EQ(*nodeReads, 0U);
 
 	// A target predicate is evaluated from the same bounded topology traversal;
 	// it cannot turn a nonmatching endpoint into an aggregate input row.
 	const auto [deviceCount, deviceStats] = countTargets({"Device"});
 	EXPECT_EQ(deviceCount, PropertyValue(int64_t{0}));
 	EXPECT_EQ(deviceStats, (LogicalPlanReadRuntimeStats{3U, 3U, 0U, 1U}));
-	EXPECT_EQ(*nodeReads, 2U);
+	EXPECT_EQ(*nodeReads, 0U);
 }
 
 TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeCountsABidirectionalSelfLoopOnlyOnce) {
@@ -630,6 +1119,78 @@ TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeCountsIncomingRelationships
 	EXPECT_EQ(stats, (LogicalPlanReadRuntimeStats{3U, 1U, 0U, 1U}));
 	EXPECT_EQ(*nodeReads, 0U);
 	EXPECT_EQ(*nodeExistenceProbes, 1U);
+}
+
+TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeBatchesFullAdjacencyEndpointValidation) {
+	LogicalGraphFixtureData data = graphData();
+	const auto scalarProbes = std::make_shared<size_t>(0U);
+	const auto batchProbes = std::make_shared<size_t>(0U);
+	data.node_existence_probe_count = scalarProbes;
+	data.node_existence_batch_probe_count = batchProbes;
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalPlanReadRuntime runtime(backend);
+	LogicalPlanReadRuntimeBounds limits = runtimeBounds();
+	limits.maximum_adjacency_page_records = 2U;
+
+	logical::LogicalTraversal traversal(
+			std::make_unique<logical::LogicalNodeScan>("source", std::vector<std::string>{"VIP"}),
+			"source", "edge", "", "", "out", {}, {}, {{"weight", PropertyValue(int64_t{2})}});
+	std::vector<uint64_t> edgeIds;
+	const LogicalPlanReadRuntimeStats stats = runtime.execute(
+			traversal, limits, [&edgeIds](const LogicalPlanReadRow &row) {
+				edgeIds.push_back(std::get<LogicalGraphEdge>(row.values.at("edge")).edge_id);
+				return true;
+			});
+
+	EXPECT_EQ(edgeIds, (std::vector<uint64_t>{10U}));
+	EXPECT_EQ(stats.edges_scanned, 2U);
+	EXPECT_EQ(*batchProbes, 1U);
+	EXPECT_EQ(*scalarProbes, 0U);
+}
+
+TEST(LogicalGraphReadExecutorTest, CountPropertyStreamsLargeValuesWithoutBatchMaterialization) {
+	LogicalGraphFixtureData data = graphData();
+	data.enable_native_ref_scans = true;
+	data.nodes.at(1U).properties.emplace_back("payload", PropertyValue(std::string(4096U, 'x')));
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalPlanReadRuntime runtime(backend);
+	const auto payload = sharedExpression(
+			std::make_unique<expressions::VariableReferenceExpression>("n", "payload"));
+	logical::LogicalAggregate root(
+			std::make_unique<logical::LogicalNodeScan>("n"), {}, {{"count", payload, "payload_count"}});
+	LogicalPlanReadRuntimeBounds bounds = runtimeBounds();
+	// The transient EntityRef rows fit, while the selected Property payload does
+	// not. COUNT only needs null/non-null cardinality and must stay streaming.
+	bounds.maximum_materialized_bytes = 512U;
+	std::vector<PropertyValue> counts;
+	static_cast<void>(runtime.execute(root, bounds, [&counts](const LogicalPlanReadRow &row) {
+		counts.push_back(std::get<PropertyValue>(row.values.at("payload_count")));
+		return true;
+	}));
+	EXPECT_EQ(counts, (std::vector<PropertyValue>{PropertyValue(int64_t{1})}));
+}
+
+TEST(LogicalGraphReadExecutorTest, AggregateFlushesAtBoundedBatchRowsWithoutChangingCardinality) {
+	std::vector<PropertyValue> values;
+	values.reserve(1025U);
+	for (int64_t value = 0; value < 1025; ++value) {
+		values.emplace_back(value);
+	}
+	logical::LogicalUnwind unwind(std::make_unique<logical::LogicalSingleRow>(), "value", std::move(values));
+	const auto argument = sharedExpression(
+			std::make_unique<expressions::VariableReferenceExpression>("value"));
+	logical::LogicalAggregate root(std::make_unique<logical::LogicalUnwind>(std::move(unwind)), {},
+				{{"count", argument, "value_count"}});
+	TestLogicalGraphBackend backend(graphData());
+	LogicalPlanReadRuntime runtime(backend);
+	LogicalPlanReadRuntimeBounds bounds = runtimeBounds();
+	bounds.maximum_rows = 2048U;
+	std::vector<PropertyValue> counts;
+	static_cast<void>(runtime.execute(root, bounds, [&counts](const LogicalPlanReadRow &row) {
+		counts.push_back(std::get<PropertyValue>(row.values.at("value_count")));
+		return true;
+	}));
+	EXPECT_EQ(counts, (std::vector<PropertyValue>{PropertyValue(int64_t{1025})}));
 }
 
 TEST(LogicalGraphReadExecutorTest, RejectsMalformedAggregateExtraArgumentsAtTheLogicalBoundary) {
@@ -731,6 +1292,59 @@ TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeMaterializationCachesAndFai
 	MissingOutputLogicalSingleRow malformedWithContext;
 	EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(malformedWithContext, runtimeBounds(), context)),
 			 std::runtime_error);
+}
+
+TEST(LogicalGraphReadExecutorTest, BatchesFilterPredicateBeforeMaterializingSelectedRows) {
+	LogicalGraphFixtureData data = graphData();
+	data.enable_native_ref_scans = true;
+	data.node_property_column_read_count = std::make_shared<size_t>(0U);
+	data.node_read_count = std::make_shared<size_t>(0U);
+	data.node_batch_read_count = std::make_shared<size_t>(0U);
+	const auto columnReads = data.node_property_column_read_count;
+	const auto pointReads = data.node_read_count;
+	const auto completeBatchReads = data.node_batch_read_count;
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalPlanReadRuntime runtime(backend);
+	auto predicate = std::make_shared<expressions::BinaryOpExpression>(
+			std::make_unique<expressions::VariableReferenceExpression>("n", "age"),
+			expressions::BinaryOperatorType::BOP_EQUAL,
+			std::make_unique<expressions::LiteralExpression>(int64_t(42)));
+	logical::LogicalFilter root(std::make_unique<logical::LogicalNodeScan>("n"), std::move(predicate));
+
+	std::vector<uint64_t> ids;
+	static_cast<void>(runtime.execute(root, runtimeBounds(), [&ids](const LogicalPlanReadRow &row) {
+		ids.push_back(std::get<LogicalGraphNode>(row.values.at("n")).node_id);
+		return true;
+	}));
+
+	EXPECT_EQ(ids, (std::vector<uint64_t>{1U}));
+	EXPECT_EQ(*columnReads, 1U);
+	// The selected-column batch rejects non-matching rows before the public
+	// boundary materializes the surviving complete Node in one shaped batch.
+	EXPECT_EQ(*completeBatchReads, 1U);
+	EXPECT_EQ(*pointReads, 0U);
+}
+
+TEST(LogicalGraphReadExecutorTest, BatchedFilterPreservesDuplicateRowsAndNullPredicateSemantics) {
+	LogicalGraphFixtureData data = graphData();
+	data.enable_native_ref_scans = true;
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalPlanReadRuntime runtime(backend);
+	auto predicate = std::make_shared<expressions::BinaryOpExpression>(
+			std::make_unique<expressions::VariableReferenceExpression>("n", "age"),
+			expressions::BinaryOperatorType::BOP_EQUAL,
+			std::make_unique<expressions::LiteralExpression>(int64_t(42)));
+	auto left = std::make_unique<logical::LogicalNodeScan>("n");
+	auto right = std::make_unique<logical::LogicalNodeScan>("n");
+	auto unionAll = std::make_unique<logical::LogicalUnion>(std::move(left), std::move(right), true);
+	logical::LogicalFilter root(std::move(unionAll), std::move(predicate));
+
+	std::vector<uint64_t> ids;
+	static_cast<void>(runtime.execute(root, runtimeBounds(), [&ids](const LogicalPlanReadRow &row) {
+		ids.push_back(std::get<LogicalGraphNode>(row.values.at("n")).node_id);
+		return true;
+	}));
+	EXPECT_EQ(ids, (std::vector<uint64_t>{1U, 1U}));
 }
 
 TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeBindsParametersAndHonorsQueryContext) {
@@ -871,6 +1485,316 @@ TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeUsesCompleteExactLookupWith
 	EXPECT_EQ(stats, (LogicalPlanReadRuntimeStats{1U, 0U, 1U, 1U}));
 }
 
+TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeRejectsNativeExactCandidatesOutsidePinnedSnapshot) {
+	LogicalGraphFixtureData data = graphData();
+	data.enable_native_exact_node_candidates = true;
+	data.native_snapshot_generation = 17U;
+	data.exact_candidate_result = IndexCandidateBatch{{{1U, false, 0U, 0U, 0U}}, 16U, true, false, {}};
+	auto candidateLookupCount = std::make_shared<size_t>(0U);
+	auto nodeReadCount = std::make_shared<size_t>(0U);
+	data.exact_candidate_lookup_count = candidateLookupCount;
+	data.node_read_count = nodeReadCount;
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalPlanReadRuntime runtime(backend);
+	logical::LogicalNodeScan scan("n", std::vector<std::string>{"Person"}, {{"age", PropertyValue(42)}});
+
+	EXPECT_THROW(static_cast<void>(runtime.execute(scan, runtimeBounds(), [](const LogicalPlanReadRow &) {
+		return true;
+	})), std::runtime_error);
+	EXPECT_EQ(*candidateLookupCount, 1U);
+	EXPECT_EQ(*nodeReadCount, 0U);
+}
+
+TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeRejectsNativeExactCandidatesWithoutSnapshotGeneration) {
+	LogicalGraphFixtureData data = graphData();
+	data.enable_native_exact_node_candidates = true;
+	data.exact_candidate_result = IndexCandidateBatch{{{1U, false, 0U, 0U, 0U}}, 0U, true, false, {}};
+	auto candidateLookupCount = std::make_shared<size_t>(0U);
+	auto nodeReadCount = std::make_shared<size_t>(0U);
+	data.exact_candidate_lookup_count = candidateLookupCount;
+	data.node_read_count = nodeReadCount;
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalPlanReadRuntime runtime(backend);
+	logical::LogicalNodeScan scan("n", std::vector<std::string>{"Person"}, {{"age", PropertyValue(42)}});
+
+	EXPECT_THROW(static_cast<void>(runtime.execute(scan, runtimeBounds(), [](const LogicalPlanReadRow &) {
+		return true;
+	})), std::runtime_error);
+	EXPECT_EQ(*candidateLookupCount, 1U);
+	EXPECT_EQ(*nodeReadCount, 0U);
+}
+
+TEST(LogicalGraphReadExecutorTest, OptimizedFilterReusesVerifiedNativeExactCandidateFields) {
+	LogicalGraphFixtureData data = graphData();
+	data.enable_native_exact_node_candidates = true;
+	data.native_snapshot_generation = 17U;
+	data.exact_candidate_result = IndexCandidateBatch{{{1U, false, 0U, 0U, 0U}}, 17U, true, false, {}};
+	auto candidateLookupCount = std::make_shared<size_t>(0U);
+	auto nodeReadCount = std::make_shared<size_t>(0U);
+	auto nodeBatchReadCount = std::make_shared<size_t>(0U);
+	data.exact_candidate_lookup_count = candidateLookupCount;
+	data.node_read_count = nodeReadCount;
+	data.node_batch_read_count = nodeBatchReadCount;
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalPlanReadRuntime runtime(backend);
+	auto predicate = std::make_shared<expressions::BinaryOpExpression>(
+			std::make_unique<expressions::VariableReferenceExpression>("n", "age"),
+			expressions::BinaryOperatorType::BOP_EQUAL,
+			std::make_unique<expressions::LiteralExpression>(int64_t{42}));
+	auto root = std::make_unique<logical::LogicalFilter>(
+			std::make_unique<logical::LogicalNodeScan>("n", std::vector<std::string>{"Person"}), predicate);
+	const auto optimized = graph::query::optimization::LogicalPlanOptimizer{}.optimize(std::move(root));
+	ASSERT_NE(optimized.root, nullptr);
+	ASSERT_EQ(optimized.rewrite_count, 1U);
+
+	std::vector<uint64_t> nodeIds;
+	const LogicalPlanReadRuntimeStats stats =
+			runtime.execute(*optimized.root, runtimeBounds(), [&nodeIds](const LogicalPlanReadRow &row) {
+				nodeIds.push_back(std::get<LogicalGraphNode>(row.values.at("n")).node_id);
+				return true;
+			});
+	EXPECT_EQ(nodeIds, (std::vector<uint64_t>{1U}));
+	EXPECT_EQ(*candidateLookupCount, 1U);
+	// One complete shaped Node batch remains necessary at the public result boundary;
+	// the retained Filter must reuse the candidate's selected field instead of
+	// causing another point read.
+	EXPECT_EQ(*nodeBatchReadCount, 1U);
+	EXPECT_EQ(*nodeReadCount, 0U);
+	EXPECT_EQ(stats, (LogicalPlanReadRuntimeStats{1U, 0U, 0U, 1U}));
+}
+
+TEST(LogicalGraphReadExecutorTest, NativeExactCandidateStreamStopsAtDownstreamLimit) {
+	LogicalGraphFixtureData data = graphData();
+	data.nodes.at(2U).properties = {{"age", PropertyValue(42)}};
+	data.enable_native_exact_node_candidates = true;
+	data.native_snapshot_generation = 17U;
+	data.exact_candidate_stream_results =
+			std::vector<IndexCandidateBatch>{IndexCandidateBatch{{{1U, false, 0U, 0U, 0U}}, 17U, true, false, {}},
+											 IndexCandidateBatch{{{2U, false, 0U, 0U, 0U}}, 17U, true, false, {}}};
+	auto streamBatchCount = std::make_shared<size_t>(0U);
+	data.exact_candidate_stream_batch_count = streamBatchCount;
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalPlanReadRuntime runtime(backend);
+	auto limited = std::make_unique<logical::LogicalNodeScan>(
+			"n", std::vector<std::string>{"Person"},
+			std::vector<std::pair<std::string, PropertyValue>>{{"age", PropertyValue(42)}});
+	logical::LogicalLimit root(std::move(limited), 1);
+	std::vector<uint64_t> ids;
+	static_cast<void>(runtime.execute(root, runtimeBounds(), [&ids](const LogicalPlanReadRow &row) {
+		ids.push_back(std::get<LogicalGraphNode>(row.values.at("n")).node_id);
+		return true;
+	}));
+	EXPECT_EQ(ids, (std::vector<uint64_t>{1U}));
+	EXPECT_EQ(*streamBatchCount, 1U);
+}
+
+TEST(LogicalGraphReadExecutorTest, NativeExactCandidateStreamEnforcesTheCrossBatchNodeBound) {
+	LogicalGraphFixtureData data = graphData();
+	data.nodes.at(2U).properties = {{"age", PropertyValue(42)}};
+	data.enable_native_exact_node_candidates = true;
+	data.native_snapshot_generation = 17U;
+	data.exact_candidate_stream_results =
+			std::vector<IndexCandidateBatch>{IndexCandidateBatch{{{1U, false, 0U, 0U, 0U}}, 17U, true, false, {}},
+											 IndexCandidateBatch{{{2U, false, 0U, 0U, 0U}}, 17U, true, false, {}}};
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalPlanReadRuntime runtime(backend);
+	LogicalPlanReadRuntimeBounds bounds = runtimeBounds();
+	bounds.maximum_node_records = 1U;
+	logical::LogicalNodeScan scan("n", std::vector<std::string>{"Person"},
+								  std::vector<std::pair<std::string, PropertyValue>>{{"age", PropertyValue(42)}});
+
+	try {
+		static_cast<void>(runtime.execute(scan, bounds, [](const LogicalPlanReadRow &) { return true; }));
+		FAIL() << "cross-batch candidates must honor the Node scan bound";
+	} catch (const std::runtime_error &error) {
+		EXPECT_STREQ(error.what(), "logical graph indexed Node lookup exceeded the Node scan bound");
+	}
+}
+
+TEST(LogicalGraphReadExecutorTest, NativeRangeCandidateStreamStopsAtDownstreamLimit) {
+	LogicalGraphFixtureData data = graphData();
+	data.nodes.at(1U).properties = {{"age", PropertyValue(42)}};
+	data.nodes.at(2U).properties = {{"age", PropertyValue(43)}};
+	data.enable_native_range_node_candidates = true;
+	data.native_snapshot_generation = 17U;
+	data.range_candidate_stream_results = std::vector<IndexCandidateBatch>{
+			IndexCandidateBatch{{{1U, false, 0U, 0U, 0U}}, 17U, false, true, {{"age", {PropertyValue(42)}}}},
+			IndexCandidateBatch{{{2U, false, 0U, 0U, 0U}}, 17U, false, true, {{"age", {PropertyValue(43)}}}}};
+	data.range_candidate_stream_batch_count = std::make_shared<size_t>(0U);
+	auto streamBatchCount = data.range_candidate_stream_batch_count;
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalPlanReadRuntime runtime(backend);
+	auto scan = std::make_unique<logical::LogicalNodeScan>("n", std::vector<std::string>{"Person"});
+	scan->setRangePredicates({{"age", PropertyValue(42), PropertyValue(), true, true}});
+	logical::LogicalLimit root(std::move(scan), 1);
+	std::vector<uint64_t> ids;
+	static_cast<void>(runtime.execute(root, runtimeBounds(), [&ids](const LogicalPlanReadRow &row) {
+		const auto &value = row.values.at("n");
+		ids.push_back(std::holds_alternative<storage::EntityRef>(value)
+				? std::get<storage::EntityRef>(value).entity_id
+				: std::get<storage::LogicalGraphNode>(value).node_id);
+		return true;
+	}));
+	EXPECT_EQ(ids, (std::vector<uint64_t>{1U}));
+	EXPECT_EQ(*streamBatchCount, 1U);
+}
+
+TEST(LogicalGraphReadExecutorTest, NativeCompositeRangeCandidateStreamStopsAtDownstreamLimit) {
+	LogicalGraphFixtureData data = graphData();
+	data.nodes.at(1U).properties = {{"status", PropertyValue("online")}, {"age", PropertyValue(42)}};
+	data.nodes.at(2U).properties = {{"status", PropertyValue("online")}, {"age", PropertyValue(43)}};
+	data.enable_native_range_node_candidates = true;
+	data.native_snapshot_generation = 17U;
+	IndexCandidateBatch first{{{1U, false, 0U, 0U, 0U}}, 17U, false, true,
+			{{"status", {PropertyValue("online")}}, {"age", {PropertyValue(42)}}}};
+	IndexCandidateBatch second{{{2U, false, 0U, 0U, 0U}}, 17U, false, true,
+			{{"status", {PropertyValue("online")}}, {"age", {PropertyValue(43)}}}};
+	data.composite_range_candidate_stream_results = std::vector<IndexCandidateBatch>{first, second};
+	data.composite_range_candidate_stream_batch_count = std::make_shared<size_t>(0U);
+	auto streamBatchCount = data.composite_range_candidate_stream_batch_count;
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalPlanReadRuntime runtime(backend);
+	auto scan = std::make_unique<logical::LogicalNodeScan>(
+			"n", std::vector<std::string>{"Person"},
+			std::vector<std::pair<std::string, PropertyValue>>{{"status", PropertyValue("online")}});
+	scan->setRangePredicates({{"age", PropertyValue(42), PropertyValue(), true, true}});
+	logical::LogicalLimit root(std::move(scan), 1);
+	std::vector<uint64_t> ids;
+	static_cast<void>(runtime.execute(root, runtimeBounds(), [&ids](const LogicalPlanReadRow &row) {
+		const auto &value = row.values.at("n");
+		ids.push_back(std::holds_alternative<storage::EntityRef>(value)
+							  ? std::get<storage::EntityRef>(value).entity_id
+							  : std::get<storage::LogicalGraphNode>(value).node_id);
+		return true;
+	}));
+	EXPECT_EQ(ids, (std::vector<uint64_t>{1U}));
+	EXPECT_EQ(*streamBatchCount, 1U);
+}
+
+TEST(LogicalGraphReadExecutorTest, NativeRangeCandidateStreamAllowsValueMajorOrderAcrossBatches) {
+	LogicalGraphFixtureData data = graphData();
+	data.enable_native_range_node_candidates = true;
+	data.native_snapshot_generation = 17U;
+	// An ordered B+Tree range is value-major. Entity IDs may therefore move
+	// backwards when the next value batch is delivered; each batch remains
+	// strictly ordered and the stream must not impose a false global ID order.
+	data.range_candidate_stream_results = std::vector<IndexCandidateBatch>{
+			IndexCandidateBatch{{{2U, false, 0U, 0U, 0U}}, 17U, false, true,
+					{{"age", {PropertyValue(30)}}}},
+			IndexCandidateBatch{{{1U, false, 0U, 0U, 0U}}, 17U, false, true,
+					{{"age", {PropertyValue(42)}}}}};
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalPlanReadRuntime runtime(backend);
+	logical::LogicalNodeScan scan("n", std::vector<std::string>{"Person"});
+	scan.setRangePredicates({{"age", PropertyValue(30), PropertyValue(42), true, true}});
+
+	std::vector<uint64_t> nodeIds;
+	EXPECT_NO_THROW(static_cast<void>(runtime.execute(scan, runtimeBounds(), [&nodeIds](const LogicalPlanReadRow &row) {
+		const auto &value = row.values.at("n");
+		nodeIds.push_back(std::holds_alternative<storage::EntityRef>(value)
+				? std::get<storage::EntityRef>(value).entity_id
+				: std::get<storage::LogicalGraphNode>(value).node_id);
+		return true;
+	})));
+	EXPECT_EQ(nodeIds, (std::vector<uint64_t>{2U, 1U}));
+}
+
+TEST(LogicalGraphReadExecutorTest, NativeRangeCandidateStreamRejectsDuplicatesAcrossBatches) {
+	LogicalGraphFixtureData data = graphData();
+	data.enable_native_range_node_candidates = true;
+	data.native_snapshot_generation = 17U;
+	data.range_candidate_stream_results = std::vector<IndexCandidateBatch>{
+			IndexCandidateBatch{{{1U, false, 0U, 0U, 0U}}, 17U, false, true,
+					{{"age", {PropertyValue(42)}}}},
+			IndexCandidateBatch{{{1U, false, 0U, 0U, 0U}}, 17U, false, true,
+					{{"age", {PropertyValue(42)}}}}};
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalPlanReadRuntime runtime(backend);
+	logical::LogicalNodeScan scan("n", std::vector<std::string>{"Person"});
+	scan.setRangePredicates({{"age", PropertyValue(30), PropertyValue(42), true, true}});
+
+	try {
+		static_cast<void>(runtime.execute(scan, runtimeBounds(), [](const LogicalPlanReadRow &) { return true; }));
+		FAIL() << "duplicate stream candidates must fail closed";
+	} catch (const std::runtime_error &error) {
+		EXPECT_STREQ(error.what(), "logical graph indexed Node lookup returned duplicate Node references");
+	}
+}
+
+TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeBoundsVerifiedIndexCandidateBytes) {
+	LogicalGraphFixtureData data = graphData();
+	data.enable_native_range_node_candidates = true;
+	data.native_snapshot_generation = 17U;
+	data.range_candidate_result = IndexCandidateBatch{
+			{{1U, false, 0U, 0U, 0U}}, 17U, false, true, {{"age", {PropertyValue(std::string(128U, 'x'))}}}};
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalPlanReadRuntime runtime(backend);
+	LogicalPlanReadRuntimeBounds bounds = runtimeBounds();
+	bounds.maximum_candidate_bytes = 64U;
+	logical::LogicalNodeScan scan("n", std::vector<std::string>{"Person"});
+	scan.setRangePredicates({{"age", PropertyValue(int64_t{30}), PropertyValue(), true, true}});
+
+	try {
+		static_cast<void>(runtime.execute(scan, bounds, [](const LogicalPlanReadRow &) { return true; }));
+		FAIL() << "oversized streamed candidates must fail closed";
+	} catch (const std::runtime_error &error) {
+		EXPECT_STREQ(error.what(), "logical graph indexed Node candidate batch exceeded its byte bound");
+	}
+}
+
+TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeBoundsNonStreamingIndexCandidateBytes) {
+	LogicalGraphFixtureData data = graphData();
+	data.enable_native_range_node_candidates = true;
+	data.disable_native_candidate_stream = true;
+	data.native_snapshot_generation = 17U;
+	data.range_candidate_result = IndexCandidateBatch{
+			{{1U, false, 0U, 0U, 0U}}, 17U, false, true, {{"age", {PropertyValue(std::string(128U, 'x'))}}}};
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalPlanReadRuntime runtime(backend);
+	LogicalPlanReadRuntimeBounds bounds = runtimeBounds();
+	bounds.maximum_candidate_bytes = 64U;
+	logical::LogicalNodeScan scan("n", std::vector<std::string>{"Person"});
+	scan.setRangePredicates({{"age", PropertyValue(int64_t{30}), PropertyValue(), true, true}});
+
+	try {
+		static_cast<void>(runtime.execute(scan, bounds, [](const LogicalPlanReadRow &) { return true; }));
+		FAIL() << "oversized non-streaming candidates must fail closed";
+	} catch (const std::runtime_error &error) {
+		EXPECT_STREQ(error.what(), "logical graph indexed Node candidate batch exceeded its byte bound");
+	}
+}
+
+TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeRejectsMalformedNativeCandidateColumnsAndOrder) {
+	{
+		LogicalGraphFixtureData data = graphData();
+		data.enable_native_range_node_candidates = true;
+		data.native_snapshot_generation = 17U;
+		data.range_candidate_result = IndexCandidateBatch{{{1U, false, 0U, 0U, 0U}}, 17U, false, true, {}};
+		TestLogicalGraphBackend backend(std::move(data));
+		LogicalPlanReadRuntime runtime(backend);
+		logical::LogicalNodeScan scan("n", std::vector<std::string>{"Person"});
+		scan.setRangePredicates({{"age", PropertyValue(0), PropertyValue(), true, true}});
+		EXPECT_THROW(static_cast<void>(runtime.execute(scan, runtimeBounds(), [](const LogicalPlanReadRow &) {
+			return true;
+		})), std::runtime_error);
+	}
+
+	for (const std::vector<EntityRef> &malformedCandidates: {
+				std::vector<EntityRef>{{1U, false, 0U, 0U, 0U}, {1U, false, 0U, 0U, 0U}},
+				std::vector<EntityRef>{{2U, false, 0U, 0U, 0U}, {1U, false, 0U, 0U, 0U}}}) {
+		LogicalGraphFixtureData data = graphData();
+		data.enable_native_exact_node_candidates = true;
+		data.native_snapshot_generation = 17U;
+		data.exact_candidate_result = IndexCandidateBatch{malformedCandidates, 17U, true, false, {}};
+		TestLogicalGraphBackend backend(std::move(data));
+		LogicalPlanReadRuntime runtime(backend);
+		logical::LogicalNodeScan scan("n", std::vector<std::string>{"Person"}, {{"age", PropertyValue(42)}});
+		EXPECT_THROW(static_cast<void>(runtime.execute(scan, runtimeBounds(), [](const LogicalPlanReadRow &) {
+			return true;
+		})), std::runtime_error);
+	}
+}
+
 TEST(LogicalGraphReadExecutorTest, OptimizedFilterNodeScanUsesExactLookupAndRetainsRuntimePredicateValidation) {
 	LogicalGraphFixtureData data = graphData();
 	data.enable_exact_node_lookup = true;
@@ -927,6 +1851,45 @@ TEST(LogicalGraphReadExecutorTest, OptimizedFilterNodeScanUsesRangeLookupAndReta
 	EXPECT_EQ(nodeIds, (std::vector<uint64_t>{1U, 2U}));
 	EXPECT_EQ(*rangeLookupCount, 1U);
 	EXPECT_EQ(stats, (LogicalPlanReadRuntimeStats{2U, 0U, 4U, 2U}));
+}
+
+TEST(LogicalGraphReadExecutorTest, OptimizedFilterReusesVerifiedNativeRangeCandidateFields) {
+	LogicalGraphFixtureData data = graphData();
+	data.enable_native_range_node_candidates = true;
+	data.native_snapshot_generation = 17U;
+	data.range_candidate_result = IndexCandidateBatch{{{1U, false, 0U, 0U, 0U}}, 17U, false, true,
+			{{"age", {PropertyValue(42)}}}};
+	auto candidateLookupCount = std::make_shared<size_t>(0U);
+	auto nodeReadCount = std::make_shared<size_t>(0U);
+	auto nodeBatchReadCount = std::make_shared<size_t>(0U);
+	data.range_candidate_lookup_count = candidateLookupCount;
+	data.node_read_count = nodeReadCount;
+	data.node_batch_read_count = nodeBatchReadCount;
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalPlanReadRuntime runtime(backend);
+	auto predicate = std::make_shared<expressions::BinaryOpExpression>(
+			std::make_unique<expressions::VariableReferenceExpression>("n", "age"),
+			expressions::BinaryOperatorType::BOP_GREATER_EQUAL,
+			std::make_unique<expressions::LiteralExpression>(int64_t{30}));
+	auto root = std::make_unique<logical::LogicalFilter>(
+			std::make_unique<logical::LogicalNodeScan>("n", std::vector<std::string>{"Person"}), predicate);
+	const auto optimized = graph::query::optimization::LogicalPlanOptimizer{}.optimize(std::move(root));
+	ASSERT_NE(optimized.root, nullptr);
+	ASSERT_EQ(optimized.rewrite_count, 1U);
+
+	std::vector<uint64_t> nodeIds;
+	const LogicalPlanReadRuntimeStats stats = runtime.execute(
+			*optimized.root, runtimeBounds(), [&nodeIds](const LogicalPlanReadRow &row) {
+				nodeIds.push_back(std::get<LogicalGraphNode>(row.values.at("n")).node_id);
+				return true;
+			});
+	EXPECT_EQ(nodeIds, (std::vector<uint64_t>{1U}));
+	EXPECT_EQ(*candidateLookupCount, 1U);
+	// The filter consumes the authenticated selected range field. The public
+	// result boundary uses one complete shaped batch and no point read.
+	EXPECT_EQ(*nodeBatchReadCount, 1U);
+	EXPECT_EQ(*nodeReadCount, 0U);
+	EXPECT_EQ(stats, (LogicalPlanReadRuntimeStats{1U, 0U, 0U, 1U}));
 }
 
 TEST(LogicalGraphReadExecutorTest, OptimizedFilterNodeScanUsesCanonicalConjunctiveRangeLookup) {
@@ -1574,7 +2537,9 @@ TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeResolvesNodeEdgeAndMapPrope
 	EXPECT_EQ(std::get<PropertyValue>(edgeRows.front().values.at("weight")), PropertyValue(2));
 	EXPECT_EQ(std::get<PropertyValue>(edgeRows.front().values.at("missing")), PropertyValue());
 	EXPECT_EQ(std::get<PropertyValue>(edgeRows.front().values.at("edgeIdMatches")), PropertyValue(true));
-	EXPECT_EQ(edgeStats, (LogicalPlanReadRuntimeStats{3U, 2U, 1U, 1U}));
+	// The topology-only traversal resolves the two requested fields through the
+	// selected-property API and does not materialize a complete Edge Property map.
+	EXPECT_EQ(edgeStats, (LogicalPlanReadRuntimeStats{3U, 2U, 0U, 1U}));
 }
 
 TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeUsesStructuralDistinctKeysAndEnforcesItsBound) {
@@ -1783,20 +2748,22 @@ TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeRejectsMalformedOperatorsEx
 		} else if (variant == 3U) {
 			bounds.maximum_edges_per_node = 0U;
 		} else if (variant == 4U) {
-			bounds.maximum_adjacency_page_records = 0U;
+			bounds.maximum_edge_records = 0U;
 		} else if (variant == 5U) {
-			bounds.maximum_property_entries = 0U;
+			bounds.maximum_adjacency_page_records = 0U;
 		} else if (variant == 6U) {
-			bounds.maximum_rows = 0U;
+			bounds.maximum_property_entries = 0U;
 		} else if (variant == 7U) {
-			bounds.maximum_distinct_rows = 0U;
+			bounds.maximum_rows = 0U;
 		} else if (variant == 8U) {
+			bounds.maximum_distinct_rows = 0U;
+		} else if (variant == 9U) {
 			bounds.maximum_node_page_records = bounds.maximum_node_records + 1U;
 		} else {
 			bounds.maximum_adjacency_page_records = bounds.maximum_edges_per_node + 1U;
 		}
 	};
-	for (size_t variant: {0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U, 8U, 9U}) {
+	for (size_t variant: {0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U, 8U, 9U, 10U}) {
 		LogicalPlanReadRuntimeBounds invalid = runtimeBounds();
 		mutateBounds(invalid, variant);
 		logical::LogicalSingleRow root;

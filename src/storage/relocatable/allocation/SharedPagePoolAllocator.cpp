@@ -8,6 +8,7 @@
 
 #include "graph/storage/relocatable/allocation/SharedPagePoolAllocator.hpp"
 
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <limits>
@@ -18,6 +19,7 @@
 #include <vector>
 
 #include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
+#include "graph/debug/PerfTrace.hpp"
 
 namespace graph::storage {
 
@@ -517,6 +519,41 @@ namespace graph::storage {
 			std::span<const SharedPagePoolPreparedAppend> appends, std::span<PageLocation> replacementLocations,
 			std::span<PageLocation> appendLocations, LogSequenceNumber checkpointLsn,
 			std::span<const SharedPagePoolPreparedRetirement> retirements) const {
+		// These counters are deliberately attached to the generic page mutation
+		// boundary. They are cheap when value collection is disabled and expose
+		// copy-on-write amplification without coupling the planner to one pool kind.
+		if (debug::PerfTrace::areValuesEnabled()) {
+			debug::PerfTrace::addValue("native_graph.write.cow.replacement_pages",
+					static_cast<int64_t>(replacements.size()));
+			debug::PerfTrace::addValue("native_graph.write.cow.append_pages", static_cast<int64_t>(appends.size()));
+			debug::PerfTrace::addValue("native_graph.write.cow.retired_pages", static_cast<int64_t>(retirements.size()));
+			uint64_t replacementBytes = 0U;
+			for (const SharedPagePoolPreparedReplacement &replacement: replacements) {
+				const uint64_t bytes = static_cast<uint64_t>(replacement.payload.size());
+				replacementBytes = bytes > std::numeric_limits<uint64_t>::max() - replacementBytes
+									 ? std::numeric_limits<uint64_t>::max()
+									 : replacementBytes + bytes;
+			}
+			uint64_t appendBytes = 0U;
+			for (const SharedPagePoolPreparedAppend &append: appends) {
+				const uint64_t bytes = static_cast<uint64_t>(append.payload.size());
+				appendBytes = bytes > std::numeric_limits<uint64_t>::max() - appendBytes
+								? std::numeric_limits<uint64_t>::max()
+								: appendBytes + bytes;
+			}
+			debug::PerfTrace::addValue("native_graph.write.cow.replacement_payload_bytes",
+					static_cast<int64_t>(std::min<uint64_t>(replacementBytes, std::numeric_limits<int64_t>::max())));
+			debug::PerfTrace::addValue("native_graph.write.cow.append_payload_bytes",
+					static_cast<int64_t>(std::min<uint64_t>(appendBytes, std::numeric_limits<int64_t>::max())));
+			if (pool.kind == SegmentKind::SGK_INDEX_PAGE_POOL) {
+				debug::PerfTrace::addValue("native_graph.write.btree.replacement_pages",
+						static_cast<int64_t>(replacements.size()));
+				debug::PerfTrace::addValue("native_graph.write.btree.append_pages",
+						static_cast<int64_t>(appends.size()));
+				debug::PerfTrace::addValue("native_graph.write.btree.retired_pages",
+						static_cast<int64_t>(retirements.size()));
+			}
+		}
 		// ZYX_COV_EXCL_START: BTreePageStore constructs these parallel vectors from one immutable, validated mutation
 		// plan.
 		if ((expectedReplacements.empty() && appends.empty() && retirements.empty()) ||
@@ -731,6 +768,7 @@ namespace graph::storage {
 	void SharedPagePoolAllocator::validatePreparedPublicationsUnderWrite(
 			const StorageIO &io, uint64_t dataRegionOffset, const CatalogEntry &pool,
 			std::span<const SharedPagePoolPreparedPublication> publications) {
+		debug::ScopedPerfTimer validationTimer("native_graph.commit.publication_validation");
 		const uint8_t invalidPool = static_cast<uint8_t>(pool.state != SegmentState::SGS_SEALED) |
 									static_cast<uint8_t>(!isSharedPoolKind(pool.kind));
 		if (invalidPool != 0U || publications.empty()) {
@@ -738,48 +776,91 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_STATE,
 					"relocatable publication authentication requires a current shared pool and assigned frames");
 		}
-		const SharedPagePoolHeader header = readPoolHeader(io, dataRegionOffset, pool);
+		SharedPagePoolHeader header;
+		{
+			debug::ScopedPerfTimer headerTimer("native_graph.commit.publication_validation.pool_header");
+			header = readPoolHeader(io, dataRegionOffset, pool);
+		}
 		const uint64_t poolOffset = PhysicalSegmentAllocator::checkedSlotOffset(dataRegionOffset, pool.physical_slot);
-		const auto readOwner = [&io, poolOffset, &pool](uint8_t frameIndex) {
-			const uint64_t pageOffset = poolOffset + static_cast<uint64_t>(frameIndex) * RSS_PAGE_SIZE;
-			const std::array<std::byte, RSS_PAGE_SIZE> page =
-					readTypedPage(io, pageOffset, pool.generation, "relocatable publication owner header is truncated");
-			std::array<std::byte, RSS_PAGE_OWNER_HEADER_BYTES> bytes{};
-			std::copy_n(page.begin(), bytes.size(), bytes.begin());
-			return PageOwnerHeaderCodec::decode(bytes);
-		};
 		std::set<PageId> pageIds;
 		std::set<uint8_t> frames;
-		for (const SharedPagePoolPreparedPublication &publication: publications) {
-			const PageLocation &location = publication.location;
-			const uint8_t invalidLocation =
-					static_cast<uint8_t>(location.segment_id != pool.segment_id) |
-					static_cast<uint8_t>(location.generation != pool.generation) |
-					static_cast<uint8_t>(location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-					static_cast<uint8_t>(location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-					static_cast<uint8_t>(publication.expected_owner_id == 0U) |
-					static_cast<uint8_t>(publication.expected_owner_kind == PageOwnerKind::POK_NONE) |
-					static_cast<uint8_t>(!publication.expected_owner_lsn.isValid()) |
-					static_cast<uint8_t>(!SharedPagePoolFrameMap::isAllocated(header, location.page_index));
-			if (invalidLocation != 0U || !pageIds.insert(location.page_id).second ||
-				!frames.insert(location.page_index).second) {
-				throwSharedPagePoolAllocatorError(
-						FormatError::FERR_INVALID_STATE,
-						"relocatable publication authentication found an invalid or duplicate assigned frame");
+		std::vector<const SharedPagePoolPreparedPublication *> ordered;
+		ordered.reserve(publications.size());
+		{
+			debug::ScopedPerfTimer shapeTimer("native_graph.commit.publication_validation.shape");
+			for (const SharedPagePoolPreparedPublication &publication: publications) {
+				const PageLocation &location = publication.location;
+				const uint8_t invalidLocation =
+						static_cast<uint8_t>(location.segment_id != pool.segment_id) |
+						static_cast<uint8_t>(location.generation != pool.generation) |
+						static_cast<uint8_t>(location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
+						static_cast<uint8_t>(location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
+						static_cast<uint8_t>(publication.expected_owner_id == 0U) |
+						static_cast<uint8_t>(publication.expected_owner_kind == PageOwnerKind::POK_NONE) |
+						static_cast<uint8_t>(!publication.expected_owner_lsn.isValid()) |
+						static_cast<uint8_t>(!SharedPagePoolFrameMap::isAllocated(header, location.page_index));
+				if (invalidLocation != 0U || !pageIds.insert(location.page_id).second ||
+					!frames.insert(location.page_index).second) {
+					throwSharedPagePoolAllocatorError(
+							FormatError::FERR_INVALID_STATE,
+							"relocatable publication authentication found an invalid or duplicate assigned frame");
+				}
+				ordered.push_back(&publication);
 			}
-			const PageOwnerHeader owner = readOwner(location.page_index);
-			const uint8_t invalidOwner = static_cast<uint8_t>(owner.page_id != location.page_id) |
-										 static_cast<uint8_t>(owner.owner_id != publication.expected_owner_id) |
-										 static_cast<uint8_t>(owner.kind != publication.expected_owner_kind) |
-										 static_cast<uint8_t>(owner.generation != location.generation) |
-										 static_cast<uint8_t>(owner.committed_lsn != publication.expected_owner_lsn) |
-										 static_cast<uint8_t>(owner.flags != 0U) |
-										 static_cast<uint8_t>(!matchesPoolAndOwnerKind(pool.kind, owner.kind));
-			if (invalidOwner != 0U) {
-				throwSharedPagePoolAllocatorError(
-						FormatError::FERR_INVALID_STATE,
-						"relocatable publication authentication found a missing, stale, or foreign assigned frame");
+			std::ranges::sort(ordered, {}, [](const SharedPagePoolPreparedPublication *publication) {
+				return publication->location.page_index;
+			});
+		}
+
+		size_t readRuns = 0U;
+		for (size_t first = 0U; first < ordered.size();) {
+			size_t last = first + 1U;
+			while (last < ordered.size() &&
+				   ordered[last]->location.page_index == ordered[last - 1U]->location.page_index + 1U) {
+				++last;
 			}
+			const uint8_t firstFrame = ordered[first]->location.page_index;
+			const size_t pageCount = last - first;
+			std::vector<std::byte> pages(pageCount * RSS_PAGE_SIZE);
+			const uint64_t firstPageOffset = poolOffset + static_cast<uint64_t>(firstFrame) * RSS_PAGE_SIZE;
+			{
+				debug::ScopedPerfTimer readTimer("native_graph.commit.publication_validation.physical_read");
+				if (io.readPages({firstPageOffset, pool.generation.value()}, pages.data(), pages.size(),
+								 BufferPoolReadHint::BPRH_SEQUENTIAL) != pages.size()) {
+					throwSharedPagePoolAllocatorError(FormatError::FERR_BUFFER_TOO_SMALL,
+											  "relocatable publication owner header is truncated");
+				}
+			}
+			++readRuns;
+			{
+				debug::ScopedPerfTimer ownerTimer("native_graph.commit.publication_validation.owner_decode");
+				for (size_t index = first; index < last; ++index) {
+					const SharedPagePoolPreparedPublication &publication = *ordered[index];
+					const size_t pageOffset = (index - first) * RSS_PAGE_SIZE;
+					const PageOwnerHeader owner = PageOwnerHeaderCodec::decode(
+							std::span<const std::byte>(pages.data() + pageOffset, RSS_PAGE_OWNER_HEADER_BYTES));
+					const PageLocation &location = publication.location;
+					const uint8_t invalidOwner = static_cast<uint8_t>(owner.page_id != location.page_id) |
+												 static_cast<uint8_t>(owner.owner_id != publication.expected_owner_id) |
+												 static_cast<uint8_t>(owner.kind != publication.expected_owner_kind) |
+												 static_cast<uint8_t>(owner.generation != location.generation) |
+												 static_cast<uint8_t>(owner.committed_lsn != publication.expected_owner_lsn) |
+												 static_cast<uint8_t>(owner.flags != 0U) |
+												 static_cast<uint8_t>(!matchesPoolAndOwnerKind(pool.kind, owner.kind));
+					if (invalidOwner != 0U) {
+						throwSharedPagePoolAllocatorError(
+								FormatError::FERR_INVALID_STATE,
+								"relocatable publication authentication found a missing, stale, or foreign assigned frame");
+					}
+				}
+			}
+			first = last;
+		}
+		if (debug::PerfTrace::areValuesEnabled()) {
+			debug::PerfTrace::addValue("native_graph.commit.publication_validation_frames",
+					static_cast<int64_t>(publications.size()));
+			debug::PerfTrace::addValue("native_graph.commit.publication_validation_read_runs",
+					static_cast<int64_t>(readRuns));
 		}
 	}
 
@@ -1115,9 +1196,28 @@ namespace graph::storage {
 			throwSharedPagePoolAllocatorError(FormatError::FERR_INVALID_ENUM,
 											  "relocatable shared page read has an unknown Buffer Pool hint");
 		}
+		if (debug::PerfTrace::areValuesEnabled()) {
+			debug::PerfTrace::addValue("native_graph.read.shared_page_route_resolution", 1);
+		}
 		const PageLocation location = metadata_.findPageLocation(snapshot, pageId);
 		const CatalogEntry pool = metadata_.findCatalog(snapshot, location.segment_id);
+		return readKnownLocation(snapshot, pool, location, hint);
+	}
+
+	SharedPagePoolContents SharedPagePoolAllocator::readKnownLocation(
+			const MetadataSnapshotPin &snapshot, const CatalogEntry &pool, const PageLocation &location,
+			const BufferPoolReadHint hint) const {
+		if (!isKnownReadHint(hint)) {
+			throwSharedPagePoolAllocatorError(FormatError::FERR_INVALID_ENUM,
+					"relocatable shared known-location read has an unknown Buffer Pool hint");
+		}
+		if (debug::PerfTrace::areValuesEnabled()) {
+			debug::PerfTrace::addValue("native_graph.read.shared_page_known_location_copy", 1);
+		}
 		const uint8_t invalidLocation =
+				static_cast<uint8_t>(!metadata_.ownsSnapshot(snapshot)) |
+				static_cast<uint8_t>(!location.page_id.isValid()) |
+				static_cast<uint8_t>(location.segment_id != pool.segment_id) |
 				static_cast<uint8_t>(pool.state != SegmentState::SGS_SEALED) |
 				static_cast<uint8_t>(pool.generation != location.generation) |
 				static_cast<uint8_t>(!isSharedPoolKind(pool.kind)) |
@@ -1167,7 +1267,7 @@ namespace graph::storage {
 		std::array<std::byte, RSS_PAGE_OWNER_HEADER_BYTES> ownerBytes{};
 		std::copy_n(pageBytes.begin(), ownerBytes.size(), ownerBytes.begin());
 		const PageOwnerHeader owner = PageOwnerHeaderCodec::decode(ownerBytes);
-		if (owner.page_id != pageId || owner.generation != location.generation ||
+		if (owner.page_id != location.page_id || owner.generation != location.generation ||
 			!matchesPoolAndOwnerKind(pool.kind, owner.kind)) {
 			throwSharedPagePoolAllocatorError(
 					FormatError::FERR_INVALID_STATE,
@@ -1176,6 +1276,106 @@ namespace graph::storage {
 		std::vector<std::byte> payload(owner.payload_bytes);
 		std::copy_n(pageBytes.begin() + RSS_PAGE_OWNER_HEADER_BYTES, payload.size(), payload.begin());
 		return {pool, location, poolHeader, owner, std::move(payload)};
+	}
+
+	std::optional<SharedPagePoolPinnedView>
+	SharedPagePoolAllocator::readPinned(const MetadataSnapshotPin &snapshot, const PageId pageId,
+														  const BufferPoolReadHint hint) const {
+		if (!isKnownReadHint(hint)) {
+			throwSharedPagePoolAllocatorError(FormatError::FERR_INVALID_ENUM,
+																 "relocatable shared pinned page read has an unknown Buffer Pool hint");
+		}
+		if (debug::PerfTrace::areValuesEnabled()) {
+			debug::PerfTrace::addValue("native_graph.read.shared_page_route_resolution", 1);
+		}
+		const PageLocation location = metadata_.findPageLocation(snapshot, pageId);
+		const CatalogEntry pool = metadata_.findCatalog(snapshot, location.segment_id);
+		return readPinnedKnownLocation(snapshot, pool, location, hint);
+	}
+
+	std::optional<SharedPagePoolPinnedView> SharedPagePoolAllocator::readPinnedKnownLocation(
+			const MetadataSnapshotPin &snapshot, const CatalogEntry &pool, const PageLocation &location,
+			const BufferPoolReadHint hint) const {
+		if (!isKnownReadHint(hint)) {
+			throwSharedPagePoolAllocatorError(FormatError::FERR_INVALID_ENUM,
+					"relocatable shared pinned known-location read has an unknown Buffer Pool hint");
+		}
+		if (debug::PerfTrace::areValuesEnabled()) {
+			debug::PerfTrace::addValue("native_graph.read.shared_page_known_location_pin", 1);
+		}
+		const uint8_t invalidLocation =
+				static_cast<uint8_t>(!metadata_.ownsSnapshot(snapshot)) |
+				static_cast<uint8_t>(!location.page_id.isValid()) |
+				static_cast<uint8_t>(location.segment_id != pool.segment_id) |
+				static_cast<uint8_t>(pool.state != SegmentState::SGS_SEALED) |
+				static_cast<uint8_t>(pool.generation != location.generation) |
+				static_cast<uint8_t>(!isSharedPoolKind(pool.kind)) |
+				static_cast<uint8_t>(!metadata_.isPhysicalSlotAllocated(snapshot, pool.physical_slot));
+		if (invalidLocation != 0U) {
+			throwSharedPagePoolAllocatorError(
+					FormatError::FERR_INVALID_STATE,
+					"relocatable shared pinned page location does not reference an allocated pool generation");
+		}
+		const uint64_t poolOffset =
+				PhysicalSegmentAllocator::checkedSlotOffset(data_region_offset_, pool.physical_slot);
+		const BufferPoolPageKey poolKey{poolOffset, pool.generation.value()};
+		std::optional<BufferPool::Pin> poolPin = io_->pinTypedPage(poolKey);
+		if (!poolPin.has_value()) {
+			return std::nullopt;
+		}
+		if (poolPin->validBytes() != RSS_PAGE_SIZE) {
+			throwSharedPagePoolAllocatorError(FormatError::FERR_BUFFER_TOO_SMALL,
+														 "relocatable shared pinned page-pool envelope is truncated");
+		}
+		const std::span<const std::byte, RSS_PAGE_SIZE> poolBytes = poolPin->bytes();
+		const SegmentEnvelope envelope = SegmentEnvelopeCodec::decode(poolBytes.first(RSS_ENVELOPE_BYTES));
+		const uint8_t invalidEnvelope = static_cast<uint8_t>(envelope.state != SegmentState::SGS_SEALED) |
+				static_cast<uint8_t>(envelope.header_bytes != RSS_PAGE_SIZE) |
+				static_cast<uint8_t>(envelope.kind != pool.kind) |
+				static_cast<uint8_t>(envelope.segment_id != pool.segment_id) |
+				static_cast<uint8_t>(envelope.owner_id != pool.owner_id) |
+				static_cast<uint8_t>(envelope.generation != pool.generation) |
+				static_cast<uint8_t>(envelope.committed_lsn != pool.committed_lsn);
+		if (invalidEnvelope != 0U) {
+			throwSharedPagePoolAllocatorError(
+					FormatError::FERR_INVALID_STATE,
+					"relocatable shared pinned page-pool envelope disagrees with its Catalog mapping");
+		}
+		const SharedPagePoolHeader poolHeader = selectPoolControlHeader(poolBytes).header;
+		const uint8_t invalidPoolHeader = static_cast<uint8_t>(poolHeader.segment_id != pool.segment_id) |
+				static_cast<uint8_t>(poolHeader.generation != pool.generation) |
+				static_cast<uint8_t>(poolHeader.committed_lsn != pool.committed_lsn) |
+				static_cast<uint8_t>(!SharedPagePoolFrameMap::isAllocated(poolHeader, location.page_index));
+		if (invalidPoolHeader != 0U) {
+			throwSharedPagePoolAllocatorError(
+					FormatError::FERR_INVALID_STATE,
+					"relocatable shared pinned page-pool header disagrees with its Page Directory mapping");
+		}
+		poolPin.reset();
+
+		const uint64_t pageOffset = poolOffset + static_cast<uint64_t>(location.page_index) * RSS_PAGE_SIZE;
+		std::optional<BufferPool::Pin> pagePin =
+				io_->pinTypedPage({pageOffset, location.generation.value()}, hint);
+		if (!pagePin.has_value()) {
+			return std::nullopt;
+		}
+		if (pagePin->validBytes() != RSS_PAGE_SIZE) {
+			throwSharedPagePoolAllocatorError(FormatError::FERR_BUFFER_TOO_SMALL,
+														 "relocatable shared pinned page owner header is truncated");
+		}
+		const std::span<const std::byte, RSS_PAGE_SIZE> pageBytes = pagePin->bytes();
+		const PageOwnerHeader owner = PageOwnerHeaderCodec::decode(pageBytes.first(RSS_PAGE_OWNER_HEADER_BYTES));
+		if (owner.page_id != location.page_id || owner.generation != location.generation ||
+			!matchesPoolAndOwnerKind(pool.kind, owner.kind)) {
+			throwSharedPagePoolAllocatorError(
+					FormatError::FERR_INVALID_STATE,
+					"relocatable shared pinned page owner header disagrees with its location mapping");
+		}
+		if (owner.payload_bytes > RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES) {
+			throwSharedPagePoolAllocatorError(FormatError::FERR_INVALID_HEADER,
+														 "relocatable shared pinned page owner has an oversized payload");
+		}
+		return SharedPagePoolPinnedView{pool, location, poolHeader, owner, std::move(*pagePin)};
 	}
 
 	void SharedPagePoolAllocator::prefetch(const MetadataSnapshotPin &snapshot, std::span<const PageId> pageIds,
@@ -1241,7 +1441,23 @@ namespace graph::storage {
 								  const std::function<std::optional<PageLocation>(PageId)> &findPageLocation,
 								  const std::function<CatalogEntry(SegmentId)> &findCatalog,
 								  const ExistingPoolFrameVisibility &isFrameVisibleToActiveSnapshot) {
-					if (reconcilePoolFrames(pool, findPageLocation, findCatalog, isFrameVisibleToActiveSnapshot)) {
+					const uint32_t framesBefore = debug::PerfTrace::areValuesEnabled()
+							? std::popcount(readPoolHeader(pool).allocated_frames)
+							: 0U;
+					const bool repaired = reconcilePoolFrames(pool, findPageLocation, findCatalog,
+							isFrameVisibleToActiveSnapshot);
+					if (debug::PerfTrace::areValuesEnabled()) {
+						const uint32_t framesAfter = std::popcount(readPoolHeader(pool).allocated_frames);
+						debug::PerfTrace::addValue("native_graph.write.recovery.pool_reconcile_calls", 1);
+						debug::PerfTrace::addValue("native_graph.write.recovery.frames_scanned",
+								static_cast<int64_t>(framesBefore));
+						debug::PerfTrace::addValue("native_graph.write.recovery.frames_released",
+								static_cast<int64_t>(framesBefore >= framesAfter ? framesBefore - framesAfter : 0U));
+						if (repaired) {
+							debug::PerfTrace::addValue("native_graph.write.recovery.syncs", 1);
+						}
+					}
+					if (repaired) {
 						// The repaired frame map must reach stable storage before a future
 						// append can reuse a frame which was unreachable at recovery time.
 						io_->sync();
@@ -1269,7 +1485,16 @@ namespace graph::storage {
 			if (!isSharedPoolKind(pool.kind)) {
 				return;
 			}
-			if (reconcilePoolFramesAtStartup(pool, pageLocations)) {
+			const bool repaired = reconcilePoolFramesAtStartup(pool, pageLocations);
+			if (debug::PerfTrace::areValuesEnabled()) {
+				debug::PerfTrace::addValue("native_graph.write.recovery.startup_pool_reconcile_calls", 1);
+				debug::PerfTrace::addValue("native_graph.write.recovery.startup_directory_pages",
+						static_cast<int64_t>(pageLocations.size()));
+				if (repaired) {
+					debug::PerfTrace::addValue("native_graph.write.recovery.startup_syncs", 1);
+				}
+			}
+			if (repaired) {
 				// Persist each safe repair before a later corrupt pool can abort the
 				// scan; this prevents a recovered frame from becoming ambiguous again.
 				io_->sync();

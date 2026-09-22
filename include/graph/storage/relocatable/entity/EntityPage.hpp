@@ -11,6 +11,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <span>
 #include <vector>
@@ -21,10 +22,10 @@
 namespace graph::storage {
 
 	constexpr uint32_t RSS_ENTITY_PAGE_MAGIC = 0x4550595AU; // Little-endian bytes: ZYPE
-	// Version 3 removes per-Node adjacency roots. Databases written by earlier
-	// formats are deliberately rejected rather than being interpreted as the
-	// global Packed B+Tree adjacency layout.
-	constexpr uint16_t RSS_ENTITY_PAGE_VERSION = 3;
+	// Version 4 adds the logical EntityId to every fixed slot. This lets scans
+	// enumerate a page directly while the Entity Map remains the authoritative
+	// point-lookup and ordered-resume structure.
+	constexpr uint16_t RSS_ENTITY_PAGE_VERSION = 4;
 	constexpr uint16_t RSS_ENTITY_PAGE_HEADER_BYTES = 72;
 	constexpr uint16_t RSS_ENTITY_NODE_RECORD_BYTES = 48;
 	constexpr uint16_t RSS_ENTITY_EDGE_RECORD_BYTES = 24;
@@ -54,9 +55,9 @@ namespace graph::storage {
 		constexpr auto operator<=>(const EntityLabelOverflowReference &) const = default;
 	};
 
-	// Entity IDs belong only to the Entity Map. Node records deliberately contain
-	// no physical adjacency state: ordinary graph traversal resolves the shared
-	// global Packed B+Tree through the snapshot-pinned Index Root Directory.
+	// Node payloads contain no physical adjacency state. The fixed page's parallel
+	// EntityId array enables local scans; point lookup and ordered resume still use
+	// the Entity Map, and graph traversal uses the global Packed B+Tree.
 	struct NodeEntityRecord {
 		std::array<uint64_t, RSS_ENTITY_INLINE_LABEL_CAPACITY> inline_label_ids{};
 		EntityLabelOverflowReference label_overflow;
@@ -74,6 +75,20 @@ namespace graph::storage {
 
 		constexpr bool operator==(const EdgeEntityRecord &) const = default;
 	};
+
+	struct IdentifiedEdgeEntityRecord {
+		uint64_t entity_id = 0;
+		EdgeEntityRecord record;
+
+		constexpr bool operator==(const IdentifiedEdgeEntityRecord &) const = default;
+	};
+
+	using EntityPageNodeVisitor =
+			std::function<bool(uint64_t entityId, uint16_t slot, uint32_t slotGeneration,
+							   const NodeEntityRecord &record)>;
+	using EntityPageEdgeVisitor =
+			std::function<bool(uint64_t entityId, uint16_t slot, uint32_t slotGeneration,
+							   const EdgeEntityRecord &record)>;
 
 	class NodeEntityRecordCodec final {
 	public:
@@ -112,9 +127,48 @@ namespace graph::storage {
 		[[nodiscard]] static EntityPageHeader decode(std::span<const std::byte> bytes);
 	};
 
+	// Read-only counterpart to EntityPage. It borrows already pinned and
+	// authenticated bytes, decodes only the requested fixed record, and cannot
+	// be used by a COW writer.
+	class EntityPageReadView final {
+	public:
+		[[nodiscard]] static EntityPageReadView open(const PageOwnerHeader &owner,
+															  std::span<const std::byte> bytes);
+
+		[[nodiscard]] EntityPageHeader header() const { return header_; }
+		[[nodiscard]] std::optional<NodeEntityRecord> findNode(uint16_t slot,
+															uint32_t expectedSlotGeneration) const;
+		[[nodiscard]] std::optional<NodeEntityRecord> findNode(uint16_t slot, uint32_t expectedSlotGeneration,
+															uint64_t expectedEntityId) const;
+		[[nodiscard]] std::optional<EdgeEntityRecord> findEdge(uint16_t slot,
+															uint32_t expectedSlotGeneration) const;
+		[[nodiscard]] std::optional<EdgeEntityRecord> findEdge(uint16_t slot, uint32_t expectedSlotGeneration,
+															uint64_t expectedEntityId) const;
+		[[nodiscard]] uint64_t entityId(uint16_t slot) const;
+		[[nodiscard]] uint32_t slotGeneration(uint16_t slot) const;
+		[[nodiscard]] bool visitNodesUntil(size_t maximumRecords, const EntityPageNodeVisitor &visitor) const;
+		[[nodiscard]] bool visitEdgesUntil(size_t maximumRecords, const EntityPageEdgeVisitor &visitor) const;
+
+	private:
+		EntityPageReadView(std::span<const std::byte> bytes, EntityPageHeader header) :
+				bytes_(bytes), header_(std::move(header)) {}
+
+		void validateLayout() const;
+		void validateLiveSlot(uint16_t slot) const;
+		void validateSlotGeneration(uint16_t slot, uint32_t expectedSlotGeneration) const;
+		[[nodiscard]] size_t bitmapOffset() const;
+		[[nodiscard]] size_t slotGenerationOffset(uint16_t slot) const;
+		[[nodiscard]] size_t entityIdOffset(uint16_t slot) const;
+		[[nodiscard]] size_t recordOffset(uint16_t slot) const;
+		[[nodiscard]] bool isLive(uint16_t slot) const;
+
+		std::span<const std::byte> bytes_;
+		EntityPageHeader header_;
+	};
+
 	// One EntityPage fills a shared-pool frame. Its bitmap is the liveness
-	// authority, and each slot has a durable generation so an Entity Map entry
-	// cannot accidentally resolve a record after slot reuse.
+	// authority; each slot stores a logical EntityId and durable generation so an
+	// Entity Map entry cannot resolve another record after slot reuse.
 	class EntityPage final {
 	public:
 		[[nodiscard]] static EntityPage create(const PageOwnerHeader &owner, EntityPageRecordKind recordKind);
@@ -130,23 +184,33 @@ namespace graph::storage {
 		// capacity formula that depends on the durable page layout.
 		[[nodiscard]] static uint16_t recordCapacity(EntityPageRecordKind recordKind);
 		[[nodiscard]] EntityPage rebindOwner(const PageOwnerHeader &owner) const;
-		[[nodiscard]] uint16_t insert(const NodeEntityRecord &record);
-		[[nodiscard]] uint16_t insert(const EdgeEntityRecord &record);
+		[[nodiscard]] uint16_t insert(uint64_t entityId, const NodeEntityRecord &record);
+		[[nodiscard]] uint16_t insert(uint64_t entityId, const EdgeEntityRecord &record);
 		// Inserts no more than one fixed-page worth of Edge records. It validates
 		// every input before changing the page, then refreshes the durable page
 		// checksums once for the complete page image.
-		[[nodiscard]] std::vector<uint16_t> insertEdges(std::span<const EdgeEntityRecord> records);
+		[[nodiscard]] std::vector<uint16_t> insertEdges(std::span<const IdentifiedEdgeEntityRecord> records);
 		[[nodiscard]] std::optional<NodeEntityRecord> findNode(uint16_t slot) const;
 		[[nodiscard]] std::optional<NodeEntityRecord> findNode(uint16_t slot, uint32_t expectedSlotGeneration) const;
+		[[nodiscard]] std::optional<NodeEntityRecord> findNode(uint16_t slot, uint32_t expectedSlotGeneration,
+															uint64_t expectedEntityId) const;
 		[[nodiscard]] std::optional<EdgeEntityRecord> findEdge(uint16_t slot) const;
 		[[nodiscard]] std::optional<EdgeEntityRecord> findEdge(uint16_t slot, uint32_t expectedSlotGeneration) const;
+		[[nodiscard]] std::optional<EdgeEntityRecord> findEdge(uint16_t slot, uint32_t expectedSlotGeneration,
+															uint64_t expectedEntityId) const;
+		[[nodiscard]] uint64_t entityId(uint16_t slot) const;
 		[[nodiscard]] uint32_t slotGeneration(uint16_t slot) const;
 		void replace(uint16_t slot, const NodeEntityRecord &record);
 		void replace(uint16_t slot, uint32_t expectedSlotGeneration, const NodeEntityRecord &record);
+		void replace(uint16_t slot, uint32_t expectedSlotGeneration, uint64_t expectedEntityId,
+					 const NodeEntityRecord &record);
 		void replace(uint16_t slot, const EdgeEntityRecord &record);
 		void replace(uint16_t slot, uint32_t expectedSlotGeneration, const EdgeEntityRecord &record);
+		void replace(uint16_t slot, uint32_t expectedSlotGeneration, uint64_t expectedEntityId,
+					 const EdgeEntityRecord &record);
 		void erase(uint16_t slot);
 		void erase(uint16_t slot, uint32_t expectedSlotGeneration);
+		void erase(uint16_t slot, uint32_t expectedSlotGeneration, uint64_t expectedEntityId);
 		[[nodiscard]] std::vector<std::byte> serialize() const;
 
 	private:
@@ -157,10 +221,12 @@ namespace graph::storage {
 		void validateSlotGeneration(uint16_t slot, uint32_t expectedSlotGeneration) const;
 		[[nodiscard]] size_t bitmapOffset() const;
 		[[nodiscard]] size_t slotGenerationOffset(uint16_t slot) const;
+		[[nodiscard]] size_t entityIdOffset(uint16_t slot) const;
 		[[nodiscard]] size_t recordOffset(uint16_t slot) const;
 		[[nodiscard]] bool isLive(uint16_t slot) const;
 		void setLive(uint16_t slot, bool live);
 		void setSlotGeneration(uint16_t slot, uint32_t generation);
+		void setEntityId(uint16_t slot, uint64_t entityId);
 		void refreshChecksums();
 
 		std::vector<std::byte> bytes_;

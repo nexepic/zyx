@@ -592,6 +592,9 @@ TEST_F(NativeConstraintSupportTreeBuilderTest, DropsEveryReachablePageOfAMultiPa
 	NativeConstraintSupportTreeBuildOptions options = supportTreeOptions();
 	options.maximum_entries = entryCount;
 	options.sort_run_bytes = 8192U;
+	// Force the validator to cross several bounded batches; this guards the
+	// sorted-ID remapping and digest-group continuity at a batch boundary.
+	options.validation_batch_entries = 2U;
 	PageBackedGraphReadAdapter graph(*metadata_, *entities_, *labels_, *properties_, indexes);
 	NativeGraphWriteTransaction publish = planner.beginTransaction();
 	ConstraintDefinition definition = stageConstraintCreate(publish, catalog, indexes, *metadata_, graph, uniqueConstraint(), options);
@@ -702,6 +705,10 @@ TEST_F(NativeConstraintSupportTreeBuilderTest, RejectsInvalidPublicPlanningContr
 
 	NativeConstraintSupportTreeBuildOptions invalidOptions = supportTreeOptions();
 	invalidOptions.maximum_entries = 0U;
+	EXPECT_THROW(static_cast<void>(NativeConstraintSupportTreeBuilder::plan(
+			indexes, *metadata_, snapshot, valid, graph, invalidOptions, propertyTokenResolver())), FormatException);
+	invalidOptions = supportTreeOptions();
+	invalidOptions.validation_batch_entries = 0U;
 	EXPECT_THROW(static_cast<void>(NativeConstraintSupportTreeBuilder::plan(
 			indexes, *metadata_, snapshot, valid, graph, invalidOptions, propertyTokenResolver())), FormatException);
 

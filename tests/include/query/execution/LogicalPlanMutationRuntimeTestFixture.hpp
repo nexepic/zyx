@@ -14,6 +14,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -89,6 +90,12 @@ namespace graph::query {
 			std::chrono::milliseconds delay_after_mutation_batch{0};
 		};
 
+		struct TestReadMetrics {
+			size_t full_edge_reads = 0U;
+			size_t topology_page_reads = 0U;
+			size_t selected_edge_property_column_reads = 0U;
+		};
+
 		enum class TestSnapshotMode {
 			TSSM_VALID,
 			TSSM_NULL,
@@ -100,6 +107,18 @@ namespace graph::query {
 			TIPM_VALID,
 			TIPM_EMPTY_KEY,
 			TIPM_DUPLICATE_KEY,
+		};
+
+		enum class TestTopologyMode {
+			TTM_VALID,
+			TTM_NON_MONOTONIC,
+		};
+
+		enum class TestPropertyColumnMode {
+			TPCM_VALID,
+			TPCM_MISSING_COLUMN,
+			TPCM_TRUNCATED_COLUMN,
+			TPCM_REVERSED_ROWS,
 		};
 
 		[[nodiscard]] PropertyMap toPropertyMap(const std::vector<storage::LogicalGraphWriteProperty> &properties) {
@@ -115,9 +134,13 @@ namespace graph::query {
 
 		class TestLogicalGraphSnapshot final : public storage::LogicalGraphReadSnapshot {
 		public:
-			explicit TestLogicalGraphSnapshot(TestGraph graph, TestSnapshotMode mode = TestSnapshotMode::TSSM_VALID,
-										  TestInlinePropertyMode propertyMode = TestInlinePropertyMode::TIPM_VALID) :
-				graph_(std::move(graph)), mode_(mode), property_mode_(propertyMode) {}
+			explicit TestLogicalGraphSnapshot(TestGraph graph, std::shared_ptr<TestReadMetrics> readMetrics,
+										  TestSnapshotMode mode = TestSnapshotMode::TSSM_VALID,
+										  TestInlinePropertyMode propertyMode = TestInlinePropertyMode::TIPM_VALID,
+										  TestTopologyMode topologyMode = TestTopologyMode::TTM_VALID,
+										  TestPropertyColumnMode columnMode = TestPropertyColumnMode::TPCM_VALID) :
+				graph_(std::move(graph)), read_metrics_(std::move(readMetrics)), mode_(mode), property_mode_(propertyMode),
+				topology_mode_(topologyMode), column_mode_(columnMode) {}
 
 			[[nodiscard]] storage::LogicalGraphNode readNode(uint64_t nodeId) const override {
 				const auto found = graph_.nodes.find(nodeId);
@@ -135,6 +158,7 @@ namespace graph::query {
 			}
 
 			[[nodiscard]] storage::LogicalGraphEdge readEdge(uint64_t edgeId) const override {
+				++read_metrics_->full_edge_reads;
 				const auto found = graph_.edges.find(edgeId);
 				if (found == graph_.edges.end()) {
 					throw std::runtime_error("test graph relationship was not found");
@@ -147,6 +171,42 @@ namespace graph::query {
 				std::ranges::sort(properties, {}, &storage::LogicalGraphPropertyEntry::key);
 				appendMalformedPropertyEntry(properties);
 				return {edgeId, found->second.source, found->second.target, found->second.type, std::move(properties)};
+			}
+
+			[[nodiscard]] std::vector<std::vector<PropertyValue>>
+			readEdgePropertyColumnsSorted(std::span<const uint64_t> edgeIds,
+										  std::span<const std::string_view> keys) const override {
+				++read_metrics_->selected_edge_property_column_reads;
+				std::vector<std::vector<PropertyValue>> columns(keys.size());
+				uint64_t previous = 0U;
+				for (const uint64_t edgeId: edgeIds) {
+					if (edgeId == 0U || edgeId <= previous) {
+						throw std::invalid_argument("test graph Edge Property columns require increasing IDs");
+					}
+					previous = edgeId;
+					const auto edge = graph_.edges.find(edgeId);
+					if (edge == graph_.edges.end()) {
+						throw std::runtime_error("test graph Edge Property column owner was not found");
+					}
+					for (size_t column = 0U; column < keys.size(); ++column) {
+						if (keys[column].empty()) {
+							throw std::invalid_argument("test graph Edge Property column key is empty");
+						}
+						const auto value = edge->second.properties.find(std::string(keys[column]));
+						columns[column].push_back(value == edge->second.properties.end() ? PropertyValue() : value->second);
+					}
+				}
+				if (column_mode_ == TestPropertyColumnMode::TPCM_MISSING_COLUMN && !columns.empty()) {
+					columns.pop_back();
+				} else if (column_mode_ == TestPropertyColumnMode::TPCM_TRUNCATED_COLUMN &&
+						   !columns.empty() && !columns.front().empty()) {
+					columns.front().pop_back();
+				} else if (column_mode_ == TestPropertyColumnMode::TPCM_REVERSED_ROWS) {
+					for (auto &column: columns) {
+						std::ranges::reverse(column);
+					}
+				}
+				return columns;
 			}
 
 			void visitNodes(size_t maximumRecords,
@@ -174,6 +234,46 @@ namespace graph::query {
 					++current;
 				}
 				page.may_have_more = current != graph_.nodes.end();
+				return page;
+			}
+
+			[[nodiscard]] storage::LogicalGraphAdjacencyTopologyPage scanAdjacentEdgeTopologies(
+					uint64_t nodeId, storage::LogicalGraphReadDirection direction,
+					std::optional<storage::LogicalGraphAdjacencyContinuation> continuation,
+					size_t maximumRecords) const override {
+				if (maximumRecords == 0U || !graph_.nodes.contains(nodeId)) {
+					throw std::runtime_error("test graph topology scan needs a valid bound and Node");
+				}
+				++read_metrics_->topology_page_reads;
+				std::vector<storage::LogicalGraphEdgeTopology> candidates;
+				for (const auto &[id, edge]: graph_.edges) {
+					const bool matches = direction == storage::LogicalGraphReadDirection::LGRD_OUTGOING
+										 ? edge.source == nodeId
+										 : edge.target == nodeId;
+					if (matches) {
+						candidates.push_back({id, edge.source, edge.target, edge.type});
+					}
+				}
+				size_t start = 0U;
+				if (continuation.has_value()) {
+					while (start < candidates.size() && candidates[start].edge_id != continuation->next_edge_id) {
+						++start;
+					}
+					if (start == candidates.size()) {
+						throw std::runtime_error("test graph topology continuation is invalid");
+					}
+				}
+				storage::LogicalGraphAdjacencyTopologyPage page;
+				const size_t end = std::min(candidates.size(), start + maximumRecords);
+				page.edges.insert(page.edges.end(), candidates.begin() + static_cast<std::ptrdiff_t>(start),
+								  candidates.begin() + static_cast<std::ptrdiff_t>(end));
+				if (end < candidates.size()) {
+					page.continuation = storage::LogicalGraphAdjacencyContinuation{page.edges.back().edge_id,
+																		 candidates[end].edge_id};
+				}
+				if (topology_mode_ == TestTopologyMode::TTM_NON_MONOTONIC && page.edges.size() > 1U) {
+					std::ranges::reverse(page.edges);
+				}
 				return page;
 			}
 
@@ -266,8 +366,11 @@ namespace graph::query {
 			}
 
 			TestGraph graph_;
+			std::shared_ptr<TestReadMetrics> read_metrics_;
 			TestSnapshotMode mode_;
 			TestInlinePropertyMode property_mode_;
+			TestTopologyMode topology_mode_;
+			TestPropertyColumnMode column_mode_;
 		};
 
 		class TestLogicalGraph final : public storage::LogicalGraphReadBackend,
@@ -278,7 +381,8 @@ namespace graph::query {
 				if (snapshot_mode_ == TestSnapshotMode::TSSM_NULL) {
 					return nullptr;
 				}
-				return std::make_unique<TestLogicalGraphSnapshot>(graph_, snapshot_mode_, property_mode_);
+				return std::make_unique<TestLogicalGraphSnapshot>(
+						graph_, read_metrics_, snapshot_mode_, property_mode_, topology_mode_, property_column_mode_);
 			}
 
 			[[nodiscard]] std::vector<uint64_t>
@@ -413,6 +517,16 @@ namespace graph::query {
 				return id;
 			}
 
+			[[nodiscard]] uint64_t addEdge(uint64_t source, uint64_t target, std::string type,
+										 PropertyMap properties) {
+				if (!graph_.nodes.contains(source) || !graph_.nodes.contains(target)) {
+					throw std::logic_error("test graph relationship endpoint does not exist");
+				}
+				const uint64_t id = graph_.next_edge_id++;
+				graph_.edges.emplace(id, TestEdge{source, target, std::move(type), std::move(properties)});
+				return id;
+			}
+
 			[[nodiscard]] size_t countNodesWithLabel(const std::string &label) const {
 				return static_cast<size_t>(std::ranges::count_if(graph_.nodes, [&label](const auto &entry) {
 					return std::ranges::find(entry.second.labels, label) != entry.second.labels.end();
@@ -425,14 +539,21 @@ namespace graph::query {
 			void rejectMutationAttempts(size_t count) { remaining_mutation_conflicts_ = count; }
 			void setSnapshotMode(TestSnapshotMode mode) { snapshot_mode_ = mode; }
 			void setInlinePropertyMode(TestInlinePropertyMode mode) { property_mode_ = mode; }
+			void setTopologyMode(TestTopologyMode mode) { topology_mode_ = mode; }
+			void setPropertyColumnMode(TestPropertyColumnMode mode) { property_column_mode_ = mode; }
+			void resetReadMetrics() { *read_metrics_ = {}; }
+			[[nodiscard]] const TestReadMetrics &readMetrics() const { return *read_metrics_; }
 			void setDelayAfterMutationBatch(std::chrono::milliseconds delay) {
 				graph_.delay_after_mutation_batch = delay;
 			}
 
 		private:
 			TestGraph graph_;
+			std::shared_ptr<TestReadMetrics> read_metrics_ = std::make_shared<TestReadMetrics>();
 			TestSnapshotMode snapshot_mode_ = TestSnapshotMode::TSSM_VALID;
 			TestInlinePropertyMode property_mode_ = TestInlinePropertyMode::TIPM_VALID;
+			TestTopologyMode topology_mode_ = TestTopologyMode::TTM_VALID;
+			TestPropertyColumnMode property_column_mode_ = TestPropertyColumnMode::TPCM_VALID;
 			 size_t remaining_mutation_conflicts_ = 0U;
 		};
 

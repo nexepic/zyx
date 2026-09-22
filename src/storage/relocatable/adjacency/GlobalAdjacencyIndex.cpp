@@ -8,6 +8,7 @@
 
 #include "graph/storage/relocatable/adjacency/GlobalAdjacencyIndex.hpp"
 
+#include <algorithm>
 #include <limits>
 
 namespace graph::storage {
@@ -86,6 +87,59 @@ namespace graph::storage {
 			result.edge_ids.push_back(key.edge_id);
 		}
 		return result;
+	}
+
+	bool GlobalAdjacencyIndex::visitForNodes(const MetadataSnapshotPin &snapshot,
+			const GlobalAdjacencyDirection direction, const std::span<const uint64_t> nodeIds,
+			const size_t maximumEntries, const std::function<bool(uint64_t, uint64_t)> &visitor) const {
+		if (!snapshot.isValid() || !isDirection(direction) || nodeIds.empty() || maximumEntries == 0U || !visitor) {
+			throw FormatException(FormatError::FERR_INVALID_HEADER,
+								  "global adjacency multi-node scan requires a snapshot, nodes, bound, and visitor");
+		}
+		if (!std::ranges::is_sorted(nodeIds) || std::ranges::adjacent_find(nodeIds) != nodeIds.end() || nodeIds.front() == 0U) {
+			throw FormatException(FormatError::FERR_INVALID_HEADER,
+								  "global adjacency multi-node scan requires strictly increasing Node IDs");
+		}
+		const std::vector<std::byte> lowerBound = AdjacencyKeyCodec::lowerBound(direction, nodeIds.front());
+		BTreeIndex::RangeCursor cursor = index_.openRangeCursor(snapshot, lowerBound,
+											 maximumEntries, BufferPoolReadHint::BPRH_SEQUENTIAL);
+		size_t scanned = 0U;
+		size_t matched = 0U;
+		for (;;) {
+			// The B+Tree cursor bounds physical work, including keys belonging to
+			// unrequested nodes between the first and last source. Stop before asking
+			// the cursor for an entry beyond that budget so resource exhaustion is a
+			// normal incomplete result rather than an internal cursor exception.
+			if (scanned == maximumEntries) {
+				return false;
+			}
+			const std::optional<BTreePageEntry> entry = cursor.next();
+			if (!entry.has_value()) {
+				return true;
+			}
+			++scanned;
+			if (entry->value_or_child != 0U) {
+				throw FormatException(FormatError::FERR_INVALID_STATE,
+								  "global adjacency multi-node scan decoded a nonempty leaf value");
+			}
+			const GlobalAdjacencyKey key = AdjacencyKeyCodec::decode(entry->key);
+			if (key.direction != direction) {
+				return true;
+			}
+			if (key.node_id > nodeIds.back()) {
+				return true;
+			}
+			if (!std::ranges::binary_search(nodeIds, key.node_id)) {
+				continue;
+			}
+			if (matched == maximumEntries) {
+				return false;
+			}
+			++matched;
+			if (!visitor(key.node_id, key.edge_id)) {
+				return false;
+			}
+		}
 	}
 
 } // namespace graph::storage

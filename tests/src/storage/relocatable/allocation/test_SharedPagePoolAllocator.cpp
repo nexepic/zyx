@@ -20,6 +20,7 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <gtest/gtest.h>
 
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/StorageIO.hpp"
 #include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
 #include "graph/storage/relocatable/allocation/SharedPagePoolAllocator.hpp"
@@ -339,6 +340,59 @@ TEST_F(RelocatableSharedPagePoolAllocatorTest, AuthenticatesBoundedPreparedPubli
 						*io, snapshot.superblock().data_region_offset, pool, std::span(&staleLsn, 1U));
 			},
 			FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(RelocatableSharedPagePoolAllocatorTest, CoalescesAdjacentPreparedPublicationValidationReads) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	SharedPagePoolAllocator allocator(io, *store);
+	ASSERT_TRUE(
+			allocator.allocateNewPoolPage(request(31, 91), PhysicalSlotId(40), PhysicalSlotId(40), LogSequenceNumber(2))
+					.has_value());
+	const MetadataSnapshotPin snapshot = store->openSnapshot();
+	const CatalogEntry pool = store->findCatalog(snapshot, SegmentId(31));
+	const std::array payload = {std::byte{0x21}};
+	std::array<SharedPagePoolPreparedAppend, 3> appends{};
+	std::array<PageLocation, 3> locations{};
+	for (size_t index = 0U; index < appends.size(); ++index) {
+		const PageId pageId(92U + index);
+		appends[index] = {.owner = {.page_id = pageId,
+										.owner_id = 99U,
+										.kind = PageOwnerKind::POK_INDEX,
+										.payload_bytes = static_cast<uint32_t>(payload.size()),
+										.generation = pool.generation,
+										.committed_lsn = pool.committed_lsn},
+						  .payload = std::vector<std::byte>(payload.begin(), payload.end())};
+		locations[index] = {.page_id = pageId, .segment_id = pool.segment_id, .generation = pool.generation};
+	}
+	SharedPagePoolAllocatorTestAccess::prepareAppendPages(allocator, pool, appends, locations, pool.committed_lsn);
+
+	// Deliberately submit the contiguous frames out of order; validation owns
+	// ordering and must still issue one bounded sequential read for the run.
+	const std::array publications = {
+			SharedPagePoolPreparedPublication{locations[2], 99U, PageOwnerKind::POK_INDEX, pool.committed_lsn},
+			SharedPagePoolPreparedPublication{locations[0], 99U, PageOwnerKind::POK_INDEX, pool.committed_lsn},
+			SharedPagePoolPreparedPublication{locations[1], 99U, PageOwnerKind::POK_INDEX, pool.committed_lsn}};
+	const bool valuesWereEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	EXPECT_NO_THROW(SharedPagePoolAllocatorTestAccess::validatePreparedPublicationsUnderWrite(
+			*io, snapshot.superblock().data_region_offset, pool, publications));
+	const graph::debug::PerfTrace::Snapshot trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
+	ASSERT_TRUE(trace.contains("native_graph.commit.publication_validation_frames"));
+	ASSERT_TRUE(trace.contains("native_graph.commit.publication_validation_read_runs"));
+	EXPECT_EQ(trace.at("native_graph.commit.publication_validation_frames").totalValue, 3);
+	EXPECT_EQ(trace.at("native_graph.commit.publication_validation_read_runs").totalValue, 1);
+
+	std::array separated = {publications[0], publications[1]};
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	EXPECT_NO_THROW(SharedPagePoolAllocatorTestAccess::validatePreparedPublicationsUnderWrite(
+			*io, snapshot.superblock().data_region_offset, pool, separated));
+	const graph::debug::PerfTrace::Snapshot separatedTrace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
+	ASSERT_TRUE(separatedTrace.contains("native_graph.commit.publication_validation_read_runs"));
+	EXPECT_EQ(separatedTrace.at("native_graph.commit.publication_validation_read_runs").totalValue, 2);
 }
 
 TEST_F(RelocatableSharedPagePoolAllocatorTest, MaterializesPrivateAppendAndMutationPlansBeforePublication) {

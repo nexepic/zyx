@@ -91,8 +91,8 @@ namespace graph::storage {
 	}
 
 	bool MetadataWriteBatch::ownsAllocatedPage(PhysicalPageRef reference) const {
-		return std::ranges::any_of(allocated_pages_,
-								   [reference](const PhysicalPageRef &allocated) { return allocated == reference; });
+		return reference.isValid() && reference.generation == generation() &&
+			   allocated_page_locations_.contains({reference.physical_slot.value(), reference.frame_index});
 	}
 
 	MetadataPageId MetadataWriteBatch::allocateMetadataPageId() {
@@ -105,10 +105,7 @@ namespace graph::storage {
 	}
 
 	void MetadataWriteBatch::registerMetadataPageRoute(MetadataPageId pageId, PhysicalPageRef reference) {
-		const bool ownsReference = std::ranges::any_of(allocated_pages_, [reference](PhysicalPageRef allocated) {
-			return allocated == reference;
-		});
-		if (!pageId.isValid() || !reference.isValid() || reference.generation != generation() || !ownsReference) {
+		if (!pageId.isValid() || !ownsAllocatedPage(reference)) {
 			throwMetadataBatchError(FormatError::FERR_INVALID_STATE,
 									"relocatable metadata route needs a stable ID and an owned current-generation frame");
 		}
@@ -422,6 +419,48 @@ namespace graph::storage {
 		return reference;
 	}
 
+	std::vector<PhysicalPageRef> MetadataWriteBatch::allocatePages(size_t count) {
+		if (published_ || count == 0U) {
+			throwMetadataBatchError(FormatError::FERR_INVALID_STATE,
+								"relocatable metadata batch requires a nonempty unpublished page allocation");
+		}
+		allocated_pages_.reserve(allocated_pages_.size() + count);
+		created_pool_slots_.reserve(created_pool_slots_.size() + count);
+		const std::vector<MetadataPageAllocation> allocations = allocator_.allocatePages(
+				generation(), checkpointLsn(), count, std::span<const PhysicalSlotId>(reserved_data_slots_),
+				std::span<const PhysicalSlotRange>(reserved_data_slot_ranges_), this);
+		if (allocations.size() != count) {
+			throwMetadataBatchError(FormatError::FERR_INVALID_STATE,
+								"relocatable metadata batch allocator returned an incomplete page allocation");
+		}
+		std::vector<PhysicalPageRef> pages;
+		pages.reserve(count);
+		for (const MetadataPageAllocation &allocation: allocations) {
+			const PhysicalPageRef reference = allocation.page;
+			if (!reference.isValid() || reference.generation != generation() ||
+				!allocated_page_locations_.emplace(reference.physical_slot.value(), reference.frame_index).second) {
+				throwMetadataBatchError(FormatError::FERR_INVALID_STATE,
+									"relocatable metadata batch allocator returned an invalid or duplicate physical reference");
+			}
+			allocated_pages_.push_back(reference);
+			pages.push_back(reference);
+			if (!allocation.created_pool_slot.has_value()) {
+				continue;
+			}
+			const PhysicalSlotId poolSlot = *allocation.created_pool_slot;
+			const bool duplicatePool = std::ranges::any_of(
+					created_pool_slots_, [poolSlot](PhysicalSlotId existing) { return existing == poolSlot; });
+			if (!poolSlot.isValid() || poolSlot != reference.physical_slot || duplicatePool ||
+				isDataSlotReserved(poolSlot)) {
+				throwMetadataBatchError(
+						FormatError::FERR_INVALID_STATE,
+						"relocatable metadata batch allocator returned an invalid new pool ownership record");
+			}
+			created_pool_slots_.push_back(poolSlot);
+		}
+		return pages;
+	}
+
 	PhysicalSlotId MetadataWriteBatch::createdPoolSlot(size_t index) const {
 		if (index >= created_pool_slots_.size()) {
 			throwMetadataBatchError(FormatError::FERR_INVALID_STATE,
@@ -616,12 +655,7 @@ namespace graph::storage {
 	}
 
 	void MetadataWriteBatch::validateOwnedRoot(PhysicalPageRef root, const char *message) const {
-		const bool owned = std::ranges::any_of(allocated_pages_, [&](const PhysicalPageRef &allocated) {
-			return allocated.physical_slot == root.physical_slot && allocated.frame_index == root.frame_index;
-		});
-		const uint8_t invalid = static_cast<uint8_t>(!root.isValid()) |
-								static_cast<uint8_t>(root.generation != generation()) | static_cast<uint8_t>(!owned);
-		if (invalid != 0U) {
+		if (!ownsAllocatedPage(root)) {
 			throwMetadataBatchError(FormatError::FERR_INVALID_STATE, message);
 		}
 	}

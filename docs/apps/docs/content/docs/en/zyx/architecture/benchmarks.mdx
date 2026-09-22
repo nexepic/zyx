@@ -171,6 +171,137 @@ Measure on-disk footprint after `db.save()`.
 4. **Check index hit rates** — A query may appear slow not because of the engine, but because an expected index is missing.
 5. **Compare across versions with identical setup** — Same compiler, same data distribution, same hardware. Anything else introduces confounding variables.
 
+## Optimization Verification Matrix (2026-09-20)
+
+The graph-comparison executable is the scale and cross-database harness for the optimization
+roadmap. Unlike `zyx-bench`, it consumes a frozen generated dataset and emits one JSON event per
+sample. A single workload can be isolated without changing its implementation:
+
+```bash
+./buildRelease/zyx-compare-bench \
+  --dataset <dataset-directory> \
+  --db-path <temporary-database-file> \
+  --scale medium \
+  --profile multihop \
+  --execution-mode opened \
+  --workload varlength_frontier_count \
+  --warmup 0 \
+  --iterations 1
+```
+
+`--workload` must name a workload registered for `--profile`; a mismatch fails argument
+validation instead of silently performing only the load phase. Omit `--workload` to run the full
+profile. The supported execution modes remain `opened`, `warm`, and `cold-ish`.
+
+The following Release results use seed `42`, `warmup=0`, `iterations=1`, and the same generated
+small/medium datasets. They are structural diagnostics, not stable percentile claims.
+
+### Sample isolation and scan acceptance
+
+Every mutating warmup and measured sample runs against a clone of the same immutable loaded
+baseline. Database cloning and lifecycle work stay outside measured operation latency, so samples
+have equal input cardinality and cannot inherit mutations from an earlier sample. The harness does
+not disable the production query timeout.
+
+Stable `smoke` and `small` matrices each pass seven profiles in all three execution modes: 21
+groups, 168 workloads, and `1,680/1,680` samples per scale. Result roots are
+`/private/tmp/zyx-opt-isolation-20260920/` and
+`/private/tmp/zyx-opt-stable-small-20260920/`.
+
+The current medium `scan/opened` profile also passes every query workload. The filtered
+relationship count uses a logical-plan aggregate/filter fusion and an authenticated physical
+Entity-page scan that reuses Page Directory and Catalog routes; it does not match query text or
+relax QueryGuard.
+
+| workload / mode | latency | status |
+| --- | ---: | --- |
+| `load_nodes_edges` / `opened` | `30,439.9 ms` | `ok` |
+| `all_nodes_property_filter` / `opened` | `11,689.7 ms` | `ok` |
+| `relationship_property_filter` / `opened` | `14,060.7 ms` | `ok` |
+| `relationship_property_filter` / three repeated `opened` samples | `14,011.2--14,070.0 ms` | `ok` |
+| `relationship_property_filter` / `warm` | `14,015.1 ms` | `ok` |
+| `relationship_property_filter` / `cold-ish` | `14,055.7 ms` | `ok` |
+
+This closes the local medium scan-timeout diagnosis, not the complete acceptance program. The
+remaining gates include the broader stable medium matrix, Linux and Windows execution, the final
+unfiltered suite, four-dimensional coverage, RSS/file-size/I/O evidence, and package closure.
+
+#### Stable workload-isolated medium scan matrix
+
+The comparison adapter now executes every registered ZYX workload in its own subprocess and
+requires the subprocess to emit only the selected workload. Query subprocesses prepare their
+database without emitting a duplicate load sample; load is measured once in its own invocation.
+Timeout, malformed output, missing or duplicate iterations, and cross-workload events are
+attributed to the selected workload. This preserves the per-workload 600-second process bound
+without imposing that same bound on the sum of a complete profile.
+
+The Release matrix at
+`/private/tmp/zyx-opt-stable-medium-scan-isolated-20260920/20260919T203646946038Z-matrix.json`
+uses medium scale, `warmup=2`, and `iterations=10`. All three modes pass 12 workloads and 120
+samples, for 360/360 successful samples. Every run has zero execution and quality failures.
+
+| mode | load p50 / p95 | all-Node filter p50 / p95 | relationship filter p50 / p95 | Top-K p50 / p95 |
+|---|---:|---:|---:|---:|
+| `cold-ish` | `30,524.0 / 30,734.1 ms` | `11,651.6 / 11,776.0 ms` | `14,097.2 / 14,197.8 ms` | `6,020.67 / 6,270.58 ms` |
+| `opened` | `30,230.6 / 30,570.4 ms` | `11,622.9 / 11,777.0 ms` | `14,047.2 / 14,152.1 ms` | `5,996.50 / 6,052.99 ms` |
+| `warm` | `30,373.7 / 30,640.6 ms` | `11,637.8 / 11,738.3 ms` | `14,104.6 / 14,177.2 ms` | `6,058.01 / 6,104.93 ms` |
+
+This closes the benchmark-orchestration defect and the stable medium scan gate. Linux/Windows,
+final full-suite coverage, RSS/file-size/I/O evidence, and package closure remain separate gates.
+
+### Multihop
+
+| workload | small | medium | status |
+| --- | ---: | ---: | --- |
+| `load_nodes_edges` | `1,517.3 ms` | `47,107.4 ms` | `ok` |
+| `reachable_within_6` | `121.656 ms` | `566.417 ms` | `ok` |
+| `reachable_within_12` | `206.147 ms` | `767.581 ms` | `ok` |
+| `reachable_within_24` | `376.449 ms` | `1,156.97 ms` | `ok` |
+| `reachable_within_30` | `463.122 ms` | `1,366.84 ms` | `ok` |
+| `varlength_frontier_count` | `1,341.57 ms` | `52,352.3 ms` | `ok` |
+
+The former medium frontier-count implementation did not finish within the runner's `600 s`
+process budget. The bounded multi-source cursor and 4,096-Edge materialization batch reduce it to
+about `52.35 s` without raising production limits or restoring unbounded materialization.
+
+### Retrieval mode matrix
+
+All nine retrieval workloads pass for both scales in all three execution modes. Representative
+single-iteration values are:
+
+| scale / mode | load | point Node | endpoint Edge | one-hop IDs | range projection |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| small / `opened` | `~1.54-1.57 s` | `20.2653 ms` | passed | `29.783 ms` | passed |
+| small / `warm` | `~1.54-1.57 s` | `20.0804 ms` | passed | `27.3023 ms` | passed |
+| small / `cold-ish` | `~1.54-1.57 s` | `19.5094 ms` | passed | `27.8635 ms` | passed |
+| medium / `opened` | `47,439.0 ms` | `72.8785 ms` | `99.3701 ms` | `89.3367 ms` | `924.695 ms` |
+| medium / `warm` | `48,279.6 ms` | `72.0821 ms` | `99.0984 ms` | passed | `925.774 ms` |
+| medium / `cold-ish` | `47,962.3 ms` | `72.8965 ms` | `98.9621 ms` | `91.7398 ms` | `927.545 ms` |
+
+### Operational dynamic
+
+| workload | small | medium | status |
+| --- | ---: | ---: | --- |
+| `load_nodes_edges` | `1,569.24 ms` | `47,963.7 ms` | `ok` |
+| `index_seek_then_one_hop_expand` | `378.284 ms` | `20,461.2 ms` | `ok` |
+| `index_seek_then_two_hop_expand` | `619.872 ms` | `32,926.9 ms` | `ok` |
+| `post_persist_create_node` | `292.034 ms` | `11,658.2 ms` | `ok` |
+| `post_persist_create_edge` | `679.44 ms` | `40,117.8 ms` | `ok` |
+| `write_then_one_hop_expand` | `716.879 ms` | `40,044.8 ms` | `ok` |
+| `batch_create_edges_100` | `769.849 ms` | `39,856.0 ms` | `ok` |
+| `batch_create_edges_1000` | `1,271.79 ms` | `40,384.2 ms` | `ok` |
+| `batch_create_edges_10000` | `3,741.68 ms` | `56,192.0 ms` | `ok` |
+| `batch_create_edges_100_then_one_hop_expand` | `778.535 ms` | `39,610.2 ms` | `ok` |
+| `batch_create_edges_10000_then_one_hop_expand` | `3,814.8 ms` | `56,373.6 ms` | `ok` |
+
+These measurements close the local single-iteration diagnostic matrix only. Optimization-package
+closure still requires repeated p50/p95/p99 measurements, peak RSS, native database-file size,
+read/write bytes, fixed environment provenance, and macOS/Linux/Windows acceptance evidence.
+
+## Optimization Roadmap
+
+The framework-level performance plan is maintained in the [Optimization Strategy](optimization) document. Use its staged execution plan (Stage 0 through Stage 9) as the execution authority for read shapes, batching, topology, indexes, execution, caching, validation, and write amplification. Benchmark results are diagnostic evidence only: a `smoke` speedup cannot close an optimization stage, and an unexplained timeout or regression remains a failed gate until structural counters attribute the cost. Comparisons must use the same binary, dataset manifest, parameters, workload order, and `cold-ish`/`opened`/`warm` mode; report latency percentiles, RSS, file size, I/O, and the relevant structural counters.
+
 ## Regression Baseline Contract
 
 When using the graph-comparison runner's `--baseline-summary` p50 regression gate, pass the `summary.csv` from an

@@ -291,6 +291,64 @@ namespace graph::storage {
 
 	} // namespace
 
+	NativeBulkRunFragmentLayoutBuilder::NativeBulkRunFragmentLayoutBuilder(const size_t maximumFragmentBytes) :
+		maximum_fragment_bytes_(maximumFragmentBytes) {
+		if (maximum_fragment_bytes_ <= RSS_NATIVE_BULK_RUN_HEADER_BYTES ||
+			maximum_fragment_bytes_ > RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES) {
+			fail(FormatError::FERR_INVALID_HEADER,
+				 "relocatable native bulk-run fragment layout requires a bounded segment payload");
+		}
+	}
+
+	void NativeBulkRunFragmentLayoutBuilder::append(const size_t encodedEntryBytes) {
+		if (finished_ || encodedEntryBytes == 0U ||
+			encodedEntryBytes > maximum_fragment_bytes_ - RSS_NATIVE_BULK_RUN_HEADER_BYTES) {
+			fail(FormatError::FERR_INVALID_HEADER,
+				 "relocatable native bulk-run fragment layout received an invalid encoded entry size");
+		}
+		if (current_encoded_bytes_ > maximum_fragment_bytes_ - encodedEntryBytes) {
+			flush();
+		}
+		if (layout_.entry_count == std::numeric_limits<uint64_t>::max() ||
+			current_entry_count_ == std::numeric_limits<size_t>::max()) {
+			fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
+				 "relocatable native bulk-run fragment layout entry count overflowed");
+		}
+		current_encoded_bytes_ += encodedEntryBytes;
+		++current_entry_count_;
+		++layout_.entry_count;
+	}
+
+	NativeBulkRunFragmentLayout NativeBulkRunFragmentLayoutBuilder::finish() {
+		if (finished_ || layout_.entry_count == 0U) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "relocatable native bulk-run fragment layout requires one unfinished nonempty input");
+		}
+		flush();
+		finished_ = true;
+		return std::move(layout_);
+	}
+
+	void NativeBulkRunFragmentLayoutBuilder::flush() {
+		if (current_entry_count_ == 0U) {
+			return;
+		}
+		if (current_encoded_bytes_ > std::numeric_limits<uint64_t>::max() - layout_.encoded_bytes) {
+			fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
+				 "relocatable native bulk-run fragment layout byte count overflowed");
+		}
+		layout_.fragments.push_back(
+				{current_first_entry_ordinal_, current_entry_count_, current_encoded_bytes_});
+		layout_.encoded_bytes += current_encoded_bytes_;
+		if (current_entry_count_ > std::numeric_limits<size_t>::max() - current_first_entry_ordinal_) {
+			fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
+				 "relocatable native bulk-run fragment layout source range overflowed");
+		}
+		current_first_entry_ordinal_ += current_entry_count_;
+		current_entry_count_ = 0U;
+		current_encoded_bytes_ = RSS_NATIVE_BULK_RUN_HEADER_BYTES;
+	}
+
 	std::vector<std::byte> NativeBulkRunFragmentCodec::encode(const NativeBulkRunFragment &fragment) {
 		const std::vector<std::byte> records = encodeEntries(fragment);
 		const uint64_t totalBytes = static_cast<uint64_t>(RSS_NATIVE_BULK_RUN_HEADER_BYTES) + records.size();

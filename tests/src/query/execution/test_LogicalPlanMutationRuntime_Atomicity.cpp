@@ -852,6 +852,7 @@ TEST(LogicalPlanMutationRuntimeTest, MatchCreateThenSetPublishesPersistedAndCrea
 		options.bounds.maximum_node_page_records = 4U;
 		options.bounds.maximum_metadata_pages_per_node_page = 4U;
 		options.bounds.maximum_edges_per_node = 16U;
+		options.bounds.maximum_edge_records = 32U;
 		options.bounds.maximum_adjacency_page_records = 4U;
 		options.bounds.maximum_property_entries = 16U;
 		options.bounds.maximum_rows = 1U;

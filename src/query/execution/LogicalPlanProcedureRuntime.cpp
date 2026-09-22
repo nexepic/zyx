@@ -46,7 +46,15 @@ namespace graph::query::execution {
 		// An options map cannot contain a key more than once. Keeping the accepted
 		// names in one place makes the resource bound grow with the public contract.
 		constexpr std::array<std::string_view, 5U> LEIDEN_OPTION_NAMES = {"maxIterations", "maxLevels", "resolution",
-																		  "refinementThreshold", "concurrency"};
+																			  "refinementThreshold", "concurrency"};
+
+		// Complete materialization is still required at procedure result and
+		// algorithm boundaries, but it must enter through the same explicit shape
+		// contract as the regular logical read runtime.  This keeps native readers
+		// from accidentally treating a procedure point read as an unplanned shape.
+		[[nodiscard]] storage::EntityReadShape completeNodeReadShape() {
+			return {.include_labels = true, .include_type = false, .all_properties = true};
+		}
 
 		[[nodiscard]] const logical::LogicalOperator *requireOnlyChild(const logical::LogicalOperator &op) {
 			const std::vector<logical::LogicalOperator *> children = op.getChildren();
@@ -121,9 +129,9 @@ namespace graph::query::execution {
 			}
 		}
 
-		void validateEdge(const storage::LogicalGraphEdge &edge) {
+		void validateEdge(const storage::LogicalGraphEdgeTopology &edge) {
 			if (edge.edge_id == 0U || edge.source_node_id == 0U || edge.target_node_id == 0U) {
-				throw std::runtime_error("logical procedure backend returned an invalid relationship");
+				throw std::runtime_error("logical procedure backend returned an invalid relationship topology");
 			}
 		}
 
@@ -276,7 +284,7 @@ namespace graph::query::execution {
 
 		[[nodiscard]] storage::LogicalGraphNode readProcedureNode(storage::LogicalGraphReadSnapshot &snapshot,
 																  uint64_t nodeId) {
-			const storage::LogicalGraphNode node = snapshot.readNode(nodeId);
+			const storage::LogicalGraphNode node = snapshot.readNodeShaped(nodeId, completeNodeReadShape());
 			validateNode(node);
 			if (node.node_id != nodeId) {
 				throw std::runtime_error("logical procedure backend resolved a mismatched Node identity");
@@ -292,7 +300,17 @@ namespace graph::query::execution {
 				bounds.maximum_rows == 0U) {
 				throw std::invalid_argument("logical shortest-path procedure requires positive graph read bounds");
 			}
-			if (!snapshot.containsNode(startNodeId) || !snapshot.containsNode(endNodeId)) {
+			std::vector<uint64_t> endpointIds{startNodeId, endNodeId};
+			std::ranges::sort(endpointIds);
+			const auto uniqueEnd = std::ranges::unique(endpointIds);
+			endpointIds.erase(uniqueEnd.begin(), endpointIds.end());
+			if (snapshot.supportsNodeExistenceProbes()) {
+				const std::vector<bool> present = snapshot.containsNodesSorted(endpointIds);
+				if (present.size() != endpointIds.size() ||
+					std::ranges::any_of(present, [](const bool value) { return !value; })) {
+					return {};
+				}
+			} else if (!snapshot.containsNode(startNodeId) || !snapshot.containsNode(endNodeId)) {
 				return {};
 			}
 			const storage::LogicalGraphNode start = readProcedureNode(snapshot, startNodeId);
@@ -333,15 +351,41 @@ namespace graph::query::execution {
 						}
 						const size_t pageRecords = std::min(bounds.maximum_edges_per_node - sourceEdges,
 															bounds.maximum_adjacency_page_records);
-						const storage::LogicalGraphAdjacencyPage page =
-								snapshot.scanAdjacentEdges(currentNodeId, direction, continuation, pageRecords);
+						// Shortest-path expansion only needs Edge identity and endpoints.
+						// Keep the topology cursor on the hot BFS path so relationship
+						// Property roots and payloads are not decoded for edges that are
+						// never returned.
+						const storage::LogicalGraphAdjacencyTopologyPage page =
+								snapshot.scanAdjacentEdgeTopologies(currentNodeId, direction, continuation, pageRecords);
 						if (page.edges.size() > pageRecords || (page.edges.empty() && page.continuation.has_value()) ||
-							(continuation.has_value() &&
-							 (page.edges.empty() || page.edges.front().edge_id != continuation->next_edge_id))) {
+								(continuation.has_value() &&
+									 (page.edges.empty() || page.edges.front().edge_id != continuation->next_edge_id))) {
 							throw std::runtime_error(
 									"logical procedure backend returned an invalid shortest-path adjacency page");
 						}
-						for (const storage::LogicalGraphEdge &edge: page.edges) {
+						// Endpoint validation is independent of edge traversal order. Resolve
+						// the distinct endpoint set once per topology page so a high-degree
+						// frontier node does not repeat the same Entity Directory descent for
+						// parallel edges or repeated targets.
+						std::vector<uint64_t> endpointIds;
+						if (snapshot.supportsNodeExistenceProbes()) {
+							endpointIds.reserve(page.edges.size());
+							for (const storage::LogicalGraphEdgeTopology &candidate: page.edges) {
+								if (candidate.source_node_id == currentNodeId &&
+										 direction == storage::LogicalGraphReadDirection::LGRD_OUTGOING) {
+									endpointIds.push_back(candidate.target_node_id);
+								} else if (candidate.target_node_id == currentNodeId &&
+										 direction == storage::LogicalGraphReadDirection::LGRD_INCOMING) {
+									endpointIds.push_back(candidate.source_node_id);
+								}
+							}
+							std::ranges::sort(endpointIds);
+							endpointIds.erase(std::unique(endpointIds.begin(), endpointIds.end()), endpointIds.end());
+						}
+						const std::vector<bool> endpointPresent = snapshot.supportsNodeExistenceProbes()
+								? snapshot.containsNodesSorted(endpointIds)
+								: std::vector<bool>{};
+						for (const storage::LogicalGraphEdgeTopology &edge: page.edges) {
 							context.checkGuard();
 							validateEdge(edge);
 							if (previousEdgeId != 0U && edge.edge_id <= previousEdgeId) {
@@ -365,9 +409,20 @@ namespace graph::query::execution {
 								continue;
 							}
 							const uint64_t nextNodeId = direction == storage::LogicalGraphReadDirection::LGRD_OUTGOING
-																? edge.target_node_id
-																: edge.source_node_id;
-							static_cast<void>(readProcedureNode(snapshot, nextNodeId));
+																			? edge.target_node_id
+																			: edge.source_node_id;
+							if (snapshot.supportsNodeExistenceProbes()) {
+								const auto endpoint = std::ranges::lower_bound(endpointIds, nextNodeId);
+								if (endpoint == endpointIds.end() || *endpoint != nextNodeId ||
+										endpointPresent[static_cast<size_t>(endpoint - endpointIds.begin())] == false) {
+									throw std::runtime_error(
+											"logical shortest-path procedure encountered an Edge with a missing endpoint");
+								}
+							} else {
+								// Older logical adapters have no cheap existence probe; retain
+								// the complete-read fallback for endpoint authentication.
+								static_cast<void>(readProcedureNode(snapshot, nextNodeId));
+							}
 							if (depths.contains(nextNodeId)) {
 								continue;
 							}
@@ -527,6 +582,104 @@ namespace graph::query::execution {
 			NodePropertyMaps node_properties;
 		};
 
+		constexpr size_t MAXIMUM_PROCEDURE_NODE_BATCH_ROWS = 256U;
+
+		[[nodiscard]] size_t procedureNodeBatchCapacity(const LogicalPlanReadRuntimeBounds &bounds) {
+			if (bounds.maximum_rows == 0U || bounds.maximum_materialized_bytes == 0U) {
+				throw std::invalid_argument("logical procedure runtime requires positive Node batch bounds");
+			}
+			// Reserve only a conservative minimum per complete Node.  The actual
+			// payload is checked after the read, but this prevents a small byte budget
+			// from staging the default 256 full records before that check can run.
+			constexpr size_t minimumNodeBytes = sizeof(BufferedProcedureRow) + sizeof(LogicalPlanReadRow) +
+					 sizeof(storage::LogicalGraphNode) + sizeof(PropertyValue);
+			const size_t byteCapacity = std::max<size_t>(
+				1U, bounds.maximum_materialized_bytes / std::max<size_t>(1U, minimumNodeBytes));
+			return std::min({MAXIMUM_PROCEDURE_NODE_BATCH_ROWS, bounds.maximum_rows, byteCapacity});
+		}
+
+		[[nodiscard]] size_t checkedProcedureSizeAdd(const size_t left, const size_t right) {
+			if (right > std::numeric_limits<size_t>::max() - left) {
+				throw std::overflow_error("logical procedure materialization size overflowed");
+			}
+			return left + right;
+		}
+
+		[[nodiscard]] size_t checkedProcedureSizeMul(const size_t left, const size_t right) {
+			if (right != 0U && left > std::numeric_limits<size_t>::max() / right) {
+				throw std::overflow_error("logical procedure materialization size overflowed");
+			}
+			return left * right;
+		}
+
+		[[nodiscard]] size_t procedureValueBytes(const LogicalPlanReadValue &value) {
+			size_t bytes = sizeof(value);
+			if (const auto *scalar = std::get_if<PropertyValue>(&value)) {
+				return checkedProcedureSizeAdd(bytes, property_utils::getPropertyValueSize(*scalar));
+			}
+			if (const auto *node = std::get_if<storage::LogicalGraphNode>(&value)) {
+				bytes = checkedProcedureSizeAdd(bytes, checkedProcedureSizeMul(node->labels.size(), sizeof(std::string)));
+				for (const std::string &label: node->labels) {
+					bytes = checkedProcedureSizeAdd(bytes, label.size());
+				}
+				bytes = checkedProcedureSizeAdd(
+						bytes, checkedProcedureSizeMul(node->properties.size(), sizeof(storage::LogicalGraphPropertyEntry)));
+				for (const storage::LogicalGraphPropertyEntry &entry: node->properties) {
+					bytes = checkedProcedureSizeAdd(bytes, entry.key.size());
+					bytes = checkedProcedureSizeAdd(bytes, property_utils::getPropertyValueSize(entry.value));
+				}
+				return bytes;
+			}
+			if (const auto *edge = std::get_if<storage::LogicalGraphEdge>(&value)) {
+				bytes = checkedProcedureSizeAdd(bytes, edge->type.size());
+				bytes = checkedProcedureSizeAdd(
+						bytes, checkedProcedureSizeMul(edge->properties.size(), sizeof(storage::LogicalGraphPropertyEntry)));
+				for (const storage::LogicalGraphPropertyEntry &entry: edge->properties) {
+					bytes = checkedProcedureSizeAdd(bytes, entry.key.size());
+					bytes = checkedProcedureSizeAdd(bytes, property_utils::getPropertyValueSize(entry.value));
+				}
+				return bytes;
+			}
+			return checkedProcedureSizeAdd(bytes, sizeof(storage::EntityRef));
+		}
+
+		[[nodiscard]] size_t bufferedProcedureRowBytes(const BufferedProcedureRow &buffered) {
+			size_t bytes = sizeof(buffered);
+			for (const auto &[name, value]: buffered.row.values) {
+				bytes = checkedProcedureSizeAdd(bytes, name.size());
+				bytes = checkedProcedureSizeAdd(bytes, procedureValueBytes(value));
+			}
+			for (const auto &[alias, properties]: buffered.row.property_cache) {
+				bytes = checkedProcedureSizeAdd(bytes, alias.size());
+				for (const auto &[key, value]: properties) {
+					bytes = checkedProcedureSizeAdd(bytes, key.size());
+					bytes = checkedProcedureSizeAdd(bytes, property_utils::getPropertyValueSize(value));
+				}
+			}
+			for (const auto &[alias, properties]: buffered.node_properties) {
+				bytes = checkedProcedureSizeAdd(bytes, sizeof(alias));
+				for (const auto &[key, value]: properties) {
+					bytes = checkedProcedureSizeAdd(bytes, key.size());
+					bytes = checkedProcedureSizeAdd(bytes, property_utils::getPropertyValueSize(value));
+				}
+			}
+			return bytes;
+		}
+
+		void validateBufferedProcedureBytes(const std::vector<BufferedProcedureRow> &rows, const size_t maximumBytes) {
+			if (maximumBytes == 0U) {
+				throw std::invalid_argument("logical procedure runtime requires a positive materialization byte bound");
+			}
+			size_t total = 0U;
+			for (const BufferedProcedureRow &row: rows) {
+				const size_t rowBytes = bufferedProcedureRowBytes(row);
+				if (rowBytes > maximumBytes - std::min(total, maximumBytes)) {
+					throw std::runtime_error("logical procedure materialization exceeded its byte bound");
+				}
+				total = checkedProcedureSizeAdd(total, rowBytes);
+			}
+		}
+
 		void appendBoundedProcedureRow(std::vector<BufferedProcedureRow> &rows, BufferedProcedureRow row,
 									  const size_t maximumRows, const std::string_view procedureName) {
 			if (maximumRows == 0U) {
@@ -619,11 +772,12 @@ namespace graph::query::execution {
 		}
 
 		[[nodiscard]] QueryResult makeProcedureResult(std::vector<BufferedProcedureRow> rows,
-											  const std::vector<std::string> &columns,
-											  const LogicalPlanReadRuntimeBounds &readBounds, const QueryContext &context) {
+															  const std::vector<std::string> &columns,
+															  const LogicalPlanReadRuntimeBounds &readBounds, const QueryContext &context) {
 			if (rows.size() > readBounds.maximum_rows) {
 				throw std::runtime_error("logical procedure exceeded its configured result-row bound");
 			}
+			validateBufferedProcedureBytes(rows, readBounds.maximum_materialized_bytes);
 			QueryResult result;
 			result.setColumns(columns);
 			for (BufferedProcedureRow &buffered: rows) {
@@ -664,25 +818,120 @@ namespace graph::query::execution {
 			return rows;
 		}
 
-		[[nodiscard]] std::vector<BufferedProcedureRow>
-		makeBufferedVectorProcedureRows(const std::vector<storage::LogicalGraphVectorSearchHit> &hits,
-										storage::LogicalGraphVectorSearchSnapshot &snapshot,
-										const QueryContext &context) {
-			std::vector<BufferedProcedureRow> rows;
-			rows.reserve(hits.size());
-			std::unordered_set<uint64_t> seenNodeIds;
-			seenNodeIds.reserve(hits.size());
+		[[nodiscard]] std::vector<storage::LogicalGraphNode>
+		materializeVectorHitNodes(const std::span<const storage::LogicalGraphVectorSearchHit> hits,
+				storage::LogicalGraphReadSnapshot &snapshot, const LogicalPlanReadRuntimeBounds &readBounds,
+				const QueryContext &context) {
+			const size_t nodeBatchRows = procedureNodeBatchCapacity(readBounds);
+			std::vector<uint64_t> sortedIds;
+			sortedIds.reserve(hits.size());
+			std::unordered_set<uint64_t> seen;
+			seen.reserve(hits.size());
 			uint64_t previousNodeId = 0U;
 			float previousScore = -std::numeric_limits<float>::infinity();
-			for (const storage::LogicalGraphVectorSearchHit &hit: hits) {
+			for (const auto &hit : hits) {
 				context.checkGuard();
 				if (hit.node_id == 0U || !std::isfinite(hit.score) ||
 					(hit.score < previousScore || (hit.score == previousScore && hit.node_id <= previousNodeId)) ||
-					!seenNodeIds.insert(hit.node_id).second) {
-					throw std::runtime_error(
-							"logical Vector procedure backend returned unordered or invalid search hits");
+					!seen.insert(hit.node_id).second) {
+					throw std::runtime_error("logical Vector procedure backend returned unordered or invalid search hits");
 				}
-				const storage::LogicalGraphNode node = snapshot.readNode(hit.node_id);
+				sortedIds.push_back(hit.node_id);
+				previousNodeId = hit.node_id;
+				previousScore = hit.score;
+			}
+			std::ranges::sort(sortedIds);
+			std::unordered_map<uint64_t, storage::LogicalGraphNode> nodes;
+			nodes.reserve(sortedIds.size());
+			for (size_t offset = 0U; offset < sortedIds.size(); offset += nodeBatchRows) {
+				const size_t count = std::min(nodeBatchRows, sortedIds.size() - offset);
+				const std::span<const uint64_t> batch(sortedIds.data() + offset, count);
+				const std::vector<storage::LogicalGraphNode> materialized =
+						snapshot.readNodesShapedSorted(batch, completeNodeReadShape());
+				if (materialized.size() != count) {
+					throw std::runtime_error("logical Vector procedure Node batch changed its cardinality");
+				}
+				for (size_t index = 0U; index < count; ++index) {
+					if (materialized[index].node_id != batch[index]) {
+						throw std::runtime_error("logical Vector procedure Node batch changed logical ID order");
+					}
+						nodes.emplace(materialized[index].node_id, materialized[index]);
+				}
+			}
+			std::vector<storage::LogicalGraphNode> aligned;
+			aligned.reserve(hits.size());
+			size_t retainedBytes = 0U;
+			for (const auto &hit : hits) {
+				const auto found = nodes.find(hit.node_id);
+				if (found == nodes.end()) {
+					throw std::runtime_error("logical Vector procedure Node batch lost a search hit");
+				}
+				LogicalPlanReadRow row;
+				row.values.emplace("node", found->second);
+				row.values.emplace("score", PropertyValue(static_cast<double>(hit.score)));
+				BufferedProcedureRow buffered{std::move(row), {}};
+				const size_t rowBytes = bufferedProcedureRowBytes(buffered);
+				if (rowBytes > readBounds.maximum_materialized_bytes -
+						std::min(retainedBytes, readBounds.maximum_materialized_bytes)) {
+					throw std::runtime_error("logical Vector procedure Node batches exceeded their materialized byte bound");
+				}
+				retainedBytes = checkedProcedureSizeAdd(retainedBytes, rowBytes);
+				aligned.push_back(found->second);
+			}
+			return aligned;
+		}
+
+		[[nodiscard]] std::unordered_map<uint64_t, storage::LogicalGraphNode>
+		materializeProcedureNodes(const std::span<const uint64_t> nodeIds,
+				storage::LogicalGraphReadSnapshot &snapshot, const LogicalPlanReadRuntimeBounds &readBounds,
+				const QueryContext &context) {
+			const size_t nodeBatchRows = procedureNodeBatchCapacity(readBounds);
+			std::vector<uint64_t> sortedIds(nodeIds.begin(), nodeIds.end());
+			std::ranges::sort(sortedIds);
+			sortedIds.erase(std::unique(sortedIds.begin(), sortedIds.end()), sortedIds.end());
+			std::unordered_map<uint64_t, storage::LogicalGraphNode> result;
+			result.reserve(sortedIds.size());
+			size_t retainedBytes = 0U;
+			for (size_t offset = 0U; offset < sortedIds.size(); offset += nodeBatchRows) {
+				context.checkGuard();
+				const size_t count = std::min(nodeBatchRows, sortedIds.size() - offset);
+				const auto batch = snapshot.readNodesShapedSorted(
+						std::span<const uint64_t>(sortedIds).subspan(offset, count), completeNodeReadShape());
+				if (batch.size() != count) {
+					throw std::runtime_error("logical procedure Node batch changed its cardinality");
+				}
+				for (size_t index = 0U; index < count; ++index) {
+					validateNode(batch[index]);
+					if (batch[index].node_id != sortedIds[offset + index]) {
+						throw std::runtime_error("logical procedure Node batch changed logical ID order");
+					}
+					LogicalPlanReadRow row;
+					row.values.emplace("node", batch[index]);
+					BufferedProcedureRow buffered{std::move(row), {}};
+					const size_t rowBytes = bufferedProcedureRowBytes(buffered);
+					if (rowBytes > readBounds.maximum_materialized_bytes -
+							std::min(retainedBytes, readBounds.maximum_materialized_bytes)) {
+						throw std::runtime_error("logical procedure Node batches exceeded their materialized byte bound");
+					}
+					retainedBytes = checkedProcedureSizeAdd(retainedBytes, rowBytes);
+					result.emplace(batch[index].node_id, batch[index]);
+				}
+			}
+			return result;
+		}
+
+		[[nodiscard]] std::vector<BufferedProcedureRow>
+		makeBufferedVectorProcedureRows(const std::vector<storage::LogicalGraphVectorSearchHit> &hits,
+										storage::LogicalGraphVectorSearchSnapshot &snapshot,
+										const LogicalPlanReadRuntimeBounds &readBounds, const QueryContext &context) {
+			std::vector<BufferedProcedureRow> rows;
+			rows.reserve(hits.size());
+		const std::vector<storage::LogicalGraphNode> nodes =
+				materializeVectorHitNodes(hits, snapshot, readBounds, context);
+		for (size_t index = 0U; index < hits.size(); ++index) {
+			const auto &hit = hits[index];
+				context.checkGuard();
+				const storage::LogicalGraphNode &node = nodes[index];
 				if (node.node_id != hit.node_id) {
 					throw std::runtime_error("logical Vector procedure backend resolved a mismatched Node identity");
 				}
@@ -692,8 +941,6 @@ namespace graph::query::execution {
 				buffered.row.values.emplace("node", node);
 				buffered.row.values.emplace("score", PropertyValue(static_cast<double>(hit.score)));
 				rows.push_back(std::move(buffered));
-				previousNodeId = hit.node_id;
-				previousScore = hit.score;
 			}
 			return rows;
 		}
@@ -706,6 +953,7 @@ namespace graph::query::execution {
 			if (rows.size() > readBounds.maximum_rows) {
 				throw std::runtime_error("logical procedure exceeded its configured result-row bound");
 			}
+			validateBufferedProcedureBytes(rows, readBounds.maximum_materialized_bytes);
 			QueryResult result;
 			result.setColumns(root.getOutputVariables());
 
@@ -726,8 +974,9 @@ namespace graph::query::execution {
 								projectedRows.push_back(std::move(buffered));
 							}
 						}
-						rows = std::move(projectedRows);
-						break;
+					rows = std::move(projectedRows);
+					validateBufferedProcedureBytes(rows, readBounds.maximum_materialized_bytes);
+					break;
 					}
 					case logical::LogicalOpType::LOP_FILTER: {
 						const auto &filter = dynamic_cast<const logical::LogicalFilter &>(*operation);
@@ -739,8 +988,9 @@ namespace graph::query::execution {
 								filteredRows.push_back(std::move(buffered));
 							}
 						}
-						rows = std::move(filteredRows);
-						break;
+					rows = std::move(filteredRows);
+					validateBufferedProcedureBytes(rows, readBounds.maximum_materialized_bytes);
+					break;
 					}
 					case logical::LogicalOpType::LOP_SKIP: {
 						const int64_t offset = dynamic_cast<const logical::LogicalSkip &>(*operation).getOffset();
@@ -813,6 +1063,7 @@ namespace graph::query::execution {
 						for (DecoratedRow &decorated: decoratedRows) {
 							rows.push_back(std::move(decorated.row));
 						}
+						validateBufferedProcedureBytes(rows, readBounds.maximum_materialized_bytes);
 						break;
 					}
 					default: // ZYX_COV_EXCL_LINE: execute() admits only the five unary types dispatched above.
@@ -846,7 +1097,7 @@ namespace graph::query::execution {
 									   const std::vector<const logical::LogicalOperator *> &operations,
 									   const logical::LogicalOperator &root,
 									   const LogicalPlanReadRuntimeBounds &readBounds, const QueryContext &context) {
-			return executeBufferedProcedure(makeBufferedVectorProcedureRows(hits, snapshot, context), snapshot,
+			return executeBufferedProcedure(makeBufferedVectorProcedureRows(hits, snapshot, readBounds, context), snapshot,
 											operations, root, readBounds, context);
 		}
 
@@ -1151,7 +1402,8 @@ namespace graph::query::execution {
 							spec, *snapshot,
 							{.maximum_nodes = readBounds.maximum_node_records,
 							 .maximum_metadata_pages = readBounds.maximum_metadata_pages_per_node_page,
-							 .maximum_edges_per_node = readBounds.maximum_edges_per_node},
+							 .maximum_edges_per_node = readBounds.maximum_edges_per_node,
+							 .maximum_property_bytes = readBounds.maximum_materialized_bytes},
 							[&context] { context.checkGuard(); });
 					if (!preparation.mutation) {
 						throw std::logic_error("logical projection catalog returned no prepared creation operation");
@@ -1420,6 +1672,7 @@ namespace graph::query::execution {
 					if (path.node_ids.size() != path.step_weights.size()) {
 						throw std::logic_error("logical Dijkstra returned an invalid path shape");
 					}
+					const auto nodeRecords = materializeProcedureNodes(path.node_ids, *snapshot, readBounds, context);
 					rows.reserve(path.node_ids.size());
 					double accumulatedCost = 0.0;
 					for (size_t index = 0U; index < path.node_ids.size(); ++index) {
@@ -1429,15 +1682,19 @@ namespace graph::query::execution {
 						if (index != 0U) {
 							accumulatedCost += path.step_weights[index];
 						}
-						const storage::LogicalGraphNode node = readProcedureNode(*snapshot, path.node_ids[index]);
+						const auto node = nodeRecords.find(path.node_ids[index]);
+						if (node == nodeRecords.end()) {
+							throw std::runtime_error("logical Dijkstra Node batch lost a path Node");
+						}
 						BufferedProcedureRow row;
 						row.row.values.emplace("nodeId", PropertyValue(checkedOutputNodeId(path.node_ids[index])));
-						row.row.values.emplace("node", node);
+						row.row.values.emplace("node", node->second);
 						row.row.values.emplace("cost", PropertyValue(accumulatedCost));
 						row.row.values.emplace("totalCost", PropertyValue(path.total_weight));
 						appendBoundedProcedureRow(rows, std::move(row), readBounds.maximum_rows,
-													  "gds.shortestPath.dijkstra.stream");
+														  "gds.shortestPath.dijkstra.stream");
 					}
+					validateBufferedProcedureBytes(rows, readBounds.maximum_materialized_bytes);
 					const double costTolerance =
 							std::numeric_limits<double>::epsilon() *
 							std::max({1.0, std::abs(accumulatedCost), std::abs(path.total_weight)}) * 8.0;
@@ -1667,14 +1924,25 @@ namespace graph::query::execution {
 		seenNodeIds.reserve(hits.size());
 		uint64_t previousNodeId = 0U;
 		float previousScore = -std::numeric_limits<float>::infinity();
-		for (const storage::LogicalGraphVectorSearchHit &hit: hits) {
+		const size_t vectorNodeBatchRows = procedureNodeBatchCapacity(readBounds);
+		for (size_t batchOffset = 0U; batchOffset < hits.size(); batchOffset += vectorNodeBatchRows) {
+			const size_t batchCount = std::min(vectorNodeBatchRows, hits.size() - batchOffset);
+			const std::span<const storage::LogicalGraphVectorSearchHit> hitBatch(hits.data() + batchOffset, batchCount);
+			const std::vector<storage::LogicalGraphNode> materializedNodes =
+					materializeVectorHitNodes(hitBatch, *snapshot, readBounds, context);
+			if (materializedNodes.size() != batchCount) {
+				throw std::runtime_error("logical Vector procedure Node batch changed its cardinality");
+			}
+			bool stopBatch = false;
+			for (size_t hitIndex = 0U; hitIndex < batchCount; ++hitIndex) {
+			const storage::LogicalGraphVectorSearchHit &hit = hitBatch[hitIndex];
 			context.checkGuard();
 			if (hit.node_id == 0U || !std::isfinite(hit.score) ||
 				(hit.score < previousScore || (hit.score == previousScore && hit.node_id <= previousNodeId)) ||
 				!seenNodeIds.insert(hit.node_id).second) {
 				throw std::runtime_error("logical Vector procedure backend returned unordered or invalid search hits");
 			}
-			const storage::LogicalGraphNode node = snapshot->readNode(hit.node_id);
+			const storage::LogicalGraphNode &node = materializedNodes[hitIndex];
 			if (node.node_id != hit.node_id) {
 				throw std::runtime_error("logical Vector procedure backend resolved a mismatched Node identity");
 			}
@@ -1686,6 +1954,8 @@ namespace graph::query::execution {
 			LogicalPlanReadRow row;
 			row.values.emplace("node", node);
 			row.values.emplace("score", PropertyValue(static_cast<double>(hit.score)));
+			validateBufferedProcedureBytes(std::vector<BufferedProcedureRow>{{row, nodeProperties}},
+					readBounds.maximum_materialized_bytes);
 			previousNodeId = hit.node_id;
 			previousScore = hit.score;
 			bool keepRow = true;
@@ -1734,6 +2004,7 @@ namespace graph::query::execution {
 			}
 			if (!keepRow) {
 				if (stopAfterCurrentRow) {
+					stopBatch = true;
 					break;
 				}
 				continue;
@@ -1753,6 +2024,11 @@ namespace graph::query::execution {
 			}
 			result.addRow(std::move(output));
 			if (stopAfterCurrentRow) {
+				stopBatch = true;
+				break;
+			}
+			}
+			if (stopBatch) {
 				break;
 			}
 		}

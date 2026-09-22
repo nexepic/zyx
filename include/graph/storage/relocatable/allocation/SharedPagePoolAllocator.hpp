@@ -107,6 +107,32 @@ namespace graph::storage {
 		std::vector<std::byte> payload;
 	};
 
+	// A read-only validated page view retains the Buffer Pool pin that owns its
+	// bytes. It is storage-internal and intentionally exposes no physical route
+	// outside typed storage code.
+	struct SharedPagePoolPinnedView {
+		CatalogEntry pool;
+		PageLocation location;
+		SharedPagePoolHeader pool_header;
+		PageOwnerHeader owner;
+		BufferPool::Pin pin;
+
+		SharedPagePoolPinnedView(CatalogEntry poolValue, PageLocation locationValue,
+											 SharedPagePoolHeader poolHeaderValue, PageOwnerHeader ownerValue,
+											 BufferPool::Pin pinValue) :
+				pool(std::move(poolValue)), location(std::move(locationValue)), pool_header(std::move(poolHeaderValue)),
+				owner(std::move(ownerValue)), pin(std::move(pinValue)) {}
+
+		SharedPagePoolPinnedView(SharedPagePoolPinnedView &&) noexcept = default;
+		SharedPagePoolPinnedView &operator=(SharedPagePoolPinnedView &&) noexcept = default;
+		SharedPagePoolPinnedView(const SharedPagePoolPinnedView &) = delete;
+		SharedPagePoolPinnedView &operator=(const SharedPagePoolPinnedView &) = delete;
+
+		[[nodiscard]] std::span<const std::byte> payload() const {
+			return pin.bytes().subspan(RSS_PAGE_OWNER_HEADER_BYTES, owner.payload_bytes);
+		}
+	};
+
 	// Prepared typed-page bytes that are durable before a caller publishes the
 	// matching Page Directory entries. This stays below B+Tree/Property codecs.
 	struct SharedPagePoolPreparedAppend {
@@ -225,6 +251,12 @@ namespace graph::storage {
 		// point-read working set.
 		[[nodiscard]] SharedPagePoolContents read(const MetadataSnapshotPin &snapshot, PageId pageId,
 												  BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
+		// Keeps the owned data frame pinned after validating the Page Directory,
+		// Catalog, pool control record, and page owner. A disabled Buffer Pool
+		// returns nullopt so callers can retain the copy-based compatibility path.
+		[[nodiscard]] std::optional<SharedPagePoolPinnedView>
+		readPinned(const MetadataSnapshotPin &snapshot, PageId pageId,
+					   BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
 		// This is a placement hint only. A caller still prepares its complete
 		// mutation under the metadata writer, which repeats the authoritative
 		// frame-capacity check before any directory root is published.
@@ -247,6 +279,17 @@ namespace graph::storage {
 														 const MetadataPublishOptions &options = {});
 
 	private:
+		// Typed scans may already hold a Page Directory location and Catalog entry
+		// authenticated from the same pinned snapshot. Reuse that route without
+		// repeating logical-tree lookups; physical pool and owner validation remains
+		// identical to the public PageId-based read path.
+		[[nodiscard]] SharedPagePoolContents readKnownLocation(
+				const MetadataSnapshotPin &snapshot, const CatalogEntry &pool, const PageLocation &location,
+				BufferPoolReadHint hint) const;
+		[[nodiscard]] std::optional<SharedPagePoolPinnedView> readPinnedKnownLocation(
+				const MetadataSnapshotPin &snapshot, const CatalogEntry &pool, const PageLocation &location,
+				BufferPoolReadHint hint) const;
+
 		// Typed page stores use this only after decoding a checked next-page route.
 		// It resolves the current snapshot mapping again before touching the cache,
 		// so a logical PageId is never treated as a physical address.

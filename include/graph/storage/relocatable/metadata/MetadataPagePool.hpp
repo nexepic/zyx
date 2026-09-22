@@ -88,6 +88,11 @@ namespace graph::storage {
 					 std::span<const PhysicalSlotId> excludedPoolSlots,
 					 std::span<const PhysicalSlotRange> excludedDataSlotRanges,
 					 const MetadataSlotReservationLookup *reservationLookup) override;
+		[[nodiscard]] std::vector<MetadataPageAllocation>
+		allocatePages(Generation generation, LogSequenceNumber checkpointLsn, size_t count,
+					  std::span<const PhysicalSlotId> excludedPoolSlots,
+					  std::span<const PhysicalSlotRange> excludedDataSlotRanges,
+					  const MetadataSlotReservationLookup *reservationLookup) override;
 		void beginUnpublishedBatch(const Superblock &current) override;
 		void endUnpublishedBatch(const Superblock &current) noexcept override;
 		void reserveMetadataFrames(size_t count, std::span<const PhysicalSlotId> excludedPoolSlots,
@@ -199,7 +204,8 @@ namespace graph::storage {
 		[[nodiscard]] PoolState &createPoolLocked(Generation generation, LogSequenceNumber checkpointLsn,
 												  std::span<const PhysicalSlotId> excludedPoolSlots,
 												  std::span<const PhysicalSlotRange> excludedDataSlotRanges = {},
-												  const MetadataSlotReservationLookup *reservationLookup = nullptr);
+												  const MetadataSlotReservationLookup *reservationLookup = nullptr,
+												  bool searchReusableSlot = true);
 		[[nodiscard]] std::optional<PhysicalSlotId>
 		findReusableFreeSlotLocked(Generation generation, std::span<const PhysicalSlotId> excludedPoolSlots,
 								   std::span<const PhysicalSlotRange> excludedDataSlotRanges = {},
@@ -211,7 +217,9 @@ namespace graph::storage {
 		void abandonUnpublishedBatchLocked(std::span<const PhysicalSlotId> poolSlots,
 										   std::span<const PhysicalSlotId> dataSlots,
 										   std::span<const PhysicalSlotRange> dataSlotRanges, uint64_t initialFileSize);
+		void writePoolLocked(PoolState &pool);
 		void writePoolLocked(const PoolState &pool);
+		void writePoolLockedKnownHeader(PoolState &pool, const MetadataPagePoolHeader &current);
 		// `recover()` can only clear poison after every retained in-memory pool
 		// still has the exact durable envelope/header it claims to represent.
 		void validateRegisteredPoolsLocked() const;

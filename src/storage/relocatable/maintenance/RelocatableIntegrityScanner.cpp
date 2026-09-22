@@ -379,7 +379,7 @@ namespace graph::storage {
 		std::map<uint64_t, StateLocation> scannedStates;
 		std::map<uint64_t, VectorPageHeader> vectorPages;
 		std::map<uint64_t, std::set<uint64_t>> rawVectorIdsByIndex;
-		std::map<StableSlotKey, EntityPageRecordKind> scannedEntitySlots;
+		std::map<StableSlotKey, std::pair<EntityPageRecordKind, uint64_t>> scannedEntitySlots;
 		std::map<StableSlotKey, std::vector<uint64_t>> scannedLabelSlots;
 		std::map<StableSlotKey, EntityPropertyKey> scannedEntityPropertySlots;
 		// Node and Edge logical IDs share the directory type with the native
@@ -429,7 +429,8 @@ namespace graph::storage {
 							// A typed Entity page enumerates each slot ordinal once and PageId
 							// uniqueness was established by the Location Directory above.
 							static_cast<void>(scannedEntitySlots.emplace(
-									stableSlotKey(location.page_id, slot, page.slotGeneration(slot)), header.record_kind));
+									stableSlotKey(location.page_id, slot, page.slotGeneration(slot)),
+									std::pair{header.record_kind, page.entityId(slot)}));
 						}
 					}
 					break;
@@ -845,9 +846,10 @@ namespace graph::storage {
 			const auto slot = scannedEntitySlots.find(slotKey);
 			// LocationLeaf decoding already requires nonzero EntityId, PageId, and
 			// slot generation; this scan owns target liveness and record-kind matching.
-			requireIntegrity(slot != scannedEntitySlots.end() && slot->second == expectedKind,
+			requireIntegrity(slot != scannedEntitySlots.end() && slot->second.first == expectedKind &&
+								 slot->second.second == location.entity_id,
 							 "relocatable integrity scan found an Entity Map entry that does not resolve to a live "
-							 "same-kind slot");
+							 "same-kind slot with the same Entity ID");
 			requireIntegrity(
 					mappedEntitySlots.insert(slotKey).second,
 					"relocatable integrity scan found multiple Entity Map entries for one live Entity page slot");
@@ -859,7 +861,7 @@ namespace graph::storage {
 			}
 			const EntityPage entityPage = EntityPage::open(page->second.owner, page->second.payload);
 			const std::optional<NodeEntityRecord> node =
-					entityPage.findNode(location.slot_id, location.slot_generation);
+					entityPage.findNode(location.slot_id, location.slot_generation, location.entity_id);
 			requireIntegrity(node.has_value(),
 							 "relocatable integrity scan found an Entity Map Node entry without a live Node record");
 			if (node->label_overflow.isEmpty()) {
@@ -922,7 +924,7 @@ namespace graph::storage {
 							 "relocatable integrity scan found an Edge Entity Map entry outside a current page");
 			const EntityPage entityPage = EntityPage::open(page->second.owner, page->second.payload);
 			const std::optional<EdgeEntityRecord> edge =
-					entityPage.findEdge(location.slot_id, location.slot_generation);
+					entityPage.findEdge(location.slot_id, location.slot_generation, location.entity_id);
 			requireIntegrity(edge.has_value(),
 							 "relocatable integrity scan found an Edge Entity Map entry without a live Edge record");
 			requireIntegrity(nativeNodes.contains(edge->source_node_id) && nativeNodes.contains(edge->target_node_id),

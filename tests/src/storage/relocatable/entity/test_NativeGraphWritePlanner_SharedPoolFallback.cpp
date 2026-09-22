@@ -149,6 +149,20 @@ TEST_F(NativeGraphWritePlannerSharedPoolFallbackTest,
 		generation.release();
 	}
 	pinned.release();
+
+	// Reopen the single-file stores to verify that the published root bindings,
+	// replacement pool pages, and their catalog metadata survive recovery rather
+	// than only working through the in-memory publication path.
+	reopenNativeStores();
+	BTreePageStore reopenedIndexes(*slotted_pages_, *metadata_);
+	BTreeIndex reopenedFirst(firstRoot.index_id, reopenedIndexes, *metadata_);
+	BTreeIndex reopenedSecond(secondRoot.index_id, reopenedIndexes, *metadata_);
+	BTreeIndex reopenedThird(thirdRoot.index_id, reopenedIndexes, *metadata_);
+	MetadataSnapshotPin recovered = metadata_->openSnapshot();
+	EXPECT_EQ(reopenedFirst.find(recovered, firstKey), std::optional<uint64_t>(1001U));
+	EXPECT_EQ(reopenedSecond.find(recovered, secondKey), std::optional<uint64_t>(2002U));
+	EXPECT_EQ(reopenedThird.find(recovered, thirdKey), std::optional<uint64_t>(3003U));
+	recovered.release();
 }
 
 TEST_F(NativeGraphWritePlannerSharedPoolFallbackTest,

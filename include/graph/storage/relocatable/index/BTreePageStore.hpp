@@ -333,8 +333,8 @@ namespace graph::storage {
 													  LogSequenceNumber checkpointLsn,
 													  const MetadataPublishOptions &publishOptions = {});
 		[[nodiscard]] std::optional<SegmentId> selectAppendPool(const MetadataSnapshotPin &snapshot,
-																std::span<const PageLocation> expectedReplacements,
-																size_t appendedPageCount) const;
+																	 std::span<const PageLocation> expectedReplacements,
+																	 size_t appendedPageCount, uint64_t poolOwnerId) const;
 		[[nodiscard]] static NewIndexTreePoolRequest newPoolRequest(IndexPagePoolGrowthOptions growth, uint64_t indexId,
 																	size_t appendedPageCount);
 		[[nodiscard]] SharedPagePoolAllocation upsertRootLeafImpl(uint64_t indexId, std::span<const std::byte> key,

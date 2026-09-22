@@ -21,6 +21,7 @@
 
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/StorageIO.hpp"
 #include "graph/storage/relocatable/index/BTreeIndex.hpp"
 #include "graph/storage/relocatable/index/IndexKeyCodec.hpp"
@@ -246,13 +247,21 @@ TEST_F(RelocatableOfflineScalarIndexMaterializerTest, MaterializesAndResumesLogi
 	publishPropertyTokens(catalog, planner, {"first", "last", "name", "weight"});
 
 	const std::vector<IndexDefinition> definitions = this->definitions();
+	const bool valuesWereEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
 	const OfflineScalarIndexMaterializationResult first = OfflineScalarIndexMaterializer::materialize(
 			definitions, pages, entities, labels, roots, catalog, *metadata, indexOptions());
+	const graph::debug::PerfTrace::Snapshot materializationTrace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
 	EXPECT_EQ(first.materialized_indexes, 7U);
 	EXPECT_EQ(first.verified_indexes, 0U);
 	EXPECT_EQ(first.deferred_vector_indexes, 1U);
 	EXPECT_EQ(first.empty_indexes_with_unassigned_property_keys, 1U);
 	EXPECT_EQ(first.indexed_entries, 7U);
+	ASSERT_TRUE(materializationTrace.contains("native_graph.read.property_selected_column_batch_owners"));
+	EXPECT_GT(materializationTrace.at("native_graph.read.property_selected_column_batch_owners").totalValue, 0);
+	EXPECT_FALSE(materializationTrace.contains("native_graph.read.property_optional_lookup"));
 
 	MetadataSnapshotPin snapshot = metadata->openSnapshot();
 	EXPECT_EQ(BTreeIndex(1, pages, *metadata).find(snapshot, IndexKeyCodec::encodeEntryKey(PropertyValue(int64_t(11)), 1)),

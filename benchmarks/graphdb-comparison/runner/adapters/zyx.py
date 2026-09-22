@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -42,6 +43,25 @@ class ZyxAdapter(BenchmarkAdapter):
         if execution_mode not in EXECUTION_MODES:
             return [self._failed_result("run_all", f"execution mode must be one of: {', '.join(EXECUTION_MODES)}")]
 
+        workloads = PROFILE_WORKLOADS[self.profile]
+        results: list[WorkloadResult] = []
+        for workload in workloads:
+            result, profile_events = self._run_workload(
+                workload, warmup=warmup, iterations=iterations, execution_mode=execution_mode
+            )
+            results.append(result)
+            if result.status != "ok":
+                break
+            self.profile_events.extend(profile_events)
+        return results
+
+    def _run_workload(
+        self,
+        workload: str,
+        warmup: int,
+        iterations: int,
+        execution_mode: str,
+    ) -> tuple[WorkloadResult, list[ProfileEvent]]:
         command = [
             str(self.binary),
             "--dataset",
@@ -58,29 +78,32 @@ class ZyxAdapter(BenchmarkAdapter):
             str(iterations),
             "--execution-mode",
             execution_mode,
+            "--workload",
+            workload,
         ]
         if self.threads is not None:
             command.extend(["--threads", str(self.threads)])
         command.append("--emit-profile")
+
         try:
+            # COSEC: an argument vector bypasses shell parsing, so paths and workload names cannot inject commands.
             completed = subprocess.run(
                 command, check=False, capture_output=True, text=True, timeout=self.timeout_seconds
             )
         except subprocess.TimeoutExpired:
-            return [self._failed_result("run_all", f"subprocess timed out after {self.timeout_seconds:g}s")]
+            return self._failed_result(
+                workload, f"subprocess for {workload} timed out after {self.timeout_seconds:g}s"
+            ), []
         except OSError as exc:
-            return [self._failed_result("run_all", str(exc))]
+            return self._failed_result(workload, str(exc)), []
 
-        workloads = PROFILE_WORKLOADS[self.profile]
-        results = {
-            workload: WorkloadResult("zyx", workload, self.scale, "ok", samples=[], equivalent_mode="api")
-            for workload in workloads
-        }
-        errors: list[WorkloadResult] = []
+        result = WorkloadResult("zyx", workload, self.scale, "ok", samples=[], equivalent_mode="api")
+        profile_events: list[ProfileEvent] = []
+        reported_errors: list[str] = []
         malformed: list[str] = []
-        for stream_name, output in [("stdout", completed.stdout), ("stderr", completed.stderr)]:
-            for line_number, line in enumerate(output.splitlines(), start=1):
-                line = line.strip()
+        for stream_name, output in (("stdout", completed.stdout), ("stderr", completed.stderr)):
+            for line_number, raw_line in enumerate(output.splitlines(), start=1):
+                line = raw_line.strip()
                 if not line:
                     continue
                 try:
@@ -91,22 +114,29 @@ class ZyxAdapter(BenchmarkAdapter):
                 if not isinstance(event, dict):
                     malformed.append(f"{stream_name}:{line_number}: JSONL event is not an object")
                     continue
-                self._consume_event(event, results, errors, malformed, stream_name, line_number)
+                self._consume_event(
+                    event,
+                    workload,
+                    result,
+                    profile_events,
+                    reported_errors,
+                    malformed,
+                    stream_name,
+                    line_number,
+                )
 
-        if completed.returncode != 0 and not errors:
-            detail = "; ".join(malformed) if malformed else (completed.stderr.strip() or completed.stdout.strip())
-            errors.append(self._failed_result("run_all", detail or f"subprocess exited {completed.returncode}"))
-        elif malformed:
-            errors.append(self._failed_result("subprocess_output", "; ".join(malformed)))
+        if malformed:
+            return self._failed_result(workload, "; ".join(malformed)), []
+        if reported_errors:
+            return self._failed_result(workload, "; ".join(reported_errors)), []
+        if completed.returncode != 0:
+            detail = completed.stderr.strip() or completed.stdout.strip()
+            return self._failed_result(workload, detail[:2000] or f"subprocess exited {completed.returncode}"), []
 
-        ok_results = [results[workload] for workload in workloads if results[workload].samples]
-        if errors:
-            return ok_results + errors
-
-        incomplete = self._incomplete_workloads(results, workloads, iterations)
+        incomplete = self._incomplete_samples(result.samples, workload, iterations)
         if incomplete:
-            return ok_results + [self._failed_result("run_all", "missing/incomplete samples for: " + "; ".join(incomplete))]
-        return [results[workload] for workload in workloads]
+            return self._failed_result(workload, incomplete), []
+        return result, profile_events
 
     def cleanup_artifacts(self) -> list[Path]:
         removed: list[Path] = []
@@ -119,6 +149,15 @@ class ZyxAdapter(BenchmarkAdapter):
             (path, True)
             for path in sorted(self.db_path.parent.glob(f"{self.db_path.name}.load-iteration-*"))
         ]
+        paths += [
+            (path, True)
+            for path in sorted(self.db_path.parent.glob(f"{self.db_path.name}.workload-*"))
+        ]
+        paths += [
+            (path, True)
+            for path in sorted(self.db_path.parent.glob(f"{self.db_path.name}.coldish-*"))
+        ]
+        paths += [(self.db_path.parent / f"{self.db_path.name}.benchmark-baseline", False)]
         for path, allow_directory in paths:
             if path.is_symlink() or path.is_file():
                 path.unlink()
@@ -129,61 +168,73 @@ class ZyxAdapter(BenchmarkAdapter):
             removed.append(path)
         return removed
 
-    def _incomplete_workloads(
-        self, results: dict[str, WorkloadResult], workloads: list[str], iterations: int
-    ) -> list[str]:
+    @staticmethod
+    def _incomplete_samples(samples: list[Sample], workload: str, iterations: int) -> str:
         expected_iterations = set(range(iterations))
-        incomplete: list[str] = []
-        for workload in workloads:
-            samples = results[workload].samples
-            sample_iterations = {sample.iteration for sample in samples}
-            if len(samples) != iterations or sample_iterations != expected_iterations:
-                missing = sorted(expected_iterations - sample_iterations)
-                duplicate_count = len(samples) - len(sample_iterations)
-                details = f"{workload} expected {iterations} samples"
-                if missing:
-                    details += f" missing samples for iterations {missing}"
-                if duplicate_count > 0:
-                    details += f" duplicate iterations {duplicate_count}"
-                incomplete.append(details)
-        return incomplete
+        sample_iterations = {sample.iteration for sample in samples}
+        if len(samples) == iterations and sample_iterations == expected_iterations:
+            return ""
+        missing = sorted(expected_iterations - sample_iterations)
+        unexpected = sorted(sample_iterations - expected_iterations)
+        duplicate_count = len(samples) - len(sample_iterations)
+        details = f"{workload} expected {iterations} samples"
+        if missing:
+            details += f"; missing iterations {missing}"
+        if unexpected:
+            details += f"; unexpected iterations {unexpected}"
+        if duplicate_count > 0:
+            details += f"; duplicate iterations {duplicate_count}"
+        return details
 
     def _consume_event(
         self,
         event: dict[str, Any],
-        results: dict[str, WorkloadResult],
-        errors: list[WorkloadResult],
+        expected_workload: str,
+        result: WorkloadResult,
+        profile_events: list[ProfileEvent],
+        reported_errors: list[str],
         malformed: list[str],
         stream_name: str,
         line_number: int,
     ) -> None:
         event_type = event.get("event")
-        workload = str(event.get("workload", "run_all"))
+        workload = event.get("workload")
+        location = f"{stream_name}:{line_number}"
+        if workload != expected_workload:
+            malformed.append(
+                f"{location}: unexpected workload for isolated subprocess {expected_workload!r}: {workload!r}"
+            )
+            return
         if event_type == "sample":
             try:
                 sample = Sample(
-                    database=str(event.get("database", "zyx")),
-                    workload=workload,
-                    scale=str(event.get("scale", self.scale)),
-                    iteration=int(event.get("iteration", 0)),
-                    latency_ms=float(event.get("latency_ms", 0.0)),
-                    status=str(event.get("status", "ok")),
-                    equivalent_mode=str(event.get("equivalent_mode", "api")),
+                    database=str(event["database"]),
+                    workload=str(workload),
+                    scale=str(event["scale"]),
+                    iteration=int(event["iteration"]),
+                    latency_ms=float(event["latency_ms"]),
+                    status=str(event["status"]),
+                    equivalent_mode=str(event["equivalent_mode"]),
                 )
-            except (TypeError, ValueError) as exc:
-                malformed.append(f"{stream_name}:{line_number}: invalid sample event: {exc}")
+            except (KeyError, TypeError, ValueError) as exc:
+                malformed.append(f"{location}: invalid sample event: {exc}")
                 return
-            if workload not in results:
-                malformed.append(
-                    f"{stream_name}:{line_number}: unexpected workload for profile {self.profile!r}: {workload}"
-                )
+            if (
+                sample.database != "zyx"
+                or sample.scale != self.scale
+                or sample.status != "ok"
+                or sample.equivalent_mode != "api"
+                or not math.isfinite(sample.latency_ms)
+                or sample.latency_ms < 0.0
+            ):
+                malformed.append(f"{location}: sample metadata or latency violates the ZYX benchmark contract")
                 return
-            results[workload].samples.append(sample)
+            result.samples.append(sample)
         elif event_type == "profile":
             try:
                 profile_event = ProfileEvent(
                     database=str(event["database"]),
-                    workload=workload,
+                    workload=str(workload),
                     scale=str(event["scale"]),
                     profile=str(event["profile"]),
                     iteration=int(event["iteration"]),
@@ -196,28 +247,25 @@ class ZyxAdapter(BenchmarkAdapter):
                     value_avg=float(event["value_avg"]) if "value_avg" in event else None,
                 )
             except (KeyError, TypeError, ValueError) as exc:
-                malformed.append(f"{stream_name}:{line_number}: invalid profile event: {exc}")
+                malformed.append(f"{location}: invalid profile event: {exc}")
                 return
-            if workload not in results:
-                malformed.append(
-                    f"{stream_name}:{line_number}: unexpected workload for profile {self.profile!r}: {workload}"
-                )
+            if (
+                profile_event.database != "zyx"
+                or profile_event.scale != self.scale
+                or profile_event.profile != self.profile
+                or profile_event.equivalent_mode != "api"
+                or profile_event.iteration < 0
+                or not math.isfinite(profile_event.total_time_ms)
+                or profile_event.total_time_ms < 0.0
+                or profile_event.calls < 0
+            ):
+                malformed.append(f"{location}: profile metadata or counters violate the ZYX benchmark contract")
                 return
-            self.profile_events.append(profile_event)
+            profile_events.append(profile_event)
         elif event_type in {"error", "failure"}:
-            errors.append(
-                WorkloadResult(
-                    database=str(event.get("database", "zyx")),
-                    workload=workload,
-                    scale=str(event.get("scale", self.scale)),
-                    status="failed",
-                    samples=[],
-                    error=str(event.get("error", "subprocess reported failure")),
-                    equivalent_mode=str(event.get("equivalent_mode", "api")),
-                )
-            )
+            reported_errors.append(str(event.get("error", "subprocess reported failure")))
         else:
-            malformed.append(f"{stream_name}:{line_number}: unknown event type: {event_type!r}")
+            malformed.append(f"{location}: unknown event type: {event_type!r}")
 
     def _failed_result(self, workload: str, error: str) -> WorkloadResult:
         return WorkloadResult("zyx", workload, self.scale, "failed", error=error, equivalent_mode="api")

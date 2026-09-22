@@ -12,12 +12,11 @@
 #include <array>
 #include <limits>
 #include <optional>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "graph/core/Edge.hpp"
-#include "graph/core/Node.hpp"
 #include "graph/core/Types.hpp"
 #include "graph/storage/relocatable/entity/EntityPage.hpp"
 #include "graph/storage/relocatable/index/BTreeIndex.hpp"
@@ -131,26 +130,6 @@ namespace graph::storage {
 			return std::ranges::binary_search(labels, labelId);
 		}
 
-		void validatePropertyOwner(const PropertyCollectionRoot &root, const EntityPropertyKey &key,
-								   const IndexDefinition &definition) {
-			const uint64_t expectedType =
-					definition.entity_kind == IndexDefinitionEntityKind::IDEK_NODE ? Node::typeId : Edge::typeId;
-			const uint8_t invalid = static_cast<uint8_t>(root.owner_entity_id != key.entity_id) |
-									static_cast<uint8_t>(root.owner_entity_type != expectedType);
-			if (invalid != 0U) {
-				fail(FormatError::FERR_INVALID_STATE,
-					 "offline scalar-index owner-keyed Property root disagrees with its Entity Map owner");
-			}
-		}
-
-		[[nodiscard]] const PropertyValue *findValue(const PropertyCollectionRoot &root, uint32_t token) {
-			const auto entry =
-					std::ranges::lower_bound(root.entries, token, {}, &PropertyCollectionRootEntry::key_token);
-			return entry == root.entries.end() || entry->key_token != token
-						   ? nullptr
-						   : &entry->value; // ZYX_COV_EXCL_LINE: caller tests presence with a canonical token.
-		}
-
 		[[nodiscard]] std::optional<std::vector<uint32_t>> resolvePropertyTokens(
 				const IndexDefinition &definition, const SystemCatalog &catalog, const MetadataSnapshotPin &snapshot,
 				size_t maximumPropertyNames) {
@@ -207,52 +186,92 @@ namespace graph::storage {
 									RelocatableMetadataStore &metadata, EntityPageStore &entities,
 									EntityLabelSetStore &labels, PropertyCollectionRootStore &properties,
 									const MetadataSnapshotPin &snapshot, ExternalBTreeEntrySorter &sorter) {
-			const auto addRoot = [&definition, &tokens, &sorter](const PropertyCollectionRoot &root) {
+			// Property roots are keyed by logical owner, while Entity Map traversal is
+			// page-oriented. Gather a bounded batch, order it by owner ID, and resolve
+			// all requested columns with one Directory merge. This removes the
+			// scale-dependent one-root lookup/full-decode loop without exposing
+			// physical locations to the index builder.
+			std::vector<uint32_t> selected_tokens = tokens;
+			std::ranges::sort(selected_tokens);
+			selected_tokens.erase(std::ranges::unique(selected_tokens).begin(), selected_tokens.end());
+			std::vector<size_t> token_ordinals;
+			token_ordinals.reserve(tokens.size());
+			for (const uint32_t token: tokens) {
+				token_ordinals.push_back(static_cast<size_t>(
+						std::ranges::lower_bound(selected_tokens, token) - selected_tokens.begin()));
+			}
+
+			const auto addValues = [&definition, &tokens, &token_ordinals, &sorter](
+					uint64_t entityId, const std::span<const std::optional<PropertyCollectionRootEntry>> columns) {
 				std::vector<PropertyValue> values;
 				values.reserve(tokens.size());
-				for (const uint32_t token: tokens) {
-					const PropertyValue *value = findValue(root, token);
-					if (value == nullptr) {
+				for (const size_t ordinal: token_ordinals) {
+					if (ordinal >= columns.size() || !columns[ordinal].has_value()) {
 						return;
 					}
-					values.push_back(*value);
+					values.push_back(columns[ordinal]->value);
 				}
 				const std::optional<std::vector<std::byte>> key =
 						definition.kind == IndexDefinitionKind::IDK_PROPERTY
-								? IndexKeyCodec::tryEncodeEntryKey(values.front(), root.owner_entity_id)
-								: IndexKeyCodec::tryEncodeCompositeEntryKey(values, root.owner_entity_id);
+								? IndexKeyCodec::tryEncodeEntryKey(values.front(), entityId)
+								: IndexKeyCodec::tryEncodeCompositeEntryKey(values, entityId);
 				if (key.has_value()) {
-					sorter.add({std::move(*key), root.owner_entity_id});
+					sorter.add({std::move(*key), entityId});
 				}
 			};
-			PropertyCollectionRootScanCursor propertyCursor = properties.openScanCursor(snapshot);
+
+			// Keep temporary owner and column storage bounded independently of the
+			// sorter's total-entry limit. The upper bound is deliberately local to
+			// this maintenance batch and does not define a persistent page capacity.
+			constexpr size_t PROPERTY_INDEX_BATCH_ENTRIES = 1024U;
+			const auto flush = [&](std::vector<uint64_t> &batch, const EntityPropertyOwnerKind ownerKind) {
+				if (batch.empty()) {
+					return;
+				}
+				std::ranges::sort(batch);
+				std::vector<EntityPropertyKey> keys;
+				keys.reserve(batch.size());
+				for (const uint64_t entityId: batch) {
+					keys.push_back({ownerKind, entityId});
+				}
+				std::vector<std::optional<PropertyCollectionRootEntry>> selected(keys.size() * selected_tokens.size());
+				properties.readEntityPropertiesOptionalSorted(snapshot, keys, selected_tokens, selected);
+				for (size_t index = 0U; index < batch.size(); ++index) {
+					addValues(batch[index],
+							std::span<const std::optional<PropertyCollectionRootEntry>>(
+									selected).subspan(index * selected_tokens.size(), selected_tokens.size()));
+				}
+				batch.clear();
+			};
+
 			if (definition.entity_kind == IndexDefinitionEntityKind::IDEK_NODE) {
+				std::vector<uint64_t> batch;
+				batch.reserve(PROPERTY_INDEX_BATCH_ENTRIES);
 				metadata.visitNodePageLocations(snapshot, [&](const EntityPageLocation &location) {
 					const NodeEntityRecord node = entities.readNodeAt(snapshot, location);
-					const EntityPropertyKey key{EntityPropertyOwnerKind::EPOK_NODE, location.entity_id};
-					const std::optional<PropertyCollectionRoot> root = propertyCursor.readEntityOptional(snapshot, key);
-					if (!root.has_value()) {
-						return;
-					}
-					validatePropertyOwner(*root, key, definition);
 					if (definition.label_token_id != 0U &&
 						!nodeHasLabel(labels.readNodeLabels(snapshot, node), definition.label_token_id)) {
 						return;
 					}
-					addRoot(*root);
+					batch.push_back(location.entity_id);
+					if (batch.size() == PROPERTY_INDEX_BATCH_ENTRIES) {
+						flush(batch, EntityPropertyOwnerKind::EPOK_NODE);
+					}
 				});
+				flush(batch, EntityPropertyOwnerKind::EPOK_NODE);
 				return;
 			}
+
+			std::vector<uint64_t> batch;
+			batch.reserve(PROPERTY_INDEX_BATCH_ENTRIES);
 			metadata.visitEdgePageLocations(snapshot, [&](const EntityPageLocation &location) {
 				static_cast<void>(entities.readEdgeAt(snapshot, location));
-				const EntityPropertyKey key{EntityPropertyOwnerKind::EPOK_EDGE, location.entity_id};
-				const std::optional<PropertyCollectionRoot> root = propertyCursor.readEntityOptional(snapshot, key);
-				if (!root.has_value()) {
-					return;
+				batch.push_back(location.entity_id);
+				if (batch.size() == PROPERTY_INDEX_BATCH_ENTRIES) {
+					flush(batch, EntityPropertyOwnerKind::EPOK_EDGE);
 				}
-				validatePropertyOwner(*root, key, definition);
-				addRoot(*root);
 			});
+			flush(batch, EntityPropertyOwnerKind::EPOK_EDGE);
 		}
 
 	} // namespace

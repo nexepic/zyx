@@ -26,6 +26,8 @@
 #include "graph/query/execution/TypedDistinctSet.hpp"
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -34,6 +36,20 @@
 #include <vector>
 
 namespace graph::query::execution {
+
+inline size_t checkedAggregateBytesAdd(size_t left, size_t right) {
+	if (right > std::numeric_limits<size_t>::max() - left) {
+		throw std::overflow_error("logical aggregate memory accounting overflowed");
+	}
+	return left + right;
+}
+
+inline size_t checkedAggregateBytesMul(size_t left, size_t right) {
+	if (right != 0U && left > std::numeric_limits<size_t>::max() / right) {
+		throw std::overflow_error("logical aggregate memory accounting overflowed");
+	}
+	return left * right;
+}
 
 /**
  * @enum AggregateFunctionType
@@ -82,6 +98,11 @@ public:
 	 * @return The aggregated value
 	 */
 	[[nodiscard]] virtual PropertyValue getResult() const = 0;
+
+	// Bytes retained by the accumulator after its last update. This is a
+	// payload estimate used by the logical runtime's aggregate memory guard;
+	// scalar accumulators normally retain no user-owned payload.
+	[[nodiscard]] virtual size_t retainedBytes() const { return 0U; }
 
 	/**
 	 * @brief Resets the accumulator to its initial state.
@@ -265,6 +286,9 @@ public:
 		}
 		return minValue_;
 	}
+	[[nodiscard]] size_t retainedBytes() const override {
+		return hasValue_ ? property_utils::getPropertyValueSize(minValue_) : 0U;
+	}
 
 	void reset() override {
 		minValue_ = PropertyValue();
@@ -311,6 +335,9 @@ public:
 		}
 		return maxValue_;
 	}
+	[[nodiscard]] size_t retainedBytes() const override {
+		return hasValue_ ? property_utils::getPropertyValueSize(maxValue_) : 0U;
+	}
 
 	void reset() override {
 		maxValue_ = PropertyValue();
@@ -347,6 +374,13 @@ public:
 	[[nodiscard]] PropertyValue getResult() const override {
 		return PropertyValue(values_);
 	}
+	[[nodiscard]] size_t retainedBytes() const override {
+		size_t total = checkedAggregateBytesMul(values_.capacity(), sizeof(PropertyValue));
+		for (const PropertyValue &value: values_) {
+			total = checkedAggregateBytesAdd(total, property_utils::getPropertyValueSize(value));
+		}
+		return total;
+	}
 
 	void reset() override {
 		values_.clear();
@@ -377,6 +411,7 @@ public:
 	[[nodiscard]] PropertyValue getResult() const override {
 		return PropertyValue(static_cast<int64_t>(seen_.size()));
 	}
+	[[nodiscard]] size_t retainedBytes() const override { return seen_.memoryBytes(); }
 
 	void reset() override {
 		seen_.clear();
@@ -409,6 +444,14 @@ public:
 
 	[[nodiscard]] PropertyValue getResult() const override {
 		return PropertyValue(values_);
+	}
+	[[nodiscard]] size_t retainedBytes() const override {
+		size_t total = checkedAggregateBytesAdd(
+				checkedAggregateBytesMul(values_.capacity(), sizeof(PropertyValue)), seen_.memoryBytes());
+		for (const PropertyValue &value: values_) {
+			total = checkedAggregateBytesAdd(total, property_utils::getPropertyValueSize(value));
+		}
+		return total;
 	}
 
 	void reset() override {
@@ -506,6 +549,13 @@ public:
 		size_t idx = static_cast<size_t>(std::floor(percentile_ * static_cast<double>(sorted.size() - 1)));
 		return sorted[idx];
 	}
+	[[nodiscard]] size_t retainedBytes() const override {
+		size_t total = checkedAggregateBytesMul(values_.capacity(), sizeof(PropertyValue));
+		for (const PropertyValue &value: values_) {
+			total = checkedAggregateBytesAdd(total, property_utils::getPropertyValueSize(value));
+		}
+		return total;
+	}
 
 	void reset() override {
 		values_.clear();
@@ -556,6 +606,13 @@ public:
 			: std::get<double>(sorted[hi].getVariant());
 		double frac = rank - static_cast<double>(lo);
 		return PropertyValue(loVal + frac * (hiVal - loVal));
+	}
+	[[nodiscard]] size_t retainedBytes() const override {
+		size_t total = checkedAggregateBytesMul(values_.capacity(), sizeof(PropertyValue));
+		for (const PropertyValue &value: values_) {
+			total = checkedAggregateBytesAdd(total, property_utils::getPropertyValueSize(value));
+		}
+		return total;
 	}
 
 	void reset() override {

@@ -8,13 +8,14 @@
 
 #pragma once
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
-#include <mutex>
 #include <optional>
+#include <span>
 #include <string>
+#include <string_view>
+#include <vector>
 
 #include "graph/storage/LogicalGraphRead.hpp"
 #include "graph/storage/relocatable/entity/PageBackedGraphReadAdapter.hpp"
@@ -37,7 +38,11 @@ namespace graph::storage {
 		[[nodiscard]] virtual std::string resolveRelationshipTypeToken(const MetadataSnapshotPin &snapshot,
 																				  uint64_t tokenId) const = 0;
 		[[nodiscard]] virtual std::string resolvePropertyKey(const MetadataSnapshotPin &snapshot,
-															 uint32_t tokenId) const = 0;
+																		 uint32_t tokenId) const = 0;
+		[[nodiscard]] virtual std::optional<uint32_t> resolvePropertyToken(const MetadataSnapshotPin &,
+																			 std::string_view) const { return std::nullopt; }
+		[[nodiscard]] virtual std::optional<uint64_t> resolveNodeLabelName(const MetadataSnapshotPin &,
+																		  std::string_view) const { return std::nullopt; }
 	};
 
 	class PageBackedLogicalGraphReadAdapter;
@@ -60,11 +65,14 @@ namespace graph::storage {
 	private:
 		friend class PageBackedLogicalGraphReadAdapter;
 		PageBackedLogicalGraphAdjacencyCursor(const PageBackedLogicalGraphReadAdapter &adapter,
-											 PageBackedGraphAdjacencyCursor native) :
-			adapter_(&adapter), native_(std::move(native)) {}
+											 PageBackedGraphAdjacencyCursor native, NativeReadSession *session,
+											 std::unique_ptr<NativeReadSession> ownedSession) :
+			adapter_(&adapter), native_(std::move(native)), session_(session), owned_session_(std::move(ownedSession)) {}
 
 		const PageBackedLogicalGraphReadAdapter *adapter_ = nullptr;
 		std::optional<PageBackedGraphAdjacencyCursor> native_;
+		NativeReadSession *session_ = nullptr;
+		std::unique_ptr<NativeReadSession> owned_session_;
 	};
 
 	// This adapter is intentionally separate from PageBackedGraphReadAdapter:
@@ -75,60 +83,128 @@ namespace graph::storage {
 	public:
 		PageBackedLogicalGraphReadAdapter(PageBackedGraphReadAdapter &pages, const PageBackedGraphNameResolver &names);
 
-		[[nodiscard]] LogicalGraphNode readNode(const MetadataSnapshotPin &snapshot, uint64_t nodeId) const;
-		[[nodiscard]] LogicalGraphEdge readEdge(const MetadataSnapshotPin &snapshot, uint64_t edgeId) const;
+		[[nodiscard]] LogicalGraphNode readNode(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
+																											 NativeReadSession *session = nullptr) const;
+		[[nodiscard]] LogicalGraphNode readNodeShaped(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
+																	 const EntityReadShape &shape,
+																	 NativeReadSession *session = nullptr) const;
+		[[nodiscard]] std::vector<LogicalGraphNode>
+		readNodesShapedSorted(const MetadataSnapshotPin &snapshot, std::span<const uint64_t> nodeIds,
+									  const EntityReadShape &shape, NativeReadSession *session = nullptr) const;
+		[[nodiscard]] LogicalGraphEdge readEdge(const MetadataSnapshotPin &snapshot, uint64_t edgeId,
+																																																				 NativeReadSession *session = nullptr) const;
+		[[nodiscard]] LogicalGraphEdge readEdgeShaped(const MetadataSnapshotPin &snapshot, uint64_t edgeId,
+																	 const EntityReadShape &shape,
+																	 NativeReadSession *session = nullptr) const;
+		[[nodiscard]] std::vector<LogicalGraphEdge>
+		readEdgesShapedSorted(const MetadataSnapshotPin &snapshot, std::span<const uint64_t> edgeIds,
+									  const EntityReadShape &shape, NativeReadSession *session = nullptr) const;
+		[[nodiscard]] PropertyValue readNodeProperty(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
+																																				 std::string_view key, NativeReadSession *session = nullptr) const;
+		[[nodiscard]] bool nodePropertyExists(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
+																																				 std::string_view key, NativeReadSession *session = nullptr) const;
+		[[nodiscard]] std::vector<PropertyValue>
+		readNodePropertiesSorted(const MetadataSnapshotPin &snapshot, std::span<const uint64_t> nodeIds,
+									 std::string_view key, NativeReadSession *session = nullptr) const;
+		[[nodiscard]] std::vector<std::vector<PropertyValue>>
+		readNodePropertyColumnsSorted(const MetadataSnapshotPin &snapshot, std::span<const uint64_t> nodeIds,
+															 std::span<const std::string_view> keys,
+															 NativeReadSession *session = nullptr) const;
+		[[nodiscard]] PropertyValue readEdgeProperty(const MetadataSnapshotPin &snapshot, uint64_t edgeId,
+																																				 std::string_view key, NativeReadSession *session = nullptr) const;
+		[[nodiscard]] bool edgePropertyExists(const MetadataSnapshotPin &snapshot, uint64_t edgeId,
+																																				 std::string_view key, NativeReadSession *session = nullptr) const;
+		[[nodiscard]] std::vector<PropertyValue>
+		readEdgePropertiesSorted(const MetadataSnapshotPin &snapshot, std::span<const uint64_t> edgeIds,
+									 std::string_view key, NativeReadSession *session = nullptr) const;
+		[[nodiscard]] std::vector<std::vector<PropertyValue>>
+		readEdgePropertyColumnsSorted(const MetadataSnapshotPin &snapshot, std::span<const uint64_t> edgeIds,
+															 std::span<const std::string_view> keys,
+															 NativeReadSession *session = nullptr) const;
+		[[nodiscard]] bool nodeHasLabels(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
+													 const std::vector<std::string> &labels,
+													 NativeReadSession *session = nullptr) const;
+		[[nodiscard]] std::vector<bool> readNodeLabelMatchesSorted(
+				const MetadataSnapshotPin &snapshot, std::span<const uint64_t> nodeIds,
+				const std::vector<std::string> &labels, NativeReadSession *session = nullptr) const;
+		[[nodiscard]] EntityRef readNodeRef(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
+																	 const EntityReadShape &shape, NativeReadSession *session = nullptr) const;
+		[[nodiscard]] EntityRef readEdgeRef(const MetadataSnapshotPin &snapshot, uint64_t edgeId,
+																			 const EntityReadShape &shape, NativeReadSession *session = nullptr) const;
+		// Converts a native record already authenticated by an index or support-tree
+		// lookup. This avoids reopening the same Entity and Property pages solely
+		// to translate its tokens into a query-facing record.
+		[[nodiscard]] LogicalGraphNode materializeNativeNode(const MetadataSnapshotPin &snapshot,
+																	 const PageBackedGraphNode &node,
+																	 NativeReadSession *session = nullptr) const;
 		[[nodiscard]] bool visitNodesUntil(const MetadataSnapshotPin &snapshot, size_t maximumRecords,
-										   const std::function<bool(const LogicalGraphNode &)> &visitor) const;
+																	   const std::function<bool(const LogicalGraphNode &)> &visitor,
+																	   NativeReadSession *session = nullptr) const;
+		[[nodiscard]] bool visitNodeRefsUntil(const MetadataSnapshotPin &snapshot, size_t maximumRecords,
+														  const std::function<bool(const EntityRef &)> &visitor,
+														  NativeReadSession *session = nullptr) const;
+		[[nodiscard]] bool visitNodeRefsWithLabelMatchesUntil(
+				const MetadataSnapshotPin &snapshot, size_t maximumRecords, const std::vector<std::string> &labels,
+				const std::function<bool(const EntityRef &, bool)> &visitor, NativeReadSession *session = nullptr) const;
 		[[nodiscard]] bool visitEdgesUntil(const MetadataSnapshotPin &snapshot, size_t maximumRecords,
-										   const std::function<bool(const LogicalGraphEdge &)> &visitor) const;
+																	   const std::function<bool(const LogicalGraphEdge &)> &visitor,
+																	   NativeReadSession *session = nullptr) const;
+		[[nodiscard]] bool visitEdgeRefsUntil(const MetadataSnapshotPin &snapshot, size_t maximumRecords,
+														  const std::function<bool(const EntityRef &)> &visitor,
+														  NativeReadSession *session = nullptr) const;
 		[[nodiscard]] bool visitEdgeTopologiesUntil(
 				const MetadataSnapshotPin &snapshot, size_t maximumRecords,
-				const std::function<bool(const LogicalGraphEdgeTopology &)> &visitor) const;
+				const std::function<bool(const LogicalGraphEdgeTopology &)> &visitor,
+				NativeReadSession *session = nullptr) const;
 		[[nodiscard]] LogicalGraphNodePage scanNodesAfter(const MetadataSnapshotPin &snapshot, uint64_t afterNodeId,
-														  size_t maximumRecords, size_t maximumMetadataPages) const;
+																	  size_t maximumRecords, size_t maximumMetadataPages,
+																	  NativeReadSession *session = nullptr) const;
 		[[nodiscard]] LogicalGraphAdjacencyPage
 		scanAdjacentEdges(const MetadataSnapshotPin &snapshot, uint64_t nodeId, LogicalGraphReadDirection direction,
-						  std::optional<LogicalGraphAdjacencyContinuation> continuation, size_t maximumRecords) const;
+							  std::optional<LogicalGraphAdjacencyContinuation> continuation, size_t maximumRecords,
+							  NativeReadSession *session = nullptr) const;
+		[[nodiscard]] LogicalGraphAdjacencyTopologyPage
+		scanAdjacentEdgeTopologies(const MetadataSnapshotPin &snapshot, uint64_t nodeId, LogicalGraphReadDirection direction,
+									std::optional<LogicalGraphAdjacencyContinuation> continuation,
+									size_t maximumRecords, NativeReadSession *session = nullptr) const;
+		[[nodiscard]] LogicalGraphAdjacencyReferencePage
+		scanAdjacentEdgeRefs(const MetadataSnapshotPin &snapshot, uint64_t nodeId, LogicalGraphReadDirection direction,
+						 std::optional<LogicalGraphAdjacencyContinuation> continuation,
+						 size_t maximumRecords, NativeReadSession *session = nullptr) const;
 		[[nodiscard]] PageBackedLogicalGraphAdjacencyCursor
 		openAdjacentEdgeCursor(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
-							   LogicalGraphReadDirection direction) const;
+							   LogicalGraphReadDirection direction, NativeReadSession *session = nullptr) const;
 		[[nodiscard]] bool visitAdjacentEdgesUntil(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
-												   LogicalGraphReadDirection direction, size_t maximumRecords,
-												   const std::function<bool(const LogicalGraphEdge &)> &visitor) const;
+														   LogicalGraphReadDirection direction, size_t maximumRecords,
+														   const std::function<bool(const LogicalGraphEdge &)> &visitor,
+														   NativeReadSession *session = nullptr) const;
 		[[nodiscard]] bool
 		visitAdjacentEdgeTopologiesUntil(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
-										 LogicalGraphReadDirection direction, size_t maximumRecords,
-										 const std::function<bool(const LogicalGraphEdgeTopology &)> &visitor) const;
+											 LogicalGraphReadDirection direction, size_t maximumRecords,
+											 const std::function<bool(const LogicalGraphEdgeTopology &)> &visitor,
+											 NativeReadSession *session = nullptr) const;
+		[[nodiscard]] bool visitAdjacentEdgeRefsForNodesUntil(
+				const MetadataSnapshotPin &snapshot, std::span<const uint64_t> nodeIds,
+				LogicalGraphReadDirection direction, size_t maximumRecords,
+				const std::function<bool(const EntityRef &)> &visitor,
+				NativeReadSession *session = nullptr) const;
 
 	private:
 		[[nodiscard]] LogicalGraphNode materializeNode(const MetadataSnapshotPin &snapshot,
-													   const PageBackedGraphNode &node) const;
+																	   const PageBackedGraphNode &node, NativeReadSession &session) const;
 		[[nodiscard]] LogicalGraphEdge materializeEdge(const MetadataSnapshotPin &snapshot,
-																	   const PageBackedGraphEdge &edge) const;
-		[[nodiscard]] std::string resolveNodeLabelName(const MetadataSnapshotPin &snapshot, uint64_t tokenId) const;
+																	   const PageBackedGraphEdge &edge, NativeReadSession &session) const;
+		[[nodiscard]] std::string resolveNodeLabelName(const MetadataSnapshotPin &snapshot, uint64_t tokenId,
+																		   NativeReadSession &session) const;
 		[[nodiscard]] std::string resolveRelationshipTypeName(const MetadataSnapshotPin &snapshot,
-																				uint64_t tokenId) const;
-		[[nodiscard]] std::string resolvePropertyKeyName(const MetadataSnapshotPin &snapshot, uint32_t tokenId) const;
-		// Caller holds name_cache_mutex_. A cache entry is never shared across
-		// metadata generations, so a pinned older snapshot cannot observe a name
-		// resolved from a later System Catalog generation.
-		void alignNameCacheGeneration(uint64_t generation) const;
-		struct TokenNameCacheEntry {
-			uint64_t token_id = 0U;
-			std::string name;
-		};
-		// The cache is an opportunistic direct map, not a catalog. A collision
-		// simply resolves the name again, keeping memory bounded for huge schemas.
-		static constexpr size_t NAME_CACHE_SLOT_COUNT = 256U;
-		using TokenNameCache = std::array<TokenNameCacheEntry, NAME_CACHE_SLOT_COUNT>;
+																							 uint64_t tokenId, NativeReadSession &session) const;
+		[[nodiscard]] std::string resolvePropertyKeyName(const MetadataSnapshotPin &snapshot, uint32_t tokenId,
+														 NativeReadSession &session) const;
+		[[nodiscard]] std::optional<std::vector<uint64_t>> resolveNodeLabelTokens(
+				const MetadataSnapshotPin &snapshot, std::span<const std::string> labels, NativeReadSession &session) const;
 
 		PageBackedGraphReadAdapter &pages_;
 		const PageBackedGraphNameResolver &names_;
-		mutable std::mutex name_cache_mutex_;
-		mutable uint64_t name_cache_generation_ = 0U;
-		mutable TokenNameCache node_label_names_{};
-		mutable TokenNameCache relationship_type_names_{};
-		mutable TokenNameCache property_key_names_{};
 		friend class PageBackedLogicalGraphAdjacencyCursor;
 	};
 

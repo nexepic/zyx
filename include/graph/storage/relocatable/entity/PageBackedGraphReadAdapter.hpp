@@ -13,11 +13,15 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <span>
+#include <utility>
 #include <vector>
 
+#include "graph/storage/LogicalGraphRead.hpp"
 #include "graph/storage/relocatable/adjacency/GlobalAdjacencyIndex.hpp"
 #include "graph/storage/relocatable/entity/EntityLabelSetStore.hpp"
 #include "graph/storage/relocatable/entity/EntityPageStore.hpp"
+#include "graph/storage/relocatable/entity/NativeReadSession.hpp"
 #include "graph/storage/relocatable/property/PropertyCollectionRoot.hpp"
 
 namespace graph::storage {
@@ -82,6 +86,14 @@ namespace graph::storage {
 		bool operator==(const PageBackedGraphAdjacencyPage &) const = default;
 	};
 
+	struct PageBackedGraphAdjacencyTopologyPage {
+		std::vector<EdgeEntityRecord> edges;
+		std::vector<uint64_t> edge_ids;
+		std::optional<PageBackedGraphAdjacencyContinuation> continuation;
+
+		bool operator==(const PageBackedGraphAdjacencyTopologyPage &) const = default;
+	};
+
 	class PageBackedGraphReadAdapter;
 
 	// This cursor is an implementation detail of one logical read snapshot. It
@@ -102,15 +114,20 @@ namespace graph::storage {
 	private:
 		friend class PageBackedGraphReadAdapter;
 		PageBackedGraphAdjacencyCursor(const PageBackedGraphReadAdapter &adapter, uint64_t nodeId,
-									   PageBackedGraphReadDirection direction,
-									   std::unique_ptr<PropertyCollectionRootScanCursor> propertyCursor) :
+										   PageBackedGraphReadDirection direction,
+										   std::unique_ptr<PropertyCollectionRootScanCursor> propertyCursor,
+										   NativeReadSession *session,
+										   std::unique_ptr<NativeReadSession> ownedSession) :
 			adapter_(&adapter), node_id_(nodeId), direction_(direction),
-			property_cursor_(std::move(propertyCursor)) {}
+							property_cursor_(std::move(propertyCursor)), session_(session),
+							owned_session_(std::move(ownedSession)) {}
 
 		const PageBackedGraphReadAdapter *adapter_ = nullptr;
 		uint64_t node_id_ = 0U;
 		PageBackedGraphReadDirection direction_ = PageBackedGraphReadDirection::PBGRD_OUTGOING;
 		std::unique_ptr<PropertyCollectionRootScanCursor> property_cursor_;
+		NativeReadSession *session_ = nullptr;
+		std::unique_ptr<NativeReadSession> owned_session_;
 	};
 
 	// The adapter is deliberately read-only. Write-side publication keeps page
@@ -123,42 +140,183 @@ namespace graph::storage {
 								   BTreePageStore &indexes,
 								   size_t maximumAdjacencyEdges = 10'000'000U);
 
-		[[nodiscard]] PageBackedGraphNode readNode(const MetadataSnapshotPin &snapshot, uint64_t nodeId) const;
-		[[nodiscard]] PageBackedGraphEdge readEdge(const MetadataSnapshotPin &snapshot, uint64_t edgeId) const;
+		[[nodiscard]] PageBackedGraphNode readNode(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
+																		  NativeReadSession *session = nullptr) const;
+		[[nodiscard]] NodeEntityRecord readNodeRecord(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
+																		 NativeReadSession *session = nullptr) const;
+		// Resolves strictly increasing logical IDs with one Entity-Map batch. The
+		// returned records contain no physical locations and are cached only in the
+		// caller's snapshot-bound session.
+		[[nodiscard]] std::vector<NodeEntityRecord>
+		readNodeRecordsSorted(const MetadataSnapshotPin &snapshot, std::span<const uint64_t> nodeIds,
+								  NativeReadSession *session = nullptr) const;
+		// Reads the Node's authenticated Property root without opening its label
+		// set. Shape-aware logical reads use this when labels are not requested.
+		[[nodiscard]] std::vector<PropertyCollectionRootEntry>
+		readNodeProperties(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
+																	 NativeReadSession *session = nullptr) const;
+		// Reads complete Node Property roots in logical-ID order through one
+		// snapshot-bound Property Directory cursor. Missing roots produce empty
+		// vectors while malformed locations still fail closed.
+		[[nodiscard]] std::vector<std::vector<PropertyCollectionRootEntry>>
+		readNodePropertiesSorted(const MetadataSnapshotPin &snapshot, std::span<const uint64_t> nodeIds,
+																	 NativeReadSession *session = nullptr) const;
+		// Returns compact label tokens without opening the Node Property root.
+		[[nodiscard]] std::vector<uint64_t> readNodeLabelTokens(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
+																																								   NativeReadSession *session = nullptr) const;
+		[[nodiscard]] std::vector<std::vector<uint64_t>> readNodeLabelTokensSorted(
+				const MetadataSnapshotPin &snapshot, std::span<const uint64_t> nodeIds,
+				NativeReadSession *session = nullptr) const;
+		[[nodiscard]] std::optional<PropertyValue> readNodeProperty(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
+																																								 uint32_t propertyToken,
+																																								 NativeReadSession *session = nullptr) const;
+		[[nodiscard]] bool nodePropertyExists(const MetadataSnapshotPin &snapshot, uint64_t nodeId, uint32_t propertyToken,
+																											 NativeReadSession *session = nullptr) const;
+		// Reads one selected Property for strictly ascending Node IDs through the
+		// Property-directory multi-lookup path. Output positions match input IDs.
+		[[nodiscard]] std::vector<std::optional<PropertyValue>>
+		readNodePropertiesSorted(const MetadataSnapshotPin &snapshot, std::span<const uint64_t> nodeIds,
+																								 uint32_t propertyToken,
+																								 NativeReadSession *session = nullptr) const;
+		[[nodiscard]] std::vector<std::vector<std::optional<PropertyValue>>>
+		readNodePropertyColumnsSorted(const MetadataSnapshotPin &snapshot, std::span<const uint64_t> nodeIds,
+																																					 std::span<const uint32_t> propertyTokens,
+																																				 NativeReadSession *session = nullptr) const;
+		// Reads selected Node Property columns and their authenticated root counts
+		// through one ordered Property Directory merge.
+		[[nodiscard]] std::pair<std::vector<std::vector<std::optional<PropertyValue>>>,
+													std::vector<std::optional<size_t>>>
+		readNodePropertyColumnsAndCountsSorted(const MetadataSnapshotPin &snapshot,
+																																 std::span<const uint64_t> nodeIds,
+																																	 std::span<const uint32_t> propertyTokens,
+																																				 NativeReadSession *session = nullptr) const;
+		// Reads only the authenticated Property-root framing used to enforce a
+		// caller-supplied bound. It deliberately does not decode Property values.
+		[[nodiscard]] size_t nodePropertyCount(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
+																									 NativeReadSession *session = nullptr) const;
+		[[nodiscard]] std::vector<std::optional<size_t>> nodePropertyCountsSorted(
+																		const MetadataSnapshotPin &snapshot, std::span<const uint64_t> nodeIds,
+																		NativeReadSession *session = nullptr) const;
+		[[nodiscard]] bool nodeHasLabelTokens(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
+													 std::span<const uint64_t> labelTokens,
+													 NativeReadSession *session = nullptr) const;
+		[[nodiscard]] std::vector<bool> readNodeLabelMatchesSorted(
+				const MetadataSnapshotPin &snapshot, std::span<const uint64_t> nodeIds,
+				std::span<const uint64_t> labelTokens, NativeReadSession *session = nullptr) const;
+		[[nodiscard]] std::optional<PropertyValue> readEdgeProperty(const MetadataSnapshotPin &snapshot, uint64_t edgeId,
+																																								 uint32_t propertyToken,
+																																								 NativeReadSession *session = nullptr) const;
+		[[nodiscard]] bool edgePropertyExists(const MetadataSnapshotPin &snapshot, uint64_t edgeId, uint32_t propertyToken,
+																											 NativeReadSession *session = nullptr) const;
+		// Edge IDs use the same ordered selected-read primitive under their distinct
+		// owner namespace, so Node and Edge property batches never alias.
+		[[nodiscard]] std::vector<std::optional<PropertyValue>>
+		readEdgePropertiesSorted(const MetadataSnapshotPin &snapshot, std::span<const uint64_t> edgeIds,
+																								 uint32_t propertyToken,
+																								 NativeReadSession *session = nullptr) const;
+		[[nodiscard]] std::vector<std::vector<std::optional<PropertyValue>>>
+		readEdgePropertyColumnsSorted(const MetadataSnapshotPin &snapshot, std::span<const uint64_t> edgeIds,
+																								 std::span<const uint32_t> propertyTokens,
+																								 NativeReadSession *session = nullptr) const;
+		// Verifies an index candidate through fixed-record labels and only the
+		// requested Property tokens. It deliberately avoids constructing a full
+		// graph-facing Node for index covered predicates.
+		void validateNodeExactProperties(const MetadataSnapshotPin &snapshot, uint64_t nodeId, uint64_t labelToken,
+															 std::span<const uint32_t> propertyTokens,
+															 std::span<const PropertyValue> expectedValues,
+															 size_t maximumPropertyEntries,
+															 NativeReadSession *session = nullptr) const;
+		// Validates a strictly ascending candidate batch with one ordered Property
+		// Directory merge. A valid B+Tree page authenticates its own bytes, not the
+		// cross-record relationship to the authoritative Property collection, so the
+		// value comparison remains mandatory even for an exact index lookup.
+		void validateNodeExactPropertiesSorted(const MetadataSnapshotPin &snapshot,
+															   std::span<const uint64_t> nodeIds, uint64_t labelToken,
+															   std::span<const uint32_t> propertyTokens,
+															   std::span<const PropertyValue> expectedValues,
+															   size_t maximumPropertyEntries,
+															   NativeReadSession *session = nullptr) const;
+		[[nodiscard]] PageBackedGraphEdge readEdge(const MetadataSnapshotPin &snapshot, uint64_t edgeId,
+																		  NativeReadSession *session = nullptr) const;
+		// Internal topology point read used by projection-aware query rows. It
+		// intentionally does not open an owner-keyed Property root.
+		[[nodiscard]] EdgeEntityRecord readEdgeTopology(const MetadataSnapshotPin &snapshot, uint64_t edgeId,
+																						 NativeReadSession *session = nullptr) const;
+		// Reads the Edge's authenticated Property root without reopening its fixed
+		// Entity record. Complete shaped batches use this to materialize directly
+		// from their already-resolved topology records.
+		[[nodiscard]] std::vector<PropertyCollectionRootEntry>
+		readEdgeProperties(const MetadataSnapshotPin &snapshot, uint64_t edgeId,
+																	 NativeReadSession *session = nullptr) const;
+		[[nodiscard]] std::vector<std::vector<PropertyCollectionRootEntry>>
+		readEdgePropertiesSorted(const MetadataSnapshotPin &snapshot, std::span<const uint64_t> edgeIds,
+																	 NativeReadSession *session = nullptr) const;
+		[[nodiscard]] std::vector<EdgeEntityRecord>
+		readEdgeTopologiesSorted(const MetadataSnapshotPin &snapshot, std::span<const uint64_t> edgeIds,
+											 NativeReadSession *session = nullptr) const;
 		// These scans consume Entity Map entries directly through EntityPageStore.
 		// They retain only logical IDs above the storage boundary and do not probe
 		// physical page order or legacy fixed records.
 		[[nodiscard]] bool visitNodesUntil(const MetadataSnapshotPin &snapshot, size_t maximumRecords,
-										   const std::function<bool(const PageBackedGraphNode &)> &visitor) const;
+														   const std::function<bool(const PageBackedGraphNode &)> &visitor,
+														   NativeReadSession *session = nullptr) const;
+		[[nodiscard]] bool visitNodeRefsUntil(const MetadataSnapshotPin &snapshot, size_t maximumRecords,
+														  const std::function<bool(const EntityRef &)> &visitor,
+														  NativeReadSession *session = nullptr) const;
+		// The Entity-page visitor already authenticates each fixed Node record. This
+		// variant consumes the same record to test label tokens before exposing a
+		// logical reference, avoiding a second Entity-Map point read per candidate.
+		[[nodiscard]] bool visitNodeRefsWithLabelTokenMatchesUntil(
+				const MetadataSnapshotPin &snapshot, size_t maximumRecords, std::span<const uint64_t> labelTokens,
+				const std::function<bool(const EntityRef &, bool)> &visitor, NativeReadSession *session = nullptr) const;
 		[[nodiscard]] bool visitEdgesUntil(const MetadataSnapshotPin &snapshot, size_t maximumRecords,
-										   const std::function<bool(const PageBackedGraphEdge &)> &visitor) const;
+														   const std::function<bool(const PageBackedGraphEdge &)> &visitor,
+														   NativeReadSession *session = nullptr) const;
+		[[nodiscard]] bool visitEdgeRefsUntil(const MetadataSnapshotPin &snapshot, size_t maximumRecords,
+														  const std::function<bool(const EntityRef &)> &visitor,
+														  NativeReadSession *session = nullptr) const;
 		// Streams durable Edge topology without opening the optional Property root.
 		// It is valid only for callers whose semantics do not inspect Properties.
 		[[nodiscard]] bool visitEdgeTopologiesUntil(
 				const MetadataSnapshotPin &snapshot, size_t maximumRecords,
-				const std::function<bool(uint64_t edgeId, const EdgeEntityRecord &)> &visitor) const;
+				const std::function<bool(uint64_t edgeId, const EdgeEntityRecord &)> &visitor,
+				NativeReadSession *session = nullptr) const;
 		[[nodiscard]] PageBackedGraphNodePage scanNodesAfter(const MetadataSnapshotPin &snapshot, uint64_t afterNodeId,
-															 size_t maximumRecords, size_t maximumMetadataPages) const;
+																	 size_t maximumRecords, size_t maximumMetadataPages,
+																	 NativeReadSession *session = nullptr) const;
 		[[nodiscard]] PageBackedGraphAdjacencyPage
 		scanAdjacentEdges(const MetadataSnapshotPin &snapshot, uint64_t nodeId, PageBackedGraphReadDirection direction,
 						  std::optional<PageBackedGraphAdjacencyContinuation> continuation,
-						  size_t maximumRecords) const;
+						  size_t maximumRecords, NativeReadSession *session = nullptr) const;
+		[[nodiscard]] PageBackedGraphAdjacencyTopologyPage
+		scanAdjacentEdgeTopologies(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
+									PageBackedGraphReadDirection direction,
+									std::optional<PageBackedGraphAdjacencyContinuation> continuation,
+									size_t maximumRecords, NativeReadSession *session = nullptr) const;
 		// Builds a checked native cursor for a new logical adjacency scan. Callers
 		// must retain the same MetadataSnapshotPin and resume only through the
 		// returned logical continuation.
 		[[nodiscard]] PageBackedGraphAdjacencyCursor
 		openAdjacentEdgeCursor(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
-							   PageBackedGraphReadDirection direction) const;
+							   PageBackedGraphReadDirection direction,
+							   NativeReadSession *session = nullptr) const;
 		[[nodiscard]] bool
 		visitAdjacentEdgesUntil(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
 								PageBackedGraphReadDirection direction, size_t maximumRecords,
-								const std::function<bool(const PageBackedGraphEdge &)> &visitor) const;
+								const std::function<bool(const PageBackedGraphEdge &)> &visitor,
+								NativeReadSession *session = nullptr) const;
 		// Streams only endpoint/type records and never opens the optional Edge
 		// Property root. The caller must not use this path for Property predicates.
 		[[nodiscard]] bool
 		visitAdjacentEdgeTopologiesUntil(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
-										 PageBackedGraphReadDirection direction, size_t maximumRecords,
-										 const std::function<bool(uint64_t, const EdgeEntityRecord &)> &visitor) const;
+																	 PageBackedGraphReadDirection direction, size_t maximumRecords,
+																	 const std::function<bool(uint64_t, const EdgeEntityRecord &)> &visitor,
+																	 NativeReadSession *session = nullptr) const;
+		[[nodiscard]] bool visitAdjacentEdgeRefsForNodesUntil(
+				const MetadataSnapshotPin &snapshot, std::span<const uint64_t> nodeIds,
+				PageBackedGraphReadDirection direction, size_t maximumRecords,
+				const std::function<bool(const EntityRef &)> &visitor,
+				NativeReadSession *session = nullptr) const;
 
 	private:
 		friend class PageBackedGraphAdjacencyCursor;
@@ -174,7 +332,7 @@ namespace graph::storage {
 		[[nodiscard]] PageBackedGraphAdjacencyPage
 		scanAdjacentEdges(const MetadataSnapshotPin &snapshot, uint64_t nodeId, PageBackedGraphReadDirection direction,
 							  std::optional<PageBackedGraphAdjacencyContinuation> continuation, size_t maximumRecords,
-							  PropertyCollectionRootScanCursor *propertyCursor) const;
+							  PropertyCollectionRootScanCursor *propertyCursor, NativeReadSession *session) const;
 
 		RelocatableMetadataStore &metadata_;
 		EntityPageStore &entities_;

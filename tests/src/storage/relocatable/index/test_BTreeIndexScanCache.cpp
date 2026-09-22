@@ -56,6 +56,16 @@ namespace {
 		}
 	}
 
+	class ThrowOnCheck final : public CancellationCheckpoint {
+	public:
+		void check() const override {
+			++checks;
+			throw std::runtime_error("range cursor cancelled");
+		}
+
+		mutable size_t checks = 0U;
+	};
+
 	PageOwnerHeader owner(PageId pageId, LogSequenceNumber lsn) {
 		return {pageId, INDEX_ID, PageOwnerKind::POK_INDEX, 0U, RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, Generation(1U), lsn};
 	}
@@ -226,4 +236,33 @@ TEST_F(BTreeIndexScanCacheTest, RejectsAnInvalidInitialLeafHintBeforeResolvingTh
 	EXPECT_EQ(after.disk_read_bytes, before.disk_read_bytes);
 	EXPECT_EQ(after.misses, before.misses);
 	EXPECT_EQ(after.resident_bytes, before.resident_bytes);
+}
+
+TEST_F(BTreeIndexScanCacheTest, RangeCursorDescendsOnceAndResumesAcrossSiblingLeaves) {
+	const std::vector<std::byte> lower = key("b");
+	BTreeIndex::RangeCursor cursor = index_->openRangeCursor(snapshot_, std::span<const std::byte>(lower), 3U);
+
+	const std::optional<BTreePageEntry> first = cursor.next();
+	ASSERT_TRUE(first.has_value());
+	EXPECT_EQ(first->key, key("b"));
+	const std::optional<BTreePageEntry> second = cursor.next();
+	ASSERT_TRUE(second.has_value());
+	EXPECT_EQ(second->key, key("c"));
+	const std::optional<BTreePageEntry> third = cursor.next();
+	ASSERT_TRUE(third.has_value());
+	EXPECT_EQ(third->key, key("d"));
+	EXPECT_FALSE(cursor.next().has_value());
+}
+
+TEST_F(BTreeIndexScanCacheTest, RangeCursorChecksCancellationBeforeOpeningStorage) {
+	io_->resetBufferPoolStats();
+	const BufferPoolStats before = io_->bufferPoolStats();
+	ThrowOnCheck cancellation;
+	EXPECT_THROW(static_cast<void>(index_->openRangeCursor(snapshot_, std::nullopt, 3U,
+																	 BufferPoolReadHint::BPRH_SEQUENTIAL, false, &cancellation)),
+				 std::runtime_error);
+	EXPECT_EQ(cancellation.checks, 1U);
+	const BufferPoolStats after = io_->bufferPoolStats();
+	EXPECT_EQ(after.disk_read_bytes, before.disk_read_bytes);
+	EXPECT_EQ(after.misses, before.misses);
 }

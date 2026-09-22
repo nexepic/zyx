@@ -50,6 +50,8 @@ namespace {
 		// disable them while retaining the small operational correctness checks.
 		bool includeLargeBatchWorkloads = true;
 		std::string executionMode = std::string(kExecutionModeWarm);
+		std::optional<std::string> onlyWorkload;
+		std::filesystem::path baselineDbPath;
 		std::optional<size_t> threads;
 		int warmup = 0;
 		int iterations = 1;
@@ -382,6 +384,66 @@ namespace {
 
 	const char *supportedProfileMessage() {
 		return "--profile must be scan, indexed, multihop, write, write_durable, operational_dynamic, or retrieval";
+	}
+
+	bool isSupportedWorkload(const std::string_view profile, const std::string_view workload) {
+		if (workload == "load_nodes_edges") {
+			return true;
+		}
+		static constexpr std::pair<std::string_view, std::string_view> kWorkloads[] = {
+				{kProfileScan, "label_scan_filter"},
+				{kProfileScan, "all_nodes_property_filter"},
+				{kProfileScan, "label_multi_property_filter"},
+				{kProfileScan, "relationship_type_scan"},
+				{kProfileScan, "relationship_property_filter"},
+				{kProfileScan, "one_hop_expand"},
+				{kProfileScan, "two_hop_expand"},
+				{kProfileScan, "shortest_path_chain"},
+				{kProfileScan, "aggregation_group_by"},
+				{kProfileScan, "aggregation_count_by_group"},
+				{kProfileScan, "topk_property_sort"},
+				{kProfileIndexed, "point_lookup_indexed"},
+				{kProfileIndexed, "property_equality_indexed"},
+				{kProfileIndexed, "property_range_indexed"},
+				{kProfileRetrieval, "point_node_fetch_by_id"},
+				{kProfileRetrieval, "point_edge_fetch_by_endpoints"},
+				{kProfileRetrieval, "batch_node_fetch_100"},
+				{kProfileRetrieval, "one_hop_fetch_neighbor_ids"},
+				{kProfileRetrieval, "one_hop_fetch_neighbor_records"},
+				{kProfileRetrieval, "property_index_fetch_users_by_country"},
+				{kProfileRetrieval, "range_index_fetch_user_projection"},
+				{kProfileRetrieval, "relationship_property_fetch"},
+				{kProfileMultihop, "reachable_within_6"},
+				{kProfileMultihop, "reachable_within_12"},
+				{kProfileMultihop, "reachable_within_24"},
+				{kProfileMultihop, "reachable_within_30"},
+				{kProfileMultihop, "varlength_frontier_count"},
+				{kProfileOperationalDynamic, "index_seek_then_one_hop_expand"},
+				{kProfileOperationalDynamic, "index_seek_then_two_hop_expand"},
+				{kProfileOperationalDynamic, "post_persist_create_node"},
+				{kProfileOperationalDynamic, "post_persist_create_edge"},
+				{kProfileOperationalDynamic, "write_then_one_hop_expand"},
+				{kProfileOperationalDynamic, "batch_create_edges_100"},
+				{kProfileOperationalDynamic, "batch_create_edges_1000"},
+				{kProfileOperationalDynamic, "batch_create_edges_10000"},
+				{kProfileOperationalDynamic, "batch_create_edges_100_then_one_hop_expand"},
+				{kProfileOperationalDynamic, "batch_create_edges_10000_then_one_hop_expand"},
+				{kProfileWrite, "point_create_node"},
+				{kProfileWrite, "point_create_edge"},
+				{kProfileWrite, "point_update_node_property"},
+				{kProfileWrite, "point_update_edge_property"},
+				{kProfileWrite, "point_create_delete_edge"},
+				{kProfileWrite, "write_then_read_edge"},
+				{kProfileWriteDurable, "point_create_node_durable"},
+				{kProfileWriteDurable, "point_create_edge_durable"},
+				{kProfileWriteDurable, "point_update_node_property_durable"},
+				{kProfileWriteDurable, "point_update_edge_property_durable"},
+				{kProfileWriteDurable, "point_create_delete_edge_durable"},
+				{kProfileWriteDurable, "write_then_read_edge_durable"},
+		};
+		return std::ranges::any_of(kWorkloads, [profile, workload](const auto &candidate) {
+			return candidate.first == profile && candidate.second == workload;
+		});
 	}
 
 	bool isMutatingWorkload(std::string_view workload) {
@@ -766,8 +828,25 @@ namespace {
 
 	void removeDatabaseArtifacts(const std::filesystem::path &dbPath) {
 		std::error_code ignored;
+		if (std::filesystem::is_directory(dbPath, ignored)) {
+			std::filesystem::remove_all(dbPath, ignored);
+			return;
+		}
 		std::filesystem::remove(dbPath, ignored);
 	}
+
+	void cloneDatabaseArtifact(const std::filesystem::path &source, const std::filesystem::path &destination) {
+		std::error_code error;
+		removeDatabaseArtifacts(destination);
+		if (!std::filesystem::copy_file(source, destination, std::filesystem::copy_options::overwrite_existing, error)) {
+			throw std::runtime_error("failed to clone benchmark database: " + error.message());
+		}
+	}
+
+	struct ScopedArtifactCleanup {
+		std::filesystem::path path;
+		~ScopedArtifactCleanup() { removeDatabaseArtifacts(path); }
+	};
 
 	LoadedGraph loadDatabase(const Options &options, const std::filesystem::path &dbPath) {
 		tracePhase("load.remove_existing_db", [&]() { removeDatabaseArtifacts(dbPath); });
@@ -919,53 +998,35 @@ namespace {
 	}
 
 	template<typename Fn>
-	void runMeasuredIsolatedLoadedWorkload(const Options &options, const std::string &workload, Fn &&operation,
-									  bool validateResult = true) {
-		const auto isolatedPath = suffixedDbPath(options.dbPath, ".workload-" + workloadPathToken(workload));
-		LoadedGraph isolatedLoaded = loadDatabase(options, isolatedPath);
-		zyx::Database isolatedDb(isolatedPath.string());
-		configureThreadPool(isolatedDb, options);
-		bool opened = false;
-		try {
-			if (options.executionMode == kExecutionModeWarm || options.executionMode == kExecutionModeOpened) {
-				isolatedDb.open();
-				opened = true;
-			}
-			runMeasured(options, workload,
-						[&]() { return invokeWorkloadOperation(operation, isolatedDb, isolatedLoaded); },
-						validateResult);
-			if (opened) {
-				isolatedDb.close();
-			}
-			removeDatabaseArtifacts(isolatedPath);
-		} catch (...) {
-			if (opened) {
-				isolatedDb.close();
-			}
-			removeDatabaseArtifacts(isolatedPath);
-			throw;
-		}
-	}
-
-	template<typename Fn>
-	void runMeasuredIsolatedColdishWorkload(const Options &options, const std::string &workload, Fn &&operation,
-									  bool validateResult = true) {
+	void runMeasuredIsolatedWorkload(const Options &options, const LoadedGraph &loaded,
+									 const std::string &workload, Fn &&operation,
+									 bool validateResult = true) {
 		auto runOnce = [&](std::optional<int> iteration, int sequence) {
-			const std::string suffix = ".coldish-" + workloadPathToken(workload) + "-" + std::to_string(sequence);
+			const std::string suffix = ".workload-" + workloadPathToken(workload) + "-" + std::to_string(sequence);
 			const auto isolatedPath = suffixedDbPath(options.dbPath, suffix);
-			LoadedGraph isolatedLoaded = loadDatabase(options, isolatedPath);
+			const auto &baselinePath = options.baselineDbPath.empty() ? options.dbPath : options.baselineDbPath;
+			cloneDatabaseArtifact(baselinePath, isolatedPath);
+			ScopedArtifactCleanup cleanup{isolatedPath};
 			zyx::Database isolatedDb(isolatedPath.string());
 			configureThreadPool(isolatedDb, options);
 			bool opened = false;
 			try {
-				{
+				if (options.executionMode == kExecutionModeColdish) {
 					graph::debug::ScopedPerfTimer timer("coldish.db_open");
 					isolatedDb.open();
-					opened = true;
+				} else {
+					isolatedDb.open();
+				}
+				opened = true;
+				std::string phase = "warm.operation";
+				if (options.executionMode == kExecutionModeColdish) {
+					phase = "coldish.operation";
+				} else if (options.executionMode == kExecutionModeOpened) {
+					phase = "opened.operation";
 				}
 				auto measuredOperation = [&]() {
-					graph::debug::ScopedPerfTimer timer("coldish.operation");
-					return invokeWorkloadOperation(operation, isolatedDb, isolatedLoaded);
+					graph::debug::ScopedPerfTimer timer(phase);
+					return invokeWorkloadOperation(operation, isolatedDb, loaded);
 				};
 				auto validateMeasuredValue = [&](const int64_t measuredValue) {
 					if (validateResult) { // ZYX_COV_EXCL_LINE: validation toggle is covered by warm-mode helper tests.
@@ -978,24 +1039,28 @@ namespace {
 					const int64_t value = measuredOperation();
 					validateMeasuredValue(value);
 				}
-				{
+				if (options.executionMode == kExecutionModeColdish) {
 					graph::debug::ScopedPerfTimer timer("coldish.db_close");
 					isolatedDb.close();
-					opened = false;
+				} else {
+					isolatedDb.close();
 				}
-				removeDatabaseArtifacts(isolatedPath);
+				opened = false;
 			} catch (...) {
 				if (opened) {
-					graph::debug::ScopedPerfTimer timer("coldish.db_close");
-					isolatedDb.close();
+					try {
+						isolatedDb.close();
+					} catch (...) {
+						// Preserve the operation failure; artifact cleanup is still guaranteed.
+					}
 				}
-				removeDatabaseArtifacts(isolatedPath);
 				throw;
 			}
 		};
 
+		const int queryWarmup = options.executionMode == kExecutionModeOpened ? 0 : options.warmup;
 		int sequence = 0;
-		for (int i = 0; i < options.warmup; ++i) { // ZYX_COV_EXCL_LINE: benchmark warmup loop shape is option-driven.
+		for (int i = 0; i < queryWarmup; ++i) { // ZYX_COV_EXCL_LINE: benchmark warmup loop shape is option-driven.
 			runOnce(std::nullopt, sequence++);
 		}
 		for (int i = 0; i < options.iterations; ++i) {
@@ -1006,12 +1071,11 @@ namespace {
 	template<typename Fn>
 	void runQueryWorkload(const Options &options, zyx::Database &db, const LoadedGraph &loaded,
 					  const std::string &workload, Fn &&operation, bool validateResult = true) {
+		if (options.onlyWorkload.has_value() && *options.onlyWorkload != workload) {
+			return;
+		}
 		if (isMutatingWorkload(workload)) {
-			if (options.executionMode == kExecutionModeColdish) {
-				runMeasuredIsolatedColdishWorkload(options, workload, std::forward<Fn>(operation), validateResult);
-			} else {
-				runMeasuredIsolatedLoadedWorkload(options, workload, std::forward<Fn>(operation), validateResult);
-			}
+			runMeasuredIsolatedWorkload(options, loaded, workload, std::forward<Fn>(operation), validateResult);
 			return;
 		}
 		if (options.executionMode == kExecutionModeColdish) {
@@ -1125,6 +1189,8 @@ namespace {
 					options.executionMode != kExecutionModeColdish) {
 					throw std::invalid_argument("--execution-mode must be warm, opened, or cold-ish");
 				}
+			} else if (arg == "--workload") {
+				options.onlyWorkload = requireValue(arg);
 			} else if (arg == "--warmup") {
 				options.warmup = std::stoi(requireValue(arg));
 			} else if (arg == "--iterations") {
@@ -1147,6 +1213,10 @@ namespace {
 		if (!isSupportedProfile(options.profile)) {
 			throw std::invalid_argument(supportedProfileMessage());
 		}
+		if (options.onlyWorkload.has_value() &&
+			!isSupportedWorkload(options.profile, *options.onlyWorkload)) {
+			throw std::invalid_argument("--workload is not registered for the selected profile");
+		}
 		if (options.executionMode != kExecutionModeWarm && options.executionMode != kExecutionModeOpened &&
 			options.executionMode != kExecutionModeColdish) {
 			throw std::invalid_argument("--execution-mode must be warm, opened, or cold-ish");
@@ -1160,8 +1230,21 @@ namespace {
 		return options;
 	}
 
-	int run(const Options &options) {
-		LoadedGraph loaded = measureLoadWorkload(options);
+	int run(const Options &inputOptions) {
+		Options options = inputOptions;
+		LoadedGraph loaded;
+		if (!options.onlyWorkload.has_value() || *options.onlyWorkload == "load_nodes_edges") {
+			loaded = measureLoadWorkload(options);
+			if (options.onlyWorkload.has_value()) {
+				return 0;
+			}
+		} else {
+			// A selected query measures only that workload; database preparation is not a benchmark sample.
+			loaded = loadDatabase(options, options.dbPath);
+		}
+		options.baselineDbPath = suffixedDbPath(options.dbPath, ".benchmark-baseline");
+		cloneDatabaseArtifact(options.dbPath, options.baselineDbPath);
+		ScopedArtifactCleanup baselineCleanup{options.baselineDbPath};
 
 		zyx::Database db(options.dbPath.string());
 		configureThreadPool(db, options);
@@ -1433,12 +1516,16 @@ namespace {
 
 int main(int argc, char **argv) {
 	std::string scale;
+	std::string workload = "run_all";
 	try {
 		const Options options = parseArgs(argc, argv);
 		scale = options.scale;
+		if (options.onlyWorkload.has_value()) {
+			workload = *options.onlyWorkload;
+		}
 		return run(options);
 	} catch (const std::exception &exc) {
-		emitError("run_all", scale, exc.what());
+		emitError(workload, scale, exc.what());
 		return 1;
 	}
 }

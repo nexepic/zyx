@@ -459,12 +459,44 @@ namespace graph::storage {
 				}
 				fresh_rebuild_applied_ = true;
 			};
+			// A full source pool does not require rebuilding the complete tree: a
+			// bounded dirty-path replacement can be allocated from another compatible
+			// Index pool while the source frames remain valid for older snapshots.
+			// Reserve destination capacity deterministically so several source pools do
+			// not overcommit the same target under one pinned planning snapshot.
+			std::vector<PageLocation> reservedDestinationFrames;
+			if (!force_fresh_rebuild_ && !replacements.empty()) {
+				for (IndexTreeMutationPoolRequest &request: requests) {
+					if (request.expected_replacements.empty()) {
+						continue;
+					}
+					const CatalogEntry sourcePool = metadata_.findCatalog(snapshot_, request.segment_id);
+					if (store_.hasReplacementFrameCapacity(sourcePool, request.expected_replacements.size())) {
+						continue;
+					}
+							const std::optional<SegmentId> destination =
+									store_.selectAppendPool(snapshot_, reservedDestinationFrames,
+											 request.expected_replacements.size(), sourcePool.owner_id);
+					if (!destination.has_value() || *destination == request.segment_id) {
+						continue;
+					}
+					request.replacement_segment_id = *destination;
+					for (const PageLocation &source: request.expected_replacements) {
+						// The selection helper only needs a valid segment/frame identity to
+						// account for reserved destination capacity; the PageId remains
+						// unique because source replacement IDs are globally unique.
+						reservedDestinationFrames.push_back(
+								{source.page_id, *destination, RSS_PAGE_POOL_FIRST_DATA_FRAME, Generation{1U}, 0U});
+					}
+				}
+			}
 			if (force_fresh_rebuild_ && !fresh_rebuild_applied_ && (!replacements.empty() || !liveVirtuals.empty())) {
 				rebuildIntoFreshPools();
 			} else if (rebuild_on_frame_exhaustion_ &&
 					   std::ranges::any_of(requests, [this](const IndexTreeMutationPoolRequest &request) {
 						   const CatalogEntry pool = metadata_.findCatalog(snapshot_, request.segment_id);
-						   return !store_.hasReplacementFrameCapacity(pool, request.expected_replacements.size());
+						   return !request.replacement_segment_id.isValid() &&
+								  !store_.hasReplacementFrameCapacity(pool, request.expected_replacements.size());
 					   })) {
 				rebuildIntoFreshPools();
 			}
@@ -488,13 +520,20 @@ namespace graph::storage {
 				}
 				size_t firstUnplaced = 0U;
 				const auto appendToCurrentPool = [&](size_t candidate) {
+					std::vector<PageLocation> appendReservations = expectedLocations;
+					appendReservations.insert(appendReservations.end(), reservedDestinationFrames.begin(),
+							reservedDestinationFrames.end());
 					const std::optional<SegmentId> selected =
-							store_.selectAppendPool(snapshot_, expectedLocations, candidate);
+							store_.selectAppendPool(snapshot_, appendReservations, candidate, 0U);
 					if (!selected.has_value()) {
 						return false;
 					}
 					const size_t ordinal = ensureRequest(*selected);
 					requests[ordinal].appended_page_count = candidate;
+					for (size_t index = 0U; index < candidate; ++index) {
+						reservedDestinationFrames.push_back(
+								{PageId{1U}, *selected, RSS_PAGE_POOL_FIRST_DATA_FRAME, Generation{1U}, 0U});
+					}
 					for (size_t index = 0U; index < candidate; ++index) {
 						virtualPlacements[liveVirtuals[index]] = {ordinal, index};
 					}
@@ -586,34 +625,62 @@ namespace graph::storage {
 					const size_t expectedAppends = poolOrdinal < requests.size()
 														   ? requests[poolOrdinal].appended_page_count
 														   : batches[poolOrdinal].appended_page_ids.size();
-					if (poolOrdinal < requests.size() &&
-						(batch.pool.segment_id != requests[poolOrdinal].segment_id ||
-						 batch.expected_replacements != requests[poolOrdinal].expected_replacements ||
-						 batch.expected_retirements != requests[poolOrdinal].expected_retirements)) {
-						throw FormatException(FormatError::FERR_INVALID_STATE,
-											  "relocatable transaction-local B+Tree overlay metadata fences changed "
-											  "before preparation");
+					if (poolOrdinal < requests.size()) {
+						const IndexTreeMutationPoolRequest &request = requests[poolOrdinal];
+						if (batch.pool.segment_id != request.segment_id) {
+							throw FormatException(FormatError::FERR_INVALID_STATE,
+												  "relocatable transaction-local B+Tree overlay source-pool fence changed "
+												  "before preparation");
+						}
+						if (batch.expected_replacements != request.expected_replacements) {
+							throw FormatException(FormatError::FERR_INVALID_STATE,
+												  "relocatable transaction-local B+Tree overlay replacement fence changed "
+												  "before preparation");
+						}
+						if (batch.expected_retirements != request.expected_retirements) {
+							throw FormatException(FormatError::FERR_INVALID_STATE,
+												  "relocatable transaction-local B+Tree overlay retirement fence changed "
+												  "before preparation");
+						}
+						const SegmentId expectedReplacementPool = request.replacement_segment_id.isValid()
+														? request.replacement_segment_id
+														: request.segment_id;
+						if (batch.replacement_pool.segment_id != expectedReplacementPool) {
+							throw FormatException(FormatError::FERR_INVALID_STATE,
+												  "relocatable transaction-local B+Tree overlay replacement-pool fence changed "
+												  "before preparation");
+						}
 					}
 					if (batch.appended_page_ids.size() != expectedAppends) {
 						throw FormatException(
 								FormatError::FERR_INVALID_STATE,
 								"relocatable transaction-local B+Tree overlay append count changed before preparation");
 					}
+					const CatalogEntry &replacementPool = batch.replacement_pool.segment_id.isValid()
+														? batch.replacement_pool
+														: batch.pool;
 					std::vector<SharedPagePoolPreparedReplacement> preparedReplacements;
+					std::vector<SharedPagePoolPreparedCrossPoolReplacement> preparedCrossPoolReplacements;
 					preparedReplacements.reserve(batch.expected_replacements.size());
+					preparedCrossPoolReplacements.reserve(batch.expected_replacements.size());
 					for (const PageLocation &location: batch.expected_replacements) {
 						ExistingOverlayMutationNode &existing = self->existingFor(location.page_id);
 						OverlayMutationNode &node = existing.node;
 						// The batch equality fence above and ExistingOverlayMutationNode's
 						// construction from the pinned read prove this durable source.
-						BTreePage page = self->materialize(node, location.page_id, batch.pool.generation,
-														   existing.owner_lsn, virtualIdsByOrdinal);
+						BTreePage page = self->materialize(node, location.page_id, replacementPool.generation,
+																   existing.owner_lsn, virtualIdsByOrdinal);
 						std::vector<std::byte> bytes = page.serialize();
 						PageOwnerHeader owner =
-								indexPageOwner(self->index_id_, location.page_id, batch.pool.generation, checkpointLsn);
+								indexPageOwner(self->index_id_, location.page_id, replacementPool.generation, checkpointLsn);
 						owner.payload_bytes = static_cast<uint32_t>(bytes.size());
-						preparedReplacements.push_back({std::move(owner), existing.owner_lsn, std::move(bytes),
-														page.slottedPage().stats().contiguous_free_bytes});
+						const uint32_t freeBytes = page.slottedPage().stats().contiguous_free_bytes;
+						if (replacementPool.segment_id == batch.pool.segment_id) {
+							preparedReplacements.push_back({std::move(owner), existing.owner_lsn, std::move(bytes), freeBytes});
+						} else {
+							preparedCrossPoolReplacements.push_back(
+									{batch.pool, location, existing.owner_lsn, std::move(owner), std::move(bytes), freeBytes});
+						}
 					}
 					std::vector<SharedPagePoolPreparedAppend> preparedAppends;
 					std::vector<size_t> batchVirtuals;
@@ -647,7 +714,23 @@ namespace graph::storage {
 					}
 					if (batch.newly_reserved) {
 						self->pages().prepareNewPoolPages(batch.pool, preparedAppends, batch.appended_locations,
-														  checkpointLsn, batch.prepared_new_pool_prefix_count);
+															  checkpointLsn, batch.prepared_new_pool_prefix_count);
+					} else if (!preparedCrossPoolReplacements.empty()) {
+						self->pages().prepareCrossPoolReplacementPages(replacementPool, preparedCrossPoolReplacements,
+																		  batch.replacement_locations, checkpointLsn);
+						// A pure cross-pool replacement needs no source write: the new
+						// Directory route makes the old frame unreachable while preserving
+						// it for older snapshots. Only source-local appends or explicit
+						// retirements require a second source-pool mutation call.
+						if (!preparedAppends.empty() || !preparedRetirements.empty()) {
+							const std::vector<PageLocation> noReplacementSources;
+							const std::vector<SharedPagePoolPreparedReplacement> noReplacements;
+							std::vector<PageLocation> noReplacementLocations;
+							self->pages().prepareMutationPages(batch.pool, noReplacementSources, noReplacements,
+																		  preparedAppends, noReplacementLocations,
+																		  batch.appended_locations, checkpointLsn,
+																		  preparedRetirements);
+						}
 					} else {
 						self->pages().prepareMutationPages(batch.pool, batch.expected_replacements,
 														   preparedReplacements, preparedAppends,
@@ -1978,8 +2061,8 @@ namespace graph::storage {
 	}
 
 	std::optional<SegmentId> BTreePageStore::selectAppendPool(const MetadataSnapshotPin &snapshot,
-															  std::span<const PageLocation> expectedReplacements,
-															  size_t appendedPageCount) const {
+																  std::span<const PageLocation> expectedReplacements,
+																  size_t appendedPageCount, uint64_t poolOwnerId) const {
 		// ZYX_COV_EXCL_START: only the local B+Tree planner calls this with its bounded nonempty append batch.
 		if (appendedPageCount == 0U || appendedPageCount > RSS_PAGE_POOL_DATA_FRAME_COUNT) { // ZYX_COV_EXCL_LINE:
 			// private mutation planners derive a nonzero append count bounded by one shared pool.
@@ -2006,6 +2089,9 @@ namespace graph::storage {
 		std::optional<SegmentId> selected;
 		uint8_t smallestSurplus = std::numeric_limits<uint8_t>::max();
 		for (const CatalogEntry &candidate: metadata_.findCurrentIndexPagePools(snapshot)) {
+			if (poolOwnerId != 0U && candidate.owner_id != poolOwnerId) {
+				continue;
+			}
 			const auto replacement = replacementCounts.find(candidate.segment_id.value());
 			const size_t replacementCount = replacement == replacementCounts.end() ? 0U : replacement->second;
 			if (replacementCount > RSS_PAGE_POOL_DATA_FRAME_COUNT - appendedPageCount) { // ZYX_COV_EXCL_LINE:
@@ -2377,7 +2463,7 @@ namespace graph::storage {
 					std::optional<BTreeNewIndexTreePoolMutation> newPool;
 					size_t appendPoolOrdinal = 0;
 					if (const std::optional<SegmentId> selectedPool =
-								selectAppendPool(mutationSnapshot, expectedReplacements, appendedPageCount);
+								selectAppendPool(mutationSnapshot, expectedReplacements, appendedPageCount, 0U);
 						selectedPool.has_value()) {
 						appendPoolOrdinal = ensureRequest(*selectedPool);
 						requests[appendPoolOrdinal].appended_page_count = appendedPageCount;
@@ -3479,7 +3565,7 @@ namespace graph::storage {
 		requests.push_back({expectedRootLocation.segment_id, {expectedRootLocation}, 0, {}});
 		std::optional<NewIndexTreePoolRequest> newPool;
 		size_t appendPoolOrdinal = 0;
-		if (const std::optional<SegmentId> selectedPool = selectAppendPool(snapshot, expectedReplacements, 2U);
+		if (const std::optional<SegmentId> selectedPool = selectAppendPool(snapshot, expectedReplacements, 2U, 0U);
 			selectedPool.has_value()) {
 			if (*selectedPool != expectedRootLocation.segment_id) {
 				appendPoolOrdinal = requests.size();

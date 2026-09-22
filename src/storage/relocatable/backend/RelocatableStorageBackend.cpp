@@ -19,6 +19,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <numeric>
 #include <queue>
 #include <random>
 #include <set>
@@ -283,6 +284,74 @@ namespace graph::storage {
 				throw std::overflow_error("relocatable native bulk candidate metric exceeds PerfTrace range");
 			}
 			debug::PerfTrace::addValue(key, static_cast<int64_t>(value));
+		}
+
+		void traceNativeCandidateMetric(std::string_view key, size_t value) {
+			if (value > static_cast<size_t>(std::numeric_limits<int64_t>::max())) {
+				throw std::overflow_error("relocatable native index candidate metric exceeds PerfTrace range");
+			}
+			debug::PerfTrace::addValue(key, static_cast<int64_t>(value));
+		}
+
+		[[nodiscard]] size_t checkedBoundPlusOne(size_t bound, const char *message) {
+			if (bound == std::numeric_limits<size_t>::max()) {
+				throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW, message);
+			}
+			return bound + 1U;
+		}
+
+		[[nodiscard]] size_t candidateBatchBytes(const IndexCandidateBatch &batch) {
+			if (batch.candidates.capacity() > std::numeric_limits<size_t>::max() / sizeof(EntityRef)) {
+				throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW,
+						"relocatable native index candidate byte accounting overflowed");
+			}
+			size_t bytes = batch.candidates.capacity() * sizeof(EntityRef);
+			for (const IndexCandidateBatch::VerifiedPropertyColumn &column: batch.verified_property_columns) {
+				if (column.key.size() > std::numeric_limits<size_t>::max() - bytes) {
+					throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW,
+							"relocatable native index candidate byte accounting overflowed");
+				}
+				bytes += column.key.size();
+				if (column.values.capacity() > (std::numeric_limits<size_t>::max() - bytes) / sizeof(PropertyValue)) {
+					throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW,
+							"relocatable native index candidate byte accounting overflowed");
+				}
+				bytes += column.values.capacity() * sizeof(PropertyValue);
+				for (const PropertyValue &value: column.values) {
+					const size_t payload = property_utils::getPropertyValueSize(value);
+					if (payload > std::numeric_limits<size_t>::max() - bytes) {
+						throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW,
+								"relocatable native index candidate byte accounting overflowed");
+					}
+					bytes += payload;
+				}
+			}
+			return bytes;
+		}
+
+		void enforceCandidateBatchBytes(const IndexCandidateBatch &batch, size_t maximumBytes) {
+			if (maximumBytes == 0U) {
+				throw FormatException(FormatError::FERR_INVALID_HEADER,
+						"relocatable native index candidate stream requires a positive byte bound");
+			}
+			if (maximumBytes != std::numeric_limits<size_t>::max() && candidateBatchBytes(batch) > maximumBytes) {
+				throw FormatException(FormatError::FERR_INVALID_STATE,
+						"relocatable native index candidate batch exceeded its byte bound");
+			}
+		}
+
+		[[nodiscard]] size_t candidateBatchCapacity(size_t maximumNodes, size_t maximumBytes) {
+			// Keep producer staging below the caller's byte budget. The authenticated
+			// batch-size check remains authoritative because Property payloads are
+			// variable-sized; this estimate only controls how many candidates are
+			// staged before that check.
+			size_t capacity = std::min(BTreeIndex::DEFAULT_CURSOR_BATCH_ENTRIES, maximumNodes);
+			constexpr size_t kConservativeCandidateBytes = 8U * 1024U;
+			if (maximumBytes != std::numeric_limits<size_t>::max()) {
+				const size_t byteCapacity = maximumBytes / kConservativeCandidateBytes;
+				capacity = std::min(capacity, std::max<size_t>(1U, byteCapacity));
+			}
+			return std::max<size_t>(1U, capacity);
 		}
 
 		void checkVectorTrainingCancellation(const LogicalGraphVectorTrainingRequest &request) {
@@ -567,32 +636,46 @@ namespace graph::storage {
 					}
 				}
 
-				const auto validate_endpoint = [this](uint64_t nodeId) {
-					if (nodeId == 0U) {
+				// Reject every row-local error before acquiring a durable lease or
+				// writing scratch, so failed input has no partial side effect. Resolve
+				// each distinct endpoint once per bounded append; sorting lets the native
+				// Directory perform one ordered descent instead of one lookup per row.
+				std::vector<uint64_t> endpointIds;
+				endpointIds.reserve(request.sourceCount() * 2U);
+				for (size_t row = 0U; row < request.sourceCount(); ++row) {
+					const uint64_t sourceNodeId = request.sourceNodeIdAt(row);
+					const uint64_t targetNodeId = request.targetNodeIdAt(row);
+					if (sourceNodeId == 0U || targetNodeId == 0U) {
 						throw std::invalid_argument("relocatable streamed bulk Edge append has a zero endpoint");
 					}
-					const bool exists = snapshot_->supportsNodeExistenceProbes()
-												? snapshot_->containsNode(nodeId)
-												: snapshot_->readNode(nodeId).node_id == nodeId;
-					if (!exists) {
+					endpointIds.push_back(sourceNodeId);
+					endpointIds.push_back(targetNodeId);
+				}
+				std::ranges::sort(endpointIds);
+				endpointIds.erase(std::unique(endpointIds.begin(), endpointIds.end()), endpointIds.end());
+				std::vector<bool> endpointPresent;
+				if (snapshot_->supportsNodeExistenceProbes()) {
+					endpointPresent = snapshot_->containsNodesSorted(endpointIds);
+					if (endpointPresent.size() != endpointIds.size()) {
+						throw std::logic_error(
+								"relocatable streamed bulk Edge endpoint existence cardinality changed");
+					}
+				} else {
+					endpointPresent.reserve(endpointIds.size());
+					for (const uint64_t endpointId : endpointIds) {
+						endpointPresent.push_back(snapshot_->readNodeShaped(endpointId, {}).node_id == endpointId);
+					}
+				}
+				for (size_t index = 0U; index < endpointIds.size(); ++index) {
+					if (!endpointPresent[index]) {
 						throw std::invalid_argument(
 								"relocatable streamed bulk Edge append has a missing persisted endpoint");
 					}
-					return true;
-				};
-				// Reject every row-local error before acquiring a durable lease or
-				// writing scratch, so failed input has no partial side effect. The
-				// fixed-size cache avoids repeated reads without retaining a batch-sized
-				// endpoint set.
-				NativeBulkEdgeEndpointCache validatedEndpoints;
+				}
 				size_t appendEncodedBytes = 0U;
 				for (size_t row = 0U; row < request.sourceCount(); ++row) {
 					const uint64_t sourceNodeId = request.sourceNodeIdAt(row);
 					const uint64_t targetNodeId = request.targetNodeIdAt(row);
-					if (!validatedEndpoints.validate(sourceNodeId, validate_endpoint) || // validate() only returns false when its callback violates the endpoint contract.
-						!validatedEndpoints.validate(targetNodeId, validate_endpoint)) {
-						throw std::logic_error("relocatable streamed bulk Edge endpoint validation was inconsistent");
-					}
 					NativeBulkEdgeRecord probe;
 					probe.edge_id = 1U;
 					probe.source_node_id = sourceNodeId;
@@ -698,7 +781,7 @@ namespace graph::storage {
 									backend_.nativeBulkEdgePublicationPreflightOptions(), [this](uint64_t nodeId) {
 										return snapshot_->supportsNodeExistenceProbes()
 												   ? snapshot_->containsNode(nodeId)
-												   : snapshot_->readNode(nodeId).node_id == nodeId;
+											   : snapshot_->readNodeShaped(nodeId, {}).node_id == nodeId;
 									});
 						}
 						backend_.commitNativeStreamedBulkEdges(*bulk_edge_store_, bulk_edge_manifest_->location,
@@ -1308,7 +1391,7 @@ namespace graph::storage {
 					const size_t scanBound = remaining + deletedAllowance + 1U;
 					std::set<uint64_t> remainingPersistedEdges;
 					const auto collect = [&remainingPersistedEdges, &persistedEdgeDeletes,
-										  remaining](const LogicalGraphEdge &edge) {
+										  remaining](const LogicalGraphEdgeTopology &edge) {
 						if (persistedEdgeDeletes.contains(edge.edge_id)) {
 							return true;
 						}
@@ -1320,9 +1403,9 @@ namespace graph::storage {
 						return true;
 					};
 					const auto collectDirection = [&](LogicalGraphReadDirection direction) {
-						const LogicalGraphAdjacencyPage page =
-								snapshot_->scanAdjacentEdges(nodeId, direction, {}, scanBound);
-						for (const LogicalGraphEdge &edge: page.edges) {
+						const LogicalGraphAdjacencyTopologyPage page =
+								snapshot_->scanAdjacentEdgeTopologies(nodeId, direction, {}, scanBound);
+						for (const LogicalGraphEdgeTopology &edge: page.edges) {
 							static_cast<void>(collect(edge));
 						}
 					};
@@ -1940,9 +2023,9 @@ namespace graph::storage {
 					}
 				}
 			}
-		vector_codebooks_ = std::make_unique<VectorCodebookStore>(*physical_, *metadata_,
-														  options_.maximum_vector_codebook_cache_bytes,
-														  options_.maximum_vector_codebook_cache_entries);
+			vector_codebooks_ = std::make_unique<VectorCodebookStore>(*physical_, *metadata_,
+															options_.maximum_vector_codebook_cache_bytes,
+															options_.maximum_vector_codebook_cache_entries);
 			// A normal open follows the published roots and must not scan every data
 			// pool. A writable allocator reconciles its selected pool before frame
 			// reuse; routed reads still authenticate each current owner header.
@@ -2293,7 +2376,7 @@ namespace graph::storage {
 
 	std::unique_ptr<LogicalGraphTransaction> RelocatableStorageBackend::beginLogicalGraphTransaction(bool readOnly) {
 		requireOpen();
-		if (!readOnly && (isReadOnly() || native_graph_mutation_executor_ == nullptr)) { // open() installs the executor before a writable transaction factory can be called.
+		if (!readOnly && isReadOnly()) {
 			throw std::logic_error(
 					"relocatable logical write transaction requires the native graph writer on a writable backend");
 		}
@@ -2331,7 +2414,7 @@ namespace graph::storage {
 	NativeGraphLogicalIdReservation RelocatableStorageBackend::reserveLogicalGraphCreationIds(uint64_t nodeCount,
 																							  uint64_t edgeCount) {
 		requireOpen();
-		if (isReadOnly() || native_graph_write_planner_ == nullptr || (nodeCount == 0U && edgeCount == 0U)) {
+		if (isReadOnly() || (nodeCount == 0U && edgeCount == 0U)) {
 			throw std::logic_error(
 					"relocatable logical creation identity reservation requires an open writable native graph backend");
 		}
@@ -2341,7 +2424,7 @@ namespace graph::storage {
 
 	NativeGraphLogicalIdReservation RelocatableStorageBackend::reserveNativeBulkEdgeSessionIds(uint64_t edgeCount) {
 		requireOpen();
-		if (isReadOnly() || metadata_ == nullptr || edgeCount == 0U ||
+		if (isReadOnly() || edgeCount == 0U ||
 			edgeCount > static_cast<uint64_t>(maximumNativeBulkEdgeTransactionRecords())) {
 			throw std::invalid_argument(
 					"relocatable streamed bulk Edge session requires bounded positive writable work");
@@ -2369,7 +2452,7 @@ namespace graph::storage {
 
 	std::unique_ptr<NativeBulkSessionLease> RelocatableStorageBackend::tryAcquireNativeBulkSessionLease() {
 		requireOpen();
-		if (isReadOnly() || data_file_ == nullptr) {
+		if (isReadOnly()) {
 			throw std::logic_error("relocatable bulk session requires an open writable backend");
 		}
 		auto lease = std::make_unique<NativeBulkSessionLease>(
@@ -2379,7 +2462,7 @@ namespace graph::storage {
 
 	std::unique_ptr<NativeBulkRunStore> RelocatableStorageBackend::createNativeBulkRunStore() {
 		requireOpen();
-		if (isReadOnly() || physical_ == nullptr || metadata_ == nullptr) {
+		if (isReadOnly()) {
 			throw std::logic_error("relocatable native bulk scratch requires an open writable backend");
 		}
 		return std::make_unique<NativeBulkRunStore>(
@@ -2424,7 +2507,7 @@ namespace graph::storage {
 
 	void RelocatableStorageBackend::refreshNativeMetadataAfterExternalPublication(const bool restoreMaintenancePaused) {
 		requireOpen();
-		if (isReadOnly() || metadata_ == nullptr) {
+		if (isReadOnly()) {
 			throw std::logic_error("relocatable native metadata refresh requires an open writable backend");
 		}
 		const bool reattachMaintenance = maintenance_ != nullptr;
@@ -2523,8 +2606,7 @@ namespace graph::storage {
 																  const LogicalGraphMutationFence &expectedFence) {
 		requireOpen();
 		requireNoIndeterminateWrite();
-		if (isReadOnly() || metadata_ == nullptr || system_catalog_ == nullptr || btree_pages_ == nullptr ||
-			large_values_ == nullptr || !manifestLocation.isValid() || reservation.edge_ranges.empty()) {
+		if (isReadOnly() || !manifestLocation.isValid() || reservation.edge_ranges.empty()) {
 			throw std::logic_error("relocatable streamed bulk Edge commit requires an open native publication domain");
 		}
 		constexpr uint16_t BULK_EDGE_MANIFEST_DEPTH = 8U;
@@ -2664,7 +2746,7 @@ namespace graph::storage {
 		if (requests.empty()) {
 			return {};
 		}
-		if (isReadOnly() || native_graph_mutation_executor_ == nullptr) { // open() installs the executor before any writable logical mutation can be issued.
+		if (isReadOnly()) {
 			throw std::logic_error(
 					"relocatable logical Node creation requires the native graph writer on a writable backend");
 		}
@@ -2680,7 +2762,7 @@ namespace graph::storage {
 		if (requests.empty()) {
 			return {};
 		}
-		if (isReadOnly() || native_graph_mutation_executor_ == nullptr) { // open() installs the executor before any writable logical mutation can be issued.
+		if (isReadOnly()) {
 			throw std::logic_error(
 					"relocatable logical Edge creation requires the native graph writer on a writable backend");
 		}
@@ -2704,7 +2786,7 @@ namespace graph::storage {
 		if (requests.empty()) {
 			return;
 		}
-		if (isReadOnly() || native_graph_mutation_executor_ == nullptr) { // open() installs the executor before any writable logical mutation can be issued.
+		if (isReadOnly()) {
 			throw std::logic_error("relocatable logical Node Property replacement requires the native graph writer on "
 								   "a writable backend");
 		}
@@ -2726,7 +2808,7 @@ namespace graph::storage {
 		if (requests.empty()) {
 			return;
 		}
-		if (isReadOnly() || native_graph_mutation_executor_ == nullptr) { // open() installs the executor before any writable logical mutation can be issued.
+		if (isReadOnly()) {
 			throw std::logic_error("relocatable logical Edge Property replacement requires the native graph writer on "
 								   "a writable backend");
 		}
@@ -2747,7 +2829,7 @@ namespace graph::storage {
 		if (requests.empty()) {
 			return;
 		}
-		if (isReadOnly() || native_graph_mutation_executor_ == nullptr) { // open() installs the executor before any writable logical mutation can be issued.
+		if (isReadOnly()) {
 			throw std::logic_error(
 					"relocatable logical Edge deletion requires the native graph writer on a writable backend");
 		}
@@ -2762,7 +2844,7 @@ namespace graph::storage {
 		if (requests.empty()) {
 			return;
 		}
-		if (isReadOnly() || native_graph_mutation_executor_ == nullptr) { // open() installs the executor before any writable logical mutation can be issued.
+		if (isReadOnly()) {
 			throw std::logic_error(
 					"relocatable logical Node deletion requires the native graph writer on a writable backend");
 		}
@@ -2780,7 +2862,7 @@ namespace graph::storage {
 			!batch.creation_identity_plan.has_value()) {
 			return {};
 		}
-		if (isReadOnly() || native_graph_mutation_executor_ == nullptr) { // open() installs the executor before any writable logical mutation can be issued.
+		if (isReadOnly()) {
 			throw std::logic_error(
 					"relocatable logical graph mutation batches require the native graph writer on a writable backend");
 		}
@@ -2862,50 +2944,134 @@ namespace graph::storage {
 	LogicalGraphNode RelocatableStorageBackend::readNode(const RelocatableReadSnapshot &snapshot,
 														 uint64_t nodeId) const {
 		requireOwnedSnapshot(snapshot);
-		if (native_logical_graph_reads_ == nullptr) { // successful backend initialization installs the immutable native reader.
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable Node read requires the native logical graph reader");
-		}
-		return native_logical_graph_reads_->readNode(snapshot.pin_, nodeId);
+		return native_logical_graph_reads_->readNodeShaped(
+				snapshot.pin_, nodeId, {.include_labels = true, .all_properties = true});
 	}
 
 	LogicalGraphEdge RelocatableStorageBackend::readEdge(const RelocatableReadSnapshot &snapshot,
 														 uint64_t edgeId) const {
 		requireOwnedSnapshot(snapshot);
-		if (native_logical_graph_reads_ == nullptr) { // successful backend initialization installs the immutable native reader.
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable Edge read requires the native logical graph reader");
-		}
-		return native_logical_graph_reads_->readEdge(snapshot.pin_, edgeId);
+		return native_logical_graph_reads_->readEdgeShaped(
+				snapshot.pin_, edgeId, {.include_type = true, .all_properties = true});
 	}
 
 	bool RelocatableStorageBackend::containsLogicalNode(const RelocatableReadSnapshot &snapshot,
-														uint64_t nodeId) const {
+																																																				 uint64_t nodeId, NativeReadSession *session) const {
 		requireOwnedSnapshot(snapshot);
 		if (nodeId == 0U) {
 			return false;
 		}
-		return metadata_->findNodePageLocationOptional(snapshot.pin_, nodeId).has_value();
+		if (session != nullptr) {
+			session->bind(snapshot.pin_);
+			if (const auto cached = session->nodeExists(nodeId); cached.has_value()) {
+				return *cached;
+			}
+		}
+		const bool exists = metadata_->findNodePageLocationOptional(snapshot.pin_, nodeId).has_value();
+		if (session != nullptr) {
+			session->putNodeExists(nodeId, exists);
+		}
+		return exists;
 	}
 
-	std::optional<std::vector<LogicalGraphNode>> RelocatableStorageBackend::findNativeNodesByExactProperties(
+	std::vector<bool> RelocatableStorageBackend::containsLogicalNodesSorted(
+			const RelocatableReadSnapshot &snapshot, const std::span<const uint64_t> nodeIds,
+			NativeReadSession *session) const {
+		requireOwnedSnapshot(snapshot);
+		std::vector<bool> result(nodeIds.size(), false);
+		if (nodeIds.empty()) {
+			return result;
+		}
+		uint64_t previousNodeId = 0U;
+		for (const uint64_t nodeId : nodeIds) {
+			if (nodeId == 0U || nodeId <= previousNodeId) {
+				throw std::invalid_argument(
+						"relocatable sorted Node existence read requires strictly increasing Node IDs");
+			}
+			previousNodeId = nodeId;
+		}
+		if (session != nullptr) {
+			session->bind(snapshot.pin_);
+		}
+		std::vector<uint64_t> missingIds;
+		std::vector<size_t> missingOrdinals;
+		missingIds.reserve(nodeIds.size());
+		missingOrdinals.reserve(nodeIds.size());
+		for (size_t index = 0U; index < nodeIds.size(); ++index) {
+			if (session != nullptr) {
+				if (const auto cached = session->nodeExists(nodeIds[index]); cached.has_value()) {
+					result[index] = *cached;
+					continue;
+				}
+			}
+			missingIds.push_back(nodeIds[index]);
+			missingOrdinals.push_back(index);
+		}
+		if (missingIds.empty()) {
+			return result;
+		}
+		debug::PerfTrace::addValue("native_graph.read.node_existence_batch_requests", 1);
+		debug::PerfTrace::addValue("native_graph.read.node_existence_batch_ids",
+				static_cast<int64_t>(missingIds.size()));
+		std::vector<std::optional<EntityPageLocation>> locations(missingIds.size());
+		metadata_->findNodePageLocationsSorted(snapshot.pin_, missingIds, locations);
+		for (size_t index = 0U; index < missingIds.size(); ++index) {
+			result[missingOrdinals[index]] = locations[index].has_value();
+			if (session != nullptr) {
+				session->putNodeExists(missingIds[index], result[missingOrdinals[index]]);
+			}
+		}
+		return result;
+	}
+
+	std::optional<IndexCandidateBatch> RelocatableStorageBackend::findNativeNodeCandidatesByExactProperties(
 			const MetadataSnapshotPin &snapshot, const std::vector<std::string> &labels,
 			const std::vector<std::pair<std::string, PropertyValue>> &properties, size_t maximumNodes,
-			size_t maximumPropertyEntries) const {
+			size_t maximumPropertyEntries, NativeReadSession *session, IndexCandidateBatchVisitor *visitor,
+			bool *visitorCompleted, size_t maximumCandidateBytes) const {
+		if (visitorCompleted != nullptr) {
+			*visitorCompleted = true;
+		}
 		if (!snapshot.isValid() || maximumNodes == 0U || maximumPropertyEntries == 0U) {
 			throw FormatException(
 					FormatError::FERR_INVALID_HEADER,
 					"relocatable native exact Node lookup requires an active snapshot and positive bounds");
 		}
-		if (native_graph_reads_ == nullptr || native_logical_graph_reads_ == nullptr || system_catalog_ == nullptr ||
-			btree_pages_ == nullptr || metadata_ == nullptr) { // successful backend initialization installs this complete read domain before any public lookup.
-			throw FormatException(
-					FormatError::FERR_INVALID_STATE,
-					"relocatable native exact Node lookup requires native graph, Catalog, and Index stores");
-		}
 		if (labels.size() != 1U || labels.front().empty() || properties.empty()) {
 			return std::nullopt;
 		}
+		if (session != nullptr) {
+			session->bind(snapshot);
+		}
+		const auto resolveLabelToken = [&]() {
+			if (session != nullptr) {
+				if (const auto cached = session->nodeLabelToken(labels.front()); cached.has_value()) {
+					return *cached;
+				}
+			}
+			debug::PerfTrace::addValue("native_graph.read.label_token_resolution", 1);
+			debug::PerfTrace::addValue("native_graph.read.index_candidate_label_token_resolution", 1);
+			const std::optional<uint64_t> resolved =
+					system_catalog_->findSchemaToken(snapshot, SystemCatalogSchemaTokenKind::SCSTK_LABEL, labels.front());
+			if (session != nullptr) {
+				session->putNodeLabelToken(labels.front(), resolved);
+			}
+			return resolved;
+		};
+		const auto resolvePropertyToken = [&](const std::string &name) {
+			if (session != nullptr) {
+				if (const auto cached = session->propertyToken(name); cached.has_value()) {
+					return *cached;
+				}
+			}
+			debug::PerfTrace::addValue("native_graph.read.property_token_resolution", 1);
+			debug::PerfTrace::addValue("native_graph.read.index_candidate_property_token_resolution", 1);
+			const std::optional<uint32_t> resolved = system_catalog_->findPropertyToken(snapshot, name);
+			if (session != nullptr) {
+				session->putPropertyToken(name, resolved);
+			}
+			return resolved;
+		};
 		std::map<std::string, const PropertyValue *> predicateValues;
 		for (const auto &[name, value]: properties) {
 			if (name.empty() || value.getType() == PropertyType::NULL_TYPE ||
@@ -2913,10 +3079,13 @@ namespace graph::storage {
 				return std::nullopt;
 			}
 		}
-		const std::optional<uint64_t> labelToken =
-				system_catalog_->findSchemaToken(snapshot, SystemCatalogSchemaTokenKind::SCSTK_LABEL, labels.front());
+		const std::optional<uint64_t> labelToken = resolveLabelToken();
 		if (!labelToken.has_value()) {
-			return std::vector<LogicalGraphNode>{};
+			IndexCandidateBatch empty;
+			empty.snapshot_generation = snapshot.superblock().generation.value();
+			empty.exact_match_verified = true;
+			empty.label_scope_verified = true;
+			return empty;
 		}
 		if (options_.maximum_constraint_support_collisions == 0U ||
 			options_.maximum_constraint_support_collisions == std::numeric_limits<size_t>::max()) {
@@ -2924,8 +3093,19 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_HEADER,
 					"relocatable native exact Node lookup requires a finite support-tree collision bound");
 		}
-		const std::vector<ConstraintDefinition> definitions =
-				readAllConstraintDefinitions(snapshot, options_.maximum_constraint_definitions);
+		const std::vector<ConstraintDefinition> *cachedConstraints =
+				session == nullptr ? nullptr : session->constraintDefinitions(options_.maximum_constraint_definitions);
+		std::vector<ConstraintDefinition> loadedConstraints;
+		if (cachedConstraints == nullptr) {
+			debug::PerfTrace::addValue("native_graph.read.index_candidate_constraint_definition_read", 1);
+			loadedConstraints = readAllConstraintDefinitions(snapshot, options_.maximum_constraint_definitions);
+			if (session != nullptr) {
+				session->putConstraintDefinitions(loadedConstraints);
+				cachedConstraints = session->constraintDefinitions(options_.maximum_constraint_definitions);
+			}
+		}
+		const std::vector<ConstraintDefinition> &definitions =
+				cachedConstraints == nullptr ? loadedConstraints : *cachedConstraints;
 		for (const ConstraintDefinition &definition: definitions) {
 			const bool supportsExactLookup = definition.entity_kind == ConstraintDefinitionEntityKind::CDEK_NODE &&
 											 (definition.kind == ConstraintDefinitionKind::CDK_UNIQUE ||
@@ -2955,7 +3135,7 @@ namespace graph::storage {
 			requestedValues.reserve(definition.property_names.size());
 			propertyTokens.reserve(definition.property_names.size());
 			for (const std::string &name: definition.property_names) {
-				const std::optional<uint32_t> token = system_catalog_->findPropertyToken(snapshot, name);
+				const std::optional<uint32_t> token = resolvePropertyToken(name);
 				if (!token.has_value()) {
 					throw FormatException(
 							FormatError::FERR_INVALID_STATE,
@@ -2973,9 +3153,19 @@ namespace graph::storage {
 			const BTreeIndex support(definition.constraint_id, *btree_pages_, *metadata_);
 			const std::vector<BTreePageEntry> candidates =
 					support.scan(snapshot, ConstraintSupportTree::lowerBound(requestedKey),
-								 options_.maximum_constraint_support_collisions + 1U);
+								 checkedBoundPlusOne(options_.maximum_constraint_support_collisions,
+										"relocatable native exact Node lookup collision bound overflowed"));
 			size_t collisionCount = 0U;
-			std::vector<LogicalGraphNode> result;
+			IndexCandidateBatch result;
+			result.snapshot_generation = snapshot.superblock().generation.value();
+			result.exact_match_verified = true;
+			result.predicates_verified = true;
+			result.label_scope_verified = true;
+			for (const std::string &name: definition.property_names) {
+				result.verified_property_columns.push_back({name, {}});
+			}
+			std::vector<uint64_t> candidateNodeIds;
+			candidateNodeIds.reserve(candidates.size());
 			for (const BTreePageEntry &candidate: candidates) {
 				if (!ConstraintSupportTree::matchesDigest(candidate.key, requestedKey)) {
 					break;
@@ -2991,46 +3181,64 @@ namespace graph::storage {
 							FormatError::FERR_INVALID_STATE,
 							"relocatable native exact Node lookup found a support-tree entry with a mismatched value");
 				}
-				const PageBackedGraphNode node = native_graph_reads_->readNode(snapshot, nodeId);
-				if (node.node_id != nodeId ||
-					std::ranges::find(node.label_token_ids, definition.schema_token_id) == node.label_token_ids.end() ||
-					node.properties.size() > maximumPropertyEntries) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "relocatable native exact Node lookup found an invalid constrained Node");
-				}
-				std::vector<PropertyValue> actualValues;
-				actualValues.reserve(propertyTokens.size());
-				for (const uint32_t token: propertyTokens) {
-					const auto property = std::ranges::lower_bound(node.properties, token, {},
-																   &PropertyCollectionRootEntry::key_token);
-					if (property == node.properties.end() || property->key_token != token ||
-						property->value.getType() == PropertyType::NULL_TYPE) {
-						throw FormatException(FormatError::FERR_INVALID_STATE,
-											  "relocatable native exact Node lookup found a stale support-tree entry");
-					}
-					actualValues.push_back(property->value);
-				}
-				// A matching digest is only a routing candidate: retain the canonical
-				// value comparison so a SHA-256 collision cannot become a false match.
-				if (ConstraintSupportTree::canonicalKey(actualValues) != requestedKey) {
-					continue;
-				}
-				if (result.size() == maximumNodes) {
-					throw FormatException(
-							FormatError::FERR_INVALID_STATE,
-							"relocatable native exact Node lookup exceeded its caller-supplied result bound");
-				}
-				result.push_back(native_logical_graph_reads_->readNode(snapshot, nodeId));
+				candidateNodeIds.push_back(nodeId);
 			}
-			if (result.size() > 1U) {
+			if (candidateNodeIds.size() > maximumNodes) {
+				throw FormatException(FormatError::FERR_INVALID_STATE,
+								  "relocatable native exact Node lookup exceeded its caller-supplied result bound");
+			}
+			if (!candidateNodeIds.empty()) {
+				std::ranges::sort(candidateNodeIds);
+				if (std::ranges::adjacent_find(candidateNodeIds) != candidateNodeIds.end()) {
+					throw FormatException(FormatError::FERR_INVALID_STATE,
+									  "relocatable native exact Node lookup found duplicate support-tree Entity IDs");
+				}
+				// The support tree is ordered by digest then Entity ID. Validate the
+				// complete digest collision batch through one sorted Entity/Property
+				// pipeline instead of repeating a Directory descent per candidate.
+				// The batch API retains owner, label, Property count, token, and value
+				// checks; this changes only their granularity.
+				native_graph_reads_->validateNodeExactPropertiesSorted(
+						snapshot, candidateNodeIds, definition.schema_token_id, propertyTokens, requestedValues,
+						maximumPropertyEntries, session);
+				traceNativeCandidateMetric("native_graph.read.index_candidate_verified_rows", candidateNodeIds.size());
+				for (const uint64_t nodeId: candidateNodeIds) {
+					result.candidates.push_back({nodeId, false, 0U, 0U, 0U});
+					for (size_t propertyIndex = 0U; propertyIndex < definition.property_names.size(); ++propertyIndex) {
+						result.verified_property_columns[propertyIndex].values.push_back(requestedValues[propertyIndex]);
+					}
+				}
+			}
+			if (result.candidates.size() > 1U) {
 				throw FormatException(FormatError::FERR_INVALID_STATE,
 									  "relocatable native exact Node lookup found duplicate unique-constraint entries");
+			}
+			if (visitor != nullptr) {
+				// Unique-constraint candidates use the support tree path rather than
+				// the ordinary Index cursor, so enforce the same producer-side byte
+				// budget before exposing this batch to a storage-neutral consumer.
+				enforceCandidateBatchBytes(result, maximumCandidateBytes);
+				if (!(*visitor)(result) && visitorCompleted != nullptr) {
+					*visitorCompleted = false;
+				}
+				return IndexCandidateBatch{};
 			}
 			return result;
 		}
 
-		const std::vector<IndexDefinition> indexDefinitions =
-				readAllIndexDefinitions(snapshot, options_.maximum_index_definitions);
+		const std::vector<IndexDefinition> *cachedIndexes =
+				session == nullptr ? nullptr : session->indexDefinitions(options_.maximum_index_definitions);
+		std::vector<IndexDefinition> loadedIndexes;
+		if (cachedIndexes == nullptr) {
+			debug::PerfTrace::addValue("native_graph.read.index_candidate_definition_read", 1);
+			loadedIndexes = readAllIndexDefinitions(snapshot, options_.maximum_index_definitions);
+			if (session != nullptr) {
+				session->putIndexDefinitions(loadedIndexes);
+				cachedIndexes = session->indexDefinitions(options_.maximum_index_definitions);
+			}
+		}
+		const std::vector<IndexDefinition> &indexDefinitions =
+				cachedIndexes == nullptr ? loadedIndexes : *cachedIndexes;
 		for (const IndexDefinition &definition: indexDefinitions) {
 			const bool supportsExactLookup = definition.entity_kind == IndexDefinitionEntityKind::IDEK_NODE &&
 											 (definition.kind == IndexDefinitionKind::IDK_PROPERTY ||
@@ -3070,7 +3278,7 @@ namespace graph::storage {
 					indexable = false;
 					break;
 				}
-				const std::optional<uint32_t> token = system_catalog_->findPropertyToken(snapshot, name);
+				const std::optional<uint32_t> token = resolvePropertyToken(name);
 				if (!token.has_value()) {
 					throw FormatException(FormatError::FERR_INVALID_STATE,
 										  "relocatable native exact Node lookup found an unknown indexed Property key");
@@ -3102,8 +3310,92 @@ namespace graph::storage {
 									  "relocatable native exact Node lookup cannot extend its result bound");
 			}
 			const BTreeIndex index(definition.index_id, *btree_pages_, *metadata_);
-			const std::vector<BTreePageEntry> candidates = index.scan(snapshot, *entryKey, maximumNodes + 1U);
-			std::vector<LogicalGraphNode> result;
+			if (visitor != nullptr) {
+				const size_t batchCapacity = candidateBatchCapacity(maximumNodes, maximumCandidateBytes);
+				auto cursor = index.openRangeCursor(snapshot, std::optional(std::span<const std::byte>(*entryKey)),
+						options_.maximum_online_index_entries, BufferPoolReadHint::BPRH_SEQUENTIAL);
+				std::vector<BTreePageEntry> pending;
+				pending.reserve(batchCapacity);
+				size_t totalCandidates = 0U;
+				const auto emit = [&]() -> bool {
+					if (pending.empty()) {
+						return true;
+					}
+					IndexCandidateBatch batch;
+					batch.snapshot_generation = snapshot.superblock().generation.value();
+					batch.exact_match_verified = true;
+					batch.predicates_verified = true;
+					batch.label_scope_verified = true;
+					for (const std::string &name: definition.property_names) {
+						batch.verified_property_columns.push_back({name, {}});
+					}
+					std::vector<uint64_t> nodeIds;
+					nodeIds.reserve(pending.size());
+					uint64_t previousNodeId = 0U;
+					for (const BTreePageEntry &candidate: pending) {
+						if (candidate.key.size() != valuePrefix.size() + sizeof(uint64_t) ||
+								candidate.key.size() < valuePrefix.size() ||
+								!std::equal(valuePrefix.begin(), valuePrefix.end(), candidate.key.begin())) {
+							throw FormatException(FormatError::FERR_INVALID_STATE,
+									"relocatable native exact Node lookup found a malformed scalar Index key");
+						}
+						const uint64_t nodeId = IndexKeyCodec::decodeEntryEntityId(candidate.key);
+						if (nodeId <= previousNodeId || candidate.value_or_child != nodeId) {
+							throw FormatException(FormatError::FERR_INVALID_STATE,
+									"relocatable native exact Node lookup found a noncanonical scalar Index entry");
+						}
+						previousNodeId = nodeId;
+						nodeIds.push_back(nodeId);
+					}
+					native_graph_reads_->validateNodeExactPropertiesSorted(snapshot, nodeIds, definition.label_token_id,
+							propertyTokens, requestedValues, maximumPropertyEntries, session);
+					traceNativeCandidateMetric("native_graph.read.index_candidate_verified_rows", nodeIds.size());
+					for (const uint64_t nodeId: nodeIds) {
+						batch.candidates.push_back({nodeId, false, 0U, 0U, 0U});
+						for (size_t propertyIndex = 0U; propertyIndex < definition.property_names.size(); ++propertyIndex) {
+							batch.verified_property_columns[propertyIndex].values.push_back(requestedValues[propertyIndex]);
+						}
+					}
+					pending.clear();
+					traceNativeCandidateMetric("native_graph.read.index_candidate_batches", 1U);
+					traceNativeCandidateMetric("native_graph.read.index_candidate_emitted_rows", batch.candidates.size());
+					enforceCandidateBatchBytes(batch, maximumCandidateBytes);
+					return (*visitor)(batch);
+				};
+			for (;;) {
+				const std::optional<BTreePageEntry> candidate = cursor.next();
+				if (!candidate.has_value() || candidate->key.size() < valuePrefix.size() ||
+						!std::equal(valuePrefix.begin(), valuePrefix.end(), candidate->key.begin())) {
+					break;
+				}
+				if (++totalCandidates > maximumNodes) {
+					throw FormatException(FormatError::FERR_INVALID_STATE,
+							"relocatable native exact Node lookup exceeded its caller-supplied result bound");
+				}
+				pending.push_back(*candidate);
+				if (pending.size() == batchCapacity && !emit()) {
+					if (visitorCompleted != nullptr) {
+						*visitorCompleted = false;
+					}
+					return IndexCandidateBatch{};
+				}
+			}
+			if (!emit() && visitorCompleted != nullptr) {
+				*visitorCompleted = false;
+			}
+			// The stream path deliberately performs no unbounded result collection.
+			return IndexCandidateBatch{};
+		}
+			const std::vector<BTreePageEntry> candidates = index.scan(snapshot, *entryKey,
+						checkedBoundPlusOne(maximumNodes, "relocatable native exact Node lookup result bound overflowed"));
+			IndexCandidateBatch result;
+			result.snapshot_generation = snapshot.superblock().generation.value();
+			result.exact_match_verified = true;
+			result.predicates_verified = true;
+			result.label_scope_verified = true;
+			for (const std::string &name: definition.property_names) {
+				result.verified_property_columns.push_back({name, {}});
+			}
 			uint64_t previousNodeId = 0U;
 			for (const BTreePageEntry &candidate: candidates) {
 				if (candidate.key.size() < valuePrefix.size() ||
@@ -3121,32 +3413,82 @@ namespace graph::storage {
 							"relocatable native exact Node lookup found a noncanonical scalar Index entry");
 				}
 				previousNodeId = nodeId;
-				const PageBackedGraphNode node = native_graph_reads_->readNode(snapshot, nodeId);
-				if (node.node_id != nodeId ||
-					std::ranges::find(node.label_token_ids, definition.label_token_id) == node.label_token_ids.end() ||
-					node.properties.size() > maximumPropertyEntries) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "relocatable native exact Node lookup found an invalid indexed Node");
-				}
-				for (size_t propertyIndex = 0U; propertyIndex < propertyTokens.size(); ++propertyIndex) {
-					const auto property = std::ranges::lower_bound(node.properties, propertyTokens[propertyIndex], {},
-																   &PropertyCollectionRootEntry::key_token);
-					if (property == node.properties.end() || property->key_token != propertyTokens[propertyIndex] ||
-						property->value != requestedValues[propertyIndex]) {
-						throw FormatException(FormatError::FERR_INVALID_STATE,
-											  "relocatable native exact Node lookup found a stale scalar Index entry");
-					}
-				}
-				if (result.size() == maximumNodes) {
+				if (result.candidates.size() == maximumNodes) {
 					throw FormatException(
 							FormatError::FERR_INVALID_STATE,
 							"relocatable native exact Node lookup exceeded its caller-supplied result bound");
 				}
-				result.push_back(native_logical_graph_reads_->readNode(snapshot, nodeId));
+				result.candidates.push_back({nodeId, false, 0U, 0U, 0U});
+				for (size_t propertyIndex = 0U; propertyIndex < definition.property_names.size(); ++propertyIndex) {
+					result.verified_property_columns[propertyIndex].values.push_back(requestedValues[propertyIndex]);
+				}
+			}
+			if (!result.candidates.empty()) {
+				std::vector<uint64_t> nodeIds;
+				nodeIds.reserve(result.candidates.size());
+				for (const EntityRef &candidate: result.candidates) {
+					nodeIds.push_back(candidate.entity_id);
+				}
+				// A B+Tree page proves only its own checksum and key ordering. Verify
+				// the authoritative Property collection once for the complete sorted
+				// candidate batch so valid-but-stale index keys fail closed.
+				native_graph_reads_->validateNodeExactPropertiesSorted(
+						snapshot, nodeIds, definition.label_token_id, propertyTokens, requestedValues,
+						maximumPropertyEntries, session);
 			}
 			return result;
 		}
 		return std::nullopt;
+	}
+
+	std::optional<bool> RelocatableStorageBackend::visitNativeNodeCandidatesByExactProperties(
+			const MetadataSnapshotPin &snapshot, const std::vector<std::string> &labels,
+			const std::vector<std::pair<std::string, PropertyValue>> &properties, const size_t maximumNodes,
+			const size_t maximumPropertyEntries, const IndexCandidateBatchVisitor &visitor,
+			NativeReadSession *session, size_t maximumCandidateBytes) const {
+		if (!visitor) {
+			throw FormatException(FormatError::FERR_INVALID_HEADER,
+					"relocatable native exact Node candidate stream requires a visitor");
+		}
+		bool completed = true;
+		IndexCandidateBatchVisitor callback = visitor;
+		const auto batch = findNativeNodeCandidatesByExactProperties(snapshot, labels, properties, maximumNodes,
+				maximumPropertyEntries, session, &callback, &completed, maximumCandidateBytes);
+		if (!batch.has_value()) {
+			return std::nullopt;
+		}
+		return completed;
+	}
+
+	std::optional<std::vector<LogicalGraphNode>> RelocatableStorageBackend::findNativeNodesByExactProperties(
+			const MetadataSnapshotPin &snapshot, const std::vector<std::string> &labels,
+			const std::vector<std::pair<std::string, PropertyValue>> &properties, const size_t maximumNodes,
+			const size_t maximumPropertyEntries, NativeReadSession *session) const {
+		const std::optional<IndexCandidateBatch> candidates =
+				findNativeNodeCandidatesByExactProperties(snapshot, labels, properties, maximumNodes,
+																				 maximumPropertyEntries, session);
+		if (!candidates.has_value()) {
+			return std::nullopt;
+		}
+		if (!candidates->exact_match_verified || candidates->candidates.size() > maximumNodes) {
+			throw FormatException(FormatError::FERR_INVALID_STATE,
+							  "relocatable native exact Node lookup returned an invalid candidate batch");
+		}
+		std::vector<LogicalGraphNode> result;
+		std::vector<uint64_t> nodeIds;
+		nodeIds.reserve(candidates->candidates.size());
+		for (const EntityRef &candidate: candidates->candidates) {
+			if (candidate.entity_id == 0U || candidate.is_edge) {
+				throw FormatException(FormatError::FERR_INVALID_STATE,
+								  "relocatable native exact Node lookup returned an invalid Node reference");
+			}
+			nodeIds.push_back(candidate.entity_id);
+		}
+		// Candidate verification already returns a strict logical-ID order. Read the
+		// complete records through one page-grouped batch so the public result does
+		// not repeat a Directory descent for every indexed Node.
+		return native_logical_graph_reads_->readNodesShapedSorted(
+				snapshot, nodeIds, {.include_labels = true, .all_properties = true}, session);
 	}
 
 	std::optional<std::vector<LogicalGraphNode>> RelocatableStorageBackend::findNodesByExactProperties(
@@ -3160,16 +3502,63 @@ namespace graph::storage {
 
 	std::optional<std::vector<LogicalGraphNode>> RelocatableStorageBackend::findNativeNodesByPropertyRange(
 			const MetadataSnapshotPin &snapshot, const std::vector<std::string> &labels,
-			const LogicalGraphPropertyRange &range, size_t maximumNodes, size_t maximumPropertyEntries) const {
+			const LogicalGraphPropertyRange &range, size_t maximumNodes, size_t maximumPropertyEntries,
+			NativeReadSession *session, IndexCandidateBatch *candidateOutput,
+			IndexCandidateBatchVisitor *visitor, bool *visitorCompleted, size_t maximumCandidateBytes) const {
+		if (visitorCompleted != nullptr) {
+			*visitorCompleted = true;
+		}
+		if (candidateOutput != nullptr) {
+			candidateOutput->candidates.clear();
+			candidateOutput->verified_property_columns.clear();
+			candidateOutput->snapshot_generation = snapshot.isValid() ? snapshot.superblock().generation.value() : 0U;
+			candidateOutput->exact_match_verified = false;
+			candidateOutput->predicates_verified = false;
+			candidateOutput->label_scope_verified = false;
+		}
 		if (!snapshot.isValid() || maximumNodes == 0U || maximumPropertyEntries == 0U) {
 			throw FormatException(FormatError::FERR_INVALID_HEADER,
 								  "relocatable native range Node lookup requires an active snapshot and positive bounds");
 		}
-		if (native_graph_reads_ == nullptr || native_logical_graph_reads_ == nullptr || system_catalog_ == nullptr ||
-			btree_pages_ == nullptr || metadata_ == nullptr) { // successful backend initialization installs this complete read domain before any public lookup.
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable native range Node lookup requires native graph, Catalog, and Index stores");
+		if (candidateOutput != nullptr) {
+			// Once the request shape and resource bounds are valid, an empty result
+			// (for example an unknown label/property) is still an authenticated,
+			// complete candidate answer rather than a fallback signal.
+			candidateOutput->predicates_verified = true;
+			candidateOutput->label_scope_verified = true;
 		}
+		if (session != nullptr) {
+			session->bind(snapshot);
+		}
+		const auto resolveLabelToken = [&]() {
+			if (session != nullptr) {
+				if (const auto cached = session->nodeLabelToken(labels.front()); cached.has_value()) {
+					return *cached;
+				}
+			}
+			debug::PerfTrace::addValue("native_graph.read.label_token_resolution", 1);
+			debug::PerfTrace::addValue("native_graph.read.range_index_label_token_resolution", 1);
+			const std::optional<uint64_t> resolved =
+					system_catalog_->findSchemaToken(snapshot, SystemCatalogSchemaTokenKind::SCSTK_LABEL, labels.front());
+			if (session != nullptr) {
+				session->putNodeLabelToken(labels.front(), resolved);
+			}
+			return resolved;
+		};
+		const auto resolvePropertyToken = [&](const std::string &name) {
+			if (session != nullptr) {
+				if (const auto cached = session->propertyToken(name); cached.has_value()) {
+					return *cached;
+				}
+			}
+			debug::PerfTrace::addValue("native_graph.read.property_token_resolution", 1);
+			debug::PerfTrace::addValue("native_graph.read.range_index_property_token_resolution", 1);
+			const std::optional<uint32_t> resolved = system_catalog_->findPropertyToken(snapshot, name);
+			if (session != nullptr) {
+				session->putPropertyToken(name, resolved);
+			}
+			return resolved;
+		};
 		const auto isOpenBound = [](const PropertyValue &value) {
 			return value.getType() != PropertyType::NULL_TYPE;
 		};
@@ -3194,12 +3583,11 @@ namespace graph::storage {
 			 (range.min_value == range.max_value && (!range.min_inclusive || !range.max_inclusive)))) {
 			return std::vector<LogicalGraphNode>{};
 		}
-		const std::optional<uint64_t> labelToken =
-				system_catalog_->findSchemaToken(snapshot, SystemCatalogSchemaTokenKind::SCSTK_LABEL, labels.front());
+		const std::optional<uint64_t> labelToken = resolveLabelToken();
 		if (!labelToken.has_value()) {
 			return std::vector<LogicalGraphNode>{};
 		}
-		const std::optional<uint32_t> propertyToken = system_catalog_->findPropertyToken(snapshot, range.key);
+		const std::optional<uint32_t> propertyToken = resolvePropertyToken(range.key);
 		if (!propertyToken.has_value()) {
 			return std::vector<LogicalGraphNode>{};
 		}
@@ -3209,8 +3597,18 @@ namespace graph::storage {
 								  "relocatable native range Node lookup requires a finite Index-entry bound");
 		}
 
-		const std::vector<IndexDefinition> definitions =
-				readAllIndexDefinitions(snapshot, options_.maximum_index_definitions);
+		const std::vector<IndexDefinition> *cachedIndexes =
+				session == nullptr ? nullptr : session->indexDefinitions(options_.maximum_index_definitions);
+		std::vector<IndexDefinition> loadedIndexes;
+		if (cachedIndexes == nullptr) {
+			debug::PerfTrace::addValue("native_graph.read.range_index_definition_read", 1);
+			loadedIndexes = readAllIndexDefinitions(snapshot, options_.maximum_index_definitions);
+			if (session != nullptr) {
+				session->putIndexDefinitions(loadedIndexes);
+				cachedIndexes = session->indexDefinitions(options_.maximum_index_definitions);
+			}
+		}
+		const std::vector<IndexDefinition> &definitions = cachedIndexes == nullptr ? loadedIndexes : *cachedIndexes;
 		for (const IndexDefinition &definition: definitions) {
 			if (definition.entity_kind != IndexDefinitionEntityKind::IDEK_NODE ||
 				definition.kind != IndexDefinitionKind::IDK_PROPERTY || definition.label_token_id != *labelToken ||
@@ -3228,75 +3626,249 @@ namespace graph::storage {
 				if (!encoded.has_value()) {
 					return std::nullopt;
 				}
-				lower = IndexKeyCodec::lowerBound(range.min_value);
+				// For an exclusive lower bound, begin after the complete value
+				// prefix (all Entity-ID suffixes), not merely after Entity ID 1.
+				lower = range.min_inclusive ? IndexKeyCodec::lowerBound(range.min_value)
+													 : IndexKeyCodec::upperBound(range.min_value);
 			}
 			const BTreeIndex index(definition.index_id, *btree_pages_, *metadata_);
-			std::optional<std::vector<std::byte>> previousKey;
-			std::vector<LogicalGraphNode> result;
-			std::unordered_set<uint64_t> seenNodeIds;
-			size_t scannedEntries = 0U;
-			for (;;) {
-				if (scannedEntries == options_.maximum_online_index_entries) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "relocatable native range Node lookup exceeded its Index-entry bound");
-				}
-				const size_t batch = std::min<size_t>(256U, options_.maximum_online_index_entries - scannedEntries);
-				const std::optional<std::span<const std::byte>> start = previousKey.has_value()
-																					 ? std::optional(std::span<const std::byte>(*previousKey))
-																					 : (lower.has_value() ? std::optional(std::span<const std::byte>(*lower)) : std::nullopt);
-				const std::vector<BTreePageEntry> candidates = index.scan(
-						snapshot, start, batch, BufferPoolReadHint::BPRH_SEQUENTIAL, nullptr, previousKey.has_value());
-				if (candidates.empty()) {
-					std::ranges::sort(result, {}, &LogicalGraphNode::node_id);
-					return result;
-				}
-				scannedEntries += candidates.size();
-				for (const BTreePageEntry &candidate: candidates) {
-					if (candidate.key.size() <= sizeof(uint64_t)) {
-						throw FormatException(FormatError::FERR_INVALID_STATE,
-											  "relocatable native range Node lookup found a malformed scalar Index key");
-					}
-					const uint64_t nodeId = IndexKeyCodec::decodeEntryEntityId(candidate.key);
-					if (candidate.value_or_child != nodeId || !seenNodeIds.insert(nodeId).second) {
-						throw FormatException(FormatError::FERR_INVALID_STATE,
-											  "relocatable native range Node lookup found a noncanonical scalar Index entry");
-					}
-					const PageBackedGraphNode node = native_graph_reads_->readNode(snapshot, nodeId);
-					if (node.node_id != nodeId ||
-						std::ranges::find(node.label_token_ids, definition.label_token_id) == node.label_token_ids.end() ||
-						node.properties.size() > maximumPropertyEntries) {
-						throw FormatException(FormatError::FERR_INVALID_STATE,
-											  "relocatable native range Node lookup found an invalid indexed Node");
-					}
-					const auto property = std::ranges::lower_bound(node.properties, *propertyToken, {},
-																					   &PropertyCollectionRootEntry::key_token);
-					if (property == node.properties.end() || property->key_token != *propertyToken) {
-						throw FormatException(FormatError::FERR_INVALID_STATE,
-											  "relocatable native range Node lookup found a stale scalar Index entry");
-					}
-					const std::optional<std::vector<std::byte>> expected =
-							IndexKeyCodec::tryEncodeEntryKey(property->value, nodeId);
-					if (!expected.has_value() || candidate.key != *expected) {
-						throw FormatException(FormatError::FERR_INVALID_STATE,
-											  "relocatable native range Node lookup found a noncanonical scalar Index entry");
-					}
-					if (isOpenBound(range.max_value) &&
-						(range.max_inclusive ? property->value > range.max_value : property->value >= range.max_value)) {
-						std::ranges::sort(result, {}, &LogicalGraphNode::node_id);
-						return result;
-					}
-					const bool belowLower = isOpenBound(range.min_value) &&
-						(range.min_inclusive ? property->value < range.min_value : property->value <= range.min_value);
-					if (!belowLower) {
-						if (result.size() == maximumNodes) {
-							throw FormatException(FormatError::FERR_INVALID_STATE,
-											  "relocatable native range Node lookup exceeded its caller-supplied result bound");
-						}
-						result.push_back(native_logical_graph_reads_->readNode(snapshot, nodeId));
-					}
-				}
-				previousKey = candidates.back().key;
+			if (candidateOutput != nullptr) {
+				candidateOutput->verified_property_columns.push_back({range.key, {}});
 			}
+			if (candidateOutput != nullptr && visitor != nullptr) {
+				throw FormatException(FormatError::FERR_INVALID_STATE,
+						"relocatable native range Node lookup cannot collect and stream candidates simultaneously");
+			}
+			std::vector<LogicalGraphNode> result;
+			std::vector<uint64_t> resultNodeIds;
+			std::unordered_set<uint64_t> seenNodeIds;
+			// The cursor retains one verified root-to-leaf route. Stream callers use
+			// bounded batches; complete callers keep the historical whole-result path
+			// so their result-bound semantics remain unchanged.
+			auto cursor = index.openRangeCursor(
+					snapshot, lower.has_value() ? std::optional(std::span<const std::byte>(*lower)) : std::nullopt,
+					options_.maximum_online_index_entries, BufferPoolReadHint::BPRH_SEQUENTIAL);
+			const std::optional<std::vector<std::byte>> upperExclusive = [&]() -> std::optional<std::vector<std::byte>> {
+				if (!isOpenBound(range.max_value)) {
+					return std::nullopt;
+				}
+				return range.max_inclusive ? std::optional(IndexKeyCodec::upperBound(range.max_value))
+										 : std::optional(IndexKeyCodec::encodeEntryKey(range.max_value, 1U));
+			}();
+		// The default cursor batch is intentionally small for callers that do not
+		// expose a byte budget. Query execution supplies a bounded candidate-byte
+		// budget, so use that budget to enlarge the I/O batch and avoid repeating
+		// Directory/Property-page work for every few hundred indexed rows. The
+		// conservative per-row estimate keeps temporary staging bounded; the final
+		// authenticated batch byte check remains authoritative for variable values.
+		const size_t batchCapacity = candidateBatchCapacity(maximumNodes, maximumCandidateBytes);
+		std::vector<BTreePageEntry> pending;
+		if (visitor != nullptr) {
+			pending.reserve(batchCapacity);
+		}
+		size_t totalCandidates = 0U;
+		const auto emit = [&](const std::span<const BTreePageEntry> entries) -> bool {
+			if (entries.empty()) {
+				return true;
+			}
+			std::vector<uint64_t> nodeIds;
+			nodeIds.reserve(entries.size());
+			for (const BTreePageEntry &candidate: entries) {
+				if (candidate.key.size() <= sizeof(uint64_t)) {
+					throw FormatException(FormatError::FERR_INVALID_STATE,
+								"relocatable native range Node lookup found a malformed scalar Index key");
+				}
+				const uint64_t nodeId = IndexKeyCodec::decodeEntryEntityId(candidate.key);
+				if (candidate.value_or_child != nodeId) {
+					throw FormatException(FormatError::FERR_INVALID_STATE,
+								"relocatable native range Node lookup found a noncanonical scalar Index entry");
+				}
+				nodeIds.push_back(nodeId);
+			}
+			std::vector<size_t> propertyOrder(nodeIds.size());
+			std::iota(propertyOrder.begin(), propertyOrder.end(), 0U);
+			std::ranges::sort(propertyOrder, [&nodeIds](const size_t left, const size_t right) {
+				return nodeIds[left] < nodeIds[right];
+			});
+			std::vector<uint64_t> sortedNodeIds;
+			sortedNodeIds.reserve(nodeIds.size());
+			for (const size_t index: propertyOrder) {
+				sortedNodeIds.push_back(nodeIds[index]);
+			}
+			const std::array<uint64_t, 1U> labelTokens{definition.label_token_id};
+			const std::vector<bool> labelMatches =
+					native_graph_reads_->readNodeLabelMatchesSorted(snapshot, sortedNodeIds, labelTokens, session);
+			const auto propertyColumnsAndCounts = native_graph_reads_->readNodePropertyColumnsAndCountsSorted(
+					snapshot, sortedNodeIds, std::array<uint32_t, 1U>{*propertyToken}, session);
+			const auto &propertyColumns = propertyColumnsAndCounts.first;
+			const auto &propertyCounts = propertyColumnsAndCounts.second;
+			if (labelMatches.size() != sortedNodeIds.size() || propertyCounts.size() != sortedNodeIds.size() ||
+					propertyColumns.size() != 1U || propertyColumns.front().size() != propertyOrder.size()) {
+				throw FormatException(FormatError::FERR_INVALID_STATE,
+								"relocatable native range Node lookup returned an invalid candidate validation batch");
+			}
+			traceNativeCandidateMetric("native_graph.read.index_candidate_liveness_probes", sortedNodeIds.size());
+			for (size_t index = 0U; index < sortedNodeIds.size(); ++index) {
+				if (!labelMatches[index] || !propertyCounts[index].has_value() ||
+						*propertyCounts[index] > maximumPropertyEntries) {
+					throw FormatException(FormatError::FERR_INVALID_STATE,
+								"relocatable native range Node lookup found an invalid indexed Node");
+				}
+			}
+			std::vector<std::optional<PropertyValue>> properties(entries.size());
+			for (size_t index = 0U; index < propertyOrder.size(); ++index) {
+				properties[propertyOrder[index]] = propertyColumns.front()[index];
+			}
+			IndexCandidateBatch streamBatch;
+			if (visitor != nullptr) {
+				streamBatch.snapshot_generation = snapshot.superblock().generation.value();
+				streamBatch.predicates_verified = true;
+				streamBatch.label_scope_verified = true;
+				streamBatch.verified_property_columns.push_back({range.key, {}});
+			}
+			for (size_t index = 0U; index < entries.size(); ++index) {
+				const BTreePageEntry &candidate = entries[index];
+				const uint64_t nodeId = nodeIds[index];
+				const std::optional<PropertyValue> &property = properties[index];
+				if (!property.has_value()) {
+					throw FormatException(FormatError::FERR_INVALID_STATE,
+									"relocatable native range Node lookup found a stale scalar Index entry");
+				}
+				const std::optional<std::vector<std::byte>> expected = IndexKeyCodec::tryEncodeEntryKey(*property, nodeId);
+				if (!expected.has_value() || candidate.key != *expected) {
+					throw FormatException(FormatError::FERR_INVALID_STATE,
+									"relocatable native range Node lookup found a noncanonical scalar Index entry");
+				}
+				const bool belowLower = isOpenBound(range.min_value) &&
+						(range.min_inclusive ? *property < range.min_value : *property <= range.min_value);
+				if (belowLower) {
+					continue;
+				}
+					if (candidateOutput != nullptr) {
+						candidateOutput->candidates.push_back({nodeId, false, 0U, 0U, 0U});
+						candidateOutput->verified_property_columns.front().values.push_back(*property);
+						traceNativeCandidateMetric("native_graph.read.index_candidate_verified_rows", 1U);
+				} else if (visitor != nullptr) {
+					streamBatch.candidates.push_back({nodeId, false, 0U, 0U, 0U});
+					streamBatch.verified_property_columns.front().values.push_back(*property);
+				} else {
+					resultNodeIds.push_back(nodeId);
+				}
+			}
+			if (visitor == nullptr) {
+				return true;
+			}
+			// Range index order is value-major. Sort only this bounded batch so the
+			// storage-neutral runtime can validate its monotonic candidate contract.
+			std::vector<size_t> order(streamBatch.candidates.size());
+			std::iota(order.begin(), order.end(), 0U);
+			std::ranges::sort(order, [&streamBatch](const size_t left, const size_t right) {
+				return streamBatch.candidates[left].entity_id < streamBatch.candidates[right].entity_id;
+			});
+			IndexCandidateBatch ordered;
+			ordered.snapshot_generation = streamBatch.snapshot_generation;
+			ordered.predicates_verified = streamBatch.predicates_verified;
+			ordered.label_scope_verified = streamBatch.label_scope_verified;
+			ordered.verified_property_columns.push_back({range.key, {}});
+			ordered.candidates.reserve(order.size());
+			ordered.verified_property_columns.front().values.reserve(order.size());
+			for (const size_t index: order) {
+				ordered.candidates.push_back(streamBatch.candidates[index]);
+				ordered.verified_property_columns.front().values.push_back(
+						std::move(streamBatch.verified_property_columns.front().values[index]));
+			}
+			traceNativeCandidateMetric("native_graph.read.index_candidate_batches", ordered.candidates.empty() ? 0U : 1U);
+			traceNativeCandidateMetric("native_graph.read.index_candidate_emitted_rows", ordered.candidates.size());
+			enforceCandidateBatchBytes(ordered, maximumCandidateBytes);
+			return ordered.candidates.empty() || (*visitor)(ordered);
+		};
+		for (;;) {
+			const std::optional<BTreePageEntry> candidate = cursor.next();
+			if (!candidate.has_value()) {
+				break;
+			}
+			if (upperExclusive.has_value() &&
+					(range.max_inclusive ? std::lexicographical_compare(upperExclusive->begin(), upperExclusive->end(),
+							candidate->key.begin(), candidate->key.end())
+							: !std::lexicographical_compare(candidate->key.begin(), candidate->key.end(),
+																 upperExclusive->begin(), upperExclusive->end()))) {
+				break;
+			}
+			if (candidate->key.size() <= sizeof(uint64_t)) {
+				throw FormatException(FormatError::FERR_INVALID_STATE,
+									"relocatable native range Node lookup found a malformed scalar Index key");
+			}
+			const uint64_t nodeId = IndexKeyCodec::decodeEntryEntityId(candidate->key);
+			if (candidate->value_or_child != nodeId || !seenNodeIds.insert(nodeId).second) {
+				throw FormatException(FormatError::FERR_INVALID_STATE,
+									"relocatable native range Node lookup found a noncanonical scalar Index entry");
+			}
+			++totalCandidates;
+			if (totalCandidates > maximumNodes) {
+				throw FormatException(FormatError::FERR_INVALID_STATE,
+									"relocatable native range Node lookup exceeded its caller-supplied result bound");
+			}
+			if (visitor != nullptr) {
+				pending.push_back(*candidate);
+				if (pending.size() == batchCapacity) {
+					if (!emit(std::span<const BTreePageEntry>(pending))) {
+						if (visitorCompleted != nullptr) {
+							*visitorCompleted = false;
+						}
+						return std::vector<LogicalGraphNode>{};
+					}
+					pending.clear();
+				}
+			} else {
+				// Complete callers retain a bounded vector to preserve their explicit
+				// maximumNodes contract and deterministic final Node-ID ordering.
+				// Defer Property validation until all candidates are sorted by owner.
+				// This path is handled by the same emitter after the cursor is drained.
+				pending.push_back(*candidate);
+			}
+		}
+		if (visitor != nullptr) {
+			if (!pending.empty() && !emit(std::span<const BTreePageEntry>(pending)) && visitorCompleted != nullptr) {
+				*visitorCompleted = false;
+			}
+			return std::vector<LogicalGraphNode>{};
+		}
+		// Complete callers now validate their collected candidates in one owner-
+		// sorted batch, then reuse the emitter's normal result/candidate-output path.
+		if (!pending.empty()) {
+			if (!emit(std::span<const BTreePageEntry>(pending))) {
+				throw FormatException(FormatError::FERR_INVALID_STATE,
+								"relocatable native range Node lookup unexpectedly stopped a complete validation");
+			}
+		}
+		if (visitor == nullptr && candidateOutput == nullptr && !resultNodeIds.empty()) {
+			std::ranges::sort(resultNodeIds);
+			result = native_logical_graph_reads_->readNodesShapedSorted(
+					snapshot, resultNodeIds, {.include_labels = true, .all_properties = true}, session);
+		}
+		std::ranges::sort(result, {}, &LogicalGraphNode::node_id);
+		if (candidateOutput != nullptr) {
+			std::vector<size_t> order(candidateOutput->candidates.size());
+			std::iota(order.begin(), order.end(), 0U);
+			std::ranges::sort(order, [candidateOutput](size_t left, size_t right) {
+				return candidateOutput->candidates[left].entity_id < candidateOutput->candidates[right].entity_id;
+			});
+			std::vector<EntityRef> sortedCandidates;
+			sortedCandidates.reserve(order.size());
+			for (const size_t index: order) {
+				sortedCandidates.push_back(candidateOutput->candidates[index]);
+			}
+			candidateOutput->candidates = std::move(sortedCandidates);
+			for (auto &column: candidateOutput->verified_property_columns) {
+				std::vector<PropertyValue> sortedValues;
+				sortedValues.reserve(order.size());
+				for (const size_t index: order) {
+					sortedValues.push_back(std::move(column.values[index]));
+				}
+				column.values = std::move(sortedValues);
+			}
+		}
+		return result;
 		}
 		return std::nullopt;
 	}
@@ -3308,19 +3880,129 @@ namespace graph::storage {
 		return findNativeNodesByPropertyRange(snapshot.pin_, labels, range, maximumNodes, maximumPropertyEntries);
 	}
 
+	std::optional<IndexCandidateBatch> RelocatableStorageBackend::findNativeNodeCandidatesByPropertyRange(
+			const MetadataSnapshotPin &snapshot, const std::vector<std::string> &labels,
+			const LogicalGraphPropertyRange &range, size_t maximumNodes, size_t maximumPropertyEntries,
+			NativeReadSession *session) const {
+		IndexCandidateBatch result;
+		const auto complete = findNativeNodesByPropertyRange(snapshot, labels, range, maximumNodes, maximumPropertyEntries,
+												 session, &result);
+		if (!complete.has_value()) {
+			return std::nullopt;
+		}
+		if (!result.predicates_verified || result.candidates.size() > maximumNodes) {
+			throw FormatException(FormatError::FERR_INVALID_STATE,
+										"relocatable native range Node lookup returned an invalid candidate batch");
+		}
+		for (const auto &column: result.verified_property_columns) {
+			if (column.values.size() != result.candidates.size()) {
+				throw FormatException(FormatError::FERR_INVALID_STATE,
+										"relocatable native range Node lookup returned an invalid Property column");
+			}
+		}
+		// The range implementation already restores candidate order after its
+		// cursor batches. Avoid sorting and moving every verified column a second
+		// time; retain the defensive reorder for alternate implementations that
+		// may return an unsorted candidate batch.
+		if (std::ranges::is_sorted(result.candidates, {}, &EntityRef::entity_id)) {
+			return result;
+		}
+		std::vector<size_t> order(result.candidates.size());
+		std::iota(order.begin(), order.end(), 0U);
+		std::ranges::sort(order, [&result](size_t left, size_t right) {
+			return result.candidates[left].entity_id < result.candidates[right].entity_id;
+		});
+		std::vector<EntityRef> candidates;
+		candidates.reserve(order.size());
+		for (const size_t index: order) {
+			candidates.push_back(result.candidates[index]);
+		}
+		result.candidates = std::move(candidates);
+		for (auto &column: result.verified_property_columns) {
+			std::vector<PropertyValue> values;
+			values.reserve(order.size());
+			for (const size_t index: order) {
+				values.push_back(std::move(column.values[index]));
+			}
+			column.values = std::move(values);
+		}
+		return result;
+	}
+
+	std::optional<bool> RelocatableStorageBackend::visitNativeNodeCandidatesByPropertyRange(
+			const MetadataSnapshotPin &snapshot, const std::vector<std::string> &labels,
+			const LogicalGraphPropertyRange &range, const size_t maximumNodes, const size_t maximumPropertyEntries,
+			const IndexCandidateBatchVisitor &visitor, NativeReadSession *session, size_t maximumCandidateBytes) const {
+		if (!visitor) {
+			throw FormatException(FormatError::FERR_INVALID_HEADER,
+					"relocatable native range Node candidate stream requires a visitor");
+		}
+		bool completed = true;
+		IndexCandidateBatchVisitor callback = visitor;
+		const auto result = findNativeNodesByPropertyRange(snapshot, labels, range, maximumNodes,
+				maximumPropertyEntries, session, nullptr, &callback, &completed, maximumCandidateBytes);
+		if (!result.has_value()) {
+			return std::nullopt;
+		}
+		return completed;
+	}
+
 	std::optional<std::vector<LogicalGraphNode>> RelocatableStorageBackend::findNativeNodesByCompositePropertyRange(
 			const MetadataSnapshotPin &snapshot, const std::vector<std::string> &labels,
 			const LogicalGraphCompositePropertyRange &request, size_t maximumNodes,
-			size_t maximumPropertyEntries) const {
+			size_t maximumPropertyEntries, NativeReadSession *session, IndexCandidateBatch *candidateOutput,
+			IndexCandidateBatchVisitor *visitor, bool *visitorCompleted, size_t maximumCandidateBytes) const {
+		if (visitorCompleted != nullptr) {
+			*visitorCompleted = true;
+		}
+		if (candidateOutput != nullptr) {
+			candidateOutput->candidates.clear();
+			candidateOutput->verified_property_columns.clear();
+			candidateOutput->snapshot_generation = snapshot.isValid() ? snapshot.superblock().generation.value() : 0U;
+			candidateOutput->exact_match_verified = false;
+			candidateOutput->predicates_verified = false;
+			candidateOutput->label_scope_verified = false;
+		}
 		if (!snapshot.isValid() || maximumNodes == 0U || maximumPropertyEntries == 0U) {
 			throw FormatException(FormatError::FERR_INVALID_HEADER,
 								  "relocatable composite range Node lookup requires an active snapshot and positive bounds");
 		}
-		if (native_graph_reads_ == nullptr || native_logical_graph_reads_ == nullptr || system_catalog_ == nullptr ||
-			btree_pages_ == nullptr || metadata_ == nullptr) { // successful backend initialization installs this complete read domain before any public lookup.
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable composite range Node lookup requires native graph, Catalog, and Index stores");
+		if (candidateOutput != nullptr) {
+			candidateOutput->predicates_verified = true;
+			candidateOutput->label_scope_verified = true;
 		}
+		if (session != nullptr) {
+			session->bind(snapshot);
+		}
+		const auto resolveLabelToken = [&]() {
+			if (session != nullptr) {
+				if (const auto cached = session->nodeLabelToken(labels.front()); cached.has_value()) {
+					return *cached;
+				}
+			}
+			debug::PerfTrace::addValue("native_graph.read.label_token_resolution", 1);
+			debug::PerfTrace::addValue("native_graph.read.composite_range_index_label_token_resolution", 1);
+			const std::optional<uint64_t> resolved =
+					system_catalog_->findSchemaToken(snapshot, SystemCatalogSchemaTokenKind::SCSTK_LABEL, labels.front());
+			if (session != nullptr) {
+				session->putNodeLabelToken(labels.front(), resolved);
+			}
+			return resolved;
+		};
+		const auto resolvePropertyToken = [&](const std::string &name) {
+			if (session != nullptr) {
+				if (const auto cached = session->propertyToken(name); cached.has_value()) {
+					return *cached;
+				}
+			}
+			debug::PerfTrace::addValue("native_graph.read.property_token_resolution", 1);
+			debug::PerfTrace::addValue("native_graph.read.composite_range_index_property_token_resolution", 1);
+			const std::optional<uint32_t> resolved = system_catalog_->findPropertyToken(snapshot, name);
+			if (session != nullptr) {
+				session->putPropertyToken(name, resolved);
+			}
+			return resolved;
+		};
 		const auto isBound = [](const PropertyValue &value) { return value.getType() != PropertyType::NULL_TYPE; };
 		const auto isIndexable = [isBound](const PropertyValue &value) {
 			if (!isBound(value)) return true;
@@ -3346,15 +4028,15 @@ namespace graph::storage {
 			  (!request.range.min_inclusive || !request.range.max_inclusive)))) {
 			return std::vector<LogicalGraphNode>{};
 		}
-		const auto labelToken = system_catalog_->findSchemaToken(snapshot, SystemCatalogSchemaTokenKind::SCSTK_LABEL, labels.front());
+		const auto labelToken = resolveLabelToken();
 		if (!labelToken.has_value()) return std::vector<LogicalGraphNode>{};
 		for (const auto &[name, value]: request.equality_prefix) {
 			static_cast<void>(value);
-			if (!system_catalog_->findPropertyToken(snapshot, name).has_value()) {
+			if (!resolvePropertyToken(name).has_value()) {
 				return std::vector<LogicalGraphNode>{};
 			}
 		}
-		if (!system_catalog_->findPropertyToken(snapshot, request.range.key).has_value()) {
+		if (!resolvePropertyToken(request.range.key).has_value()) {
 			return std::vector<LogicalGraphNode>{};
 		}
 		if (options_.maximum_online_index_entries == 0U ||
@@ -3362,7 +4044,18 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_HEADER,
 								  "relocatable composite range Node lookup requires a finite Index-entry bound");
 		}
-		const std::vector<IndexDefinition> definitions = readAllIndexDefinitions(snapshot, options_.maximum_index_definitions);
+		const std::vector<IndexDefinition> *cachedIndexes =
+				session == nullptr ? nullptr : session->indexDefinitions(options_.maximum_index_definitions);
+		std::vector<IndexDefinition> loadedIndexes;
+		if (cachedIndexes == nullptr) {
+			debug::PerfTrace::addValue("native_graph.read.composite_range_index_definition_read", 1);
+			loadedIndexes = readAllIndexDefinitions(snapshot, options_.maximum_index_definitions);
+			if (session != nullptr) {
+				session->putIndexDefinitions(loadedIndexes);
+				cachedIndexes = session->indexDefinitions(options_.maximum_index_definitions);
+			}
+		}
+		const std::vector<IndexDefinition> &definitions = cachedIndexes == nullptr ? loadedIndexes : *cachedIndexes;
 		for (const IndexDefinition &definition: definitions) {
 			if (definition.entity_kind != IndexDefinitionEntityKind::IDEK_NODE ||
 				definition.kind != IndexDefinitionKind::IDK_COMPOSITE || definition.label_token_id != *labelToken ||
@@ -3372,79 +4065,277 @@ namespace graph::storage {
 			bool matches = true;
 			for (size_t index = 0U; index + 1U < definition.property_names.size(); ++index) {
 				const auto value = prefix.find(definition.property_names[index]);
-				const auto token = system_catalog_->findPropertyToken(snapshot, definition.property_names[index]);
+				const auto token = resolvePropertyToken(definition.property_names[index]);
 				if (value == prefix.end() || !token.has_value()) { matches = false; break; }
 				prefixValues.push_back(*value->second);
 				propertyTokens.push_back(*token);
 			}
-			const auto rangeToken = system_catalog_->findPropertyToken(snapshot, request.range.key);
+			const auto rangeToken = resolvePropertyToken(request.range.key);
 			if (!matches || !rangeToken.has_value()) continue;
 			propertyTokens.push_back(*rangeToken);
 			const auto encodedPrefix = IndexKeyCodec::tryEncodeComposite(prefixValues);
 			if (!encodedPrefix.has_value()) return std::nullopt;
 			std::optional<std::vector<std::byte>> lower;
-			if (isBound(request.range.min_value)) {
-				std::vector<PropertyValue> lowerValues = prefixValues;
-				lowerValues.push_back(request.range.min_value);
-				lower = IndexKeyCodec::tryEncodeCompositeEntryKey(lowerValues, 1U);
-				if (!lower.has_value()) return std::nullopt;
-			}
+				if (isBound(request.range.min_value)) {
+					std::vector<PropertyValue> lowerValues = prefixValues;
+					lowerValues.push_back(request.range.min_value);
+					lower = IndexKeyCodec::tryEncodeCompositeEntryKey(
+							lowerValues, request.range.min_inclusive ? 1U : std::numeric_limits<uint64_t>::max());
+					if (!lower.has_value()) return std::nullopt;
+				}
 			if (!metadata_->findIndexRootOptional(snapshot, definition.index_id).has_value()) {
 				throw FormatException(FormatError::FERR_INVALID_STATE,
 									  "relocatable composite range Node lookup found an Index definition without a B+Tree root");
 			}
 			const BTreeIndex index(definition.index_id, *btree_pages_, *metadata_);
-			std::optional<std::vector<std::byte>> previousKey;
+			if (candidateOutput != nullptr && visitor != nullptr) {
+				throw FormatException(FormatError::FERR_INVALID_STATE,
+						"relocatable composite range Node lookup cannot collect and stream candidates simultaneously");
+			}
+			if (candidateOutput != nullptr) {
+				candidateOutput->predicates_verified = true;
+				for (const std::string &name: definition.property_names) {
+					candidateOutput->verified_property_columns.push_back({name, {}});
+				}
+			}
+				const std::optional<std::span<const std::byte>> start =
+						lower.has_value() ? std::optional(std::span<const std::byte>(*lower))
+										: std::optional(std::span<const std::byte>(*encodedPrefix));
+				// The lower bound for an exclusive value uses the largest possible
+				// Entity-ID suffix. Exclude that sentinel itself so an entry with the
+				// maximum ID cannot leak into the exclusive range.
+				const bool excludeLowerBound = isBound(request.range.min_value) && !request.range.min_inclusive;
+				auto cursor = index.openRangeCursor(snapshot, start, options_.maximum_online_index_entries,
+					BufferPoolReadHint::BPRH_SEQUENTIAL, excludeLowerBound);
+				std::optional<std::vector<std::byte>> upperExclusive;
+				if (isBound(request.range.max_value)) {
+					std::vector<PropertyValue> upperValues = prefixValues;
+					upperValues.push_back(request.range.max_value);
+					upperExclusive = IndexKeyCodec::tryEncodeCompositeEntryKey(
+							upperValues, request.range.max_inclusive ? std::numeric_limits<uint64_t>::max() : 1U);
+					if (!upperExclusive.has_value()) return std::nullopt;
+				}
 			std::unordered_set<uint64_t> seen;
 			std::vector<LogicalGraphNode> result;
-			size_t scanned = 0U;
-			for (;;) {
-				if (scanned == options_.maximum_online_index_entries) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "relocatable composite range Node lookup exceeded its Index-entry bound");
-				}
-				const size_t batch = std::min<size_t>(256U, options_.maximum_online_index_entries - scanned);
-				const std::optional<std::span<const std::byte>> start = previousKey ? std::optional(std::span<const std::byte>(*previousKey)) :
-					(lower ? std::optional(std::span<const std::byte>(*lower)) : std::optional(std::span<const std::byte>(*encodedPrefix)));
-				const auto candidates = index.scan(snapshot, start, batch, BufferPoolReadHint::BPRH_SEQUENTIAL, nullptr, previousKey.has_value());
-				if (candidates.empty()) break;
-				scanned += candidates.size();
-				for (const BTreePageEntry &candidate: candidates) {
+			std::vector<uint64_t> resultNodeIds;
+			std::vector<BTreePageEntry> pending;
+			const size_t batchCapacity = candidateBatchCapacity(maximumNodes, maximumCandidateBytes);
+			if (visitor != nullptr) {
+			pending.reserve(batchCapacity);
+			}
+			size_t totalCandidates = 0U;
+			bool rangeExhausted = false;
+			const auto emit = [&](const std::span<const BTreePageEntry> entries) -> bool {
+				if (entries.empty()) return true;
+				std::vector<uint64_t> nodeIds;
+				nodeIds.reserve(entries.size());
+				for (const BTreePageEntry &candidate: entries) {
 					if (candidate.key.size() <= encodedPrefix->size() + sizeof(uint64_t) ||
-						!std::equal(encodedPrefix->begin(), encodedPrefix->end(), candidate.key.begin())) {
-						std::ranges::sort(result, {}, &LogicalGraphNode::node_id);
-						return result;
+							!std::equal(encodedPrefix->begin(), encodedPrefix->end(), candidate.key.begin())) {
+						throw FormatException(FormatError::FERR_INVALID_STATE,
+								"relocatable composite range Node lookup found a malformed Index key");
 					}
 					const uint64_t nodeId = IndexKeyCodec::decodeEntryEntityId(candidate.key);
-					if (candidate.value_or_child != nodeId || !seen.insert(nodeId).second) {
+					if (candidate.value_or_child != nodeId) {
 						throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "relocatable composite range Node lookup found a noncanonical Index entry");
+								"relocatable composite range Node lookup found a noncanonical Index entry");
 					}
-					const PageBackedGraphNode node = native_graph_reads_->readNode(snapshot, nodeId);
-					if (node.node_id != nodeId || std::ranges::find(node.label_token_ids, definition.label_token_id) == node.label_token_ids.end() ||
-						node.properties.size() > maximumPropertyEntries) throw FormatException(FormatError::FERR_INVALID_STATE, "relocatable composite range Node lookup found an invalid indexed Node");
-					std::vector<PropertyValue> actual;
-					actual.reserve(propertyTokens.size());
-					for (const uint32_t token: propertyTokens) {
-						const auto property = std::ranges::lower_bound(node.properties, token, {}, &PropertyCollectionRootEntry::key_token);
-						if (property == node.properties.end() || property->key_token != token) throw FormatException(FormatError::FERR_INVALID_STATE, "relocatable composite range Node lookup found a stale Index entry");
-						actual.push_back(property->value);
-					}
-					const auto expected = IndexKeyCodec::tryEncodeCompositeEntryKey(actual, nodeId);
-					if (!expected.has_value() || candidate.key != *expected) throw FormatException(FormatError::FERR_INVALID_STATE, "relocatable composite range Node lookup found a noncanonical Index entry");
-					const PropertyValue &value = actual.back();
-					if (isBound(request.range.max_value) && (request.range.max_inclusive ? value > request.range.max_value : value >= request.range.max_value)) {
-						std::ranges::sort(result, {}, &LogicalGraphNode::node_id); return result;
-					}
-					const bool belowLower = isBound(request.range.min_value) && (request.range.min_inclusive ? value < request.range.min_value : value <= request.range.min_value);
-					if (!belowLower) {
-						if (result.size() == maximumNodes) throw FormatException(FormatError::FERR_INVALID_STATE, "relocatable composite range Node lookup exceeded its caller-supplied result bound");
-						result.push_back(native_logical_graph_reads_->readNode(snapshot, nodeId));
+					nodeIds.push_back(nodeId);
+				}
+				std::vector<size_t> propertyOrder(nodeIds.size());
+				std::iota(propertyOrder.begin(), propertyOrder.end(), 0U);
+				std::ranges::sort(propertyOrder, [&nodeIds](size_t left, size_t right) {
+					return nodeIds[left] < nodeIds[right];
+				});
+				std::vector<uint64_t> sortedNodeIds;
+				sortedNodeIds.reserve(propertyOrder.size());
+				for (const size_t index: propertyOrder) sortedNodeIds.push_back(nodeIds[index]);
+				const std::array<uint64_t, 1U> labelTokens{definition.label_token_id};
+				const auto labelMatches = native_graph_reads_->readNodeLabelMatchesSorted(
+						snapshot, sortedNodeIds, labelTokens, session);
+				const auto propertyCounts = native_graph_reads_->nodePropertyCountsSorted(snapshot, sortedNodeIds, session);
+				if (labelMatches.size() != sortedNodeIds.size() || propertyCounts.size() != sortedNodeIds.size()) {
+					throw FormatException(FormatError::FERR_INVALID_STATE,
+							"relocatable composite range Node lookup returned an invalid candidate validation batch");
+				}
+				traceNativeCandidateMetric("native_graph.read.index_candidate_liveness_probes", sortedNodeIds.size());
+				for (size_t index = 0U; index < sortedNodeIds.size(); ++index) {
+					if (!labelMatches[index] || !propertyCounts[index].has_value() ||
+							*propertyCounts[index] > maximumPropertyEntries) {
+						throw FormatException(FormatError::FERR_INVALID_STATE,
+								"relocatable composite range Node lookup found an invalid indexed Node");
 					}
 				}
-				previousKey = candidates.back().key;
+				std::vector<std::pair<uint32_t, size_t>> tokenOrder;
+				tokenOrder.reserve(propertyTokens.size());
+				for (size_t index = 0U; index < propertyTokens.size(); ++index) {
+					tokenOrder.emplace_back(propertyTokens[index], index);
+				}
+				std::ranges::sort(tokenOrder, {}, &std::pair<uint32_t, size_t>::first);
+				for (size_t index = 1U; index < tokenOrder.size(); ++index) {
+					if (tokenOrder[index - 1U].first == tokenOrder[index].first) {
+						throw FormatException(FormatError::FERR_INVALID_STATE,
+								"relocatable composite range Node lookup resolved duplicate Property tokens");
+					}
+				}
+				std::vector<uint32_t> sortedPropertyTokens;
+				sortedPropertyTokens.reserve(tokenOrder.size());
+				for (const auto &[token, originalColumn]: tokenOrder) {
+					static_cast<void>(originalColumn);
+					sortedPropertyTokens.push_back(token);
+				}
+				const auto sortedPropertiesByToken = native_graph_reads_->readNodePropertyColumnsSorted(
+						snapshot, sortedNodeIds, sortedPropertyTokens, session);
+				if (sortedPropertiesByToken.size() != propertyTokens.size()) {
+					throw FormatException(FormatError::FERR_INVALID_STATE,
+							"relocatable composite range Node lookup returned an invalid Property column batch");
+				}
+				std::vector<std::vector<std::optional<PropertyValue>>> propertiesByToken(propertyTokens.size());
+				for (size_t tokenIndex = 0U; tokenIndex < sortedPropertiesByToken.size(); ++tokenIndex) {
+					const auto &sortedProperties = sortedPropertiesByToken[tokenIndex];
+					if (sortedProperties.size() != propertyOrder.size()) {
+						throw FormatException(FormatError::FERR_INVALID_STATE,
+								"relocatable composite range Node lookup returned an invalid Property batch");
+					}
+					std::vector<std::optional<PropertyValue>> properties(entries.size());
+					for (size_t index = 0U; index < propertyOrder.size(); ++index) {
+						properties[propertyOrder[index]] = sortedProperties[index];
+					}
+					propertiesByToken[tokenOrder[tokenIndex].second] = std::move(properties);
+				}
+				IndexCandidateBatch streamBatch;
+				if (visitor != nullptr) {
+					streamBatch.snapshot_generation = snapshot.superblock().generation.value();
+					streamBatch.predicates_verified = true;
+					streamBatch.label_scope_verified = true;
+					for (const std::string &name: definition.property_names) {
+						streamBatch.verified_property_columns.push_back({name, {}});
+					}
+				}
+				for (size_t index = 0U; index < entries.size(); ++index) {
+					const uint64_t nodeId = nodeIds[index];
+					std::vector<PropertyValue> actual;
+					actual.reserve(propertyTokens.size());
+					for (const auto &properties: propertiesByToken) {
+						if (!properties[index].has_value()) {
+							throw FormatException(FormatError::FERR_INVALID_STATE,
+									"relocatable composite range Node lookup found a stale Index entry");
+						}
+						actual.push_back(*properties[index]);
+					}
+					const auto expected = IndexKeyCodec::tryEncodeCompositeEntryKey(actual, nodeId);
+					if (!expected.has_value() || entries[index].key != *expected) {
+						throw FormatException(FormatError::FERR_INVALID_STATE,
+								"relocatable composite range Node lookup found a noncanonical Index entry");
+					}
+					const PropertyValue &value = actual.back();
+					if (isBound(request.range.max_value) &&
+							(request.range.max_inclusive ? value > request.range.max_value : value >= request.range.max_value)) {
+						rangeExhausted = true;
+						continue;
+					}
+					const bool belowLower = isBound(request.range.min_value) &&
+							(request.range.min_inclusive ? value < request.range.min_value : value <= request.range.min_value);
+					if (belowLower) continue;
+					if (candidateOutput != nullptr) {
+						for (size_t propertyIndex = 0U; propertyIndex < definition.property_names.size(); ++propertyIndex) {
+							candidateOutput->verified_property_columns[propertyIndex].values.push_back(actual[propertyIndex]);
+						}
+						candidateOutput->candidates.push_back({nodeId, false, 0U, 0U, 0U});
+						traceNativeCandidateMetric("native_graph.read.index_candidate_verified_rows", 1U);
+					} else if (visitor != nullptr) {
+						streamBatch.candidates.push_back({nodeId, false, 0U, 0U, 0U});
+						for (size_t propertyIndex = 0U; propertyIndex < actual.size(); ++propertyIndex) {
+							streamBatch.verified_property_columns[propertyIndex].values.push_back(actual[propertyIndex]);
+						}
+					} else {
+						resultNodeIds.push_back(nodeId);
+					}
+				}
+				if (visitor == nullptr) return true;
+				std::vector<size_t> order(streamBatch.candidates.size());
+				std::iota(order.begin(), order.end(), 0U);
+				std::ranges::sort(order, [&streamBatch](size_t left, size_t right) {
+					return streamBatch.candidates[left].entity_id < streamBatch.candidates[right].entity_id;
+				});
+				IndexCandidateBatch ordered;
+				ordered.snapshot_generation = streamBatch.snapshot_generation;
+				ordered.predicates_verified = streamBatch.predicates_verified;
+				ordered.label_scope_verified = streamBatch.label_scope_verified;
+				for (size_t column = 0U; column < streamBatch.verified_property_columns.size(); ++column) {
+					ordered.verified_property_columns.push_back({streamBatch.verified_property_columns[column].key, {}});
+				}
+				ordered.candidates.reserve(order.size());
+				for (const size_t index: order) {
+					ordered.candidates.push_back(streamBatch.candidates[index]);
+					for (size_t column = 0U; column < ordered.verified_property_columns.size(); ++column) {
+						ordered.verified_property_columns[column].values.push_back(
+								std::move(streamBatch.verified_property_columns[column].values[index]));
+					}
+				}
+				traceNativeCandidateMetric("native_graph.read.index_candidate_batches", ordered.candidates.empty() ? 0U : 1U);
+				traceNativeCandidateMetric("native_graph.read.index_candidate_emitted_rows", ordered.candidates.size());
+				enforceCandidateBatchBytes(ordered, maximumCandidateBytes);
+				return ordered.candidates.empty() || (*visitor)(ordered);
+			};
+				for (;;) {
+					if (rangeExhausted) break;
+					const auto candidate = cursor.next();
+					if (!candidate.has_value() || candidate->key.size() <= encodedPrefix->size() + sizeof(uint64_t) ||
+							!std::equal(encodedPrefix->begin(), encodedPrefix->end(), candidate->key.begin())) break;
+					if (upperExclusive.has_value()) {
+						const bool outsideUpper = request.range.max_inclusive
+								? std::lexicographical_compare(upperExclusive->begin(), upperExclusive->end(),
+										candidate->key.begin(), candidate->key.end())
+								: !std::lexicographical_compare(candidate->key.begin(), candidate->key.end(),
+										upperExclusive->begin(), upperExclusive->end());
+						if (outsideUpper) break;
+					}
+					const uint64_t nodeId = IndexKeyCodec::decodeEntryEntityId(candidate->key);
+				if (candidate->value_or_child != nodeId || !seen.insert(nodeId).second) {
+					throw FormatException(FormatError::FERR_INVALID_STATE,
+							"relocatable composite range Node lookup found a noncanonical Index entry");
+				}
+				if (++totalCandidates > maximumNodes) {
+					throw FormatException(FormatError::FERR_INVALID_STATE,
+							"relocatable composite range Node lookup exceeded its caller-supplied result bound");
+				}
+				pending.push_back(*candidate);
+				if (pending.size() == batchCapacity) {
+					if (!emit(std::span<const BTreePageEntry>(pending))) {
+						if (visitorCompleted != nullptr) *visitorCompleted = false;
+						return std::vector<LogicalGraphNode>{};
+					}
+					pending.clear();
+				}
+			}
+			if (!pending.empty()) {
+				if (!emit(std::span<const BTreePageEntry>(pending)) && visitorCompleted != nullptr) *visitorCompleted = false;
+			}
+			if (visitor != nullptr) return std::vector<LogicalGraphNode>{};
+			if (visitor == nullptr && candidateOutput == nullptr && !resultNodeIds.empty()) {
+				std::ranges::sort(resultNodeIds);
+				result = native_logical_graph_reads_->readNodesShapedSorted(
+						snapshot, resultNodeIds, {.include_labels = true, .all_properties = true}, session);
 			}
 			std::ranges::sort(result, {}, &LogicalGraphNode::node_id);
+			if (candidateOutput != nullptr) {
+				std::vector<size_t> order(candidateOutput->candidates.size());
+				std::iota(order.begin(), order.end(), 0U);
+				std::ranges::sort(order, [candidateOutput](size_t left, size_t right) {
+					return candidateOutput->candidates[left].entity_id < candidateOutput->candidates[right].entity_id;
+				});
+				std::vector<EntityRef> sortedCandidates;
+				sortedCandidates.reserve(order.size());
+				for (const size_t index: order) sortedCandidates.push_back(candidateOutput->candidates[index]);
+				candidateOutput->candidates = std::move(sortedCandidates);
+				for (auto &column: candidateOutput->verified_property_columns) {
+					std::vector<PropertyValue> sortedValues;
+					sortedValues.reserve(order.size());
+					for (const size_t index: order) sortedValues.push_back(std::move(column.values[index]));
+					column.values = std::move(sortedValues);
+				}
+			}
 			return result;
 		}
 		return std::nullopt;
@@ -3455,6 +4346,67 @@ namespace graph::storage {
 			const LogicalGraphCompositePropertyRange &request, size_t maximumNodes, size_t maximumPropertyEntries) const {
 		requireOwnedSnapshot(snapshot);
 		return findNativeNodesByCompositePropertyRange(snapshot.pin_, labels, request, maximumNodes, maximumPropertyEntries);
+	}
+
+	std::optional<IndexCandidateBatch> RelocatableStorageBackend::findNativeNodeCandidatesByCompositePropertyRange(
+			const MetadataSnapshotPin &snapshot, const std::vector<std::string> &labels,
+			const LogicalGraphCompositePropertyRange &request, size_t maximumNodes,
+			size_t maximumPropertyEntries, NativeReadSession *session) const {
+		IndexCandidateBatch result;
+		const auto complete = findNativeNodesByCompositePropertyRange(snapshot, labels, request, maximumNodes,
+														 maximumPropertyEntries, session, &result);
+		if (!complete.has_value()) {
+			return std::nullopt;
+		}
+		if (!result.predicates_verified || result.candidates.size() > maximumNodes) {
+			throw FormatException(FormatError::FERR_INVALID_STATE,
+										"relocatable native composite range Node lookup returned an invalid candidate batch");
+		}
+		for (const auto &column: result.verified_property_columns) {
+			if (column.values.size() != result.candidates.size()) {
+				throw FormatException(FormatError::FERR_INVALID_STATE,
+										"relocatable native composite range Node lookup returned an invalid Property column");
+			}
+		}
+		std::vector<size_t> order(result.candidates.size());
+		std::iota(order.begin(), order.end(), 0U);
+		std::ranges::sort(order, [&result](size_t left, size_t right) {
+			return result.candidates[left].entity_id < result.candidates[right].entity_id;
+		});
+		std::vector<EntityRef> candidates;
+		candidates.reserve(order.size());
+		for (const size_t index: order) {
+			candidates.push_back(result.candidates[index]);
+		}
+		result.candidates = std::move(candidates);
+		for (auto &column: result.verified_property_columns) {
+			std::vector<PropertyValue> values;
+			values.reserve(order.size());
+			for (const size_t index: order) {
+				values.push_back(std::move(column.values[index]));
+			}
+			column.values = std::move(values);
+		}
+		return result;
+	}
+
+	std::optional<bool> RelocatableStorageBackend::visitNativeNodeCandidatesByCompositePropertyRange(
+			const MetadataSnapshotPin &snapshot, const std::vector<std::string> &labels,
+			const LogicalGraphCompositePropertyRange &request, const size_t maximumNodes,
+			const size_t maximumPropertyEntries, const IndexCandidateBatchVisitor &visitor,
+			NativeReadSession *session, size_t maximumCandidateBytes) const {
+		if (!visitor) {
+			throw FormatException(FormatError::FERR_INVALID_HEADER,
+					"relocatable native composite range Node candidate stream requires a visitor");
+		}
+		bool completed = true;
+		IndexCandidateBatchVisitor callback = visitor;
+		const auto result = findNativeNodesByCompositePropertyRange(snapshot, labels, request, maximumNodes,
+				maximumPropertyEntries, session, nullptr, &callback, &completed, maximumCandidateBytes);
+		if (!result.has_value()) {
+			return std::nullopt;
+		}
+		return completed;
 	}
 
 	void RelocatableStorageBackend::visitNodes(const RelocatableReadSnapshot &snapshot, size_t maximumRecords,
@@ -3487,10 +4439,6 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_HEADER,
 								  "relocatable Node scan requires a positive bound and visitor");
 		}
-		if (native_logical_graph_reads_ == nullptr) { // successful backend initialization installs the immutable native reader.
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable Node scan requires the native logical graph reader");
-		}
 		return native_logical_graph_reads_->visitNodesUntil(snapshot.pin_, maximumRecords, visitor);
 	}
 
@@ -3501,10 +4449,6 @@ namespace graph::storage {
 		if (maximumRecords == 0U || !visitor) {
 			throw FormatException(FormatError::FERR_INVALID_HEADER,
 								  "relocatable Edge scan requires a positive bound and visitor");
-		}
-		if (native_logical_graph_reads_ == nullptr) { // successful backend initialization installs the immutable native reader.
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable Edge scan requires the native logical graph reader");
 		}
 		return native_logical_graph_reads_->visitEdgesUntil(snapshot.pin_, maximumRecords, visitor);
 	}
@@ -3517,10 +4461,6 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_HEADER,
 								  "relocatable resumable Node scan requires positive bounds");
 		}
-		if (native_logical_graph_reads_ == nullptr) { // successful backend initialization installs the immutable native reader.
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable resumable Node scan requires the native logical graph reader");
-		}
 		return native_logical_graph_reads_->scanNodesAfter(snapshot.pin_, afterNodeId, maximumRecords,
 														   maximumMetadataPages);
 	}
@@ -3529,10 +4469,6 @@ namespace graph::storage {
 			const RelocatableReadSnapshot &snapshot, uint64_t nodeId, LogicalGraphReadDirection direction,
 			std::optional<LogicalGraphAdjacencyContinuation> continuation, size_t maximumRecords) const {
 		requireOwnedSnapshot(snapshot);
-		if (native_logical_graph_reads_ == nullptr) { // successful backend initialization installs the immutable native reader.
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable resumable adjacency scan requires the native logical graph reader");
-		}
 		return native_logical_graph_reads_->scanAdjacentEdges(snapshot.pin_, nodeId, direction, std::move(continuation),
 															  maximumRecords);
 	}
@@ -3560,10 +4496,6 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_HEADER,
 								  "relocatable adjacency traversal requires a positive bound and visitor");
 		}
-		if (native_logical_graph_reads_ == nullptr) { // successful backend initialization installs the immutable native reader.
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable adjacency traversal requires the native logical graph reader");
-		}
 		return native_logical_graph_reads_->visitAdjacentEdgesUntil(snapshot.pin_, nodeId, direction, maximumEdges,
 																	visitor);
 	}
@@ -3571,30 +4503,18 @@ namespace graph::storage {
 	std::optional<uint32_t> RelocatableStorageBackend::findPropertyKeyToken(const RelocatableReadSnapshot &snapshot,
 																			std::string_view key) const {
 		requireOwnedSnapshot(snapshot);
-		if (system_catalog_ == nullptr) { // successful backend initialization installs the canonical System Catalog.
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable Property-key lookup requires the native System Catalog");
-		}
 		return system_catalog_->findPropertyToken(snapshot.pin_, key);
 	}
 
 	std::optional<std::string> RelocatableStorageBackend::findPropertyKey(const RelocatableReadSnapshot &snapshot,
 																		  uint32_t token) const {
 		requireOwnedSnapshot(snapshot);
-		if (system_catalog_ == nullptr) { // successful backend initialization installs the canonical System Catalog.
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable Property-key lookup requires the native System Catalog");
-		}
 		return system_catalog_->findPropertyName(snapshot.pin_, token);
 	}
 
 	std::optional<TokenDefinition> RelocatableStorageBackend::findSchemaToken(const RelocatableReadSnapshot &snapshot,
 																			  uint64_t tokenId) const {
 		requireOwnedSnapshot(snapshot);
-		if (system_catalog_ == nullptr) { // successful backend initialization installs the canonical System Catalog.
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable schema Token lookup requires the native System Catalog");
-		}
 		const std::optional<SystemCatalogSchemaToken> label =
 				system_catalog_->findSchemaToken(snapshot.pin_, SystemCatalogSchemaTokenKind::SCSTK_LABEL, tokenId);
 		const std::optional<SystemCatalogSchemaToken> relationshipType = system_catalog_->findSchemaToken(
@@ -3611,12 +4531,8 @@ namespace graph::storage {
 	}
 
 	std::optional<uint64_t> RelocatableStorageBackend::findSchemaTokenId(const RelocatableReadSnapshot &snapshot,
-																		 std::string_view name) const {
+																					 std::string_view name) const {
 		requireOwnedSnapshot(snapshot);
-		if (system_catalog_ == nullptr) { // successful backend initialization installs the canonical System Catalog.
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable schema Token lookup requires the native System Catalog");
-		}
 		const std::optional<uint64_t> label =
 				system_catalog_->findSchemaToken(snapshot.pin_, SystemCatalogSchemaTokenKind::SCSTK_LABEL, name);
 		const std::optional<uint64_t> relationshipType = system_catalog_->findSchemaToken(
@@ -3626,6 +4542,18 @@ namespace graph::storage {
 								  "relocatable schema Token name is ambiguous across native schema domains");
 		}
 		return label.has_value() ? label : relationshipType;
+	}
+
+	std::optional<uint64_t>
+	RelocatableStorageBackend::findRelationshipTypeTokenId(const RelocatableReadSnapshot &snapshot,
+																								std::string_view name) const {
+		requireOwnedSnapshot(snapshot);
+		if (name.empty()) {
+			return std::nullopt;
+		}
+		debug::PerfTrace::addValue("native_graph.read.relationship_type_token_resolution", 1);
+		return system_catalog_->findSchemaToken(
+				snapshot.pin_, SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, name);
 	}
 
 	std::vector<IndexDefinition>
@@ -3669,12 +4597,6 @@ namespace graph::storage {
 			!std::ranges::any_of(request.query_vector, [](float value) { return value != 0.0F; })) {
 			throw std::invalid_argument("relocatable cosine Vector search query must have a nonzero L2 norm");
 		}
-		if (vector_manifests_ == nullptr || vector_pages_ == nullptr || vector_codebooks_ == nullptr ||
-				btree_pages_ == nullptr || metadata_ == nullptr) { // successful backend initialization installs all Vector and index stores before public statistics access.
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable logical Vector search has an incomplete persistent Vector state");
-		}
-
 		// An index may validly precede its first matching Property. In that state no
 		// physical mapping or Manifest exists yet, so the exact answer is empty.
 		if (!metadata_->findVectorManifestOptional(snapshot.pin_, definition->index_id).has_value()) {
@@ -3705,10 +4627,6 @@ namespace graph::storage {
 		if (request.mode != LogicalGraphVectorSearchMode::LGVSM_AUTO &&
 			request.mode != LogicalGraphVectorSearchMode::LGVSM_EXACT) {
 			throw std::invalid_argument("relocatable logical Vector search received an unknown search mode");
-		}
-		if (system_catalog_ == nullptr) { // successful backend initialization installs the canonical System Catalog.
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable logical Vector search has no canonical System Catalog");
 		}
 		const std::vector<IndexDefinition> definitions =
 				readAllIndexDefinitions(snapshot.pin_, options_.maximum_index_definitions);
@@ -3803,7 +4721,7 @@ namespace graph::storage {
 		requireOpen();
 		std::unique_lock<std::mutex> publicationLock(native_publication_mutex_);
 		checkVectorTrainingCancellation(request);
-		if (isReadOnly() || native_graph_write_planner_ == nullptr) {
+		if (isReadOnly()) {
 			throw std::runtime_error("relocatable read-only backend cannot train a logical Vector Index");
 		}
 		requireNoIndeterminateWrite();
@@ -3814,11 +4732,6 @@ namespace graph::storage {
 			options_.maximum_vector_training_samples == 0U || options_.vector_training_iterations == 0U) {
 			throw std::invalid_argument("relocatable logical Vector training requires a nonempty index name and finite "
 										"positive resource bounds");
-		}
-		if (metadata_ == nullptr || btree_pages_ == nullptr || vector_pages_ == nullptr ||
-				vector_codebooks_ == nullptr || vector_manifests_ == nullptr) { // successful backend initialization installs the complete native maintenance domain.
-			failVectorTraining(FormatError::FERR_INVALID_STATE,
-							   "relocatable logical Vector training has an incomplete persistent Vector state");
 		}
 		const size_t maximumRecords = std::min(request.maximum_records, options_.maximum_vector_training_records);
 		const size_t maximumPages = std::min(request.maximum_pages, options_.maximum_vector_training_pages);
@@ -3866,7 +4779,7 @@ namespace graph::storage {
 			const LogicalGraphVectorTrainingRequest &request) {
 		requireOpen();
 		checkVectorTrainingCancellation(request);
-		if (isReadOnly() || native_graph_write_planner_ == nullptr) {
+		if (isReadOnly()) {
 			throw std::runtime_error("relocatable read-only backend cannot train a logical Vector Index");
 		}
 		requireNoIndeterminateWrite();
@@ -3877,11 +4790,6 @@ namespace graph::storage {
 			options_.maximum_vector_training_samples == 0U || options_.vector_training_iterations == 0U) {
 			throw std::invalid_argument("relocatable logical Vector training requires a nonempty index name and finite "
 										"positive resource bounds");
-		}
-		if (metadata_ == nullptr || btree_pages_ == nullptr || vector_pages_ == nullptr ||
-				vector_codebooks_ == nullptr || vector_manifests_ == nullptr) { // successful backend initialization installs the complete native maintenance domain.
-			failVectorTraining(FormatError::FERR_INVALID_STATE,
-							   "relocatable logical Vector training has an incomplete persistent Vector state");
 		}
 
 		const size_t maximumRecords = std::min(request.maximum_records, options_.maximum_vector_training_records);
@@ -3967,7 +4875,8 @@ namespace graph::storage {
 
 			const std::vector<BTreePageEntry> forward =
 					BTreeIndex(definition->index_id, *btree_pages_, *metadata_)
-							.scan(sourceSnapshot, std::nullopt, maximumRecords + 1U,
+							.scan(sourceSnapshot, std::nullopt, checkedBoundPlusOne(maximumRecords,
+									"relocatable logical Vector training record bound overflowed"),
 								  BufferPoolReadHint::BPRH_SEQUENTIAL, request.cancellation);
 			if (forward.size() > maximumRecords) {
 				failVectorTraining(FormatError::FERR_INVALID_STATE,
@@ -4020,7 +4929,8 @@ namespace graph::storage {
 			}
 			const std::vector<BTreePageEntry> reverse =
 					BTreeIndex(manifest.vector_node_mapping_index_id, *btree_pages_, *metadata_)
-							.scan(sourceSnapshot, std::nullopt, maximumRecords + 1U,
+							.scan(sourceSnapshot, std::nullopt, checkedBoundPlusOne(maximumRecords,
+									"relocatable logical Vector training mapping bound overflowed"),
 								  BufferPoolReadHint::BPRH_SEQUENTIAL, request.cancellation);
 			if (reverse.size() != semanticPairs.size()) {
 				failVectorTraining(
@@ -4272,27 +5182,23 @@ namespace graph::storage {
 	}
 
 	std::vector<IndexDefinition> RelocatableStorageBackend::readAllIndexDefinitions(const MetadataSnapshotPin &snapshot,
-																					size_t maximumDefinitions) const {
+																									size_t maximumDefinitions) const {
 		if (maximumDefinitions == 0U) {
 			throw FormatException(FormatError::FERR_INVALID_HEADER,
 								  "relocatable Index definition read requires a positive caller-provided bound");
 		}
-		if (system_catalog_ != nullptr) {
-			const std::vector<IndexDefinition> canonical =
-					system_catalog_->readIndexDefinitions(snapshot, maximumDefinitions);
-			for (const IndexDefinition &definition: canonical) {
-				if (definition.kind != IndexDefinitionKind::IDK_VECTOR &&
-					!metadata_->findIndexRootOptional(snapshot, definition.index_id).has_value()) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "relocatable canonical Index definition has no published physical root");
-				}
+		const std::vector<IndexDefinition> canonical =
+				system_catalog_->readIndexDefinitions(snapshot, maximumDefinitions);
+		for (const IndexDefinition &definition: canonical) {
+			if (definition.kind != IndexDefinitionKind::IDK_VECTOR &&
+				!metadata_->findIndexRootOptional(snapshot, definition.index_id).has_value()) {
+				throw FormatException(FormatError::FERR_INVALID_STATE,
+									  "relocatable canonical Index definition has no published physical root");
 			}
-			// An initialized canonical catalog is authoritative even when the
-			// current definition set is empty. Falling back here would resurrect
-			// a dropped definition from an independent legacy registry.
-			return canonical;
 		}
-		throw FormatException(FormatError::FERR_INVALID_STATE, "relocatable backend has no canonical System Catalog");
+		// The canonical catalog remains authoritative when the definition set is
+		// empty; consulting a second registry here could resurrect dropped state.
+		return canonical;
 	}
 
 	std::vector<ConstraintDefinition>
@@ -4303,10 +5209,7 @@ namespace graph::storage {
 					FormatError::FERR_INVALID_HEADER,
 					"relocatable constraint definition read requires a positive bound and initialized catalog");
 		}
-		if (system_catalog_ != nullptr) {
-			return system_catalog_->readConstraintDefinitions(snapshot, maximumDefinitions);
-		}
-		throw FormatException(FormatError::FERR_INVALID_STATE, "relocatable backend has no canonical System Catalog");
+		return system_catalog_->readConstraintDefinitions(snapshot, maximumDefinitions);
 	}
 
 	RelocatableStorageIOStats RelocatableStorageBackend::ioStats() const {
@@ -4322,20 +5225,12 @@ namespace graph::storage {
 
 	std::optional<PropertyValue> RelocatableStorageBackend::findConfiguration(std::string_view name) const {
 		requireOpen();
-		if (system_catalog_ == nullptr) { // successful backend initialization installs the canonical System Catalog.
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable backend has no canonical System Catalog for configuration lookup");
-		}
 		MetadataSnapshotPin snapshot = metadata_->openSnapshot();
 		return system_catalog_->findConfiguration(snapshot, name);
 	}
 
 	std::vector<LogicalGraphConfiguration> RelocatableStorageBackend::readConfigurations(size_t maximumRecords) const {
 		requireOpen();
-		if (system_catalog_ == nullptr) { // successful backend initialization installs the canonical System Catalog.
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable backend has no canonical System Catalog for configuration lookup");
-		}
 		MetadataSnapshotPin snapshot = metadata_->openSnapshot();
 		const std::vector<NativeConfigurationRecord> records =
 				system_catalog_->readConfigurations(snapshot, maximumRecords);
@@ -4349,7 +5244,7 @@ namespace graph::storage {
 
 	void RelocatableStorageBackend::setConfiguration(std::string_view name, const PropertyValue &value) {
 		requireOpen();
-		if (isReadOnly() || native_graph_write_planner_ == nullptr || system_catalog_ == nullptr) { // open() installs the native writer and Catalog before writable configuration is exposed.
+		if (isReadOnly()) {
 			throw std::runtime_error("relocatable read-only backend cannot update durable configuration");
 		}
 		requireNoIndeterminateWrite();
@@ -4398,10 +5293,6 @@ namespace graph::storage {
 	std::optional<LogicalGraphCardinalityStatistics>
 	RelocatableStorageBackend::readLogicalGraphCardinalityStatistics() const {
 		requireOpen();
-		if (system_catalog_ == nullptr) { // successful backend initialization installs the canonical System Catalog.
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable backend has no canonical System Catalog for cardinality statistics");
-		}
 		MetadataSnapshotPin snapshot = metadata_->openSnapshot();
 		const std::optional<NativeGraphCardinalityStatistics> statistics =
 				system_catalog_->readGraphCardinalityStatistics(snapshot);
@@ -4426,8 +5317,7 @@ namespace graph::storage {
 	std::vector<LogicalGraphIndexDefinition> RelocatableStorageBackend::createLogicalNodeIndexes(
 			const std::span<const LogicalGraphNodeIndexCreateRequest> requests) {
 		requireOpen();
-		if (isReadOnly() || native_graph_write_planner_ == nullptr || native_graph_reads_ == nullptr ||
-			btree_pages_ == nullptr || system_catalog_ == nullptr) { // open() installs this complete index creation domain before exposing the API.
+		if (isReadOnly()) {
 			throw std::runtime_error("relocatable read-only backend cannot create a logical Index");
 		}
 		requireNoIndeterminateWrite();
@@ -4526,48 +5416,167 @@ namespace graph::storage {
 			propertyTokens.push_back(std::move(tokens));
 		}
 
+		// Build every requested index from one bounded Node/label/Property scan.
+		// The previous per-definition loop repeated the Entity Map descent and
+		// Property Directory merge for each index in a DDL batch, which made a
+		// multi-index schema operation scale with the number of definitions rather
+		// than with the graph. Each sorter remains independent, so index ordering,
+		// entry limits, and external-sort memory bounds are unchanged.
+		struct IndexBuildState {
+			ExternalBTreeEntrySorter sorter;
+			std::vector<std::pair<uint32_t, size_t>> token_order;
+			std::vector<uint32_t> sorted_tokens;
+			uint64_t indexed_entries = 0U;
+
+			IndexBuildState(ExternalBTreeEntrySorterOptions options, const std::vector<uint32_t> &tokens) :
+					sorter(options) {
+				token_order.reserve(tokens.size());
+				for (size_t tokenIndex = 0U; tokenIndex < tokens.size(); ++tokenIndex) {
+					token_order.emplace_back(tokens[tokenIndex], tokenIndex);
+				}
+				std::ranges::sort(token_order, {}, &std::pair<uint32_t, size_t>::first);
+				for (size_t index = 1U; index < token_order.size(); ++index) {
+					if (token_order[index - 1U].first == token_order[index].first) {
+						throw FormatException(FormatError::FERR_INVALID_STATE,
+								"relocatable logical node Index creation resolved duplicate Property tokens");
+					}
+				}
+				sorted_tokens.reserve(token_order.size());
+				for (const auto &[token, originalIndex]: token_order) {
+					static_cast<void>(originalIndex);
+					sorted_tokens.push_back(token);
+				}
+			}
+		};
+
+		std::vector<IndexBuildState> indexStates;
+		indexStates.reserve(definitions.size());
+		for (size_t definitionIndex = 0U; definitionIndex < definitions.size(); ++definitionIndex) {
+			indexStates.emplace_back(
+					ExternalBTreeEntrySorterOptions{options_.maximum_online_index_entries,
+															 options_.online_index_sort_run_bytes,
+															 options_.maximum_online_index_sort_runs},
+					propertyTokens[definitionIndex]);
+		}
+
+		constexpr size_t ONLINE_INDEX_NODE_BATCH_ENTRIES = 512U;
+		std::vector<uint64_t> nodeBatch;
+		nodeBatch.reserve(ONLINE_INDEX_NODE_BATCH_ENTRIES);
+		NativeReadSession readSession;
+		const auto flushNodeBatch = [&]() {
+			if (nodeBatch.empty()) {
+				return;
+			}
+			const std::vector<std::vector<uint64_t>> labels =
+					native_graph_reads_->readNodeLabelTokensSorted(snapshot, nodeBatch, &readSession);
+			if (labels.size() != nodeBatch.size()) {
+				throw FormatException(FormatError::FERR_INVALID_STATE,
+						"relocatable logical node Index creation returned an invalid label batch");
+			}
+
+			std::vector<std::vector<size_t>> candidatePositions(definitions.size());
+			std::vector<uint64_t> propertyNodeIds;
+			std::vector<uint32_t> propertyTokensUnion;
+			propertyNodeIds.reserve(nodeBatch.size());
+			for (size_t definitionIndex = 0U; definitionIndex < definitions.size(); ++definitionIndex) {
+				const IndexDefinition &definition = definitions[definitionIndex];
+				std::vector<size_t> &positions = candidatePositions[definitionIndex];
+				positions.reserve(nodeBatch.size());
+				for (size_t position = 0U; position < nodeBatch.size(); ++position) {
+					if (std::ranges::binary_search(labels[position], definition.label_token_id)) {
+						positions.push_back(position);
+						propertyNodeIds.push_back(nodeBatch[position]);
+					}
+				}
+				propertyTokensUnion.insert(propertyTokensUnion.end(), indexStates[definitionIndex].sorted_tokens.begin(),
+														 indexStates[definitionIndex].sorted_tokens.end());
+			}
+			std::ranges::sort(propertyNodeIds);
+			propertyNodeIds.erase(std::ranges::unique(propertyNodeIds).begin(), propertyNodeIds.end());
+			std::ranges::sort(propertyTokensUnion);
+			propertyTokensUnion.erase(std::ranges::unique(propertyTokensUnion).begin(), propertyTokensUnion.end());
+
+			std::vector<std::vector<std::optional<graph::PropertyValue>>> columns;
+			if (!propertyNodeIds.empty()) {
+				columns = native_graph_reads_->readNodePropertyColumnsSorted(
+						snapshot, propertyNodeIds, propertyTokensUnion, &readSession);
+				if (columns.size() != propertyTokensUnion.size() ||
+						std::ranges::any_of(columns, [&](const auto &column) {
+							return column.size() != propertyNodeIds.size();
+						})) {
+					throw FormatException(FormatError::FERR_INVALID_STATE,
+							"relocatable logical node Index creation returned an invalid Property column batch");
+				}
+			}
+
+			for (size_t definitionIndex = 0U; definitionIndex < definitions.size(); ++definitionIndex) {
+				IndexBuildState &state = indexStates[definitionIndex];
+				const IndexDefinition &definition = definitions[definitionIndex];
+				const std::vector<uint32_t> &tokens = propertyTokens[definitionIndex];
+				for (const size_t nodePosition : candidatePositions[definitionIndex]) {
+					const auto propertyPosition = std::ranges::lower_bound(propertyNodeIds, nodeBatch[nodePosition]);
+					if (propertyPosition == propertyNodeIds.end() || *propertyPosition != nodeBatch[nodePosition]) {
+						throw FormatException(FormatError::FERR_INVALID_STATE,
+								"relocatable logical node Index creation lost a candidate ID");
+					}
+					const size_t row = static_cast<size_t>(propertyPosition - propertyNodeIds.begin());
+					std::vector<graph::PropertyValue> values(tokens.size());
+					bool complete = true;
+					for (size_t sortedIndex = 0U; sortedIndex < state.token_order.size(); ++sortedIndex) {
+						const size_t unionIndex = static_cast<size_t>(
+								std::ranges::lower_bound(propertyTokensUnion, state.sorted_tokens[sortedIndex]) -
+								propertyTokensUnion.begin());
+						if (unionIndex >= columns.size() || !columns[unionIndex][row].has_value()) {
+							complete = false;
+							break;
+						}
+						values[state.token_order[sortedIndex].second] = *columns[unionIndex][row];
+					}
+					if (!complete) {
+						continue;
+					}
+					if (state.indexed_entries == options_.maximum_online_index_entries) {
+						throw FormatException(FormatError::FERR_INVALID_STATE,
+								"relocatable logical node Index exceeds its configured entry bound");
+					}
+					const std::optional<std::vector<std::byte>> key =
+							definition.kind == IndexDefinitionKind::IDK_PROPERTY
+									? IndexKeyCodec::tryEncodeEntryKey(values.front(), nodeBatch[nodePosition])
+									: IndexKeyCodec::tryEncodeCompositeEntryKey(values, nodeBatch[nodePosition]);
+					if (key.has_value()) {
+						state.sorter.add({std::move(*key), nodeBatch[nodePosition]});
+						++state.indexed_entries;
+					}
+				}
+			}
+			nodeBatch.clear();
+		};
+
+		const bool scannedAllNodes = native_graph_reads_->visitNodeRefsUntil(
+				snapshot, options_.maximum_online_index_scan_nodes,
+				[&](const EntityRef &reference) {
+					nodeBatch.push_back(reference.entity_id);
+					if (nodeBatch.size() == ONLINE_INDEX_NODE_BATCH_ENTRIES) {
+						flushNodeBatch();
+					}
+					return true;
+				}, &readSession);
+		flushNodeBatch();
+		if (!scannedAllNodes) {
+			throw FormatException(
+					FormatError::FERR_INVALID_STATE,
+					"relocatable logical node Index graph scan exceeded its configured bounded DDL work");
+		}
+
 		for (size_t definitionIndex = 0U; definitionIndex < definitions.size(); ++definitionIndex) {
 			const IndexDefinition &definition = definitions[definitionIndex];
-			const std::vector<uint32_t> &tokens = propertyTokens[definitionIndex];
-			ExternalBTreeEntrySorter sorter({options_.maximum_online_index_entries,
-											 options_.online_index_sort_run_bytes,
-											 options_.maximum_online_index_sort_runs});
-			const bool scannedAllNodes = native_graph_reads_->visitNodesUntil(
-					snapshot, options_.maximum_online_index_scan_nodes, [&](const PageBackedGraphNode &node) {
-						if (!std::ranges::binary_search(node.label_token_ids, definition.label_token_id)) {
-							return true;
-						}
-						std::vector<graph::PropertyValue> values;
-						values.reserve(tokens.size());
-						for (const uint32_t token: tokens) {
-							const auto property = std::ranges::lower_bound(node.properties, token, {},
-																		   &PropertyCollectionRootEntry::key_token);
-							if (property == node.properties.end() || property->key_token != token) {
-								return true;
-							}
-							values.push_back(property->value);
-						}
-						const std::optional<std::vector<std::byte>> key =
-								definition.kind == IndexDefinitionKind::IDK_PROPERTY
-										? IndexKeyCodec::tryEncodeEntryKey(values.front(), node.node_id)
-										: IndexKeyCodec::tryEncodeCompositeEntryKey(values, node.node_id);
-						if (key.has_value()) {
-							sorter.add({std::move(*key), node.node_id});
-						}
-						return true;
-					});
-			if (!scannedAllNodes) {
-				throw FormatException(
-						FormatError::FERR_INVALID_STATE,
-						"relocatable logical node Index graph scan exceeded its configured bounded DDL work");
-			}
-			const OrderedBTreeEntrySource source = sorter.finish();
+			const OrderedBTreeEntrySource source = indexStates[definitionIndex].sorter.finish();
 			const BulkBTreeBuildOptions build = {
 					PhysicalSlotId(1U), PhysicalSlotId(std::numeric_limits<uint64_t>::max()), definition.index_id,
 					options_.maximum_online_index_entries, options_.maximum_online_index_pages};
 			transaction.stageScalarIndexCreate(*btree_pages_,
-											   BulkBTreeBuilder::planNativeTree(*btree_pages_, *metadata_, snapshot,
-																				definition.index_id, source, build));
+												 BulkBTreeBuilder::planNativeTree(*btree_pages_, *metadata_, snapshot,
+																									 definition.index_id, source, build));
 		}
 		catalogSession.finish();
 		const NativeGraphWriteCommitResult committed = commitNativeGraphWriteTransaction(transaction);
@@ -4581,9 +5590,7 @@ namespace graph::storage {
 	LogicalGraphIndexDefinition
 	RelocatableStorageBackend::createLogicalNodeVectorIndex(const LogicalGraphNodeVectorIndexCreateRequest &request) {
 		requireOpen();
-		if (isReadOnly() || native_graph_write_planner_ == nullptr || native_graph_reads_ == nullptr ||
-			btree_pages_ == nullptr || vector_pages_ == nullptr || vector_manifests_ == nullptr ||
-			system_catalog_ == nullptr) { // open() installs the complete Vector index creation domain before exposing the API.
+		if (isReadOnly()) {
 			throw std::runtime_error("relocatable read-only backend cannot create a logical Vector Index");
 		}
 		requireNoIndeterminateWrite();
@@ -4632,31 +5639,57 @@ namespace graph::storage {
 
 		std::vector<NativeGraphVectorBootstrapRecord> records;
 		records.reserve(std::min<size_t>(options_.maximum_online_index_entries, 1024U));
-		const bool scannedAllNodes = native_graph_reads_->visitNodesUntil(
-				snapshot, options_.maximum_online_index_scan_nodes, [&](const PageBackedGraphNode &node) {
-					if (!std::ranges::binary_search(node.label_token_ids, definition.label_token_id)) {
-						return true;
-					}
-					const auto property = std::ranges::lower_bound(node.properties, propertyToken, {},
-																   &PropertyCollectionRootEntry::key_token);
-					if (property == node.properties.end() || property->key_token != propertyToken) {
-						return true;
-					}
-					if (records.size() == options_.maximum_online_index_entries) {
-						throw FormatException(
-								FormatError::FERR_INVALID_STATE,
-								"relocatable logical Vector Index exceeds its configured historical Vector bound");
-					}
-					const std::vector<std::byte> encoded = VectorSemanticCodec::encodeBFloat16ForLogicalWrite(
-							property->value, definition.vector_dimensions);
-					if (distanceMetric == VectorDistanceMetric::VDM_COSINE &&
+		// Vector bootstrap needs one Property column, not complete logical Nodes.
+		// Use the same bounded label-reference scan and sorted selected read as
+		// scalar indexes so large imports do not decode every owner's root.
+		constexpr size_t ONLINE_VECTOR_PROPERTY_BATCH_ENTRIES = 512U;
+		std::vector<uint64_t> pendingNodeIds;
+		pendingNodeIds.reserve(ONLINE_VECTOR_PROPERTY_BATCH_ENTRIES);
+		NativeReadSession readSession;
+		const auto flushPropertyBatch = [&]() {
+			if (pendingNodeIds.empty()) {
+				return;
+			}
+			std::ranges::sort(pendingNodeIds);
+			pendingNodeIds.erase(std::ranges::unique(pendingNodeIds).begin(), pendingNodeIds.end());
+			const std::vector<std::optional<graph::PropertyValue>> values =
+					native_graph_reads_->readNodePropertiesSorted(snapshot, pendingNodeIds, propertyToken, &readSession);
+			if (values.size() != pendingNodeIds.size()) {
+				throw FormatException(FormatError::FERR_INVALID_STATE,
+						"relocatable logical Vector Index creation returned an invalid Property batch");
+			}
+			for (size_t index = 0U; index < pendingNodeIds.size(); ++index) {
+				if (!values[index].has_value()) {
+					continue;
+				}
+				if (records.size() == options_.maximum_online_index_entries) {
+					throw FormatException(FormatError::FERR_INVALID_STATE,
+							"relocatable logical Vector Index exceeds its configured historical Vector bound");
+				}
+				const std::vector<std::byte> encoded = VectorSemanticCodec::encodeBFloat16ForLogicalWrite(
+						values[index].value(), definition.vector_dimensions);
+				if (distanceMetric == VectorDistanceMetric::VDM_COSINE &&
 						!VectorSemanticCodec::hasNonZeroFiniteL2Norm(encoded)) {
-						throw std::invalid_argument(
-								"relocatable logical cosine Vector Index cannot include a zero-norm property");
+					throw std::invalid_argument(
+							"relocatable logical cosine Vector Index cannot include a zero-norm property");
+				}
+				records.push_back({pendingNodeIds[index], encoded});
+			}
+			pendingNodeIds.clear();
+		};
+		const std::array<uint64_t, 1U> labelTokens{definition.label_token_id};
+		const bool scannedAllNodes = native_graph_reads_->visitNodeRefsWithLabelTokenMatchesUntil(
+				snapshot, options_.maximum_online_index_scan_nodes, labelTokens,
+				[&](const EntityRef &reference, const bool labelsMatch) {
+					if (labelsMatch) {
+						pendingNodeIds.push_back(reference.entity_id);
+						if (pendingNodeIds.size() == ONLINE_VECTOR_PROPERTY_BATCH_ENTRIES) {
+							flushPropertyBatch();
+						}
 					}
-					records.push_back({node.node_id, encoded});
 					return true;
 				});
+		flushPropertyBatch();
 		if (!scannedAllNodes) {
 			throw FormatException(
 					FormatError::FERR_INVALID_STATE,
@@ -4684,8 +5717,7 @@ namespace graph::storage {
 
 	bool RelocatableStorageBackend::dropLogicalIndexByName(std::string_view name) {
 		requireOpen();
-		if (isReadOnly() || native_graph_write_planner_ == nullptr || system_catalog_ == nullptr ||
-			btree_pages_ == nullptr) { // open() installs the complete index drop domain before exposing the API.
+		if (isReadOnly()) {
 			throw std::runtime_error("relocatable read-only backend cannot drop a logical Index");
 		}
 		if (name.empty()) {
@@ -4730,10 +5762,6 @@ namespace graph::storage {
 		if (label.empty() || propertyKey.empty()) {
 			throw std::invalid_argument("relocatable logical node Index drop requires nonempty label and Property key");
 		}
-		if (system_catalog_ == nullptr) { // successful backend initialization installs the canonical System Catalog.
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable logical node Index drop requires the canonical System Catalog");
-		}
 		MetadataSnapshotPin snapshot = metadata_->openSnapshot();
 		const std::optional<uint64_t> token =
 				system_catalog_->findSchemaToken(snapshot, SystemCatalogSchemaTokenKind::SCSTK_LABEL, label);
@@ -4759,10 +5787,6 @@ namespace graph::storage {
 	std::vector<LogicalGraphIndexDefinition>
 	RelocatableStorageBackend::listLogicalIndexes(size_t maximumIndexes) const {
 		requireOpen();
-		if (system_catalog_ == nullptr) { // successful backend initialization installs the canonical System Catalog.
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable logical Index list requires the canonical System Catalog");
-		}
 		const MetadataSnapshotPin snapshot = metadata_->openSnapshot();
 		const std::vector<IndexDefinition> definitions = readAllIndexDefinitions(snapshot, maximumIndexes);
 		std::vector<LogicalGraphIndexDefinition> result;
@@ -4797,8 +5821,7 @@ namespace graph::storage {
 	LogicalGraphConstraintDefinition
 	RelocatableStorageBackend::createLogicalConstraint(const LogicalGraphConstraintCreateRequest &request) {
 		requireOpen();
-		if (isReadOnly() || native_graph_write_planner_ == nullptr || native_graph_reads_ == nullptr ||
-			btree_pages_ == nullptr || system_catalog_ == nullptr) { // open() installs this complete constraint creation domain before exposing the API.
+		if (isReadOnly()) {
 			throw std::runtime_error("relocatable read-only backend cannot create a logical constraint");
 		}
 		requireNoIndeterminateWrite();
@@ -4899,8 +5922,7 @@ namespace graph::storage {
 
 	bool RelocatableStorageBackend::dropLogicalConstraintByName(std::string_view name) {
 		requireOpen();
-		if (isReadOnly() || native_graph_write_planner_ == nullptr || btree_pages_ == nullptr ||
-			system_catalog_ == nullptr) { // open() installs the complete constraint drop domain before exposing the API.
+		if (isReadOnly()) {
 			throw std::runtime_error("relocatable read-only backend cannot drop a logical constraint");
 		}
 		if (name.empty()) {
@@ -4936,10 +5958,6 @@ namespace graph::storage {
 		std::vector<LogicalGraphConstraintDefinition> result;
 		result.reserve(definitions.size());
 		for (const ConstraintDefinition &definition: definitions) {
-			if (system_catalog_ == nullptr) { // successful backend initialization installs the canonical System Catalog.
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "relocatable logical constraint list requires the native System Catalog");
-			}
 			const SystemCatalogSchemaTokenKind schemaKind =
 					definition.entity_kind == ConstraintDefinitionEntityKind::CDEK_NODE
 							? SystemCatalogSchemaTokenKind::SCSTK_LABEL
@@ -4959,8 +5977,7 @@ namespace graph::storage {
 	RelocatableStorageBackend::reclaimObsoleteScalarIndexTrees(const ScalarIndexTreeReclaimOptions &options,
 															   const MetadataPublishOptions &publishOptions) {
 		requireOpen();
-		if (isReadOnly() || btree_pages_ == nullptr || system_catalog_ == nullptr || vector_manifests_ == nullptr ||
-			metadata_ == nullptr) { // open() installs all stores required by scalar-tree reclamation before exposing it.
+		if (isReadOnly()) {
 			throw std::runtime_error("relocatable read-only backend cannot reclaim obsolete scalar Index trees");
 		}
 		requireNoIndeterminateWrite();
@@ -4991,9 +6008,7 @@ namespace graph::storage {
 	RelocatableStorageBackend::reclaimObsoleteVectorIndexState(const VectorIndexStateReclaimOptions &options,
 															   const MetadataPublishOptions &publishOptions) {
 		requireOpen();
-		if (isReadOnly() || physical_ == nullptr || slotted_pages_ == nullptr || btree_pages_ == nullptr ||
-			vector_pages_ == nullptr || vector_manifests_ == nullptr || system_catalog_ == nullptr ||
-			metadata_ == nullptr || data_file_ == nullptr) { // open() installs the complete Vector reclamation domain before exposing it.
+		if (isReadOnly()) {
 			throw std::runtime_error("relocatable read-only backend cannot reclaim obsolete Vector Index state");
 		}
 		requireNoIndeterminateWrite();
@@ -5026,7 +6041,7 @@ namespace graph::storage {
 	RelocatableStorageBackend::reclaimUnreachableLargeValues(const LargeValueReachabilityReclaimOptions &options,
 															 const MetadataPublishOptions &publishOptions) {
 		requireOpen();
-		if (isReadOnly() || large_values_ == nullptr || slotted_pages_ == nullptr || metadata_ == nullptr) { // open() installs the complete LargeValue reclamation domain before exposing it.
+		if (isReadOnly()) {
 			throw std::runtime_error("relocatable read-only backend cannot reclaim unreachable LargeValues");
 		}
 		requireNoIndeterminateWrite();
@@ -5158,11 +6173,10 @@ namespace graph::storage {
 
 	void RelocatableStorageBackend::verifyConstraintSupportTrees(const MetadataSnapshotPin &snapshot) const {
 		if (options_.maximum_constraint_definitions == 0U || options_.maximum_online_index_entries == 0U ||
-			options_.maximum_online_index_entries == std::numeric_limits<size_t>::max() ||
-			native_graph_reads_ == nullptr || system_catalog_ == nullptr || btree_pages_ == nullptr) { // successful open installs these stores and validated finite options before integrity verification.
+			options_.maximum_online_index_entries == std::numeric_limits<size_t>::max()) {
 			throw FormatException(FormatError::FERR_INVALID_HEADER,
-								  "relocatable native constraint support-tree integrity verification requires local "
-								  "stores and finite bounds");
+								  "relocatable native constraint support-tree integrity verification requires finite "
+								  "positive bounds");
 		}
 		const std::vector<ConstraintDefinition> definitions =
 				readAllConstraintDefinitions(snapshot, options_.maximum_constraint_definitions);
@@ -5243,7 +6257,8 @@ namespace graph::storage {
 										  "relocatable native constraint support-tree scan exceeded its Entity bound");
 				}
 			};
-			const size_t scanBound = options_.maximum_online_index_entries + 1U;
+			const size_t scanBound = checkedBoundPlusOne(options_.maximum_online_index_entries,
+					"relocatable integrity verification scan bound overflowed");
 			if (definition.entity_kind == ConstraintDefinitionEntityKind::CDEK_NODE) {
 				static_cast<void>(
 						native_graph_reads_->visitNodesUntil(snapshot, scanBound, [&](const PageBackedGraphNode &node) {
@@ -5272,7 +6287,8 @@ namespace graph::storage {
 			}
 			const std::vector<BTreePageEntry> actual =
 					BTreeIndex(definition.constraint_id, *btree_pages_, *metadata_)
-							.scan(snapshot, std::nullopt, options_.maximum_online_index_entries + 1U);
+							.scan(snapshot, std::nullopt, checkedBoundPlusOne(options_.maximum_online_index_entries,
+									"relocatable integrity verification index bound overflowed"));
 			if (actual.size() > options_.maximum_online_index_entries || actual.size() != expectedEntries.size()) {
 				throw FormatException(
 						FormatError::FERR_INVALID_STATE,
@@ -5323,7 +6339,7 @@ namespace graph::storage {
 
 	std::string RelocatableStorageBackend::resolveNodeLabelToken(const MetadataSnapshotPin &snapshot,
 																 uint64_t tokenId) const {
-		if (tokenId == 0U || system_catalog_ == nullptr) {
+		if (tokenId == 0U) {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable native logical reader has an invalid Node-label resolver state");
 		}
@@ -5338,7 +6354,7 @@ namespace graph::storage {
 
 	std::string RelocatableStorageBackend::resolveRelationshipTypeToken(const MetadataSnapshotPin &snapshot,
 																		uint64_t tokenId) const {
-		if (tokenId == 0U || system_catalog_ == nullptr) {
+		if (tokenId == 0U) {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable native logical reader has an invalid relationship-type resolver state");
 		}
@@ -5353,7 +6369,7 @@ namespace graph::storage {
 
 	std::string RelocatableStorageBackend::resolvePropertyKey(const MetadataSnapshotPin &snapshot,
 															  uint32_t tokenId) const {
-		if (tokenId == 0U || system_catalog_ == nullptr) {
+		if (tokenId == 0U) {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable native logical reader has an invalid Property-key resolver state");
 		}
@@ -5364,6 +6380,24 @@ namespace graph::storage {
 										  std::to_string(tokenId));
 		}
 		return *resolved;
+	}
+
+	std::optional<uint32_t> RelocatableStorageBackend::resolvePropertyToken(const MetadataSnapshotPin &snapshot,
+																							std::string_view name) const {
+		if (name.empty()) {
+			return std::nullopt;
+		}
+		debug::PerfTrace::addValue("native_graph.read.property_token_resolution", 1);
+		return system_catalog_->findPropertyToken(snapshot, name);
+	}
+
+	std::optional<uint64_t> RelocatableStorageBackend::resolveNodeLabelName(const MetadataSnapshotPin &snapshot,
+																						  std::string_view name) const {
+		if (name.empty()) {
+			return std::nullopt;
+		}
+		debug::PerfTrace::addValue("native_graph.read.label_token_resolution", 1);
+		return system_catalog_->findSchemaToken(snapshot, SystemCatalogSchemaTokenKind::SCSTK_LABEL, name);
 	}
 
 	void RelocatableStorageBackend::releaseResources() noexcept {

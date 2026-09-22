@@ -216,6 +216,77 @@ TEST_F(RelocatableBTreePageStoreTest,
 	reopened.release();
 }
 
+TEST_F(RelocatableBTreePageStoreTest,
+		MovesAFullSourcePageToACompatibleIndexPoolAndPreservesPinnedAndReopenedReads) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+	SlottedPagePool pages(io, *metadata);
+	BTreePageStore store(pages, *metadata);
+	const std::array<IndexTreeMaterializationPoolOptions, 2U> pools = {
+			{{PhysicalSlotId(40U), PhysicalSlotId(41U), INDEX_ID, RSS_PAGE_POOL_DATA_FRAME_COUNT},
+			 {PhysicalSlotId(40U), PhysicalSlotId(41U), INDEX_ID, 1U}}};
+
+	static_cast<void>(store.materializeAndPublishTreeAcrossPools(
+			pools, INDEX_ID, {0U, 0U}, LogSequenceNumber(2U),
+			[](std::span<const IndexTreeMaterializedPool> materialized, size_t poolOrdinal, size_t pageOrdinal) {
+				const IndexTreeMaterializedPool &pool = materialized[poolOrdinal];
+				const PageId pageId = pool.page_ids[pageOrdinal];
+				BTreePageHeader header;
+				header.index_id = INDEX_ID;
+				header.page_id = pageId;
+				header.generation = pool.pool.generation;
+				BTreePage page = BTreePage::create(treeOwner(pool.pool, pageId, LogSequenceNumber(2U)), header);
+				if (poolOrdinal == 0U && pageOrdinal == 0U) {
+					page.insert({{std::byte{'a'}}, 1U});
+				}
+				return page;
+			}));
+
+	BTreeIndex index(INDEX_ID, store, *metadata);
+	MetadataSnapshotPin before = metadata->openSnapshot();
+	const IndexRootLocation beforeRoot = metadata->findIndexRoot(before, INDEX_ID);
+	const PageLocation sourceLocation = metadata->findPageLocation(before, beforeRoot.root_page_id);
+	ASSERT_EQ(pages.availableFrameCount(before, sourceLocation.segment_id), 0U);
+	const auto currentPools = metadata->findCurrentIndexPagePools(before);
+	ASSERT_EQ(currentPools.size(), 2U);
+	const CatalogEntry destinationPool = currentPools[0].segment_id == sourceLocation.segment_id
+			? currentPools[1]
+			: currentPools[0];
+	ASSERT_GT(pages.availableFrameCount(before, destinationPool.segment_id), 0U);
+	EXPECT_EQ(index.find(before, std::vector<std::byte>{std::byte{'a'}}), std::optional<uint64_t>(1U));
+
+	NativeBTreeWriteContext writes(io, *metadata, pages);
+	NativeGraphWriteTransaction transaction = writes.beginTransaction();
+	transaction.stageScalarIndexUpsert(store, INDEX_ID, std::vector<std::byte>{std::byte{'b'}}, 2U);
+	ASSERT_TRUE(transaction.commit().committed());
+
+	// The pinned snapshot must continue to resolve the source root while the new
+	// publication points the unchanged logical root at the compatible pool.
+	EXPECT_EQ(metadata->findIndexRoot(before, INDEX_ID), beforeRoot);
+	EXPECT_EQ(index.find(before, std::vector<std::byte>{std::byte{'b'}}), std::nullopt);
+	MetadataSnapshotPin current = metadata->openSnapshot();
+	const IndexRootLocation currentRoot = metadata->findIndexRoot(current, INDEX_ID);
+	const PageLocation currentLocation = metadata->findPageLocation(current, currentRoot.root_page_id);
+	EXPECT_EQ(currentLocation.segment_id, destinationPool.segment_id);
+	EXPECT_EQ(index.find(current, std::vector<std::byte>{std::byte{'a'}}), std::optional<uint64_t>(1U));
+	EXPECT_EQ(index.find(current, std::vector<std::byte>{std::byte{'b'}}), std::optional<uint64_t>(2U));
+	before.release();
+	current.release();
+	store.reclaimRetiredFrames(sourceLocation.segment_id);
+	MetadataSnapshotPin reclaimed = metadata->openSnapshot();
+	EXPECT_EQ(pages.availableFrameCount(reclaimed, sourceLocation.segment_id), 1U);
+	reclaimed.release();
+
+	metadata.reset();
+	auto reopenedMetadata = RelocatableMetadataStore::open(io);
+	SlottedPagePool reopenedPages(io, *reopenedMetadata);
+	BTreePageStore reopenedStore(reopenedPages, *reopenedMetadata);
+	BTreeIndex reopenedIndex(INDEX_ID, reopenedStore, *reopenedMetadata);
+	MetadataSnapshotPin reopened = reopenedMetadata->openSnapshot();
+	EXPECT_EQ(reopenedIndex.find(reopened, std::vector<std::byte>{std::byte{'a'}}), std::optional<uint64_t>(1U));
+	EXPECT_EQ(reopenedIndex.find(reopened, std::vector<std::byte>{std::byte{'b'}}), std::optional<uint64_t>(2U));
+	reopened.release();
+}
+
 TEST_F(RelocatableBTreePageStoreTest, PlansCrossPoolTreeRetirementInStablePoolAndPageOrder) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
 	SlottedPagePool pages(io, *metadata);

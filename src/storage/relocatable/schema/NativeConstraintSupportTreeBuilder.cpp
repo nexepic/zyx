@@ -13,6 +13,7 @@
 #include <limits>
 #include <optional>
 #include <set>
+#include <unordered_map>
 #include <vector>
 
 #include "graph/storage/relocatable/entity/PageBackedGraphReadAdapter.hpp"
@@ -39,21 +40,14 @@ namespace graph::storage {
 										static_cast<uint8_t>(options.first_slot > options.last_slot) |
 										static_cast<uint8_t>(options.maximum_entries == 0U) |
 										static_cast<uint8_t>(options.maximum_pages == 0U) |
-										static_cast<uint8_t>(options.sort_run_bytes == 0U) |
-										static_cast<uint8_t>(options.maximum_sort_runs < 2U) |
-										static_cast<uint8_t>(options.maximum_collisions == 0U);
+									static_cast<uint8_t>(options.sort_run_bytes == 0U) |
+									static_cast<uint8_t>(options.maximum_sort_runs < 2U) |
+									static_cast<uint8_t>(options.maximum_collisions == 0U) |
+									static_cast<uint8_t>(options.validation_batch_entries == 0U);
 			if (invalid != 0U) {
 				fail(FormatError::FERR_INVALID_HEADER,
 						"native constraint support-tree planning received invalid bounded placement options");
 			}
-		}
-
-		[[nodiscard]] bool nodeInScope(const PageBackedGraphNode &node, const ConstraintDefinition &definition) {
-			return std::ranges::find(node.label_token_ids, definition.schema_token_id) != node.label_token_ids.end();
-		}
-
-		[[nodiscard]] bool edgeInScope(const PageBackedGraphEdge &edge, const ConstraintDefinition &definition) {
-			return edge.type_id == definition.schema_token_id;
 		}
 
 		[[nodiscard]] const PropertyValue *findProperty(const std::vector<PropertyCollectionRootEntry> &entries,
@@ -103,49 +97,121 @@ namespace graph::storage {
 
 		void validateCanonicalEntries(const ConstraintDefinition &definition, PageBackedGraphReadAdapter &graph,
 				const MetadataSnapshotPin &snapshot, std::span<const uint32_t> propertyTokens,
-				const OrderedBTreeEntrySource &source, size_t maximumCollisions) {
+				const OrderedBTreeEntrySource &source, size_t maximumCollisions, size_t batchEntries) {
 			OrderedBTreeEntryCursor cursor = source();
+			NativeReadSession session;
+			session.bind(snapshot);
 			std::array<std::byte, RSS_CONSTRAINT_SUPPORT_DIGEST_BYTES> digest{};
 			bool hasDigest = false;
 			std::vector<std::vector<std::byte>> canonicalGroup;
 			for (;;) {
-				const std::optional<BTreePageEntry> next = cursor();
-				if (!next.has_value()) {
+				std::vector<BTreePageEntry> entries;
+				entries.reserve(batchEntries);
+				while (entries.size() < batchEntries) {
+					const std::optional<BTreePageEntry> next = cursor();
+					if (!next.has_value()) {
+						break;
+					}
+					entries.push_back(*next);
+				}
+				if (entries.empty()) {
 					break;
 				}
-				if (next->key.size() != RSS_CONSTRAINT_SUPPORT_ENTRY_KEY_BYTES || next->value_or_child == 0U ||
-						ConstraintSupportTree::entryEntityId(next->key) != next->value_or_child) {
+				std::vector<std::pair<uint64_t, size_t>> orderedIds;
+				orderedIds.reserve(entries.size());
+				for (size_t ordinal = 0U; ordinal < entries.size(); ++ordinal) {
+					const BTreePageEntry &entry = entries[ordinal];
+					if (entry.key.size() != RSS_CONSTRAINT_SUPPORT_ENTRY_KEY_BYTES || entry.value_or_child == 0U ||
+							ConstraintSupportTree::entryEntityId(entry.key) != entry.value_or_child) {
+						fail(FormatError::FERR_INVALID_STATE,
+								"native constraint support-tree plan produced an invalid Entity identity");
+					}
+					orderedIds.emplace_back(entry.value_or_child, ordinal);
+				}
+				std::ranges::sort(orderedIds);
+				if (std::ranges::adjacent_find(orderedIds,
+						[](const auto &left, const auto &right) { return left.first == right.first; }) != orderedIds.end()) {
 					fail(FormatError::FERR_INVALID_STATE,
-							"native constraint support-tree plan produced an invalid Entity identity");
+							"native constraint support-tree plan repeated an Entity identity");
 				}
-				std::array<std::byte, RSS_CONSTRAINT_SUPPORT_DIGEST_BYTES> candidateDigest{};
-				std::copy_n(next->key.begin(), candidateDigest.size(), candidateDigest.begin());
-				if (!hasDigest || candidateDigest != digest) {
-					digest = candidateDigest;
-					hasDigest = true;
-					canonicalGroup.clear();
+				std::vector<uint64_t> ids;
+				ids.reserve(orderedIds.size());
+				for (const auto &[id, ordinal]: orderedIds) {
+					static_cast<void>(ordinal);
+					ids.push_back(id);
 				}
-				if (canonicalGroup.size() >= maximumCollisions) {
+				std::unordered_map<uint64_t, size_t> positions;
+				positions.reserve(orderedIds.size());
+				for (size_t position = 0U; position < orderedIds.size(); ++position) {
+					positions.emplace(orderedIds[position].first, position);
+				}
+				std::vector<std::vector<std::optional<PropertyValue>>> selectedProperties;
+				std::vector<std::vector<uint64_t>> labels;
+				std::vector<EdgeEntityRecord> edgeRecords;
+				// The Property-column API intentionally requires sorted tokens so it
+				// can merge one ordered directory cursor. Constraint property order
+				// remains authoritative for canonical-key construction below.
+				std::vector<uint32_t> readPropertyTokens(propertyTokens.begin(), propertyTokens.end());
+				std::ranges::sort(readPropertyTokens);
+				if (std::ranges::adjacent_find(readPropertyTokens) != readPropertyTokens.end()) {
 					fail(FormatError::FERR_INVALID_STATE,
-							"native constraint support-tree digest group exceeded its collision bound");
+							"native constraint support-tree definition repeats a Property-key Token");
 				}
-				std::optional<std::vector<std::byte>> canonical;
 				if (definition.entity_kind == ConstraintDefinitionEntityKind::CDEK_NODE) {
-					const PageBackedGraphNode node = graph.readNode(snapshot, next->value_or_child);
-					if (!nodeInScope(node, definition)) {
+					labels = graph.readNodeLabelTokensSorted(snapshot, ids, &session);
+					selectedProperties = graph.readNodePropertyColumnsSorted(snapshot, ids, readPropertyTokens, &session);
+					if (labels.size() != ids.size() ||
+						selectedProperties.size() != propertyTokens.size()) {
+						fail(FormatError::FERR_INVALID_STATE, "native constraint support-tree validation changed Node batch cardinality");
+					}
+				} else {
+					edgeRecords = graph.readEdgeTopologiesSorted(snapshot, ids, &session);
+					selectedProperties = graph.readEdgePropertyColumnsSorted(snapshot, ids, readPropertyTokens, &session);
+					if (edgeRecords.size() != ids.size() || selectedProperties.size() != propertyTokens.size()) {
+						fail(FormatError::FERR_INVALID_STATE, "native constraint support-tree validation changed Edge batch cardinality");
+					}
+				}
+				if (std::ranges::any_of(selectedProperties, [&ids](const auto &column) {
+						return column.size() != ids.size();
+					})) {
+					fail(FormatError::FERR_INVALID_STATE,
+							"native constraint support-tree validation changed Property column cardinality");
+				}
+				for (const BTreePageEntry &next: entries) {
+					std::array<std::byte, RSS_CONSTRAINT_SUPPORT_DIGEST_BYTES> candidateDigest{};
+					std::copy_n(next.key.begin(), candidateDigest.size(), candidateDigest.begin());
+					if (!hasDigest || candidateDigest != digest) {
+						digest = candidateDigest;
+						hasDigest = true;
+						canonicalGroup.clear();
+					}
+					if (canonicalGroup.size() >= maximumCollisions) {
+						fail(FormatError::FERR_INVALID_STATE,
+								"native constraint support-tree digest group exceeded its collision bound");
+					}
+					const size_t position = positions.at(next.value_or_child);
+					std::vector<PropertyCollectionRootEntry> properties;
+					properties.reserve(propertyTokens.size());
+					for (size_t token = 0U; token < readPropertyTokens.size(); ++token) {
+						if (selectedProperties[token][position].has_value()) {
+							properties.push_back({readPropertyTokens[token], *selectedProperties[token][position]});
+						}
+					}
+					std::optional<std::vector<std::byte>> canonical;
+				if (definition.entity_kind == ConstraintDefinitionEntityKind::CDEK_NODE) {
+					if (std::ranges::find(labels[position], definition.schema_token_id) == labels[position].end()) {
 						fail(FormatError::FERR_INVALID_STATE,
 								"native constraint support-tree plan names a Node outside its schema scope");
 					}
-					canonical = canonicalValues(node.properties, propertyTokens, true);
+					canonical = canonicalValues(properties, propertyTokens, true);
 				} else {
-					const PageBackedGraphEdge edge = graph.readEdge(snapshot, next->value_or_child);
-					if (!edgeInScope(edge, definition)) {
+					if (edgeRecords[position].type_id != definition.schema_token_id) {
 						fail(FormatError::FERR_INVALID_STATE,
 								"native constraint support-tree plan names an Edge outside its schema scope");
 					}
-					canonical = canonicalValues(edge.properties, propertyTokens, true);
+					canonical = canonicalValues(properties, propertyTokens, true);
 				}
-				if (!canonical.has_value() || !ConstraintSupportTree::matchesDigest(next->key, *canonical)) {
+				if (!canonical.has_value() || !ConstraintSupportTree::matchesDigest(next.key, *canonical)) {
 					fail(FormatError::FERR_INVALID_STATE,
 							"native constraint support-tree digest disagrees with canonical Property values");
 				}
@@ -154,6 +220,7 @@ namespace graph::storage {
 							"native constraint support-tree found duplicate uniqueness semantics");
 				}
 				canonicalGroup.push_back(std::move(*canonical));
+				}
 			}
 		}
 
@@ -208,7 +275,8 @@ namespace graph::storage {
 					}));
 		}
 		const OrderedBTreeEntrySource source = sorter.finish();
-		validateCanonicalEntries(definition, graph, snapshot, propertyTokens, source, options.maximum_collisions);
+		validateCanonicalEntries(definition, graph, snapshot, propertyTokens, source, options.maximum_collisions,
+				options.validation_batch_entries);
 		return BulkBTreeBuilder::planNativeTree(
 				pages, metadata, snapshot, definition.constraint_id, source,
 				{options.first_slot, options.last_slot, definition.constraint_id, options.maximum_entries,

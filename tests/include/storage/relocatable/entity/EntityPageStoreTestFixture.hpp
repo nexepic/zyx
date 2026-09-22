@@ -116,8 +116,8 @@ namespace {
 	}
 
 	[[maybe_unused]] void overwritePageOwner(const std::shared_ptr<StorageIO> &io,
-											  RelocatableMetadataStore &metadata, PageId pageId,
-											  const PageOwnerHeader &owner) {
+												  RelocatableMetadataStore &metadata, PageId pageId,
+												  const PageOwnerHeader &owner) {
 		MetadataSnapshotPin snapshot = metadata.openSnapshot();
 		const PageLocation location = metadata.findPageLocation(snapshot, pageId);
 		const CatalogEntry pool = metadata.findCatalog(snapshot, location.segment_id);
@@ -127,6 +127,28 @@ namespace {
 		snapshot.release();
 		const auto bytes = PageOwnerHeaderCodec::encode(owner);
 		io->writeAt(offset, bytes.data(), bytes.size());
+	}
+
+	[[maybe_unused]] void corruptPagePayloadByte(const std::shared_ptr<StorageIO> &io,
+													RelocatableMetadataStore &metadata, PageId pageId,
+													size_t payloadOffset = RSS_ENTITY_PAGE_HEADER_BYTES) {
+		if (payloadOffset >= RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES) {
+			throw std::invalid_argument("test page payload corruption offset is outside the page payload");
+		}
+		MetadataSnapshotPin snapshot = metadata.openSnapshot();
+		const PageLocation location = metadata.findPageLocation(snapshot, pageId);
+		const CatalogEntry pool = metadata.findCatalog(snapshot, location.segment_id);
+		const uint64_t offset = PhysicalSegmentAllocator::checkedSlotOffset(snapshot.superblock().data_region_offset,
+																							pool.physical_slot) +
+								static_cast<uint64_t>(location.page_index) * RSS_PAGE_SIZE + RSS_PAGE_OWNER_HEADER_BYTES +
+								payloadOffset;
+		snapshot.release();
+		std::byte original{};
+		if (io->readAt(offset, &original, sizeof(original)) != sizeof(original)) {
+			throw std::runtime_error("test page payload corruption could not read the persisted byte");
+		}
+		const std::byte corrupted = original ^ std::byte{0x01U};
+		io->writeAt(offset, &corrupted, sizeof(corrupted));
 	}
 
 } // namespace

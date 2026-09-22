@@ -94,6 +94,93 @@ TEST_F(RelocatableMetadataPagePoolTest, KeepsControlPageUpdatesUnderTheDurablePo
 	EXPECT_EQ(stats.disk_read_bytes, stats.misses * RSS_PAGE_SIZE);
 }
 
+TEST_F(RelocatableMetadataPagePoolTest, BatchAllocationPersistsOneBitmapUpdatePerPool) {
+	const file_handle_t writeHandle = portable_open_rw(testFilePath.string().c_str());
+	const file_handle_t readHandle = portable_open(testFilePath.string().c_str(), O_RDONLY);
+	ASSERT_NE(writeHandle, INVALID_FILE_HANDLE);
+	ASSERT_NE(readHandle, INVALID_FILE_HANDLE);
+	auto nativeIo = std::make_shared<StorageIO>(file, writeHandle, readHandle);
+	const Superblock initial = superblock(1U, 1U);
+	SuperblockFile bootstrap(nativeIo);
+	bootstrap.initializeNew(initial);
+
+	size_t controlRecordWrites = 0U;
+	{
+		MetadataPagePoolAllocator allocator(nativeIo, initial);
+		StorageIO::ScopedNativeWriteHookForTesting countControlRecords(
+				[&controlRecordWrites](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+					if (byteCount == RSS_METADATA_PAGE_POOL_HEADER_BYTES) {
+						++controlRecordWrites;
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		const std::vector<MetadataPageAllocation> allocated = allocator.allocatePages(
+				Generation(2U), LogSequenceNumber(2U), 8U, std::span<const PhysicalSlotId>{},
+				std::span<const PhysicalSlotRange>{}, nullptr);
+		ASSERT_EQ(allocated.size(), 8U);
+		EXPECT_EQ(controlRecordWrites, 1U);
+		EXPECT_EQ(allocator.stats().allocated_pages, 8U);
+		EXPECT_EQ(std::popcount(allocator.poolHeader(PhysicalSlotId(1U)).allocated_frames), 8U);
+	}
+
+	nativeIo.reset();
+	EXPECT_EQ(portable_close_rw(writeHandle), 0);
+	EXPECT_EQ(portable_close(readHandle), 0);
+}
+
+TEST_F(RelocatableMetadataPagePoolTest, BatchAllocationRollsBackEveryPoolWhenLaterBitmapWriteFails) {
+	const file_handle_t writeHandle = portable_open_rw(testFilePath.string().c_str());
+	const file_handle_t readHandle = portable_open(testFilePath.string().c_str(), O_RDONLY);
+	ASSERT_NE(writeHandle, INVALID_FILE_HANDLE);
+	ASSERT_NE(readHandle, INVALID_FILE_HANDLE);
+	auto nativeIo = std::make_shared<StorageIO>(file, writeHandle, readHandle);
+	const Superblock initial = superblock(1U, 1U);
+	SuperblockFile bootstrap(nativeIo);
+	bootstrap.initializeNew(initial);
+
+	{
+		MetadataPagePoolAllocator allocator(nativeIo, initial);
+		const PhysicalPageRef retained = allocator.allocatePage(Generation(1U));
+		ASSERT_EQ(retained.physical_slot, PhysicalSlotId(1U));
+		const uint64_t secondPoolControlRecord = RSS_FILE_BOOTSTRAP_BYTES + RSS_SEGMENT_SIZE +
+												 RSS_ENVELOPE_BYTES + RSS_METADATA_PAGE_POOL_HEADER_BYTES;
+		bool interrupted = false;
+		{
+			StorageIO::ScopedNativeWriteHookForTesting failSecondPoolBitmap(
+					[secondPoolControlRecord, &interrupted](file_handle_t fd, const void *bytes, size_t byteCount,
+															 pwrite_off_t offset) {
+						if (!interrupted && static_cast<uint64_t>(offset) == secondPoolControlRecord &&
+							byteCount == RSS_METADATA_PAGE_POOL_HEADER_BYTES) {
+							interrupted = true;
+#ifdef _WIN32
+							SetLastError(ERROR_DISK_FULL);
+#else
+							errno = ENOSPC;
+#endif
+							return static_cast<pwrite_ssize_t>(-1);
+						}
+						return portable_pwrite(fd, bytes, byteCount, offset);
+					});
+			EXPECT_THROW(
+					static_cast<void>(allocator.allocatePages(
+							Generation(2U), LogSequenceNumber(2U), RSS_PAGE_POOL_DATA_FRAME_COUNT,
+							std::span<const PhysicalSlotId>{}, std::span<const PhysicalSlotRange>{}, nullptr)),
+					std::system_error);
+		}
+		ASSERT_TRUE(interrupted);
+		EXPECT_FALSE(allocator.stats().poisoned);
+		EXPECT_EQ(allocator.stats().pools, 1U);
+		EXPECT_EQ(allocator.stats().allocated_pages, 1U);
+		const PhysicalPageRef retried = allocator.allocatePage(Generation(2U));
+		EXPECT_EQ(retried.physical_slot, retained.physical_slot);
+		EXPECT_EQ(retried.frame_index, retained.frame_index + 1U);
+	}
+
+	nativeIo.reset();
+	EXPECT_EQ(portable_close_rw(writeHandle), 0);
+	EXPECT_EQ(portable_close(readHandle), 0);
+}
+
 TEST_F(RelocatableMetadataPagePoolTest, ControlRecordShortWriteRetainsThePreviousAllocationBitmap) {
 	const file_handle_t writeHandle = portable_open_rw(testFilePath.string().c_str());
 	const file_handle_t readHandle = portable_open(testFilePath.string().c_str(), O_RDONLY);

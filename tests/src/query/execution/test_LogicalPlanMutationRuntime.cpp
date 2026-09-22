@@ -162,6 +162,137 @@ namespace graph::query {
 		EXPECT_EQ(backend->edgeCount(), 1U);
 	}
 
+	TEST(LogicalPlanMutationRuntimeTest, MergeRejectsTopologyCandidatesWithoutMaterializingTheirProperties) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const uint64_t source = backend->addNode({"Person"}, {{"name", PropertyValue("Ada")}});
+		const uint64_t target = backend->addNode({"Person"}, {{"name", PropertyValue("Bob")}});
+		static_cast<void>(backend->addEdge(source, target, "OTHER", {{"payload", PropertyValue("unused")}}));
+		backend->resetReadMetrics();
+		QueryEngine engine(backend, backend);
+
+		static_cast<void>(engine.execute(
+				"MERGE (source:Person {name: 'Ada'})-[relationship:KNOWS {since: 2026}]->"
+				"(target:Person {name: 'Bob'})"));
+
+		EXPECT_EQ(backend->edgeCount(), 2U);
+		EXPECT_GT(backend->readMetrics().topology_page_reads, 0U);
+		EXPECT_EQ(backend->readMetrics().full_edge_reads, 0U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, MergeBatchesIdentityPropertiesBeforeMaterializingTheMatchingRelationship) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const uint64_t source = backend->addNode({"Person"}, {{"name", PropertyValue("Ada")}});
+		const uint64_t target = backend->addNode({"Person"}, {{"name", PropertyValue("Bob")}});
+		static_cast<void>(backend->addEdge(source, target, "LINK", {{"since", PropertyValue(2024)}}));
+		static_cast<void>(backend->addEdge(source, target, "LINK", {{"since", PropertyValue(2025)}}));
+		const uint64_t expected =
+				backend->addEdge(source, target, "LINK", {{"since", PropertyValue(2026)}});
+		backend->resetReadMetrics();
+		QueryEngine engine(backend, backend);
+
+		const QueryResult result = engine.execute(
+				"MERGE (source:Person {name: 'Ada'})-[relationship:LINK {since: 2026}]->"
+				"(target:Person {name: 'Bob'}) RETURN relationship");
+
+		ASSERT_EQ(result.rowCount(), 1U);
+		EXPECT_EQ(result.getRows().front().at("relationship").asLogicalEdge().edge_id, expected);
+		EXPECT_EQ(backend->edgeCount(), 3U);
+		EXPECT_EQ(backend->readMetrics().selected_edge_property_column_reads, 1U);
+		// One complete read authenticates the selected candidate and one refreshes
+		// the public result after the mutation fence. Rejected candidates stay column-only.
+		EXPECT_EQ(backend->readMetrics().full_edge_reads, 2U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, MergeRejectsMalformedSelectedRelationshipPropertyColumns) {
+		for (const TestPropertyColumnMode mode: {TestPropertyColumnMode::TPCM_MISSING_COLUMN,
+				 TestPropertyColumnMode::TPCM_TRUNCATED_COLUMN}) {
+			auto backend = std::make_shared<TestLogicalGraph>();
+			const uint64_t source = backend->addNode({"Person"}, {{"name", PropertyValue("Ada")}});
+			const uint64_t target = backend->addNode({"Person"}, {{"name", PropertyValue("Bob")}});
+			static_cast<void>(backend->addEdge(source, target, "LINK", {{"since", PropertyValue(2025)}}));
+			static_cast<void>(backend->addEdge(source, target, "LINK", {{"since", PropertyValue(2026)}}));
+			backend->setPropertyColumnMode(mode);
+			backend->resetReadMetrics();
+			QueryEngine engine(backend, backend);
+
+			EXPECT_THROW(static_cast<void>(engine.execute(
+					"MERGE (source:Person {name: 'Ada'})-[relationship:LINK {since: 2026}]->"
+					"(target:Person {name: 'Bob'})")), std::runtime_error);
+
+			EXPECT_EQ(backend->edgeCount(), 2U);
+			EXPECT_EQ(backend->graph().mutation_batches, 0U);
+			EXPECT_EQ(backend->readMetrics().selected_edge_property_column_reads, 1U);
+			EXPECT_EQ(backend->readMetrics().full_edge_reads, 0U);
+		}
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, MergeRejectsSelectedPropertiesThatDisagreeWithTheCompleteRelationship) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const uint64_t source = backend->addNode({"Person"}, {{"name", PropertyValue("Ada")}});
+		const uint64_t target = backend->addNode({"Person"}, {{"name", PropertyValue("Bob")}});
+		static_cast<void>(backend->addEdge(source, target, "LINK", {{"since", PropertyValue(2025)}}));
+		static_cast<void>(backend->addEdge(source, target, "LINK", {{"since", PropertyValue(2026)}}));
+		backend->setPropertyColumnMode(TestPropertyColumnMode::TPCM_REVERSED_ROWS);
+		backend->resetReadMetrics();
+		QueryEngine engine(backend, backend);
+
+		EXPECT_THROW(static_cast<void>(engine.execute(
+				"MERGE (source:Person {name: 'Ada'})-[relationship:LINK {since: 2026}]->"
+				"(target:Person {name: 'Bob'})")), std::runtime_error);
+
+		EXPECT_EQ(backend->edgeCount(), 2U);
+		EXPECT_EQ(backend->graph().mutation_batches, 0U);
+		EXPECT_EQ(backend->readMetrics().selected_edge_property_column_reads, 1U);
+		EXPECT_EQ(backend->readMetrics().full_edge_reads, 1U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, MergeBoundsSelectedRelationshipPropertyPayloads) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const uint64_t source = backend->addNode({"Person"}, {{"name", PropertyValue("Ada")}});
+		const uint64_t target = backend->addNode({"Person"}, {{"name", PropertyValue("Bob")}});
+		static_cast<void>(backend->addEdge(
+				source, target, "LINK", {{"payload", PropertyValue(std::string(4096U, 'x'))}}));
+		backend->resetReadMetrics();
+		LogicalReadExecutionOptions options;
+		options.bounds.maximum_materialized_bytes = 1024U;
+		QueryEngine engine(backend, backend, options);
+
+		try {
+			static_cast<void>(engine.execute(
+					"MERGE (source:Person {name: 'Ada'})-[relationship:LINK {payload: 'missing'}]->"
+					"(target:Person {name: 'Bob'})"));
+			FAIL() << "oversized selected relationship Properties must fail closed";
+		} catch (const std::runtime_error &error) {
+			EXPECT_STREQ(error.what(), "logical MERGE relationship Property batch exceeded its byte bound");
+		}
+
+		EXPECT_EQ(backend->edgeCount(), 1U);
+		EXPECT_EQ(backend->graph().mutation_batches, 0U);
+		EXPECT_EQ(backend->readMetrics().selected_edge_property_column_reads, 1U);
+		EXPECT_EQ(backend->readMetrics().full_edge_reads, 0U);
+	}
+
+	TEST(LogicalPlanMutationRuntimeTest, MergeRejectsNonMonotonicTopologyBeforePublishing) {
+		auto backend = std::make_shared<TestLogicalGraph>();
+		const uint64_t source = backend->addNode({"Person"}, {{"name", PropertyValue("Ada")}});
+		const uint64_t target = backend->addNode({"Person"}, {{"name", PropertyValue("Bob")}});
+		static_cast<void>(backend->addEdge(source, target, "OTHER", {}));
+		static_cast<void>(backend->addEdge(source, target, "OTHER", {}));
+		backend->setTopologyMode(TestTopologyMode::TTM_NON_MONOTONIC);
+		backend->resetReadMetrics();
+		QueryEngine engine(backend, backend);
+
+		EXPECT_THROW(static_cast<void>(engine.execute(
+					 "MERGE (source:Person {name: 'Ada'})-[relationship:KNOWS]->"
+					 "(target:Person {name: 'Bob'})")),
+				 std::runtime_error);
+
+		EXPECT_EQ(backend->edgeCount(), 2U);
+		EXPECT_EQ(backend->graph().mutation_batches, 0U);
+		EXPECT_GT(backend->readMetrics().topology_page_reads, 0U);
+		EXPECT_EQ(backend->readMetrics().full_edge_reads, 0U);
+	}
+
 	TEST(LogicalPlanMutationRuntimeTest, MergeOnMatchMapPatchReplacesAndMaterializesRelationshipProperties) {
 		auto backend = std::make_shared<TestLogicalGraph>();
 		QueryEngine engine(backend, backend);

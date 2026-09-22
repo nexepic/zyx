@@ -23,6 +23,14 @@ namespace graph::storage {
 
 		using PropertyMap = std::map<std::string, PropertyValue>;
 
+		[[nodiscard]] EntityReadShape completeNodeReadShape() {
+			return {.include_labels = true, .include_type = false, .all_properties = true};
+		}
+
+		[[nodiscard]] EntityReadShape completeEdgeReadShape() {
+			return {.include_labels = false, .include_type = true, .all_properties = true};
+		}
+
 		[[nodiscard]] bool isEmpty(const LogicalGraphMutationBatch &batch) {
 			return batch.node_creates.empty() && batch.edge_creates.empty() && batch.property_replacements.empty() &&
 				   batch.node_label_replacements.empty() && batch.edge_deletes.empty() && batch.node_deletes.empty() &&
@@ -82,15 +90,86 @@ namespace graph::storage {
 	public:
 		explicit Snapshot(const LogicalGraphTransactionOverlay &overlay) : overlay_(overlay) {}
 
-		[[nodiscard]] LogicalGraphNode readNode(uint64_t nodeId) const override {
+		[[nodiscard]] LogicalGraphNode readNodeShaped(uint64_t nodeId, const EntityReadShape &shape) const override {
+			validateEntityReadShape(shape);
 			const auto state = overlay_.nodes_.find(nodeId);
-			if (state != overlay_.nodes_.end()) {
-				if (state->second.deleted) {
-					throw std::runtime_error("logical transaction overlay Node was deleted");
-				}
-				return state->second.node;
+			if (state == overlay_.nodes_.end()) {
+				return overlay_.baseSnapshot().readNodeShaped(nodeId, shape);
 			}
-			return overlay_.baseSnapshot().readNode(nodeId);
+			if (state->second.deleted) {
+				throw std::runtime_error("logical transaction overlay Node was deleted");
+			}
+			const LogicalGraphNode &source = state->second.node;
+			LogicalGraphNode result;
+			result.node_id = source.node_id;
+			if (shape.include_labels) {
+				result.labels = source.labels;
+			}
+			if (shape.all_properties) {
+				result.properties = source.properties;
+				return result;
+			}
+			// Staged records retain logical Property names. Resolve each name through
+			// the pinned base schema when possible; if a generic reader cannot expose
+			// tokens, conservatively retain the properties rather than returning an
+			// incomplete logical value.
+			for (const LogicalGraphPropertyEntry &entry: source.properties) {
+				const std::optional<uint32_t> token = overlay_.baseSnapshot().findPropertyToken(entry.key);
+				if (token.has_value() && std::ranges::binary_search(shape.property_tokens, *token)) {
+					result.properties.push_back(entry);
+				} else if (!token.has_value() && !shape.property_tokens.empty()) {
+					result.properties.push_back(entry);
+				}
+			}
+			return result;
+		}
+
+		[[nodiscard]] std::vector<LogicalGraphNode>
+		readNodesShapedSorted(std::span<const uint64_t> nodeIds, const EntityReadShape &shape) const override {
+			validateEntityReadShape(shape);
+			std::vector<uint64_t> baseIds;
+			baseIds.reserve(nodeIds.size());
+			uint64_t previous = 0U;
+			for (const uint64_t nodeId: nodeIds) {
+				if (nodeId == 0U || nodeId <= previous) {
+					throw std::invalid_argument("logical transaction overlay shaped Node batch requires increasing IDs");
+				}
+				previous = nodeId;
+				const auto state = overlay_.nodes_.find(nodeId);
+				if (state != overlay_.nodes_.end()) {
+					if (state->second.deleted) {
+						throw std::runtime_error("logical transaction overlay Node was deleted");
+					}
+					continue;
+				}
+				baseIds.push_back(nodeId);
+			}
+			const std::vector<LogicalGraphNode> baseNodes = baseIds.empty()
+					? std::vector<LogicalGraphNode>{}
+					: overlay_.baseSnapshot().readNodesShapedSorted(baseIds, shape);
+			if (baseNodes.size() != baseIds.size()) {
+				throw std::runtime_error("logical transaction overlay base Node batch returned an invalid cardinality");
+			}
+			std::vector<LogicalGraphNode> result;
+			result.reserve(nodeIds.size());
+			size_t baseOrdinal = 0U;
+			for (const uint64_t nodeId: nodeIds) {
+				if (overlay_.nodes_.contains(nodeId)) {
+					result.push_back(readNodeShaped(nodeId, shape));
+				} else {
+					const LogicalGraphNode &node = baseNodes[baseOrdinal];
+					if (node.node_id != nodeId) {
+						throw std::runtime_error("logical transaction overlay base Node batch returned an out-of-order record");
+					}
+					result.push_back(node);
+					++baseOrdinal;
+				}
+			}
+			return result;
+		}
+
+		[[nodiscard]] LogicalGraphNode readNode(uint64_t nodeId) const override {
+			return readNodeShaped(nodeId, completeNodeReadShape());
 		}
 
 		[[nodiscard]] bool containsNode(uint64_t nodeId) const override {
@@ -101,18 +180,280 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] LogicalGraphEdge readEdge(uint64_t edgeId) const override {
+			return readEdgeShaped(edgeId, completeEdgeReadShape());
+		}
+
+		[[nodiscard]] LogicalGraphEdge readEdgeShaped(uint64_t edgeId, const EntityReadShape &shape) const override {
+			validateEntityReadShape(shape);
 			const auto state = overlay_.edges_.find(edgeId);
-			if (state != overlay_.edges_.end()) {
-				if (state->second.deleted || !overlay_.isEdgeVisible(state->second.edge, edgeId)) {
+			if (state == overlay_.edges_.end()) {
+				LogicalGraphEdge edge = overlay_.baseSnapshot().readEdgeShaped(edgeId, shape);
+				if (!overlay_.isEdgeVisible(edge, edgeId)) {
 					throw std::runtime_error("logical transaction overlay Edge was deleted");
 				}
-				return state->second.edge;
+				return edge;
 			}
-			const LogicalGraphEdge edge = overlay_.baseSnapshot().readEdge(edgeId);
-			if (!overlay_.isEdgeVisible(edge, edgeId)) {
+			if (state->second.deleted || !overlay_.isEdgeVisible(state->second.edge, edgeId)) {
 				throw std::runtime_error("logical transaction overlay Edge was deleted");
 			}
-			return edge;
+			const LogicalGraphEdge &source = state->second.edge;
+			LogicalGraphEdge result;
+			result.edge_id = source.edge_id;
+			result.source_node_id = source.source_node_id;
+			result.target_node_id = source.target_node_id;
+			if (shape.include_type) {
+				result.type = source.type;
+			}
+			if (shape.all_properties) {
+				result.properties = source.properties;
+				return result;
+			}
+			for (const LogicalGraphPropertyEntry &entry: source.properties) {
+				const std::optional<uint32_t> token = overlay_.baseSnapshot().findPropertyToken(entry.key);
+				if (token.has_value() && std::ranges::binary_search(shape.property_tokens, *token)) {
+					result.properties.push_back(entry);
+				} else if (!token.has_value() && !shape.property_tokens.empty()) {
+					// Preserve correctness for readers that do not publish token lookup.
+					result.properties.push_back(entry);
+				}
+			}
+			return result;
+		}
+
+		[[nodiscard]] std::vector<LogicalGraphEdge>
+		readEdgesShapedSorted(std::span<const uint64_t> edgeIds, const EntityReadShape &shape) const override {
+			validateEntityReadShape(shape);
+			std::vector<uint64_t> baseIds;
+			baseIds.reserve(edgeIds.size());
+			uint64_t previous = 0U;
+			for (const uint64_t edgeId: edgeIds) {
+				if (edgeId == 0U || edgeId <= previous) {
+					throw std::invalid_argument("logical transaction overlay shaped Edge batch requires increasing IDs");
+				}
+				previous = edgeId;
+				const auto state = overlay_.edges_.find(edgeId);
+				if (state != overlay_.edges_.end()) {
+					if (state->second.deleted || !overlay_.isEdgeVisible(state->second.edge, edgeId)) {
+						throw std::runtime_error("logical transaction overlay Edge was deleted");
+					}
+					continue;
+				}
+				baseIds.push_back(edgeId);
+			}
+			const std::vector<LogicalGraphEdge> baseEdges = baseIds.empty()
+					? std::vector<LogicalGraphEdge>{}
+					: overlay_.baseSnapshot().readEdgesShapedSorted(baseIds, shape);
+			if (baseEdges.size() != baseIds.size()) {
+				throw std::runtime_error("logical transaction overlay base Edge batch returned an invalid cardinality");
+			}
+			std::vector<LogicalGraphEdge> result;
+			result.reserve(edgeIds.size());
+			size_t baseOrdinal = 0U;
+			for (const uint64_t edgeId: edgeIds) {
+				if (overlay_.edges_.contains(edgeId)) {
+					result.push_back(readEdgeShaped(edgeId, shape));
+				} else {
+					const LogicalGraphEdge &edge = baseEdges[baseOrdinal];
+					if (edge.edge_id != edgeId || !overlay_.isEdgeVisible(edge, edgeId)) {
+						throw std::runtime_error("logical transaction overlay base Edge batch returned an invalid record");
+					}
+					result.push_back(edge);
+					++baseOrdinal;
+				}
+			}
+			return result;
+		}
+
+		[[nodiscard]] std::vector<PropertyValue>
+		readNodePropertiesSorted(std::span<const uint64_t> nodeIds, std::string_view key) const override {
+			if (key.empty()) {
+				throw std::invalid_argument("logical transaction overlay sorted Node Property read requires a non-empty key");
+			}
+			std::vector<uint64_t> baseIds;
+			baseIds.reserve(nodeIds.size());
+			uint64_t previous = 0U;
+			for (const uint64_t nodeId: nodeIds) {
+				if (nodeId == 0U || nodeId <= previous) {
+					throw std::invalid_argument("logical transaction overlay sorted Node Property read requires increasing IDs");
+				}
+				previous = nodeId;
+				const auto state = overlay_.nodes_.find(nodeId);
+				if (state != overlay_.nodes_.end()) {
+					if (state->second.deleted) {
+						throw std::runtime_error("logical transaction overlay Node was deleted");
+					}
+					continue;
+				}
+				baseIds.push_back(nodeId);
+			}
+			const std::vector<PropertyValue> baseValues = baseIds.empty()
+					? std::vector<PropertyValue>{}
+					: overlay_.baseSnapshot().readNodePropertiesSorted(baseIds, key);
+			if (baseValues.size() != baseIds.size()) {
+				throw std::runtime_error("logical transaction overlay base Node Property batch returned an invalid cardinality");
+			}
+			std::vector<PropertyValue> result;
+			result.reserve(nodeIds.size());
+			size_t baseOrdinal = 0U;
+			for (const uint64_t nodeId: nodeIds) {
+				if (overlay_.nodes_.contains(nodeId)) {
+					result.push_back(readNodeProperty(nodeId, key));
+				} else {
+					result.push_back(baseValues[baseOrdinal++]);
+				}
+			}
+			return result;
+		}
+
+		[[nodiscard]] std::vector<PropertyValue>
+		readEdgePropertiesSorted(std::span<const uint64_t> edgeIds, std::string_view key) const override {
+			if (key.empty()) {
+				throw std::invalid_argument("logical transaction overlay sorted Edge Property read requires a non-empty key");
+			}
+			std::vector<uint64_t> baseIds;
+			baseIds.reserve(edgeIds.size());
+			uint64_t previous = 0U;
+			for (const uint64_t edgeId: edgeIds) {
+				if (edgeId == 0U || edgeId <= previous) {
+					throw std::invalid_argument("logical transaction overlay sorted Edge Property read requires increasing IDs");
+				}
+				previous = edgeId;
+				const auto state = overlay_.edges_.find(edgeId);
+				if (state != overlay_.edges_.end()) {
+					if (state->second.deleted || !overlay_.isEdgeVisible(state->second.edge, edgeId)) {
+						throw std::runtime_error("logical transaction overlay Edge was deleted");
+					}
+					continue;
+				}
+				baseIds.push_back(edgeId);
+			}
+			const std::vector<PropertyValue> baseValues = baseIds.empty()
+					? std::vector<PropertyValue>{}
+					: overlay_.baseSnapshot().readEdgePropertiesSorted(baseIds, key);
+			if (baseValues.size() != baseIds.size()) {
+				throw std::runtime_error("logical transaction overlay base Edge Property batch returned an invalid cardinality");
+			}
+			std::vector<PropertyValue> result;
+			result.reserve(edgeIds.size());
+			size_t baseOrdinal = 0U;
+			for (const uint64_t edgeId: edgeIds) {
+				if (overlay_.edges_.contains(edgeId)) {
+					result.push_back(readEdgeProperty(edgeId, key));
+				} else {
+					result.push_back(baseValues[baseOrdinal++]);
+				}
+			}
+			return result;
+		}
+
+		[[nodiscard]] std::vector<std::vector<PropertyValue>>
+		readNodePropertyColumnsSorted(std::span<const uint64_t> nodeIds,
+											 std::span<const std::string_view> keys) const override {
+			for (const std::string_view key: keys) {
+				if (key.empty()) {
+					throw std::invalid_argument("logical transaction overlay Node Property columns require non-empty keys");
+				}
+			}
+			std::vector<uint64_t> baseIds;
+			baseIds.reserve(nodeIds.size());
+			uint64_t previous = 0U;
+			for (const uint64_t nodeId: nodeIds) {
+				if (nodeId == 0U || nodeId <= previous) {
+					throw std::invalid_argument("logical transaction overlay Node Property columns require increasing IDs");
+				}
+				previous = nodeId;
+				const auto state = overlay_.nodes_.find(nodeId);
+				if (state != overlay_.nodes_.end()) {
+					if (state->second.deleted) {
+						throw std::runtime_error("logical transaction overlay Node was deleted");
+					}
+					continue;
+				}
+				baseIds.push_back(nodeId);
+			}
+			const std::vector<std::vector<PropertyValue>> baseColumns = baseIds.empty()
+					? std::vector<std::vector<PropertyValue>>(keys.size())
+					: overlay_.baseSnapshot().readNodePropertyColumnsSorted(baseIds, keys);
+			if (baseColumns.size() != keys.size()) {
+				throw std::runtime_error("logical transaction overlay base Node Property columns returned an invalid count");
+			}
+			for (const auto &column: baseColumns) {
+				if (column.size() != baseIds.size()) {
+					throw std::runtime_error("logical transaction overlay base Node Property columns returned an invalid cardinality");
+				}
+			}
+			std::vector<std::vector<PropertyValue>> result(keys.size());
+			for (auto &column: result) {
+				column.reserve(nodeIds.size());
+			}
+			size_t baseOrdinal = 0U;
+			for (const uint64_t nodeId: nodeIds) {
+				const auto state = overlay_.nodes_.find(nodeId);
+				for (size_t column = 0U; column < keys.size(); ++column) {
+					result[column].push_back(state != overlay_.nodes_.end()
+							? readNodeProperty(nodeId, keys[column])
+							: baseColumns[column][baseOrdinal]);
+				}
+				if (state == overlay_.nodes_.end()) {
+					++baseOrdinal;
+				}
+			}
+			return result;
+		}
+
+		[[nodiscard]] std::vector<std::vector<PropertyValue>>
+		readEdgePropertyColumnsSorted(std::span<const uint64_t> edgeIds,
+											 std::span<const std::string_view> keys) const override {
+			for (const std::string_view key: keys) {
+				if (key.empty()) {
+					throw std::invalid_argument("logical transaction overlay Edge Property columns require non-empty keys");
+				}
+			}
+			std::vector<uint64_t> baseIds;
+			baseIds.reserve(edgeIds.size());
+			uint64_t previous = 0U;
+			for (const uint64_t edgeId: edgeIds) {
+				if (edgeId == 0U || edgeId <= previous) {
+					throw std::invalid_argument("logical transaction overlay Edge Property columns require increasing IDs");
+				}
+				previous = edgeId;
+				const auto state = overlay_.edges_.find(edgeId);
+				if (state != overlay_.edges_.end()) {
+					if (state->second.deleted || !overlay_.isEdgeVisible(state->second.edge, edgeId)) {
+						throw std::runtime_error("logical transaction overlay Edge was deleted");
+					}
+					continue;
+				}
+				baseIds.push_back(edgeId);
+			}
+			const std::vector<std::vector<PropertyValue>> baseColumns = baseIds.empty()
+					? std::vector<std::vector<PropertyValue>>(keys.size())
+					: overlay_.baseSnapshot().readEdgePropertyColumnsSorted(baseIds, keys);
+			if (baseColumns.size() != keys.size()) {
+				throw std::runtime_error("logical transaction overlay base Edge Property columns returned an invalid count");
+			}
+			for (const auto &column: baseColumns) {
+				if (column.size() != baseIds.size()) {
+					throw std::runtime_error("logical transaction overlay base Edge Property columns returned an invalid cardinality");
+				}
+			}
+			std::vector<std::vector<PropertyValue>> result(keys.size());
+			for (auto &column: result) {
+				column.reserve(edgeIds.size());
+			}
+			size_t baseOrdinal = 0U;
+			for (const uint64_t edgeId: edgeIds) {
+				const auto state = overlay_.edges_.find(edgeId);
+				for (size_t column = 0U; column < keys.size(); ++column) {
+					result[column].push_back(state != overlay_.edges_.end()
+							? readEdgeProperty(edgeId, keys[column])
+							: baseColumns[column][baseOrdinal]);
+				}
+				if (state == overlay_.edges_.end()) {
+					++baseOrdinal;
+				}
+			}
+			return result;
 		}
 
 		[[nodiscard]] std::optional<std::vector<LogicalGraphNode>>
@@ -256,7 +597,14 @@ namespace graph::storage {
 				for (const LogicalGraphNode &node: page.nodes) {
 					baseAfter = node.node_id;
 					if (overlay_.isNodeVisible(node.node_id)) {
-						result.nodes.push_back(readNode(node.node_id));
+						// The base scan already materializes the complete Node. Only a
+						// staged Node needs overlay replacement; avoid a second point read
+						// for every persisted row in the page.
+						if (overlay_.nodes_.contains(node.node_id)) {
+							result.nodes.push_back(readNode(node.node_id));
+						} else {
+							result.nodes.push_back(node);
+						}
 					}
 				}
 				baseExhausted = !page.may_have_more;
@@ -326,7 +674,14 @@ namespace graph::storage {
 				}
 				for (const LogicalGraphEdge &edge: page.edges) {
 					if (overlay_.isEdgeVisible(edge, edge.edge_id)) {
-						edges.push_back(readEdge(edge.edge_id));
+						// The base adjacency page already contains a complete Edge. Only
+						// staged Edge state needs an overlay lookup; re-reading every base
+						// Edge would turn one adjacency page into N point reads.
+						if (overlay_.edges_.contains(edge.edge_id)) {
+							edges.push_back(readEdge(edge.edge_id));
+						} else {
+							edges.push_back(edge);
+						}
 					}
 				}
 				if (edges.size() == maximumRecords) {
@@ -348,6 +703,68 @@ namespace graph::storage {
 			return appendCreatedEdges(nodeId, direction, std::move(edges), maximumRecords, continuationKey);
 		}
 
+		[[nodiscard]] LogicalGraphAdjacencyTopologyPage
+		scanAdjacentEdgeTopologies(uint64_t nodeId, LogicalGraphReadDirection direction,
+											std::optional<LogicalGraphAdjacencyContinuation> continuation,
+											size_t maximumRecords) const override {
+			if (nodeId == 0U || maximumRecords == 0U) {
+				throw std::invalid_argument("logical transaction overlay topology scan requires positive bounds");
+			}
+			const auto continuationKey = [nodeId, direction](const LogicalGraphAdjacencyContinuation &value) {
+				return std::tuple{nodeId, static_cast<uint8_t>(direction), value.previous_edge_id, value.next_edge_id};
+			};
+		std::optional<LogicalGraphAdjacencyContinuation> current = continuation;
+		if (continuation.has_value()) {
+			if (const auto found = continuations_.find(continuationKey(*continuation)); found != continuations_.end()) {
+				if (found->second.created_offset.has_value()) {
+					return createdTopologyPage(nodeId, direction, *found->second.created_offset, maximumRecords,
+													 continuationKey);
+				}
+				current = found->second.base_continuation;
+			}
+		}
+		if (const auto node = overlay_.nodes_.find(nodeId);
+				 node != overlay_.nodes_.end() && node->second.created) {
+			if (continuation.has_value()) {
+				throw std::runtime_error("logical transaction overlay received an unknown created-Node topology continuation");
+			}
+			return createdTopologyPage(nodeId, direction, 0U, maximumRecords, continuationKey);
+		}
+
+		std::vector<LogicalGraphEdgeTopology> edges;
+		edges.reserve(maximumRecords);
+		while (edges.size() < maximumRecords) {
+			const LogicalGraphAdjacencyTopologyPage page = overlay_.baseSnapshot().scanAdjacentEdgeTopologies(
+					nodeId, direction, current, maximumRecords - edges.size());
+			if (page.edges.empty() && page.continuation.has_value()) {
+				throw std::runtime_error(
+						"logical transaction overlay base snapshot returned an empty nonterminal topology page");
+			}
+			for (const LogicalGraphEdgeTopology &edge: page.edges) {
+				if (overlay_.isEdgeVisible(
+						{edge.edge_id, edge.source_node_id, edge.target_node_id, edge.type}, edge.edge_id)) {
+					edges.push_back(edge);
+				}
+			}
+			if (edges.size() == maximumRecords) {
+				LogicalGraphAdjacencyTopologyPage result;
+				result.edges = std::move(edges);
+				if (page.continuation.has_value()) {
+					result.continuation = {result.edges.back().edge_id, page.continuation->next_edge_id};
+					continuations_.insert_or_assign(continuationKey(*result.continuation),
+																		ContinuationState{page.continuation, std::nullopt});
+					return result;
+				}
+				return appendCreatedTopologies(nodeId, direction, 0U, std::move(result.edges), maximumRecords, continuationKey);
+			}
+			if (!page.continuation.has_value()) {
+				break;
+			}
+			current = page.continuation;
+		}
+			return appendCreatedTopologies(nodeId, direction, 0U, std::move(edges), maximumRecords, continuationKey);
+		}
+
 		void visitEdges(size_t maximumRecords, const std::function<bool(const LogicalGraphEdge &)> &visitor) const override {
 			if (maximumRecords == 0U || !visitor) {
 				throw std::invalid_argument("logical transaction overlay Edge visit requires a positive bound and visitor");
@@ -361,7 +778,7 @@ namespace graph::storage {
 				if (visited > maximumRecords) {
 					throw std::runtime_error("logical transaction overlay Edge visit exceeded its bound");
 				}
-				return visitor(readEdge(edge.edge_id));
+				return visitor(overlay_.edges_.contains(edge.edge_id) ? readEdge(edge.edge_id) : edge);
 			});
 			for (const auto &[edgeId, state]: overlay_.edges_) {
 				if (!state.created || !overlay_.isEdgeVisible(state.edge, edgeId)) {
@@ -428,6 +845,43 @@ namespace graph::storage {
 		}
 
 		template<typename MakeKey>
+		[[nodiscard]] LogicalGraphAdjacencyTopologyPage createdTopologyPage(uint64_t nodeId,
+															LogicalGraphReadDirection direction, size_t offset,
+															size_t maximumRecords, const MakeKey &makeKey) const {
+			return appendCreatedTopologies(nodeId, direction, offset, {}, maximumRecords, makeKey);
+		}
+
+		template<typename MakeKey>
+		[[nodiscard]] LogicalGraphAdjacencyTopologyPage appendCreatedTopologies(uint64_t nodeId,
+																LogicalGraphReadDirection direction, size_t offset,
+																std::vector<LogicalGraphEdgeTopology> edges,
+																size_t maximumRecords, const MakeKey &makeKey) const {
+			std::vector<LogicalGraphEdgeTopology> created;
+			for (const auto &[edgeId, state]: overlay_.edges_) {
+				const bool endpointMatches = direction == LogicalGraphReadDirection::LGRD_OUTGOING
+															 ? state.edge.source_node_id == nodeId
+															 : state.edge.target_node_id == nodeId;
+				if (state.created && endpointMatches && overlay_.isEdgeVisible(state.edge, edgeId)) {
+					created.push_back({edgeId, state.edge.source_node_id, state.edge.target_node_id, state.edge.type});
+				}
+			}
+			if (offset > created.size()) {
+				throw std::runtime_error("logical transaction overlay received an invalid created topology continuation");
+			}
+			size_t index = offset;
+			while (index < created.size() && edges.size() < maximumRecords) {
+				edges.push_back(created[index++]);
+			}
+			LogicalGraphAdjacencyTopologyPage result;
+			result.edges = std::move(edges);
+			if (index < created.size()) {
+				result.continuation = {result.edges.back().edge_id, created[index].edge_id};
+				continuations_.insert_or_assign(makeKey(*result.continuation), ContinuationState{std::nullopt, index});
+			}
+			return result;
+		}
+
+		template<typename MakeKey>
 		[[nodiscard]] LogicalGraphAdjacencyPage appendCreatedEdgesFrom(uint64_t nodeId,
 																				 LogicalGraphReadDirection direction, size_t offset,
 																				 std::vector<LogicalGraphEdge> edges, size_t maximumRecords,
@@ -466,12 +920,26 @@ namespace graph::storage {
 	public:
 		explicit VectorSnapshot(const LogicalGraphTransactionOverlay &overlay,
 									 LogicalGraphVectorSearchSnapshot &derivedSnapshot) :
-			overlay_(overlay), derived_snapshot_(derivedSnapshot) {}
+				overlay_(overlay), derived_snapshot_(derivedSnapshot) {}
+
+		[[nodiscard]] LogicalGraphNode readNodeShaped(uint64_t nodeId, const EntityReadShape &shape) const override {
+			requireActive();
+			if (overlay_.logical_revision_ == 0U) {
+				return derived_snapshot_.readNodeShaped(nodeId, shape);
+			}
+			return overlay_.openLogicalGraphReadSnapshot()->readNodeShaped(nodeId, shape);
+		}
+
+		[[nodiscard]] LogicalGraphEdge readEdgeShaped(uint64_t edgeId, const EntityReadShape &shape) const override {
+			requireActive();
+			if (overlay_.logical_revision_ == 0U) {
+				return derived_snapshot_.readEdgeShaped(edgeId, shape);
+			}
+			return overlay_.openLogicalGraphReadSnapshot()->readEdgeShaped(edgeId, shape);
+		}
 
 		[[nodiscard]] LogicalGraphNode readNode(uint64_t nodeId) const override {
-			requireActive();
-			return overlay_.logical_revision_ == 0U ? derived_snapshot_.readNode(nodeId)
-															 : overlay_.openLogicalGraphReadSnapshot()->readNode(nodeId);
+			return readNodeShaped(nodeId, completeNodeReadShape());
 		}
 
 		[[nodiscard]] bool containsNode(uint64_t nodeId) const override {
@@ -481,9 +949,7 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] LogicalGraphEdge readEdge(uint64_t edgeId) const override {
-			requireActive();
-			return overlay_.logical_revision_ == 0U ? derived_snapshot_.readEdge(edgeId)
-															 : overlay_.openLogicalGraphReadSnapshot()->readEdge(edgeId);
+			return readEdgeShaped(edgeId, completeEdgeReadShape());
 		}
 
 		[[nodiscard]] std::optional<std::vector<LogicalGraphNode>>
@@ -526,7 +992,19 @@ namespace graph::storage {
 				return derived_snapshot_.scanAdjacentEdges(nodeId, direction, std::move(continuation), maximumRecords);
 			}
 			return overlay_.openLogicalGraphReadSnapshot()->scanAdjacentEdges(nodeId, direction, std::move(continuation),
-																				 maximumRecords);
+																												 maximumRecords);
+		}
+
+		[[nodiscard]] LogicalGraphAdjacencyTopologyPage
+		scanAdjacentEdgeTopologies(uint64_t nodeId, LogicalGraphReadDirection direction,
+											std::optional<LogicalGraphAdjacencyContinuation> continuation,
+											size_t maximumRecords) const override {
+			requireActive();
+			if (overlay_.logical_revision_ == 0U) {
+				return derived_snapshot_.scanAdjacentEdgeTopologies(nodeId, direction, std::move(continuation), maximumRecords);
+			}
+			return overlay_.openLogicalGraphReadSnapshot()->scanAdjacentEdgeTopologies(nodeId, direction,
+																																	 std::move(continuation), maximumRecords);
 		}
 
 		void visitEdges(size_t maximumRecords, const std::function<bool(const LogicalGraphEdge &)> &visitor) const override {
@@ -751,7 +1229,8 @@ namespace graph::storage {
 			}
 			return existing->second;
 		}
-		auto [inserted, success] = nodes_.emplace(nodeId, NodeState{baseSnapshot().readNode(nodeId), false, false});
+		auto [inserted, success] = nodes_.emplace(
+				nodeId, NodeState{baseSnapshot().readNodeShaped(nodeId, completeNodeReadShape()), false, false});
 		static_cast<void>(success);
 		return inserted->second;
 	}
@@ -766,7 +1245,8 @@ namespace graph::storage {
 			}
 			return existing->second;
 		}
-		auto [inserted, success] = edges_.emplace(edgeId, EdgeState{baseSnapshot().readEdge(edgeId), false, false});
+		auto [inserted, success] = edges_.emplace(
+				edgeId, EdgeState{baseSnapshot().readEdgeShaped(edgeId, completeEdgeReadShape()), false, false});
 		static_cast<void>(success);
 		return inserted->second;
 	}
@@ -874,10 +1354,14 @@ namespace graph::storage {
 					}
 					return true;
 				};
-				baseSnapshot().visitAdjacentEdges(request.node_id, LogicalGraphReadDirection::LGRD_OUTGOING,
-																 request.maximum_detach_edges, markIncident);
-				baseSnapshot().visitAdjacentEdges(request.node_id, LogicalGraphReadDirection::LGRD_INCOMING,
-																 request.maximum_detach_edges, markIncident);
+				const auto markIncidentTopology = [&markIncident](const LogicalGraphEdgeTopology &topology) {
+					const LogicalGraphEdge edge{topology.edge_id, topology.source_node_id, topology.target_node_id, topology.type};
+					return markIncident(edge);
+				};
+				baseSnapshot().visitAdjacentEdgeTopologies(request.node_id, LogicalGraphReadDirection::LGRD_OUTGOING,
+														 request.maximum_detach_edges, markIncidentTopology);
+				baseSnapshot().visitAdjacentEdgeTopologies(request.node_id, LogicalGraphReadDirection::LGRD_INCOMING,
+														 request.maximum_detach_edges, markIncidentTopology);
 				for (auto &[edgeId, edge]: edges_) {
 					if (edge.created && !edge.deleted &&
 						(edge.edge.source_node_id == request.node_id || edge.edge.target_node_id == request.node_id)) {
@@ -918,15 +1402,17 @@ namespace graph::storage {
 		// relationship or proves the remaining adjacency is entirely deleted.
 		const size_t maximumEdges = edges_.size() + 1U;
 		for (const LogicalGraphReadDirection direction:
-			 {LogicalGraphReadDirection::LGRD_OUTGOING, LogicalGraphReadDirection::LGRD_INCOMING}) {
+				{LogicalGraphReadDirection::LGRD_OUTGOING, LogicalGraphReadDirection::LGRD_INCOMING}) {
 			bool found = false;
-			baseSnapshot().visitAdjacentEdges(nodeId, direction, maximumEdges, [this, &found](const LogicalGraphEdge &edge) {
+			baseSnapshot().visitAdjacentEdgeTopologies(nodeId, direction, maximumEdges,
+					[this, &found](const LogicalGraphEdgeTopology &topology) {
+				const LogicalGraphEdge edge{topology.edge_id, topology.source_node_id, topology.target_node_id, topology.type};
 				if (isEdgeVisible(edge, edge.edge_id)) {
 					found = true;
 					return false;
 				}
 				return true;
-			});
+				});
 			if (found) {
 				return true;
 			}

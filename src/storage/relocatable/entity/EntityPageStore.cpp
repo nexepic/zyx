@@ -9,6 +9,7 @@
 #include "graph/storage/relocatable/entity/EntityPageStore.hpp"
 
 #include "graph/storage/relocatable/entity/EntityLabelSet.hpp"
+#include "graph/storage/relocatable/entity/NativeReadSession.hpp"
 #include "graph/storage/relocatable/property/LargeValueStore.hpp"
 
 #include "graph/debug/PerfTrace.hpp"
@@ -20,6 +21,7 @@
 #include <set>
 #include <string>
 #include <tuple>
+#include <unordered_set>
 namespace graph::storage {
 
 	namespace {
@@ -212,16 +214,80 @@ namespace graph::storage {
 	}
 
 	NodeEntityRecord EntityPageStore::readNodeAt(const MetadataSnapshotPin &snapshot,
-												 const EntityPageLocation &location) const {
+														 const EntityPageLocation &location) const {
 		if (location.entity_id == 0U || !location.page_id.isValid() || location.slot_generation == 0U) {
 			fail(FormatError::FERR_INVALID_HEADER,
 				 "relocatable Entity Map Node entry has an invalid logical ID, Page ID, or slot generation");
 		}
-		LoadedPage loaded = loadPage(snapshot, location.page_id, EntityPageRecordKind::EPRK_NODE);
+		ReadPage loaded = loadReadPage(snapshot, location.page_id, EntityPageRecordKind::EPRK_NODE);
 		// EntityPage's generation-aware lookup rejects an unavailable slot before
 		// returning. An Entity Map lookup is therefore total at this layer.
-		const std::optional<NodeEntityRecord> record = loaded.page.findNode(location.slot_id, location.slot_generation);
+		const std::optional<NodeEntityRecord> record =
+				loaded.page.findNode(location.slot_id, location.slot_generation, location.entity_id);
 		return *record;
+	}
+
+	std::vector<std::optional<NodeEntityRecord>> EntityPageStore::readNodesSorted(
+			const MetadataSnapshotPin &snapshot, const std::span<const uint64_t> nodeIds) const {
+		if (!metadata_.ownsSnapshot(snapshot)) {
+			fail(FormatError::FERR_INVALID_STATE, "relocatable sorted Node read requires this store's active snapshot");
+		}
+		std::vector<std::optional<NodeEntityRecord>> result(nodeIds.size());
+		if (nodeIds.empty()) {
+			return result;
+		}
+		const bool traceValues = debug::PerfTrace::areValuesEnabled();
+		if (traceValues) {
+			debug::PerfTrace::addValue("native_graph.read.node_sorted_batch_calls", 1);
+			debug::PerfTrace::addValue("native_graph.read.node_sorted_batch_entries",
+					static_cast<int64_t>(nodeIds.size()));
+			// One ordered multi-lookup opens one Entity-directory range cursor.
+			debug::PerfTrace::addValue("native_graph.read.node_sorted_batch_directory_range_calls", 1);
+		}
+		uint64_t previousId = 0U;
+		for (const uint64_t nodeId: nodeIds) {
+			if (nodeId == 0U || nodeId <= previousId) {
+				fail(FormatError::FERR_INVALID_HEADER,
+					 "relocatable sorted Node read requires strictly increasing nonzero IDs");
+			}
+			previousId = nodeId;
+		}
+		std::vector<std::optional<EntityPageLocation>> locations(nodeIds.size());
+		metadata_.findNodePageLocationsSorted(snapshot, nodeIds, locations);
+		std::vector<size_t> present;
+		present.reserve(locations.size());
+		for (size_t index = 0U; index < locations.size(); ++index) {
+			if (locations[index].has_value()) {
+				present.push_back(index);
+			}
+		}
+		if (traceValues) {
+			debug::PerfTrace::addValue("native_graph.read.node_sorted_batch_unique_io_ids",
+					static_cast<int64_t>(present.size()));
+		}
+		std::ranges::sort(present, [&locations](const size_t left, const size_t right) {
+			const EntityPageLocation &lhs = *locations[left];
+			const EntityPageLocation &rhs = *locations[right];
+			return lhs.page_id != rhs.page_id ? lhs.page_id < rhs.page_id : lhs.slot_id < rhs.slot_id;
+		});
+		std::optional<ReadPage> current;
+		PageId currentPage;
+		size_t pinnedPages = 0U;
+		for (const size_t index: present) {
+			const EntityPageLocation &location = *locations[index];
+			if (!current.has_value() || location.page_id != currentPage) {
+				current.emplace(loadReadPage(snapshot, location.page_id, EntityPageRecordKind::EPRK_NODE,
+															 BufferPoolReadHint::BPRH_SEQUENTIAL));
+				currentPage = location.page_id;
+				++pinnedPages;
+			}
+			result[index] = current->page.findNode(location.slot_id, location.slot_generation, location.entity_id);
+		}
+		if (traceValues) {
+			debug::PerfTrace::addValue("native_graph.read.node_sorted_batch_entity_page_pins",
+					static_cast<int64_t>(pinnedPages));
+		}
+		return result;
 	}
 
 	EdgeEntityRecord EntityPageStore::readEdge(const MetadataSnapshotPin &snapshot, uint64_t edgeId) const {
@@ -230,6 +296,69 @@ namespace graph::storage {
 		}
 		const EntityPageLocation location = metadata_.findEdgePageLocation(snapshot, edgeId);
 		return readEdgeAt(snapshot, location);
+	}
+
+	std::vector<std::optional<EdgeEntityRecord>> EntityPageStore::readEdgesSorted(
+			const MetadataSnapshotPin &snapshot, const std::span<const uint64_t> edgeIds) const {
+		if (!metadata_.ownsSnapshot(snapshot)) {
+			fail(FormatError::FERR_INVALID_STATE, "relocatable sorted Edge read requires this store's active snapshot");
+		}
+		std::vector<std::optional<EdgeEntityRecord>> result(edgeIds.size());
+		if (edgeIds.empty()) {
+			return result;
+		}
+		const bool traceValues = debug::PerfTrace::areValuesEnabled();
+		if (traceValues) {
+			debug::PerfTrace::addValue("native_graph.read.edge_sorted_batch_calls", 1);
+			debug::PerfTrace::addValue("native_graph.read.edge_sorted_batch_entries",
+					static_cast<int64_t>(edgeIds.size()));
+			// One ordered multi-lookup opens one Entity-directory range cursor.
+			debug::PerfTrace::addValue("native_graph.read.edge_sorted_batch_directory_range_calls", 1);
+		}
+		uint64_t previousId = 0U;
+		for (const uint64_t edgeId: edgeIds) {
+			if (edgeId == 0U || edgeId <= previousId) {
+				fail(FormatError::FERR_INVALID_HEADER,
+						 "relocatable sorted Edge read requires strictly increasing nonzero IDs");
+			}
+			previousId = edgeId;
+		}
+		std::vector<std::optional<EntityPageLocation>> locations(edgeIds.size());
+		metadata_.findEdgePageLocationsSorted(snapshot, edgeIds, locations);
+		std::vector<size_t> present;
+		present.reserve(locations.size());
+		for (size_t index = 0U; index < locations.size(); ++index) {
+			if (locations[index].has_value()) {
+				present.push_back(index);
+			}
+		}
+		if (traceValues) {
+			debug::PerfTrace::addValue("native_graph.read.edge_sorted_batch_unique_io_ids",
+					static_cast<int64_t>(present.size()));
+		}
+		std::ranges::sort(present, [&locations](const size_t left, const size_t right) {
+			const EntityPageLocation &lhs = *locations[left];
+			const EntityPageLocation &rhs = *locations[right];
+			return lhs.page_id != rhs.page_id ? lhs.page_id < rhs.page_id : lhs.slot_id < rhs.slot_id;
+		});
+		std::optional<ReadPage> current;
+		PageId currentPage{};
+		size_t pinnedPages = 0U;
+		for (const size_t index: present) {
+			const EntityPageLocation &location = *locations[index];
+			if (!current.has_value() || location.page_id != currentPage) {
+				current.emplace(loadReadPage(snapshot, location.page_id, EntityPageRecordKind::EPRK_EDGE,
+														 BufferPoolReadHint::BPRH_SEQUENTIAL));
+				currentPage = location.page_id;
+				++pinnedPages;
+			}
+			result[index] = current->page.findEdge(location.slot_id, location.slot_generation, location.entity_id);
+		}
+		if (traceValues) {
+			debug::PerfTrace::addValue("native_graph.read.edge_sorted_batch_entity_page_pins",
+					static_cast<int64_t>(pinnedPages));
+		}
+		return result;
 	}
 
 	SharedPagePoolContents EntityPageStore::readAuxiliaryPage(const MetadataSnapshotPin &snapshot, PageId pageId,
@@ -277,85 +406,137 @@ namespace graph::storage {
 			fail(FormatError::FERR_INVALID_HEADER,
 				 "relocatable Entity Map Edge entry has an invalid logical ID, Page ID, or slot generation");
 		}
-		LoadedPage loaded = loadPage(snapshot, location.page_id, EntityPageRecordKind::EPRK_EDGE);
-		const std::optional<EdgeEntityRecord> record = loaded.page.findEdge(location.slot_id, location.slot_generation);
+		ReadPage loaded = loadReadPage(snapshot, location.page_id, EntityPageRecordKind::EPRK_EDGE);
+		const std::optional<EdgeEntityRecord> record =
+				loaded.page.findEdge(location.slot_id, location.slot_generation, location.entity_id);
 		return *record;
 	}
 
 	bool EntityPageStore::visitNodesUntil(
 			const MetadataSnapshotPin &snapshot, size_t maximumRecords,
-			const std::function<bool(uint64_t nodeId, const NodeEntityRecord &)> &visitor) const {
+			const std::function<bool(uint64_t nodeId, const NodeEntityRecord &)> &visitor,
+			NativeReadSession *session) const {
 		if (maximumRecords == 0U || !visitor) {
 			fail(FormatError::FERR_INVALID_HEADER,
 				 "relocatable native Node scan requires a nonzero record bound and visitor");
 		}
-		uint64_t previousId = 0U;
+		debug::ScopedPerfTimer timer("native_graph.read.node_page_scan");
+		const bool tracingValues = debug::PerfTrace::areValuesEnabled();
+		NativeReadSession localSession;
+		NativeReadSession &activeSession = session == nullptr ? localSession : *session;
+		activeSession.bind(snapshot);
+		std::vector<CatalogEntry> uncachedPools;
+		const std::vector<CatalogEntry> *entityPools = activeSession.entityPagePools();
+		if (entityPools == nullptr) {
+			if (tracingValues) {
+				debug::PerfTrace::addValue("native_graph.read.entity_pool_catalog_scan", 1);
+			}
+			uncachedPools = metadata_.findCurrentEntityPagePools(snapshot);
+			activeSession.putEntityPagePools(uncachedPools);
+			entityPools = activeSession.entityPagePools();
+			if (entityPools == nullptr) {
+				entityPools = &uncachedPools;
+			}
+		} else if (tracingValues) {
+			debug::PerfTrace::addValue("native_graph.read.entity_pool_cache_hit", 1);
+		}
 		size_t visited = 0U;
-		std::optional<LoadedPage> currentPage;
-		PageId currentPageId;
-		return metadata_.visitNodePageLocationsUntil(snapshot, [&](const EntityPageLocation &entry) {
-			if (visited == maximumRecords) { // the callback returns false when this count is reached, and LocationDirectory stops before invoking it again.
-				fail(FormatError::FERR_INVALID_STATE,
-					 "relocatable native Node scan exceeded its caller-supplied record bound");
+		return metadata_.visitPageLocationsUntil(snapshot, [&](const PageLocation &location) {
+			const auto pool = std::ranges::lower_bound(*entityPools, location.segment_id, {}, &CatalogEntry::segment_id);
+			if (pool == entityPools->end() || pool->segment_id != location.segment_id) {
+				return true;
 			}
-			if (entry.entity_id == 0U || entry.entity_id <= previousId || !entry.page_id.isValid() ||
-				entry.slot_generation == 0U) {
-				fail(FormatError::FERR_INVALID_STATE,
-					 "relocatable native Node directory scan contains an invalid or unordered Entity Map entry");
+			std::optional<ReadPage> loaded = loadPhysicalScanReadPage(snapshot, *pool, location);
+			if (!loaded.has_value() || loaded->page.header().record_kind != EntityPageRecordKind::EPRK_NODE) {
+				return true;
 			}
-			LoadedPage &loaded =
-					loadScanPage(snapshot, entry.page_id, EntityPageRecordKind::EPRK_NODE, currentPage, currentPageId);
-			const std::optional<NodeEntityRecord> record = loaded.page.findNode(entry.slot_id, entry.slot_generation);
-			++visited;
-			previousId = entry.entity_id;
-			return visitor(entry.entity_id, *record) && visited < maximumRecords;
+			if (tracingValues) {
+				debug::PerfTrace::addValue("native_graph.read.node_page_scan.pages", 1);
+			}
+			return loaded->page.visitNodesUntil(
+				maximumRecords - visited,
+				[&](const uint64_t nodeId, uint16_t, uint32_t, const NodeEntityRecord &record) {
+					++visited;
+					if (tracingValues) {
+						debug::PerfTrace::addValue("native_graph.read.node_page_scan.records", 1);
+					}
+					return visitor(nodeId, record);
+				});
 		});
 	}
 
 	bool EntityPageStore::visitEdgesUntil(
 			const MetadataSnapshotPin &snapshot, size_t maximumRecords,
-			const std::function<bool(uint64_t edgeId, const EdgeEntityRecord &)> &visitor) const {
+			const std::function<bool(uint64_t edgeId, const EdgeEntityRecord &)> &visitor,
+			NativeReadSession *session) const {
 		if (maximumRecords == 0U || !visitor) {
 			fail(FormatError::FERR_INVALID_HEADER,
 				 "relocatable native Edge scan requires a nonzero record bound and visitor");
 		}
-		debug::ScopedPerfTimer timer("native_graph.read.edge_entity_map_scan");
+		debug::ScopedPerfTimer timer("native_graph.read.edge_page_scan");
 		const bool tracing = debug::PerfTrace::isEnabled();
+		const bool tracingValues = debug::PerfTrace::areValuesEnabled();
 		uint64_t entityRecordNanoseconds = 0U;
 		uint64_t visitorNanoseconds = 0U;
 		uint64_t records = 0U;
-		uint64_t previousId = 0U;
+		NativeReadSession localSession;
+		NativeReadSession &activeSession = session == nullptr ? localSession : *session;
+		activeSession.bind(snapshot);
+		std::vector<CatalogEntry> uncachedPools;
+		const std::vector<CatalogEntry> *entityPools = activeSession.entityPagePools();
+		if (entityPools == nullptr) {
+			if (tracingValues) {
+				debug::PerfTrace::addValue("native_graph.read.entity_pool_catalog_scan", 1);
+			}
+			uncachedPools = metadata_.findCurrentEntityPagePools(snapshot);
+			activeSession.putEntityPagePools(uncachedPools);
+			entityPools = activeSession.entityPagePools();
+			if (entityPools == nullptr) {
+				entityPools = &uncachedPools;
+			}
+		} else if (tracingValues) {
+			debug::PerfTrace::addValue("native_graph.read.entity_pool_cache_hit", 1);
+		}
 		size_t visited = 0U;
-		std::optional<LoadedPage> currentPage;
-		PageId currentPageId;
-		const bool exhausted = metadata_.visitEdgePageLocationsUntil(snapshot, [&](const EntityPageLocation &entry) {
-			if (visited == maximumRecords) { // the callback returns false when this count is reached, and LocationDirectory stops before invoking it again.
-				fail(FormatError::FERR_INVALID_STATE,
-					 "relocatable native Edge scan exceeded its caller-supplied record bound");
+		const bool exhausted = metadata_.visitPageLocationsUntil(snapshot, [&](const PageLocation &location) {
+			const auto pool = std::ranges::lower_bound(*entityPools, location.segment_id, {}, &CatalogEntry::segment_id);
+			if (pool == entityPools->end() || pool->segment_id != location.segment_id) {
+				return true;
 			}
-			if (entry.entity_id == 0U || entry.entity_id <= previousId || !entry.page_id.isValid() ||
-				entry.slot_generation == 0U) {
-				fail(FormatError::FERR_INVALID_STATE,
-					 "relocatable native Edge directory scan contains an invalid or unordered Entity Map entry");
+			const auto pageStart = tracing ? std::chrono::steady_clock::now()
+												 : std::chrono::steady_clock::time_point{};
+			std::optional<ReadPage> loaded = loadPhysicalScanReadPage(snapshot, *pool, location);
+			if (!loaded.has_value() || loaded->page.header().record_kind != EntityPageRecordKind::EPRK_EDGE) {
+				return true;
 			}
-			const auto recordStart = tracing ? std::chrono::steady_clock::now()
-															 : std::chrono::steady_clock::time_point{};
-			LoadedPage &loaded =
-					loadScanPage(snapshot, entry.page_id, EntityPageRecordKind::EPRK_EDGE, currentPage, currentPageId);
-			const std::optional<EdgeEntityRecord> record = loaded.page.findEdge(entry.slot_id, entry.slot_generation);
+			if (tracingValues) {
+				debug::PerfTrace::addValue("native_graph.read.edge_page_scan.pages", 1);
+			}
+			uint64_t pageVisitorNanoseconds = 0U;
+			const bool continueScan = loaded->page.visitEdgesUntil(
+				maximumRecords - visited,
+				[&](const uint64_t edgeId, uint16_t, uint32_t, const EdgeEntityRecord &record) {
+					++visited;
+					if (tracingValues) {
+						debug::PerfTrace::addValue("native_graph.read.edge_page_scan.records", 1);
+					}
+					const auto visitorStart = tracing ? std::chrono::steady_clock::now()
+													 : std::chrono::steady_clock::time_point{};
+					const bool keepGoing = visitor(edgeId, record);
+					if (tracing) {
+						const uint64_t elapsedVisitor = elapsedNanoseconds(visitorStart);
+						visitorNanoseconds += elapsedVisitor;
+						pageVisitorNanoseconds += elapsedVisitor;
+						++records;
+					}
+					return keepGoing;
+				});
 			if (tracing) {
-				entityRecordNanoseconds += elapsedNanoseconds(recordStart);
+				const uint64_t elapsedPage = elapsedNanoseconds(pageStart);
+				entityRecordNanoseconds +=
+						elapsedPage >= pageVisitorNanoseconds ? elapsedPage - pageVisitorNanoseconds : 0U;
 			}
-			++visited;
-			previousId = entry.entity_id;
-			const auto visitorStart = tracing ? std::chrono::steady_clock::now()
-															  : std::chrono::steady_clock::time_point{};
-			const bool keepGoing = visitor(entry.entity_id, *record);
-			if (tracing) {
-				visitorNanoseconds += elapsedNanoseconds(visitorStart);
-				++records;
-			}
-			return keepGoing && visited < maximumRecords;
+			return continueScan;
 		});
 		if (tracing) {
 			debug::PerfTrace::addDurationBatch("native_graph.read.edge_entity_record", entityRecordNanoseconds, records);
@@ -374,7 +555,7 @@ namespace graph::storage {
 		}
 		uint64_t previousId = afterNodeId;
 		size_t visited = 0U;
-		std::optional<LoadedPage> currentPage;
+		std::optional<ReadPage> currentPage;
 		PageId currentPageId;
 		return metadata_.visitNodePageLocationsAfter(
 				snapshot, afterNodeId, maximumMetadataPages,
@@ -388,10 +569,10 @@ namespace graph::storage {
 						fail(FormatError::FERR_INVALID_STATE, "relocatable resumable native Node scan contains an "
 															  "invalid or unordered Entity Map entry");
 					}
-					LoadedPage &loaded = loadScanPage(snapshot, entry.page_id, EntityPageRecordKind::EPRK_NODE,
-													  currentPage, currentPageId);
+					ReadPage &loaded = loadScanReadPage(snapshot, entry.page_id, EntityPageRecordKind::EPRK_NODE,
+																currentPage, currentPageId);
 					const std::optional<NodeEntityRecord> record =
-							loaded.page.findNode(entry.slot_id, entry.slot_generation);
+							loaded.page.findNode(entry.slot_id, entry.slot_generation, entry.entity_id);
 					++visited;
 					previousId = entry.entity_id;
 					return visitor(entry.entity_id, *record) && visited < maximumRecords;
@@ -608,6 +789,71 @@ namespace graph::storage {
 		replacementPropertyPlanOrdinals.reserve(propertyPlans.size());
 		propertyPageBatchPlanOrdinals.reserve(propertyPlans.size());
 		largeValueMutations.reserve(propertyPlans.size());
+		// Authenticate every Entity ID touched by this publication through one
+		// ordered Directory range per record kind. The page-local loops below still
+		// validate page ownership and slot generations, but no longer repeat a
+		// radix root descent for each update, erase, or insertion.
+		std::vector<uint64_t> batchNodeIds;
+		std::vector<uint64_t> batchEdgeIds;
+		const auto collectNodeId = [&batchNodeIds](uint64_t nodeId) { batchNodeIds.push_back(nodeId); };
+		const auto collectEdgeId = [&batchEdgeIds](uint64_t edgeId) { batchEdgeIds.push_back(edgeId); };
+		for (const EntityPageBatchMutation &mutation: mutations) {
+			for (const auto &update: mutation.node_updates) collectNodeId(update.node_id);
+			for (const auto &insertion: mutation.node_insertions) collectNodeId(insertion.node_id);
+			for (const uint64_t nodeId: mutation.erased_node_ids) collectNodeId(nodeId);
+			for (const auto &update: mutation.edge_updates) collectEdgeId(update.edge_id);
+			for (const auto &insertion: mutation.edge_insertions) collectEdgeId(insertion.edge_id);
+			for (const uint64_t edgeId: mutation.erased_edge_ids) collectEdgeId(edgeId);
+		}
+		for (const EntityPageBatchAppend &append: appends) {
+			for (const auto &insertion: append.node_insertions) collectNodeId(insertion.node_id);
+			for (const auto &insertion: append.edge_insertions) collectEdgeId(insertion.edge_id);
+		}
+		for (const EntityPageBatchNewPool &newPool: newPools) {
+			for (const auto &insertion: newPool.node_insertions) collectNodeId(insertion.node_id);
+			for (const auto &insertion: newPool.edge_insertions) collectEdgeId(insertion.edge_id);
+		}
+		const auto normalizeIds = [](std::vector<uint64_t> &ids) {
+			std::ranges::sort(ids);
+			ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
+		};
+		normalizeIds(batchNodeIds);
+		normalizeIds(batchEdgeIds);
+		std::vector<std::optional<EntityPageLocation>> batchNodeLocations(batchNodeIds.size());
+		std::vector<std::optional<EntityPageLocation>> batchEdgeLocations(batchEdgeIds.size());
+		if (!batchNodeIds.empty()) {
+			metadata_.findNodePageLocationsSorted(snapshot, batchNodeIds, batchNodeLocations);
+			debug::PerfTrace::addValue("native_graph.commit.entity_page_batch_directory_requests", 1);
+		}
+		if (!batchEdgeIds.empty()) {
+			metadata_.findEdgePageLocationsSorted(snapshot, batchEdgeIds, batchEdgeLocations);
+			debug::PerfTrace::addValue("native_graph.commit.entity_page_batch_directory_requests", 1);
+		}
+		const auto findBatchLocation = [](const std::vector<uint64_t> &ids,
+				const std::vector<std::optional<EntityPageLocation>> &locations,
+				uint64_t entityId) -> std::optional<EntityPageLocation> {
+			const auto iterator = std::ranges::lower_bound(ids, entityId);
+			if (iterator == ids.end() || *iterator != entityId) {
+				return std::nullopt;
+			}
+			return locations[static_cast<size_t>(iterator - ids.begin())];
+		};
+		const auto nodeLocation = [&](uint64_t nodeId) { return findBatchLocation(batchNodeIds, batchNodeLocations, nodeId); };
+		const auto edgeLocation = [&](uint64_t edgeId) { return findBatchLocation(batchEdgeIds, batchEdgeLocations, edgeId); };
+		const auto requireNodeLocation = [&](uint64_t nodeId) {
+			const auto location = nodeLocation(nodeId);
+			if (!location.has_value()) {
+				fail(FormatError::FERR_INVALID_STATE, "relocatable Entity batch Node mapping is absent");
+			}
+			return *location;
+		};
+		const auto requireEdgeLocation = [&](uint64_t edgeId) {
+			const auto location = edgeLocation(edgeId);
+			if (!location.has_value()) {
+				fail(FormatError::FERR_INVALID_STATE, "relocatable Entity batch Edge mapping is absent");
+			}
+			return *location;
+		};
 		std::set<uint64_t> mutatedPropertyKeys;
 		std::set<uint64_t> plannedLargeValueIds;
 		std::vector<size_t> pendingNewPropertyPlanOrdinals;
@@ -848,12 +1094,12 @@ namespace graph::storage {
 						fail(FormatError::FERR_INVALID_HEADER,
 							 "relocatable Entity page batch Node update requires one nonzero Entity ID per page");
 					}
-					const EntityPageLocation location = metadata_.findNodePageLocation(snapshot, update.node_id);
+					const EntityPageLocation location = requireNodeLocation(update.node_id);
 					if (location.page_id != mutation.page_id) {
 						fail(FormatError::FERR_INVALID_STATE,
 							 "relocatable Entity page batch Node update targets a foreign Entity Map page");
 					}
-					loaded.page.replace(location.slot_id, location.slot_generation, update.record);
+					loaded.page.replace(location.slot_id, location.slot_generation, update.node_id, update.record);
 				}
 				for (const EntityPageNodeInsertion &insertion: mutation.node_insertions) {
 					validateRecord(insertion.record);
@@ -861,11 +1107,11 @@ namespace graph::storage {
 						fail(FormatError::FERR_INVALID_HEADER, "relocatable Entity page batch Node insertion requires "
 															   "one new nonzero Entity ID per page");
 					}
-					if (metadata_.findNodePageLocationOptional(snapshot, insertion.node_id).has_value()) {
+					if (nodeLocation(insertion.node_id).has_value()) {
 						fail(FormatError::FERR_INVALID_STATE,
 							 "relocatable Entity page batch Node insertion reuses a published Entity ID");
 					}
-					const uint16_t slot = loaded.page.insert(insertion.record);
+					const uint16_t slot = loaded.page.insert(insertion.node_id, insertion.record);
 					request.inserted_nodes.push_back(
 							mappingFor(insertion.node_id, mutation.page_id, loaded.page, slot));
 				}
@@ -874,12 +1120,12 @@ namespace graph::storage {
 						fail(FormatError::FERR_INVALID_HEADER,
 							 "relocatable Entity page batch Node erase requires one nonzero Entity ID per page");
 					}
-					const EntityPageLocation location = metadata_.findNodePageLocation(snapshot, nodeId);
+					const EntityPageLocation location = requireNodeLocation(nodeId);
 					if (location.page_id != mutation.page_id) {
 						fail(FormatError::FERR_INVALID_STATE,
 							 "relocatable Entity page batch Node erase targets a foreign Entity Map page");
 					}
-					loaded.page.erase(location.slot_id, location.slot_generation);
+					loaded.page.erase(location.slot_id, location.slot_generation, nodeId);
 					request.erased_node_ids.push_back(nodeId);
 				}
 			} else {
@@ -889,12 +1135,12 @@ namespace graph::storage {
 						fail(FormatError::FERR_INVALID_HEADER,
 							 "relocatable Entity page batch Edge update requires one nonzero Entity ID per page");
 					}
-					const EntityPageLocation location = metadata_.findEdgePageLocation(snapshot, update.edge_id);
+					const EntityPageLocation location = requireEdgeLocation(update.edge_id);
 					if (location.page_id != mutation.page_id) {
 						fail(FormatError::FERR_INVALID_STATE,
 							 "relocatable Entity page batch Edge update targets a foreign Entity Map page");
 					}
-					loaded.page.replace(location.slot_id, location.slot_generation, update.record);
+					loaded.page.replace(location.slot_id, location.slot_generation, update.edge_id, update.record);
 				}
 				for (const EntityPageEdgeInsertion &insertion: mutation.edge_insertions) {
 					validateRecord(insertion.record);
@@ -902,11 +1148,11 @@ namespace graph::storage {
 						fail(FormatError::FERR_INVALID_HEADER, "relocatable Entity page batch Edge insertion requires "
 															   "one new nonzero Entity ID per page");
 					}
-					if (metadata_.findEdgePageLocationOptional(snapshot, insertion.edge_id).has_value()) {
+					if (edgeLocation(insertion.edge_id).has_value()) {
 						fail(FormatError::FERR_INVALID_STATE,
 							 "relocatable Entity page batch Edge insertion reuses a published Entity ID");
 					}
-					const uint16_t slot = loaded.page.insert(insertion.record);
+					const uint16_t slot = loaded.page.insert(insertion.edge_id, insertion.record);
 					request.inserted_edges.push_back(
 							mappingFor(insertion.edge_id, mutation.page_id, loaded.page, slot));
 				}
@@ -915,12 +1161,12 @@ namespace graph::storage {
 						fail(FormatError::FERR_INVALID_HEADER,
 							 "relocatable Entity page batch Edge erase requires one nonzero Entity ID per page");
 					}
-					const EntityPageLocation location = metadata_.findEdgePageLocation(snapshot, edgeId);
+					const EntityPageLocation location = requireEdgeLocation(edgeId);
 					if (location.page_id != mutation.page_id) {
 						fail(FormatError::FERR_INVALID_STATE,
 							 "relocatable Entity page batch Edge erase targets a foreign Entity Map page");
 					}
-					loaded.page.erase(location.slot_id, location.slot_generation);
+					loaded.page.erase(location.slot_id, location.slot_generation, edgeId);
 					request.erased_edge_ids.push_back(edgeId);
 				}
 			}
@@ -980,11 +1226,11 @@ namespace graph::storage {
 						fail(FormatError::FERR_INVALID_HEADER,
 							 "relocatable Entity page batch Node append requires unique nonzero Entity IDs");
 					}
-					if (metadata_.findNodePageLocationOptional(snapshot, insertion.node_id).has_value()) {
+					if (nodeLocation(insertion.node_id).has_value()) {
 						fail(FormatError::FERR_INVALID_STATE,
 							 "relocatable Entity page batch Node append reuses a published Entity ID");
 					}
-					const uint16_t slot = page.insert(insertion.record);
+					const uint16_t slot = page.insert(insertion.node_id, insertion.record);
 					mapping = mappingFor(insertion.node_id, append.request.page_id, page, slot);
 					request.inserted_nodes.push_back(mapping);
 				}
@@ -996,11 +1242,11 @@ namespace graph::storage {
 						fail(FormatError::FERR_INVALID_HEADER,
 							 "relocatable Entity page batch Edge append requires unique nonzero Entity IDs");
 					}
-					if (metadata_.findEdgePageLocationOptional(snapshot, insertion.edge_id).has_value()) {
+					if (edgeLocation(insertion.edge_id).has_value()) {
 						fail(FormatError::FERR_INVALID_STATE,
 							 "relocatable Entity page batch Edge append reuses a published Entity ID");
 					}
-					const uint16_t slot = page.insert(insertion.record);
+					const uint16_t slot = page.insert(insertion.edge_id, insertion.record);
 					mapping = mappingFor(insertion.edge_id, append.request.page_id, page, slot);
 					request.inserted_edges.push_back(mapping);
 				}
@@ -1052,11 +1298,11 @@ namespace graph::storage {
 						fail(FormatError::FERR_INVALID_HEADER,
 							 "relocatable Entity page new-pool Node batch requires unique nonzero Entity IDs");
 					}
-					if (metadata_.findNodePageLocationOptional(snapshot, insertion.node_id).has_value()) {
+					if (nodeLocation(insertion.node_id).has_value()) {
 						fail(FormatError::FERR_INVALID_STATE,
 							 "relocatable Entity page new-pool Node batch reuses a published Entity ID");
 					}
-					const uint16_t slot = page.insert(insertion.record);
+					const uint16_t slot = page.insert(insertion.node_id, insertion.record);
 					mapping = mappingFor(insertion.node_id, newPool.request.page_id, page, slot);
 					request.inserted_nodes.push_back(mapping);
 				}
@@ -1068,11 +1314,11 @@ namespace graph::storage {
 						fail(FormatError::FERR_INVALID_HEADER,
 							 "relocatable Entity page new-pool Edge batch requires unique nonzero Entity IDs");
 					}
-					if (metadata_.findEdgePageLocationOptional(snapshot, insertion.edge_id).has_value()) {
+					if (edgeLocation(insertion.edge_id).has_value()) {
 						fail(FormatError::FERR_INVALID_STATE,
 							 "relocatable Entity page new-pool Edge batch reuses a published Entity ID");
 					}
-					const uint16_t slot = page.insert(insertion.record);
+					const uint16_t slot = page.insert(insertion.edge_id, insertion.record);
 					mapping = mappingFor(insertion.edge_id, newPool.request.page_id, page, slot);
 					request.inserted_edges.push_back(mapping);
 				}
@@ -2011,12 +2257,111 @@ namespace graph::storage {
 		return {std::move(contents), std::move(page)};
 	}
 
+	EntityPageStore::ReadPage EntityPageStore::loadReadPage(const MetadataSnapshotPin &snapshot, const PageId pageId,
+																											const EntityPageRecordKind expectedKind,
+																											const BufferPoolReadHint hint) const {
+		if (!pageId.isValid() || !isEntityPageKind(expectedKind)) {
+			fail(FormatError::FERR_INVALID_HEADER,
+					 "relocatable Entity page read view has an invalid Page ID or record kind");
+		}
+		if (std::optional<SharedPagePoolPinnedView> contents = allocator_.readPinned(snapshot, pageId, hint)) {
+			const uint8_t invalid =
+					static_cast<uint8_t>(contents->pool.kind != SegmentKind::SGK_ENTITY_PAGE_POOL) |
+					static_cast<uint8_t>(contents->pool.owner_id == 0U) |
+					static_cast<uint8_t>(contents->pool.state != SegmentState::SGS_SEALED) |
+					static_cast<uint8_t>(contents->location.page_id != pageId) |
+					static_cast<uint8_t>(contents->location.segment_id != contents->pool.segment_id) |
+					static_cast<uint8_t>(contents->location.generation != contents->pool.generation) |
+					static_cast<uint8_t>(contents->owner.page_id != pageId) |
+					static_cast<uint8_t>(contents->owner.owner_id != contents->pool.owner_id) |
+					static_cast<uint8_t>(contents->owner.kind != PageOwnerKind::POK_ENTITY) |
+					static_cast<uint8_t>((contents->owner.flags & ~RSS_PAGE_OWNER_KNOWN_FLAGS) != 0U) |
+					static_cast<uint8_t>(contents->owner.payload_bytes != RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES) |
+					static_cast<uint8_t>(contents->owner.generation != contents->location.generation) |
+					static_cast<uint8_t>(contents->owner.committed_lsn > snapshot.superblock().checkpoint_lsn);
+			if (invalid != 0U) {
+				fail(FormatError::FERR_INVALID_STATE,
+						 "relocatable pinned Entity page disagrees with its pool, owner, or metadata snapshot");
+			}
+			ReadPage result(std::move(*contents));
+			if (result.page.header().record_kind != expectedKind) {
+				fail(FormatError::FERR_INVALID_STATE,
+						 "relocatable Entity Map resolves to a pinned page with another fixed-record kind");
+			}
+			return result;
+		}
+		return ReadPage(loadPage(snapshot, pageId, expectedKind, hint));
+	}
+
+	std::optional<EntityPageStore::ReadPage>
+	EntityPageStore::loadPhysicalScanReadPage(const MetadataSnapshotPin &snapshot,
+															 const CatalogEntry &pool,
+															 const PageLocation &location) const {
+		if (!location.page_id.isValid() || !location.segment_id.isValid() || !location.generation.isValid()) {
+			fail(FormatError::FERR_INVALID_HEADER,
+				 "relocatable physical Entity scan requires a complete current Page Directory location");
+		}
+		const auto validate = [&snapshot, &location](const auto &contents) {
+			const bool supportedOwner = contents.owner.kind == PageOwnerKind::POK_ENTITY ||
+										contents.owner.kind == PageOwnerKind::POK_ENTITY_LABEL;
+			const uint8_t invalid =
+					static_cast<uint8_t>(contents.pool.kind != SegmentKind::SGK_ENTITY_PAGE_POOL) |
+					static_cast<uint8_t>(contents.pool.owner_id == 0U) |
+					static_cast<uint8_t>(contents.pool.state != SegmentState::SGS_SEALED) |
+					static_cast<uint8_t>(contents.location != location) |
+					static_cast<uint8_t>(contents.location.segment_id != contents.pool.segment_id) |
+					static_cast<uint8_t>(contents.location.generation != contents.pool.generation) |
+					static_cast<uint8_t>(contents.owner.page_id != location.page_id) |
+					static_cast<uint8_t>(contents.owner.owner_id != contents.pool.owner_id) |
+					static_cast<uint8_t>(!supportedOwner) |
+					static_cast<uint8_t>((contents.owner.flags & ~RSS_PAGE_OWNER_KNOWN_FLAGS) != 0U) |
+					static_cast<uint8_t>(contents.owner.payload_bytes != RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES) |
+					static_cast<uint8_t>(contents.owner.generation != contents.location.generation) |
+					static_cast<uint8_t>(contents.owner.committed_lsn > snapshot.superblock().checkpoint_lsn) |
+					static_cast<uint8_t>(contents.owner.kind == PageOwnerKind::POK_ENTITY &&
+									 location.free_bytes != 0U);
+			if (invalid != 0U) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "relocatable physical Entity scan found a page that disagrees with its pool, owner, or snapshot");
+			}
+		};
+
+		if (std::optional<SharedPagePoolPinnedView> contents =
+					allocator_.readPinnedKnownLocation(snapshot, pool, location, BufferPoolReadHint::BPRH_SEQUENTIAL)) {
+			validate(*contents);
+			if (contents->owner.kind == PageOwnerKind::POK_ENTITY_LABEL) {
+				return std::nullopt;
+			}
+			return ReadPage(std::move(*contents));
+		}
+		SharedPagePoolContents contents =
+				allocator_.readKnownLocation(snapshot, pool, location, BufferPoolReadHint::BPRH_SEQUENTIAL);
+		validate(contents);
+		if (contents.owner.kind == PageOwnerKind::POK_ENTITY_LABEL) {
+			return std::nullopt;
+		}
+		EntityPage page = EntityPage::open(contents.owner, contents.payload);
+		return ReadPage(LoadedPage(std::move(contents), std::move(page)));
+	}
+
 	EntityPageStore::LoadedPage &EntityPageStore::loadScanPage(const MetadataSnapshotPin &snapshot, PageId pageId,
 															   EntityPageRecordKind expectedKind,
 															   std::optional<LoadedPage> &currentPage,
 															   PageId &currentPageId) const {
 		if (!currentPage.has_value() || currentPageId != pageId) {
 			currentPage.emplace(loadPage(snapshot, pageId, expectedKind, BufferPoolReadHint::BPRH_SEQUENTIAL));
+			currentPageId = pageId;
+		}
+		return *currentPage;
+	}
+
+	EntityPageStore::ReadPage &EntityPageStore::loadScanReadPage(const MetadataSnapshotPin &snapshot,
+																											const PageId pageId,
+																											const EntityPageRecordKind expectedKind,
+																											std::optional<ReadPage> &currentPage,
+																											PageId &currentPageId) const {
+		if (!currentPage.has_value() || currentPageId != pageId) {
+			currentPage.emplace(loadReadPage(snapshot, pageId, expectedKind, BufferPoolReadHint::BPRH_SEQUENTIAL));
 			currentPageId = pageId;
 		}
 		return *currentPage;
@@ -2030,7 +2375,7 @@ namespace graph::storage {
 		const PageOwnerHeader owner =
 				ownerFor(request.page_id, request.pool_owner_id, request.generation, checkpointLsn);
 		EntityPage page = EntityPage::create(owner, kind);
-		const uint16_t slot = isNodePage(kind) ? page.insert(*node) : page.insert(*edge);
+		const uint16_t slot = isNodePage(kind) ? page.insert(entityId, *node) : page.insert(entityId, *edge);
 		const EntityPageLocation mapping = mappingFor(entityId, request.page_id, page, slot);
 		PageLocation location = unpublishedLocation(request.page_id, request.segment_id, request.generation);
 		CatalogSlotReservationRequest catalogRequest;
@@ -2067,7 +2412,7 @@ namespace graph::storage {
 		const PageOwnerHeader owner = ownerFor(request.page_id, request.expected_pool.owner_id,
 											   request.expected_pool.generation, checkpointLsn);
 		EntityPage page = EntityPage::create(owner, kind);
-		const uint16_t slot = isNodePage(kind) ? page.insert(*node) : page.insert(*edge);
+		const uint16_t slot = isNodePage(kind) ? page.insert(entityId, *node) : page.insert(entityId, *edge);
 		const EntityPageLocation mapping = mappingFor(entityId, request.page_id, page, slot);
 		PageLocation published = unpublishedLocation(request.page_id, request.expected_pool.segment_id,
 													 request.expected_pool.generation);
@@ -2096,7 +2441,8 @@ namespace graph::storage {
 				 "relocatable Entity page insertion requires a logical Entity ID and a checkpoint LSN");
 		}
 		LoadedPage loaded = loadPage(snapshot, pageId, kind);
-		const uint16_t slot = isNodePage(kind) ? loaded.page.insert(*node) : loaded.page.insert(*edge);
+		const uint16_t slot =
+				isNodePage(kind) ? loaded.page.insert(entityId, *node) : loaded.page.insert(entityId, *edge);
 		PageOwnerHeader owner = loaded.contents.owner;
 		owner.committed_lsn = checkpointLsn;
 		loaded.page = loaded.page.rebindOwner(owner);
@@ -2133,9 +2479,9 @@ namespace graph::storage {
 															: metadata_.findEdgePageLocation(snapshot, entityId);
 		LoadedPage loaded = loadPage(snapshot, mapping.page_id, kind);
 		if (isNodePage(kind)) {
-			loaded.page.replace(mapping.slot_id, mapping.slot_generation, *node);
+			loaded.page.replace(mapping.slot_id, mapping.slot_generation, entityId, *node);
 		} else {
-			loaded.page.replace(mapping.slot_id, mapping.slot_generation, *edge);
+			loaded.page.replace(mapping.slot_id, mapping.slot_generation, entityId, *edge);
 		}
 		PageOwnerHeader owner = loaded.contents.owner;
 		owner.committed_lsn = checkpointLsn;
@@ -2329,8 +2675,10 @@ namespace graph::storage {
 
 	EntityPageLocation EntityPageStore::mappingFor(uint64_t entityId, PageId pageId, const EntityPage &page,
 												   uint16_t slot) {
-		// Callers validate Entity/Page identity before insertion. A live EntityPage
-		// slot is created atomically with its nonzero durable generation.
+		if (entityId == 0U || page.entityId(slot) != entityId) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "relocatable Entity page insertion did not preserve its logical Entity ID");
+		}
 		return {entityId, pageId, slot, page.slotGeneration(slot)};
 	}
 

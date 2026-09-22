@@ -92,11 +92,56 @@ namespace graph::storage {
 		// Optional point lookup keeps normal Buffer Pool admission while avoiding a
 		// separate directory probe before decoding a present owner.
 		[[nodiscard]] std::optional<PropertyCollectionRoot> readEntityOptional(const MetadataSnapshotPin &snapshot,
-																			   const EntityPropertyKey &key) const;
+																	   const EntityPropertyKey &key) const;
+		// Reads one Property value without materializing the owner's complete
+		// collection. A missing owner and a missing token both return nullopt;
+		// malformed directory, page, or payload state still fails closed.
+		[[nodiscard]] std::optional<PropertyCollectionRootEntry>
+		readEntityPropertyOptional(const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key,
+																							 uint32_t keyToken) const;
+		[[nodiscard]] std::optional<bool> readEntityPropertyExists(const MetadataSnapshotPin &snapshot,
+																							 const EntityPropertyKey &key, uint32_t keyToken) const;
+		// Resolves one selected Property for strictly directory-ordered owners in a
+		// single metadata merge, then reads each distinct Property page once. Missing
+		// owners and missing tokens remain nullopt; malformed locations fail closed.
+		void readEntityPropertiesOptionalSorted(
+				const MetadataSnapshotPin &snapshot, std::span<const EntityPropertyKey> keys, uint32_t keyToken,
+				std::span<std::optional<PropertyCollectionRootEntry>> results,
+				const CancellationCheckpoint *cancellation = nullptr) const;
+		// Resolves several strictly increasing tokens for strictly directory-ordered
+		// owners. Results are owner-major: result[owner * token_count + token].
+		// One directory merge and one Property-page pin serve every requested column.
+		void readEntityPropertiesOptionalSorted(
+				const MetadataSnapshotPin &snapshot, std::span<const EntityPropertyKey> keys,
+				std::span<const uint32_t> keyTokens,
+				std::span<std::optional<PropertyCollectionRootEntry>> results,
+				const CancellationCheckpoint *cancellation = nullptr) const;
+		// Resolves selected values and root entry counts from one ordered owner
+		// directory merge. Index candidate verification needs both facts from the
+		// same authenticated root and must not perform two independent lookups.
+		void readEntityPropertiesAndCountsOptionalSorted(
+				const MetadataSnapshotPin &snapshot, std::span<const EntityPropertyKey> keys,
+				std::span<const uint32_t> keyTokens,
+				std::span<std::optional<PropertyCollectionRootEntry>> results,
+				std::span<std::optional<size_t>> counts,
+				const CancellationCheckpoint *cancellation = nullptr) const;
+		// Reads only the authenticated root framing needed to enforce caller row
+		// bounds. It never materializes the Property value collection.
+		[[nodiscard]] std::optional<size_t> readEntityPropertyCount(const MetadataSnapshotPin &snapshot,
+																												const EntityPropertyKey &key) const;
+		// Resolves strictly ordered owners in one directory merge and reads each
+		// distinct Property page at most once. Missing owners report zero, matching
+		// the point-count contract; malformed locations still fail closed.
+		void readEntityPropertyCountsSorted(const MetadataSnapshotPin &snapshot,
+																std::span<const EntityPropertyKey> keys,
+																std::span<std::optional<size_t>> results,
+																const CancellationCheckpoint *cancellation = nullptr) const;
 		// A logical Entity/Property scan reuses the currently decoded slotted page
 		// while admitting its owned frame as sequential. Point callers keep using
 		// readEntity(), whose normal admission preserves shared-page locality.
 		[[nodiscard]] PropertyCollectionRootScanCursor openScanCursor(const MetadataSnapshotPin &snapshot) const;
+		[[nodiscard]] PropertyCollectionRootScanCursor
+		openScanCursor(const MetadataSnapshotPin &snapshot, const CancellationCheckpoint *cancellation) const;
 		// Builds an owner-keyed mutation against exactly `snapshot`. It never
 		// publishes metadata. Empty roots remove an existing root; a missing root
 		// is a no-op. A nonempty root that cannot fit a current Property page
@@ -134,7 +179,26 @@ namespace graph::storage {
 		[[nodiscard]] PropertyCollectionRoot decodeEntityRoot(const MetadataSnapshotPin &snapshot,
 															  const EntityPropertyKey &key,
 															  const EntityPropertyLocation &location,
-															  const SlottedPage &page) const;
+															  PageId pageId, PageOwnerKind ownerKind,
+															  std::span<const std::byte> bytes) const;
+		[[nodiscard]] std::optional<PropertyCollectionRootEntry>
+		decodeSelectedEntityProperty(const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key,
+															  const EntityPropertyLocation &location, PageId pageId,
+															  PageOwnerKind ownerKind, std::span<const std::byte> bytes,
+																																									 uint32_t keyToken) const;
+		[[nodiscard]] bool decodeEntityPropertyExists(const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key,
+																																								 const EntityPropertyLocation &location, PageId pageId,
+																																								 PageOwnerKind ownerKind, std::span<const std::byte> bytes,
+																																												 uint32_t keyToken) const;
+		[[nodiscard]] std::vector<std::optional<PropertyCollectionRootEntry>>
+		decodeSelectedEntityProperties(const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key,
+									  const EntityPropertyLocation &location, PageId pageId,
+									  PageOwnerKind ownerKind, std::span<const std::byte> bytes,
+																																														std::span<const uint32_t> keyTokens) const;
+		[[nodiscard]] size_t decodeEntityPropertyCount(const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key,
+																																																								const EntityPropertyLocation &location,
+																																																														PageId pageId, PageOwnerKind ownerKind,
+																																																														std::span<const std::byte> bytes) const;
 		[[nodiscard]] EntityPropertyRootMutationPlan planEntityRootReplacementWithLargeValueId(
 				const MetadataSnapshotPin &snapshot, const PropertyCollectionRoot &root,
 				const PropertyCollectionRootStoreOptions &options, LargeValueId nextLargeValueId,
@@ -160,22 +224,73 @@ namespace graph::storage {
 		[[nodiscard]] PropertyCollectionRoot readEntity(const MetadataSnapshotPin &snapshot,
 														const EntityPropertyKey &key);
 		[[nodiscard]] std::optional<PropertyCollectionRoot> readEntityOptional(const MetadataSnapshotPin &snapshot,
-																			   const EntityPropertyKey &key);
+																	   const EntityPropertyKey &key);
+		[[nodiscard]] std::optional<PropertyCollectionRootEntry>
+		readEntityPropertyOptional(const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key,
+																																																											 uint32_t keyToken);
+		[[nodiscard]] bool readEntityPropertyExists(const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key,
+																																																																													 uint32_t keyToken);
+			// Resolves strictly ordered owners through the retained Directory cursor and
+			// decodes all requested tokens from each owner payload once. Results are
+			// owner-major and remain nullopt for missing owners or tokens.
+		void readEntityPropertiesOptionalSorted(
+				const MetadataSnapshotPin &snapshot, std::span<const EntityPropertyKey> keys,
+				std::span<const uint32_t> keyTokens,
+				std::span<std::optional<PropertyCollectionRootEntry>> results,
+				bool columnBatch = true);
+		// Cursor-preserving counterpart used by indexed candidate streams. It keeps
+		// the owner-directory route across adjacent batches while returning the
+		// selected values and root counts required by the same validation pass.
+		void readEntityPropertiesAndCountsOptionalSorted(
+				const MetadataSnapshotPin &snapshot, std::span<const EntityPropertyKey> keys,
+				std::span<const uint32_t> keyTokens,
+				std::span<std::optional<PropertyCollectionRootEntry>> results,
+				std::span<std::optional<size_t>> counts);
+		// Count-only counterpart for batches whose selected values are already
+		// cached. It reuses the same snapshot-bound Directory cursor without
+		// decoding Property values a second time.
+		void readEntityPropertyCountsSorted(const MetadataSnapshotPin &snapshot,
+				std::span<const EntityPropertyKey> keys,
+				std::span<std::optional<size_t>> results);
 
 	private:
 		friend class PropertyCollectionRootStore;
-		PropertyCollectionRootScanCursor(const PropertyCollectionRootStore &store, Generation generation) :
-			store_(&store), generation_(generation) {}
+		PropertyCollectionRootScanCursor(const PropertyCollectionRootStore &store, Generation generation,
+									 const CancellationCheckpoint *cancellation) :
+			store_(&store), generation_(generation), cancellation_(cancellation) {}
 
 		[[nodiscard]] PropertyCollectionRoot readLocation(const MetadataSnapshotPin &snapshot,
 														  const EntityPropertyKey &key,
 														  const EntityPropertyLocation &location);
+		[[nodiscard]] std::optional<PropertyCollectionRootEntry>
+		readSelectedLocation(const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key,
+																	 const EntityPropertyLocation &location, uint32_t keyToken);
+		[[nodiscard]] std::vector<std::optional<PropertyCollectionRootEntry>>
+		readSelectedLocation(const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key,
+																	 const EntityPropertyLocation &location,
+																							 std::span<const uint32_t> keyTokens);
+		[[nodiscard]] bool readSelectedPresenceLocation(const MetadataSnapshotPin &snapshot,
+																							 const EntityPropertyKey &key,
+																							 const EntityPropertyLocation &location, uint32_t keyToken);
+		// Entity scans visit logical owners in directory-key order. Retain the
+		// directory's root-to-leaf cursor and at most one look-ahead location.
+		// Out-of-order callers fall back to point lookup without reusing ambiguous
+		// continuation state.
+		[[nodiscard]] std::optional<EntityPropertyLocation>
+		findLocationOptional(const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key);
+		void accountDirectoryPages();
 		void validateSnapshot(const MetadataSnapshotPin &snapshot) const;
 
 		const PropertyCollectionRootStore *store_ = nullptr;
 		Generation generation_{};
+		const CancellationCheckpoint *cancellation_ = nullptr;
 		PageId current_page_id_{};
 		std::optional<SlottedPage> current_page_;
+		std::optional<LocationDirectoryRangeCursor> directory_cursor_;
+		std::optional<EntityPropertyLocation> pending_directory_location_;
+		size_t directory_metadata_pages_reported_ = 0U;
+		uint64_t last_requested_directory_id_ = 0U;
+		bool directory_stream_enabled_ = true;
 	};
 
 } // namespace graph::storage

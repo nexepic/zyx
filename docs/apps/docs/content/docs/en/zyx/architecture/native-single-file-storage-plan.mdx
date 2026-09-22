@@ -1915,6 +1915,7 @@ Work:
 
 - 4 KiB Node/Edge pages.
 - Page-local bitmaps.
+- A page-local EntityId array parallel to the fixed slots.
 - Entity Map.
 - Reuse free slots across EntityIds.
 - 4 KiB page COW.
@@ -1990,9 +1991,13 @@ once an inactive Superblock is completely written, normal A/B recovery exposes t
 with the Entity batch. It materializes the Entity and Property frames before a single Native Graph metadata
 publication, returns newly reachable Property locations, and rejects an orphan Property root unless its Node or Edge
 owner already exists or is inserted by that same transaction.
-The native read foundation now traverses the snapshot-pinned Entity Map directly: bounded Node and Edge scans, resumable
-Node scans, and adjacency continuations retain logical IDs only and never fall back to physical-page scans or fixed
-records. `PageBackedLogicalGraphReadAdapter` resolves labels, relationship types, and Property keys through the same
+Entity page v4 persists the logical EntityId for every slot. Ordinary bounded Node and Edge scans identify current shared
+Entity pools through the Catalog, stream their typed pages from the Page Directory, and enumerate live bitmap slots without
+descending the Entity Map for each entity. `visitNodesAfter` retains the snapshot-pinned Entity Map range path when strict
+EntityId order and a logical continuation are required. Point lookup validates EntityId, slot generation, PageId, and
+record kind together. The integrity scanner cross-checks every page-local EntityId against the Entity Map, so ordinary
+queries avoid a whole-database semantic audit while corruption, orphan slots, and identity mismatches still fail closed.
+`PageBackedLogicalGraphReadAdapter` resolves labels, relationship types, and Property keys through the same
 pinned metadata generation and emits direct owner-keyed Property entries on `LogicalGraphNode` and `LogicalGraphEdge`;
 query predicate evaluation can therefore avoid a second Property-ID lookup. Snapshot, reopen, corrupt Entity-Map
 kind, continuation, duplicate-name, record-bound, and metadata-page-bound cases are covered at this lower boundary.
@@ -4160,24 +4165,30 @@ No recursive deletion of an entire legacy tree is permitted while one of its exc
 
 This section records the framework-level gaps exposed by benchmark comparison and the implementation sequence that closes them. These are not
 workload-specific tricks. They must not reintroduce Segment Chains, per-node adjacency roots, Edge linked lists, a second database file, or
-query-specific fast paths. Every change remains within the single-file format, A/B Superblock, generation-aware Catalog/Page Directory, shared
+fast paths that match a particular query text or workload. Storage-neutral fast paths based on reusable logical-operator shapes remain part of
+the execution framework. Every change remains within the single-file format, A/B Superblock, generation-aware Catalog/Page Directory, shared
 Buffer Pool, global key-only adjacency Packed B+Tree, and no-migration policy. A faster write path does not mean that the read path is complete;
 the Stage 2, 4, 5, 6, and 8 production-read gates therefore remain open until this section is implemented and verified. Existing "native core"
 statements mean correctness-core completion only.
+
+The latest performance assessment, execution priorities, and prohibited regressions are maintained in the [Optimization Strategy](optimization#current-assessment), with the implementation order defined by its [staged execution plan](optimization#staged-execution-plan). This section remains authoritative for the single-file physical format and storage invariants.
 
 ### 23.1 Benchmark evidence and measurement contract
 
 The current and historical architecture were compared on the same macOS arm64 host, AppleClang 17, Conan toolchain, Release configuration,
 smoke dataset, and seed. The historical binary was rebuilt from a separate worktree whose commit is not a linear ancestor of the current branch,
-so the result is a reference baseline, not a strict before/after claim. `load_nodes_edges` is roughly twice as fast in the current architecture,
-while read paths regressed by tens to thousands of times for label/property scans, relationship scans, one- and two-hop expansion, shortest-path
+so the result is a reference baseline, not a strict before/after claim. The `smoke` data set has 250 Nodes and 660 Edges. Load without extra
+property indexes improves from 85.244 ms to 60.228 ms, about 29%, while load with property-index construction is effectively equal at 117.047 ms
+versus 116.409 ms. Read paths regressed by tens to thousands of times for label/property scans, relationship scans, one- and two-hop expansion, shortest-path
 chains, top-k sorting, and indexed point/equality/range lookups. Exact p50/p95/p99, RSS, database size, and logical/physical byte counts must be
 stored in reproducible benchmark artifacts rather than encoded as format constants.
 
 Profiles show repeated metadata-directory lookup, page-route lookup, Catalog and segment validation, page reads, payload copies, slotted-page
-decoding, and complete property-root decoding on node scans. Relationship-property filters materialize complete Edges repeatedly, and shortest
-path reads complete Edge and Node objects even when only topology is needed. Every phase below must record structural counters as well as wall-clock
-time.
+decoding, and complete property-root decoding on node scans. Property optional lookup accounts for about 88% to 98% of label filtering,
+all-Node property filtering, aggregation, and Top-K execution. Relationship-property filters can issue an adjacency range from each scanned Node
+before materializing complete Edges, while shortest path reads complete Edge and Node objects when it needs only topology. Complete current samples
+do not yet exist for `small` and larger scales, so hot-cache `smoke` ratios do not establish scaling behavior. Every phase below must record structural
+counters as well as wall-clock time.
 
 ### 23.2 Phased implementation
 
@@ -4192,9 +4203,11 @@ time.
 
 #### Phase 1: add `NativeReadSession`
 
-Introduce a snapshot-bound read session owning a `MetadataSnapshotPin`, bounded PageId-to-PageLocation and SegmentId-to-CatalogEntry caches,
+Introduce a query-owned, snapshot-bound, normally single-threaded lock-free read session owning a `MetadataSnapshotPin`, bounded PageId-to-PageLocation and SegmentId-to-CatalogEntry caches,
 validated envelope/control views, a snapshot-local token dictionary, and Directory/B+Tree cursor state. Caches are generation-scoped and bounded
-by entries or bytes. Physical offsets remain inside storage and never cross into query, binding, or public ABI layers.
+by entries or bytes. Physical offsets remain inside storage and never cross into query, binding, or public ABI layers. A fixed 256-slot,
+`id % slots` direct-mapped Entity cache guarded by a shared mutex does not complete this phase: it collides during sequential scans and caches the
+wrong granularity. The generation-aware Buffer Pool continues to own cross-query and cross-thread sharing.
 
 #### Phase 2: add zero-copy typed page views
 
@@ -4241,7 +4254,15 @@ The index layer returns an `IndexCandidateBatch` containing EntityId, covered va
 covered predicates directly, and loads only missing requested fields; it must not reread a complete Node after an index hit. Full cross-store integrity
 checks belong to an integrity scanner or paranoid mode, not every normal query.
 
-#### Phase 9: scale writes and maintenance
+#### Phase 9: restore the batch execution framework
+
+Add typed column batches, selection vectors, and composable predicate, filter, project, and aggregate pipelines to the logical runtime. Query
+compilation resolves label, relationship-type, and Property names to tokens once; execution does not construct a string-keyed `unordered_map` for
+every row. Restore storage-neutral count, aggregate, and traversal fast paths based on logical-operator shapes. They must not match exact Cypher text
+or refer to the retired physical format. Point lookup and scan may choose different strategies while sharing typed-page, Directory-resolution,
+snapshot-validation, and Buffer Pool primitives.
+
+#### Phase 10: scale writes and maintenance
 
 Keep format semantics while adding target-page grouping, one COW candidate per page, sorted directory merges, incremental free-space indexes, and a
 shared B+Tree WriteBatch for online and bulk paths. Do not add an adjacency-only write buffer. A general bounded write buffer may be considered only after
@@ -4255,6 +4276,8 @@ measured COW write amplification proves it necessary.
 - A B+Tree range cursor descends the root once; adjacency count never reads Property pages.
 - Shortest path never reads unrelated Properties; an index-candidate path never reads the same entity twice.
 - Requesting one Property decodes one Property; a batch point lookup pins each distinct Entity Page at most once.
+- A global Edge-property filter uses a sequential Edge scan or equivalent batch path, not one adjacency-root descent per Node.
+- Scalar-only operations such as `count` do not construct complete per-row results; name-to-token resolution occurs at most once per query/session.
 - Cache, cursor, batch, and materialization memory is bounded.
 - Relocation, old snapshots, split/merge, reopen, and checksum/owner/generation corruption preserve results or fail closed.
 - Each phase adds pin-lifetime, cursor-continuation, selective/full-equivalence, topology/full-Edge-equivalence, and deterministic-counter tests.

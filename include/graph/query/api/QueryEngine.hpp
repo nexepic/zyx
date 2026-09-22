@@ -54,6 +54,7 @@ namespace graph::query {
 				.maximum_node_page_records = 1'024U,
 				.maximum_metadata_pages_per_node_page = 4'096U,
 				.maximum_edges_per_node = 100'000U,
+				.maximum_edge_records = 10'000'000U,
 				.maximum_adjacency_page_records = 1'024U,
 				.maximum_property_entries = 10'000U,
 				.maximum_rows = 1'000'000U,

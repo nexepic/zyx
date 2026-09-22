@@ -100,7 +100,9 @@ namespace graph::storage {
 		[[nodiscard]] std::vector<uint64_t> read(const MetadataSnapshotPin &snapshot,
 												 const EntityLabelOverflowReference &reference) const;
 		[[nodiscard]] std::vector<uint64_t> readNodeLabels(const MetadataSnapshotPin &snapshot,
-														   const NodeEntityRecord &node) const;
+																																					 const NodeEntityRecord &node) const;
+		[[nodiscard]] std::vector<std::vector<uint64_t>> readNodeLabelsSorted(
+				const MetadataSnapshotPin &snapshot, std::span<const NodeEntityRecord> nodes) const;
 		[[nodiscard]] EntityLabelSetMutationPlan planNodeLabels(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
 																std::span<const uint64_t> labels,
 																const EntityLabelSetWritePlan &plan,

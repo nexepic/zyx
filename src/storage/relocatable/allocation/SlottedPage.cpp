@@ -75,6 +75,155 @@ namespace graph::storage {
 
 	} // namespace
 
+	SlottedPageReadView SlottedPageReadView::open(const PageOwnerHeader &owner,
+															 std::span<const std::byte> bytes) {
+		validateSlottedPageOwner(owner);
+		if (bytes.size() != RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES) {
+			throwSlottedPageError(bytes.size() < RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES ? FormatError::FERR_BUFFER_TOO_SMALL
+																													 : FormatError::FERR_INVALID_HEADER,
+									  "relocatable slotted page view has an invalid byte length");
+		}
+		const uint32_t expectedCrc = LittleEndianCodec::readU32(bytes, PAGE_CRC_OFFSET);
+		uint32_t actualCrc = utils::updateCrc(0U, bytes.data(), PAGE_CRC_OFFSET);
+		const uint32_t zeroCrc = 0U;
+		actualCrc = utils::updateCrc(actualCrc, &zeroCrc, sizeof(zeroCrc));
+		actualCrc = utils::updateCrc(actualCrc, bytes.data() + PAGE_CRC_OFFSET + sizeof(uint32_t),
+															bytes.size() - PAGE_CRC_OFFSET - sizeof(uint32_t));
+		if (actualCrc != expectedCrc) {
+			throwSlottedPageError(FormatError::FERR_CHECKSUM_MISMATCH,
+									  "relocatable slotted page view checksum does not match");
+		}
+		const uint8_t invalidStatic =
+				static_cast<uint8_t>(LittleEndianCodec::readU32(bytes, PAGE_MAGIC_OFFSET) != RSS_SLOTTED_PAGE_MAGIC) |
+				static_cast<uint8_t>(LittleEndianCodec::readU16(bytes, PAGE_VERSION_OFFSET) != RSS_SLOTTED_PAGE_VERSION) |
+				static_cast<uint8_t>(LittleEndianCodec::readU16(bytes, PAGE_HEADER_BYTES_OFFSET) !=
+														 RSS_SLOTTED_PAGE_HEADER_BYTES) |
+				static_cast<uint8_t>(LittleEndianCodec::readU16(bytes, PAGE_RESERVED0_OFFSET) != 0U) |
+				static_cast<uint8_t>(LittleEndianCodec::readU32(bytes, PAGE_RESERVED1_OFFSET) != 0U) |
+				static_cast<uint8_t>(LittleEndianCodec::readU32(bytes, PAGE_FLAGS_OFFSET) !=
+														 RSS_SLOTTED_PAGE_KNOWN_FLAGS) |
+				static_cast<uint8_t>(LittleEndianCodec::readU64(bytes, PAGE_RESERVED2_OFFSET) != 0U);
+		if (invalidStatic != 0U) {
+			throwSlottedPageError(FormatError::FERR_RESERVED_BITS,
+									  "relocatable slotted page view has invalid fixed fields");
+		}
+		const PageId pageId(LittleEndianCodec::readU64(bytes, PAGE_ID_OFFSET));
+		const Generation pageGeneration(LittleEndianCodec::readU64(bytes, PAGE_GENERATION_OFFSET));
+		const uint16_t slotCount = LittleEndianCodec::readU16(bytes, PAGE_SLOT_COUNT_OFFSET);
+		const uint16_t liveSlotCount = LittleEndianCodec::readU16(bytes, PAGE_LIVE_SLOT_COUNT_OFFSET);
+		const uint16_t freeSlotHint = LittleEndianCodec::readU16(bytes, PAGE_FREE_SLOT_HINT_OFFSET);
+		const uint16_t freeStart = LittleEndianCodec::readU16(bytes, PAGE_FREE_START_OFFSET);
+		const uint16_t freeEnd = LittleEndianCodec::readU16(bytes, PAGE_FREE_END_OFFSET);
+		const uint32_t liveBytes = LittleEndianCodec::readU32(bytes, PAGE_LIVE_BYTES_OFFSET);
+		const uint32_t reclaimableBytes = LittleEndianCodec::readU32(bytes, PAGE_RECLAIMABLE_BYTES_OFFSET);
+		if (!pageId.isValid() || !pageGeneration.isValid() || pageId != owner.page_id ||
+			pageGeneration != owner.generation ||
+			slotCount > (RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES - RSS_SLOTTED_PAGE_HEADER_BYTES) /
+									RSS_SLOTTED_PAGE_SLOT_BYTES ||
+			liveSlotCount > slotCount ||
+			freeStart != RSS_SLOTTED_PAGE_HEADER_BYTES + slotCount * RSS_SLOTTED_PAGE_SLOT_BYTES ||
+			freeStart > freeEnd || freeEnd > RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES) {
+			throwSlottedPageError(FormatError::FERR_INVALID_HEADER,
+									  "relocatable slotted page view has invalid layout metadata");
+		}
+		SlottedPageReadView view(bytes, pageId, pageGeneration, owner.owner_id, owner.kind, owner.committed_lsn,
+									 slotCount, liveSlotCount, freeStart, freeEnd, liveBytes, reclaimableBytes);
+		uint32_t actualLiveSlots = 0U;
+		uint32_t actualLiveBytes = 0U;
+		uint32_t allocatedBytes = 0U;
+		uint16_t expectedFreeHint = RSS_SLOTTED_PAGE_NO_SLOT;
+		for (uint16_t slotId = 0U; slotId < slotCount; ++slotId) {
+			const Slot slot = view.readSlot(slotId);
+			if (slot.generation == 0U || (slot.flags & ~RSS_SLOTTED_SLOT_KNOWN_FLAGS) != 0U ||
+				LittleEndianCodec::readU32(bytes, view.slotOffset(slotId) + SLOT_RESERVED_OFFSET) != 0U) {
+				throwSlottedPageError(FormatError::FERR_RESERVED_BITS,
+									  "relocatable slotted page view slot has an invalid generation or reserved field");
+			}
+			if (!slot.isLive()) {
+				if (slot.flags != 0U || slot.offset != 0U || slot.capacity != 0U || slot.value_bytes != 0U) {
+					throwSlottedPageError(FormatError::FERR_INVALID_HEADER,
+											  "relocatable slotted page view free slot retains payload metadata");
+				}
+				if (expectedFreeHint == RSS_SLOTTED_PAGE_NO_SLOT) {
+					expectedFreeHint = slotId;
+				}
+				continue;
+			}
+			if (slot.value_bytes > slot.capacity || slot.offset < freeEnd ||
+				slot.capacity > RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES - slot.offset) {
+				throwSlottedPageError(FormatError::FERR_INVALID_HEADER,
+									  "relocatable slotted page view live slot has an invalid payload range");
+			}
+			for (uint16_t otherSlotId = 0U; otherSlotId < slotId; ++otherSlotId) {
+				const Slot other = view.readSlot(otherSlotId);
+				if (!other.isLive() || slot.capacity == 0U || other.capacity == 0U) {
+					continue;
+				}
+				const uint32_t slotEnd = static_cast<uint32_t>(slot.offset) + slot.capacity;
+				const uint32_t otherEnd = static_cast<uint32_t>(other.offset) + other.capacity;
+				if (slot.offset < otherEnd && other.offset < slotEnd) {
+					throwSlottedPageError(FormatError::FERR_INVALID_HEADER,
+											  "relocatable slotted page view live slot payload ranges overlap");
+				}
+			}
+			++actualLiveSlots;
+			actualLiveBytes += slot.value_bytes;
+			allocatedBytes += slot.capacity;
+		}
+		const uint32_t payloadRegionBytes = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES - freeEnd;
+		if (actualLiveSlots != liveSlotCount || actualLiveBytes != liveBytes || allocatedBytes > payloadRegionBytes ||
+			reclaimableBytes != payloadRegionBytes - allocatedBytes || freeSlotHint != expectedFreeHint) {
+			throwSlottedPageError(FormatError::FERR_INVALID_HEADER,
+									  "relocatable slotted page view counters or free-slot hint do not match its slots");
+		}
+		return view;
+	}
+
+	SlottedPageStats SlottedPageReadView::stats() const {
+		return {slot_count_, live_slot_count_, reusableFreeSlotCount(), live_bytes_, reclaimable_bytes_,
+				static_cast<uint32_t>(free_end_ - free_start_)};
+	}
+
+	std::span<const std::byte> SlottedPageReadView::read(const SlottedSlotReference &reference) const {
+		if (!reference.isValid() || reference.page_id != page_id_ || reference.slot_id >= slot_count_) {
+			throwSlottedPageError(FormatError::FERR_INVALID_STATE,
+									  "relocatable slotted page view reference is invalid or foreign");
+		}
+		const Slot slot = readSlot(reference.slot_id);
+		if (!slot.isLive() || slot.generation != reference.generation) {
+			throwSlottedPageError(FormatError::FERR_INVALID_STATE, "relocatable slotted page view reference is stale");
+		}
+		return bytes_.subspan(slot.offset, slot.value_bytes);
+	}
+
+	SlottedPageReadView::Slot SlottedPageReadView::readSlot(const uint16_t slotId) const {
+		const size_t offset = slotOffset(slotId);
+		return {LittleEndianCodec::readU16(bytes_, offset + SLOT_OFFSET_OFFSET),
+				LittleEndianCodec::readU16(bytes_, offset + SLOT_CAPACITY_OFFSET),
+				LittleEndianCodec::readU16(bytes_, offset + SLOT_VALUE_BYTES_OFFSET),
+				LittleEndianCodec::readU16(bytes_, offset + SLOT_FLAGS_OFFSET),
+				LittleEndianCodec::readU32(bytes_, offset + SLOT_GENERATION_OFFSET)};
+	}
+
+	size_t SlottedPageReadView::slotOffset(const uint16_t slotId) const {
+		if (slotId >= slot_count_) {
+			throwSlottedPageError(FormatError::FERR_INVALID_HEADER,
+									  "relocatable slotted page view slot ID is out of range");
+		}
+		return RSS_SLOTTED_PAGE_HEADER_BYTES + static_cast<size_t>(slotId) * RSS_SLOTTED_PAGE_SLOT_BYTES;
+	}
+
+	uint16_t SlottedPageReadView::reusableFreeSlotCount() const {
+		uint16_t result = 0U;
+		for (uint16_t slotId = 0U; slotId < slot_count_; ++slotId) {
+			const Slot slot = readSlot(slotId);
+			if (!slot.isLive() && slot.generation != std::numeric_limits<uint32_t>::max()) {
+				++result;
+			}
+		}
+		return result;
+	}
+
 	SlottedPage::SlottedPage(std::vector<std::byte> bytes, Header header) :
 		bytes_(std::move(bytes)), header_(std::move(header)) {}
 

@@ -56,6 +56,18 @@ using graph::storage::test::overwriteIntegrityScannerPagePayload;
 using graph::storage::test::RelocatableIntegrityScannerTestFixture;
 
 namespace {
+	void refreshEntityPageChecksums(std::vector<std::byte> &bytes) {
+		constexpr size_t payloadCrcOffset = 40U;
+		constexpr size_t headerCrcOffset = 44U;
+		LittleEndianCodec::writeU32(
+				bytes, payloadCrcOffset,
+				graph::utils::calculateCrc(bytes.data() + RSS_ENTITY_PAGE_HEADER_BYTES,
+											 bytes.size() - RSS_ENTITY_PAGE_HEADER_BYTES));
+		LittleEndianCodec::writeU32(bytes, headerCrcOffset, 0U);
+		LittleEndianCodec::writeU32(
+				bytes, headerCrcOffset,
+				graph::utils::calculateCrc(bytes.data(), RSS_ENTITY_PAGE_HEADER_BYTES));
+	}
 
 	void replaceIntegrityScannerBTreePage(const std::shared_ptr<StorageIO> &io, RelocatableMetadataStore &metadata,
 										  PageId pageId, const BTreePage &replacement) {
@@ -766,7 +778,8 @@ TEST_F(RelocatableIntegrityScannerTestFixture, RejectsStaleOrForeignLabelSetPage
 	SharedPagePoolAllocator pages(io, *graph.metadata, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
 	const SharedPagePoolContents nodeContents = pages.read(snapshot, nodeLocation.page_id);
 	const EntityPage nodePage = EntityPage::open(nodeContents.owner, nodeContents.payload);
-	const NodeEntityRecord storedNode = *nodePage.findNode(nodeLocation.slot_id, nodeLocation.slot_generation);
+	const NodeEntityRecord storedNode =
+			*nodePage.findNode(nodeLocation.slot_id, nodeLocation.slot_generation, nodeLocation.entity_id);
 	ASSERT_TRUE(storedNode.label_overflow.isValid());
 	PageLocation labelLocation = graph.metadata->findPageLocation(snapshot, storedNode.label_overflow.page_id);
 	const SharedPagePoolContents labelContents = pages.read(snapshot, storedNode.label_overflow.page_id);
@@ -928,13 +941,33 @@ TEST_F(RelocatableIntegrityScannerTestFixture, RejectsNativeEntityAndLabelSetOrp
 	SharedPagePoolAllocator pages(io, *graph.metadata, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
 	const SharedPagePoolContents contents = pages.read(snapshot, graph.node_page);
 	EntityPage page = EntityPage::open(contents.owner, contents.payload);
-	NodeEntityRecord detached = *page.findNode(location.slot_id, location.slot_generation);
+	NodeEntityRecord detached = *page.findNode(location.slot_id, location.slot_generation, location.entity_id);
 	detached.inline_label_ids.fill(0U);
 	detached.inline_label_count = 0U;
 	detached.label_overflow = {};
-	page.replace(location.slot_id, location.slot_generation, detached);
+	page.replace(location.slot_id, location.slot_generation, location.entity_id, detached);
 	snapshot.release();
 	overwriteIntegrityScannerPagePayload(io, *graph.metadata, graph.node_page, page.serialize());
+
+	EXPECT_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *graph.metadata).scan()), FormatException);
+}
+
+TEST_F(RelocatableIntegrityScannerTestFixture, RejectsPageLocalEntityIdThatDisagreesWithTheEntityMap) {
+	NativeEntityIntegrityGraph graph = createNativeEntityIntegrityGraph(io);
+	MetadataSnapshotPin snapshot = graph.metadata->openSnapshot();
+	const EntityPageLocation location = graph.metadata->findNodePageLocation(snapshot, 1001U);
+	SharedPagePoolAllocator pages(io, *graph.metadata, SharedPagePoolOpenMode::SPPOM_READ_ONLY);
+	const SharedPagePoolContents contents = pages.read(snapshot, location.page_id);
+	const EntityPage page = EntityPage::open(contents.owner, contents.payload);
+	std::vector<std::byte> payload = page.serialize();
+	const EntityPageHeader header = page.header();
+	const size_t entityIdsOffset = RSS_ENTITY_PAGE_HEADER_BYTES + header.bitmap_bytes +
+									static_cast<size_t>(header.slot_capacity) * sizeof(uint32_t);
+	LittleEndianCodec::writeU64(payload,
+							 entityIdsOffset + static_cast<size_t>(location.slot_id) * sizeof(uint64_t), 9001U);
+	refreshEntityPageChecksums(payload);
+	snapshot.release();
+	overwriteIntegrityScannerPagePayload(io, *graph.metadata, graph.node_page, payload);
 
 	EXPECT_THROW(static_cast<void>(RelocatableIntegrityScanner(io, *graph.metadata).scan()), FormatException);
 }

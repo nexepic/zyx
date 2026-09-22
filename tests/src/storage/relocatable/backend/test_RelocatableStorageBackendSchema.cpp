@@ -13,6 +13,7 @@
 #include <cerrno>
 #endif
 
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/query/QueryGuard.hpp"
 #include "graph/storage/relocatable/format/SuperblockFile.hpp"
 
@@ -1258,8 +1259,39 @@ TEST_F(RelocatableStorageBackendSchemaTest, RejectsPersistedScalarIndexEntriesWi
 	RelocatableStorageBackend corrupted(options());
 	corrupted.open();
 	RelocatableReadSnapshot snapshot = corrupted.openSnapshot();
+	std::unique_ptr<LogicalGraphReadSnapshot> graphSnapshot = corrupted.openLogicalGraphReadSnapshot();
 	EXPECT_THROW(static_cast<void>(corrupted.findNodesByExactProperties(
 				snapshot, {"Person"}, {{"score", graph::PropertyValue(int64_t{42})}}, 1U, 1U)),
+			 FormatException);
+	EXPECT_THROW(static_cast<void>(graphSnapshot->visitNodeCandidatesByExactProperties(
+				{"Person"}, {{"score", graph::PropertyValue(int64_t{42})}}, 1U, 1U,
+				[](const graph::storage::IndexCandidateBatch &) { return true; })),
+			 FormatException);
+	snapshot.release();
+	graphSnapshot.reset();
+	corrupted.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest, RejectsPersistedScalarIndexKeysThatDisagreeWithThePropertyRecord) {
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes(
+			{{{"Person"}, {{"score", graph::PropertyValue(int64_t{42})}}}});
+	ASSERT_EQ(nodes.size(), 1U);
+	const LogicalGraphIndexDefinition index = backend.createLogicalNodeIndex({"person_score", "Person", {"score"}});
+	backend.close();
+
+	const std::vector<std::byte> storedKey = IndexKeyCodec::encodeEntryKey(graph::PropertyValue(int64_t{42}), nodes.front());
+	const std::vector<std::byte> staleKey = IndexKeyCodec::encodeEntryKey(graph::PropertyValue(int64_t{43}), nodes.front());
+	// A page checksum authenticates this replacement key, but not its agreement
+	// with the separate authoritative Property collection.
+	overwriteBTreeLeafEntry(index.index_id, storedKey, {staleKey, nodes.front()});
+
+	RelocatableStorageBackend corrupted(options());
+	corrupted.open();
+	RelocatableReadSnapshot snapshot = corrupted.openSnapshot();
+	EXPECT_THROW(static_cast<void>(corrupted.findNodesByExactProperties(
+				snapshot, {"Person"}, {{"score", graph::PropertyValue(int64_t{43})}}, 1U, 1U)),
 			 FormatException);
 	snapshot.release();
 	corrupted.close();
@@ -1280,11 +1312,18 @@ TEST_F(RelocatableStorageBackendSchemaTest, RejectsPersistedScalarRangeIndexEntr
 	RelocatableStorageBackend corrupted(options());
 	corrupted.open();
 	RelocatableReadSnapshot snapshot = corrupted.openSnapshot();
+	std::unique_ptr<LogicalGraphReadSnapshot> graphSnapshot = corrupted.openLogicalGraphReadSnapshot();
 	EXPECT_THROW(static_cast<void>(corrupted.findNodesByPropertyRange(
 				snapshot, {"Person"},
 				{"score", graph::PropertyValue(int64_t{42}), graph::PropertyValue(), true, true}, 1U, 1U)),
 			 FormatException);
+	EXPECT_THROW(static_cast<void>(graphSnapshot->visitNodeCandidatesByPropertyRange(
+				{"Person"},
+				{"score", graph::PropertyValue(int64_t{42}), graph::PropertyValue(), true, true}, 1U, 1U,
+				[](const graph::storage::IndexCandidateBatch &) { return true; })),
+			 FormatException);
 	snapshot.release();
+	graphSnapshot.reset();
 	corrupted.close();
 }
 
@@ -1305,12 +1344,85 @@ TEST_F(RelocatableStorageBackendSchemaTest, RejectsPersistedCompositeRangeIndexE
 	RelocatableStorageBackend corrupted(options());
 	corrupted.open();
 	RelocatableReadSnapshot snapshot = corrupted.openSnapshot();
+	std::unique_ptr<LogicalGraphReadSnapshot> graphSnapshot = corrupted.openLogicalGraphReadSnapshot();
 	const LogicalGraphCompositePropertyRange request{
 			{{"city", graph::PropertyValue("Shanghai")}},
 			{"age", graph::PropertyValue(int64_t{30}), graph::PropertyValue(), true, true}};
 	EXPECT_THROW(static_cast<void>(corrupted.findNodesByCompositePropertyRange(snapshot, {"Person"}, request, 1U, 2U)),
 			 FormatException);
+	EXPECT_THROW(static_cast<void>(graphSnapshot->visitNodeCandidatesByCompositePropertyRange(
+				{"Person"}, request, 1U, 2U,
+				[](const graph::storage::IndexCandidateBatch &) { return true; })),
+			 FormatException);
 	snapshot.release();
+	graphSnapshot.reset();
+	corrupted.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest, RejectsIndexCandidatePagesWithMismatchedOwners) {
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes(
+			{{{"Person"}, {{"score", graph::PropertyValue(int64_t{42})},
+																{"city", graph::PropertyValue("Shanghai")},
+																{"age", graph::PropertyValue(int64_t{30})}}}});
+	ASSERT_EQ(nodes.size(), 1U);
+	const LogicalGraphIndexDefinition scalar = backend.createLogicalNodeIndex({"person_score", "Person", {"score"}});
+	const LogicalGraphIndexDefinition composite =
+			backend.createLogicalNodeIndex({"person_city_age", "Person", {"city", "age"}});
+	backend.close();
+
+	mutateBTreeRootOwner(scalar.index_id, [](PageOwnerHeader &owner) { ++owner.owner_id; });
+	RelocatableStorageBackend scalarCorrupted(options());
+	scalarCorrupted.open();
+	RelocatableReadSnapshot scalarSnapshot = scalarCorrupted.openSnapshot();
+	EXPECT_THROW(static_cast<void>(scalarCorrupted.findNodesByExactProperties(
+				scalarSnapshot, {"Person"}, {{"score", graph::PropertyValue(int64_t{42})}}, 1U, 4U)), FormatException);
+	scalarSnapshot.release();
+	scalarCorrupted.close();
+
+	mutateBTreeRootOwner(scalar.index_id, [](PageOwnerHeader &owner) { owner.kind = PageOwnerKind::POK_ENTITY; });
+	RelocatableStorageBackend scalarRangeCorrupted(options());
+	scalarRangeCorrupted.open();
+	RelocatableReadSnapshot scalarRangeSnapshot = scalarRangeCorrupted.openSnapshot();
+	EXPECT_THROW(static_cast<void>(scalarRangeCorrupted.findNodesByPropertyRange(
+				scalarRangeSnapshot, {"Person"},
+				{"score", graph::PropertyValue(int64_t{0}), graph::PropertyValue(int64_t{100}), true, true}, 1U, 4U)),
+				FormatException);
+	scalarRangeSnapshot.release();
+	scalarRangeCorrupted.close();
+
+	mutateBTreeRootOwner(composite.index_id, [](PageOwnerHeader &owner) { owner.kind = PageOwnerKind::POK_ENTITY; });
+	RelocatableStorageBackend compositeCorrupted(options());
+	compositeCorrupted.open();
+	RelocatableReadSnapshot compositeSnapshot = compositeCorrupted.openSnapshot();
+	const LogicalGraphCompositePropertyRange request{
+			{{"city", graph::PropertyValue("Shanghai")}},
+			{"age", graph::PropertyValue(int64_t{30}), graph::PropertyValue(), true, true}};
+	EXPECT_THROW(static_cast<void>(compositeCorrupted.findNodesByCompositePropertyRange(
+				compositeSnapshot, {"Person"}, request, 1U, 4U)), FormatException);
+	compositeSnapshot.release();
+	compositeCorrupted.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest, RejectsIndexCandidatePagesWithChecksumCorruption) {
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes(
+			{{{"Person"}, {{"score", graph::PropertyValue(int64_t{42})}}}});
+	ASSERT_EQ(nodes.size(), 1U);
+	const LogicalGraphIndexDefinition index = backend.createLogicalNodeIndex({"person_score", "Person", {"score"}});
+	backend.close();
+	flipBTreeRootPayloadByte(index.index_id);
+
+	RelocatableStorageBackend corrupted(options());
+	corrupted.open();
+	std::unique_ptr<LogicalGraphReadSnapshot> snapshot = corrupted.openLogicalGraphReadSnapshot();
+	ASSERT_NE(snapshot, nullptr);
+	EXPECT_THROW(static_cast<void>(snapshot->visitNodeCandidatesByPropertyRange(
+				{"Person"}, {"score", graph::PropertyValue(int64_t{0}), graph::PropertyValue(int64_t{100}), true, true}, 1U,
+				4U, [](const graph::storage::IndexCandidateBatch &) { return true; })), FormatException);
+	snapshot.reset();
 	corrupted.close();
 }
 
@@ -1345,6 +1457,11 @@ TEST_F(RelocatableStorageBackendSchemaTest, ResolvesExactScalarAndCompositeNodeL
 		EXPECT_THROW(static_cast<void>(snapshot->findNodesByExactProperties(
 							 {"Person"}, {{"score", graph::PropertyValue(int64_t{42})}}, 1U, 3U)),
 					 FormatException);
+		// The overflow-safe probe must reject an unrepresentable result bound
+		// instead of wrapping maximum-size + 1 to zero and returning a false miss.
+		EXPECT_THROW(static_cast<void>(snapshot->findNodesByExactProperties(
+							 {"Person"}, {{"score", graph::PropertyValue(int64_t{42})}},
+							 std::numeric_limits<size_t>::max(), 3U)), FormatException);
 
 		const auto compositeMatch = snapshot->findNodesByExactProperties(
 				{"Person"}, {{"age", graph::PropertyValue(int64_t{30})}, {"city", graph::PropertyValue("Shanghai")}},
@@ -1414,6 +1531,1032 @@ TEST_F(RelocatableStorageBackendSchemaTest, ResolvesExactScalarAndCompositeNodeL
 													 3U, 3U),
 				std::nullopt);
 	}
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest, ReusesTheSnapshotReadSessionForExactIndexCandidates) {
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes(
+			{{{"Person"}, {{"score", graph::PropertyValue(int64_t{42})}}},
+			 {{"Person"}, {{"score", graph::PropertyValue(int64_t{42})}}}});
+	ASSERT_EQ(nodes.size(), 2U);
+	static_cast<void>(backend.createLogicalNodeIndex({"person_score", "Person", {"score"}}));
+
+	std::unique_ptr<LogicalGraphReadSnapshot> snapshot = backend.openLogicalGraphReadSnapshot();
+	ASSERT_NE(snapshot, nullptr);
+	EXPECT_TRUE(snapshot->supportsNativeExactNodeCandidates());
+	const bool valuesWereEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	const auto first = snapshot->findNodeCandidatesByExactProperties(
+			{"Person"}, {{"score", graph::PropertyValue(int64_t{42})}}, 2U, 1U);
+	const auto second = snapshot->findNodeCandidatesByExactProperties(
+			{"Person"}, {{"score", graph::PropertyValue(int64_t{42})}}, 2U, 1U);
+	const graph::debug::PerfTrace::Snapshot trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
+
+	ASSERT_TRUE(first.has_value());
+	ASSERT_TRUE(second.has_value());
+	ASSERT_TRUE(snapshot->nativeSnapshotGeneration().has_value());
+	EXPECT_EQ(first->snapshot_generation, *snapshot->nativeSnapshotGeneration());
+	EXPECT_EQ(second->snapshot_generation, *snapshot->nativeSnapshotGeneration());
+	EXPECT_TRUE(first->exact_match_verified);
+	EXPECT_TRUE(second->exact_match_verified);
+	ASSERT_EQ(first->candidates.size(), nodes.size());
+	EXPECT_EQ(first->candidates, second->candidates);
+	EXPECT_EQ(first->candidates.at(0).entity_id, nodes.at(0));
+	EXPECT_EQ(first->candidates.at(1).entity_id, nodes.at(1));
+	ASSERT_TRUE(trace.contains("native_graph.read.index_candidate_label_token_resolution"));
+	ASSERT_TRUE(trace.contains("native_graph.read.index_candidate_constraint_definition_read"));
+	ASSERT_TRUE(trace.contains("native_graph.read.index_candidate_definition_read"));
+	ASSERT_TRUE(trace.contains("native_graph.read.index_candidate_property_token_resolution"));
+	ASSERT_TRUE(trace.contains("native_graph.read.property_selected_column_batch_owners"));
+	EXPECT_EQ(trace.at("native_graph.read.index_candidate_label_token_resolution").totalValue, 1);
+	EXPECT_EQ(trace.at("native_graph.read.index_candidate_property_token_resolution").totalValue, 1);
+	EXPECT_EQ(trace.at("native_graph.read.index_candidate_constraint_definition_read").totalValue, 1);
+	EXPECT_EQ(trace.at("native_graph.read.index_candidate_definition_read").totalValue, 1);
+	EXPECT_EQ(trace.at("native_graph.read.property_selected_column_batch_owners").totalValue,
+			  static_cast<int64_t>(nodes.size() * 2U));
+
+	snapshot.reset();
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest, ReusesTheSnapshotReadSessionForScalarRangeIndexes) {
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes(
+			{{{"Person"}, {{"score", graph::PropertyValue(int64_t{7})}}},
+			 {{"Person"}, {{"score", graph::PropertyValue(int64_t{42})}}}});
+	ASSERT_EQ(nodes.size(), 2U);
+	static_cast<void>(backend.createLogicalNodeIndex({"person_score", "Person", {"score"}}));
+
+	std::unique_ptr<LogicalGraphReadSnapshot> snapshot = backend.openLogicalGraphReadSnapshot();
+	ASSERT_NE(snapshot, nullptr);
+	const bool valuesWereEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	const auto first = snapshot->findNodesByPropertyRange(
+			{"Person"}, {"score", graph::PropertyValue(int64_t{7}), graph::PropertyValue(), true, true}, 2U, 1U);
+	const auto second = snapshot->findNodesByPropertyRange(
+			{"Person"}, {"score", graph::PropertyValue(int64_t{7}), graph::PropertyValue(), true, true}, 2U, 1U);
+	const graph::debug::PerfTrace::Snapshot trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
+
+	ASSERT_TRUE(first.has_value());
+	ASSERT_TRUE(second.has_value());
+	ASSERT_EQ(first->size(), nodes.size());
+	EXPECT_EQ(*first, *second);
+	ASSERT_TRUE(trace.contains("native_graph.read.range_index_label_token_resolution"));
+	ASSERT_TRUE(trace.contains("native_graph.read.range_index_property_token_resolution"));
+	ASSERT_TRUE(trace.contains("native_graph.read.range_index_definition_read"));
+	ASSERT_TRUE(trace.contains("native_btree.read.range_cursor_root_descent"));
+	ASSERT_TRUE(trace.contains("native_graph.read.property_selected_batch_owners"));
+	EXPECT_EQ(trace.at("native_graph.read.range_index_label_token_resolution").totalValue, 1);
+	EXPECT_EQ(trace.at("native_graph.read.range_index_property_token_resolution").totalValue, 1);
+	EXPECT_EQ(trace.at("native_graph.read.range_index_definition_read").totalValue, 1);
+	EXPECT_EQ(trace.at("native_btree.read.range_cursor_root_descent").totalValue, 2);
+	// The first range lookup fills the snapshot-owned selected-property cache;
+	// the repeated lookup reuses those values and performs no second owner batch.
+	EXPECT_EQ(trace.at("native_graph.read.property_selected_batch_owners").totalValue, 2);
+
+	snapshot.reset();
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest, ScalarRangeVerificationUsesOneGlobalPropertyBatch) {
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	std::vector<LogicalGraphNodeCreateRequest> requests;
+	requests.reserve(300U);
+	for (int64_t score = 1; score <= 300; ++score) {
+		requests.push_back({{"Person"}, {{"score", graph::PropertyValue(score)}}});
+	}
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes(requests);
+	ASSERT_EQ(nodes.size(), requests.size());
+	static_cast<void>(backend.createLogicalNodeIndex({"person_score", "Person", {"score"}}));
+	std::unique_ptr<LogicalGraphReadSnapshot> snapshot = backend.openLogicalGraphReadSnapshot();
+	ASSERT_NE(snapshot, nullptr);
+	const bool valuesWereEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	const auto candidates = snapshot->findNodeCandidatesByPropertyRange(
+			{"Person"}, {"score", graph::PropertyValue(int64_t{1}), graph::PropertyValue(int64_t{300}), true, true},
+			requests.size(), 1U);
+	const graph::debug::PerfTrace::Snapshot trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
+	ASSERT_TRUE(candidates.has_value());
+	ASSERT_EQ(candidates->candidates.size(), requests.size());
+	ASSERT_EQ(candidates->verified_property_columns.size(), 1U);
+	EXPECT_EQ(candidates->verified_property_columns.front().values.size(), requests.size());
+	ASSERT_TRUE(trace.contains("native_graph.read.property_selected_batch_owners"));
+	EXPECT_EQ(trace.at("native_graph.read.property_selected_batch_owners").totalValue,
+			  static_cast<int64_t>(requests.size()));
+	ASSERT_TRUE(trace.contains("native_graph.read.directory_range_cursor_root_descents"));
+	// Label validation and Property validation use separate authenticated
+	// directory namespaces; each is descended once for the complete batch.
+	EXPECT_LE(trace.at("native_graph.read.directory_range_cursor_root_descents").totalValue, 2);
+	ASSERT_TRUE(trace.contains("native_graph.read.index_candidate_liveness_probes"));
+	ASSERT_TRUE(trace.contains("native_graph.read.index_candidate_verified_rows"));
+	EXPECT_EQ(trace.at("native_graph.read.index_candidate_liveness_probes").totalValue,
+			  static_cast<int64_t>(requests.size()));
+	EXPECT_EQ(trace.at("native_graph.read.index_candidate_verified_rows").totalValue,
+			  static_cast<int64_t>(requests.size()));
+	snapshot.reset();
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest, ScalarRangeCandidateStreamStopsBeforeReadingLaterBatches) {
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	std::vector<LogicalGraphNodeCreateRequest> requests;
+	requests.reserve(600U);
+	for (int64_t score = 1; score <= 600; ++score) {
+		requests.push_back({{"Person"}, {{"score", graph::PropertyValue(score)}}});
+	}
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes(requests);
+	ASSERT_EQ(nodes.size(), requests.size());
+	static_cast<void>(backend.createLogicalNodeIndex({"person_score", "Person", {"score"}}));
+	std::unique_ptr<LogicalGraphReadSnapshot> snapshot = backend.openLogicalGraphReadSnapshot();
+	ASSERT_NE(snapshot, nullptr);
+	ASSERT_TRUE(snapshot->supportsNativeRangeNodeCandidates());
+
+	const bool valuesWereEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	size_t callbackCount = 0U;
+	size_t callbackEntries = 0U;
+	const auto stopped = snapshot->visitNodeCandidatesByPropertyRange(
+			{"Person"}, {"score", graph::PropertyValue(int64_t{1}), graph::PropertyValue(int64_t{600}), true, true},
+			requests.size(), 1U, [&](const graph::storage::IndexCandidateBatch &batch) -> bool {
+				++callbackCount;
+				callbackEntries += batch.candidates.size();
+				EXPECT_EQ(batch.snapshot_generation, snapshot->nativeSnapshotGeneration().value());
+				EXPECT_TRUE(batch.predicates_verified);
+				EXPECT_EQ(batch.verified_property_columns.size(), 1U);
+				if (batch.verified_property_columns.size() != 1U) {
+					return false;
+				}
+				EXPECT_EQ(batch.verified_property_columns.front().values.size(), batch.candidates.size());
+				EXPECT_TRUE(std::ranges::is_sorted(batch.candidates, {}, &graph::storage::EntityRef::entity_id));
+				return false;
+			});
+		const graph::debug::PerfTrace::Snapshot trace = graph::debug::PerfTrace::snapshotAndReset();
+		graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
+
+	ASSERT_TRUE(stopped.has_value());
+	EXPECT_FALSE(*stopped);
+	EXPECT_EQ(callbackCount, 1U);
+	EXPECT_EQ(callbackEntries, graph::storage::BTreeIndex::DEFAULT_CURSOR_BATCH_ENTRIES);
+	ASSERT_TRUE(trace.contains("native_btree.read.range_cursor_root_descent"));
+	EXPECT_EQ(trace.at("native_btree.read.range_cursor_root_descent").totalValue, 1);
+	// Early termination must not validate a second Property batch or read the
+	// remaining index leaves after the first bounded batch was accepted.
+	ASSERT_TRUE(trace.contains("native_graph.read.property_selected_batch_owners"));
+	EXPECT_EQ(trace.at("native_graph.read.property_selected_batch_owners").totalValue,
+			static_cast<int64_t>(graph::storage::BTreeIndex::DEFAULT_CURSOR_BATCH_ENTRIES));
+
+	snapshot.reset();
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest, CandidateStreamsEnforceNodeResultBounds) {
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	const std::vector<LogicalGraphNodeCreateRequest> requests{
+			{{"Person"}, {{"score", graph::PropertyValue(int64_t{7})},
+								 {"city", graph::PropertyValue("Shanghai")}, {"age", graph::PropertyValue(int64_t{7})}}},
+			{{"Person"}, {{"score", graph::PropertyValue(int64_t{7})},
+								 {"city", graph::PropertyValue("Shanghai")}, {"age", graph::PropertyValue(int64_t{42})}}}};
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes(requests);
+	ASSERT_EQ(nodes.size(), 2U);
+	static_cast<void>(backend.createLogicalNodeIndex({"person_score", "Person", {"score"}}));
+	static_cast<void>(backend.createLogicalNodeIndex({"person_city_age", "Person", {"city", "age"}}));
+	std::unique_ptr<LogicalGraphReadSnapshot> snapshot = backend.openLogicalGraphReadSnapshot();
+	ASSERT_NE(snapshot, nullptr);
+
+	const auto acceptAll = [](const graph::storage::IndexCandidateBatch &) { return true; };
+	EXPECT_THROW(static_cast<void>(snapshot->visitNodeCandidatesByExactProperties(
+			{"Person"}, {{"score", graph::PropertyValue(int64_t{7})}}, 1U, 8U, acceptAll)), FormatException);
+	EXPECT_THROW(static_cast<void>(snapshot->visitNodeCandidatesByPropertyRange(
+			{"Person"}, {"score", graph::PropertyValue(int64_t{7}), graph::PropertyValue(int64_t{7}), true, true},
+			1U, 8U, acceptAll)), FormatException);
+	const LogicalGraphCompositePropertyRange composite{
+			{{"city", graph::PropertyValue("Shanghai")}},
+			{"age", graph::PropertyValue(int64_t{0}), graph::PropertyValue(int64_t{100}), true, true}};
+	EXPECT_THROW(static_cast<void>(snapshot->visitNodeCandidatesByCompositePropertyRange(
+			{"Person"}, composite, 1U, 8U, acceptAll)), FormatException);
+
+	snapshot.reset();
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest, CandidateStreamsEnforceProducerByteBounds) {
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	const std::string largeValue(256U, 'x');
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes({
+			{{"Person"}, {{"code", graph::PropertyValue(largeValue)},
+								 {"city", graph::PropertyValue(largeValue)}, {"age", graph::PropertyValue(int64_t{7})}}}});
+	ASSERT_EQ(nodes.size(), 1U);
+	static_cast<void>(backend.createLogicalNodeIndex({"person_code", "Person", {"code"}}));
+	static_cast<void>(backend.createLogicalNodeIndex({"person_city_age", "Person", {"city", "age"}}));
+	std::unique_ptr<LogicalGraphReadSnapshot> snapshot = backend.openLogicalGraphReadSnapshot();
+	ASSERT_NE(snapshot, nullptr);
+	const auto acceptAll = [](const graph::storage::IndexCandidateBatch &) { return true; };
+	EXPECT_THROW(static_cast<void>(snapshot->visitNodeCandidatesByExactProperties(
+			{"Person"}, {{"code", graph::PropertyValue(largeValue)}}, 1U, 8U, 1U, acceptAll)), FormatException);
+	EXPECT_THROW(static_cast<void>(snapshot->visitNodeCandidatesByPropertyRange(
+			{"Person"}, {"code", graph::PropertyValue(std::string("a")), graph::PropertyValue(), true, true}, 1U, 8U,
+			1U, acceptAll)), FormatException);
+	const LogicalGraphCompositePropertyRange composite{
+			{{"city", graph::PropertyValue(largeValue)}},
+			{"age", graph::PropertyValue(int64_t{0}), graph::PropertyValue(int64_t{10}), true, true}};
+	EXPECT_THROW(static_cast<void>(snapshot->visitNodeCandidatesByCompositePropertyRange(
+			{"Person"}, composite, 1U, 8U, 1U, acceptAll)), FormatException);
+	snapshot.reset();
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest, RangeIndexCandidatesRetainOnlyVerifiedIndexedProperties) {
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes(
+			{{{"Person"}, {{"score", graph::PropertyValue(int64_t{7})},
+								{"unused", graph::PropertyValue("large payload")}}},
+			 { {"Person"}, {{"score", graph::PropertyValue(int64_t{42})},
+								{"unused", graph::PropertyValue("another payload")}}}});
+	ASSERT_EQ(nodes.size(), 2U);
+	static_cast<void>(backend.createLogicalNodeIndex({"person_score", "Person", {"score"}}));
+	std::unique_ptr<LogicalGraphReadSnapshot> snapshot = backend.openLogicalGraphReadSnapshot();
+	ASSERT_NE(snapshot, nullptr);
+	ASSERT_TRUE(snapshot->supportsNativeRangeNodeCandidates());
+	const auto candidates = snapshot->findNodeCandidatesByPropertyRange(
+			{"Person"}, {"score", graph::PropertyValue(int64_t{7}), graph::PropertyValue(), true, true}, 2U, 2U);
+	ASSERT_TRUE(candidates.has_value());
+	EXPECT_TRUE(candidates->predicates_verified);
+	EXPECT_FALSE(candidates->exact_match_verified);
+	ASSERT_EQ(candidates->candidates.size(), nodes.size());
+	ASSERT_EQ(candidates->verified_property_columns.size(), 1U);
+	EXPECT_EQ(candidates->verified_property_columns.front().key, "score");
+	ASSERT_EQ(candidates->verified_property_columns.front().values.size(), nodes.size());
+	for (size_t index = 0U; index < nodes.size(); ++index) {
+		EXPECT_EQ(candidates->verified_property_columns.front().values[index],
+				  graph::PropertyValue(int64_t{index == 0U ? 7 : 42}));
+	}
+	EXPECT_EQ(candidates->candidates.front().entity_id, nodes.front());
+	snapshot.reset();
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest, ScalarRangeCandidateStreamConsumesMultipleBatchesInLogicalOrder) {
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	std::vector<LogicalGraphNodeCreateRequest> requests;
+	requests.reserve(513U);
+	for (int64_t score = 1; score <= 513; ++score) {
+		requests.push_back({{"Person"}, {{"score", graph::PropertyValue(score)}}});
+	}
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes(requests);
+	ASSERT_EQ(nodes.size(), requests.size());
+	static_cast<void>(backend.createLogicalNodeIndex({"person_score", "Person", {"score"}}));
+	std::unique_ptr<LogicalGraphReadSnapshot> snapshot = backend.openLogicalGraphReadSnapshot();
+	ASSERT_NE(snapshot, nullptr);
+	size_t callbackCount = 0U;
+	size_t callbackEntries = 0U;
+	uint64_t previousInBatch = 0U;
+	const auto completed = snapshot->visitNodeCandidatesByPropertyRange(
+			{"Person"}, {"score", graph::PropertyValue(int64_t{1}), graph::PropertyValue(int64_t{513}), true, true},
+			requests.size(), 1U, [&](const graph::storage::IndexCandidateBatch &batch) {
+				++callbackCount;
+				callbackEntries += batch.candidates.size();
+				uint64_t previous = 0U;
+				for (size_t index = 0U; index < batch.candidates.size(); ++index) {
+					EXPECT_GT(batch.candidates[index].entity_id, previous);
+					previous = batch.candidates[index].entity_id;
+					EXPECT_EQ(batch.verified_property_columns.front().values[index],
+							graph::PropertyValue(static_cast<int64_t>(batch.candidates[index].entity_id)));
+				}
+				EXPECT_GT(previous, previousInBatch);
+				previousInBatch = previous;
+				return true;
+			});
+	ASSERT_TRUE(completed.has_value());
+	EXPECT_TRUE(*completed);
+	EXPECT_EQ(callbackCount, 3U);
+	EXPECT_EQ(callbackEntries, requests.size());
+	snapshot.reset();
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest, ScalarRangeCandidateStreamPreservesOrderWithinValueBatches) {
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	std::vector<LogicalGraphNodeCreateRequest> requests;
+	requests.reserve(600U);
+	for (int64_t score = 600; score >= 1; --score) {
+		requests.push_back({{"Person"}, {{"score", graph::PropertyValue(score)}}});
+	}
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes(requests);
+	ASSERT_EQ(nodes.size(), requests.size());
+	static_cast<void>(backend.createLogicalNodeIndex({"person_score", "Person", {"score"}}));
+	std::unique_ptr<LogicalGraphReadSnapshot> snapshot = backend.openLogicalGraphReadSnapshot();
+	ASSERT_NE(snapshot, nullptr);
+	std::vector<uint64_t> observed;
+	const auto completed = snapshot->visitNodeCandidatesByPropertyRange(
+			{"Person"}, {"score", graph::PropertyValue(int64_t{1}), graph::PropertyValue(int64_t{600}), true, true},
+			requests.size(), 1U, 1U << 20U, [&](const graph::storage::IndexCandidateBatch &batch) {
+				EXPECT_TRUE(std::ranges::is_sorted(batch.candidates, {}, &EntityRef::entity_id));
+				for (const EntityRef &candidate: batch.candidates) {
+					observed.push_back(candidate.entity_id);
+				}
+				return true;
+			});
+	ASSERT_TRUE(completed.has_value());
+	EXPECT_TRUE(*completed);
+	std::vector<uint64_t> expected = nodes;
+	std::ranges::sort(observed);
+	std::ranges::sort(expected);
+	EXPECT_EQ(observed, expected);
+	snapshot.reset();
+	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest,
+		CandidateStreamsRemainBoundToTheirSnapshotAcrossIndexUpdates) {
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	const std::vector<uint64_t> initialNodes = backend.createLogicalNodes(
+			{{{"Person"}, {{"score", graph::PropertyValue(int64_t{7})},
+									 {"city", graph::PropertyValue("Shanghai")},
+									 {"age", graph::PropertyValue(int64_t{7})}}}});
+	ASSERT_EQ(initialNodes.size(), 1U);
+	static_cast<void>(backend.createLogicalNodeIndex({"person_score", "Person", {"score"}}));
+	static_cast<void>(backend.createLogicalNodeIndex({"person_city_age", "Person", {"city", "age"}}));
+
+	std::unique_ptr<LogicalGraphReadSnapshot> oldSnapshot = backend.openLogicalGraphReadSnapshot();
+	ASSERT_NE(oldSnapshot, nullptr);
+	ASSERT_TRUE(oldSnapshot->nativeSnapshotGeneration().has_value());
+	const uint64_t oldGeneration = *oldSnapshot->nativeSnapshotGeneration();
+
+	const std::vector<uint64_t> laterNodes = backend.createLogicalNodes(
+			{{{"Person"}, {{"score", graph::PropertyValue(int64_t{7})},
+									  {"city", graph::PropertyValue("Shanghai")},
+									  {"age", graph::PropertyValue(int64_t{42})}}}});
+	ASSERT_EQ(laterNodes.size(), 1U);
+
+	const LogicalGraphPropertyRange scalarRange{
+			"score", graph::PropertyValue(int64_t{0}), graph::PropertyValue(int64_t{100}), true, true};
+	const LogicalGraphCompositePropertyRange compositeRange{
+			{{"city", graph::PropertyValue("Shanghai")} },
+			{"age", graph::PropertyValue(int64_t{0}), graph::PropertyValue(int64_t{100}), true, true}};
+	const auto collectExact = [](const LogicalGraphReadSnapshot &snapshot) -> std::vector<uint64_t> {
+		std::vector<uint64_t> ids;
+		const auto completed = snapshot.visitNodeCandidatesByExactProperties(
+				{"Person"}, {{"score", graph::PropertyValue(int64_t{7})}}, 16U, 16U,
+				[&](const graph::storage::IndexCandidateBatch &batch) -> bool {
+					if (!batch.exact_match_verified || !batch.predicates_verified ||
+							batch.candidates.size() != batch.verified_property_columns.front().values.size()) {
+						return false;
+					}
+					EXPECT_EQ(batch.snapshot_generation, snapshot.nativeSnapshotGeneration().value());
+					for (size_t index = 0U; index < batch.candidates.size(); ++index) {
+						if (!ids.empty()) {
+							EXPECT_LT(ids.back(), batch.candidates[index].entity_id);
+						}
+						ids.push_back(batch.candidates[index].entity_id);
+					}
+					return true;
+				});
+		if (!completed.has_value()) {
+			ADD_FAILURE() << "exact candidate stream unexpectedly declined";
+			return {};
+		}
+		EXPECT_TRUE(*completed);
+		return ids;
+	};
+
+	const auto collectScalar = [](const LogicalGraphReadSnapshot &snapshot,
+									 const LogicalGraphPropertyRange &range) -> std::vector<uint64_t> {
+			std::vector<uint64_t> ids;
+			const auto completed = snapshot.visitNodeCandidatesByPropertyRange(
+					{"Person"}, range, 16U, 16U, [&](const graph::storage::IndexCandidateBatch &batch) -> bool {
+						EXPECT_TRUE(batch.predicates_verified);
+						EXPECT_TRUE(batch.label_scope_verified);
+						EXPECT_EQ(batch.snapshot_generation, snapshot.nativeSnapshotGeneration().value());
+						if (batch.verified_property_columns.size() != 1U ||
+								batch.candidates.size() != batch.verified_property_columns.front().values.size()) {
+							return false;
+						}
+						for (size_t index = 0U; index < batch.candidates.size(); ++index) {
+							if (!ids.empty()) {
+								EXPECT_LT(ids.back(), batch.candidates[index].entity_id);
+							}
+							ids.push_back(batch.candidates[index].entity_id);
+							EXPECT_EQ(batch.verified_property_columns.front().values[index].getType(),
+															  graph::PropertyType::INTEGER);
+						}
+						return true;
+					});
+		if (!completed.has_value()) {
+			ADD_FAILURE() << "scalar candidate stream unexpectedly declined";
+			return {};
+		}
+		EXPECT_TRUE(*completed);
+		return ids;
+	};
+	const auto collectComposite = [](const LogicalGraphReadSnapshot &snapshot,
+									 const LogicalGraphCompositePropertyRange &range) -> std::vector<uint64_t> {
+			std::vector<uint64_t> ids;
+			const auto completed = snapshot.visitNodeCandidatesByCompositePropertyRange(
+					{"Person"}, range, 16U, 16U, [&](const graph::storage::IndexCandidateBatch &batch) -> bool {
+						EXPECT_TRUE(batch.predicates_verified);
+						EXPECT_EQ(batch.snapshot_generation, snapshot.nativeSnapshotGeneration().value());
+						if (batch.verified_property_columns.size() != 2U ||
+								batch.candidates.size() != batch.verified_property_columns[0].values.size() ||
+								batch.candidates.size() != batch.verified_property_columns[1].values.size()) {
+							return false;
+						}
+						for (size_t index = 0U; index < batch.candidates.size(); ++index) {
+							if (!ids.empty()) {
+								EXPECT_LT(ids.back(), batch.candidates[index].entity_id);
+							}
+							ids.push_back(batch.candidates[index].entity_id);
+							EXPECT_EQ(batch.verified_property_columns[0].values[index], graph::PropertyValue("Shanghai"));
+						}
+						return true;
+					});
+		if (!completed.has_value()) {
+			ADD_FAILURE() << "composite candidate stream unexpectedly declined";
+			return {};
+		}
+		EXPECT_TRUE(*completed);
+		return ids;
+	};
+
+	const std::vector<uint64_t> oldExact = collectExact(*oldSnapshot);
+	const std::vector<uint64_t> oldScalar = collectScalar(*oldSnapshot, scalarRange);
+	const std::vector<uint64_t> oldComposite = collectComposite(*oldSnapshot, compositeRange);
+	EXPECT_EQ(oldExact, initialNodes);
+	EXPECT_EQ(oldScalar, initialNodes);
+	EXPECT_EQ(oldComposite, initialNodes);
+
+	std::unique_ptr<LogicalGraphReadSnapshot> currentSnapshot = backend.openLogicalGraphReadSnapshot();
+	ASSERT_NE(currentSnapshot, nullptr);
+	ASSERT_TRUE(currentSnapshot->nativeSnapshotGeneration().has_value());
+	EXPECT_GT(*currentSnapshot->nativeSnapshotGeneration(), oldGeneration);
+	const std::vector<uint64_t> currentExact = collectExact(*currentSnapshot);
+	const std::vector<uint64_t> currentScalar = collectScalar(*currentSnapshot, scalarRange);
+	const std::vector<uint64_t> currentComposite = collectComposite(*currentSnapshot, compositeRange);
+	EXPECT_EQ(currentExact, (std::vector<uint64_t>{initialNodes.front(), laterNodes.front()}));
+	EXPECT_EQ(currentScalar, (std::vector<uint64_t>{initialNodes.front(), laterNodes.front()}));
+	EXPECT_EQ(currentComposite, (std::vector<uint64_t>{initialNodes.front(), laterNodes.front()}));
+
+	currentSnapshot.reset();
+	oldSnapshot.reset();
+	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest,
+		CandidateStreamKeepsConcurrentWriterInvisibleToPinnedSnapshot) {
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	std::vector<LogicalGraphNodeCreateRequest> initialRequests;
+	initialRequests.reserve(128U);
+	for (int64_t score = 1; score <= 128; ++score) {
+		initialRequests.push_back({{"Person"}, {{"score", graph::PropertyValue(score)}}});
+	}
+	const std::vector<uint64_t> initialNodes = backend.createLogicalNodes(initialRequests);
+	ASSERT_EQ(initialNodes.size(), initialRequests.size());
+	static_cast<void>(backend.createLogicalNodeIndex({"person_score", "Person", {"score"}}));
+	std::unique_ptr<LogicalGraphReadSnapshot> oldSnapshot = backend.openLogicalGraphReadSnapshot();
+	ASSERT_NE(oldSnapshot, nullptr);
+
+	std::vector<uint64_t> observedByOldSnapshot;
+	std::exception_ptr readerFailure;
+	std::atomic<bool> readerStarted{false};
+	std::thread reader([&] {
+		try {
+			readerStarted.store(true, std::memory_order_release);
+			const auto result = oldSnapshot->findNodeCandidatesByPropertyRange(
+					{"Person"}, {"score", graph::PropertyValue(int64_t{1}), graph::PropertyValue(int64_t{256}), true, true},
+					256U, 1U);
+			if (!result.has_value()) {
+				throw std::runtime_error("concurrent candidate lookup unexpectedly declined");
+			}
+			for (const EntityRef &candidate: result->candidates) {
+				observedByOldSnapshot.push_back(candidate.entity_id);
+			}
+		} catch (...) {
+			readerFailure = std::current_exception();
+		}
+	});
+	while (!readerStarted.load(std::memory_order_acquire)) {
+		std::this_thread::yield();
+	}
+
+	const std::vector<uint64_t> laterNodes = backend.createLogicalNodes(
+			{{{"Person"}, {{"score", graph::PropertyValue(int64_t{200})}}},
+			 { {"Person"}, {{"score", graph::PropertyValue(int64_t{201})}}}});
+	ASSERT_EQ(laterNodes.size(), 2U);
+	reader.join();
+	if (readerFailure != nullptr) {
+		std::rethrow_exception(readerFailure);
+	}
+
+	EXPECT_EQ(observedByOldSnapshot, initialNodes);
+	std::unique_ptr<LogicalGraphReadSnapshot> currentSnapshot = backend.openLogicalGraphReadSnapshot();
+	ASSERT_NE(currentSnapshot, nullptr);
+	const auto current = currentSnapshot->findNodeCandidatesByPropertyRange(
+			{"Person"}, {"score", graph::PropertyValue(int64_t{1}), graph::PropertyValue(int64_t{256}), true, true},
+			256U, 1U);
+	ASSERT_TRUE(current.has_value());
+	EXPECT_EQ(current->candidates.size(), initialNodes.size() + laterNodes.size());
+	currentSnapshot.reset();
+	oldSnapshot.reset();
+	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest,
+		CandidateStreamsApplyLivenessWithoutBreakingAnOlderSnapshot) {
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes({
+			{{"Person"}, {{"score", graph::PropertyValue(int64_t{7})},
+										{"city", graph::PropertyValue("Shanghai")}, {"age", graph::PropertyValue(int64_t{7})}}},
+			{{"Person"}, {{"score", graph::PropertyValue(int64_t{7})},
+										{"city", graph::PropertyValue("Shanghai")}, {"age", graph::PropertyValue(int64_t{7})}}}});
+	ASSERT_EQ(nodes.size(), 2U);
+	static_cast<void>(backend.createLogicalNodeIndex({"person_score", "Person", {"score"}}));
+	static_cast<void>(backend.createLogicalNodeIndex({"person_city_age", "Person", {"city", "age"}}));
+	std::unique_ptr<LogicalGraphReadSnapshot> oldSnapshot = backend.openLogicalGraphReadSnapshot();
+	ASSERT_NE(oldSnapshot, nullptr);
+	backend.deleteLogicalNodes({{nodes.back(), false, 0U}});
+
+	const LogicalGraphPropertyRange range{
+			"score", graph::PropertyValue(int64_t{7}), graph::PropertyValue(int64_t{7}), true, true};
+	const LogicalGraphCompositePropertyRange compositeRange{
+			{{"city", graph::PropertyValue("Shanghai")} },
+			{"age", graph::PropertyValue(int64_t{7}), graph::PropertyValue(int64_t{7}), true, true}};
+	const auto collectExact = [&](const LogicalGraphReadSnapshot &snapshot) {
+		std::vector<uint64_t> ids;
+		const auto completed = snapshot.visitNodeCandidatesByExactProperties(
+				{"Person"}, {{"score", graph::PropertyValue(int64_t{7})}}, 8U, 8U,
+				[&](const graph::storage::IndexCandidateBatch &batch) -> bool {
+					if (!batch.exact_match_verified || !batch.predicates_verified ||
+							batch.verified_property_columns.size() != 1U ||
+							batch.candidates.size() != batch.verified_property_columns.front().values.size()) {
+						return false;
+					}
+					for (size_t index = 0U; index < batch.candidates.size(); ++index) {
+						ids.push_back(batch.candidates[index].entity_id);
+						EXPECT_EQ(batch.verified_property_columns.front().values[index], graph::PropertyValue(int64_t{7}));
+					}
+					return true;
+				});
+		if (!completed.has_value()) {
+			ADD_FAILURE() << "exact liveness candidate stream unexpectedly declined";
+			return std::vector<uint64_t>{};
+		}
+		EXPECT_TRUE(*completed);
+		return ids;
+	};
+	const auto collect = [&](const LogicalGraphReadSnapshot &snapshot) {
+		std::vector<uint64_t> ids;
+		const auto completed = snapshot.visitNodeCandidatesByPropertyRange(
+				{"Person"}, range, 8U, 8U, [&](const graph::storage::IndexCandidateBatch &batch) -> bool {
+					if (!batch.predicates_verified || batch.snapshot_generation == 0U ||
+							batch.verified_property_columns.size() != 1U ||
+							batch.candidates.size() != batch.verified_property_columns.front().values.size()) {
+						return false;
+					}
+					for (size_t index = 0U; index < batch.candidates.size(); ++index) {
+						ids.push_back(batch.candidates[index].entity_id);
+						EXPECT_EQ(batch.verified_property_columns.front().values[index], graph::PropertyValue(int64_t{7}));
+					}
+					return true;
+				});
+		if (!completed.has_value()) {
+			ADD_FAILURE() << "liveness candidate stream unexpectedly declined";
+			return std::vector<uint64_t>{};
+		}
+		EXPECT_TRUE(*completed);
+		return ids;
+	};
+	const auto collectComposite = [&](const LogicalGraphReadSnapshot &snapshot) {
+		std::vector<uint64_t> ids;
+		const auto completed = snapshot.visitNodeCandidatesByCompositePropertyRange(
+				{"Person"}, compositeRange, 8U, 8U, [&](const graph::storage::IndexCandidateBatch &batch) {
+					if (batch.verified_property_columns.size() != 2U ||
+							batch.candidates.size() != batch.verified_property_columns[0].values.size() ||
+							batch.candidates.size() != batch.verified_property_columns[1].values.size()) {
+						return false;
+					}
+					for (size_t index = 0U; index < batch.candidates.size(); ++index) {
+						ids.push_back(batch.candidates[index].entity_id);
+						EXPECT_EQ(batch.verified_property_columns[0].values[index], graph::PropertyValue("Shanghai"));
+					}
+					return true;
+				});
+		if (!completed.has_value()) {
+			ADD_FAILURE() << "composite liveness candidate stream unexpectedly declined";
+			return ids;
+		}
+		EXPECT_TRUE(*completed);
+		return ids;
+	};
+
+	EXPECT_EQ(collectExact(*oldSnapshot), nodes);
+	EXPECT_EQ(collect(*oldSnapshot), nodes);
+	EXPECT_EQ(collectComposite(*oldSnapshot), nodes);
+	std::unique_ptr<LogicalGraphReadSnapshot> currentSnapshot = backend.openLogicalGraphReadSnapshot();
+	ASSERT_NE(currentSnapshot, nullptr);
+	EXPECT_EQ(collectExact(*currentSnapshot), std::vector<uint64_t>{nodes.front()});
+	EXPECT_EQ(collect(*currentSnapshot), std::vector<uint64_t>{nodes.front()});
+	EXPECT_EQ(collectComposite(*currentSnapshot), std::vector<uint64_t>{nodes.front()});
+	currentSnapshot.reset();
+	oldSnapshot.reset();
+	backend.close();
+
+	RelocatableStorageBackend reopened(options());
+	reopened.open();
+	std::unique_ptr<LogicalGraphReadSnapshot> reopenedSnapshot = reopened.openLogicalGraphReadSnapshot();
+	ASSERT_NE(reopenedSnapshot, nullptr);
+	EXPECT_EQ(collectExact(*reopenedSnapshot), std::vector<uint64_t>{nodes.front()});
+	EXPECT_EQ(collect(*reopenedSnapshot), std::vector<uint64_t>{nodes.front()});
+	EXPECT_EQ(collectComposite(*reopenedSnapshot), std::vector<uint64_t>{nodes.front()});
+	reopenedSnapshot.reset();
+	EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity()));
+	reopened.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest,
+		CandidateStreamsRejectAnIndexedPropertyAfterReplacementAndPreserveOldSnapshot) {
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes({
+			{{"Person"}, {{"score", graph::PropertyValue(int64_t{42})}}}});
+	ASSERT_EQ(nodes.size(), 1U);
+	static_cast<void>(backend.createLogicalNodeIndex({"person_score", "Person", {"score"}}));
+	std::unique_ptr<LogicalGraphReadSnapshot> oldSnapshot = backend.openLogicalGraphReadSnapshot();
+	ASSERT_NE(oldSnapshot, nullptr);
+
+	// Replacing the complete Property collection removes the indexed field. The
+	// old snapshot must retain the prior generation, while the current generation
+	// must not return a stale index candidate or silently treat the field as live.
+	backend.replaceLogicalNodeProperties({{nodes.front(), {}}});
+
+	const auto oldExact = oldSnapshot->findNodeCandidatesByExactProperties(
+			{"Person"}, {{"score", graph::PropertyValue(int64_t{42})}}, 2U, 2U);
+	ASSERT_TRUE(oldExact.has_value());
+	ASSERT_EQ(oldExact->candidates.size(), 1U);
+	EXPECT_EQ(oldExact->candidates.front().entity_id, nodes.front());
+
+	std::unique_ptr<LogicalGraphReadSnapshot> currentSnapshot = backend.openLogicalGraphReadSnapshot();
+	ASSERT_NE(currentSnapshot, nullptr);
+	const auto currentExact = currentSnapshot->findNodeCandidatesByExactProperties(
+			{"Person"}, {{"score", graph::PropertyValue(int64_t{42})}}, 2U, 2U);
+	ASSERT_TRUE(currentExact.has_value());
+	EXPECT_TRUE(currentExact->candidates.empty());
+	const auto currentRange = currentSnapshot->findNodeCandidatesByPropertyRange(
+			{"Person"}, {"score", graph::PropertyValue(int64_t{0}), graph::PropertyValue(int64_t{100}), true, true}, 2U,
+			2U);
+	ASSERT_TRUE(currentRange.has_value());
+	EXPECT_TRUE(currentRange->candidates.empty());
+
+	currentSnapshot.reset();
+	oldSnapshot.reset();
+	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+	backend.close();
+
+	RelocatableStorageBackend reopened(options());
+	reopened.open();
+	std::unique_ptr<LogicalGraphReadSnapshot> reopenedSnapshot = reopened.openLogicalGraphReadSnapshot();
+	ASSERT_NE(reopenedSnapshot, nullptr);
+	const auto reopenedExact = reopenedSnapshot->findNodeCandidatesByExactProperties(
+			{"Person"}, {{"score", graph::PropertyValue(int64_t{42})}}, 2U, 2U);
+	ASSERT_TRUE(reopenedExact.has_value());
+	EXPECT_TRUE(reopenedExact->candidates.empty());
+	reopenedSnapshot.reset();
+	EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity()));
+	reopened.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest, UniqueCandidateStreamEnforcesProducerByteBound) {
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	static_cast<void>(backend.createLogicalConstraint({"person_code_unique",
+			LogicalGraphConstraintEntityKind::LGCEK_NODE, LogicalGraphConstraintKind::LGCK_UNIQUE,
+			"Person", {"code"}, LogicalGraphConstraintPropertyType::LGCPT_NONE}));
+	const std::string largeValue(256U, 'x');
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes({
+			{{"Person"}, {{"code", graph::PropertyValue(largeValue)}}}});
+	ASSERT_EQ(nodes.size(), 1U);
+	std::unique_ptr<LogicalGraphReadSnapshot> snapshot = backend.openLogicalGraphReadSnapshot();
+	ASSERT_NE(snapshot, nullptr);
+	ASSERT_TRUE(snapshot->supportsNativeExactNodeCandidates());
+	const auto acceptAll = [](const graph::storage::IndexCandidateBatch &) { return true; };
+	EXPECT_THROW(static_cast<void>(snapshot->visitNodeCandidatesByExactProperties(
+			{"Person"}, {{"code", graph::PropertyValue(largeValue)}}, 1U, 4U, 1U, acceptAll)), FormatException);
+	snapshot.reset();
+	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest, ReusesCatalogDescriptorAcrossEntityPagesDuringInsertionPlanning) {
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	std::vector<LogicalGraphNodeCreateRequest> initial;
+	initial.reserve(600U);
+	for (size_t index = 0U; index < 600U; ++index) {
+		initial.push_back({{"CatalogReuse"}, {}});
+	}
+	const std::vector<uint64_t> initialNodes = backend.createLogicalNodes(initial);
+	ASSERT_EQ(initialNodes.size(), initial.size());
+
+	const bool valuesWereEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	ASSERT_EQ(backend.createLogicalNodes({{{"CatalogReuse"}, {}}}).size(), 1U);
+	const graph::debug::PerfTrace::Snapshot trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
+
+	// The planner keeps a snapshot-pinned insertion target cache after the
+	// initial batch. A subsequent insert should reuse it without rescanning the
+	// complete Entity Directory or reloading the pool descriptor.
+	EXPECT_TRUE(trace.contains("native_graph.commit.entity_insert_target_cache_hits"));
+	EXPECT_EQ(trace.at("native_graph.commit.entity_insert_target_cache_hits").totalValue, 1);
+	EXPECT_FALSE(trace.contains("native_graph.commit.entity_insert_node_directory_pages"));
+	EXPECT_FALSE(trace.contains("native_graph.commit.entity_insert_catalog_lookups"));
+
+	// A delete-only publication must preserve the untouched insertion targets so
+	// the following insert still avoids a full Entity Directory scan.
+	backend.deleteLogicalNodes({{initialNodes.front()}});
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	ASSERT_EQ(backend.createLogicalNodes({{{"CatalogReuse"}, {}}}).size(), 1U);
+	const graph::debug::PerfTrace::Snapshot afterDelete = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
+	ASSERT_TRUE(afterDelete.contains("native_graph.commit.entity_insert_target_cache_hits"));
+	EXPECT_EQ(afterDelete.at("native_graph.commit.entity_insert_target_cache_hits").totalValue, 1);
+	EXPECT_FALSE(afterDelete.contains("native_graph.commit.entity_insert_node_directory_pages"));
+	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest, GroupsBulkNodeInsertionsByBoundedEntityPageTargets) {
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	std::vector<LogicalGraphNodeCreateRequest> requests;
+	requests.reserve(600U);
+	for (size_t index = 0U; index < 600U; ++index) {
+		requests.push_back({{"GroupedInsertions"}, {}});
+	}
+	const bool valuesWereEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	ASSERT_EQ(backend.createLogicalNodes(requests).size(), requests.size());
+	const graph::debug::PerfTrace::Snapshot trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
+
+	ASSERT_TRUE(trace.contains("native_graph.commit.entity_insert_target_pages"));
+	ASSERT_TRUE(trace.contains("native_graph.commit.entity_insert_target_records"));
+	EXPECT_EQ(trace.at("native_graph.commit.entity_insert_target_records").totalValue,
+			static_cast<int64_t>(requests.size()));
+	EXPECT_GT(trace.at("native_graph.commit.entity_insert_target_pages").totalValue, 0);
+	EXPECT_LT(trace.at("native_graph.commit.entity_insert_target_pages").totalValue,
+			trace.at("native_graph.commit.entity_insert_target_records").totalValue);
+	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest, ResolvesBulkNodeMutationsThroughOneSortedDirectoryBatch) {
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	std::vector<LogicalGraphNodeCreateRequest> creates;
+	creates.reserve(600U);
+	for (size_t index = 0U; index < 600U; ++index) {
+		creates.push_back({{"BulkMutation"}, {{"value", graph::PropertyValue(static_cast<int64_t>(index))}}});
+	}
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes(creates);
+	ASSERT_EQ(nodes.size(), creates.size());
+
+	std::vector<LogicalGraphPropertyReplaceRequest> replacements;
+	replacements.reserve(nodes.size());
+	for (const uint64_t nodeId: nodes) {
+		replacements.push_back({nodeId, {{"value", graph::PropertyValue(int64_t{-1})}}});
+	}
+	const bool valuesWereEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	backend.replaceLogicalNodeProperties(replacements);
+	const graph::debug::PerfTrace::Snapshot trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
+
+	ASSERT_TRUE(trace.contains("native_graph.read.entity_directory_batch_requests"));
+	EXPECT_EQ(trace.at("native_graph.read.entity_directory_batch_requests").totalValue, 1);
+	ASSERT_TRUE(trace.contains("native_graph.read.entity_directory_batch_ids"));
+	EXPECT_EQ(trace.at("native_graph.read.entity_directory_batch_ids").totalValue,
+			static_cast<int64_t>(nodes.size()));
+	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest, ResolvesBulkEdgeMutationsThroughOneSortedDirectoryBatch) {
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes({{{"BulkMutation"}, {}}, {{"BulkMutation"}, {}}});
+	ASSERT_EQ(nodes.size(), 2U);
+	std::vector<LogicalGraphEdgeCreateRequest> creates;
+	creates.reserve(600U);
+	for (size_t index = 0U; index < 600U; ++index) {
+		creates.push_back({nodes.front(), nodes.back(), "LINK", {{"value", graph::PropertyValue(static_cast<int64_t>(index))}}});
+	}
+	const std::vector<uint64_t> edges = backend.createLogicalEdges(creates);
+	ASSERT_EQ(edges.size(), creates.size());
+
+	std::vector<LogicalGraphPropertyReplaceRequest> replacements;
+	replacements.reserve(edges.size());
+	for (const uint64_t edgeId: edges) {
+		replacements.push_back({edgeId, {{"value", graph::PropertyValue(int64_t{-1})}}});
+	}
+	const bool valuesWereEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	backend.replaceLogicalEdgeProperties(replacements);
+	const graph::debug::PerfTrace::Snapshot trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
+
+	ASSERT_TRUE(trace.contains("native_graph.read.entity_directory_batch_requests"));
+	EXPECT_EQ(trace.at("native_graph.read.entity_directory_batch_requests").totalValue, 1);
+	ASSERT_TRUE(trace.contains("native_graph.read.entity_directory_batch_ids"));
+	EXPECT_EQ(trace.at("native_graph.read.entity_directory_batch_ids").totalValue,
+			static_cast<int64_t>(edges.size()));
+	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest, CompositeRangeCandidatesRetainLogicalIndexFieldOrder) {
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes(
+			{{{"Person"}, {{"city", graph::PropertyValue("Shanghai")}, {"age", graph::PropertyValue(int64_t{7})}}},
+			 { {"Person"}, {{"city", graph::PropertyValue("Shanghai")}, {"age", graph::PropertyValue(int64_t{42})}}}});
+	ASSERT_EQ(nodes.size(), 2U);
+	static_cast<void>(backend.createLogicalNodeIndex({"person_city_age", "Person", {"city", "age"}}));
+	std::unique_ptr<LogicalGraphReadSnapshot> snapshot = backend.openLogicalGraphReadSnapshot();
+	ASSERT_NE(snapshot, nullptr);
+	const LogicalGraphCompositePropertyRange request{
+			{{"city", graph::PropertyValue("Shanghai")}},
+			{"age", graph::PropertyValue(int64_t{7}), graph::PropertyValue(), true, true}};
+	const auto candidates = snapshot->findNodeCandidatesByCompositePropertyRange({"Person"}, request, 2U, 2U);
+	ASSERT_TRUE(candidates.has_value());
+	EXPECT_TRUE(candidates->predicates_verified);
+	ASSERT_EQ(candidates->candidates.size(), nodes.size());
+	ASSERT_EQ(candidates->verified_property_columns.size(), 2U);
+	EXPECT_EQ(candidates->verified_property_columns[0].key, "city");
+	EXPECT_EQ(candidates->verified_property_columns[1].key, "age");
+	ASSERT_EQ(candidates->verified_property_columns[0].values.size(), nodes.size());
+	ASSERT_EQ(candidates->verified_property_columns[1].values.size(), nodes.size());
+	for (size_t index = 0U; index < nodes.size(); ++index) {
+		EXPECT_EQ(candidates->verified_property_columns[0].values[index], graph::PropertyValue("Shanghai"));
+		EXPECT_EQ(candidates->verified_property_columns[1].values[index],
+				  graph::PropertyValue(int64_t{index == 0U ? 7 : 42}));
+	}
+	snapshot.reset();
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest, CompositeRangeCandidateStreamStopsAtFirstBatch) {
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	std::vector<LogicalGraphNodeCreateRequest> requests;
+	requests.reserve(600U);
+	for (int64_t age = 1; age <= 600; ++age) {
+		requests.push_back({{"Person"}, {{"city", graph::PropertyValue("Shanghai")},
+				{"age", graph::PropertyValue(age)}}});
+	}
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes(requests);
+	ASSERT_EQ(nodes.size(), requests.size());
+	static_cast<void>(backend.createLogicalNodeIndex({"person_city_age", "Person", {"city", "age"}}));
+	std::unique_ptr<LogicalGraphReadSnapshot> snapshot = backend.openLogicalGraphReadSnapshot();
+	ASSERT_NE(snapshot, nullptr);
+	const bool valuesWereEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	const LogicalGraphCompositePropertyRange request{
+			{{"city", graph::PropertyValue("Shanghai")} },
+			{"age", graph::PropertyValue(int64_t{1}), graph::PropertyValue(int64_t{600}), true, true}};
+	size_t callbackCount = 0U;
+	size_t callbackEntries = 0U;
+	const auto completed = snapshot->visitNodeCandidatesByCompositePropertyRange(
+			{"Person"}, request, requests.size(), 2U,
+			[&](const graph::storage::IndexCandidateBatch &batch) -> bool {
+				++callbackCount;
+				callbackEntries += batch.candidates.size();
+				EXPECT_TRUE(batch.predicates_verified);
+				EXPECT_EQ(batch.verified_property_columns.size(), 2U);
+				if (batch.verified_property_columns.size() != 2U) return false;
+				EXPECT_EQ(batch.candidates.size(), batch.verified_property_columns.front().values.size());
+				EXPECT_EQ(batch.candidates.size(), batch.verified_property_columns.back().values.size());
+				EXPECT_TRUE(std::ranges::is_sorted(batch.candidates, {}, &graph::storage::EntityRef::entity_id));
+				return false;
+			});
+	const graph::debug::PerfTrace::Snapshot trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
+	ASSERT_TRUE(completed.has_value());
+	EXPECT_FALSE(*completed);
+	EXPECT_EQ(callbackCount, 1U);
+	EXPECT_EQ(callbackEntries, graph::storage::BTreeIndex::DEFAULT_CURSOR_BATCH_ENTRIES);
+	ASSERT_TRUE(trace.contains("native_btree.read.range_cursor_root_descent"));
+	EXPECT_EQ(trace.at("native_btree.read.range_cursor_root_descent").totalValue, 1);
+	ASSERT_TRUE(trace.contains("native_graph.read.property_selected_column_batch_owners"));
+	EXPECT_EQ(trace.at("native_graph.read.property_selected_column_batch_owners").totalValue,
+			static_cast<int64_t>(graph::storage::BTreeIndex::DEFAULT_CURSOR_BATCH_ENTRIES));
+	ASSERT_TRUE(trace.contains("native_graph.read.index_candidate_liveness_probes"));
+	ASSERT_TRUE(trace.contains("native_graph.read.index_candidate_batches"));
+	EXPECT_EQ(trace.at("native_graph.read.index_candidate_liveness_probes").totalValue,
+			  static_cast<int64_t>(graph::storage::BTreeIndex::DEFAULT_CURSOR_BATCH_ENTRIES));
+	EXPECT_EQ(trace.at("native_graph.read.index_candidate_batches").totalValue, 1);
+	snapshot.reset();
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest, CompositeRangeAppliesUpperBoundBeforeCandidateBudget) {
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes(
+			{{{"Person"}, {{"city", graph::PropertyValue("Shanghai")}, {"age", graph::PropertyValue(int64_t{7})}}},
+			 { {"Person"}, {{"city", graph::PropertyValue("Shanghai")}, {"age", graph::PropertyValue(int64_t{42})}}},
+			 { {"Person"}, {{"city", graph::PropertyValue("Shanghai")}, {"age", graph::PropertyValue(int64_t{99})}}}});
+	ASSERT_EQ(nodes.size(), 3U);
+	static_cast<void>(backend.createLogicalNodeIndex({"person_city_age", "Person", {"city", "age"}}));
+	std::unique_ptr<LogicalGraphReadSnapshot> snapshot = backend.openLogicalGraphReadSnapshot();
+	ASSERT_NE(snapshot, nullptr);
+
+	// Only the first indexed value belongs to this range.  The cursor must stop
+	// at the encoded upper key before counting later leaf entries against the
+	// caller's result bound.
+	const LogicalGraphCompositePropertyRange request{
+			{{"city", graph::PropertyValue("Shanghai")}},
+			{"age", graph::PropertyValue(int64_t{7}), graph::PropertyValue(int64_t{7}), true, true}};
+	const auto result = snapshot->findNodesByCompositePropertyRange({"Person"}, request, 1U, 4U);
+	ASSERT_TRUE(result.has_value());
+	ASSERT_EQ(result->size(), 1U);
+	EXPECT_EQ(result->front().node_id, nodes.front());
+
+	snapshot.reset();
+	backend.close();
+}
+
+TEST_F(RelocatableStorageBackendSchemaTest, ReusesTheSnapshotReadSessionForCompositeRangeIndexes) {
+	RelocatableStorageBackend backend(options());
+	backend.open();
+	const std::vector<uint64_t> nodes = backend.createLogicalNodes(
+			{{{"Person"}, {{"city", graph::PropertyValue("Shanghai")}, {"age", graph::PropertyValue(int64_t{7})}}},
+			 {{"Person"}, {{"city", graph::PropertyValue("Shanghai")}, {"age", graph::PropertyValue(int64_t{42})}}},
+			 {{"Person"}, {{"city", graph::PropertyValue("Beijing")}, {"age", graph::PropertyValue(int64_t{42})}}}});
+	ASSERT_EQ(nodes.size(), 3U);
+	static_cast<void>(backend.createLogicalNodeIndex({"person_city_age", "Person", {"city", "age"}}));
+
+	std::unique_ptr<LogicalGraphReadSnapshot> snapshot = backend.openLogicalGraphReadSnapshot();
+	ASSERT_NE(snapshot, nullptr);
+	const LogicalGraphCompositePropertyRange request{
+			{{"city", graph::PropertyValue("Shanghai")}},
+			{"age", graph::PropertyValue(int64_t{7}), graph::PropertyValue(), true, true}};
+	const bool valuesWereEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	const auto first = snapshot->findNodesByCompositePropertyRange({"Person"}, request, 2U, 2U);
+	const auto second = snapshot->findNodesByCompositePropertyRange({"Person"}, request, 2U, 2U);
+	const graph::debug::PerfTrace::Snapshot trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
+
+	ASSERT_TRUE(first.has_value());
+	ASSERT_TRUE(second.has_value());
+	ASSERT_EQ(first->size(), 2U);
+	EXPECT_EQ(*first, *second);
+	EXPECT_EQ(first->at(0).node_id, nodes.at(0));
+	EXPECT_EQ(first->at(1).node_id, nodes.at(1));
+	ASSERT_TRUE(trace.contains("native_graph.read.composite_range_index_label_token_resolution"));
+	ASSERT_TRUE(trace.contains("native_graph.read.composite_range_index_property_token_resolution"));
+	ASSERT_TRUE(trace.contains("native_graph.read.composite_range_index_definition_read"));
+	ASSERT_TRUE(trace.contains("native_btree.read.range_cursor_root_descent"));
+	ASSERT_TRUE(trace.contains("native_graph.read.property_selected_column_batch_owners"));
+	EXPECT_EQ(trace.at("native_graph.read.composite_range_index_label_token_resolution").totalValue, 1);
+	EXPECT_EQ(trace.at("native_graph.read.composite_range_index_property_token_resolution").totalValue, 2);
+	EXPECT_EQ(trace.at("native_graph.read.composite_range_index_definition_read").totalValue, 1);
+	EXPECT_EQ(trace.at("native_btree.read.range_cursor_root_descent").totalValue, 2);
+	// Both composite indexed fields are read once for the first lookup and then
+	// served from the same snapshot-owned cache on the repeated lookup.
+	EXPECT_EQ(trace.at("native_graph.read.property_selected_column_batch_owners").totalValue,
+			  static_cast<int64_t>(first->size()));
+
+	snapshot.reset();
 	backend.close();
 }
 
@@ -1605,8 +2748,18 @@ TEST_F(RelocatableStorageBackendSchemaTest, PublishesScalarIndexBatchesOnlyAfter
 
 	const std::vector<LogicalGraphNodeIndexCreateRequest> requests = {{"person_score", "Person", {"score"}},
 																	  {"person_rank", "Person", {"rank"}}};
+	const bool valuesWereEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
 	const std::vector<LogicalGraphIndexDefinition> created = backend.createLogicalNodeIndexes(requests);
+	const graph::debug::PerfTrace::Snapshot indexBuildTrace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
 	ASSERT_EQ(created.size(), 2U);
+	ASSERT_TRUE(indexBuildTrace.contains("native_graph.read.property_selected_column_batch_owners"));
+	// Both definitions share one bounded Property-column pass over the matching
+	// Node owners; the old per-definition implementation performed two passes.
+	EXPECT_EQ(indexBuildTrace.at("native_graph.read.property_selected_column_batch_owners").totalValue, 2);
+	EXPECT_FALSE(indexBuildTrace.contains("native_graph.read.property_optional_lookup"));
 	EXPECT_LT(created[0].index_id, created[1].index_id);
 	EXPECT_EQ(created[0].kind, LogicalGraphIndexKind::LGIK_PROPERTY);
 	EXPECT_EQ(created[1].kind, LogicalGraphIndexKind::LGIK_PROPERTY);

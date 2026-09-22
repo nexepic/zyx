@@ -62,6 +62,16 @@ namespace graph::storage {
 			throw std::system_error(error, std::move(operation));
 		}
 
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+		[[nodiscard]] bool nativeWriteHookActive() {
+			if (nativeWriteHookForTesting) {
+				return true;
+			}
+			std::lock_guard lock(allThreadNativeWriteHookMutex);
+			return static_cast<bool>(allThreadNativeWriteHookForTesting);
+		}
+#endif
+
 	} // namespace
 
 	StorageIO::StorageIO(std::shared_ptr<std::fstream> stream, file_handle_t writeFd, file_handle_t readFd) :
@@ -252,6 +262,18 @@ namespace graph::storage {
 		}
 		requireTypedPageRange(firstKey, size, "writePages");
 		requireWritable("writePages");
+#ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+		// Preserve page-granular fault-injection semantics when a test hook is
+		// active. Production writes retain the batched native I/O path.
+		if (nativeWriteHookActive() && !bufferPool()) {
+			const auto *bytes = static_cast<const std::byte *>(buf);
+			for (size_t offset = 0U; offset < size; offset += RSS_PAGE_SIZE) {
+				writeAtUncached(firstKey.page_offset + offset, bytes + offset, RSS_PAGE_SIZE);
+				recordWrite(RSS_PAGE_SIZE);
+			}
+			return;
+		}
+#endif
 		if (const std::shared_ptr<BufferPool> pool = bufferPool()) {
 			pool->writePages(firstKey, {static_cast<const std::byte *>(buf), size});
 			recordWrite(size);
@@ -627,6 +649,20 @@ namespace graph::storage {
 		if (buffer_pool_ == pool) {
 			buffer_pool_.reset();
 		}
+	}
+
+	std::optional<BufferPool::Pin> StorageIO::pinTypedPage(const BufferPoolPageKey key,
+														  const BufferPoolReadHint hint) const {
+		if (key.generation == 0U || key.page_offset % RSS_BUFFER_POOL_PAGE_BYTES != 0U) {
+			throw std::invalid_argument("StorageIO::pinTypedPage requires an aligned durable page key");
+		}
+		const std::shared_ptr<BufferPool> pool = bufferPool();
+		if (pool == nullptr) {
+			return std::nullopt;
+		}
+		BufferPool::Pin pin = pool->pin(key, hint);
+		recordRead(pin.validBytes());
+		return pin;
 	}
 
 	void StorageIO::discardBufferPoolForExternalRebase() {
