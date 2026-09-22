@@ -246,6 +246,33 @@ namespace graph::storage {
 			return result;
 		}
 
+		// Edge validation runs before durable ID consumption. Validate the canonical
+		// key/token shape without copying or sorting the Property values; the actual
+		// materialization below performs that work exactly once.
+		void validatePropertyKeysAndTokens(
+				const std::vector<LogicalGraphWriteProperty> &properties,
+				const std::function<std::optional<uint32_t>(std::string_view)> &resolvePropertyKey) {
+			std::unordered_set<std::string_view> names;
+			std::unordered_set<uint32_t> tokens;
+			names.reserve(properties.size());
+			tokens.reserve(properties.size());
+			for (const LogicalGraphWriteProperty &property: properties) {
+				if (property.key.empty() || !names.emplace(property.key).second) {
+					throw std::invalid_argument(
+							"native logical graph mutation requires nonempty, unique Property keys per entity");
+				}
+				const std::optional<uint32_t> token = resolvePropertyKey(property.key);
+				if (!token.has_value() || *token == 0U) {
+					fail(FormatError::FERR_INVALID_STATE,
+							 "native logical graph mutation could not resolve a Property-key Token in its snapshot");
+				}
+				if (!tokens.emplace(*token).second) {
+					fail(FormatError::FERR_INVALID_STATE,
+							 "native logical graph mutation resolved distinct Property keys to one Token");
+				}
+			}
+		}
+
 		[[nodiscard]] std::vector<uint64_t>
 		resolveLabels(const std::vector<std::string> &labels,
 					  const std::function<std::optional<uint64_t>(std::string_view)> &resolveSchemaToken) {
@@ -444,7 +471,7 @@ namespace graph::storage {
 						 "native logical graph mutation could not resolve a relationship-type Token in its snapshot");
 				}
 			}
-			static_cast<void>(resolveProperties(request.properties, resolvePropertyKey));
+			validatePropertyKeysAndTokens(request.properties, resolvePropertyKey);
 		}
 		std::unordered_map<uint64_t, PersistedNodeMutation> persistedNodes;
 		std::unordered_map<uint64_t, ResolvedProperties> persistedEdges;

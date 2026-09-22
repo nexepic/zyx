@@ -115,19 +115,20 @@ namespace graph::storage {
 		}
 
 		struct LargeValuePropertyDirectory {
+			LargeValueManifest manifest;
 			std::vector<std::byte> header_and_directory;
 			std::vector<EntityPropertyLargeValueEntryLocation> locations;
 		};
 
 		[[nodiscard]] LargeValuePropertyDirectory readLargeValuePropertyDirectory(
 				const LargeValueStore &store, const MetadataSnapshotPin &snapshot, const LargeValueRef &reference) {
-			const LargeValueManifest manifest = store.manifest(snapshot, reference);
+			LargeValueManifest manifest = store.manifest(snapshot, reference);
 			if (manifest.logical_bytes < RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES) {
 				throwRootStoreError(FormatError::FERR_BUFFER_TOO_SMALL,
 									"Entity Property LargeValue payload is truncated");
 			}
-			const std::vector<std::byte> header = store.readRange(
-					snapshot, reference, 0U, RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES);
+			const std::vector<std::byte> header = store.readRangeFromManifest(
+					snapshot, manifest, 0U, RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES);
 			const uint32_t entryCount = LittleEndianCodec::readU32(header, 8U);
 			const uint64_t directoryBytes = static_cast<uint64_t>(entryCount) * sizeof(uint32_t) * 2U;
 			const uint64_t headerBytes = RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES + directoryBytes;
@@ -136,13 +137,14 @@ namespace graph::storage {
 									"Entity Property LargeValue directory exceeds its manifest");
 			}
 			LargeValuePropertyDirectory result;
-			result.header_and_directory = store.readRange(snapshot, reference, 0U, headerBytes);
+			result.header_and_directory = store.readRangeFromManifest(snapshot, manifest, 0U, headerBytes);
 			result.locations = EntityPropertyLargeValuePayloadCodec::decodeDirectory(result.header_and_directory);
 			const uint64_t payloadBytes = LittleEndianCodec::readU32(result.header_and_directory, 12U);
 			if (headerBytes + payloadBytes - directoryBytes != manifest.logical_bytes) {
 				throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 									"Entity Property LargeValue manifest length disagrees with its payload header");
 			}
+			result.manifest = std::move(manifest);
 			return result;
 		}
 
@@ -159,7 +161,8 @@ namespace graph::storage {
 					continue;
 				}
 				const uint64_t offset = RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES + found->offset;
-				const std::vector<std::byte> entry = store.readRange(snapshot, reference, offset, found->length);
+				const std::vector<std::byte> entry = store.readRangeFromManifest(
+						snapshot, directory.manifest, offset, found->length);
 				result.emplace_back(EntityPropertyLargeValuePayloadCodec::decodeEntry(entry, token));
 			}
 			return result;

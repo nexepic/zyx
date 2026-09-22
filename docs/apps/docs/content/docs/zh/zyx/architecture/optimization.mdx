@@ -219,6 +219,8 @@ Property reader 必须共享：
 
 后续必须补齐 selected Property 的范围读取：Property payload 的 offset directory 应能映射到 LargeValue chunk 范围，只读取目标 token 涉及的 chunk。读取单个小字段不能无条件读取整个大型代码片段或二进制对象。
 
+当前 selected 路径在解析 LargeValue directory 后会复用同一份已认证的 manifest 路由，再读取各个目标 entry 的重叠 chunk；不会为每个 token 重新执行 manifest directory lookup。完整 Property 读取仍使用完整内容校验，范围读取仍保留 chunk、codec、checksum 和 snapshot 校验。
+
 压缩策略按 chunk 生效。压缩收益低于策略阈值时可以保留 RAW。不得为某种文件类型写固定压缩特例；codec、最低收益和 raw fallback 都由通用写入选项控制。
 
 ## Topology-first Adjacency
@@ -358,6 +360,8 @@ IN adjacency
 Property root
 affected indexes
 ```
+
+批量 Edge 写入的预检只解析 Property key/token 的 canonical 形状，不复制或排序 Property value；真正的 Property root 在统一写入阶段只物化一次。这样可以避免大批量写入在验证阶段产生第二份完整 resolved payload。
 
 不能为每一条 Edge 单独执行 root-to-leaf insertion、page split 或 metadata publication。只有在结构计数器证明 COW amplification 仍是主要成本时，才增加通用 dirty-path COW、Directory merge 或共享 B+Tree WriteBatch；如果证据不成立，保留现有简单路径。
 
