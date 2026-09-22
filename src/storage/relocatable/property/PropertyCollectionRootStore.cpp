@@ -114,6 +114,57 @@ namespace graph::storage {
 			return root;
 		}
 
+		struct LargeValuePropertyDirectory {
+			std::vector<std::byte> header_and_directory;
+			std::vector<EntityPropertyLargeValueEntryLocation> locations;
+		};
+
+		[[nodiscard]] LargeValuePropertyDirectory readLargeValuePropertyDirectory(
+				const LargeValueStore &store, const MetadataSnapshotPin &snapshot, const LargeValueRef &reference) {
+			const LargeValueManifest manifest = store.manifest(snapshot, reference);
+			if (manifest.logical_bytes < RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES) {
+				throwRootStoreError(FormatError::FERR_BUFFER_TOO_SMALL,
+									"Entity Property LargeValue payload is truncated");
+			}
+			const std::vector<std::byte> header = store.readRange(
+					snapshot, reference, 0U, RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES);
+			const uint32_t entryCount = LittleEndianCodec::readU32(header, 8U);
+			const uint64_t directoryBytes = static_cast<uint64_t>(entryCount) * sizeof(uint32_t) * 2U;
+			const uint64_t headerBytes = RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES + directoryBytes;
+			if (headerBytes > manifest.logical_bytes) {
+				throwRootStoreError(FormatError::FERR_BUFFER_TOO_SMALL,
+									"Entity Property LargeValue directory exceeds its manifest");
+			}
+			LargeValuePropertyDirectory result;
+			result.header_and_directory = store.readRange(snapshot, reference, 0U, headerBytes);
+			result.locations = EntityPropertyLargeValuePayloadCodec::decodeDirectory(result.header_and_directory);
+			const uint64_t payloadBytes = LittleEndianCodec::readU32(result.header_and_directory, 12U);
+			if (headerBytes + payloadBytes - directoryBytes != manifest.logical_bytes) {
+				throwRootStoreError(FormatError::FERR_INVALID_HEADER,
+									"Entity Property LargeValue manifest length disagrees with its payload header");
+			}
+			return result;
+		}
+
+		[[nodiscard]] std::vector<std::optional<PropertyCollectionRootEntry>> readSelectedLargeValueProperties(
+				const LargeValueStore &store, const MetadataSnapshotPin &snapshot, const LargeValueRef &reference,
+				const LargeValuePropertyDirectory &directory, std::span<const uint32_t> keyTokens) {
+			std::vector<std::optional<PropertyCollectionRootEntry>> result;
+			result.reserve(keyTokens.size());
+			for (const uint32_t token: keyTokens) {
+				const auto found = std::ranges::lower_bound(directory.locations, token, {},
+																	&EntityPropertyLargeValueEntryLocation::key_token);
+				if (found == directory.locations.end() || found->key_token != token) {
+					result.emplace_back(std::nullopt);
+					continue;
+				}
+				const uint64_t offset = RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES + found->offset;
+				const std::vector<std::byte> entry = store.readRange(snapshot, reference, offset, found->length);
+				result.emplace_back(EntityPropertyLargeValuePayloadCodec::decodeEntry(entry, token));
+			}
+			return result;
+		}
+
 	} // namespace
 
 	PropertyCollectionRootStore::PropertyCollectionRootStore(SlottedPagePool &pages,
@@ -488,12 +539,10 @@ namespace graph::storage {
 					throwRootStoreError(FormatError::FERR_INVALID_STATE,
 										"Entity Property LargeValue reference has an invalid owner or content type");
 				}
-				const std::vector<std::byte> payload = large_values_->read(snapshot, reference.value);
-				if (!EntityPropertyLargeValuePayloadCodec::hasMagic(payload)) {
-					throwRootStoreError(FormatError::FERR_INVALID_STATE,
-										"Entity Property LargeValue payload is not the canonical owner-neutral encoding");
-				}
-				decoded = EntityPropertyLargeValuePayloadCodec::decodeSelectedAndCount(payload, keyTokens);
+				const LargeValuePropertyDirectory directory =
+						readLargeValuePropertyDirectory(*large_values_, snapshot, reference.value);
+				decoded = {directory.locations.size(),
+							readSelectedLargeValueProperties(*large_values_, snapshot, reference.value, directory, keyTokens)};
 			} else {
 				const PropertyCollectionRoot owner = EntityPropertyCollectionRootCodec::decodeOwner(bytes);
 				if (entityKeyForRoot(owner) != keys[index]) {
@@ -544,12 +593,7 @@ namespace graph::storage {
 				throwRootStoreError(FormatError::FERR_INVALID_STATE,
 										"Entity Property LargeValue reference has an invalid owner or content type");
 			}
-			const std::vector<std::byte> payload = large_values_->read(snapshot, reference.value);
-			if (!EntityPropertyLargeValuePayloadCodec::hasMagic(payload)) {
-				throwRootStoreError(FormatError::FERR_INVALID_STATE,
-										"Entity Property LargeValue payload is not the canonical owner-neutral encoding");
-			}
-			return EntityPropertyLargeValuePayloadCodec::entryCount(payload);
+			return readLargeValuePropertyDirectory(*large_values_, snapshot, reference.value).locations.size();
 		}
 		const PropertyCollectionRoot owner = EntityPropertyCollectionRootCodec::decodeOwner(bytes);
 		if (entityKeyForRoot(owner) != key) {
@@ -786,12 +830,10 @@ namespace graph::storage {
 				throwRootStoreError(FormatError::FERR_INVALID_STATE,
 									"Entity Property LargeValue reference has an invalid owner or content type");
 			}
-			const std::vector<std::byte> payload = large_values_->read(snapshot, reference.value);
-			if (!EntityPropertyLargeValuePayloadCodec::hasMagic(payload)) {
-				throwRootStoreError(FormatError::FERR_INVALID_STATE,
-									"Entity Property LargeValue payload is not the canonical owner-neutral encoding");
-			}
-			return EntityPropertyLargeValuePayloadCodec::decodeSelected(payload, keyToken);
+			const std::array<uint32_t, 1U> tokens{keyToken};
+			const LargeValuePropertyDirectory directory =
+					readLargeValuePropertyDirectory(*large_values_, snapshot, reference.value);
+			return readSelectedLargeValueProperties(*large_values_, snapshot, reference.value, directory, tokens).front();
 		}
 
 		const PropertyCollectionRoot owner = EntityPropertyCollectionRootCodec::decodeOwner(bytes);
@@ -831,8 +873,9 @@ namespace graph::storage {
 				throwRootStoreError(FormatError::FERR_INVALID_STATE,
 									"Entity Property LargeValue reference has an invalid owner or content type");
 			}
-			const std::vector<std::byte> payload = large_values_->read(snapshot, reference.value);
-			return EntityPropertyLargeValuePayloadCodec::containsToken(payload, keyToken);
+			const auto locations = readLargeValuePropertyDirectory(*large_values_, snapshot, reference.value).locations;
+			return std::ranges::binary_search(locations, keyToken, {},
+																&EntityPropertyLargeValueEntryLocation::key_token);
 		}
 		const PropertyCollectionRoot owner = EntityPropertyCollectionRootCodec::decodeOwner(bytes);
 		if (entityKeyForRoot(owner) != key) {
@@ -878,12 +921,9 @@ namespace graph::storage {
 				throwRootStoreError(FormatError::FERR_INVALID_STATE,
 									"Entity Property LargeValue reference has an invalid owner or content type");
 			}
-			const std::vector<std::byte> payload = large_values_->read(snapshot, reference.value);
-			if (!EntityPropertyLargeValuePayloadCodec::hasMagic(payload)) {
-				throwRootStoreError(FormatError::FERR_INVALID_STATE,
-									"Entity Property LargeValue payload is not the canonical owner-neutral encoding");
-			}
-			return EntityPropertyLargeValuePayloadCodec::decodeSelected(payload, keyTokens);
+			const LargeValuePropertyDirectory directory =
+					readLargeValuePropertyDirectory(*large_values_, snapshot, reference.value);
+			return readSelectedLargeValueProperties(*large_values_, snapshot, reference.value, directory, keyTokens);
 		}
 
 		const PropertyCollectionRoot owner = EntityPropertyCollectionRootCodec::decodeOwner(bytes);

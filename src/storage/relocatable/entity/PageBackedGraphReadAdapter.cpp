@@ -32,7 +32,6 @@ namespace graph::storage {
 		// Multi-source scans amortize Entity Map routing over a larger but still
 		// fixed batch. At current record widths this remains well below one MiB.
 		constexpr size_t MULTI_NODE_ADJACENCY_BATCH_ENTRIES = 4'096U;
-		constexpr size_t TOPOLOGY_ENTITY_SCAN_THRESHOLD = 512U;
 
 		[[noreturn]] void throwAdapterError(FormatError error, const char *message) {
 			throw FormatException(error, message);
@@ -1758,69 +1757,51 @@ namespace graph::storage {
 			debug::PerfTrace::addValue("native_graph.read.adjacency_topology_scan_edges",
 					static_cast<int64_t>(edgeIds.edge_ids.size()));
 		}
-		if (edgeIds.edge_ids.size() <= TOPOLOGY_ENTITY_SCAN_THRESHOLD) {
-			// Keep strict early termination: the callback may stop before the next
-			// logical record, so this small path intentionally resolves one Edge at a
-			// time. Large bounded scans use the sequential Entity Map pass below.
-			for (const uint64_t edgeId: edgeIds.edge_ids) {
-				const std::optional<EdgeEntityRecord> cached = readSession.edge(edgeId);
-				const EdgeEntityRecord edge = cached.has_value() ? *cached : entities_.readEdge(snapshot, edgeId);
-				if (!cached.has_value()) {
-					readSession.putEdge(edgeId, edge);
-				}
-				const bool endpointMatches = direction == PageBackedGraphReadDirection::PBGRD_OUTGOING
-																 ? edge.source_node_id == nodeId
-																 : edge.target_node_id == nodeId;
-				if (!endpointMatches) { // adjacency and Entity Map records share one pinned publication.
-					throwAdapterError(FormatError::FERR_INVALID_STATE,
-											  "page-backed graph adjacency topology has an inconsistent endpoint");
-				}
-				if (!visitor(edgeId, edge)) {
-					return false;
-				}
+		// Adjacency keys are ordered by Edge ID for one source Node. Resolve all
+		// cache misses through one typed Entity-directory range cursor, then restore
+		// the adjacency order while visiting. This keeps topology-only traversal
+		// independent of the physical distance between sparse Edge IDs and avoids
+		// scanning unrelated Entity pages.
+		std::vector<uint64_t> missingEdgeIds;
+		missingEdgeIds.reserve(edgeIds.edge_ids.size());
+		for (const uint64_t edgeId : edgeIds.edge_ids) {
+			if (!readSession.edge(edgeId).has_value()) {
+				missingEdgeIds.push_back(edgeId);
 			}
-			return true;
 		}
-
-		// Large topology-only counts are sorted by Edge ID in both directories. A
-		// single sequential Entity Map pass avoids one metadata lookup per Edge,
-		// while the adjacency result remains bounded by the caller.
-		size_t requested = 0U;
-		bool stoppedByVisitor = false;
-			static_cast<void>(entities_.visitEdgesUntil(
-					snapshot, std::numeric_limits<size_t>::max(), [&](uint64_t edgeId, const EdgeEntityRecord &edge) {
-					if (requested == edgeIds.edge_ids.size()) { // the callback stops after accepting the final requested Edge.
-						return false;
-					}
-					const uint64_t wanted = edgeIds.edge_ids[requested];
-					if (edgeId < wanted) {
-						return true;
-					}
-					if (edgeId > wanted) { // the immutable Entity Map contains every published adjacency Edge.
-						throwAdapterError(FormatError::FERR_INVALID_STATE,
-										  "page-backed graph adjacency topology references a missing Edge");
-					}
-					const bool endpointMatches = direction == PageBackedGraphReadDirection::PBGRD_OUTGOING
-														 ? edge.source_node_id == nodeId
-														 : edge.target_node_id == nodeId;
-						if (!endpointMatches) { // adjacency and Entity Map records share one pinned publication.
-						throwAdapterError(FormatError::FERR_INVALID_STATE,
-										  "page-backed graph adjacency topology has an inconsistent endpoint");
-						}
-						readSession.putEdge(edgeId, edge);
-					if (!visitor(edgeId, edge)) {
-						stoppedByVisitor = true;
-						return false;
-					}
-					++requested;
-					return requested < edgeIds.edge_ids.size();
-				}));
-		if (stoppedByVisitor) {
-			return false;
-		}
-		if (requested != edgeIds.edge_ids.size()) { // the immutable Entity Map contains every published adjacency Edge.
+		const std::vector<std::optional<EdgeEntityRecord>> missingRecords =
+				entities_.readEdgesSorted(snapshot, missingEdgeIds);
+		if (missingRecords.size() != missingEdgeIds.size()) {
 			throwAdapterError(FormatError::FERR_INVALID_STATE,
-							  "page-backed graph adjacency topology Entity Map is missing an Edge");
+							  "page-backed graph adjacency topology batch changed its cardinality");
+		}
+		for (const uint64_t edgeId : edgeIds.edge_ids) {
+			std::optional<EdgeEntityRecord> cached = readSession.edge(edgeId);
+			if (!cached.has_value()) {
+				const auto position = std::ranges::lower_bound(missingEdgeIds, edgeId);
+				if (position == missingEdgeIds.end() || *position != edgeId) {
+					throwAdapterError(FormatError::FERR_INVALID_STATE,
+											  "page-backed graph adjacency topology lost an Edge ID");
+				}
+				const size_t missingOrdinal = static_cast<size_t>(position - missingEdgeIds.begin());
+				if (!missingRecords[missingOrdinal].has_value()) {
+					throwAdapterError(FormatError::FERR_INVALID_STATE,
+											  "page-backed graph adjacency topology references a missing Edge");
+				}
+				readSession.putEdge(edgeId, *missingRecords[missingOrdinal]);
+				cached = missingRecords[missingOrdinal];
+			}
+			const EdgeEntityRecord &edge = *cached;
+			const bool endpointMatches = direction == PageBackedGraphReadDirection::PBGRD_OUTGOING
+																				 ? edge.source_node_id == nodeId
+																				 : edge.target_node_id == nodeId;
+			if (!endpointMatches) { // adjacency and Entity Map records share one pinned publication.
+				throwAdapterError(FormatError::FERR_INVALID_STATE,
+										  "page-backed graph adjacency topology has an inconsistent endpoint");
+			}
+			if (!visitor(edgeId, edge)) {
+				return false;
+			}
 		}
 		return true;
 	}
