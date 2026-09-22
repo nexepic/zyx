@@ -147,7 +147,7 @@ When a Property collection does not fit in a Property page, the page stores only
 
 The existing mechanism provides immutable logical IDs, manifest trees, chunked data pages, per-chunk `RAW`/`LZ4`/`ZSTD` codecs, content hashing and bounded deduplication, full and range reads, generation-aware retirement, and snapshot-safe reclaim.
 
-The remaining framework work is selected range reading. The Property payload offset directory must map to LargeValue chunk ranges so a selected token reads only overlapping chunks. Reading one small field must not unconditionally read a large source file or binary object. Compression remains a generic per-chunk policy with a savings threshold and RAW fallback; it must not contain file-type-specific branches.
+The remaining framework work is selected range reading. The Property payload offset directory must map to LargeValue chunk ranges so a selected token reads only overlapping chunks. Reading one small field must not unconditionally read a large source file or binary object. The selected path now reuses the already authenticated manifest route while reading the requested entries, so each token does not reopen the manifest directory. Full Property reads still perform full-content validation, and ranged reads retain chunk, codec, checksum, and snapshot validation. Compression remains a generic per-chunk policy with a savings threshold and RAW fallback; it must not contain file-type-specific branches.
 
 ## Topology-First Adjacency
 
@@ -216,6 +216,8 @@ Batching changes internal order only; null, duplicate, ordering, short-circuit, 
 Online mutations, bulk ingest, index builds, adjacency rebuilds, and maintenance share canonical ordering, a byte-aware page builder, fill/split/merge policy, codecs/checksums, COW publication, retirement, and reclaim.
 
 Bulk Edge writes plan the Edge Entity, OUT adjacency, IN adjacency, Property root, and affected indexes in one transaction-local sorted overlay. Each Edge must not cause an independent root-to-leaf insertion, split, or metadata publication. Add generic dirty-path COW, Directory merge, or a shared B+Tree WriteBatch only when structural counters show that COW amplification remains the dominant cost.
+
+Bulk Edge preflight validates only the canonical Property key/token shape; it does not copy or sort Property values. The actual Property roots are materialized once in the unified write phase, avoiding a second full resolved payload for large batches.
 
 Every write optimization proves writer conflict/rebase, short I/O, ENOSPC, interruption, old-snapshot reads, reopen/recovery, retire-queue reclaim, single-file durability, and atomic visibility of Entity, adjacency, Property, and index state.
 

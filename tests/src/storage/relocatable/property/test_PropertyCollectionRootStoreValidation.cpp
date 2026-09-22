@@ -501,6 +501,14 @@ TEST_F(PropertyCollectionRootStoreValidationTest, SelectiveReadsSupportCanonical
 	EXPECT_EQ(propertiesWithLargeValues.readEntityPropertyOptional(snapshot, key, 3U),
 			  std::optional<PropertyCollectionRootEntry>(original.entries.front()));
 	EXPECT_FALSE(propertiesWithLargeValues.readEntityPropertyOptional(snapshot, key, 5U).has_value());
+	const std::array<EntityPropertyKey, 1U> keys{key};
+	const std::array<uint32_t, 2U> selectedTokens{3U, 7U};
+	std::array<std::optional<PropertyCollectionRootEntry>, 2U> selected{};
+	propertiesWithLargeValues.readEntityPropertiesOptionalSorted(snapshot, keys, selectedTokens, selected);
+	ASSERT_TRUE(selected[0].has_value());
+	ASSERT_TRUE(selected[1].has_value());
+	EXPECT_EQ(*selected[0], original.entries[0]);
+	EXPECT_EQ(*selected[1], original.entries[1]);
 	snapshot.release();
 }
 

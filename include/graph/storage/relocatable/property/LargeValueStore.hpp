@@ -156,6 +156,11 @@ namespace graph::storage {
 		[[nodiscard]] std::vector<std::byte> readRange(const MetadataSnapshotPin &snapshot,
 													   const LargeValueRef &reference, uint64_t offset,
 													   uint64_t length) const;
+		// Reads through an already authenticated manifest. Property column readers
+		// use this to avoid reopening the same immutable manifest for every token.
+		[[nodiscard]] std::vector<std::byte> readRangeFromManifest(const MetadataSnapshotPin &snapshot,
+																   const LargeValueManifest &manifest, uint64_t offset,
+																   uint64_t length) const;
 		// Removes complete unreachable values: all data pages and the one manifest
 		// page are marked retired, their Page Directory entries disappear, and the
 		// matching LargeValue Manifest Directory entries are erased atomically.
@@ -214,7 +219,7 @@ namespace graph::storage {
 																	LogSequenceNumber checkpointLsn,
 																	const MetadataPublishOptions &publishOptions);
 		[[nodiscard]] LargeValueManifest readManifest(const MetadataSnapshotPin &snapshot,
-												  const LargeValueRef &reference) const;
+													  const LargeValueRef &reference) const;
 		[[nodiscard]] LargeValueManifest readManifestNode(const MetadataSnapshotPin &snapshot,
 												  const LargeValueManifest &root, PageId pageId,
 												  BufferPoolReadHint hint) const;

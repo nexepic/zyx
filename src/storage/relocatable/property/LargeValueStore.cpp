@@ -1351,6 +1351,16 @@ namespace graph::storage {
 													  const LargeValueRef &reference, uint64_t offset,
 													  uint64_t length) const {
 		const LargeValueManifest immutableManifest = readManifest(snapshot, reference);
+		return readRangeFromManifest(snapshot, immutableManifest, offset, length);
+	}
+
+	std::vector<std::byte> LargeValueStore::readRangeFromManifest(const MetadataSnapshotPin &snapshot,
+																  const LargeValueManifest &immutableManifest,
+																  const uint64_t offset, const uint64_t length) const {
+		if (!immutableManifest.isRoot()) {
+			fail(FormatError::FERR_INVALID_HEADER,
+					"LargeValue ranged read requires a directory-routed manifest root");
+		}
 		validateRange(immutableManifest.logical_bytes, offset, length);
 		std::vector<std::byte> result;
 		result.reserve(static_cast<size_t>(length));
