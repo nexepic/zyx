@@ -108,7 +108,10 @@ def _measurement_semantics(profile: str, execution_mode: str) -> dict[str, objec
         "workload_isolation": {
             "load_nodes_edges": "fresh adapter/database per warmup and measured load sample",
             "cold-ish": "fresh loaded adapter/database per measured non-load workload sample",
-            "mutating_warm_opened": "fresh loaded adapter/database per mutating workload, excluding load/open from measured latency",
+            "mutating_warm_opened": (
+                "fresh loaded adapter/database per mutating warmup and measured sample, "
+                "excluding load/open from measured latency"
+            ),
         },
     }
 

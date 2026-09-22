@@ -7745,7 +7745,8 @@ inline/template 的 `include/`，排除生成 ANTLR 源）为 Region `96.26%`（
 ### 13.1 为什么重新打开读取门禁
 
 最近的 Release 对照基准使用相同的 macOS arm64、AppleClang 17、Conan 工具链、smoke 数据集和 seed；旧架构来自独立历史 worktree，
-不是当前提交的线性祖先，因此只能作为参考基线。当前架构写入 `load_nodes_edges` 约快一半，但 label/property scan、关系扫描、
+不是当前提交的线性祖先，因此只能作为参考基线。`smoke` 数据集包含 250 个 Node 和 660 个 Edge；无额外属性索引的加载约快 29%，
+包含属性索引构建的加载基本持平，但 label/property scan、关系扫描、
 一跳/两跳扩展、最短路径、top-k 和 indexed lookup 的读取耗时约为旧架构数十倍至数千倍。画像确认主要成本来自重复的 Directory/Catalog
 查找、envelope/control 校验、page payload copy、完整 property-root decode，以及把只需拓扑的 Edge/Node 提前完整 materialize。
 
@@ -7757,16 +7758,17 @@ inline/template 的 `include/`，排除生成 ANTLR 源）为 Region `96.26%`（
 
 | 优先级 | 阶段 | 必须完成的工作 | 关闭条件 |
 |---|---|---|---|
-| P0 | 阶段 0：基线契约 | 固定 scan/indexed/multihop/write workload、规模和 warm/opened/cold-ish 模式；记录 p50/p95/p99、RSS、文件大小、读写字节及结构计数器 | 同一 binary 可重现 baseline，结果与计数器格式固定 |
-| P0 | 阶段 1：`NativeReadSession` | 绑定 snapshot 的 pin、generation-aware 有界 Page/Catalog cache、validated view、token dictionary 和 cursor state | 无物理 offset 泄漏；缓存按 entry/byte 有界且旧 generation 不可见 |
+| P0 | 阶段 0：基线契约 | 固定 scan/indexed/adjacency/multihop/retrieval/write workload、规模和 warm/opened/cold-ish 模式；记录 p50/p95/p99、RSS、文件大小、读写字节及结构计数器 | 同一 binary 可重现 baseline；完成 small/medium，smoke 不替代规模结论 |
+| P0 | 阶段 1：`NativeReadSession` | query-owned、snapshot-bound、默认单线程无锁；generation-aware 有界 Page/Catalog/Directory/token/index metadata cache、validated view 和 cursor state | 无物理 offset 泄漏；无共享热路径 mutex 或固定 256 direct-map 假设；缓存有界且旧 generation 不可见 |
 | P0 | 阶段 2：零拷贝 typed view | `PinnedTypedPageView`、`DecodedRecordView`、`MutableOwnedPage` 分离；命中路径复用 pin 和校验后的 bytes | cache hit 不复制整页；checksum/owner/generation/slot 校验回归通过 |
-| P1 | 阶段 3：流式 Directory/B+Tree | 统一 point/multiLookup/range cursor，一次 root descent、leaf streaming、bounded prefetch、callback/span 输出 | cursor 跨 split/merge、relocation、reopen 和旧 snapshot 正确 |
-| P1 | 阶段 4：Entity page scan | Entity Page 增加 page-local EntityId array；page/bitmap scan 与 ID-order Entity Map cursor 分离；批量 point read 按 PageId 分组 | 全量扫描不再每实体查 Entity Map；每 distinct page 至多一次 pin |
-| P1 | 阶段 5：分层 Property | 小集合 packed record、大集合 overflow/per-key tree、单值 `LargeValueRef`；token offset binary search/selective decode；小批量 sorted multiLookup | 读取一个 token 只解码一个值；不再复制完整 Property Directory |
+| P0 | 阶段 3：流式 Directory/B+Tree | 统一 point/multiLookup/range cursor，一次 root descent、leaf streaming、bounded prefetch、callback/span 输出 | cursor 跨 split/merge、relocation、reopen 和旧 snapshot 正确 |
+| P0 | 阶段 4：Entity page scan | Entity Page 增加 page-local EntityId array；page/bitmap scan 与 ID-order Entity Map cursor 分离；批量 point read 按 PageId 分组 | 全量扫描不再每实体查 Entity Map；每 distinct page 至多一次 pin |
+| P0 | 阶段 5：分层 Property | 小集合 packed record、大集合 overflow/per-key tree、单值 `LargeValueRef`；token offset binary search/selective decode；小批量 sorted multiLookup | 读取一个 token 只解码一个值；不再复制完整 Property Directory |
 | P1 | 阶段 6：投影感知 materialization | `EntityReadShape`、`EntityRef` 和 selected-field cache；名称在 result/binding 边界解析 | `properties(n)` 之外不强制完整 Node/Edge materialize，结果等价 |
 | P1 | 阶段 7：topology-first adjacency | EdgeId、endpoint/type、selected/full property 三层 cursor；按 Entity Page 批量读取 Edge | degree/count、类型过滤、shortest path 不读无关 Property page |
 | P1 | 阶段 8：index candidate 分离 | `IndexCandidateBatch` 携带 EntityId、covered values、snapshot identity；只加载缺失字段 | index hit 不重复读取完整实体；完整校验移至 integrity/paranoid path |
-| P2 | 阶段 9：写入/维护扩展 | target-page grouping、每页一个 COW candidate、sorted merge、增量 free-space index、共用 B+Tree WriteBatch | 结构计数器证明写放大下降；不引入 adjacency-only 特例 |
+| P1 | 阶段 9：批量执行框架 | typed column batch、selection vector、可组合 filter/project/aggregate，以及基于 logical shape 的 storage-neutral fast path；query 内名称只解析一次 token | `count` 等操作不构造逐行完整 result；不匹配具体 query text；多类 workload 同时改善 |
+| P2 | 阶段 10：写入/维护扩展 | target-page grouping、每页一个 COW candidate、sorted merge、增量 free-space index、共用 B+Tree WriteBatch | 结构计数器证明写放大下降；不引入 adjacency-only 特例 |
 
 ### 13.3 每阶段必须补充的测试和门禁
 
@@ -7780,7 +7782,32 @@ inline/template 的 `include/`，排除生成 ANTLR 源）为 Region `96.26%`（
 
 ### 13.4 当前执行顺序
 
-先完成 P0 的基线、读取 session 和 zero-copy view，再完成 P1 的流式目录、Entity scan、Property projection、topology-first adjacency 和
-index candidate 分离；P2 只在结构计数器证明写放大仍是瓶颈时实施。Stage 9/10、Leiden/GDS、Cypher、Vector、Driver ABI 和 binding 功能必须
+先完成 P0 的基线、读取 session、zero-copy view、流式目录、Entity scan 和选择性 Property 读取，再完成 P1 的 read shape、
+topology-first adjacency、index candidate pipeline 和批量执行框架；P2 只在结构计数器证明写放大仍是瓶颈时实施。原存储 Stage 9/10、
+Leiden/GDS、Cypher、Vector、Driver ABI 和 binding 功能必须
 持续保留并用 native 回归验证，不因读取优化删除任何公开图能力。所有阶段通过结构性门禁后，才把对应 Stage 从 correctness-core complete 改为
 production-read complete，并最后集中处理全局覆盖率低项和发布级压力测试。
+
+截至本检查点，代码已经提供批量标签谓词、snapshot-bound 有界 selected-Property cache、COW replacement/append/retirement 计数器和安全条件下的延迟目标物化；这些是后续阶段可复用的框架基础，不等同于对应阶段的性能关闭。实现时应优先复用这些窄接口，避免再次在 logical runtime 中增加按查询文本区分的特例路径。
+
+本检查点之后又完成三项既有阶段内的通用收敛：完整 Node/Edge 物化会复用 `NativeReadSession` 持有的 Property cursor；`EntityPageStore::readNodesSorted`
+使用一次有序 Directory range cursor 并按 Entity page 分组读取，供批量标签检查使用；当普通 topology-only traversal 没有 target binding 时，runtime
+只执行 snapshot-bound endpoint existence probe，不再读取永远不会进入结果的完整 target Node。以上改动已经有 Node batch 缺失/无序输入、目标 Node
+不应读取以及 traversal/adapter 回归，仍须与 small/medium 基准和跨平台门禁一起决定阶段是否关闭。
+
+具体诊断、保留/重构边界、目标流水线和完整关闭条件见[优化策略](optimization)。本台账只维护执行顺序，物理格式约束仍以
+[原生单文件存储重构方案](native-single-file-storage-plan#23-框架级读取路径优化与实现差距)为准。
+
+### 13.5 2026-09-11 Edge projection 性能检查点
+
+最近一次完整 quick suite（run id `native-20260911T113204-55636`）为 3,847/3,847 通过；Region `95.45%`、Function `99.21%`、Line `96.05%`、Branch `90.19%`。这只证明读取框架改动没有正确性回归，不能将性能阶段标记为完成。
+
+当前 `opened/smoke/retrieval` 诊断中，`relationship_property_fetch` 已从 `669.598 ms` 降至 `275.086 ms`，其中 `direct_edge_scan` 为约 `247.146 ms`；298 条 Edge 分布在 3 个 Edge page，Edge selected-column batch 计数为 300 个 owner、7 个 Property page、300 次 column decode。下一项实现应按[优化策略](optimization)中的 Edge projection 通用收敛方案继续审计 page-local Edge visitor 和 Property-page 解码，并让 direct/non-direct filter、project、aggregate、named-path 共享同一批量结果。
+
+该检查点不得通过 query-text 特判、Edge 链表、adjacency 专用存储或跳过 owner/generation/checksum 校验来降低耗时。完成后须补齐多页、无序/重复 ID、缺失字段、LargeValue、relocation/reopen/old snapshot、corruption、资源上限和 early termination 回归，并在同一 manifest 的 `smoke`、`small`、`medium` 与 `cold-ish`、`opened`、`warm` 模式下确认其他 workload 类别没有显著退化。
+
+后续优化方案统一以[优化策略](optimization)中的 Stage 0 至 Stage 9 为执行入口。先建立可复现基线和结构计数器，再依次完成 typed entity cursor、统一 read shape、Property page 批读、topology-first adjacency、index candidate stream、批量执行、snapshot-local cache 与分层校验，以及由结构证据决定的通用写入批处理。该执行顺序保留全部图能力和单文件约束，并将 coverage 全面收口放在功能迁移、遗留代码清理和 source set 稳定之后。
+
+具体实施提交按优化文档的 Stage 0 至 Stage 9 组织。每个阶段都必须在本台账中留下对应的 focused 回归、完整 quick suite、结构计数器和必要的规模证据；阶段关闭条件以[优化策略的测试协议](optimization#测试协议)、[结构验收指标](optimization#结构验收指标)及[原生单文件存储重构方案](native-single-file-storage-plan)为准。
+
+当前实现中已经存在可复用的读取 session、Property cursor、拓扑 Entity cache、selected-column 和 `SelectionVector` 基础，但这些基础不代表对应阶段已经关闭；后续仍需完成消费者迁移、生命周期/损坏回归和结构计数器验收。`small`/`medium` 规模 benchmark 与全面覆盖率收口继续后置于功能迁移、Legacy 清理和 source-set 稳定之后。

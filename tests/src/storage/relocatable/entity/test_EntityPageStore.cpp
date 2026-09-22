@@ -8,7 +8,10 @@
 
 #include "storage/relocatable/entity/EntityPageStoreTestFixture.hpp"
 
+#include <array>
 #include <limits>
+
+#include "graph/debug/PerfTrace.hpp"
 
 TEST_F(RelocatableEntityPageStoreTest, AtomicallyAllocatesReadsAndReopensNodeAndEdgePages) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
@@ -31,6 +34,18 @@ TEST_F(RelocatableEntityPageStoreTest, AtomicallyAllocatesReadsAndReopensNodeAnd
 	EXPECT_EQ(metadata->findEdgePageLocation(current, 2001U), edgeAllocation->location);
 	EXPECT_EQ(metadata->findPageLocation(current, PageId(101U)), nodeAllocation->page);
 	EXPECT_EQ(metadata->findPageLocation(current, PageId(201U)), edgeAllocation->page);
+	const std::vector<std::optional<NodeEntityRecord>> nodeBatch =
+			store.readNodesSorted(current, std::array<uint64_t, 3U>{1001U, 2001U, 3001U});
+	ASSERT_EQ(nodeBatch.size(), 3U);
+	ASSERT_TRUE(nodeBatch[0].has_value());
+	EXPECT_EQ(*nodeBatch[0], firstNode);
+	EXPECT_FALSE(nodeBatch[1].has_value());
+	EXPECT_FALSE(nodeBatch[2].has_value());
+	expectFormatError(
+			[&] { static_cast<void>(store.readNodesSorted(current, std::array<uint64_t, 2U>{2001U, 1001U})); },
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { static_cast<void>(store.readNodesSorted(current, std::array<uint64_t, 1U>{0U})); },
+					  FormatError::FERR_INVALID_HEADER);
 	const std::vector<CatalogEntry> pools = store.currentPools(current);
 	ASSERT_EQ(pools.size(), 2U);
 	EXPECT_EQ(pools.front().segment_id, SegmentId(31U));
@@ -1535,6 +1550,99 @@ TEST_F(RelocatableEntityPageStoreTest, MaintainsEdgePagesAcrossAppendCowDeletion
 	store.reclaimRetiredFrames(SegmentId(31U));
 }
 
+TEST_F(RelocatableEntityPageStoreTest,
+	   ReadsSortedEdgesAcrossCowEvacuationReopenAndRejectsCorruptedCurrentOwner) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore store(io, *metadata);
+	const EdgeEntityRecord originalEdge = edge(10U, 11U, 21U);
+	const EdgeEntityRecord otherEdge = edge(12U, 13U, 22U);
+	ASSERT_TRUE(store.allocateEdge(newPool(31U, 901U, 201U, 40U), 2001U, originalEdge, LogSequenceNumber(2U))
+					.has_value());
+	ASSERT_TRUE(store.allocateEdge(newPool(32U, 901U, 202U, 41U), 2002U, otherEdge, LogSequenceNumber(3U))
+					.has_value());
+	const std::array<uint64_t, 3U> edgeIds{2001U, 2002U, 2003U};
+
+	MetadataSnapshotPin original = metadata->openSnapshot();
+	const bool valuesWereEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	const std::vector<std::optional<EdgeEntityRecord>> originalBatch = store.readEdgesSorted(original, edgeIds);
+	const graph::debug::PerfTrace::Snapshot trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
+	ASSERT_EQ(originalBatch.size(), edgeIds.size());
+	ASSERT_TRUE(originalBatch[0].has_value());
+	EXPECT_EQ(*originalBatch[0], originalEdge);
+	ASSERT_TRUE(originalBatch[1].has_value());
+	EXPECT_EQ(*originalBatch[1], otherEdge);
+	EXPECT_FALSE(originalBatch[2].has_value());
+	EXPECT_EQ(trace.at("native_graph.read.edge_sorted_batch_calls").totalValue, 1);
+	EXPECT_EQ(trace.at("native_graph.read.edge_sorted_batch_entries").totalValue, 3);
+	EXPECT_EQ(trace.at("native_graph.read.edge_sorted_batch_directory_range_calls").totalValue, 1);
+	EXPECT_EQ(trace.at("native_graph.read.edge_sorted_batch_unique_io_ids").totalValue, 2);
+	EXPECT_EQ(trace.at("native_graph.read.edge_sorted_batch_entity_page_pins").totalValue, 2);
+
+	const EdgeEntityRecord replacementEdge = edge(14U, 15U, 23U);
+	static_cast<void>(store.updateEdge(original, 2001U, replacementEdge, LogSequenceNumber(4U)));
+	MetadataSnapshotPin afterCow = metadata->openSnapshot();
+	static_cast<void>(store.evacuateEdgePage(afterCow, PageId(201U), SegmentId(32U), LogSequenceNumber(5U)));
+	MetadataSnapshotPin current = metadata->openSnapshot();
+
+	const std::vector<std::optional<EdgeEntityRecord>> oldBatch = store.readEdgesSorted(original, edgeIds);
+	const std::vector<std::optional<EdgeEntityRecord>> cowBatch = store.readEdgesSorted(afterCow, edgeIds);
+	const std::vector<std::optional<EdgeEntityRecord>> currentBatch = store.readEdgesSorted(current, edgeIds);
+	ASSERT_TRUE(oldBatch[0].has_value());
+	EXPECT_EQ(*oldBatch[0], originalEdge);
+	ASSERT_TRUE(cowBatch[0].has_value());
+	EXPECT_EQ(*cowBatch[0], replacementEdge);
+	ASSERT_TRUE(currentBatch[0].has_value());
+	EXPECT_EQ(*currentBatch[0], replacementEdge);
+	ASSERT_TRUE(currentBatch[1].has_value());
+	EXPECT_EQ(*currentBatch[1], otherEdge);
+	EXPECT_FALSE(currentBatch[2].has_value());
+
+	original.release();
+	afterCow.release();
+	current.release();
+	metadata.reset();
+	auto reopened = RelocatableMetadataStore::open(io);
+	EntityPageStore reopenedStore(io, *reopened);
+	MetadataSnapshotPin reopenedSnapshot = reopened->openSnapshot();
+	const std::vector<std::optional<EdgeEntityRecord>> reopenedBatch =
+			reopenedStore.readEdgesSorted(reopenedSnapshot, edgeIds);
+	ASSERT_TRUE(reopenedBatch[0].has_value());
+	EXPECT_EQ(*reopenedBatch[0], replacementEdge);
+	ASSERT_TRUE(reopenedBatch[1].has_value());
+	EXPECT_EQ(*reopenedBatch[1], otherEdge);
+	EXPECT_FALSE(reopenedBatch[2].has_value());
+	reopenedSnapshot.release();
+
+	MetadataSnapshotPin routing = reopened->openSnapshot();
+	const CatalogEntry currentPool = reopened->findCatalog(routing, SegmentId(32U));
+	routing.release();
+	overwritePageOwner(io, *reopened, PageId(201U),
+					   {PageId(201U), currentPool.owner_id + 1U, PageOwnerKind::POK_ENTITY, 0U,
+						RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, currentPool.generation, LogSequenceNumber(5U)});
+	MetadataSnapshotPin corrupted = reopened->openSnapshot();
+	expectFormatError([&] { static_cast<void>(reopenedStore.readEdgesSorted(corrupted, edgeIds)); },
+					  FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(RelocatableEntityPageStoreTest, SortedEdgeReadsRejectPersistedEntityPageChecksumCorruption) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore store(io, *metadata);
+	const EdgeEntityRecord record = edge(10U, 11U, 21U);
+	ASSERT_TRUE(store.allocateEdge(newPool(31U, 901U, 201U, 40U), 2001U, record, LogSequenceNumber(2U))
+					.has_value());
+
+	// Mutate the persisted payload without refreshing its page checksum. The
+	// sorted batch path must authenticate the page before exposing any record.
+	corruptPagePayloadByte(io, *metadata, PageId(201U));
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	expectFormatError(
+			[&] { static_cast<void>(store.readEdgesSorted(snapshot, std::array<uint64_t, 1U>{2001U})); },
+			FormatError::FERR_CHECKSUM_MISMATCH);
+}
+
 TEST_F(RelocatableEntityPageStoreTest, RejectsInvalidRequestsAndDoesNotPublishNoSpaceAllocations) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
 	EntityPageStore store(io, *metadata);
@@ -1657,7 +1765,14 @@ TEST_F(RelocatableEntityPageStoreTest, BatchCowPublishesNodeAndEdgePagesAndMapsI
 			 .edge_updates = {{2001U, updatedEdge}},
 			 .edge_insertions = {{2002U, insertedEdge}}},
 	}};
+	const bool valuesWereEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
 	const EntityPageBatchResult result = store.applyBatch(before, mutations, LogSequenceNumber(4U));
+	const graph::debug::PerfTrace::Snapshot trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
+	ASSERT_EQ(trace.at("native_graph.commit.entity_page_batch_directory_requests").valueCalls, 2U);
+	EXPECT_EQ(trace.at("native_graph.commit.entity_page_batch_directory_requests").totalValue, 2);
 	ASSERT_EQ(result.pages.size(), mutations.size());
 	EXPECT_EQ(result.superblock.generation.value(), before.superblock().generation.value() + 1U);
 	EXPECT_EQ(result.pages[0].pool.segment_id, SegmentId(31U));
@@ -1796,8 +1911,15 @@ TEST_F(RelocatableEntityPageStoreTest, BatchTransactionAtomicallyAllocatesNewEdg
 			 .record_kind = EntityPageRecordKind::EPRK_EDGE,
 			 .edge_insertions = {{2001U, edge(1001U, 1002U, 51U)}}},
 	}};
+	const bool valuesWereEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
 	const EntityPageBatchResult result =
 			store.applyBatchTransaction(before, mutations, {}, newPools, LogSequenceNumber(3U));
+	const graph::debug::PerfTrace::Snapshot trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
+	ASSERT_EQ(trace.at("native_graph.commit.entity_page_batch_directory_requests").valueCalls, 2U);
+	EXPECT_EQ(trace.at("native_graph.commit.entity_page_batch_directory_requests").totalValue, 2);
 	ASSERT_EQ(result.pages.size(), 1U);
 	ASSERT_TRUE(result.appended_pages.empty());
 	ASSERT_EQ(result.new_pool_pages.size(), 1U);

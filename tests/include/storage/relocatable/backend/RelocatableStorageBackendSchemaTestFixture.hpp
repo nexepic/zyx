@@ -15,6 +15,7 @@
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <span>
@@ -400,6 +401,60 @@ protected:
 		snapshot.release();
 		const std::vector<std::byte> bytes = rewritten.serialize();
 		dataIo->writeAt(offset + RSS_PAGE_OWNER_HEADER_BYTES, bytes.data(), bytes.size());
+		dataIo->sync();
+		metadata.reset();
+		dataIo.reset();
+		data->close();
+	}
+
+	// Mutates only the durable owner header of an index root.  The payload keeps
+	// its original SlottedPage identity, so readers must reject the mismatch
+	// before interpreting any candidate entry.
+	void mutateBTreeRootOwner(uint64_t indexId, const std::function<void(PageOwnerHeader &)> &mutator) const {
+		ASSERT_TRUE(static_cast<bool>(mutator));
+		auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
+		ASSERT_TRUE(data->is_open());
+		auto dataIo = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		auto metadata = RelocatableMetadataStore::open(dataIo);
+		MetadataSnapshotPin snapshot = metadata->openSnapshot();
+		const IndexRootLocation root = metadata->findIndexRoot(snapshot, indexId);
+		const PageLocation location = metadata->findPageLocation(snapshot, root.root_page_id);
+		const CatalogEntry pool = metadata->findCatalog(snapshot, location.segment_id);
+		const uint64_t offset = PhysicalSegmentAllocator::checkedSlotOffset(snapshot.superblock().data_region_offset,
+															 pool.physical_slot) +
+												 static_cast<uint64_t>(location.page_index) * RSS_PAGE_SIZE;
+		std::array<std::byte, RSS_PAGE_OWNER_HEADER_BYTES> ownerBytes{};
+		ASSERT_EQ(dataIo->readAt(offset, ownerBytes.data(), ownerBytes.size()), ownerBytes.size());
+		PageOwnerHeader owner = PageOwnerHeaderCodec::decode(ownerBytes);
+		snapshot.release();
+		mutator(owner);
+		const auto rewritten = PageOwnerHeaderCodec::encode(owner);
+		dataIo->writeAt(offset, rewritten.data(), rewritten.size());
+		dataIo->sync();
+		metadata.reset();
+		dataIo.reset();
+		data->close();
+	}
+
+	// Flips one payload byte without refreshing its SlottedPage checksum.  This
+	// models a torn/corrupt index page and must fail before candidate decoding.
+	void flipBTreeRootPayloadByte(uint64_t indexId) const {
+		auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
+		ASSERT_TRUE(data->is_open());
+		auto dataIo = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		auto metadata = RelocatableMetadataStore::open(dataIo);
+		MetadataSnapshotPin snapshot = metadata->openSnapshot();
+		const IndexRootLocation root = metadata->findIndexRoot(snapshot, indexId);
+		const PageLocation location = metadata->findPageLocation(snapshot, root.root_page_id);
+		const CatalogEntry pool = metadata->findCatalog(snapshot, location.segment_id);
+		const uint64_t offset = PhysicalSegmentAllocator::checkedSlotOffset(snapshot.superblock().data_region_offset,
+															 pool.physical_slot) +
+												 static_cast<uint64_t>(location.page_index) * RSS_PAGE_SIZE;
+		snapshot.release();
+		std::byte payload{};
+		ASSERT_EQ(dataIo->readAt(offset + RSS_PAGE_OWNER_HEADER_BYTES, &payload, sizeof(payload)), sizeof(payload));
+		const std::byte flipped = payload ^ std::byte{0x01};
+		dataIo->writeAt(offset + RSS_PAGE_OWNER_HEADER_BYTES, &flipped, 1U);
 		dataIo->sync();
 		metadata.reset();
 		dataIo.reset();

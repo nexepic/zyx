@@ -12,6 +12,7 @@
 #include <functional>
 #include <limits>
 #include <memory>
+#include <stdexcept>
 #include <system_error>
 #include <vector>
 
@@ -56,6 +57,11 @@ namespace {
 		page.entries = {{1U, SegmentId(10U), Generation(1U), 0U, 1U, 0U}};
 		return page;
 	}
+
+	class ThrowOnCancellationCheck final : public CancellationCheckpoint {
+	public:
+		void check() const override { throw std::runtime_error("cancelled before directory I/O"); }
+	};
 
 } // namespace
 
@@ -159,6 +165,112 @@ TEST_F(LocationDirectoryScanCacheTest, KeepsRootResidentAndStreamsDeepDescendant
 	EXPECT_EQ(afterSecondPoint.misses, afterFirstPoint.misses);
 	EXPECT_EQ(afterSecondPoint.disk_read_bytes, afterFirstPoint.disk_read_bytes);
 	EXPECT_GT(afterSecondPoint.hits, afterFirstPoint.hits);
+}
+
+TEST_F(LocationDirectoryScanCacheTest, RangeCursorRetainsRouteAndSupportsSparseMonotonicSeek) {
+	const Superblock initial = initialSuperblock();
+	SuperblockFile bootstrap(io_);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(io_, initial);
+	MetadataPagePoolAllocator allocator(io_, initial);
+	LocationDirectory directory(pages, allocator);
+	const uint64_t nextLeafId = 1U + RSS_LOCATION_LEAF_MAX_ENTRIES;
+	const uint64_t deepId =
+			1U + static_cast<uint64_t>(RSS_LOCATION_LEAF_MAX_ENTRIES) * RSS_CATALOG_RADIX_FANOUT;
+	const std::array mappings = {
+			EntityPageLocation{1U, PageId(101U), 0U, 1U},
+			EntityPageLocation{nextLeafId, PageId(102U), 1U, 1U},
+			EntityPageLocation{deepId, PageId(201U), 2U, 2U},
+			EntityPageLocation{deepId + RSS_LOCATION_LEAF_MAX_ENTRIES, PageId(202U), 3U, 2U},
+	};
+	MetadataWriteBatch batch(allocator, initial, LogSequenceNumber(2U));
+	directory.prepareReplaceNodePageLocations(batch, mappings, {});
+	batch.publish(bootstrap);
+	const Superblock published = batch.candidate();
+
+	LocationDirectoryRangeCursor cursor = directory.openRangeCursor(
+			published, MetadataDirectoryType::MDT_NODE_ENTITY, 1U, std::numeric_limits<uint64_t>::max());
+	EXPECT_EQ(cursor.metadataPagesRead(), 0U);
+	ASSERT_EQ(cursor.next()->logical_id, mappings[0].entity_id);
+	EXPECT_EQ(cursor.metadataPagesRead(), 3U); // Root, first internal, first leaf.
+	ASSERT_EQ(cursor.next()->logical_id, mappings[1].entity_id);
+	EXPECT_EQ(cursor.metadataPagesRead(), 4U); // The retained route reads only the next leaf.
+	ASSERT_EQ(cursor.nextAtOrAfter(deepId)->logical_id, mappings[2].entity_id);
+	EXPECT_EQ(cursor.metadataPagesRead(), 6U); // Second internal and its first leaf; no root reread.
+	expectFormatError([&] { static_cast<void>(cursor.nextAtOrAfter(deepId)); },
+					  FormatError::FERR_INVALID_STATE);
+
+	LocationDirectoryRangeCursor moved = std::move(cursor);
+	expectFormatError([&] { static_cast<void>(cursor.next()); }, FormatError::FERR_INVALID_STATE);
+	ASSERT_EQ(moved.next()->logical_id, mappings[3].entity_id);
+	EXPECT_EQ(moved.metadataPagesRead(), 7U);
+	EXPECT_FALSE(moved.next().has_value());
+	EXPECT_TRUE(moved.exhausted());
+}
+
+TEST_F(LocationDirectoryScanCacheTest, RangeCursorChecksCancellationBeforeStorageIo) {
+	const Superblock initial = initialSuperblock();
+	SuperblockFile bootstrap(io_);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(io_, initial);
+	MetadataPagePoolAllocator allocator(io_, initial);
+	LocationDirectory directory(pages, allocator);
+	MetadataWriteBatch batch(allocator, initial, LogSequenceNumber(2U));
+	const std::array mappings{EntityPageLocation{1U, PageId(101U), 0U, 1U}};
+	directory.prepareReplaceNodePageLocations(batch, mappings, {});
+	batch.publish(bootstrap);
+	io_->sync();
+	io_->enableBufferPool(8U * RSS_PAGE_SIZE);
+	io_->resetBufferPoolStats();
+
+	ThrowOnCancellationCheck cancellation;
+	LocationDirectoryRangeCursor cursor = directory.openRangeCursor(
+			batch.candidate(), MetadataDirectoryType::MDT_NODE_ENTITY, 1U,
+			std::numeric_limits<uint64_t>::max(), &cancellation);
+	EXPECT_THROW(static_cast<void>(cursor.next()), std::runtime_error);
+	EXPECT_EQ(cursor.metadataPagesRead(), 0U);
+	EXPECT_EQ(io_->bufferPoolStats().disk_read_bytes, 0U);
+}
+
+TEST_F(LocationDirectoryScanCacheTest, SortedPropertyMultiLookupStreamsOnlyRequestedRange) {
+	const Superblock initial = initialSuperblock();
+	SuperblockFile bootstrap(io_);
+	bootstrap.initializeNew(initial);
+	MetadataPageFile pages(io_, initial);
+	MetadataPagePoolAllocator allocator(io_, initial);
+	LocationDirectory directory(pages, allocator);
+	const uint64_t nextLeafId = 1U + RSS_LOCATION_LEAF_MAX_ENTRIES;
+	const uint64_t deepId =
+			1U + static_cast<uint64_t>(RSS_LOCATION_LEAF_MAX_ENTRIES) * RSS_CATALOG_RADIX_FANOUT;
+	const std::array locations = {
+			EntityPropertyLocation{{EntityPropertyOwnerKind::EPOK_NODE, 1U}, PageId(101U), 0U, 1U},
+			EntityPropertyLocation{{EntityPropertyOwnerKind::EPOK_NODE, nextLeafId}, PageId(102U), 1U, 2U},
+			EntityPropertyLocation{{EntityPropertyOwnerKind::EPOK_NODE, deepId}, PageId(201U), 2U, 3U},
+	};
+	MetadataWriteBatch batch(allocator, initial, LogSequenceNumber(2U));
+	directory.prepareReplaceEntityProperties(batch, locations, {});
+	batch.publish(bootstrap);
+	const std::array keys = {
+			EntityPropertyKey{EntityPropertyOwnerKind::EPOK_NODE, 1U},
+			EntityPropertyKey{EntityPropertyOwnerKind::EPOK_NODE, 2U},
+			EntityPropertyKey{EntityPropertyOwnerKind::EPOK_NODE, nextLeafId},
+			EntityPropertyKey{EntityPropertyOwnerKind::EPOK_NODE, deepId},
+	};
+	std::array<std::optional<EntityPropertyLocation>, keys.size()> results;
+	directory.findEntityPropertiesSorted(batch.candidate(), keys, results);
+	EXPECT_EQ(results[0], std::optional(locations[0]));
+	EXPECT_EQ(results[1], std::nullopt);
+	EXPECT_EQ(results[2], std::optional(locations[1]));
+	EXPECT_EQ(results[3], std::optional(locations[2]));
+
+	const std::array duplicateKeys{keys[0], keys[0]};
+	std::array<std::optional<EntityPropertyLocation>, duplicateKeys.size()> duplicateResults;
+	expectFormatError(
+			[&] { directory.findEntityPropertiesSorted(batch.candidate(), duplicateKeys, duplicateResults); },
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] { directory.findEntityPropertiesSorted(batch.candidate(), keys, duplicateResults); },
+			FormatError::FERR_INVALID_HEADER);
 }
 
 TEST_F(LocationDirectoryScanCacheTest, StreamsEntityRangeAbsenceProofDescendantsTransiently) {

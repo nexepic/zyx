@@ -140,7 +140,8 @@ namespace graph::storage {
 		}
 		const EntityPropertyLocation location = metadata_.findEntityPropertyLocation(snapshot, key);
 		const SlottedPage page = pages_.read(snapshot, location.page_id);
-		return decodeEntityRoot(snapshot, key, location, page);
+		const std::vector<std::byte> bytes = page.read({location.page_id, location.slot_id, location.slot_generation});
+		return decodeEntityRoot(snapshot, key, location, page.pageId(), page.ownerKind(), bytes);
 	}
 
 	std::optional<PropertyCollectionRoot>
@@ -156,24 +157,531 @@ namespace graph::storage {
 			return std::nullopt;
 		}
 		const SlottedPage page = pages_.read(snapshot, location->page_id);
-		return decodeEntityRoot(snapshot, key, *location, page);
+		const std::vector<std::byte> bytes =
+				page.read({location->page_id, location->slot_id, location->slot_generation});
+		return decodeEntityRoot(snapshot, key, *location, page.pageId(), page.ownerKind(), bytes);
+	}
+
+	std::optional<PropertyCollectionRootEntry>
+	PropertyCollectionRootStore::readEntityPropertyOptional(const MetadataSnapshotPin &snapshot,
+																		 const EntityPropertyKey &key,
+																		 const uint32_t keyToken) const {
+		if (!key.isValid() || keyToken == 0U) {
+			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
+									"selective Entity Property read requires a valid owner key and nonzero token");
+		}
+		const std::optional<EntityPropertyLocation> location =
+				metadata_.findEntityPropertyLocationOptional(snapshot, key);
+		if (!location.has_value()) {
+			return std::nullopt;
+		}
+		if (std::optional<SlottedPagePinnedRead> pinned = pages_.readPinned(snapshot, location->page_id);
+			pinned.has_value()) {
+			return decodeSelectedEntityProperty(snapshot, key, *location, pinned->page.pageId(),
+															pinned->page.ownerKind(),
+															pinned->page.read({location->page_id, location->slot_id,
+																					location->slot_generation}),
+															keyToken);
+		}
+		const SlottedPage page = pages_.read(snapshot, location->page_id);
+		const std::vector<std::byte> bytes =
+				page.read({location->page_id, location->slot_id, location->slot_generation});
+		return decodeSelectedEntityProperty(snapshot, key, *location, page.pageId(), page.ownerKind(), bytes, keyToken);
+	}
+
+	std::optional<bool> PropertyCollectionRootStore::readEntityPropertyExists(const MetadataSnapshotPin &snapshot,
+																	 const EntityPropertyKey &key, const uint32_t keyToken) const {
+		if (!key.isValid() || keyToken == 0U) {
+			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
+								"Entity Property presence read requires a valid owner key and nonzero token");
+		}
+		const std::optional<EntityPropertyLocation> location =
+			metadata_.findEntityPropertyLocationOptional(snapshot, key);
+		if (!location.has_value()) {
+			return false;
+		}
+		if (std::optional<SlottedPagePinnedRead> pinned = pages_.readPinned(snapshot, location->page_id);
+				pinned.has_value()) {
+			return decodeEntityPropertyExists(snapshot, key, *location, pinned->page.pageId(), pinned->page.ownerKind(),
+														pinned->page.read({location->page_id, location->slot_id, location->slot_generation}), keyToken);
+		}
+		const SlottedPage page = pages_.read(snapshot, location->page_id);
+		const std::vector<std::byte> bytes =
+				page.read({location->page_id, location->slot_id, location->slot_generation});
+		return decodeEntityPropertyExists(snapshot, key, *location, page.pageId(), page.ownerKind(), bytes, keyToken);
+	}
+
+	void PropertyCollectionRootStore::readEntityPropertiesOptionalSorted(
+			const MetadataSnapshotPin &snapshot, const std::span<const EntityPropertyKey> keys, const uint32_t keyToken,
+			const std::span<std::optional<PropertyCollectionRootEntry>> results,
+			const CancellationCheckpoint *cancellation) const {
+		if (!metadata_.ownsSnapshot(snapshot) || keyToken == 0U || keys.size() != results.size()) {
+			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
+								"sorted selected Entity Property reads require one snapshot, token, and result per owner");
+		}
+		std::fill(results.begin(), results.end(), std::nullopt);
+		if (keys.empty()) {
+			return;
+		}
+
+		uint64_t previousDirectoryId = 0U;
+		for (const EntityPropertyKey &key: keys) {
+			const uint64_t directoryId = key.directoryId();
+			if (directoryId <= previousDirectoryId) {
+				throwRootStoreError(FormatError::FERR_INVALID_HEADER,
+									"sorted selected Entity Property reads require strictly ordered valid owners");
+			}
+			previousDirectoryId = directoryId;
+		}
+
+		std::vector<std::optional<EntityPropertyLocation>> locations(keys.size());
+		metadata_.findEntityPropertyLocationsSorted(snapshot, keys, locations, cancellation);
+		std::vector<size_t> present;
+		present.reserve(locations.size());
+		for (size_t index = 0U; index < locations.size(); ++index) {
+			if (locations[index].has_value()) {
+				present.push_back(index);
+			}
+		}
+		// Directory order is not required to match Property-page allocation order.
+		// Grouping by PageId guarantees one typed page read per batch page while
+		// preserving results at the caller's logical-owner positions.
+		std::ranges::sort(present, [&locations](const size_t left, const size_t right) {
+			const EntityPropertyLocation &leftLocation = *locations[left];
+			const EntityPropertyLocation &rightLocation = *locations[right];
+			if (leftLocation.page_id != rightLocation.page_id) {
+				return leftLocation.page_id < rightLocation.page_id;
+			}
+			return leftLocation.slot_id < rightLocation.slot_id;
+		});
+
+		std::optional<SlottedPagePinnedRead> pinned;
+		std::optional<SlottedPage> copied;
+		PageId currentPage{};
+		for (const size_t index: present) {
+			if (cancellation != nullptr) {
+				cancellation->check();
+			}
+			const EntityPropertyLocation &location = *locations[index];
+			if (location.page_id != currentPage) {
+				pinned.reset();
+				copied.reset();
+				currentPage = location.page_id;
+				pinned = pages_.readPinned(snapshot, currentPage, BufferPoolReadHint::BPRH_SEQUENTIAL);
+				if (!pinned.has_value()) {
+					copied.emplace(pages_.read(snapshot, currentPage, BufferPoolReadHint::BPRH_SEQUENTIAL));
+				}
+				debug::PerfTrace::addValue("native_graph.read.property_selected_batch_pages", 1);
+			}
+			if (pinned.has_value()) {
+				const std::span<const std::byte> bytes =
+						pinned->page.read({location.page_id, location.slot_id, location.slot_generation});
+				results[index] = decodeSelectedEntityProperty(snapshot, keys[index], location, pinned->page.pageId(),
+																			pinned->page.ownerKind(), bytes, keyToken);
+			} else {
+				const std::vector<std::byte> bytes =
+						copied->read({location.page_id, location.slot_id, location.slot_generation});
+				results[index] = decodeSelectedEntityProperty(snapshot, keys[index], location, copied->pageId(),
+																			copied->ownerKind(), bytes, keyToken);
+			}
+		}
+		debug::PerfTrace::addValue("native_graph.read.property_selected_batch_owners",
+									 static_cast<int64_t>(keys.size()));
+	}
+
+	void PropertyCollectionRootStore::readEntityPropertiesOptionalSorted(
+			const MetadataSnapshotPin &snapshot, const std::span<const EntityPropertyKey> keys,
+			const std::span<const uint32_t> keyTokens,
+			const std::span<std::optional<PropertyCollectionRootEntry>> results,
+			const CancellationCheckpoint *cancellation) const {
+		if (!metadata_.ownsSnapshot(snapshot) || keyTokens.empty() ||
+			keys.size() > std::numeric_limits<size_t>::max() / keyTokens.size() ||
+			results.size() != keys.size() * keyTokens.size()) {
+			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
+								"multi-column Entity Property reads require one snapshot and a rectangular result shape");
+		}
+		uint64_t previousDirectoryId = 0U;
+		for (const EntityPropertyKey &key: keys) {
+			const uint64_t directoryId = key.directoryId();
+			if (directoryId <= previousDirectoryId) {
+				throwRootStoreError(FormatError::FERR_INVALID_HEADER,
+								"multi-column Entity Property reads require strictly ordered valid owners");
+			}
+			previousDirectoryId = directoryId;
+		}
+		uint32_t previousToken = 0U;
+		for (const uint32_t keyToken: keyTokens) {
+			if (keyToken == 0U || keyToken <= previousToken) {
+				throwRootStoreError(FormatError::FERR_INVALID_HEADER,
+								"multi-column Entity Property reads require strictly increasing nonzero tokens");
+			}
+			previousToken = keyToken;
+		}
+		std::fill(results.begin(), results.end(), std::nullopt);
+		if (keys.empty()) {
+			return;
+		}
+
+		std::vector<std::optional<EntityPropertyLocation>> locations(keys.size());
+		metadata_.findEntityPropertyLocationsSorted(snapshot, keys, locations, cancellation);
+		std::vector<size_t> present;
+		present.reserve(locations.size());
+		for (size_t index = 0U; index < locations.size(); ++index) {
+			if (locations[index].has_value()) {
+				present.push_back(index);
+			}
+		}
+		std::ranges::sort(present, [&locations](const size_t left, const size_t right) {
+			const EntityPropertyLocation &leftLocation = *locations[left];
+			const EntityPropertyLocation &rightLocation = *locations[right];
+			return leftLocation.page_id != rightLocation.page_id ? leftLocation.page_id < rightLocation.page_id
+																											 : leftLocation.slot_id < rightLocation.slot_id;
+		});
+
+		std::optional<SlottedPagePinnedRead> pinned;
+		std::optional<SlottedPage> copied;
+		PageId currentPage{};
+		// A single requested token is the dominant predicate/projection shape. Keep
+		// this path scalar so each owner avoids allocating a temporary one-element
+		// vector before the caller places the value in its column.
+		const bool scalarSelection = keyTokens.size() == 1U;
+		for (const size_t index: present) {
+			if (cancellation != nullptr) {
+				cancellation->check();
+			}
+			const EntityPropertyLocation &location = *locations[index];
+			if (location.page_id != currentPage) {
+				pinned.reset();
+				copied.reset();
+				currentPage = location.page_id;
+				pinned = pages_.readPinned(snapshot, currentPage, BufferPoolReadHint::BPRH_SEQUENTIAL);
+				if (!pinned.has_value()) {
+					copied.emplace(pages_.read(snapshot, currentPage, BufferPoolReadHint::BPRH_SEQUENTIAL));
+				}
+				debug::PerfTrace::addValue("native_graph.read.property_selected_column_batch_pages", 1);
+			}
+			std::vector<std::byte> copiedBytes;
+			std::span<const std::byte> bytes;
+			if (pinned.has_value()) {
+				bytes = pinned->page.read({location.page_id, location.slot_id, location.slot_generation});
+			} else {
+				copiedBytes = copied->read({location.page_id, location.slot_id, location.slot_generation});
+				bytes = copiedBytes;
+			}
+			const PageId pageId = pinned.has_value() ? pinned->page.pageId() : copied->pageId();
+			const PageOwnerKind ownerKind = pinned.has_value() ? pinned->page.ownerKind() : copied->ownerKind();
+			if (scalarSelection) {
+				const std::optional<PropertyCollectionRootEntry> selected =
+						decodeSelectedEntityProperty(snapshot, keys[index], location, pageId, ownerKind, bytes, keyTokens.front());
+				results[index] = selected;
+				continue;
+			}
+			std::vector<std::optional<PropertyCollectionRootEntry>> selected =
+					decodeSelectedEntityProperties(snapshot, keys[index], location, pageId, ownerKind, bytes, keyTokens);
+			if (selected.size() != keyTokens.size()) {
+				throwRootStoreError(FormatError::FERR_INVALID_STATE,
+								"multi-column Entity Property decoder returned an invalid result shape");
+			}
+			std::copy(selected.begin(), selected.end(), results.begin() + index * keyTokens.size());
+		}
+		debug::PerfTrace::addValue("native_graph.read.property_selected_column_batch_owners",
+									 static_cast<int64_t>(keys.size()));
+	}
+
+	void PropertyCollectionRootStore::readEntityPropertiesAndCountsOptionalSorted(
+			const MetadataSnapshotPin &snapshot, const std::span<const EntityPropertyKey> keys,
+			const std::span<const uint32_t> keyTokens,
+			const std::span<std::optional<PropertyCollectionRootEntry>> results,
+			const std::span<std::optional<size_t>> counts,
+			const CancellationCheckpoint *cancellation) const {
+		if (!metadata_.ownsSnapshot(snapshot) || keyTokens.empty() ||
+			keys.size() > std::numeric_limits<size_t>::max() / keyTokens.size() ||
+			results.size() != keys.size() * keyTokens.size() || counts.size() != keys.size()) {
+			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
+								"combined Entity Property reads require one snapshot and rectangular result shapes");
+		}
+		uint64_t previousDirectoryId = 0U;
+		for (const EntityPropertyKey &key: keys) {
+			if (!key.isValid() || key.directoryId() <= previousDirectoryId) {
+				throwRootStoreError(FormatError::FERR_INVALID_HEADER,
+									"combined Entity Property reads require strictly ordered valid owners");
+			}
+			previousDirectoryId = key.directoryId();
+		}
+		uint32_t previousToken = 0U;
+		for (const uint32_t token: keyTokens) {
+			if (token == 0U || token <= previousToken) {
+				throwRootStoreError(FormatError::FERR_INVALID_HEADER,
+									"combined Entity Property reads require strictly increasing nonzero tokens");
+			}
+			previousToken = token;
+		}
+		std::fill(results.begin(), results.end(), std::nullopt);
+		std::fill(counts.begin(), counts.end(), std::nullopt);
+		if (keys.empty()) {
+			return;
+		}
+
+		std::vector<std::optional<EntityPropertyLocation>> locations(keys.size());
+		metadata_.findEntityPropertyLocationsSorted(snapshot, keys, locations, cancellation);
+		std::vector<size_t> present;
+		present.reserve(locations.size());
+		for (size_t index = 0U; index < locations.size(); ++index) {
+			if (locations[index].has_value()) {
+				present.push_back(index);
+			} else {
+				counts[index] = size_t{0U};
+			}
+		}
+		std::ranges::sort(present, [&locations](const size_t left, const size_t right) {
+			const EntityPropertyLocation &lhs = *locations[left];
+			const EntityPropertyLocation &rhs = *locations[right];
+			return lhs.page_id != rhs.page_id ? lhs.page_id < rhs.page_id : lhs.slot_id < rhs.slot_id;
+		});
+
+		std::optional<SlottedPagePinnedRead> pinned;
+		std::optional<SlottedPage> copied;
+		PageId currentPage{};
+		for (const size_t index: present) {
+			if (cancellation != nullptr) {
+				cancellation->check();
+			}
+			const EntityPropertyLocation &location = *locations[index];
+			if (location.page_id != currentPage) {
+				pinned.reset();
+				copied.reset();
+				currentPage = location.page_id;
+				pinned = pages_.readPinned(snapshot, currentPage, BufferPoolReadHint::BPRH_SEQUENTIAL);
+				if (!pinned.has_value()) {
+					copied.emplace(pages_.read(snapshot, currentPage, BufferPoolReadHint::BPRH_SEQUENTIAL));
+				}
+				debug::PerfTrace::addValue("native_graph.read.property_combined_batch_pages", 1);
+			}
+			std::vector<std::byte> copiedBytes;
+			std::span<const std::byte> bytes;
+			if (pinned.has_value()) {
+				bytes = pinned->page.read({location.page_id, location.slot_id, location.slot_generation});
+			} else {
+				copiedBytes = copied->read({location.page_id, location.slot_id, location.slot_generation});
+				bytes = copiedBytes;
+			}
+			const PageId pageId = pinned.has_value() ? pinned->page.pageId() : copied->pageId();
+			const PageOwnerKind ownerKind = pinned.has_value() ? pinned->page.ownerKind() : copied->ownerKind();
+			const uint8_t invalidLocation = static_cast<uint8_t>(location.key != keys[index]) |
+					static_cast<uint8_t>(location.page_id != pageId) |
+					static_cast<uint8_t>(ownerKind != PageOwnerKind::POK_PROPERTY);
+			if (invalidLocation != 0U) {
+				throwRootStoreError(FormatError::FERR_INVALID_STATE,
+									"combined Entity Property location does not resolve to its Property page");
+			}
+			std::pair<size_t, std::vector<std::optional<PropertyCollectionRootEntry>>> decoded;
+			if (EntityPropertyLargeValueReferenceCodec::hasMagic(bytes)) {
+				if (large_values_ == nullptr) {
+					throwRootStoreError(FormatError::FERR_INVALID_STATE,
+										"Entity Property LargeValue reference requires a configured LargeValue store");
+				}
+				const EntityPropertyLargeValueReference reference = EntityPropertyLargeValueReferenceCodec::decode(bytes);
+				const EntityPropertyKey referenceKey =
+						entityKeyForRoot({reference.owner_entity_id, reference.owner_entity_type, {}});
+				if (referenceKey != keys[index] || reference.value.kind != LargeValueKind::LVK_BYTES ||
+						reference.value.media_type != RSS_ENTITY_PROPERTY_LARGE_VALUE_MEDIA_TYPE) {
+					throwRootStoreError(FormatError::FERR_INVALID_STATE,
+										"Entity Property LargeValue reference has an invalid owner or content type");
+				}
+				const std::vector<std::byte> payload = large_values_->read(snapshot, reference.value);
+				if (!EntityPropertyLargeValuePayloadCodec::hasMagic(payload)) {
+					throwRootStoreError(FormatError::FERR_INVALID_STATE,
+										"Entity Property LargeValue payload is not the canonical owner-neutral encoding");
+				}
+				decoded = EntityPropertyLargeValuePayloadCodec::decodeSelectedAndCount(payload, keyTokens);
+			} else {
+				const PropertyCollectionRoot owner = EntityPropertyCollectionRootCodec::decodeOwner(bytes);
+				if (entityKeyForRoot(owner) != keys[index]) {
+					throwRootStoreError(FormatError::FERR_INVALID_STATE,
+										"Entity Property location resolves to another logical owner");
+				}
+				decoded = EntityPropertyCollectionRootCodec::decodeSelectedAndCount(bytes, keyTokens);
+			}
+			counts[index] = decoded.first;
+			std::vector<std::optional<PropertyCollectionRootEntry>> selected = std::move(decoded.second);
+			if (selected.size() != keyTokens.size()) {
+				throwRootStoreError(FormatError::FERR_INVALID_STATE,
+									"combined Entity Property decoder returned an invalid result shape");
+			}
+			std::copy(selected.begin(), selected.end(), results.begin() + index * keyTokens.size());
+		}
+		debug::PerfTrace::addValue("native_graph.read.property_combined_batch_owners",
+								 static_cast<int64_t>(keys.size()));
+		// Preserve the established scalar/column diagnostics as compatibility
+		// aliases while the combined operation exposes its own structural counter.
+		debug::PerfTrace::addValue("native_graph.read.property_selected_batch_owners",
+								 static_cast<int64_t>(keys.size()));
+		debug::PerfTrace::addValue("native_graph.read.property_selected_column_batch_owners",
+								 static_cast<int64_t>(keys.size()));
+	}
+
+	size_t PropertyCollectionRootStore::decodeEntityPropertyCount(
+			const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key,
+			const EntityPropertyLocation &location, const PageId pageId, const PageOwnerKind ownerKind,
+			const std::span<const std::byte> bytes) const {
+		const uint8_t invalidLocation = static_cast<uint8_t>(location.key != key) |
+				static_cast<uint8_t>(location.page_id != pageId) |
+				static_cast<uint8_t>(ownerKind != PageOwnerKind::POK_PROPERTY);
+		if (invalidLocation != 0U) {
+			throwRootStoreError(FormatError::FERR_INVALID_STATE,
+									"Entity Property count location does not resolve to its Property page");
+		}
+		if (EntityPropertyLargeValueReferenceCodec::hasMagic(bytes)) {
+			if (large_values_ == nullptr) {
+				throwRootStoreError(FormatError::FERR_INVALID_STATE,
+										"Entity Property LargeValue reference requires a configured LargeValue store");
+			}
+			const EntityPropertyLargeValueReference reference = EntityPropertyLargeValueReferenceCodec::decode(bytes);
+			const EntityPropertyKey referenceKey =
+					entityKeyForRoot({reference.owner_entity_id, reference.owner_entity_type, {}});
+			if (referenceKey != key || reference.value.kind != LargeValueKind::LVK_BYTES ||
+				reference.value.media_type != RSS_ENTITY_PROPERTY_LARGE_VALUE_MEDIA_TYPE) {
+				throwRootStoreError(FormatError::FERR_INVALID_STATE,
+										"Entity Property LargeValue reference has an invalid owner or content type");
+			}
+			const std::vector<std::byte> payload = large_values_->read(snapshot, reference.value);
+			if (!EntityPropertyLargeValuePayloadCodec::hasMagic(payload)) {
+				throwRootStoreError(FormatError::FERR_INVALID_STATE,
+										"Entity Property LargeValue payload is not the canonical owner-neutral encoding");
+			}
+			return EntityPropertyLargeValuePayloadCodec::entryCount(payload);
+		}
+		const PropertyCollectionRoot owner = EntityPropertyCollectionRootCodec::decodeOwner(bytes);
+		if (entityKeyForRoot(owner) != key) {
+			throwRootStoreError(FormatError::FERR_INVALID_STATE,
+									"Entity Property count location resolves to another logical owner");
+		}
+		return EntityPropertyCollectionRootCodec::entryCount(bytes);
+	}
+
+	std::optional<size_t> PropertyCollectionRootStore::readEntityPropertyCount(
+			const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key) const {
+		if (!key.isValid()) {
+			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
+									"Entity Property count read requires a valid logical owner key");
+		}
+		const std::optional<EntityPropertyLocation> location =
+				metadata_.findEntityPropertyLocationOptional(snapshot, key);
+		if (!location.has_value()) {
+			return 0U;
+		}
+		if (std::optional<SlottedPagePinnedRead> pinned = pages_.readPinned(snapshot, location->page_id);
+				pinned.has_value()) {
+			return decodeEntityPropertyCount(snapshot, key, *location, pinned->page.pageId(), pinned->page.ownerKind(),
+																pinned->page.read({location->page_id, location->slot_id, location->slot_generation}));
+		}
+		const SlottedPage page = pages_.read(snapshot, location->page_id);
+		const std::vector<std::byte> bytes =
+				page.read({location->page_id, location->slot_id, location->slot_generation});
+		return decodeEntityPropertyCount(snapshot, key, *location, page.pageId(), page.ownerKind(), bytes);
+	}
+
+	void PropertyCollectionRootStore::readEntityPropertyCountsSorted(
+			const MetadataSnapshotPin &snapshot, const std::span<const EntityPropertyKey> keys,
+			const std::span<std::optional<size_t>> results, const CancellationCheckpoint *cancellation) const {
+		if (!metadata_.ownsSnapshot(snapshot) || keys.size() != results.size()) {
+			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
+									"sorted Entity Property counts require one snapshot and result per owner");
+		}
+		std::fill(results.begin(), results.end(), std::nullopt);
+		uint64_t previousDirectoryId = 0U;
+		for (const EntityPropertyKey &key: keys) {
+			if (!key.isValid() || key.directoryId() <= previousDirectoryId) {
+				throwRootStoreError(FormatError::FERR_INVALID_HEADER,
+									"sorted Entity Property counts require strictly ordered valid owners");
+			}
+			previousDirectoryId = key.directoryId();
+		}
+		if (keys.empty()) {
+			return;
+		}
+
+		std::vector<std::optional<EntityPropertyLocation>> locations(keys.size());
+		metadata_.findEntityPropertyLocationsSorted(snapshot, keys, locations, cancellation);
+		std::vector<size_t> present;
+		present.reserve(keys.size());
+		for (size_t index = 0U; index < locations.size(); ++index) {
+			if (locations[index].has_value()) {
+				present.push_back(index);
+			}
+		}
+		std::ranges::sort(present, [&locations](const size_t left, const size_t right) {
+			const EntityPropertyLocation &lhs = *locations[left];
+			const EntityPropertyLocation &rhs = *locations[right];
+			return lhs.page_id != rhs.page_id ? lhs.page_id < rhs.page_id : lhs.slot_id < rhs.slot_id;
+		});
+
+		std::optional<SlottedPagePinnedRead> pinned;
+		std::optional<SlottedPage> copied;
+		PageId currentPage{};
+		for (const size_t index: present) {
+			if (cancellation != nullptr) {
+				cancellation->check();
+			}
+			const EntityPropertyLocation &location = *locations[index];
+			if (location.page_id != currentPage) {
+				pinned.reset();
+				copied.reset();
+				currentPage = location.page_id;
+				pinned = pages_.readPinned(snapshot, currentPage, BufferPoolReadHint::BPRH_SEQUENTIAL);
+				if (!pinned.has_value()) {
+					copied.emplace(pages_.read(snapshot, currentPage, BufferPoolReadHint::BPRH_SEQUENTIAL));
+				}
+				debug::PerfTrace::addValue("native_graph.read.property_count_batch_pages", 1);
+			}
+			if (pinned.has_value()) {
+				results[index] = decodeEntityPropertyCount(snapshot, keys[index], location, pinned->page.pageId(),
+															 pinned->page.ownerKind(),
+															 pinned->page.read({location.page_id, location.slot_id, location.slot_generation}));
+			} else {
+				const std::vector<std::byte> bytes =
+						copied->read({location.page_id, location.slot_id, location.slot_generation});
+				results[index] = decodeEntityPropertyCount(snapshot, keys[index], location, copied->pageId(),
+															 copied->ownerKind(), bytes);
+			}
+		}
+		for (size_t index = 0U; index < results.size(); ++index) {
+			if (!results[index].has_value()) {
+				results[index] = 0U;
+			}
+		}
+		debug::PerfTrace::addValue("native_graph.read.property_count_batch_owners",
+									 static_cast<int64_t>(keys.size()));
 	}
 
 	PropertyCollectionRootScanCursor
 	PropertyCollectionRootStore::openScanCursor(const MetadataSnapshotPin &snapshot) const {
+		return openScanCursor(snapshot, nullptr);
+	}
+
+	PropertyCollectionRootScanCursor
+	PropertyCollectionRootStore::openScanCursor(const MetadataSnapshotPin &snapshot,
+											 const CancellationCheckpoint *cancellation) const {
 		if (!metadata_.ownsSnapshot(snapshot)) {
 			throwRootStoreError(FormatError::FERR_INVALID_STATE,
 								"Entity Property scan cursor requires this store's active metadata snapshot");
 		}
-		return PropertyCollectionRootScanCursor(*this, snapshot.superblock().generation);
+		return PropertyCollectionRootScanCursor(*this, snapshot.superblock().generation, cancellation);
 	}
 
 	PropertyCollectionRootScanCursor::PropertyCollectionRootScanCursor(
 			PropertyCollectionRootScanCursor &&other) noexcept :
 		store_(std::exchange(other.store_, nullptr)), generation_(std::exchange(other.generation_, Generation{})),
+		cancellation_(std::exchange(other.cancellation_, nullptr)),
 		current_page_id_(std::exchange(other.current_page_id_, PageId{})),
-		current_page_(std::move(other.current_page_)) {
+		current_page_(std::move(other.current_page_)), directory_cursor_(std::move(other.directory_cursor_)),
+		pending_directory_location_(std::move(other.pending_directory_location_)),
+		directory_metadata_pages_reported_(std::exchange(other.directory_metadata_pages_reported_, 0U)),
+		last_requested_directory_id_(std::exchange(other.last_requested_directory_id_, 0U)),
+		directory_stream_enabled_(std::exchange(other.directory_stream_enabled_, false)) {
 		other.current_page_.reset();
+		other.directory_cursor_.reset();
+		other.pending_directory_location_.reset();
 	}
 
 	PropertyCollectionRootScanCursor &
@@ -181,28 +689,37 @@ namespace graph::storage {
 		if (this != &other) {
 			store_ = std::exchange(other.store_, nullptr);
 			generation_ = std::exchange(other.generation_, Generation{});
+			cancellation_ = std::exchange(other.cancellation_, nullptr);
 			current_page_id_ = std::exchange(other.current_page_id_, PageId{});
 			current_page_ = std::move(other.current_page_);
+			directory_cursor_ = std::move(other.directory_cursor_);
+			pending_directory_location_ = std::move(other.pending_directory_location_);
+			directory_metadata_pages_reported_ = std::exchange(other.directory_metadata_pages_reported_, 0U);
+			last_requested_directory_id_ = std::exchange(other.last_requested_directory_id_, 0U);
+			directory_stream_enabled_ = std::exchange(other.directory_stream_enabled_, false);
 			other.current_page_.reset();
+			other.directory_cursor_.reset();
+			other.pending_directory_location_.reset();
 		}
 		return *this;
 	}
 
 	PropertyCollectionRoot PropertyCollectionRootStore::decodeEntityRoot(const MetadataSnapshotPin &snapshot,
-																		 const EntityPropertyKey &key,
-																		 const EntityPropertyLocation &location,
-																		 const SlottedPage &page) const {
+																							 const EntityPropertyKey &key,
+																							 const EntityPropertyLocation &location,
+																							 const PageId pageId, const PageOwnerKind ownerKind,
+																							 const std::span<const std::byte> bytes) const {
 		const uint8_t invalidLocation =
-				static_cast<uint8_t>(location.key != key) | static_cast<uint8_t>(location.page_id != page.pageId());
+				static_cast<uint8_t>(location.key != key) | static_cast<uint8_t>(location.page_id != pageId);
 		if (invalidLocation != 0U) {
 			throwRootStoreError(FormatError::FERR_INVALID_STATE,
 								"Entity Property Directory location disagrees with its decoded Property page");
 		}
-		if (page.ownerKind() != PageOwnerKind::POK_PROPERTY) {
+		if (ownerKind != PageOwnerKind::POK_PROPERTY) {
 			throwRootStoreError(FormatError::FERR_INVALID_STATE,
 								"Entity Property Directory location does not resolve to a Property page");
 		}
-		const std::vector<std::byte> bytes = page.read({location.page_id, location.slot_id, location.slot_generation});
+		debug::PerfTrace::addValue("native_graph.read.property_full_decode", 1);
 		PropertyCollectionRoot root;
 		if (EntityPropertyLargeValueReferenceCodec::hasMagic(bytes)) {
 			if (large_values_ == nullptr) {
@@ -221,20 +738,13 @@ namespace graph::storage {
 									"Entity Property LargeValue reference has an invalid owner or content type");
 			}
 			const std::vector<std::byte> payload = large_values_->read(snapshot, reference.value);
-			if (EntityPropertyLargeValuePayloadCodec::hasMagic(payload)) {
-				root.owner_entity_id = reference.owner_entity_id;
-				root.owner_entity_type = reference.owner_entity_type;
-				root.entries = EntityPropertyLargeValuePayloadCodec::decode(payload);
-			} else {
-				// Accept pre-owner-neutral values so an already-created native file is
-				// never silently decoded as a shared payload.
-				root = EntityPropertyCollectionRootCodec::decode(payload);
-				if (root.owner_entity_id != reference.owner_entity_id ||
-					root.owner_entity_type != reference.owner_entity_type) {
-					throwRootStoreError(FormatError::FERR_INVALID_STATE,
-										"Entity Property LargeValue root owner disagrees with its reference");
-				}
+			if (!EntityPropertyLargeValuePayloadCodec::hasMagic(payload)) {
+				throwRootStoreError(FormatError::FERR_INVALID_STATE,
+								"Entity Property LargeValue payload is not the canonical owner-neutral encoding");
 			}
+			root.owner_entity_id = reference.owner_entity_id;
+			root.owner_entity_type = reference.owner_entity_type;
+			root.entries = EntityPropertyLargeValuePayloadCodec::decode(payload);
 		} else {
 			root = EntityPropertyCollectionRootCodec::decode(bytes);
 		}
@@ -246,6 +756,144 @@ namespace graph::storage {
 		return root;
 	}
 
+	std::optional<PropertyCollectionRootEntry>
+	PropertyCollectionRootStore::decodeSelectedEntityProperty(const MetadataSnapshotPin &snapshot,
+																											 const EntityPropertyKey &key,
+																											 const EntityPropertyLocation &location,
+																											 const PageId pageId, const PageOwnerKind ownerKind,
+																											 const std::span<const std::byte> bytes,
+																											 const uint32_t keyToken) const {
+		const uint8_t invalidLocation =
+				static_cast<uint8_t>(location.key != key) | static_cast<uint8_t>(location.page_id != pageId) |
+				static_cast<uint8_t>(ownerKind != PageOwnerKind::POK_PROPERTY);
+		if (invalidLocation != 0U) {
+			throwRootStoreError(FormatError::FERR_INVALID_STATE,
+									"Entity Property Directory location does not resolve to its Property page");
+		}
+		debug::PerfTrace::addValue("native_graph.read.property_selected_decode", 1);
+		if (EntityPropertyLargeValueReferenceCodec::hasMagic(bytes)) {
+			if (large_values_ == nullptr) {
+				throwRootStoreError(FormatError::FERR_INVALID_STATE,
+									"Entity Property LargeValue reference requires a configured LargeValue store");
+			}
+			const EntityPropertyLargeValueReference reference = EntityPropertyLargeValueReferenceCodec::decode(bytes);
+			const EntityPropertyKey referenceKey =
+					entityKeyForRoot({reference.owner_entity_id, reference.owner_entity_type, {}});
+			const uint8_t invalidReference = static_cast<uint8_t>(referenceKey != key) |
+					static_cast<uint8_t>(reference.value.kind != LargeValueKind::LVK_BYTES) |
+					static_cast<uint8_t>(reference.value.media_type != RSS_ENTITY_PROPERTY_LARGE_VALUE_MEDIA_TYPE);
+			if (invalidReference != 0U) {
+				throwRootStoreError(FormatError::FERR_INVALID_STATE,
+									"Entity Property LargeValue reference has an invalid owner or content type");
+			}
+			const std::vector<std::byte> payload = large_values_->read(snapshot, reference.value);
+			if (!EntityPropertyLargeValuePayloadCodec::hasMagic(payload)) {
+				throwRootStoreError(FormatError::FERR_INVALID_STATE,
+									"Entity Property LargeValue payload is not the canonical owner-neutral encoding");
+			}
+			return EntityPropertyLargeValuePayloadCodec::decodeSelected(payload, keyToken);
+		}
+
+		const PropertyCollectionRoot owner = EntityPropertyCollectionRootCodec::decodeOwner(bytes);
+		if (entityKeyForRoot(owner) != key) {
+			throwRootStoreError(FormatError::FERR_INVALID_STATE,
+									"Entity Property Directory location resolves to another logical owner");
+		}
+		return EntityPropertyCollectionRootCodec::decodeSelected(bytes, keyToken);
+	}
+
+	bool PropertyCollectionRootStore::decodeEntityPropertyExists(const MetadataSnapshotPin &snapshot,
+																	 const EntityPropertyKey &key,
+																	 const EntityPropertyLocation &location, const PageId pageId,
+																	 const PageOwnerKind ownerKind,
+																	 const std::span<const std::byte> bytes,
+																	 const uint32_t keyToken) const {
+		const uint8_t invalidLocation =
+				static_cast<uint8_t>(location.key != key) | static_cast<uint8_t>(location.page_id != pageId) |
+				static_cast<uint8_t>(ownerKind != PageOwnerKind::POK_PROPERTY);
+		if (invalidLocation != 0U) {
+			throwRootStoreError(FormatError::FERR_INVALID_STATE,
+									"Entity Property presence location does not resolve to its Property page");
+		}
+		debug::PerfTrace::addValue("native_graph.read.property_presence_probe", 1);
+		if (EntityPropertyLargeValueReferenceCodec::hasMagic(bytes)) {
+			if (large_values_ == nullptr) {
+				throwRootStoreError(FormatError::FERR_INVALID_STATE,
+									"Entity Property LargeValue reference requires a configured LargeValue store");
+			}
+			const EntityPropertyLargeValueReference reference = EntityPropertyLargeValueReferenceCodec::decode(bytes);
+			const EntityPropertyKey referenceKey =
+					entityKeyForRoot({reference.owner_entity_id, reference.owner_entity_type, {}});
+			const uint8_t invalidReference = static_cast<uint8_t>(referenceKey != key) |
+					static_cast<uint8_t>(reference.value.kind != LargeValueKind::LVK_BYTES) |
+					static_cast<uint8_t>(reference.value.media_type != RSS_ENTITY_PROPERTY_LARGE_VALUE_MEDIA_TYPE);
+			if (invalidReference != 0U) {
+				throwRootStoreError(FormatError::FERR_INVALID_STATE,
+									"Entity Property LargeValue reference has an invalid owner or content type");
+			}
+			const std::vector<std::byte> payload = large_values_->read(snapshot, reference.value);
+			return EntityPropertyLargeValuePayloadCodec::containsToken(payload, keyToken);
+		}
+		const PropertyCollectionRoot owner = EntityPropertyCollectionRootCodec::decodeOwner(bytes);
+		if (entityKeyForRoot(owner) != key) {
+			throwRootStoreError(FormatError::FERR_INVALID_STATE,
+									"Entity Property Directory location resolves to another logical owner");
+		}
+		return EntityPropertyCollectionRootCodec::containsToken(bytes, keyToken);
+	}
+
+	std::vector<std::optional<PropertyCollectionRootEntry>>
+	PropertyCollectionRootStore::decodeSelectedEntityProperties(
+			const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key,
+			const EntityPropertyLocation &location, const PageId pageId, const PageOwnerKind ownerKind,
+			const std::span<const std::byte> bytes, const std::span<const uint32_t> keyTokens) const {
+		if (keyTokens.empty()) {
+			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
+								"multi-column Entity Property decoding requires selected tokens");
+		}
+		const uint8_t invalidLocation =
+				static_cast<uint8_t>(location.key != key) | static_cast<uint8_t>(location.page_id != pageId) |
+				static_cast<uint8_t>(ownerKind != PageOwnerKind::POK_PROPERTY);
+		if (invalidLocation != 0U) {
+			throwRootStoreError(FormatError::FERR_INVALID_STATE,
+								"Entity Property Directory location does not resolve to its Property page");
+		}
+		debug::PerfTrace::addValue("native_graph.read.property_selected_column_decode", 1);
+		// Keep the aggregate selected-decode counter meaningful for callers that
+		// compare scalar and multi-column reads, while the column-specific counter
+		// retains the finer-grained batch diagnostic.
+		debug::PerfTrace::addValue("native_graph.read.property_selected_decode", 1);
+		if (EntityPropertyLargeValueReferenceCodec::hasMagic(bytes)) {
+			if (large_values_ == nullptr) {
+				throwRootStoreError(FormatError::FERR_INVALID_STATE,
+									"Entity Property LargeValue reference requires a configured LargeValue store");
+			}
+			const EntityPropertyLargeValueReference reference = EntityPropertyLargeValueReferenceCodec::decode(bytes);
+			const EntityPropertyKey referenceKey =
+					entityKeyForRoot({reference.owner_entity_id, reference.owner_entity_type, {}});
+			const uint8_t invalidReference = static_cast<uint8_t>(referenceKey != key) |
+					static_cast<uint8_t>(reference.value.kind != LargeValueKind::LVK_BYTES) |
+					static_cast<uint8_t>(reference.value.media_type != RSS_ENTITY_PROPERTY_LARGE_VALUE_MEDIA_TYPE);
+			if (invalidReference != 0U) {
+				throwRootStoreError(FormatError::FERR_INVALID_STATE,
+									"Entity Property LargeValue reference has an invalid owner or content type");
+			}
+			const std::vector<std::byte> payload = large_values_->read(snapshot, reference.value);
+			if (!EntityPropertyLargeValuePayloadCodec::hasMagic(payload)) {
+				throwRootStoreError(FormatError::FERR_INVALID_STATE,
+									"Entity Property LargeValue payload is not the canonical owner-neutral encoding");
+			}
+			return EntityPropertyLargeValuePayloadCodec::decodeSelected(payload, keyTokens);
+		}
+
+		const PropertyCollectionRoot owner = EntityPropertyCollectionRootCodec::decodeOwner(bytes);
+		if (entityKeyForRoot(owner) != key) {
+			throwRootStoreError(FormatError::FERR_INVALID_STATE,
+								"Entity Property Directory location resolves to another logical owner");
+		}
+		return EntityPropertyCollectionRootCodec::decodeSelected(bytes, keyTokens);
+	}
+
 	void PropertyCollectionRootScanCursor::validateSnapshot(const MetadataSnapshotPin &snapshot) const {
 		if (store_ == nullptr || !store_->metadata_.ownsSnapshot(snapshot) ||
 			snapshot.superblock().generation != generation_) {
@@ -254,25 +902,94 @@ namespace graph::storage {
 		}
 	}
 
+	void PropertyCollectionRootScanCursor::accountDirectoryPages() {
+		if (!directory_cursor_.has_value()) {
+			return;
+		}
+		const size_t current = directory_cursor_->metadataPagesRead();
+		if (current > directory_metadata_pages_reported_) {
+			debug::PerfTrace::addValue("native_graph.read.property_directory_metadata_pages",
+									   static_cast<int64_t>(current - directory_metadata_pages_reported_));
+			directory_metadata_pages_reported_ = current;
+		}
+	}
+
+	std::optional<EntityPropertyLocation>
+	PropertyCollectionRootScanCursor::findLocationOptional(const MetadataSnapshotPin &snapshot,
+														  const EntityPropertyKey &key) {
+		validateSnapshot(snapshot);
+		if (cancellation_ != nullptr) {
+			cancellation_->check();
+		}
+		const uint64_t requestedDirectoryId = key.directoryId();
+		if (!directory_stream_enabled_ || requestedDirectoryId <= last_requested_directory_id_) {
+			// Restart the ordered stream instead of permanently degrading this
+			// query-owned cursor to point lookups. Operators commonly consume the
+			// same snapshot in several batches whose owner ranges start over; a
+			// restart preserves correctness and lets the next monotonic run share
+			// one root descent and one decoded Property page again.
+			directory_stream_enabled_ = true;
+			directory_cursor_.reset();
+			pending_directory_location_.reset();
+			last_requested_directory_id_ = 0U;
+		}
+		if (!directory_cursor_.has_value()) {
+			directory_cursor_.emplace(store_->metadata_.openEntityPropertyLocationRangeCursor(
+					snapshot, requestedDirectoryId, std::numeric_limits<uint64_t>::max(), cancellation_));
+			debug::PerfTrace::addValue("native_graph.read.property_directory_refill", 1);
+		}
+		last_requested_directory_id_ = requestedDirectoryId;
+		if (pending_directory_location_.has_value() &&
+			pending_directory_location_->key.directoryId() < requestedDirectoryId) {
+			pending_directory_location_.reset();
+		}
+		if (!pending_directory_location_.has_value()) {
+				const std::optional<LocationLeafEntry> entry = directory_cursor_->nextAtOrAfter(requestedDirectoryId);
+				accountDirectoryPages();
+				if (entry.has_value()) {
+					pending_directory_location_.emplace(EntityPropertyKey::fromDirectoryId(entry->logical_id),
+												 PageId(entry->segment_id.value()), entry->first_page,
+												 static_cast<uint32_t>(entry->generation.value()));
+			}
+		}
+		if (pending_directory_location_.has_value() &&
+			pending_directory_location_->key.directoryId() == requestedDirectoryId) {
+			std::optional<EntityPropertyLocation> result = std::move(pending_directory_location_);
+			pending_directory_location_.reset();
+			return result;
+		}
+		return std::nullopt;
+	}
+
 	PropertyCollectionRoot PropertyCollectionRootScanCursor::readLocation(const MetadataSnapshotPin &snapshot,
 																		  const EntityPropertyKey &key,
 																		  const EntityPropertyLocation &location) {
 		validateSnapshot(snapshot);
+		if (cancellation_ != nullptr) {
+			cancellation_->check();
+		}
 		if (location.page_id != current_page_id_) {
 			current_page_.emplace(store_->pages_.read(snapshot, location.page_id, BufferPoolReadHint::BPRH_SEQUENTIAL));
 			current_page_id_ = location.page_id;
 		}
-		return store_->decodeEntityRoot(snapshot, key, location, *current_page_);
+		const std::vector<std::byte> bytes =
+				current_page_->read({location.page_id, location.slot_id, location.slot_generation});
+		return store_->decodeEntityRoot(snapshot, key, location, current_page_->pageId(), current_page_->ownerKind(), bytes);
 	}
 
 	PropertyCollectionRoot PropertyCollectionRootScanCursor::readEntity(const MetadataSnapshotPin &snapshot,
-																		const EntityPropertyKey &key) {
+																const EntityPropertyKey &key) {
 		validateSnapshot(snapshot);
 		if (!key.isValid()) {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 								"Entity Property scan read requires a valid logical owner key");
 		}
-		return readLocation(snapshot, key, store_->metadata_.findEntityPropertyLocation(snapshot, key));
+		const std::optional<EntityPropertyLocation> location = findLocationOptional(snapshot, key);
+		if (!location.has_value()) {
+			throwRootStoreError(FormatError::FERR_INVALID_STATE,
+								"Entity Property scan read requires a present Property root");
+		}
+		return readLocation(snapshot, key, *location);
 	}
 
 	std::optional<PropertyCollectionRoot>
@@ -284,9 +1001,359 @@ namespace graph::storage {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
 								"optional Entity Property scan read requires a valid logical owner key");
 		}
-		const std::optional<EntityPropertyLocation> location =
-				store_->metadata_.findEntityPropertyLocationOptional(snapshot, key);
+		const std::optional<EntityPropertyLocation> location = findLocationOptional(snapshot, key);
 		return location.has_value() ? std::optional(readLocation(snapshot, key, *location)) : std::nullopt;
+	}
+
+	std::optional<PropertyCollectionRootEntry>
+	PropertyCollectionRootScanCursor::readEntityPropertyOptional(const MetadataSnapshotPin &snapshot,
+																																				const EntityPropertyKey &key,
+																																				const uint32_t keyToken) {
+		validateSnapshot(snapshot);
+		if (!key.isValid() || keyToken == 0U) {
+			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
+									"selective Entity Property scan read requires a valid owner key and nonzero token");
+		}
+		const std::optional<EntityPropertyLocation> location = findLocationOptional(snapshot, key);
+		return location.has_value() ? readSelectedLocation(snapshot, key, *location, keyToken) : std::nullopt;
+	}
+
+	bool PropertyCollectionRootScanCursor::readEntityPropertyExists(const MetadataSnapshotPin &snapshot,
+																	 const EntityPropertyKey &key, const uint32_t keyToken) {
+		validateSnapshot(snapshot);
+		if (!key.isValid() || keyToken == 0U) {
+			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
+								"Entity Property presence scan requires a valid owner key and nonzero token");
+		}
+		const std::optional<EntityPropertyLocation> location = findLocationOptional(snapshot, key);
+		if (!location.has_value()) {
+			return false;
+		}
+		return readSelectedPresenceLocation(snapshot, key, *location, keyToken);
+	}
+
+	void PropertyCollectionRootScanCursor::readEntityPropertiesOptionalSorted(
+			const MetadataSnapshotPin &snapshot, const std::span<const EntityPropertyKey> keys,
+			const std::span<const uint32_t> keyTokens,
+			const std::span<std::optional<PropertyCollectionRootEntry>> results,
+			const bool columnBatch) {
+			validateSnapshot(snapshot);
+		if (keyTokens.empty() || keys.size() > std::numeric_limits<size_t>::max() / keyTokens.size() ||
+			results.size() != keys.size() * keyTokens.size()) {
+			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
+								"Property scan batch requires a rectangular owner/token result shape");
+		}
+		uint64_t previousDirectoryId = 0U;
+		for (const EntityPropertyKey &key : keys) {
+			const uint64_t directoryId = key.directoryId();
+			if (directoryId <= previousDirectoryId) {
+				throwRootStoreError(FormatError::FERR_INVALID_HEADER,
+									"Property scan batch owners must be strictly ordered");
+			}
+			previousDirectoryId = directoryId;
+		}
+		uint32_t previousToken = 0U;
+		for (const uint32_t token : keyTokens) {
+			if (token == 0U || token <= previousToken) {
+				throwRootStoreError(FormatError::FERR_INVALID_HEADER,
+									"Property scan batch tokens must be strictly increasing");
+			}
+			previousToken = token;
+		}
+		std::fill(results.begin(), results.end(), std::nullopt);
+		std::vector<std::optional<EntityPropertyLocation>> locations(keys.size());
+		for (size_t ownerIndex = 0U; ownerIndex < keys.size(); ++ownerIndex) {
+			if (cancellation_ != nullptr) {
+				cancellation_->check();
+			}
+			locations[ownerIndex] = findLocationOptional(snapshot, keys[ownerIndex]);
+		}
+		// Directory results are owner ordered, but COW publication can place those
+		// owners on non-monotonic physical pages. Resolve the whole range first,
+		// then read each distinct page once and restore owner-major output order.
+		std::vector<size_t> present;
+		present.reserve(locations.size());
+		for (size_t index = 0U; index < locations.size(); ++index) {
+			if (locations[index].has_value()) {
+				present.push_back(index);
+			}
+		}
+		std::ranges::sort(present, [&locations](const size_t left, const size_t right) {
+			if (locations[left]->page_id != locations[right]->page_id) {
+				return locations[left]->page_id < locations[right]->page_id;
+			}
+			return locations[left]->slot_id < locations[right]->slot_id;
+		});
+		size_t pagesRead = 0U;
+		PageId previousPage{};
+		bool havePage = false;
+		for (const size_t ownerIndex : present) {
+			const EntityPropertyLocation &location = *locations[ownerIndex];
+			if (!havePage || previousPage != location.page_id) {
+				previousPage = location.page_id;
+				havePage = true;
+				++pagesRead;
+			}
+			const std::vector<std::optional<PropertyCollectionRootEntry>> decoded =
+					readSelectedLocation(snapshot, keys[ownerIndex], location, keyTokens);
+			if (decoded.size() != keyTokens.size()) {
+				throwRootStoreError(FormatError::FERR_INVALID_STATE,
+									"Property scan batch decoder changed its column cardinality");
+			}
+			std::copy(decoded.begin(), decoded.end(), results.begin() +
+											static_cast<std::ptrdiff_t>(ownerIndex * keyTokens.size()));
+		}
+		if (columnBatch) {
+			debug::PerfTrace::addValue("native_graph.read.property_selected_column_batch_pages",
+										static_cast<int64_t>(pagesRead));
+			debug::PerfTrace::addValue("native_graph.read.property_selected_column_batch_owners",
+										static_cast<int64_t>(keys.size()));
+		} else {
+			debug::PerfTrace::addValue("native_graph.read.property_selected_batch_pages",
+										static_cast<int64_t>(pagesRead));
+			debug::PerfTrace::addValue("native_graph.read.property_selected_batch_owners",
+										static_cast<int64_t>(keys.size()));
+		}
+	}
+
+	void PropertyCollectionRootScanCursor::readEntityPropertiesAndCountsOptionalSorted(
+			const MetadataSnapshotPin &snapshot, const std::span<const EntityPropertyKey> keys,
+			const std::span<const uint32_t> keyTokens,
+			const std::span<std::optional<PropertyCollectionRootEntry>> results,
+			const std::span<std::optional<size_t>> counts) {
+		validateSnapshot(snapshot);
+		if (keyTokens.empty() || keys.size() > std::numeric_limits<size_t>::max() / keyTokens.size() ||
+			results.size() != keys.size() * keyTokens.size() || counts.size() != keys.size()) {
+			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
+								"Property scan combined batch requires a rectangular result shape");
+		}
+		uint32_t previousToken = 0U;
+		for (const uint32_t token: keyTokens) {
+			if (token == 0U || token <= previousToken) {
+				throwRootStoreError(FormatError::FERR_INVALID_HEADER,
+									"Property scan combined batch tokens must be strictly increasing");
+			}
+			previousToken = token;
+		}
+		std::fill(results.begin(), results.end(), std::nullopt);
+		std::fill(counts.begin(), counts.end(), std::nullopt);
+		if (keys.empty()) {
+			return;
+		}
+
+		std::vector<std::optional<EntityPropertyLocation>> locations(keys.size());
+		for (size_t index = 0U; index < keys.size(); ++index) {
+			if (!keys[index].isValid()) {
+				throwRootStoreError(FormatError::FERR_INVALID_HEADER,
+									"Property scan combined batch contains an invalid owner key");
+			}
+			locations[index] = findLocationOptional(snapshot, keys[index]);
+			if (!locations[index].has_value()) {
+				counts[index] = size_t{0U};
+			}
+		}
+		std::vector<size_t> present;
+		present.reserve(keys.size());
+		for (size_t index = 0U; index < locations.size(); ++index) {
+			if (locations[index].has_value()) {
+				present.push_back(index);
+			}
+		}
+		std::ranges::sort(present, [&locations](const size_t left, const size_t right) {
+			return locations[left]->page_id != locations[right]->page_id
+					? locations[left]->page_id < locations[right]->page_id
+					: locations[left]->slot_id < locations[right]->slot_id;
+		});
+		std::optional<SlottedPagePinnedRead> pinned;
+		std::optional<SlottedPage> copied;
+		PageId currentPage{};
+		for (const size_t ownerIndex: present) {
+			const EntityPropertyLocation &location = *locations[ownerIndex];
+			if (location.page_id != currentPage) {
+				pinned.reset();
+				copied.reset();
+				currentPage = location.page_id;
+				pinned = store_->pages_.readPinned(snapshot, currentPage, BufferPoolReadHint::BPRH_SEQUENTIAL);
+				if (!pinned.has_value()) {
+					copied.emplace(store_->pages_.read(snapshot, currentPage));
+				}
+			}
+			std::vector<std::byte> copiedBytes;
+			std::span<const std::byte> bytes;
+			PageId pageId;
+			PageOwnerKind ownerKind;
+			if (pinned.has_value()) {
+				bytes = pinned->page.read({location.page_id, location.slot_id, location.slot_generation});
+				pageId = pinned->page.pageId();
+				ownerKind = pinned->page.ownerKind();
+			} else {
+				copiedBytes = copied->read({location.page_id, location.slot_id, location.slot_generation});
+				bytes = copiedBytes;
+				pageId = copied->pageId();
+				ownerKind = copied->ownerKind();
+			}
+			counts[ownerIndex] = store_->decodeEntityPropertyCount(snapshot, keys[ownerIndex], location,
+					pageId, ownerKind, bytes);
+			const std::vector<std::optional<PropertyCollectionRootEntry>> selected =
+					store_->decodeSelectedEntityProperties(snapshot, keys[ownerIndex], location,
+					pageId, ownerKind, bytes, keyTokens);
+			if (selected.size() != keyTokens.size()) {
+				throwRootStoreError(FormatError::FERR_INVALID_STATE,
+									"Property scan combined decoder changed its column cardinality");
+			}
+			std::copy(selected.begin(), selected.end(), results.begin() +
+									static_cast<std::ptrdiff_t>(ownerIndex * keyTokens.size()));
+		}
+		debug::PerfTrace::addValue("native_graph.read.property_combined_batch_owners",
+								 static_cast<int64_t>(keys.size()));
+		// Preserve the established selected-batch metric for callers and tests
+		// while exposing the combined operation's more specific counter above.
+		debug::PerfTrace::addValue("native_graph.read.property_selected_batch_owners",
+								 static_cast<int64_t>(keys.size()));
+		debug::PerfTrace::addValue("native_graph.read.property_selected_column_batch_owners",
+									 static_cast<int64_t>(keys.size()));
+	}
+
+	void PropertyCollectionRootScanCursor::readEntityPropertyCountsSorted(
+			const MetadataSnapshotPin &snapshot, const std::span<const EntityPropertyKey> keys,
+			const std::span<std::optional<size_t>> results) {
+		validateSnapshot(snapshot);
+		if (keys.size() != results.size()) {
+			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
+								"Property scan count batch requires one result per owner");
+		}
+		std::fill(results.begin(), results.end(), std::nullopt);
+		uint64_t previousDirectoryId = 0U;
+		for (const EntityPropertyKey &key : keys) {
+			if (!key.isValid() || key.directoryId() <= previousDirectoryId) {
+				throwRootStoreError(FormatError::FERR_INVALID_HEADER,
+									"Property scan count owners must be strictly ordered and valid");
+			}
+			previousDirectoryId = key.directoryId();
+		}
+		if (keys.empty()) {
+			return;
+		}
+
+		std::vector<std::optional<EntityPropertyLocation>> locations(keys.size());
+		for (size_t index = 0U; index < keys.size(); ++index) {
+			if (cancellation_ != nullptr) {
+				cancellation_->check();
+			}
+			locations[index] = findLocationOptional(snapshot, keys[index]);
+			if (!locations[index].has_value()) {
+				results[index] = size_t{0U};
+			}
+		}
+
+		std::vector<size_t> present;
+		present.reserve(keys.size());
+		for (size_t index = 0U; index < locations.size(); ++index) {
+			if (locations[index].has_value()) {
+				present.push_back(index);
+			}
+		}
+		// Physical placement may not follow owner order after COW relocation;
+		// group by page so each distinct Property page is authenticated once.
+		std::ranges::sort(present, [&locations](const size_t left, const size_t right) {
+			const EntityPropertyLocation &lhs = *locations[left];
+			const EntityPropertyLocation &rhs = *locations[right];
+			return lhs.page_id != rhs.page_id ? lhs.page_id < rhs.page_id : lhs.slot_id < rhs.slot_id;
+		});
+
+		PageId currentPage = current_page_id_;
+		for (const size_t index : present) {
+			if (cancellation_ != nullptr) {
+				cancellation_->check();
+			}
+			const EntityPropertyLocation &location = *locations[index];
+			if (location.page_id != currentPage) {
+				currentPage = location.page_id;
+				// Keep an owned transient image in the cursor after the authenticated
+				// pin is released. This preserves the one-page cursor locality without
+				// retaining a Buffer Pool frame for the lifetime of a query.
+				if (std::optional<SlottedPagePinnedRead> pinned =
+						store_->pages_.readPinned(snapshot, currentPage, BufferPoolReadHint::BPRH_SEQUENTIAL);
+						pinned.has_value()) {
+					current_page_.emplace(SlottedPage::open(pinned->contents.owner, std::vector<std::byte>(
+							pinned->contents.payload().begin(), pinned->contents.payload().end())));
+				} else {
+					current_page_.emplace(store_->pages_.read(snapshot, currentPage, BufferPoolReadHint::BPRH_SEQUENTIAL));
+				}
+				current_page_id_ = currentPage;
+				debug::PerfTrace::addValue("native_graph.read.property_count_batch_pages", 1);
+			}
+			const std::vector<std::byte> bytes =
+					current_page_->read({location.page_id, location.slot_id, location.slot_generation});
+			results[index] = store_->decodeEntityPropertyCount(
+					snapshot, keys[index], location, current_page_->pageId(), current_page_->ownerKind(), bytes);
+		}
+		for (std::optional<size_t> &result : results) {
+			if (!result.has_value()) {
+				result = size_t{0U};
+			}
+		}
+		debug::PerfTrace::addValue("native_graph.read.property_count_batch_owners",
+								 static_cast<int64_t>(keys.size()));
+	}
+
+	std::optional<PropertyCollectionRootEntry>
+	PropertyCollectionRootScanCursor::readSelectedLocation(const MetadataSnapshotPin &snapshot,
+																			  const EntityPropertyKey &key,
+																			  const EntityPropertyLocation &location,
+																			  const uint32_t keyToken) {
+		validateSnapshot(snapshot);
+		if (cancellation_ != nullptr) {
+			cancellation_->check();
+		}
+		if (location.page_id != current_page_id_) {
+			current_page_.emplace(store_->pages_.read(snapshot, location.page_id, BufferPoolReadHint::BPRH_SEQUENTIAL));
+			current_page_id_ = location.page_id;
+		}
+		const std::vector<std::byte> bytes =
+				current_page_->read({location.page_id, location.slot_id, location.slot_generation});
+		return store_->decodeSelectedEntityProperty(snapshot, key, location, current_page_->pageId(),
+																																												 current_page_->ownerKind(), bytes, keyToken);
+	}
+
+	bool PropertyCollectionRootScanCursor::readSelectedPresenceLocation(const MetadataSnapshotPin &snapshot,
+																	 const EntityPropertyKey &key,
+																	 const EntityPropertyLocation &location,
+																	 const uint32_t keyToken) {
+		validateSnapshot(snapshot);
+		if (cancellation_ != nullptr) {
+			cancellation_->check();
+		}
+		if (location.page_id != current_page_id_) {
+			current_page_.emplace(store_->pages_.read(snapshot, location.page_id, BufferPoolReadHint::BPRH_SEQUENTIAL));
+			current_page_id_ = location.page_id;
+		}
+		const std::vector<std::byte> bytes =
+				current_page_->read({location.page_id, location.slot_id, location.slot_generation});
+		return store_->decodeEntityPropertyExists(snapshot, key, location, current_page_->pageId(),
+																																												 current_page_->ownerKind(), bytes, keyToken);
+	}
+
+	std::vector<std::optional<PropertyCollectionRootEntry>>
+	PropertyCollectionRootScanCursor::readSelectedLocation(
+			const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key,
+			const EntityPropertyLocation &location, const std::span<const uint32_t> keyTokens) {
+		validateSnapshot(snapshot);
+		if (cancellation_ != nullptr) {
+			cancellation_->check();
+		}
+		if (keyTokens.empty()) {
+			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
+								"Property scan selected location requires at least one token");
+		}
+		if (location.page_id != current_page_id_) {
+			current_page_.emplace(store_->pages_.read(snapshot, location.page_id, BufferPoolReadHint::BPRH_SEQUENTIAL));
+			current_page_id_ = location.page_id;
+		}
+		const std::vector<std::byte> bytes =
+				current_page_->read({location.page_id, location.slot_id, location.slot_generation});
+		return store_->decodeSelectedEntityProperties(snapshot, key, location, current_page_->pageId(),
+																																												 current_page_->ownerKind(), bytes, keyTokens);
 	}
 
 	EntityPropertyRootMutationPlan
@@ -307,16 +1374,28 @@ namespace graph::storage {
 		if (roots.empty()) {
 			return {};
 		}
-		// Batch roots are ordered and share one pinned snapshot. Materialize the
-		// authoritative directory once so each root avoids a repeated radix-route
-		// traversal during large graph writes.
-		std::map<EntityPropertyKey, EntityPropertyLocation> existingLocations;
-		metadata_.visitEntityPropertyLocations(snapshot, [&existingLocations](const EntityPropertyLocation &location) {
-			if (!existingLocations.emplace(location.key, location).second) {
-				throwRootStoreError(FormatError::FERR_INVALID_STATE,
-									"Entity Property Directory contains duplicate owner keys");
+		// Resolve only the caller's ordered owners through one retained directory
+		// route. Import-sized batches must not copy unrelated Property locations.
+		std::vector<EntityPropertyKey> rootKeys;
+		rootKeys.reserve(roots.size());
+		uint64_t previousDirectoryId = 0U;
+		for (const PropertyCollectionRoot &root: roots) {
+			const EntityPropertyKey key = entityKeyForRoot(canonicalEntityRoot(root));
+			if (key.directoryId() <= previousDirectoryId) {
+				throwRootStoreError(FormatError::FERR_INVALID_HEADER,
+									"Entity Property batch roots must be strictly ordered by owner key");
 			}
-		});
+			previousDirectoryId = key.directoryId();
+			rootKeys.push_back(key);
+		}
+		std::vector<std::optional<EntityPropertyLocation>> resolvedLocations(rootKeys.size());
+		metadata_.findEntityPropertyLocationsSorted(snapshot, rootKeys, resolvedLocations);
+		std::map<EntityPropertyKey, EntityPropertyLocation> existingLocations;
+		for (const std::optional<EntityPropertyLocation> &location: resolvedLocations) {
+			if (location.has_value()) {
+				existingLocations.emplace(location->key, *location);
+			}
+		}
 		std::vector<SegmentId> currentPropertyPools;
 		for (const CatalogEntry &pool: metadata_.findCurrentPropertyPagePools(snapshot, options.page_owner_id)) {
 			currentPropertyPools.push_back(pool.segment_id);
@@ -328,14 +1407,7 @@ namespace graph::storage {
 		std::map<size_t, std::optional<SlottedPagePlacement>> placementCache;
 		EntityPropertyBatchPageCache pageCache;
 		uint64_t nextLargeValueId = snapshot.superblock().next_large_value_id;
-		uint64_t previousDirectoryId = 0U;
 		for (const PropertyCollectionRoot &root: roots) {
-			const EntityPropertyKey key = entityKeyForRoot(canonicalEntityRoot(root));
-			if (key.directoryId() <= previousDirectoryId) {
-				throwRootStoreError(FormatError::FERR_INVALID_HEADER,
-									"Entity Property batch roots must be strictly ordered by owner key");
-			}
-			previousDirectoryId = key.directoryId();
 			const EntityPropertyRootMutationPlan plan =
 					planEntityRootReplacementWithLargeValueId(snapshot, root, options, LargeValueId(nextLargeValueId),
 																						 &existingLocations, &placementCache, &currentPropertyPools, &pageCache);

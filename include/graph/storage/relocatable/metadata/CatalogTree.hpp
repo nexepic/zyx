@@ -18,6 +18,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <vector>
 
 #include "graph/storage/relocatable/format/SuperblockFile.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageFile.hpp"
@@ -85,6 +86,33 @@ namespace graph::storage {
 					 const MetadataSlotReservationLookup *reservationLookup) {
 			static_cast<void>(reservationLookup);
 			return allocatePage(generation, checkpointLsn, excludedPoolSlots, excludedDataSlotRanges);
+		}
+		// Batches amortize durable pool-bitmap updates while preserving the same
+		// fresh-frame and rollback contract as repeated scalar allocations.
+		[[nodiscard]] virtual std::vector<MetadataPageAllocation>
+		allocatePages(Generation generation, LogSequenceNumber checkpointLsn, size_t count,
+					  std::span<const PhysicalSlotId> excludedPoolSlots,
+					  std::span<const PhysicalSlotRange> excludedDataSlotRanges,
+					  const MetadataSlotReservationLookup *reservationLookup) {
+			std::vector<MetadataPageAllocation> allocations;
+			allocations.reserve(count);
+			try {
+				for (size_t index = 0U; index < count; ++index) {
+					allocations.push_back(allocatePage(generation, checkpointLsn, excludedPoolSlots,
+												   excludedDataSlotRanges, reservationLookup));
+				}
+			} catch (...) {
+				for (auto iterator = allocations.rbegin(); iterator != allocations.rend(); ++iterator) {
+					abandonPage(iterator->page);
+				}
+				for (auto iterator = allocations.rbegin(); iterator != allocations.rend(); ++iterator) {
+					if (iterator->created_pool_slot.has_value()) {
+						abandonUnpublishedPool(*iterator->created_pool_slot);
+					}
+				}
+				throw;
+			}
+			return allocations;
 		}
 		// A concrete allocator may inspect the current published roots while a
 		// batch is active. This lets it reuse only a root-free physical tail slot

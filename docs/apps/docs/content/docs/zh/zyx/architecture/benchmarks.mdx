@@ -171,6 +171,133 @@ ninja -C buildDir zyx-bench
 4. **检查索引命中率** — 查询可能不是因为引擎慢，而是缺少预期索引。
 5. **跨版本对比时保持完全相同的配置** — 同一编译器、同一数据分布、同一硬件。
 
+## 优化验证矩阵（2026-09-20）
+
+graph-comparison 可执行程序是优化路线的规模与跨数据库验证工具。与 `zyx-bench` 不同，它读取
+冻结的生成数据集，并为每个 sample 输出一条 JSON event。可以在不修改 workload 实现的情况下
+单独执行一个 workload：
+
+```bash
+./buildRelease/zyx-compare-bench \
+  --dataset <dataset-directory> \
+  --db-path <temporary-database-file> \
+  --scale medium \
+  --profile multihop \
+  --execution-mode opened \
+  --workload varlength_frontier_count \
+  --warmup 0 \
+  --iterations 1
+```
+
+`--workload` 必须属于 `--profile` 注册的 workload；不匹配时参数校验直接失败，而不是静默地只
+执行 load 阶段。不传 `--workload` 时运行完整 profile。execution mode 仍为 `opened`、`warm`
+和 `cold-ish`。
+
+以下 Release 结果使用 seed `42`、`warmup=0`、`iterations=1` 以及相同的生成 small/medium
+数据集。它们是结构诊断数据，不代表稳定的延迟分位数。
+
+### 样本隔离与 scan 验收
+
+每个 mutation warmup 和正式 sample 都基于同一个不可变已加载 baseline 的克隆运行。数据库
+克隆和生命周期操作不计入被测操作延迟，因此各 sample 输入基数一致，不会继承更早 sample
+的 mutation。harness 不会禁用生产查询超时。
+
+稳定 `smoke` 和 `small` 矩阵均通过 7 个 profile 的三种 execution mode：每个 scale 共 21 个
+group、168 个 workload 和 `1,680/1,680` 个 sample。结果目录为
+`/private/tmp/zyx-opt-isolation-20260920/` 和
+`/private/tmp/zyx-opt-stable-small-20260920/`。
+
+当前 medium `scan/opened` profile 的所有查询 workload 也均通过。带过滤的关系计数使用逻辑
+计划 aggregate/filter 融合，并通过复用 Page Directory/Catalog route 的认证物理 Entity-page
+扫描读取数据；实现不匹配查询文本，也不放宽 QueryGuard。
+
+| workload / 模式 | 延迟 | 状态 |
+| --- | ---: | --- |
+| `load_nodes_edges` / `opened` | `30,439.9 ms` | `ok` |
+| `all_nodes_property_filter` / `opened` | `11,689.7 ms` | `ok` |
+| `relationship_property_filter` / `opened` | `14,060.7 ms` | `ok` |
+| `relationship_property_filter` / 三次重复 `opened` | `14,011.2--14,070.0 ms` | `ok` |
+| `relationship_property_filter` / `warm` | `14,015.1 ms` | `ok` |
+| `relationship_property_filter` / `cold-ish` | `14,055.7 ms` | `ok` |
+
+这只关闭本地 medium scan 超时诊断，不代表完整验收计划已关闭。剩余门禁包括更广泛的稳定
+medium 矩阵、Linux/Windows、最终无筛选测试、四维覆盖率、RSS/文件大小/I/O 证据和工作包
+关闭审计。
+
+#### 按 workload 隔离的稳定 medium scan 矩阵
+
+comparison adapter 现在会为每个已注册 ZYX workload 分别启动一个子进程，并要求子进程只
+输出所选 workload。查询子进程会准备数据库但不输出重复 load sample；load 只在自己的调用
+中测量一次。超时、非法输出、缺失或重复 iteration 以及跨 workload event 都精确归属到所选
+workload。这样既保留每个 workload 的 600 秒进程边界，也不会把同一个边界错误地施加到
+整个 profile 的累计时长上。
+
+Release 矩阵位于
+`/private/tmp/zyx-opt-stable-medium-scan-isolated-20260920/20260919T203646946038Z-matrix.json`，
+参数为 medium、`warmup=2`、`iterations=10`。三个模式都通过 12 个 workload、120 个 sample，
+合计 `360/360` 个成功 sample；所有 run 的执行失败与质量门禁失败均为零。
+
+| 模式 | load p50 / p95 | 全节点过滤 p50 / p95 | 关系过滤 p50 / p95 | Top-K p50 / p95 |
+|---|---:|---:|---:|---:|
+| `cold-ish` | `30,524.0 / 30,734.1 ms` | `11,651.6 / 11,776.0 ms` | `14,097.2 / 14,197.8 ms` | `6,020.67 / 6,270.58 ms` |
+| `opened` | `30,230.6 / 30,570.4 ms` | `11,622.9 / 11,777.0 ms` | `14,047.2 / 14,152.1 ms` | `5,996.50 / 6,052.99 ms` |
+| `warm` | `30,373.7 / 30,640.6 ms` | `11,637.8 / 11,738.3 ms` | `14,104.6 / 14,177.2 ms` | `6,058.01 / 6,104.93 ms` |
+
+这关闭了 benchmark 编排缺陷和稳定 medium scan 门禁。Linux/Windows、最终完整测试覆盖率、
+RSS/文件大小/I/O 证据与工作包关闭仍是独立门禁。
+
+### Multihop
+
+| workload | small | medium | 状态 |
+| --- | ---: | ---: | --- |
+| `load_nodes_edges` | `1,517.3 ms` | `47,107.4 ms` | `ok` |
+| `reachable_within_6` | `121.656 ms` | `566.417 ms` | `ok` |
+| `reachable_within_12` | `206.147 ms` | `767.581 ms` | `ok` |
+| `reachable_within_24` | `376.449 ms` | `1,156.97 ms` | `ok` |
+| `reachable_within_30` | `463.122 ms` | `1,366.84 ms` | `ok` |
+| `varlength_frontier_count` | `1,341.57 ms` | `52,352.3 ms` | `ok` |
+
+旧的 medium frontier-count 实现在 runner 的 `600 s` 进程预算内无法完成。有界多 source
+cursor 和 4,096 条 Edge 的物化批次将其降低到约 `52.35 s`，没有提高生产限制，也没有恢复
+无界物化。
+
+### Retrieval 模式矩阵
+
+small 和 medium 的 9 个 retrieval workload 在三种 execution mode 中全部通过。代表性单次
+迭代数据如下：
+
+| 规模 / 模式 | load | point Node | endpoint Edge | one-hop ID | range projection |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| small / `opened` | `约 1.54-1.57 s` | `20.2653 ms` | 通过 | `29.783 ms` | 通过 |
+| small / `warm` | `约 1.54-1.57 s` | `20.0804 ms` | 通过 | `27.3023 ms` | 通过 |
+| small / `cold-ish` | `约 1.54-1.57 s` | `19.5094 ms` | 通过 | `27.8635 ms` | 通过 |
+| medium / `opened` | `47,439.0 ms` | `72.8785 ms` | `99.3701 ms` | `89.3367 ms` | `924.695 ms` |
+| medium / `warm` | `48,279.6 ms` | `72.0821 ms` | `99.0984 ms` | 通过 | `925.774 ms` |
+| medium / `cold-ish` | `47,962.3 ms` | `72.8965 ms` | `98.9621 ms` | `91.7398 ms` | `927.545 ms` |
+
+### Operational dynamic
+
+| workload | small | medium | 状态 |
+| --- | ---: | ---: | --- |
+| `load_nodes_edges` | `1,569.24 ms` | `47,963.7 ms` | `ok` |
+| `index_seek_then_one_hop_expand` | `378.284 ms` | `20,461.2 ms` | `ok` |
+| `index_seek_then_two_hop_expand` | `619.872 ms` | `32,926.9 ms` | `ok` |
+| `post_persist_create_node` | `292.034 ms` | `11,658.2 ms` | `ok` |
+| `post_persist_create_edge` | `679.44 ms` | `40,117.8 ms` | `ok` |
+| `write_then_one_hop_expand` | `716.879 ms` | `40,044.8 ms` | `ok` |
+| `batch_create_edges_100` | `769.849 ms` | `39,856.0 ms` | `ok` |
+| `batch_create_edges_1000` | `1,271.79 ms` | `40,384.2 ms` | `ok` |
+| `batch_create_edges_10000` | `3,741.68 ms` | `56,192.0 ms` | `ok` |
+| `batch_create_edges_100_then_one_hop_expand` | `778.535 ms` | `39,610.2 ms` | `ok` |
+| `batch_create_edges_10000_then_one_hop_expand` | `3,814.8 ms` | `56,373.6 ms` | `ok` |
+
+这些数据只关闭本地单次迭代诊断矩阵。优化工作包关闭前，仍需重复执行的 p50/p95/p99、峰值
+RSS、原生数据库文件大小、读写字节、冻结环境来源，以及 macOS/Linux/Windows 验收证据。
+
+## 优化路线入口
+
+框架级性能优化方案维护在[优化策略](optimization)文档中。后续实现以该文档的 Stage 0 至 Stage 9 分阶段执行计划为准，覆盖读取形状、批处理、拓扑、索引、执行、缓存、校验和写放大优化。benchmark 结果只能作为诊断证据：`smoke` 的局部加速不能关闭阶段；任何无法解释的超时或回归，在结构计数器归因之前都视为门禁失败。比较必须固定相同的 binary、数据集 manifest、参数、workload 顺序以及 `cold-ish`/`opened`/`warm` 模式，并报告延迟分位数、RSS、文件大小、I/O 和相关结构计数器。
+
 ## 回归基线契约
 
 graph comparison runner 的 `--baseline-summary` 用于 p50 回归门禁时，必须传入由该 runner 先前输出的 `summary.csv`。它会

@@ -85,8 +85,17 @@ namespace graph::query::execution {
 			page.edges.size() > options_.maximum_total_edges - edges_returned_) {
 			throw std::runtime_error("logical graph backend exceeded the adjacency cursor edge bound");
 		}
+		if (continuation_.has_value() &&
+			(page.edges.empty() || page.edges.front().edge_id != continuation_->next_edge_id)) {
+			throw std::runtime_error("logical graph backend returned an adjacency page that does not resume at its continuation");
+		}
+		uint64_t previousEdgeId = 0U;
 		for (const storage::LogicalGraphEdge &edge: page.edges) {
 			validateEdge(edge, node_id_, direction_);
+			if (previousEdgeId != 0U && edge.edge_id <= previousEdgeId) {
+				throw std::runtime_error("logical graph backend returned non-monotonic adjacency Edge IDs");
+			}
+			previousEdgeId = edge.edge_id;
 		}
 		if (page.edges.empty()) {
 			if (page.continuation.has_value()) {

@@ -149,6 +149,36 @@ TEST(LogicalGraphReadExecutorIndexLookupContractsTest, RejectsOutOfScopeRangeAnd
 	}
 }
 
+TEST(LogicalGraphReadExecutorIndexLookupContractsTest, RejectsMalformedVerifiedNativeRangeCandidateFields) {
+	LogicalGraphFixtureData data = graphData();
+	data.enable_native_range_node_candidates = true;
+	data.native_snapshot_generation = 9U;
+	data.range_candidate_result = IndexCandidateBatch{{{1U, false, 0U, 0U, 0U}}, 9U, false, true, {}};
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalPlanReadRuntime runtime(backend);
+	logical::LogicalNodeScan scan("node", {"Person"});
+	scan.setRangePredicates({{"age", PropertyValue(30), PropertyValue(), true, true}});
+	EXPECT_THROW(static_cast<void>(runtime.execute(scan, runtimeBounds(), [](const LogicalPlanReadRow &) {
+		return true;
+	})), std::runtime_error);
+}
+
+TEST(LogicalGraphReadExecutorIndexLookupContractsTest, RejectsVerifiedNativeCandidatesWhoseColumnsViolateTheScan) {
+	LogicalGraphFixtureData data = graphData();
+	data.enable_native_range_node_candidates = true;
+	data.native_snapshot_generation = 9U;
+	data.range_candidate_result = IndexCandidateBatch{
+			{{1U, false, 0U, 0U, 0U}}, 9U, false, true, {{"age", {PropertyValue(10)}}}};
+	TestLogicalGraphBackend backend(std::move(data));
+	LogicalPlanReadRuntime runtime(backend);
+	logical::LogicalNodeScan scan("node", {"Person"});
+	scan.setRangePredicates({{"age", PropertyValue(30), PropertyValue(), true, true}});
+
+	EXPECT_THROW(static_cast<void>(runtime.execute(scan, runtimeBounds(), [](const LogicalPlanReadRow &) {
+		return true;
+	})), std::runtime_error);
+}
+
 TEST(LogicalGraphReadExecutorIndexLookupContractsTest, RefreshesImportedEntitiesAndRejectsStoppedInputRowExecution) {
 	TestLogicalGraphBackend backend(graphData());
 	LogicalPlanReadRuntime runtime(backend);

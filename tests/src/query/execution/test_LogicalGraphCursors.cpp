@@ -263,6 +263,18 @@ namespace graph::query::execution {
 		expectRejectedPage({{edge(10U)}, storage::LogicalGraphAdjacencyContinuation{10U, 10U}});
 		expectRejectedPage({{edge(10U)}, storage::LogicalGraphAdjacencyContinuation{10U, 11U}}, {1U, 1U});
 
+		CursorScript discontinuousScript;
+		discontinuousScript.adjacency_pages = {{{edge(10U)}, storage::LogicalGraphAdjacencyContinuation{10U, 11U}},
+													{{edge(12U)}, std::nullopt}};
+		ScriptedCursorBackend discontinuousBackend(std::move(discontinuousScript));
+		LogicalGraphAdjacencyCursor discontinuous(discontinuousBackend, 1U,
+				storage::LogicalGraphReadDirection::LGRD_OUTGOING, adjacencyOptions());
+		discontinuous.open();
+		ASSERT_TRUE(discontinuous.next().has_value());
+		EXPECT_THROW(static_cast<void>(discontinuous.next()), std::runtime_error);
+
+		expectRejectedPage({{edge(11U), edge(10U)}, std::nullopt});
+
 		CursorScript cumulativeBoundScript;
 		cumulativeBoundScript.adjacency_pages = {{{edge(10U)}, storage::LogicalGraphAdjacencyContinuation{10U, 11U}},
 																							{{edge(11U), edge(12U)}, std::nullopt}};

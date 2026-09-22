@@ -435,6 +435,10 @@ namespace graph::storage {
 		std::vector<PageLocation> expected_replacements;
 		size_t appended_page_count = 0;
 		std::vector<IndexTreePageRetirement> expected_retirements;
+		// When valid, replacements are written to this compatible current pool while
+		// retirements and appended pages remain owned by `segment_id`.  The logical
+		// PageId is unchanged; only its Page Directory location moves at publication.
+		SegmentId replacement_segment_id{};
 	};
 
 	// Physical capacity remains a database-level policy. This request gives the
@@ -598,6 +602,9 @@ namespace graph::storage {
 		// The number of contiguous initial frames already materialized in this
 		// fresh pool by earlier plans in the same writer-owned compound batch.
 		size_t prepared_new_pool_prefix_count = 0U;
+		// Destination for replacement frames. It equals `pool` for the normal
+		// same-pool COW path and is distinct only for a bounded cross-pool move.
+		CatalogEntry replacement_pool;
 	};
 
 	using IndexTreeMultiPoolMutationPreparer = std::function<void(std::vector<IndexTreeMutationPoolBatch> &)>;
@@ -1507,6 +1514,12 @@ namespace graph::storage {
 		findNodePageLocationOptional(const MetadataSnapshotPin &snapshot, uint64_t nodeId) const;
 		[[nodiscard]] std::optional<EntityPageLocation>
 		findEdgePageLocationOptional(const MetadataSnapshotPin &snapshot, uint64_t edgeId) const;
+		void findNodePageLocationsSorted(const MetadataSnapshotPin &snapshot, std::span<const uint64_t> nodeIds,
+												 std::span<std::optional<EntityPageLocation>> results,
+												 const CancellationCheckpoint *cancellation = nullptr) const;
+		void findEdgePageLocationsSorted(const MetadataSnapshotPin &snapshot, std::span<const uint64_t> edgeIds,
+												 std::span<std::optional<EntityPageLocation>> results,
+												 const CancellationCheckpoint *cancellation = nullptr) const;
 		void visitNodePageLocations(const MetadataSnapshotPin &snapshot,
 									const std::function<void(const EntityPageLocation &)> &visitor) const;
 		void visitEdgePageLocations(const MetadataSnapshotPin &snapshot,
@@ -1525,6 +1538,10 @@ namespace graph::storage {
 												   const std::function<bool(const PageLocation &)> &visitor) const;
 		void visitEntityPropertyLocations(const MetadataSnapshotPin &snapshot,
 										  const std::function<void(const EntityPropertyLocation &)> &visitor) const;
+		[[nodiscard]] LocationDirectoryRangeCursor openEntityPropertyLocationRangeCursor(
+				const MetadataSnapshotPin &snapshot, uint64_t lowerDirectoryId = 1U,
+				uint64_t upperDirectoryId = std::numeric_limits<uint64_t>::max(),
+				const CancellationCheckpoint *cancellation = nullptr) const;
 		[[nodiscard]] bool
 		visitEntityPropertyLocationsAfter(const MetadataSnapshotPin &snapshot, uint64_t afterDirectoryId,
 										  size_t maximumMetadataPages,
@@ -1561,6 +1578,10 @@ namespace graph::storage {
 																		const EntityPropertyKey &key) const;
 		[[nodiscard]] std::optional<EntityPropertyLocation>
 		findEntityPropertyLocationOptional(const MetadataSnapshotPin &snapshot, const EntityPropertyKey &key) const;
+		void findEntityPropertyLocationsSorted(
+				const MetadataSnapshotPin &snapshot, std::span<const EntityPropertyKey> keys,
+				std::span<std::optional<EntityPropertyLocation>> results,
+				const CancellationCheckpoint *cancellation = nullptr) const;
 		[[nodiscard]] StateLocation findStateLocation(const MetadataSnapshotPin &snapshot, uint64_t stateId) const;
 		[[nodiscard]] std::optional<StateLocation> findStateLocationOptional(const MetadataSnapshotPin &snapshot,
 																			 uint64_t stateId) const;

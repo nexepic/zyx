@@ -78,7 +78,8 @@ TEST(NativeStreamedGraphEntityPageMaterializerTest, EmitsCodecCheckedPagesAndCan
 		const EntityPage decoded = EntityPage::open(page.owner, page.payload);
 		EXPECT_EQ(decoded.header().record_kind, EntityPageRecordKind::EPRK_EDGE);
 		for (const EntityPageLocation &location: page.edge_locations) {
-			EXPECT_TRUE(decoded.findEdge(location.slot_id, location.slot_generation).has_value());
+			EXPECT_TRUE(decoded.findEdge(location.slot_id, location.slot_generation, location.entity_id).has_value());
+			EXPECT_EQ(decoded.entityId(location.slot_id), location.entity_id);
 		}
 	}
 }

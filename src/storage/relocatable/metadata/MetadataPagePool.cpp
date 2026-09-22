@@ -220,7 +220,7 @@ namespace graph::storage {
 			return *selected;
 		}
 
-		void rewriteInactiveControlRecord(StorageIO &io, uint64_t pageOffset, Generation generation,
+		uint64_t rewriteInactiveControlRecord(StorageIO &io, uint64_t pageOffset, Generation generation,
 										  const MetadataPagePoolHeader &replacement, const char *truncatedMessage) {
 			const std::array<std::byte, RSS_PAGE_SIZE> page =
 					readTypedControlPage(io, pageOffset, generation, truncatedMessage);
@@ -239,9 +239,41 @@ namespace graph::storage {
 			next.control_sequence = current.header.control_sequence + 1U;
 			const auto bytes = MetadataPagePoolHeaderCodec::encode(next);
 			const size_t targetOffset = current.offset == RSS_ENVELOPE_BYTES
-												? RSS_ENVELOPE_BYTES + RSS_METADATA_PAGE_POOL_HEADER_BYTES
-												: RSS_ENVELOPE_BYTES;
+													? RSS_ENVELOPE_BYTES + RSS_METADATA_PAGE_POOL_HEADER_BYTES
+													: RSS_ENVELOPE_BYTES;
 			io.writeControlRecord({pageOffset, generation.value()}, targetOffset, bytes);
+			return next.control_sequence;
+		}
+
+		// Batch allocation already holds the last authenticated control header for
+		// each pool. Reuse that identity instead of rereading the whole control
+		// page; the normal path above remains the fail-closed fallback for callers
+		// that do not have an authenticated in-memory header.
+		uint64_t rewriteInactiveControlRecordKnown(StorageIO &io, uint64_t pageOffset, Generation generation,
+										  const MetadataPagePoolHeader &current,
+										  const MetadataPagePoolHeader &replacement) {
+			validateHeader(current);
+			validateHeader(replacement);
+			const uint8_t invalidIdentity =
+					static_cast<uint8_t>(replacement.physical_slot != current.physical_slot) |
+					static_cast<uint8_t>(replacement.segment_id != current.segment_id) |
+					static_cast<uint8_t>(replacement.generation != current.generation) |
+					static_cast<uint8_t>(replacement.committed_lsn != current.committed_lsn) |
+					static_cast<uint8_t>(current.control_sequence == std::numeric_limits<uint64_t>::max()) |
+					static_cast<uint8_t>(generation != current.generation);
+			if (invalidIdentity != 0U) {
+				throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
+									  "relocatable metadata pool control record has invalid known identity");
+			}
+			MetadataPagePoolHeader next = replacement;
+			next.control_sequence = current.control_sequence + 1U;
+			const auto bytes = MetadataPagePoolHeaderCodec::encode(next);
+			const size_t firstOffset = RSS_ENVELOPE_BYTES;
+			const size_t secondOffset = RSS_ENVELOPE_BYTES + RSS_METADATA_PAGE_POOL_HEADER_BYTES;
+			const size_t currentOffset = (current.control_sequence & 1U) != 0U ? firstOffset : secondOffset;
+			const size_t targetOffset = currentOffset == firstOffset ? secondOffset : firstOffset;
+			io.writeControlRecord({pageOffset, generation.value()}, targetOffset, bytes);
+			return next.control_sequence;
 		}
 
 		[[nodiscard]] uint64_t radixFactor(uint16_t level) {
@@ -480,6 +512,165 @@ namespace graph::storage {
 		}
 		return MetadataPageAllocation{PhysicalPageRef{pool->second.header.physical_slot, frame, generation},
 									  createdPoolSlot};
+	}
+
+	std::vector<MetadataPageAllocation> MetadataPagePoolAllocator::allocatePages(
+			Generation generation, LogSequenceNumber checkpointLsn, size_t count,
+			std::span<const PhysicalSlotId> excludedPoolSlots,
+			std::span<const PhysicalSlotRange> excludedDataSlotRanges,
+			const MetadataSlotReservationLookup *reservationLookup) {
+		std::lock_guard lock(mutex_);
+		requireHealthyLocked();
+		const uint8_t invalid = static_cast<uint8_t>(!generation.isValid()) |
+								static_cast<uint8_t>(generation.value() > RSS_MAX_PHYSICAL_PAGE_GENERATION) |
+								static_cast<uint8_t>(!checkpointLsn.isValid()) | static_cast<uint8_t>(count == 0U);
+		if (invalid != 0U) {
+			throwCatalogPoolError(FormatError::FERR_INVALID_HEADER,
+								  "relocatable Catalog page batch allocation context is invalid");
+		}
+		const bool metadataReservationActive = reserved_metadata_frames_.has_value();
+		if (metadataReservationActive && count > *reserved_metadata_frames_) {
+			throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
+								  "relocatable metadata frame reservation was exhausted");
+		}
+		const auto excluded = [this, &excludedPoolSlots, &excludedDataSlotRanges,
+							   reservationLookup](PhysicalSlotId slot) {
+			if (snapshot_protected_pool_slots_.contains(slot.value())) {
+				return true;
+			}
+			return reservationLookup != nullptr
+					   ? reservationLookup->isDataSlotReserved(slot)
+					   : std::ranges::any_of(excludedPoolSlots, [slot](PhysicalSlotId candidate) {
+							 return candidate == slot;
+						 }) || std::ranges::any_of(excludedDataSlotRanges, [slot](PhysicalSlotRange range) {
+							 return range.contains(slot);
+						 });
+		};
+		const auto usable = [&](const auto &candidate) {
+			return !excluded(candidate->second.header.physical_slot) &&
+				   (!emergency_reserve_.isValid() ||
+					candidate->second.header.physical_slot != emergency_reserve_.physical_slot) &&
+				   candidate->second.header.allocated_frames != RSS_METADATA_PAGE_POOL_VALID_FRAME_MASK;
+		};
+
+		std::vector<MetadataPageAllocation> allocations;
+		allocations.reserve(count);
+		std::map<uint64_t, MetadataPagePoolHeader> originalHeaders;
+		std::vector<PhysicalSlotId> createdPoolSlots;
+		std::vector<uint64_t> persistedSlots;
+		const std::optional<uint64_t> originalCursor = allocation_cursor_slot_;
+		bool reusableSlotSearchPending = true;
+		try {
+			while (allocations.size() < count) {
+				auto pool = allocation_cursor_slot_.has_value() ? pools_.lower_bound(*allocation_cursor_slot_)
+														 : pools_.begin();
+				if (pool == pools_.end() && allocation_cursor_slot_.has_value()) {
+					pool = pools_.begin();
+				}
+				bool foundPool = false;
+				for (size_t visited = 0U; pool != pools_.end() && visited < pools_.size(); ++visited) {
+					if (usable(pool)) {
+						foundPool = true;
+						break;
+					}
+					++pool;
+					if (pool == pools_.end() && allocation_cursor_slot_.has_value()) {
+						pool = pools_.begin();
+					}
+				}
+				if (!foundPool) {
+					pool = pools_.end();
+				}
+
+				std::optional<PhysicalSlotId> createdPoolSlot;
+				if (pool == pools_.end()) {
+					if (metadataReservationActive) {
+						throwCatalogPoolError(FormatError::FERR_INVALID_STATE,
+												  "relocatable metadata frame reservation cannot allocate a new pool");
+					}
+					try {
+						PoolState &created = createPoolLocked(generation, checkpointLsn, excludedPoolSlots,
+								excludedDataSlotRanges, reservationLookup, reusableSlotSearchPending);
+						reusableSlotSearchPending = false;
+						createdPoolSlot = created.header.physical_slot;
+						createdPoolSlots.push_back(*createdPoolSlot);
+						pool = pools_.find(created.header.physical_slot.value());
+					} catch (const std::system_error &error) {
+						if (!isNoSpaceError(error) || !emergency_reserve_.isValid() ||
+							excluded(emergency_reserve_.physical_slot)) {
+							throw;
+						}
+						pool = pools_.find(emergency_reserve_.physical_slot.value());
+						if (pool == pools_.end() ||
+							pool->second.header.allocated_frames == RSS_METADATA_PAGE_POOL_VALID_FRAME_MASK) {
+							throwCatalogPoolError(
+									FormatError::FERR_INVALID_STATE,
+									"relocatable metadata emergency reserve has no free page frame");
+						}
+					}
+				}
+
+				originalHeaders.try_emplace(pool->first, pool->second.header);
+				uint32_t freeFrames = RSS_METADATA_PAGE_POOL_VALID_FRAME_MASK &
+									  ~pool->second.header.allocated_frames;
+				bool reportsCreatedPool = createdPoolSlot.has_value();
+				while (freeFrames != 0U && allocations.size() < count) {
+					const uint8_t frame =
+							static_cast<uint8_t>(std::countr_zero(freeFrames) + RSS_PAGE_POOL_FIRST_DATA_FRAME);
+					pool->second.header.allocated_frames |= 1U << (frame - RSS_PAGE_POOL_FIRST_DATA_FRAME);
+					allocations.push_back(
+							{PhysicalPageRef{pool->second.header.physical_slot, frame, generation},
+							 reportsCreatedPool ? createdPoolSlot : std::optional<PhysicalSlotId>{}});
+					reportsCreatedPool = false;
+					freeFrames &= ~(1U << (frame - RSS_PAGE_POOL_FIRST_DATA_FRAME));
+				}
+				if (pool->second.header.allocated_frames == RSS_METADATA_PAGE_POOL_VALID_FRAME_MASK) {
+					auto next = std::next(pool);
+					allocation_cursor_slot_ =
+							next == pools_.end() ? std::optional<uint64_t>{} : std::optional<uint64_t>{next->first};
+				} else {
+					allocation_cursor_slot_ = pool->first;
+				}
+			}
+
+			persistedSlots.reserve(originalHeaders.size());
+			for (const auto &[slot, original]: originalHeaders) {
+				PoolState &pool = pools_.at(slot);
+				writePoolLockedKnownHeader(pool, original);
+				persistedSlots.push_back(slot);
+			}
+			if (metadataReservationActive) {
+				*reserved_metadata_frames_ -= count;
+			}
+			return allocations;
+		} catch (...) {
+			const std::exception_ptr failure = std::current_exception();
+			bool rollbackSucceeded = true;
+			for (auto iterator = persistedSlots.rbegin(); iterator != persistedSlots.rend(); ++iterator) {
+				try {
+					writePoolLocked(PoolState{originalHeaders.at(*iterator)});
+				} catch (...) {
+					rollbackSucceeded = false;
+				}
+			}
+			for (const auto &[slot, original]: originalHeaders) {
+				if (auto pool = pools_.find(slot); pool != pools_.end()) {
+					pool->second.header = original;
+				}
+			}
+			for (auto iterator = createdPoolSlots.rbegin(); iterator != createdPoolSlots.rend(); ++iterator) {
+				try {
+					eraseUnpublishedPoolLocked(*iterator);
+				} catch (...) {
+					rollbackSucceeded = false;
+				}
+			}
+			allocation_cursor_slot_ = originalCursor;
+			if (!rollbackSucceeded) {
+				poisoned_ = true;
+			}
+			std::rethrow_exception(failure);
+		}
 	}
 
 	void MetadataPagePoolAllocator::beginUnpublishedBatch(const Superblock &current) {
@@ -1623,9 +1814,10 @@ namespace graph::storage {
 
 	MetadataPagePoolAllocator::PoolState &
 	MetadataPagePoolAllocator::createPoolLocked(Generation generation, LogSequenceNumber checkpointLsn,
-												std::span<const PhysicalSlotId> excludedPoolSlots,
-												std::span<const PhysicalSlotRange> excludedDataSlotRanges,
-												const MetadataSlotReservationLookup *reservationLookup) {
+													std::span<const PhysicalSlotId> excludedPoolSlots,
+													std::span<const PhysicalSlotRange> excludedDataSlotRanges,
+													const MetadataSlotReservationLookup *reservationLookup,
+													bool searchReusableSlot) {
 		requireHealthyLocked();
 		const uint64_t fileSize = io_->fileSize();
 		const uint8_t invalidTail = static_cast<uint8_t>(fileSize < data_region_offset_) |
@@ -1635,11 +1827,13 @@ namespace graph::storage {
 			throwCatalogPoolError(FormatError::FERR_ARITHMETIC_OVERFLOW,
 								  "relocatable metadata pool file cannot append another physical slot");
 		}
-		if (const std::optional<PhysicalSlotId> reusableSlot = findReusableFreeSlotLocked(
+		if (searchReusableSlot) {
+			if (const std::optional<PhysicalSlotId> reusableSlot = findReusableFreeSlotLocked(
 					generation, excludedPoolSlots, excludedDataSlotRanges, reservationLookup);
-			reusableSlot.has_value()) {
-			return createPoolAtLocked(*reusableSlot, SegmentId(reusableSlot->value()), generation, checkpointLsn, 0U,
-									  true);
+					reusableSlot.has_value()) {
+				return createPoolAtLocked(*reusableSlot, SegmentId(reusableSlot->value()), generation, checkpointLsn, 0U,
+										  true);
+			}
 		}
 		uint64_t nextSlot = (fileSize - data_region_offset_) / RSS_SEGMENT_SIZE + 1U;
 		const auto excludedPool = [&excludedPoolSlots, reservationLookup](uint64_t slot) {
@@ -1787,6 +1981,10 @@ namespace graph::storage {
 								  "relocatable metadata pool reserved an unexpected physical tail offset");
 		}
 		writeTypedControlPage(*io_, offset, generation, makeControlPage(envelope, header));
+		// makeControlPage publishes record 1 as the active A record. Keep the
+		// process-local header synchronized so batch updates can select the
+		// inactive B record without rereading the control page.
+		header.control_sequence = 1U;
 		auto [iterator, inserted] = pools_.emplace(physicalSlot.value(), PoolState{header});
 		static_cast<void>(inserted);
 		return iterator->second;
@@ -1909,9 +2107,21 @@ namespace graph::storage {
 		allocation_cursor_slot_.reset();
 	}
 
+	void MetadataPagePoolAllocator::writePoolLocked(PoolState &pool) {
+		pool.header.control_sequence = rewriteInactiveControlRecord(
+				*io_, slotOffset(pool.header.physical_slot), pool.header.generation, pool.header,
+				"relocatable metadata-pool control page is truncated");
+	}
+
 	void MetadataPagePoolAllocator::writePoolLocked(const PoolState &pool) {
-		rewriteInactiveControlRecord(*io_, slotOffset(pool.header.physical_slot), pool.header.generation, pool.header,
-									 "relocatable metadata-pool control page is truncated");
+		static_cast<void>(rewriteInactiveControlRecord(*io_, slotOffset(pool.header.physical_slot), pool.header.generation,
+															pool.header, "relocatable metadata-pool control page is truncated"));
+	}
+
+	void MetadataPagePoolAllocator::writePoolLockedKnownHeader(PoolState &pool,
+											 const MetadataPagePoolHeader &current) {
+		pool.header.control_sequence = rewriteInactiveControlRecordKnown(
+				*io_, slotOffset(pool.header.physical_slot), pool.header.generation, current, pool.header);
 	}
 
 	void MetadataPagePoolAllocator::validateRegisteredPoolsLocked() const {

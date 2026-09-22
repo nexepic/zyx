@@ -7,6 +7,7 @@
  */
 
 #include <algorithm>
+#include <array>
 #include <limits>
 #include <map>
 #include <memory>
@@ -45,9 +46,58 @@ namespace graph::storage {
 					size_t)>
 					exact_node_lookup;
 
-			[[nodiscard]] LogicalGraphNode readNode(uint64_t nodeId) const override { return nodes.at(nodeId); }
-			[[nodiscard]] bool containsNode(uint64_t nodeId) const override { return nodes.contains(nodeId); }
-			[[nodiscard]] LogicalGraphEdge readEdge(uint64_t edgeId) const override { return edges.at(edgeId); }
+		[[nodiscard]] LogicalGraphNode readNode(uint64_t nodeId) const override {
+			++read_node_calls;
+			return nodes.at(nodeId);
+		}
+		[[nodiscard]] LogicalGraphNode readNodeShaped(uint64_t nodeId, const EntityReadShape &shape) const override {
+			node_shapes.push_back(shape);
+			return readNode(nodeId);
+		}
+		mutable size_t read_node_calls = 0U;
+		mutable std::vector<EntityReadShape> node_shapes;
+		[[nodiscard]] std::vector<LogicalGraphNode>
+		readNodesShapedSorted(std::span<const uint64_t> nodeIds, const EntityReadShape &shape) const override {
+			++read_node_batch_calls;
+			return LogicalGraphReadSnapshot::readNodesShapedSorted(nodeIds, shape);
+		}
+		mutable size_t read_node_batch_calls = 0U;
+		[[nodiscard]] std::vector<PropertyValue>
+		readNodePropertiesSorted(std::span<const uint64_t> nodeIds, std::string_view key) const override {
+			++read_node_property_batch_calls;
+			return LogicalGraphReadSnapshot::readNodePropertiesSorted(nodeIds, key);
+		}
+		mutable size_t read_node_property_batch_calls = 0U;
+		[[nodiscard]] bool containsNode(uint64_t nodeId) const override { return nodes.contains(nodeId); }
+		[[nodiscard]] LogicalGraphEdge readEdge(uint64_t edgeId) const override {
+			++read_edge_calls;
+			return edges.at(edgeId);
+		}
+		[[nodiscard]] LogicalGraphEdge readEdgeShaped(uint64_t edgeId, const EntityReadShape &shape) const override {
+			edge_shapes.push_back(shape);
+			return readEdge(edgeId);
+		}
+		[[nodiscard]] std::vector<LogicalGraphEdge>
+		readEdgesShapedSorted(std::span<const uint64_t> edgeIds, const EntityReadShape &shape) const override {
+			++read_edge_batch_calls;
+			return LogicalGraphReadSnapshot::readEdgesShapedSorted(edgeIds, shape);
+		}
+		mutable size_t read_edge_calls = 0U;
+		mutable size_t read_edge_batch_calls = 0U;
+		mutable std::vector<EntityReadShape> edge_shapes;
+		[[nodiscard]] std::vector<PropertyValue>
+		readEdgePropertiesSorted(std::span<const uint64_t> edgeIds, std::string_view key) const override {
+			++read_edge_property_batch_calls;
+			return LogicalGraphReadSnapshot::readEdgePropertiesSorted(edgeIds, key);
+		}
+		mutable size_t read_edge_property_batch_calls = 0U;
+		mutable size_t topology_scan_calls = 0U;
+		[[nodiscard]] std::optional<uint32_t> findPropertyToken(std::string_view key) const override {
+			if (key == "name") return 1U;
+			if (key == "rank") return 2U;
+			if (key == "weight") return 3U;
+			return std::nullopt;
+		}
 			[[nodiscard]] std::optional<std::vector<LogicalGraphNode>>
 			findNodesByExactProperties(const std::vector<std::string> &labels,
 											 const std::vector<std::pair<std::string, PropertyValue>> &properties,
@@ -133,6 +183,31 @@ namespace graph::storage {
 				}
 				return result;
 			}
+			[[nodiscard]] LogicalGraphAdjacencyTopologyPage
+			scanAdjacentEdgeTopologies(uint64_t nodeId, LogicalGraphReadDirection direction,
+									std::optional<LogicalGraphAdjacencyContinuation> continuation,
+									size_t maximumRecords) const override {
+				if (maximumRecords == 0U) {
+					throw std::invalid_argument("test topology scan requires a positive bound");
+				}
+				++topology_scan_calls;
+				const uint64_t after = continuation.has_value() ? continuation->next_edge_id - 1U : 0U;
+				LogicalGraphAdjacencyTopologyPage result;
+				for (const auto &[id, edge]: edges) {
+					const bool matches = direction == LogicalGraphReadDirection::LGRD_OUTGOING
+											? edge.source_node_id == nodeId
+											: edge.target_node_id == nodeId;
+					if (id <= after || !matches) {
+						continue;
+					}
+					if (result.edges.size() == maximumRecords) {
+						result.continuation = {result.edges.back().edge_id, id};
+						break;
+					}
+					result.edges.emplace_back(edge.edge_id, edge.source_node_id, edge.target_node_id, edge.type);
+				}
+				return result;
+			}
 			void visitEdges(size_t maximumRecords, const std::function<bool(const LogicalGraphEdge &)> &visitor) const override {
 				size_t visited = 0U;
 				for (const auto &[id, edge]: edges) {
@@ -190,8 +265,14 @@ namespace graph::storage {
 		explicit InMemoryVectorSnapshot(const InMemoryLogicalSnapshot &snapshot) : snapshot_(snapshot) {}
 
 		[[nodiscard]] LogicalGraphNode readNode(uint64_t nodeId) const override { return snapshot_.readNode(nodeId); }
+		[[nodiscard]] LogicalGraphNode readNodeShaped(uint64_t nodeId, const EntityReadShape &shape) const override {
+			return snapshot_.readNodeShaped(nodeId, shape);
+		}
 		[[nodiscard]] bool containsNode(uint64_t nodeId) const override { return snapshot_.containsNode(nodeId); }
 		[[nodiscard]] LogicalGraphEdge readEdge(uint64_t edgeId) const override { return snapshot_.readEdge(edgeId); }
+		[[nodiscard]] LogicalGraphEdge readEdgeShaped(uint64_t edgeId, const EntityReadShape &shape) const override {
+			return snapshot_.readEdgeShaped(edgeId, shape);
+		}
 		[[nodiscard]] std::optional<std::vector<LogicalGraphNode>>
 		findNodesByExactProperties(const std::vector<std::string> &labels,
 									 const std::vector<std::pair<std::string, PropertyValue>> &properties,
@@ -288,6 +369,13 @@ namespace graph::storage {
 			return vector_snapshot_;
 		}
 		[[nodiscard]] size_t vectorScoreCalls() const { return vector_snapshot_.score_calls; }
+		[[nodiscard]] size_t topologyScanCalls() const { return snapshot_.topology_scan_calls; }
+		[[nodiscard]] size_t readEdgeCalls() const { return snapshot_.read_edge_calls; }
+		[[nodiscard]] size_t readNodeCalls() const { return snapshot_.read_node_calls; }
+		[[nodiscard]] size_t readNodeBatchCalls() const { return snapshot_.read_node_batch_calls; }
+		[[nodiscard]] size_t readEdgeBatchCalls() const { return snapshot_.read_edge_batch_calls; }
+		[[nodiscard]] size_t readNodePropertyBatchCalls() const { return snapshot_.read_node_property_batch_calls; }
+		[[nodiscard]] size_t readEdgePropertyBatchCalls() const { return snapshot_.read_edge_property_batch_calls; }
 		[[nodiscard]] LogicalGraphMutationBatchResult
 		previewMutationBatch(const LogicalGraphMutationBatch &batch) const override {
 			requireActive();
@@ -387,10 +475,67 @@ namespace graph::storage {
 				1U, LogicalGraphReadDirection::LGRD_OUTGOING, firstEdges.continuation, 2U);
 		ASSERT_EQ(secondEdges.edges.size(), 2U);
 		EXPECT_FALSE(secondEdges.continuation.has_value());
+		EXPECT_EQ(transaction.readEdgeCalls(), 0U);
 
 		overlay.deleteLogicalEdges({{200U}});
 		snapshot = overlay.openLogicalGraphReadSnapshot();
 		EXPECT_THROW(static_cast<void>(snapshot->readEdge(200U)), std::runtime_error);
+	}
+
+	TEST(LogicalGraphTransactionOverlayTest, ReusesCompleteRecordsFromBasePages) {
+		InMemoryLogicalTransaction transaction;
+		LogicalGraphTransactionOverlay overlay(transaction);
+		std::unique_ptr<LogicalGraphReadSnapshot> snapshot = overlay.openLogicalGraphReadSnapshot();
+
+		const LogicalGraphNodePage nodes = snapshot->scanNodesAfter(0U, 2U, 1U);
+		ASSERT_EQ(nodes.nodes.size(), 2U);
+		EXPECT_EQ(transaction.readNodeCalls(), 0U);
+		snapshot->visitEdges(1U, [](const LogicalGraphEdge &) { return false; });
+		EXPECT_EQ(transaction.readEdgeCalls(), 0U);
+	}
+
+	TEST(LogicalGraphTransactionOverlayTest, AppliesReadShapesToStagedEntitiesAndSortedBatches) {
+		InMemoryLogicalTransaction transaction;
+		LogicalGraphTransactionOverlay overlay(transaction);
+		const std::vector<uint64_t> createdNodes =
+				overlay.createLogicalNodes({{{"Added"}, {{"name", PropertyValue("Grace")},
+																	 {"rank", PropertyValue(int64_t(7))}}}});
+		ASSERT_EQ(createdNodes, (std::vector<uint64_t>{100U}));
+		const std::vector<uint64_t> createdEdges =
+				overlay.createLogicalEdges({{1U, createdNodes.front(), "ADDED", {{"weight", PropertyValue(int64_t(3))}}}});
+		ASSERT_EQ(createdEdges, (std::vector<uint64_t>{200U}));
+
+		std::unique_ptr<LogicalGraphReadSnapshot> snapshot = overlay.openLogicalGraphReadSnapshot();
+		const LogicalGraphNode identity = snapshot->readNodeShaped(createdNodes.front(), EntityReadShape{});
+		EXPECT_EQ(identity, (LogicalGraphNode{createdNodes.front(), {}, {}}));
+		const LogicalGraphNode selectedNode = snapshot->readNodeShaped(
+				createdNodes.front(), EntityReadShape{.include_labels = true, .property_tokens = {2U}});
+		EXPECT_EQ(selectedNode,
+				  (LogicalGraphNode{createdNodes.front(), {"Added"}, {{"rank", PropertyValue(int64_t(7))}}}));
+		const LogicalGraphEdge selectedEdge = snapshot->readEdgeShaped(
+				createdEdges.front(), EntityReadShape{.include_type = true, .property_tokens = {3U}});
+		EXPECT_EQ(selectedEdge,
+				  (LogicalGraphEdge{createdEdges.front(), 1U, createdNodes.front(), "ADDED",
+																	{{"weight", PropertyValue(int64_t(3))}}}));
+
+		const auto nodes = snapshot->readNodesShapedSorted(
+				std::array<uint64_t, 2U>{1U, createdNodes.front()}, EntityReadShape{.include_labels = true});
+		ASSERT_EQ(nodes.size(), 2U);
+		EXPECT_EQ(nodes.front().labels, (std::vector<std::string>{"Base"}));
+		EXPECT_EQ(nodes.back().labels, (std::vector<std::string>{"Added"}));
+		EXPECT_EQ(transaction.readNodeBatchCalls(), 1U);
+		const auto edges = snapshot->readEdgesShapedSorted(
+				std::array<uint64_t, 2U>{10U, createdEdges.front()}, EntityReadShape{.include_type = true});
+		ASSERT_EQ(edges.size(), 2U);
+		EXPECT_EQ(edges.front().type, "BASE_LINK");
+		EXPECT_EQ(edges.back().type, "ADDED");
+		EXPECT_EQ(transaction.readEdgeBatchCalls(), 1U);
+		const auto nodeNames = snapshot->readNodePropertiesSorted(
+				std::array<uint64_t, 2U>{1U, createdNodes.front()}, "name");
+		EXPECT_EQ(nodeNames, (std::vector<PropertyValue>{PropertyValue("Ada"), PropertyValue("Grace")}));
+		EXPECT_EQ(transaction.readNodePropertyBatchCalls(), 1U);
+		EXPECT_THROW(static_cast<void>(snapshot->readNodesShapedSorted(
+				std::array<uint64_t, 2U>{createdNodes.front(), 1U}, EntityReadShape{})), std::invalid_argument);
 	}
 
 	TEST(LogicalGraphTransactionOverlayTest, CreationIdentityRangesAreBoundedAndNeverWrap) {
@@ -444,10 +589,15 @@ namespace graph::storage {
 		InMemoryLogicalTransaction transaction;
 		LogicalGraphTransactionOverlay overlay(transaction);
 		std::unique_ptr<LogicalGraphVectorSearchSnapshot> snapshot = overlay.openLogicalGraphVectorSearchSnapshot();
+		auto &base = static_cast<InMemoryLogicalSnapshot &>(transaction.readSnapshot());
 
 		EXPECT_EQ(snapshot->readNode(1U).node_id, 1U);
 		EXPECT_TRUE(snapshot->containsNode(1U));
 		EXPECT_EQ(snapshot->readEdge(10U).edge_id, 10U);
+		ASSERT_FALSE(base.node_shapes.empty());
+		EXPECT_EQ(base.node_shapes.back(), (EntityReadShape{.include_labels = true, .all_properties = true}));
+		ASSERT_FALSE(base.edge_shapes.empty());
+		EXPECT_EQ(base.edge_shapes.back(), (EntityReadShape{.include_type = true, .all_properties = true}));
 		EXPECT_FALSE(snapshot->findNodesByExactProperties({"Base"}, {}, 2U, 2U).has_value());
 		EXPECT_EQ(snapshot->scanNodesAfter(0U, 2U, 1U).nodes.size(), 2U);
 		EXPECT_EQ(snapshot->scanAdjacentEdges(1U, LogicalGraphReadDirection::LGRD_OUTGOING, std::nullopt, 1U)
@@ -814,6 +964,42 @@ namespace graph::storage {
 			return true;
 		});
 		EXPECT_EQ(visibleEdges, (std::vector<uint64_t>{11U}));
+	}
+
+	TEST(LogicalGraphTransactionOverlayTest, ScansTopologyWithoutMaterializingEdgesAcrossCreatedContinuation) {
+		InMemoryLogicalTransaction transaction;
+		auto &base = static_cast<InMemoryLogicalSnapshot &>(transaction.readSnapshot());
+		base.edges.emplace(11U, LogicalGraphEdge{11U, 1U, 2U, "SECOND", {{"payload", PropertyValue("large")}}});
+		LogicalGraphTransactionOverlay overlay(transaction);
+		ASSERT_EQ(overlay.createLogicalEdges({{1U, 2U, "CREATED_A", {}}, {1U, 2U, "CREATED_B", {}}}),
+				  (std::vector<uint64_t>{200U, 201U}));
+		std::unique_ptr<LogicalGraphReadSnapshot> snapshot = overlay.openLogicalGraphReadSnapshot();
+
+		std::vector<uint64_t> ids;
+		std::optional<LogicalGraphAdjacencyContinuation> continuation;
+		for (;;) {
+			const LogicalGraphAdjacencyTopologyPage page = snapshot->scanAdjacentEdgeTopologies(
+					1U, LogicalGraphReadDirection::LGRD_OUTGOING, continuation, 1U);
+			for (const auto &edge: page.edges) {
+				ids.push_back(edge.edge_id);
+				EXPECT_TRUE(edge.type == "BASE_LINK" || edge.type == "SECOND" || edge.type == "CREATED_A" ||
+								edge.type == "CREATED_B");
+			}
+			if (!page.continuation.has_value()) {
+				break;
+			}
+			continuation = page.continuation;
+		}
+		EXPECT_EQ(ids, (std::vector<uint64_t>{10U, 11U, 200U, 201U}));
+		EXPECT_GT(transaction.topologyScanCalls(), 0U);
+		EXPECT_EQ(transaction.readEdgeCalls(), 0U);
+
+		InMemoryLogicalTransaction deletedEndpointTransaction;
+		LogicalGraphTransactionOverlay deletedEndpointOverlay(deletedEndpointTransaction);
+		ASSERT_NO_THROW(deletedEndpointOverlay.deleteLogicalNodes({{2U, true, 1U}}));
+		const auto deletedSnapshot = deletedEndpointOverlay.openLogicalGraphReadSnapshot();
+		EXPECT_TRUE(deletedSnapshot->scanAdjacentEdgeTopologies(
+					1U, LogicalGraphReadDirection::LGRD_OUTGOING, std::nullopt, 4U).edges.empty());
 	}
 
 	TEST(LogicalGraphTransactionOverlayTest, AppliesDetachDeletionToBaseAndCreatedIncidentEdges) {
@@ -1191,6 +1377,9 @@ namespace graph::storage {
 		endpointBase.hide_edges_from_adjacency = true;
 		LogicalGraphTransactionOverlay endpointOverlay(endpointTransaction);
 		endpointOverlay.deleteLogicalNodes({{2U, false, 0U}});
+		std::unique_ptr<LogicalGraphReadSnapshot> hiddenBaseSnapshot = endpointOverlay.openLogicalGraphReadSnapshot();
+		EXPECT_THROW(static_cast<void>(hiddenBaseSnapshot->readEdgeShaped(
+				10U, EntityReadShape{.include_type = true})), std::runtime_error);
 		// Create an overlay Edge state without marking it deleted. The direct read
 		// must still reject it because its target Node is transaction-invisible.
 		endpointOverlay.replaceLogicalEdgeProperties({{10U, {{"state", PropertyValue("updated")}}}});

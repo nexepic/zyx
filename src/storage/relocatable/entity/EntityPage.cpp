@@ -74,7 +74,8 @@ namespace graph::storage {
 			for (uint32_t candidate = 1U; candidate <= std::numeric_limits<uint16_t>::max(); ++candidate) {
 				const uint64_t bytes = static_cast<uint64_t>(RSS_ENTITY_PAGE_HEADER_BYTES) +
 									   requiredBitmapBytes(static_cast<uint16_t>(candidate)) +
-									   candidate * sizeof(uint32_t) + candidate * RecordBytes;
+									   candidate * sizeof(uint32_t) + candidate * sizeof(uint64_t) +
+									   candidate * RecordBytes;
 				if (bytes > RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES) {
 					break;
 				}
@@ -291,6 +292,219 @@ namespace graph::storage {
 		return header;
 	}
 
+	EntityPageReadView EntityPageReadView::open(const PageOwnerHeader &owner, const std::span<const std::byte> bytes) {
+		if (bytes.size() != RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES) {
+			throwEntityPageError(bytes.size() < RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES ? FormatError::FERR_BUFFER_TOO_SMALL
+																									 : FormatError::FERR_INVALID_HEADER,
+									 "relocatable Entity page view payload has an invalid byte length");
+		}
+		const std::span<const std::byte> encodedHeader = bytes.first(RSS_ENTITY_PAGE_HEADER_BYTES);
+		const uint32_t expectedHeaderCrc = LittleEndianCodec::readU32(encodedHeader, PAGE_HEADER_CRC_OFFSET);
+		const uint32_t expectedPayloadCrc = LittleEndianCodec::readU32(encodedHeader, PAGE_PAYLOAD_CRC_OFFSET);
+		std::array<std::byte, RSS_ENTITY_PAGE_HEADER_BYTES> headerForCrc{};
+		std::copy(encodedHeader.begin(), encodedHeader.end(), headerForCrc.begin());
+		LittleEndianCodec::writeU32(headerForCrc, PAGE_HEADER_CRC_OFFSET, 0U);
+		if (calculateCrc(headerForCrc) != expectedHeaderCrc ||
+			calculateCrc(bytes.subspan(RSS_ENTITY_PAGE_HEADER_BYTES)) != expectedPayloadCrc) {
+			throwEntityPageError(FormatError::FERR_CHECKSUM_MISMATCH,
+									 "relocatable Entity page view checksum does not match its payload");
+		}
+		EntityPageReadView view(bytes, EntityPageHeaderCodec::decode(encodedHeader));
+		validateOwner(owner, view.header_, true);
+		view.validateLayout();
+		return view;
+	}
+
+	std::optional<NodeEntityRecord> EntityPageReadView::findNode(const uint16_t slot,
+															 const uint32_t expectedSlotGeneration) const {
+		if (header_.record_kind != EntityPageRecordKind::EPRK_NODE) {
+			throwEntityPageError(FormatError::FERR_INVALID_STATE,
+									 "relocatable Entity page view does not store Node records");
+		}
+		if (slot >= header_.slot_capacity || !isLive(slot)) {
+			throwEntityPageError(FormatError::FERR_INVALID_STATE,
+									 "relocatable Entity Map references an unavailable Node slot");
+		}
+		validateSlotGeneration(slot, expectedSlotGeneration);
+		return NodeEntityRecordCodec::decode(bytes_.subspan(recordOffset(slot), header_.record_bytes));
+	}
+
+	std::optional<NodeEntityRecord> EntityPageReadView::findNode(const uint16_t slot,
+															 const uint32_t expectedSlotGeneration,
+															 const uint64_t expectedEntityId) const {
+		const std::optional<NodeEntityRecord> record = findNode(slot, expectedSlotGeneration);
+		if (expectedEntityId == 0U || entityId(slot) != expectedEntityId) {
+			throwEntityPageError(FormatError::FERR_INVALID_STATE,
+								 "relocatable Entity Map references a Node slot owned by another Entity ID");
+		}
+		return record;
+	}
+
+	std::optional<EdgeEntityRecord> EntityPageReadView::findEdge(const uint16_t slot,
+																		 const uint32_t expectedSlotGeneration) const {
+		if (header_.record_kind != EntityPageRecordKind::EPRK_EDGE) {
+			throwEntityPageError(FormatError::FERR_INVALID_STATE,
+									 "relocatable Entity page view does not store Edge records");
+		}
+		if (slot >= header_.slot_capacity || !isLive(slot)) {
+			throwEntityPageError(FormatError::FERR_INVALID_STATE,
+									 "relocatable Entity Map references an unavailable Edge slot");
+		}
+		validateSlotGeneration(slot, expectedSlotGeneration);
+		return EdgeEntityRecordCodec::decode(bytes_.subspan(recordOffset(slot), header_.record_bytes));
+	}
+
+	std::optional<EdgeEntityRecord> EntityPageReadView::findEdge(const uint16_t slot,
+															 const uint32_t expectedSlotGeneration,
+															 const uint64_t expectedEntityId) const {
+		const std::optional<EdgeEntityRecord> record = findEdge(slot, expectedSlotGeneration);
+		if (expectedEntityId == 0U || entityId(slot) != expectedEntityId) {
+			throwEntityPageError(FormatError::FERR_INVALID_STATE,
+								 "relocatable Entity Map references an Edge slot owned by another Entity ID");
+		}
+		return record;
+	}
+
+	uint64_t EntityPageReadView::entityId(const uint16_t slot) const {
+		if (slot >= header_.slot_capacity) {
+			throwEntityPageError(FormatError::FERR_INVALID_HEADER,
+								 "relocatable Entity page view slot is outside its capacity");
+		}
+		return LittleEndianCodec::readU64(bytes_, entityIdOffset(slot));
+	}
+
+	uint32_t EntityPageReadView::slotGeneration(const uint16_t slot) const {
+		if (slot >= header_.slot_capacity) {
+			throwEntityPageError(FormatError::FERR_INVALID_HEADER,
+								 "relocatable Entity page view slot is outside its capacity");
+		}
+		return LittleEndianCodec::readU32(bytes_, slotGenerationOffset(slot));
+	}
+
+	bool EntityPageReadView::visitNodesUntil(const size_t maximumRecords,
+														 const EntityPageNodeVisitor &visitor) const {
+		if (header_.record_kind != EntityPageRecordKind::EPRK_NODE || maximumRecords == 0U || !visitor) {
+			throwEntityPageError(FormatError::FERR_INVALID_STATE,
+								 "relocatable Entity page view Node scan requires a Node page, bound, and visitor");
+		}
+		size_t visited = 0U;
+		for (uint16_t slot = 0U; slot < header_.slot_capacity; ++slot) {
+			if (!isLive(slot)) {
+				continue;
+			}
+			const NodeEntityRecord record =
+					NodeEntityRecordCodec::decode(bytes_.subspan(recordOffset(slot), header_.record_bytes));
+			++visited;
+			if (!visitor(entityId(slot), slot, slotGeneration(slot), record) || visited == maximumRecords) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	bool EntityPageReadView::visitEdgesUntil(const size_t maximumRecords,
+														 const EntityPageEdgeVisitor &visitor) const {
+		if (header_.record_kind != EntityPageRecordKind::EPRK_EDGE || maximumRecords == 0U || !visitor) {
+			throwEntityPageError(FormatError::FERR_INVALID_STATE,
+								 "relocatable Entity page view Edge scan requires an Edge page, bound, and visitor");
+		}
+		size_t visited = 0U;
+		for (uint16_t slot = 0U; slot < header_.slot_capacity; ++slot) {
+			if (!isLive(slot)) {
+				continue;
+			}
+			const EdgeEntityRecord record =
+					EdgeEntityRecordCodec::decode(bytes_.subspan(recordOffset(slot), header_.record_bytes));
+			++visited;
+			if (!visitor(entityId(slot), slot, slotGeneration(slot), record) || visited == maximumRecords) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	void EntityPageReadView::validateLayout() const {
+		validateHeader(header_);
+		const size_t recordAreaStart = bitmapOffset() + header_.bitmap_bytes +
+									   static_cast<size_t>(header_.slot_capacity) * sizeof(uint32_t) +
+									   static_cast<size_t>(header_.slot_capacity) * sizeof(uint64_t);
+		const size_t recordAreaEnd = recordAreaStart + static_cast<size_t>(header_.slot_capacity) * header_.record_bytes;
+		std::array<uint64_t, RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES / sizeof(uint64_t)> liveEntityIds{};
+		uint16_t actualLive = 0U;
+		for (uint16_t slot = 0U; slot < header_.slot_capacity; ++slot) {
+			const size_t offset = recordOffset(slot);
+			const uint64_t entityId = LittleEndianCodec::readU64(bytes_, entityIdOffset(slot));
+			if (!isLive(slot)) {
+				if (entityId != 0U || !std::all_of(bytes_.begin() + static_cast<std::ptrdiff_t>(offset),
+								 bytes_.begin() + static_cast<std::ptrdiff_t>(offset + header_.record_bytes),
+								 [](const std::byte value) { return value == std::byte{}; })) {
+					throwEntityPageError(FormatError::FERR_INVALID_HEADER,
+									 "relocatable Entity page view free slot retains identity or record bytes");
+				}
+				continue;
+			}
+			if (entityId == 0U || LittleEndianCodec::readU32(bytes_, slotGenerationOffset(slot)) == 0U) {
+				throwEntityPageError(FormatError::FERR_INVALID_HEADER,
+									 "relocatable Entity page view live slot has no identity or generation");
+			}
+			liveEntityIds[actualLive] = entityId;
+			++actualLive;
+		}
+		std::sort(liveEntityIds.begin(), liveEntityIds.begin() + actualLive);
+		const bool duplicateEntityId =
+				std::adjacent_find(liveEntityIds.begin(), liveEntityIds.begin() + actualLive) !=
+				liveEntityIds.begin() + actualLive;
+		const uint8_t unusedBits = static_cast<uint8_t>(header_.bitmap_bytes * 8U - header_.slot_capacity);
+		const uint8_t tailMask = unusedBits == 0U ? 0U : static_cast<uint8_t>(0xFFU << (8U - unusedBits));
+		const uint8_t invalid = static_cast<uint8_t>(actualLive != header_.live_count) |
+			static_cast<uint8_t>(duplicateEntityId) |
+				static_cast<uint8_t>(unusedBits != 0U &&
+									 (std::to_integer<uint8_t>(bytes_[bitmapOffset() + header_.bitmap_bytes - 1U]) & tailMask) != 0U) |
+				static_cast<uint8_t>(!std::all_of(bytes_.begin() + static_cast<std::ptrdiff_t>(recordAreaEnd), bytes_.end(),
+																				 [](const std::byte value) { return value == std::byte{}; }));
+		if (invalid != 0U) {
+			throwEntityPageError(FormatError::FERR_INVALID_HEADER,
+									 "relocatable Entity page view bitmap, counters, or trailing bytes are invalid");
+		}
+	}
+
+	void EntityPageReadView::validateLiveSlot(const uint16_t slot) const {
+		if (slot >= header_.slot_capacity || !isLive(slot)) {
+			throwEntityPageError(FormatError::FERR_INVALID_STATE,
+									 "relocatable Entity page view slot is unavailable");
+		}
+	}
+
+	void EntityPageReadView::validateSlotGeneration(const uint16_t slot, const uint32_t expectedSlotGeneration) const {
+		if (expectedSlotGeneration == 0U ||
+			LittleEndianCodec::readU32(bytes_, slotGenerationOffset(slot)) != expectedSlotGeneration) {
+			throwEntityPageError(FormatError::FERR_INVALID_STATE,
+									 "relocatable Entity page view slot generation is stale or unavailable");
+		}
+	}
+
+	size_t EntityPageReadView::bitmapOffset() const { return RSS_ENTITY_PAGE_HEADER_BYTES; }
+
+	size_t EntityPageReadView::slotGenerationOffset(const uint16_t slot) const {
+		return bitmapOffset() + header_.bitmap_bytes + static_cast<size_t>(slot) * sizeof(uint32_t);
+	}
+
+	size_t EntityPageReadView::entityIdOffset(const uint16_t slot) const {
+		return bitmapOffset() + header_.bitmap_bytes + static_cast<size_t>(header_.slot_capacity) * sizeof(uint32_t) +
+			   static_cast<size_t>(slot) * sizeof(uint64_t);
+	}
+
+	size_t EntityPageReadView::recordOffset(const uint16_t slot) const {
+		return bitmapOffset() + header_.bitmap_bytes + static_cast<size_t>(header_.slot_capacity) * sizeof(uint32_t) +
+				static_cast<size_t>(header_.slot_capacity) * sizeof(uint64_t) +
+				static_cast<size_t>(slot) * header_.record_bytes;
+	}
+
+	bool EntityPageReadView::isLive(const uint16_t slot) const {
+		const size_t byteOffset = bitmapOffset() + slot / 8U;
+		return (std::to_integer<uint8_t>(bytes_[byteOffset]) & static_cast<uint8_t>(1U << (slot % 8U))) != 0U;
+	}
+
 	EntityPage::EntityPage(std::vector<std::byte> bytes, EntityPageHeader header) :
 		bytes_(std::move(bytes)), header_(std::move(header)) {}
 
@@ -360,13 +574,23 @@ namespace graph::storage {
 		return page;
 	}
 
-	uint16_t EntityPage::insert(const NodeEntityRecord &record) {
+	uint16_t EntityPage::insert(const uint64_t entityId, const NodeEntityRecord &record) {
 		if (header_.record_kind != EntityPageRecordKind::EPRK_NODE) {
 			throwEntityPageError(FormatError::FERR_INVALID_STATE,
 								 "relocatable Entity page does not store Node records");
 		}
+		if (entityId == 0U) {
+			throwEntityPageError(FormatError::FERR_INVALID_HEADER,
+								 "relocatable Entity page insertion requires a nonzero Entity ID");
+		}
 		const NodeEntityRecordCodec::Bytes encoded = NodeEntityRecordCodec::encode(record);
 		validateLayout();
+		for (uint16_t slot = 0U; slot < header_.slot_capacity; ++slot) {
+			if (isLive(slot) && this->entityId(slot) == entityId) {
+				throwEntityPageError(FormatError::FERR_INVALID_STATE,
+									 "relocatable Entity page already stores the Entity ID");
+			}
+		}
 		for (uint16_t slot = 0U; slot < header_.slot_capacity; ++slot) {
 			if (!isLive(slot)) {
 				const uint32_t previous = LittleEndianCodec::readU32(bytes_, slotGenerationOffset(slot));
@@ -375,6 +599,7 @@ namespace graph::storage {
 										 "relocatable Entity page slot generation is exhausted");
 				}
 				std::copy(encoded.begin(), encoded.end(), bytes_.begin() + recordOffset(slot));
+				setEntityId(slot, entityId);
 				setSlotGeneration(slot, previous + 1U);
 				setLive(slot, true);
 				++header_.live_count;
@@ -385,13 +610,23 @@ namespace graph::storage {
 		throwEntityPageError(FormatError::FERR_INVALID_STATE, "relocatable Entity page has no free fixed-record slot");
 	}
 
-	uint16_t EntityPage::insert(const EdgeEntityRecord &record) {
+	uint16_t EntityPage::insert(const uint64_t entityId, const EdgeEntityRecord &record) {
 		if (header_.record_kind != EntityPageRecordKind::EPRK_EDGE) {
 			throwEntityPageError(FormatError::FERR_INVALID_STATE,
 								 "relocatable Entity page does not store Edge records");
 		}
+		if (entityId == 0U) {
+			throwEntityPageError(FormatError::FERR_INVALID_HEADER,
+								 "relocatable Entity page insertion requires a nonzero Entity ID");
+		}
 		const EdgeEntityRecordCodec::Bytes encoded = EdgeEntityRecordCodec::encode(record);
 		validateLayout();
+		for (uint16_t slot = 0U; slot < header_.slot_capacity; ++slot) {
+			if (isLive(slot) && this->entityId(slot) == entityId) {
+				throwEntityPageError(FormatError::FERR_INVALID_STATE,
+									 "relocatable Entity page already stores the Entity ID");
+			}
+		}
 		for (uint16_t slot = 0U; slot < header_.slot_capacity; ++slot) {
 			if (!isLive(slot)) {
 				const uint32_t previous = LittleEndianCodec::readU32(bytes_, slotGenerationOffset(slot));
@@ -400,6 +635,7 @@ namespace graph::storage {
 										 "relocatable Entity page slot generation is exhausted");
 				}
 				std::copy(encoded.begin(), encoded.end(), bytes_.begin() + recordOffset(slot));
+				setEntityId(slot, entityId);
 				setSlotGeneration(slot, previous + 1U);
 				setLive(slot, true);
 				++header_.live_count;
@@ -410,7 +646,7 @@ namespace graph::storage {
 		throwEntityPageError(FormatError::FERR_INVALID_STATE, "relocatable Entity page has no free fixed-record slot");
 	}
 
-	std::vector<uint16_t> EntityPage::insertEdges(std::span<const EdgeEntityRecord> records) {
+	std::vector<uint16_t> EntityPage::insertEdges(std::span<const IdentifiedEdgeEntityRecord> records) {
 		if (header_.record_kind != EntityPageRecordKind::EPRK_EDGE) {
 			throwEntityPageError(FormatError::FERR_INVALID_STATE,
 							 "relocatable Entity page does not store Edge records");
@@ -428,8 +664,25 @@ namespace graph::storage {
 		std::vector<uint16_t> slots;
 		encoded.reserve(records.size());
 		slots.reserve(records.size());
-		for (const EdgeEntityRecord &record: records) {
-			encoded.push_back(EdgeEntityRecordCodec::encode(record));
+		for (size_t index = 0U; index < records.size(); ++index) {
+			const IdentifiedEdgeEntityRecord &record = records[index];
+			if (record.entity_id == 0U) {
+				throwEntityPageError(FormatError::FERR_INVALID_HEADER,
+									 "relocatable Entity page batch requires nonzero Edge IDs");
+			}
+			for (size_t previous = 0U; previous < index; ++previous) {
+				if (records[previous].entity_id == record.entity_id) {
+					throwEntityPageError(FormatError::FERR_INVALID_HEADER,
+										 "relocatable Entity page batch contains duplicate Edge IDs");
+				}
+			}
+			for (uint16_t slot = 0U; slot < header_.slot_capacity; ++slot) {
+				if (isLive(slot) && entityId(slot) == record.entity_id) {
+					throwEntityPageError(FormatError::FERR_INVALID_STATE,
+										 "relocatable Entity page already stores a batched Edge ID");
+				}
+			}
+			encoded.push_back(EdgeEntityRecordCodec::encode(record.record));
 		}
 		for (uint16_t slot = 0U; slot < header_.slot_capacity && slots.size() < records.size(); ++slot) {
 			if (isLive(slot)) {
@@ -449,6 +702,7 @@ namespace graph::storage {
 			const uint16_t slot = slots[index];
 			const uint32_t previous = LittleEndianCodec::readU32(bytes_, slotGenerationOffset(slot));
 			std::copy(encoded[index].begin(), encoded[index].end(), bytes_.begin() + recordOffset(slot));
+			setEntityId(slot, records[index].entity_id);
 			setSlotGeneration(slot, previous + 1U);
 			setLive(slot, true);
 		}
@@ -480,6 +734,17 @@ namespace graph::storage {
 		return record;
 	}
 
+	std::optional<NodeEntityRecord> EntityPage::findNode(const uint16_t slot,
+													 const uint32_t expectedSlotGeneration,
+													 const uint64_t expectedEntityId) const {
+		const std::optional<NodeEntityRecord> record = findNode(slot, expectedSlotGeneration);
+		if (expectedEntityId == 0U || entityId(slot) != expectedEntityId) {
+			throwEntityPageError(FormatError::FERR_INVALID_STATE,
+								 "relocatable Entity Map references a Node slot owned by another Entity ID");
+		}
+		return record;
+	}
+
 	std::optional<EdgeEntityRecord> EntityPage::findEdge(uint16_t slot) const {
 		if (header_.record_kind != EntityPageRecordKind::EPRK_EDGE) {
 			throwEntityPageError(FormatError::FERR_INVALID_STATE,
@@ -502,8 +767,26 @@ namespace graph::storage {
 		return record;
 	}
 
+	std::optional<EdgeEntityRecord> EntityPage::findEdge(const uint16_t slot,
+													 const uint32_t expectedSlotGeneration,
+													 const uint64_t expectedEntityId) const {
+		const std::optional<EdgeEntityRecord> record = findEdge(slot, expectedSlotGeneration);
+		if (expectedEntityId == 0U || entityId(slot) != expectedEntityId) {
+			throwEntityPageError(FormatError::FERR_INVALID_STATE,
+								 "relocatable Entity Map references an Edge slot owned by another Entity ID");
+		}
+		return record;
+	}
+
+	uint64_t EntityPage::entityId(const uint16_t slot) const {
+		if (slot >= header_.slot_capacity) {
+			throwEntityPageError(FormatError::FERR_INVALID_HEADER,
+								 "relocatable Entity page slot is outside its capacity");
+		}
+		return LittleEndianCodec::readU64(bytes_, entityIdOffset(slot));
+	}
+
 	uint32_t EntityPage::slotGeneration(uint16_t slot) const {
-		validateLayout();
 		if (slot >= header_.slot_capacity) {
 			throwEntityPageError(FormatError::FERR_INVALID_HEADER,
 								 "relocatable Entity page slot is outside its capacity");
@@ -530,6 +813,18 @@ namespace graph::storage {
 		replace(slot, record);
 	}
 
+	void EntityPage::replace(const uint16_t slot, const uint32_t expectedSlotGeneration,
+								 const uint64_t expectedEntityId, const NodeEntityRecord &record) {
+		validateLayout();
+		validateLiveSlot(slot);
+		validateSlotGeneration(slot, expectedSlotGeneration);
+		if (expectedEntityId == 0U || entityId(slot) != expectedEntityId) {
+			throwEntityPageError(FormatError::FERR_INVALID_STATE,
+								 "relocatable Node replacement targets a slot owned by another Entity ID");
+		}
+		replace(slot, record);
+	}
+
 	void EntityPage::replace(uint16_t slot, const EdgeEntityRecord &record) {
 		if (header_.record_kind != EntityPageRecordKind::EPRK_EDGE) {
 			throwEntityPageError(FormatError::FERR_INVALID_STATE,
@@ -549,10 +844,23 @@ namespace graph::storage {
 		replace(slot, record);
 	}
 
+	void EntityPage::replace(const uint16_t slot, const uint32_t expectedSlotGeneration,
+								 const uint64_t expectedEntityId, const EdgeEntityRecord &record) {
+		validateLayout();
+		validateLiveSlot(slot);
+		validateSlotGeneration(slot, expectedSlotGeneration);
+		if (expectedEntityId == 0U || entityId(slot) != expectedEntityId) {
+			throwEntityPageError(FormatError::FERR_INVALID_STATE,
+								 "relocatable Edge replacement targets a slot owned by another Entity ID");
+		}
+		replace(slot, record);
+	}
+
 	void EntityPage::erase(uint16_t slot) {
 		validateLayout();
 		validateLiveSlot(slot);
 		std::fill_n(bytes_.begin() + recordOffset(slot), header_.record_bytes, std::byte{});
+		setEntityId(slot, 0U);
 		setLive(slot, false);
 		--header_.live_count;
 		refreshChecksums();
@@ -565,6 +873,18 @@ namespace graph::storage {
 		erase(slot);
 	}
 
+	void EntityPage::erase(const uint16_t slot, const uint32_t expectedSlotGeneration,
+							   const uint64_t expectedEntityId) {
+		validateLayout();
+		validateLiveSlot(slot);
+		validateSlotGeneration(slot, expectedSlotGeneration);
+		if (expectedEntityId == 0U || entityId(slot) != expectedEntityId) {
+			throwEntityPageError(FormatError::FERR_INVALID_STATE,
+								 "relocatable Entity erase targets a slot owned by another Entity ID");
+		}
+		erase(slot);
+	}
+
 	std::vector<std::byte> EntityPage::serialize() const {
 		validateLayout();
 		return bytes_;
@@ -572,24 +892,27 @@ namespace graph::storage {
 
 	void EntityPage::validateLayout() const {
 		validateHeader(header_);
-		const size_t recordAreaStart =
-				bitmapOffset() + header_.bitmap_bytes + static_cast<size_t>(header_.slot_capacity) * sizeof(uint32_t);
+		const size_t recordAreaStart = bitmapOffset() + header_.bitmap_bytes +
+									   static_cast<size_t>(header_.slot_capacity) * sizeof(uint32_t) +
+									   static_cast<size_t>(header_.slot_capacity) * sizeof(uint64_t);
 		const size_t recordAreaEnd =
 				recordAreaStart + static_cast<size_t>(header_.slot_capacity) * header_.record_bytes;
+		std::array<uint64_t, RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES / sizeof(uint64_t)> liveEntityIds{};
 		uint16_t actualLive = 0U;
 		for (uint16_t slot = 0U; slot < header_.slot_capacity; ++slot) {
 			const size_t offset = recordOffset(slot);
+			const uint64_t entityId = LittleEndianCodec::readU64(bytes_, entityIdOffset(slot));
 			if (!isLive(slot)) {
-				if (!std::all_of(bytes_.begin() + offset, bytes_.begin() + offset + header_.record_bytes,
+				if (entityId != 0U || !std::all_of(bytes_.begin() + offset, bytes_.begin() + offset + header_.record_bytes,
 								 [](std::byte value) { return value == std::byte{}; })) {
 					throwEntityPageError(FormatError::FERR_INVALID_HEADER,
-										 "relocatable Entity page free slot retains record bytes");
+									 "relocatable Entity page free slot retains identity or record bytes");
 				}
 				continue;
 			}
-			if (LittleEndianCodec::readU32(bytes_, slotGenerationOffset(slot)) == 0U) {
+			if (entityId == 0U || LittleEndianCodec::readU32(bytes_, slotGenerationOffset(slot)) == 0U) {
 				throwEntityPageError(FormatError::FERR_INVALID_HEADER,
-									 "relocatable Entity page live slot has no generation");
+									 "relocatable Entity page live slot has no identity or generation");
 			}
 			if (header_.record_kind == EntityPageRecordKind::EPRK_NODE) {
 				static_cast<void>(
@@ -598,12 +921,18 @@ namespace graph::storage {
 				static_cast<void>(
 						EdgeEntityRecordCodec::decode(std::span(bytes_).subspan(offset, header_.record_bytes)));
 			}
+			liveEntityIds[actualLive] = entityId;
 			++actualLive;
 		}
+		std::sort(liveEntityIds.begin(), liveEntityIds.begin() + actualLive);
+		const bool duplicateEntityId =
+				std::adjacent_find(liveEntityIds.begin(), liveEntityIds.begin() + actualLive) !=
+				liveEntityIds.begin() + actualLive;
 		const uint8_t unusedBits = static_cast<uint8_t>(header_.bitmap_bytes * 8U - header_.slot_capacity);
 		const uint8_t tailMask = unusedBits == 0U ? 0U : static_cast<uint8_t>(0xFFU << (8U - unusedBits));
 		const uint8_t invalid =
 				static_cast<uint8_t>(actualLive != header_.live_count) |
+				static_cast<uint8_t>(duplicateEntityId) |
 				static_cast<uint8_t>(unusedBits != 0U &&
 									 (std::to_integer<uint8_t>(bytes_[bitmapOffset() + header_.bitmap_bytes - 1U]) &
 									  tailMask) != 0U) |
@@ -635,8 +964,14 @@ namespace graph::storage {
 		return bitmapOffset() + header_.bitmap_bytes + static_cast<size_t>(slot) * sizeof(uint32_t);
 	}
 
+	size_t EntityPage::entityIdOffset(const uint16_t slot) const {
+		return bitmapOffset() + header_.bitmap_bytes + static_cast<size_t>(header_.slot_capacity) * sizeof(uint32_t) +
+			   static_cast<size_t>(slot) * sizeof(uint64_t);
+	}
+
 	size_t EntityPage::recordOffset(uint16_t slot) const {
 		return bitmapOffset() + header_.bitmap_bytes + static_cast<size_t>(header_.slot_capacity) * sizeof(uint32_t) +
+			   static_cast<size_t>(header_.slot_capacity) * sizeof(uint64_t) +
 			   static_cast<size_t>(slot) * header_.record_bytes;
 	}
 
@@ -654,6 +989,10 @@ namespace graph::storage {
 
 	void EntityPage::setSlotGeneration(uint16_t slot, uint32_t generation) {
 		LittleEndianCodec::writeU32(bytes_, slotGenerationOffset(slot), generation);
+	}
+
+	void EntityPage::setEntityId(const uint16_t slot, const uint64_t entityId) {
+		LittleEndianCodec::writeU64(bytes_, entityIdOffset(slot), entityId);
 	}
 
 	void EntityPage::refreshChecksums() {

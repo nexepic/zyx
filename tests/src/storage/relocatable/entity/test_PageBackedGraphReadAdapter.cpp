@@ -6,6 +6,7 @@
  * @license Apache-2.0
  **/
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <filesystem>
@@ -126,14 +127,45 @@ namespace {
 			}
 		}
 
+		[[nodiscard]] std::optional<uint32_t> resolvePropertyToken(const MetadataSnapshotPin &,
+																		 std::string_view name) const override {
+			++property_token_resolutions_;
+			if (name == "name") {
+				return 3U;
+			}
+			if (name == "age") {
+				return 5U;
+			}
+			if (name == "weight") {
+				return 7U;
+			}
+			return std::nullopt;
+		}
+
+		[[nodiscard]] std::optional<uint64_t> resolveNodeLabelName(const MetadataSnapshotPin &,
+																		 std::string_view name) const override {
+			++node_label_token_resolutions_;
+			if (name == "Person") {
+				return 7U;
+			}
+			if (name == "VIP") {
+				return 9U;
+			}
+			return std::nullopt;
+		}
+
 		[[nodiscard]] uint64_t relationshipTypeResolutionCount() const { return relationship_type_resolutions_; }
 		[[nodiscard]] uint64_t propertyKeyResolutionCount() const { return property_key_resolutions_; }
+		[[nodiscard]] uint64_t propertyTokenResolutionCount() const { return property_token_resolutions_; }
+		[[nodiscard]] uint64_t nodeLabelTokenResolutionCount() const { return node_label_token_resolutions_; }
 
 	private:
 		bool duplicate_labels_ = false;
 		mutable uint64_t node_label_resolutions_ = 0U;
 		mutable uint64_t relationship_type_resolutions_ = 0U;
 		mutable uint64_t property_key_resolutions_ = 0U;
+		mutable uint64_t property_token_resolutions_ = 0U;
+		mutable uint64_t node_label_token_resolutions_ = 0U;
 	};
 
 } // namespace
@@ -141,6 +173,125 @@ namespace {
 TEST(PageBackedGraphNameResolverContractTest, SupportsVirtualDestructionThroughThePublicInterface) {
 	std::unique_ptr<PageBackedGraphNameResolver> resolver = std::make_unique<TestPageBackedGraphNameResolver>();
 	EXPECT_NE(resolver, nullptr);
+}
+
+TEST(NativeReadSessionTest, KeepsTokenNamesBoundedAndReplacesExistingNames) {
+	NativeReadSession session;
+	using TokenKind = NativeReadSession::TokenNameKind;
+	for (uint64_t tokenId = 1U; tokenId <= NativeReadSession::MAXIMUM_CACHED_TOKEN_NAMES; ++tokenId) {
+		session.putTokenName(TokenKind::TNK_PROPERTY_KEY, tokenId, "key" + std::to_string(tokenId));
+	}
+	ASSERT_EQ(session.tokenName(TokenKind::TNK_PROPERTY_KEY, 1U), std::optional<std::string>{"key1"});
+	session.putTokenName(TokenKind::TNK_PROPERTY_KEY, 1U, "replacement");
+	EXPECT_EQ(session.tokenName(TokenKind::TNK_PROPERTY_KEY, 1U), std::optional<std::string>{"replacement"});
+	session.putTokenName(TokenKind::TNK_NODE_LABEL, 1U, "Person");
+	EXPECT_EQ(session.tokenName(TokenKind::TNK_NODE_LABEL, 1U), std::optional<std::string>{"Person"});
+	session.putTokenName(TokenKind::TNK_PROPERTY_KEY, NativeReadSession::MAXIMUM_CACHED_TOKEN_NAMES + 1U,
+						 "overflow");
+	EXPECT_FALSE(session.tokenName(TokenKind::TNK_PROPERTY_KEY, 1U).has_value());
+	EXPECT_FALSE(session.propertyToken("name").has_value());
+	session.putPropertyToken("name", 3U);
+	ASSERT_TRUE(session.propertyToken("name").has_value());
+	EXPECT_EQ(*session.propertyToken("name"), std::optional<uint32_t>{3U});
+	session.putPropertyToken("unknown", std::nullopt);
+	ASSERT_TRUE(session.propertyToken("unknown").has_value());
+	EXPECT_FALSE(session.propertyToken("unknown")->has_value());
+	session.putNodeLabelToken("Person", 7U);
+	ASSERT_TRUE(session.nodeLabelToken("Person").has_value());
+	EXPECT_EQ(*session.nodeLabelToken("Person"), std::optional<uint64_t>{7U});
+	session.putNodeLabelToken("Unknown", std::nullopt);
+	ASSERT_TRUE(session.nodeLabelToken("Unknown").has_value());
+	EXPECT_FALSE(session.nodeLabelToken("Unknown")->has_value());
+	EXPECT_THROW(session.putPropertyToken("", 3U), std::invalid_argument);
+	EXPECT_THROW(session.putPropertyToken("invalid", 0U), std::invalid_argument);
+	EXPECT_THROW(session.putNodeLabelToken("", 7U), std::invalid_argument);
+	EXPECT_THROW(session.putNodeLabelToken("invalid", 0U), std::invalid_argument);
+	EXPECT_THROW(session.putTokenName(TokenKind::TNK_PROPERTY_KEY, 0U, "invalid"), std::invalid_argument);
+	EXPECT_THROW(session.putTokenName(TokenKind::TNK_PROPERTY_KEY, 1U, ""), std::invalid_argument);
+}
+
+TEST(NativeReadSessionTest, KeepsNodeLabelTokenSetsBoundedAndReplacesExistingSets) {
+	NativeReadSession session;
+	EXPECT_FALSE(session.nodeLabels(17U).has_value());
+	session.putNodeLabels(17U, {3U, 9U});
+	ASSERT_TRUE(session.nodeLabels(17U).has_value());
+	EXPECT_EQ(*session.nodeLabels(17U), (std::vector<uint64_t>{3U, 9U}));
+	session.putNodeLabels(17U, {5U});
+	EXPECT_EQ(*session.nodeLabels(17U), (std::vector<uint64_t>{5U}));
+	EXPECT_THROW(session.putNodeLabels(0U, {}), std::invalid_argument);
+	EXPECT_THROW(session.putNodeLabels(17U, {9U, 3U}), std::invalid_argument);
+}
+
+TEST(NativeReadSessionTest, CachesRelationshipTypeTokenHitsAndMissesWithTheTokenBound) {
+	NativeReadSession session;
+	EXPECT_FALSE(session.relationshipTypeToken("KNOWS").has_value());
+	session.putRelationshipTypeToken("KNOWS", 11U);
+	session.putRelationshipTypeToken("MISSING", std::nullopt);
+	ASSERT_TRUE(session.relationshipTypeToken("KNOWS").has_value());
+	EXPECT_EQ(*session.relationshipTypeToken("KNOWS"), std::optional<uint64_t>{11U});
+	ASSERT_TRUE(session.relationshipTypeToken("MISSING").has_value());
+	EXPECT_FALSE(session.relationshipTypeToken("MISSING")->has_value());
+	EXPECT_THROW(session.putRelationshipTypeToken("", 1U), std::invalid_argument);
+	EXPECT_THROW(session.putRelationshipTypeToken("invalid", 0U), std::invalid_argument);
+	for (size_t index = 0U; index < NativeReadSession::MAXIMUM_CACHED_TOKEN_NAMES; ++index) {
+		session.putRelationshipTypeToken("type" + std::to_string(index), index + 1U);
+	}
+	session.putRelationshipTypeToken("replacement", 99U);
+	EXPECT_FALSE(session.relationshipTypeToken("KNOWS").has_value());
+}
+
+TEST(NativeReadSessionTest, KeepsSelectedPropertyValuesAndMissingFieldsBounded) {
+	NativeReadSession session;
+	EXPECT_FALSE(session.property(false, 11U, 3U).has_value());
+	session.putProperty(false, 11U, 3U, graph::PropertyValue(int64_t{42}));
+	session.putProperty(true, 11U, 3U, std::nullopt);
+	ASSERT_TRUE(session.property(false, 11U, 3U).has_value());
+	ASSERT_TRUE(session.property(false, 11U, 3U)->has_value());
+	EXPECT_EQ(**session.property(false, 11U, 3U), graph::PropertyValue(int64_t{42}));
+	ASSERT_TRUE(session.property(true, 11U, 3U).has_value());
+	EXPECT_FALSE(session.property(true, 11U, 3U)->has_value());
+	EXPECT_THROW(session.putProperty(false, 0U, 3U, std::nullopt), std::invalid_argument);
+	EXPECT_THROW(session.putProperty(false, 11U, 0U, std::nullopt), std::invalid_argument);
+}
+
+TEST(NativeReadSessionTest, CachesPresentAndAbsentNodeExistenceWithTheEntityBound) {
+	NativeReadSession session;
+	EXPECT_FALSE(session.nodeExists(41U).has_value());
+	session.putNodeExists(41U, true);
+	session.putNodeExists(42U, false);
+	EXPECT_EQ(session.nodeExists(41U), std::optional<bool>{true});
+	EXPECT_EQ(session.nodeExists(42U), std::optional<bool>{false});
+	session.putNodeExists(41U, false);
+	EXPECT_EQ(session.nodeExists(41U), std::optional<bool>{false});
+	for (uint64_t id = 1U; id <= NativeReadSession::MAXIMUM_CACHED_ENTITY_RECORDS; ++id) {
+		session.putNodeExists(1000U + id, true);
+	}
+	session.putNodeExists(2000U, true);
+	EXPECT_FALSE(session.nodeExists(1001U).has_value());
+	EXPECT_EQ(session.nodeExists(2000U), std::optional<bool>{true});
+	EXPECT_THROW(session.putNodeExists(0U, true), std::invalid_argument);
+}
+
+TEST(NativeReadSessionTest, DoesNotRetainPropertyValuesOverTheByteBudget) {
+	NativeReadSession session;
+	graph::PropertyValue::Bytes bytes(NativeReadSession::MAXIMUM_CACHED_PROPERTY_BYTES + 1U);
+	session.putProperty(false, 11U, 3U, graph::PropertyValue(std::move(bytes)));
+	EXPECT_FALSE(session.property(false, 11U, 3U).has_value());
+
+	session.putProperty(false, 11U, 3U, graph::PropertyValue(int64_t{7}));
+	ASSERT_TRUE(session.property(false, 11U, 3U).has_value());
+	ASSERT_TRUE(session.property(false, 11U, 3U)->has_value());
+	EXPECT_EQ(**session.property(false, 11U, 3U), graph::PropertyValue(int64_t{7}));
+
+	graph::PropertyValue::Bytes nestedBytes(NativeReadSession::MAXIMUM_CACHED_PROPERTY_BYTES + 1U);
+	graph::PropertyValue nestedList(std::vector<graph::PropertyValue>{graph::PropertyValue(std::move(nestedBytes))});
+	session.putProperty(false, 11U, 4U, std::move(nestedList));
+	EXPECT_FALSE(session.property(false, 11U, 4U).has_value());
+	graph::PropertyValue::MapType nestedMap;
+	nestedMap.emplace("payload", graph::PropertyValue(graph::PropertyValue::Bytes(
+			NativeReadSession::MAXIMUM_CACHED_PROPERTY_BYTES + 1U)));
+	session.putProperty(false, 11U, 5U, graph::PropertyValue(std::move(nestedMap)));
+	EXPECT_FALSE(session.property(false, 11U, 5U).has_value());
 }
 
 class PageBackedGraphReadAdapterTest : public ::testing::Test {
@@ -192,6 +343,11 @@ TEST_F(PageBackedGraphReadAdapterTest, ResolvesLogicalIdentityAndCompleteOverflo
 	EXPECT_EQ(adapter.readNode(before, 1001U), (PageBackedGraphNode{1001U, {7U, 9U, 11U}, {}}));
 	MetadataSnapshotPin current = metadata->openSnapshot();
 	EXPECT_EQ(adapter.readNode(current, 1001U), (PageBackedGraphNode{1001U, overflowLabels, {}}));
+	const std::array<uint64_t, 1U> orderedNodeIds{1001U};
+	EXPECT_EQ(adapter.readNodeLabelTokensSorted(current, orderedNodeIds),
+			  (std::vector<std::vector<uint64_t>>{overflowLabels}));
+	EXPECT_THROW(static_cast<void>(adapter.readNodeLabelTokensSorted(
+			current, std::array<uint64_t, 2U>{1001U, 1001U})), std::exception);
 	before.release();
 	current.release();
 }
@@ -226,8 +382,11 @@ TEST_F(PageBackedGraphReadAdapterTest, ReadsOwnerKeyedPropertiesAndPreservesAnOl
 	ASSERT_TRUE(
 			entities.allocateNode(nodePool(33U, 903U, 301U, 42U), 1001U, node({7U, 0U, 0U}, 1U), LogSequenceNumber(2U))
 					.has_value());
-	const EdgeEntityRecord edge{1001U, 1002U, 41U};
-	ASSERT_TRUE(entities.allocateEdge(nodePool(34U, 904U, 302U, 43U), 2001U, edge, LogSequenceNumber(3U)).has_value());
+	ASSERT_TRUE(
+			entities.allocateNode(nodePool(35U, 905U, 303U, 44U), 1002U, node({0U, 0U, 0U}, 0U), LogSequenceNumber(3U))
+					.has_value());
+		const EdgeEntityRecord edge{1001U, 1002U, 41U};
+	ASSERT_TRUE(entities.allocateEdge(nodePool(34U, 904U, 302U, 43U), 2001U, edge, LogSequenceNumber(4U)).has_value());
 	SlottedPagePool slottedPages(io, *metadata);
 	EntityLabelSetStore labels(io, *metadata, slottedPages);
 	PropertyCollectionRootStore properties(slottedPages, *metadata);
@@ -245,21 +404,298 @@ TEST_F(PageBackedGraphReadAdapterTest, ReadsOwnerKeyedPropertiesAndPreservesAnOl
 	const std::vector<PropertyCollectionRootEntry> nodeProperties{{3U, graph::PropertyValue("alpha")},
 																  {5U, graph::PropertyValue(int64_t(42))}};
 	const std::vector<PropertyCollectionRootEntry> edgeProperties{{7U, graph::PropertyValue(true)}};
+	const std::vector<PropertyCollectionRootEntry> secondNodeProperties{{3U, graph::PropertyValue("beta")}};
 	const std::array roots{propertyRoot(1001U, graph::Node::typeId, nodeProperties),
-						   propertyRoot(2001U, graph::Edge::typeId, edgeProperties)};
+							propertyRoot(1002U, graph::Node::typeId, secondNodeProperties),
+							propertyRoot(2001U, graph::Edge::typeId, edgeProperties)};
 	static_cast<void>(test::publishPropertyRoots(entities, properties, *metadata, roots, propertyOptions()));
 
 	MetadataSnapshotPin current = metadata->openSnapshot();
 	EXPECT_EQ(adapter.readNode(current, 1001U).properties, nodeProperties);
 	EXPECT_EQ(adapter.readEdge(current, 2001U).properties, edgeProperties);
+	NativeReadSession selectedSession;
+	EXPECT_EQ(logical.readNodeProperty(current, 1001U, "name", &selectedSession), graph::PropertyValue("alpha"));
+	EXPECT_EQ(logical.readNodeProperty(current, 1001U, "name", &selectedSession), graph::PropertyValue("alpha"));
+	EXPECT_EQ(logical.readNodeProperty(current, 1001U, "age", &selectedSession), graph::PropertyValue(int64_t(42)));
+	EXPECT_EQ(logical.readNodeProperty(current, 1001U, "missing", &selectedSession), graph::PropertyValue());
+	EXPECT_EQ(logical.readNodeProperty(current, 1001U, "missing", &selectedSession), graph::PropertyValue());
+	EXPECT_EQ(logical.readEdgeProperty(current, 2001U, "weight", &selectedSession), graph::PropertyValue(true));
+	const std::array<uint64_t, 1U> nodeIds{1001U};
+	const std::array<uint64_t, 1U> edgeIds{2001U};
+	EXPECT_EQ(adapter.readNodePropertiesSorted(current, nodeIds, 3U),
+				  (std::vector<std::optional<graph::PropertyValue>>{graph::PropertyValue("alpha")}));
+		const std::array<uint64_t, 2U> bulkNodeIds{1001U, 1002U};
+		const auto bulkNodeProperties = adapter.readNodePropertiesSorted(current, bulkNodeIds);
+		ASSERT_EQ(bulkNodeProperties.size(), bulkNodeIds.size());
+		EXPECT_EQ(bulkNodeProperties[0], nodeProperties);
+		EXPECT_EQ(bulkNodeProperties[1], secondNodeProperties);
+		EXPECT_THROW(static_cast<void>(adapter.readNodePropertiesSorted(current, std::array<uint64_t, 2U>{1002U, 1001U})),
+					 std::exception);
+	EXPECT_EQ(logical.readNodePropertiesSorted(current, nodeIds, "name", &selectedSession),
+			  (std::vector<graph::PropertyValue>{graph::PropertyValue("alpha")}));
+	EXPECT_EQ(adapter.readEdgePropertiesSorted(current, edgeIds, 7U),
+			  (std::vector<std::optional<graph::PropertyValue>>{graph::PropertyValue(true)}));
+	EXPECT_EQ(logical.readEdgePropertiesSorted(current, edgeIds, "weight", &selectedSession),
+			  (std::vector<graph::PropertyValue>{graph::PropertyValue(true)}));
+	const LogicalGraphNode shapedNode = logical.readNodeShaped(
+			current, 1001U, EntityReadShape{.include_labels = true, .property_tokens = {3U}}, &selectedSession);
+	EXPECT_EQ(shapedNode.labels, (std::vector<std::string>{"Person"}));
+	ASSERT_EQ(shapedNode.properties.size(), 1U);
+	EXPECT_EQ(shapedNode.properties.front().key, "name");
+	EXPECT_EQ(shapedNode.properties.front().value, graph::PropertyValue("alpha"));
+	const LogicalGraphEdge shapedEdge = logical.readEdgeShaped(
+			current, 2001U, EntityReadShape{.include_type = true, .property_tokens = {7U}}, &selectedSession);
+	EXPECT_EQ(shapedEdge.type, "KNOWS");
+	ASSERT_EQ(shapedEdge.properties.size(), 1U);
+	EXPECT_EQ(shapedEdge.properties.front().key, "weight");
+	EXPECT_EQ(shapedEdge.properties.front().value, graph::PropertyValue(true));
+	NativeReadSession shapedSession;
+	const bool traceWasEnabled = graph::debug::PerfTrace::isEnabled();
+	const bool valuesWereEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::setEnabled(true);
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	graph::debug::PerfTrace::reset();
+	const EntityRef shapedNodeRef = logical.readNodeRef(
+			current, 1001U, EntityReadShape{.include_labels = true, .property_tokens = {3U}}, &shapedSession);
+	EXPECT_EQ(shapedNodeRef, (EntityRef{1001U, false, 0U, 0U, 0U}));
+	EXPECT_EQ(logical.readNodeProperty(current, 1001U, "name", &shapedSession), graph::PropertyValue("alpha"));
+	const EntityRef shapedEdgeRef = logical.readEdgeRef(
+			current, 2001U, EntityReadShape{.include_type = true, .property_tokens = {7U}}, &shapedSession);
+	EXPECT_EQ(shapedEdgeRef.type_token, 41U);
+	EXPECT_EQ(logical.readEdgeProperty(current, 2001U, "weight", &shapedSession), graph::PropertyValue(true));
+	const graph::debug::PerfTrace::Snapshot prefetchTrace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
+	graph::debug::PerfTrace::setEnabled(traceWasEnabled);
+	ASSERT_TRUE(prefetchTrace.contains("native_graph.read.property_selected_decode"));
+	EXPECT_EQ(prefetchTrace.at("native_graph.read.property_selected_decode").totalValue, 2);
+	EXPECT_EQ(names.propertyTokenResolutionCount(), 6U);
+	EXPECT_TRUE(logical.nodeHasLabels(current, 1001U, {"Person"}, &selectedSession));
+	EXPECT_TRUE(logical.nodeHasLabels(current, 1001U, {"Person"}, &selectedSession));
+	EXPECT_FALSE(logical.nodeHasLabels(current, 1001U, {"Missing"}, &selectedSession));
+	EXPECT_FALSE(logical.nodeHasLabels(current, 1001U, {"Missing"}, &selectedSession));
+	EXPECT_EQ(names.nodeLabelTokenResolutionCount(), 2U);
 	EXPECT_EQ(logical.readEdge(current, 2001U).type, "KNOWS");
 	// A new metadata generation cannot reuse a logical-name cache entry from
 	// the earlier pinned snapshot, even when the durable token name is unchanged.
-	EXPECT_EQ(names.relationshipTypeResolutionCount(), 2U);
+	EXPECT_EQ(names.relationshipTypeResolutionCount(), 4U);
 	EXPECT_TRUE(adapter.readNode(before, 1001U).properties.empty());
 	EXPECT_TRUE(adapter.readEdge(before, 2001U).properties.empty());
+	// `all_properties` must not implicitly widen the logical shape.  Callers
+	// that need only properties can omit labels/type while still receiving the
+	// complete owner-keyed Property set.
+	const LogicalGraphNode propertyOnlyNode = logical.readNodeShaped(
+			current, 1001U, EntityReadShape{.all_properties = true}, &shapedSession);
+	EXPECT_TRUE(propertyOnlyNode.labels.empty());
+	EXPECT_EQ(propertyOnlyNode.properties.size(), 2U);
+	const LogicalGraphEdge propertyOnlyEdge = logical.readEdgeShaped(
+			current, 2001U, EntityReadShape{.all_properties = true}, &shapedSession);
+	EXPECT_TRUE(propertyOnlyEdge.type.empty());
+	EXPECT_EQ(propertyOnlyEdge.properties.size(), 1U);
 	before.release();
 	current.release();
+}
+
+TEST_F(PageBackedGraphReadAdapterTest, ReusesNodeLabelsWithinOneReadSession) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore entities(io, *metadata);
+	ASSERT_TRUE(entities.allocateNode(nodePool(35U, 905U, 501U, 44U), 1001U, node({7U, 9U, 0U}, 2U),
+																				 LogSequenceNumber(2U))
+							.has_value());
+	SlottedPagePool slottedPages(io, *metadata);
+	EntityLabelSetStore labels(io, *metadata, slottedPages);
+	PropertyCollectionRootStore properties(slottedPages, *metadata);
+	BTreePageStore trees(slottedPages, *metadata);
+	PageBackedGraphReadAdapter adapter(*metadata, entities, labels, properties, trees);
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	NativeReadSession session;
+	const std::array<uint64_t, 1U> nodeIds{1001U};
+	const std::array<uint64_t, 1U> requiredLabels{7U};
+	// A prior label-only lookup must not be treated as an authenticated entity
+	// record when the shaped batch still needs the Node payload.
+	session.putNodeLabels(1001U, {7U, 9U});
+	const bool valuesWereEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	graph::debug::PerfTrace::reset();
+	EXPECT_EQ(adapter.readNodeLabelMatchesSorted(snapshot, nodeIds, requiredLabels, &session),
+			  (std::vector<bool>{true}));
+	const auto first = graph::debug::PerfTrace::snapshotAndReset();
+	EXPECT_EQ(first.at("native_graph.read.node_sorted_batch_calls").totalValue, 1);
+	EXPECT_EQ(adapter.readNodeLabelMatchesSorted(snapshot, nodeIds, requiredLabels, &session),
+			  (std::vector<bool>{true}));
+	const auto second = graph::debug::PerfTrace::snapshotAndReset();
+	EXPECT_FALSE(second.contains("native_graph.read.node_sorted_batch_calls"));
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
+	snapshot.release();
+}
+
+TEST_F(PageBackedGraphReadAdapterTest, ReadsStrictlyOrderedShapedEntityBatchesThroughOneSession) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore entities(io, *metadata);
+	ASSERT_TRUE(entities.allocateNode(nodePool(36U, 906U, 601U, 45U), 1001U, node({7U, 0U, 0U}, 1U),
+																 LogSequenceNumber(2U))
+							.has_value());
+	ASSERT_TRUE(entities.allocateNode(nodePool(37U, 907U, 602U, 46U), 1002U, node({9U, 0U, 0U}, 1U),
+																 LogSequenceNumber(3U))
+							.has_value());
+		ASSERT_TRUE(entities.allocateEdge(nodePool(38U, 908U, 603U, 47U), 2001U,
+															 EdgeEntityRecord{1001U, 1002U, 41U}, LogSequenceNumber(4U))
+							.has_value());
+		SlottedPagePool slottedPages(io, *metadata);
+		EntityLabelSetStore labels(io, *metadata, slottedPages);
+		PropertyCollectionRootStore properties(slottedPages, *metadata);
+		BTreePageStore trees(slottedPages, *metadata);
+		PageBackedGraphReadAdapter pages(*metadata, entities, labels, properties, trees);
+		TestPageBackedGraphNameResolver names;
+		PageBackedLogicalGraphReadAdapter logical(pages, names);
+		MetadataSnapshotPin snapshot = metadata->openSnapshot();
+		NativeReadSession session;
+		const std::array<uint64_t, 2U> nodeIds{1001U, 1002U};
+		const std::vector<LogicalGraphNode> nodes = logical.readNodesShapedSorted(
+				snapshot, nodeIds, EntityReadShape{.include_labels = true}, &session);
+		ASSERT_EQ(nodes.size(), 2U);
+		EXPECT_EQ(nodes[0].node_id, 1001U);
+		EXPECT_EQ(nodes[0].labels, (std::vector<std::string>{"Person"}));
+		EXPECT_EQ(nodes[1].node_id, 1002U);
+		EXPECT_EQ(nodes[1].labels, (std::vector<std::string>{"VIP"}));
+		const std::array<uint64_t, 1U> edgeIds{2001U};
+		const std::vector<LogicalGraphEdge> edges = logical.readEdgesShapedSorted(
+				snapshot, edgeIds, EntityReadShape{.include_type = true}, &session);
+		ASSERT_EQ(edges.size(), 1U);
+		EXPECT_EQ(edges.front(), (LogicalGraphEdge{2001U, 1001U, 1002U, "KNOWS", {}}));
+		EXPECT_THROW(static_cast<void>(logical.readNodesShapedSorted(
+				snapshot, std::array<uint64_t, 2U>{1002U, 1001U}, EntityReadShape{}, &session)),
+					 std::exception);
+	snapshot.release();
+}
+
+TEST_F(PageBackedGraphReadAdapterTest, PreservesShapedBatchResultsBeyondSessionEntityCacheCapacity) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore entities(io, *metadata);
+	constexpr uint64_t FIRST_NODE_ID = 10'001U;
+	constexpr size_t NODE_COUNT = NativeReadSession::MAXIMUM_CACHED_ENTITY_RECORDS + 1U;
+	// A native Entity page has a bounded fixed-record capacity. Build three pages
+	// with one batch mutation each so the read request spans more entries than the
+	// session cache can retain.
+	constexpr size_t FIRST_PAGE_NODES = 60U;
+	constexpr size_t SECOND_PAGE_NODES = 60U;
+	const auto allocate = [&](uint64_t nodeId, uint64_t segmentId, uint64_t pageId, uint64_t slot,
+							 LogSequenceNumber lsn) {
+		return entities.allocateNode(nodePool(segmentId, 5'000U + segmentId, pageId, slot), nodeId,
+								 node({0U, 0U, 0U}, 0U), lsn);
+	};
+	ASSERT_TRUE(allocate(FIRST_NODE_ID, 1'001U, 20'001U, 1'001U, LogSequenceNumber(2U)).has_value());
+	MetadataSnapshotPin firstSnapshot = metadata->openSnapshot();
+	std::vector<EntityPageNodeInsertion> firstInsertions;
+	firstInsertions.reserve(FIRST_PAGE_NODES - 1U);
+	for (size_t index = 1U; index < FIRST_PAGE_NODES; ++index) {
+		firstInsertions.push_back({FIRST_NODE_ID + index, node({0U, 0U, 0U}, 0U)});
+	}
+	const std::array<EntityPageBatchMutation, 1U> firstMutation{{
+		{PageId(20'001U), EntityPageRecordKind::EPRK_NODE, {}, std::move(firstInsertions), {}, {}, {}, {}, {}, {}}}};
+	const EntityPageBatchResult firstResult = entities.applyBatch(firstSnapshot, firstMutation, LogSequenceNumber(3U));
+	firstSnapshot.release();
+	ASSERT_FALSE(firstResult.pages.empty());
+
+	ASSERT_TRUE(allocate(FIRST_NODE_ID + FIRST_PAGE_NODES, 1'002U, 20'002U, 1'002U, LogSequenceNumber(4U)).has_value());
+	MetadataSnapshotPin secondSnapshot = metadata->openSnapshot();
+	std::vector<EntityPageNodeInsertion> secondInsertions;
+	secondInsertions.reserve(SECOND_PAGE_NODES - 1U);
+	for (size_t index = 1U; index < SECOND_PAGE_NODES; ++index) {
+		secondInsertions.push_back({FIRST_NODE_ID + FIRST_PAGE_NODES + index, node({0U, 0U, 0U}, 0U)});
+	}
+	const std::array<EntityPageBatchMutation, 1U> secondMutation{{
+		{PageId(20'002U), EntityPageRecordKind::EPRK_NODE, {}, std::move(secondInsertions), {}, {}, {}, {}, {}, {}}}};
+	const EntityPageBatchResult secondResult = entities.applyBatch(secondSnapshot, secondMutation, LogSequenceNumber(5U));
+	secondSnapshot.release();
+	ASSERT_FALSE(secondResult.pages.empty());
+
+	const uint64_t thirdNodeId = FIRST_NODE_ID + FIRST_PAGE_NODES + SECOND_PAGE_NODES;
+	ASSERT_TRUE(allocate(thirdNodeId, 1'003U, 20'003U, 1'003U, LogSequenceNumber(6U)).has_value());
+	MetadataSnapshotPin thirdSnapshot = metadata->openSnapshot();
+	std::vector<EntityPageNodeInsertion> thirdInsertions;
+	thirdInsertions.reserve(NODE_COUNT - FIRST_PAGE_NODES - SECOND_PAGE_NODES - 1U);
+	for (size_t index = 1U; index < NODE_COUNT - FIRST_PAGE_NODES - SECOND_PAGE_NODES; ++index) {
+		thirdInsertions.push_back({thirdNodeId + index, node({0U, 0U, 0U}, 0U)});
+	}
+	const std::array<EntityPageBatchMutation, 1U> thirdMutation{{
+		{PageId(20'003U), EntityPageRecordKind::EPRK_NODE, {}, std::move(thirdInsertions), {}, {}, {}, {}, {}, {}}}};
+	const EntityPageBatchResult thirdResult = entities.applyBatch(thirdSnapshot, thirdMutation, LogSequenceNumber(7U));
+	thirdSnapshot.release();
+	ASSERT_FALSE(thirdResult.pages.empty());
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	SlottedPagePool slottedPages(io, *metadata);
+	EntityLabelSetStore labels(io, *metadata, slottedPages);
+	PropertyCollectionRootStore properties(slottedPages, *metadata);
+	BTreePageStore trees(slottedPages, *metadata);
+	PageBackedGraphReadAdapter adapter(*metadata, entities, labels, properties, trees);
+	NativeReadSession session;
+	std::vector<uint64_t> nodeIds;
+	nodeIds.reserve(NODE_COUNT);
+	for (size_t index = 0U; index < NODE_COUNT; ++index) {
+		nodeIds.push_back(FIRST_NODE_ID + index);
+	}
+	const std::vector<NodeEntityRecord> records = adapter.readNodeRecordsSorted(snapshot, nodeIds, &session);
+	ASSERT_EQ(records.size(), NODE_COUNT);
+	EXPECT_TRUE(std::ranges::all_of(records, [](const NodeEntityRecord &record) {
+		return record.inline_label_count == 0U;
+	}));
+	snapshot.release();
+}
+
+TEST_F(PageBackedGraphReadAdapterTest, PreservesTopologyBatchResultsBeyondSessionEntityCacheCapacity) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore entities(io, *metadata);
+	constexpr uint64_t FIRST_EDGE_ID = 30'001U;
+	constexpr size_t EDGE_COUNT = NativeReadSession::MAXIMUM_CACHED_ENTITY_RECORDS + 1U;
+	constexpr size_t FIRST_PAGE_EDGES = 100U;
+	const EdgeEntityRecord edgeRecord{1U, 2U, 0U};
+	ASSERT_TRUE(entities.allocateEdge(nodePool(2'001U, 7'001U, 30'001U, 2'001U), FIRST_EDGE_ID, edgeRecord,
+									 LogSequenceNumber(2U))
+						.has_value());
+	MetadataSnapshotPin firstSnapshot = metadata->openSnapshot();
+	std::vector<EntityPageEdgeInsertion> firstInsertions;
+	firstInsertions.reserve(FIRST_PAGE_EDGES - 1U);
+	for (size_t index = 1U; index < FIRST_PAGE_EDGES; ++index) {
+		firstInsertions.push_back({FIRST_EDGE_ID + index, edgeRecord});
+	}
+	const std::array<EntityPageBatchMutation, 1U> firstMutation{{
+		{PageId(30'001U), EntityPageRecordKind::EPRK_EDGE, {}, {}, {}, {}, std::move(firstInsertions), {}, {}, {}}}};
+	const EntityPageBatchResult firstResult = entities.applyBatch(firstSnapshot, firstMutation, LogSequenceNumber(3U));
+	firstSnapshot.release();
+	ASSERT_FALSE(firstResult.pages.empty());
+
+	const uint64_t secondFirstEdge = FIRST_EDGE_ID + FIRST_PAGE_EDGES;
+	ASSERT_TRUE(entities.allocateEdge(nodePool(2'002U, 7'002U, 30'002U, 2'002U), secondFirstEdge, edgeRecord,
+									 LogSequenceNumber(4U))
+						.has_value());
+	MetadataSnapshotPin secondSnapshot = metadata->openSnapshot();
+	std::vector<EntityPageEdgeInsertion> secondInsertions;
+	secondInsertions.reserve(EDGE_COUNT - FIRST_PAGE_EDGES - 1U);
+	for (size_t index = 1U; index < EDGE_COUNT - FIRST_PAGE_EDGES; ++index) {
+		secondInsertions.push_back({secondFirstEdge + index, edgeRecord});
+	}
+	const std::array<EntityPageBatchMutation, 1U> secondMutation{{
+		{PageId(30'002U), EntityPageRecordKind::EPRK_EDGE, {}, {}, {}, {}, std::move(secondInsertions), {}, {}, {}}}};
+	const EntityPageBatchResult secondResult = entities.applyBatch(secondSnapshot, secondMutation, LogSequenceNumber(5U));
+	secondSnapshot.release();
+	ASSERT_FALSE(secondResult.pages.empty());
+
+	SlottedPagePool slottedPages(io, *metadata);
+	EntityLabelSetStore labels(io, *metadata, slottedPages);
+	PropertyCollectionRootStore properties(slottedPages, *metadata);
+	BTreePageStore trees(slottedPages, *metadata);
+	PageBackedGraphReadAdapter adapter(*metadata, entities, labels, properties, trees);
+	NativeReadSession session;
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	std::vector<uint64_t> edgeIds;
+	edgeIds.reserve(EDGE_COUNT);
+	for (size_t index = 0U; index < EDGE_COUNT; ++index) {
+		edgeIds.push_back(FIRST_EDGE_ID + index);
+	}
+	const std::vector<EdgeEntityRecord> records = adapter.readEdgeTopologiesSorted(snapshot, edgeIds, &session);
+	ASSERT_EQ(records.size(), EDGE_COUNT);
+	EXPECT_TRUE(std::ranges::all_of(records, [&](const EdgeEntityRecord &record) { return record == edgeRecord; }));
+	snapshot.release();
 }
 
 TEST_F(PageBackedGraphReadAdapterTest, ConvertsNativeRecordsToDirectOwnerKeyedLogicalProperties) {
@@ -299,6 +735,51 @@ TEST_F(PageBackedGraphReadAdapterTest, ConvertsNativeRecordsToDirectOwnerKeyedLo
 	const LogicalGraphNodePage page = adapter.scanNodesAfter(snapshot, 0U, 1U, 8U);
 	ASSERT_EQ(page.nodes.size(), 1U);
 	EXPECT_EQ(page.nodes.front().properties.size(), 2U);
+	std::vector<EntityRef> nodeRefs;
+	EXPECT_TRUE(adapter.visitNodeRefsUntil(snapshot, 8U, [&nodeRefs](const EntityRef &reference) {
+		nodeRefs.push_back(reference);
+		return true;
+	}));
+	EXPECT_EQ(nodeRefs, (std::vector<EntityRef>{{1001U, false, 0U, 0U, 0U}}));
+	std::vector<std::pair<EntityRef, bool>> labelMatches;
+	EXPECT_TRUE(adapter.visitNodeRefsWithLabelMatchesUntil(
+			snapshot, 8U, {"Person"}, [&labelMatches](const EntityRef &reference, const bool matches) {
+				labelMatches.emplace_back(reference, matches);
+				return true;
+			}));
+	ASSERT_EQ(labelMatches.size(), 1U);
+	EXPECT_EQ(labelMatches.front().first, (EntityRef{1001U, false, 0U, 0U, 0U}));
+	EXPECT_TRUE(labelMatches.front().second);
+	labelMatches.clear();
+	EXPECT_TRUE(adapter.visitNodeRefsWithLabelMatchesUntil(
+			snapshot, 8U, {"Missing"}, [&labelMatches](const EntityRef &reference, const bool matches) {
+				labelMatches.emplace_back(reference, matches);
+				return true;
+			}));
+	ASSERT_EQ(labelMatches.size(), 1U);
+	EXPECT_FALSE(labelMatches.front().second);
+	std::vector<EntityRef> edgeRefs;
+	NativeReadSession scanSession;
+	EXPECT_TRUE(pages.visitNodeRefsUntil(snapshot, 8U, [](const EntityRef &) { return true; }, &scanSession));
+	ASSERT_TRUE(scanSession.node(1001U).has_value());
+	EXPECT_EQ(scanSession.node(1001U)->inline_label_count, 2U);
+	const std::array<uint64_t, 1U> personLabelToken{7U};
+	EXPECT_TRUE(pages.visitNodeRefsWithLabelTokenMatchesUntil(
+			snapshot, 8U, personLabelToken, [](const EntityRef &, bool) { return true; }, &scanSession));
+	// Label-aware scans reuse the same authenticated fixed record rather than
+	// forcing a second Entity Map lookup at the result/binding boundary.
+	ASSERT_TRUE(scanSession.node(1001U).has_value());
+	EXPECT_TRUE(pages.visitEdgeRefsUntil(snapshot, 8U, [&edgeRefs](const EntityRef &reference) {
+			edgeRefs.push_back(reference);
+			return true;
+	}, &scanSession));
+	EXPECT_EQ(edgeRefs, (std::vector<EntityRef>{{2001U, true, 1001U, 1002U, 41U}}));
+	ASSERT_TRUE(scanSession.edge(2001U).has_value());
+	EXPECT_EQ(scanSession.edge(2001U)->type_id, 41U);
+	EXPECT_TRUE(pages.visitEdgeTopologiesUntil(
+			snapshot, 8U, [&scanSession](uint64_t edgeId, const EdgeEntityRecord &) {
+				return scanSession.edge(edgeId).has_value();
+			}, &scanSession));
 	TestPageBackedGraphNameResolver duplicateNames(true);
 	PageBackedLogicalGraphReadAdapter duplicateAdapter(pages, duplicateNames);
 	EXPECT_THROW(static_cast<void>(duplicateAdapter.readNode(snapshot, 1001U)), FormatException);
@@ -512,11 +993,12 @@ TEST_F(PageBackedGraphReadAdapterTest, ResumesNativeAdjacencyThroughLogicalEdgeI
 
 	TestPageBackedGraphNameResolver names;
 	PageBackedLogicalGraphReadAdapter logical(adapter, names);
+	NativeReadSession readSession;
 	std::vector<LogicalGraphEdgeTopology> topologies;
 	EXPECT_TRUE(logical.visitEdgeTopologiesUntil(current, 3U, [&topologies](const LogicalGraphEdgeTopology &record) {
 		topologies.push_back(record);
 		return true;
-	}));
+	}, &readSession));
 	EXPECT_EQ(topologies,
 			  (std::vector<LogicalGraphEdgeTopology>{{firstEdge, source, firstTarget, "KNOWS"},
 														 {secondEdge, source, secondTarget, "FOLLOWS"}}));
@@ -525,41 +1007,61 @@ TEST_F(PageBackedGraphReadAdapterTest, ResumesNativeAdjacencyThroughLogicalEdgeI
 	EXPECT_EQ(names.relationshipTypeResolutionCount(), 2U);
 	std::vector<LogicalGraphEdgeTopology> adjacentTopologies;
 	EXPECT_TRUE(logical.visitAdjacentEdgeTopologiesUntil(
-			current, source, LogicalGraphReadDirection::LGRD_OUTGOING, 2U,
-			[&adjacentTopologies](const LogicalGraphEdgeTopology &record) {
-				adjacentTopologies.push_back(record);
-				return true;
-			}));
+				current, source, LogicalGraphReadDirection::LGRD_OUTGOING, 2U,
+				[&adjacentTopologies](const LogicalGraphEdgeTopology &record) {
+					adjacentTopologies.push_back(record);
+					return true;
+				}, &readSession));
 	EXPECT_EQ(adjacentTopologies,
 			  (std::vector<LogicalGraphEdgeTopology>{{firstEdge, source, firstTarget, "KNOWS"},
-																									 {secondEdge, source, secondTarget, "FOLLOWS"}}));
-	EXPECT_EQ(names.propertyKeyResolutionCount(), 0U);
+																																				 {secondEdge, source, secondTarget, "FOLLOWS"}}));
+	NativeReadSession topologyBatchSession;
+	TestPageBackedGraphNameResolver topologyNames;
+	PageBackedLogicalGraphReadAdapter topologyLogical(adapter, topologyNames);
+	const bool traceWasEnabled = graph::debug::PerfTrace::isEnabled();
+	const bool valuesWereEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::setEnabled(true);
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	graph::debug::PerfTrace::reset();
+	EXPECT_EQ(topologyLogical.scanAdjacentEdgeTopologies(current, source, LogicalGraphReadDirection::LGRD_OUTGOING,
+			std::nullopt, 2U, &topologyBatchSession).edges.size(), 2U);
+	const auto firstTopologyTrace = graph::debug::PerfTrace::snapshotAndReset();
+	EXPECT_GE(firstTopologyTrace.at("native_graph.read.edge_sorted_batch_calls").totalValue, 1);
+	EXPECT_EQ(firstTopologyTrace.at("native_graph.read.edge_sorted_batch_entries").totalValue, 2);
+	EXPECT_EQ(topologyLogical.scanAdjacentEdgeTopologies(current, source, LogicalGraphReadDirection::LGRD_OUTGOING,
+			std::nullopt, 2U, &topologyBatchSession).edges.size(), 2U);
+	const auto secondTopologyTrace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
+	graph::debug::PerfTrace::setEnabled(traceWasEnabled);
+	EXPECT_EQ(secondTopologyTrace.contains("native_graph.read.edge_sorted_batch_calls"), false);
 	std::vector<LogicalGraphEdgeTopology> incomingTopologies;
 	EXPECT_TRUE(logical.visitAdjacentEdgeTopologiesUntil(
 			current, firstTarget, LogicalGraphReadDirection::LGRD_INCOMING, 2U,
 			[&incomingTopologies](const LogicalGraphEdgeTopology &record) {
 				incomingTopologies.push_back(record);
 				return true;
-			}));
+			}, &readSession));
 	EXPECT_EQ(incomingTopologies,
 			  (std::vector<LogicalGraphEdgeTopology>{{firstEdge, source, firstTarget, "KNOWS"}}));
 	EXPECT_EQ(names.propertyKeyResolutionCount(), 0U);
 	const LogicalGraphAdjacencyPage logicalFirst =
-			logical.scanAdjacentEdges(current, source, LogicalGraphReadDirection::LGRD_OUTGOING, std::nullopt, 1U);
+			logical.scanAdjacentEdges(current, source, LogicalGraphReadDirection::LGRD_OUTGOING, std::nullopt, 1U,
+																&readSession);
 	ASSERT_EQ(logicalFirst.edges.size(), 1U);
 	EXPECT_EQ(logicalFirst.edges.front().edge_id, firstEdge);
 	EXPECT_EQ(logicalFirst.edges.front().type, "KNOWS");
 	ASSERT_TRUE(logicalFirst.continuation.has_value());
 	EXPECT_EQ(*logicalFirst.continuation, (LogicalGraphAdjacencyContinuation{firstEdge, secondEdge}));
 	const LogicalGraphAdjacencyPage logicalFinal = logical.scanAdjacentEdges(
-			current, source, LogicalGraphReadDirection::LGRD_OUTGOING, logicalFirst.continuation, 1U);
+			current, source, LogicalGraphReadDirection::LGRD_OUTGOING, logicalFirst.continuation, 1U, &readSession);
 	ASSERT_EQ(logicalFinal.edges.size(), 1U);
 	EXPECT_EQ(logicalFinal.edges.front().edge_id, secondEdge);
 	EXPECT_EQ(logicalFinal.edges.front().type, "FOLLOWS");
 	EXPECT_FALSE(logicalFinal.continuation.has_value());
 
 	const LogicalGraphAdjacencyPage incoming =
-			logical.scanAdjacentEdges(current, firstTarget, LogicalGraphReadDirection::LGRD_INCOMING, std::nullopt, 1U);
+			logical.scanAdjacentEdges(current, firstTarget, LogicalGraphReadDirection::LGRD_INCOMING, std::nullopt, 1U,
+																&readSession);
 	ASSERT_EQ(incoming.edges.size(), 1U);
 	EXPECT_EQ(incoming.edges.front().edge_id, firstEdge);
 	EXPECT_THROW(static_cast<void>(logical.scanAdjacentEdges(
@@ -567,14 +1069,14 @@ TEST_F(PageBackedGraphReadAdapterTest, ResumesNativeAdjacencyThroughLogicalEdgeI
 			 FormatException);
 
 	PageBackedLogicalGraphAdjacencyCursor cursor =
-			logical.openAdjacentEdgeCursor(current, source, LogicalGraphReadDirection::LGRD_OUTGOING);
+			logical.openAdjacentEdgeCursor(current, source, LogicalGraphReadDirection::LGRD_OUTGOING, &readSession);
 	const LogicalGraphAdjacencyPage cursorFirst = cursor.next(current, std::nullopt, 1U);
 	ASSERT_TRUE(cursorFirst.continuation.has_value());
 	EXPECT_EQ(cursorFirst.edges.front().edge_id, firstEdge);
 	PageBackedLogicalGraphAdjacencyCursor movedCursor(std::move(cursor));
 	EXPECT_THROW(static_cast<void>(cursor.next(current, std::nullopt, 1U)), FormatException);
 	PageBackedLogicalGraphAdjacencyCursor assignedCursor =
-			logical.openAdjacentEdgeCursor(current, source, LogicalGraphReadDirection::LGRD_OUTGOING);
+			logical.openAdjacentEdgeCursor(current, source, LogicalGraphReadDirection::LGRD_OUTGOING, &readSession);
 	assignedCursor = std::move(movedCursor);
 	EXPECT_THROW(static_cast<void>(movedCursor.next(current, std::nullopt, 1U)), FormatException);
 	const LogicalGraphAdjacencyPage cursorFinal = assignedCursor.next(current, cursorFirst.continuation, 1U);
@@ -586,7 +1088,7 @@ TEST_F(PageBackedGraphReadAdapterTest, ResumesNativeAdjacencyThroughLogicalEdgeI
 	EXPECT_TRUE(logical.visitNodesUntil(current, 4U, [&logicalNodes](const LogicalGraphNode &record) {
 		logicalNodes.push_back(record.node_id);
 		return true;
-	}));
+	}, &readSession));
 	EXPECT_EQ(logicalNodes, (std::vector<uint64_t>{source, firstTarget, secondTarget}));
 	std::vector<uint64_t> logicalEdges;
 	graph::debug::PerfTrace::setEnabled(true);
@@ -594,7 +1096,7 @@ TEST_F(PageBackedGraphReadAdapterTest, ResumesNativeAdjacencyThroughLogicalEdgeI
 	EXPECT_TRUE(logical.visitEdgesUntil(current, 3U, [&logicalEdges](const LogicalGraphEdge &record) {
 		logicalEdges.push_back(record.edge_id);
 		return true;
-	}));
+	}, &readSession));
 	graph::debug::PerfTrace::setEnabled(false);
 	const graph::debug::PerfTrace::Snapshot trace = graph::debug::PerfTrace::snapshotAndReset();
 	EXPECT_EQ(logicalEdges, (std::vector<uint64_t>{firstEdge, secondEdge}));
@@ -604,7 +1106,7 @@ TEST_F(PageBackedGraphReadAdapterTest, ResumesNativeAdjacencyThroughLogicalEdgeI
 	EXPECT_FALSE(logical.visitEdgesUntil(current, 3U, [&](const LogicalGraphEdge &) {
 		++untracedLogicalEdges;
 		return false;
-	}));
+	}, &readSession));
 	EXPECT_EQ(untracedLogicalEdges, 1U);
 	std::vector<uint64_t> visitedAdjacent;
 	EXPECT_TRUE(logical.visitAdjacentEdgesUntil(
@@ -612,7 +1114,7 @@ TEST_F(PageBackedGraphReadAdapterTest, ResumesNativeAdjacencyThroughLogicalEdgeI
 			[&visitedAdjacent](const LogicalGraphEdge &record) {
 				visitedAdjacent.push_back(record.edge_id);
 				return true;
-			}));
+			}, &readSession));
 	EXPECT_EQ(visitedAdjacent, (std::vector<uint64_t>{firstEdge, secondEdge}));
 	// The same pinned snapshot resolves each relationship token once even when
 	// multiple traversal APIs revisit the same native Edge records.
@@ -627,6 +1129,73 @@ TEST_F(PageBackedGraphReadAdapterTest, ResumesNativeAdjacencyThroughLogicalEdgeI
 				 current, source, LogicalGraphReadDirection::LGRD_OUTGOING, 2U, {})),
 			 FormatException);
 	current.release();
+}
+
+TEST_F(PageBackedGraphReadAdapterTest, VisitsSeveralNativeAdjacencyRangesInOneBoundedBatch) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore entities(io, *metadata);
+	SlottedPagePool slottedPages(io, *metadata);
+	EntityLabelSetStore labels(io, *metadata, slottedPages);
+	PropertyCollectionRootStore properties(slottedPages, *metadata);
+	BTreePageStore trees(slottedPages, *metadata);
+	NativeGraphWritePlanner planner(*metadata, entities, labels, properties, trees, graphWriteOptions());
+	NativeGraphWriteTransaction transaction = planner.beginTransaction();
+	const uint64_t first = transaction.createNode(std::array<uint64_t, 0U>{});
+	const uint64_t second = transaction.createNode(std::array<uint64_t, 0U>{});
+	const uint64_t third = transaction.createNode(std::array<uint64_t, 0U>{});
+	const uint64_t firstEdge = transaction.createEdge(first, second, 41U);
+	const uint64_t secondEdge = transaction.createEdge(second, third, 43U);
+	ASSERT_TRUE(transaction.commit().committed());
+	PageBackedGraphReadAdapter adapter(*metadata, entities, labels, properties, trees);
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	NativeReadSession session;
+
+	const std::array<uint64_t, 2U> outgoingSources{first, second};
+	std::vector<EntityRef> outgoing;
+	EXPECT_TRUE(adapter.visitAdjacentEdgeRefsForNodesUntil(
+			snapshot, outgoingSources, PageBackedGraphReadDirection::PBGRD_OUTGOING, 3U,
+			[&outgoing](const EntityRef &reference) {
+				outgoing.push_back(reference);
+				return true;
+			}, &session));
+	EXPECT_EQ(outgoing, (std::vector<EntityRef>{{firstEdge, true, first, second, 41U},
+			{secondEdge, true, second, third, 43U}}));
+	ASSERT_TRUE(session.edge(firstEdge).has_value());
+	ASSERT_TRUE(session.edge(secondEdge).has_value());
+
+	const std::array<uint64_t, 2U> incomingTargets{second, third};
+	std::vector<EntityRef> incoming;
+	EXPECT_TRUE(adapter.visitAdjacentEdgeRefsForNodesUntil(
+			snapshot, incomingTargets, PageBackedGraphReadDirection::PBGRD_INCOMING, 3U,
+			[&incoming](const EntityRef &reference) {
+				incoming.push_back(reference);
+				return true;
+			}, &session));
+	EXPECT_EQ(incoming, outgoing);
+
+	size_t stopped = 0U;
+	EXPECT_FALSE(adapter.visitAdjacentEdgeRefsForNodesUntil(
+			snapshot, outgoingSources, PageBackedGraphReadDirection::PBGRD_OUTGOING, 3U,
+			[&stopped](const EntityRef &) {
+				++stopped;
+				return false;
+			}, &session));
+	EXPECT_EQ(stopped, 1U);
+	EXPECT_THROW(static_cast<void>(adapter.visitAdjacentEdgeRefsForNodesUntil(
+			snapshot, outgoingSources, PageBackedGraphReadDirection::PBGRD_OUTGOING, 1U,
+			[](const EntityRef &) { return true; })), FormatException);
+	const std::array<uint64_t, 2U> unsorted{second, first};
+	const std::array<uint64_t, 2U> duplicate{first, first};
+	EXPECT_THROW(static_cast<void>(adapter.visitAdjacentEdgeRefsForNodesUntil(
+			snapshot, unsorted, PageBackedGraphReadDirection::PBGRD_OUTGOING, 3U,
+			[](const EntityRef &) { return true; })), FormatException);
+	EXPECT_THROW(static_cast<void>(adapter.visitAdjacentEdgeRefsForNodesUntil(
+			snapshot, duplicate, PageBackedGraphReadDirection::PBGRD_OUTGOING, 3U,
+			[](const EntityRef &) { return true; })), FormatException);
+	EXPECT_THROW(static_cast<void>(adapter.visitAdjacentEdgeRefsForNodesUntil(
+			snapshot, std::span<const uint64_t>{}, PageBackedGraphReadDirection::PBGRD_OUTGOING, 3U,
+			[](const EntityRef &) { return true; })), FormatException);
+	snapshot.release();
 }
 
 TEST_F(PageBackedGraphReadAdapterTest, StreamsSupernodeVisitorsInBoundedLogicalBatches) {
@@ -716,7 +1285,6 @@ TEST_F(PageBackedGraphReadAdapterTest, StreamsLargeAdjacencyTopologyThroughOneEn
 	EXPECT_NE(firstTarget, 0U);
 	EXPECT_EQ(names.propertyKeyResolutionCount(), 0U);
 	EXPECT_EQ(names.relationshipTypeResolutionCount(), 2U);
-
 	visited = 0U;
 	EXPECT_FALSE(logical.visitAdjacentEdgeTopologiesUntil(snapshot, source, LogicalGraphReadDirection::LGRD_OUTGOING,
 														  EDGE_COUNT + 1U, [&](const LogicalGraphEdgeTopology &) {
@@ -767,7 +1335,7 @@ TEST_F(PageBackedGraphReadAdapterTest, ReopensAndScansNativeEntityMapWithoutFixe
 	snapshot.release();
 }
 
-TEST_F(PageBackedGraphReadAdapterTest, RejectsACorruptEntityMapThatPointsANodeToAnEdgePage) {
+TEST_F(PageBackedGraphReadAdapterTest, PointReadsRejectCorruptEntityMapWhilePhysicalNodeScanRemainsPageLocal) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
 	EntityPageStore entities(io, *metadata);
 	ASSERT_TRUE(entities.allocateNode(nodePool(40U, 910U, 701U, 49U), 1001U, node({7U, 0U, 0U}, 1U),
@@ -787,9 +1355,16 @@ TEST_F(PageBackedGraphReadAdapterTest, RejectsACorruptEntityMapThatPointsANodeTo
 	BTreePageStore trees(slottedPages, *metadata);
 	PageBackedGraphReadAdapter adapter(*metadata, entities, labels, properties, trees);
 	MetadataSnapshotPin snapshot = metadata->openSnapshot();
-	EXPECT_THROW(static_cast<void>(adapter.visitNodesUntil(snapshot, 4U, [](const PageBackedGraphNode &) {
+	// Point reads resolve the Entity Map and must reject a Node route into an
+	// Edge page. Physical scans deliberately enumerate current Node pages
+	// directly; the integrity scanner owns the global cross-directory audit.
+	EXPECT_THROW(static_cast<void>(adapter.readNode(snapshot, 1002U)), FormatException);
+	std::vector<uint64_t> physicalNodeIds;
+	EXPECT_TRUE(adapter.visitNodesUntil(snapshot, 4U, [&physicalNodeIds](const PageBackedGraphNode &nodeRecord) {
+		physicalNodeIds.push_back(nodeRecord.node_id);
 		return true;
-	})), FormatException);
+	}));
+	EXPECT_EQ(physicalNodeIds, (std::vector<uint64_t>{1001U}));
 	snapshot.release();
 }
 

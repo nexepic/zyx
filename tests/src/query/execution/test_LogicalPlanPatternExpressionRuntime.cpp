@@ -25,10 +25,13 @@
 #include "graph/query/expressions/ExistsExpression.hpp"
 #include "graph/query/expressions/PatternComprehensionExpression.hpp"
 #include "graph/query/expressions/ShortestPathExpression.hpp"
+#include "graph/query/expressions/Expression.hpp"
+#include "graph/query/logical/operators/LogicalAggregate.hpp"
 #include "graph/query/logical/operators/LogicalJoin.hpp"
 #include "graph/query/logical/operators/LogicalNodeScan.hpp"
 #include "graph/query/logical/operators/LogicalProject.hpp"
 #include "graph/query/logical/operators/LogicalSingleRow.hpp"
+#include "graph/query/logical/operators/LogicalTraversal.hpp"
 #include "graph/storage/LogicalGraphRead.hpp"
 
 using namespace graph;
@@ -51,6 +54,16 @@ namespace {
 		bool invalid_adjacency_endpoint = false;
 		bool wrong_node_identity = false;
 		bool discontinuous_adjacency_page = false;
+		bool supports_node_existence_probes = false;
+		bool supports_native_adjacency_refs = false;
+		std::shared_ptr<size_t> node_read_count;
+		std::shared_ptr<size_t> edge_read_count;
+		std::shared_ptr<size_t> node_existence_probe_count;
+		std::shared_ptr<size_t> node_existence_batch_probe_count;
+		std::shared_ptr<size_t> adjacency_topology_scan_count;
+		std::shared_ptr<size_t> adjacency_reference_scan_count;
+		std::shared_ptr<size_t> edge_shaped_batch_read_count;
+		std::shared_ptr<std::vector<uint64_t>> edge_shaped_batch_ids;
 	};
 
 	[[nodiscard]] PatternExpressionGraph makeDefaultPatternExpressionGraph() {
@@ -71,12 +84,55 @@ namespace {
 		: nodes_(std::move(graph.nodes)), edges_(std::move(graph.edges)), faults_(faults) {}
 
 		[[nodiscard]] LogicalGraphNode readNode(uint64_t id) const override {
+			if (faults_.node_read_count) {
+				++*faults_.node_read_count;
+			}
 			if (faults_.wrong_node_identity && id != nodes_.begin()->first) {
 				return nodes_.begin()->second;
 			}
 			return nodes_.at(id);
 		}
-		[[nodiscard]] LogicalGraphEdge readEdge(uint64_t id) const override { return edges_.at(id); }
+		[[nodiscard]] bool containsNode(uint64_t id) const override {
+			if (faults_.node_existence_probe_count) {
+				++*faults_.node_existence_probe_count;
+			}
+			return nodes_.contains(id);
+		}
+		[[nodiscard]] std::vector<bool> containsNodesSorted(std::span<const uint64_t> ids) const override {
+			if (faults_.node_existence_batch_probe_count) {
+				++*faults_.node_existence_batch_probe_count;
+			}
+			std::vector<bool> result;
+			result.reserve(ids.size());
+			uint64_t previous = 0U;
+			for (const uint64_t id: ids) {
+				if (id == 0U || id <= previous) {
+					throw std::invalid_argument("pattern-expression fixture requires sorted Node probes");
+				}
+				previous = id;
+				result.push_back(nodes_.contains(id));
+			}
+			return result;
+		}
+		[[nodiscard]] bool supportsNodeExistenceProbes() const override {
+			return faults_.supports_node_existence_probes;
+		}
+		[[nodiscard]] LogicalGraphEdge readEdge(uint64_t id) const override {
+			if (faults_.edge_read_count) {
+				++*faults_.edge_read_count;
+			}
+			return edges_.at(id);
+		}
+		[[nodiscard]] std::vector<LogicalGraphEdge> readEdgesShapedSorted(
+				std::span<const uint64_t> ids, const EntityReadShape &shape) const override {
+			if (faults_.edge_shaped_batch_read_count) {
+				++*faults_.edge_shaped_batch_read_count;
+			}
+			if (faults_.edge_shaped_batch_ids) {
+				faults_.edge_shaped_batch_ids->assign(ids.begin(), ids.end());
+			}
+			return LogicalGraphReadSnapshot::readEdgesShapedSorted(ids, shape);
+		}
 		void visitNodes(size_t, const std::function<bool(const LogicalGraphNode &)> &) const override {
 			throw std::logic_error("pattern-expression runtime uses paged Node scans");
 		}
@@ -140,6 +196,77 @@ namespace {
 			}
 			return page;
 		}
+		[[nodiscard]] LogicalGraphAdjacencyTopologyPage scanAdjacentEdgeTopologies(
+				uint64_t nodeId, LogicalGraphReadDirection direction,
+				std::optional<LogicalGraphAdjacencyContinuation> continuation, size_t maximumRecords) const override {
+			if (faults_.adjacency_topology_scan_count) {
+				++*faults_.adjacency_topology_scan_count;
+			}
+			const LogicalGraphAdjacencyPage full =
+					scanAdjacentEdges(nodeId, direction, std::move(continuation), maximumRecords);
+			LogicalGraphAdjacencyTopologyPage result;
+			result.edges.reserve(full.edges.size());
+			for (const LogicalGraphEdge &edge: full.edges) {
+				result.edges.push_back({edge.edge_id, edge.source_node_id, edge.target_node_id, edge.type});
+			}
+			result.continuation = full.continuation;
+			return result;
+		}
+		void visitAdjacentEdgeTopologies(uint64_t nodeId, LogicalGraphReadDirection direction, size_t maximumRecords,
+										 const std::function<bool(const LogicalGraphEdgeTopology &)> &visitor) const override {
+			if (maximumRecords == 0U || !visitor) {
+				throw std::invalid_argument("pattern-expression fixture topology visit needs a positive bound and visitor");
+			}
+			std::optional<LogicalGraphAdjacencyContinuation> continuation;
+		size_t visited = 0U;
+		for (;;) {
+			const LogicalGraphAdjacencyTopologyPage page =
+					scanAdjacentEdgeTopologies(nodeId, direction, continuation, maximumRecords - visited);
+			for (const LogicalGraphEdgeTopology &edge: page.edges) {
+				++visited;
+				if (!visitor(edge) || visited == maximumRecords) {
+					return;
+				}
+			}
+			if (!page.continuation.has_value()) {
+				return;
+			}
+			continuation = page.continuation;
+		}
+		}
+		[[nodiscard]] LogicalGraphAdjacencyReferencePage scanAdjacentEdgeRefs(
+				uint64_t nodeId, LogicalGraphReadDirection direction,
+				std::optional<LogicalGraphAdjacencyContinuation> continuation, size_t maximumRecords) const override {
+			if (!faults_.supports_native_adjacency_refs) {
+				throw std::logic_error("pattern-expression fixture has no native adjacency references");
+			}
+			if (faults_.adjacency_reference_scan_count) {
+				++*faults_.adjacency_reference_scan_count;
+			}
+			const LogicalGraphAdjacencyPage full =
+					scanAdjacentEdges(nodeId, direction, std::move(continuation), maximumRecords);
+			LogicalGraphAdjacencyReferencePage result;
+			result.edges.reserve(full.edges.size());
+			for (const LogicalGraphEdge &edge: full.edges) {
+				const uint64_t typeToken = edge.type == "R" ? 1U : 2U;
+				result.edges.push_back({edge.edge_id, true, edge.source_node_id, edge.target_node_id, typeToken});
+			}
+			result.continuation = full.continuation;
+			return result;
+		}
+		[[nodiscard]] bool supportsNativeAdjacentEdgeRefScans() const override {
+			return faults_.supports_native_adjacency_refs;
+		}
+		[[nodiscard]] bool supportsNativeAdjacentEdgeTopologyPages() const override { return true; }
+		[[nodiscard]] bool supportsNativeRelationshipTypeTokens() const override {
+			return faults_.supports_native_adjacency_refs;
+		}
+		[[nodiscard]] std::optional<uint64_t> findRelationshipTypeToken(std::string_view name) const override {
+			if (!faults_.supports_native_adjacency_refs) {
+				return std::nullopt;
+			}
+			return name == "R" ? std::optional<uint64_t>{1U} : std::nullopt;
+		}
 		void visitEdges(size_t, const std::function<bool(const LogicalGraphEdge &)> &) const override {
 			throw std::logic_error("pattern-expression runtime does not use Edge scans");
 		}
@@ -174,6 +301,7 @@ namespace {
 				.maximum_node_page_records = 2U,
 				.maximum_metadata_pages_per_node_page = 4U,
 				.maximum_edges_per_node = 8U,
+				.maximum_edge_records = 32U,
 				.maximum_adjacency_page_records = 1U,
 				.maximum_property_entries = 8U,
 				.maximum_rows = 16U,
@@ -268,6 +396,141 @@ TEST(LogicalPlanPatternExpressionRuntimeTest, ExcludesExistingRelationshipsThatF
 	EXPECT_EQ(runtime.executeToQueryResult(*plan.root, bounds()).rowCount(), 0U);
 }
 
+TEST(LogicalPlanPatternExpressionRuntimeTest, UsesNativeAdjacencyReferencesForTypedExistsPatterns) {
+	PatternExpressionGraph graph;
+	graph.nodes.emplace(1U, LogicalGraphNode{1U, {"Person"}, {{"name", PropertyValue("Ada")}}});
+	graph.nodes.emplace(2U, LogicalGraphNode{2U, {"Friend"}, {{"age", PropertyValue(30)}}});
+	graph.edges.emplace(1U, LogicalGraphEdge{1U, 1U, 2U, "R"});
+	PatternExpressionSnapshotFaults faults;
+	faults.supports_native_adjacency_refs = true;
+	faults.adjacency_reference_scan_count = std::make_shared<size_t>(0U);
+	faults.adjacency_topology_scan_count = std::make_shared<size_t>(0U);
+	faults.node_existence_probe_count = std::make_shared<size_t>(0U);
+		faults.node_existence_batch_probe_count = std::make_shared<size_t>(0U);
+	PatternExpressionBackend backend(std::move(graph), faults);
+	LogicalPlanReadRuntime runtime(backend);
+	QueryPlan plan = parse("MATCH (n:Person) WHERE EXISTS((n)-[:R]->(m:Friend) WHERE m.age > 21) RETURN n.name AS name");
+	ASSERT_NE(plan.root, nullptr);
+
+	const QueryResult result = runtime.executeToQueryResult(*plan.root, bounds());
+	ASSERT_EQ(result.rowCount(), 1U);
+	EXPECT_EQ(result.getRows().front().at("name").asPrimitive(), PropertyValue("Ada"));
+	EXPECT_GT(*faults.adjacency_reference_scan_count, 0U);
+	EXPECT_EQ(*faults.adjacency_topology_scan_count, 0U);
+		EXPECT_EQ(*faults.node_existence_probe_count, 0U);
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, NativeReferenceExistsStopsBeforeMaterializingLaterMatches) {
+	PatternExpressionGraph graph;
+	graph.nodes.emplace(1U, LogicalGraphNode{1U, {"Person"}, {{"name", PropertyValue("Ada")}}});
+	graph.nodes.emplace(2U, LogicalGraphNode{2U, {"Friend"}, {{"age", PropertyValue(30)}}});
+	graph.nodes.emplace(3U, LogicalGraphNode{3U, {"Friend"}, {{"age", PropertyValue(40)}}});
+	graph.edges.emplace(1U, LogicalGraphEdge{1U, 1U, 2U, "R"});
+	graph.edges.emplace(2U, LogicalGraphEdge{2U, 1U, 3U, "R"});
+	PatternExpressionSnapshotFaults faults;
+	faults.supports_native_adjacency_refs = true;
+	faults.adjacency_reference_scan_count = std::make_shared<size_t>(0U);
+	faults.edge_read_count = std::make_shared<size_t>(0U);
+	PatternExpressionBackend backend(std::move(graph), faults);
+	LogicalPlanReadRuntime runtime(backend);
+	QueryPlan plan = parse(
+			"MATCH (n:Person) WHERE EXISTS((n)-[:R]->(m:Friend) WHERE m.age > 21) RETURN n.name AS name");
+	ASSERT_NE(plan.root, nullptr);
+	LogicalPlanReadRuntimeBounds queryBounds = bounds();
+	queryBounds.maximum_adjacency_page_records = 2U;
+
+	const QueryResult result = runtime.executeToQueryResult(*plan.root, queryBounds);
+	ASSERT_EQ(result.rowCount(), 1U);
+	EXPECT_EQ(result.getRows().front().at("name").asPrimitive(), PropertyValue("Ada"));
+	EXPECT_EQ(*faults.adjacency_reference_scan_count, 1U);
+	// EXISTS can stop after the first matching candidate; later full Edge payloads
+	// must not be prefetched merely because they share one topology page.
+	EXPECT_EQ(*faults.edge_read_count, 1U);
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, BatchesEndpointExistenceForTopologyOnlyExistsPatterns) {
+	PatternExpressionGraph graph;
+	graph.nodes.emplace(1U, LogicalGraphNode{1U, {"Person"}, {{"name", PropertyValue("Ada")}}});
+	graph.nodes.emplace(2U, LogicalGraphNode{2U, {"Friend"}});
+	graph.nodes.emplace(3U, LogicalGraphNode{3U, {"Other"}});
+	graph.edges.emplace(1U, LogicalGraphEdge{1U, 1U, 3U, "R"});
+	graph.edges.emplace(2U, LogicalGraphEdge{2U, 1U, 2U, "R"});
+	PatternExpressionSnapshotFaults faults;
+	faults.supports_native_adjacency_refs = true;
+	faults.supports_node_existence_probes = true;
+	faults.node_existence_probe_count = std::make_shared<size_t>(0U);
+	faults.node_existence_batch_probe_count = std::make_shared<size_t>(0U);
+	PatternExpressionSnapshot snapshot(std::move(graph), faults);
+	LogicalPlanReadRow row;
+	row.values.emplace("n", EntityRef{1U, false, 0U, 0U, 0U});
+	graph::query::expressions::ExistsExpression expression(
+			"(n)-[:R]->()", "n", "R", "", graph::query::expressions::PatternDirection::PAT_OUTGOING);
+	QueryContext context;
+	LogicalPlanReadRuntimeBounds batchBounds = bounds();
+	batchBounds.maximum_adjacency_page_records = 2U;
+	const LogicalPlanReadValue result = LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+			snapshot, expression, row, batchBounds, context);
+	ASSERT_TRUE(std::holds_alternative<PropertyValue>(result));
+	EXPECT_EQ(std::get<PropertyValue>(result), PropertyValue(true));
+	EXPECT_EQ(*faults.node_existence_probe_count, 0U);
+	EXPECT_GT(*faults.node_existence_batch_probe_count, 0U);
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest,
+		GenericTraversalPrefiltersRelationshipTypeBeforeCompleteEdgeRead) {
+	PatternExpressionGraph graph = makeDefaultPatternExpressionGraph();
+	graph.edges.at(10U).properties.push_back({"weight", PropertyValue(int64_t{7})});
+	graph.edges.at(11U).properties.push_back({"weight", PropertyValue(int64_t{7})});
+	PatternExpressionSnapshotFaults faults;
+	faults.edge_shaped_batch_read_count = std::make_shared<size_t>(0U);
+	faults.edge_shaped_batch_ids = std::make_shared<std::vector<uint64_t>>();
+	PatternExpressionBackend backend(std::move(graph), faults);
+	LogicalPlanReadRuntime runtime(backend);
+	// The projection deliberately prevents the direct-traversal shortcut, so this
+	// exercises the ordinary adjacency-page consumer rather than a query-specific
+	// global/reference fast path.
+	auto source = std::make_unique<logical::LogicalNodeScan>("n", std::vector<std::string>{"Person"});
+	std::vector<logical::LogicalProjectItem> items;
+	items.emplace_back(std::make_shared<expressions::VariableReferenceExpression>("n"), "n");
+	auto projectedSource = std::make_unique<logical::LogicalProject>(std::move(source), std::move(items));
+	logical::LogicalTraversal traversal(
+			std::move(projectedSource), "n", "r", "m", "KNOWS", "out", {}, {},
+			{{"weight", PropertyValue(int64_t{7})}});
+
+	std::vector<uint64_t> edgeIds;
+	LogicalPlanReadRuntimeBounds traversalBounds = bounds();
+	traversalBounds.maximum_adjacency_page_records = 2U;
+	static_cast<void>(runtime.execute(traversal, traversalBounds, [&edgeIds](const LogicalPlanReadRow &row) {
+		edgeIds.push_back(std::get<LogicalGraphEdge>(row.values.at("r")).edge_id);
+		return true;
+	}));
+
+	EXPECT_EQ(edgeIds, std::vector<uint64_t>{10U});
+	ASSERT_EQ(*faults.edge_shaped_batch_read_count, 1U);
+	EXPECT_EQ(*faults.edge_shaped_batch_ids, std::vector<uint64_t>{10U});
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, DoesNotMaterializeTopologyEdgesRejectedByRelationshipType) {
+	PatternExpressionGraph graph = makeDefaultPatternExpressionGraph();
+	PatternExpressionSnapshotFaults faults;
+	faults.edge_shaped_batch_read_count = std::make_shared<size_t>(0U);
+	faults.edge_shaped_batch_ids = std::make_shared<std::vector<uint64_t>>();
+	PatternExpressionSnapshot snapshot(std::move(graph), faults);
+	LogicalPlanReadRow row;
+	row.values.emplace("n", EntityRef{1U, false, 0U, 0U, 0U});
+	graph::query::expressions::ExistsExpression expression(
+			"(n)-[:KNOWS]->(m)", "n", "KNOWS", "", graph::query::expressions::PatternDirection::PAT_OUTGOING);
+	QueryContext context;
+	LogicalPlanReadRuntimeBounds expressionBounds = bounds();
+	expressionBounds.maximum_adjacency_page_records = 2U;
+	const LogicalPlanReadValue result = LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+			snapshot, expression, row, expressionBounds, context);
+	ASSERT_TRUE(std::holds_alternative<PropertyValue>(result));
+	EXPECT_EQ(std::get<PropertyValue>(result), PropertyValue(true));
+	ASSERT_EQ(*faults.edge_shaped_batch_read_count, 1U);
+	ASSERT_EQ(*faults.edge_shaped_batch_ids, std::vector<uint64_t>({10U}));
+}
+
 TEST(LogicalPlanPatternExpressionRuntimeTest, EvaluatesLengthForANamedSingleRelationshipPath) {
 	PatternExpressionBackend backend;
 	LogicalPlanReadRuntime runtime(backend);
@@ -359,6 +622,36 @@ TEST(LogicalPlanPatternExpressionRuntimeTest, ProducesCompletePatternComprehensi
 	EXPECT_EQ(result.getRows().front().at("ages").asPrimitive(),
 			  PropertyValue(std::vector<PropertyValue>{PropertyValue(30)}));
 	EXPECT_EQ(result.getRows().back().at("ages").asPrimitive(), PropertyValue(std::vector<PropertyValue>{}));
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, BoundsPatternComprehensionContainerOverhead) {
+	PatternExpressionBackend backend;
+	LogicalPlanReadRuntime runtime(backend);
+	QueryPlan plan = parse("MATCH (n:Person) RETURN [(n)-[:KNOWS]->(m) | m.age] AS ages");
+	ASSERT_NE(plan.root, nullptr);
+	LogicalPlanReadRuntimeBounds limited = bounds();
+	// The mapped integer fits by itself, but the returned list also needs its
+	// collection envelope and must be rejected under the tighter bound.
+	limited.maximum_materialized_bytes = 8U;
+	EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*plan.root, limited)), std::runtime_error);
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, BatchesEndpointExistenceForCompleteTopologyPages) {
+	PatternExpressionSnapshotFaults faults;
+	faults.supports_node_existence_probes = true;
+	faults.node_existence_probe_count = std::make_shared<size_t>(0U);
+	faults.node_existence_batch_probe_count = std::make_shared<size_t>(0U);
+	PatternExpressionBackend backend(makeDefaultPatternExpressionGraph(), faults);
+	LogicalPlanReadRuntime runtime(backend);
+	QueryPlan plan = parse("MATCH (n:Person) RETURN [(n)-[:KNOWS]->(m) | m.age] AS ages");
+	ASSERT_NE(plan.root, nullptr);
+
+	const QueryResult result = runtime.executeToQueryResult(*plan.root, bounds());
+	ASSERT_EQ(result.rowCount(), 2U);
+	EXPECT_EQ(result.getRows().front().at("ages").asPrimitive(),
+			  PropertyValue(std::vector<PropertyValue>{PropertyValue(30)}));
+	EXPECT_EQ(*faults.node_existence_probe_count, 0U);
+	EXPECT_GT(*faults.node_existence_batch_probe_count, 0U);
 }
 
 TEST(LogicalPlanPatternExpressionRuntimeTest,
@@ -545,6 +838,205 @@ TEST(LogicalPlanPatternExpressionRuntimeTest, MaterializesBoundedShortestPathAnd
 	EXPECT_EQ(paths.front().getType(), PropertyType::LIST);
 }
 
+TEST(LogicalPlanPatternExpressionRuntimeTest, ShortestPathUsesNativeEndpointProbesBeforePathMaterialization) {
+	PatternExpressionGraph graph;
+	graph.nodes.emplace(1U, LogicalGraphNode{1U, {"Start"}});
+	graph.nodes.emplace(2U, LogicalGraphNode{2U, {"End"}});
+	graph.nodes.emplace(3U, LogicalGraphNode{3U, {"Detour"}});
+	graph.edges.emplace(1U, LogicalGraphEdge{1U, 1U, 2U, "R"});
+	graph.edges.emplace(2U, LogicalGraphEdge{2U, 1U, 3U, "R"});
+	PatternExpressionSnapshotFaults faults;
+	faults.supports_node_existence_probes = true;
+	faults.node_read_count = std::make_shared<size_t>(0U);
+	faults.node_existence_probe_count = std::make_shared<size_t>(0U);
+	PatternExpressionBackend backend(std::move(graph), faults);
+	LogicalPlanReadRuntime runtime(backend);
+	auto root = makeShortestPathRoot("Start", "End", "R",
+			graph::query::expressions::PatternDirection::PAT_OUTGOING, 1, 1, false);
+
+	const QueryResult result = runtime.executeToQueryResult(*root, bounds());
+	ASSERT_EQ(result.rowCount(), 1U);
+	EXPECT_EQ(entityId(result.getRows().front().at("path").asPrimitive().getList()[1]), 1);
+	// Node-scan bindings are already authenticated; the topology-only BFS does
+	// not need a second point probe before materializing the returned path.
+	EXPECT_EQ(*faults.node_existence_probe_count, 0U);
+	// The start and end records are materialized only while building the returned
+	// path. The non-path frontier Node is never fully decoded.
+	EXPECT_EQ(*faults.node_read_count, 2U);
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, ShortestPathSeedsBfsFromEntityIdsWithoutReadingEndpoints) {
+	PatternExpressionGraph graph;
+	graph.nodes.emplace(1U, LogicalGraphNode{1U, {"Start"}, {{"payload", PropertyValue("large")}}});
+	graph.nodes.emplace(2U, LogicalGraphNode{2U, {"End"}, {{"payload", PropertyValue("large")}}});
+	PatternExpressionSnapshotFaults faults;
+	faults.node_read_count = std::make_shared<size_t>(0U);
+	faults.supports_node_existence_probes = true;
+	faults.node_existence_probe_count = std::make_shared<size_t>(0U);
+	faults.node_existence_batch_probe_count = std::make_shared<size_t>(0U);
+	PatternExpressionSnapshot snapshot(std::move(graph), faults);
+	LogicalPlanReadRow row;
+	row.values.emplace("a", EntityRef{1U, false, 0U, 0U, 0U});
+	row.values.emplace("b", EntityRef{2U, false, 0U, 0U, 0U});
+	graph::query::expressions::ShortestPathExpression expression(
+		"a", "b", "R", graph::query::expressions::PatternDirection::PAT_OUTGOING, 0, 0, false);
+	graph::query::QueryContext context;
+	const LogicalPlanReadValue result = LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(
+			snapshot, expression, row, bounds(), context);
+	ASSERT_TRUE(std::holds_alternative<PropertyValue>(result));
+	EXPECT_EQ(std::get<PropertyValue>(result).getType(), PropertyType::NULL_TYPE);
+	EXPECT_EQ(*faults.node_read_count, 0U);
+	EXPECT_EQ(*faults.node_existence_probe_count, 0U);
+	EXPECT_EQ(*faults.node_existence_batch_probe_count, 1U);
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, ShortestPathUsesTypedNativeAdjacencyReferences) {
+	PatternExpressionGraph graph;
+	graph.nodes.emplace(1U, LogicalGraphNode{1U, {"Start"}});
+	graph.nodes.emplace(2U, LogicalGraphNode{2U, {"End"}});
+	graph.edges.emplace(1U, LogicalGraphEdge{1U, 1U, 2U, "R"});
+	PatternExpressionSnapshotFaults faults;
+	faults.supports_native_adjacency_refs = true;
+	faults.adjacency_topology_scan_count = std::make_shared<size_t>(0U);
+	faults.adjacency_reference_scan_count = std::make_shared<size_t>(0U);
+	PatternExpressionBackend backend(std::move(graph), faults);
+	LogicalPlanReadRuntime runtime(backend);
+	auto root = makeShortestPathRoot("Start", "End", "R",
+			graph::query::expressions::PatternDirection::PAT_OUTGOING, 1, 1, false);
+
+	const QueryResult result = runtime.executeToQueryResult(*root, bounds());
+	ASSERT_EQ(result.rowCount(), 1U);
+	EXPECT_EQ(entityId(result.getRows().front().at("path").asPrimitive().getList()[1]), 1);
+	EXPECT_EQ(*faults.adjacency_reference_scan_count, 1U);
+	EXPECT_EQ(*faults.adjacency_topology_scan_count, 0U);
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, ShortestPathUsesUntypedNativeAdjacencyReferences) {
+	PatternExpressionGraph graph;
+	graph.nodes.emplace(1U, LogicalGraphNode{1U, {"Start"}});
+	graph.nodes.emplace(2U, LogicalGraphNode{2U, {"End"}});
+	graph.edges.emplace(1U, LogicalGraphEdge{1U, 1U, 2U, "OTHER"});
+	PatternExpressionSnapshotFaults faults;
+	faults.supports_native_adjacency_refs = true;
+	faults.adjacency_topology_scan_count = std::make_shared<size_t>(0U);
+	faults.adjacency_reference_scan_count = std::make_shared<size_t>(0U);
+	PatternExpressionBackend backend(std::move(graph), faults);
+	LogicalPlanReadRuntime runtime(backend);
+	auto root = makeShortestPathRoot("Start", "End", "",
+			graph::query::expressions::PatternDirection::PAT_OUTGOING, 1, 1, false);
+
+	const QueryResult result = runtime.executeToQueryResult(*root, bounds());
+	ASSERT_EQ(result.rowCount(), 1U);
+	EXPECT_EQ(entityId(result.getRows().front().at("path").asPrimitive().getList()[1]), 1);
+	EXPECT_EQ(*faults.adjacency_reference_scan_count, 1U);
+	EXPECT_EQ(*faults.adjacency_topology_scan_count, 0U);
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, AnchoredRelationshipCountUsesTypedNativeAdjacencyReferences) {
+	PatternExpressionGraph graph;
+	graph.nodes.emplace(1U, LogicalGraphNode{1U, {"Start"}});
+	graph.nodes.emplace(2U, LogicalGraphNode{2U, {"End"}});
+	graph.nodes.emplace(3U, LogicalGraphNode{3U, {"Other"}});
+	graph.edges.emplace(1U, LogicalGraphEdge{1U, 1U, 2U, "R"});
+	graph.edges.emplace(2U, LogicalGraphEdge{2U, 1U, 3U, "OTHER"});
+	PatternExpressionSnapshotFaults faults;
+	faults.supports_native_adjacency_refs = true;
+	faults.supports_node_existence_probes = true;
+	faults.node_existence_probe_count = std::make_shared<size_t>(0U);
+	faults.node_existence_batch_probe_count = std::make_shared<size_t>(0U);
+	faults.adjacency_topology_scan_count = std::make_shared<size_t>(0U);
+	faults.adjacency_reference_scan_count = std::make_shared<size_t>(0U);
+	PatternExpressionBackend backend(std::move(graph), faults);
+	LogicalPlanReadRuntime runtime(backend);
+	auto source = std::make_unique<graph::query::logical::LogicalNodeScan>("a", std::vector<std::string>{"Start"});
+	auto traversal = std::make_unique<graph::query::logical::LogicalTraversal>(
+			std::move(source), "a", "r", "b", "R", "out");
+	graph::query::logical::LogicalAggregate aggregate(
+			std::move(traversal), {},
+			{{"count", std::make_shared<graph::query::expressions::VariableReferenceExpression>("b"), "count", false}});
+
+	std::vector<PropertyValue> results;
+	static_cast<void>(runtime.execute(aggregate, bounds(), [&results](const LogicalPlanReadRow &row) {
+		results.push_back(std::get<PropertyValue>(row.values.at("count")));
+		return true;
+	}));
+
+	EXPECT_EQ(results, std::vector<PropertyValue>{PropertyValue(int64_t{1})});
+	EXPECT_GT(*faults.adjacency_reference_scan_count, 0U);
+	EXPECT_EQ(*faults.adjacency_topology_scan_count, 0U);
+	EXPECT_EQ(*faults.node_existence_probe_count, 0U);
+	EXPECT_GT(*faults.node_existence_batch_probe_count, 0U);
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, AnchoredRelationshipCountUsesUntypedNativeAdjacencyReferences) {
+	PatternExpressionGraph graph;
+	graph.nodes.emplace(1U, LogicalGraphNode{1U, {"Start"}});
+	graph.nodes.emplace(2U, LogicalGraphNode{2U, {"End"}});
+	graph.nodes.emplace(3U, LogicalGraphNode{3U, {"Other"}});
+	graph.edges.emplace(1U, LogicalGraphEdge{1U, 1U, 2U, "R"});
+	graph.edges.emplace(2U, LogicalGraphEdge{2U, 1U, 3U, "OTHER"});
+	PatternExpressionSnapshotFaults faults;
+	faults.supports_native_adjacency_refs = true;
+	faults.supports_node_existence_probes = true;
+	faults.node_existence_probe_count = std::make_shared<size_t>(0U);
+	faults.node_existence_batch_probe_count = std::make_shared<size_t>(0U);
+	faults.adjacency_topology_scan_count = std::make_shared<size_t>(0U);
+	faults.adjacency_reference_scan_count = std::make_shared<size_t>(0U);
+	PatternExpressionBackend backend(std::move(graph), faults);
+	LogicalPlanReadRuntime runtime(backend);
+	auto source = std::make_unique<graph::query::logical::LogicalNodeScan>("a", std::vector<std::string>{"Start"});
+	auto traversal = std::make_unique<graph::query::logical::LogicalTraversal>(
+			std::move(source), "a", "r", "b", "", "out");
+	graph::query::logical::LogicalAggregate aggregate(
+			std::move(traversal), {},
+			{{"count", std::make_shared<graph::query::expressions::VariableReferenceExpression>("b"), "count", false}});
+
+	std::vector<PropertyValue> results;
+	static_cast<void>(runtime.execute(aggregate, bounds(), [&results](const LogicalPlanReadRow &row) {
+		results.push_back(std::get<PropertyValue>(row.values.at("count")));
+		return true;
+	}));
+
+	EXPECT_EQ(results, std::vector<PropertyValue>{PropertyValue(int64_t{2})});
+	EXPECT_GT(*faults.adjacency_reference_scan_count, 0U);
+	EXPECT_EQ(*faults.adjacency_topology_scan_count, 0U);
+	EXPECT_EQ(*faults.node_existence_probe_count, 0U);
+	EXPECT_GT(*faults.node_existence_batch_probe_count, 0U);
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, AnchoredRelationshipCountBatchesTopologyPageEndpointProbes) {
+	PatternExpressionGraph graph;
+	graph.nodes.emplace(1U, LogicalGraphNode{1U, {"Start"}});
+	graph.nodes.emplace(2U, LogicalGraphNode{2U, {"End"}});
+	graph.nodes.emplace(3U, LogicalGraphNode{3U, {"Other"}});
+	graph.edges.emplace(1U, LogicalGraphEdge{1U, 1U, 2U, "R"});
+	graph.edges.emplace(2U, LogicalGraphEdge{2U, 1U, 3U, "R"});
+	PatternExpressionSnapshotFaults faults;
+	faults.supports_node_existence_probes = true;
+	faults.node_existence_probe_count = std::make_shared<size_t>(0U);
+	faults.node_existence_batch_probe_count = std::make_shared<size_t>(0U);
+	faults.adjacency_topology_scan_count = std::make_shared<size_t>(0U);
+	PatternExpressionBackend backend(std::move(graph), faults);
+	LogicalPlanReadRuntime runtime(backend);
+	auto source = std::make_unique<graph::query::logical::LogicalNodeScan>("a", std::vector<std::string>{"Start"});
+	auto traversal = std::make_unique<graph::query::logical::LogicalTraversal>(
+			std::move(source), "a", "r", "b", "", "out");
+	graph::query::logical::LogicalAggregate aggregate(
+			std::move(traversal), {},
+			{{"count", std::make_shared<graph::query::expressions::VariableReferenceExpression>("b"), "count", false}});
+
+	std::vector<PropertyValue> results;
+	static_cast<void>(runtime.execute(aggregate, bounds(), [&results](const LogicalPlanReadRow &row) {
+		results.push_back(std::get<PropertyValue>(row.values.at("count")));
+		return true;
+	}));
+
+	EXPECT_EQ(results, std::vector<PropertyValue>{PropertyValue(int64_t{2})});
+	EXPECT_GT(*faults.adjacency_topology_scan_count, 0U);
+	EXPECT_EQ(*faults.node_existence_probe_count, 0U);
+	EXPECT_GT(*faults.node_existence_batch_probe_count, 0U);
+}
+
 TEST(LogicalPlanPatternExpressionRuntimeTest, MaterializesAllEqualShortestPathsInDeterministicParentOrder) {
 	PatternExpressionBackend backend(makeDiamondGraph());
 	LogicalPlanReadRuntime runtime(backend);
@@ -666,6 +1158,21 @@ TEST(LogicalPlanPatternExpressionRuntimeTest, RejectsShortestPathWhenTheParentDa
 			graph::query::expressions::PatternDirection::PAT_OUTGOING, 1, 3, true);
 	LogicalPlanReadRuntimeBounds limited = bounds();
 	limited.maximum_rows = 3U;
+
+	EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*root, limited)), std::runtime_error);
+}
+
+TEST(LogicalPlanPatternExpressionRuntimeTest, RejectsShortestPathWhenTraversalStateExceedsByteBound) {
+	PatternExpressionBackend backend(makeLayeredPathGraph());
+	LogicalPlanReadRuntime runtime(backend);
+	auto root = makeShortestPathRoot("Start", "End", "R",
+			graph::query::expressions::PatternDirection::PAT_OUTGOING, 1, 6, false);
+	LogicalPlanReadRuntimeBounds limited = bounds();
+	limited.maximum_node_records = 12U;
+	limited.maximum_rows = 20U;
+	limited.maximum_edges_per_node = 2U;
+	limited.maximum_adjacency_page_records = 1U;
+	limited.maximum_materialized_bytes = 128U;
 
 	EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*root, limited)), std::runtime_error);
 }

@@ -73,6 +73,7 @@ namespace graph::query::execution {
 					.maximum_node_page_records = 2U,
 					.maximum_metadata_pages_per_node_page = 4U,
 					.maximum_edges_per_node = 16U,
+					.maximum_edge_records = 32U,
 					.maximum_adjacency_page_records = 2U,
 					.maximum_property_entries = 16U,
 					.maximum_rows = 16U,
@@ -326,6 +327,20 @@ namespace graph::query::execution {
 		const fs::path duplicateHeaders = writeFile("duplicate.csv", "name,name\nAda,Grace\n");
 		QueryPlan headerPlan = parse("LOAD CSV WITH HEADERS FROM '" + fileUri(duplicateHeaders) + "' AS row RETURN row");
 		EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*headerPlan.root, bounds(), context())),
+				 std::runtime_error);
+	}
+
+	TEST_F(LogicalPlanLoadCsvRuntimeTest, BoundsMaterializedCsvRowsIndependentlyFromParserLimits) {
+		const fs::path csv = writeFile("large-row.csv", "value\n" + std::string(256U, 'x') + "\n");
+		CsvOnlyBackend backend;
+		LogicalPlanReadRuntime runtime(backend);
+		QueryPlan plan = parse("LOAD CSV FROM '" + fileUri(csv) + "' AS row RETURN row");
+		ASSERT_NE(plan.root, nullptr);
+		QueryContext queryContext = context();
+		queryContext.csv_import_policy.maximum_field_bytes = 1024U;
+		LogicalPlanReadRuntimeBounds constrained = bounds();
+		constrained.maximum_materialized_bytes = 64U;
+		EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*plan.root, constrained, queryContext)),
 				 std::runtime_error);
 	}
 

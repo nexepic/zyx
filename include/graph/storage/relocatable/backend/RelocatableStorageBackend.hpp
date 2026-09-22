@@ -354,7 +354,11 @@ namespace graph::storage {
 		prepareLogicalVectorTraining(const LogicalGraphVectorTrainingRequest &request) override;
 		[[nodiscard]] LogicalGraphNode readNode(const RelocatableReadSnapshot &snapshot, uint64_t nodeId) const;
 		[[nodiscard]] LogicalGraphEdge readEdge(const RelocatableReadSnapshot &snapshot, uint64_t edgeId) const;
-		[[nodiscard]] bool containsLogicalNode(const RelocatableReadSnapshot &snapshot, uint64_t nodeId) const;
+		[[nodiscard]] bool containsLogicalNode(const RelocatableReadSnapshot &snapshot, uint64_t nodeId,
+																				 NativeReadSession *session = nullptr) const;
+		[[nodiscard]] std::vector<bool> containsLogicalNodesSorted(const RelocatableReadSnapshot &snapshot,
+																				 std::span<const uint64_t> nodeIds,
+																				 NativeReadSession *session = nullptr) const;
 		// Resolves a complete exact Node match through a compatible UNIQUE/NODE KEY
 		// support tree. nullopt means no compatible durable constraint exists and
 		// callers must retain their bounded scan path.
@@ -399,7 +403,9 @@ namespace graph::storage {
 		[[nodiscard]] std::optional<TokenDefinition> findSchemaToken(const RelocatableReadSnapshot &snapshot,
 																	 uint64_t tokenId) const;
 		[[nodiscard]] std::optional<uint64_t> findSchemaTokenId(const RelocatableReadSnapshot &snapshot,
-																std::string_view name) const;
+																						std::string_view name) const;
+		[[nodiscard]] std::optional<uint64_t> findRelationshipTypeTokenId(const RelocatableReadSnapshot &snapshot,
+																								std::string_view name) const;
 		[[nodiscard]] std::vector<IndexDefinition> readIndexDefinitions(const RelocatableReadSnapshot &snapshot,
 																		size_t maximumDefinitions) const;
 		[[nodiscard]] LogicalGraphIndexDefinition
@@ -479,7 +485,11 @@ namespace graph::storage {
 		[[nodiscard]] std::string resolveRelationshipTypeToken(const MetadataSnapshotPin &snapshot,
 																			uint64_t tokenId) const override;
 		[[nodiscard]] std::string resolvePropertyKey(const MetadataSnapshotPin &snapshot,
-												  uint32_t tokenId) const override;
+																				  uint32_t tokenId) const override;
+		[[nodiscard]] std::optional<uint32_t> resolvePropertyToken(const MetadataSnapshotPin &snapshot,
+																			 std::string_view name) const override;
+		[[nodiscard]] std::optional<uint64_t> resolveNodeLabelName(const MetadataSnapshotPin &snapshot,
+																		  std::string_view name) const override;
 		[[nodiscard]] std::vector<IndexDefinition> readAllIndexDefinitions(const MetadataSnapshotPin &snapshot,
 																									   size_t maximumDefinitions) const;
 		[[nodiscard]] std::vector<ConstraintDefinition>
@@ -504,14 +514,51 @@ namespace graph::storage {
 		[[nodiscard]] std::optional<std::vector<LogicalGraphNode>> findNativeNodesByExactProperties(
 				const MetadataSnapshotPin &snapshot, const std::vector<std::string> &labels,
 				const std::vector<std::pair<std::string, PropertyValue>> &properties, size_t maximumNodes,
-				size_t maximumPropertyEntries) const;
+				size_t maximumPropertyEntries, NativeReadSession *session = nullptr) const;
+		[[nodiscard]] std::optional<IndexCandidateBatch> findNativeNodeCandidatesByExactProperties(
+				const MetadataSnapshotPin &snapshot, const std::vector<std::string> &labels,
+				const std::vector<std::pair<std::string, PropertyValue>> &properties, size_t maximumNodes,
+				 size_t maximumPropertyEntries, NativeReadSession *session = nullptr,
+				IndexCandidateBatchVisitor *visitor = nullptr, bool *visitor_completed = nullptr,
+				size_t maximumCandidateBytes = std::numeric_limits<size_t>::max()) const;
+		[[nodiscard]] std::optional<bool> visitNativeNodeCandidatesByExactProperties(
+				const MetadataSnapshotPin &snapshot, const std::vector<std::string> &labels,
+				const std::vector<std::pair<std::string, PropertyValue>> &properties, size_t maximumNodes,
+				size_t maximumPropertyEntries, const IndexCandidateBatchVisitor &visitor,
+				NativeReadSession *session = nullptr,
+				size_t maximumCandidateBytes = std::numeric_limits<size_t>::max()) const;
+		[[nodiscard]] std::optional<IndexCandidateBatch> findNativeNodeCandidatesByPropertyRange(
+				const MetadataSnapshotPin &snapshot, const std::vector<std::string> &labels,
+				const LogicalGraphPropertyRange &range, size_t maximumNodes, size_t maximumPropertyEntries,
+				NativeReadSession *session = nullptr) const;
+		[[nodiscard]] std::optional<bool> visitNativeNodeCandidatesByPropertyRange(
+				const MetadataSnapshotPin &snapshot, const std::vector<std::string> &labels,
+				const LogicalGraphPropertyRange &range, size_t maximumNodes, size_t maximumPropertyEntries,
+				const IndexCandidateBatchVisitor &visitor, NativeReadSession *session = nullptr,
+				size_t maximumCandidateBytes = std::numeric_limits<size_t>::max()) const;
+		[[nodiscard]] std::optional<IndexCandidateBatch> findNativeNodeCandidatesByCompositePropertyRange(
+				const MetadataSnapshotPin &snapshot, const std::vector<std::string> &labels,
+				const LogicalGraphCompositePropertyRange &request, size_t maximumNodes,
+				 size_t maximumPropertyEntries, NativeReadSession *session = nullptr) const;
+		[[nodiscard]] std::optional<bool> visitNativeNodeCandidatesByCompositePropertyRange(
+				const MetadataSnapshotPin &snapshot, const std::vector<std::string> &labels,
+				const LogicalGraphCompositePropertyRange &request, size_t maximumNodes,
+				size_t maximumPropertyEntries, const IndexCandidateBatchVisitor &visitor,
+				NativeReadSession *session = nullptr,
+				size_t maximumCandidateBytes = std::numeric_limits<size_t>::max()) const;
 		[[nodiscard]] std::optional<std::vector<LogicalGraphNode>> findNativeNodesByPropertyRange(
 				const MetadataSnapshotPin &snapshot, const std::vector<std::string> &labels,
-				const LogicalGraphPropertyRange &range, size_t maximumNodes, size_t maximumPropertyEntries) const;
+				const LogicalGraphPropertyRange &range, size_t maximumNodes, size_t maximumPropertyEntries,
+				NativeReadSession *session = nullptr, IndexCandidateBatch *candidateOutput = nullptr,
+				IndexCandidateBatchVisitor *visitor = nullptr, bool *visitor_completed = nullptr,
+				size_t maximumCandidateBytes = std::numeric_limits<size_t>::max()) const;
 		[[nodiscard]] std::optional<std::vector<LogicalGraphNode>> findNativeNodesByCompositePropertyRange(
 				const MetadataSnapshotPin &snapshot, const std::vector<std::string> &labels,
 				const LogicalGraphCompositePropertyRange &request, size_t maximumNodes,
-				size_t maximumPropertyEntries) const;
+				size_t maximumPropertyEntries, NativeReadSession *session = nullptr,
+				IndexCandidateBatch *candidateOutput = nullptr, IndexCandidateBatchVisitor *visitor = nullptr,
+				bool *visitor_completed = nullptr,
+				size_t maximumCandidateBytes = std::numeric_limits<size_t>::max()) const;
 		void verifyConstraintSupportTrees(const MetadataSnapshotPin &snapshot) const;
 		[[nodiscard]] RelocatableMaintenanceService &requireMaintenance();
 		[[nodiscard]] const RelocatableMaintenanceService &requireMaintenance() const;
@@ -519,6 +566,9 @@ namespace graph::storage {
 		void releaseResources() noexcept;
 
 		RelocatableStorageBackendOptions options_;
+		// A successful open establishes this complete common component domain;
+		// writable opens additionally install both native writers.
+		// A construction failure rolls the whole domain back through releaseResources().
 		std::unique_ptr<OwnedRelocatableBackendFile> data_file_;
 		std::unique_ptr<RelocatableMetadataStore> metadata_;
 		std::unique_ptr<PhysicalSegmentAllocator> physical_;

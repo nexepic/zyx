@@ -243,6 +243,8 @@ TEST_F(RelocatableMetadataWriteBatchTest, RecordsFinalMetadataPageRouteFromOwned
 	const PhysicalPageRef reference = batch.allocatePage();
 	EXPECT_TRUE(batch.ownsAllocatedPage(reference));
 	EXPECT_FALSE(batch.ownsAllocatedPage({PhysicalSlotId(99U), 1U, batch.generation()}));
+	EXPECT_FALSE(batch.ownsAllocatedPage(
+			{reference.physical_slot, reference.frame_index, Generation(batch.generation().value() + 1U)}));
 	EXPECT_EQ(batch.pendingMetadataPageRoute(MetadataPageId{}), std::nullopt);
 	EXPECT_EQ(batch.pendingMetadataPageRoute(MetadataPageId(8U)), std::nullopt);
 	batch.registerMetadataPageRoute(MetadataPageId(8U), reference);

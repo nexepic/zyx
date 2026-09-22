@@ -18,6 +18,7 @@
 #include <mutex>
 #include <optional>
 #include <set>
+#include <utility>
 
 #include "graph/storage/relocatable/allocation/SharedPagePoolAllocator.hpp"
 #include "graph/storage/relocatable/allocation/SlottedPage.hpp"
@@ -41,6 +42,22 @@ namespace graph::storage {
 	struct SlottedPagePoolAllocation {
 		SharedPagePoolAllocation allocation;
 		SlottedPage page;
+	};
+
+	// Keeps the Buffer Pool pin alive for a read-only slotted-page codec. The
+	// borrowed record spans returned by `page` therefore remain valid until this
+	// storage-internal object is destroyed.
+	struct SlottedPagePinnedRead {
+		SharedPagePoolPinnedView contents;
+		SlottedPageReadView page;
+
+		SlottedPagePinnedRead(SharedPagePoolPinnedView contentsValue, SlottedPageReadView pageValue) :
+				contents(std::move(contentsValue)), page(std::move(pageValue)) {}
+
+		SlottedPagePinnedRead(SlottedPagePinnedRead &&) noexcept = default;
+		SlottedPagePinnedRead &operator=(SlottedPagePinnedRead &&) noexcept = default;
+		SlottedPagePinnedRead(const SlottedPagePinnedRead &) = delete;
+		SlottedPagePinnedRead &operator=(const SlottedPagePinnedRead &) = delete;
 	};
 
 	struct SlottedPagePoolAppendRequest {
@@ -96,6 +113,11 @@ namespace graph::storage {
 		// while the shared-pool reader validates and copies page bytes.
 		[[nodiscard]] SlottedPage read(const MetadataSnapshotPin &snapshot, PageId pageId,
 									   BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
+		// Returns an authenticated borrowed page only when the shared Buffer Pool
+		// can retain its backing frame; callers fall back to `read` otherwise.
+		[[nodiscard]] std::optional<SlottedPagePinnedRead>
+		readPinned(const MetadataSnapshotPin &snapshot, PageId pageId,
+					   BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
 
 		// Publishes a complete page replacement through the shared pool's frame
 		// COW path. The supplied page must retain the current Page ID and

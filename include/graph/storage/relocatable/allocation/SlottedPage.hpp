@@ -54,6 +54,60 @@ namespace graph::storage {
 		uint32_t contiguous_free_bytes = 0;
 	};
 
+	// Read-only counterpart to SlottedPage. It borrows a fully pinned shared-pool
+	// payload after authenticating the page and a stable slot reference. COW
+	// writers keep using the owning SlottedPage representation below.
+	class SlottedPageReadView final {
+	public:
+		[[nodiscard]] static SlottedPageReadView open(const PageOwnerHeader &owner,
+																	 std::span<const std::byte> bytes);
+
+		[[nodiscard]] PageId pageId() const { return page_id_; }
+		[[nodiscard]] Generation pageGeneration() const { return page_generation_; }
+		[[nodiscard]] uint64_t ownerId() const { return owner_id_; }
+		[[nodiscard]] PageOwnerKind ownerKind() const { return owner_kind_; }
+		[[nodiscard]] LogSequenceNumber ownerCommittedLsn() const { return owner_committed_lsn_; }
+		[[nodiscard]] SlottedPageStats stats() const;
+		[[nodiscard]] std::span<const std::byte> read(const SlottedSlotReference &reference) const;
+
+	private:
+		struct Slot {
+			uint16_t offset = 0;
+			uint16_t capacity = 0;
+			uint16_t value_bytes = 0;
+			uint16_t flags = 0;
+			uint32_t generation = 0;
+
+			[[nodiscard]] bool isLive() const { return flags == RSS_SLOTTED_SLOT_FLAG_LIVE; }
+		};
+
+		SlottedPageReadView(std::span<const std::byte> bytes, PageId pageId, Generation pageGeneration,
+								uint64_t ownerId, PageOwnerKind ownerKind, LogSequenceNumber ownerCommittedLsn,
+								uint16_t slotCount, uint16_t liveSlotCount, uint16_t freeStart, uint16_t freeEnd,
+								uint32_t liveBytes, uint32_t reclaimableBytes) :
+				bytes_(bytes), page_id_(pageId), page_generation_(pageGeneration), owner_id_(ownerId),
+				owner_kind_(ownerKind), owner_committed_lsn_(ownerCommittedLsn), slot_count_(slotCount),
+				live_slot_count_(liveSlotCount), free_start_(freeStart), free_end_(freeEnd),
+				live_bytes_(liveBytes), reclaimable_bytes_(reclaimableBytes) {}
+
+		[[nodiscard]] Slot readSlot(uint16_t slotId) const;
+		[[nodiscard]] size_t slotOffset(uint16_t slotId) const;
+		[[nodiscard]] uint16_t reusableFreeSlotCount() const;
+
+		std::span<const std::byte> bytes_;
+		PageId page_id_{};
+		Generation page_generation_{};
+		uint64_t owner_id_ = 0U;
+		PageOwnerKind owner_kind_ = PageOwnerKind::POK_NONE;
+		LogSequenceNumber owner_committed_lsn_{};
+		uint16_t slot_count_ = 0U;
+		uint16_t live_slot_count_ = 0U;
+		uint16_t free_start_ = 0U;
+		uint16_t free_end_ = 0U;
+		uint32_t live_bytes_ = 0U;
+		uint32_t reclaimable_bytes_ = 0U;
+	};
+
 	// The object serializes its own page-local mutations. Persisting its returned
 	// bytes and atomically publishing the matching Page Directory entry remains
 	// the responsibility of a higher-level COW store.

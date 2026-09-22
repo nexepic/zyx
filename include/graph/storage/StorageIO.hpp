@@ -19,10 +19,10 @@
 #include <mutex>
 #include <span>
 #include "PwriteHelper.hpp"
+#include "graph/storage/relocatable/cache/BufferPool.hpp"
 #include "graph/storage/relocatable/cache/BufferPoolTypes.hpp"
 
 namespace graph::storage {
-	class BufferPool;
 	class FileTruncator;
 	class RelocatableMetadataStore;
 
@@ -284,6 +284,11 @@ namespace graph::storage {
 		// bytes and must contain at least one 4 KiB format page.
 		void enableBufferPool(size_t capacityBytes);
 		void disableBufferPool();
+		// Holds a generation-qualified cached native page without copying its
+		// bytes. Typed storage readers use this only while their decoded view is
+		// alive; callers without an enabled pool keep the established copy path.
+		[[nodiscard]] std::optional<BufferPool::Pin>
+		pinTypedPage(BufferPoolPageKey key, BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
 		// Discard clean, unpinned cached pages after another handle has published a
 		// newer durable root. This deliberately never flushes local cache images.
 		void discardBufferPoolForExternalRebase();

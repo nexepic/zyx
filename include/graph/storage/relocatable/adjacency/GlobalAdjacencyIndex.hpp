@@ -11,6 +11,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <functional>
+#include <span>
 #include <vector>
 
 #include "graph/storage/relocatable/adjacency/AdjacencyKeyCodec.hpp"
@@ -40,7 +42,15 @@ namespace graph::storage {
 
 		[[nodiscard]] GlobalAdjacencyRange
 		scan(const MetadataSnapshotPin &snapshot, GlobalAdjacencyDirection direction, uint64_t nodeId,
-			 size_t maximumEntries, std::optional<GlobalAdjacencyContinuation> continuation = {}) const;
+				size_t maximumEntries, std::optional<GlobalAdjacencyContinuation> continuation = {}) const;
+		// Visits one direction of the adjacency tree in key order while matching a
+		// sorted set of source nodes. A single range cursor replaces one B+Tree root
+		// descent per source node for high-cardinality anchored traversals. The
+		// entry bound covers both matched callbacks and intervening physical keys;
+		// false therefore also reports a physical scan-budget exhaustion.
+		[[nodiscard]] bool visitForNodes(const MetadataSnapshotPin &snapshot, GlobalAdjacencyDirection direction,
+									 std::span<const uint64_t> nodeIds, size_t maximumEntries,
+									 const std::function<bool(uint64_t, uint64_t)> &visitor) const;
 
 	private:
 		BTreeIndex index_;

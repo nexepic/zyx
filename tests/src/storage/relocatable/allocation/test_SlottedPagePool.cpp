@@ -135,6 +135,33 @@ TEST_F(RelocatableSlottedPagePoolTest, AtomicallyMaterializesAndReopensAnEmptyTy
 			  std::vector<std::byte>(value.begin(), value.end()));
 }
 
+TEST_F(RelocatableSlottedPagePoolTest, PinsBorrowedSlottedRecordsWhenTheBufferPoolIsAvailable) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	SlottedPagePool pool(io, *metadata);
+	ASSERT_TRUE(
+			pool.allocateEmptyPage(request(52U, 102U), PhysicalSlotId(41U), PhysicalSlotId(41U), LogSequenceNumber(2U))
+					.has_value());
+	MetadataSnapshotPin beforeUpdate = metadata->openSnapshot();
+	SlottedPage writable = pool.read(beforeUpdate, PageId(102U));
+	const std::array value = {std::byte{0x11U}, std::byte{0x22U}, std::byte{0x33U}};
+	const SlottedSlotReference reference = writable.insert(value);
+	static_cast<void>(pool.replacePage(writable, LogSequenceNumber(3U)));
+	beforeUpdate.release();
+
+	io->sync();
+	io->enableBufferPool(8U * RSS_PAGE_SIZE);
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	{
+		const std::optional<SlottedPagePinnedRead> pinned = pool.readPinned(snapshot, PageId(102U));
+		ASSERT_TRUE(pinned.has_value());
+		const std::span<const std::byte> borrowed = pinned->page.read(reference);
+		EXPECT_EQ(std::vector<std::byte>(borrowed.begin(), borrowed.end()),
+				  std::vector<std::byte>(value.begin(), value.end()));
+		EXPECT_EQ(pinned->page.pageId(), PageId(102U));
+	}
+	snapshot.release();
+}
+
 TEST_F(RelocatableSlottedPagePoolTest, AtomicallyMaterializesAPopulatedPageOnlyAfterItsDirectoryPublication) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
 	SlottedPagePool pool(io, *metadata);

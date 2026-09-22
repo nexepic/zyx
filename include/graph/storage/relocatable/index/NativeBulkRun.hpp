@@ -41,6 +41,42 @@ namespace graph::storage {
 		constexpr bool operator==(const NativeBulkRunFragment &) const = default;
 	};
 
+	struct NativeBulkRunFragmentRange {
+		size_t first_entry_ordinal = 0U;
+		size_t entry_count = 0U;
+		size_t encoded_bytes = 0U;
+
+		constexpr bool operator==(const NativeBulkRunFragmentRange &) const = default;
+	};
+
+	struct NativeBulkRunFragmentLayout {
+		std::vector<NativeBulkRunFragmentRange> fragments;
+		uint64_t entry_count = 0U;
+		uint64_t encoded_bytes = 0U;
+
+		constexpr bool operator==(const NativeBulkRunFragmentLayout &) const = default;
+	};
+
+	// Builds a compact random-access partition in one pass. Deferred producers can
+	// later materialize fragment N from its exact source range instead of rescanning
+	// every preceding entry. Memory is proportional to fragment count, not input.
+	class NativeBulkRunFragmentLayoutBuilder final {
+	public:
+		explicit NativeBulkRunFragmentLayoutBuilder(size_t maximumFragmentBytes);
+		void append(size_t encodedEntryBytes);
+		[[nodiscard]] NativeBulkRunFragmentLayout finish();
+
+	private:
+		void flush();
+
+		NativeBulkRunFragmentLayout layout_;
+		size_t maximum_fragment_bytes_ = 0U;
+		size_t current_first_entry_ordinal_ = 0U;
+		size_t current_entry_count_ = 0U;
+		size_t current_encoded_bytes_ = RSS_NATIVE_BULK_RUN_HEADER_BYTES;
+		bool finished_ = false;
+	};
+
 	struct NativeBulkRunFragmentLocation {
 		SegmentId segment_id{};
 		Generation generation{};

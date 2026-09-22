@@ -46,6 +46,10 @@ namespace graph::storage {
 		// found in the published tree when validating visibility.
 		[[nodiscard]] bool ownsAllocatedPage(PhysicalPageRef reference) const;
 		[[nodiscard]] size_t createdPoolCount() const { return created_pool_slots_.size(); }
+		// Number of physical metadata frames staged by this publication.  Writers
+		// use the delta around one typed directory operation for bounded COW
+		// amplification accounting; it does not expose physical identity to readers.
+		[[nodiscard]] size_t allocatedPageCount() const noexcept { return allocated_pages_.size(); }
 		[[nodiscard]] PhysicalSlotId createdPoolSlot(size_t index) const;
 		// A maintenance operation may materialize an empty pool before it has a
 		// metadata frame to allocate. Track it so every pre-publication failure
@@ -140,6 +144,7 @@ namespace graph::storage {
 		void observePropertyKeyToken(uint32_t token);
 		void observeSchemaTokenId(uint64_t tokenId);
 		[[nodiscard]] PhysicalPageRef allocatePage();
+		[[nodiscard]] std::vector<PhysicalPageRef> allocatePages(size_t count);
 		void setCatalogRoot(PhysicalPageRef root);
 		void setPageDirectoryRoot(PhysicalPageRef root);
 		// The bootstrap header is the only legal Superblock Page Directory root

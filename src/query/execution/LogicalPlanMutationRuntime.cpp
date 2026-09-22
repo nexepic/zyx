@@ -59,6 +59,14 @@ namespace graph::query::execution {
 		using storage::LogicalGraphWriteProperty;
 		using PropertyMap = std::unordered_map<std::string, PropertyValue>;
 
+		[[nodiscard]] storage::EntityReadShape completeNodeReadShape() {
+			return {.include_labels = true, .include_type = false, .all_properties = true};
+		}
+
+		[[nodiscard]] storage::EntityReadShape completeEdgeReadShape() {
+			return {.include_labels = false, .include_type = true, .all_properties = true};
+		}
+
 		[[nodiscard]] LogicalGraphMutationEntityReference createdNodeReference(size_t ordinal) {
 			return {LogicalGraphMutationEntityKind::LGMK_NODE, LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE,
 					static_cast<uint64_t>(ordinal)};
@@ -2348,6 +2356,26 @@ namespace graph::query::execution {
 			return true;
 		}
 
+		void enforceMergePropertyColumnBytes(
+				const std::vector<std::vector<PropertyValue>> &columns,
+				const MergeIdentityProperties &properties, size_t maximumBytes) {
+			size_t bytes = 0U;
+			for (size_t column = 0U; column < columns.size(); ++column) {
+				const size_t keyBytes = column < properties.size() ? properties[column].first.size() : 0U;
+				if (keyBytes > maximumBytes - bytes) {
+					throw std::runtime_error("logical MERGE relationship Property batch exceeded its byte bound");
+				}
+				bytes += keyBytes;
+				for (const PropertyValue &value: columns[column]) {
+					const size_t valueBytes = property_utils::getPropertyValueSize(value);
+					if (valueBytes > maximumBytes - bytes) {
+						throw std::runtime_error("logical MERGE relationship Property batch exceeded its byte bound");
+					}
+					bytes += valueBytes;
+				}
+			}
+		}
+
 		[[nodiscard]] std::optional<storage::LogicalGraphNode> findMergeNode(const logical::LogicalMergeNode &operation,
 																			 const PropertyMap &properties,
 																			 MergeExecutionState &state) {
@@ -2473,6 +2501,16 @@ namespace graph::query::execution {
 		[[nodiscard]] std::optional<storage::LogicalGraphEdge>
 		findMergeEdge(const logical::LogicalMergeEdge &operation, uint64_t sourceNodeId, uint64_t targetNodeId,
 					  const PropertyMap &properties, const std::string &direction, MergeExecutionState &state) {
+			if (properties.size() > state.bounds.maximum_property_entries) {
+				throw std::runtime_error("logical MERGE relationship exceeded its Property bound");
+			}
+			const MergeIdentityProperties orderedProperties = canonicalMergeIdentityProperties(properties);
+			std::vector<std::string_view> propertyKeys;
+			propertyKeys.reserve(orderedProperties.size());
+			for (const auto &[key, value]: orderedProperties) {
+				static_cast<void>(value);
+				propertyKeys.push_back(key);
+			}
 			size_t remaining = state.bounds.maximum_edges_per_node;
 			const auto scanDirection = [&](storage::LogicalGraphReadDirection scanDirection,
 										   const std::function<bool(const storage::LogicalGraphEdge &)> &matches)
@@ -2484,39 +2522,98 @@ namespace graph::query::execution {
 						throw std::runtime_error("logical MERGE relationship scan reached its configured bound");
 					}
 					const size_t pageLimit = std::min(remaining, state.bounds.maximum_adjacency_page_records);
-					const storage::LogicalGraphAdjacencyPage page =
-							state.snapshot.scanAdjacentEdges(sourceNodeId, scanDirection, continuation, pageLimit);
-					if (page.edges.size() > pageLimit || (page.edges.empty() && page.continuation.has_value())) {
+					// MERGE identity matching only needs topology for the scan.  Do not
+					// decode every candidate's Property collection; materialize the
+					// complete Edge only after endpoint/type predicates match.
+					const storage::LogicalGraphAdjacencyTopologyPage page =
+							state.snapshot.scanAdjacentEdgeTopologies(sourceNodeId, scanDirection, continuation, pageLimit);
+					if (page.edges.size() > pageLimit || (page.edges.empty() && page.continuation.has_value()) ||
+							(continuation.has_value() &&
+									(page.edges.empty() || page.edges.front().edge_id != continuation->next_edge_id))) {
 						throw std::runtime_error("logical MERGE relationship scan returned an invalid bounded page");
 					}
-					for (const storage::LogicalGraphEdge &edge: page.edges) {
+					std::vector<const storage::LogicalGraphEdgeTopology *> candidates;
+					candidates.reserve(page.edges.size());
+					for (const storage::LogicalGraphEdgeTopology &topology: page.edges) {
 						state.context.checkGuard();
-						if (edge.edge_id == 0U || (previousEdgeId != 0U && edge.edge_id <= previousEdgeId)) {
+						if (topology.edge_id == 0U || (previousEdgeId != 0U && topology.edge_id <= previousEdgeId)) {
 							throw std::runtime_error(
 									"logical MERGE relationship scan returned non-monotonic adjacency Edge IDs");
 						}
-						previousEdgeId = edge.edge_id;
+						previousEdgeId = topology.edge_id;
 						if (direction == "both" && scanDirection == storage::LogicalGraphReadDirection::LGRD_INCOMING &&
-							edge.source_node_id == sourceNodeId && edge.target_node_id == sourceNodeId) {
+							topology.source_node_id == sourceNodeId && topology.target_node_id == sourceNodeId) {
 							continue;
 						}
 						--remaining;
-						if (matches(edge)) {
-							if (edge.type != operation.getEdgeType()) {
-								continue;
-							}
-							const PropertyMap actual =
-									readEdgeProperties(state.snapshot, edge, state.bounds.maximum_property_entries);
-							if (mergeNodePropertiesMatch(actual, properties)) {
-								return edge;
-							}
+						if (topology.type == operation.getEdgeType() &&
+							matches(storage::LogicalGraphEdge{topology.edge_id, topology.source_node_id,
+														 topology.target_node_id, topology.type})) {
+							candidates.push_back(&topology);
 						}
 						if (remaining == 0U && page.continuation.has_value()) {
 							throw std::runtime_error("logical MERGE relationship scan reached its configured bound");
 						}
 					}
+					std::optional<size_t> matchOrdinal;
+					if (!candidates.empty() && orderedProperties.empty()) {
+						matchOrdinal = 0U;
+					} else if (!candidates.empty()) {
+						std::vector<uint64_t> edgeIds;
+						edgeIds.reserve(candidates.size());
+						for (const storage::LogicalGraphEdgeTopology *candidate: candidates) {
+							edgeIds.push_back(candidate->edge_id);
+						}
+						const std::vector<std::vector<PropertyValue>> columns =
+								state.snapshot.readEdgePropertyColumnsSorted(edgeIds, propertyKeys);
+						if (columns.size() != orderedProperties.size()) {
+							throw std::runtime_error(
+									"logical MERGE relationship Property batch returned an invalid column count");
+						}
+						for (const auto &column: columns) {
+							if (column.size() != candidates.size()) {
+								throw std::runtime_error(
+										"logical MERGE relationship Property batch returned an invalid row count");
+							}
+						}
+						enforceMergePropertyColumnBytes(
+								columns, orderedProperties, state.bounds.maximum_materialized_bytes);
+						for (size_t row = 0U; row < candidates.size() && !matchOrdinal.has_value(); ++row) {
+							bool matchesProperties = true;
+							for (size_t column = 0U; column < columns.size(); ++column) {
+								if (columns[column][row] != orderedProperties[column].second) {
+									matchesProperties = false;
+									break;
+								}
+							}
+							if (matchesProperties) {
+								matchOrdinal = row;
+							}
+						}
+					}
+					if (matchOrdinal.has_value()) {
+						const storage::LogicalGraphEdgeTopology &topology = *candidates[*matchOrdinal];
+						const storage::LogicalGraphEdge edge =
+								state.snapshot.readEdgeShaped(topology.edge_id, completeEdgeReadShape());
+						if (edge.edge_id != topology.edge_id || edge.source_node_id != topology.source_node_id ||
+							edge.target_node_id != topology.target_node_id || edge.type != topology.type) {
+							throw std::runtime_error("logical MERGE relationship scan returned mismatched Edge topology");
+						}
+						const PropertyMap actual =
+								readEdgeProperties(state.snapshot, edge, state.bounds.maximum_property_entries);
+						if (!mergeNodePropertiesMatch(actual, properties)) {
+							throw std::runtime_error(
+									"logical MERGE relationship selected Properties disagreed with the complete Edge");
+						}
+						return edge;
+					}
 					if (!page.continuation.has_value()) {
 						return std::nullopt;
+					}
+					if (page.continuation->previous_edge_id != page.edges.back().edge_id ||
+							page.continuation->next_edge_id == 0U ||
+							page.continuation->previous_edge_id == page.continuation->next_edge_id) {
+						throw std::runtime_error("logical MERGE relationship scan returned an invalid continuation");
 					}
 					continuation = page.continuation;
 				}
@@ -2535,10 +2632,10 @@ namespace graph::query::execution {
 						});
 			}
 			if (const auto outgoing = scanDirection(storage::LogicalGraphReadDirection::LGRD_OUTGOING,
-													[&](const storage::LogicalGraphEdge &edge) {
-														return edge.source_node_id == sourceNodeId &&
-															   edge.target_node_id == targetNodeId;
-													});
+														[&](const storage::LogicalGraphEdge &edge) {
+																return edge.source_node_id == sourceNodeId &&
+																	   edge.target_node_id == targetNodeId;
+															});
 				outgoing.has_value()) {
 				return outgoing;
 			}
@@ -3114,7 +3211,7 @@ namespace graph::query::execution {
 				if (reference.reference_kind != LogicalGraphMutationReferenceKind::LGRK_PERSISTED) {
 					throw std::logic_error("logical MERGE has an invalid Node projection reference");
 				}
-				const storage::LogicalGraphNode node = state.snapshot.readNode(reference.value);
+				const storage::LogicalGraphNode node = state.snapshot.readNodeShaped(reference.value, completeNodeReadShape());
 				const auto changed = state.modified_entities.find(
 						{static_cast<uint8_t>(LogicalGraphMutationEntityKind::LGMK_NODE), reference.value});
 				const PropertyMap properties =
@@ -3139,7 +3236,7 @@ namespace graph::query::execution {
 			if (reference.reference_kind != LogicalGraphMutationReferenceKind::LGRK_PERSISTED) {
 				throw std::logic_error("logical MERGE has an invalid relationship projection reference");
 			}
-			const storage::LogicalGraphEdge edge = state.snapshot.readEdge(reference.value);
+			const storage::LogicalGraphEdge edge = state.snapshot.readEdgeShaped(reference.value, completeEdgeReadShape());
 			const auto changed = state.modified_entities.find(
 					{static_cast<uint8_t>(LogicalGraphMutationEntityKind::LGMK_EDGE), reference.value});
 			const PropertyMap properties =

@@ -177,6 +177,72 @@ TEST_F(GlobalAdjacencyIndexTest, StreamsOneLogicalRangeAndResumesWithoutPhysical
 			FormatError::FERR_INVALID_STATE);
 }
 
+TEST_F(GlobalAdjacencyIndexTest, VisitsSeveralSourceRangesWithOneCursor) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+	SlottedPagePool pool(io, *metadata);
+	BTreePageStore pages(pool, *metadata);
+	BTreePage root = leaf(PageId(101U), BTreeLeafValueLayout::BLVL_EMPTY);
+	for (const GlobalAdjacencyKey key : {
+				 GlobalAdjacencyKey{GlobalAdjacencyDirection::GAD_OUT, 7U, 3U},
+				 GlobalAdjacencyKey{GlobalAdjacencyDirection::GAD_OUT, 7U, 9U},
+				 GlobalAdjacencyKey{GlobalAdjacencyDirection::GAD_OUT, 8U, 4U},
+				 GlobalAdjacencyKey{GlobalAdjacencyDirection::GAD_OUT, 9U, 5U},
+				 GlobalAdjacencyKey{GlobalAdjacencyDirection::GAD_IN, 8U, 6U},
+			}) {
+		root.insert({AdjacencyKeyCodec::encode(key), 0U});
+	}
+	ASSERT_TRUE(pages.allocate(allocationRequest(PageId(101U)), root, PhysicalSlotId(40U), PhysicalSlotId(40U),
+									 LogSequenceNumber(2U)).has_value());
+		const IndexRootLocation rootLocation{RSS_GLOBAL_ADJACENCY_INDEX_ID, PageId(101U), Generation(1U)};
+		static_cast<void>(pages.publishRoots(std::span(&rootLocation, 1U), {}, LogSequenceNumber(3U)));
+		GlobalAdjacencyIndex index(pages, *metadata);
+		const MetadataSnapshotPin snapshot = metadata->openSnapshot();
+		const std::array<uint64_t, 2U> nodes{7U, 9U};
+		std::vector<std::pair<uint64_t, uint64_t>> observed;
+		EXPECT_TRUE(index.visitForNodes(snapshot, GlobalAdjacencyDirection::GAD_OUT, nodes, 8U,
+				[&observed](const uint64_t nodeId, const uint64_t edgeId) {
+					observed.emplace_back(nodeId, edgeId);
+					return true;
+				}));
+		EXPECT_EQ(observed, (std::vector<std::pair<uint64_t, uint64_t>>{{7U, 3U}, {7U, 9U}, {9U, 5U}}));
+		EXPECT_FALSE(index.visitForNodes(snapshot, GlobalAdjacencyDirection::GAD_OUT, nodes, 2U,
+				[](uint64_t, uint64_t) { return true; }));
+		size_t stopped = 0U;
+		EXPECT_FALSE(index.visitForNodes(snapshot, GlobalAdjacencyDirection::GAD_OUT, nodes, 8U,
+				[&stopped](uint64_t, uint64_t) {
+					++stopped;
+					return false;
+				}));
+		EXPECT_EQ(stopped, 1U);
+		const std::array<uint64_t, 2U> unsorted{9U, 7U};
+		const std::array<uint64_t, 2U> duplicate{7U, 7U};
+		const std::array<uint64_t, 2U> zero{0U, 7U};
+		MetadataSnapshotPin invalidSnapshot;
+		expectFormatError([&] {
+			static_cast<void>(index.visitForNodes(invalidSnapshot, GlobalAdjacencyDirection::GAD_OUT, nodes, 8U,
+					[](uint64_t, uint64_t) { return true; }));
+		}, FormatError::FERR_INVALID_HEADER);
+		for (const std::span<const uint64_t> invalidNodes: {
+				std::span<const uint64_t>(unsorted), std::span<const uint64_t>(duplicate),
+				std::span<const uint64_t>(zero), std::span<const uint64_t>{}}) {
+			expectFormatError([&] {
+				static_cast<void>(index.visitForNodes(snapshot, GlobalAdjacencyDirection::GAD_OUT, invalidNodes, 8U,
+						[](uint64_t, uint64_t) { return true; }));
+			}, FormatError::FERR_INVALID_HEADER);
+		}
+		expectFormatError([&] {
+			static_cast<void>(index.visitForNodes(snapshot, static_cast<GlobalAdjacencyDirection>(99U), nodes, 8U,
+					[](uint64_t, uint64_t) { return true; }));
+		}, FormatError::FERR_INVALID_HEADER);
+		expectFormatError([&] {
+			static_cast<void>(index.visitForNodes(snapshot, GlobalAdjacencyDirection::GAD_OUT, nodes, 0U,
+					[](uint64_t, uint64_t) { return true; }));
+		}, FormatError::FERR_INVALID_HEADER);
+		expectFormatError([&] {
+			static_cast<void>(index.visitForNodes(snapshot, GlobalAdjacencyDirection::GAD_OUT, nodes, 8U, {}));
+		}, FormatError::FERR_INVALID_HEADER);
+	}
+
 TEST_F(GlobalAdjacencyIndexTest, RejectsAValuedLeafForTheReservedAdjacencyRoot) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
 	SlottedPagePool pool(io, *metadata);

@@ -111,6 +111,68 @@ TEST_F(CompareBenchmarkTest, RunMeasuredOpenedModeSkipsExplicitQueryWarmup) {
 	EXPECT_EQ(calls, 2);
 }
 
+TEST_F(CompareBenchmarkTest, MutatingSamplesEachStartFromTheSameImmutableBaseline) {
+	const auto baselinePath = tempRoot / "mutation-baseline.db";
+	{
+		zyx::Database baseline(baselinePath.string());
+		baseline.open();
+		baseline.close();
+	}
+
+	for (const auto &mode: {std::string(kExecutionModeWarm), std::string(kExecutionModeOpened),
+			 std::string(kExecutionModeColdish)}) {
+		Options options;
+		options.dbPath = tempRoot / (mode + ".db");
+		options.baselineDbPath = baselinePath;
+		options.scale = "smoke";
+		options.executionMode = mode;
+		options.warmup = 2;
+		options.iterations = 3;
+
+		std::vector<int64_t> initialCounts;
+		runMeasuredIsolatedWorkload(options, LoadedGraph{}, "point_create_node", [&](zyx::Database &db) {
+			initialCounts.push_back(scalarInt(db.execute("MATCH (n:SampleIsolation) RETURN count(n)")));
+			executeOk(db, "CREATE (:SampleIsolation {marker: 1})");
+			return scalarInt(db.execute("MATCH (n:SampleIsolation) RETURN count(n)"));
+		});
+
+		const size_t expectedCalls = mode == kExecutionModeOpened ? 3U : 5U;
+		EXPECT_EQ(initialCounts.size(), expectedCalls);
+		EXPECT_TRUE(std::ranges::all_of(initialCounts, [](int64_t count) { return count == 0; }));
+	}
+
+	zyx::Database baseline(baselinePath.string());
+	baseline.open();
+	EXPECT_EQ(scalarInt(baseline.execute("MATCH (n:SampleIsolation) RETURN count(n)")), 0);
+	baseline.close();
+	for (const auto &entry: std::filesystem::directory_iterator(tempRoot)) {
+		EXPECT_EQ(entry.path().filename().string().find(".workload-"), std::string::npos);
+	}
+}
+
+TEST_F(CompareBenchmarkTest, MutatingSampleFailureStillRemovesItsDatabaseClone) {
+	const auto baselinePath = tempRoot / "failure-baseline.db";
+	{
+		zyx::Database baseline(baselinePath.string());
+		baseline.open();
+		baseline.close();
+	}
+
+	Options options;
+	options.dbPath = tempRoot / "failure.db";
+	options.baselineDbPath = baselinePath;
+	options.scale = "smoke";
+	options.executionMode = std::string(kExecutionModeWarm);
+	options.iterations = 1;
+
+	EXPECT_THROW(runMeasuredIsolatedWorkload(options, LoadedGraph{}, "point_create_node", [](zyx::Database &) -> int64_t {
+		throw std::runtime_error("expected operation failure");
+	}), std::runtime_error);
+	for (const auto &entry: std::filesystem::directory_iterator(tempRoot)) {
+		EXPECT_EQ(entry.path().filename().string().find(".workload-"), std::string::npos);
+	}
+}
+
 TEST_F(CompareBenchmarkTest, ParseArgsAcceptsCompleteScanAndIndexedOptions) {
 	std::vector<std::string> args = {"zyx-compare-bench",
 									 "--dataset",
@@ -187,6 +249,28 @@ TEST_F(CompareBenchmarkTest, ParseArgsAcceptsMultihopProfileAndComputesTargets) 
 	EXPECT_EQ(targetUserIdForDepth(30), "user-000151");
 	EXPECT_EQ(targetUserIdForDepth(6, "smoke"), "user-000019");
 	EXPECT_EQ(targetUserIdForDepth(30, "smoke"), "user-000091");
+}
+
+TEST_F(CompareBenchmarkTest, ParseArgsValidatesTheSelectedWorkloadAgainstItsProfile) {
+	std::vector<std::string> args = {"zyx-compare-bench", "--dataset", "data", "--db-path", "db",
+			"--scale", "small", "--profile", "multihop", "--workload", "varlength_frontier_count"};
+	std::vector<char *> argv;
+	for (auto &arg: args) {
+		argv.push_back(arg.data());
+	}
+	const Options options = parseArgs(static_cast<int>(argv.size()), argv.data());
+	ASSERT_TRUE(options.onlyWorkload.has_value());
+	EXPECT_EQ(*options.onlyWorkload, "varlength_frontier_count");
+	EXPECT_TRUE(isSupportedWorkload(kProfileMultihop, "varlength_frontier_count"));
+	EXPECT_TRUE(isSupportedWorkload(kProfileMultihop, "load_nodes_edges"));
+	EXPECT_FALSE(isSupportedWorkload(kProfileScan, "varlength_frontier_count"));
+
+	args.back() = "not_registered";
+	argv.clear();
+	for (auto &arg: args) {
+		argv.push_back(arg.data());
+	}
+	EXPECT_THROW(static_cast<void>(parseArgs(static_cast<int>(argv.size()), argv.data())), std::invalid_argument);
 }
 
 TEST_F(CompareBenchmarkTest, ParseArgsAcceptsWriteProfileAndComputesWriteTargets) {
@@ -483,6 +567,39 @@ TEST_F(CompareBenchmarkTest, LoadGraphRequiresExplicitActiveWriteTransaction) {
 	db.close();
 }
 
+TEST_F(CompareBenchmarkTest, SelectedWorkloadEmitsOnlyItsOwnSamples) {
+	const auto dataset = writeSmallDataset();
+
+	Options query;
+	query.dataset = dataset;
+	query.dbPath = tempRoot / "selected-query.db";
+	query.scale = "tiny";
+	query.profile = std::string(kProfileScan);
+	query.onlyWorkload = "label_scan_filter";
+	query.iterations = 1;
+
+	std::ostringstream queryStream;
+	auto *originalStdout = std::cout.rdbuf(queryStream.rdbuf());
+	const int queryStatus = run(query);
+	std::cout.rdbuf(originalStdout);
+	EXPECT_EQ(queryStatus, 0);
+	const std::string queryOutput = queryStream.str();
+	EXPECT_NE(queryOutput.find("\"workload\":\"label_scan_filter\""), std::string::npos);
+	EXPECT_EQ(queryOutput.find("\"workload\":\"load_nodes_edges\""), std::string::npos);
+
+	Options load = query;
+	load.dbPath = tempRoot / "selected-load.db";
+	load.onlyWorkload = "load_nodes_edges";
+	std::ostringstream loadStream;
+	originalStdout = std::cout.rdbuf(loadStream.rdbuf());
+	const int loadStatus = run(load);
+	std::cout.rdbuf(originalStdout);
+	EXPECT_EQ(loadStatus, 0);
+	const std::string loadOutput = loadStream.str();
+	EXPECT_NE(loadOutput.find("\"workload\":\"load_nodes_edges\""), std::string::npos);
+	EXPECT_EQ(loadOutput.find("\"workload\":\"label_scan_filter\""), std::string::npos);
+}
+
 TEST_F(CompareBenchmarkTest, RunExecutesSmallScanIndexedAndWriteProfiles) {
 	const auto dataset = writeSmallDataset();
 
@@ -592,4 +709,23 @@ TEST_F(CompareBenchmarkTest, MainReportsJsonErrorForInvalidArguments) {
 	}
 
 	EXPECT_EQ(zyx_compare_benchmark_main(static_cast<int>(argv.size()), argv.data()), 1);
+}
+
+TEST_F(CompareBenchmarkTest, MainAttributesSelectedWorkloadFailure) {
+	std::vector<std::string> args = {
+			"zyx-compare-bench", "--dataset", (tempRoot / "missing-dataset").string(), "--db-path",
+			(tempRoot / "selected-failure.db").string(), "--scale", "tiny", "--profile", "scan", "--workload",
+			"label_scan_filter"};
+	std::vector<char *> argv;
+	for (auto &arg: args) {
+		argv.push_back(arg.data());
+	}
+
+	std::ostringstream errorStream;
+	auto *originalStderr = std::cerr.rdbuf(errorStream.rdbuf());
+	const int status = zyx_compare_benchmark_main(static_cast<int>(argv.size()), argv.data());
+	std::cerr.rdbuf(originalStderr);
+	EXPECT_EQ(status, 1);
+	const std::string output = errorStream.str();
+	EXPECT_NE(output.find("\"workload\":\"label_scan_filter\""), std::string::npos);
 }

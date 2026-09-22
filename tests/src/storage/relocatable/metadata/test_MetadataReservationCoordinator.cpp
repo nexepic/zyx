@@ -18,6 +18,7 @@
 #include "graph/storage/relocatable/metadata/MetadataReservationCoordinator.hpp"
 #include "graph/storage/relocatable/metadata/MetadataWriteBatch.hpp"
 #include "graph/storage/relocatable/format/SuperblockFile.hpp"
+#include "graph/debug/PerfTrace.hpp"
 
 namespace {
 
@@ -75,7 +76,12 @@ TEST_F(RelocatableMetadataStoreTest, MetadataReservationCoordinatorStagesCatalog
 	};
 	input.data_preparer = &dataPreparer;
 
+	const bool valuesWereEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::reset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
 	const std::optional<std::vector<CatalogEntry>> entries = components.coordinator.prepare(batch, input);
+	const graph::debug::PerfTrace::Snapshot trace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
 	ASSERT_TRUE(entries.has_value());
 	ASSERT_TRUE(prepared);
 	ASSERT_EQ(entries->size(), 1U);
@@ -84,6 +90,12 @@ TEST_F(RelocatableMetadataStoreTest, MetadataReservationCoordinatorStagesCatalog
 	EXPECT_TRUE(components.allocator.isAllocated(batch.candidate(), PhysicalSlotId(40U)));
 	EXPECT_EQ(components.catalog.find(batch.candidate(), pool.segment_id).physical_slot, PhysicalSlotId(40U));
 	EXPECT_EQ(components.locations.findPage(batch.candidate(), page.page_id), page);
+	ASSERT_TRUE(trace.contains("native_graph.commit.metadata_reservation_page_index_builds"));
+	EXPECT_EQ(trace.at("native_graph.commit.metadata_reservation_page_index_builds").totalValue, 1);
+	ASSERT_TRUE(trace.contains("native_graph.commit.metadata_reservation_page_index_entries"));
+	EXPECT_EQ(trace.at("native_graph.commit.metadata_reservation_page_index_entries").totalValue, 1);
+	ASSERT_TRUE(trace.contains("native_graph.commit.directory_publication_pages"));
+	EXPECT_GT(trace.at("native_graph.commit.directory_publication_pages").totalValue, 0);
 }
 
 TEST_F(RelocatableMetadataStoreTest, MetadataReservationCoordinatorRejectsMalformedRequestsBeforeAllocation) {
@@ -211,6 +223,27 @@ TEST_F(RelocatableMetadataStoreTest, MetadataReservationCoordinatorRejectsForeig
 	expectFormatError([&] { static_cast<void>(components.coordinator.prepare(batch, manifestTarget)); },
 					  FormatError::FERR_INVALID_STATE);
 
+}
+
+TEST_F(RelocatableMetadataStoreTest, MetadataReservationCoordinatorRejectsDuplicatePageIdsBeforeAllocation) {
+	const Superblock current = initializeAndRecoverReservationStore(io);
+	MetadataReservationCoordinatorComponents components(io, current);
+	CatalogSlotReservationRequest first = reservationRequest(RSS_FIRST_ALLOCATABLE_SEGMENT_ID + 10U, 2U);
+	CatalogSlotReservationRequest second = reservationRequest(RSS_FIRST_ALLOCATABLE_SEGMENT_ID + 11U, 2U);
+	first.kind = SegmentKind::SGK_PROPERTY_PAGE_POOL;
+	second.kind = SegmentKind::SGK_PROPERTY_PAGE_POOL;
+	const std::array requests{first, second};
+	const PageLocation page{PageId(201U), first.segment_id, RSS_PAGE_POOL_FIRST_DATA_FRAME, first.segment_generation};
+	PageLocation duplicate = page;
+	duplicate.segment_id = second.segment_id;
+	const std::array pages{page, duplicate};
+	MetadataWriteBatch batch(components.pools, current, LogSequenceNumber(2U));
+	CatalogReservationPublicationRequest input =
+			reservationInput(requests, PhysicalSlotId(40U), PhysicalSlotId(41U));
+	input.pages = pages;
+	expectFormatError([&] { static_cast<void>(components.coordinator.prepare(batch, input)); },
+					  FormatError::FERR_INVALID_STATE);
+	EXPECT_FALSE(components.allocator.isAllocated(batch.candidate(), PhysicalSlotId(40U)));
 }
 
 TEST_F(RelocatableMetadataStoreTest, MetadataReservationCoordinatorRejectsDurableIdentityCollisionsAndUnavailableSlots) {

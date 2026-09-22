@@ -14,6 +14,7 @@
 #include <array>
 #include <ranges>
 #include <stdexcept>
+#include <unordered_map>
 
 namespace graph::storage {
 
@@ -106,7 +107,7 @@ namespace graph::storage {
 	}
 
 	std::vector<uint64_t> EntityLabelSetStore::readNodeLabels(const MetadataSnapshotPin &snapshot,
-															  const NodeEntityRecord &node) const {
+																					 const NodeEntityRecord &node) const {
 		if (node.inline_label_count > RSS_ENTITY_INLINE_LABEL_CAPACITY) {
 			fail(FormatError::FERR_INVALID_STATE,
 				 "relocatable Node fixed-label prefix exceeds the inline LabelSet capacity");
@@ -124,6 +125,41 @@ namespace graph::storage {
 		return labels;
 	}
 
+	std::vector<std::vector<uint64_t>> EntityLabelSetStore::readNodeLabelsSorted(
+			const MetadataSnapshotPin &snapshot, const std::span<const NodeEntityRecord> nodes) const {
+		std::vector<std::vector<uint64_t>> result(nodes.size());
+		std::unordered_map<uint64_t, size_t> loadedPages;
+		loadedPages.reserve(nodes.size());
+		std::vector<LoadedLabelPage> pages;
+		pages.reserve(nodes.size());
+		for (size_t index = 0U; index < nodes.size(); ++index) {
+			const NodeEntityRecord &node = nodes[index];
+			if (node.inline_label_count > RSS_ENTITY_INLINE_LABEL_CAPACITY) {
+				fail(FormatError::FERR_INVALID_STATE,
+						"relocatable Node fixed-label prefix exceeds the inline LabelSet capacity");
+			}
+			std::vector<uint64_t> labels;
+			labels.reserve(RSS_ENTITY_MAX_LABELS);
+			const auto inlineEnd = node.inline_label_ids.begin() + node.inline_label_count;
+			labels.insert(labels.end(), node.inline_label_ids.begin(), inlineEnd);
+			if (!node.label_overflow.isEmpty()) {
+				const uint64_t pageKey = node.label_overflow.page_id.value();
+				auto [pageIt, inserted] = loadedPages.emplace(pageKey, pages.size());
+				if (inserted) {
+					pages.emplace_back(loadLabelPage(snapshot, node.label_overflow.page_id));
+				}
+				const LoadedLabelPage &page = pages[pageIt->second];
+				const SlottedSlotReference slot{node.label_overflow.page_id, node.label_overflow.slot_id,
+						node.label_overflow.slot_generation};
+				const std::vector<uint64_t> overflow = EntityLabelSetCodec::decode(page.page.read(slot));
+				labels.insert(labels.end(), overflow.begin(), overflow.end());
+			}
+			validateNodeLabels(node, labels);
+			result[index] = std::move(labels);
+		}
+		return result;
+	}
+
 	EntityLabelSetMutationPlan EntityLabelSetStore::planNodeLabels(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
 																   std::span<const uint64_t> labels,
 																   const EntityLabelSetWritePlan &plan,
@@ -137,7 +173,7 @@ namespace graph::storage {
 		const EntityPageLocation nodeLocation = metadata_.findNodePageLocation(snapshot, nodeId);
 		LoadedNodePage nodePage = loadNodePage(snapshot, nodeLocation.page_id);
 		const std::optional<NodeEntityRecord> currentNode =
-				nodePage.page.findNode(nodeLocation.slot_id, nodeLocation.slot_generation);
+				nodePage.page.findNode(nodeLocation.slot_id, nodeLocation.slot_generation, nodeId);
 		if (!currentNode.has_value()) {
 			fail(FormatError::FERR_INVALID_STATE,
 				 "relocatable Node Entity Map resolves to a missing Node fixed-record slot");

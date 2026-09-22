@@ -69,11 +69,17 @@ namespace graph::query::gds {
 
 		class Snapshot final : public storage::LogicalGraphReadSnapshot {
 		public:
-			std::vector<storage::LogicalGraphNode> nodes;
-			std::vector<storage::LogicalGraphEdge> edges;
+		std::vector<storage::LogicalGraphNode> nodes;
+		std::vector<storage::LogicalGraphEdge> edges;
+		mutable size_t full_edge_reads = 0U;
+		mutable size_t topology_reads = 0U;
+		mutable size_t batched_property_reads = 0U;
 			bool return_mismatched_adjacency = false;
 			bool return_unbounded_adjacency_page = false;
+			bool paginate_adjacency = false;
+			size_t adjacency_page_limit_override = 0U;
 			bool return_oversized_node_page = false;
+			bool paginate_nodes = false;
 			bool return_excess_metadata_pages = false;
 			bool preserve_node_scan_order = false;
 			bool return_nodes_before_cursor = false;
@@ -93,6 +99,7 @@ namespace graph::query::gds {
 			}
 
 			[[nodiscard]] storage::LogicalGraphEdge readEdge(const uint64_t edgeId) const override {
+				++full_edge_reads;
 				const auto found = std::ranges::find(edges, edgeId, &storage::LogicalGraphEdge::edge_id);
 				if (found == edges.end()) {
 					throw std::out_of_range("unknown relationship");
@@ -123,11 +130,12 @@ namespace graph::query::gds {
 			std::ranges::sort(sorted, {}, &storage::LogicalGraphNode::node_id);
 			const std::vector<storage::LogicalGraphNode> &ordered = preserve_node_scan_order ? nodes : sorted;
 			storage::LogicalGraphNodePage page;
+			const size_t pageLimit = paginate_nodes ? std::min<size_t>(maximumRecords, 1U) : maximumRecords;
 			for (const storage::LogicalGraphNode &node: ordered) {
 				if (!return_nodes_before_cursor && node.node_id <= afterNodeId) {
 					continue;
 				}
-				if (!return_oversized_node_page && page.nodes.size() == maximumRecords) {
+				if (!return_oversized_node_page && page.nodes.size() == pageLimit) {
 					page.may_have_more = true;
 					break;
 				}
@@ -144,10 +152,14 @@ namespace graph::query::gds {
 			scanAdjacentEdges(const uint64_t nodeId, const storage::LogicalGraphReadDirection direction,
 							  const std::optional<storage::LogicalGraphAdjacencyContinuation> continuation,
 							  const size_t maximumRecords) const override {
-				if (maximumRecords == 0U || continuation.has_value()) {
+				if (maximumRecords == 0U || (continuation.has_value() && !paginate_adjacency)) {
 					throw std::invalid_argument("invalid paged relationship scan request");
 				}
 				storage::LogicalGraphAdjacencyPage page;
+				const size_t pageLimit = paginate_adjacency
+						? std::min(maximumRecords, adjacency_page_limit_override == 0U ? 1U : adjacency_page_limit_override)
+						: maximumRecords;
+				bool afterContinuation = !continuation.has_value();
 				for (const storage::LogicalGraphEdge &edge: edges) {
 					const bool matches = return_mismatched_adjacency ||
 							(direction == storage::LogicalGraphReadDirection::LGRD_OUTGOING
@@ -156,7 +168,14 @@ namespace graph::query::gds {
 					if (!matches) {
 						continue;
 					}
-					if (!return_unbounded_adjacency_page && page.edges.size() == maximumRecords) {
+					if (!afterContinuation) {
+						if (edge.edge_id == continuation->next_edge_id) {
+							afterContinuation = true;
+						} else {
+							continue;
+						}
+					}
+					if (!return_unbounded_adjacency_page && page.edges.size() == pageLimit) {
 						page.continuation = storage::LogicalGraphAdjacencyContinuation{
 								.previous_edge_id = page.edges.back().edge_id, .next_edge_id = edge.edge_id};
 						break;
@@ -164,6 +183,36 @@ namespace graph::query::gds {
 					page.edges.push_back(edge);
 				}
 				return page;
+			}
+
+			[[nodiscard]] storage::LogicalGraphAdjacencyTopologyPage scanAdjacentEdgeTopologies(
+					const uint64_t nodeId, const storage::LogicalGraphReadDirection direction,
+					const std::optional<storage::LogicalGraphAdjacencyContinuation> continuation,
+					const size_t maximumRecords) const override {
+				++topology_reads;
+				const storage::LogicalGraphAdjacencyPage full = scanAdjacentEdges(nodeId, direction, continuation, maximumRecords);
+				storage::LogicalGraphAdjacencyTopologyPage result;
+				result.continuation = full.continuation;
+				for (const storage::LogicalGraphEdge &edge: full.edges) {
+					result.edges.push_back({edge.edge_id, edge.source_node_id, edge.target_node_id, edge.type});
+				}
+				return result;
+			}
+
+			[[nodiscard]] std::vector<PropertyValue> readEdgePropertiesSorted(
+					const std::span<const uint64_t> edgeIds, const std::string_view key) const override {
+				++batched_property_reads;
+				std::vector<PropertyValue> result;
+				result.reserve(edgeIds.size());
+				for (const uint64_t edgeId: edgeIds) {
+					const auto edge = std::ranges::find(edges, edgeId, &storage::LogicalGraphEdge::edge_id);
+					if (edge == edges.end()) {
+						throw std::out_of_range("unknown relationship");
+					}
+					const auto property = std::ranges::find(edge->properties, key, &storage::LogicalGraphPropertyEntry::key);
+					result.push_back(property == edge->properties.end() ? PropertyValue() : property->value);
+				}
+				return result;
 			}
 
 			void visitEdges(const size_t maximumRecords,
@@ -222,8 +271,8 @@ namespace graph::query::gds {
 				{3U, {"Code", "Service"}},
 		};
 		snapshot.edges = {
-				{12U, 1U, 2U, "CALLS", {property("cost", PropertyValue(9.0))}},
 				{11U, 1U, 3U, "CALLS", {property("cost", PropertyValue(2.5))}},
+				{12U, 1U, 2U, "CALLS", {property("cost", PropertyValue(9.0))}},
 				{13U, 3U, 1U, "IMPORTS", {}},
 		};
 
@@ -247,6 +296,9 @@ namespace graph::query::gds {
 		ASSERT_EQ(projection.incoming(3U).size(), 1U);
 		EXPECT_EQ(projection.incoming(3U).front().target_node_id, 1U);
 		EXPECT_TRUE(projection.outgoing(2U).empty());
+		EXPECT_GT(snapshot.topology_reads, 0U);
+		EXPECT_EQ(snapshot.full_edge_reads, 0U);
+		EXPECT_EQ(snapshot.batched_property_reads, 1U);
 		EXPECT_GT(projection.estimatedMemoryBytes(), sizeof(LogicalGraphProjection));
 		const std::shared_ptr<const LogicalProjectionCsr> firstCsr = projection.csr();
 		const std::shared_ptr<const LogicalProjectionCsr> secondCsr = projection.csr();
@@ -308,6 +360,75 @@ namespace graph::query::gds {
 		EXPECT_THROW(static_cast<void>(LogicalGraphProjection::build(snapshot, spec, bounds())), std::runtime_error);
 	}
 
+	TEST(LogicalGraphProjectionTest, RejectsNonMonotonicTopologyBeforeBuildingAdjacency) {
+		Snapshot snapshot;
+		snapshot.nodes = {{1U, {"Code"}}, {2U, {"Code"}}, {3U, {"Code"}}};
+		snapshot.edges = {{42U, 1U, 2U, "CALLS", {}}, {41U, 1U, 3U, "CALLS", {}}};
+		LogicalGraphProjectionSpec spec;
+		spec.name = "non-monotonic-topology";
+		spec.relationships = {{.type = "CALLS"}};
+
+		EXPECT_THROW(static_cast<void>(LogicalGraphProjection::build(snapshot, spec,
+				{.maximum_nodes = 3U, .maximum_metadata_pages = 1U, .maximum_edges_per_node = 2U})),
+				std::runtime_error);
+		EXPECT_EQ(snapshot.full_edge_reads, 0U);
+		EXPECT_EQ(snapshot.batched_property_reads, 0U);
+	}
+
+	TEST(LogicalGraphProjectionTest, ConsumesMultiplePhysicalAdjacencyPagesWithinTheLogicalBudget) {
+		Snapshot snapshot;
+		snapshot.paginate_adjacency = true;
+		snapshot.nodes = {{1U, {"Code"}}, {2U, {"Code"}}, {3U, {"Code"}}, {4U, {"Code"}}};
+		snapshot.edges = {{41U, 1U, 2U, "CALLS", {}}, {42U, 1U, 3U, "CALLS", {}},
+				{43U, 1U, 4U, "CALLS", {}}};
+		LogicalGraphProjectionSpec spec;
+		spec.name = "paged";
+		spec.relationships = {{.type = "CALLS"}};
+		const LogicalGraphProjection projection = LogicalGraphProjection::build(snapshot, spec,
+				{.maximum_nodes = 4U, .maximum_metadata_pages = 1U, .maximum_edges_per_node = 3U});
+		EXPECT_EQ(projection.edgeCount(), 3U);
+		ASSERT_EQ(projection.outgoing(1U).size(), 3U);
+		EXPECT_EQ(projection.outgoing(1U)[0].relationship_id, 41U);
+		EXPECT_EQ(projection.outgoing(1U)[1].relationship_id, 42U);
+		EXPECT_EQ(projection.outgoing(1U)[2].relationship_id, 43U);
+		EXPECT_EQ(snapshot.topology_reads, 6U);
+	}
+
+	TEST(LogicalGraphProjectionTest, CapsAValidLargeAdjacencyReadIntoBoundedBatches) {
+		Snapshot snapshot;
+		snapshot.paginate_adjacency = true;
+		snapshot.adjacency_page_limit_override = 256U;
+		snapshot.nodes = {{1U, {"Code"}}, {2U, {"Code"}}};
+		snapshot.edges.reserve(300U);
+		for (uint64_t edgeId = 1U; edgeId <= 300U; ++edgeId) {
+			snapshot.edges.push_back({edgeId, 1U, 2U, "CALLS", {}});
+		}
+		LogicalGraphProjectionSpec spec;
+		spec.name = "bounded-large-adjacency";
+		spec.relationships = {{.type = "CALLS"}};
+		const LogicalGraphProjection projection = LogicalGraphProjection::build(
+				snapshot, spec, {.maximum_nodes = 2U, .maximum_metadata_pages = 1U, .maximum_edges_per_node = 300U});
+		EXPECT_EQ(projection.edgeCount(), 300U);
+		// The projection budget is larger than one physical request, but no request
+		// may exceed the shared bounded adjacency batch size.
+		EXPECT_EQ(snapshot.topology_reads, 3U);
+	}
+
+	TEST(LogicalGraphProjectionTest, ConsumesMultiplePhysicalNodePagesWithinTheLogicalBudget) {
+		Snapshot snapshot;
+		snapshot.paginate_nodes = true;
+		snapshot.nodes = {{1U, {"Code"}}, {2U, {"Code"}}, {3U, {"Code"}}};
+		snapshot.edges = {{51U, 1U, 2U, "CALLS", {}}, {52U, 2U, 3U, "CALLS", {}}};
+		LogicalGraphProjectionSpec spec;
+		spec.name = "paged-nodes";
+		spec.node_labels = {"Code"};
+		spec.relationships = {{.type = "CALLS"}};
+		const LogicalGraphProjection projection = LogicalGraphProjection::build(
+				snapshot, spec, {.maximum_nodes = 3U, .maximum_metadata_pages = 3U, .maximum_edges_per_node = 2U});
+		EXPECT_EQ(projection.nodeIds(), (std::vector<uint64_t>{1U, 2U, 3U}));
+		EXPECT_EQ(projection.edgeCount(), 2U);
+	}
+
 	TEST(LogicalGraphProjectionTest, RejectsAnAdjacencyCursorThatWouldTruncateASupernode) {
 		Snapshot snapshot;
 		snapshot.nodes = {{1U, {"Code"}}, {2U, {"Code"}}, {3U, {"Code"}}};
@@ -354,6 +475,10 @@ namespace graph::query::gds {
 		EXPECT_EQ(weighted.outgoing(1U)[1U].weight, 7.0);
 		EXPECT_EQ(weighted.outgoing(1U)[2U].weight, 2.0);
 		EXPECT_EQ(weighted.outgoing(1U)[3U].weight, 3.5);
+		// Weight properties are fetched as one selected column after topology
+		// collection; projection must not materialize complete Edges on this path.
+		EXPECT_EQ(snapshot.batched_property_reads, 1U);
+		EXPECT_EQ(snapshot.full_edge_reads, 0U);
 		EXPECT_TRUE(weighted.incoming(99U).empty());
 
 		auto invalidBounds = bounds();
@@ -368,6 +493,10 @@ namespace graph::query::gds {
 		invalidBounds.maximum_edges_per_node = 0U;
 		EXPECT_THROW(static_cast<void>(LogicalGraphProjection::build(snapshot, spec, invalidBounds)),
 					 std::invalid_argument);
+		invalidBounds = bounds();
+		invalidBounds.maximum_nodes = std::numeric_limits<size_t>::max();
+		EXPECT_THROW(static_cast<void>(LogicalGraphProjection::build(snapshot, spec, invalidBounds)),
+					 std::overflow_error);
 
 		LogicalGraphProjectionSpec invalid = spec;
 		invalid.node_labels = {"", "Code"};
@@ -422,6 +551,20 @@ namespace graph::query::gds {
 		EXPECT_NO_THROW(static_cast<void>(LogicalGraphProjection::build(
 				snapshot, spec, bounds(), [&checkpointCalls] { ++checkpointCalls; })));
 		EXPECT_GT(checkpointCalls, 0U);
+	}
+
+	TEST(LogicalGraphProjectionTest, RejectsAnOversizedWeightColumnBeforeRetainingTheProjection) {
+		Snapshot snapshot;
+		snapshot.nodes = {{1U, {"Code"}}, {2U, {"Code"}}};
+		snapshot.edges = {{1U, 1U, 2U, "CALLS", {property("cost", PropertyValue(std::string(128U, 'x')))}}};
+		LogicalGraphProjectionSpec spec;
+		spec.name = "bounded-weight-column";
+		spec.relationships = {{.type = "CALLS",
+										 .weight = {.kind = LogicalProjectionWeightKind::LPWK_PROPERTY,
+													 .property_name = "cost"}}};
+		LogicalProjectionBuildBounds limited = bounds();
+		limited.maximum_property_bytes = 16U;
+		EXPECT_THROW(static_cast<void>(LogicalGraphProjection::build(snapshot, spec, limited)), std::runtime_error);
 	}
 
 	TEST(LogicalProjectionCatalogTest, OwnsImmutableProjectionsAndReportsSnapshotStaleness) {

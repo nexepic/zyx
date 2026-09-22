@@ -78,6 +78,38 @@ namespace {
 		return graph::utils::calculateCrc(bytes.empty() ? &empty : bytes.data(), bytes.size());
 	}
 
+	TEST(NativeBulkRunFragmentLayoutBuilderTest, PlansExactRangesWithoutRetainingEntries) {
+		const size_t maximumBytes = RSS_NATIVE_BULK_RUN_HEADER_BYTES + 20U;
+		NativeBulkRunFragmentLayoutBuilder builder(maximumBytes);
+		builder.append(8U);
+		builder.append(12U);
+		builder.append(13U);
+		builder.append(7U);
+		const NativeBulkRunFragmentLayout layout = builder.finish();
+
+		ASSERT_EQ(layout.fragments.size(), 2U);
+		EXPECT_EQ(layout.fragments[0], (NativeBulkRunFragmentRange{0U, 2U, maximumBytes}));
+		EXPECT_EQ(layout.fragments[1], (NativeBulkRunFragmentRange{2U, 2U, maximumBytes}));
+		EXPECT_EQ(layout.entry_count, 4U);
+		EXPECT_EQ(layout.encoded_bytes, maximumBytes * 2U);
+	}
+
+	TEST(NativeBulkRunFragmentLayoutBuilderTest, RejectsInvalidBoundsEntriesAndReuse) {
+		expectFormatError(
+				[] { static_cast<void>(NativeBulkRunFragmentLayoutBuilder(RSS_NATIVE_BULK_RUN_HEADER_BYTES)); },
+				FormatError::FERR_INVALID_HEADER);
+		NativeBulkRunFragmentLayoutBuilder empty(RSS_NATIVE_BULK_RUN_HEADER_BYTES + 8U);
+		expectFormatError([&] { static_cast<void>(empty.finish()); }, FormatError::FERR_INVALID_STATE);
+
+		NativeBulkRunFragmentLayoutBuilder builder(RSS_NATIVE_BULK_RUN_HEADER_BYTES + 8U);
+		expectFormatError([&] { builder.append(0U); }, FormatError::FERR_INVALID_HEADER);
+		expectFormatError([&] { builder.append(9U); }, FormatError::FERR_INVALID_HEADER);
+		builder.append(8U);
+		static_cast<void>(builder.finish());
+		expectFormatError([&] { builder.append(1U); }, FormatError::FERR_INVALID_HEADER);
+		expectFormatError([&] { static_cast<void>(builder.finish()); }, FormatError::FERR_INVALID_STATE);
+	}
+
 	void refreshFragmentRecordChecksum(std::vector<std::byte> &bytes) {
 		constexpr size_t RECORD_BYTES_OFFSET = 16U;
 		constexpr size_t RECORD_CRC_OFFSET = 20U;

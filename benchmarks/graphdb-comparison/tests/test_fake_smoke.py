@@ -407,14 +407,18 @@ def test_run_all_preloads_query_adapter_before_timing(tmp_path: Path):
     assert ("label", True) in ObservedFakeAdapter.events
 
 
-def test_run_all_isolates_mutating_workloads_per_workload(tmp_path: Path):
+@pytest.mark.parametrize(("execution_mode", "expected_samples"), [("warm", 3), ("opened", 2)])
+def test_run_all_isolates_every_mutating_sample(
+    tmp_path: Path, execution_mode: str, expected_samples: int
+):
     dataset_dir = tmp_path / "dataset"
     graph = generate_graph(SCALES["smoke"], seed=42)
     write_dataset(graph, dataset_dir)
 
     class ObservedFakeAdapter(FakeAdapter):
         next_adapter_id = 0
-        operation_adapter_ids: dict[str, int] = {}
+        operation_adapter_ids: dict[str, list[int]] = {}
+        initial_user_counts: dict[str, list[int]] = {}
 
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
@@ -422,20 +426,29 @@ def test_run_all_isolates_mutating_workloads_per_workload(tmp_path: Path):
             self.observed_adapter_id = type(self).next_adapter_id
 
         def point_create_node(self) -> int:
-            type(self).operation_adapter_ids["point_create_node"] = self.observed_adapter_id
+            type(self).operation_adapter_ids.setdefault("point_create_node", []).append(self.observed_adapter_id)
+            type(self).initial_user_counts.setdefault("point_create_node", []).append(len(self.users))
             return super().point_create_node()
 
         def point_create_edge(self) -> int:
-            type(self).operation_adapter_ids["point_create_edge"] = self.observed_adapter_id
+            type(self).operation_adapter_ids.setdefault("point_create_edge", []).append(self.observed_adapter_id)
+            type(self).initial_user_counts.setdefault("point_create_edge", []).append(len(self.users))
             return super().point_create_edge()
 
     adapter = ObservedFakeAdapter(database="fake", dataset_dir=dataset_dir, scale="smoke", profile="write")
-    results = adapter.run_all(warmup=0, iterations=1)
+    results = adapter.run_all(warmup=1, iterations=2, execution_mode=execution_mode)
 
     assert [result.status for result in results] == ["ok"] * 7
-    assert ObservedFakeAdapter.operation_adapter_ids["point_create_node"] != ObservedFakeAdapter.operation_adapter_ids[
-        "point_create_edge"
-    ]
+    assert len(ObservedFakeAdapter.operation_adapter_ids["point_create_node"]) == expected_samples
+    assert len(ObservedFakeAdapter.operation_adapter_ids["point_create_edge"]) == expected_samples
+    assert len(set(ObservedFakeAdapter.operation_adapter_ids["point_create_node"])) == expected_samples
+    assert len(set(ObservedFakeAdapter.operation_adapter_ids["point_create_edge"])) == expected_samples
+    assert set(ObservedFakeAdapter.operation_adapter_ids["point_create_node"]).isdisjoint(
+        ObservedFakeAdapter.operation_adapter_ids["point_create_edge"]
+    )
+    expected_users = len(graph.users)
+    assert ObservedFakeAdapter.initial_user_counts["point_create_node"] == [expected_users] * expected_samples
+    assert ObservedFakeAdapter.initial_user_counts["point_create_edge"] == [expected_users] * expected_samples
     assert adapter.users == []
     assert adapter.follows == []
 
@@ -852,7 +865,7 @@ def test_run_benchmark_records_missing_adapter_failures(tmp_path: Path):
     assert status["failure_count"] == 1
     assert status["quality_failure_count"] > 0
     assert "failed" in summary
-    assert "run_all" in summary
+    assert "load_nodes_edges" in summary
 
 
 def test_run_benchmark_records_run_all_exceptions(tmp_path: Path, monkeypatch):

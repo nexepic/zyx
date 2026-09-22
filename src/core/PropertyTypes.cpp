@@ -19,9 +19,21 @@
  **/
 
 #include "graph/core/PropertyTypes.hpp"
+
+#include <limits>
+#include <stdexcept>
 #include <variant>
 
 namespace graph::property_utils {
+
+	namespace {
+		[[nodiscard]] size_t checkedAdd(const size_t left, const size_t right) {
+			if (right > std::numeric_limits<size_t>::max() - left) {
+				throw std::overflow_error("PropertyValue size calculation overflowed");
+			}
+			return left + right;
+		}
+	} // namespace
 
 	/**
 	 * @brief Calculates the estimated memory size of a PropertyValue.
@@ -49,18 +61,18 @@ namespace graph::property_utils {
 					} else if constexpr (std::is_same_v<T, double>) {
 						return sizeof(double);
 					} else if constexpr (std::is_same_v<T, std::string>) {
-						return arg.size() + sizeof(size_t);
+						return checkedAdd(arg.size(), sizeof(size_t));
 					} else if constexpr (std::is_same_v<T, std::vector<PropertyValue>>) {
 						size_t total = sizeof(uint32_t);
 						for (const auto &element : arg) {
-							total += getPropertyValueSize(element);
+							total = checkedAdd(total, getPropertyValueSize(element));
 						}
 						return total;
 					} else if constexpr (std::is_same_v<T, PropertyValue::MapType>) {
 						size_t total = sizeof(uint32_t);
 						for (const auto &[k, v] : arg) {
-							total += k.size() + sizeof(size_t);
-							total += getPropertyValueSize(v);
+							total = checkedAdd(total, checkedAdd(k.size(), sizeof(size_t)));
+							total = checkedAdd(total, getPropertyValueSize(v));
 						}
 						return total;
 					} else if constexpr (std::is_same_v<T, TemporalDate>) {
@@ -70,7 +82,7 @@ namespace graph::property_utils {
 					} else if constexpr (std::is_same_v<T, TemporalDuration>) {
 						return sizeof(int64_t) * 3;
 					} else if constexpr (std::is_same_v<T, PropertyValue::Bytes>) {
-						return arg.size() + sizeof(size_t);
+						return checkedAdd(arg.size(), sizeof(size_t));
 					} else {
 						return 0;
 					}

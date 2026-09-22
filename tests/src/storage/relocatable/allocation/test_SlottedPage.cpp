@@ -35,6 +35,7 @@ namespace {
 	constexpr size_t PAGE_FREE_END_OFFSET = 34;
 	constexpr size_t PAGE_LIVE_BYTES_OFFSET = 40;
 	constexpr size_t PAGE_RECLAIMABLE_BYTES_OFFSET = 44;
+	constexpr size_t SLOT_OFFSET_OFFSET = 0;
 	constexpr size_t SLOT_CAPACITY_OFFSET = 2;
 	constexpr size_t SLOT_VALUE_BYTES_OFFSET = 4;
 	constexpr size_t SLOT_FLAGS_OFFSET = 6;
@@ -142,6 +143,34 @@ TEST(RelocatableSlottedPageTest, BindsVariablePageBytesToTheirSharedPoolOwner) {
 	PageOwnerHeader invalidLsn = owner;
 	invalidLsn.committed_lsn = LogSequenceNumber{};
 	expectFormatError([&] { static_cast<void>(SlottedPage::create(invalidLsn)); }, FormatError::FERR_INVALID_HEADER);
+}
+
+TEST(RelocatableSlottedPageTest, ReadViewAuthenticatesBorrowedSlotBytesAndStableReferences) {
+	PageOwnerHeader owner;
+	owner.page_id = PageId(36U);
+	owner.owner_id = 44U;
+	owner.kind = PageOwnerKind::POK_PROPERTY;
+	owner.payload_bytes = RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES;
+	owner.generation = Generation(6U);
+	owner.committed_lsn = LogSequenceNumber(8U);
+	SlottedPage page = SlottedPage::create(owner);
+	const SlottedSlotReference reference = page.insert(bytes("borrowed-value"));
+	const std::vector<std::byte> encoded = page.serialize();
+
+	const SlottedPageReadView view = SlottedPageReadView::open(owner, encoded);
+	const std::span<const std::byte> value = view.read(reference);
+	EXPECT_EQ(std::vector<std::byte>(value.begin(), value.end()), bytes("borrowed-value"));
+	const size_t slotOffset = RSS_SLOTTED_PAGE_HEADER_BYTES + reference.slot_id * RSS_SLOTTED_PAGE_SLOT_BYTES;
+	EXPECT_EQ(value.data(), encoded.data() + LittleEndianCodec::readU16(encoded, slotOffset + SLOT_OFFSET_OFFSET));
+	EXPECT_EQ(view.stats().live_slot_count, 1U);
+
+	SlottedSlotReference stale = reference;
+	++stale.generation;
+	expectFormatError([&] { static_cast<void>(view.read(stale)); }, FormatError::FERR_INVALID_STATE);
+	std::vector<std::byte> checksumCorrupt = encoded;
+	checksumCorrupt.back() ^= std::byte{0x01U};
+	expectFormatError([&] { static_cast<void>(SlottedPageReadView::open(owner, checksumCorrupt)); },
+					  FormatError::FERR_CHECKSUM_MISMATCH);
 }
 
 TEST(RelocatableSlottedPageTest, RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation) {

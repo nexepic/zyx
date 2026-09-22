@@ -178,9 +178,17 @@ TEST_F(RelocatableEntityPageStoreTest, ReadsDecodedLocationsAndBoundsEntityScans
 	++missingNodeSlot.slot_generation;
 	EntityPageLocation missingEdgeSlot = allocatedEdge->location;
 	++missingEdgeSlot.slot_generation;
+	EntityPageLocation wrongNodeId = allocatedNode->location;
+	++wrongNodeId.entity_id;
+	EntityPageLocation wrongEdgeId = allocatedEdge->location;
+	++wrongEdgeId.entity_id;
 	expectFormatError([&] { static_cast<void>(store.readNodeAt(snapshot, missingNodeSlot)); },
 					  FormatError::FERR_INVALID_STATE);
 	expectFormatError([&] { static_cast<void>(store.readEdgeAt(snapshot, missingEdgeSlot)); },
+					  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(store.readNodeAt(snapshot, wrongNodeId)); },
+					  FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(store.readEdgeAt(snapshot, wrongEdgeId)); },
 					  FormatError::FERR_INVALID_STATE);
 	const EntityPageLocation invalidNodeLocation{1001U, PageId{}, 0U, 1U};
 	const EntityPageLocation invalidEdgeLocation{2001U, PageId{}, 0U, 1U};
@@ -820,6 +828,31 @@ TEST_F(RelocatableEntityPageStoreTest, RejectsCorruptTypedLabelPayloadDuringPubl
 			},
 			FormatError::FERR_CHECKSUM_MISMATCH);
 	EXPECT_EQ(metadata->findPageLocation(current, PageId(102U)), location);
+}
+
+TEST_F(RelocatableEntityPageStoreTest, PhysicalEntityScanRejectsPoolEnvelopeThatDisagreesWithCatalogRoute) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore store(io, *metadata);
+	ASSERT_TRUE(store.allocateNode(newPool(31U, 901U, 101U, 40U), 1001U, node(7U, 0U),
+			LogSequenceNumber(2U)).has_value());
+
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	const CatalogEntry pool = metadata->findCatalog(snapshot, SegmentId(31U));
+	const uint64_t poolOffset = PhysicalSegmentAllocator::checkedSlotOffset(
+			snapshot.superblock().data_region_offset, pool.physical_slot);
+	std::array<std::byte, RSS_ENVELOPE_BYTES> bytes{};
+	ASSERT_EQ(io->readAt(poolOffset, bytes.data(), bytes.size()), bytes.size());
+	SegmentEnvelope envelope = SegmentEnvelopeCodec::decode(bytes);
+	++envelope.owner_id;
+	bytes = SegmentEnvelopeCodec::encode(envelope);
+	io->writeAt(poolOffset, bytes.data(), bytes.size());
+
+	expectFormatError(
+			[&] {
+				static_cast<void>(store.visitNodesUntil(
+						snapshot, 8U, [](uint64_t, const NodeEntityRecord &) { return true; }));
+			},
+			FormatError::FERR_INVALID_STATE);
 }
 
 TEST_F(RelocatableEntityPageStoreTest, PublishesAReachableLabelSetWithItsNewNodeInsertion) {

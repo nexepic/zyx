@@ -60,6 +60,7 @@ namespace {
 				.maximum_node_page_records = 4U,
 				.maximum_metadata_pages_per_node_page = 4U,
 				.maximum_edges_per_node = 16U,
+				.maximum_edge_records = 32U,
 				.maximum_adjacency_page_records = 4U,
 				.maximum_property_entries = 16U,
 				.maximum_rows = 16U,
@@ -97,4 +98,36 @@ TEST(LogicalPlanUnionRuntimeTest, RejectsMismatchedOutputColumnsBeforeExecutingE
 	QueryPlan plan = parser.parseToLogical("RETURN 1 AS left UNION RETURN 2 AS right");
 	ASSERT_NE(plan.root, nullptr);
 	EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*plan.root, bounds())), std::invalid_argument);
+}
+
+TEST(LogicalPlanUnionRuntimeTest, BoundsDistinctMaterializedKeysByBytes) {
+	NoGraphBackend backend;
+	LogicalPlanReadRuntime runtime(backend);
+	graph::parser::cypher::CypherParserImpl parser;
+	QueryPlan plan = parser.parseToLogical(
+			"RETURN 'a long union value that must be accounted for' AS value "
+			"UNION RETURN 'another long union value that must be accounted for' AS value");
+	ASSERT_NE(plan.root, nullptr);
+	LogicalPlanReadRuntimeBounds constrained = bounds();
+	constrained.maximum_materialized_bytes = 8U;
+	EXPECT_THROW(static_cast<void>(runtime.executeToQueryResult(*plan.root, constrained)), std::runtime_error);
+}
+
+TEST(LogicalPlanUnionRuntimeTest, StopsBeforeReadingTheSecondBranchAfterDownstreamCancellation) {
+	NoGraphBackend backend;
+	LogicalPlanReadRuntime runtime(backend);
+	graph::parser::cypher::CypherParserImpl parser;
+	QueryPlan plan = parser.parseToLogical(
+			"UNWIND [1, 2] AS value RETURN value UNION ALL "
+			"UNWIND [3, 4] AS value RETURN value");
+	ASSERT_NE(plan.root, nullptr);
+	std::vector<PropertyValue> delivered;
+	const LogicalPlanReadRuntimeStats stats = runtime.execute(
+			*plan.root, bounds(), [&delivered](const LogicalPlanReadRow &row) {
+				delivered.push_back(std::get<PropertyValue>(row.values.at("value")));
+				return false;
+			});
+	ASSERT_EQ(delivered.size(), 1U);
+	EXPECT_EQ(delivered.front(), PropertyValue(1));
+	EXPECT_EQ(stats.rows_emitted, 1U);
 }

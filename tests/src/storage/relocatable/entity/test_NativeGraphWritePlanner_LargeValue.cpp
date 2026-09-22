@@ -503,7 +503,9 @@ TEST_F(NativeGraphLargeValueMutationTest,
 	for (size_t ordinal = 0U; ordinal < FINAL_ENTRY_COUNT; ++ordinal) {
 		const uint64_t nodeId = transaction.createNode(std::array<uint64_t, 1U>{PERSON_LABEL_TOKEN});
 		finalBodies.emplace_back(RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES + 97U, 'z');
-		finalBodies.back().append("-final-" + std::to_string(ordinal));
+		// Match the seed payload widths so the content keys exercise multiple
+		// existing leaves rather than one length-sorted rightmost leaf.
+		finalBodies.back().append("-" + std::to_string(ordinal));
 		transaction.replaceNodeProperty(entityPropertyRoot(nodeId, finalBodies.back()));
 		finalNodeIds.push_back(nodeId);
 	}

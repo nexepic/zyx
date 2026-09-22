@@ -7,6 +7,7 @@ buildDir_*/
 build-*/
 /libzyx_core.a
 build_release/
+buildRelease/
 build_bench_release/
 build_wasm/
 CMakeFiles/

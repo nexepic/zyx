@@ -22,6 +22,8 @@
 
 namespace graph::storage {
 
+	class NativeReadSession;
+
 	// A fresh pool receives its first populated Entity page and its Entity Map
 	// entry in one data-before-metadata publication.
 	struct EntityPageNewPoolRequest {
@@ -185,17 +187,31 @@ namespace graph::storage {
 		// second root-to-leaf lookup per record while still validating PageId, slot,
 		// record kind, and durable slot generation before exposing a record.
 		[[nodiscard]] NodeEntityRecord readNodeAt(const MetadataSnapshotPin &snapshot,
-												  const EntityPageLocation &location) const;
+														  const EntityPageLocation &location) const;
+		// Resolves and reads a strictly increasing Node-ID batch through one
+		// directory range cursor, grouping locations by Entity page. Empty
+		// optionals represent absent logical IDs; present records remain fully
+		// authenticated by the typed page codec.
+		[[nodiscard]] std::vector<std::optional<NodeEntityRecord>>
+		readNodesSorted(const MetadataSnapshotPin &snapshot, std::span<const uint64_t> nodeIds) const;
 		[[nodiscard]] EdgeEntityRecord readEdgeAt(const MetadataSnapshotPin &snapshot,
-												  const EntityPageLocation &location) const;
-		// Entity Map traversal is logical-ID ordered and bounded by the caller. A
-		// visitor returning false stops before decoding another Entity Map entry.
+														  const EntityPageLocation &location) const;
+		// Resolves and reads a strictly increasing Edge-ID batch through one
+		// directory range cursor, grouping locations by Entity page. Empty results
+		// represent absent logical IDs; present records remain fully authenticated.
+		[[nodiscard]] std::vector<std::optional<EdgeEntityRecord>>
+		readEdgesSorted(const MetadataSnapshotPin &snapshot, std::span<const uint64_t> edgeIds) const;
+		// Ordinary scans walk current physical Entity pages and enumerate their live
+		// slots without a per-record Entity Map lookup. Order is intentionally not a
+		// contract; resumable logical-ID scans use visitNodesAfter below.
 		[[nodiscard]] bool
 		visitNodesUntil(const MetadataSnapshotPin &snapshot, size_t maximumRecords,
-						const std::function<bool(uint64_t nodeId, const NodeEntityRecord &)> &visitor) const;
+						const std::function<bool(uint64_t nodeId, const NodeEntityRecord &)> &visitor,
+						NativeReadSession *session = nullptr) const;
 		[[nodiscard]] bool
 		visitEdgesUntil(const MetadataSnapshotPin &snapshot, size_t maximumRecords,
-						const std::function<bool(uint64_t edgeId, const EdgeEntityRecord &)> &visitor) const;
+						const std::function<bool(uint64_t edgeId, const EdgeEntityRecord &)> &visitor,
+						NativeReadSession *session = nullptr) const;
 		// The metadata-page limit bounds directory traversal independently from
 		// result count, which preserves resumable sparse-ID scan behavior.
 		[[nodiscard]] bool
@@ -336,15 +352,45 @@ namespace graph::storage {
 				contents(std::move(contents)), page(std::move(page)) {}
 		};
 
+		// The point/scan read path keeps its data frame pinned and borrows its
+		// validated payload. The owned fallback preserves direct-store tests that
+		// intentionally run without a Buffer Pool.
+		struct ReadPage {
+			std::optional<SharedPagePoolPinnedView> pinned_contents;
+			std::optional<LoadedPage> copied_contents;
+			EntityPageReadView page;
+
+			explicit ReadPage(SharedPagePoolPinnedView contents) :
+					pinned_contents(std::move(contents)),
+					page(EntityPageReadView::open(pinned_contents->owner, pinned_contents->payload())) {}
+			explicit ReadPage(LoadedPage contents) :
+					copied_contents(std::move(contents)),
+					page(EntityPageReadView::open(copied_contents->contents.owner,
+																	 copied_contents->contents.payload)) {}
+		};
+
 		[[nodiscard]] LoadedPage loadPage(const MetadataSnapshotPin &snapshot, PageId pageId,
 										  EntityPageRecordKind expectedKind,
 										  BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
+		[[nodiscard]] ReadPage loadReadPage(const MetadataSnapshotPin &snapshot, PageId pageId,
+													EntityPageRecordKind expectedKind,
+													BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
+		// A physical scan starts from the Page Directory, so it already owns the
+		// exact current location. Entity pools may also contain LabelSet pages;
+		// those are authenticated and skipped without being decoded as EntityPage.
+		[[nodiscard]] std::optional<ReadPage>
+		loadPhysicalScanReadPage(const MetadataSnapshotPin &snapshot, const CatalogEntry &pool,
+							 const PageLocation &location) const;
 		// Entity Map order commonly groups records from the same Entity page. A
 		// bounded scan retains only that current decoded page, so a transient read is
 		// issued once per contiguous PageId run instead of once per Entity record.
 		[[nodiscard]] LoadedPage &loadScanPage(const MetadataSnapshotPin &snapshot, PageId pageId,
 											   EntityPageRecordKind expectedKind,
-											   std::optional<LoadedPage> &currentPage, PageId &currentPageId) const;
+																	std::optional<LoadedPage> &currentPage, PageId &currentPageId) const;
+		[[nodiscard]] ReadPage &loadScanReadPage(const MetadataSnapshotPin &snapshot, PageId pageId,
+																		 EntityPageRecordKind expectedKind,
+																		 std::optional<ReadPage> &currentPage,
+																		 PageId &currentPageId) const;
 		[[nodiscard]] std::optional<EntityPageInsertResult>
 		allocate(const EntityPageNewPoolRequest &request, uint64_t entityId, EntityPageRecordKind kind,
 				 const NodeEntityRecord *node, const EdgeEntityRecord *edge, LogSequenceNumber checkpointLsn,

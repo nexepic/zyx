@@ -2,8 +2,10 @@
 
 #include <array>
 #include <cstddef>
+#include <limits>
 #include <string>
 #include <string_view>
+#include <stdexcept>
 #include <unordered_set>
 
 #include "graph/core/PropertyTypes.hpp"
@@ -90,6 +92,38 @@ namespace graph::query::execution {
 			return (hasNull_ ? size_t{1} : size_t{0}) + (seenBools_[0] ? size_t{1} : size_t{0}) +
 			       (seenBools_[1] ? size_t{1} : size_t{0}) + integers_.size() + doubles_.size() +
 			       strings_.size() + dates_.size() + dateTimes_.size() + fallback_.size();
+		}
+
+		// Payload accounting used by bounded aggregate execution. Container
+		// allocator overhead is intentionally excluded; the execution layer also
+		// charges its row/key structures, while this method accounts for values
+		// retained by DISTINCT state.
+		[[nodiscard]] size_t memoryBytes() const {
+			size_t total = 0U;
+			const auto add = [&total](size_t bytes) {
+				if (bytes > std::numeric_limits<size_t>::max() - total) {
+					throw std::overflow_error("typed distinct-set memory accounting overflowed");
+				}
+				total += bytes;
+			};
+			const auto multiply = [](size_t count, size_t width) {
+				if (width != 0U && count > std::numeric_limits<size_t>::max() / width) {
+					throw std::overflow_error("typed distinct-set memory accounting overflowed");
+				}
+				return count * width;
+			};
+			add((hasNull_ ? 1U : 0U) + (seenBools_[0] ? 1U : 0U) + (seenBools_[1] ? 1U : 0U));
+			add(multiply(integers_.size(), sizeof(int64_t)));
+			add(multiply(doubles_.size(), sizeof(double)));
+			add(multiply(dates_.size(), sizeof(int32_t)));
+			add(multiply(dateTimes_.size(), sizeof(int64_t)));
+		for (const auto &value: strings_) {
+			add(value.size());
+		}
+		for (const auto &value: fallback_) {
+			add(property_utils::getPropertyValueSize(value));
+		}
+		return total;
 		}
 
 		void clear() {

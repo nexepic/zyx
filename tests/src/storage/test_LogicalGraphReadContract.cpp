@@ -8,6 +8,8 @@
 
 #include <gtest/gtest.h>
 
+#include <stdexcept>
+
 #include "graph/storage/LogicalGraphRead.hpp"
 #include "graph/storage/LogicalGraphWrite.hpp"
 
@@ -15,8 +17,10 @@ namespace graph::storage {
 
 	namespace {
 
-		class MinimalLogicalGraphSnapshot final : public LogicalGraphReadSnapshot {
+		class MinimalLogicalGraphSnapshot : public LogicalGraphReadSnapshot {
 		public:
+			bool return_malformed_edges = false;
+
 			[[nodiscard]] LogicalGraphNode readNode(uint64_t) const override { return {}; }
 			[[nodiscard]] LogicalGraphEdge readEdge(uint64_t) const override { return {}; }
 			void visitNodes(size_t, const std::function<bool(const LogicalGraphNode &)> &) const override {}
@@ -27,12 +31,75 @@ namespace graph::storage {
 				return {};
 			}
 			void visitEdges(size_t, const std::function<bool(const LogicalGraphEdge &)> &visitor) const override {
-				static_cast<void>(visitor(LogicalGraphEdge{11U, 3U, 5U, "KNOWS"}));
+				static_cast<void>(visitor(return_malformed_edges
+						? LogicalGraphEdge{0U, 3U, 5U, "KNOWS"}
+						: LogicalGraphEdge{11U, 3U, 5U, "KNOWS"}));
 			}
 			void visitAdjacentEdges(uint64_t, LogicalGraphReadDirection, size_t,
 								const std::function<bool(const LogicalGraphEdge &)> &visitor) const override {
-				static_cast<void>(visitor(LogicalGraphEdge{12U, 5U, 3U, "FOLLOWS"}));
+				static_cast<void>(visitor(return_malformed_edges
+						? LogicalGraphEdge{12U, 1U, 3U, "FOLLOWS"}
+						: LogicalGraphEdge{12U, 5U, 3U, "FOLLOWS"}));
 			}
+		};
+
+		class FallbackCandidateLogicalGraphSnapshot final : public MinimalLogicalGraphSnapshot {
+		public:
+			std::vector<LogicalGraphNode> candidate_nodes;
+
+			[[nodiscard]] std::optional<std::vector<LogicalGraphNode>> findNodesByExactProperties(
+					const std::vector<std::string> &, const std::vector<std::pair<std::string, PropertyValue>> &,
+					size_t, size_t) const override {
+				return candidate_nodes;
+			}
+			[[nodiscard]] std::optional<std::vector<LogicalGraphNode>> findNodesByPropertyRange(
+					const std::vector<std::string> &, const LogicalGraphPropertyRange &, size_t, size_t) const override {
+				return candidate_nodes;
+			}
+			[[nodiscard]] std::optional<std::vector<LogicalGraphNode>> findNodesByCompositePropertyRange(
+					const std::vector<std::string> &, const LogicalGraphCompositePropertyRange &, size_t,
+					size_t) const override {
+				return candidate_nodes;
+			}
+		};
+
+		class ShapeAwareLogicalGraphSnapshot final : public LogicalGraphReadSnapshot {
+		public:
+			mutable std::vector<EntityReadShape> node_shapes;
+			mutable std::vector<EntityReadShape> edge_shapes;
+			bool return_mismatched_identity = false;
+
+			[[nodiscard]] LogicalGraphNode readNode(uint64_t) const override {
+				ADD_FAILURE() << "default shaped helpers must not call the complete Node read";
+				return {};
+			}
+			[[nodiscard]] LogicalGraphNode readNodeShaped(uint64_t nodeId, const EntityReadShape &shape) const override {
+				node_shapes.push_back(shape);
+				return LogicalGraphNode{return_mismatched_identity ? nodeId + 1U : nodeId,
+						shape.include_labels ? std::vector<std::string>{"Person"} :
+						std::vector<std::string>{}, shape.all_properties ?
+						std::vector<LogicalGraphPropertyEntry>{{"name", PropertyValue("Ada")}} :
+						std::vector<LogicalGraphPropertyEntry>{}};
+			}
+			[[nodiscard]] LogicalGraphEdge readEdge(uint64_t) const override {
+				ADD_FAILURE() << "default shaped helpers must not call the complete Edge read";
+				return {};
+			}
+			[[nodiscard]] LogicalGraphEdge readEdgeShaped(uint64_t edgeId, const EntityReadShape &shape) const override {
+				edge_shapes.push_back(shape);
+				return LogicalGraphEdge{return_mismatched_identity ? edgeId + 1U : edgeId, 1U, 2U,
+						shape.include_type ? "KNOWS" : ""};
+			}
+			void visitNodes(size_t, const std::function<bool(const LogicalGraphNode &)> &) const override {}
+			[[nodiscard]] LogicalGraphNodePage scanNodesAfter(uint64_t, size_t, size_t) const override { return {}; }
+			[[nodiscard]] LogicalGraphAdjacencyPage
+			scanAdjacentEdges(uint64_t, LogicalGraphReadDirection,
+							  std::optional<LogicalGraphAdjacencyContinuation>, size_t) const override {
+				return {};
+			}
+			void visitEdges(size_t, const std::function<bool(const LogicalGraphEdge &)>&) const override {}
+			void visitAdjacentEdges(uint64_t, LogicalGraphReadDirection, size_t,
+								const std::function<bool(const LogicalGraphEdge &)>&) const override {}
 		};
 
 		class MinimalLogicalGraphTransactionalBackend final : public LogicalGraphTransactionalBackend {
@@ -61,7 +128,12 @@ namespace graph::storage {
 
 	TEST(LogicalGraphReadContractTest, DefaultsRejectUnsupportedProbesAndFallBackToNoOptimizations) {
 		MinimalLogicalGraphSnapshot snapshot;
+		EXPECT_THROW(static_cast<void>(snapshot.readNodeRef(7U, EntityReadShape{.property_tokens = {2U, 1U}})),
+					 std::invalid_argument);
+		EXPECT_THROW(static_cast<void>(snapshot.readEdgeRef(7U, EntityReadShape{.property_tokens = {3U, 3U}})),
+					 std::invalid_argument);
 		EXPECT_THROW(static_cast<void>(snapshot.containsNode(7U)), std::logic_error);
+		EXPECT_EQ(snapshot.nativeSnapshotGeneration(), std::nullopt);
 		EXPECT_EQ(snapshot.findNodesByExactProperties({"Person"}, {{"name", PropertyValue("Ada")}}, 1U, 1U),
 				  std::nullopt);
 		EXPECT_EQ(snapshot.findNodesByPropertyRange(
@@ -87,7 +159,7 @@ namespace graph::storage {
 		EXPECT_EQ(allEdges.front(), (LogicalGraphEdgeTopology{11U, 3U, 5U, "KNOWS"}));
 
 		std::vector<LogicalGraphEdgeTopology> adjacentEdges;
-		snapshot.visitAdjacentEdgeTopologies(5U, LogicalGraphReadDirection::LGRD_INCOMING, 1U,
+		snapshot.visitAdjacentEdgeTopologies(5U, LogicalGraphReadDirection::LGRD_OUTGOING, 1U,
 				[&adjacentEdges](const LogicalGraphEdgeTopology &edge) {
 					adjacentEdges.push_back(edge);
 					return true;
@@ -98,6 +170,83 @@ namespace graph::storage {
 		EXPECT_THROW(snapshot.visitEdgeTopologies(1U, {}), std::invalid_argument);
 		EXPECT_THROW(snapshot.visitAdjacentEdgeTopologies(5U, LogicalGraphReadDirection::LGRD_INCOMING, 1U, {}),
 				 std::invalid_argument);
+		const std::vector<uint64_t> unorderedNodes{5U, 3U};
+		EXPECT_THROW(snapshot.visitAdjacentEdgeRefsForNodes(unorderedNodes, LogicalGraphReadDirection::LGRD_OUTGOING,
+				2U, [](const EntityRef &) { return true; }), std::invalid_argument);
+	}
+
+	TEST(LogicalGraphReadContractTest, DefaultTopologyAndReferenceVisitorsFailClosedOnMalformedEdges) {
+		MinimalLogicalGraphSnapshot snapshot;
+		snapshot.return_malformed_edges = true;
+		EXPECT_THROW(snapshot.visitEdgeTopologies(1U, [](const LogicalGraphEdgeTopology &) { return true; }),
+				 std::runtime_error);
+		EXPECT_THROW(snapshot.visitEdgeRefs(1U, [](const EntityRef &) { return true; }), std::runtime_error);
+		EXPECT_THROW(snapshot.visitAdjacentEdgeTopologies(5U, LogicalGraphReadDirection::LGRD_INCOMING, 1U,
+				[](const LogicalGraphEdgeTopology &) { return true; }), std::runtime_error);
+	}
+
+	TEST(LogicalGraphReadContractTest, DefaultHelpersUseShapedReadsForNarrowRequests) {
+		ShapeAwareLogicalGraphSnapshot snapshot;
+
+		const EntityRef nodeRef = snapshot.readNodeRef(7U, EntityReadShape{.all_properties = true});
+		EXPECT_EQ(nodeRef, (EntityRef{7U, false, 0U, 0U, 0U}));
+		ASSERT_EQ(snapshot.node_shapes.size(), 1U);
+		EXPECT_EQ(snapshot.node_shapes.front(), EntityReadShape{});
+
+		EXPECT_TRUE(snapshot.nodeHasLabels(7U, {"Person"}));
+		ASSERT_EQ(snapshot.node_shapes.size(), 2U);
+		EXPECT_EQ(snapshot.node_shapes.back(), (EntityReadShape{.include_labels = true}));
+
+		EXPECT_EQ(snapshot.readNodeProperty(7U, "name"), PropertyValue("Ada"));
+		ASSERT_EQ(snapshot.node_shapes.size(), 3U);
+		EXPECT_EQ(snapshot.node_shapes.back(), (EntityReadShape{.all_properties = true}));
+
+		const EntityRef edgeRef = snapshot.readEdgeRef(9U, EntityReadShape{.all_properties = true});
+		EXPECT_EQ(edgeRef, (EntityRef{9U, true, 1U, 2U, 0U}));
+		ASSERT_EQ(snapshot.edge_shapes.size(), 1U);
+		EXPECT_EQ(snapshot.edge_shapes.front(), EntityReadShape{});
+
+		EXPECT_EQ(snapshot.readEdgeProperty(9U, "missing"), PropertyValue());
+		ASSERT_EQ(snapshot.edge_shapes.size(), 2U);
+		EXPECT_EQ(snapshot.edge_shapes.back(), (EntityReadShape{.all_properties = true}));
+	}
+
+	TEST(LogicalGraphReadContractTest, DefaultCandidateStreamsEnforceByteBounds) {
+		FallbackCandidateLogicalGraphSnapshot snapshot;
+		snapshot.candidate_nodes = {
+				LogicalGraphNode{1U, {"Person"}, {{"payload", PropertyValue(std::string(256U, 'x'))}}}};
+		const auto accept = [](const IndexCandidateBatch &) { return true; };
+		const LogicalGraphPropertyRange range{
+				"payload", PropertyValue("a"), PropertyValue("z"), true, true};
+		const LogicalGraphCompositePropertyRange composite{
+				{{"group", PropertyValue("g")}}, {"payload", PropertyValue("a"), PropertyValue("z"), true, true}};
+
+		EXPECT_THROW(static_cast<void>(snapshot.visitNodeCandidatesByExactProperties(
+				{"Person"}, {{"payload", PropertyValue("x")}}, 1U, 8U, 1U, accept)), std::length_error);
+		EXPECT_THROW(static_cast<void>(snapshot.visitNodeCandidatesByPropertyRange(
+				{"Person"}, range, 1U, 8U, 1U, accept)), std::length_error);
+		EXPECT_THROW(static_cast<void>(snapshot.visitNodeCandidatesByCompositePropertyRange(
+				{"Person"}, composite, 1U, 8U, 1U, accept)), std::length_error);
+	}
+
+	TEST(LogicalGraphReadContractTest, DefaultCandidateStreamsValidateFallbackIdentityOrder) {
+		FallbackCandidateLogicalGraphSnapshot snapshot;
+		snapshot.candidate_nodes = {LogicalGraphNode{2U, {}}, LogicalGraphNode{1U, {}}};
+		const auto accept = [](const IndexCandidateBatch &) { return true; };
+
+		EXPECT_THROW(static_cast<void>(snapshot.visitNodeCandidatesByExactProperties(
+				{"Person"}, {{"id", PropertyValue(int64_t{1})}}, 2U, 8U, 1U << 20U, accept)), std::runtime_error);
+	}
+
+	TEST(LogicalGraphReadContractTest, DefaultShapedBatchesFailClosedOnMismatchedIdentity) {
+		ShapeAwareLogicalGraphSnapshot snapshot;
+		snapshot.return_mismatched_identity = true;
+		const std::vector<uint64_t> nodeIds{1U, 2U};
+		const std::vector<uint64_t> edgeIds{3U, 4U};
+		EXPECT_THROW(static_cast<void>(snapshot.readNodeRef(1U, EntityReadShape{})), std::runtime_error);
+		EXPECT_THROW(static_cast<void>(snapshot.readEdgeRef(3U, EntityReadShape{})), std::runtime_error);
+		EXPECT_THROW(static_cast<void>(snapshot.readNodesShapedSorted(nodeIds, EntityReadShape{})), std::runtime_error);
+		EXPECT_THROW(static_cast<void>(snapshot.readEdgesShapedSorted(edgeIds, EntityReadShape{})), std::runtime_error);
 	}
 
 	TEST(LogicalGraphReadContractTest, MutationFenceRequiresBothOpaqueIdentityTokens) {

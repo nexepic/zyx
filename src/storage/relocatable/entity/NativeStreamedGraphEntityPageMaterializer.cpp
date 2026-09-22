@@ -35,10 +35,10 @@ namespace graph::storage {
 			NativeStreamedGraphEntityPage result;
 			result.owner = owner;
 			result.edge_locations.reserve(batch.records.size());
-			std::vector<EdgeEntityRecord> records;
+			std::vector<IdentifiedEdgeEntityRecord> records;
 			records.reserve(batch.records.size());
 			for (const NativeBulkEdgeMaterializedRecord &record: batch.records) {
-				records.push_back(record.entity);
+				records.push_back({record.edge_id, record.entity});
 			}
 			const std::vector<uint16_t> slots = page.insertEdges(records);
 			for (size_t index = 0U; index < batch.records.size(); ++index) {
