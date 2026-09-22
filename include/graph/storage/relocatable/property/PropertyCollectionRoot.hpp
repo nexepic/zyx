@@ -24,7 +24,10 @@ namespace graph::storage {
 	constexpr uint16_t RSS_ENTITY_PROPERTY_COLLECTION_ROOT_VERSION = 2;
 	constexpr uint16_t RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES = 32;
 	constexpr uint32_t RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_MAGIC = 0x5050595AU; // Little-endian bytes: ZYPP
-	constexpr uint16_t RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_VERSION = 2;
+	// Version 3 stores token and offset together in the LargeValue directory.
+	// This lets selected reads resolve tokens from the directory without loading
+	// the complete variable-sized payload.
+	constexpr uint16_t RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_VERSION = 3;
 	constexpr uint16_t RSS_ENTITY_PROPERTY_LARGE_VALUE_PAYLOAD_HEADER_BYTES = 16;
 	constexpr uint32_t RSS_ENTITY_PROPERTY_LARGE_VALUE_REFERENCE_MAGIC = 0x5650595AU; // Little-endian bytes: ZYPV
 	constexpr uint16_t RSS_ENTITY_PROPERTY_LARGE_VALUE_REFERENCE_VERSION = 1;
@@ -46,6 +49,14 @@ namespace graph::storage {
 		std::vector<PropertyCollectionRootEntry> entries;
 
 		bool operator==(const PropertyCollectionRoot &) const = default;
+	};
+
+	struct EntityPropertyLargeValueEntryLocation {
+		uint32_t key_token = 0U;
+		uint32_t offset = 0U;
+		uint32_t length = 0U;
+
+		bool operator==(const EntityPropertyLargeValueEntryLocation &) const = default;
 	};
 
 	// The owner-keyed Property Directory is the sole durable identity. The codec
@@ -85,6 +96,13 @@ namespace graph::storage {
 	public:
 		[[nodiscard]] static std::vector<std::byte> encode(std::span<const PropertyCollectionRootEntry> entries);
 		[[nodiscard]] static std::vector<PropertyCollectionRootEntry> decode(std::span<const std::byte> bytes);
+		// Validates the header and token/offset directory. The input may contain
+		// only the header plus directory; entry payload bytes are not required.
+		[[nodiscard]] static std::vector<EntityPropertyLargeValueEntryLocation>
+		decodeDirectory(std::span<const std::byte> headerAndDirectory);
+		// Decodes one complete entry range returned by decodeDirectory.
+		[[nodiscard]] static PropertyCollectionRootEntry
+		decodeEntry(std::span<const std::byte> bytes, uint32_t expectedToken);
 		// Reads one token through the canonical offset directory without building
 		// or decoding the complete owner-neutral collection.
 		[[nodiscard]] static std::optional<PropertyCollectionRootEntry>

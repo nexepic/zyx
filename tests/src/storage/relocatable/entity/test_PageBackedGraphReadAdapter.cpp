@@ -1238,7 +1238,7 @@ TEST_F(PageBackedGraphReadAdapterTest, StreamsSupernodeVisitorsInBoundedLogicalB
 	snapshot.release();
 }
 
-TEST_F(PageBackedGraphReadAdapterTest, StreamsLargeAdjacencyTopologyThroughOneEntityMapPass) {
+TEST_F(PageBackedGraphReadAdapterTest, StreamsLargeAdjacencyTopologyThroughTypedEntityBatch) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
 	EntityPageStore entities(io, *metadata);
 	SlottedPagePool slottedPages(io, *metadata);
@@ -1267,6 +1267,11 @@ TEST_F(PageBackedGraphReadAdapterTest, StreamsLargeAdjacencyTopologyThroughOneEn
 	TestPageBackedGraphNameResolver names;
 	PageBackedLogicalGraphReadAdapter logical(adapter, names);
 	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	const bool traceWasEnabled = graph::debug::PerfTrace::isEnabled();
+	const bool valuesWereEnabled = graph::debug::PerfTrace::areValuesEnabled();
+	graph::debug::PerfTrace::setEnabled(true);
+	graph::debug::PerfTrace::setValueCollectionEnabled(true);
+	graph::debug::PerfTrace::reset();
 
 	size_t visited = 0U;
 	uint64_t firstTarget = 0U;
@@ -1285,6 +1290,12 @@ TEST_F(PageBackedGraphReadAdapterTest, StreamsLargeAdjacencyTopologyThroughOneEn
 	EXPECT_NE(firstTarget, 0U);
 	EXPECT_EQ(names.propertyKeyResolutionCount(), 0U);
 	EXPECT_EQ(names.relationshipTypeResolutionCount(), 2U);
+	const auto batchTrace = graph::debug::PerfTrace::snapshotAndReset();
+	graph::debug::PerfTrace::setValueCollectionEnabled(valuesWereEnabled);
+	graph::debug::PerfTrace::setEnabled(traceWasEnabled);
+	EXPECT_EQ(batchTrace.at("native_graph.read.edge_sorted_batch_calls").totalValue, 1);
+	EXPECT_EQ(batchTrace.at("native_graph.read.edge_sorted_batch_entries").totalValue,
+			  static_cast<int64_t>(EDGE_COUNT));
 	visited = 0U;
 	EXPECT_FALSE(logical.visitAdjacentEdgeTopologiesUntil(snapshot, source, LogicalGraphReadDirection::LGRD_OUTGOING,
 														  EDGE_COUNT + 1U, [&](const LogicalGraphEdgeTopology &) {
