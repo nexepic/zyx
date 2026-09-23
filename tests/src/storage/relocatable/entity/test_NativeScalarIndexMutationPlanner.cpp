@@ -18,6 +18,7 @@
 #include "graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp"
 #include "graph/storage/relocatable/entity/NativeScalarIndexMutationPlanner.hpp"
 #include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
+#include "graph/storage/relocatable/index/BTreeIndex.hpp"
 #include "graph/storage/relocatable/index/BTreePageStore.hpp"
 #include "graph/storage/relocatable/index/IndexKeyCodec.hpp"
 #include "graph/storage/relocatable/schema/SystemCatalog.hpp"
@@ -197,6 +198,30 @@ TEST_F(NativeScalarIndexMutationPlannerTest,
 	EXPECT_THROW(scalar.stageProperties(transaction, IndexDefinitionEntityKind::IDEK_NODE, 1U, {}, root, false),
 			 FormatException);
 	transaction.rollback();
+}
+
+TEST_F(NativeScalarIndexMutationPlannerTest, RefreshesPublishedRootCacheAfterSnapshotGenerationChanges) {
+	const IndexDefinition label = nodeLabelDefinition();
+	NativeScalarIndexMutationPlanner scalar(
+			*metadata_, *btree_pages_, {label},
+			[](const MetadataSnapshotPin &, std::string_view) -> std::optional<uint32_t> { return std::nullopt; });
+	NativeGraphWritePlanner graph(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+
+	NativeGraphWriteTransaction beforeRoot = graph.beginTransaction();
+	scalar.stageNodeLabels(beforeRoot, 1U, std::array<uint64_t, 1U>{7U}, false);
+	beforeRoot.rollback();
+
+	static_cast<void>(allocateEmptyIndexRoot(*btree_pages_, label.index_id, 71U, 101U, 40U, 2U));
+	NativeGraphWriteTransaction afterRoot = graph.beginTransaction();
+	scalar.stageNodeLabels(afterRoot, 1U, std::array<uint64_t, 1U>{7U}, false);
+	ASSERT_TRUE(afterRoot.commit().committed());
+
+	BTreeIndex index(label.index_id, *btree_pages_, *metadata_);
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	const std::vector<std::byte> key =
+			IndexKeyCodec::encodeEntryKey(PropertyValue(int64_t(7)), 1U);
+	EXPECT_EQ(index.find(snapshot, key), std::optional<uint64_t>(1U));
+	snapshot.release();
 }
 
 TEST_F(NativeScalarIndexMutationPlannerTest,

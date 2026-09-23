@@ -118,8 +118,21 @@ namespace graph::storage {
 	}
 
 	bool NativeScalarIndexMutationPlanner::hasPublishedRoot(const MetadataSnapshotPin &snapshot,
-															uint64_t indexId) const {
-		return metadata_.findIndexRootOptional(snapshot, indexId).has_value();
+																uint64_t indexId) const {
+		const uint64_t databaseId = snapshot.superblock().database_id.value();
+		const uint64_t generation = snapshot.superblock().generation.value();
+		if (databaseId != published_root_cache_database_id_ ||
+			generation != published_root_cache_generation_) {
+			published_root_cache_.clear();
+			published_root_cache_database_id_ = databaseId;
+			published_root_cache_generation_ = generation;
+		}
+		if (const auto cached = published_root_cache_.find(indexId); cached != published_root_cache_.end()) {
+			return cached->second;
+		}
+		const bool published = metadata_.findIndexRootOptional(snapshot, indexId).has_value();
+		published_root_cache_.emplace(indexId, published);
+		return published;
 	}
 
 	std::optional<uint32_t> NativeScalarIndexMutationPlanner::resolvePropertyKey(const MetadataSnapshotPin &snapshot,

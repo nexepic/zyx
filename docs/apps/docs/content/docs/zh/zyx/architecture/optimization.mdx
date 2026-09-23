@@ -361,7 +361,9 @@ Property root
 affected indexes
 ```
 
-批量 Edge 写入的预检只解析 Property key/token 的 canonical 形状，不复制或排序 Property value；真正的 Property root 在统一写入阶段只物化一次。这样可以避免大批量写入在验证阶段产生第二份完整 resolved payload。
+批量 Edge 写入的预检只解析 Property key/token 的 canonical 形状，不复制或排序 Property value；同一事务 snapshot 内的 token 命中和未命中结果会缓存，预检和物化不会为同一个 key 重复访问 Catalog/Index。真正的 Property root 在统一写入阶段只物化一次。这样可以避免大批量写入在验证阶段产生第二份完整 resolved payload。
+
+标量 Index 写入规划还会按数据库和基准 snapshot generation 缓存已发布 root 的存在性。这样不同实体的 staging 不会重复查询同一个 Metadata Directory；进入新的 generation 后缓存会失效，再为下一个事务重新确认。
 
 不能为每一条 Edge 单独执行 root-to-leaf insertion、page split 或 metadata publication。只有在结构计数器证明 COW amplification 仍是主要成本时，才增加通用 dirty-path COW、Directory merge 或共享 B+Tree WriteBatch；如果证据不成立，保留现有简单路径。
 

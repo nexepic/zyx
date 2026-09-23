@@ -217,7 +217,9 @@ Online mutations, bulk ingest, index builds, adjacency rebuilds, and maintenance
 
 Bulk Edge writes plan the Edge Entity, OUT adjacency, IN adjacency, Property root, and affected indexes in one transaction-local sorted overlay. Each Edge must not cause an independent root-to-leaf insertion, split, or metadata publication. Add generic dirty-path COW, Directory merge, or a shared B+Tree WriteBatch only when structural counters show that COW amplification remains the dominant cost.
 
-Bulk Edge preflight validates only the canonical Property key/token shape; it does not copy or sort Property values. The actual Property roots are materialized once in the unified write phase, avoiding a second full resolved payload for large batches.
+Bulk Edge preflight validates only the canonical Property key/token shape; it does not copy or sort Property values. Token hits and misses are memoized for the transaction snapshot, so preflight and materialization do not repeat catalog/index resolution for the same key. The actual Property roots are materialized once in the unified write phase, avoiding a second full resolved payload for large batches.
+
+Scalar index mutation planning also caches published-root presence by database and base snapshot generation. Entity staging therefore does not repeat the same Metadata Directory lookup for every owner, while a new generation invalidates the cache before the next transaction.
 
 Every write optimization proves writer conflict/rebase, short I/O, ENOSPC, interruption, old-snapshot reads, reopen/recovery, retire-queue reclaim, single-file durability, and atomic visibility of Entity, adjacency, Property, and index state.
 

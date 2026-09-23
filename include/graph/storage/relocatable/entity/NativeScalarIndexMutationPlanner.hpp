@@ -13,6 +13,7 @@
 #include <optional>
 #include <span>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include "graph/storage/relocatable/schema/IndexDefinition.hpp"
@@ -75,6 +76,12 @@ namespace graph::storage {
 		BTreePageStore &indexes_;
 		std::vector<IndexDefinition> definitions_;
 		NativePropertyKeyTokenResolver property_key_tokens_;
+		// Index-root presence is immutable for a pinned metadata generation. The
+		// planner may stage thousands of entities against one snapshot, so retain
+		// the result of each root lookup and invalidate it on generation changes.
+		mutable std::unordered_map<uint64_t, bool> published_root_cache_;
+		mutable uint64_t published_root_cache_database_id_ = 0U;
+		mutable uint64_t published_root_cache_generation_ = 0U;
 	};
 
 } // namespace graph::storage
