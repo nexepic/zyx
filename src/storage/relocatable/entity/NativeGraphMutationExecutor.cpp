@@ -413,29 +413,54 @@ namespace graph::storage {
 		if (system_catalog_ != nullptr) {
 			catalogSession.emplace(system_catalog_->beginWrite(transaction));
 		}
+		// Token resolution is snapshot-stable for the lifetime of this transaction.
+		// Cache both hits and misses so bulk validation and materialization do not
+		// repeatedly descend the same catalog/index for every row.
+		using SchemaTokenCacheKey = std::pair<SystemCatalogSchemaTokenKind, std::string>;
+		std::map<SchemaTokenCacheKey, std::optional<uint64_t>> resolvedSchemaTokens;
+		std::map<std::string, std::optional<uint32_t>, std::less<>> resolvedPropertyTokens;
 		std::map<std::string, uint32_t, std::less<>> stagedPropertyNames;
 		std::map<uint32_t, std::string> stagedPropertyTokens;
-		const auto resolveSchemaToken = [this, &snapshot,
-										 &catalogSession](SystemCatalogSchemaTokenKind kind,
-														  std::string_view name) -> std::optional<uint64_t> {
-			if (catalogSession.has_value()) {
-				return catalogSession->ensureSchemaToken(kind, name);
+		const auto resolveSchemaToken = [this, &snapshot, &catalogSession,
+												 &resolvedSchemaTokens](SystemCatalogSchemaTokenKind kind,
+																		 std::string_view name) -> std::optional<uint64_t> {
+			const SchemaTokenCacheKey cacheKey{kind, std::string(name)};
+			const auto cached = resolvedSchemaTokens.find(cacheKey);
+			if (cached != resolvedSchemaTokens.end()) {
+				return cached->second;
 			}
-			return tokens_.schema_token(snapshot, kind, name);
+			std::optional<uint64_t> resolved;
+			if (catalogSession.has_value()) {
+				resolved = catalogSession->ensureSchemaToken(kind, name);
+			} else {
+				resolved = tokens_.schema_token(snapshot, kind, name);
+			}
+			resolvedSchemaTokens.emplace(cacheKey, resolved);
+			return resolved;
 		};
 		const auto resolvePropertyKey = [this, &snapshot, &catalogSession, &stagedPropertyNames,
-										 &stagedPropertyTokens](std::string_view name) -> std::optional<uint32_t> {
+									 &stagedPropertyTokens,
+									 &resolvedPropertyTokens](std::string_view name) -> std::optional<uint32_t> {
+			const auto cached = resolvedPropertyTokens.find(name);
+			if (cached != resolvedPropertyTokens.end()) {
+				return cached->second;
+			}
+			std::optional<uint32_t> resolved;
 			if (!catalogSession.has_value()) {
-				return tokens_.property_key_token(snapshot, name);
+				resolved = tokens_.property_key_token(snapshot, name);
+			} else {
+				const auto staged = stagedPropertyNames.find(name);
+				if (staged != stagedPropertyNames.end()) {
+					resolved = staged->second;
+				} else {
+					const uint32_t token = catalogSession->ensurePropertyToken(name);
+					stagedPropertyNames.emplace(name, token);
+					stagedPropertyTokens.emplace(token, std::string(name));
+					resolved = token;
+				}
 			}
-			const auto staged = stagedPropertyNames.find(name);
-			if (staged != stagedPropertyNames.end()) {
-				return staged->second;
-			}
-			const uint32_t token = catalogSession->ensurePropertyToken(name);
-			stagedPropertyNames.emplace(name, token);
-			stagedPropertyTokens.emplace(token, std::string(name));
-			return token;
+			resolvedPropertyTokens.emplace(std::string(name), resolved);
+			return resolved;
 		};
 		const auto resolvePropertyName = [this, &snapshot, &catalogSession,
 										  &stagedPropertyTokens](uint32_t token) -> std::optional<std::string> {

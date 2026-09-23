@@ -200,6 +200,35 @@ TEST_F(NativeGraphMutationExecutorValidationTest,
 }
 
 TEST_F(NativeGraphMutationExecutorValidationTest,
+	   CachesStablePropertyTokenResolutionAcrossBulkEdgeValidationAndMaterialization) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	PageBackedGraphReadAdapter graph(*metadata_, *entities_, *labels_, *properties_, *btree_pages_);
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	NativeGraphMutationTokenResolvers resolver = tokens();
+	size_t propertyTokenLookups = 0U;
+	resolver.property_key_token = [&propertyTokenLookups](const MetadataSnapshotPin &,
+																 std::string_view name) -> std::optional<uint32_t> {
+		++propertyTokenLookups;
+		return name == "age" ? std::optional<uint32_t>(17U) : std::nullopt;
+	};
+	NativeGraphMutationExecutor executor(
+			planner, graph, indexes, *vector_pages_, *vector_manifests_, *metadata_, std::move(resolver),
+			[](const MetadataSnapshotPin &) { return std::vector<IndexDefinition>{}; },
+			[](const MetadataSnapshotPin &) { return std::vector<ConstraintDefinition>{}; }, executorOptions());
+
+	LogicalGraphMutationBatch batch;
+	batch.node_creates = {{{"Person"}, {}}, {{"Person"}, {}}};
+	batch.edge_creates = {
+			{createdNodeReference(0U), createdNodeReference(1U), "KNOWS", {{"age", PropertyValue(int64_t(1))}}},
+			{createdNodeReference(1U), createdNodeReference(0U), "KNOWS", {{"age", PropertyValue(int64_t(2))}}}};
+
+	const NativeGraphMutationExecutionResult result = executor.execute(batch);
+	ASSERT_TRUE(result.committed());
+	EXPECT_EQ(result.result.created_edge_ids.size(), 2U);
+	EXPECT_EQ(propertyTokenLookups, 1U);
+}
+
+TEST_F(NativeGraphMutationExecutorValidationTest,
 	   EnforcesTheOptionalReadSnapshotFenceBeforePublishingLogicalGraphChanges) {
 	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
 	PageBackedGraphReadAdapter graph(*metadata_, *entities_, *labels_, *properties_, *btree_pages_);
