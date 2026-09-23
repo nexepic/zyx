@@ -319,6 +319,25 @@ protected:
 	}
 };
 
+TEST_F(PageBackedGraphReadAdapterTest, RejectsReusingAReadSessionAcrossMetadataGenerations) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	MetadataSnapshotPin before = metadata->openSnapshot();
+	EntityPageStore entities(io, *metadata);
+	ASSERT_TRUE(entities.allocateNode(nodePool(40U, 910U, 901U, 60U), 1001U, node({0U, 0U, 0U}, 0U),
+										 LogSequenceNumber(2U))
+						.has_value());
+	MetadataSnapshotPin current = metadata->openSnapshot();
+
+	NativeReadSession session;
+	session.bind(before);
+	session.putNode(1001U, node({0U, 0U, 0U}, 0U));
+	EXPECT_THROW(session.bind(current), std::invalid_argument);
+	EXPECT_TRUE(session.node(1001U).has_value());
+
+	before.release();
+	current.release();
+}
+
 TEST_F(PageBackedGraphReadAdapterTest, ResolvesLogicalIdentityAndCompleteOverflowLabelsThroughOneSnapshot) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
 	EntityPageStore entities(io, *metadata);
