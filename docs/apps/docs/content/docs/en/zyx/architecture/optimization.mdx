@@ -105,6 +105,14 @@ Scatter:
 
 Physical requests may sort and deduplicate, but results preserve logical order, duplicate IDs, `NULL` and missing positions, `LIMIT`, `SKIP`, early-stop, and snapshot visibility. Every variable-length Property, LargeValue, label set, and result object is charged before it enters downstream execution. A batch is bounded by both rows and bytes.
 
+`LOAD CSV` is an external pull source and remains row-at-a-time at the visitor
+boundary. It still enforces the same row/byte budgets and cancellation checks,
+while downstream operators batch the rows they receive. A CSV implementation
+must not pre-read a batch before invoking the visitor: doing so would change
+`LIMIT`, cancellation, and fail-fast behavior. True CSV source batching is
+reserved for a future generic pull/batch protocol shared by all external
+sources; it must not be introduced as a CSV-specific fast path.
+
 The physical cost of a batch should track directory ranges, metadata pages, distinct data pages, decoded records, and selected values rather than the number of input rows.
 
 ## Typed Entity Page Cursors
@@ -265,7 +273,7 @@ Close when root descent does not grow with candidate count, candidates do not in
 
 ### Stage 6: Batch Execution
 
-Connect `BoundedBatch`, typed columns, and `SelectionVector` to scan/filter/project/aggregate/JOIN/OPTIONAL MATCH/UNION/`LOAD CSV`/`LIMIT`/`SKIP`. Separate selection from payload and enforce one byte budget and cancellation contract.
+Connect `BoundedBatch`, typed columns, and `SelectionVector` to scan/filter/project/aggregate/JOIN/OPTIONAL MATCH/UNION/`LIMIT`/`SKIP`. Apply the same bounded row/byte accounting and cancellation contract at the `LOAD CSV` source boundary, and batch its downstream consumers without source read-ahead. Separate selection from payload and enforce one byte budget and cancellation contract.
 
 Close when empty, all-selected, all-rejected, null, duplicate, unsorted, early-stop, and aggregate-boundary semantics pass and count-like operations avoid complete entities.
 

@@ -130,6 +130,12 @@ Scatter:
 
 批次同时受记录数和字节数限制。任何变长 Property、LargeValue、label 集合或结果对象都必须在进入下游之前计费；不能先使用默认容量暂存，再在结果边界才失败。
 
+`LOAD CSV` 是外部拉取数据源，在 visitor 边界保持逐行输出。它仍然使用
+同一套行数/字节预算和 cancellation 检查，接收到 CSV 行的下游算子继续使用
+批处理。CSV 实现不能在调用 visitor 之前预读整批数据，否则会改变 `LIMIT`、
+取消和 fail-fast 语义。真正的 CSV 源批处理应等待所有外部数据源共用的通用
+pull/batch 协议；不能为 CSV 单独增加 fast path。
+
 一个批次的物理成本应接近以下量，而不是输入记录数：
 
 ```text
@@ -419,7 +425,7 @@ exact、range、composite 统一 candidate stream；一次 root descent，按 En
 
 ### Stage 6：Batch Execution
 
-将 `BoundedBatch`、typed columns、`SelectionVector` 接入 scan/filter/project/aggregate/JOIN/OPTIONAL MATCH/UNION/LOAD CSV/`LIMIT`/`SKIP`；selection 与 payload 分离；统一 byte budget 和 cancellation。
+将 `BoundedBatch`、typed columns、`SelectionVector` 接入 scan/filter/project/aggregate/JOIN/OPTIONAL MATCH/UNION/`LIMIT`/`SKIP`；在 `LOAD CSV` 源边界使用同一套行数/字节预算和 cancellation 契约，在不预读源数据的前提下让下游消费者批处理；selection 与 payload 分离；统一 byte budget 和 cancellation。
 
 关闭条件：empty、all-selected、all-rejected、null、duplicate、unsorted、early-stop 和 aggregate-boundary 语义回归通过，count-like 操作不生成完整实体。
 
