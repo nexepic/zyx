@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -23,6 +24,7 @@
 #include <vector>
 
 #include "graph/storage/LogicalGraphRead.hpp"
+#include "graph/storage/LogicalGraphAdministration.hpp"
 #include "graph/storage/LogicalGraphSchema.hpp"
 #include "graph/storage/LogicalGraphVectorSearch.hpp"
 #include "graph/storage/LogicalGraphWrite.hpp"
@@ -30,19 +32,24 @@
 #include "graph/storage/StorageIO.hpp"
 #include "graph/storage/StorageTypes.hpp"
 #include "graph/storage/relocatable/entity/PageBackedLogicalGraphReadAdapter.hpp"
+#include "graph/storage/relocatable/entity/NativeBulkEdgePublicationPreflight.hpp"
+#include "graph/storage/relocatable/entity/NativeStreamedGraphFinalPublication.hpp"
 #include "graph/storage/relocatable/schema/ConstraintDefinition.hpp"
 #include "graph/storage/relocatable/schema/ConstraintSupportTree.hpp"
 #include "graph/storage/relocatable/schema/IndexDefinition.hpp"
 #include "graph/storage/relocatable/metadata/MetadataSnapshotRegistry.hpp"
 #include "graph/storage/relocatable/property/PropertyCollectionRoot.hpp"
 #include "graph/storage/relocatable/index/ScalarIndexTreeReachabilityReclaimer.hpp"
-#include "graph/storage/relocatable/metadata/StateRecord.hpp"
+#include "graph/storage/relocatable/schema/SystemCatalog.hpp"
 #include "graph/storage/relocatable/schema/TokenDefinition.hpp"
 #include "graph/storage/relocatable/maintenance/RelocatableIntegrityScanner.hpp"
+#include "graph/storage/relocatable/maintenance/LargeValueReachabilityReclaimer.hpp"
 #include "graph/storage/relocatable/maintenance/RelocatableMaintenanceService.hpp"
 #include "graph/storage/relocatable/maintenance/VectorIndexStateReclaimer.hpp"
 
 namespace graph::storage {
+
+	class NativeBulkSessionLease;
 
 	struct RelocatableStorageIOStats {
 		StorageIOStats data;
@@ -55,6 +62,9 @@ namespace graph::storage {
 	class EntityLabelSetStore;
 	class NativeGraphWritePlanner;
 	class NativeGraphMutationExecutor;
+	class NativeGraphWriteTransaction;
+	class NativeBulkRunStore;
+	struct NativeGraphWriteCommitResult;
 	struct NativeGraphLogicalIdReservation;
 	class PageBackedGraphReadAdapter;
 	class BTreePageStore;
@@ -62,7 +72,6 @@ namespace graph::storage {
 	class PhysicalSegmentAllocator;
 	class PropertyCollectionRootStore;
 	class SlottedPagePool;
-	class StateRecordStore;
 	class SystemCatalog;
 	class VectorCodebookStore;
 	class VectorManifestStore;
@@ -110,6 +119,35 @@ namespace graph::storage {
 		size_t maximum_vector_delta_pages = 4'096U;
 		// Ordinary graph adjacency uses bounded global Packed B+Tree range scans.
 		size_t maximum_adjacency_read_edges = 10'000'000U;
+		// Edge-only bulk transactions have their own transaction-wide record
+		// ceiling. It bounds private scratch independently from a public batch.
+		size_t maximum_bulk_edge_transaction_records = 10'000'000U;
+		// Streamed Edge identities are leased incrementally. This is independent
+		// from the transaction admission ceiling so a small transaction cannot
+		// burn the complete transaction-sized logical-ID range. The effective
+		// block is clamped to the transaction's remaining record allowance.
+		size_t bulk_edge_id_lease_block_records = 65'536U;
+		// One append is also a publication-gate work unit. Bound both cardinality
+		// and encoded bytes so a caller cannot monopolize all native publications
+		// with one transaction-sized call; larger ingests submit more appends.
+		size_t maximum_bulk_edge_append_records = 65'536U;
+		size_t maximum_bulk_edge_append_bytes = 64U * 1024U * 1024U;
+		// The eventual streamed adjacency sorter retains at most one run of this
+		// many encoded keys in memory. It is independent from the transaction
+		// record ceiling because key size and Edge Properties are variable.
+		size_t bulk_edge_sort_run_bytes = 8U * 1024U * 1024U;
+		// One merge pass may open only this many private runs. Larger inputs reduce
+		// in bounded fan-in groups inside the database file; no OS temporary file is
+		// part of the ordinary graph-write protocol.
+		size_t maximum_bulk_edge_sort_runs = 64U;
+		// Bounds every new Entity, Property, Index, and directory page planned by a
+		// single streamed bulk-edge candidate before its one Superblock publication.
+		size_t maximum_bulk_edge_candidate_pages = 1'000'000U;
+		// A streamed publication rebuilds bounded Catalog, global adjacency, and
+		// LargeValue-content trees. This limits the complete final tree source,
+		// including entries already visible before the transaction, rather than
+		// merely limiting the incoming Edge rows.
+		size_t maximum_bulk_edge_index_entries = 20'000'000U;
 		// A logical read snapshot may retain a bounded number of native adjacency
 		// cursors. Zero disables this optional acceleration.
 		size_t maximum_snapshot_adjacency_cursors = 64U;
@@ -174,6 +212,9 @@ namespace graph::storage {
 
 	class RelocatableStorageBackend final : public StorageBackend,
 									  public LogicalGraphReadBackend,
+									  public LogicalGraphStatisticsBackend,
+									  public LogicalGraphAdministrationBackend,
+									  public LogicalGraphMaintenanceController,
 									  public LogicalGraphVectorSearchBackend,
 									  public LogicalGraphVectorMaintenanceBackend,
 									  public LogicalGraphWriteBackend,
@@ -225,10 +266,75 @@ namespace graph::storage {
 		// Internal logical-transaction bridge: return durable IDs before exposing a
 		// provisional result, so the executor can later adopt the same ranges.
 		[[nodiscard]] NativeGraphLogicalIdReservation reserveLogicalGraphCreationIds(uint64_t nodeCount,
-																								 uint64_t edgeCount);
+																		 uint64_t edgeCount);
+		// A streamed bulk-Edge transaction acquires bounded durable capabilities
+		// incrementally. Every returned range remains exact so the final publisher
+		// can claim it once and rollback can abandon it without making IDs reusable.
+		[[nodiscard]] NativeGraphLogicalIdReservation reserveNativeBulkEdgeSessionIds(uint64_t edgeCount);
 		void abandonLogicalGraphCreationIds(const NativeGraphLogicalIdReservation &reservation) noexcept;
+		// Internal transaction-only bridge for typed private scratch. It is kept on
+		// the relocatable backend rather than the format-independent logical API so
+		// no public caller can obtain an allocator, SegmentId, or metadata handle.
+		[[nodiscard]] uint64_t allocateNativeBulkScratchOwner();
+		// A streamed session holds this lease across durable scratch allocation and
+		// cleanup so another process cannot publish overlapping allocator state.
+		[[nodiscard]] std::unique_ptr<NativeBulkSessionLease> tryAcquireNativeBulkSessionLease();
+		[[nodiscard]] std::unique_ptr<NativeBulkRunStore> createNativeBulkRunStore();
+		[[nodiscard]] Generation currentNativeMetadataGeneration() const;
+		[[nodiscard]] LogicalGraphMutationFence currentNativeLogicalGraphMutationFence() const;
+		// Internal streamed-transaction bridge. It pauses a service before the
+		// caller takes the native publication gate, avoiding an in-flight worker
+		// deadlock on that same gate.
+		[[nodiscard]] bool quiesceNativeMaintenanceForExternalRebase();
+		void refreshNativeMetadataAfterExternalPublication(bool restoreMaintenancePaused = false);
+		[[nodiscard]] LogSequenceNumber nextNativeBulkScratchCheckpointLsn() const;
+		// Finalizes one already sealed, allocator-managed Edge source. The caller
+		// supplies no physical placement authority; this backend owns every pool,
+		// candidate segment, and one-generation publication decision.
+		void commitNativeStreamedBulkEdges(NativeBulkRunStore &scratch,
+										 NativeBulkRunFragmentLocation manifestLocation,
+										 const NativeGraphLogicalIdReservation &reservation,
+										 const NativeStreamedGraphPublicationPlan &plan,
+										 const LogicalGraphMutationFence &expectedFence);
+		// Serializes one bounded allocator-managed scratch publication with graph,
+		// DDL, and maintenance publication. The lock must never escape one append,
+		// finish, or cleanup operation into the bulk transaction lifetime.
+		[[nodiscard]] std::unique_lock<std::mutex> acquireNativePublicationGate();
+		// An ambiguous scratch cleanup leaves allocator state that can only be
+		// reconciled by writable-open recovery. Reject later writes on this handle
+		// rather than allocating over
+		// an unverified tail.
+		void requireReopenAfterNativeBulkStagingFailure() noexcept;
+		[[nodiscard]] bool hasIndeterminateWriteOutcome() const noexcept {
+			return requires_reopen_after_indeterminate_write_.load(std::memory_order_acquire);
+		}
+		[[nodiscard]] NativeBulkEdgePublicationPreflightOptions nativeBulkEdgePublicationPreflightOptions() const {
+			// Private candidates are fixed-size segments. Plan with that same
+			// payload limit so preflight never underestimates the number of runs
+			// that final private materialization must retain.
+			return {options_.maximum_bulk_edge_transaction_records,
+					std::min(options_.bulk_edge_sort_run_bytes,
+							 static_cast<size_t>(RSS_SEGMENT_SIZE - RSS_ENVELOPE_BYTES)),
+					options_.maximum_bulk_edge_sort_runs, options_.maximum_bulk_edge_candidate_pages};
+		}
+		[[nodiscard]] size_t maximumNativeBulkEdgeTransactionRecords() const {
+			return options_.maximum_bulk_edge_transaction_records;
+		}
+		[[nodiscard]] size_t nativeBulkEdgeIdLeaseBlockRecords() const {
+			return std::min(options_.bulk_edge_id_lease_block_records,
+							options_.maximum_bulk_edge_transaction_records);
+		}
+		[[nodiscard]] size_t maximumNativeBulkEdgeAppendRecords() const {
+			return std::min(options_.maximum_bulk_edge_append_records,
+							options_.maximum_bulk_edge_transaction_records);
+		}
+		[[nodiscard]] size_t maximumNativeBulkEdgeAppendBytes() const {
+			return options_.maximum_bulk_edge_append_bytes;
+		}
 		[[nodiscard]] std::unique_ptr<LogicalGraphTransaction> beginLogicalGraphTransaction(bool readOnly) override;
 		[[nodiscard]] std::unique_ptr<LogicalGraphReadSnapshot> openLogicalGraphReadSnapshot() const override;
+		[[nodiscard]] std::optional<LogicalGraphCardinalityStatistics>
+		readLogicalGraphCardinalityStatistics() const override;
 		[[nodiscard]] std::unique_ptr<LogicalGraphVectorSearchSnapshot>
 		openLogicalGraphVectorSearchSnapshot() const override;
 		// Exact bounded refinement is the semantic baseline. Derived PQ/adjacency
@@ -236,8 +342,16 @@ namespace graph::storage {
 		// validation and deterministic result ordering.
 		[[nodiscard]] LogicalGraphVectorSearchResult
 		searchLogicalVector(const RelocatableReadSnapshot &snapshot, const LogicalGraphVectorSearchRequest &request) const;
-		[[nodiscard]] LogicalGraphVectorTrainingResult
-		trainLogicalVector(const LogicalGraphVectorTrainingRequest &request) override;
+		[[nodiscard]] std::optional<LogicalGraphVectorIndexDescriptor>
+		describeLogicalVectorIndex(const RelocatableReadSnapshot &snapshot,
+								   const LogicalGraphVectorSearchRequest &request) const;
+		[[nodiscard]] std::optional<LogicalGraphVectorSearchHit>
+		scoreLogicalVectorExactOverlayCandidate(const RelocatableReadSnapshot &snapshot,
+											const LogicalGraphVectorSearchRequest &request,
+											const LogicalGraphVectorIndexDescriptor &index,
+											const LogicalGraphNode &node) const;
+		[[nodiscard]] std::unique_ptr<PreparedLogicalGraphVectorTraining>
+		prepareLogicalVectorTraining(const LogicalGraphVectorTrainingRequest &request) override;
 		[[nodiscard]] LogicalGraphNode readNode(const RelocatableReadSnapshot &snapshot, uint64_t nodeId) const;
 		[[nodiscard]] LogicalGraphEdge readEdge(const RelocatableReadSnapshot &snapshot, uint64_t edgeId) const;
 		[[nodiscard]] bool containsLogicalNode(const RelocatableReadSnapshot &snapshot, uint64_t nodeId) const;
@@ -247,6 +361,13 @@ namespace graph::storage {
 		[[nodiscard]] std::optional<std::vector<LogicalGraphNode>> findNodesByExactProperties(
 				const RelocatableReadSnapshot &snapshot, const std::vector<std::string> &labels,
 				const std::vector<std::pair<std::string, PropertyValue>> &properties, size_t maximumNodes,
+				size_t maximumPropertyEntries) const;
+		[[nodiscard]] std::optional<std::vector<LogicalGraphNode>> findNodesByPropertyRange(
+				const RelocatableReadSnapshot &snapshot, const std::vector<std::string> &labels,
+				const LogicalGraphPropertyRange &range, size_t maximumNodes, size_t maximumPropertyEntries) const;
+		[[nodiscard]] std::optional<std::vector<LogicalGraphNode>> findNodesByCompositePropertyRange(
+				const RelocatableReadSnapshot &snapshot, const std::vector<std::string> &labels,
+				const LogicalGraphCompositePropertyRange &request, size_t maximumNodes,
 				size_t maximumPropertyEntries) const;
 		// Directory traversal is ordered by stable logical ID and has an explicit
 		// record bound and never materializes an unbounded graph result.
@@ -306,7 +427,16 @@ namespace graph::storage {
 		[[nodiscard]] VectorIndexStateReclaimReport
 		reclaimObsoleteVectorIndexState(const VectorIndexStateReclaimOptions &options,
 										const MetadataPublishOptions &publishOptions = {});
+		// Graph mutation removes an owner reference before it reclaims immutable
+		// LargeValue storage. This explicit bounded maintenance entry point closes
+		// that lifecycle without coupling user-visible DELETE to physical cleanup.
+		[[nodiscard]] LargeValueReachabilityReclaimReport
+		reclaimUnreachableLargeValues(const LargeValueReachabilityReclaimOptions &options,
+								  const MetadataPublishOptions &publishOptions = {});
 		[[nodiscard]] bool maintenanceEnabled() const { return maintenance_ != nullptr; }
+		[[nodiscard]] bool nativeMaintenanceAvailable() const noexcept override { return maintenance_ != nullptr; }
+		[[nodiscard]] bool nativeMaintenanceEnabled() const override;
+		void setNativeMaintenanceEnabled(bool enabled) override;
 		void pauseMaintenance();
 		void resumeMaintenance();
 		[[nodiscard]] size_t cancelQueuedMaintenance();
@@ -319,19 +449,26 @@ namespace graph::storage {
 															   uint32_t pageBudget);
 		[[nodiscard]] uint64_t enqueueEntityPageCompaction(SegmentId source, SegmentId destination,
 																 uint32_t pageBudget);
-		[[nodiscard]] uint64_t enqueueLargeValuePageCompaction(SegmentId source, SegmentId destination,
-																 uint32_t pageBudget);
+		[[nodiscard]] uint64_t enqueueLargeValuePageCompaction(SegmentId source, SegmentId destination, uint32_t pageBudget);
+		[[nodiscard]] uint64_t enqueueLargeValueReachabilityReclamation(
+				const LargeValueReachabilityReclaimOptions &options);
 		[[nodiscard]] uint64_t enqueueCodebookExtentRelocation(uint64_t codebookId, ExtentId extentId,
 															   PhysicalSlotId firstDestination,
 															   PhysicalSlotId lastDestination);
 		[[nodiscard]] RelocatableMaintenanceMetrics maintenanceMetrics() const;
 		[[nodiscard]] std::exception_ptr maintenanceFailure() const;
-		[[nodiscard]] StateRecord readState(const RelocatableReadSnapshot &snapshot, uint64_t stateId) const;
 		[[nodiscard]] RelocatableIntegrityReport verifyIntegrity() const;
 
 		[[nodiscard]] const RelocatableStorageBackendOptions &options() const { return options_; }
 		[[nodiscard]] RelocatableStorageIOStats ioStats() const;
 		void resetIoStats();
+		// Durable configuration records are metadata, while I/O statistics remain
+		// process-local observations exposed through ioStats()/resetIoStats().
+		[[nodiscard]] std::optional<PropertyValue> findConfiguration(std::string_view name) const override;
+		[[nodiscard]] std::vector<LogicalGraphConfiguration> readConfigurations(size_t maximumRecords) const override;
+		void setConfiguration(std::string_view name, const PropertyValue &value) override;
+		[[nodiscard]] std::vector<LogicalGraphRuntimeStatistic> runtimeStatistics() const override;
+		void resetRuntimeStatistics() override;
 
 	private:
 		friend class RelocatableLogicalGraphReadSnapshot;
@@ -347,6 +484,15 @@ namespace graph::storage {
 																									   size_t maximumDefinitions) const;
 		[[nodiscard]] std::vector<ConstraintDefinition>
 		readAllConstraintDefinitions(const MetadataSnapshotPin &snapshot, size_t maximumDefinitions) const;
+		// A failed final publication fence can leave either the old or the newly
+		// published Superblock durable. Keep this distinction at the transaction
+		// boundary so validation and planning failures do not unnecessarily poison
+		// a writable handle, while an ambiguous publication never permits a retry
+		// on that same handle.
+		[[nodiscard]] NativeGraphWriteCommitResult
+		commitNativeGraphWriteTransaction(NativeGraphWriteTransaction &transaction);
+		void markReopenRequiredIfPublicationAdvanced(const Superblock &before) noexcept;
+		void requireNoIndeterminateWrite() const;
 		// The public training entry point acquires native_publication_mutex_. The
 		// maintenance service already holds that same gate, so its typed rebuild
 		// executor must use this non-reentrant implementation instead.
@@ -359,9 +505,17 @@ namespace graph::storage {
 				const MetadataSnapshotPin &snapshot, const std::vector<std::string> &labels,
 				const std::vector<std::pair<std::string, PropertyValue>> &properties, size_t maximumNodes,
 				size_t maximumPropertyEntries) const;
+		[[nodiscard]] std::optional<std::vector<LogicalGraphNode>> findNativeNodesByPropertyRange(
+				const MetadataSnapshotPin &snapshot, const std::vector<std::string> &labels,
+				const LogicalGraphPropertyRange &range, size_t maximumNodes, size_t maximumPropertyEntries) const;
+		[[nodiscard]] std::optional<std::vector<LogicalGraphNode>> findNativeNodesByCompositePropertyRange(
+				const MetadataSnapshotPin &snapshot, const std::vector<std::string> &labels,
+				const LogicalGraphCompositePropertyRange &request, size_t maximumNodes,
+				size_t maximumPropertyEntries) const;
 		void verifyConstraintSupportTrees(const MetadataSnapshotPin &snapshot) const;
 		[[nodiscard]] RelocatableMaintenanceService &requireMaintenance();
 		[[nodiscard]] const RelocatableMaintenanceService &requireMaintenance() const;
+		void initializeNativeMaintenanceService();
 		void releaseResources() noexcept;
 
 		RelocatableStorageBackendOptions options_;
@@ -382,7 +536,6 @@ namespace graph::storage {
 		std::unique_ptr<SystemCatalog> system_catalog_;
 		std::unique_ptr<LargeValueStore> large_values_;
 		std::unique_ptr<PropertyCollectionRootStore> properties_;
-		std::unique_ptr<StateRecordStore> states_;
 		std::unique_ptr<VectorPageStore> vector_pages_;
 		std::unique_ptr<VectorManifestStore> vector_manifests_;
 		std::unique_ptr<RelocatableMaintenanceService> maintenance_;
@@ -395,6 +548,9 @@ namespace graph::storage {
 		// serializes typed page relocation with the generation that created its
 		// logical Entity/Property/Index references.
 		mutable std::mutex native_publication_mutex_;
+		// Scratch owners are process-local identities. Unpublished entries are
+		// reclaimed on writable reopen, so this never becomes database state.
+		std::atomic<uint64_t> next_bulk_scratch_owner_id_{1U};
 		// An exception after attempted Superblock publication has an ambiguous
 		// outcome. A caller must close/reopen and recover the newest valid root.
 		std::atomic_bool requires_reopen_after_indeterminate_write_{false};

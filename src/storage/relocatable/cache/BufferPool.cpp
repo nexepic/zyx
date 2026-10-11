@@ -98,6 +98,15 @@ namespace graph::storage {
 			   key.page_offset <= std::numeric_limits<uint64_t>::max() - RSS_BUFFER_POOL_PAGE_BYTES;
 	}
 
+	void BufferPool::requireTypedPageRange(BufferPoolPageKey firstKey, size_t bytes, const char *operation) {
+		if (firstKey.generation == 0U || !isAligned(firstKey) || bytes == 0U ||
+			bytes % RSS_BUFFER_POOL_PAGE_BYTES != 0U ||
+			bytes > std::numeric_limits<uint64_t>::max() - firstKey.page_offset) {
+			throw std::invalid_argument(std::string("buffer pool ") + operation +
+								" needs a nonempty aligned complete typed-page range");
+		}
+	}
+
 	BufferPool::Pin BufferPool::pin(BufferPoolPageKey key, BufferPoolReadHint hint) {
 		if (!isAligned(key)) {
 			throw std::invalid_argument("buffer pool page key is not 4 KiB aligned");
@@ -190,6 +199,161 @@ namespace graph::storage {
 			++dirty_pages_;
 		}
 		promoteLocked(key, *entry);
+	}
+
+	size_t BufferPool::readPages(BufferPoolPageKey firstKey, std::span<std::byte> output, BufferPoolReadHint hint) {
+		requireTypedPageRange(firstKey, output.size(), "typed read");
+		const uint64_t fileSize = io_.fileSizeUncached();
+		if (firstKey.page_offset >= fileSize) {
+			return 0U;
+		}
+		const uint64_t readableBytes = std::min<uint64_t>(output.size(), fileSize - firstKey.page_offset);
+		const size_t pageCount = output.size() / RSS_BUFFER_POOL_PAGE_BYTES;
+		size_t copied = 0U;
+		std::lock_guard lock(mutex_);
+		for (size_t page = 0U; page < pageCount; ++page) {
+			const uint64_t pageOffset = firstKey.page_offset + page * RSS_BUFFER_POOL_PAGE_BYTES;
+			if (pageOffset >= fileSize) {
+				return copied;
+			}
+			const BufferPoolPageKey key{pageOffset, firstKey.generation};
+			const auto existing = entries_.find(key);
+			if (existing != entries_.end()) {
+				Entry &entry = *existing->second;
+				if (entry.private_cow) {
+					throw std::logic_error("private buffer-pool COW page cannot be shared before root publication");
+				}
+				++hits_;
+				if (entry.prefetched) {
+					++prefetch_hits_;
+					entry.prefetched = false;
+				}
+				promoteLocked(key, entry);
+				const size_t bytes = std::min<size_t>(
+						entry.valid_bytes, static_cast<size_t>(std::min<uint64_t>(RSS_BUFFER_POOL_PAGE_BYTES,
+																		fileSize - pageOffset)));
+				std::copy_n(entry.bytes.begin(), static_cast<std::ptrdiff_t>(bytes),
+							output.begin() + static_cast<std::ptrdiff_t>(copied));
+				copied += bytes;
+				if (bytes != RSS_BUFFER_POOL_PAGE_BYTES) {
+					return copied;
+				}
+				continue;
+			}
+			if (hint != BufferPoolReadHint::BPRH_SEQUENTIAL) {
+				Entry &entry = loadLocked(key, hint);
+				const size_t bytes = std::min<size_t>(
+						entry.valid_bytes, static_cast<size_t>(std::min<uint64_t>(RSS_BUFFER_POOL_PAGE_BYTES,
+																		fileSize - pageOffset)));
+				std::copy_n(entry.bytes.begin(), static_cast<std::ptrdiff_t>(bytes),
+							output.begin() + static_cast<std::ptrdiff_t>(copied));
+				copied += bytes;
+				if (bytes != RSS_BUFFER_POOL_PAGE_BYTES) {
+					return copied;
+				}
+				continue;
+			}
+
+			// Sequential typed scans have no useful working-set residency. Coalesce
+			// one missing run into a positioned read, as repeated readPage() calls
+			// would otherwise issue one native read and cache lock per 4 KiB page.
+			size_t runPages = 1U;
+			while (page + runPages < pageCount &&
+				   !entries_.contains({firstKey.page_offset + (page + runPages) * RSS_BUFFER_POOL_PAGE_BYTES,
+											  firstKey.generation})) {
+				++runPages;
+			}
+			const size_t requested = static_cast<size_t>(std::min<uint64_t>(
+					static_cast<uint64_t>(runPages) * RSS_BUFFER_POOL_PAGE_BYTES, readableBytes - copied));
+			const size_t bytesRead = io_.readAtUncached(pageOffset,
+					output.data() + static_cast<std::ptrdiff_t>(copied), requested);
+			disk_read_bytes_ += bytesRead;
+			misses_ += runPages;
+			copied += bytesRead;
+			if (bytesRead != requested) {
+				return copied;
+			}
+			if (requested != runPages * RSS_BUFFER_POOL_PAGE_BYTES) {
+				return copied;
+			}
+			page += runPages - 1U;
+		}
+		return copied;
+	}
+
+	void BufferPool::writePages(BufferPoolPageKey firstKey, std::span<const std::byte> input) {
+		requireTypedPageRange(firstKey, input.size(), "typed write");
+		io_.requireWritable("BufferPool::writePages");
+		io_.ensureFileSizeUncached(firstKey.page_offset + input.size());
+		const size_t pageCount = input.size() / RSS_BUFFER_POOL_PAGE_BYTES;
+		std::lock_guard lock(mutex_);
+		const uint64_t end = firstKey.page_offset + input.size();
+		// Check the entire range before flushing any stale entry. A rejected batch
+		// must not partly invalidate a live snapshot or modify dirty accounting.
+		for (const auto &[key, entry]: entries_) {
+			if (key.page_offset >= firstKey.page_offset && key.page_offset < end &&
+				(entry->pin_count != 0U || entry->private_cow)) {
+				throw std::logic_error("buffer pool refuses to overwrite a pinned or private typed page");
+			}
+		}
+		discardStaleGenerationsInRangeLocked(firstKey, pageCount);
+		for (size_t page = 0U; page < pageCount; ++page) {
+			const BufferPoolPageKey key{firstKey.page_offset + page * RSS_BUFFER_POOL_PAGE_BYTES,
+										firstKey.generation};
+			Entry *entry = nullptr;
+			if (const auto found = entries_.find(key); found != entries_.end()) {
+				++hits_;
+				entry = found->second.get();
+			} else {
+				++misses_;
+				ensureCapacityLocked(RSS_BUFFER_POOL_PAGE_BYTES);
+				auto fresh = std::make_unique<Entry>();
+				Entry &stored = *fresh;
+				entries_.emplace(key, std::move(fresh));
+				admitLocked(key, stored);
+				resident_bytes_ += RSS_BUFFER_POOL_PAGE_BYTES;
+				entry = &stored;
+			}
+			std::copy_n(input.begin() + static_cast<std::ptrdiff_t>(page * RSS_BUFFER_POOL_PAGE_BYTES),
+						RSS_BUFFER_POOL_PAGE_BYTES, entry->bytes.begin());
+			entry->valid_bytes = RSS_BUFFER_POOL_PAGE_BYTES;
+			if (!entry->dirty) {
+				entry->dirty = true;
+				++dirty_pages_;
+			}
+			promoteLocked(key, *entry);
+		}
+	}
+
+	void BufferPool::writePagesThrough(BufferPoolPageKey firstKey, std::span<const std::byte> input) {
+		requireTypedPageRange(firstKey, input.size(), "typed write-through");
+		io_.requireWritable("BufferPool::writePagesThrough");
+		io_.ensureFileSizeUncached(firstKey.page_offset + input.size());
+		const uint64_t end = firstKey.page_offset + input.size();
+		std::lock_guard lock(mutex_);
+		for (const auto &[key, entry]: entries_) {
+			if (key.page_offset >= firstKey.page_offset && key.page_offset < end &&
+				(entry->pin_count != 0U || entry->private_cow)) {
+				throw std::logic_error("buffer pool refuses to write through a pinned or private typed page");
+			}
+		}
+		for (auto iterator = entries_.begin(); iterator != entries_.end();) {
+			const BufferPoolPageKey key = iterator->first;
+			Entry &entry = *iterator->second;
+			if (key.page_offset < firstKey.page_offset || key.page_offset >= end) {
+				++iterator;
+				continue;
+			}
+			if (entry.dirty) {
+				flushEntryLocked(entry, key.page_offset);
+			}
+			eraseLocked(key, entry);
+			iterator = entries_.erase(iterator);
+		}
+		// Cache entries are gone before I/O. A short write therefore cannot be
+		// followed by a stale dirty-page flush that overwrites partial bytes.
+		io_.writeAtUncached(firstKey.page_offset, input.data(), input.size());
+		disk_write_bytes_ += input.size();
 	}
 
 	size_t BufferPool::read(uint64_t offset, std::span<std::byte> output, BufferPoolReadHint hint) {
@@ -342,6 +506,23 @@ namespace graph::storage {
 		}
 	}
 
+	void BufferPool::discardForExternalRebase() {
+		std::lock_guard lock(mutex_);
+		for (const auto &[key, entry]: entries_) {
+			static_cast<void>(key);
+			if (entry->pin_count != 0U || entry->dirty) {
+				throw std::logic_error(
+						"buffer pool cannot discard pinned or dirty pages during an external metadata rebase");
+			}
+		}
+		entries_.clear();
+		recent_.clear();
+		frequent_.clear();
+		resident_bytes_ = 0U;
+		pinned_pages_ = 0U;
+		dirty_pages_ = 0U;
+	}
+
 	BufferPoolStats BufferPool::stats() const {
 		std::lock_guard lock(mutex_);
 		return {capacity_bytes_,
@@ -479,6 +660,29 @@ namespace graph::storage {
 				flushEntryLocked(entry, residentKey.page_offset);
 			}
 			eraseLocked(residentKey, entry);
+			iterator = entries_.erase(iterator);
+		}
+	}
+
+	void BufferPool::discardStaleGenerationsInRangeLocked(BufferPoolPageKey firstKey, size_t pageCount) {
+		const uint64_t end = firstKey.page_offset + pageCount * RSS_BUFFER_POOL_PAGE_BYTES;
+		for (const auto &[key, entry]: entries_) {
+			if (key.page_offset >= firstKey.page_offset && key.page_offset < end && key.generation != firstKey.generation &&
+				(entry->pin_count != 0U || entry->private_cow)) {
+				throw std::logic_error("buffer pool refuses to recycle a pinned or private generation");
+			}
+		}
+		for (auto iterator = entries_.begin(); iterator != entries_.end();) {
+			const BufferPoolPageKey key = iterator->first;
+			Entry &entry = *iterator->second;
+			if (key.page_offset < firstKey.page_offset || key.page_offset >= end || key.generation == firstKey.generation) {
+				++iterator;
+				continue;
+			}
+			if (entry.dirty) {
+				flushEntryLocked(entry, key.page_offset);
+			}
+			eraseLocked(key, entry);
 			iterator = entries_.erase(iterator);
 		}
 	}

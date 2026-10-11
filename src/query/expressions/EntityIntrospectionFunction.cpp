@@ -27,7 +27,7 @@ namespace graph::query::expressions {
 // The native logical runtime handles these functions directly against its
 // snapshot-backed bindings. The fallback implementations below retain the
 // marker type for non-runtime expression consumers without depending on
-// discarded DataManager token resolution.
+// discarded physical token resolution.
 
 static PropertyValue idImpl(
 	const std::vector<PropertyValue>& args,

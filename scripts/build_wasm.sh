@@ -38,8 +38,6 @@ rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 
 export ZYX_ANTLR4_WASM_DIR="$ANTLR4_WASM_DIR"
-# Avoid Emscripten's post-link llvm-objcopy stripping pass; some macOS Gatekeeper setups kill that tool.
-export EMCC_STRIP_DEBUG="${EMCC_STRIP_DEBUG:-0}"
 
 echo -e "${BLUE}>>> [3/5] Configuring CMake build...${NC}"
 emcmake cmake -S "$PROJECT_ROOT" -B "$BUILD_DIR" \
@@ -67,6 +65,7 @@ if [ ! -f "$INPUTXX_LIB" ]; then
     exit 1
 fi
 
+link_wasm_module() {
 em++ \
     -o "$BUILD_DIR/zyx.js" \
     -Wl,--whole-archive "$ZYX_CORE_LIB" "$INPUTXX_LIB" -Wl,--no-whole-archive \
@@ -148,6 +147,58 @@ em++ \
     -sERROR_ON_UNDEFINED_SYMBOLS=0 \
     -O1 --no-binaryen-passes \
     -fwasm-exceptions
+}
+
+if ! link_wasm_module; then
+    if [ "$(uname -s)" != "Darwin" ]; then
+        exit 1
+    fi
+
+    # Some macOS hosts kill Emscripten's llvm-objcopy during custom-section
+    # cleanup. Retry only there with wasm-opt, keeping the compiler/linker intact.
+    FALLBACK_LLVM_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/zyx-wasm-llvm.XXXXXX")"
+    cleanup_fallback_tools() {
+        rm -rf "$FALLBACK_LLVM_ROOT"
+    }
+    trap cleanup_fallback_tools EXIT
+
+    for tool in clang clang++ llvm-ar llvm-ranlib llvm-nm llvm-ld wasm-ld; do
+        ln -s "$EMSDK_DIR/upstream/bin/$tool" "$FALLBACK_LLVM_ROOT/$tool"
+    done
+
+    cat > "$FALLBACK_LLVM_ROOT/llvm-objcopy" <<'EOF'
+#!/bin/sh
+set -eu
+
+input_path=''
+output_path=''
+for argument in "$@"; do
+    case "$argument" in
+        --remove-section=*) ;;
+        *)
+            if [ -z "$input_path" ]; then
+                input_path="$argument"
+            else
+                output_path="$argument"
+            fi
+            ;;
+    esac
+done
+
+if [ -z "$input_path" ] || [ -z "$output_path" ]; then
+    echo "unsupported llvm-objcopy arguments" >&2
+    exit 2
+fi
+
+temporary_path="${output_path}.wasm-opt-tmp"
+"$ZYX_WASM_OPT" "$input_path" -O0 --strip-debug -o "$temporary_path"
+mv "$temporary_path" "$output_path"
+EOF
+    chmod 755 "$FALLBACK_LLVM_ROOT/llvm-objcopy"
+    export ZYX_WASM_OPT="$EMSDK_DIR/upstream/bin/wasm-opt"
+    echo -e "${YELLOW}>>> Retrying WASM link with macOS objcopy compatibility fallback...${NC}"
+    EM_LLVM_ROOT="$FALLBACK_LLVM_ROOT" link_wasm_module
+fi
 
 echo -e "${GREEN}======================================================${NC}"
 echo -e "${GREEN} WASM Build Successful!                                ${NC}"

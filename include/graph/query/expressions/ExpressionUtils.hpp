@@ -29,8 +29,8 @@ namespace graph::query::expressions {
  * @class ExpressionUtils
  * @brief Central utilities for expression tree analysis.
  *
- * Replaces duplicated logic scattered across ExpressionBuilder,
- * ResultClauseHandler, FilterPushdownRule, and ProjectionPushdownRule.
+ * Replaces duplicated logic scattered across parser expression lowering and
+ * logical projection/predicate optimization.
  */
 class ExpressionUtils {
 public:
@@ -45,6 +45,15 @@ public:
 	 * @return true if count, sum, avg, min, max, or collect
 	 */
 	static bool isAggregateFunction(const std::string& functionName);
+
+	/**
+	 * @brief Validate the argument shape of an aggregate function call.
+	 *
+	 * The logical aggregate representation stores one input expression and, for
+	 * percentile aggregates, one percentile expression. Validation must happen
+	 * before an AST is lowered so no accepted argument can be silently dropped.
+	 */
+	static void validateAggregateFunctionCall(const FunctionCallExpression& functionCall);
 
 	/**
 	 * @brief Recursively check if an expression tree contains any aggregate function calls.

@@ -33,6 +33,7 @@
 #include <unordered_set>
 #include <vector>
 #include "DatabaseBulkInternal.hpp"
+#include "PreparedQueryInternal.hpp"
 #include "graph/core/Database.hpp"
 #include "graph/debug/PerfTrace.hpp"
 #include "graph/query/QueryContext.hpp"
@@ -473,15 +474,58 @@ namespace zyx {
 
 			for (size_t row = 0U; row < sourceIds.size(); ++row) {
 				if (!isVisibleEndpoint(sourceIds[row])) {
-				throw detail::BulkInputError(
+				throw BulkInputError(
 							row, "source_id", "source node " + std::to_string(sourceIds[row]) +
 													 " does not exist or is inactive");
 				}
 				if (!isVisibleEndpoint(targetIds[row])) {
-				throw detail::BulkInputError(
+				throw BulkInputError(
 							row, "target_id", "target node " + std::to_string(targetIds[row]) +
 													 " does not exist or is inactive");
 				}
+			}
+		}
+
+		void validateStreamedBulkEdgeEndpoints(graph::storage::LogicalGraphReadBackend &readBackend,
+												 const std::vector<int64_t> &sourceIds,
+												 const std::vector<int64_t> &targetIds) {
+			if (sourceIds.size() != targetIds.size()) {
+				throw std::invalid_argument("streamed bulk Edge endpoint counts must match");
+			}
+			std::unique_ptr<graph::storage::LogicalGraphReadSnapshot> snapshot =
+					readBackend.openLogicalGraphReadSnapshot();
+			if (!snapshot) {
+				throw std::runtime_error("streamed bulk Edge ingest could not open its validation snapshot");
+			}
+			// Public columnar batches can contain repeated endpoints. Bound this
+			// cache per borrowed batch so repeated validation does not create
+			// transaction-sized state or repeatedly read the same pinned Node.
+			constexpr size_t MAXIMUM_VALIDATED_ENDPOINTS = 4'096U;
+			std::unordered_set<int64_t> validatedEndpoints;
+			std::deque<int64_t> validationOrder;
+			for (size_t row = 0U; row < sourceIds.size(); ++row) {
+				const auto validate = [&snapshot, &validatedEndpoints, &validationOrder, row](int64_t nodeId,
+																		std::string_view field) {
+					if (nodeId <= 0) {
+						throw BulkInputError(row, std::string(field), std::string(field) + " node " +
+																			std::to_string(nodeId) + " does not exist or is inactive");
+					}
+					if (validatedEndpoints.contains(nodeId)) {
+						return;
+					}
+					if (!snapshot->containsNode(static_cast<uint64_t>(nodeId))) {
+						throw BulkInputError(row, std::string(field), std::string(field) + " node " +
+																			std::to_string(nodeId) + " does not exist or is inactive");
+					}
+					if (validationOrder.size() == MAXIMUM_VALIDATED_ENDPOINTS) {
+						validatedEndpoints.erase(validationOrder.front());
+						validationOrder.pop_front();
+					}
+					validatedEndpoints.insert(nodeId);
+					validationOrder.push_back(nodeId);
+				};
+				validate(sourceIds[row], "source_id");
+				validate(targetIds[row], "target_id");
 			}
 		}
 
@@ -580,8 +624,7 @@ namespace zyx {
 		[[nodiscard]] bool visitLogicalAlgorithmOutgoingEdges(const graph::storage::LogicalGraphReadSnapshot &snapshot,
 																	 uint64_t sourceNodeId, EdgeVisitor &&visitor) {
 			std::optional<graph::storage::LogicalGraphAdjacencyContinuation> continuation;
-			std::unordered_set<uint64_t> edgeIds;
-			edgeIds.reserve(LOGICAL_ALGORITHM_ADJACENCY_PAGE_RECORDS);
+			uint64_t previousEdgeId = 0U;
 			size_t visited = 0U;
 			while (true) {
 				const size_t remaining = LOGICAL_ALGORITHM_MAXIMUM_EDGES_PER_NODE - visited;
@@ -593,9 +636,10 @@ namespace zyx {
 				}
 				for (const graph::storage::LogicalGraphEdge &edge: page.edges) {
 					validateLogicalAlgorithmEdge(edge, sourceNodeId);
-					if (!edgeIds.insert(edge.edge_id).second) {
-						throw std::runtime_error("logical graph backend returned a duplicate Edge during traversal");
+					if (previousEdgeId != 0U && edge.edge_id <= previousEdgeId) {
+						throw std::runtime_error("logical graph backend returned non-monotonic Edge IDs during traversal");
 					}
+					previousEdgeId = edge.edge_id;
 					++visited;
 					if (!visitor(edge)) {
 						return false;
@@ -993,6 +1037,7 @@ namespace zyx {
 				throw std::invalid_argument("logical public transaction requires an inner transaction");
 			}
 			logical_overlay_ = std::make_unique<graph::storage::LogicalGraphTransactionOverlay>(*logical_txn_);
+			logical_projection_catalog_ = std::make_unique<graph::query::gds::LogicalProjectionCatalog>();
 			registerTransaction();
 		}
 		~TransactionImpl() { unregisterTransaction(); }
@@ -1030,10 +1075,12 @@ namespace zyx {
 				static_cast<void>(logical_txn_->commit());
 			} catch (...) {
 				if (!isActive()) {
+					logical_projection_catalog_.reset();
 					unregisterTransaction();
 				}
 				throw;
 			}
+			logical_projection_catalog_.reset();
 			unregisterTransaction();
 		}
 		void rollback() {
@@ -1044,10 +1091,12 @@ namespace zyx {
 				logical_txn_->rollback();
 			} catch (...) {
 				if (!isActive()) {
+					logical_projection_catalog_.reset();
 					unregisterTransaction();
 				}
 				throw;
 			}
+			logical_projection_catalog_.reset();
 			unregisterTransaction();
 		}
 
@@ -1070,6 +1119,7 @@ namespace zyx {
 
 		std::unique_ptr<graph::storage::LogicalGraphTransaction> logical_txn_;
 		std::unique_ptr<graph::storage::LogicalGraphTransactionOverlay> logical_overlay_;
+		std::unique_ptr<graph::query::gds::LogicalProjectionCatalog> logical_projection_catalog_;
 		DatabaseImpl *dbImpl_; // Non-owning reference to parent database
 		bool registered_ = false;
 	};
@@ -1148,11 +1198,58 @@ namespace zyx {
 			auto queryEngine = impl_->dbImpl_->db_.getQueryEngine();
 			auto plan = queryEngine->buildPlan(cypher);
 			graph::query::QueryResult internalRes = queryEngine->executePlanWithLogicalTransactionOverlay(
-					std::move(plan), ctx, *impl_->logical_overlay_, *impl_->logical_overlay_);
+					std::move(plan), ctx, *impl_->logical_overlay_, *impl_->logical_overlay_,
+					impl_->logical_projection_catalog_.get());
 
 			auto end = std::chrono::high_resolution_clock::now();
 			std::chrono::duration<double, std::milli> elapsed = end - start;
 			internalRes.setDuration(elapsed.count());
+
+			Result res;
+			res.impl_ = std::make_unique<ResultImpl>(std::move(internalRes));
+			return res;
+		} catch (const std::exception &e) {
+			Result res;
+			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult());
+			res.impl_->error_msg = e.what();
+			return res;
+		} catch (...) {
+			Result res;
+			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult());
+			res.impl_->error_msg = "Unknown error";
+			return res;
+		}
+	}
+
+	QueryBuilder Transaction::query() const { return QueryBuilder(); }
+
+	Result Transaction::execute(const PreparedQuery &query) const {
+		if (!impl_ || !impl_->isActive()) {
+			Result res;
+			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult());
+			res.impl_->error_msg = "Transaction is not active";
+			return res;
+		}
+		if (!query.impl_) {
+			Result res;
+			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult());
+			res.impl_->error_msg = "PreparedQuery is empty or has been moved";
+			return res;
+		}
+
+		try {
+			auto start = std::chrono::high_resolution_clock::now();
+			auto ctx = detail::preparedQueryContext(*query.impl_);
+			if (impl_->isReadOnly()) {
+				ctx.execMode = graph::query::ExecMode::EM_READ_ONLY;
+			}
+			auto queryEngine = impl_->dbImpl_->db_.getQueryEngine();
+			auto plan = detail::clonePreparedQueryPlan(*query.impl_);
+			graph::query::QueryResult internalRes = queryEngine->executePlanWithLogicalTransactionOverlay(
+					std::move(plan), ctx, *impl_->logical_overlay_, *impl_->logical_overlay_,
+					impl_->logical_projection_catalog_.get());
+			auto end = std::chrono::high_resolution_clock::now();
+			internalRes.setDuration(std::chrono::duration<double, std::milli>(end - start).count());
 
 			Result res;
 			res.impl_ = std::make_unique<ResultImpl>(std::move(internalRes));
@@ -1504,6 +1601,47 @@ namespace zyx {
 		}
 	}
 
+	QueryBuilder Database::query() const { return QueryBuilder(); }
+
+	Result Database::execute(const PreparedQuery &query) const {
+		if (!query.impl_) {
+			Result res;
+			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult());
+			res.impl_->error_msg = "PreparedQuery is empty or has been moved";
+			return res;
+		}
+		try {
+			impl_->ensureOpen();
+			if (impl_->cypherTxn_.has_value()) {
+				return impl_->cypherTxn_->execute(query);
+			}
+			auto queryEngine = impl_->db_.getQueryEngine();
+			auto plan = detail::clonePreparedQueryPlan(*query.impl_);
+			if ((plan.mutatesData || plan.mutatesSchema) && !impl_->db_.getLogicalGraphWriteBackend()) {
+				throw std::runtime_error("relocatable backend was opened read-only and cannot execute query mutations");
+			}
+			auto start = std::chrono::high_resolution_clock::now();
+			auto ctx = detail::preparedQueryContext(*query.impl_);
+			auto internalRes = queryEngine->executePlan(std::move(plan), ctx);
+			auto end = std::chrono::high_resolution_clock::now();
+			internalRes.setDuration(std::chrono::duration<double, std::milli>(end - start).count());
+
+			Result res;
+			res.impl_ = std::make_unique<ResultImpl>(std::move(internalRes));
+			return res;
+		} catch (const std::exception &e) {
+			Result res;
+			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult());
+			res.impl_->error_msg = e.what();
+			return res;
+		} catch (...) {
+			Result res;
+			res.impl_ = std::make_unique<ResultImpl>(graph::query::QueryResult());
+			res.impl_->error_msg = "Unknown error";
+			return res;
+		}
+	}
+
 	int64_t Database::createNode(const std::string &label, const std::unordered_map<std::string, Value> &props) const {
 		impl_->ensureOpen();
 		auto &logicalWrites = impl_->resolveLogicalWriteTarget();
@@ -1645,6 +1783,22 @@ namespace zyx {
 		}
 		if (transaction.impl_->isReadOnly() || transaction.impl_->logical_overlay_ == nullptr) {
 			throw std::logic_error("columnar Edge ingest cannot write through a read-only logical transaction");
+		}
+		validateInternalPropertyColumns(columns, sourceIds.size(), "createEdgesColumnar");
+		if (auto *const bulk = dynamic_cast<graph::storage::LogicalGraphBoundedBulkEdgeTransaction *>(
+					transaction.impl_->logical_txn_.get()); bulk != nullptr) {
+			// Streamed bulk mode deliberately has no read-your-writes overlay. It also
+			// cannot be mixed with Node creation, so validate every borrowed batch
+			// against the Database's persisted read target; the writer-fenced backend
+			// repeats the check immediately before publication.
+			validateStreamedBulkEdgeEndpoints(database.impl_->resolveLogicalReadTarget(), sourceIds, targetIds);
+			std::vector<graph::storage::LogicalGraphBulkEdgePropertyColumn> propertyColumns;
+			propertyColumns.reserve(columns.size());
+			for (const BulkPropertyColumn &column: columns) {
+				propertyColumns.push_back({column.key, column.values});
+			}
+			return checkedDirectWriteIds(
+					bulk->appendPersistedBulkEdges({edgeType, sourceIds, targetIds, propertyColumns}), "Edge");
 		}
 		validateLogicalColumnarEdgeEndpoints(*transaction.impl_->logical_overlay_, sourceIds, targetIds);
 		const std::vector<graph::storage::LogicalGraphEdgeCreateRequest> requests =

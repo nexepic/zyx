@@ -50,7 +50,7 @@ namespace {
 	LocationLeafPage singleEntryPage(MetadataDirectoryType type) {
 		LocationLeafPage page;
 		page.directory_type = type;
-		page.page_id = PageId(1U);
+		page.page_id = MetadataPageId(1U);
 		page.generation = Generation(1U);
 		page.committed_lsn = LogSequenceNumber(1U);
 		page.entries = {{1U, SegmentId(10U), Generation(1U), 0U, 1U, 0U}};

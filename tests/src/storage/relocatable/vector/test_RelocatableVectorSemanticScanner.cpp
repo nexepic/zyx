@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <vector>
 
@@ -24,7 +25,7 @@
 #include "graph/storage/relocatable/entity/NativeGraphWritePlanner.hpp"
 #include "graph/storage/relocatable/schema/SystemCatalog.hpp"
 #include "graph/storage/relocatable/vector/RelocatableVectorSemanticScanner.hpp"
-#include "graph/vector/core/BFloat16.hpp"
+#include "graph/common/VectorMath.hpp"
 #include "storage/relocatable/property/PropertyCollectionRootTestUtils.hpp"
 
 using namespace graph;
@@ -53,7 +54,7 @@ namespace {
 		std::vector<std::byte> result(values.size() * sizeof(uint16_t));
 		size_t offset = 0;
 		for (const float value: values) {
-			const vector::BFloat16 encoded(value);
+			const common::BFloat16 encoded(value);
 			LittleEndianCodec::writeU16(result, offset, encoded.data);
 			offset += sizeof(uint16_t);
 		}
@@ -224,7 +225,17 @@ TEST_F(RelocatableVectorSemanticScannerTest, RejectsInvalidBoundsAndDimensionMis
 						std::span(&definition, 1), entities, labels, roots, catalog, *metadata, invalid,
 						[](std::span<const RelocatableVectorSemanticRecord>) {}));
 			},
-			FormatError::FERR_INVALID_HEADER);
+		FormatError::FERR_INVALID_HEADER);
+	invalid = scanOptions();
+	invalid.maximum_definitions = std::numeric_limits<size_t>::max();
+	invalid.maximum_vectors_per_index = 2U;
+	expectFormatError(
+			[&] {
+				static_cast<void>(RelocatableVectorSemanticScanner::scan(
+						std::span(&definition, 1), entities, labels, roots, catalog, *metadata, invalid,
+						[](std::span<const RelocatableVectorSemanticRecord>) {}));
+			},
+			FormatError::FERR_ARITHMETIC_OVERFLOW);
 	expectFormatError(
 			[&] {
 				static_cast<void>(RelocatableVectorSemanticScanner::scan(
@@ -379,7 +390,13 @@ TEST_F(RelocatableVectorSemanticScannerTest, RejectsEachStoreFromAnotherMetadata
 		expectFormatError(
 				[&] {
 					static_cast<void>(RelocatableVectorSemanticScanner::scan(std::span(&definition, 1U), entities, foreignLabels,
-																					 foreignRoots, catalog, *metadata, scanOptions(), consume));
+																 foreignRoots, catalog, *metadata, scanOptions(), consume));
+				},
+				FormatError::FERR_INVALID_STATE);
+		expectFormatError(
+				[&] {
+					static_cast<void>(RelocatableVectorSemanticScanner::scan(std::span(&definition, 1U), entities, labels,
+																 foreignRoots, catalog, *metadata, scanOptions(), consume));
 				},
 				FormatError::FERR_INVALID_STATE);
 		expectFormatError(

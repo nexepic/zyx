@@ -39,8 +39,11 @@ namespace graph::debug {
 
 		using Snapshot = std::unordered_map<std::string, Entry>;
 
+		// Maintains the legacy all-tracing toggle for callers that collect both durations and values.
 		static void setEnabled(bool enabled);
 		[[nodiscard]] static bool isEnabled();
+		static void setValueCollectionEnabled(bool enabled);
+		[[nodiscard]] static bool areValuesEnabled();
 
 		static void addDuration(std::string_view key, uint64_t durationNs);
 		static void addDurationBatch(std::string_view key, uint64_t durationNs, uint64_t calls);

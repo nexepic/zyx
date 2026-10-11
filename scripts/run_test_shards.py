@@ -59,6 +59,11 @@ def terminate_process_tree(process: subprocess.Popen[bytes], *, force: bool) -> 
         os.killpg(process.pid, signal.SIGKILL if force else signal.SIGTERM)
     except ProcessLookupError:
         pass
+    except PermissionError:
+        # The supervisor must still report the original timeout/interrupt when
+        # an external sandbox owns the process group and rejects the signal.
+        # Finalization retains that shard workspace for later diagnostics.
+        pass
 
 
 def terminate_and_reap_processes(
@@ -143,8 +148,8 @@ def run_shards(command: Sequence[str], jobs: int, timeout_seconds: float, failur
             environment = os.environ.copy()
             environment["GTEST_TOTAL_SHARDS"] = str(jobs)
             environment["GTEST_SHARD_INDEX"] = str(index)
-            # Fixtures use the platform temporary-directory API for databases, WALs,
-            # and recovery sidecars. A private directory prevents independently
+            # Fixtures use the platform temporary-directory API for databases and
+            # test artifacts. A private directory prevents independently
             # sharded processes from deleting or reopening each other's artifacts.
             environment["TMPDIR"] = str(temporary_directory)
             environment["TMP"] = str(temporary_directory)
@@ -190,6 +195,8 @@ def run_shards(command: Sequence[str], jobs: int, timeout_seconds: float, failur
                             (failure_log_dir / f"shard-{index}.log").write_text(contents)
                     except OSError as error:
                         print(f"Unable to read shard log {log_path}: {error}", file=sys.stderr)
+                if failure_log_dir is not None:
+                    print(f"Failed shard logs retained at: {failure_log_dir.resolve()}", file=sys.stderr)
                 exit_code = 1
             else:
                 print(f"All {jobs} isolated GoogleTest shards passed.")
@@ -208,11 +215,35 @@ def run_shards(command: Sequence[str], jobs: int, timeout_seconds: float, failur
     return exit_code
 
 
-def write_result(path: Path, exit_code: int, jobs: int) -> None:
-    """Publish a small result record for non-interactive CI harnesses."""
+def write_result(
+    path: Path,
+    exit_code: int,
+    jobs: int,
+    *,
+    run_id: str | None,
+    started_at: float,
+    command: Sequence[str],
+) -> None:
+    """Publish an attributable result record for non-interactive CI harnesses."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + ".tmp")
-    temporary.write_text(json.dumps({"exit_code": exit_code, "jobs": jobs}) + "\n")
+    completed_at = time.time()
+    temporary.write_text(
+        json.dumps(
+            {
+                "command": list(command),
+                "completed_at_unix_seconds": completed_at,
+                "exit_code": exit_code,
+                "jobs": jobs,
+                "launcher_pid": os.getpid(),
+                "run_id": run_id,
+                "started_at_unix_seconds": started_at,
+                "working_directory": str(Path.cwd().resolve()),
+            },
+            sort_keys=True,
+        )
+        + "\n"
+    )
     temporary.replace(path)
 
 
@@ -221,19 +252,28 @@ def main() -> int:
     parser.add_argument("--jobs", type=int, default=1, help="number of isolated GoogleTest shards")
     parser.add_argument("--timeout", type=float, default=1800.0, help="maximum wall time for the complete shard run")
     parser.add_argument("--result-file", type=Path, help="write the final exit code as JSON")
+    parser.add_argument("--run-id", help="opaque caller-generated identifier recorded with the result")
     parser.add_argument("--failure-log-dir", type=Path, help="copy failed shard logs to this directory")
     parser.add_argument("command", nargs=argparse.REMAINDER, help="test executable and arguments")
     args = parser.parse_args()
     if args.timeout <= 0:
         parser.error("--timeout must be greater than zero")
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
+    started_at = time.time()
     try:
         exit_code = run_shards(command, args.jobs, args.timeout, args.failure_log_dir)
     except (OSError, RuntimeError, ValueError) as error:
         print(f"Unable to run test shards: {error}", file=sys.stderr)
         exit_code = 127
     if args.result_file is not None:
-        write_result(args.result_file, exit_code, args.jobs)
+        write_result(
+            args.result_file,
+            exit_code,
+            args.jobs,
+            run_id=args.run_id,
+            started_at=started_at,
+            command=command,
+        )
     return exit_code
 
 

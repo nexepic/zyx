@@ -24,8 +24,10 @@ namespace graph::query::execution {
 	class LogicalPlanMutationRuntime final {
 	public:
 		LogicalPlanMutationRuntime(const storage::LogicalGraphReadBackend &readBackend,
-								   storage::LogicalGraphWriteBackend &writeBackend) :
-			read_backend_(readBackend), write_backend_(writeBackend) {}
+								   storage::LogicalGraphWriteBackend &writeBackend,
+								   bool permitsIndependentBatchCommits = true) :
+			read_backend_(readBackend), write_backend_(writeBackend),
+			permits_independent_batch_commits_(permitsIndependentBatchCommits) {}
 
 		[[nodiscard]] QueryResult execute(const logical::LogicalOperator &root,
 										  const LogicalPlanReadRuntimeBounds &bounds,
@@ -34,6 +36,7 @@ namespace graph::query::execution {
 	private:
 		const storage::LogicalGraphReadBackend &read_backend_;
 		storage::LogicalGraphWriteBackend &write_backend_;
+		bool permits_independent_batch_commits_;
 	};
 
 } // namespace graph::query::execution

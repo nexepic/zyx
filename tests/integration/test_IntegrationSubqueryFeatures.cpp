@@ -10,9 +10,11 @@
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
+#include <vector>
 
 #include "graph/core/Database.hpp"
 #include "graph/query/api/QueryResult.hpp"
@@ -138,6 +140,21 @@ TEST_F(IntegrationSubqueryFeaturesTest, CallSubquery_WithOuterScope) {
 	EXPECT_EQ(val(result, "total"), "30");
 }
 
+TEST_F(IntegrationSubqueryFeaturesTest, CallSubquery_ImportsOuterVariableAndExportsAlias) {
+	execute("CREATE (:SubqOuter {name: 'Alice'})");
+	execute("CREATE (:SubqOuter {name: 'Bob'})");
+
+	const auto result = execute(
+			"MATCH (person:SubqOuter) "
+			"CALL { WITH person RETURN person.name AS innerName } "
+			"RETURN person.name AS outerName, innerName ORDER BY outerName");
+	ASSERT_EQ(result.rowCount(), 2UL);
+	EXPECT_EQ(val(result, "outerName", 0), "Alice");
+	EXPECT_EQ(val(result, "innerName", 0), "Alice");
+	EXPECT_EQ(val(result, "outerName", 1), "Bob");
+	EXPECT_EQ(val(result, "innerName", 1), "Bob");
+}
+
 TEST_F(IntegrationSubqueryFeaturesTest, CallSubquery_WriteOnly) {
 	// Write-only subquery wrapped with MATCH to satisfy grammar
 	execute("CREATE (:SubqDummy {x: 1})");
@@ -145,6 +162,239 @@ TEST_F(IntegrationSubqueryFeaturesTest, CallSubquery_WriteOnly) {
 	auto result = execute("MATCH (n:SubqWriteOnly) RETURN n.created AS c");
 	ASSERT_EQ(result.rowCount(), 1UL);
 	EXPECT_EQ(val(result, "c"), "true");
+}
+
+TEST_F(IntegrationSubqueryFeaturesTest, CallSubquery_WriteOnlyImportsOuterVariableAndPersists) {
+	execute("CREATE (:SubqWriteImport {value: 7})");
+	execute("CREATE (:SubqWriteImport {value: 11})");
+
+	const auto outer = execute(
+			"MATCH (seed:SubqWriteImport) "
+			"CALL { WITH seed CREATE (:SubqImportedChild {copied: seed.value}) } "
+			"RETURN seed.value AS value");
+	ASSERT_EQ(outer.rowCount(), 2UL);
+	std::vector<std::string> outerValues{val(outer, "value", 0), val(outer, "value", 1)};
+	std::ranges::sort(outerValues);
+	EXPECT_EQ(outerValues, (std::vector<std::string>{"11", "7"}));
+
+	db->close();
+	db->open();
+	const auto persisted = execute("MATCH (child:SubqImportedChild) RETURN child.copied AS copied ORDER BY copied");
+	ASSERT_EQ(persisted.rowCount(), 2UL);
+	EXPECT_EQ(val(persisted, "copied", 0), "7");
+	EXPECT_EQ(val(persisted, "copied", 1), "11");
+}
+
+TEST_F(IntegrationSubqueryFeaturesTest, CallSubquery_WriteOnlyImportsOuterVariableForSetAndRemove) {
+	execute("CREATE (:SubqWriteUpdate {value: 3})");
+	execute("CREATE (:SubqWriteUpdate {value: 5})");
+
+	const auto outer = execute(
+			"MATCH (seed:SubqWriteUpdate) "
+			"CALL { WITH seed SET seed.doubled = seed.value * 2, seed.temporary = true REMOVE seed.temporary } "
+			"RETURN seed.value AS value");
+	ASSERT_EQ(outer.rowCount(), 2UL);
+
+	db->close();
+	db->open();
+	const auto persisted = execute(
+			"MATCH (seed:SubqWriteUpdate) RETURN seed.value AS value, seed.doubled AS doubled, seed.temporary AS temporary "
+			"ORDER BY value");
+	ASSERT_EQ(persisted.rowCount(), 2UL);
+	EXPECT_EQ(val(persisted, "value", 0), "3");
+	EXPECT_EQ(val(persisted, "doubled", 0), "6");
+	EXPECT_EQ(val(persisted, "temporary", 0), "null");
+	EXPECT_EQ(val(persisted, "value", 1), "5");
+	EXPECT_EQ(val(persisted, "doubled", 1), "10");
+	EXPECT_EQ(val(persisted, "temporary", 1), "null");
+}
+
+TEST_F(IntegrationSubqueryFeaturesTest, CallSubquery_WriteOnlyExportsUpdatedValue) {
+	execute("CREATE (:SubqWriteExportUpdate {value: 3})");
+	execute("CREATE (:SubqWriteExportUpdate {value: 5})");
+
+	const auto result = execute(
+			"MATCH (seed:SubqWriteExportUpdate) "
+			"CALL { WITH seed SET seed.doubled = seed.value * 2 "
+			"RETURN seed.doubled AS doubled } "
+			"RETURN seed.value AS value, doubled ORDER BY value");
+	ASSERT_EQ(result.rowCount(), 2UL);
+	EXPECT_EQ(val(result, "value", 0), "3");
+	EXPECT_EQ(val(result, "doubled", 0), "6");
+	EXPECT_EQ(val(result, "value", 1), "5");
+	EXPECT_EQ(val(result, "doubled", 1), "10");
+
+	db->close();
+	db->open();
+	const auto persisted = execute(
+			"MATCH (seed:SubqWriteExportUpdate) RETURN seed.doubled AS doubled ORDER BY doubled");
+	ASSERT_EQ(persisted.rowCount(), 2UL);
+	EXPECT_EQ(val(persisted, "doubled", 0), "6");
+	EXPECT_EQ(val(persisted, "doubled", 1), "10");
+}
+
+TEST_F(IntegrationSubqueryFeaturesTest, CallSubquery_WriteOnlyImportsOuterVariableForDelete) {
+	execute("CREATE (:SubqWriteDelete {value: 13})");
+	execute("CREATE (:SubqWriteDelete {value: 17})");
+
+	execute("MATCH (seed:SubqWriteDelete) CALL { WITH seed DELETE seed }");
+
+	db->close();
+	db->open();
+	const auto persisted = execute("MATCH (seed:SubqWriteDelete) RETURN count(seed) AS count");
+	ASSERT_EQ(persisted.rowCount(), 1UL);
+	EXPECT_EQ(val(persisted, "count"), "0");
+}
+
+TEST_F(IntegrationSubqueryFeaturesTest, CallSubquery_WriteOnlyExportsCreatedValue) {
+	execute("CREATE (:SubqWriteExport {value: 2})");
+	execute("CREATE (:SubqWriteExport {value: 4})");
+
+	const auto result = execute(
+			"MATCH (seed:SubqWriteExport) "
+			"CALL { WITH seed CREATE (child:SubqExportedChild {copied: seed.value}) RETURN child, child.copied AS copied } "
+			"RETURN seed.value AS value, copied, child");
+	ASSERT_EQ(result.rowCount(), 2UL);
+	EXPECT_EQ(val(result, "value", 0), "2");
+	EXPECT_EQ(val(result, "copied", 0), "2");
+	EXPECT_EQ(result.getRows().at(0).at("child").asLogicalNode().properties.at("copied"), PropertyValue(2));
+	EXPECT_EQ(val(result, "value", 1), "4");
+	EXPECT_EQ(val(result, "copied", 1), "4");
+	EXPECT_EQ(result.getRows().at(1).at("child").asLogicalNode().properties.at("copied"), PropertyValue(4));
+
+	db->close();
+	db->open();
+	const auto persisted = execute("MATCH (child:SubqExportedChild) RETURN child.copied AS copied ORDER BY copied");
+	ASSERT_EQ(persisted.rowCount(), 2UL);
+	EXPECT_EQ(val(persisted, "copied", 0), "2");
+	EXPECT_EQ(val(persisted, "copied", 1), "4");
+}
+
+TEST_F(IntegrationSubqueryFeaturesTest, CallSubquery_WriteOnlyExportFailureDoesNotPublish) {
+	execute("CREATE (:SubqWriteExportFailure {value: 0})");
+
+	EXPECT_THROW(static_cast<void>(execute(
+				 "MATCH (seed:SubqWriteExportFailure) "
+				 "CALL { WITH seed CREATE (:SubqFailedExport) RETURN 1 / seed.value AS invalid } "
+				 "RETURN invalid")),
+			 std::runtime_error);
+
+	db->close();
+	db->open();
+	const auto persisted = execute("MATCH (child:SubqFailedExport) RETURN count(child) AS count");
+	ASSERT_EQ(persisted.rowCount(), 1UL);
+	EXPECT_EQ(val(persisted, "count"), "0");
+}
+
+TEST_F(IntegrationSubqueryFeaturesTest, CallSubquery_WriteOnlyOrdersAndPaginatesOuterResults) {
+	execute("CREATE (:SubqWritePaging {value: 3})");
+	execute("CREATE (:SubqWritePaging {value: 1})");
+	execute("CREATE (:SubqWritePaging {value: 2})");
+
+	const auto result = execute(
+			"MATCH (seed:SubqWritePaging) "
+			"CALL { WITH seed CREATE (:SubqWritePagingChild {copied: seed.value}) } "
+			"RETURN seed.value AS value ORDER BY value DESC SKIP 1 LIMIT 1");
+	ASSERT_EQ(result.rowCount(), 1UL);
+	EXPECT_EQ(val(result, "value"), "2");
+
+	// Pagination applies only to the result pipeline; every outer row still runs
+	// the write-only subquery and is committed in the single mutation batch.
+	const auto persisted = execute("MATCH (child:SubqWritePagingChild) RETURN count(child) AS count");
+	ASSERT_EQ(persisted.rowCount(), 1UL);
+	EXPECT_EQ(val(persisted, "count"), "3");
+}
+
+TEST_F(IntegrationSubqueryFeaturesTest, CallSubquery_WriteOnlyDistinctsOuterResultsAfterMutation) {
+	execute("CREATE (:SubqWriteDistinct {value: 2})");
+	execute("CREATE (:SubqWriteDistinct {value: 2})");
+	execute("CREATE (:SubqWriteDistinct {value: 1})");
+
+	const auto result = execute(
+			"MATCH (seed:SubqWriteDistinct) "
+			"CALL { WITH seed CREATE (:SubqWriteDistinctChild {copied: seed.value}) } "
+			"RETURN DISTINCT seed.value AS value ORDER BY value DESC");
+	ASSERT_EQ(result.rowCount(), 2UL);
+	EXPECT_EQ(val(result, "value", 0), "2");
+	EXPECT_EQ(val(result, "value", 1), "1");
+
+	const auto persisted = execute("MATCH (child:SubqWriteDistinctChild) RETURN count(child) AS count");
+	ASSERT_EQ(persisted.rowCount(), 1UL);
+	EXPECT_EQ(val(persisted, "count"), "3");
+}
+
+TEST_F(IntegrationSubqueryFeaturesTest, CallSubquery_InTransactionsExportsCreatedValuesPerBatch) {
+	execute("CREATE (:SubqWriteBatchExport {value: 3})");
+	execute("CREATE (:SubqWriteBatchExport {value: 1})");
+	execute("CREATE (:SubqWriteBatchExport {value: 2})");
+
+	const auto result = execute(
+			"MATCH (seed:SubqWriteBatchExport) "
+			"CALL { WITH seed CREATE (child:SubqBatchExportedChild {copied: seed.value}) "
+			"RETURN child.copied AS copied } IN TRANSACTIONS OF 2 ROWS "
+			"RETURN seed.value AS source, copied");
+	ASSERT_EQ(result.rowCount(), 3UL);
+	std::vector<std::string> sources;
+	std::vector<std::string> copied;
+	for (const auto &row : result.getRows()) {
+		sources.push_back(row.at("source").toString());
+		copied.push_back(row.at("copied").toString());
+	}
+	std::ranges::sort(sources);
+	std::ranges::sort(copied);
+	EXPECT_EQ(sources, (std::vector<std::string>{"1", "2", "3"}));
+	EXPECT_EQ(copied, (std::vector<std::string>{"1", "2", "3"}));
+
+	db->close();
+	db->open();
+	const auto persisted = execute("MATCH (child:SubqBatchExportedChild) RETURN count(child) AS count");
+	ASSERT_EQ(persisted.rowCount(), 1UL);
+	EXPECT_EQ(val(persisted, "count"), "3");
+}
+
+TEST_F(IntegrationSubqueryFeaturesTest, CallSubquery_InTransactionsExportsUpdatedValuesPerBatch) {
+	execute("CREATE (:SubqBatchUpdate {value: 3})");
+	execute("CREATE (:SubqBatchUpdate {value: 5})");
+
+	const auto result = execute(
+			"MATCH (seed:SubqBatchUpdate) "
+			"CALL { WITH seed SET seed.doubled = seed.value * 2 "
+			"RETURN seed.doubled AS doubled } IN TRANSACTIONS OF 1 ROWS "
+			"RETURN seed.value AS value, doubled");
+	ASSERT_EQ(result.rowCount(), 2UL);
+	std::vector<std::string> values;
+	std::vector<std::string> doubled;
+	for (const auto &row: result.getRows()) {
+		values.push_back(row.at("value").toString());
+		doubled.push_back(row.at("doubled").toString());
+	}
+	std::ranges::sort(values);
+	std::ranges::sort(doubled);
+	EXPECT_EQ(values, (std::vector<std::string>{"3", "5"}));
+	EXPECT_EQ(doubled, (std::vector<std::string>{"10", "6"}));
+
+	db->close();
+	db->open();
+	const auto persisted = execute(
+			"MATCH (seed:SubqBatchUpdate) RETURN seed.doubled AS doubled ORDER BY doubled");
+	ASSERT_EQ(persisted.rowCount(), 2UL);
+	EXPECT_EQ(val(persisted, "doubled", 0), "6");
+	EXPECT_EQ(val(persisted, "doubled", 1), "10");
+}
+
+TEST_F(IntegrationSubqueryFeaturesTest, CallSubquery_InTransactionsExportFailureDoesNotPublishBatch) {
+	execute("CREATE (:SubqWriteBatchExportFailure {value: 0})");
+
+	EXPECT_THROW(static_cast<void>(execute(
+					"MATCH (seed:SubqWriteBatchExportFailure) "
+					"CALL { WITH seed CREATE (:SubqBatchExportFailure) "
+					"RETURN 1 / seed.value AS invalid } IN TRANSACTIONS OF 1 ROW "
+					"RETURN invalid")),
+				std::runtime_error);
+
+	const auto persisted = execute("MATCH (child:SubqBatchExportFailure) RETURN count(child) AS count");
+	ASSERT_EQ(persisted.rowCount(), 1UL);
+	EXPECT_EQ(val(persisted, "count"), "0");
 }
 
 // ============================================================================

@@ -17,19 +17,9 @@ ZYX 在索引、存储、查询处理、向量搜索和并发控制等方面采�
 
 ### 存储算法
 
-管理持久化数据存储与分配的算法：
+管理原生单文件存储的算法：
 
-- **[段分配](segment-allocation)** — 段如何分配、链接成链，以及按实体类型进行跟踪
-- **[段压缩](segment-compaction)** — 多阶段压缩，在删除操作后回收碎片化空间
-- **[位图索引](bitmap-indexing)** — 使用位图结构跟踪段内空闲槽位
-- **[压缩](compression)** — 基于 Zlib 的无损压缩，用于状态链和大数据
-
-### 事务与并发
-
-保证 ACID 特性和崩溃恢复的算法：
-
-- **[状态链与乐观锁](state-chain-optimistic-locking)** — 基于版本链的配置存储，支持原子读写
-- **[WAL 恢复](wal-recovery)** — 4 阶段崩溃恢复：扫描、去重、重放、收尾
+- **[段压缩](segment-compaction)** — 通过 native metadata publication 实现 snapshot-safe relocation 和回收
 
 ### 索引算法
 
@@ -46,18 +36,12 @@ ZYX 在索引、存储、查询处理、向量搜索和并发控制等方面采�
 - **[查询优化](query-optimization)** — 基于固定点迭代的多规则优化器
 - **[关系遍历](relationship-traversal)** — 使用全局 Packed B+Tree range cursor 遍历出边和入边
 
-### 缓存
-
-- **[缓存淘汰](cache-eviction)** — 带命中/未命中统计和线程安全操作的 LRU 缓存
-
 ### 向量搜索
 
 用于高维向量相似性搜索的算法：
 
 - **[向量度量](vector-metrics)** — 经过优化的 L2 和 IP 距离计算，支持混合精度
 - **[乘积量化](product-quantization)** — 通过子空间量化进行向量压缩
-- **[K-Means 聚类](kmeans)** — Lloyd 算法，用于 PQ 码本训练
-- **[DiskANN](diskann)** — 可导航小世界图，用于近似最近邻搜索
 
 ### 图分析
 
@@ -106,9 +90,8 @@ graph TD
 | Property Index | Exact match | O(log n + k) |
 | Property Index | Range query | O(log n + k) |
 | Relationship Traversal | Get outgoing/incoming edges | O(log E + degree) |
-| LRU Cache | Get / Put | O(1) |
 | 社区检测 | Leiden 每层 | O(n + m) × 迭代次数 |
-| DiskANN Search | K-nearest neighbors | O(beamWidth × maxDegree × dim) |
+| 原生向量检索 | K 近邻 | 受配置的候选与精排预算限制 |
 | PQ Distance | Approximate distance | O(numSubspaces) |
 
 其中 n = 索引中的条目数，k = 结果数量，dim = 向量维度。

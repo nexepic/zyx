@@ -12,18 +12,20 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>
 #include <span>
 
-#include "graph/storage/relocatable/metadata/MetadataPageFile.hpp"
 #include "graph/storage/relocatable/format/SuperblockFile.hpp"
+#include "graph/storage/relocatable/metadata/MetadataPageFile.hpp"
 
 namespace graph::storage {
 
 	class MetadataWriteBatch;
+	class CatalogTree;
 
 	// A physical metadata page may bring a new metadata pool online. The batch
 	// publishes ownership of that pool in the same free-space generation.
@@ -34,6 +36,30 @@ namespace graph::storage {
 		[[nodiscard]] constexpr operator PhysicalPageRef() const { return page; }
 	};
 
+	// A batch can reserve a contiguous data-only suffix without expanding it into
+	// one PhysicalSlotId per segment. Metadata pages must not reuse this range
+	// before the enclosing Superblock publication decides its reachability.
+	struct PhysicalSlotRange {
+		PhysicalSlotId first{};
+		PhysicalSlotId last{};
+
+		[[nodiscard]] constexpr bool isValid() const { return first.isValid() && last.isValid() && first <= last; }
+		[[nodiscard]] constexpr bool contains(PhysicalSlotId slot) const {
+			return isValid() && slot.isValid() && first <= slot && slot <= last;
+		}
+	};
+
+	// Rollback keeps reservations in insertion order, whereas metadata COW
+	// allocation needs frequent membership checks. This view exposes an indexed
+	// lookup without changing the durable reservation contract.
+	class MetadataSlotReservationLookup {
+	public:
+		virtual ~MetadataSlotReservationLookup() = default;
+		[[nodiscard]] virtual bool isDataSlotReserved(PhysicalSlotId slot) const noexcept = 0;
+		[[nodiscard]] virtual std::optional<PhysicalSlotRange>
+		dataSlotRangeContaining(PhysicalSlotId slot) const noexcept = 0;
+	};
+
 	class MetadataPageAllocator {
 	public:
 		virtual ~MetadataPageAllocator() = default;
@@ -41,26 +67,105 @@ namespace graph::storage {
 		// New logical page IDs may be monotonic and need not be reused when a
 		// transaction is abandoned. Physical pages, however, must be fresh for
 		// the requested metadata generation.
-		[[nodiscard]] virtual PageId allocatePageId() = 0;
+		[[nodiscard]] virtual MetadataPageId allocateMetadataPageId() = 0;
 		[[nodiscard]] virtual MetadataPageAllocation
 		allocatePage(Generation generation, LogSequenceNumber checkpointLsn,
 					 std::span<const PhysicalSlotId> excludedPoolSlots) = 0;
+		[[nodiscard]] virtual MetadataPageAllocation
+		allocatePage(Generation generation, LogSequenceNumber checkpointLsn,
+					 std::span<const PhysicalSlotId> excludedPoolSlots,
+					 std::span<const PhysicalSlotRange> excludedDataSlotRanges) {
+			static_cast<void>(excludedDataSlotRanges);
+			return allocatePage(generation, checkpointLsn, excludedPoolSlots);
+		}
+		[[nodiscard]] virtual MetadataPageAllocation
+		allocatePage(Generation generation, LogSequenceNumber checkpointLsn,
+					 std::span<const PhysicalSlotId> excludedPoolSlots,
+					 std::span<const PhysicalSlotRange> excludedDataSlotRanges,
+					 const MetadataSlotReservationLookup *reservationLookup) {
+			static_cast<void>(reservationLookup);
+			return allocatePage(generation, checkpointLsn, excludedPoolSlots, excludedDataSlotRanges);
+		}
+		// A concrete allocator may inspect the current published roots while a
+		// batch is active. This lets it reuse only a root-free physical tail slot
+		// left by an interrupted unpublished candidate.
+		virtual void beginUnpublishedBatch(const Superblock &) {}
+		virtual void endUnpublishedBatch(const Superblock &) noexcept {}
+		// A publication may reserve its exact metadata-frame budget after ordinary
+		// COW work has converged. Concrete allocators bind this reservation to the
+		// active batch and reject allocations that exceed it; lightweight test
+		// allocators can retain the source-compatible no-op default.
+		virtual void reserveMetadataFrames(size_t, std::span<const PhysicalSlotId>,
+									  std::span<const PhysicalSlotRange>,
+									  const MetadataSlotReservationLookup *) {}
+		virtual void releaseMetadataFrames() noexcept {}
+		// Final route/header publication needs a bounded number of existing free
+		// frames. A production allocator can add a private empty pool before that
+		// reservation is activated; lightweight test allocators retain this default.
+		[[nodiscard]] virtual std::vector<PhysicalSlotId>
+		ensureMetadataFrameCapacity(Generation, LogSequenceNumber, size_t, std::span<const PhysicalSlotId>,
+										std::span<const PhysicalSlotRange>, const MetadataSlotReservationLookup *) {
+			return {};
+		}
 		virtual void abandonPage(PhysicalPageRef reference) noexcept = 0;
 		virtual void abandonUnpublishedPool(PhysicalSlotId slot) noexcept { static_cast<void>(slot); }
 		// A concrete allocator may coordinate newly created metadata pools with
 		// data slots provisionally appended by the same metadata batch.  The
 		// default keeps lightweight test allocators source-compatible.
 		[[nodiscard]] virtual uint64_t physicalFileSize() const { return 0U; }
-		virtual void abandonUnpublishedBatch(std::span<const PhysicalSlotId> poolSlots,
-											std::span<const PhysicalSlotId>, uint64_t) noexcept {
+		virtual void abandonUnpublishedBatch(std::span<const PhysicalSlotId> poolSlots, std::span<const PhysicalSlotId>,
+											 uint64_t) noexcept {
 			for (const PhysicalSlotId slot: poolSlots) {
 				abandonUnpublishedPool(slot);
 			}
 		}
+		virtual void abandonUnpublishedBatch(std::span<const PhysicalSlotId> poolSlots,
+											 std::span<const PhysicalSlotId> dataSlots,
+											 std::span<const PhysicalSlotRange>, uint64_t initialFileSize) noexcept {
+			abandonUnpublishedBatch(poolSlots, dataSlots, initialFileSize);
+		}
+	};
+
+	// Owns one bounded append-only Catalog COW path.  A caller may keep this
+	// session beside other metadata append sessions while materializing a page,
+	// then publish every completed root through the same MetadataWriteBatch.
+	class CatalogAppendSession final {
+	public:
+		CatalogAppendSession(CatalogAppendSession &&) noexcept;
+		CatalogAppendSession &operator=(CatalogAppendSession &&) noexcept;
+		~CatalogAppendSession();
+
+		CatalogAppendSession(const CatalogAppendSession &) = delete;
+		CatalogAppendSession &operator=(const CatalogAppendSession &) = delete;
+
+		void append(const CatalogEntry &entry);
+		void finish();
+		[[nodiscard]] bool isFinished() const noexcept;
+
+	private:
+		struct Impl;
+		explicit CatalogAppendSession(std::unique_ptr<Impl> implementation) noexcept;
+
+		std::unique_ptr<Impl> implementation_;
+
+		friend class CatalogTree;
 	};
 
 	class CatalogTree final {
 	public:
+		// Streamed publication assigns a contiguous run of new logical Segment IDs.
+		// This append-only form retains one Catalog leaf and one radix path instead
+		// of materializing an import-sized Catalog-entry vector.
+		using EntryCursor = std::function<std::optional<CatalogEntry>()>;
+		using EntrySink = std::function<void(const CatalogEntry &)>;
+		using EntryProducer = std::function<void(const EntrySink &)>;
+		[[nodiscard]] CatalogAppendSession beginAppend(MetadataWriteBatch &batch, SegmentId firstSegmentId,
+													   SegmentId lastSegmentId, size_t expectedCount);
+		void prepareAppend(MetadataWriteBatch &batch, SegmentId firstSegmentId, SegmentId lastSegmentId,
+						   size_t expectedCount, const EntryCursor &cursor);
+		void prepareAppend(MetadataWriteBatch &batch, SegmentId firstSegmentId, SegmentId lastSegmentId,
+						   size_t expectedCount, const EntryProducer &producer);
+
 		CatalogTree(MetadataPageFile &pages, MetadataPageAllocator &allocator);
 
 		// Upserts strictly Segment-ID-ordered entries as one copy-on-write metadata
@@ -78,6 +183,10 @@ namespace graph::storage {
 		// generation. Empty leaves are unlinked rather than serialized so removed
 		// metadata-pool ownership cannot accumulate as permanent Catalog history.
 		void prepareErase(MetadataWriteBatch &batch, std::span<const SegmentId> segmentIds);
+		// Runs after all same-batch Catalog mutations have converged. Candidate
+		// roots remain physical while writers compose; the final root is then
+		// rewritten with stable logical child identities for route publication.
+		void prepareLogicalRootChildren(MetadataWriteBatch &batch);
 
 		// Resolves one entry from a published Superblock generation. It validates
 		// every traversed root/internal/leaf relationship before returning data.

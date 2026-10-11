@@ -179,3 +179,47 @@ TEST_F(RelocatableMetadataStoreTest, CatalogSegmentRetirementCoordinatorRejectsA
 	expectFormatError([&] { components.segmentRetirement.prepareRetiredRelease(releaseBatch, mismatched); },
 					  FormatError::FERR_INVALID_STATE);
 }
+
+TEST_F(RelocatableMetadataStoreTest, CatalogSegmentRetirementCoordinatorRejectsStaleRetirementGeneration) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	CatalogSlotReservationRequest request = reservationRequest(RSS_FIRST_ALLOCATABLE_SEGMENT_ID, 1U);
+	request.kind = SegmentKind::SGK_CODEBOOK_EXTENT;
+	request.require_absent = true;
+	ASSERT_TRUE(store->reserveFirstFreeAndUpsertCatalog(request, PhysicalSlotId(40U), PhysicalSlotId(40U), LogSequenceNumber(2U))
+							.has_value());
+	MetadataSnapshotPin snapshot = store->openSnapshot();
+	const Superblock current = snapshot.superblock();
+	snapshot.release();
+	store.reset();
+
+	MetadataRetirementComponents components(io, current);
+	MetadataWriteBatch retirementBatch(components.pools, current, LogSequenceNumber(3U));
+	components.segmentRetirement.prepareRetirement(retirementBatch, request.segment_id, request.segment_generation);
+	retirementBatch.publish(components.bootstrap);
+	const Superblock retired = retirementBatch.candidate();
+	const RetireQueueEntry queued = components.segmentRetirement.validateRetiredRelease(
+			retired, request.segment_id, request.segment_generation);
+
+	// The queue generation is the publication fence that made the source
+	// unreachable. A smaller value must never permit a direct slot release.
+	CatalogEntry newerRetired = components.catalog.find(retired, request.segment_id);
+	newerRetired.generation = Generation(2U);
+	newerRetired.committed_lsn = LogSequenceNumber(4U);
+	RetireQueueEntry stale = queued;
+	stale.retired_generation = Generation(1U);
+	MetadataWriteBatch corruptBatch(components.pools, retired, LogSequenceNumber(4U));
+	components.catalog.prepareUpsert(corruptBatch, std::span(&newerRetired, 1U));
+	components.locations.prepareReplaceRetireQueue(corruptBatch, std::span(&stale, 1U), {});
+	corruptBatch.publish(components.bootstrap);
+	const Superblock corrupted = corruptBatch.candidate();
+
+	expectFormatError(
+			[&] {
+				static_cast<void>(components.segmentRetirement.validateRetiredRelease(
+						corrupted, request.segment_id, newerRetired.generation));
+			},
+			FormatError::FERR_INVALID_STATE);
+	MetadataWriteBatch releaseBatch(components.pools, corrupted, LogSequenceNumber(5U));
+	expectFormatError([&] { components.segmentRetirement.prepareRetiredRelease(releaseBatch, stale); },
+					  FormatError::FERR_INVALID_STATE);
+}

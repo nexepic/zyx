@@ -48,7 +48,7 @@ flowchart LR
     E --> F
 ```
 
-一个 ingest session 在 native relocatable database 上持有一个原子写入边界：快照固定的 logical transaction 及其 read-your-writes overlay。正常 Driver ABI 打开路径会拒绝 legacy 文件，必须先完成 offline migration。只有成功 commit 并完成持久化后 session 才会返回成功；主数据库 checkpoint 可以延迟到 `zyx_driver_db_save()` 或正常关闭数据库时执行。关闭仍处于 active 状态的 session 会自动回滚。
+一个 ingest session 在 native relocatable database 上持有一个原子写入边界：快照固定的 logical transaction 及其 read-your-writes overlay。Driver ABI 不会打开 legacy 数据库格式。成功 commit 会在 session 返回成功前原子发布持久化的 native 单文件 generation；它不依赖 WAL sidecar。关闭仍处于 active 状态的 session 会自动回滚。
 
 任何 write 失败都会将整个 session 标记为失败，之后禁止 commit，只能 rollback 或 close。Schema prepare 错误发生在 writer 创建之前，不会污染 session。
 

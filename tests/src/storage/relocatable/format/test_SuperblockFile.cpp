@@ -127,6 +127,19 @@ TEST_F(RelocatableSuperblockFileTest, PublishesThenReopensTheNewestMetadataGener
 	EXPECT_EQ(reopened.recover().catalog_root.physical_slot, PhysicalSlotId(400));
 }
 
+TEST_F(RelocatableSuperblockFileTest, SeparatelyRecordsDataAndSuperblockPublicationFences) {
+	SuperblockFile bootstrap(io);
+	bootstrap.initializeNew(superblock(1, 10, 100));
+	io->resetStats();
+
+	bootstrap.publish(superblock(2, 11, 200));
+
+	const StorageIOStats statistics = io->stats();
+	EXPECT_EQ(statistics.sync_calls, 2U);
+	EXPECT_EQ(statistics.data_sync_calls, 1U);
+	EXPECT_EQ(statistics.superblock_sync_calls, 1U);
+}
+
 TEST_F(RelocatableSuperblockFileTest, RebuildsEitherCorruptPeerWithoutDiscardingTheValidCopy) {
 	SuperblockFile bootstrap(io);
 	bootstrap.initializeNew(superblock(1, 10, 100));

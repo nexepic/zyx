@@ -280,6 +280,183 @@ TEST_F(NativeGraphWritePlannerAdjacencyTest, PreservesPinnedOldTreeAndErasesBoth
 	recreated.release();
 }
 
+TEST_F(NativeGraphWritePlannerAdjacencyTest, RebuildsAnExistingAdjacencyTreeFromOneSortedBulkMerge) {
+	NativeGraphWritePlannerOptions options = plannerOptions();
+	// Keep the fixture small while forcing the existing-tree bulk route. Each
+	// Edge contributes two final-state directional keys.
+	options.global_adjacency_bulk_rebuild_entry_threshold = 2U;
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, options);
+
+	NativeGraphWriteTransaction initial = planner.beginTransaction();
+	const uint64_t source = initial.createNode(std::array<uint64_t, 0U>{});
+	const uint64_t firstTarget = initial.createNode(std::array<uint64_t, 0U>{});
+	const uint64_t firstEdge = initial.createEdge(source, firstTarget, 7U);
+	ASSERT_TRUE(initial.commit().committed());
+
+	MetadataSnapshotPin before = metadata_->openSnapshot();
+	const IndexRootLocation beforeRoot =
+			metadata_->findIndexRoot(before, RSS_GLOBAL_ADJACENCY_INDEX_ID);
+	GlobalAdjacencyIndex adjacency(*btree_pages_, *metadata_);
+	ASSERT_EQ(scan(adjacency, before, GlobalAdjacencyDirection::GAD_OUT, source),
+			  (std::vector<uint64_t>{firstEdge}));
+
+	NativeGraphWriteTransaction bulk = planner.beginTransaction();
+	const uint64_t secondTarget = bulk.createNode(std::array<uint64_t, 0U>{});
+	const uint64_t thirdTarget = bulk.createNode(std::array<uint64_t, 0U>{});
+	const uint64_t secondEdge = bulk.createEdge(source, secondTarget, 9U);
+	const uint64_t thirdEdge = bulk.createEdge(source, thirdTarget, 11U);
+	ASSERT_TRUE(bulk.commit().committed());
+
+	// The old source tree remains complete while pinned; the new generation has
+	// exactly the merged final state behind a freshly published root.
+	EXPECT_EQ(metadata_->findIndexRoot(before, RSS_GLOBAL_ADJACENCY_INDEX_ID), beforeRoot);
+	EXPECT_EQ(scan(adjacency, before, GlobalAdjacencyDirection::GAD_OUT, source),
+		  (std::vector<uint64_t>{firstEdge}));
+	MetadataSnapshotPin current = metadata_->openSnapshot();
+	const IndexRootLocation currentRoot =
+			metadata_->findIndexRoot(current, RSS_GLOBAL_ADJACENCY_INDEX_ID);
+	EXPECT_NE(currentRoot.root_page_id, beforeRoot.root_page_id);
+	EXPECT_EQ(scan(adjacency, current, GlobalAdjacencyDirection::GAD_OUT, source),
+		  (std::vector<uint64_t>{firstEdge, secondEdge, thirdEdge}));
+	EXPECT_EQ(scan(adjacency, current, GlobalAdjacencyDirection::GAD_IN, secondTarget),
+		  (std::vector<uint64_t>{secondEdge}));
+	EXPECT_EQ(scan(adjacency, current, GlobalAdjacencyDirection::GAD_IN, thirdTarget),
+		  (std::vector<uint64_t>{thirdEdge}));
+	before.release();
+	current.release();
+
+	reopenNativeStores();
+	GlobalAdjacencyIndex reopened(*btree_pages_, *metadata_);
+	MetadataSnapshotPin persisted = metadata_->openSnapshot();
+	EXPECT_EQ(scan(reopened, persisted, GlobalAdjacencyDirection::GAD_OUT, source),
+		  (std::vector<uint64_t>{firstEdge, secondEdge, thirdEdge}));
+	persisted.release();
+}
+
+TEST_F(NativeGraphWritePlannerAdjacencyTest, DeferredBulkMergeCombinesErasureAndUpsertAgainstAnExistingTree) {
+	NativeGraphWritePlannerOptions options = plannerOptions();
+	options.global_adjacency_bulk_rebuild_entry_threshold = 2U;
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, options);
+
+	NativeGraphWriteTransaction seed = planner.beginTransaction();
+	const uint64_t source = seed.createNode(std::array<uint64_t, 0U>{});
+	const uint64_t erasedTarget = seed.createNode(std::array<uint64_t, 0U>{});
+	const uint64_t retainedTarget = seed.createNode(std::array<uint64_t, 0U>{});
+	const uint64_t erasedEdge = seed.createEdge(source, erasedTarget, 7U);
+	const uint64_t retainedEdge = seed.createEdge(source, retainedTarget, 9U);
+	ASSERT_TRUE(seed.commit().committed());
+
+	MetadataSnapshotPin before = metadata_->openSnapshot();
+	GlobalAdjacencyIndex adjacency(*btree_pages_, *metadata_);
+	ASSERT_EQ(scan(adjacency, before, GlobalAdjacencyDirection::GAD_OUT, source),
+			  (std::vector<uint64_t>{erasedEdge, retainedEdge}));
+
+	NativeGraphWriteTransaction bulk = planner.beginTransaction();
+	const uint64_t replacementTarget = bulk.createNode(std::array<uint64_t, 0U>{});
+	bulk.eraseEdge(erasedEdge);
+	const uint64_t replacementEdge = bulk.createEdge(source, replacementTarget, 11U);
+	ASSERT_TRUE(bulk.commit().committed());
+
+	// A pinned reader retains the complete pre-replacement tree, while the fresh
+	// root contains exactly the merged final state in both directions.
+	EXPECT_EQ(scan(adjacency, before, GlobalAdjacencyDirection::GAD_OUT, source),
+			  (std::vector<uint64_t>{erasedEdge, retainedEdge}));
+	MetadataSnapshotPin current = metadata_->openSnapshot();
+	EXPECT_EQ(scan(adjacency, current, GlobalAdjacencyDirection::GAD_OUT, source),
+			  (std::vector<uint64_t>{retainedEdge, replacementEdge}));
+	EXPECT_TRUE(scan(adjacency, current, GlobalAdjacencyDirection::GAD_IN, erasedTarget).empty());
+	EXPECT_EQ(scan(adjacency, current, GlobalAdjacencyDirection::GAD_IN, retainedTarget),
+			  (std::vector<uint64_t>{retainedEdge}));
+	EXPECT_EQ(scan(adjacency, current, GlobalAdjacencyDirection::GAD_IN, replacementTarget),
+			  (std::vector<uint64_t>{replacementEdge}));
+	EXPECT_THROW(static_cast<void>(entities_->readEdge(current, erasedEdge)), FormatException);
+	EXPECT_EQ(entities_->readEdge(current, retainedEdge), (EdgeEntityRecord{source, retainedTarget, 9U}));
+	EXPECT_EQ(entities_->readEdge(current, replacementEdge), (EdgeEntityRecord{source, replacementTarget, 11U}));
+	before.release();
+	current.release();
+
+	reopenNativeStores();
+	MetadataSnapshotPin reopened = metadata_->openSnapshot();
+	GlobalAdjacencyIndex persisted(*btree_pages_, *metadata_);
+	EXPECT_EQ(scan(persisted, reopened, GlobalAdjacencyDirection::GAD_OUT, source),
+			  (std::vector<uint64_t>{retainedEdge, replacementEdge}));
+	reopened.release();
+}
+
+TEST_F(NativeGraphWritePlannerAdjacencyTest, BuildsTheFirstLargeAdjacencyTreeFromPrivateScratchInOnePublication) {
+	NativeGraphWritePlannerOptions options = plannerOptions();
+	// Two Edges produce four key-only operations, forcing the first-tree
+	// deferred scratch route without relying on an already published root.
+	options.global_adjacency_bulk_rebuild_entry_threshold = 2U;
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, options);
+
+	NativeGraphWriteTransaction transaction = planner.beginTransaction();
+	const uint64_t source = transaction.createNode(std::array<uint64_t, 0U>{});
+	const uint64_t firstTarget = transaction.createNode(std::array<uint64_t, 0U>{});
+	const uint64_t secondTarget = transaction.createNode(std::array<uint64_t, 0U>{});
+	const uint64_t firstEdge = transaction.createEdge(source, firstTarget, 7U);
+	const uint64_t secondEdge = transaction.createEdge(source, secondTarget, 9U);
+	ASSERT_TRUE(transaction.commit().committed());
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	const IndexRootLocation root = metadata_->findIndexRoot(snapshot, RSS_GLOBAL_ADJACENCY_INDEX_ID);
+	GlobalAdjacencyIndex adjacency(*btree_pages_, *metadata_);
+	EXPECT_TRUE(root.root_page_id.isValid());
+	EXPECT_EQ(scan(adjacency, snapshot, GlobalAdjacencyDirection::GAD_OUT, source),
+			  (std::vector<uint64_t>{firstEdge, secondEdge}));
+	EXPECT_EQ(scan(adjacency, snapshot, GlobalAdjacencyDirection::GAD_IN, firstTarget),
+			  (std::vector<uint64_t>{firstEdge}));
+	EXPECT_EQ(scan(adjacency, snapshot, GlobalAdjacencyDirection::GAD_IN, secondTarget),
+			  (std::vector<uint64_t>{secondEdge}));
+	snapshot.release();
+
+	reopenNativeStores();
+	MetadataSnapshotPin reopened = metadata_->openSnapshot();
+	GlobalAdjacencyIndex persisted(*btree_pages_, *metadata_);
+	EXPECT_EQ(scan(persisted, reopened, GlobalAdjacencyDirection::GAD_OUT, source),
+			  (std::vector<uint64_t>{firstEdge, secondEdge}));
+	reopened.release();
+}
+
+TEST_F(NativeGraphWritePlannerAdjacencyTest, BulkMergeErasureRetiresAnEmptyExistingAdjacencyTree) {
+	NativeGraphWritePlannerOptions options = plannerOptions();
+	options.global_adjacency_bulk_rebuild_entry_threshold = 2U;
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, options);
+
+	NativeGraphWriteTransaction create = planner.beginTransaction();
+	const uint64_t source = create.createNode(std::array<uint64_t, 0U>{});
+	const uint64_t firstTarget = create.createNode(std::array<uint64_t, 0U>{});
+	const uint64_t secondTarget = create.createNode(std::array<uint64_t, 0U>{});
+	const uint64_t firstEdge = create.createEdge(source, firstTarget, 7U);
+	const uint64_t secondEdge = create.createEdge(source, secondTarget, 9U);
+	ASSERT_TRUE(create.commit().committed());
+
+	MetadataSnapshotPin before = metadata_->openSnapshot();
+	const IndexRootLocation beforeRoot =
+			metadata_->findIndexRoot(before, RSS_GLOBAL_ADJACENCY_INDEX_ID);
+	NativeGraphWriteTransaction erase = planner.beginTransaction();
+	erase.eraseEdge(firstEdge);
+	erase.eraseEdge(secondEdge);
+	ASSERT_TRUE(erase.commit().committed());
+
+	GlobalAdjacencyIndex adjacency(*btree_pages_, *metadata_);
+	EXPECT_EQ(scan(adjacency, before, GlobalAdjacencyDirection::GAD_OUT, source),
+		  (std::vector<uint64_t>{firstEdge, secondEdge}));
+	MetadataSnapshotPin current = metadata_->openSnapshot();
+	EXPECT_FALSE(metadata_->findIndexRootOptional(current, RSS_GLOBAL_ADJACENCY_INDEX_ID).has_value());
+	EXPECT_TRUE(scan(adjacency, current, GlobalAdjacencyDirection::GAD_OUT, source).empty());
+	before.release();
+	current.release();
+
+	// The publication removes the root rather than materializing an empty tree.
+	// Normal snapshot-safe retirement may reclaim the old frames only after the
+	// final source snapshot is released.
+	MetadataSnapshotPin after = metadata_->openSnapshot();
+	EXPECT_FALSE(metadata_->findIndexRootOptional(after, RSS_GLOBAL_ADJACENCY_INDEX_ID).has_value());
+	EXPECT_EQ(metadata_->findIndexRootOptional(after, beforeRoot.index_id), std::nullopt);
+	after.release();
+}
+
 TEST_F(NativeGraphWritePlannerAdjacencyTest, RebasesDisjointDeleteOnlyOverlaysOnTheCurrentGlobalRoot) {
 	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
 	NativeGraphWriteTransaction seed = planner.beginTransaction();
@@ -333,6 +510,45 @@ TEST_F(NativeGraphWritePlannerAdjacencyTest, RebasesConcurrentLeasedEdgeCreation
 			  (std::vector<uint64_t>{secondEdge}));
 	EXPECT_EQ(entities_->readEdge(snapshot, firstEdge), (EdgeEntityRecord{source, firstTarget, 7U}));
 	EXPECT_EQ(entities_->readEdge(snapshot, secondEdge), (EdgeEntityRecord{source, secondTarget, 9U}));
+	snapshot.release();
+}
+
+TEST_F(NativeGraphWritePlannerAdjacencyTest, RebasesDisjointMixedCreateDeleteBatchesWithoutLosingEitherDirection) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	NativeGraphWriteTransaction seed = planner.beginTransaction();
+	const uint64_t source = seed.createNode(std::array<uint64_t, 0U>{});
+	const uint64_t firstTarget = seed.createNode(std::array<uint64_t, 0U>{});
+	const uint64_t secondTarget = seed.createNode(std::array<uint64_t, 0U>{});
+	const uint64_t thirdTarget = seed.createNode(std::array<uint64_t, 0U>{});
+	const uint64_t fourthTarget = seed.createNode(std::array<uint64_t, 0U>{});
+	const uint64_t firstExisting = seed.createEdge(source, firstTarget, 7U);
+	const uint64_t secondExisting = seed.createEdge(source, secondTarget, 9U);
+	ASSERT_TRUE(seed.commit().committed());
+
+	NativeGraphWriteTransaction first = planner.beginTransaction();
+	NativeGraphWriteTransaction second = planner.beginTransaction();
+	first.eraseEdge(firstExisting);
+	const uint64_t firstReplacement = first.createEdge(source, thirdTarget, 11U);
+	second.eraseEdge(secondExisting);
+	const uint64_t secondReplacement = second.createEdge(source, fourthTarget, 13U);
+
+	ASSERT_TRUE(first.commit().committed());
+	EXPECT_TRUE(second.commit().committed());
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	GlobalAdjacencyIndex adjacency(*btree_pages_, *metadata_);
+	EXPECT_EQ(scan(adjacency, snapshot, GlobalAdjacencyDirection::GAD_OUT, source),
+			  (std::vector<uint64_t>{firstReplacement, secondReplacement}));
+	EXPECT_TRUE(scan(adjacency, snapshot, GlobalAdjacencyDirection::GAD_IN, firstTarget).empty());
+	EXPECT_TRUE(scan(adjacency, snapshot, GlobalAdjacencyDirection::GAD_IN, secondTarget).empty());
+	EXPECT_EQ(scan(adjacency, snapshot, GlobalAdjacencyDirection::GAD_IN, thirdTarget),
+			  (std::vector<uint64_t>{firstReplacement}));
+	EXPECT_EQ(scan(adjacency, snapshot, GlobalAdjacencyDirection::GAD_IN, fourthTarget),
+			  (std::vector<uint64_t>{secondReplacement}));
+	EXPECT_THROW(static_cast<void>(entities_->readEdge(snapshot, firstExisting)), FormatException);
+	EXPECT_THROW(static_cast<void>(entities_->readEdge(snapshot, secondExisting)), FormatException);
+	EXPECT_EQ(entities_->readEdge(snapshot, firstReplacement), (EdgeEntityRecord{source, thirdTarget, 11U}));
+	EXPECT_EQ(entities_->readEdge(snapshot, secondReplacement), (EdgeEntityRecord{source, fourthTarget, 13U}));
 	snapshot.release();
 }
 
@@ -430,8 +646,10 @@ TEST_F(NativeGraphWritePlannerAdjacencyTest, RelocatesTheGlobalTreeWithoutChangi
 	const uint64_t source = transaction.createNode(std::array<uint64_t, 0U>{});
 	const uint64_t firstTarget = transaction.createNode(std::array<uint64_t, 0U>{});
 	const uint64_t secondTarget = transaction.createNode(std::array<uint64_t, 0U>{});
+	const uint64_t thirdTarget = transaction.createNode(std::array<uint64_t, 0U>{});
 	const uint64_t first = transaction.createEdge(source, firstTarget, 7U);
 	const uint64_t second = transaction.createEdge(source, secondTarget, 9U);
+	const uint64_t third = transaction.createEdge(source, thirdTarget, 11U);
 	ASSERT_TRUE(transaction.commit().committed());
 
 	MetadataSnapshotPin sourceSnapshot = metadata_->openSnapshot();
@@ -455,8 +673,10 @@ TEST_F(NativeGraphWritePlannerAdjacencyTest, RelocatesTheGlobalTreeWithoutChangi
 
 	MetadataSnapshotPin oldSnapshot = metadata_->openSnapshot();
 	GlobalAdjacencyIndex adjacency(*btree_pages_, *metadata_);
-	EXPECT_EQ(scan(adjacency, oldSnapshot, GlobalAdjacencyDirection::GAD_OUT, source),
-			  (std::vector<uint64_t>{first, second}));
+	const GlobalAdjacencyRange oldFirstPage =
+			adjacency.scan(oldSnapshot, GlobalAdjacencyDirection::GAD_OUT, source, 1U);
+	ASSERT_EQ(oldFirstPage.edge_ids, (std::vector<uint64_t>{first}));
+	ASSERT_TRUE(oldFirstPage.continuation.has_value());
 
 	RelocatableCompactionCoordinator coordinator(*slotted_pages_, *btree_pages_, *metadata_);
 	const RelocatableSlottedPoolCompactionResult compacted = coordinator.compactBTreePool(
@@ -475,9 +695,11 @@ TEST_F(NativeGraphWritePlannerAdjacencyTest, RelocatesTheGlobalTreeWithoutChangi
 	EXPECT_EQ(metadata_->findPageLocation(currentSnapshot, sourceRoot.root_page_id).segment_id,
 			  destinationRequest.segment_id);
 	EXPECT_EQ(scan(adjacency, currentSnapshot, GlobalAdjacencyDirection::GAD_OUT, source),
-			  (std::vector<uint64_t>{first, second}));
-	EXPECT_EQ(scan(adjacency, oldSnapshot, GlobalAdjacencyDirection::GAD_OUT, source),
-			  (std::vector<uint64_t>{first, second}));
+			  (std::vector<uint64_t>{first, second, third}));
+	const GlobalAdjacencyRange resumedOldCursor = adjacency.scan(
+			oldSnapshot, GlobalAdjacencyDirection::GAD_OUT, source, 2U, oldFirstPage.continuation);
+	EXPECT_EQ(resumedOldCursor.edge_ids, (std::vector<uint64_t>{second, third}));
+	EXPECT_FALSE(resumedOldCursor.continuation.has_value());
 	currentSnapshot.release();
 
 	EXPECT_FALSE(
@@ -489,6 +711,15 @@ TEST_F(NativeGraphWritePlannerAdjacencyTest, RelocatesTheGlobalTreeWithoutChangi
 	EXPECT_EQ(metadata_->findCatalog(releasedSnapshot, sourcePool.segment_id).state, SegmentState::SGS_OBSOLETE);
 	EXPECT_FALSE(metadata_->isPhysicalSlotAllocated(releasedSnapshot, sourcePool.physical_slot));
 	releasedSnapshot.release();
+
+	// Reopening discards physical routing state, so a new logical cursor must
+	// still traverse the relocated tree without referring to the retired pool.
+	reopenNativeStores();
+	MetadataSnapshotPin reopenedSnapshot = metadata_->openSnapshot();
+	GlobalAdjacencyIndex reopenedAdjacency(*btree_pages_, *metadata_);
+	EXPECT_EQ(scanAll(reopenedAdjacency, reopenedSnapshot, GlobalAdjacencyDirection::GAD_OUT, source, 3U),
+			  (std::vector<uint64_t>{first, second, third}));
+	reopenedSnapshot.release();
 }
 
 TEST_F(NativeGraphWritePlannerAdjacencyTest, StreamsASupernodeAcrossMultipleLeavesWithoutSkippingOrDuplicatingEdges) {
@@ -626,6 +857,91 @@ TEST_F(NativeGraphWritePlannerAdjacencyTest, MaintainsTheGlobalTreeAcrossRandomi
 						  expectedIncoming[nodeId].size()),
 				  expectedIncoming[nodeId]);
 	}
+	reopened.release();
+}
+
+TEST_F(NativeGraphWritePlannerAdjacencyTest,
+	   MaintainsEdgePropertiesAndBothAdjacencyDirectionsAcrossRandomizedCreateDeleteBatches) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	const std::array<uint64_t, 0U> noLabels{};
+	NativeGraphWriteTransaction createNodes = planner.beginTransaction();
+	std::array<uint64_t, 8U> nodes{};
+	for (uint64_t &nodeId: nodes) {
+		nodeId = createNodes.createNode(noLabels);
+	}
+	ASSERT_TRUE(createNodes.commit().committed());
+
+	struct ExpectedEdge {
+		uint64_t source = 0U;
+		uint64_t target = 0U;
+		uint64_t type = 0U;
+		std::vector<PropertyCollectionRootEntry> properties;
+	};
+	std::map<uint64_t, ExpectedEdge> expected;
+	std::vector<uint64_t> erased;
+	uint64_t state = 0xD1B54A32D192ED03ULL;
+	const auto next = [&state]() {
+		state = state * 6364136223846793005ULL + 1442695040888963407ULL;
+		return state;
+	};
+
+	const auto assertState = [this, &nodes, &expected, &erased](const MetadataSnapshotPin &snapshot) {
+		std::map<uint64_t, std::vector<uint64_t>> expectedOutgoing;
+		std::map<uint64_t, std::vector<uint64_t>> expectedIncoming;
+		for (const auto &[edgeId, edge]: expected) {
+			expectedOutgoing[edge.source].push_back(edgeId);
+			expectedIncoming[edge.target].push_back(edgeId);
+			EXPECT_EQ(entities_->readEdge(snapshot, edgeId), (EdgeEntityRecord{edge.source, edge.target, edge.type}));
+			EXPECT_EQ(properties_->readEntity(snapshot, {EntityPropertyOwnerKind::EPOK_EDGE, edgeId}),
+					  (PropertyCollectionRoot{edgeId, graph::Edge::typeId, edge.properties}));
+		}
+		for (const uint64_t edgeId: erased) {
+			EXPECT_FALSE(properties_->readEntityOptional(snapshot, {EntityPropertyOwnerKind::EPOK_EDGE, edgeId}).has_value());
+		}
+
+		GlobalAdjacencyIndex adjacency(*btree_pages_, *metadata_);
+		for (const uint64_t nodeId: nodes) {
+			EXPECT_EQ(scanAll(adjacency, snapshot, GlobalAdjacencyDirection::GAD_OUT, nodeId,
+							  expectedOutgoing[nodeId].size()),
+					  expectedOutgoing[nodeId]);
+			EXPECT_EQ(scanAll(adjacency, snapshot, GlobalAdjacencyDirection::GAD_IN, nodeId,
+							  expectedIncoming[nodeId].size()),
+					  expectedIncoming[nodeId]);
+		}
+	};
+
+	for (size_t batch = 0U; batch < 32U; ++batch) {
+		NativeGraphWriteTransaction transaction = planner.beginTransaction();
+		if (!expected.empty() && next() % 3U == 0U) {
+			const size_t ordinal = static_cast<size_t>(next() % expected.size());
+			auto edge = expected.begin();
+			std::advance(edge, static_cast<std::ptrdiff_t>(ordinal));
+			transaction.eraseEdge(edge->first);
+			erased.push_back(edge->first);
+			expected.erase(edge);
+		}
+		const size_t additions = 1U + static_cast<size_t>(next() % 3U);
+		for (size_t addition = 0U; addition < additions; ++addition) {
+			const uint64_t source = nodes[static_cast<size_t>(next() % nodes.size())];
+			const uint64_t target = nodes[static_cast<size_t>(next() % nodes.size())];
+			const uint64_t type = 3'000U + batch;
+			const uint64_t edgeId = transaction.createEdge(source, target, type);
+			std::vector<PropertyCollectionRootEntry> propertyEntries{
+					{17U, graph::PropertyValue(static_cast<int64_t>(batch))},
+					{19U, graph::PropertyValue(static_cast<int64_t>(addition))}};
+			transaction.replaceEdgeProperty({edgeId, graph::Edge::typeId, propertyEntries});
+			expected.emplace(edgeId, ExpectedEdge{source, target, type, std::move(propertyEntries)});
+		}
+		ASSERT_TRUE(transaction.commit().committed());
+
+		MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+		assertState(snapshot);
+		snapshot.release();
+	}
+
+	reopenNativeStores();
+	MetadataSnapshotPin reopened = metadata_->openSnapshot();
+	assertState(reopened);
 	reopened.release();
 }
 

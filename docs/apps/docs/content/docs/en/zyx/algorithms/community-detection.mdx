@@ -51,9 +51,11 @@ The procedure returns one row per projected node:
 | Field | Type | Meaning |
 |---|---|---|
 | `nodeId` | Integer | Original database node ID |
-| `communityId` | Integer | Dense community ID produced by this run |
+| `communityId` | Integer | Smallest original node ID in the community, used as its canonical ID |
 
-Community IDs identify a partition within one result. Do not treat their numeric values as stable identifiers across projection rebuilds or runs.
+Community IDs identify a partition within one result. For the same immutable projection and options, ZYX derives each ID
+from the smallest original node ID in that community, making the result deterministic without exposing an internal dense
+working label. A projection rebuild or different options can produce a different partition and therefore different IDs.
 
 ## Options
 
@@ -84,9 +86,10 @@ flowchart TD
 
 ### Local Moving
 
-Each node evaluates neighboring communities and moves when modularity gain is positive. Parallel workers read the latest community labels through atomic values, so local moving uses asynchronous updates without concurrent read/write undefined behavior. Per-community degree totals also use atomic updates.
-
-Graphs with fewer than 1,024 nodes take the serial executor path to avoid partitioning overhead. Larger workloads are partitioned across the procedure's thread pool.
+Each node evaluates neighboring communities and moves when modularity gain is positive. Local moving is deliberately
+serial, so a fixed immutable projection and option set always use the same tie-breaking and partition evolution. The
+runtime may parallelize only independent degree-scan batches; workers never mutate community assignments or invoke a
+query cancellation callback.
 
 ### Refinement
 
@@ -125,7 +128,9 @@ A named projection is an immutable snapshot. Database mutations after projection
 CALL gds.graph.drop('social')
 ```
 
-Parallel asynchronous moves can produce different numeric community IDs or equivalent partitions across runs. Compare partition quality and membership, not raw `communityId` values.
+For the same immutable projection and option set, the native implementation produces a deterministic partition and
+canonical `communityId` values. A rebuilt projection or different options can still change the partition, so application
+logic should treat membership and graph version as the semantic identity rather than assuming a community survives a rebuild.
 
 ## Tuning Guidance
 

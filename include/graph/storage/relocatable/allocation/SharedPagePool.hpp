@@ -24,8 +24,11 @@
 namespace graph::storage {
 
 	constexpr uint32_t RSS_SHARED_PAGE_POOL_MAGIC = 0x5053595AU; // Little-endian bytes: ZYSP
-	constexpr uint16_t RSS_SHARED_PAGE_POOL_VERSION = 1;
+	constexpr uint16_t RSS_SHARED_PAGE_POOL_VERSION = 2;
 	constexpr uint16_t RSS_SHARED_PAGE_POOL_HEADER_BYTES = 64;
+	constexpr uint16_t RSS_SHARED_PAGE_POOL_CONTROL_RECORD_COUNT = 2;
+	constexpr uint16_t RSS_SHARED_PAGE_POOL_CONTROL_RECORD_BYTES =
+			RSS_SHARED_PAGE_POOL_HEADER_BYTES * RSS_SHARED_PAGE_POOL_CONTROL_RECORD_COUNT;
 	constexpr uint32_t RSS_SHARED_PAGE_POOL_VALID_FRAME_MASK = (1U << RSS_PAGE_POOL_DATA_FRAME_COUNT) - 1U;
 
 	constexpr uint32_t RSS_PAGE_OWNER_MAGIC = 0x4F50595AU; // Little-endian bytes: ZYPO
@@ -76,6 +79,7 @@ namespace graph::storage {
 		uint32_t allocated_frames = 0;
 		Generation generation{};
 		LogSequenceNumber committed_lsn{};
+		uint64_t control_sequence = 0U;
 	};
 
 	class SharedPagePoolHeaderCodec {

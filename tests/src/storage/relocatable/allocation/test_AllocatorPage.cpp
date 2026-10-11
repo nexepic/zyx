@@ -36,7 +36,7 @@ namespace {
 
 	AllocatorLeafPage page(uint32_t slotCount = 10) {
 		AllocatorLeafPage result;
-		result.page_id = PageId(7);
+		result.page_id = MetadataPageId(7);
 		result.first_slot = PhysicalSlotId(101);
 		result.slot_count = slotCount;
 		result.generation = Generation(3);
@@ -73,7 +73,7 @@ TEST(RelocatableAllocatorPageTest, MatchesGoldenFieldsAndRoundTrips) {
 	EXPECT_EQ(LittleEndianCodec::readU32(encoded, 16), 3U);
 
 	const AllocatorLeafPage decoded = AllocatorLeafPageCodec::decode(encoded);
-	EXPECT_EQ(decoded.page_id, PageId(7));
+	EXPECT_EQ(decoded.page_id, MetadataPageId(7));
 	EXPECT_EQ(decoded.first_slot, PhysicalSlotId(101));
 	EXPECT_EQ(decoded.slot_count, 10U);
 	EXPECT_EQ(decoded.generation, Generation(3));
@@ -137,7 +137,7 @@ TEST(RelocatableAllocatorPageTest, RejectsMalformedHeaderFields) {
 
 TEST(RelocatableAllocatorPageTest, RejectsInvalidRangeAndBitmapState) {
 	AllocatorLeafPage invalid = page();
-	invalid.page_id = PageId{};
+	invalid.page_id = MetadataPageId{};
 	expectFormatError([&] { static_cast<void>(AllocatorLeafPageCodec::encode(invalid)); },
 					  FormatError::FERR_INVALID_HEADER);
 	invalid = page();
@@ -189,4 +189,25 @@ TEST(RelocatableAllocatorPageTest, RejectsTamperedAllocationCountAndUnusedPayloa
 	recalculatePayloadAndHeaderCrc(corrupt);
 	expectFormatError([&] { static_cast<void>(AllocatorLeafPageCodec::decode(corrupt)); },
 					  FormatError::FERR_RESERVED_BITS);
+}
+
+TEST(RelocatableAllocatorPageTest, RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation) {
+	const auto encoded = AllocatorLeafPageCodec::encode(page());
+	for (size_t byteOffset = 0U; byteOffset < encoded.size(); ++byteOffset) {
+		for (uint8_t bit = 0U; bit < 8U; ++bit) {
+			auto mutation = encoded;
+			mutation[byteOffset] ^= std::byte{static_cast<uint8_t>(1U << bit)};
+			recalculatePayloadAndHeaderCrc(mutation);
+			try {
+				const AllocatorLeafPage decoded = AllocatorLeafPageCodec::decode(mutation);
+				if (AllocatorLeafPageCodec::encode(decoded) != mutation) {
+					ADD_FAILURE() << "Allocator mutation was silently normalized at byte " << byteOffset << ", bit "
+									 << static_cast<unsigned>(bit);
+					return;
+				}
+			} catch (const FormatException &) {
+				// Every non-canonical mutation must fail at the typed format boundary.
+			}
+		}
+	}
 }

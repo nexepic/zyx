@@ -168,8 +168,7 @@ PYTHONPATH=benchmarks/graphdb-comparison python3 -m runner.matrix \
 
 Use `--profile write_durable` when comparing write latency with an explicit durability barrier after
 each measured write. For Kuzu the barrier is `CHECKPOINT`; for ZYX the normal auto-commit write path
-fsyncs the WAL commit record and may defer the main database checkpoint until the WAL threshold or a
-clean close. This profile is intentionally separate from `write` so statement latency and
+synchronizes the published single-file generation before returning. This profile is intentionally separate from `write` so statement latency and
 durable-after-each-write latency are not mixed into one number.
 
 Use `--profile retrieval` when evaluating data-return latency rather than count-only execution. The
@@ -245,7 +244,7 @@ The benchmark records one row per database/workload and labels how equivalent wo
 | `write_then_read_edge` | `write` profile workload that creates one `FOLLOWS` edge and immediately verifies it through a read query. |
 | `batch_create_edges_100` / `1000` / `10000` | `operational_dynamic` profile workloads that append a measured batch of `FOLLOWS` edges between existing users. |
 | `batch_create_edges_100_then_one_hop_expand` / `10000_then_one_hop_expand` | `operational_dynamic` profile workloads that append a batch of `FOLLOWS` edges from one source and immediately count that source's outgoing neighbors. |
-| `*_durable` | `write_durable` profile variants that run the matching write workload and then an adapter-defined durability barrier before stopping the timer. For ZYX this barrier is the WAL commit fsync; clean close still checkpoints the main file and removes the WAL. |
+| `*_durable` | `write_durable` profile variants that run the matching write workload and then an adapter-defined durability barrier before stopping the timer. For ZYX the durable boundary is the synchronized single-file generation publication. |
 
 `equivalent_mode` indicates the execution interface:
 
@@ -268,6 +267,12 @@ Each run creates a timestamped result directory below `results/` or the configur
 - `environment.json`: machine, Python, run configuration, dataset manifest, execution-mode semantics, and write durability contract.
 - `run_status.json`: current failure count for the run.
 - `latest.txt`: written in the output root and points to the latest result directory name.
+
+To enforce a p50 regression gate, pass `--baseline-summary` with the `summary.csv` from a previous runner result. The
+runner requires that result's sibling `environment.json` and fails closed unless its dataset manifest, database set,
+scale/seed, profile, execution mode, warmup/iterations, thread contract, and platform match the current run. This keeps
+historical results from a different machine or workload from being treated as a production baseline. Git commit is
+intentionally not compared, because the gate exists to compare different revisions under one frozen benchmark contract.
 
 ZYX and Kuzu database files are treated as reproducible benchmark artifacts and are removed by
 default after each adapter finishes. Summaries, raw samples, profiles, comparison reports, and CSV

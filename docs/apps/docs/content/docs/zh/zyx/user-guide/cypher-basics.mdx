@@ -80,6 +80,10 @@ flowchart LR
 | 量词 | `all`, `any`, `none`, `single` |
 | 通用 | `coalesce`, `timestamp`, `randomUUID`, `exists((pattern))`, `reduce(...)` |
 
+### 转换语义
+
+所有转换函数都会传播 `NULL`。`toInteger` 接受 Boolean、integer、有限 double 或完整的十进制 integer string；它会在转换前拒绝非有限或超出范围的浮点值。`toFloat` 接受 Boolean、integer、有限 double 或完整的有限 numeric string。`toBoolean` 接受 Boolean、有限数值以及大小写无关的 `true` 与 `false` string。其他输入类型和格式错误的文本会显式失败，不会再通过 display-string 或容器 truthiness 规则静默 coercion。
+
 ## 时间类型
 
 ZYX 支持三种时间类型：**Date**、**DateTime** 和 **Duration**。

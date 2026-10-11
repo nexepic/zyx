@@ -68,6 +68,16 @@ namespace graph::storage {
 		[[nodiscard]] size_t readPage(BufferPoolPageKey key, std::span<std::byte, RSS_BUFFER_POOL_PAGE_BYTES> output,
 									  BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL);
 		void writePage(BufferPoolPageKey key, std::span<const std::byte, RSS_BUFFER_POOL_PAGE_BYTES> input);
+		// Bounded typed scans such as private scratch candidates use one lock and
+		// one uncached read per missing contiguous run, while retaining the normal
+		// generation, pin, cache-admission, and short-read rules for every page.
+		[[nodiscard]] size_t readPages(BufferPoolPageKey firstKey, std::span<std::byte> output,
+									   BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL);
+		void writePages(BufferPoolPageKey firstKey, std::span<const std::byte> input);
+		// A caller with a complete, self-authenticating replacement image can
+		// write it once without retaining scan-only scratch bytes in the cache.
+		// Overlapping cache views are flushed and removed before the direct write.
+		void writePagesThrough(BufferPoolPageKey firstKey, std::span<const std::byte> input);
 		[[nodiscard]] size_t read(uint64_t offset, std::span<std::byte> output,
 								  BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL);
 		void write(uint64_t offset, std::span<const std::byte> input);
@@ -77,6 +87,9 @@ namespace graph::storage {
 					  BufferPoolReadHint admissionHint = BufferPoolReadHint::BPRH_PREFETCH);
 		void flush();
 		void invalidateRange(uint64_t offset, size_t bytes);
+		// Drop every clean, unpinned cached page when another handle has advanced
+		// the durable root. Unlike invalidation, this never writes a stale image.
+		void discardForExternalRebase();
 
 		[[nodiscard]] BufferPoolStats stats() const;
 		void resetStats();
@@ -108,6 +121,7 @@ namespace graph::storage {
 		};
 
 		[[nodiscard]] static bool isAligned(BufferPoolPageKey key) noexcept;
+		static void requireTypedPageRange(BufferPoolPageKey firstKey, size_t bytes, const char *operation);
 		[[nodiscard]] Entry &loadLocked(BufferPoolPageKey key, BufferPoolReadHint hint);
 		void promoteLocked(BufferPoolPageKey key, Entry &entry);
 		void admitLocked(BufferPoolPageKey key, Entry &entry);
@@ -116,6 +130,7 @@ namespace graph::storage {
 		bool evictOneLocked();
 		void flushEntryLocked(Entry &entry, uint64_t pageOffset);
 		void discardStaleGenerationsLocked(BufferPoolPageKey key);
+		void discardStaleGenerationsInRangeLocked(BufferPoolPageKey firstKey, size_t pageCount);
 		void unpin(BufferPoolPageKey key) noexcept;
 		[[nodiscard]] std::span<const std::byte, RSS_BUFFER_POOL_PAGE_BYTES> bytesForPin(BufferPoolPageKey key) const;
 		[[nodiscard]] size_t validBytesForPin(BufferPoolPageKey key) const;

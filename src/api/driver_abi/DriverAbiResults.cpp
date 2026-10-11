@@ -554,7 +554,7 @@ zyx_driver_value_type_t valueType(const zyx::Value &value) {
     return ZYX_DRIVER_VALUE_NULL; // ZYX_COV_EXCL_STOP
 }
 
-std::string typeName(zyx_driver_value_type_t type) {
+std::string typeName(uint32_t type) {
     switch (type) { // ZYX_COV_EXCL_LINE: all enum cases return directly; default is defensive
         case ZYX_DRIVER_VALUE_NULL: return "null";
         case ZYX_DRIVER_VALUE_BOOL: return "bool";

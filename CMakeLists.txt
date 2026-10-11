@@ -176,6 +176,13 @@ if(ZYX_BUILD_APPS AND NOT ZYX_WASM)
         target_link_libraries(zyx_large_value_calibrate PRIVATE psapi)
     endif()
 
+    add_executable(zyx_bulk_edge_calibrate apps/bulk_edge_calibration/main.cpp)
+    set_target_properties(zyx_bulk_edge_calibrate PROPERTIES OUTPUT_NAME zyx-bulk-edge-calibrate)
+    target_link_libraries(zyx_bulk_edge_calibrate PRIVATE zyx::core)
+    if(WIN32)
+        target_link_libraries(zyx_bulk_edge_calibrate PRIVATE psapi)
+    endif()
+
     add_subdirectory(benchmarks/leiden)
 endif()
 

@@ -10,6 +10,7 @@
 #include <fstream>
 #include <functional>
 #include <memory>
+#include <stdexcept>
 #include <string_view>
 #include <vector>
 
@@ -20,6 +21,7 @@
 
 #include "graph/storage/StorageIO.hpp"
 #include "graph/storage/relocatable/index/BTreeIndex.hpp"
+#include "graph/storage/relocatable/maintenance/RelocatableCompactionCoordinator.hpp"
 
 using namespace graph::storage;
 
@@ -108,6 +110,23 @@ namespace {
 		return request;
 	}
 
+	class ThrowAfterCheckpoint final : public CancellationCheckpoint {
+	public:
+		explicit ThrowAfterCheckpoint(size_t throwAfter) : throw_after_(throwAfter) {}
+
+		void check() const override {
+			++checks;
+			if (checks == throw_after_) {
+				throw std::runtime_error("test cancellation checkpoint");
+			}
+		}
+
+		mutable size_t checks = 0U;
+
+	private:
+		size_t throw_after_ = 0U;
+	};
+
 } // namespace
 
 class RelocatableBTreeIndexTest : public ::testing::Test {
@@ -183,6 +202,32 @@ TEST_F(RelocatableBTreeIndexTest, FindsAndScansOneSnapshotPinnedLeaf) {
 	EXPECT_THROW(static_cast<void>(BTreeIndex(0, pages, *metadata)), std::invalid_argument);
 }
 
+TEST_F(RelocatableBTreeIndexTest, ScanChecksCancellationBeforeReturningPartialResults) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+	SlottedPagePool pool(io, *metadata);
+	BTreePageStore pages(pool, *metadata);
+	BTreePage root = leaf(PageId(101), 17, LogSequenceNumber(2));
+	root.insert({key("a"), 10});
+	root.insert({key("c"), 30});
+	ASSERT_TRUE(pages.allocate(allocationRequest(PageId(101)), root, PhysicalSlotId(40), PhysicalSlotId(40),
+							   LogSequenceNumber(2))
+						 .has_value());
+	const IndexRootLocation rootLocation{17, PageId(101), Generation(1)};
+	static_cast<void>(pages.publishRoots(std::span(&rootLocation, 1), {}, LogSequenceNumber(3)));
+	BTreeIndex index(17, pages, *metadata);
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+
+	ThrowAfterCheckpoint cancellation(3U);
+	EXPECT_THROW(static_cast<void>(index.scan(snapshot, std::nullopt, 8U, BufferPoolReadHint::BPRH_SEQUENTIAL,
+																 &cancellation)),
+			 std::runtime_error);
+	EXPECT_EQ(cancellation.checks, 3U);
+
+	// Cancellation is read-only: the same pinned generation remains usable and
+	// no partial result is published by the aborted scan.
+	EXPECT_EQ(index.scan(snapshot, std::nullopt, 8U).size(), 2U);
+}
+
 TEST_F(RelocatableBTreeIndexTest, TraversesInternalSeparatorsAndLeafSiblingLinks) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
 	SlottedPagePool pool(io, *metadata);
@@ -212,6 +257,120 @@ TEST_F(RelocatableBTreeIndexTest, TraversesInternalSeparatorsAndLeafSiblingLinks
 	ASSERT_EQ(fromM.size(), 2U);
 	EXPECT_EQ(fromM[0].key, m);
 	EXPECT_EQ(fromM[1].key, z);
+}
+
+TEST_F(RelocatableBTreeIndexTest, StreamsBoundedOrderedSourcesFromIndependentCursors) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+	SlottedPagePool pool(io, *metadata);
+	BTreePageStore pages(pool, *metadata);
+	BTreePage root = internal(PageId(100), 17, LogSequenceNumber(2), PageId(101), key("m"), PageId(102));
+	ASSERT_TRUE(pages.allocate(allocationRequest(PageId(100)), root, PhysicalSlotId(40), PhysicalSlotId(40),
+							   LogSequenceNumber(2))
+						.has_value());
+	BTreePage left = leaf(PageId(101), 17, LogSequenceNumber(3), {}, PageId(102));
+	left.insert({key("a"), 1});
+	left.insert({key("c"), 3});
+	BTreePage right = leaf(PageId(102), 17, LogSequenceNumber(4), PageId(101));
+	right.insert({key("m"), 13});
+	right.insert({key("z"), 26});
+	static_cast<void>(pages.append(appendRequest(PageId(101)), left, LogSequenceNumber(3)));
+	static_cast<void>(pages.append(appendRequest(PageId(102)), right, LogSequenceNumber(4)));
+	const IndexRootLocation rootLocation{17, PageId(100), Generation(1)};
+	static_cast<void>(pages.publishRoots(std::span(&rootLocation, 1), {}, LogSequenceNumber(5)));
+	BTreeIndex index(17, pages, *metadata);
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+
+	const OrderedBTreeEntrySource source = index.orderedSource(snapshot, 4U, 1U);
+	const auto readAll = [&source] {
+		OrderedBTreeEntryCursor cursor = source();
+		std::vector<BTreePageEntry> entries;
+		while (const std::optional<BTreePageEntry> entry = cursor()) {
+			entries.push_back(*entry);
+		}
+		return entries;
+	};
+	const std::vector<BTreePageEntry> expected = {{key("a"), 1}, {key("c"), 3}, {key("m"), 13}, {key("z"), 26}};
+	EXPECT_EQ(readAll(), expected);
+	EXPECT_EQ(readAll(), expected);
+
+	const OrderedBTreeEntryCursor limited = index.orderedSource(snapshot, 3U, 1U)();
+	EXPECT_EQ(limited()->key, key("a"));
+	EXPECT_EQ(limited()->key, key("c"));
+	EXPECT_EQ(limited()->key, key("m"));
+	expectFormatError([&] { static_cast<void>(limited()); }, FormatError::FERR_INVALID_STATE);
+	expectFormatError([&] { static_cast<void>(index.orderedSource(snapshot, 0U)); }, FormatError::FERR_INVALID_HEADER);
+	expectFormatError([&] { static_cast<void>(index.orderedSource(snapshot, 2U, 3U)); },
+				  FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableBTreeIndexTest, ContinuesAnOrderedCursorAcrossPoolRelocationThenReopensTheTree) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+	SlottedPagePool pool(io, *metadata);
+	BTreePageStore pages(pool, *metadata);
+	const SlottedPagePoolAllocationRequest sourceRequest = allocationRequest(PageId(100U));
+	BTreePage root = internal(PageId(100U), 17U, LogSequenceNumber(2U), PageId(101U), key("m"), PageId(102U));
+	ASSERT_TRUE(pages.allocate(sourceRequest, root, PhysicalSlotId(40U), PhysicalSlotId(40U), LogSequenceNumber(2U))
+					.has_value());
+	BTreePage left = leaf(PageId(101U), 17U, LogSequenceNumber(3U), {}, PageId(102U));
+	left.insert({key("a"), 1U});
+	left.insert({key("c"), 3U});
+	BTreePage right = leaf(PageId(102U), 17U, LogSequenceNumber(4U), PageId(101U));
+	right.insert({key("m"), 13U});
+	right.insert({key("z"), 26U});
+	static_cast<void>(pages.append(appendRequest(PageId(101U)), left, LogSequenceNumber(3U)));
+	static_cast<void>(pages.append(appendRequest(PageId(102U)), right, LogSequenceNumber(4U)));
+	const IndexRootLocation sourceRoot{17U, PageId(100U), Generation(1U)};
+	static_cast<void>(pages.publishRoots(std::span(&sourceRoot, 1U), {}, LogSequenceNumber(5U)));
+
+	// The destination pool has an independent root, so it remains a live typed
+	// pool throughout compaction rather than borrowing an orphaned frame.
+	SlottedPagePoolAllocationRequest destinationRequest = allocationRequest(PageId(900U), 18U);
+	destinationRequest.segment_id = SegmentId(72U);
+	ASSERT_TRUE(pages.allocate(destinationRequest, leaf(PageId(900U), 18U, LogSequenceNumber(6U)),
+						   PhysicalSlotId(41U), PhysicalSlotId(41U), LogSequenceNumber(6U))
+					.has_value());
+	const IndexRootLocation destinationRoot{18U, PageId(900U), Generation(1U)};
+	static_cast<void>(pages.publishRoots(std::span(&destinationRoot, 1U), {}, LogSequenceNumber(7U)));
+
+	MetadataSnapshotPin oldSnapshot = metadata->openSnapshot();
+	BTreeIndex index(17U, pages, *metadata);
+	OrderedBTreeEntryCursor oldCursor = index.orderedSource(oldSnapshot, 4U, 1U)();
+	ASSERT_EQ(oldCursor()->key, key("a"));
+
+	RelocatableCompactionCoordinator coordinator(pool, pages, *metadata);
+	const RelocatableSlottedPoolCompactionResult compacted = coordinator.compactBTreePool(
+			{sourceRequest.segment_id, destinationRequest.segment_id, 3U, LogSequenceNumber(8U)});
+	EXPECT_EQ(compacted.status, RelocatableCompactionStatus::VCS_SOURCE_RETIRED_AWAITING_SNAPSHOTS);
+	EXPECT_EQ(compacted.moved_pages, 3U);
+	EXPECT_TRUE(compacted.source_retired);
+	EXPECT_FALSE(compacted.source_released);
+
+	MetadataSnapshotPin current = metadata->openSnapshot();
+	EXPECT_EQ(metadata->findPageLocation(current, sourceRoot.root_page_id).segment_id, destinationRequest.segment_id);
+	EXPECT_EQ(index.scan(current, std::nullopt, 4U),
+			  (std::vector<BTreePageEntry>{{key("a"), 1U}, {key("c"), 3U}, {key("m"), 13U}, {key("z"), 26U}}));
+	EXPECT_EQ(oldCursor()->key, key("c"));
+	EXPECT_EQ(oldCursor()->key, key("m"));
+	EXPECT_EQ(oldCursor()->key, key("z"));
+	EXPECT_FALSE(oldCursor().has_value());
+	current.release();
+
+	EXPECT_FALSE(coordinator.releaseRetiredSlottedPool(sourceRequest.segment_id, sourceRequest.generation,
+															compacted.next_lsn));
+	oldSnapshot.release();
+	EXPECT_TRUE(coordinator.releaseRetiredSlottedPool(sourceRequest.segment_id, sourceRequest.generation,
+														   compacted.next_lsn));
+
+	metadata.reset();
+	auto reopenedMetadata = RelocatableMetadataStore::open(io);
+	SlottedPagePool reopenedPool(io, *reopenedMetadata);
+	BTreePageStore reopenedPages(reopenedPool, *reopenedMetadata);
+	BTreeIndex reopenedIndex(17U, reopenedPages, *reopenedMetadata);
+	MetadataSnapshotPin reopened = reopenedMetadata->openSnapshot();
+	EXPECT_EQ(reopenedMetadata->findPageLocation(reopened, sourceRoot.root_page_id).segment_id,
+			  destinationRequest.segment_id);
+	EXPECT_EQ(reopenedIndex.scan(reopened, std::nullopt, 4U),
+			  (std::vector<BTreePageEntry>{{key("a"), 1U}, {key("c"), 3U}, {key("m"), 13U}, {key("z"), 26U}}));
 }
 
 TEST_F(RelocatableBTreeIndexTest, RejectsMissingChildrenAndBrokenLeafLinks) {
@@ -341,6 +500,33 @@ TEST_F(RelocatableBTreeIndexTest, RejectsNonreciprocalLeafLinks) {
 	static_cast<void>(pages.append(appendRequest(PageId(102)), right, LogSequenceNumber(4)));
 	const IndexRootLocation rootLocation{17, PageId(100), Generation(1)};
 	static_cast<void>(pages.publishRoots(std::span(&rootLocation, 1), {}, LogSequenceNumber(5)));
+	BTreeIndex index(17, pages, *metadata);
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	expectFormatError([&] { static_cast<void>(index.scan(snapshot, std::nullopt, 8)); },
+					  FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableBTreeIndexTest, RejectsReciprocalSiblingOutsideTheRoutedLeafSequence) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+	SlottedPagePool pool(io, *metadata);
+	BTreePageStore pages(pool, *metadata);
+	BTreePage root = internal(PageId(100), 17, LogSequenceNumber(2), PageId(101), key("m"), PageId(102));
+	ASSERT_TRUE(pages.allocate(allocationRequest(PageId(100)), root, PhysicalSlotId(40), PhysicalSlotId(40),
+							   LogSequenceNumber(2))
+						.has_value());
+	// Page 103 belongs to this Index and has a valid reciprocal link, but the
+	// root routes the successor of 101 to 102. It must not yield ghost entries.
+	BTreePage left = leaf(PageId(101), 17, LogSequenceNumber(3), {}, PageId(103));
+	left.insert({key("a"), 1});
+	BTreePage routedRight = leaf(PageId(102), 17, LogSequenceNumber(4));
+	routedRight.insert({key("m"), 2});
+	BTreePage unroutedSibling = leaf(PageId(103), 17, LogSequenceNumber(5), PageId(101));
+	unroutedSibling.insert({key("n"), 3});
+	static_cast<void>(pages.append(appendRequest(PageId(101)), left, LogSequenceNumber(3)));
+	static_cast<void>(pages.append(appendRequest(PageId(102)), routedRight, LogSequenceNumber(4)));
+	static_cast<void>(pages.append(appendRequest(PageId(103)), unroutedSibling, LogSequenceNumber(5)));
+	const IndexRootLocation rootLocation{17, PageId(100), Generation(1)};
+	static_cast<void>(pages.publishRoots(std::span(&rootLocation, 1), {}, LogSequenceNumber(6)));
 	BTreeIndex index(17, pages, *metadata);
 	MetadataSnapshotPin snapshot = metadata->openSnapshot();
 	expectFormatError([&] { static_cast<void>(index.scan(snapshot, std::nullopt, 8)); },

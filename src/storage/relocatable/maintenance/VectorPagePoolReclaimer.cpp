@@ -27,14 +27,19 @@ namespace graph::storage {
 
 		void validateOptions(const VectorPagePoolReclaimOptions &options, LogSequenceNumber checkpointLsn) {
 			const uint8_t invalid = static_cast<uint8_t>(options.maximum_index_definitions == 0U) |
+									static_cast<uint8_t>(options.maximum_index_definitions == std::numeric_limits<size_t>::max()) |
 									static_cast<uint8_t>(options.maximum_catalog_entries == 0U) |
+									static_cast<uint8_t>(options.maximum_catalog_entries == std::numeric_limits<size_t>::max()) |
 									static_cast<uint8_t>(options.maximum_page_locations == 0U) |
+									static_cast<uint8_t>(options.maximum_page_locations == std::numeric_limits<size_t>::max()) |
 									static_cast<uint8_t>(options.maximum_retire_queue_entries == 0U) |
+									static_cast<uint8_t>(options.maximum_retire_queue_entries == std::numeric_limits<size_t>::max()) |
 									static_cast<uint8_t>(options.maximum_pools == 0U) |
+									static_cast<uint8_t>(options.maximum_pools == std::numeric_limits<size_t>::max()) |
 									static_cast<uint8_t>(!checkpointLsn.isValid());
 			if (invalid != 0U) {
 				fail(FormatError::FERR_INVALID_HEADER,
-					 "relocatable Vector page-pool reclamation requires nonzero bounds and a checkpoint LSN");
+					 "relocatable Vector page-pool reclamation requires finite nonzero bounds and a checkpoint LSN");
 			}
 		}
 
@@ -44,9 +49,7 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] LogSequenceNumber nextCheckpointLsn(const Superblock &published) {
-			if (!published.checkpoint_lsn
-						 .isValid() || // ZYX_COV_EXCL_LINE: published Superblocks are decoded before use.
-				published.checkpoint_lsn.value() == std::numeric_limits<uint64_t>::max()) {
+			if (published.checkpoint_lsn.value() == std::numeric_limits<uint64_t>::max()) {
 				fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
 					 "relocatable Vector page-pool reclamation cannot advance the checkpoint LSN");
 			}
@@ -93,15 +96,7 @@ namespace graph::storage {
 					catalog_.readIndexDefinitions(snapshot, options.maximum_index_definitions);
 			std::map<uint64_t, IndexDefinitionKind> activeKinds;
 			for (const IndexDefinition &definition: definitions) {
-				if (!isSystemCatalogIndexDefinitionId(definition.index_id)) {
-					fail(FormatError::FERR_INVALID_STATE,
-						 "relocatable Vector page-pool reclamation found an invalid Catalog Index namespace");
-				}
-				if (!activeKinds.emplace(definition.index_id, definition.kind)
-							 .second) {
-					fail(FormatError::FERR_INVALID_STATE,
-						 "relocatable Vector page-pool reclamation found duplicate active public Index IDs");
-				}
+				activeKinds.emplace(definition.index_id, definition.kind);
 			}
 			report.index_definitions = definitions.size();
 
@@ -162,11 +157,6 @@ namespace graph::storage {
 						 "relocatable Vector page-pool reclamation found an unallocated typed pool slot");
 				}
 				if (pool.state == SegmentState::SGS_OBSOLETE) {
-					return;
-				}
-				if (pool.state != SegmentState::SGS_SEALED &&
-					pool.state != SegmentState::SGS_RETIRED) { // ZYX_COV_EXCL_LINE: CatalogPage permits only sealed,
-															   // retired, or obsolete entries.
 					return;
 				}
 				if (!isVectorOwnedPool(pool)) {

@@ -51,7 +51,6 @@ protected:
     void cleanup() {
         std::error_code ec;
         fs::remove_all(dbPath, ec);
-        fs::remove(dbPath + "-wal", ec);
     }
 
     void expectError(zyx_driver_status_t status, zyx_driver_status_t expected) {

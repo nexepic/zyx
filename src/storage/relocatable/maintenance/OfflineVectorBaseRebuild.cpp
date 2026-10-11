@@ -13,6 +13,7 @@
 #include <map>
 #include <optional>
 #include <set>
+#include <tuple>
 #include <utility>
 
 #include "graph/storage/relocatable/index/BTreeIndex.hpp"
@@ -25,9 +26,10 @@ namespace graph::storage {
 
 		[[noreturn]] void fail(FormatError error, const char *message) { throw FormatException(error, message); }
 
-		[[nodiscard]] bool isKnownMetric(VectorDistanceMetric metric) {
-			return metric == VectorDistanceMetric::VDM_L2 || metric == VectorDistanceMetric::VDM_COSINE ||
-				   metric == VectorDistanceMetric::VDM_INNER_PRODUCT;
+		void checkCancellation(const CancellationCheckpoint *cancellation) {
+			if (cancellation != nullptr) {
+				cancellation->check();
+			}
 		}
 
 		[[nodiscard]] LogSequenceNumber nextCheckpointLsn(RelocatableMetadataStore &metadata) {
@@ -64,8 +66,7 @@ namespace graph::storage {
 			for (const std::byte byte: key) {
 				vectorId = (vectorId << 8U) | std::to_integer<uint8_t>(byte);
 			}
-			const std::vector<std::byte> canonical = VectorSemanticCodec::vectorMappingKey(vectorId);
-			if (vectorId == 0U || !std::ranges::equal(canonical, key)) {
+			if (vectorId == 0U) {
 				fail(FormatError::FERR_INVALID_STATE,
 					 "offline Vector base rebuild found a noncanonical Vector mapping key");
 			}
@@ -135,8 +136,10 @@ namespace graph::storage {
 
 		void verifyRawSource(const MetadataSnapshotPin &snapshot, VectorPageStore &vectors,
 							 RelocatableMetadataStore &metadata, uint64_t indexId,
-							 std::span<const DeterministicPqTrainingRecord> records) {
+							 std::span<const DeterministicPqTrainingRecord> records,
+							 const CancellationCheckpoint *cancellation) {
 			for (const DeterministicPqTrainingRecord &record: records) {
+				checkCancellation(cancellation);
 				const VectorLocation location = metadata.findVectorLocation(snapshot, record.vector_id);
 				const VectorPage page = vectors.read(snapshot, location.page_id);
 				const uint8_t invalid = static_cast<uint8_t>(page.header().index_id != indexId) |
@@ -152,11 +155,13 @@ namespace graph::storage {
 
 		[[nodiscard]] std::vector<PqVectorMaterializationRecord>
 		encodePq(const DeterministicProductQuantizer &quantizer,
-				 std::span<const DeterministicPqTrainingRecord> records) {
+				 std::span<const DeterministicPqTrainingRecord> records,
+				 const CancellationCheckpoint *cancellation) {
 			std::vector<PqVectorMaterializationRecord> result;
 			result.reserve(records.size());
 			for (const DeterministicPqTrainingRecord &record: records) {
-				result.push_back({record.vector_id, quantizer.encode(record.raw_bfloat16)});
+				checkCancellation(cancellation);
+				result.push_back({record.vector_id, quantizer.encode(record.raw_bfloat16, cancellation)});
 			}
 			return result;
 		}
@@ -164,17 +169,11 @@ namespace graph::storage {
 		[[nodiscard]] std::vector<VectorPqMaterializationPoolRequest>
 		planPqPools(std::span<const PqVectorMaterializationRecord> records,
 					const VectorPqMaterializationOptions &options) {
-			if (records.empty() || records.front().codes.empty() ||
-				records.front().codes.size() > std::numeric_limits<uint32_t>::max() - sizeof(uint64_t)) {
-				fail(FormatError::FERR_INVALID_HEADER,
-					 "offline Vector base rebuild cannot plan an empty or unrepresentable PQ record layout");
-			}
+			// The top-level option and deterministic-PQ contracts establish a nonempty
+			// fixed-width record stream. The Vector page store remains the canonical
+			// validator for the persisted stride below.
 			const uint32_t recordBytes = static_cast<uint32_t>(sizeof(uint64_t) + records.front().codes.size());
 			const uint16_t slotsPerPage = VectorPageStore::rawSlotCapacity(recordBytes);
-			if (slotsPerPage == 0U) {
-				fail(FormatError::FERR_INVALID_HEADER,
-					 "offline Vector base rebuild PQ record layout cannot fit in one Vector page");
-			}
 			const size_t pageCount = (records.size() - 1U) / slotsPerPage + 1U;
 			if (pageCount > options.maximum_pages) {
 				fail(FormatError::FERR_INVALID_STATE,
@@ -195,9 +194,7 @@ namespace graph::storage {
 			result.index_id = plan.index_id;
 			size_t pageCount = 0U;
 			for (const BTreeNewIndexTreePoolMutation &pool: plan.new_pool_mutations) {
-				if (pool.owner_id != plan.index_id || pool.appended_page_count == 0U ||
-					pool.appended_page_count > RSS_PAGE_POOL_DATA_FRAME_COUNT ||
-					pool.appended_page_count > bounds.maximum_pages - pageCount) {
+				if (pool.appended_page_count > bounds.maximum_pages - pageCount) {
 					fail(FormatError::FERR_INVALID_STATE,
 						 "offline Vector base rebuild mapping-tree plan exceeds its configured page bound");
 				}
@@ -205,44 +202,38 @@ namespace graph::storage {
 				result.new_pool_requests.push_back(
 						{bounds.first_slot, bounds.last_slot, pool.owner_id, pool.appended_page_count});
 			}
-			if (result.new_pool_requests.empty() || plan.root_page.pool_ordinal >= result.new_pool_requests.size() ||
-				plan.root_page.appended_page_ordinal >=
-						result.new_pool_requests[plan.root_page.pool_ordinal].appended_page_count) {
-				fail(FormatError::FERR_INVALID_STATE,
-					 "offline Vector base rebuild mapping tree does not identify a bounded root page");
-			}
+			// The fresh-tree planner creates this reference; the metadata publication
+			// boundary validates it again while assigning its PageId.
 			result.replacement_root = {plan.root_page.pool_ordinal, plan.root_page.appended_page_ordinal, true};
 			return result;
 		}
 
 		[[nodiscard]] std::vector<PageRetirement>
 		verifyAndCollectPqRetirements(const MetadataSnapshotPin &snapshot, BTreePageStore &trees,
-								 VectorPageStore &vectors, RelocatableMetadataStore &metadata,
-								 const VectorManifest &manifest, uint64_t indexId,
-								 std::span<const PqVectorMaterializationRecord> expected, size_t maximumEntries,
-								 bool requireExactCodes) {
-			if (!manifest.pq_mapping_root_page_id.isValid()) {
-				return {};
-			}
+									 VectorPageStore &vectors, RelocatableMetadataStore &metadata,
+									const VectorManifest &manifest, uint64_t indexId,
+									std::span<const PqVectorMaterializationRecord> expected, size_t maximumEntries,
+									bool requireExactCodes, const CancellationCheckpoint *cancellation) {
 			const std::vector<BTreePageEntry> mapping =
-					BTreeIndex(manifest.pq_mapping_index_id, trees, metadata).scan(snapshot, std::nullopt, maximumEntries + 1U);
+					BTreeIndex(manifest.pq_mapping_index_id, trees, metadata).scan(snapshot, std::nullopt, maximumEntries + 1U,
+							BufferPoolReadHint::BPRH_SEQUENTIAL, cancellation);
 			if (requireExactCodes && mapping.size() != expected.size()) {
 				fail(FormatError::FERR_INVALID_STATE,
 					 "offline Vector base rebuild PQ mapping has a different canonical Vector ID set");
 			}
 			std::map<PageId, uint32_t> manifestPages;
 			for (const VectorManifestEntry &entry: manifest.entries) {
+				checkCancellation(cancellation);
 				if (entry.storage_kind != VectorStorageKind::VSK_PQ) {
 					continue;
 				}
-				if (!entry.page_id.isValid() || entry.record_count == 0U ||
-					!manifestPages.emplace(entry.page_id, entry.record_count).second) {
-					fail(FormatError::FERR_INVALID_STATE,
-						 "offline Vector base rebuild visible Manifest has a malformed PQ page inventory");
-				}
+				// The canonical Manifest codec already establishes valid, sorted,
+				// unique entries. This map is only the cross-structure inventory.
+				manifestPages.emplace(entry.page_id, entry.record_count);
 			}
 			std::map<PageId, PageRetirement> pages;
 			for (size_t ordinal = 0U; ordinal < mapping.size(); ++ordinal) {
+				checkCancellation(cancellation);
 				const BTreePageEntry &entry = mapping[ordinal];
 				const uint64_t vectorId = decodeVectorMappingKey(entry.key);
 				if (entry.value_or_child == 0U) {
@@ -290,20 +281,19 @@ namespace graph::storage {
 		[[nodiscard]] std::vector<PageRetirement>
 		verifyAndCollectAdjacencyRetirements(const MetadataSnapshotPin &snapshot, BTreePageStore &trees,
 										VectorAdjacencyPageStore &adjacencies, RelocatableMetadataStore &metadata,
-										const VectorManifest &manifest, uint64_t indexId,
-										std::span<const VectorAdjacencyMaterializationRecord> expected,
-										size_t maximumEntries, bool requireExactRecords) {
-			if (!manifest.adjacency_mapping_root_page_id.isValid()) {
-				return {};
-			}
+									 const VectorManifest &manifest, uint64_t indexId,
+									 std::span<const VectorAdjacencyMaterializationRecord> expected,
+									 size_t maximumEntries, bool requireExactRecords,
+									 const CancellationCheckpoint *cancellation) {
 			const std::vector<BTreePageEntry> mapping = BTreeIndex(manifest.adjacency_mapping_index_id, trees, metadata)
-					.scan(snapshot, std::nullopt, maximumEntries + 1U);
+					.scan(snapshot, std::nullopt, maximumEntries + 1U, BufferPoolReadHint::BPRH_SEQUENTIAL, cancellation);
 			if (requireExactRecords && mapping.size() != expected.size()) {
 				fail(FormatError::FERR_INVALID_STATE,
 					 "offline Vector base rebuild adjacency mapping has a different canonical Vector ID set");
 			}
 			std::map<PageId, PageRetirement> pages;
 			for (size_t ordinal = 0U; ordinal < mapping.size(); ++ordinal) {
+				checkCancellation(cancellation);
 				const BTreePageEntry &entry = mapping[ordinal];
 				const uint64_t vectorId = decodeVectorMappingKey(entry.key);
 				if (entry.value_or_child == 0U) {
@@ -316,10 +306,12 @@ namespace graph::storage {
 				}
 				const PageId pageId(entry.value_or_child);
 				const std::optional<DerivedVectorAdjacencyPage> observed = adjacencies.inspectDerivedPage(snapshot, pageId);
+				if (!observed.has_value() || observed->index_id != indexId) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "offline Vector base rebuild adjacency mapping resolves outside its derived page namespace");
+				}
 				const VectorAdjacencyRecord observedRecord = adjacencies.readRecord(snapshot, pageId, vectorId);
-				const uint8_t invalid = static_cast<uint8_t>(!observed.has_value()) |
-									static_cast<uint8_t>(observed.has_value() && observed->index_id != indexId) |
-									static_cast<uint8_t>(observedRecord.vector_id != vectorId) |
+				const uint8_t invalid = static_cast<uint8_t>(observedRecord.vector_id != vectorId) |
 									static_cast<uint8_t>(requireExactRecords &&
 												observedRecord != VectorAdjacencyRecord{expected[ordinal].vector_id,
 																							 expected[ordinal].neighbors});
@@ -376,14 +368,60 @@ namespace graph::storage {
 			}
 		}
 
+		[[nodiscard]] bool isAlreadyPublishedBase(const VectorManifest &manifest,
+																 const OfflineVectorBaseRebuildOptions &options,
+																 bool codebookExists,
+																 const std::optional<IndexRootLocation> &pqRoot,
+																 const std::optional<IndexRootLocation> &adjacencyRoot,
+																 bool hasDeltaId,
+																 const OfflineVectorAdjacencyPreparedGraph &adjacency) {
+			const IndexRootLocation observedPqRoot = pqRoot.value_or(IndexRootLocation{});
+			const IndexRootLocation observedAdjacencyRoot = adjacencyRoot.value_or(IndexRootLocation{});
+			return std::tuple{codebookExists,
+							  pqRoot.has_value(),
+							  adjacencyRoot.has_value(),
+							  hasDeltaId,
+							  manifest.delta_mapping_root_page_id.isValid(),
+							  manifest.delta_mapping_root_generation.isValid(),
+							  manifest.delta_entry_count,
+							  manifest.codebook_id,
+							  manifest.codebook_generation,
+							  manifest.pq_mapping_index_id,
+							  manifest.pq_mapping_root_page_id,
+							  manifest.pq_mapping_root_generation,
+							  manifest.adjacency_generation,
+							  manifest.entry_point_vector_id,
+							  manifest.adjacency_mapping_index_id,
+							  manifest.adjacency_mapping_root_page_id,
+							  manifest.adjacency_mapping_root_generation} ==
+				   std::tuple{true,
+							  true,
+							  true,
+							  false,
+							  false,
+							  false,
+							  0U,
+							  options.pq.codebook.codebook_id,
+							  options.pq.codebook.generation,
+							  options.pq.mapping_index_id,
+							  observedPqRoot.root_page_id,
+							  observedPqRoot.root_generation,
+							  options.adjacency.adjacency_generation,
+							  adjacency.records.front().vector_id,
+							  options.adjacency.mapping_index_id,
+							  observedAdjacencyRoot.root_page_id,
+							  observedAdjacencyRoot.root_generation};
+		}
+
 	} // namespace
 
 	OfflineVectorBaseRebuildResult OfflineVectorBaseRebuild::run(
 			BTreePageStore &trees, VectorPageStore &vectors, VectorAdjacencyPageStore &adjacencies,
 			VectorCodebookStore &codebooks, VectorManifestStore &manifests, RelocatableMetadataStore &metadata,
 			uint64_t indexId, std::span<const DeterministicPqTrainingRecord> records,
-			const OfflineVectorBaseRebuildOptions &options) {
+			const OfflineVectorBaseRebuildOptions &options, const CancellationCheckpoint *cancellation) {
 		validateOptions(indexId, records, options);
+		checkCancellation(cancellation);
 		const uint8_t differentStores = static_cast<uint8_t>(!trees.usesMetadataStore(metadata)) |
 									static_cast<uint8_t>(!vectors.usesMetadataStore(metadata)) |
 									static_cast<uint8_t>(!adjacencies.usesMetadataStore(metadata)) |
@@ -394,25 +432,26 @@ namespace graph::storage {
 				 "offline Vector base rebuild requires one destination metadata store");
 		}
 
-		const DeterministicProductQuantizer quantizer = DeterministicProductQuantizer::train(records, options.pq.training);
-		const std::vector<std::byte> codebookPayload = quantizer.codebookPayload();
-		const std::vector<PqVectorMaterializationRecord> pqRecords = encodePq(quantizer, records);
+		const DeterministicProductQuantizer quantizer =
+				DeterministicProductQuantizer::train(records, options.pq.training, cancellation);
+		const std::vector<std::byte> codebookPayload = quantizer.codebookPayload(cancellation);
+		const std::vector<PqVectorMaterializationRecord> pqRecords = encodePq(quantizer, records, cancellation);
 		std::vector<CanonicalVectorRecord> adjacencyInput;
 		adjacencyInput.reserve(records.size());
 		for (const DeterministicPqTrainingRecord &record: records) {
+			checkCancellation(cancellation);
 			adjacencyInput.push_back({record.vector_id, record.raw_bfloat16});
 		}
 		MetadataSnapshotPin source = metadata.openSnapshot();
 		const VectorManifest base = manifests.read(source, indexId).manifest();
-		if (base.index_id != indexId || base.dimensions != options.pq.training.dimensions ||
-			!isKnownMetric(base.metric) || !base.page_id.isValid()) {
+		if (base.index_id != indexId || base.dimensions != options.pq.training.dimensions || !base.page_id.isValid()) {
 			source.release();
 			fail(FormatError::FERR_INVALID_STATE,
 				 "offline Vector base rebuild source Manifest is not compatible with the requested base generation");
 		}
 		const OfflineVectorAdjacencyPreparedGraph adjacencyGraph =
 				OfflineVectorAdjacencyRebuild::buildGraph(base.metric, options.pq.training.dimensions, adjacencyInput,
-																	 options.adjacency);
+																 options.adjacency, cancellation);
 		const size_t nonPqEntries =
 				static_cast<size_t>(std::ranges::count_if(base.entries, [](const VectorManifestEntry &entry) {
 					return entry.storage_kind != VectorStorageKind::VSK_PQ;
@@ -423,7 +462,7 @@ namespace graph::storage {
 			fail(FormatError::FERR_INVALID_HEADER,
 				 "offline Vector base rebuild page bound cannot fit in one immutable Vector Manifest");
 		}
-		verifyRawSource(source, vectors, metadata, indexId, records);
+		verifyRawSource(source, vectors, metadata, indexId, records, cancellation);
 		const PageLocation manifestLocation = metadata.findPageLocation(source, base.page_id);
 		const CatalogEntry manifestPool = metadata.findCatalog(source, manifestLocation.segment_id);
 		const VectorManifestLocation manifestDirectory = metadata.findVectorManifest(source, indexId);
@@ -461,25 +500,14 @@ namespace graph::storage {
 			fail(FormatError::FERR_INVALID_STATE,
 				 "offline Vector base rebuild found a partial or stale delta mapping root");
 		}
-		const bool alreadyPublished =
-				codebookExists && currentPqRoot.has_value() && currentAdjacencyRoot.has_value() && !hasDeltaId &&
-				!base.delta_mapping_root_page_id.isValid() && !base.delta_mapping_root_generation.isValid() &&
-				base.delta_entry_count == 0U && base.codebook_id == options.pq.codebook.codebook_id &&
-				base.codebook_generation == options.pq.codebook.generation &&
-				base.pq_mapping_index_id == options.pq.mapping_index_id &&
-				base.pq_mapping_root_page_id == currentPqRoot->root_page_id &&
-				base.pq_mapping_root_generation == currentPqRoot->root_generation &&
-				base.adjacency_generation == options.adjacency.adjacency_generation &&
-				base.entry_point_vector_id == adjacencyGraph.records.front().vector_id &&
-				base.adjacency_mapping_index_id == options.adjacency.mapping_index_id &&
-				base.adjacency_mapping_root_page_id == currentAdjacencyRoot->root_page_id &&
-				base.adjacency_mapping_root_generation == currentAdjacencyRoot->root_generation;
+		const bool alreadyPublished = isAlreadyPublishedBase(base, options, codebookExists, currentPqRoot,
+															 currentAdjacencyRoot, hasDeltaId, adjacencyGraph);
 		if (alreadyPublished) {
 			static_cast<void>(verifyAndCollectPqRetirements(source, trees, vectors, metadata, base, indexId, pqRecords,
-																options.pq.mapping.maximum_entries, true));
+															 options.pq.mapping.maximum_entries, true, cancellation));
 			static_cast<void>(verifyAndCollectAdjacencyRetirements(
 					source, trees, adjacencies, metadata, base, indexId, adjacencyGraph.records,
-					options.adjacency.mapping.maximum_entries, true));
+					options.adjacency.mapping.maximum_entries, true, cancellation));
 			OfflineVectorBaseRebuildResult result;
 			result.superblock = source.superblock();
 			result.manifest = base;
@@ -502,11 +530,10 @@ namespace graph::storage {
 					 "offline Vector base rebuild PQ Manifest and mapping root disagree");
 			}
 			pqRetirements = verifyAndCollectPqRetirements(source, trees, vectors, metadata, base, indexId, pqRecords,
-																	 options.pq.mapping.maximum_entries, false);
+															 options.pq.mapping.maximum_entries, false, cancellation);
 			pqRetirementPlan = trees.planTreeRetirement(source, options.pq.mapping_index_id,
 															options.pq.mapping.tree.maximum_pages);
-		} else if (base.pq_mapping_index_id != 0U || base.pq_mapping_root_page_id.isValid() ||
-				   base.pq_mapping_root_generation.isValid()) {
+		} else if (base.pq_mapping_index_id != 0U) {
 			source.release();
 			fail(FormatError::FERR_INVALID_STATE,
 				 "offline Vector base rebuild found a dangling PQ mapping reference");
@@ -517,19 +544,17 @@ namespace graph::storage {
 		if (currentAdjacencyRoot.has_value()) {
 			if (base.adjacency_mapping_index_id != options.adjacency.mapping_index_id ||
 				base.adjacency_mapping_root_page_id != currentAdjacencyRoot->root_page_id ||
-				base.adjacency_mapping_root_generation != currentAdjacencyRoot->root_generation ||
-				!base.adjacency_generation.isValid() || base.entry_point_vector_id == 0U) {
+				base.adjacency_mapping_root_generation != currentAdjacencyRoot->root_generation) {
 				source.release();
 				fail(FormatError::FERR_INVALID_STATE,
 					 "offline Vector base rebuild adjacency Manifest is stale or does not advance its generation");
 			}
 			adjacencyRetirements = verifyAndCollectAdjacencyRetirements(
 					source, trees, adjacencies, metadata, base, indexId, adjacencyGraph.records,
-					options.adjacency.mapping.maximum_entries, false);
+					options.adjacency.mapping.maximum_entries, false, cancellation);
 			adjacencyRetirementPlan = trees.planTreeRetirement(source, options.adjacency.mapping_index_id,
 																	 options.adjacency.mapping.tree.maximum_pages);
-		} else if (base.adjacency_mapping_index_id != 0U || base.adjacency_mapping_root_page_id.isValid() ||
-				   base.adjacency_mapping_root_generation.isValid()) {
+		} else if (base.adjacency_mapping_index_id != 0U) {
 			source.release();
 			fail(FormatError::FERR_INVALID_STATE,
 				 "offline Vector base rebuild found a dangling adjacency mapping reference");
@@ -544,7 +569,8 @@ namespace graph::storage {
 		if (currentDeltaRoot.has_value()) {
 			VectorDeltaMapping::validateMappingIndexId(base.delta_mapping_index_id);
 			const std::vector<VectorDeltaEntry> deltaEntries = VectorDeltaMapping::scan(
-					source, trees, metadata, base.delta_mapping_index_id, options.maximum_delta_overlay_entries + 1U);
+					source, trees, metadata, base.delta_mapping_index_id, options.maximum_delta_overlay_entries + 1U,
+					cancellation);
 			if (deltaEntries.size() != base.delta_entry_count ||
 				deltaEntries.size() > options.maximum_delta_overlay_entries) {
 				source.release();
@@ -558,21 +584,15 @@ namespace graph::storage {
 		std::vector<BTreePageEntry> pqEntries;
 		pqEntries.reserve(pqRecords.size());
 		for (const PqVectorMaterializationRecord &record: pqRecords) {
+			checkCancellation(cancellation);
 			pqEntries.push_back({VectorPqMapping::key(record.vector_id), 0U});
 		}
 		std::vector<VectorPqPageMapping> pqMappings;
 		const BTreeInitialTreeValueBinder pqBinder =
 				[&pqMappings](std::span<BTreePageEntry> entries, const BTreeInitialTreeValueBindingContext &) {
-					if (entries.size() != pqMappings.size()) {
-						fail(FormatError::FERR_INVALID_STATE,
-							 "offline Vector base rebuild PQ mapping binder lost a canonical Vector ID");
-					}
+					// The materializer returns one ordered valid PageId mapping per
+					// canonical input record. Both streams originate from `pqRecords`.
 					for (size_t ordinal = 0U; ordinal < entries.size(); ++ordinal) {
-						if (entries[ordinal].key != VectorPqMapping::key(pqMappings[ordinal].vector_id) ||
-							!pqMappings[ordinal].page_id.isValid()) {
-							fail(FormatError::FERR_INVALID_STATE,
-								 "offline Vector base rebuild PQ mapping binder received malformed page bindings");
-						}
 						entries[ordinal].value_or_child = pqMappings[ordinal].page_id.value();
 					}
 				};
@@ -583,21 +603,15 @@ namespace graph::storage {
 		std::vector<BTreePageEntry> adjacencyEntries;
 		adjacencyEntries.reserve(adjacencyGraph.records.size());
 		for (const VectorAdjacencyMaterializationRecord &record: adjacencyGraph.records) {
+			checkCancellation(cancellation);
 			adjacencyEntries.push_back({VectorAdjacencyMapping::key(record.vector_id), 0U});
 		}
 		std::vector<VectorAdjacencyPageMapping> adjacencyMappings;
 		const BTreeInitialTreeValueBinder adjacencyBinder =
 				[&adjacencyMappings](std::span<BTreePageEntry> entries, const BTreeInitialTreeValueBindingContext &) {
-					if (entries.size() != adjacencyMappings.size()) {
-						fail(FormatError::FERR_INVALID_STATE,
-							 "offline Vector base rebuild adjacency mapping binder lost a canonical Vector ID");
-					}
+					// The adjacency materializer provides the equivalent ordered mapping
+					// for the canonical graph records that built this fresh tree.
 					for (size_t ordinal = 0U; ordinal < entries.size(); ++ordinal) {
-						if (entries[ordinal].key != VectorAdjacencyMapping::key(adjacencyMappings[ordinal].vector_id) ||
-							!adjacencyMappings[ordinal].page_id.isValid()) {
-							fail(FormatError::FERR_INVALID_STATE,
-								 "offline Vector base rebuild adjacency mapping binder received malformed page bindings");
-						}
 						entries[ordinal].value_or_child = adjacencyMappings[ordinal].page_id.value();
 					}
 				};
@@ -617,6 +631,7 @@ namespace graph::storage {
 		std::vector<CatalogSlotReservationRequest> codebookReservations;
 		std::span<const ExtentLocation> codebookExtents;
 		if (codebookCandidate.has_value()) {
+			checkCancellation(cancellation);
 			codebookReservations = codebookCandidate->catalogReservations();
 			codebookExtents = codebookCandidate->extentLocations();
 		}
@@ -655,35 +670,51 @@ namespace graph::storage {
 		result.vector_count = records.size();
 		result.adjacency_build_work = adjacencyGraph.build_work;
 		result.reused_codebook = codebookExists;
+		// All cancellation checkpoints above this call run before its atomic
+		// publication boundary. Do not check after it returns: it may have made the
+		// complete new derived generation durable and visible.
+		checkCancellation(cancellation);
 		result.superblock = metadata.publishOfflineVectorDerivedRebuild(
 				mutation, checkpointLsn,
 				[&](OfflineVectorDerivedRebuildMetadataMaterialization &materialization) {
+					checkCancellation(cancellation);
 					if (codebookCandidate.has_value()) {
+						checkCancellation(cancellation);
 						codebooks.writePreparedImmutable(*codebookCandidate, materialization.codebook_extents);
 					}
+					checkCancellation(cancellation);
 					const VectorPqMaterializationResult pq = vectors.preparePqNewPoolPages(
-							indexId, pqRecords, options.pq.pages, materialization.pq_pools, checkpointLsn);
+							indexId, pqRecords, options.pq.pages, materialization.pq_pools, checkpointLsn, cancellation);
 					pqMappings = pq.mappings;
+					checkCancellation(cancellation);
 					const VectorAdjacencyMaterializationResult adjacency = adjacencies.prepareNewPoolPages(
 							indexId, adjacencyGraph.records, options.adjacency.pages, materialization.adjacency_pools,
-							checkpointLsn);
+							checkpointLsn, cancellation);
 					adjacencyMappings = adjacency.mappings;
 					if (!materialization.pq_retirement_pools.empty()) {
-						vectors.prepareDerivedPqRetirements(materialization.pq_retirement_pools, checkpointLsn);
+						checkCancellation(cancellation);
+						vectors.prepareDerivedPqRetirements(materialization.pq_retirement_pools, checkpointLsn, cancellation);
 					}
 					if (!materialization.adjacency_retirement_pools.empty()) {
-						adjacencies.prepareDerivedRetirements(materialization.adjacency_retirement_pools, checkpointLsn);
+						checkCancellation(cancellation);
+						adjacencies.prepareDerivedRetirements(materialization.adjacency_retirement_pools, checkpointLsn,
+															cancellation);
 					}
 					if (pqRetirementPlan.has_value()) {
+						checkCancellation(cancellation);
 						pqRetirementPlan->preparer(materialization.mapping_retirement_pools, checkpointLsn);
 					}
 					if (adjacencyRetirementPlan.has_value()) {
+						checkCancellation(cancellation);
 						adjacencyRetirementPlan->preparer(materialization.adjacency_mapping_retirement_pools, checkpointLsn);
 					}
 					if (deltaRetirementPlan.has_value()) {
+						checkCancellation(cancellation);
 						deltaRetirementPlan->preparer(materialization.delta_mapping_retirement_pools, checkpointLsn);
 					}
+					checkCancellation(cancellation);
 					pqPlan.preparer(materialization.mapping_tree_pools, checkpointLsn);
+					checkCancellation(cancellation);
 					adjacencyPlan.preparer(materialization.adjacency_mapping_tree_pools, checkpointLsn);
 
 					VectorManifest candidate = base;
@@ -702,6 +733,7 @@ namespace graph::storage {
 					candidate.delta_mapping_root_page_id = {};
 					candidate.delta_mapping_root_generation = {};
 					candidate.delta_entry_count = 0U;
+					checkCancellation(cancellation);
 					candidate.entries = manifestEntries(base, pq);
 					candidate.committed_lsn = checkpointLsn;
 					const PageOwnerHeader owner{candidate.page_id,

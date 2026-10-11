@@ -92,6 +92,27 @@ def test_scalar_types_survive_reopen(persist_path):
     db.close()
 
 
+def test_large_bytes_survive_reopen_and_outlive_the_result(persist_path):
+    # This exceeds one Property-page record. It must therefore pass through the
+    # native LargeValue path rather than merely exercising an inline property.
+    expected = bytes((index * 37) % 251 for index in range(16 * 1024 + 137))
+
+    db = _open(persist_path)
+    db.create_node("PersistedBinary", {"payload": expected})
+    db.save()
+    db.close()
+
+    db = _open(persist_path)
+    payload = list(db.execute("MATCH (n:PersistedBinary) RETURN n.payload AS payload"))[0]["payload"]
+    assert isinstance(payload, bytes)
+    assert payload == expected
+
+    # Python receives an owned bytes object, so closing its ABI result/database
+    # cannot invalidate the value that was already materialized for the caller.
+    db.close()
+    assert payload == expected
+
+
 def test_index_survives_reopen_and_is_usable(persist_path):
     db = _open(persist_path)
     db.execute("CREATE INDEX person_name_idx FOR (n:Person) ON (n.name)")

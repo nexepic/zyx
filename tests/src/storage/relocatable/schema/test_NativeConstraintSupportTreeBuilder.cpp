@@ -630,7 +630,10 @@ TEST_F(NativeConstraintSupportTreeBuilderTest, RejectsAnIncompleteNativeNodeKeyB
 	BTreePageStore indexes(*slottedPages_, *metadata_);
 	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
 	NativeGraphWriteTransaction create = planner.beginTransaction();
-	static_cast<void>(create.createNode(std::array<uint64_t, 1U>{7U}));
+	const uint64_t nodeId = create.createNode(std::array<uint64_t, 1U>{7U});
+	// A different Property token is still an incomplete NODE KEY. This covers
+	// the lookup path where the collection is nonempty but lacks the key.
+	create.replaceNodeProperty({nodeId, Node::typeId, {{2U, PropertyValue("unrelated")}}});
 	ASSERT_TRUE(create.commit().committed());
 
 	PageBackedGraphReadAdapter graph(*metadata_, *entities_, *labels_, *properties_, indexes);
@@ -640,6 +643,47 @@ TEST_F(NativeConstraintSupportTreeBuilderTest, RejectsAnIncompleteNativeNodeKeyB
 		static_cast<void>(NativeConstraintSupportTreeBuilder::plan(
 				indexes, *metadata_, publish.baseSnapshot(), definition, graph, supportTreeOptions(), propertyTokenResolver()));
 		FAIL() << "Expected an incomplete NODE KEY to fail before native tree allocation";
+	} catch (const FormatException &error) {
+		EXPECT_EQ(error.error(), FormatError::FERR_INVALID_STATE);
+	}
+	publish.rollback();
+
+	MetadataSnapshotPin current = metadata_->openSnapshot();
+	EXPECT_FALSE(metadata_->findIndexRootOptional(current, definition.constraint_id).has_value());
+	current.release();
+}
+
+TEST_F(NativeConstraintSupportTreeBuilderTest, RejectsANativeNodeKeyWithNoPropertyCollection) {
+	BTreePageStore indexes(*slottedPages_, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	NativeGraphWriteTransaction create = planner.beginTransaction();
+	static_cast<void>(create.createNode(std::array<uint64_t, 1U>{7U}));
+	ASSERT_TRUE(create.commit().committed());
+
+	PageBackedGraphReadAdapter graph(*metadata_, *entities_, *labels_, *properties_, indexes);
+	NativeGraphWriteTransaction publish = planner.beginTransaction();
+	EXPECT_THROW(static_cast<void>(NativeConstraintSupportTreeBuilder::plan(
+				indexes, *metadata_, publish.baseSnapshot(), nodeKeyConstraintForPlanning(), graph, supportTreeOptions(),
+				propertyTokenResolver())), FormatException);
+	publish.rollback();
+}
+
+TEST_F(NativeConstraintSupportTreeBuilderTest, RejectsAnUnresolvedPropertyTokenBeforeItCanPlanAUniqueTree) {
+	BTreePageStore indexes(*slottedPages_, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	NativeGraphWriteTransaction create = planner.beginTransaction();
+	const uint64_t nodeId = create.createNode(std::array<uint64_t, 1U>{7U});
+	create.replaceNodeProperty(rootFor(nodeId, PropertyValue("Ada")));
+	ASSERT_TRUE(create.commit().committed());
+
+	PageBackedGraphReadAdapter graph(*metadata_, *entities_, *labels_, *properties_, indexes);
+	NativeGraphWriteTransaction publish = planner.beginTransaction();
+	const ConstraintDefinition definition = uniqueConstraintForPlanning();
+	try {
+		static_cast<void>(NativeConstraintSupportTreeBuilder::plan(
+				indexes, *metadata_, publish.baseSnapshot(), definition, graph, supportTreeOptions(),
+				[](const MetadataSnapshotPin &, std::string_view) -> std::optional<uint32_t> { return std::nullopt; }));
+		FAIL() << "Expected an unresolved Property token to reject support-tree planning";
 	} catch (const FormatException &error) {
 		EXPECT_EQ(error.error(), FormatError::FERR_INVALID_STATE);
 	}
@@ -785,6 +829,35 @@ TEST_F(NativeConstraintSupportTreeBuilderTest, RejectsDuplicateCanonicalValuesBe
 		static_cast<void>(NativeConstraintSupportTreeBuilder::plan(
 				indexes, *metadata_, publish.baseSnapshot(), definition, graph, supportTreeOptions(), propertyTokenResolver()));
 		FAIL() << "Expected duplicate canonical values to be rejected";
+	} catch (const FormatException &error) {
+		EXPECT_EQ(error.error(), FormatError::FERR_INVALID_STATE);
+	}
+	publish.rollback();
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_FALSE(metadata_->findIndexRootOptional(snapshot, definition.constraint_id).has_value());
+	snapshot.release();
+}
+
+TEST_F(NativeConstraintSupportTreeBuilderTest, RejectsDigestGroupsThatExceedTheConfiguredCollisionBound) {
+	BTreePageStore indexes(*slottedPages_, *metadata_);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, indexes, plannerOptions());
+	NativeGraphWriteTransaction create = planner.beginTransaction();
+	const uint64_t firstNode = create.createNode(std::array<uint64_t, 1U>{7U});
+	const uint64_t secondNode = create.createNode(std::array<uint64_t, 1U>{7U});
+	create.replaceNodeProperty(rootFor(firstNode, PropertyValue("same")));
+	create.replaceNodeProperty(rootFor(secondNode, PropertyValue("same")));
+	ASSERT_TRUE(create.commit().committed());
+
+	PageBackedGraphReadAdapter graph(*metadata_, *entities_, *labels_, *properties_, indexes);
+	NativeConstraintSupportTreeBuildOptions options = supportTreeOptions();
+	options.maximum_collisions = 1U;
+	const ConstraintDefinition definition = uniqueConstraintForPlanning();
+	NativeGraphWriteTransaction publish = planner.beginTransaction();
+	try {
+		static_cast<void>(NativeConstraintSupportTreeBuilder::plan(
+				indexes, *metadata_, publish.baseSnapshot(), definition, graph, options, propertyTokenResolver()));
+		FAIL() << "Expected the bounded digest group to reject a second candidate";
 	} catch (const FormatException &error) {
 		EXPECT_EQ(error.error(), FormatError::FERR_INVALID_STATE);
 	}

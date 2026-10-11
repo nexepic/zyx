@@ -9,14 +9,18 @@
 #include "graph/query/planner/ProcedureRegistry.hpp"
 
 #include <stdexcept>
+#include <string>
 #include <utility>
+
+#include "graph/query/NativeProcedureManifest.hpp"
 
 namespace graph::query::planner {
 
 	ProcedureRegistry::ProcedureRegistry() {
-		registerProcedure("algo.shortestPath", {});
-		registerProcedure("db.index.vector.queryNodes", {});
-		registerProcedure("db.index.vector.train", {.mutatesData = true});
+		for (const NativeProcedureManifestEntry &entry: nativeProcedureManifest()) {
+			registerProcedure(std::string(entry.name), {.mutatesData = entry.mutates_data,
+															 .mutatesSchema = entry.mutates_schema});
+		}
 	}
 
 	void ProcedureRegistry::registerProcedure(std::string name, ProcedureDescriptor descriptor) {

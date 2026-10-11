@@ -17,19 +17,9 @@ ZYX employs a range of algorithms across indexing, storage, query processing, ve
 
 ### Storage Algorithms
 
-Algorithms managing persistent data storage and allocation:
+Algorithms managing native single-file storage:
 
-- **[Segment Allocation](segment-allocation)** — How segments are allocated, linked into chains, and tracked per entity type
-- **[Segment Compaction](segment-compaction)** — Multi-phase compaction that reclaims fragmented space after deletions
-- **[Bitmap Indexing](bitmap-indexing)** — Free slot tracking within segments using bitmap structures
-- **[Compression](compression)** — Zlib-based lossless compression for state chains and large data
-
-### Transaction & Concurrency
-
-Algorithms ensuring ACID properties and crash recovery:
-
-- **[State Chain & Optimistic Locking](state-chain-optimistic-locking)** — Version-chain configuration storage with atomic read/write
-- **[WAL Recovery](wal-recovery)** — 4-phase crash recovery: scan, deduplicate, replay, finalize
+- **[Segment Compaction](segment-compaction)** — Snapshot-safe relocation and reclamation through native metadata publication
 
 ### Indexing Algorithms
 
@@ -46,18 +36,12 @@ Algorithms for efficient query execution:
 - **[Query Optimization](query-optimization)** — Multi-rule optimizer with fixed-point iteration
 - **[Relationship Traversal](relationship-traversal)** — Global Packed B+Tree range cursors for outgoing and incoming Edge traversal
 
-### Caching
-
-- **[Cache Eviction](cache-eviction)** — LRU cache with hit/miss statistics and thread-safe operations
-
 ### Vector Search
 
 Algorithms for high-dimensional vector similarity search:
 
 - **[Vector Metrics](vector-metrics)** — Optimized L2 and IP distance with mixed-precision support
 - **[Product Quantization](product-quantization)** — Vector compression via subspace quantization
-- **[K-Means Clustering](kmeans)** — Lloyd's algorithm for PQ codebook training
-- **[DiskANN](diskann)** — Navigable small-world graph for approximate nearest neighbor search
 
 ### Graph Analytics
 
@@ -106,9 +90,8 @@ All algorithms share these properties:
 | Property Index | Exact match | O(log n + k) |
 | Property Index | Range query | O(log n + k) |
 | Relationship Traversal | Get outgoing/incoming edges | O(log E + degree) |
-| LRU Cache | Get / Put | O(1) |
 | Community Detection | Leiden per level | O(n + m) × iterations |
-| DiskANN Search | K-nearest neighbors | O(beamWidth × maxDegree × dim) |
+| Native Vector Search | K-nearest neighbors | Bounded by the configured candidate and refinement budgets |
 | PQ Distance | Approximate distance | O(numSubspaces) |
 
 Where n = entries in index, k = result count, dim = vector dimensionality.

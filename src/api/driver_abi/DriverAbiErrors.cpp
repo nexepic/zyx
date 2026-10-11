@@ -4,7 +4,7 @@
 
 #include <new>
 
-const zyx_driver_error_t &staticErrorFor(zyx_driver_status_t code) noexcept { // ZYX_COV_EXCL_FUNCTION: fallback for error allocation failure.
+const zyx_driver_error_t &staticErrorFor(uint32_t code) noexcept { // ZYX_COV_EXCL_FUNCTION: fallback for error allocation failure.
     static const zyx_driver_error_t ok{ZYX_DRIVER_OK, {}, "", true, -1, {}};
     static const zyx_driver_error_t invalidArgument{
         ZYX_DRIVER_INVALID_ARGUMENT, {}, "invalid argument", true, -1, {}};
@@ -47,7 +47,7 @@ const zyx_driver_error_t &staticErrorFor(zyx_driver_status_t code) noexcept { //
     return internalError; // ZYX_COV_EXCL_LINE: unknown status values are defensive only.
 }
 
-void setStaticError(zyx_driver_error_t **out_error, zyx_driver_status_t code) noexcept { // ZYX_COV_EXCL_FUNCTION: fallback for error allocation failure.
+void setStaticError(zyx_driver_error_t **out_error, uint32_t code) noexcept { // ZYX_COV_EXCL_FUNCTION: fallback for error allocation failure.
     if (out_error != nullptr) {
         *out_error = const_cast<zyx_driver_error_t *>(&staticErrorFor(code));
     }

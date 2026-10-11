@@ -7,6 +7,7 @@
  **/
 
 #include <array>
+#include <atomic>
 #include <cerrno>
 #include <filesystem>
 #include <fstream>
@@ -282,6 +283,332 @@ TEST_F(PropertyPagePoolDurabilityTest, ExistingPoolAppendWriteFailureIsReconcile
 	ASSERT_EQ(recoveredPools.size(), 1U);
 	EXPECT_EQ(recoveredPools.front().segment_id, initialPools.front().segment_id);
 	EXPECT_EQ(pages_->availableFrameCount(recovered, recoveredPools.front().segment_id), initialAvailable);
+}
+
+TEST_F(PropertyPagePoolDurabilityTest, ExistingPoolAppendDiskFullRetainsThePublishedRootAndCanRetryAfterReopen) {
+	const std::array<uint64_t, 2U> nodeIds{1001U, 1002U};
+	const PropertyCollectionRoot first = sizedRoot(nodeIds[0], 3U, 3000U, 'a');
+	static_cast<void>(publish(nodeIds, std::span(&first, 1U), LogSequenceNumber(2U)));
+
+	MetadataSnapshotPin initial = metadata_->openSnapshot();
+	const std::vector<CatalogEntry> initialPools =
+			metadata_->findCurrentPropertyPagePools(initial, propertyOptions().page_owner_id);
+	ASSERT_EQ(initialPools.size(), 1U);
+	const uint8_t initialAvailable = pages_->availableFrameCount(initial, initialPools.front().segment_id);
+	initial.release();
+
+	switchToNativeIo();
+	MetadataSnapshotPin before = metadata_->openSnapshot();
+	const uint64_t poolOffset = PhysicalSegmentAllocator::checkedSlotOffset(
+			before.superblock().data_region_offset, initialPools.front().physical_slot);
+	const uint64_t candidateOffset =
+			poolOffset + static_cast<uint64_t>(RSS_PAGE_POOL_FIRST_DATA_FRAME + 1U) * RSS_PAGE_SIZE;
+	const PropertyCollectionRoot second = sizedRoot(nodeIds[1], 5U, 2000U, 'b');
+	const std::array roots{second};
+	const std::vector<EntityPropertyRootMutationPlan> plans =
+			properties_->planEntityRootReplacements(before, roots, propertyOptions());
+	ASSERT_EQ(plans.size(), 1U);
+	ASSERT_EQ(plans.front().kind, EntityPropertyRootMutationPlanKind::EPRMPK_NEW_PAGE_REQUIRED);
+	{
+		StorageIO::ScopedNativeWriteHookForTesting failCandidatePage(
+				[candidateOffset](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+					if (static_cast<uint64_t>(offset) == candidateOffset && byteCount == RSS_PAGE_SIZE) {
+#ifdef _WIN32
+						SetLastError(ERROR_DISK_FULL);
+#else
+						errno = ENOSPC;
+#endif
+						return static_cast<pwrite_ssize_t>(-1);
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		EXPECT_THROW(static_cast<void>(entities_->applyNativeGraphBatchTransaction(
+						 before, {}, {}, {}, plans, *properties_, propertyOptions(), LogSequenceNumber(3U))),
+					 std::system_error);
+	}
+	before.release();
+
+	reopen();
+	MetadataSnapshotPin recovered = metadata_->openSnapshot();
+	EXPECT_EQ(properties_->readEntity(recovered, nodePropertyKey(first.owner_entity_id)), first);
+	EXPECT_FALSE(metadata_->findEntityPropertyLocationOptional(recovered, nodePropertyKey(second.owner_entity_id))
+					 .has_value());
+	const std::vector<CatalogEntry> recoveredPools =
+			metadata_->findCurrentPropertyPagePools(recovered, propertyOptions().page_owner_id);
+	ASSERT_EQ(recoveredPools.size(), 1U);
+	EXPECT_EQ(recoveredPools.front().segment_id, initialPools.front().segment_id);
+	EXPECT_EQ(pages_->availableFrameCount(recovered, recoveredPools.front().segment_id), initialAvailable);
+
+	const std::vector<EntityPropertyRootMutationPlan> retryPlans =
+			properties_->planEntityRootReplacements(recovered, roots, propertyOptions());
+	static_cast<void>(entities_->applyNativeGraphBatchTransaction(
+			recovered, {}, {}, {}, retryPlans, *properties_, propertyOptions(), LogSequenceNumber(3U)));
+	recovered.release();
+
+	MetadataSnapshotPin published = metadata_->openSnapshot();
+	EXPECT_EQ(properties_->readEntity(published, nodePropertyKey(first.owner_entity_id)), first);
+	EXPECT_EQ(properties_->readEntity(published, nodePropertyKey(second.owner_entity_id)), second);
+	EXPECT_EQ(pages_->availableFrameCount(published, initialPools.front().segment_id), initialAvailable - 1U);
+	published.release();
+}
+
+TEST_F(PropertyPagePoolDurabilityTest, ExistingPoolAppendSyncFailureRetainsThePublishedRootAndCanRetryAfterReopen) {
+	const std::array<uint64_t, 2U> nodeIds{1001U, 1002U};
+	const PropertyCollectionRoot first = sizedRoot(nodeIds[0], 3U, 3000U, 'a');
+	static_cast<void>(publish(nodeIds, std::span(&first, 1U), LogSequenceNumber(2U)));
+
+	switchToNativeIo();
+	MetadataSnapshotPin before = metadata_->openSnapshot();
+	const PropertyCollectionRoot second = sizedRoot(nodeIds[1], 5U, 2000U, 'b');
+	const std::array roots{second};
+	const std::vector<EntityPropertyRootMutationPlan> plans =
+			properties_->planEntityRootReplacements(before, roots, propertyOptions());
+	ASSERT_EQ(plans.size(), 1U);
+	ASSERT_EQ(plans.front().kind, EntityPropertyRootMutationPlanKind::EPRMPK_NEW_PAGE_REQUIRED);
+	std::atomic<uint32_t> syncCalls{0U};
+	{
+		StorageIO::ScopedNativeSyncHookForTesting failFirstDataFence([&syncCalls](file_handle_t fd) {
+			if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 0U) {
+#ifdef _WIN32
+				SetLastError(ERROR_DISK_FULL);
+#else
+				errno = ENOSPC;
+#endif
+				return -1;
+			}
+			return portable_fsync(fd);
+		});
+		EXPECT_THROW(static_cast<void>(entities_->applyNativeGraphBatchTransaction(
+						 before, {}, {}, {}, plans, *properties_, propertyOptions(), LogSequenceNumber(3U))),
+					 std::runtime_error);
+	}
+	EXPECT_GE(syncCalls.load(std::memory_order_relaxed), 1U);
+	before.release();
+
+	reopen();
+	MetadataSnapshotPin recovered = metadata_->openSnapshot();
+	EXPECT_EQ(properties_->readEntity(recovered, nodePropertyKey(first.owner_entity_id)), first);
+	EXPECT_FALSE(metadata_->findEntityPropertyLocationOptional(recovered, nodePropertyKey(second.owner_entity_id))
+					 .has_value());
+	const std::vector<EntityPropertyRootMutationPlan> retryPlans =
+			properties_->planEntityRootReplacements(recovered, roots, propertyOptions());
+	static_cast<void>(entities_->applyNativeGraphBatchTransaction(
+			recovered, {}, {}, {}, retryPlans, *properties_, propertyOptions(), LogSequenceNumber(3U)));
+	recovered.release();
+
+	MetadataSnapshotPin published = metadata_->openSnapshot();
+	EXPECT_EQ(properties_->readEntity(published, nodePropertyKey(first.owner_entity_id)), first);
+	EXPECT_EQ(properties_->readEntity(published, nodePropertyKey(second.owner_entity_id)), second);
+	published.release();
+}
+
+TEST_F(PropertyPagePoolDurabilityTest, ExistingPageReplacementDiskFullRetainsThePublishedRootAndCanRetryAfterReopen) {
+	const uint64_t nodeId = 1001U;
+	const PropertyCollectionRoot original = sizedRoot(nodeId, 3U, 1800U, 'a');
+	static_cast<void>(publish(std::span(&nodeId, 1U), std::span(&original, 1U), LogSequenceNumber(2U)));
+
+	switchToNativeIo();
+	MetadataSnapshotPin before = metadata_->openSnapshot();
+	const EntityPropertyKey key = nodePropertyKey(nodeId);
+	const EntityPropertyLocation oldLocation = metadata_->findEntityPropertyLocation(before, key);
+	const PageLocation oldRoute = metadata_->findPageLocation(before, oldLocation.page_id);
+	const CatalogEntry pool = metadata_->findCatalog(before, oldRoute.segment_id);
+	const uint64_t candidateOffset = PhysicalSegmentAllocator::checkedSlotOffset(
+			before.superblock().data_region_offset, pool.physical_slot) +
+			static_cast<uint64_t>(RSS_PAGE_POOL_FIRST_DATA_FRAME + 1U) * RSS_PAGE_SIZE;
+	const PropertyCollectionRoot replacement = sizedRoot(nodeId, 3U, 1800U, 'b');
+	const std::vector<EntityPropertyRootMutationPlan> plans =
+			properties_->planEntityRootReplacements(before, std::span(&replacement, 1U), propertyOptions());
+	ASSERT_EQ(plans.size(), 1U);
+	ASSERT_EQ(plans.front().kind, EntityPropertyRootMutationPlanKind::EPRMPK_EXISTING_PAGE);
+	{
+		StorageIO::ScopedNativeWriteHookForTesting failCandidatePage(
+				[candidateOffset](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+					if (static_cast<uint64_t>(offset) == candidateOffset && byteCount == RSS_PAGE_SIZE) {
+#ifdef _WIN32
+						SetLastError(ERROR_DISK_FULL);
+#else
+						errno = ENOSPC;
+#endif
+						return static_cast<pwrite_ssize_t>(-1);
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		EXPECT_THROW(static_cast<void>(entities_->applyNativeGraphBatchTransaction(
+					 before, {}, {}, {}, plans, *properties_, propertyOptions(), LogSequenceNumber(3U))),
+				 std::system_error);
+	}
+	before.release();
+
+	reopen();
+	MetadataSnapshotPin recovered = metadata_->openSnapshot();
+	EXPECT_EQ(properties_->readEntity(recovered, key), original);
+	EXPECT_EQ(metadata_->findPageLocation(recovered, oldLocation.page_id), oldRoute);
+	const std::vector<EntityPropertyRootMutationPlan> retryPlans =
+			properties_->planEntityRootReplacements(recovered, std::span(&replacement, 1U), propertyOptions());
+	static_cast<void>(entities_->applyNativeGraphBatchTransaction(
+			recovered, {}, {}, {}, retryPlans, *properties_, propertyOptions(), LogSequenceNumber(3U)));
+	recovered.release();
+
+	MetadataSnapshotPin published = metadata_->openSnapshot();
+	EXPECT_EQ(properties_->readEntity(published, key), replacement);
+	EXPECT_EQ(metadata_->findPageLocation(published, oldLocation.page_id).page_index,
+			  RSS_PAGE_POOL_FIRST_DATA_FRAME + 1U);
+	published.release();
+}
+
+TEST_F(PropertyPagePoolDurabilityTest, ExistingPageReplacementSyncFailureRetainsThePublishedRootAndCanRetryAfterReopen) {
+	const uint64_t nodeId = 1001U;
+	const PropertyCollectionRoot original = sizedRoot(nodeId, 3U, 1800U, 'a');
+	static_cast<void>(publish(std::span(&nodeId, 1U), std::span(&original, 1U), LogSequenceNumber(2U)));
+
+	switchToNativeIo();
+	MetadataSnapshotPin before = metadata_->openSnapshot();
+	const EntityPropertyKey key = nodePropertyKey(nodeId);
+	const EntityPropertyLocation oldLocation = metadata_->findEntityPropertyLocation(before, key);
+	const PageLocation oldRoute = metadata_->findPageLocation(before, oldLocation.page_id);
+	const PropertyCollectionRoot replacement = sizedRoot(nodeId, 3U, 1800U, 'b');
+	const std::vector<EntityPropertyRootMutationPlan> plans =
+			properties_->planEntityRootReplacements(before, std::span(&replacement, 1U), propertyOptions());
+	ASSERT_EQ(plans.size(), 1U);
+	ASSERT_EQ(plans.front().kind, EntityPropertyRootMutationPlanKind::EPRMPK_EXISTING_PAGE);
+	std::atomic<uint32_t> syncCalls{0U};
+	{
+		StorageIO::ScopedNativeSyncHookForTesting failFirstDataFence([&syncCalls](file_handle_t fd) {
+			if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 0U) {
+#ifdef _WIN32
+				SetLastError(ERROR_DISK_FULL);
+#else
+				errno = ENOSPC;
+#endif
+				return -1;
+			}
+			return portable_fsync(fd);
+		});
+		EXPECT_THROW(static_cast<void>(entities_->applyNativeGraphBatchTransaction(
+					 before, {}, {}, {}, plans, *properties_, propertyOptions(), LogSequenceNumber(3U))),
+				 std::runtime_error);
+	}
+	EXPECT_GE(syncCalls.load(std::memory_order_relaxed), 1U);
+	before.release();
+
+	reopen();
+	MetadataSnapshotPin recovered = metadata_->openSnapshot();
+	EXPECT_EQ(properties_->readEntity(recovered, key), original);
+	EXPECT_EQ(metadata_->findPageLocation(recovered, oldLocation.page_id), oldRoute);
+	const std::vector<EntityPropertyRootMutationPlan> retryPlans =
+			properties_->planEntityRootReplacements(recovered, std::span(&replacement, 1U), propertyOptions());
+	static_cast<void>(entities_->applyNativeGraphBatchTransaction(
+			recovered, {}, {}, {}, retryPlans, *properties_, propertyOptions(), LogSequenceNumber(3U)));
+	recovered.release();
+
+	MetadataSnapshotPin published = metadata_->openSnapshot();
+	EXPECT_EQ(properties_->readEntity(published, key), replacement);
+	EXPECT_EQ(metadata_->findPageLocation(published, oldLocation.page_id).page_index,
+			  RSS_PAGE_POOL_FIRST_DATA_FRAME + 1U);
+	published.release();
+}
+
+TEST_F(PropertyPagePoolDurabilityTest,
+		   ExistingPageReplacementMetadataDiskFullRetainsThePublishedRootAndCanRetryAfterReopen) {
+	const uint64_t nodeId = 1001U;
+	const PropertyCollectionRoot original = sizedRoot(nodeId, 3U, 1800U, 'a');
+	static_cast<void>(publish(std::span(&nodeId, 1U), std::span(&original, 1U), LogSequenceNumber(2U)));
+
+	switchToNativeIo();
+	MetadataSnapshotPin before = metadata_->openSnapshot();
+	const EntityPropertyKey key = nodePropertyKey(nodeId);
+	const EntityPropertyLocation oldLocation = metadata_->findEntityPropertyLocation(before, key);
+	const PageLocation oldRoute = metadata_->findPageLocation(before, oldLocation.page_id);
+	const uint64_t metadataPoolOffset = before.superblock().data_region_offset;
+	const PropertyCollectionRoot replacement = sizedRoot(nodeId, 3U, 1800U, 'b');
+	const std::vector<EntityPropertyRootMutationPlan> plans =
+			properties_->planEntityRootReplacements(before, std::span(&replacement, 1U), propertyOptions());
+	ASSERT_EQ(plans.size(), 1U);
+	ASSERT_EQ(plans.front().kind, EntityPropertyRootMutationPlanKind::EPRMPK_EXISTING_PAGE);
+	{
+		StorageIO::ScopedNativeWriteHookForTesting failMetadataCandidate(
+				[metadataPoolOffset](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+					const uint64_t absoluteOffset = static_cast<uint64_t>(offset);
+					if (absoluteOffset >= metadataPoolOffset + RSS_PAGE_SIZE &&
+						absoluteOffset < metadataPoolOffset + RSS_SEGMENT_SIZE && byteCount == RSS_PAGE_SIZE) {
+#ifdef _WIN32
+						SetLastError(ERROR_DISK_FULL);
+#else
+						errno = ENOSPC;
+#endif
+						return static_cast<pwrite_ssize_t>(-1);
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		EXPECT_THROW(static_cast<void>(entities_->applyNativeGraphBatchTransaction(
+						 before, {}, {}, {}, plans, *properties_, propertyOptions(), LogSequenceNumber(3U))),
+				 std::runtime_error);
+	}
+	before.release();
+
+	reopen();
+	MetadataSnapshotPin recovered = metadata_->openSnapshot();
+	EXPECT_EQ(properties_->readEntity(recovered, key), original);
+	EXPECT_EQ(metadata_->findPageLocation(recovered, oldLocation.page_id), oldRoute);
+	const std::vector<EntityPropertyRootMutationPlan> retryPlans =
+			properties_->planEntityRootReplacements(recovered, std::span(&replacement, 1U), propertyOptions());
+	static_cast<void>(entities_->applyNativeGraphBatchTransaction(
+			recovered, {}, {}, {}, retryPlans, *properties_, propertyOptions(), LogSequenceNumber(3U)));
+	recovered.release();
+
+	MetadataSnapshotPin published = metadata_->openSnapshot();
+	EXPECT_EQ(properties_->readEntity(published, key), replacement);
+	EXPECT_EQ(metadata_->findPageLocation(published, oldLocation.page_id).page_index,
+			  RSS_PAGE_POOL_FIRST_DATA_FRAME + 1U);
+}
+
+TEST_F(PropertyPagePoolDurabilityTest,
+		   ExistingPageReplacementFinalSyncFailureReportsUncertainDurabilityAndReopensTheCompleteRoot) {
+	const uint64_t nodeId = 1001U;
+	const PropertyCollectionRoot original = sizedRoot(nodeId, 3U, 1800U, 'a');
+	static_cast<void>(publish(std::span(&nodeId, 1U), std::span(&original, 1U), LogSequenceNumber(2U)));
+
+	switchToNativeIo();
+	MetadataSnapshotPin before = metadata_->openSnapshot();
+	const EntityPropertyKey key = nodePropertyKey(nodeId);
+	const EntityPropertyLocation oldLocation = metadata_->findEntityPropertyLocation(before, key);
+	const PropertyCollectionRoot replacement = sizedRoot(nodeId, 3U, 1800U, 'b');
+	const std::vector<EntityPropertyRootMutationPlan> plans =
+			properties_->planEntityRootReplacements(before, std::span(&replacement, 1U), propertyOptions());
+	ASSERT_EQ(plans.size(), 1U);
+	ASSERT_EQ(plans.front().kind, EntityPropertyRootMutationPlanKind::EPRMPK_EXISTING_PAGE);
+	std::atomic<uint32_t> syncCalls{0U};
+	{
+		StorageIO::ScopedNativeSyncHookForTesting failFinalFence([&syncCalls](file_handle_t fd) {
+			if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 1U) {
+#ifdef _WIN32
+				SetLastError(ERROR_DISK_FULL);
+#else
+				errno = ENOSPC;
+#endif
+				return -1;
+			}
+			return portable_fsync(fd);
+		});
+		EXPECT_THROW(static_cast<void>(entities_->applyNativeGraphBatchTransaction(
+						 before, {}, {}, {}, plans, *properties_, propertyOptions(), LogSequenceNumber(3U))),
+				 std::runtime_error);
+	}
+	EXPECT_GE(syncCalls.load(std::memory_order_relaxed), 2U);
+	before.release();
+
+	MetadataSnapshotPin current = metadata_->openSnapshot();
+	EXPECT_EQ(properties_->readEntity(current, key), replacement);
+	EXPECT_EQ(metadata_->findPageLocation(current, oldLocation.page_id).page_index,
+			  RSS_PAGE_POOL_FIRST_DATA_FRAME + 1U);
+	current.release();
+
+	reopen();
+	MetadataSnapshotPin reopened = metadata_->openSnapshot();
+	EXPECT_EQ(properties_->readEntity(reopened, key), replacement);
+	EXPECT_EQ(metadata_->findPageLocation(reopened, oldLocation.page_id).page_index,
+			  RSS_PAGE_POOL_FIRST_DATA_FRAME + 1U);
 }
 
 TEST_F(PropertyPagePoolDurabilityTest, FreshMultiPagePoolIsRecoveredAsAllOrNothing) {

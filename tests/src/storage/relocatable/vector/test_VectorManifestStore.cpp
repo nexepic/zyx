@@ -7,27 +7,35 @@
  **/
 
 #include <array>
+#include <atomic>
+#include <cerrno>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <memory>
 #include <optional>
+#include <system_error>
 #include <vector>
 
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <gtest/gtest.h>
 
+#include "graph/storage/PwriteHelper.hpp"
 #include "graph/storage/StorageIO.hpp"
-#include "graph/storage/relocatable/index/BTreePageStore.hpp"
 #include "graph/storage/relocatable/allocation/SharedPagePoolAllocator.hpp"
 #include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
+#include "graph/storage/relocatable/index/BTreePageStore.hpp"
 #include "graph/storage/relocatable/vector/VectorAdjacencyMapping.hpp"
 #include "graph/storage/relocatable/vector/VectorCodebookStore.hpp"
 #include "graph/storage/relocatable/vector/VectorManifestStore.hpp"
 #include "graph/storage/relocatable/vector/VectorNodeMapping.hpp"
 #include "graph/storage/relocatable/vector/VectorPageStore.hpp"
 #include "graph/storage/relocatable/vector/VectorPqMapping.hpp"
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 using namespace graph::storage;
 
@@ -146,13 +154,14 @@ namespace {
 	}
 
 	[[nodiscard]] IndexRootLocation buildNodeMappingRoot(const std::shared_ptr<StorageIO> &io,
-															 RelocatableMetadataStore &metadata, uint64_t indexId,
-															 LogSequenceNumber checkpointLsn) {
+														 RelocatableMetadataStore &metadata, uint64_t indexId,
+														 LogSequenceNumber checkpointLsn) {
 		SlottedPagePool slotted(io, metadata);
 		BTreePageStore trees(slotted, metadata);
 		const std::vector<BTreePageEntry> entries = {{{std::byte{0x01U}}, 1U}};
 		const BulkBTreeBuildOptions options{PhysicalSlotId(40U), PhysicalSlotId(95U), indexId, entries.size(), 1U};
-		static_cast<void>(BulkBTreeBuilder::build(trees, metadata, indexId, sourceFor(entries), options, checkpointLsn));
+		static_cast<void>(
+				BulkBTreeBuilder::build(trees, metadata, indexId, sourceFor(entries), options, checkpointLsn));
 		MetadataSnapshotPin snapshot = metadata.openSnapshot();
 		const IndexRootLocation root = metadata.findIndexRoot(snapshot, indexId);
 		snapshot.release();
@@ -160,8 +169,9 @@ namespace {
 	}
 
 	[[nodiscard]] IndexRootLocation buildVectorNodeMappingRoot(const std::shared_ptr<StorageIO> &io,
-																	RelocatableMetadataStore &metadata, uint64_t mappingIndexId,
-																	LogSequenceNumber checkpointLsn) {
+															   RelocatableMetadataStore &metadata,
+															   uint64_t mappingIndexId,
+															   LogSequenceNumber checkpointLsn) {
 		SlottedPagePool slotted(io, metadata);
 		BTreePageStore trees(slotted, metadata);
 		const std::vector<BTreePageEntry> entries = {{VectorNodeMapping::key(1U), 1U}};
@@ -177,16 +187,17 @@ namespace {
 	}
 
 	[[nodiscard]] IndexRootLocation buildAdjacencyMappingRoot(const std::shared_ptr<StorageIO> &io,
-																RelocatableMetadataStore &metadata, uint64_t mappingIndexId,
-																LogSequenceNumber checkpointLsn) {
+															  RelocatableMetadataStore &metadata,
+															  uint64_t mappingIndexId,
+															  LogSequenceNumber checkpointLsn) {
 		SlottedPagePool slotted(io, metadata);
 		BTreePageStore trees(slotted, metadata);
 		const std::array<VectorAdjacencyPageMapping, 1> mappings = {{{1U, PageId(101U)}}};
 		VectorAdjacencyMappingBuildOptions options;
 		options.tree = {PhysicalSlotId(40U), PhysicalSlotId(95U), mappingIndexId, mappings.size(), 1U};
 		options.maximum_entries = mappings.size();
-		static_cast<void>(VectorAdjacencyMapping::build(trees, metadata, mappingIndexId, mappings, options,
-																		checkpointLsn));
+		static_cast<void>(
+				VectorAdjacencyMapping::build(trees, metadata, mappingIndexId, mappings, options, checkpointLsn));
 		MetadataSnapshotPin snapshot = metadata.openSnapshot();
 		const IndexRootLocation root = metadata.findIndexRoot(snapshot, mappingIndexId);
 		snapshot.release();
@@ -194,16 +205,15 @@ namespace {
 	}
 
 	[[nodiscard]] IndexRootLocation buildPqMappingRoot(const std::shared_ptr<StorageIO> &io,
-															 RelocatableMetadataStore &metadata, uint64_t mappingIndexId,
-															 LogSequenceNumber checkpointLsn) {
+													   RelocatableMetadataStore &metadata, uint64_t mappingIndexId,
+													   LogSequenceNumber checkpointLsn) {
 		SlottedPagePool slotted(io, metadata);
 		BTreePageStore trees(slotted, metadata);
 		const std::array<VectorPqPageMapping, 1> mappings = {{{1U, PageId(101U)}}};
 		VectorPqMappingBuildOptions options;
 		options.tree = {PhysicalSlotId(40U), PhysicalSlotId(95U), mappingIndexId, mappings.size(), 1U};
 		options.maximum_entries = mappings.size();
-		static_cast<void>(
-				VectorPqMapping::build(trees, metadata, mappingIndexId, mappings, options, checkpointLsn));
+		static_cast<void>(VectorPqMapping::build(trees, metadata, mappingIndexId, mappings, options, checkpointLsn));
 		MetadataSnapshotPin snapshot = metadata.openSnapshot();
 		const IndexRootLocation root = metadata.findIndexRoot(snapshot, mappingIndexId);
 		snapshot.release();
@@ -344,7 +354,7 @@ TEST_F(RelocatableVectorManifestStoreTest, RejectsMismatchedPqMappingRootAndAcce
 	expectFormatError(
 			[&] {
 				static_cast<void>(store.materialize(wrongGeneration, PhysicalSlotId(40U), PhysicalSlotId(95U),
-																			 LogSequenceNumber(3U)));
+													LogSequenceNumber(3U)));
 			},
 			FormatError::FERR_INVALID_STATE);
 
@@ -367,9 +377,8 @@ TEST_F(RelocatableVectorManifestStoreTest, ValidatesManifestPoolCapacityAndPriva
 	EXPECT_FALSE(store.hasReplacementFrameCapacity({}, 1U));
 	EXPECT_FALSE(store.hasReplacementFrameCapacity(pool, 0U));
 	EXPECT_TRUE(store.hasReplacementFrameCapacity(pool, 1U));
-	EXPECT_FALSE(store.hasReplacementFrameCapacity(pool, static_cast<size_t>(
-																					  SharedPagePoolAllocator(io, *metadata).availableFrameCount(pool)) +
-																					  1U));
+	EXPECT_FALSE(store.hasReplacementFrameCapacity(
+			pool, static_cast<size_t>(SharedPagePoolAllocator(io, *metadata).availableFrameCount(pool)) + 1U));
 
 	const VectorManifestPage page = VectorManifestPage::create(owner(materialized.manifest), materialized.manifest);
 	PageLocation replacement;
@@ -387,7 +396,8 @@ TEST_F(RelocatableVectorManifestStoreTest, ValidatesManifestPoolCapacityAndPriva
 			FormatError::FERR_INVALID_STATE);
 	expectFormatError(
 			[&] {
-				store.prepareReplacementSourceRetirement(pool, materialized.allocation.location, {}, LogSequenceNumber(2U));
+				store.prepareReplacementSourceRetirement(pool, materialized.allocation.location, {},
+														 LogSequenceNumber(2U));
 			},
 			FormatError::FERR_INVALID_STATE);
 }
@@ -444,7 +454,7 @@ TEST_F(RelocatableVectorManifestStoreTest, RejectsMismatchedVectorNodeMappingRoo
 	expectFormatError(
 			[&] {
 				static_cast<void>(store.materialize(wrongGeneration, PhysicalSlotId(40U), PhysicalSlotId(95U),
-																			 LogSequenceNumber(4U)));
+													LogSequenceNumber(4U)));
 			},
 			FormatError::FERR_INVALID_STATE);
 
@@ -504,7 +514,7 @@ TEST_F(RelocatableVectorManifestStoreTest, RejectsMismatchedAdjacencyMappingRoot
 	expectFormatError(
 			[&] {
 				static_cast<void>(store.materialize(wrongGeneration, PhysicalSlotId(40U), PhysicalSlotId(95U),
-																			 LogSequenceNumber(3U)));
+													LogSequenceNumber(3U)));
 			},
 			FormatError::FERR_INVALID_STATE);
 
@@ -610,13 +620,12 @@ TEST_F(RelocatableVectorManifestStoreTest, KeepsManifestCodebookReferenceValidAc
 
 	const std::optional<PhysicalSegmentRelocation> relocation = codebooks.relocateExtent(
 			codebookRequest.codebook_id, VectorCodebookExtentIdCodec::manifestExtentId(codebookRequest.codebook_id),
-			PhysicalSlotId(42),
-			PhysicalSlotId(42), LogSequenceNumber(4));
+			PhysicalSlotId(42), PhysicalSlotId(42), LogSequenceNumber(4));
 	ASSERT_TRUE(relocation.has_value());
 	MetadataSnapshotPin snapshot = metadata->openSnapshot();
-	EXPECT_EQ(metadata
-				  ->findExtentLocation(snapshot, VectorCodebookExtentIdCodec::manifestExtentId(codebookRequest.codebook_id))
-				  .generation,
+	EXPECT_EQ(metadata->findExtentLocation(snapshot,
+										   VectorCodebookExtentIdCodec::manifestExtentId(codebookRequest.codebook_id))
+					  .generation,
 			  Generation(2));
 	EXPECT_EQ(manifests.read(snapshot, expected.index_id).manifest(), expected);
 	EXPECT_EQ(codebooks.read(snapshot, codebookRequest.codebook_id).header.generation, codebookRequest.generation);
@@ -801,6 +810,186 @@ TEST_F(RelocatableVectorManifestStoreTest, ReplacementRetainsOldManifestForPinne
 												SegmentId(71), LogSequenceNumber(2), LogSequenceNumber(4)));
 			},
 			FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(RelocatableVectorManifestStoreTest, ReplacementDiskFullRetainsBothPublishedDirectoriesAndCanRetryAfterReopen) {
+	const file_handle_t nativeHandle = portable_open_rw(path.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+		const VectorManifest original = manifest();
+		VectorManifest replacement = original;
+		replacement.committed_lsn = LogSequenceNumber(3U);
+		replacement.entries.front().record_count = 7U;
+		{
+			auto metadata = RelocatableMetadataStore::initializeNew(nativeIo, initialSuperblock());
+			VectorManifestStore store(nativeIo, *metadata);
+			ASSERT_TRUE(store.allocate(request(original), VectorManifestPage::create(owner(original), original),
+									   PhysicalSlotId(40U), PhysicalSlotId(40U), LogSequenceNumber(2U))
+								.has_value());
+			const uint64_t candidateOffset = manifestFrameOffset(*metadata, original.page_id) + RSS_PAGE_SIZE;
+			bool diskFullObserved = false;
+			{
+				StorageIO::ScopedNativeWriteHookForTesting failCandidate(
+						[candidateOffset, &diskFullObserved](file_handle_t fd, const void *bytes, size_t byteCount,
+															 pwrite_off_t offset) {
+							if (static_cast<uint64_t>(offset) == candidateOffset && byteCount == RSS_PAGE_SIZE) {
+								diskFullObserved = true;
+#ifdef _WIN32
+								SetLastError(ERROR_DISK_FULL);
+#else
+								errno = ENOSPC;
+#endif
+								return static_cast<pwrite_ssize_t>(-1);
+							}
+							return portable_pwrite(fd, bytes, byteCount, offset);
+						});
+				EXPECT_THROW(
+						static_cast<void>(store.replace(VectorManifestPage::create(owner(replacement), replacement),
+														SegmentId(71U), LogSequenceNumber(2U), LogSequenceNumber(3U))),
+						std::system_error);
+			}
+			EXPECT_TRUE(diskFullObserved);
+			MetadataSnapshotPin current = metadata->openSnapshot();
+			EXPECT_EQ(store.read(current, original.index_id).manifest(), original);
+			EXPECT_EQ(metadata->findVectorManifest(current, original.index_id),
+					  (VectorManifestLocation{original.index_id, original.page_id, original.generation}));
+			EXPECT_EQ(metadata->findPageLocation(current, original.page_id).page_index, RSS_PAGE_POOL_FIRST_DATA_FRAME);
+		}
+
+		auto recoveredMetadata = RelocatableMetadataStore::open(nativeIo);
+		VectorManifestStore recoveredStore(nativeIo, *recoveredMetadata);
+		MetadataSnapshotPin recovered = recoveredMetadata->openSnapshot();
+		EXPECT_EQ(recoveredStore.read(recovered, original.index_id).manifest(), original);
+		EXPECT_EQ(recoveredMetadata->findVectorManifest(recovered, original.index_id),
+				  (VectorManifestLocation{original.index_id, original.page_id, original.generation}));
+		EXPECT_EQ(recoveredMetadata->findPageLocation(recovered, original.page_id).page_index,
+				  RSS_PAGE_POOL_FIRST_DATA_FRAME);
+		recovered.release();
+		EXPECT_EQ(recoveredStore
+						  .replace(VectorManifestPage::create(owner(replacement), replacement), SegmentId(71U),
+								   LogSequenceNumber(2U), LogSequenceNumber(3U))
+						  .location.page_index,
+				  2U);
+		MetadataSnapshotPin published = recoveredMetadata->openSnapshot();
+		EXPECT_EQ(recoveredStore.read(published, original.index_id).manifest(), replacement);
+		EXPECT_EQ(recoveredMetadata->findVectorManifest(published, original.index_id),
+				  (VectorManifestLocation{replacement.index_id, replacement.page_id, replacement.generation}));
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+}
+
+TEST_F(RelocatableVectorManifestStoreTest,
+	   ReplacementFinalSyncFailureReportsUncertainDurabilityAndReopensBothPublishedDirectories) {
+	const file_handle_t nativeHandle = portable_open_rw(path.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+		const VectorManifest original = manifest();
+		VectorManifest replacement = original;
+		replacement.committed_lsn = LogSequenceNumber(3U);
+		replacement.entries.front().record_count = 7U;
+		{
+			auto metadata = RelocatableMetadataStore::initializeNew(nativeIo, initialSuperblock());
+			VectorManifestStore store(nativeIo, *metadata);
+			ASSERT_TRUE(store.allocate(request(original), VectorManifestPage::create(owner(original), original),
+									   PhysicalSlotId(40U), PhysicalSlotId(40U), LogSequenceNumber(2U))
+								.has_value());
+			std::atomic<uint32_t> syncCalls{0U};
+			{
+				StorageIO::ScopedNativeSyncHookForTesting failFinalPublicationFence([&syncCalls](file_handle_t fd) {
+					if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 1U) {
+#ifdef _WIN32
+						SetLastError(ERROR_DISK_FULL);
+#else
+						errno = ENOSPC;
+#endif
+						return -1;
+					}
+					return portable_fsync(fd);
+				});
+				EXPECT_THROW(
+						static_cast<void>(store.replace(VectorManifestPage::create(owner(replacement), replacement),
+														SegmentId(71U), LogSequenceNumber(2U), LogSequenceNumber(3U))),
+						std::runtime_error);
+			}
+			EXPECT_GE(syncCalls.load(std::memory_order_relaxed), 2U);
+			MetadataSnapshotPin current = metadata->openSnapshot();
+			EXPECT_EQ(store.read(current, original.index_id).manifest(), replacement);
+			EXPECT_EQ(metadata->findVectorManifest(current, original.index_id),
+					  (VectorManifestLocation{replacement.index_id, replacement.page_id, replacement.generation}));
+			EXPECT_EQ(metadata->findPageLocation(current, original.page_id).page_index, 2U);
+		}
+
+		auto recoveredMetadata = RelocatableMetadataStore::open(nativeIo);
+		VectorManifestStore recoveredStore(nativeIo, *recoveredMetadata);
+		MetadataSnapshotPin recovered = recoveredMetadata->openSnapshot();
+		EXPECT_EQ(recoveredStore.read(recovered, original.index_id).manifest(), replacement);
+		EXPECT_EQ(recoveredMetadata->findVectorManifest(recovered, original.index_id),
+				  (VectorManifestLocation{replacement.index_id, replacement.page_id, replacement.generation}));
+		EXPECT_EQ(recoveredMetadata->findPageLocation(recovered, original.page_id).page_index, 2U);
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+}
+
+TEST_F(RelocatableVectorManifestStoreTest,
+	   ReplacementPrePublicationSyncFailureRetainsBothPublishedDirectoriesAndCanRetryAfterReopen) {
+	const file_handle_t nativeHandle = portable_open_rw(path.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+		const VectorManifest original = manifest();
+		VectorManifest replacement = original;
+		replacement.committed_lsn = LogSequenceNumber(3U);
+		replacement.entries.front().record_count = 7U;
+		{
+			auto metadata = RelocatableMetadataStore::initializeNew(nativeIo, initialSuperblock());
+			VectorManifestStore store(nativeIo, *metadata);
+			ASSERT_TRUE(store.allocate(request(original), VectorManifestPage::create(owner(original), original),
+									   PhysicalSlotId(40U), PhysicalSlotId(40U), LogSequenceNumber(2U))
+								.has_value());
+			std::atomic<uint32_t> syncCalls{0U};
+			{
+				StorageIO::ScopedNativeSyncHookForTesting failDataFence([&syncCalls](file_handle_t fd) {
+					if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 0U) {
+#ifdef _WIN32
+						SetLastError(ERROR_DISK_FULL);
+#else
+						errno = ENOSPC;
+#endif
+						return -1;
+					}
+					return portable_fsync(fd);
+				});
+				EXPECT_THROW(
+						static_cast<void>(store.replace(VectorManifestPage::create(owner(replacement), replacement),
+														SegmentId(71U), LogSequenceNumber(2U), LogSequenceNumber(3U))),
+						std::runtime_error);
+			}
+			EXPECT_GE(syncCalls.load(std::memory_order_relaxed), 1U);
+			MetadataSnapshotPin current = metadata->openSnapshot();
+			EXPECT_EQ(store.read(current, original.index_id).manifest(), original);
+			EXPECT_EQ(metadata->findVectorManifest(current, original.index_id),
+					  (VectorManifestLocation{original.index_id, original.page_id, original.generation}));
+			EXPECT_EQ(metadata->findPageLocation(current, original.page_id).page_index, RSS_PAGE_POOL_FIRST_DATA_FRAME);
+		}
+
+		auto recoveredMetadata = RelocatableMetadataStore::open(nativeIo);
+		VectorManifestStore recoveredStore(nativeIo, *recoveredMetadata);
+		MetadataSnapshotPin recovered = recoveredMetadata->openSnapshot();
+		EXPECT_EQ(recoveredStore.read(recovered, original.index_id).manifest(), original);
+		EXPECT_EQ(recoveredMetadata->findVectorManifest(recovered, original.index_id),
+				  (VectorManifestLocation{original.index_id, original.page_id, original.generation}));
+		EXPECT_EQ(recoveredMetadata->findPageLocation(recovered, original.page_id).page_index,
+				  RSS_PAGE_POOL_FIRST_DATA_FRAME);
+		recovered.release();
+		EXPECT_EQ(recoveredStore
+						  .replace(VectorManifestPage::create(owner(replacement), replacement), SegmentId(71U),
+								   LogSequenceNumber(2U), LogSequenceNumber(3U))
+						  .location.page_index,
+				  2U);
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
 }
 
 TEST_F(RelocatableVectorManifestStoreTest, ReplacementRecoversTheWholeManifestAtWalBoundaries) {

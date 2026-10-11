@@ -29,23 +29,27 @@ namespace graph::query::expressions {
 
 LiteralExpression::LiteralExpression(std::string value)
 	: stringValue_(std::move(value)), integerValue_(0), doubleValue_(0.0), booleanValue_(false),
-	  literalType_(LiteralType::STRING) {}
+	  propertyValue_(), literalType_(LiteralType::STRING) {}
 
 LiteralExpression::LiteralExpression(int64_t value)
 	: stringValue_(), integerValue_(value), doubleValue_(0.0), booleanValue_(false),
-	  literalType_(LiteralType::INTEGER) {}
+	  propertyValue_(), literalType_(LiteralType::INTEGER) {}
 
 LiteralExpression::LiteralExpression(double value)
 	: stringValue_(), integerValue_(0), doubleValue_(value), booleanValue_(false),
-	  literalType_(LiteralType::DOUBLE) {}
+	  propertyValue_(), literalType_(LiteralType::DOUBLE) {}
 
 LiteralExpression::LiteralExpression(bool value)
 	: stringValue_(), integerValue_(0), doubleValue_(0.0), booleanValue_(value),
-	  literalType_(LiteralType::BOOLEAN) {}
+	  propertyValue_(), literalType_(LiteralType::BOOLEAN) {}
+
+LiteralExpression::LiteralExpression(PropertyValue value)
+	: stringValue_(), integerValue_(0), doubleValue_(0.0), booleanValue_(false),
+	  propertyValue_(std::move(value)), literalType_(LiteralType::PROPERTY_VALUE) {}
 
 LiteralExpression::LiteralExpression()
 	: stringValue_(), integerValue_(0), doubleValue_(0.0), booleanValue_(false),
-	  literalType_(LiteralType::NULL_VAL) {}
+	  propertyValue_(), literalType_(LiteralType::NULL_VAL) {}
 
 void LiteralExpression::accept(ExpressionVisitor &visitor) {
 	visitor.visit(this);
@@ -70,6 +74,8 @@ std::string LiteralExpression::toString() const {
 		}
 		case LiteralType::STRING:
 			return "'" + stringValue_ + "'";
+		case LiteralType::PROPERTY_VALUE:
+			return propertyValue_.toString();
 	}
 }
 
@@ -85,6 +91,8 @@ std::unique_ptr<Expression> LiteralExpression::clone() const {
 			return std::make_unique<LiteralExpression>(doubleValue_);
 		case LiteralType::STRING:
 			return std::make_unique<LiteralExpression>(stringValue_);
+		case LiteralType::PROPERTY_VALUE:
+			return std::make_unique<LiteralExpression>(propertyValue_);
 	}
 	return std::make_unique<LiteralExpression>();
 }
@@ -109,6 +117,10 @@ bool LiteralExpression::isString() const {
 	return literalType_ == LiteralType::STRING;
 }
 
+bool LiteralExpression::isPropertyValue() const {
+	return literalType_ == LiteralType::PROPERTY_VALUE;
+}
+
 bool LiteralExpression::getBooleanValue() const {
 	return booleanValue_;
 }
@@ -123,6 +135,10 @@ double LiteralExpression::getDoubleValue() const {
 
 const std::string &LiteralExpression::getStringValue() const {
 	return stringValue_;
+}
+
+const PropertyValue &LiteralExpression::getPropertyValue() const {
+	return propertyValue_;
 }
 
 // ============================================================================
@@ -338,6 +354,10 @@ std::unique_ptr<Expression> CaseExpression::clone() const {
 	}
 	if (elseExpression_) {
 		cloned->setElseExpression(elseExpression_->clone());
+	} else {
+		// Preserve an explicitly absent ELSE branch instead of normalizing the
+		// cloned AST to the constructor's implicit NULL expression.
+		cloned->setElseExpression(nullptr);
 	}
 	return cloned;
 }

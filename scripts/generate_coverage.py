@@ -26,11 +26,7 @@ IGNORE_PATTERNS = [
     "generated",
     "subprojects",
     "antlr4",
-    "helpers/internal",  # Internal implementation files (tested through integration tests)
-    "debug/",  # Debug visualization utilities (not unit-testable)
     "apps/compare_benchmark",  # Benchmark harness entrypoint, not a unit-tested engine module
-    "Terminal.cpp", # OS-level terminal wrapper (untestable without real PTY)
-    "src/cli/Repl.cpp" # Top-level REPL entrypoint (blocks on stdin)
 ]
 
 EXCLUDED_LINE_MARKER = "ZYX_COV_EXCL_LINE"
@@ -62,6 +58,27 @@ def find_test_binaries(build_dir):
         if os.access(file_path, os.X_OK) and _is_native_coverage_binary(file_path):
             binaries.append(str(file_path))
     return binaries
+
+
+def find_coverage_profiles(profile_root):
+    """Return usable LLVM raw profiles below ``profile_root``.
+
+    A forcibly terminated crash-test child can create its profile file before
+    LLVM writes any counters.  Such zero-byte files are invalid merge inputs;
+    ignore them while retaining diagnostics for real I/O failures.
+    """
+
+    profiles = []
+    for profile_path in sorted(Path(profile_root).rglob("*.profraw")):
+        try:
+            if profile_path.stat().st_size == 0:
+                print(f"Skipping empty LLVM coverage profile: {profile_path}", file=sys.stderr)
+                continue
+        except OSError as error:
+            print(f"Warning: unable to inspect coverage profile {profile_path}: {error}", file=sys.stderr)
+            continue
+        profiles.append(profile_path)
+    return profiles
 
 
 def _is_native_coverage_binary(file_path):
@@ -435,7 +452,7 @@ def main():
     if not profile_root.is_dir():
         print(f"Error: Coverage profile directory does not exist: {profile_root}")
         sys.exit(1)
-    profraw_files = list(profile_root.rglob("*.profraw"))
+    profraw_files = find_coverage_profiles(profile_root)
     profdata_file = os.path.join(args.build_dir, "code.profdata")
 
     if not profraw_files:

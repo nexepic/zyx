@@ -34,9 +34,9 @@ namespace graph::parser::cypher {
  * @class CypherToPlanVisitor
  * @brief ANTLR4 visitor that converts Cypher parse trees into logical execution plans.
  *
- * This visitor delegates to specialized helper and handler classes:
- * - Helpers: AstExtractor, ExpressionBuilder, PatternBuilder, OperatorChain
- * - Clauses: ReadingClauseHandler, WritingClauseHandler, ResultClauseHandler, AdminClauseHandler
+ * This visitor first builds the format-independent QueryAST through
+ * CypherASTBuilder, then delegates plan construction to LogicalPlanBuilder.
+ * ExpressionBuilder and AstExtractor are parser-local helpers only.
  *
  * The visitor builds a logical IR (LogicalOperator tree) during traversal.
  * Execution dispatch is intentionally owned by the native logical runtime.

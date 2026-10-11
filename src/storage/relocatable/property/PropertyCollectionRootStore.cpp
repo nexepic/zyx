@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
@@ -219,11 +220,20 @@ namespace graph::storage {
 				throwRootStoreError(FormatError::FERR_INVALID_STATE,
 									"Entity Property LargeValue reference has an invalid owner or content type");
 			}
-			root = EntityPropertyCollectionRootCodec::decode(large_values_->read(snapshot, reference.value));
-			if (root.owner_entity_id != reference.owner_entity_id ||
-				root.owner_entity_type != reference.owner_entity_type) {
-				throwRootStoreError(FormatError::FERR_INVALID_STATE,
-									"Entity Property LargeValue root owner disagrees with its reference");
+			const std::vector<std::byte> payload = large_values_->read(snapshot, reference.value);
+			if (EntityPropertyLargeValuePayloadCodec::hasMagic(payload)) {
+				root.owner_entity_id = reference.owner_entity_id;
+				root.owner_entity_type = reference.owner_entity_type;
+				root.entries = EntityPropertyLargeValuePayloadCodec::decode(payload);
+			} else {
+				// Accept pre-owner-neutral values so an already-created native file is
+				// never silently decoded as a shared payload.
+				root = EntityPropertyCollectionRootCodec::decode(payload);
+				if (root.owner_entity_id != reference.owner_entity_id ||
+					root.owner_entity_type != reference.owner_entity_type) {
+					throwRootStoreError(FormatError::FERR_INVALID_STATE,
+										"Entity Property LargeValue root owner disagrees with its reference");
+				}
 			}
 		} else {
 			root = EntityPropertyCollectionRootCodec::decode(bytes);
@@ -267,7 +277,8 @@ namespace graph::storage {
 
 	std::optional<PropertyCollectionRoot>
 	PropertyCollectionRootScanCursor::readEntityOptional(const MetadataSnapshotPin &snapshot,
-														 const EntityPropertyKey &key) {
+																	 const EntityPropertyKey &key) {
+		debug::ScopedPerfTimer timer("native_graph.read.property_optional_lookup");
 		validateSnapshot(snapshot);
 		if (!key.isValid()) {
 			throwRootStoreError(FormatError::FERR_INVALID_HEADER,
@@ -293,8 +304,29 @@ namespace graph::storage {
 															const PropertyCollectionRootStoreOptions &options) const {
 		validatePlannerSnapshot(metadata_, snapshot);
 		validateOptions(options);
+		if (roots.empty()) {
+			return {};
+		}
+		// Batch roots are ordered and share one pinned snapshot. Materialize the
+		// authoritative directory once so each root avoids a repeated radix-route
+		// traversal during large graph writes.
+		std::map<EntityPropertyKey, EntityPropertyLocation> existingLocations;
+		metadata_.visitEntityPropertyLocations(snapshot, [&existingLocations](const EntityPropertyLocation &location) {
+			if (!existingLocations.emplace(location.key, location).second) {
+				throwRootStoreError(FormatError::FERR_INVALID_STATE,
+									"Entity Property Directory contains duplicate owner keys");
+			}
+		});
+		std::vector<SegmentId> currentPropertyPools;
+		for (const CatalogEntry &pool: metadata_.findCurrentPropertyPagePools(snapshot, options.page_owner_id)) {
+			currentPropertyPools.push_back(pool.segment_id);
+		}
 		std::vector<EntityPropertyRootMutationPlan> plans;
 		plans.reserve(roots.size());
+		// A pinned snapshot is immutable. New roots with equal encoded sizes therefore
+		// have the same best-fit source page; cache that selection for this batch.
+		std::map<size_t, std::optional<SlottedPagePlacement>> placementCache;
+		EntityPropertyBatchPageCache pageCache;
 		uint64_t nextLargeValueId = snapshot.superblock().next_large_value_id;
 		uint64_t previousDirectoryId = 0U;
 		for (const PropertyCollectionRoot &root: roots) {
@@ -305,7 +337,8 @@ namespace graph::storage {
 			}
 			previousDirectoryId = key.directoryId();
 			const EntityPropertyRootMutationPlan plan =
-					planEntityRootReplacementWithLargeValueId(snapshot, root, options, LargeValueId(nextLargeValueId));
+					planEntityRootReplacementWithLargeValueId(snapshot, root, options, LargeValueId(nextLargeValueId),
+																						 &existingLocations, &placementCache, &currentPropertyPools, &pageCache);
 			if (!plan.large_values.empty()) {
 				if (nextLargeValueId == std::numeric_limits<uint64_t>::max()) {
 					nextLargeValueId = 0U;
@@ -328,7 +361,7 @@ namespace graph::storage {
 			}
 			const NativeGraphPropertyPageReplacementRequest &request = *plan.page_replacement;
 			const size_t memberMutationCount = request.upserted_properties.size() + request.erased_properties.size() +
-										 request.relocated_properties.size();
+											   request.relocated_properties.size();
 			const bool validMemberMutation = memberMutationCount == 1U;
 			// ZYX_COV_EXCL_NEXT: the private single-root planner emits exactly one mutation.
 			if (!validMemberMutation) {
@@ -376,8 +409,11 @@ namespace graph::storage {
 									FormatError::FERR_INVALID_STATE,
 									"Entity Property batch coalescing found inconsistent Property page sources");
 						}
+						const auto existingIterator = existingLocations.find(member.key);
 						const std::optional<EntityPropertyLocation> existing =
-								metadata_.findEntityPropertyLocationOptional(snapshot, member.key);
+								existingIterator == existingLocations.end()
+										? std::nullopt
+										: std::optional<EntityPropertyLocation>(existingIterator->second);
 						if (!memberRequest.upserted_properties.empty()) {
 							const EntityPropertyLocation &provisional = memberRequest.upserted_properties.front();
 							const SlottedSlotReference provisionalSlot{provisional.page_id, provisional.slot_id,
@@ -425,10 +461,12 @@ namespace graph::storage {
 							page.erase({existing->page_id, existing->slot_id, existing->slot_generation});
 							request.erased_properties.push_back(member.key);
 						} else {
-							// ZYX_COV_EXCL_NEXT: relocation plans retain the validated source and canonical encoded root.
+							// ZYX_COV_EXCL_NEXT: relocation plans retain the validated source and canonical encoded
+							// root.
 							if (!existing.has_value() || existing->page_id != request.expected_location.page_id ||
 								memberRequest.relocated_properties.size() != 1U ||
-								memberRequest.relocated_properties.front() != member.key || member.encoded_root.empty()) {
+								memberRequest.relocated_properties.front() != member.key ||
+								member.encoded_root.empty()) {
 								throwRootStoreError(
 										FormatError::FERR_INVALID_STATE,
 										"Entity Property batch coalescing lost a relocated root's source page");
@@ -437,10 +475,10 @@ namespace graph::storage {
 							request.relocated_properties.push_back(member.key);
 							if (memberOrdinal == ordinal) {
 								merged.large_values.insert(merged.large_values.end(), member.large_values.begin(),
-													   member.large_values.end());
+														   member.large_values.end());
 								merged.reused_large_values.insert(merged.reused_large_values.end(),
-														  member.reused_large_values.begin(),
-														  member.reused_large_values.end());
+																  member.reused_large_values.begin(),
+																  member.reused_large_values.end());
 							} else {
 								EntityPropertyRootMutationPlan destination = member;
 								destination.page_replacement.reset();
@@ -479,14 +517,33 @@ namespace graph::storage {
 
 	EntityPropertyRootMutationPlan PropertyCollectionRootStore::planEntityRootReplacementWithLargeValueId(
 			const MetadataSnapshotPin &snapshot, const PropertyCollectionRoot &inputRoot,
-			const PropertyCollectionRootStoreOptions &options, LargeValueId nextLargeValueId) const {
+			const PropertyCollectionRootStoreOptions &options, LargeValueId nextLargeValueId,
+			const std::map<EntityPropertyKey, EntityPropertyLocation> *existingLocations,
+			std::map<size_t, std::optional<SlottedPagePlacement>> *placementCache,
+			const std::vector<SegmentId> *currentPropertyPools, EntityPropertyBatchPageCache *pageCache) const {
 		validateOptions(options);
 		const PropertyCollectionRoot root = canonicalEntityRoot(inputRoot);
 		const EntityPropertyKey key = entityKeyForRoot(root);
 		EntityPropertyRootMutationPlan plan;
 		plan.key = key;
-		const std::optional<EntityPropertyLocation> existing =
-				metadata_.findEntityPropertyLocationOptional(snapshot, key);
+		const std::optional<EntityPropertyLocation> existing = [&]() -> std::optional<EntityPropertyLocation> {
+			if (existingLocations != nullptr) {
+				const auto iterator = existingLocations->find(key);
+				return iterator == existingLocations->end() ? std::nullopt
+																				 : std::optional<EntityPropertyLocation>(iterator->second);
+			}
+			return metadata_.findEntityPropertyLocationOptional(snapshot, key);
+		}();
+		const auto readPage = [&](PageId pageId) {
+			if (pageCache == nullptr) {
+				return pages_.read(snapshot, pageId);
+			}
+			auto [cached, inserted] = pageCache->pages.try_emplace(pageId);
+			if (inserted) {
+				cached->second.emplace(pages_.read(snapshot, pageId));
+			}
+			return cached->second->clone();
+		};
 		enum class ExistingPageMutationKind : uint8_t {
 			EPMK_UPSERT = 1U,
 			EPMK_ERASE = 2U,
@@ -494,10 +551,23 @@ namespace graph::storage {
 		};
 
 		const auto prepareExistingPage = [&](const EntityPropertyLocation &current, SlottedPage page,
-										 std::optional<SlottedSlotReference> inserted,
-										 ExistingPageMutationKind mutationKind) {
-			const PageLocation source = metadata_.findPageLocation(snapshot, current.page_id);
-			const CatalogEntry pool = metadata_.findCatalog(snapshot, source.segment_id);
+											 std::optional<SlottedSlotReference> inserted,
+											 ExistingPageMutationKind mutationKind) {
+			PageLocation source;
+			CatalogEntry pool;
+			if (pageCache == nullptr) {
+				source = metadata_.findPageLocation(snapshot, current.page_id);
+				pool = metadata_.findCatalog(snapshot, source.segment_id);
+			} else {
+				auto [location, inserted] = pageCache->locations.try_emplace(current.page_id);
+				if (inserted) {
+					location->second = metadata_.findPageLocation(snapshot, current.page_id);
+					pageCache->pools.emplace(current.page_id,
+									 metadata_.findCatalog(snapshot, location->second.segment_id));
+				}
+				source = location->second;
+				pool = pageCache->pools.at(current.page_id);
+			}
 			const uint8_t invalidSource = static_cast<uint8_t>(pool.kind != SegmentKind::SGK_PROPERTY_PAGE_POOL) |
 										  static_cast<uint8_t>(pool.owner_id != options.page_owner_id) |
 										  static_cast<uint8_t>(pool.state != SegmentState::SGS_SEALED) |
@@ -516,6 +586,8 @@ namespace graph::storage {
 			replacement.expected_location = source;
 			replacement.expected_page_owner_id = options.page_owner_id;
 			replacement.expected_owner_lsn = page.ownerCommittedLsn();
+			replacement.first_slot = options.first_slot;
+			replacement.last_slot = options.last_slot;
 			if (mutationKind == ExistingPageMutationKind::EPMK_ERASE) {
 				replacement.erased_properties = {key};
 				replacement.retire_page = page.stats().live_slot_count == 0U;
@@ -532,8 +604,8 @@ namespace graph::storage {
 				replacement.upserted_properties = {{key, current.page_id, inserted->slot_id, inserted->generation}};
 			}
 			plan.kind = mutationKind == ExistingPageMutationKind::EPMK_RELOCATE
-							? EntityPropertyRootMutationPlanKind::EPRMPK_NEW_PAGE_REQUIRED
-							: EntityPropertyRootMutationPlanKind::EPRMPK_EXISTING_PAGE;
+								? EntityPropertyRootMutationPlanKind::EPRMPK_NEW_PAGE_REQUIRED
+								: EntityPropertyRootMutationPlanKind::EPRMPK_EXISTING_PAGE;
 			plan.page_replacement = std::move(replacement);
 			if (!plan.page_replacement->retire_page) {
 				plan.replacement_payload = page.serialize();
@@ -545,7 +617,7 @@ namespace graph::storage {
 			if (!existing.has_value()) {
 				return plan;
 			}
-			SlottedPage page = pages_.read(snapshot, existing->page_id);
+			SlottedPage page = readPage(existing->page_id);
 			page.erase({existing->page_id, existing->slot_id, existing->slot_generation});
 			prepareExistingPage(*existing, std::move(page), std::nullopt, ExistingPageMutationKind::EPMK_ERASE);
 			return plan;
@@ -554,8 +626,8 @@ namespace graph::storage {
 		if (existing.has_value() && readEntity(snapshot, key) == root) {
 			return plan;
 		}
-		const std::vector<std::byte> logicalRoot = EntityPropertyCollectionRootCodec::encode(root);
-		std::vector<std::byte> encoded = logicalRoot;
+		const std::vector<std::byte> inlineRoot = EntityPropertyCollectionRootCodec::encode(root);
+		std::vector<std::byte> encoded = inlineRoot;
 		const size_t maximumBytes =
 				RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES - RSS_SLOTTED_PAGE_HEADER_BYTES - RSS_SLOTTED_PAGE_SLOT_BYTES;
 		if (encoded.size() > maximumBytes) {
@@ -564,13 +636,14 @@ namespace graph::storage {
 						FormatError::FERR_INVALID_STATE,
 						"Entity Property root exceeds the inline page limit but has no LargeValue placement");
 			}
+			const std::vector<std::byte> largeValuePayload = EntityPropertyLargeValuePayloadCodec::encode(root.entries);
 			const std::optional<LargeValueRef> reused = large_values_->findContentDuplicate(
-					snapshot, logicalRoot, LargeValueKind::LVK_BYTES, RSS_ENTITY_PROPERTY_LARGE_VALUE_MEDIA_TYPE,
+					snapshot, largeValuePayload, LargeValueKind::LVK_BYTES, RSS_ENTITY_PROPERTY_LARGE_VALUE_MEDIA_TYPE,
 					options.maximum_large_value_dedup_candidates);
 			const LargeValueRef reference =
 					reused.has_value() ? *reused
-									   : large_values_->planReference(nextLargeValueId, Generation(1U), logicalRoot,
-																	  LargeValueKind::LVK_BYTES,
+									 : large_values_->planReference(nextLargeValueId, Generation(1U), largeValuePayload,
+																  LargeValueKind::LVK_BYTES,
 																	  RSS_ENTITY_PROPERTY_LARGE_VALUE_MEDIA_TYPE,
 																	  options.large_value_compression);
 			EntityPropertyLargeValueReference storedReference;
@@ -583,7 +656,7 @@ namespace graph::storage {
 			} else {
 				plan.large_values.push_back(
 						{.reference = reference,
-						 .logical_bytes = logicalRoot,
+						 .logical_bytes = largeValuePayload,
 						 .first_data_slot = options.first_slot,
 						 .last_data_slot = options.last_slot,
 						 .first_manifest_slot = options.first_slot,
@@ -591,9 +664,9 @@ namespace graph::storage {
 						 .compression = options.large_value_compression,
 						 .extent_class = LargeValueExtentClass::LVEC_32K,
 						 .planned_data_page_count = large_values_->plannedDataPageCount(
-								 logicalRoot, options.large_value_compression, LargeValueExtentClass::LVEC_32K),
+								 largeValuePayload, options.large_value_compression, LargeValueExtentClass::LVEC_32K),
 						 .planned_manifest_page_count = large_values_->plannedManifestPageCount(
-								 logicalRoot, options.large_value_compression, LargeValueExtentClass::LVEC_32K)});
+								 largeValuePayload, options.large_value_compression, LargeValueExtentClass::LVEC_32K)});
 			}
 			// ZYX_COV_EXCL_NEXT: the fixed LargeValue reference is smaller than an empty slot capacity.
 			if (encoded.size() > maximumBytes) {
@@ -603,7 +676,7 @@ namespace graph::storage {
 		}
 
 		if (existing.has_value()) {
-			SlottedPage page = pages_.read(snapshot, existing->page_id);
+			SlottedPage page = readPage(existing->page_id);
 			page.erase({existing->page_id, existing->slot_id, existing->slot_generation});
 			SlottedSlotReference replacement;
 			try {
@@ -615,8 +688,7 @@ namespace graph::storage {
 				}
 				plan.kind = EntityPropertyRootMutationPlanKind::EPRMPK_NEW_PAGE_REQUIRED;
 				plan.encoded_root = encoded;
-				prepareExistingPage(*existing, std::move(page), std::nullopt,
-									ExistingPageMutationKind::EPMK_RELOCATE);
+				prepareExistingPage(*existing, std::move(page), std::nullopt, ExistingPageMutationKind::EPMK_RELOCATE);
 				return plan;
 			}
 			prepareExistingPage(*existing, std::move(page), replacement, ExistingPageMutationKind::EPMK_UPSERT);
@@ -624,16 +696,30 @@ namespace graph::storage {
 		}
 
 		std::vector<SegmentId> pools;
-		for (const CatalogEntry &pool: metadata_.findCurrentPropertyPagePools(snapshot, options.page_owner_id)) {
-			pools.push_back(pool.segment_id);
+		if (currentPropertyPools != nullptr) {
+			pools = *currentPropertyPools;
+		} else {
+			for (const CatalogEntry &pool: metadata_.findCurrentPropertyPagePools(snapshot, options.page_owner_id)) {
+				pools.push_back(pool.segment_id);
+			}
 		}
 		if (pools.empty()) {
 			plan.kind = EntityPropertyRootMutationPlanKind::EPRMPK_NEW_PAGE_REQUIRED;
 			plan.encoded_root = encoded;
 			return plan;
 		}
-		const std::optional<SlottedPagePlacement> placement = pages_.findBestFitPageForRecord(
-				snapshot, pools, PageOwnerKind::POK_PROPERTY, static_cast<uint32_t>(encoded.size()));
+		std::optional<SlottedPagePlacement> placement;
+		if (!existing.has_value() && placementCache != nullptr) {
+			auto [cached, inserted] = placementCache->try_emplace(encoded.size());
+			if (inserted) {
+				cached->second = pages_.findBestFitPageForRecord(
+						snapshot, pools, PageOwnerKind::POK_PROPERTY, static_cast<uint32_t>(encoded.size()));
+			}
+			placement = cached->second;
+		} else {
+			placement = pages_.findBestFitPageForRecord(snapshot, pools, PageOwnerKind::POK_PROPERTY,
+																 static_cast<uint32_t>(encoded.size()));
+		}
 		if (!placement.has_value()) {
 			plan.kind = EntityPropertyRootMutationPlanKind::EPRMPK_NEW_PAGE_REQUIRED;
 			plan.encoded_root = encoded;
@@ -641,7 +727,7 @@ namespace graph::storage {
 		}
 		const PageLocation source = metadata_.findPageLocation(snapshot, placement->page_id);
 		const CatalogEntry pool = metadata_.findCatalog(snapshot, source.segment_id);
-		SlottedPage page = pages_.read(snapshot, placement->page_id);
+		SlottedPage page = readPage(placement->page_id);
 		const uint8_t invalidPlacement = static_cast<uint8_t>(source.segment_id != placement->segment_id) |
 										 static_cast<uint8_t>(pool.kind != SegmentKind::SGK_PROPERTY_PAGE_POOL) |
 										 static_cast<uint8_t>(pool.owner_id != options.page_owner_id) |
@@ -674,29 +760,39 @@ namespace graph::storage {
 			const EntityPropertyRootMutationPlan &plan,
 			NativeGraphPropertyPageReplacementMaterialization &materialization, LogSequenceNumber checkpointLsn) const {
 		const bool existingPagePlan = plan.kind == EntityPropertyRootMutationPlanKind::EPRMPK_EXISTING_PAGE;
-		// ZYX_COV_EXCL_NEXT: a source-bearing new-page plan is a relocation only when both private planner fields exist.
+		// ZYX_COV_EXCL_NEXT: a source-bearing new-page plan is a relocation only when both private planner fields
+		// exist.
 		const bool relocationPlan = plan.kind == EntityPropertyRootMutationPlanKind::EPRMPK_NEW_PAGE_REQUIRED &&
 									plan.page_replacement.has_value() && !plan.encoded_root.empty();
-		if ((!existingPagePlan && !relocationPlan) || !plan.page_replacement.has_value() ||
-			!checkpointLsn.isValid()) {
+		if ((!existingPagePlan && !relocationPlan) || !plan.page_replacement.has_value() || !checkpointLsn.isValid()) {
 			throwRootStoreError(FormatError::FERR_INVALID_STATE,
 								"native Entity Property preparation requires a page-source plan and checkpoint LSN");
 		}
 		const NativeGraphPropertyPageReplacementRequest &request = *plan.page_replacement;
+		const bool samePoolDestination = request.expected_pool.segment_id == materialization.pool.segment_id &&
+										 request.expected_pool.physical_slot == materialization.pool.physical_slot &&
+										 request.expected_pool.kind == materialization.pool.kind &&
+										 request.expected_pool.owner_id == materialization.pool.owner_id &&
+										 request.expected_pool.generation == materialization.pool.generation &&
+										 request.expected_pool.state == materialization.pool.state &&
+										 request.expected_pool.committed_lsn == materialization.pool.committed_lsn;
 		const bool hasSourceMutation = !request.upserted_properties.empty() || !request.erased_properties.empty() ||
-								   !request.relocated_properties.empty();
+									   !request.relocated_properties.empty();
 		const bool containsPlanKey =
-				std::ranges::any_of(request.upserted_properties,
-								[key = plan.key](const EntityPropertyLocation &location) { return location.key == key; }) ||
+				std::ranges::any_of(
+						request.upserted_properties,
+						[key = plan.key](const EntityPropertyLocation &location) { return location.key == key; }) ||
 				std::ranges::find(request.erased_properties, plan.key) != request.erased_properties.end() ||
 				std::ranges::find(request.relocated_properties, plan.key) != request.relocated_properties.end();
 		const uint8_t invalidPlan =
-				static_cast<uint8_t>(request.expected_pool.segment_id != materialization.pool.segment_id) |
-				static_cast<uint8_t>(request.expected_pool.physical_slot != materialization.pool.physical_slot) |
-				static_cast<uint8_t>(request.expected_pool.kind != materialization.pool.kind) |
-				static_cast<uint8_t>(request.expected_pool.owner_id != materialization.pool.owner_id) |
-				static_cast<uint8_t>(request.expected_pool.generation != materialization.pool.generation) |
-				static_cast<uint8_t>(request.expected_pool.committed_lsn != materialization.pool.committed_lsn) |
+				static_cast<uint8_t>(!materialization.destination_is_new_pool && !samePoolDestination) |
+				static_cast<uint8_t>(materialization.pool.kind != SegmentKind::SGK_PROPERTY_PAGE_POOL) |
+				static_cast<uint8_t>(materialization.pool.owner_id != request.expected_page_owner_id) |
+				static_cast<uint8_t>(materialization.destination_is_new_pool &&
+									 (materialization.pool.generation != Generation(1U) ||
+									  materialization.pool.committed_lsn != checkpointLsn)) |
+				static_cast<uint8_t>(materialization.destination_initializes_new_pool &&
+									 !materialization.destination_is_new_pool) |
 				static_cast<uint8_t>(request.expected_location != materialization.expected_location) |
 				static_cast<uint8_t>(request.expected_page_owner_id != materialization.page_owner_id) |
 				static_cast<uint8_t>(request.expected_owner_lsn != materialization.expected_owner_lsn) |
@@ -704,9 +800,8 @@ namespace graph::storage {
 				static_cast<uint8_t>(!plan.key.isValid()) | static_cast<uint8_t>(!hasSourceMutation) |
 				static_cast<uint8_t>(!containsPlanKey) |
 				static_cast<uint8_t>(existingPagePlan && !plan.encoded_root.empty()) |
-				static_cast<uint8_t>(relocationPlan &&
-								 std::ranges::find(request.relocated_properties, plan.key) ==
-										 request.relocated_properties.end()) |
+				static_cast<uint8_t>(relocationPlan && std::ranges::find(request.relocated_properties, plan.key) ==
+															   request.relocated_properties.end()) |
 				static_cast<uint8_t>(request.retire_page &&
 									 (!request.upserted_properties.empty() ||
 									  (request.erased_properties.empty() && request.relocated_properties.empty()) ||
@@ -759,8 +854,8 @@ namespace graph::storage {
 				return;
 			}
 			const EntityPropertyLargeValueReference reference = EntityPropertyLargeValueReferenceCodec::decode(stored);
-			const bool newlyMaterialized = std::ranges::any_of(
-					plan.large_values, [&reference](const NativeGraphLargeValueMutation &mutation) {
+			const bool newlyMaterialized =
+					std::ranges::any_of(plan.large_values, [&reference](const NativeGraphLargeValueMutation &mutation) {
 						return mutation.reference == reference.value;
 					});
 			if (newlyMaterialized && !referencedNewLargeValues.insert(reference.value.value_id.value()).second) {
@@ -796,6 +891,10 @@ namespace graph::storage {
 								"native Entity Property erase plan cannot carry a LargeValue mutation");
 		}
 		if (request.retire_page) {
+			if (materialization.destination_is_new_pool) {
+				throwRootStoreError(FormatError::FERR_INVALID_STATE,
+									"native Entity Property retirement cannot allocate a fresh destination pool");
+			}
 			const std::array<PageLocation, 0U> noSources{};
 			const std::array<SharedPagePoolPreparedReplacement, 0U> noReplacements{};
 			const std::array<SharedPagePoolPreparedAppend, 0U> noAppends{};
@@ -806,7 +905,7 @@ namespace graph::storage {
 					 request.expected_owner_lsn},
 			}};
 			pages_.prepareMutationPages(materialization.pool, noSources, noReplacements, noAppends,
-									noReplacementLocations, noAppendLocations, checkpointLsn, retirements);
+										noReplacementLocations, noAppendLocations, checkpointLsn, retirements);
 			return;
 		}
 		const PageOwnerHeader owner{.page_id = request.expected_location.page_id,
@@ -817,13 +916,37 @@ namespace graph::storage {
 									.committed_lsn = checkpointLsn};
 		const SharedPagePoolPreparedReplacement replacement{owner, request.expected_owner_lsn, plan.replacement_payload,
 															plan.replacement_free_bytes};
-		const std::array<PageLocation, 1U> expected{materialization.expected_location};
-		const std::array<SharedPagePoolPreparedReplacement, 1U> replacements{replacement};
-		const std::array<SharedPagePoolPreparedAppend, 0U> noAppends{};
 		std::array<PageLocation, 1U> replacementLocations{materialization.replacement};
-		std::array<PageLocation, 0U> noAppendLocations{};
-		pages_.prepareMutationPages(materialization.pool, expected, replacements, noAppends, replacementLocations,
-									noAppendLocations, checkpointLsn);
+		if (materialization.destination_is_new_pool && materialization.destination_initializes_new_pool) {
+			const std::array<SharedPagePoolPreparedAppend, 1U> initial{{
+					{owner, plan.replacement_payload, plan.replacement_free_bytes},
+			}};
+			pages_.prepareNewPoolPages(materialization.pool, initial, replacementLocations, checkpointLsn);
+			const std::array<PageLocation, 0U> noSources{};
+			const std::array<SharedPagePoolPreparedReplacement, 0U> noReplacements{};
+			const std::array<SharedPagePoolPreparedAppend, 0U> noAppends{};
+			std::array<PageLocation, 0U> noReplacementLocations{};
+			std::array<PageLocation, 0U> noAppendLocations{};
+			const std::array<SharedPagePoolPreparedRetirement, 1U> retirements{{
+					{materialization.expected_location, request.expected_page_owner_id, PageOwnerKind::POK_PROPERTY,
+					 request.expected_owner_lsn},
+			}};
+			pages_.prepareMutationPages(request.expected_pool, noSources, noReplacements, noAppends,
+										noReplacementLocations, noAppendLocations, checkpointLsn, retirements);
+		} else if (materialization.destination_is_new_pool) {
+			const SharedPagePoolPreparedCrossPoolReplacement crossPoolReplacement{
+					request.expected_pool,	  materialization.expected_location, request.expected_owner_lsn, owner,
+					plan.replacement_payload, plan.replacement_free_bytes};
+			pages_.prepareCrossPoolReplacementPages(materialization.pool, std::span(&crossPoolReplacement, 1U),
+													replacementLocations, checkpointLsn);
+		} else {
+			const std::array<PageLocation, 1U> expected{materialization.expected_location};
+			const std::array<SharedPagePoolPreparedReplacement, 1U> replacements{replacement};
+			const std::array<SharedPagePoolPreparedAppend, 0U> noAppends{};
+			std::array<PageLocation, 0U> noAppendLocations{};
+			pages_.prepareMutationPages(materialization.pool, expected, replacements, noAppends, replacementLocations,
+										noAppendLocations, checkpointLsn);
+		}
 		materialization.replacement = replacementLocations.front();
 	}
 
@@ -840,8 +963,7 @@ namespace graph::storage {
 	void PropertyCollectionRootStore::preparePlannedEntityRootPageBatch(
 			std::span<const EntityPropertyRootMutationPlan> plans,
 			std::span<const std::vector<size_t>> pagePlanOrdinals,
-			NativeGraphPropertyPageBatchMaterialization &materialization,
-			LogSequenceNumber checkpointLsn) const {
+			NativeGraphPropertyPageBatchMaterialization &materialization, LogSequenceNumber checkpointLsn) const {
 		const size_t maximumBytes =
 				RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES - RSS_SLOTTED_PAGE_HEADER_BYTES - RSS_SLOTTED_PAGE_SLOT_BYTES;
 		const bool validBatchKind =
@@ -849,17 +971,16 @@ namespace graph::storage {
 				materialization.kind == NativeGraphPropertyPageBatchKind::NGPBK_CREATE_POOL;
 		const uint8_t invalidMaterialization =
 				static_cast<uint8_t>(plans.empty()) | static_cast<uint8_t>(pagePlanOrdinals.empty()) |
-				static_cast<uint8_t>(!checkpointLsn.isValid()) |
-				static_cast<uint8_t>(!validBatchKind) |
+				static_cast<uint8_t>(!checkpointLsn.isValid()) | static_cast<uint8_t>(!validBatchKind) |
 				static_cast<uint8_t>(materialization.pool.kind != SegmentKind::SGK_PROPERTY_PAGE_POOL) |
 				static_cast<uint8_t>(materialization.pool.owner_id != materialization.page_owner_id) |
 				static_cast<uint8_t>(!materialization.pool.generation.isValid()) |
 				static_cast<uint8_t>(materialization.kind == NativeGraphPropertyPageBatchKind::NGPBK_CREATE_POOL &&
-								 materialization.pool.generation != Generation(1U)) |
+									 materialization.pool.generation != Generation(1U)) |
 				static_cast<uint8_t>(materialization.pool.state != SegmentState::SGS_SEALED) |
 				static_cast<uint8_t>(!materialization.pool.committed_lsn.isValid()) |
 				static_cast<uint8_t>(materialization.kind == NativeGraphPropertyPageBatchKind::NGPBK_CREATE_POOL &&
-								 materialization.pool.committed_lsn != checkpointLsn) |
+									 materialization.pool.committed_lsn != checkpointLsn) |
 				static_cast<uint8_t>(materialization.pages.size() != pagePlanOrdinals.size()) |
 				static_cast<uint8_t>(materialization.pages.size() > RSS_PAGE_POOL_DATA_FRAME_COUNT);
 		if (invalidMaterialization != 0U) {
@@ -895,18 +1016,17 @@ namespace graph::storage {
 			SlottedPage page = SlottedPage::create(owner);
 			for (size_t index = 0U; index < planOrdinals.size(); ++index) {
 				if (planOrdinals[index] >= plans.size()) {
-					throwRootStoreError(
-							FormatError::FERR_INVALID_STATE,
-							"native Entity Property page-batch ordinal exceeds its pinned plan array");
+					throwRootStoreError(FormatError::FERR_INVALID_STATE,
+										"native Entity Property page-batch ordinal exceeds its pinned plan array");
 				}
 				const EntityPropertyRootMutationPlan &plan = plans[planOrdinals[index]];
 				const EntityPropertyLocation &expected = initial.upserted_properties[index];
 				const uint64_t directoryId = plan.key.isValid() ? plan.key.directoryId() : 0U;
-				const bool relocationPlan =
-						plan.page_replacement.has_value() &&
-						std::ranges::find(plan.page_replacement->relocated_properties, plan.key) !=
-								plan.page_replacement->relocated_properties.end();
-				const bool invalidRelocationSource = relocationPlan &&
+				const bool relocationPlan = plan.page_replacement.has_value() &&
+											std::ranges::find(plan.page_replacement->relocated_properties, plan.key) !=
+													plan.page_replacement->relocated_properties.end();
+				const bool invalidRelocationSource =
+						relocationPlan &&
 						(plan.page_replacement->retire_page
 								 ? (!plan.page_replacement->upserted_properties.empty() ||
 									(plan.page_replacement->erased_properties.empty() &&
@@ -917,9 +1037,8 @@ namespace graph::storage {
 											RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES - RSS_SLOTTED_PAGE_HEADER_BYTES));
 				const uint8_t invalidPlan =
 						static_cast<uint8_t>(plan.kind !=
-									 EntityPropertyRootMutationPlanKind::EPRMPK_NEW_PAGE_REQUIRED) |
-						static_cast<uint8_t>(!plan.key.isValid()) |
-						static_cast<uint8_t>(directoryId <= previousKey) |
+											 EntityPropertyRootMutationPlanKind::EPRMPK_NEW_PAGE_REQUIRED) |
+						static_cast<uint8_t>(!plan.key.isValid()) | static_cast<uint8_t>(directoryId <= previousKey) |
 						static_cast<uint8_t>(plan.page_replacement.has_value() && !relocationPlan) |
 						static_cast<uint8_t>(!relocationPlan && !plan.replacement_payload.empty()) |
 						static_cast<uint8_t>(!relocationPlan && plan.replacement_free_bytes != 0U) |
@@ -935,10 +1054,10 @@ namespace graph::storage {
 										"native Entity Property page batch has an invalid owner-keyed root");
 				}
 				validateStoredEntityPropertyRecord(plan.encoded_root, plan.key, plan.large_values,
-											   plan.reused_large_values);
+												   plan.reused_large_values);
 				const SlottedSlotReference slot = page.insert(plan.encoded_root);
-				initial.upserted_properties[index] =
-						{plan.key, initial.location.page_id, slot.slot_id, slot.generation};
+				initial.upserted_properties[index] = {plan.key, initial.location.page_id, slot.slot_id,
+													  slot.generation};
 				previousKey = directoryId;
 			}
 			preparedPages.push_back({owner, page.serialize(), page.stats().contiguous_free_bytes});

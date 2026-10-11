@@ -10,6 +10,8 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
+#include <cerrno>
 #include <cstddef>
 #include <limits>
 #include <set>
@@ -17,6 +19,7 @@
 #include <string>
 #include <vector>
 
+#include "graph/storage/PwriteHelper.hpp"
 #include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
 #include "graph/storage/relocatable/allocation/SharedPagePoolAllocator.hpp"
 #include "graph/storage/relocatable/index/BTreeIndex.hpp"
@@ -24,6 +27,10 @@
 #include "graph/storage/relocatable/property/LargeValueStore.hpp"
 #include "graph/utils/ChecksumUtils.hpp"
 #include "graph/utils/Sha256.hpp"
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 namespace {
 
@@ -185,6 +192,148 @@ TEST_F(RelocatableMetadataStoreTest, LargeValueStorePublishesAnEmptyValueAndSurv
 	LargeValueStore reopenedStore(io, *reopened);
 	MetadataSnapshotPin reopenedSnapshot = reopened->openSnapshot();
 	EXPECT_TRUE(reopenedStore.read(reopenedSnapshot, written.reference).empty());
+}
+
+TEST_F(RelocatableMetadataStoreTest, ResumesDurableLargeValueManifestTraversalAfterStableValueId) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	LargeValueStore store(io, *metadata);
+	const LargeValueWriteResult first = store.write(bytes(3U), writeOptions(), LogSequenceNumber(2U));
+	const LargeValueWriteResult second = store.write(bytes(5U), writeOptions(), LogSequenceNumber(3U));
+	static_cast<void>(store.write(bytes(7U), writeOptions(), LogSequenceNumber(4U)));
+
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	std::vector<LargeValueManifestLocation> resumed;
+	size_t metadataPages = 0U;
+	EXPECT_FALSE(metadata->visitLargeValueManifestLocationsAfter(
+			snapshot, first.reference.value_id.value(), 2U,
+			[&resumed](const LargeValueManifestLocation &location) {
+				resumed.push_back(location);
+				return false;
+			},
+			&metadataPages));
+	ASSERT_EQ(resumed.size(), 1U);
+	EXPECT_EQ(resumed.front().value_id, second.reference.value_id);
+	EXPECT_GT(metadataPages, 0U);
+	snapshot.release();
+}
+
+TEST_F(RelocatableMetadataStoreTest,
+	   LargeValueStoreFinalSyncFailureReportsUncertainDurabilityAndReopensTheCompleteImmutableValue) {
+	file->flush();
+	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+		auto metadata = RelocatableMetadataStore::initializeNew(nativeIo, superblock(1U, 1U));
+		LargeValueStore store(nativeIo, *metadata);
+		const std::vector<std::byte> first = bytes(17U);
+		const std::vector<std::byte> second = bytes(19U);
+		const LargeValueWriteResult firstWrite = store.write(first, writeOptions(), LogSequenceNumber(2U));
+
+		std::atomic<uint32_t> syncCalls{0U};
+		{
+			StorageIO::ScopedNativeSyncHookForTesting failFinalPublicationFence([&syncCalls](file_handle_t fd) {
+				if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 1U) {
+#ifdef _WIN32
+					SetLastError(ERROR_DISK_FULL);
+#else
+					errno = ENOSPC;
+#endif
+					return -1;
+				}
+				return portable_fsync(fd);
+			});
+			EXPECT_THROW(static_cast<void>(store.write(second, writeOptions(), LogSequenceNumber(3U))),
+						 std::runtime_error);
+		}
+		EXPECT_GE(syncCalls.load(std::memory_order_relaxed), 2U);
+
+		// A final Superblock fence error has an indeterminate durability result. The
+		// completed publication must still resolve as one immutable value, never a
+		// visible Manifest with missing data or content-index state.
+		MetadataSnapshotPin current = metadata->openSnapshot();
+		const LargeValueManifest secondManifest = store.manifest(current, LargeValueId(2U));
+		EXPECT_EQ(metadata->findLargeValueManifest(current, LargeValueId(1U)).manifest_page_id,
+				  firstWrite.manifest.page_id);
+		EXPECT_EQ(store.read(current, firstWrite.reference), first);
+		EXPECT_EQ(store.read(current, secondManifest.reference()), second);
+		EXPECT_EQ(current.superblock().next_large_value_id, 3U);
+		current.release();
+
+		const LargeValueWriteResult retry = store.write(second, writeOptions(), LogSequenceNumber(3U));
+		EXPECT_TRUE(retry.content_deduplicated);
+		EXPECT_EQ(retry.reference, secondManifest.reference());
+
+		metadata.reset();
+		auto reopenedMetadata = RelocatableMetadataStore::open(nativeIo);
+		LargeValueStore reopenedStore(nativeIo, *reopenedMetadata);
+		MetadataSnapshotPin recovered = reopenedMetadata->openSnapshot();
+		EXPECT_EQ(reopenedStore.read(recovered, firstWrite.reference), first);
+		EXPECT_EQ(reopenedStore.read(recovered, secondManifest.reference()), second);
+		EXPECT_EQ(recovered.superblock().next_large_value_id, 3U);
+		recovered.release();
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+}
+
+TEST_F(RelocatableMetadataStoreTest, LargeValueStoreMetadataDiskFullRetainsPublishedValueAndCanRetryAfterReopen) {
+	file->flush();
+	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+		auto metadata = RelocatableMetadataStore::initializeNew(nativeIo, superblock(1U, 1U));
+		LargeValueStore store(nativeIo, *metadata);
+		const std::vector<std::byte> first = bytes(17U);
+		const std::vector<std::byte> second = bytes(19U);
+		const LargeValueWriteResult firstWrite = store.write(first, writeOptions(), LogSequenceNumber(2U));
+		MetadataSnapshotPin before = metadata->openSnapshot();
+		const uint64_t metadataPoolOffset = before.superblock().data_region_offset;
+		before.release();
+
+		{
+			StorageIO::ScopedNativeWriteHookForTesting failMetadataCandidate(
+					[metadataPoolOffset](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+						const uint64_t absoluteOffset = static_cast<uint64_t>(offset);
+						if (absoluteOffset >= metadataPoolOffset + RSS_PAGE_SIZE &&
+							absoluteOffset < metadataPoolOffset + RSS_SEGMENT_SIZE && byteCount == RSS_PAGE_SIZE) {
+#ifdef _WIN32
+							SetLastError(ERROR_DISK_FULL);
+#else
+							errno = ENOSPC;
+#endif
+							return static_cast<pwrite_ssize_t>(-1);
+						}
+						return portable_pwrite(fd, bytes, byteCount, offset);
+					});
+			EXPECT_THROW(static_cast<void>(store.write(second, writeOptions(), LogSequenceNumber(3U))),
+						 std::runtime_error);
+		}
+
+		MetadataSnapshotPin current = metadata->openSnapshot();
+		EXPECT_EQ(store.read(current, firstWrite.reference), first);
+		EXPECT_THROW(static_cast<void>(store.manifest(current, LargeValueId(2U))), FormatException);
+		EXPECT_EQ(current.superblock().next_large_value_id, 2U);
+		current.release();
+		metadata.reset();
+
+		auto reopenedMetadata = RelocatableMetadataStore::open(nativeIo);
+		LargeValueStore reopenedStore(nativeIo, *reopenedMetadata);
+		MetadataSnapshotPin recovered = reopenedMetadata->openSnapshot();
+		EXPECT_EQ(reopenedStore.read(recovered, firstWrite.reference), first);
+		EXPECT_THROW(static_cast<void>(reopenedStore.manifest(recovered, LargeValueId(2U))), FormatException);
+		EXPECT_EQ(recovered.superblock().next_large_value_id, 2U);
+		recovered.release();
+
+		const LargeValueWriteResult retry = reopenedStore.write(second, writeOptions(), LogSequenceNumber(3U));
+		EXPECT_FALSE(retry.content_deduplicated);
+		EXPECT_EQ(retry.reference.value_id, LargeValueId(2U));
+		MetadataSnapshotPin published = reopenedMetadata->openSnapshot();
+		EXPECT_EQ(reopenedStore.read(published, firstWrite.reference), first);
+		EXPECT_EQ(reopenedStore.read(published, retry.reference), second);
+		published.release();
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
 }
 
 TEST_F(RelocatableMetadataStoreTest, LargeValueStoreAllocatesDataAndManifestPoolsFromOneCandidateRange) {
@@ -514,6 +663,182 @@ TEST_F(RelocatableMetadataStoreTest, LargeValueStoreRejectsInvalidPublicReferenc
 															   LogSequenceNumber(3U)));
 			},
 			FormatError::FERR_INVALID_HEADER);
+	const std::array<LargeValueId, 2U> duplicateValueIds{{LargeValueId(1U), LargeValueId(1U)}};
+	const std::array<PageRetirement, 1U> placeholderRetirement{
+			{{{PageId(1U), SegmentId(1U), RSS_PAGE_POOL_FIRST_DATA_FRAME, Generation(1U), 0U},
+			  1U,
+			  PageOwnerKind::POK_LARGE_VALUE_DATA,
+			  LogSequenceNumber(1U)}}};
+	expectFormatError(
+			[&] {
+				static_cast<void>(store.retireUnreachablePages(Generation(1U), duplicateValueIds, placeholderRetirement,
+															   PhysicalSlotId(40U), PhysicalSlotId(80U),
+															   LogSequenceNumber(3U)));
+			},
+			FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableMetadataStoreTest,
+	   LargeValueContentIndexPlannerValidatesTheGraphPublicationBatchBeforeReservingPages) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	LargeValueStore store(io, *metadata);
+	const std::vector<std::byte> firstBytes = bytes(29U);
+	const std::vector<std::byte> secondBytes = bytes(31U);
+	const LargeValueRef first = store.planReference(LargeValueId(1U), Generation(1U), firstBytes,
+													LargeValueKind::LVK_UTF8_TEXT, "text/plain", {});
+	const LargeValueRef second = store.planReference(LargeValueId(2U), Generation(1U), secondBytes,
+													 LargeValueKind::LVK_UTF8_TEXT, "text/plain", {});
+	const NativeGraphLargeValueMutation firstMutation{
+			first,
+			firstBytes,
+			PhysicalSlotId(40U),
+			PhysicalSlotId(80U),
+			PhysicalSlotId(40U),
+			PhysicalSlotId(80U),
+			{},
+			LargeValueExtentClass::LVEC_32K,
+			store.plannedDataPageCount(firstBytes, {}, LargeValueExtentClass::LVEC_32K),
+			store.plannedManifestPageCount(firstBytes, {}, LargeValueExtentClass::LVEC_32K)};
+	const NativeGraphLargeValueMutation secondMutation{
+			second,
+			secondBytes,
+			PhysicalSlotId(40U),
+			PhysicalSlotId(80U),
+			PhysicalSlotId(40U),
+			PhysicalSlotId(80U),
+			{},
+			LargeValueExtentClass::LVEC_32K,
+			store.plannedDataPageCount(secondBytes, {}, LargeValueExtentClass::LVEC_32K),
+			store.plannedManifestPageCount(secondBytes, {}, LargeValueExtentClass::LVEC_32K)};
+	const std::array<NativeGraphLargeValueMutation, 0U> noValues{};
+	const std::array<NativeGraphLargeValueMutation, 2U> values{{firstMutation, secondMutation}};
+	const std::array<NativeGraphLargeValueMutation, 2U> duplicateValues{{firstMutation, firstMutation}};
+	NativeGraphLargeValueMutation invalidIdentity = secondMutation;
+	invalidIdentity.reference.value_id = LargeValueId{};
+	const std::array<NativeGraphLargeValueMutation, 1U> invalidValues{{invalidIdentity}};
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+
+	expectFormatError(
+			[&] {
+				static_cast<void>(store.planNativeGraphContentIndexMutation(snapshot, noValues, PhysicalSlotId(40U),
+																			PhysicalSlotId(80U)));
+			},
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				static_cast<void>(store.planNativeGraphContentIndexMutation(snapshot, values, PhysicalSlotId{},
+																			PhysicalSlotId(80U)));
+			},
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				static_cast<void>(store.planNativeGraphContentIndexMutation(snapshot, values, PhysicalSlotId(81U),
+																			PhysicalSlotId(80U)));
+			},
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				static_cast<void>(store.planNativeGraphContentIndexMutation(snapshot, duplicateValues,
+																			PhysicalSlotId(40U), PhysicalSlotId(80U)));
+			},
+			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				static_cast<void>(store.planNativeGraphContentIndexMutation(snapshot, invalidValues,
+																			PhysicalSlotId(40U), PhysicalSlotId(80U)));
+			},
+			FormatError::FERR_INVALID_HEADER);
+
+	const LargeValueContentIndexPublicationPlan plan =
+			store.planNativeGraphContentIndexMutation(snapshot, values, PhysicalSlotId(40U), PhysicalSlotId(80U));
+	EXPECT_EQ(plan.mutation.index_id, RSS_LARGE_VALUE_CONTENT_INDEX_ID);
+	EXPECT_FALSE(plan.mutation.expected_root.has_value());
+	EXPECT_TRUE(plan.preparer);
+	EXPECT_EQ(plan.mutation.new_pool_requests.size(), 1U);
+	snapshot.release();
+}
+
+TEST_F(RelocatableMetadataStoreTest,
+	   MetadataCoordinatorRejectsLargeValuePublicationWithoutTheRequiredContentIndexMutation) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	LargeValueStore store(io, *metadata);
+	const std::vector<std::byte> input = bytes(29U);
+	const LargeValueRef unpublishedReference{LargeValueId(1U),
+											 Generation(1U),
+											 static_cast<uint64_t>(input.size()),
+											 graph::utils::Sha256::digest(input),
+											 LargeValueKind::LVK_UTF8_TEXT,
+											 LargeValueCodec::LVC_RAW,
+											 "text/plain"};
+	const NativeGraphLargeValueMutation unpublishedMutation{unpublishedReference,
+															input,
+															PhysicalSlotId(40U),
+															PhysicalSlotId(40U),
+															PhysicalSlotId(41U),
+															PhysicalSlotId(41U),
+															{},
+															LargeValueExtentClass::LVEC_16K,
+															1U,
+															1U};
+	const std::array<NativeGraphLargeValueMutation, 1U> unpublishedValues{{unpublishedMutation}};
+	const std::array<EntityPageReplacementRequest, 0U> noEntityReplacements{};
+	const std::array<EntityPageAppendBatchRequest, 0U> noEntityAppends{};
+	const std::array<EntityPageNewPoolBatchRequest, 0U> noEntityPools{};
+	const std::array<NativeGraphPropertyPageReplacementRequest, 0U> noPropertyReplacements{};
+	const std::array<NativeGraphPropertyPageBatchRequest, 0U> noPropertyPools{};
+	const NativeGraphPageTransactionWithLargeValuesPreparer noMaterializations =
+			[](std::span<EntityPageReplacementMaterialization>, std::span<EntityPageAppendBatchMaterialization>,
+			   std::span<EntityPageNewPoolBatchMaterialization>,
+			   std::span<NativeGraphPropertyPageReplacementMaterialization>,
+			   std::span<NativeGraphPropertyPageBatchMaterialization>, std::span<LargeValueMaterializationResult>) {};
+	const ExistingPoolPagesRetirementPreparer noRetirementMaterializations =
+			[](std::span<const ExistingPoolPageRetirementBatch>) {};
+
+	expectFormatError(
+			[&] {
+				static_cast<void>(metadata->mutateNativeGraphPagesWithLargeValues(
+						noEntityReplacements, noEntityAppends, noEntityPools, noPropertyReplacements, noPropertyPools,
+						unpublishedValues, {}, LogSequenceNumber(2U), noMaterializations, {}));
+			},
+			FormatError::FERR_INVALID_HEADER);
+	MetadataSnapshotPin beforeWrite = metadata->openSnapshot();
+	EXPECT_EQ(beforeWrite.superblock().generation, Generation(1U));
+	EXPECT_FALSE(metadata->findLargeValueManifestOptional(beforeWrite, unpublishedReference.value_id).has_value());
+	beforeWrite.release();
+
+	const LargeValueWriteResult written = store.write(input, writeOptions(), LogSequenceNumber(2U));
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	const Generation generation = snapshot.superblock().generation;
+	const PageRetirement dataRetirement =
+			store.planPageRetirement(snapshot, written.manifest.chunks.front().first_data_page_id,
+									 written.reference.value_id, PageOwnerKind::POK_LARGE_VALUE_DATA);
+	const PageRetirement manifestRetirement = store.planPageRetirement(
+			snapshot, written.manifest.page_id, written.reference.value_id, PageOwnerKind::POK_LARGE_VALUE_MANIFEST);
+	snapshot.release();
+
+	const std::array<NativeGraphLargeValueMutation, 0U> noNewValues{};
+	const std::array<PageRetirement, 2U> retirements{{dataRetirement, manifestRetirement}};
+	const std::array<LargeValueId, 1U> erasedValueIds{{written.reference.value_id}};
+	expectFormatError(
+			[&] {
+				static_cast<void>(metadata->mutateNativeGraphPagesWithLargeValues(
+						noEntityReplacements, noEntityAppends, noEntityPools, noPropertyReplacements, noPropertyPools,
+						noNewValues, {}, LogSequenceNumber(3U), noMaterializations, {}, {}, {}, retirements,
+						erasedValueIds, noRetirementMaterializations));
+			},
+			FormatError::FERR_INVALID_HEADER);
+
+	MetadataSnapshotPin unchanged = metadata->openSnapshot();
+	EXPECT_EQ(unchanged.superblock().generation, generation);
+	EXPECT_EQ(store.read(unchanged, written.reference), input);
+	unchanged.release();
+	metadata.reset();
+
+	auto reopened = RelocatableMetadataStore::open(io);
+	LargeValueStore reopenedStore(io, *reopened);
+	MetadataSnapshotPin recovered = reopened->openSnapshot();
+	EXPECT_EQ(recovered.superblock().generation, generation);
+	EXPECT_EQ(reopenedStore.read(recovered, written.reference), input);
 }
 
 TEST_F(RelocatableMetadataStoreTest, LargeValueStoreWritesAcrossPoolsAndReadsOnlyTheRequestedRange) {
@@ -599,8 +924,7 @@ TEST_F(RelocatableMetadataStoreTest, LargeValueStoreReusesSharedDataAndManifestP
 	EXPECT_EQ(secondPool.state, firstPool.state);
 	EXPECT_EQ(secondPool.committed_lsn, firstPool.committed_lsn);
 	const std::vector<CatalogEntry> currentDataPools = metadata->findCurrentLargeValueDataPagePools(current);
-	const std::vector<CatalogEntry> currentManifestPools =
-			metadata->findCurrentLargeValueManifestPagePools(current);
+	const std::vector<CatalogEntry> currentManifestPools = metadata->findCurrentLargeValueManifestPagePools(current);
 	ASSERT_EQ(currentDataPools.size(), 1U);
 	ASSERT_EQ(currentManifestPools.size(), 1U);
 	EXPECT_EQ(currentDataPools.front().segment_id, firstPool.segment_id);
@@ -789,6 +1113,57 @@ TEST_F(RelocatableMetadataStoreTest, LargeValueStoreUsesManifestLeavesBeyondRoot
 	LargeValueStore reopenedStore(io, *reopened);
 	MetadataSnapshotPin reopenedSnapshot = reopened->openSnapshot();
 	EXPECT_EQ(reopenedStore.read(reopenedSnapshot, written.reference), input);
+}
+
+TEST_F(RelocatableMetadataStoreTest, StreamedLargeValueMaterializationUsesBoundedManifestFrontier) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	LargeValueStore store(io, *metadata);
+	const std::vector<std::byte> input = bytes(
+			(static_cast<size_t>(RSS_LARGE_VALUE_MANIFEST_MAX_CHUNKS) + 1U) * RSS_LARGE_VALUE_EXTENT_16K_BYTES + 19U);
+	const LargeValueRef reference =
+			store.planReference(LargeValueId(1U), Generation(1U), input, LargeValueKind::LVK_UTF8_TEXT, "text/plain",
+								{}, LargeValueExtentClass::LVEC_16K);
+	const size_t dataPageCount = store.plannedDataPageCount(input, {}, LargeValueExtentClass::LVEC_16K);
+	const size_t manifestPageCount = store.plannedManifestPageCount(input, {}, LargeValueExtentClass::LVEC_16K);
+	ASSERT_GT(dataPageCount, 0U);
+	ASSERT_EQ(manifestPageCount, 3U);
+	struct PreparedFrame {
+		PageOwnerHeader owner;
+		std::vector<std::byte> payload;
+		PageOwnerKind kind = PageOwnerKind::POK_NONE;
+	};
+	std::vector<PreparedFrame> frames;
+	frames.reserve(dataPageCount + manifestPageCount);
+	const PageId firstDataPage(101U);
+	const PageId firstManifestPage(1000U);
+	store.materializeStreamedValue(
+			{reference,
+			 input,
+			 {},
+			 LargeValueExtentClass::LVEC_16K,
+			 firstDataPage,
+			 dataPageCount,
+			 firstManifestPage,
+			 manifestPageCount},
+			LogSequenceNumber(2U),
+			[](PageId pageId, PageOwnerKind kind) {
+				return PageOwnerHeader{
+						pageId, 1U, kind, 0U, RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, Generation(1U), LogSequenceNumber(2U)};
+			},
+			[&frames](const PageOwnerHeader &owner, std::vector<std::byte> payload, PageOwnerKind kind) {
+				frames.push_back({owner, std::move(payload), kind});
+			});
+	ASSERT_EQ(frames.size(), dataPageCount + manifestPageCount);
+	EXPECT_EQ(frames.front().owner.page_id, firstDataPage);
+	const auto root = std::find_if(frames.begin(), frames.end(), [firstManifestPage](const PreparedFrame &frame) {
+		return frame.kind == PageOwnerKind::POK_LARGE_VALUE_MANIFEST && frame.owner.page_id == firstManifestPage;
+	});
+	ASSERT_NE(root, frames.end());
+	const LargeValueManifest decodedRoot = LargeValueManifestPage::open(root->owner, root->payload).manifest();
+	EXPECT_TRUE(decodedRoot.isRoot());
+	EXPECT_EQ(decodedRoot.children.size(), 2U);
+	EXPECT_EQ(decodedRoot.children.front().page_id, PageId(firstManifestPage.value() + 1U));
+	EXPECT_EQ(decodedRoot.children.back().page_id, PageId(firstManifestPage.value() + 2U));
 }
 
 TEST_F(RelocatableMetadataStoreTest, LargeValueStoreReadsAValidManifestWithAnInternalChildLevel) {
@@ -1388,36 +1763,65 @@ TEST_F(RelocatableMetadataStoreTest, LargeValueStoreRejectsMultiLevelChildWithMi
 					  FormatError::FERR_INVALID_STATE);
 }
 
-TEST_F(RelocatableMetadataStoreTest, LargeValueStoreRetiresEveryFrameAndContentIdentityAtomically) {
+TEST_F(RelocatableMetadataStoreTest,
+	   LargeValueStoreRejectsIncompleteMultiLevelRetirementBeforeRemovingTheContentIdentity) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
 	LargeValueStore store(io, *metadata);
-	const std::vector<std::byte> input = bytes(RSS_LARGE_VALUE_DATA_PAGE_MAX_STORED_BYTES + 1U);
-	const LargeValueWriteResult written = store.write(input, writeOptions(), LogSequenceNumber(2U));
-	MetadataSnapshotPin oldSnapshot = metadata->openSnapshot();
-	std::vector<PageRetirement> retirements;
-	for (const LargeValueChunk &chunk: written.manifest.chunks) {
-		for (uint16_t ordinal = 0U; ordinal < chunk.data_page_count; ++ordinal) {
-			retirements.push_back(
-					store.planPageRetirement(oldSnapshot, PageId(chunk.first_data_page_id.value() + ordinal),
-											 written.reference.value_id, PageOwnerKind::POK_LARGE_VALUE_DATA));
+	LargeValueWriteResult written;
+	const LargeValueManifest root = largeMultiLeafManifest(store, *metadata, written);
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	const std::vector<LargeValueManifest> nodes = store.manifestTree(snapshot, root);
+	ASSERT_GT(nodes.size(), 1U);
+
+	std::vector<PageRetirement> completeRetirements;
+	for (const LargeValueManifest &node: nodes) {
+		for (const LargeValueChunk &chunk: node.chunks) {
+			for (uint16_t ordinal = 0U; ordinal < chunk.data_page_count; ++ordinal) {
+				completeRetirements.push_back(
+						store.planPageRetirement(snapshot, PageId(chunk.first_data_page_id.value() + ordinal),
+												 written.reference.value_id, PageOwnerKind::POK_LARGE_VALUE_DATA));
+			}
 		}
+		completeRetirements.push_back(store.planPageRetirement(snapshot, node.page_id, written.reference.value_id,
+															   PageOwnerKind::POK_LARGE_VALUE_MANIFEST));
 	}
-	retirements.push_back(store.planPageRetirement(oldSnapshot, written.manifest.page_id, written.reference.value_id,
-												   PageOwnerKind::POK_LARGE_VALUE_MANIFEST));
-	const Generation expectedGeneration = oldSnapshot.superblock().generation;
+	std::sort(completeRetirements.begin(), completeRetirements.end(),
+			  [](const PageRetirement &left, const PageRetirement &right) {
+				  return left.location.page_id.value() < right.location.page_id.value();
+			  });
+
+	std::vector<PageRetirement> incompleteRetirements = completeRetirements;
+	const auto childManifest = std::find_if(
+			incompleteRetirements.begin(), incompleteRetirements.end(), [&root](const PageRetirement &retirement) {
+				return retirement.expected_owner_kind == PageOwnerKind::POK_LARGE_VALUE_MANIFEST &&
+					   retirement.location.page_id != root.page_id;
+			});
+	ASSERT_NE(childManifest, incompleteRetirements.end());
+	incompleteRetirements.erase(childManifest);
+
+	const Generation expectedGeneration = snapshot.superblock().generation;
 	const std::array<LargeValueId, 1U> erasedValueIds{{written.reference.value_id}};
+	expectFormatError(
+			[&] {
+				static_cast<void>(store.retireUnreachablePages(expectedGeneration, erasedValueIds,
+															   incompleteRetirements, PhysicalSlotId(40U),
+															   PhysicalSlotId(80U), LogSequenceNumber(3U)));
+			},
+			FormatError::FERR_INVALID_STATE);
+	EXPECT_EQ(store.read(snapshot, written.reference),
+			  bytes((static_cast<size_t>(RSS_LARGE_VALUE_MANIFEST_MAX_CHUNKS) + 1U) * RSS_LARGE_VALUE_EXTENT_16K_BYTES +
+					19U));
+
 	const Superblock retired =
-			store.retireUnreachablePages(expectedGeneration, erasedValueIds, retirements, PhysicalSlotId(40U),
+			store.retireUnreachablePages(expectedGeneration, erasedValueIds, completeRetirements, PhysicalSlotId(40U),
 										 PhysicalSlotId(80U), LogSequenceNumber(3U));
 	EXPECT_GT(retired.generation, expectedGeneration);
-	EXPECT_EQ(store.read(oldSnapshot, written.reference), input);
+	snapshot.release();
 
 	MetadataSnapshotPin current = metadata->openSnapshot();
 	EXPECT_FALSE(metadata->findLargeValueManifestOptional(current, written.reference.value_id).has_value());
-	EXPECT_THROW(static_cast<void>(store.read(current, written.reference)), FormatException);
 	const BTreeIndex contentIndex(RSS_LARGE_VALUE_CONTENT_INDEX_ID, store.contentIndex(), *metadata);
 	EXPECT_TRUE(contentIndex.scan(current, std::nullopt, 1U).empty());
-	oldSnapshot.release();
 }
 
 TEST_F(RelocatableMetadataStoreTest, LargeValueStoreRejectsRetirementPlannedAgainstAStaleGeneration) {

@@ -176,15 +176,16 @@ namespace graph::storage {
 	}
 
 	std::vector<VectorDeltaEntry> VectorDeltaMapping::scan(const MetadataSnapshotPin &snapshot, BTreePageStore &pages,
-														   RelocatableMetadataStore &metadata, uint64_t mappingIndexId,
-														   size_t maximumEntries) {
+																   RelocatableMetadataStore &metadata, uint64_t mappingIndexId,
+																   size_t maximumEntries, const CancellationCheckpoint *cancellation) {
 		validateMappingIndexId(mappingIndexId);
 		if (!snapshot.isValid() || maximumEntries == 0U || maximumEntries == std::numeric_limits<size_t>::max()) {
 			fail(FormatError::FERR_INVALID_HEADER,
 				 "relocatable Vector delta mapping scan requires a bounded pinned snapshot");
 		}
 		const std::vector<BTreePageEntry> entries =
-				BTreeIndex(mappingIndexId, pages, metadata).scan(snapshot, std::nullopt, maximumEntries + 1U);
+				BTreeIndex(mappingIndexId, pages, metadata)
+						.scan(snapshot, std::nullopt, maximumEntries + 1U, BufferPoolReadHint::BPRH_SEQUENTIAL, cancellation);
 		if (entries.size() > maximumEntries) {
 			fail(FormatError::FERR_INVALID_STATE,
 				 "relocatable Vector delta mapping exceeds its configured bounded scan cardinality");
@@ -193,6 +194,9 @@ namespace graph::storage {
 		result.reserve(entries.size());
 		uint64_t previousVectorId = 0U;
 		for (const BTreePageEntry &entry: entries) {
+			if (cancellation != nullptr) {
+				cancellation->check();
+			}
 			const VectorDeltaEntry decoded = decodeEntry(entry);
 			const uint64_t vectorId = decoded.vector_id;
 			if (vectorId == 0U || vectorId <= previousVectorId) {

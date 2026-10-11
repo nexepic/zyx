@@ -119,9 +119,9 @@ singleQuery
     : ( withClause+ readingClause* returnStatement )
     | ( withClause+ readingClause* updatingClause+ returnStatement? )
     | ( readingClause* withClause+ readingClause* returnStatement )
-    | ( readingClause* withClause+ readingClause* updatingClause+ returnStatement? )
+    | ( readingClause* withClause+ readingClause* (updatingClause | callSubquery)+ returnStatement? )
     | ( readingClause* returnStatement )
-    | ( readingClause* updatingClause+ returnStatement? )
+    | ( readingClause* (updatingClause | callSubquery)+ returnStatement? )
     ;
 
 // ============================================================================

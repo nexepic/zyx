@@ -158,6 +158,15 @@ TEST(RelocatableConstraintDefinitionCodecTest, RejectsMalformedWireHeadersAndVar
 	LittleEndianCodec::writeU16(corrupt, 6U, 0U);
 	expectFormatError([&] { static_cast<void>(ConstraintDefinitionCodec::decode(corrupt)); }, FormatError::FERR_RESERVED_BITS);
 	corrupt = encoded;
+	corrupt[27U] = std::byte{1};
+	expectFormatError([&] { static_cast<void>(ConstraintDefinitionCodec::decode(corrupt)); }, FormatError::FERR_RESERVED_BITS);
+	corrupt = encoded;
+	corrupt[30U] = std::byte{1};
+	expectFormatError([&] { static_cast<void>(ConstraintDefinitionCodec::decode(corrupt)); }, FormatError::FERR_RESERVED_BITS);
+	corrupt = encoded;
+	corrupt[31U] = std::byte{1};
+	expectFormatError([&] { static_cast<void>(ConstraintDefinitionCodec::decode(corrupt)); }, FormatError::FERR_RESERVED_BITS);
+	corrupt = encoded;
 	LittleEndianCodec::writeU64(corrupt, RESERVED_OFFSET, 1U);
 	expectFormatError([&] { static_cast<void>(ConstraintDefinitionCodec::decode(corrupt)); }, FormatError::FERR_RESERVED_BITS);
 	corrupt = encoded;
@@ -200,4 +209,24 @@ TEST(RelocatableConstraintDefinitionCodecTest, RejectsTruncatedPropertyPayloadTr
 	corrupt = encodedUnique();
 	corrupt[PROPERTY_TYPE_OFFSET] = std::byte{99};
 	expectFormatError([&] { static_cast<void>(ConstraintDefinitionCodec::decode(corrupt)); }, FormatError::FERR_INVALID_HEADER);
+}
+
+TEST(RelocatableConstraintDefinitionCodecTest, RejectsOrExactlyRoundTripsEverySingleBitMutation) {
+	ConstraintDefinition expected = definition(std::string("person\0key", 10), ConstraintDefinitionEntityKind::CDEK_NODE,
+			ConstraintDefinitionKind::CDK_NODE_KEY, {std::string("tenant\0", 7), std::string("subject\xFF", 8)});
+	const std::vector<std::byte> encoded = ConstraintDefinitionCodec::encode(expected);
+	for (size_t byteOffset = 0U; byteOffset < encoded.size(); ++byteOffset) {
+		for (uint8_t bit = 0U; bit < 8U; ++bit) {
+			std::vector<std::byte> mutation = encoded;
+			mutation[byteOffset] ^= std::byte{static_cast<uint8_t>(1U << bit)};
+			try {
+				const ConstraintDefinition decoded = ConstraintDefinitionCodec::decode(mutation);
+				EXPECT_EQ(ConstraintDefinitionCodec::encode(decoded), mutation)
+						<< "Constraint definition mutation was normalized at byte " << byteOffset << ", bit "
+						<< static_cast<unsigned>(bit);
+			} catch (const FormatException &) {
+				// Any non-canonical mutation must fail at the typed format boundary.
+			}
+		}
+	}
 }

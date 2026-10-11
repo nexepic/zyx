@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -19,6 +18,7 @@
 #include "graph/storage/relocatable/maintenance/RelocatableMaintenanceLoop.hpp"
 #include "graph/storage/relocatable/maintenance/RelocatablePageCompactionScheduler.hpp"
 #include "graph/storage/relocatable/maintenance/RelocatableSegmentRelocationScheduler.hpp"
+#include "graph/storage/relocatable/maintenance/SingleWriterSaturatingCounter.hpp"
 
 namespace graph::storage {
 
@@ -31,6 +31,7 @@ namespace graph::storage {
 	class VectorManifestStore;
 	class VectorPageStore;
 	class RelocatableMetadataStore;
+	struct LargeValueReachabilityReclaimOptions;
 
 	struct RelocatableMaintenanceOptions {
 		RelocatableMaintenanceLoopPolicy loop{};
@@ -55,6 +56,8 @@ namespace graph::storage {
 		RelocatableSegmentRelocationMetrics segments{};
 		uint64_t vector_rebuild_recovery_scanned_metadata_pages = 0U;
 		uint64_t vector_rebuild_recovery_completed_rebuild_attempts = 0U;
+		uint64_t global_adjacency_pools_retired = 0U;
+		uint64_t global_adjacency_pools_released = 0U;
 
 		constexpr bool operator==(const RelocatableMaintenanceMetrics &) const = default;
 	};
@@ -77,6 +80,28 @@ namespace graph::storage {
 	using RelocatableVectorRebuildDebtScanner =
 			std::function<RelocatableVectorRebuildDebtScan(uint64_t afterIndexId, size_t maximumMetadataPages)>;
 
+	// The graph backend owns the semantic proof that a pool belonged to the
+	// retired global adjacency tree. The maintenance service owns only its
+	// bounded retirement and snapshot-safe release lifecycle.
+	// The scanner distinguishes new empty pools from a durable retirement whose
+	// snapshot-safe physical release was interrupted by a prior process crash.
+	enum class RelocatableGlobalAdjacencyPoolReclaimState {
+		RGAPRS_SEALED,
+		RGAPRS_RETIRED,
+	};
+
+	struct RelocatableGlobalAdjacencyPoolReclaimCandidate {
+		SegmentId segment_id{};
+		Generation generation{};
+		RelocatableGlobalAdjacencyPoolReclaimState state =
+				RelocatableGlobalAdjacencyPoolReclaimState::RGAPRS_SEALED;
+
+		constexpr bool operator==(const RelocatableGlobalAdjacencyPoolReclaimCandidate &) const = default;
+	};
+
+	using RelocatableGlobalAdjacencyPoolReclaimCandidateScanner =
+			std::function<std::optional<RelocatableGlobalAdjacencyPoolReclaimCandidate>()>;
+
 	// Every public enqueue method captures only a typed logical request. Physical
 	// payload dispatch stays in the matching coordinator, while the execution LSN
 	// is selected under the graph publication lock rather than at queue time.
@@ -86,11 +111,12 @@ namespace graph::storage {
 								VectorManifestStore &vectorManifests, EntityPageStore &entities,
 								VectorCodebookStore &codebooks, LargeValueStore &largeValues,
 								   PhysicalSegmentAllocator &physical, RelocatableMetadataStore &metadata,
-				   std::mutex &publicationMutex, RelocatableMaintenanceOptions options,
-				   RelocatableMaintenanceFailureHandler failureHandler = {},
-				   std::function<bool()> writeAllowed = {},
-				   RelocatableVectorRebuildExecutor vectorRebuild = {},
-				   RelocatableVectorRebuildDebtScanner vectorRebuildDebtScanner = {});
+			   std::mutex &publicationMutex, RelocatableMaintenanceOptions options,
+			   RelocatableMaintenanceFailureHandler failureHandler = {},
+			   std::function<bool()> writeAllowed = {},
+			   RelocatableVectorRebuildExecutor vectorRebuild = {},
+			   RelocatableVectorRebuildDebtScanner vectorRebuildDebtScanner = {},
+			   RelocatableGlobalAdjacencyPoolReclaimCandidateScanner globalAdjacencyPoolReclaimCandidateScanner = {});
 		~RelocatableMaintenanceService() = default;
 		RelocatableMaintenanceService(const RelocatableMaintenanceService &) = delete;
 		RelocatableMaintenanceService &operator=(const RelocatableMaintenanceService &) = delete;
@@ -110,8 +136,11 @@ namespace graph::storage {
 																   uint32_t pageBudget);
 		[[nodiscard]] uint64_t enqueueEntityPageCompaction(SegmentId source, SegmentId destination,
 																 uint32_t pageBudget);
-		[[nodiscard]] uint64_t enqueueLargeValuePageCompaction(SegmentId source, SegmentId destination,
-																 uint32_t pageBudget);
+		[[nodiscard]] uint64_t enqueueLargeValuePageCompaction(SegmentId source, SegmentId destination, uint32_t pageBudget);
+		// Runs one bounded reachability/reclamation pass under the same publication
+		// fence as other maintenance tasks. Duplicate requests are coalesced.
+		[[nodiscard]] uint64_t enqueueLargeValueReachabilityReclamation(
+				const LargeValueReachabilityReclaimOptions &options);
 		[[nodiscard]] uint64_t enqueueCodebookExtentRelocation(uint64_t codebookId, ExtentId extentId,
 													   PhysicalSlotId firstDestination,
 													   PhysicalSlotId lastDestination);
@@ -120,6 +149,10 @@ namespace graph::storage {
 		// process restart from the routed Manifest Directory, so queue admission is
 		// never the source of truth for durable Vector rebuild debt.
 		[[nodiscard]] uint64_t enqueueVectorRebuildRecovery();
+		// Retires every currently empty global-adjacency B+Tree pool. One queued
+		// task walks candidates incrementally and defers final slot release until
+		// every older metadata snapshot has drained.
+		[[nodiscard]] uint64_t enqueueGlobalAdjacencyPoolReclamation();
 
 		[[nodiscard]] RelocatableMaintenanceMetrics metrics() const;
 		[[nodiscard]] std::exception_ptr lastFailure() const;
@@ -132,12 +165,15 @@ namespace graph::storage {
 		[[nodiscard]] LogSequenceNumber nextCheckpointLsn() const;
 
 		RelocatableMaintenanceOptions options_;
+		SlottedPagePool &pages_;
+		LargeValueStore &large_values_;
 		RelocatableMetadataStore &metadata_;
 		EntityPageStore &entities_;
 		std::mutex &publication_mutex_;
 		std::function<bool()> write_allowed_;
 		RelocatableVectorRebuildExecutor vector_rebuild_;
 		RelocatableVectorRebuildDebtScanner vector_rebuild_debt_scanner_;
+		RelocatableGlobalAdjacencyPoolReclaimCandidateScanner global_adjacency_pool_reclaim_candidate_scanner_;
 		RelocatableCompactionCoordinator property_coordinator_;
 		RelocatableCompactionCoordinator entity_coordinator_;
 		RelocatableCompactionCoordinator btree_coordinator_;
@@ -153,8 +189,10 @@ namespace graph::storage {
 		RelocatablePageCompactionScheduler large_value_scheduler_;
 		RelocatableSegmentRelocationScheduler segment_scheduler_;
 		RelocatableMaintenanceLoop loop_;
-		std::atomic<uint64_t> vector_rebuild_recovery_scanned_metadata_pages_{0U};
-		std::atomic<uint64_t> vector_rebuild_recovery_completed_rebuild_attempts_{0U};
+		SingleWriterSaturatingCounter vector_rebuild_recovery_scanned_metadata_pages_{};
+		SingleWriterSaturatingCounter vector_rebuild_recovery_completed_rebuild_attempts_{};
+		SingleWriterSaturatingCounter global_adjacency_pools_retired_{};
+		SingleWriterSaturatingCounter global_adjacency_pools_released_{};
 	};
 
 } // namespace graph::storage

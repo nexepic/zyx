@@ -13,7 +13,7 @@
 #include <limits>
 #include <stdexcept>
 
-#include "graph/vector/core/BFloat16.hpp"
+#include "graph/common/VectorMath.hpp"
 
 namespace graph::storage {
 
@@ -52,7 +52,7 @@ namespace graph::storage {
 					failInput(logicalWrite ? "Vector property has a non-numeric coordinate"
 									   : "relocatable Vector value has a non-numeric coordinate");
 				}
-				const vector::BFloat16 encoded(converted);
+				const common::BFloat16 encoded(converted);
 				LittleEndianCodec::writeU16(bytes, static_cast<size_t>(index) * sizeof(uint16_t), encoded.data);
 			}
 			return bytes;
@@ -76,7 +76,7 @@ namespace graph::storage {
 		}
 		double squaredNorm = 0.0;
 		for (size_t offset = 0U; offset < rawBfloat16.size(); offset += sizeof(uint16_t)) {
-			vector::BFloat16 encoded;
+			common::BFloat16 encoded;
 			encoded.data = LittleEndianCodec::readU16(rawBfloat16, offset);
 			const float coordinate = encoded.toFloat();
 			if (!std::isfinite(coordinate)) {

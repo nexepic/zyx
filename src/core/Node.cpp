@@ -22,7 +22,6 @@
 #include <cstring>
 #include <stdexcept>
 #include "graph/core/PropertyTypes.hpp"
-#include "graph/storage/IDAllocator.hpp"
 #include "graph/utils/Serializer.hpp"
 
 namespace graph {

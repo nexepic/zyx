@@ -26,7 +26,7 @@ projectOrder: 1
 
 - **内存效率**：768 维向量从 3KB 压缩至约 100 字节
 - **搜索速度**：距离计算复杂度从 O(dim) 降低至 O(numSubspaces)
-- **DiskANN 集成**：与基于图的 ANN 搜索无缝集成
+- **原生邻接集成**：通过原子发布的派生邻接数据进行有界 ANN 检索
 - **零拷贝操作**：高效的内存布局，对缓存友好
 
 ### PQ 流水线
@@ -84,9 +84,9 @@ Cm = {c_m1, c_m2, ..., c_mK}
 - K = 每个子空间的质心数量（通常为 256 = 2^8）
 - c_mi 属于 R^Di（第 m 个子空间中的第 i 个质心）
 
-训练过程对每个子空间独立应用 K-Means 聚类。对于 M 个子空间中的每一个，训练数据被切分为覆盖该子空间维度的子向量，K-Means 使用固定种子 42 和最多 15 次迭代运行。产生的 K 个质心构成该子空间的码本。
+训练过程对每个子空间独立应用确定性的 Lloyd 式聚类。原生实现按 Vector ID 选择稳定且有界的样本，将记录切分为子向量，并执行配置的有限迭代次数。产生的 K 个质心构成该子空间的码本。
 
-`NativeProductQuantizer` 类（定义在 `include/graph/vector/core/NativeProductQuantizer.hpp`）管理此过程：它遍历所有 M 个子空间，从训练集中提取对应的子向量，调用 `include/graph/vector/core/KMeans.hpp` 中的 `KMeans::run`，并存储生成的质心。
+`DeterministicProductQuantizer` 类（定义在 `include/graph/storage/relocatable/vector/DeterministicProductQuantizer.hpp`）管理此过程：它验证有界输入形状、训练确定性的子空间质心，并为原生 Vector store 产生显式 little-endian codebook payload。
 
 ### 编码
 
@@ -102,7 +102,7 @@ encode(x) = [q_1, q_2, ..., q_M]
 q_m = argmin_i ||x_m - c_mi||^2
 ```
 
-这里 x_m 是向量 x 对应子空间 m 的子向量。具体地，对于每个子空间 m，编码器取偏移 `m * subDim` 处的 Di 维子向量，使用 `VectorMetric::computeL2Sqr`（来自 `include/graph/vector/core/VectorMetric.hpp`）计算与码本 m 中每个质心的平方 L2 距离，并将最近质心的索引记录为 `uint8_t`。由于 K = 256，每个编码恰好占用一个字节，每个向量总共需要 M 个字节。
+这里 x_m 是向量 x 对应子空间 m 的子向量。对于每个子空间 m，编码器计算与每个质心的平方距离，并将第一个最近质心的索引记录为 `uint8_t`；确定性的平局规则让重复编码不受主机调度影响。由于 K 被限制为不超过 256，每个编码占一个字节，每个向量总共需要 M 个字节。
 
 ### 解码
 
@@ -212,7 +212,7 @@ T[m][i] = ||q_m - c_mi||^2
 d(q, x) = 对 m 求和 T[m][codes[m]]
 ```
 
-每一项是一次简单的数组访问：在第 m 行索引 `codes[m]` 列。`NativeProductQuantizer` 应用 4 路循环展开来分摊循环开销并提高流水线利用率。对于 M = 96，这减少为大约 24 次展开迭代加上一个小的余数循环。
+每一项是一次简单的数组访问：在第 m 行索引 `codes[m]` 列。原生实现会在该查找前验证 codebook 和 PQ payload 的显式形状，并限制所有读取。
 
 ### ADC 距离表查找
 
@@ -272,11 +272,11 @@ K-Means 聚类用于训练每个子空间的码本。
 
 ### 算法
 
-K-Means 实现（`include/graph/vector/core/KMeans.hpp`）遵循标准的期望最大化（EM）方法：
+原生确定性训练器（`include/graph/storage/relocatable/vector/DeterministicProductQuantizer.hpp`）遵循有界的 Lloyd 式期望/最大化方法：
 
-1. **初始化**：通过随机选择 K 个数据点来播种 K 个质心。随机数生成器使用固定种子 42 以确保可重现性。
+1. **初始化**：从稳定且有界的样本中确定性地选择 K 个质心。
 
-2. **E 步（分配）**：每个数据点根据平方 L2 距离（通过 `VectorMetric::computeL2Sqr` 计算）分配到最近的质心。如果与上一次迭代相比没有分配变化，则训练提前收敛。
+2. **E 步（分配）**：每个数据点按平方 L2 距离分配到最近的质心，并由第一个质心赢得平局。
 
 3. **M 步（更新）**：每个质心被重新计算为分配给它的所有点的均值。如果一个簇变为空（无分配点），其质心被重新初始化为一个随机选择的数据点。
 
@@ -299,7 +299,7 @@ K-Means 实现（`include/graph/vector/core/KMeans.hpp`）遵循标准的期望�
 
 ### 参数
 
-`NativeProductQuantizer` 通过三个参数配置：
+`DeterministicProductQuantizer` 由维度、子空间、质心、有限迭代次数以及显式 record/sample 上限配置：
 
 - **dim** -- 输入向量的总维度（如 768）
 - **numSubspaces** -- 向量被分解的子空间数量 M
@@ -330,13 +330,13 @@ K-Means 实现（`include/graph/vector/core/KMeans.hpp`）遵循标准的期望�
 - **代表性**：训练数据应与查询分布相匹配
 - **随机采样**：使用均匀随机采样从数据集中选取
 
-训练数据使用随机数生成器（固定种子 42）从数据集中采样，均匀随机地选取向量以构成训练集。
+训练样本按 Vector ID 的稳定排名选择，并受配置的 record 与 sample 上限约束。
 
-## 与 DiskANN 的集成
+## 原生邻接集成
 
 ### 混合搜索策略
 
-ZYX 在 DiskANN 搜索流水线中采用混合方法，结合 PQ 和原始向量。当计算查询向量与候选向量之间的距离时，系统首先检查 PQ 是否已训练以及该向量是否有可用的 PQ 编码。如果有，则使用预计算的距离表进行快速 PQ 距离计算。否则，回退到从原始向量计算精确距离。
+ZYX 在原生派生邻接 generation 中结合 PQ 和原始向量。当计算查询向量与候选向量之间的距离时，系统会在已发布 generation 提供 PQ 编码时使用快速 PQ 距离，并在需要时回退到有界的原始向量精确评分。
 
 ### 搜索工作流
 
@@ -350,7 +350,7 @@ flowchart TD
 ```
 
 1. **距离表**：使用查询向量预计算 PQ 距离表（M x K 个条目）。
-2. **图遍历**：在 DiskANN 图上的贪心搜索期间，PQ 距离引导导航朝向有希望的区域。每次邻居比较仅需 M 次表查找。
+2. **图遍历**：在原生邻接遍历期间，PQ 距离引导导航朝向有希望的区域。每次邻居比较仅需 M 次表查找。
 3. **候选选择**：beam search 使用近似 PQ 距离收集候选向量。
 4. **重排序**：使用从原始向量计算的精确 L2 距离对顶部候选重新评分，确保最终排名的准确性。
 
@@ -368,7 +368,7 @@ PQ 码本使用 `utils::Serializer` 工具进行持久化序列化。序列化�
 1. **头部**：维度、子空间数量、质心数量和已训练标志（4 个 POD 值）。
 2. **码本数据**：如果已训练标志为 true，则顺序写入所有 M 个码本。每个码本包含 K 个质心，每个质心包含 Di 个浮点值。
 
-反序列化读取头部，重建 `NativeProductQuantizer` 实例，并且——如果已训练标志已设置——通过读取 M x K x Di 个浮点数恢复完整的码本数组。
+原生 Vector store 会在解码显式 little-endian float payload 前验证声明的 codebook 形状，并拒绝畸形或过期的派生 metadata。
 
 对于 M=96、K=256 的已训练 768D 量化器，序列化总大小约为 786 KB（码本数据）加上一个小的固定大小头部。
 
@@ -458,7 +458,4 @@ PQ 码本使用 `utils::Serializer` 工具进行持久化序列化。序列化�
 
 ## 另见
 
-- [DiskANN 算法](/zh/docs/zyx/algorithms/diskann) - 基于 PQ 的图 ANN 搜索
-- [K-Means 聚类](/zh/docs/zyx/algorithms/kmeans) - PQ 训练算法
 - [向量度量](/zh/docs/zyx/algorithms/vector-metrics) - 距离度量实现
-- [压缩算法](/zh/docs/zyx/algorithms/compression) - 无损压缩技术

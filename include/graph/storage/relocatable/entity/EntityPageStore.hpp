@@ -282,7 +282,13 @@ namespace graph::storage {
 				const NativeGraphDerivedStatePreparer &derivedStatePreparer, LogSequenceNumber checkpointLsn,
 				const MetadataPublishOptions &options = {}, NativeGraphLogicalIdReservation logicalIdReservation = {},
 				const NativeGraphVectorBootstrapPreparer &vectorBootstrapPreparer = {},
-				const NativeGraphVectorDeltaPreparer &vectorDeltaPreparer = {});
+				const NativeGraphVectorDeltaPreparer &vectorDeltaPreparer = {},
+				const NativeGraphPrivateSegmentImagePreparer &privateSegmentImagePreparer = {},
+				// Private candidate data is scoped to the metadata writer and must never
+				// escape into a public snapshot or logical transaction API.
+				const NativeGraphPrivateSegmentPreparer &privateSegmentPreparer = {},
+				const NativeGraphDeferredIndexPlanner &deferredIndexPlanner = {},
+				const NativeGraphEarlyPublicationPlanner &earlyPublicationPlanner = {});
 		[[nodiscard]] EntityPageMutationResult eraseNode(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
 														 LogSequenceNumber checkpointLsn,
 														 const MetadataPublishOptions &options = {});
@@ -379,7 +385,11 @@ namespace graph::storage {
 				const NativeGraphDerivedStatePreparer *derivedStatePreparer,
 				const NativeGraphVectorBootstrapPreparer *vectorBootstrapPreparer,
 				const NativeGraphVectorDeltaPreparer *vectorDeltaPreparer, LogSequenceNumber checkpointLsn,
-				const MetadataPublishOptions &options, NativeGraphLogicalIdReservation logicalIdReservation);
+				const MetadataPublishOptions &options, NativeGraphLogicalIdReservation logicalIdReservation,
+				const NativeGraphPrivateSegmentImagePreparer *privateSegmentImagePreparer = nullptr,
+				const NativeGraphPrivateSegmentPreparer *privateSegmentPreparer = nullptr,
+				const NativeGraphDeferredIndexPlanner *deferredIndexPlanner = nullptr,
+				const NativeGraphEarlyPublicationPlanner *earlyPublicationPlanner = nullptr);
 
 		static void validateNewPoolRequest(const EntityPageNewPoolRequest &request, uint64_t entityId,
 										   EntityPageRecordKind kind, LogSequenceNumber checkpointLsn);

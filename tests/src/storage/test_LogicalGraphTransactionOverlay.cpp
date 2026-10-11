@@ -25,7 +25,7 @@ namespace graph::storage {
 
 	namespace {
 
-		class InMemoryLogicalSnapshot final : public LogicalGraphReadSnapshot {
+	class InMemoryLogicalSnapshot final : public LogicalGraphReadSnapshot {
 		public:
 			std::map<uint64_t, LogicalGraphNode> nodes;
 			std::map<uint64_t, LogicalGraphEdge> edges;
@@ -185,10 +185,88 @@ namespace graph::storage {
 		}
 	};
 
-	class InMemoryLogicalTransaction final : public LogicalGraphTransaction {
+	class InMemoryVectorSnapshot final : public LogicalGraphVectorSearchSnapshot {
+	public:
+		explicit InMemoryVectorSnapshot(const InMemoryLogicalSnapshot &snapshot) : snapshot_(snapshot) {}
+
+		[[nodiscard]] LogicalGraphNode readNode(uint64_t nodeId) const override { return snapshot_.readNode(nodeId); }
+		[[nodiscard]] bool containsNode(uint64_t nodeId) const override { return snapshot_.containsNode(nodeId); }
+		[[nodiscard]] LogicalGraphEdge readEdge(uint64_t edgeId) const override { return snapshot_.readEdge(edgeId); }
+		[[nodiscard]] std::optional<std::vector<LogicalGraphNode>>
+		findNodesByExactProperties(const std::vector<std::string> &labels,
+									 const std::vector<std::pair<std::string, PropertyValue>> &properties,
+									 size_t maximumNodes, size_t maximumPropertyEntries) const override {
+			return snapshot_.findNodesByExactProperties(labels, properties, maximumNodes, maximumPropertyEntries);
+		}
+		void visitNodes(size_t maximumRecords, const std::function<bool(const LogicalGraphNode &)> &visitor) const override {
+			snapshot_.visitNodes(maximumRecords, visitor);
+		}
+		[[nodiscard]] LogicalGraphNodePage scanNodesAfter(uint64_t afterNodeId, size_t maximumRecords,
+																		 size_t maximumMetadataPages) const override {
+			return snapshot_.scanNodesAfter(afterNodeId, maximumRecords, maximumMetadataPages);
+		}
+		[[nodiscard]] LogicalGraphAdjacencyPage
+		scanAdjacentEdges(uint64_t nodeId, LogicalGraphReadDirection direction,
+						  std::optional<LogicalGraphAdjacencyContinuation> continuation, size_t maximumRecords) const override {
+			return snapshot_.scanAdjacentEdges(nodeId, direction, continuation, maximumRecords);
+		}
+		void visitEdges(size_t maximumRecords, const std::function<bool(const LogicalGraphEdge &)> &visitor) const override {
+			snapshot_.visitEdges(maximumRecords, visitor);
+		}
+		void visitAdjacentEdges(uint64_t nodeId, LogicalGraphReadDirection direction, size_t maximumEdges,
+									const std::function<bool(const LogicalGraphEdge &)> &visitor) const override {
+			snapshot_.visitAdjacentEdges(nodeId, direction, maximumEdges, visitor);
+		}
+		[[nodiscard]] std::optional<LogicalGraphMutationFence> mutationFence() const override {
+			return snapshot_.mutationFence();
+		}
+		[[nodiscard]] LogicalGraphVectorSearchResult
+		searchLogicalVector(const LogicalGraphVectorSearchRequest &) const override {
+			throw std::logic_error("test derived Vector snapshot must use the exact overlay fallback");
+		}
+		[[nodiscard]] std::optional<LogicalGraphVectorIndexDescriptor>
+		describeLogicalVectorIndex(const LogicalGraphVectorSearchRequest &) const override {
+			return LogicalGraphVectorIndexDescriptor{1U, "Embedding", "value", 2U, "l2"};
+		}
+		[[nodiscard]] std::optional<LogicalGraphVectorSearchHit>
+		scoreLogicalVectorExactOverlayCandidate(const LogicalGraphVectorSearchRequest &,
+															 const LogicalGraphVectorIndexDescriptor &,
+															 const LogicalGraphNode &node) const override {
+			++score_calls;
+			if (!std::ranges::binary_search(node.labels, std::string("Embedding"))) {
+				return std::nullopt;
+			}
+			return LogicalGraphVectorSearchHit{node.node_id, 0.0F};
+		}
+
+		mutable size_t score_calls = 0U;
+
+	private:
+		const InMemoryLogicalSnapshot &snapshot_;
+	};
+
+	class ThrowAfterCancellationCheckpoint final : public CancellationCheckpoint {
+	public:
+		explicit ThrowAfterCancellationCheckpoint(size_t throwAfter) : throw_after_(throwAfter) {}
+
+		void check() const override {
+			++checks;
+			if (checks == throw_after_) {
+				throw std::runtime_error("test transaction-overlay cancellation checkpoint");
+			}
+		}
+
+		mutable size_t checks = 0U;
+
+	private:
+		size_t throw_after_ = 0U;
+	};
+
+	class InMemoryLogicalTransaction final : public LogicalGraphTransaction,
+												 public LogicalGraphTransactionVectorSnapshotProvider {
 	public:
 		explicit InMemoryLogicalTransaction(bool readOnly = false, size_t requiredNodeMetadataPages = 1U) :
-			read_only_(readOnly) {
+			vector_snapshot_(snapshot_), read_only_(readOnly) {
 			snapshot_.required_node_metadata_pages = requiredNodeMetadataPages;
 			snapshot_.nodes.emplace(1U, LogicalGraphNode{1U, {"Base"}, {{"name", PropertyValue("Ada")}}});
 			snapshot_.nodes.emplace(2U, LogicalGraphNode{2U, {"Base"}});
@@ -205,6 +283,11 @@ namespace graph::storage {
 			requireActive();
 			return snapshot_;
 		}
+		[[nodiscard]] LogicalGraphVectorSearchSnapshot &pinnedLogicalGraphVectorSearchSnapshot() override {
+			requireActive();
+			return vector_snapshot_;
+		}
+		[[nodiscard]] size_t vectorScoreCalls() const { return vector_snapshot_.score_calls; }
 		[[nodiscard]] LogicalGraphMutationBatchResult
 		previewMutationBatch(const LogicalGraphMutationBatch &batch) const override {
 			requireActive();
@@ -264,6 +347,7 @@ namespace graph::storage {
 		}
 
 		InMemoryLogicalSnapshot snapshot_;
+		InMemoryVectorSnapshot vector_snapshot_;
 		LogicalGraphTransactionState state_ = LogicalGraphTransactionState::LGTTS_ACTIVE;
 		bool read_only_ = false;
 		size_t staged_node_count_ = 0U;
@@ -307,6 +391,53 @@ namespace graph::storage {
 		overlay.deleteLogicalEdges({{200U}});
 		snapshot = overlay.openLogicalGraphReadSnapshot();
 		EXPECT_THROW(static_cast<void>(snapshot->readEdge(200U)), std::runtime_error);
+	}
+
+	TEST(LogicalGraphTransactionOverlayTest, CreationIdentityRangesAreBoundedAndNeverWrap) {
+		const LogicalGraphCreationIdentityRange range{10U, 3U};
+		EXPECT_FALSE(range.contains(9U));
+		EXPECT_TRUE(range.contains(10U));
+		EXPECT_TRUE(range.contains(11U));
+		EXPECT_TRUE(range.contains(12U));
+		EXPECT_FALSE(range.contains(13U));
+
+		const LogicalGraphCreationIdentityRange zeroFirstId{0U, 3U};
+		const LogicalGraphCreationIdentityRange emptyRange{10U, 0U};
+		EXPECT_FALSE(zeroFirstId.contains(1U));
+		EXPECT_FALSE(emptyRange.contains(10U));
+		const LogicalGraphCreationIdentityRange nearLimit{std::numeric_limits<uint64_t>::max() - 1U, 2U};
+		EXPECT_TRUE(nearLimit.contains(std::numeric_limits<uint64_t>::max() - 1U));
+		EXPECT_TRUE(nearLimit.contains(std::numeric_limits<uint64_t>::max()));
+	}
+
+	TEST(LogicalGraphTransactionOverlayTest, CancelledVectorOverlayScanPreservesStagedFinalStateForRetry) {
+		InMemoryLogicalTransaction transaction;
+		LogicalGraphTransactionOverlay overlay(transaction);
+		const std::vector<uint64_t> created = overlay.createLogicalNodes({{{"Embedding"}, {{"value", PropertyValue(1.0)}}}});
+		ASSERT_EQ(created, (std::vector<uint64_t>{100U}));
+
+		auto snapshot = overlay.openLogicalGraphVectorSearchSnapshot();
+		ASSERT_NE(snapshot, nullptr);
+		LogicalGraphVectorSearchRequest request;
+		request.index_name = "embedding";
+		request.query_vector = {1.0F, 0.0F};
+		request.top_k = 1U;
+		request.maximum_mapping_entries = 4U;
+		request.maximum_raw_vector_reads = 4U;
+		ThrowAfterCancellationCheckpoint cancellation(2U);
+		request.cancellation = &cancellation;
+
+		EXPECT_THROW(static_cast<void>(snapshot->searchLogicalVector(request)), std::runtime_error);
+		EXPECT_EQ(cancellation.checks, 2U);
+		EXPECT_EQ(transaction.vectorScoreCalls(), 0U);
+		EXPECT_EQ(overlay.openLogicalGraphReadSnapshot()->readNode(created.front()).node_id, created.front());
+
+		request.cancellation = nullptr;
+		const LogicalGraphVectorSearchResult retry = snapshot->searchLogicalVector(request);
+		ASSERT_EQ(retry.hits.size(), 1U);
+		EXPECT_EQ(retry.hits.front().node_id, created.front());
+		EXPECT_TRUE(retry.stats.used_exact_overlay);
+		EXPECT_GT(retry.stats.exact_overlay_candidate_scans, 0U);
 	}
 
 	TEST(LogicalGraphTransactionOverlayTest, SharesTheBaseMetadataPageBudgetAcrossItsNodeOverlay) {

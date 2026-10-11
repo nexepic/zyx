@@ -18,6 +18,7 @@
 #include "graph/storage/relocatable/index/BTreeIndex.hpp"
 #include "graph/storage/relocatable/index/BTreePageStore.hpp"
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
+#include "graph/storage/relocatable/property/PropertyValueCodec.hpp"
 
 namespace graph::storage {
 
@@ -38,6 +39,13 @@ namespace graph::storage {
 			SCKK_CONSTRAINT_DEFINITION = 9U,
 			SCKK_CONSTRAINT_NAME = 10U,
 			SCKK_CONSTRAINT_SEMANTIC = 11U,
+			SCKK_CONFIGURATION = 12U,
+			SCKK_GRAPH_CARDINALITY = 13U,
+		};
+
+		enum class SystemCatalogGraphCardinalityKind : uint8_t {
+			SCGCK_NODE_COUNT = 1U,
+			SCGCK_EDGE_COUNT = 2U,
 		};
 
 		enum class SystemCatalogSequenceKind : uint8_t {
@@ -47,7 +55,7 @@ namespace graph::storage {
 			SCSK_CONSTRAINT_DEFINITION = 4U,
 		};
 
-		constexpr uint64_t SYSTEM_CATALOG_BOOTSTRAP_VALUE = UINT64_C(0x5A5958434154414C);
+		constexpr uint64_t SYSTEM_CATALOG_CONFIGURATION_VALUE = UINT64_C(0x434F4E4649475552);
 
 		[[noreturn]] void fail(FormatError error, const char *message) { throw FormatException(error, message); }
 
@@ -94,6 +102,17 @@ namespace graph::storage {
 				fail(FormatError::FERR_BUFFER_TOO_SMALL, "System Catalog definition key is truncated");
 			}
 			uint64_t value = 0U;
+			for (size_t index = 0U; index < sizeof(value); ++index) {
+				value = (value << 8U) | std::to_integer<uint8_t>(bytes[offset + index]);
+			}
+			return value;
+		}
+
+		[[nodiscard]] uint32_t readBigEndianU32(std::span<const std::byte> bytes, size_t offset) {
+			if (offset > bytes.size() || bytes.size() - offset < sizeof(uint32_t)) {
+				fail(FormatError::FERR_BUFFER_TOO_SMALL, "System Catalog configuration key is truncated");
+			}
+			uint32_t value = 0U;
 			for (size_t index = 0U; index < sizeof(value); ++index) {
 				value = (value << 8U) | std::to_integer<uint8_t>(bytes[offset + index]);
 			}
@@ -167,6 +186,83 @@ namespace graph::storage {
 
 		[[nodiscard]] std::vector<std::byte> sequenceKey(SystemCatalogSequenceKind kind) {
 			return {static_cast<std::byte>(SystemCatalogKeyKind::SCKK_SEQUENCE), static_cast<std::byte>(kind)};
+		}
+
+		void validateConfigurationValue(const PropertyValue &value) {
+			switch (value.getType()) {
+				case PropertyType::BOOLEAN:
+				case PropertyType::INTEGER:
+				case PropertyType::DOUBLE:
+				case PropertyType::STRING:
+					return;
+				default:
+					fail(FormatError::FERR_INVALID_HEADER,
+						 "System Catalog configuration value must be a scalar Boolean, Integer, Float, or String");
+			}
+		}
+
+		[[nodiscard]] std::vector<std::byte> configurationPrefix(std::string_view name) {
+			validateName(name);
+			std::vector<std::byte> key = {static_cast<std::byte>(SystemCatalogKeyKind::SCKK_CONFIGURATION)};
+			appendBigEndianU32(key, static_cast<uint32_t>(name.size()));
+			appendName(key, name);
+			return key;
+		}
+
+		[[nodiscard]] std::vector<std::byte> configurationKey(std::string_view name, const PropertyValue &value) {
+			validateConfigurationValue(value);
+			std::vector<std::byte> key = configurationPrefix(name);
+			CanonicalPropertyValueCodec::append(key, value);
+			return key;
+		}
+
+		[[nodiscard]] std::vector<std::byte> graphCardinalityKey(SystemCatalogGraphCardinalityKind kind) {
+			switch (kind) {
+				case SystemCatalogGraphCardinalityKind::SCGCK_NODE_COUNT:
+				case SystemCatalogGraphCardinalityKind::SCGCK_EDGE_COUNT:
+					return {static_cast<std::byte>(SystemCatalogKeyKind::SCKK_GRAPH_CARDINALITY),
+							static_cast<std::byte>(kind)};
+			}
+			fail(FormatError::FERR_INVALID_ENUM, "System Catalog graph cardinality kind is invalid");
+		}
+
+		[[nodiscard]] uint64_t encodeGraphCardinalityCount(uint64_t count) {
+			if (count == std::numeric_limits<uint64_t>::max()) {
+				fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
+					 "System Catalog graph cardinality cannot encode the maximum uint64 value");
+			}
+			// B+Tree leaves reserve zero as an invalid value. Biasing by one preserves
+			// an empty graph without conflating it with a malformed persisted record.
+			return count + 1U;
+		}
+
+		[[nodiscard]] uint64_t decodeGraphCardinalityCount(uint64_t encoded) {
+			if (encoded == 0U) {
+				fail(FormatError::FERR_INVALID_STATE, "System Catalog graph cardinality record has a zero value");
+			}
+			return encoded - 1U;
+		}
+
+		[[nodiscard]] NativeConfigurationRecord decodeConfigurationKey(std::span<const std::byte> key) {
+			const std::vector<std::byte> prefix = {static_cast<std::byte>(SystemCatalogKeyKind::SCKK_CONFIGURATION)};
+			if (key.empty() || key.front() != prefix.front()) {
+				fail(FormatError::FERR_INVALID_HEADER, "System Catalog configuration entry has an invalid key kind");
+			}
+			const uint32_t nameLength = readBigEndianU32(key, prefix.size());
+			const size_t nameOffset = prefix.size() + sizeof(uint32_t);
+			if (nameLength == 0U || nameLength > RSS_SYSTEM_CATALOG_NAME_MAX_BYTES || nameOffset > key.size() ||
+				nameLength > key.size() - nameOffset) {
+				fail(FormatError::FERR_INVALID_HEADER, "System Catalog configuration entry has an invalid name");
+			}
+			const std::string name(reinterpret_cast<const char *>(key.data() + nameOffset), nameLength);
+			validateName(name);
+			size_t valueOffset = nameOffset + nameLength;
+			const PropertyValue value = CanonicalPropertyValueCodec::decodeNext(key, valueOffset);
+			if (valueOffset != key.size()) {
+				fail(FormatError::FERR_INVALID_HEADER, "System Catalog configuration entry has trailing bytes");
+			}
+			validateConfigurationValue(value);
+			return {name, value};
 		}
 
 		[[nodiscard]] bool isIndexDefinitionId(uint64_t id) {
@@ -262,7 +358,8 @@ namespace graph::storage {
 			appendBigEndianU64(key, definition.schema_token_id);
 			appendByte(key, static_cast<uint8_t>(definition.property_type));
 			if (definition.property_names.size() > RSS_CONSTRAINT_DEFINITION_MAX_PROPERTIES) {
-				fail(FormatError::FERR_INVALID_HEADER, "System Catalog constraint semantic key has too many properties");
+				fail(FormatError::FERR_INVALID_HEADER,
+					 "System Catalog constraint semantic key has too many properties");
 			}
 			key.push_back(static_cast<std::byte>((definition.property_names.size() >> 8U) & UINT16_C(0xFF)));
 			key.push_back(static_cast<std::byte>(definition.property_names.size() & UINT16_C(0xFF)));
@@ -274,10 +371,13 @@ namespace graph::storage {
 
 		[[nodiscard]] IndexDefinition decodeIndexDefinition(std::span<const std::byte> key) {
 			const std::vector<std::byte> prefix = definitionPrefix(SystemCatalogKeyKind::SCKK_INDEX_DEFINITION);
-			if (!startsWith(key, prefix) || key.size() <= prefix.size() + sizeof(uint64_t)) {
-				fail(FormatError::FERR_INVALID_HEADER, "System Catalog Index definition entry is truncated");
+			if (!startsWith(key, prefix)) {
+				fail(FormatError::FERR_INVALID_HEADER, "System Catalog Index definition entry has an invalid key kind");
 			}
 			const uint64_t id = readBigEndianU64(key, prefix.size());
+			if (key.size() == prefix.size() + sizeof(uint64_t)) {
+				fail(FormatError::FERR_INVALID_HEADER, "System Catalog Index definition entry has no encoded payload");
+			}
 			const IndexDefinition definition =
 					IndexDefinitionCodec::decode(key.subspan(prefix.size() + sizeof(uint64_t)));
 			if (definition.index_id != id || !isIndexDefinitionId(id)) {
@@ -288,10 +388,15 @@ namespace graph::storage {
 
 		[[nodiscard]] ConstraintDefinition decodeConstraintDefinition(std::span<const std::byte> key) {
 			const std::vector<std::byte> prefix = definitionPrefix(SystemCatalogKeyKind::SCKK_CONSTRAINT_DEFINITION);
-			if (!startsWith(key, prefix) || key.size() <= prefix.size() + sizeof(uint64_t)) {
-				fail(FormatError::FERR_INVALID_HEADER, "System Catalog constraint definition entry is truncated");
+			if (!startsWith(key, prefix)) {
+				fail(FormatError::FERR_INVALID_HEADER,
+					 "System Catalog constraint definition entry has an invalid key kind");
 			}
 			const uint64_t id = readBigEndianU64(key, prefix.size());
+			if (key.size() == prefix.size() + sizeof(uint64_t)) {
+				fail(FormatError::FERR_INVALID_HEADER,
+					 "System Catalog constraint definition entry has no encoded payload");
+			}
 			const ConstraintDefinition definition =
 					ConstraintDefinitionCodec::decode(key.subspan(prefix.size() + sizeof(uint64_t)));
 			if (definition.constraint_id != id || !isConstraintDefinitionId(id)) {
@@ -309,7 +414,7 @@ namespace graph::storage {
 			const std::optional<uint64_t> value =
 					BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, catalog.pageStore(), catalog.metadataStore())
 							.find(snapshot, bootstrapKey());
-			if (!value.has_value() || *value != SYSTEM_CATALOG_BOOTSTRAP_VALUE) {
+			if (!value.has_value() || *value != RSS_SYSTEM_CATALOG_BOOTSTRAP_VALUE) {
 				fail(FormatError::FERR_INVALID_STATE, "System Catalog root is missing its bootstrap record");
 			}
 		}
@@ -352,19 +457,87 @@ namespace graph::storage {
 
 	} // namespace
 
+	std::vector<std::byte> SystemCatalogTokenKeyCodec::bootstrapKey() { return ::graph::storage::bootstrapKey(); }
+
+	std::vector<std::byte> SystemCatalogTokenKeyCodec::propertyNameKey(std::string_view name) {
+		return ::graph::storage::propertyNameKey(name);
+	}
+
+	std::vector<std::byte> SystemCatalogTokenKeyCodec::propertyTokenKey(uint32_t token, std::string_view name) {
+		return ::graph::storage::propertyTokenKey(token, name);
+	}
+
+	std::vector<std::byte> SystemCatalogTokenKeyCodec::schemaNameKey(SystemCatalogSchemaTokenKind kind,
+																	 std::string_view name) {
+		return ::graph::storage::schemaNameKey(kind, name);
+	}
+
+	std::vector<std::byte> SystemCatalogTokenKeyCodec::schemaTokenKey(SystemCatalogSchemaTokenKind kind, uint64_t token,
+																	  std::string_view name) {
+		return ::graph::storage::schemaTokenKey(kind, token, name);
+	}
+
+	std::vector<std::byte> SystemCatalogTokenKeyCodec::propertyTokenSequenceKey() {
+		return ::graph::storage::sequenceKey(SystemCatalogSequenceKind::SCSK_PROPERTY_TOKEN);
+	}
+
+	std::vector<std::byte> SystemCatalogTokenKeyCodec::schemaTokenSequenceKey() {
+		return ::graph::storage::sequenceKey(SystemCatalogSequenceKind::SCSK_SCHEMA_TOKEN);
+	}
+
+	void SystemCatalogTokenKeyCodec::validateName(std::string_view name) { ::graph::storage::validateName(name); }
+
+	void SystemCatalogTokenKeyCodec::validateSchemaKind(SystemCatalogSchemaTokenKind kind) {
+		::graph::storage::validateSchemaKind(kind);
+	}
+
+	std::vector<std::byte> SystemCatalogGraphCardinalityCodec::nodeCountKey() {
+		return ::graph::storage::graphCardinalityKey(SystemCatalogGraphCardinalityKind::SCGCK_NODE_COUNT);
+	}
+
+	std::vector<std::byte> SystemCatalogGraphCardinalityCodec::edgeCountKey() {
+		return ::graph::storage::graphCardinalityKey(SystemCatalogGraphCardinalityKind::SCGCK_EDGE_COUNT);
+	}
+
+	uint64_t SystemCatalogGraphCardinalityCodec::encodeCount(uint64_t count) {
+		return ::graph::storage::encodeGraphCardinalityCount(count);
+	}
+
+	uint64_t SystemCatalogGraphCardinalityCodec::decodeCount(uint64_t encoded) {
+		return ::graph::storage::decodeGraphCardinalityCount(encoded);
+	}
+
 	SystemCatalogWriteSession::SystemCatalogWriteSession(SystemCatalog &catalog,
 														 NativeGraphWriteTransaction &transaction) :
 		catalog_(&catalog), transaction_(&transaction), initial_root_(!hasRoot(catalog, transaction.baseSnapshot())) {
 		if (initial_root_) {
-			initial_entries_.emplace(bootstrapKey(), SYSTEM_CATALOG_BOOTSTRAP_VALUE);
+			initial_entries_.emplace(bootstrapKey(), RSS_SYSTEM_CATALOG_BOOTSTRAP_VALUE);
+			initial_entries_.emplace(graphCardinalityKey(SystemCatalogGraphCardinalityKind::SCGCK_NODE_COUNT), 1U);
+			initial_entries_.emplace(graphCardinalityKey(SystemCatalogGraphCardinalityKind::SCGCK_EDGE_COUNT), 1U);
 		} else {
 			verifyBootstrap(catalog, transaction.baseSnapshot());
 		}
 	}
 
-	SystemCatalogWriteSession::SystemCatalogWriteSession(SystemCatalogWriteSession &&) noexcept = default;
-
-	SystemCatalogWriteSession &SystemCatalogWriteSession::operator=(SystemCatalogWriteSession &&) noexcept = default;
+	SystemCatalogWriteSession::SystemCatalogWriteSession(SystemCatalogWriteSession &&other) noexcept :
+		catalog_(std::exchange(other.catalog_, nullptr)), transaction_(std::exchange(other.transaction_, nullptr)),
+		initial_root_(std::exchange(other.initial_root_, false)), changed_(std::exchange(other.changed_, false)),
+		finished_(std::exchange(other.finished_, false)),
+		property_sequence_loaded_(std::exchange(other.property_sequence_loaded_, false)),
+		schema_sequence_loaded_(std::exchange(other.schema_sequence_loaded_, false)),
+		index_sequence_loaded_(std::exchange(other.index_sequence_loaded_, false)),
+		constraint_sequence_loaded_(std::exchange(other.constraint_sequence_loaded_, false)),
+		next_property_token_(std::exchange(other.next_property_token_, 0U)),
+		next_schema_token_(std::exchange(other.next_schema_token_, 0U)),
+		next_index_definition_id_(std::exchange(other.next_index_definition_id_, 0U)),
+		next_constraint_definition_id_(std::exchange(other.next_constraint_definition_id_, 0U)),
+		initial_entries_(std::move(other.initial_entries_)),
+		staged_property_tokens_(std::move(other.staged_property_tokens_)),
+		staged_schema_tokens_(std::move(other.staged_schema_tokens_)),
+		staged_index_definitions_(std::move(other.staged_index_definitions_)),
+		staged_constraint_definitions_(std::move(other.staged_constraint_definitions_)),
+		staged_configurations_(std::move(other.staged_configurations_)),
+		staged_graph_statistics_(std::move(other.staged_graph_statistics_)) {}
 
 	void SystemCatalogWriteSession::stageUpsert(std::vector<std::byte> key, uint64_t value) {
 		if (catalog_ == nullptr || transaction_ == nullptr || finished_) {
@@ -376,6 +549,18 @@ namespace graph::storage {
 			return;
 		}
 		transaction_->stageScalarIndexUpsert(catalog_->pages_, RSS_SYSTEM_CATALOG_INDEX_ID, key, value);
+	}
+
+	void SystemCatalogWriteSession::stageErase(const std::vector<std::byte> &key) {
+		if (catalog_ == nullptr || transaction_ == nullptr || finished_) {
+			throw std::logic_error("System Catalog write session is not active");
+		}
+		changed_ = true;
+		if (initial_root_) {
+			initial_entries_.erase(key);
+			return;
+		}
+		transaction_->stageScalarIndexErase(catalog_->pages_, RSS_SYSTEM_CATALOG_INDEX_ID, key);
 	}
 
 	uint64_t SystemCatalogWriteSession::nextPropertyToken() {
@@ -412,8 +597,8 @@ namespace graph::storage {
 	uint64_t SystemCatalogWriteSession::nextIndexDefinitionId() {
 		if (!index_sequence_loaded_) {
 			next_index_definition_id_ = readSequence(*catalog_, transaction_->baseSnapshot(),
-													SystemCatalogSequenceKind::SCSK_INDEX_DEFINITION)
-													.value_or(RSS_SYSTEM_CATALOG_INDEX_ID_FIRST);
+													 SystemCatalogSequenceKind::SCSK_INDEX_DEFINITION)
+												.value_or(RSS_SYSTEM_CATALOG_INDEX_ID_FIRST);
 			index_sequence_loaded_ = true;
 		}
 		if (!isIndexDefinitionId(next_index_definition_id_)) {
@@ -428,7 +613,7 @@ namespace graph::storage {
 	uint64_t SystemCatalogWriteSession::nextConstraintDefinitionId() {
 		if (!constraint_sequence_loaded_) {
 			next_constraint_definition_id_ = readSequence(*catalog_, transaction_->baseSnapshot(),
-													 SystemCatalogSequenceKind::SCSK_CONSTRAINT_DEFINITION)
+														  SystemCatalogSequenceKind::SCSK_CONSTRAINT_DEFINITION)
 													 .value_or(RSS_SYSTEM_CATALOG_CONSTRAINT_ID_FIRST);
 			constraint_sequence_loaded_ = true;
 		}
@@ -493,20 +678,25 @@ namespace graph::storage {
 		if (definition.index_id != 0U) {
 			fail(FormatError::FERR_INVALID_HEADER, "System Catalog allocates Index definition IDs");
 		}
-		definition.index_id = nextIndexDefinitionId();
+		// Validate and reject duplicate definitions before staging a durable sequence
+		// advance. A caller may recover from validation failure and commit other work.
+		definition.index_id = RSS_SYSTEM_CATALOG_INDEX_ID_FIRST;
 		static_cast<void>(IndexDefinitionCodec::encode(definition));
 		if (std::ranges::any_of(staged_index_definitions_, [&](const auto &entry) {
-			return entry.second.name == definition.name || indexSemanticKey(entry.second) == indexSemanticKey(definition);
-		})) {
+				return entry.second.name == definition.name ||
+					   indexSemanticKey(entry.second) == indexSemanticKey(definition);
+			})) {
 			fail(FormatError::FERR_INVALID_STATE, "System Catalog Index definition duplicates a staged name or schema");
 		}
 		if (catalog_->findIndexDefinitionByName(transaction_->baseSnapshot(), definition.name).has_value() ||
 			catalog_->findIndexDefinitionBySchema(transaction_->baseSnapshot(), definition.entity_kind, definition.kind,
-												definition.label_token_id, definition.property_names, definition.vector_dimensions,
-												definition.vector_metric)
-												.has_value()) {
-			fail(FormatError::FERR_INVALID_STATE, "System Catalog Index definition duplicates a durable name or schema");
+												  definition.label_token_id, definition.property_names,
+												  definition.vector_dimensions, definition.vector_metric)
+					.has_value()) {
+			fail(FormatError::FERR_INVALID_STATE,
+				 "System Catalog Index definition duplicates a durable name or schema");
 		}
+		definition.index_id = nextIndexDefinitionId();
 		stageUpsert(indexDefinitionKey(definition), definition.index_id);
 		stageUpsert(namedKey(SystemCatalogKeyKind::SCKK_INDEX_NAME, definition.name), definition.index_id);
 		stageUpsert(indexSemanticKey(definition), definition.index_id);
@@ -521,28 +711,59 @@ namespace graph::storage {
 		if (definition.constraint_id != 0U) {
 			fail(FormatError::FERR_INVALID_HEADER, "System Catalog allocates constraint definition IDs");
 		}
-		definition.constraint_id = nextConstraintDefinitionId();
+		// As with Index definitions, leave the transaction overlay untouched until
+		// validation and duplicate checks have succeeded.
+		definition.constraint_id = RSS_SYSTEM_CATALOG_CONSTRAINT_ID_FIRST;
 		static_cast<void>(ConstraintDefinitionCodec::encode(definition));
 		if (std::ranges::any_of(staged_constraint_definitions_, [&](const auto &entry) {
-			return entry.second.name == definition.name ||
-					constraintSemanticKey(entry.second) == constraintSemanticKey(definition);
-		})) {
+				return entry.second.name == definition.name ||
+					   constraintSemanticKey(entry.second) == constraintSemanticKey(definition);
+			})) {
 			fail(FormatError::FERR_INVALID_STATE,
-					 "System Catalog constraint definition duplicates a staged name or schema");
+				 "System Catalog constraint definition duplicates a staged name or schema");
 		}
 		if (catalog_->findConstraintDefinitionByName(transaction_->baseSnapshot(), definition.name).has_value() ||
-			catalog_->findConstraintDefinitionBySchema(transaction_->baseSnapshot(), definition.entity_kind, definition.kind,
-													 definition.schema_token_id, definition.property_names,
-													 definition.property_type)
-													.has_value()) {
+			catalog_->findConstraintDefinitionBySchema(transaction_->baseSnapshot(), definition.entity_kind,
+													   definition.kind, definition.schema_token_id,
+													   definition.property_names, definition.property_type)
+					.has_value()) {
 			fail(FormatError::FERR_INVALID_STATE,
-							 "System Catalog constraint definition duplicates a durable name or schema");
+				 "System Catalog constraint definition duplicates a durable name or schema");
 		}
+		definition.constraint_id = nextConstraintDefinitionId();
 		stageUpsert(constraintDefinitionKey(definition), definition.constraint_id);
 		stageUpsert(namedKey(SystemCatalogKeyKind::SCKK_CONSTRAINT_NAME, definition.name), definition.constraint_id);
 		stageUpsert(constraintSemanticKey(definition), definition.constraint_id);
 		staged_constraint_definitions_.emplace(definition.constraint_id, definition);
 		return definition;
+	}
+
+	void SystemCatalogWriteSession::setConfiguration(std::string_view name, const PropertyValue &value) {
+		if (catalog_ == nullptr || transaction_ == nullptr || finished_) {
+			throw std::logic_error("System Catalog write session is not active");
+		}
+		const std::string ownedName(name);
+		static_cast<void>(configurationKey(ownedName, value));
+		if (const auto staged = staged_configurations_.find(ownedName); staged != staged_configurations_.end()) {
+			stageErase(configurationKey(ownedName, staged->second));
+		} else if (const std::optional<PropertyValue> current =
+						   catalog_->findConfiguration(transaction_->baseSnapshot(), ownedName);
+				   current.has_value()) {
+			stageErase(configurationKey(ownedName, *current));
+		}
+		stageUpsert(configurationKey(ownedName, value), SYSTEM_CATALOG_CONFIGURATION_VALUE);
+		staged_configurations_.insert_or_assign(std::move(ownedName), value);
+	}
+
+	void SystemCatalogWriteSession::setGraphCardinalityStatistics(const NativeGraphCardinalityStatistics &statistics) {
+		if (catalog_ == nullptr || transaction_ == nullptr || finished_) {
+			throw std::logic_error("System Catalog write session is not active");
+		}
+		stageUpsert(SystemCatalogGraphCardinalityCodec::nodeCountKey(),
+					SystemCatalogGraphCardinalityCodec::encodeCount(statistics.node_count));
+		stageUpsert(SystemCatalogGraphCardinalityCodec::edgeCountKey(),
+					SystemCatalogGraphCardinalityCodec::encodeCount(statistics.edge_count));
+		staged_graph_statistics_ = statistics;
 	}
 
 	void SystemCatalogWriteSession::dropIndexDefinition(const IndexDefinition &definition) {
@@ -555,11 +776,11 @@ namespace graph::storage {
 			fail(FormatError::FERR_INVALID_STATE, "System Catalog Index definition drop does not match its snapshot");
 		}
 		transaction_->stageScalarIndexErase(catalog_->pages_, RSS_SYSTEM_CATALOG_INDEX_ID,
-												indexDefinitionKey(definition));
+											indexDefinitionKey(definition));
 		transaction_->stageScalarIndexErase(catalog_->pages_, RSS_SYSTEM_CATALOG_INDEX_ID,
-												namedKey(SystemCatalogKeyKind::SCKK_INDEX_NAME, definition.name));
+											namedKey(SystemCatalogKeyKind::SCKK_INDEX_NAME, definition.name));
 		transaction_->stageScalarIndexErase(catalog_->pages_, RSS_SYSTEM_CATALOG_INDEX_ID,
-												indexSemanticKey(definition));
+											indexSemanticKey(definition));
 		changed_ = true;
 	}
 
@@ -571,16 +792,16 @@ namespace graph::storage {
 				catalog_->findConstraintDefinitionById(transaction_->baseSnapshot(), definition.constraint_id);
 		if (!current.has_value() || *current != definition) {
 			fail(FormatError::FERR_INVALID_STATE,
-					 "System Catalog constraint definition drop does not match its snapshot");
+				 "System Catalog constraint definition drop does not match its snapshot");
 		}
 		transaction_->stageScalarIndexErase(catalog_->pages_, RSS_SYSTEM_CATALOG_INDEX_ID,
-												constraintDefinitionKey(definition));
+											constraintDefinitionKey(definition));
 		transaction_->stageScalarIndexErase(catalog_->pages_, RSS_SYSTEM_CATALOG_INDEX_ID,
-												namedKey(SystemCatalogKeyKind::SCKK_CONSTRAINT_NAME, definition.name));
+											namedKey(SystemCatalogKeyKind::SCKK_CONSTRAINT_NAME, definition.name));
 		transaction_->stageScalarIndexErase(catalog_->pages_, RSS_SYSTEM_CATALOG_INDEX_ID,
-												constraintSemanticKey(definition));
-			changed_ = true;
-		}
+											constraintSemanticKey(definition));
+		changed_ = true;
+	}
 
 	void SystemCatalogWriteSession::finish() {
 		if (catalog_ == nullptr || transaction_ == nullptr) {
@@ -629,6 +850,25 @@ namespace graph::storage {
 				 "System Catalog Property-key forward mapping has no matching reverse mapping");
 		}
 		return token;
+	}
+
+	std::optional<NativeGraphCardinalityStatistics>
+	SystemCatalog::readGraphCardinalityStatistics(const MetadataSnapshotPin &snapshot) const {
+		if (!hasRoot(*this, snapshot)) {
+			return std::nullopt;
+		}
+		verifyBootstrap(*this, snapshot);
+		const BTreeIndex index(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_);
+		const std::optional<uint64_t> nodes = index.find(snapshot, SystemCatalogGraphCardinalityCodec::nodeCountKey());
+		const std::optional<uint64_t> edges = index.find(snapshot, SystemCatalogGraphCardinalityCodec::edgeCountKey());
+		if (nodes.has_value() != edges.has_value()) {
+			fail(FormatError::FERR_INVALID_STATE, "System Catalog graph cardinality record is incomplete");
+		}
+		if (!nodes.has_value()) {
+			return std::nullopt;
+		}
+		return NativeGraphCardinalityStatistics{SystemCatalogGraphCardinalityCodec::decodeCount(*nodes),
+												SystemCatalogGraphCardinalityCodec::decodeCount(*edges)};
 	}
 
 	std::optional<std::string> SystemCatalog::findPropertyName(const MetadataSnapshotPin &snapshot,
@@ -702,8 +942,8 @@ namespace graph::storage {
 		return SystemCatalogSchemaToken{token, kind, *name};
 	}
 
-	std::optional<IndexDefinition>
-	SystemCatalog::findIndexDefinitionById(const MetadataSnapshotPin &snapshot, uint64_t indexId) const {
+	std::optional<IndexDefinition> SystemCatalog::findIndexDefinitionById(const MetadataSnapshotPin &snapshot,
+																		  uint64_t indexId) const {
 		if (indexId == 0U) {
 			fail(FormatError::FERR_INVALID_HEADER, "System Catalog Index definition lookup requires a nonzero ID");
 		}
@@ -719,7 +959,7 @@ namespace graph::storage {
 		}
 		if (entries.size() == 2U && startsWith(entries[1].key, lower)) {
 			fail(FormatError::FERR_INVALID_STATE,
-					 "System Catalog contains multiple Index definitions for one logical ID");
+				 "System Catalog contains multiple Index definitions for one logical ID");
 		}
 		const IndexDefinition definition = decodeIndexDefinition(entries.front().key);
 		if (entries.front().value_or_child != indexId) {
@@ -731,14 +971,13 @@ namespace graph::storage {
 		const std::optional<uint64_t> bySemantic =
 				BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).find(snapshot, indexSemanticKey(definition));
 		if (!byName.has_value() || !bySemantic.has_value() || *byName != indexId || *bySemantic != indexId) {
-			fail(FormatError::FERR_INVALID_STATE,
-					 "System Catalog Index definition directions do not agree");
+			fail(FormatError::FERR_INVALID_STATE, "System Catalog Index definition directions do not agree");
 		}
 		return definition;
 	}
 
-	std::optional<IndexDefinition>
-	SystemCatalog::findIndexDefinitionByName(const MetadataSnapshotPin &snapshot, std::string_view name) const {
+	std::optional<IndexDefinition> SystemCatalog::findIndexDefinitionByName(const MetadataSnapshotPin &snapshot,
+																			std::string_view name) const {
 		validateName(name);
 		if (!hasRoot(*this, snapshot)) {
 			return std::nullopt;
@@ -752,16 +991,16 @@ namespace graph::storage {
 		}
 		const std::optional<IndexDefinition> definition = findIndexDefinitionById(snapshot, *id);
 		if (!definition.has_value() || definition->name != name) {
-			fail(FormatError::FERR_INVALID_STATE,
-					 "System Catalog Index name direction has no matching definition");
+			fail(FormatError::FERR_INVALID_STATE, "System Catalog Index name direction has no matching definition");
 		}
 		return definition;
 	}
 
-	std::optional<IndexDefinition> SystemCatalog::findIndexDefinitionBySchema(
-			const MetadataSnapshotPin &snapshot, IndexDefinitionEntityKind entityKind, IndexDefinitionKind kind,
-			uint64_t labelTokenId, std::span<const std::string> propertyNames, uint32_t vectorDimensions,
-			std::string_view vectorMetric) const {
+	std::optional<IndexDefinition>
+	SystemCatalog::findIndexDefinitionBySchema(const MetadataSnapshotPin &snapshot,
+											   IndexDefinitionEntityKind entityKind, IndexDefinitionKind kind,
+											   uint64_t labelTokenId, std::span<const std::string> propertyNames,
+											   uint32_t vectorDimensions, std::string_view vectorMetric) const {
 		IndexDefinition probe;
 		probe.name = "_";
 		probe.entity_kind = entityKind;
@@ -777,23 +1016,23 @@ namespace graph::storage {
 			return std::nullopt;
 		}
 		verifyBootstrap(*this, snapshot);
-		const std::optional<uint64_t> id = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).find(snapshot, key);
+		const std::optional<uint64_t> id =
+				BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).find(snapshot, key);
 		if (!id.has_value()) {
 			return std::nullopt;
 		}
 		const std::optional<IndexDefinition> definition = findIndexDefinitionById(snapshot, *id);
 		if (!definition.has_value() || indexSemanticKey(*definition) != key) {
-			fail(FormatError::FERR_INVALID_STATE,
-					 "System Catalog Index semantic direction has no matching definition");
+			fail(FormatError::FERR_INVALID_STATE, "System Catalog Index semantic direction has no matching definition");
 		}
 		return definition;
 	}
 
-	std::vector<IndexDefinition>
-	SystemCatalog::readIndexDefinitions(const MetadataSnapshotPin &snapshot, size_t maximumDefinitions) const {
+	std::vector<IndexDefinition> SystemCatalog::readIndexDefinitions(const MetadataSnapshotPin &snapshot,
+																	 size_t maximumDefinitions) const {
 		if (maximumDefinitions == 0U || maximumDefinitions == std::numeric_limits<size_t>::max()) {
 			fail(FormatError::FERR_INVALID_HEADER,
-					 "System Catalog Index definition read requires a finite positive bound");
+				 "System Catalog Index definition read requires a finite positive bound");
 		}
 		if (!hasRoot(*this, snapshot)) {
 			return {};
@@ -801,7 +1040,7 @@ namespace graph::storage {
 		verifyBootstrap(*this, snapshot);
 		const std::vector<std::byte> prefix = definitionPrefix(SystemCatalogKeyKind::SCKK_INDEX_DEFINITION);
 		const std::vector<BTreePageEntry> entries = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_)
-				.scan(snapshot, prefix, maximumDefinitions + 1U);
+															.scan(snapshot, prefix, maximumDefinitions + 1U);
 		std::vector<IndexDefinition> result;
 		for (const BTreePageEntry &entry: entries) {
 			if (!startsWith(entry.key, prefix)) {
@@ -812,7 +1051,7 @@ namespace graph::storage {
 			}
 			const IndexDefinition definition = decodeIndexDefinition(entry.key);
 			if (entry.value_or_child != definition.index_id ||
-					!findIndexDefinitionById(snapshot, definition.index_id).has_value()) {
+				!findIndexDefinitionById(snapshot, definition.index_id).has_value()) {
 				fail(FormatError::FERR_INVALID_STATE, "System Catalog Index definition is not self-consistent");
 			}
 			result.push_back(definition);
@@ -820,11 +1059,10 @@ namespace graph::storage {
 		return result;
 	}
 
-	std::optional<ConstraintDefinition>
-	SystemCatalog::findConstraintDefinitionById(const MetadataSnapshotPin &snapshot, uint64_t constraintId) const {
+	std::optional<ConstraintDefinition> SystemCatalog::findConstraintDefinitionById(const MetadataSnapshotPin &snapshot,
+																					uint64_t constraintId) const {
 		if (constraintId == 0U) {
-			fail(FormatError::FERR_INVALID_HEADER,
-					 "System Catalog constraint definition lookup requires a nonzero ID");
+			fail(FormatError::FERR_INVALID_HEADER, "System Catalog constraint definition lookup requires a nonzero ID");
 		}
 		if (!isConstraintDefinitionId(constraintId) || !hasRoot(*this, snapshot)) {
 			return std::nullopt;
@@ -838,20 +1076,19 @@ namespace graph::storage {
 		}
 		if (entries.size() == 2U && startsWith(entries[1].key, lower)) {
 			fail(FormatError::FERR_INVALID_STATE,
-					 "System Catalog contains multiple constraint definitions for one logical ID");
+				 "System Catalog contains multiple constraint definitions for one logical ID");
 		}
 		const ConstraintDefinition definition = decodeConstraintDefinition(entries.front().key);
 		if (entries.front().value_or_child != constraintId) {
-			fail(FormatError::FERR_INVALID_STATE,
-					 "System Catalog constraint definition value disagrees with its key");
+			fail(FormatError::FERR_INVALID_STATE, "System Catalog constraint definition value disagrees with its key");
 		}
-		const std::optional<uint64_t> byName = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_)
-				.find(snapshot, namedKey(SystemCatalogKeyKind::SCKK_CONSTRAINT_NAME, definition.name));
-		const std::optional<uint64_t> bySemantic =
-				BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).find(snapshot, constraintSemanticKey(definition));
+		const std::optional<uint64_t> byName =
+				BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_)
+						.find(snapshot, namedKey(SystemCatalogKeyKind::SCKK_CONSTRAINT_NAME, definition.name));
+		const std::optional<uint64_t> bySemantic = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_)
+														   .find(snapshot, constraintSemanticKey(definition));
 		if (!byName.has_value() || !bySemantic.has_value() || *byName != constraintId || *bySemantic != constraintId) {
-			fail(FormatError::FERR_INVALID_STATE,
-					 "System Catalog constraint definition directions do not agree");
+			fail(FormatError::FERR_INVALID_STATE, "System Catalog constraint definition directions do not agree");
 		}
 		return definition;
 	}
@@ -863,15 +1100,16 @@ namespace graph::storage {
 			return std::nullopt;
 		}
 		verifyBootstrap(*this, snapshot);
-		const std::optional<uint64_t> id = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_)
-				.find(snapshot, namedKey(SystemCatalogKeyKind::SCKK_CONSTRAINT_NAME, name));
+		const std::optional<uint64_t> id =
+				BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_)
+						.find(snapshot, namedKey(SystemCatalogKeyKind::SCKK_CONSTRAINT_NAME, name));
 		if (!id.has_value()) {
 			return std::nullopt;
 		}
 		const std::optional<ConstraintDefinition> definition = findConstraintDefinitionById(snapshot, *id);
 		if (!definition.has_value() || definition->name != name) {
 			fail(FormatError::FERR_INVALID_STATE,
-					 "System Catalog constraint name direction has no matching definition");
+				 "System Catalog constraint name direction has no matching definition");
 		}
 		return definition;
 	}
@@ -894,23 +1132,24 @@ namespace graph::storage {
 			return std::nullopt;
 		}
 		verifyBootstrap(*this, snapshot);
-		const std::optional<uint64_t> id = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).find(snapshot, key);
+		const std::optional<uint64_t> id =
+				BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).find(snapshot, key);
 		if (!id.has_value()) {
 			return std::nullopt;
 		}
 		const std::optional<ConstraintDefinition> definition = findConstraintDefinitionById(snapshot, *id);
 		if (!definition.has_value() || constraintSemanticKey(*definition) != key) {
 			fail(FormatError::FERR_INVALID_STATE,
-					 "System Catalog constraint semantic direction has no matching definition");
+				 "System Catalog constraint semantic direction has no matching definition");
 		}
 		return definition;
 	}
 
-	std::vector<ConstraintDefinition>
-	SystemCatalog::readConstraintDefinitions(const MetadataSnapshotPin &snapshot, size_t maximumDefinitions) const {
+	std::vector<ConstraintDefinition> SystemCatalog::readConstraintDefinitions(const MetadataSnapshotPin &snapshot,
+																			   size_t maximumDefinitions) const {
 		if (maximumDefinitions == 0U || maximumDefinitions == std::numeric_limits<size_t>::max()) {
 			fail(FormatError::FERR_INVALID_HEADER,
-					 "System Catalog constraint definition read requires a finite positive bound");
+				 "System Catalog constraint definition read requires a finite positive bound");
 		}
 		if (!hasRoot(*this, snapshot)) {
 			return {};
@@ -918,24 +1157,83 @@ namespace graph::storage {
 		verifyBootstrap(*this, snapshot);
 		const std::vector<std::byte> prefix = definitionPrefix(SystemCatalogKeyKind::SCKK_CONSTRAINT_DEFINITION);
 		const std::vector<BTreePageEntry> entries = BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_)
-				.scan(snapshot, prefix, maximumDefinitions + 1U);
+															.scan(snapshot, prefix, maximumDefinitions + 1U);
 		std::vector<ConstraintDefinition> result;
 		for (const BTreePageEntry &entry: entries) {
 			if (!startsWith(entry.key, prefix)) {
 				break;
 			}
 			if (result.size() == maximumDefinitions) {
-				fail(FormatError::FERR_INVALID_STATE,
-						 "System Catalog constraint definitions exceed the caller bound");
+				fail(FormatError::FERR_INVALID_STATE, "System Catalog constraint definitions exceed the caller bound");
 			}
 			const ConstraintDefinition definition = decodeConstraintDefinition(entry.key);
 			if (entry.value_or_child != definition.constraint_id ||
-					!findConstraintDefinitionById(snapshot, definition.constraint_id).has_value()) {
-				fail(FormatError::FERR_INVALID_STATE,
-						 "System Catalog constraint definition is not self-consistent");
+				!findConstraintDefinitionById(snapshot, definition.constraint_id).has_value()) {
+				fail(FormatError::FERR_INVALID_STATE, "System Catalog constraint definition is not self-consistent");
 			}
 			result.push_back(definition);
 		}
+		return result;
+	}
+
+	std::optional<PropertyValue> SystemCatalog::findConfiguration(const MetadataSnapshotPin &snapshot,
+																  std::string_view name) const {
+		const std::vector<std::byte> prefix = configurationPrefix(name);
+		if (!hasRoot(*this, snapshot)) {
+			return std::nullopt;
+		}
+		verifyBootstrap(*this, snapshot);
+		const std::vector<BTreePageEntry> entries =
+				BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).scan(snapshot, prefix, 2U);
+		if (entries.empty() || !startsWith(entries.front().key, prefix)) {
+			return std::nullopt;
+		}
+		if (entries.size() == 2U && startsWith(entries[1].key, prefix)) {
+			fail(FormatError::FERR_INVALID_STATE, "System Catalog contains multiple values for one configuration name");
+		}
+		if (entries.front().value_or_child != SYSTEM_CATALOG_CONFIGURATION_VALUE) {
+			fail(FormatError::FERR_INVALID_STATE, "System Catalog configuration entry has an invalid value marker");
+		}
+		const NativeConfigurationRecord record = decodeConfigurationKey(entries.front().key);
+		if (record.name != name) {
+			fail(FormatError::FERR_INVALID_STATE, "System Catalog configuration entry disagrees with its name prefix");
+		}
+		return record.value;
+	}
+
+	std::vector<NativeConfigurationRecord> SystemCatalog::readConfigurations(const MetadataSnapshotPin &snapshot,
+																			 size_t maximumRecords) const {
+		if (maximumRecords == 0U || maximumRecords == std::numeric_limits<size_t>::max()) {
+			fail(FormatError::FERR_INVALID_HEADER,
+				 "System Catalog configuration read requires a finite positive bound");
+		}
+		if (!hasRoot(*this, snapshot)) {
+			return {};
+		}
+		verifyBootstrap(*this, snapshot);
+		const std::vector<std::byte> prefix = {static_cast<std::byte>(SystemCatalogKeyKind::SCKK_CONFIGURATION)};
+		const std::vector<BTreePageEntry> entries =
+				BTreeIndex(RSS_SYSTEM_CATALOG_INDEX_ID, pages_, metadata_).scan(snapshot, prefix, maximumRecords + 1U);
+		std::set<std::string, std::less<>> names;
+		std::vector<NativeConfigurationRecord> result;
+		for (const BTreePageEntry &entry: entries) {
+			if (!startsWith(entry.key, prefix)) {
+				break;
+			}
+			if (result.size() == maximumRecords) {
+				fail(FormatError::FERR_INVALID_STATE, "System Catalog configurations exceed the caller bound");
+			}
+			if (entry.value_or_child != SYSTEM_CATALOG_CONFIGURATION_VALUE) {
+				fail(FormatError::FERR_INVALID_STATE, "System Catalog configuration entry has an invalid value marker");
+			}
+			NativeConfigurationRecord record = decodeConfigurationKey(entry.key);
+			if (!names.emplace(record.name).second) {
+				fail(FormatError::FERR_INVALID_STATE,
+					 "System Catalog contains multiple values for one configuration name");
+			}
+			result.push_back(std::move(record));
+		}
+		std::ranges::sort(result, {}, &NativeConfigurationRecord::name);
 		return result;
 	}
 

@@ -33,12 +33,14 @@ public:
 		std::unordered_map<std::string, graph::PropertyValue> properties,
 		std::string sourceVar,
 		std::string targetVar,
-		std::unique_ptr<LogicalOperator> child = nullptr)
+		std::unique_ptr<LogicalOperator> child = nullptr,
+		std::string direction = "out")
 		: variable_(std::move(variable))
 		, type_(std::move(type))
 		, properties_(std::move(properties))
 		, sourceVar_(std::move(sourceVar))
 		, targetVar_(std::move(targetVar))
+		, direction_(std::move(direction))
 		, child_(std::move(child)) {}
 
 	LogicalCreateEdge(
@@ -48,13 +50,15 @@ public:
 		std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> propertyExprs,
 		std::string sourceVar,
 		std::string targetVar,
-		std::unique_ptr<LogicalOperator> child = nullptr)
+		std::unique_ptr<LogicalOperator> child = nullptr,
+		std::string direction = "out")
 		: variable_(std::move(variable))
 		, type_(std::move(type))
 		, properties_(std::move(properties))
 		, propertyExprs_(std::move(propertyExprs))
 		, sourceVar_(std::move(sourceVar))
 		, targetVar_(std::move(targetVar))
+		, direction_(std::move(direction))
 		, child_(std::move(child)) {}
 
 	[[nodiscard]] LogicalOpType getType() const override { return LogicalOpType::LOP_CREATE_EDGE; }
@@ -86,7 +90,8 @@ public:
 			std::move(exprsCopy),
 			sourceVar_,
 			targetVar_,
-			child_ ? child_->clone() : nullptr);
+			child_ ? child_->clone() : nullptr,
+			direction_);
 	}
 
 	[[nodiscard]] std::string toString() const override {
@@ -112,6 +117,7 @@ public:
 	}
 	[[nodiscard]] const std::string &getSourceVar() const { return sourceVar_; }
 	[[nodiscard]] const std::string &getTargetVar() const { return targetVar_; }
+	[[nodiscard]] const std::string &getDirection() const { return direction_; }
 
 private:
 	std::string variable_;
@@ -120,6 +126,7 @@ private:
 	std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> propertyExprs_;
 	std::string sourceVar_;
 	std::string targetVar_;
+	std::string direction_;
 	std::unique_ptr<LogicalOperator> child_;
 };
 

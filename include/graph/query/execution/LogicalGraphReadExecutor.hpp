@@ -1,6 +1,6 @@
 /**
  * @file LogicalGraphReadExecutor.hpp
- * @brief Bounded logical graph scan and traversal executor independent of DataManager.
+ * @brief Bounded logical graph scan and traversal executor independent of physical storage managers.
  *
  * @copyright Copyright (c) 2026 Nexepic
  * @license Apache-2.0
@@ -14,7 +14,7 @@
 #include <string>
 #include <vector>
 
-#include "graph/query/execution/VectorizedPredicate.hpp"
+#include "graph/query/execution/LogicalPropertyPredicate.hpp"
 #include "graph/storage/LogicalGraphRead.hpp"
 
 namespace graph::query::execution {
@@ -32,12 +32,12 @@ namespace graph::query::execution {
 
 	struct LogicalGraphNodeFilter {
 		std::vector<std::string> required_labels;
-		std::vector<VectorizedPropertyPredicate> property_predicates;
+		std::vector<LogicalPropertyPredicate> property_predicates;
 	};
 
 	struct LogicalGraphEdgeFilter {
 		std::optional<std::string> relationship_type;
-		std::vector<VectorizedPropertyPredicate> property_predicates;
+		std::vector<LogicalPropertyPredicate> property_predicates;
 	};
 
 	struct LogicalGraphExpansion {
@@ -75,8 +75,8 @@ namespace graph::query::execution {
 	};
 
 	// This is a query execution kernel, not a Cypher parser or a read-write
-	// transaction. It forms the format-independent read boundary that a future
-	// physical-plan lowering path can target without accessing DataManager.
+	// transaction. It is a format-independent logical read boundary and does
+	// not access retired storage managers.
 	class LogicalGraphReadExecutor final {
 	public:
 		using RowVisitor = std::function<void(const LogicalGraphReadRow &)>;

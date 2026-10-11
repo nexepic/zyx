@@ -13,6 +13,8 @@
 #include <span>
 #include <vector>
 
+#include "graph/storage/CancellationCheckpoint.hpp"
+
 namespace graph::storage {
 
 	// Raw coordinates use the same explicit little-endian BF16 representation as
@@ -40,15 +42,17 @@ namespace graph::storage {
 	class DeterministicProductQuantizer final {
 	public:
 		[[nodiscard]] static DeterministicProductQuantizer train(std::span<const DeterministicPqTrainingRecord> records,
-																 const DeterministicPqOptions &options);
+															 const DeterministicPqOptions &options,
+															 const CancellationCheckpoint *cancellation = nullptr);
 
 		[[nodiscard]] const DeterministicPqOptions &options() const { return options_; }
 		// The payload is ordered by subspace, centroid, then coordinate and is
 		// ready for VectorCodebookStore as an explicit little-endian float32 span.
-		[[nodiscard]] std::vector<std::byte> codebookPayload() const;
+		[[nodiscard]] std::vector<std::byte> codebookPayload(const CancellationCheckpoint *cancellation = nullptr) const;
 		// Returns one byte per PQ subspace. The first centroid wins deterministic
 		// distance ties, so re-encoding is independent of host scheduling.
-		[[nodiscard]] std::vector<uint8_t> encode(std::span<const std::byte> rawBfloat16) const;
+		[[nodiscard]] std::vector<uint8_t> encode(std::span<const std::byte> rawBfloat16,
+														 const CancellationCheckpoint *cancellation = nullptr) const;
 		// Encodes against an immutable persisted Codebook without retraining. The
 		// caller supplies the Codec shape explicitly so a stale or malformed
 		// Codebook payload cannot be interpreted using a different Vector layout.

@@ -18,9 +18,11 @@
  * limitations under the License.
  **/
 
-#include "LegacyQueryTestFixture.hpp"
+#include "QueryTestFixture.hpp"
 
-class CypherGdsTest : public LegacyQueryTestFixture {
+#include <unordered_set>
+
+class CypherGdsTest : public QueryTestFixture {
 protected:
 	void createSocialGraph() {
 		(void) execute("CREATE (a:Person {name: 'Alice'})-[:KNOWS]->(b:Person {name: 'Bob'})");
@@ -65,12 +67,12 @@ TEST_F(CypherGdsTest, ProjectAndDropGraph) {
 TEST_F(CypherGdsTest, ProjectDuplicateNameThrows) {
 	createSocialGraph();
 	(void) execute("CALL gds.graph.project('dup', 'Person', 'KNOWS')");
-	EXPECT_THROW(execute("CALL gds.graph.project('dup', 'Person', 'KNOWS')"), std::exception);
+	EXPECT_THROW((void) execute("CALL gds.graph.project('dup', 'Person', 'KNOWS')"), std::exception);
 	(void) execute("CALL gds.graph.drop('dup')");
 }
 
 TEST_F(CypherGdsTest, DropNonExistentThrows) {
-	EXPECT_THROW(execute("CALL gds.graph.drop('missing')"), std::exception);
+	EXPECT_THROW((void) execute("CALL gds.graph.drop('missing')"), std::exception);
 }
 
 TEST_F(CypherGdsTest, ProjectionCatalogExistsListSchemaAndDropAll) {
@@ -141,11 +143,11 @@ TEST_F(CypherGdsTest, ProjectionCatalogReportsStaleAfterGraphMutation) {
 }
 
 TEST_F(CypherGdsTest, ProjectionCatalogRejectsInvalidIntrospectionArguments) {
-	EXPECT_THROW(execute("CALL gds.graph.exists()"), std::exception);
-	EXPECT_THROW(execute("CALL gds.graph.list('a', 'b')"), std::exception);
-	EXPECT_THROW(execute("CALL gds.graph.dropAll('x')"), std::exception);
-	EXPECT_THROW(execute("CALL gds.graph.schema()"), std::exception);
-	EXPECT_THROW(execute("CALL gds.graph.schema('missing')"), std::exception);
+	EXPECT_THROW((void) execute("CALL gds.graph.exists()"), std::exception);
+	EXPECT_THROW((void) execute("CALL gds.graph.list('a', 'b')"), std::exception);
+	EXPECT_THROW((void) execute("CALL gds.graph.dropAll('x')"), std::exception);
+	EXPECT_THROW((void) execute("CALL gds.graph.schema()"), std::exception);
+	EXPECT_THROW((void) execute("CALL gds.graph.schema('missing')"), std::exception);
 }
 
 // ============================================================================
@@ -285,7 +287,7 @@ TEST_F(CypherGdsTest, DijkstraStreamNoPath) {
 // ============================================================================
 
 TEST_F(CypherGdsTest, AlgorithmOnMissingProjectionThrows) {
-	EXPECT_THROW(execute("CALL gds.pageRank.stream('nonexistent')"), std::exception);
+	EXPECT_THROW((void) execute("CALL gds.pageRank.stream('nonexistent')"), std::exception);
 }
 
 // ============================================================================
@@ -336,7 +338,7 @@ TEST_F(CypherGdsTest, ClosenessOnEmptyProjection) {
 // ============================================================================
 
 TEST_F(CypherGdsTest, ProjectWithTooFewArgsThrows) {
-	EXPECT_THROW(execute("CALL gds.graph.project('onlyname', 'Person')"), std::exception);
+	EXPECT_THROW((void) execute("CALL gds.graph.project('onlyname', 'Person')"), std::exception);
 }
 
 TEST_F(CypherGdsTest, ProjectWithWeightProperty) {
@@ -408,10 +410,10 @@ TEST_F(CypherGdsTest, ProjectWithNeo4jStyleNativeSignature) {
 
 TEST_F(CypherGdsTest, ProjectWithConfigMapRejectsInvalidOptions) {
 	EXPECT_THROW(
-		execute("CALL gds.graph.project('bad', {nodeLabels: ['Person'], relationships: {KNOWS: {badOption: 1}}})"),
+		(void) execute("CALL gds.graph.project('bad', {nodeLabels: ['Person'], relationships: {KNOWS: {badOption: 1}}})"),
 		std::exception);
 	EXPECT_THROW(
-		execute("CALL gds.graph.project('bad2', {nodeLabels: ['Person'], relationships: {KNOWS: {orientation: 'SIDEWAYS'}}})"),
+		(void) execute("CALL gds.graph.project('bad2', {nodeLabels: ['Person'], relationships: {KNOWS: {orientation: 'SIDEWAYS'}}})"),
 		std::exception);
 }
 
@@ -464,13 +466,13 @@ TEST_F(CypherGdsTest, LeidenStreamWithOptionsMap) {
 TEST_F(CypherGdsTest, LeidenStreamRejectsInvalidOptions) {
 	(void) execute("CREATE (:Person {name: 'A'})-[:KNOWS]->(:Person {name: 'B'})");
 	(void) execute("CALL gds.graph.project('lc_invalid', 'Person', 'KNOWS')");
-	EXPECT_THROW(execute("CALL gds.leiden.stream('lc_invalid', {maxIterations: 0})"), std::exception);
-	EXPECT_THROW(execute("CALL gds.leiden.stream('lc_invalid', {maxIterations: 1.5})"), std::exception);
-	EXPECT_THROW(execute("CALL gds.leiden.stream('lc_invalid', {resolution: 0.0})"), std::exception);
-	EXPECT_THROW(execute("CALL gds.leiden.stream('lc_invalid', {concurrency: -1})"), std::exception);
+	EXPECT_THROW((void) execute("CALL gds.leiden.stream('lc_invalid', {maxIterations: 0})"), std::exception);
+	EXPECT_THROW((void) execute("CALL gds.leiden.stream('lc_invalid', {maxIterations: 1.5})"), std::exception);
+	EXPECT_THROW((void) execute("CALL gds.leiden.stream('lc_invalid', {resolution: 0.0})"), std::exception);
+	EXPECT_THROW((void) execute("CALL gds.leiden.stream('lc_invalid', {concurrency: -1})"), std::exception);
 	(void) execute("CALL gds.graph.drop('lc_invalid')");
 }
 
 TEST_F(CypherGdsTest, LeidenStreamTooFewArgsThrows) {
-	EXPECT_THROW(execute("CALL gds.leiden.stream()"), std::exception);
+	EXPECT_THROW((void) execute("CALL gds.leiden.stream()"), std::exception);
 }

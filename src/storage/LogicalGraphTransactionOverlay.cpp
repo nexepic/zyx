@@ -127,7 +127,7 @@ namespace graph::storage {
 			if (!base.has_value()) {
 				return std::nullopt;
 			}
-			const auto matches = [this, &labels, &properties, maximumPropertyEntries](const LogicalGraphNode &node) {
+			const auto matches = [&labels, &properties, maximumPropertyEntries](const LogicalGraphNode &node) {
 				std::set<std::string> nodeLabels(node.labels.begin(), node.labels.end());
 				if (nodeLabels.size() != node.labels.size() ||
 					std::ranges::any_of(node.labels, [](const std::string &label) { return label.empty(); })) {
@@ -403,7 +403,7 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] std::optional<LogicalGraphMutationFence> mutationFence() const override {
-			return overlay_.baseFence();
+			return overlay_.overlayFence();
 		}
 
 	private:
@@ -462,6 +462,152 @@ namespace graph::storage {
 		mutable std::map<ContinuationKey, ContinuationState> continuations_;
 	};
 
+	class LogicalGraphTransactionOverlay::VectorSnapshot final : public LogicalGraphVectorSearchSnapshot {
+	public:
+		explicit VectorSnapshot(const LogicalGraphTransactionOverlay &overlay,
+									 LogicalGraphVectorSearchSnapshot &derivedSnapshot) :
+			overlay_(overlay), derived_snapshot_(derivedSnapshot) {}
+
+		[[nodiscard]] LogicalGraphNode readNode(uint64_t nodeId) const override {
+			requireActive();
+			return overlay_.logical_revision_ == 0U ? derived_snapshot_.readNode(nodeId)
+															 : overlay_.openLogicalGraphReadSnapshot()->readNode(nodeId);
+		}
+
+		[[nodiscard]] bool containsNode(uint64_t nodeId) const override {
+			requireActive();
+			return overlay_.logical_revision_ == 0U ? derived_snapshot_.containsNode(nodeId)
+															 : overlay_.openLogicalGraphReadSnapshot()->containsNode(nodeId);
+		}
+
+		[[nodiscard]] LogicalGraphEdge readEdge(uint64_t edgeId) const override {
+			requireActive();
+			return overlay_.logical_revision_ == 0U ? derived_snapshot_.readEdge(edgeId)
+															 : overlay_.openLogicalGraphReadSnapshot()->readEdge(edgeId);
+		}
+
+		[[nodiscard]] std::optional<std::vector<LogicalGraphNode>>
+		findNodesByExactProperties(const std::vector<std::string> &labels,
+											const std::vector<std::pair<std::string, PropertyValue>> &properties,
+											size_t maximumNodes, size_t maximumPropertyEntries) const override {
+			requireActive();
+			if (overlay_.logical_revision_ == 0U) {
+				return derived_snapshot_.findNodesByExactProperties(labels, properties, maximumNodes, maximumPropertyEntries);
+			}
+			return overlay_.openLogicalGraphReadSnapshot()->findNodesByExactProperties(
+					labels, properties, maximumNodes, maximumPropertyEntries);
+		}
+
+		void visitNodes(size_t maximumRecords, const std::function<bool(const LogicalGraphNode &)> &visitor) const override {
+			requireActive();
+			if (overlay_.logical_revision_ == 0U) {
+				derived_snapshot_.visitNodes(maximumRecords, visitor);
+				return;
+			}
+			overlay_.openLogicalGraphReadSnapshot()->visitNodes(maximumRecords, visitor);
+		}
+
+		[[nodiscard]] LogicalGraphNodePage scanNodesAfter(uint64_t afterNodeId, size_t maximumRecords,
+																						 size_t maximumMetadataPages) const override {
+			requireActive();
+			if (overlay_.logical_revision_ == 0U) {
+				return derived_snapshot_.scanNodesAfter(afterNodeId, maximumRecords, maximumMetadataPages);
+			}
+			return overlay_.openLogicalGraphReadSnapshot()->scanNodesAfter(afterNodeId, maximumRecords,
+																				maximumMetadataPages);
+		}
+
+		[[nodiscard]] LogicalGraphAdjacencyPage
+		scanAdjacentEdges(uint64_t nodeId, LogicalGraphReadDirection direction,
+							  std::optional<LogicalGraphAdjacencyContinuation> continuation,
+							  size_t maximumRecords) const override {
+			requireActive();
+			if (overlay_.logical_revision_ == 0U) {
+				return derived_snapshot_.scanAdjacentEdges(nodeId, direction, std::move(continuation), maximumRecords);
+			}
+			return overlay_.openLogicalGraphReadSnapshot()->scanAdjacentEdges(nodeId, direction, std::move(continuation),
+																				 maximumRecords);
+		}
+
+		void visitEdges(size_t maximumRecords, const std::function<bool(const LogicalGraphEdge &)> &visitor) const override {
+			requireActive();
+			if (overlay_.logical_revision_ == 0U) {
+				derived_snapshot_.visitEdges(maximumRecords, visitor);
+				return;
+			}
+			overlay_.openLogicalGraphReadSnapshot()->visitEdges(maximumRecords, visitor);
+		}
+
+		void visitAdjacentEdges(uint64_t nodeId, LogicalGraphReadDirection direction, size_t maximumEdges,
+									const std::function<bool(const LogicalGraphEdge &)> &visitor) const override {
+			requireActive();
+			if (overlay_.logical_revision_ == 0U) {
+				derived_snapshot_.visitAdjacentEdges(nodeId, direction, maximumEdges, visitor);
+				return;
+			}
+			overlay_.openLogicalGraphReadSnapshot()->visitAdjacentEdges(nodeId, direction, maximumEdges, visitor);
+		}
+
+		[[nodiscard]] std::optional<LogicalGraphMutationFence> mutationFence() const override {
+			requireActive();
+			return overlay_.overlayFence();
+		}
+
+		[[nodiscard]] LogicalGraphVectorSearchResult
+		searchLogicalVector(const LogicalGraphVectorSearchRequest &request) const override {
+			requireActive();
+			if (request.cancellation != nullptr) {
+				request.cancellation->check();
+			}
+			if (overlay_.logical_revision_ == 0U) {
+				return derived_snapshot_.searchLogicalVector(request);
+			}
+			const std::optional<LogicalGraphVectorIndexDescriptor> index =
+					derived_snapshot_.describeLogicalVectorIndex(request);
+			if (!index.has_value()) {
+				throw std::runtime_error(
+						"logical transaction Vector search has no exact overlay evaluator for its pinned generation");
+			}
+			std::vector<LogicalGraphVectorSearchHit> hits;
+			LogicalGraphVectorSearchStats stats;
+			stats.used_exact_overlay = true;
+			auto graphSnapshot = overlay_.openLogicalGraphReadSnapshot();
+			graphSnapshot->visitNodes(request.maximum_mapping_entries, [&](const LogicalGraphNode &node) {
+				if (request.cancellation != nullptr) {
+					request.cancellation->check();
+				}
+				++stats.exact_overlay_candidate_scans;
+				const std::optional<LogicalGraphVectorSearchHit> hit =
+						derived_snapshot_.scoreLogicalVectorExactOverlayCandidate(request, *index, node);
+				if (hit.has_value()) {
+					hits.push_back(*hit);
+				}
+				return true;
+			});
+			if (request.cancellation != nullptr) {
+				request.cancellation->check();
+			}
+			std::ranges::sort(hits, [](const LogicalGraphVectorSearchHit &left,
+														 const LogicalGraphVectorSearchHit &right) {
+				return left.score == right.score ? left.node_id < right.node_id : left.score < right.score;
+			});
+			if (hits.size() > request.top_k) {
+				hits.resize(request.top_k);
+			}
+			return {std::move(hits), stats};
+		}
+
+	private:
+		void requireActive() const {
+			if (overlay_.transaction_.state() != LogicalGraphTransactionState::LGTTS_ACTIVE) {
+				throw std::logic_error("logical transaction Vector snapshot is no longer active");
+			}
+		}
+
+		const LogicalGraphTransactionOverlay &overlay_;
+		LogicalGraphVectorSearchSnapshot &derived_snapshot_;
+	};
+
 	LogicalGraphTransactionOverlay::LogicalGraphTransactionOverlay(LogicalGraphTransaction &transaction) :
 		transaction_(transaction) {
 		if (transaction_.state() != LogicalGraphTransactionState::LGTTS_ACTIVE) {
@@ -480,6 +626,18 @@ namespace graph::storage {
 			throw std::logic_error("logical transaction overlay cannot open a snapshot after transaction completion");
 		}
 		return std::make_unique<Snapshot>(*this);
+	}
+
+	std::unique_ptr<LogicalGraphVectorSearchSnapshot>
+	LogicalGraphTransactionOverlay::openLogicalGraphVectorSearchSnapshot() const {
+		if (transaction_.state() != LogicalGraphTransactionState::LGTTS_ACTIVE) {
+			throw std::logic_error("logical transaction overlay cannot open a Vector snapshot after transaction completion");
+		}
+		auto *provider = dynamic_cast<LogicalGraphTransactionVectorSnapshotProvider *>(&transaction_);
+		if (provider == nullptr) {
+			throw std::runtime_error("logical transaction does not own a pinned Vector search snapshot");
+		}
+		return std::make_unique<VectorSnapshot>(*this, provider->pinnedLogicalGraphVectorSearchSnapshot());
 	}
 
 	std::vector<uint64_t>
@@ -538,11 +696,17 @@ namespace graph::storage {
 		if (transaction_.state() != LogicalGraphTransactionState::LGTTS_ACTIVE) {
 			throw std::logic_error("logical transaction overlay cannot stage a mutation after transaction completion");
 		}
-		if (expectedFence.has_value() && (!expectedFence->isValid() || baseFence() != expectedFence)) {
-			throw LogicalGraphMutationConflict("logical transaction overlay mutation does not match its pinned read fence");
+		// A plan built from this overlay observes both the durable base fence and
+		// the overlay revision. Comparing it to the base fence alone rejects every
+		// statement after the first successful staged mutation.
+		if (expectedFence.has_value() && (!expectedFence->isValid() || overlayFence() != expectedFence)) {
+			throw LogicalGraphMutationConflict("logical transaction overlay mutation does not match its current read fence");
 		}
 		if (isEmpty(batch)) {
 			return {};
+		}
+		if (logical_revision_ == std::numeric_limits<uint64_t>::max()) {
+			throw std::overflow_error("logical transaction overlay revision overflowed");
 		}
 
 		const LogicalGraphMutationBatchResult preview = transaction_.previewMutationBatch(batch);
@@ -554,6 +718,7 @@ namespace graph::storage {
 			if (staged != preview) {
 				throw std::logic_error("logical transaction changed a batch's provisional identity after validation");
 			}
+			++logical_revision_;
 			return staged;
 		} catch (...) {
 			nodes_ = nodesBefore;
@@ -566,6 +731,14 @@ namespace graph::storage {
 
 	std::optional<LogicalGraphMutationFence> LogicalGraphTransactionOverlay::baseFence() const {
 		return baseSnapshot().mutationFence();
+	}
+
+	std::optional<LogicalGraphMutationFence> LogicalGraphTransactionOverlay::overlayFence() const {
+		std::optional<LogicalGraphMutationFence> fence = baseFence();
+		if (fence.has_value()) {
+			fence->logical_revision = logical_revision_;
+		}
+		return fence;
 	}
 
 	LogicalGraphTransactionOverlay::NodeState &LogicalGraphTransactionOverlay::ensureNode(uint64_t nodeId) {

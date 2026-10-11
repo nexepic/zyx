@@ -387,7 +387,16 @@ namespace {
 			initial.database_id = DatabaseId(options.database_id);
 			initial.generation = Generation(1U);
 			initial.checkpoint_lsn = LogSequenceNumber(1U);
-			auto metadata = RelocatableMetadataStore::initializeNew(io, initial);
+			std::unique_ptr<RelocatableMetadataStore> metadata;
+			try {
+				metadata = RelocatableMetadataStore::initializeNewComplete(io, initial);
+			} catch (...) {
+				io.reset();
+				data->close();
+				std::error_code ignored;
+				static_cast<void>(std::filesystem::remove(options.data_path, ignored));
+				throw;
+			}
 			io->sync();
 			unique.file_bytes_before = fileBytes(options.data_path);
 			io->resetStats();

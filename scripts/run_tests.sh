@@ -3,7 +3,7 @@
 # ==============================================================================
 # Script Name: run_tests.sh
 # Purpose: Clean, configure, build, test, and generate coverage reports.
-# Usage: ./run_tests.sh [--quick] [--no-conan] [--html] [--file <filename>]
+# Usage: ./run_tests.sh [--quick] [--no-conan] [--html] [--file <filename>] [--gtest-filter <pattern>]
 # ==============================================================================
 
 set -euo pipefail
@@ -16,15 +16,20 @@ NC='\033[0m'
 
 BUILD_DIR="buildDir"
 COVERAGE_ROOT="$BUILD_DIR/coverage"
-PROFILES_DIR="$COVERAGE_ROOT/raw"
+TEST_RESULT_FILE="$COVERAGE_ROOT/test-shards-result.json"
 PYTHON_SCRIPT="scripts/generate_coverage.py"
 TEST_RUNNER="scripts/run_test_process.py"
 SHARD_RUNNER="scripts/run_test_shards.py"
-# Native durability tests intentionally synchronize WAL and metadata on every
-# isolated database lifecycle.  Ten minutes is insufficient on slower local,
+# Native durability tests intentionally synchronize single-file data and metadata on every
+# isolated database lifecycle. Ten minutes is insufficient on slower local,
 # virtualized, or Windows filesystems; callers can still lower this explicitly.
 TEST_TIMEOUT_SECONDS="${ZYX_TEST_TIMEOUT_SECONDS:-1800}"
 TEST_SHARDS="${ZYX_TEST_SHARDS:-}"
+# Keep each invocation's profiles separate so a report can be tied to exactly
+# one test execution rather than accidentally merging a stale background run.
+TEST_RUN_ID="${ZYX_TEST_RUN_ID:-native-$(date +%Y%m%dT%H%M%S)-$$}"
+PROFILES_DIR="$COVERAGE_ROOT/runs/$TEST_RUN_ID/raw"
+FAILED_SHARD_LOG_DIR="$COVERAGE_ROOT/runs/$TEST_RUN_ID/failed-shards"
 
 if [ ! -f "$PYTHON_SCRIPT" ]; then
     echo -e "${RED}Error: $PYTHON_SCRIPT not found.${NC}"
@@ -79,7 +84,9 @@ trap cleanup EXIT INT TERM
 
 QUICK_MODE=false
 NO_CONAN=false
-REPORT_ARGS=""
+REPORT_ARGS=()
+TEST_ARGS=()
+GTEST_FILTER=""
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -92,12 +99,41 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --html)
-      REPORT_ARGS+=" --html"
+      REPORT_ARGS+=(--html)
       shift
       ;;
     --file)
-      REPORT_ARGS+=" --file $2"
+      if [ "$#" -lt 2 ]; then
+        echo "Error: --file requires a source-file path"
+        exit 1
+      fi
+      REPORT_ARGS+=(--file "$2")
       shift 2
+      ;;
+    --gtest-filter)
+      if [ "$#" -lt 2 ] || [ -z "$2" ]; then
+        echo "Error: --gtest-filter requires a GoogleTest filter pattern"
+        exit 1
+      fi
+      if [ -n "$GTEST_FILTER" ]; then
+        echo "Error: --gtest-filter may be specified only once"
+        exit 1
+      fi
+      GTEST_FILTER="$2"
+      shift 2
+      ;;
+    --gtest-filter=*)
+      FILTER_VALUE="${1#--gtest-filter=}"
+      if [ -z "$FILTER_VALUE" ]; then
+        echo "Error: --gtest-filter requires a GoogleTest filter pattern"
+        exit 1
+      fi
+      if [ -n "$GTEST_FILTER" ]; then
+        echo "Error: --gtest-filter may be specified only once"
+        exit 1
+      fi
+      GTEST_FILTER="$FILTER_VALUE"
+      shift
       ;;
     *)
       echo "Unknown argument: $1"
@@ -105,6 +141,19 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if [ -n "$GTEST_FILTER" ]; then
+    TEST_ARGS=("--gtest_filter=$GTEST_FILTER")
+    echo -e "${BLUE}>>> GoogleTest filter: $GTEST_FILTER${NC}"
+else
+    # Keep a complete test run's output bounded in CI and terminal harnesses.
+    # Failed suites and the final GoogleTest summary remain visible.
+    export ZYX_TEST_TERSE_OUTPUT=1
+    # Long-running suites intentionally stay quiet in terse mode. Emit a
+    # low-frequency supervisor heartbeat so noninteractive sessions do not
+    # mistake healthy test execution for a stalled command.
+    export ZYX_TEST_HEARTBEAT_SECONDS="${ZYX_TEST_HEARTBEAT_SECONDS:-10}"
+fi
 
 if [ "$QUICK_MODE" = true ] && [ -d "$BUILD_DIR" ]; then
     echo -e "${YELLOW}>>> [1/5] Quick Mode: Reusing existing build directory.${NC}"
@@ -127,6 +176,8 @@ else
 fi
 
 mkdir -p "$PROFILES_DIR"
+rm -f "$TEST_RESULT_FILE"
+rm -rf "$FAILED_SHARD_LOG_DIR"
 PROFILE_PATH="$(pwd)/$PROFILES_DIR/code-%p.profraw"
 export LLVM_PROFILE_FILE="$PROFILE_PATH"
 
@@ -144,7 +195,18 @@ cmake -S . -B "$BUILD_DIR" "${CONFIGURE_ARGS[@]}"
 cmake --build "$BUILD_DIR" --target zyx_test_suite
 
 echo -e "${BLUE}>>> [3/5] Running tests...${NC}"
-python3 "$SHARD_RUNNER" --jobs "$TEST_SHARDS" --timeout "$TEST_TIMEOUT_SECONDS" -- "$(pwd)/$BUILD_DIR/zyx_test_suite"
+if [ -n "$GTEST_FILTER" ]; then
+    python3 "$SHARD_RUNNER" --jobs "$TEST_SHARDS" --timeout "$TEST_TIMEOUT_SECONDS" \
+        --result-file "$TEST_RESULT_FILE" --run-id "$TEST_RUN_ID" \
+        --failure-log-dir "$FAILED_SHARD_LOG_DIR" -- \
+        "$(pwd)/$BUILD_DIR/zyx_test_suite" "${TEST_ARGS[@]}"
+else
+    python3 "$SHARD_RUNNER" --jobs "$TEST_SHARDS" --timeout "$TEST_TIMEOUT_SECONDS" \
+        --result-file "$TEST_RESULT_FILE" --run-id "$TEST_RUN_ID" \
+        --failure-log-dir "$FAILED_SHARD_LOG_DIR" -- \
+        "$(pwd)/$BUILD_DIR/zyx_test_suite"
+fi
+cat "$TEST_RESULT_FILE"
 
 echo -e "${BLUE}>>> [4/5] Verifying CTest registration...${NC}"
 ctest --test-dir "$BUILD_DIR" -N
@@ -158,11 +220,18 @@ else
     LLVM_PROF_CMD="llvm-profdata"
 fi
 
-python3 "$PYTHON_SCRIPT" "$BUILD_DIR" \
-    --llvm-cov "$LLVM_COV_CMD" \
-    --llvm-prof "$LLVM_PROF_CMD" \
-    --profile-dir "$PROFILES_DIR" \
-    $REPORT_ARGS
+if [ "${#REPORT_ARGS[@]}" -gt 0 ]; then
+    python3 "$PYTHON_SCRIPT" "$BUILD_DIR" \
+        --llvm-cov "$LLVM_COV_CMD" \
+        --llvm-prof "$LLVM_PROF_CMD" \
+        --profile-dir "$PROFILES_DIR" \
+        "${REPORT_ARGS[@]}"
+else
+    python3 "$PYTHON_SCRIPT" "$BUILD_DIR" \
+        --llvm-cov "$LLVM_COV_CMD" \
+        --llvm-prof "$LLVM_PROF_CMD" \
+        --profile-dir "$PROFILES_DIR"
+fi
 
 echo -e "${GREEN}======================================================${NC}"
 echo -e "${GREEN} Done! ${NC}"

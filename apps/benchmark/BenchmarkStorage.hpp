@@ -52,8 +52,6 @@ namespace zyx::benchmark {
 		int64_t edges = 0;
 		int64_t properties = 0;
 		uint64_t dbBytes = 0;
-		uint64_t walBytes = 0;
-		uint64_t totalBytes = 0;
 		double bytesPerNode = 0.0;
 	};
 
@@ -69,41 +67,14 @@ namespace zyx::benchmark {
 		if (std::filesystem::exists(dbPath, ec)) {
 			(void) std::filesystem::remove_all(dbPath, ec);
 		}
-
-		const std::filesystem::path walPath = dbPath.string() + "-wal";
-		ec.clear();
-		if (std::filesystem::exists(walPath, ec)) {
-			(void) std::filesystem::remove_all(walPath, ec);
-		}
 	}
 
-	inline uint64_t getPathSizeBytes(const std::filesystem::path &path) {
+	inline uint64_t getFileSizeBytes(const std::filesystem::path &path) {
 		std::error_code ec;
-		if (!std::filesystem::exists(path, ec)) {
+		if (!std::filesystem::is_regular_file(path, ec) || ec) {
 			return 0;
 		}
-
-		ec.clear();
-		if (std::filesystem::is_regular_file(path, ec)) {
-			return std::filesystem::file_size(path, ec);
-		}
-
-		ec.clear();
-		if (!std::filesystem::is_directory(path, ec)) {
-			return 0;
-		}
-
-		uint64_t total = 0;
-		std::filesystem::recursive_directory_iterator it(path, std::filesystem::directory_options::skip_permission_denied,
-														  ec);
-		const std::filesystem::recursive_directory_iterator end;
-		while (!ec && it != end) {
-			if (it->is_regular_file(ec)) {
-				total += it->file_size(ec);
-			}
-			it.increment(ec);
-		}
-		return total;
+		return std::filesystem::file_size(path, ec);
 	}
 
 	inline std::string randomAlphaString(size_t len, std::mt19937 &rng) {
@@ -312,21 +283,17 @@ namespace zyx::benchmark {
 		}
 		std::cout << " Done." << std::endl;
 
-		const std::filesystem::path walPath = dbPath.string() + "-wal";
-		const uint64_t dbBytes = getPathSizeBytes(dbPath);
-		const uint64_t walBytes = getPathSizeBytes(walPath);
-		const uint64_t totalBytes = dbBytes + walBytes;
+		const uint64_t dbBytes = getFileSizeBytes(dbPath);
 		const double bytesPerNode =
-				workloadStats.nodes > 0 ? static_cast<double>(totalBytes) / static_cast<double>(workloadStats.nodes) : 0.0;
+				workloadStats.nodes > 0 ? static_cast<double>(dbBytes) / static_cast<double>(workloadStats.nodes) : 0.0;
 
 		return StorageProfileRow{
 				scenario.name, workloadStats.nodes, workloadStats.edges, workloadStats.properties,
-				dbBytes,		   walBytes,				totalBytes,			 bytesPerNode};
+				dbBytes,		   bytesPerNode};
 	}
 
 	inline std::string storageSeparator() {
 		return "+" + std::string(41, '-') + "+" + std::string(10, '-') + "+" + std::string(10, '-') + "+" +
-			   std::string(12, '-') + "+" + std::string(12, '-') + "+" + std::string(12, '-') + "+" +
 			   std::string(12, '-') + "+" + std::string(12, '-') + "+";
 	}
 
@@ -341,8 +308,6 @@ namespace zyx::benchmark {
 				  << "| " << std::setw(9) << "Edges"
 				  << "| " << std::setw(11) << "Props"
 				  << "| " << std::setw(11) << "DB(MB)"
-				  << "| " << std::setw(11) << "WAL(MB)"
-				  << "| " << std::setw(11) << "Total(MB)"
 				  << "| " << std::setw(11) << "Bytes/Node"
 				  << "|\n"
 				  << sep << "\n";
@@ -350,30 +315,24 @@ namespace zyx::benchmark {
 
 	inline void printStorageRow(const StorageProfileRow &row) {
 		const double dbMB = static_cast<double>(row.dbBytes) / (1024.0 * 1024.0);
-		const double walMB = static_cast<double>(row.walBytes) / (1024.0 * 1024.0);
-		const double totalMB = static_cast<double>(row.totalBytes) / (1024.0 * 1024.0);
 
 		std::cout << "| " << std::left << std::setw(40) << row.scenario
 				  << "| " << std::setw(9) << row.nodes
 				  << "| " << std::setw(9) << row.edges
 				  << "| " << std::setw(11) << row.properties
 				  << "| " << std::setw(11) << std::fixed << std::setprecision(3) << dbMB
-				  << "| " << std::setw(11) << std::fixed << std::setprecision(3) << walMB
-				  << "| " << std::setw(11) << std::fixed << std::setprecision(3) << totalMB
 				  << "| " << std::setw(11) << std::fixed << std::setprecision(1) << row.bytesPerNode << "|\n";
 	}
 
 	inline std::string writeStorageCsv(const std::vector<StorageProfileRow> &rows) {
 		std::ofstream out(std::string(config::PATH_STORAGE_CSV), std::ios::trunc);
-		out << "scenario,nodes,edges,properties,db_bytes,wal_bytes,total_bytes,bytes_per_node\n";
+		out << "scenario,nodes,edges,properties,db_bytes,bytes_per_node\n";
 		for (const auto &row: rows) {
 			out << '"' << row.scenario << '"' << ","
 				<< row.nodes << ","
 				<< row.edges << ","
 				<< row.properties << ","
 				<< row.dbBytes << ","
-				<< row.walBytes << ","
-				<< row.totalBytes << ","
 				<< std::fixed << std::setprecision(4) << row.bytesPerNode << "\n";
 		}
 		return std::string(config::PATH_STORAGE_CSV);

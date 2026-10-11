@@ -17,8 +17,8 @@
 
 namespace graph::query {
 
-QueryGuard::QueryGuard(int64_t timeoutMs, int64_t memoryLimitMb)
-	: timeoutMs_(timeoutMs), memoryLimitMb_(memoryLimitMb) {
+QueryGuard::QueryGuard(int64_t timeoutMs, int64_t memoryLimitMb, MemoryUsageSampler memoryUsageSampler)
+	: timeoutMs_(timeoutMs), memoryLimitMb_(memoryLimitMb), memoryUsageSampler_(std::move(memoryUsageSampler)) {
 	if (timeoutMs > 0) {
 		timeoutEnabled_ = true;
 		deadline_ = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeoutMs);
@@ -26,6 +26,7 @@ QueryGuard::QueryGuard(int64_t timeoutMs, int64_t memoryLimitMb)
 	if (memoryLimitMb > 0) {
 		memoryEnabled_ = true;
 		memoryLimitBytes_ = static_cast<size_t>(memoryLimitMb) * 1024 * 1024;
+		baselineResidentBytes_ = currentResidentBytes();
 	}
 }
 
@@ -36,11 +37,17 @@ void QueryGuard::checkSlow() {
 		}
 	}
 	if (memoryEnabled_) {
-		size_t rss = getCurrentRSSBytes();
-		if (rss > memoryLimitBytes_) {
-			throw QueryMemoryExceededException(memoryLimitMb_, rss);
+		const size_t currentBytes = currentResidentBytes();
+		if (currentBytes > baselineResidentBytes_ && currentBytes - baselineResidentBytes_ > memoryLimitBytes_) {
+			throw QueryMemoryExceededException(memoryLimitMb_, baselineResidentBytes_, currentBytes);
 		}
 	}
+}
+
+void QueryGuard::checkNow() { checkSlow(); }
+
+size_t QueryGuard::currentResidentBytes() const {
+	return memoryUsageSampler_ ? memoryUsageSampler_() : getCurrentRSSBytes();
 }
 
 size_t QueryGuard::getCurrentRSSBytes() {

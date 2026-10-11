@@ -18,7 +18,6 @@ Last reviewed: **2026-04-10**
 - `DISTINCT`, `ORDER BY`, `SKIP`, `LIMIT`
 - `UNION` / `UNION ALL`
 - `UNWIND`
-- `FOREACH`
 - `CALL procedure(...) [YIELD ...]`
 - `CALL { subquery }` and `CALL { ... } IN TRANSACTIONS [OF n ROWS]`
 - `LOAD CSV` / `LOAD CSV WITH HEADERS` with optional `FIELDTERMINATOR`
@@ -82,6 +81,8 @@ Last reviewed: **2026-04-10**
 - Statistical aggregates (`percentileDisc`, `percentileCont`, `stDev`, `stDevP`, ...)
 - `USING INDEX` query hints
 - `PERIODIC COMMIT`
+- General `CALL { ... } IN TRANSACTIONS` bodies beyond the native write-only, no-export,
+  `CREATE`-based unary mutation chain (including `MERGE`, exported variables, and explicit-transaction use)
 - Full Cypher `EXISTS { ... }` subquery expression form in `WHERE`
 - APOC procedure ecosystem
 

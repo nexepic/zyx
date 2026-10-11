@@ -132,6 +132,11 @@ namespace graph::storage {
 										   const std::function<bool(const PageBackedGraphNode &)> &visitor) const;
 		[[nodiscard]] bool visitEdgesUntil(const MetadataSnapshotPin &snapshot, size_t maximumRecords,
 										   const std::function<bool(const PageBackedGraphEdge &)> &visitor) const;
+		// Streams durable Edge topology without opening the optional Property root.
+		// It is valid only for callers whose semantics do not inspect Properties.
+		[[nodiscard]] bool visitEdgeTopologiesUntil(
+				const MetadataSnapshotPin &snapshot, size_t maximumRecords,
+				const std::function<bool(uint64_t edgeId, const EdgeEntityRecord &)> &visitor) const;
 		[[nodiscard]] PageBackedGraphNodePage scanNodesAfter(const MetadataSnapshotPin &snapshot, uint64_t afterNodeId,
 															 size_t maximumRecords, size_t maximumMetadataPages) const;
 		[[nodiscard]] PageBackedGraphAdjacencyPage
@@ -148,6 +153,12 @@ namespace graph::storage {
 		visitAdjacentEdgesUntil(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
 								PageBackedGraphReadDirection direction, size_t maximumRecords,
 								const std::function<bool(const PageBackedGraphEdge &)> &visitor) const;
+		// Streams only endpoint/type records and never opens the optional Edge
+		// Property root. The caller must not use this path for Property predicates.
+		[[nodiscard]] bool
+		visitAdjacentEdgeTopologiesUntil(const MetadataSnapshotPin &snapshot, uint64_t nodeId,
+										 PageBackedGraphReadDirection direction, size_t maximumRecords,
+										 const std::function<bool(uint64_t, const EdgeEntityRecord &)> &visitor) const;
 
 	private:
 		friend class PageBackedGraphAdjacencyCursor;

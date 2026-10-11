@@ -29,6 +29,8 @@ namespace {
 	constexpr size_t ENTITY_ENTRY_COUNT_OFFSET = 20U;
 	constexpr size_t ENTITY_PAYLOAD_BYTES_OFFSET = 24U;
 	constexpr size_t ENTITY_RESERVED_OFFSET = 28U;
+	constexpr size_t LARGE_VALUE_PAYLOAD_ENTRY_COUNT_OFFSET = 8U;
+	constexpr size_t LARGE_VALUE_PAYLOAD_BYTES_OFFSET = 12U;
 
 	void expectFormatError(const std::function<void()> &operation, FormatError expected) {
 		try {
@@ -63,6 +65,47 @@ TEST(RelocatablePropertyCollectionRootTest, RoundTripsCanonicalOwnerKeyedCollect
 	PropertyCollectionRoot edgeOwned = expected;
 	edgeOwned.owner_entity_type = Edge::typeId;
 	EXPECT_EQ(EntityPropertyCollectionRootCodec::decode(EntityPropertyCollectionRootCodec::encode(edgeOwned)), edgeOwned);
+}
+
+TEST(RelocatablePropertyCollectionRootTest, RoundTripsOwnerNeutralLargeValuePayloads) {
+	const PropertyCollectionRoot ownerA = root();
+	PropertyCollectionRoot ownerB = ownerA;
+	ownerB.owner_entity_id = 98U;
+	ownerB.owner_entity_type = Edge::typeId;
+	const std::vector<std::byte> encoded = EntityPropertyLargeValuePayloadCodec::encode(ownerA.entries);
+	EXPECT_TRUE(EntityPropertyLargeValuePayloadCodec::hasMagic(encoded));
+	EXPECT_EQ(EntityPropertyLargeValuePayloadCodec::decode(encoded), ownerA.entries);
+	EXPECT_EQ(EntityPropertyLargeValuePayloadCodec::encode(ownerB.entries), encoded);
+
+	expectFormatError(
+			[&] { static_cast<void>(EntityPropertyLargeValuePayloadCodec::decode(std::span(encoded).first(15U))); },
+			FormatError::FERR_BUFFER_TOO_SMALL);
+	auto malformed = encoded;
+	LittleEndianCodec::writeU32(malformed, MAGIC_OFFSET, 0U);
+	expectFormatError([&] { static_cast<void>(EntityPropertyLargeValuePayloadCodec::decode(malformed)); },
+				  FormatError::FERR_INVALID_HEADER);
+	malformed = encoded;
+	LittleEndianCodec::writeU32(malformed, LARGE_VALUE_PAYLOAD_BYTES_OFFSET, 1U);
+	expectFormatError([&] { static_cast<void>(EntityPropertyLargeValuePayloadCodec::decode(malformed)); },
+				  FormatError::FERR_INVALID_HEADER);
+	malformed = encoded;
+	LittleEndianCodec::writeU32(malformed, LARGE_VALUE_PAYLOAD_ENTRY_COUNT_OFFSET, 1000U);
+	expectFormatError([&] { static_cast<void>(EntityPropertyLargeValuePayloadCodec::decode(malformed)); },
+				  FormatError::FERR_INVALID_HEADER);
+	for (size_t byteOffset = 0U; byteOffset < encoded.size(); ++byteOffset) {
+		for (uint8_t bit = 0U; bit < 8U; ++bit) {
+			auto mutation = encoded;
+			mutation[byteOffset] ^= static_cast<std::byte>(uint8_t{1U} << bit);
+			try {
+				const std::vector<PropertyCollectionRootEntry> decoded =
+						EntityPropertyLargeValuePayloadCodec::decode(mutation);
+				EXPECT_EQ(EntityPropertyLargeValuePayloadCodec::encode(decoded), mutation)
+						<< "mutation at byte " << byteOffset << ", bit " << static_cast<unsigned>(bit);
+			} catch (const FormatException &) {
+				// Invalid images must stop at the typed LargeValue payload boundary.
+			}
+		}
+	}
 }
 
 TEST(RelocatablePropertyCollectionRootTest, RejectsInvalidOwnerIdentitiesAndTokenOrder) {
@@ -133,4 +176,21 @@ TEST(RelocatablePropertyCollectionRootTest, FailsClosedForMalformedPersistentByt
 							 static_cast<uint32_t>(malformed.size() - RSS_ENTITY_PROPERTY_COLLECTION_ROOT_HEADER_BYTES));
 	expectFormatError([&] { static_cast<void>(EntityPropertyCollectionRootCodec::decode(malformed)); },
 					  FormatError::FERR_INVALID_HEADER);
+}
+
+TEST(RelocatablePropertyCollectionRootTest, RejectsOrExactlyRoundTripsEverySingleBitMutation) {
+	const std::vector<std::byte> encoded = EntityPropertyCollectionRootCodec::encode(root());
+	for (size_t byteOffset = 0U; byteOffset < encoded.size(); ++byteOffset) {
+		for (uint8_t bit = 0U; bit < 8U; ++bit) {
+			auto mutation = encoded;
+			mutation[byteOffset] ^= static_cast<std::byte>(uint8_t{1U} << bit);
+			try {
+				const PropertyCollectionRoot decoded = EntityPropertyCollectionRootCodec::decode(mutation);
+				EXPECT_EQ(EntityPropertyCollectionRootCodec::encode(decoded), mutation)
+						<< "mutation at byte " << byteOffset << ", bit " << static_cast<unsigned>(bit);
+			} catch (const FormatException &) {
+				// Invalid images must stop at the typed Property-root boundary.
+			}
+		}
+	}
 }

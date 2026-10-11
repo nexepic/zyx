@@ -327,9 +327,9 @@ TEST_F(CypherASTBuilderClausesTest, DropConstraintIfExists) {
 // ============================================================================
 
 TEST_F(CypherASTBuilderClausesTest, StandaloneCall) {
-	// The parser must construct the CALL plan, while native execution rejects
-	// this retired State-manager procedure at the public procedure boundary.
-	EXPECT_THROW((void)execute("CALL dbms.listConfig()"), std::runtime_error);
+	const auto result = execute("CALL dbms.listConfig()");
+	EXPECT_EQ(result.getColumns(), (std::vector<std::string>{"key", "value"}));
+	EXPECT_EQ(result.rowCount(), 6U);
 }
 
 // ============================================================================
@@ -337,7 +337,10 @@ TEST_F(CypherASTBuilderClausesTest, StandaloneCall) {
 // ============================================================================
 
 TEST_F(CypherASTBuilderClausesTest, InQueryCallWithYield) {
-	EXPECT_THROW((void)execute("CALL dbms.listConfig() YIELD key RETURN key"), std::runtime_error);
+	const auto result = execute("CALL dbms.listConfig() YIELD key RETURN key");
+	EXPECT_EQ(result.getColumns(), (std::vector<std::string>{"key"}));
+	ASSERT_EQ(result.rowCount(), 6U);
+	EXPECT_EQ(result.getRows()[0U].at("key").asPrimitive(), graph::PropertyValue("query.max_memory_mb"));
 }
 
 // ============================================================================
@@ -532,7 +535,7 @@ TEST_F(CypherASTBuilderClausesTest, CreatePropertyTypeConstraint) {
 
 TEST_F(CypherASTBuilderClausesTest, ShowConstraints) {
 	// SHOW CONSTRAINTS is not supported by the grammar
-	EXPECT_THROW(execute("SHOW CONSTRAINTS"), std::exception);
+	EXPECT_THROW(static_cast<void>(execute("SHOW CONSTRAINTS")), std::exception);
 }
 
 // ============================================================================

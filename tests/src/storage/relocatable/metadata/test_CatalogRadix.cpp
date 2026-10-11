@@ -54,7 +54,7 @@ namespace {
 		CatalogRadixPage page;
 		page.kind = CatalogRadixPageKind::CRPK_ROOT;
 		page.level = 2;
-		page.page_id = PageId(0x0102030405060708ULL);
+		page.page_id = MetadataPageId(0x0102030405060708ULL);
 		page.generation = Generation(6);
 		page.committed_lsn = LogSequenceNumber(20);
 		page.children[0] = pageRef(10, 1, 5);
@@ -98,7 +98,7 @@ TEST(RelocatableCatalogRadixTest, CodecMatchesGoldenFieldsAndRoundTrips) {
 	EXPECT_EQ(decoded.kind, CatalogRadixPageKind::CRPK_ROOT);
 	EXPECT_EQ(decoded.directory_type, MetadataDirectoryType::MDT_CATALOG);
 	EXPECT_EQ(decoded.level, 2U);
-	EXPECT_EQ(decoded.page_id, PageId(0x0102030405060708ULL));
+	EXPECT_EQ(decoded.page_id, MetadataPageId(0x0102030405060708ULL));
 	EXPECT_EQ(decoded.generation, Generation(6));
 	EXPECT_EQ(decoded.committed_lsn, LogSequenceNumber(20));
 	EXPECT_EQ(decoded.children[1].physical_slot, PhysicalSlotId(11));
@@ -107,7 +107,7 @@ TEST(RelocatableCatalogRadixTest, CodecMatchesGoldenFieldsAndRoundTrips) {
 
 TEST(RelocatableCatalogRadixTest, CodecSupportsEmptyAndFullChildArrays) {
 	CatalogRadixPage empty;
-	empty.page_id = PageId(1);
+	empty.page_id = MetadataPageId(1);
 	empty.generation = Generation(1);
 	empty.committed_lsn = LogSequenceNumber(1);
 	const CatalogRadixPage decodedEmpty = CatalogRadixPageCodec::decode(CatalogRadixPageCodec::encode(empty));
@@ -116,7 +116,7 @@ TEST(RelocatableCatalogRadixTest, CodecSupportsEmptyAndFullChildArrays) {
 	CatalogRadixPage full;
 	full.kind = CatalogRadixPageKind::CRPK_INTERNAL;
 	full.level = RSS_CATALOG_RADIX_MAX_LEVEL;
-	full.page_id = PageId(2);
+	full.page_id = MetadataPageId(2);
 	full.generation = Generation(2);
 	full.committed_lsn = LogSequenceNumber(2);
 	for (uint32_t index = 0; index < RSS_CATALOG_RADIX_FANOUT; ++index) {
@@ -143,7 +143,7 @@ TEST(RelocatableCatalogRadixTest, RejectsInvalidInMemoryPages) {
 					  FormatError::FERR_INVALID_HEADER);
 
 	page = validPage();
-	page.page_id = PageId{};
+	page.page_id = MetadataPageId{};
 	expectFormatError([&] { static_cast<void>(CatalogRadixPageCodec::encode(page)); },
 					  FormatError::FERR_INVALID_HEADER);
 
@@ -189,6 +189,27 @@ TEST(RelocatableCatalogRadixTest, PersistsAllocatorFreeChildSummaryOnlyForAlloca
 	expectFormatError([&] { static_cast<void>(CatalogRadixPageCodec::encode(page)); }, FormatError::FERR_RESERVED_BITS);
 }
 
+TEST(RelocatableCatalogRadixTest, RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation) {
+	const auto encoded = CatalogRadixPageCodec::encode(validPage());
+	for (size_t byteOffset = 0U; byteOffset < encoded.size(); ++byteOffset) {
+		for (uint8_t bit = 0U; bit < 8U; ++bit) {
+			auto mutation = encoded;
+			mutation[byteOffset] ^= std::byte{static_cast<uint8_t>(1U << bit)};
+			recalculateCrc(mutation);
+			try {
+				const CatalogRadixPage decoded = CatalogRadixPageCodec::decode(mutation);
+				if (CatalogRadixPageCodec::encode(decoded) != mutation) {
+					ADD_FAILURE() << "Catalog radix mutation was silently normalized at byte " << byteOffset << ", bit "
+									 << static_cast<unsigned>(bit);
+					return;
+				}
+			} catch (const FormatException &) {
+				// Every non-canonical mutation must fail at the typed format boundary.
+			}
+		}
+	}
+}
+
 TEST(RelocatableCatalogRadixTest, RejectsTruncatedChecksummedAndMalformedDiskPages) {
 	const auto encoded = CatalogRadixPageCodec::encode(validPage());
 	expectFormatError(
@@ -216,7 +237,7 @@ TEST(RelocatableCatalogRadixTest, RejectsTruncatedChecksummedAndMalformedDiskPag
 					  FormatError::FERR_INVALID_MAGIC);
 
 	corrupt = encoded;
-	LittleEndianCodec::writeU16(corrupt, 4, RSS_CATALOG_RADIX_PAGE_VERSION + 1U);
+	LittleEndianCodec::writeU16(corrupt, 4, RSS_CATALOG_RADIX_LOGICAL_PAGE_VERSION + 1U);
 	recalculateCrc(corrupt);
 	expectFormatError([&] { static_cast<void>(CatalogRadixPageCodec::decode(corrupt)); },
 					  FormatError::FERR_UNSUPPORTED_VERSION);
@@ -281,6 +302,61 @@ TEST(RelocatableCatalogRadixTest, RejectsTruncatedChecksummedAndMalformedDiskPag
 	recalculateCrc(corrupt);
 	expectFormatError([&] { static_cast<void>(CatalogRadixPageCodec::decode(corrupt)); },
 					  FormatError::FERR_INVALID_HEADER);
+}
+
+TEST(RelocatableCatalogRadixTest, CodecRoundTripsLogicalChildrenInVersionFive) {
+	CatalogRadixPage page = validPage();
+	page.logical_children_enabled = true;
+	page.children.fill(PhysicalPageRef{});
+	page.logical_children[0] = MetadataPageId(101);
+	page.logical_children[RSS_CATALOG_RADIX_FANOUT - 1U] = MetadataPageId(202);
+	const auto encoded = CatalogRadixPageCodec::encode(page);
+	EXPECT_EQ(LittleEndianCodec::readU16(encoded, 4), RSS_CATALOG_RADIX_LOGICAL_PAGE_VERSION);
+	EXPECT_EQ(LittleEndianCodec::readU32(encoded, CHILD_COUNT_OFFSET), 2U);
+	EXPECT_EQ(LittleEndianCodec::readU64(encoded, RSS_CATALOG_RADIX_HEADER_BYTES), 101U);
+	EXPECT_EQ(LittleEndianCodec::readU64(encoded, RSS_CATALOG_RADIX_HEADER_BYTES + sizeof(uint64_t)), 0U);
+	const CatalogRadixPage decoded = CatalogRadixPageCodec::decode(encoded);
+	EXPECT_TRUE(decoded.logical_children_enabled);
+	EXPECT_EQ(decoded.logical_children[0], MetadataPageId(101));
+	EXPECT_EQ(decoded.logical_children[RSS_CATALOG_RADIX_FANOUT - 1U], MetadataPageId(202));
+	EXPECT_FALSE(decoded.children[0].isValid());
+}
+
+TEST(RelocatableCatalogRadixTest, RejectsMixedLogicalPhysicalChildrenAndRouteLogicalization) {
+	CatalogRadixPage page = validPage();
+	page.logical_children_enabled = true;
+	page.logical_children[0] = MetadataPageId(1);
+	page.children[1] = pageRef(11, 2, 6);
+	expectFormatError([&] { static_cast<void>(CatalogRadixPageCodec::encode(page)); },
+					  FormatError::FERR_INVALID_HEADER);
+
+	page = validPage();
+	page.directory_type = MetadataDirectoryType::MDT_METADATA_PAGE_ROUTE;
+	page.logical_children_enabled = true;
+	page.children.fill(PhysicalPageRef{});
+	page.logical_children[0] = MetadataPageId(1);
+	expectFormatError([&] { static_cast<void>(CatalogRadixPageCodec::encode(page)); },
+					  FormatError::FERR_INVALID_STATE);
+
+	page = validPage();
+	page.directory_type = MetadataDirectoryType::MDT_PAGE;
+	page.logical_children_enabled = true;
+	page.children.fill(PhysicalPageRef{});
+	page.logical_children[0] = MetadataPageId(1);
+	const CatalogRadixPage logicalPageDirectory = CatalogRadixPageCodec::decode(CatalogRadixPageCodec::encode(page));
+	EXPECT_TRUE(logicalPageDirectory.logical_children_enabled);
+	EXPECT_EQ(logicalPageDirectory.directory_type, MetadataDirectoryType::MDT_PAGE);
+	EXPECT_EQ(logicalPageDirectory.logical_children[0], MetadataPageId(1));
+
+	page = validPage();
+	page.logical_children_enabled = true;
+	page.children.fill(PhysicalPageRef{});
+	page.logical_children[0] = MetadataPageId(1);
+	auto encoded = CatalogRadixPageCodec::encode(page);
+	LittleEndianCodec::writeU64(encoded, RSS_CATALOG_RADIX_HEADER_BYTES + sizeof(uint64_t), 7U);
+	recalculateCrc(encoded);
+	expectFormatError([&] { static_cast<void>(CatalogRadixPageCodec::decode(encoded)); },
+					  FormatError::FERR_RESERVED_BITS);
 }
 
 TEST(RelocatableCatalogRadixTest, RoutesSegmentIdsByRadixDigitAndRejectsAbsentChildren) {
@@ -382,6 +458,7 @@ TEST(RelocatableCatalogRadixTest, SupportsAllDirectoryTypesAndValidatesLeafOrdin
 				 MetadataDirectoryType::MDT_VECTOR_MANIFEST,
 				 MetadataDirectoryType::MDT_LARGE_VALUE_MANIFEST,
 				 MetadataDirectoryType::MDT_STATE,
+				 MetadataDirectoryType::MDT_METADATA_PAGE_ROUTE,
 		 }) {
 		CatalogRadixPage page = validPage();
 		page.directory_type = directoryType;

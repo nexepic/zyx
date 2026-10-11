@@ -46,6 +46,9 @@ namespace {
 		std::string scale;
 		std::string profile = std::string(kProfileScan);
 		bool emitProfile = false;
+		// Scale workloads stay enabled for the standalone benchmark; unit tests can
+		// disable them while retaining the small operational correctness checks.
+		bool includeLargeBatchWorkloads = true;
 		std::string executionMode = std::string(kExecutionModeWarm);
 		std::optional<size_t> threads;
 		int warmup = 0;
@@ -763,11 +766,7 @@ namespace {
 
 	void removeDatabaseArtifacts(const std::filesystem::path &dbPath) {
 		std::error_code ignored;
-		std::filesystem::remove_all(dbPath, ignored);
-		// Native storage keeps its metadata WAL beside the data file with the
-		// relocatable `.wal` suffix; preserve `-wal` cleanup for legacy benchmark data.
-		std::filesystem::remove_all(std::filesystem::path(dbPath.string() + ".wal"), ignored);
-		std::filesystem::remove_all(std::filesystem::path(dbPath.string() + "-wal"), ignored);
+		std::filesystem::remove(dbPath, ignored);
 	}
 
 	LoadedGraph loadDatabase(const Options &options, const std::filesystem::path &dbPath) {
@@ -1315,16 +1314,18 @@ namespace {
 								 return requireExactCount("batch_create_edges_100",
 														  createBatchEdges(queryDb, graph, batchEdgeId, 100), 100);
 							 });
-			runQueryWorkload(options, db, loaded, "batch_create_edges_1000",
-							 [&batchEdgeId](zyx::Database &queryDb, const LoadedGraph &graph) {
-								 return requireExactCount("batch_create_edges_1000",
-														  createBatchEdges(queryDb, graph, batchEdgeId, 1000), 1000);
-							 });
-			runQueryWorkload(options, db, loaded, "batch_create_edges_10000",
-							 [&batchEdgeId](zyx::Database &queryDb, const LoadedGraph &graph) {
-								 return requireExactCount("batch_create_edges_10000",
-														  createBatchEdges(queryDb, graph, batchEdgeId, 10000), 10000);
-							 });
+			if (options.includeLargeBatchWorkloads) {
+				runQueryWorkload(options, db, loaded, "batch_create_edges_1000",
+								 [&batchEdgeId](zyx::Database &queryDb, const LoadedGraph &graph) {
+									 return requireExactCount("batch_create_edges_1000",
+															 createBatchEdges(queryDb, graph, batchEdgeId, 1000), 1000);
+								 });
+				runQueryWorkload(options, db, loaded, "batch_create_edges_10000",
+								 [&batchEdgeId](zyx::Database &queryDb, const LoadedGraph &graph) {
+									 return requireExactCount("batch_create_edges_10000",
+															 createBatchEdges(queryDb, graph, batchEdgeId, 10000), 10000);
+								 });
+			}
 			runQueryWorkload(options, db, loaded, "batch_create_edges_100_then_one_hop_expand",
 							 [&batchEdgeId](zyx::Database &queryDb, const LoadedGraph &graph) {
 								 (void) requireExactCount("batch_create_edges_100_then_one_hop_expand",
@@ -1334,15 +1335,17 @@ namespace {
 								 return scalarInt(queryDb.execute("MATCH (:User {id: 'user-000007'})-[:FOLLOWS]->"
 															 "(v:User) RETURN count(v)"));
 							 });
-			runQueryWorkload(options, db, loaded, "batch_create_edges_10000_then_one_hop_expand",
-							 [&batchEdgeId](zyx::Database &queryDb, const LoadedGraph &graph) {
-								 (void) requireExactCount("batch_create_edges_10000_then_one_hop_expand",
-														  createBatchEdges(queryDb, graph, batchEdgeId, 10000,
-																		   "user-000008"),
-														  10000);
-								 return scalarInt(queryDb.execute("MATCH (:User {id: 'user-000008'})-[:FOLLOWS]->"
-															 "(v:User) RETURN count(v)"));
-							 });
+			if (options.includeLargeBatchWorkloads) {
+				runQueryWorkload(options, db, loaded, "batch_create_edges_10000_then_one_hop_expand",
+								 [&batchEdgeId](zyx::Database &queryDb, const LoadedGraph &graph) {
+									 (void) requireExactCount("batch_create_edges_10000_then_one_hop_expand",
+															 createBatchEdges(queryDb, graph, batchEdgeId, 10000,
+																									   "user-000008"),
+															 10000);
+									 return scalarInt(queryDb.execute("MATCH (:User {id: 'user-000008'})-[:FOLLOWS]->"
+																													 "(v:User) RETURN count(v)"));
+								 });
+			}
 		} else if (options.profile == kProfileWrite || options.profile == kProfileWriteDurable) {
 			const bool durableProfile = options.profile == kProfileWriteDurable;
 			auto workloadName = [durableProfile](std::string_view base) {

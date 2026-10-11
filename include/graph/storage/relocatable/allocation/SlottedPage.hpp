@@ -88,6 +88,9 @@ namespace graph::storage {
 		[[nodiscard]] PageOwnerKind ownerKind() const;
 		[[nodiscard]] LogSequenceNumber ownerCommittedLsn() const;
 		[[nodiscard]] SlottedPageStats stats() const;
+		// Produces an independent mutable image while preserving the authenticated
+		// owner header. Batch planners use it to reuse one pinned source page.
+		[[nodiscard]] SlottedPage clone() const;
 		[[nodiscard]] std::vector<std::byte> serialize() const;
 		// Enumerates stable references for all currently live records. The caller
 		// still validates each decoded domain record before interpreting it.

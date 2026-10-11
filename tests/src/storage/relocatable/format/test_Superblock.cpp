@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <functional>
 #include <limits>
+#include <random>
 #include <span>
 #include <vector>
 
@@ -166,6 +167,58 @@ TEST(RelocatableSuperblockTest, CodecMatchesGoldenFieldsAndRoundTrips) {
 	EXPECT_EQ(decoded.next_schema_token_id, 701U);
 }
 
+TEST(RelocatableSuperblockTest, RejectsOrCanonicallyRoundTripsDeterministicFuzzedPages) {
+	// Keep the codec fuzz corpus deterministic so it runs identically on every
+	// supported platform and remains suitable for the regular unit-test suite.
+	std::mt19937_64 random(0x535559585F534255ULL);
+	for (size_t trial = 0U; trial < 256U; ++trial) {
+		std::array<std::byte, RSS_SUPERBLOCK_BYTES> bytes;
+		for (std::byte &byte: bytes) {
+			byte = static_cast<std::byte>(random() & 0xFFU);
+		}
+		try {
+			const Superblock decoded = SuperblockCodec::decode(bytes);
+			EXPECT_EQ(SuperblockCodec::encode(decoded), bytes) << "random corpus trial " << trial;
+		} catch (const FormatException &) {
+			// Random on-disk bytes must fail closed through the codec's typed error.
+		}
+	}
+
+	const auto encoded = SuperblockCodec::encode(validSuperblock(7U, 50U));
+	for (size_t trial = 0U; trial < 256U; ++trial) {
+		auto mutated = encoded;
+		const size_t offset = static_cast<size_t>(random() % mutated.size());
+		const auto mask = static_cast<uint8_t>((random() & 0xFFU) | 1U);
+		mutated[offset] ^= static_cast<std::byte>(mask);
+		recalculateCrc(mutated);
+		try {
+			const Superblock decoded = SuperblockCodec::decode(mutated);
+			EXPECT_EQ(SuperblockCodec::encode(decoded), mutated) << "mutated corpus trial " << trial;
+		} catch (const FormatException &) {
+			// A checksum-valid mutation is accepted only when all structural checks pass.
+		}
+	}
+}
+
+TEST(RelocatableSuperblockTest, RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation) {
+	const auto encoded = SuperblockCodec::encode(validSuperblock(7U, 50U));
+	for (size_t byteOffset = 0U; byteOffset < encoded.size(); ++byteOffset) {
+		for (uint8_t bit = 0U; bit < 8U; ++bit) {
+			auto mutation = encoded;
+			mutation[byteOffset] ^= static_cast<std::byte>(uint8_t{1U} << bit);
+			recalculateCrc(mutation);
+			try {
+				const Superblock decoded = SuperblockCodec::decode(mutation);
+				EXPECT_EQ(SuperblockCodec::encode(decoded), mutation)
+						<< "checksum-valid mutation at byte " << byteOffset << ", bit "
+						<< static_cast<unsigned>(bit);
+			} catch (const FormatException &) {
+				// All rejected mutations must stop at the typed format boundary.
+			}
+		}
+	}
+}
+
 TEST(RelocatableSuperblockTest, PersistsAndValidatesTheMetadataEmergencyReserveDescriptor) {
 	Superblock superblock = validSuperblock(7, 50);
 	superblock.metadata_emergency_reserve = {PhysicalSlotId(2),
@@ -205,6 +258,37 @@ TEST(RelocatableSuperblockTest, PersistsAndValidatesTheMetadataEmergencyReserveD
 					  FormatError::FERR_INVALID_HEADER);
 }
 
+TEST(RelocatableSuperblockTest, ClassifiesEveryEmergencyReserveDescriptorCompletenessBoundary) {
+	MetadataEmergencyReserveDescriptor absent;
+	EXPECT_TRUE(absent.isAbsent());
+	EXPECT_FALSE(absent.isValid());
+
+	auto poolOnly = absent;
+	poolOnly.pool_token = SegmentId(RSS_INITIAL_METADATA_EMERGENCY_RESERVE_POOL_TOKEN);
+	EXPECT_FALSE(poolOnly.isAbsent());
+
+	auto generationOnly = absent;
+	generationOnly.generation = Generation(1U);
+	EXPECT_FALSE(generationOnly.isAbsent());
+
+	auto lsnOnly = absent;
+	lsnOnly.committed_lsn = LogSequenceNumber(1U);
+	EXPECT_FALSE(lsnOnly.isAbsent());
+
+	MetadataEmergencyReserveDescriptor valid{PhysicalSlotId(2U),
+										  SegmentId(RSS_INITIAL_METADATA_EMERGENCY_RESERVE_POOL_TOKEN), Generation(1U),
+										  LogSequenceNumber(1U)};
+	EXPECT_TRUE(valid.isValid());
+
+	auto missingGeneration = valid;
+	missingGeneration.generation = Generation{};
+	EXPECT_FALSE(missingGeneration.isValid());
+
+	auto missingLsn = valid;
+	missingLsn.committed_lsn = LogSequenceNumber{};
+	EXPECT_FALSE(missingLsn.isValid());
+}
+
 TEST(RelocatableSuperblockTest, AllowsEmptyRootsAndSelectsTheNewestValidGeneration) {
 	Superblock emptyRoots;
 	emptyRoots.database_id = DatabaseId(0x1020304050607080ULL);
@@ -238,6 +322,19 @@ TEST(RelocatableSuperblockTest, AllowsEmptyRootsAndSelectsTheNewestValidGenerati
 	const Superblock selected = SuperblockCodec::selectNewest(first, second);
 	EXPECT_EQ(selected.generation, Generation(9));
 	EXPECT_EQ(selected.checkpoint_lsn, LogSequenceNumber(41));
+}
+
+TEST(RelocatableSuperblockTest, PersistsTheTypedPageDirectoryBootstrapFlag) {
+	Superblock superblock = validSuperblock(7U, 50U);
+	superblock.flags = RSS_SUPERBLOCK_FLAG_PAGE_DIRECTORY_BOOTSTRAP;
+	const auto encoded = SuperblockCodec::encode(superblock);
+	EXPECT_EQ(LittleEndianCodec::readU32(encoded, FLAGS_OFFSET), RSS_SUPERBLOCK_FLAG_PAGE_DIRECTORY_BOOTSTRAP);
+	const Superblock decoded = SuperblockCodec::decode(encoded);
+	EXPECT_TRUE(decoded.usesPageDirectoryBootstrap());
+
+	superblock.flags |= 1U << 31U;
+	expectFormatError([&] { static_cast<void>(SuperblockCodec::encode(superblock)); },
+					  FormatError::FERR_RESERVED_BITS);
 }
 
 TEST(RelocatableSuperblockTest, RejectsInvalidInMemoryValues) {

@@ -50,6 +50,11 @@ public:
 	MapProjectionExpression(std::string variable, std::vector<MapProjectionItem> items)
 		: variable_(std::move(variable)), items_(std::move(items)) {}
 
+	// A map literal shares the expression-owned item representation used by a
+	// projection, but deliberately has no source binding to dereference.
+	explicit MapProjectionExpression(std::vector<MapProjectionItem> items)
+		: items_(std::move(items)), is_map_literal_(true) {}
+
 	[[nodiscard]] ExpressionType getExpressionType() const override {
 		return ExpressionType::MAP_PROJECTION;
 	}
@@ -58,7 +63,7 @@ public:
 	void accept(ConstExpressionVisitor &visitor) const override { visitor.visit(this); }
 
 	[[nodiscard]] std::string toString() const override {
-		std::string result = variable_ + " {";
+		std::string result = is_map_literal_ ? "{" : variable_ + " {";
 		for (size_t i = 0; i < items_.size(); ++i) {
 			if (i > 0) result += ", ";
 			switch (items_[i].type) {
@@ -83,15 +88,20 @@ public:
 		for (const auto& item : items_) {
 			clonedItems.push_back(item.clone());
 		}
+		if (is_map_literal_) {
+			return std::make_unique<MapProjectionExpression>(std::move(clonedItems));
+		}
 		return std::make_unique<MapProjectionExpression>(variable_, std::move(clonedItems));
 	}
 
 	[[nodiscard]] const std::string& getVariable() const { return variable_; }
 	[[nodiscard]] const std::vector<MapProjectionItem>& getItems() const { return items_; }
+	[[nodiscard]] bool isMapLiteral() const { return is_map_literal_; }
 
 private:
 	std::string variable_;
 	std::vector<MapProjectionItem> items_;
+	bool is_map_literal_ = false;
 };
 
 } // namespace graph::query::expressions

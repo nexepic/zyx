@@ -36,7 +36,7 @@ namespace {
 		return catalog.find(building.segment_id);
 	}
 
-	constexpr std::array<SegmentKind, 12> ALL_KINDS = {
+	constexpr std::array<SegmentKind, 13> ALL_KINDS = {
 			SegmentKind::SGK_ENTITY_PAGE_POOL,		SegmentKind::SGK_PROPERTY_PAGE_POOL,
 			SegmentKind::SGK_INDEX_PAGE_POOL,	SegmentKind::SGK_VECTOR_RAW_POOL,
 			SegmentKind::SGK_VECTOR_PQ_POOL,	SegmentKind::SGK_VECTOR_ADJACENCY_POOL,
@@ -44,6 +44,7 @@ namespace {
 			SegmentKind::SGK_METADATA_PAGE_POOL,			SegmentKind::SGK_VECTOR_MANIFEST_POOL,
 			SegmentKind::SGK_STATE_PAGE_POOL,		SegmentKind::SGK_LARGE_VALUE_DATA_POOL,
 			SegmentKind::SGK_LARGE_VALUE_MANIFEST_POOL,
+			SegmentKind::SGK_BULK_SCRATCH,
 	};
 
 } // namespace
@@ -181,7 +182,7 @@ TEST(RelocatableCatalogTest, RejectsInvalidOrStaleLifecycleRequests) {
 	expectFormatError(
 			[&] {
 				static_cast<void>(catalog.allocate(
-						static_cast<SegmentKind>(static_cast<uint16_t>(SegmentKind::SGK_LARGE_VALUE_MANIFEST_POOL) + 1U),
+						static_cast<SegmentKind>(static_cast<uint16_t>(SegmentKind::SGK_BULK_SCRATCH) + 1U),
 						1));
 			},
 					  FormatError::FERR_INVALID_ENUM);

@@ -12,7 +12,9 @@ cross-platform compatibility.
 ./scripts/run_tests.sh --quick      # Quick build (skip Conan)
 ./scripts/run_tests.sh --no-conan   # Use system dependencies
 ./scripts/run_tests.sh --html       # HTML coverage report
-./scripts/run_tests.sh --quick --file xxx.cpp  # Coverage report for specific file
+./scripts/run_tests.sh --quick --file src/query/execution/LogicalPlanReadRuntime.cpp  # Full test run; show coverage for one source file
+./scripts/run_tests.sh --quick --gtest-filter "SuiteName.*"  # Run selected tests and generate coverage from only those tests
+./scripts/run_tests.sh --quick --gtest-filter "SuiteName.*" --file src/query/execution/LogicalPlanReadRuntime.cpp  # Targeted test run plus one-file coverage detail
 cmake --build buildDir --target zyx_test_suite && ./buildDir/zyx_test_suite --gtest_filter="DriverAbi*" # Driver ABI tests
 cmake --build buildDir --target zyx && cd bindings/rust && cargo test # Rust SDK tests after building libzyx
 ./scripts/test_bindings.sh             # Build (from current source) + test all language bindings (Node/Python/Rust)
@@ -29,10 +31,12 @@ Build system: **CMake** + **Conan** + **Ninja**. Tests: **Google Test**, auto-di
 
 ## Verification
 
-Before completing any code change:
-1. Run `./scripts/run_tests.sh --quick` and confirm all tests pass
-2. If `.g4` grammar files were modified, run `bash src/query/parser/cypher/generate.sh` first
-3. Coverage target: 95%+ across line, branch, function, region metrics
+Use the following coverage workflow:
+1. During iterative test development, run the smallest relevant GoogleTest selection with `--gtest-filter` and pair it with `--file <source-path>` to inspect uncovered lines and branches in the production file being changed.
+2. `--file` limits only the rendered coverage detail. Without `--gtest-filter`, the script still runs the complete test suite.
+3. Before completing any code change, run `./scripts/run_tests.sh --quick` without either filter and confirm the complete suite passes. This full run is the only valid final coverage result.
+4. If `.g4` grammar files were modified, run `bash src/query/parser/cypher/generate.sh` first.
+5. Coverage target: 95%+ across line, branch, function, and region metrics.
 
 ## Unit Testing
 
@@ -95,7 +99,7 @@ See `rules/architecture.md` for full component documentation, data flow, directo
 
 Key entry points:
 - **Database**: `include/graph/core/Database.hpp`
-- **Storage**: `include/graph/storage/FileStorage.hpp`
+- **Storage**: `include/graph/storage/StorageBackend.hpp` and `include/graph/storage/StorageBackendFactory.hpp`
 - **Query Engine**: `include/graph/query/`
 - **C++ API**: `include/zyx/zyx.hpp`
 - **Driver ABI**: `include/zyx/zyx_driver_abi.h` (long-term stable ABI for Rust, Python, Node.js, WASM, and future bindings)

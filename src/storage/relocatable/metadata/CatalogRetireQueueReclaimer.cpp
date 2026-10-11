@@ -28,12 +28,14 @@ namespace graph::storage {
 
 	void CatalogRetireQueueReclaimer::validateEntry(const Superblock &current, const RetireQueueEntry &entry) const {
 		const std::optional<CatalogEntry> currentEntry = catalog_.findOptional(current, entry.segment_id);
-		const uint8_t invalidCommon = static_cast<uint8_t>(!entry.physical_slot.isValid()) |
-									  static_cast<uint8_t>(!entry.segment_id.isValid()) |
-									  static_cast<uint8_t>(!entry.retired_generation.isValid()) |
-									  static_cast<uint8_t>(entry.retired_generation > current.generation) |
-									  static_cast<uint8_t>(!allocator_.isAllocated(current, entry.physical_slot)) |
-									  static_cast<uint8_t>(!currentEntry.has_value());
+		const uint8_t invalidCommon =
+				static_cast<uint8_t>(!entry.physical_slot.isValid()) |
+				static_cast<uint8_t>(!entry.segment_id.isValid()) |
+				static_cast<uint8_t>(!entry.retired_generation.isValid()) |
+				static_cast<uint8_t>(entry.retired_generation > current.generation) |
+				static_cast<uint8_t>(currentEntry.has_value() && entry.retired_generation < currentEntry->generation) |
+				static_cast<uint8_t>(!allocator_.isAllocated(current, entry.physical_slot)) |
+				static_cast<uint8_t>(!currentEntry.has_value());
 		if (invalidCommon != 0U) {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable Retire Queue has an invalid or unowned physical slot");

@@ -22,9 +22,9 @@ namespace graph::query::logical {
  * @class LogicalJoin
  * @brief Combines two input streams as a cross join.
  *
- * At the physical level this maps to a CartesianProduct operator. Optimizer
- * rules may later push filter predicates down to convert this into a more
- * selective join.
+ * The logical read runtime evaluates the Cartesian product directly. Future
+ * logical-plan transformations may replace it with a more selective join
+ * without introducing a storage-specific execution operator.
  */
 class LogicalJoin : public LogicalOperator {
 public:

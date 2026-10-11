@@ -30,6 +30,12 @@ public:
 	 */
 	explicit ListLiteralExpression(PropertyValue listValue);
 
+	/**
+	 * Construct a list whose members must be evaluated against the current row.
+	 * Static lists keep their compact PropertyValue representation instead.
+	 */
+	explicit ListLiteralExpression(std::vector<std::unique_ptr<Expression>> elements);
+
 	~ListLiteralExpression() override = default;
 
 	[[nodiscard]] ExpressionType getExpressionType() const override {
@@ -44,10 +50,13 @@ public:
 	/**
 	 * Get the list value
 	 */
-	[[nodiscard]] const PropertyValue& getValue() const { return value_; }
+	[[nodiscard]] bool isStatic() const { return elements_.empty(); }
+	[[nodiscard]] const PropertyValue& getValue() const;
+	[[nodiscard]] const std::vector<std::unique_ptr<Expression>>& getElements() const { return elements_; }
 
 private:
 	PropertyValue value_;
+	std::vector<std::unique_ptr<Expression>> elements_;
 };
 
 } // namespace graph::query::expressions

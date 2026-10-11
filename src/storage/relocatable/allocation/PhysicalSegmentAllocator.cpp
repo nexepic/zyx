@@ -25,7 +25,7 @@ namespace graph::storage {
 		[[nodiscard]] bool isAllocatableKind(SegmentKind kind) {
 			const uint16_t raw = static_cast<uint16_t>(kind);
 			return raw >= static_cast<uint16_t>(SegmentKind::SGK_ENTITY_PAGE_POOL) &&
-				   raw <= static_cast<uint16_t>(SegmentKind::SGK_LARGE_VALUE_MANIFEST_POOL) &&
+				   raw <= static_cast<uint16_t>(SegmentKind::SGK_BULK_SCRATCH) &&
 				   kind != SegmentKind::SGK_METADATA_PAGE_POOL;
 		}
 
@@ -36,12 +36,9 @@ namespace graph::storage {
 
 		void readCompleteSegment(const StorageIO &io, uint64_t segmentOffset, Generation generation,
 								 std::span<std::byte> bytes, const char *message) {
-			for (size_t pageOffset = 0U; pageOffset < bytes.size(); pageOffset += RSS_PAGE_SIZE) {
-				const std::span<std::byte> page = bytes.subspan(pageOffset, RSS_PAGE_SIZE);
-				if (io.readAt({segmentOffset + pageOffset, generation.value()}, page.data(), page.size(),
-							  BufferPoolReadHint::BPRH_SEQUENTIAL) != page.size()) {
-					throwPhysicalAllocatorError(FormatError::FERR_BUFFER_TOO_SMALL, message);
-				}
+			if (!generation.isValid() || bytes.size() != RSS_SEGMENT_SIZE ||
+				io.readAtSequential(segmentOffset, bytes.data(), bytes.size()) != bytes.size()) {
+				throwPhysicalAllocatorError(FormatError::FERR_BUFFER_TOO_SMALL, message);
 			}
 		}
 

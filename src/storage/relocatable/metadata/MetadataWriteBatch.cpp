@@ -9,6 +9,7 @@
 #include "graph/storage/relocatable/metadata/MetadataWriteBatch.hpp"
 
 #include <algorithm>
+#include <iterator>
 #include <limits>
 #include <set>
 #include <stdexcept>
@@ -50,17 +51,86 @@ namespace graph::storage {
 		candidate_.generation = Generation(current.generation.value() + 1U);
 		candidate_.checkpoint_lsn = checkpointLsn;
 		initial_physical_file_size_ = allocator_.physicalFileSize();
+		allocator_.beginUnpublishedBatch(current_);
+		batch_context_active_ = true;
 	}
 
-	MetadataWriteBatch::~MetadataWriteBatch() { abandonUnpublishedPages(); }
+	MetadataWriteBatch::~MetadataWriteBatch() {
+		abandonUnpublishedPages();
+		if (metadata_frame_reservation_active_) {
+			allocator_.releaseMetadataFrames();
+			metadata_frame_reservation_active_ = false;
+		}
+		if (batch_context_active_) {
+			allocator_.endUnpublishedBatch(current_);
+		}
+	}
 
-	PageId MetadataWriteBatch::allocatePageId() {
-		const PageId pageId = allocator_.allocatePageId();
+	void MetadataWriteBatch::reserveMetadataFrames(size_t count) {
+		if (published_ || metadata_frame_reservation_active_ || count == 0U) {
+			throwMetadataBatchError(FormatError::FERR_INVALID_STATE,
+							  "relocatable metadata batch cannot reserve frames in its current state");
+		}
+		allocator_.reserveMetadataFrames(count, std::span<const PhysicalSlotId>(reserved_data_slots_),
+									 std::span<const PhysicalSlotRange>(reserved_data_slot_ranges_), this);
+		metadata_frame_reservation_active_ = true;
+	}
+
+	size_t MetadataWriteBatch::ensureMetadataFrameCapacity(size_t count) {
+		if (published_ || metadata_frame_reservation_active_ || count == 0U) {
+			throwMetadataBatchError(FormatError::FERR_INVALID_STATE,
+									  "relocatable metadata batch cannot prepare route-frame capacity in its current state");
+		}
+		const std::vector<PhysicalSlotId> created = allocator_.ensureMetadataFrameCapacity(
+				generation(), checkpointLsn(), count, std::span<const PhysicalSlotId>(reserved_data_slots_),
+				std::span<const PhysicalSlotRange>(reserved_data_slot_ranges_), this);
+		for (const PhysicalSlotId slot: created) {
+			trackUnpublishedPool(slot);
+		}
+		return created.size();
+	}
+
+	bool MetadataWriteBatch::ownsAllocatedPage(PhysicalPageRef reference) const {
+		return std::ranges::any_of(allocated_pages_,
+								   [reference](const PhysicalPageRef &allocated) { return allocated == reference; });
+	}
+
+	MetadataPageId MetadataWriteBatch::allocateMetadataPageId() {
+		const MetadataPageId pageId = allocator_.allocateMetadataPageId();
 		if (!pageId.isValid()) {
 			throwMetadataBatchError(FormatError::FERR_INVALID_STATE,
 									"relocatable metadata batch allocator returned an invalid Page ID");
 		}
 		return pageId;
+	}
+
+	void MetadataWriteBatch::registerMetadataPageRoute(MetadataPageId pageId, PhysicalPageRef reference) {
+		const bool ownsReference = std::ranges::any_of(allocated_pages_, [reference](PhysicalPageRef allocated) {
+			return allocated == reference;
+		});
+		if (!pageId.isValid() || !reference.isValid() || reference.generation != generation() || !ownsReference) {
+			throwMetadataBatchError(FormatError::FERR_INVALID_STATE,
+									"relocatable metadata route needs a stable ID and an owned current-generation frame");
+		}
+		metadata_page_routes_.insert_or_assign(pageId.value(), reference);
+	}
+
+	std::optional<PhysicalPageRef> MetadataWriteBatch::pendingMetadataPageRoute(MetadataPageId pageId) const {
+		if (!pageId.isValid()) {
+			return std::nullopt;
+		}
+		const auto iterator = metadata_page_routes_.find(pageId.value());
+		return iterator == metadata_page_routes_.end() ? std::nullopt
+																	 : std::optional<PhysicalPageRef>(iterator->second);
+	}
+
+	std::vector<MetadataPageRoute> MetadataWriteBatch::metadataPageRoutes() const {
+		std::vector<MetadataPageRoute> routes;
+		routes.reserve(metadata_page_routes_.size());
+		for (const auto &[pageId, reference]: metadata_page_routes_) {
+			routes.push_back({MetadataPageId(pageId), reference});
+		}
+		return routes;
 	}
 
 	PageId MetadataWriteBatch::allocateLogicalPageId() {
@@ -77,6 +147,20 @@ namespace graph::storage {
 		return pageId;
 	}
 
+	PageId MetadataWriteBatch::allocateLogicalPageIdRange(uint64_t count) {
+		if (count == 0U || candidate_.next_logical_page_id == 0U ||
+			count - 1U > std::numeric_limits<uint64_t>::max() - candidate_.next_logical_page_id) {
+			throwMetadataBatchError(FormatError::FERR_ARITHMETIC_OVERFLOW,
+								"relocatable logical Page-ID range exceeds its durable namespace");
+		}
+		const PageId firstPageId(candidate_.next_logical_page_id);
+		candidate_.next_logical_page_id =
+				firstPageId.value() + count - 1U == std::numeric_limits<uint64_t>::max()
+						? 0U
+						: firstPageId.value() + count;
+		return firstPageId;
+	}
+
 	SegmentId MetadataWriteBatch::allocateLogicalSegmentId() {
 		if (candidate_.next_logical_segment_id == 0U) {
 			throwMetadataBatchError(FormatError::FERR_ARITHMETIC_OVERFLOW,
@@ -89,6 +173,20 @@ namespace graph::storage {
 			++candidate_.next_logical_segment_id;
 		}
 		return segmentId;
+	}
+
+	SegmentId MetadataWriteBatch::allocateLogicalSegmentIdRange(uint64_t count) {
+		if (count == 0U || candidate_.next_logical_segment_id == 0U ||
+			count - 1U > std::numeric_limits<uint64_t>::max() - candidate_.next_logical_segment_id) {
+			throwMetadataBatchError(FormatError::FERR_ARITHMETIC_OVERFLOW,
+									"relocatable logical Segment ID range exceeds its durable namespace");
+		}
+		const SegmentId firstSegmentId(candidate_.next_logical_segment_id);
+		candidate_.next_logical_segment_id =
+				firstSegmentId.value() + count - 1U == std::numeric_limits<uint64_t>::max()
+						? 0U
+						: firstSegmentId.value() + count;
+		return firstSegmentId;
 	}
 
 	uint64_t MetadataWriteBatch::allocateLogicalNodeId() {
@@ -111,6 +209,30 @@ namespace graph::storage {
 		return edgeId;
 	}
 
+	uint64_t MetadataWriteBatch::allocateLogicalNodeIdRange(uint64_t count) {
+		if (count == 0U || candidate_.next_logical_node_id == 0U ||
+			count - 1U > std::numeric_limits<uint64_t>::max() - candidate_.next_logical_node_id) {
+			throwMetadataBatchError(FormatError::FERR_ARITHMETIC_OVERFLOW,
+								"relocatable logical Node ID range exceeds its durable namespace");
+		}
+		const uint64_t firstId = candidate_.next_logical_node_id;
+		candidate_.next_logical_node_id =
+				firstId + count - 1U == std::numeric_limits<uint64_t>::max() ? 0U : firstId + count;
+		return firstId;
+	}
+
+	uint64_t MetadataWriteBatch::allocateLogicalEdgeIdRange(uint64_t count) {
+		if (count == 0U || candidate_.next_logical_edge_id == 0U ||
+			count - 1U > std::numeric_limits<uint64_t>::max() - candidate_.next_logical_edge_id) {
+			throwMetadataBatchError(FormatError::FERR_ARITHMETIC_OVERFLOW,
+								"relocatable logical Edge ID range exceeds its durable namespace");
+		}
+		const uint64_t firstId = candidate_.next_logical_edge_id;
+		candidate_.next_logical_edge_id =
+				firstId + count - 1U == std::numeric_limits<uint64_t>::max() ? 0U : firstId + count;
+		return firstId;
+	}
+
 	uint64_t MetadataWriteBatch::allocateLogicalVectorId() {
 		if (candidate_.next_logical_vector_id == 0U) {
 			throwMetadataBatchError(FormatError::FERR_ARITHMETIC_OVERFLOW,
@@ -130,6 +252,18 @@ namespace graph::storage {
 		candidate_.next_large_value_id =
 				valueId.value() == std::numeric_limits<uint64_t>::max() ? 0U : valueId.value() + 1U;
 		return valueId;
+	}
+
+	LargeValueId MetadataWriteBatch::allocateLargeValueIdRange(uint64_t count) {
+		if (count == 0U || candidate_.next_large_value_id == 0U ||
+			count - 1U > std::numeric_limits<uint64_t>::max() - candidate_.next_large_value_id) {
+			throwMetadataBatchError(FormatError::FERR_ARITHMETIC_OVERFLOW,
+									"relocatable LargeValue ID range exceeds its durable namespace");
+		}
+		const LargeValueId firstId(candidate_.next_large_value_id);
+		candidate_.next_large_value_id =
+				firstId.value() + count - 1U == std::numeric_limits<uint64_t>::max() ? 0U : firstId.value() + count;
+		return firstId;
 	}
 
 	uint32_t MetadataWriteBatch::allocatePropertyKeyToken() {
@@ -254,19 +388,25 @@ namespace graph::storage {
 
 	PhysicalPageRef MetadataWriteBatch::allocatePage() {
 		const MetadataPageAllocation allocation = allocator_.allocatePage(
-				generation(), checkpointLsn(), std::span<const PhysicalSlotId>(reserved_data_slots_));
+				generation(), checkpointLsn(), std::span<const PhysicalSlotId>(reserved_data_slots_),
+				std::span<const PhysicalSlotRange>(reserved_data_slot_ranges_), this);
 		const PhysicalPageRef reference = allocation.page;
 		if (!reference.isValid() || reference.generation != generation()) {
 			throwMetadataBatchError(FormatError::FERR_INVALID_STATE,
 									"relocatable metadata batch allocator returned an invalid physical reference");
 		}
-		for (const PhysicalPageRef &allocated: allocated_pages_) {
-			if (allocated.physical_slot == reference.physical_slot && allocated.frame_index == reference.frame_index) {
-				throwMetadataBatchError(FormatError::FERR_INVALID_STATE,
-										"relocatable metadata batch allocator returned a duplicate physical location");
-			}
+		const auto [location, inserted] =
+				allocated_page_locations_.emplace(reference.physical_slot.value(), reference.frame_index);
+		if (!inserted) {
+			throwMetadataBatchError(FormatError::FERR_INVALID_STATE,
+									"relocatable metadata batch allocator returned a duplicate physical location");
 		}
-		allocated_pages_.push_back(reference);
+		try {
+			allocated_pages_.push_back(reference);
+		} catch (...) {
+			allocated_page_locations_.erase(location);
+			throw;
+		}
 		if (allocation.created_pool_slot.has_value()) {
 			const PhysicalSlotId poolSlot = *allocation.created_pool_slot;
 			const bool duplicatePool = std::ranges::any_of(
@@ -309,16 +449,75 @@ namespace graph::storage {
 			throwMetadataBatchError(FormatError::FERR_INVALID_STATE,
 									"relocatable metadata batch cannot reserve a metadata-pool slot as data");
 		}
-		const bool duplicate =
-				std::ranges::any_of(reserved_data_slots_, [slot](PhysicalSlotId existing) { return existing == slot; });
-		if (!duplicate) {
-			reserved_data_slots_.push_back(slot);
+		const auto [iterator, inserted] = reserved_data_slot_index_.emplace(slot.value());
+		if (inserted) {
+			try {
+				reserved_data_slots_.push_back(slot);
+			} catch (...) {
+				reserved_data_slot_index_.erase(iterator);
+				throw;
+			}
 		}
 	}
 
-	bool MetadataWriteBatch::isDataSlotReserved(PhysicalSlotId slot) const {
+	void MetadataWriteBatch::reserveDataSlotRange(PhysicalSlotRange range) {
+		if (!range.isValid()) {
+			throwMetadataBatchError(FormatError::FERR_INVALID_STATE,
+								  "relocatable metadata batch cannot reserve an invalid data-slot range");
+		}
+		if (std::ranges::any_of(created_pool_slots_, [&range](PhysicalSlotId slot) { return range.contains(slot); })) {
+			throwMetadataBatchError(FormatError::FERR_INVALID_STATE,
+								  "relocatable metadata batch cannot reserve a metadata-pool slot as data");
+		}
+		const auto nextRange = reserved_data_slot_range_index_.lower_bound(range.first.value());
+		const bool overlapsNext = nextRange != reserved_data_slot_range_index_.end() &&
+							  nextRange->first <= range.last.value();
+		const bool overlapsPrevious = nextRange != reserved_data_slot_range_index_.begin() &&
+							  std::prev(nextRange)->second >= range.first.value();
+		const auto firstReservedSlot = reserved_data_slot_index_.lower_bound(range.first.value());
+		if (overlapsNext || overlapsPrevious ||
+			(firstReservedSlot != reserved_data_slot_index_.end() && *firstReservedSlot <= range.last.value())) {
+			throwMetadataBatchError(FormatError::FERR_INVALID_STATE,
+								  "relocatable metadata batch has overlapping data-slot reservations");
+		}
+		const auto [iterator, inserted] =
+				reserved_data_slot_range_index_.emplace(range.first.value(), range.last.value());
+		if (!inserted) {
+			throwMetadataBatchError(FormatError::FERR_INVALID_STATE,
+								  "relocatable metadata batch has duplicate data-slot range reservations");
+		}
+		try {
+			reserved_data_slot_ranges_.push_back(range);
+		} catch (...) {
+			reserved_data_slot_range_index_.erase(iterator);
+			throw;
+		}
+	}
+
+	std::optional<PhysicalSlotRange> MetadataWriteBatch::dataSlotRangeContaining(PhysicalSlotId slot) const noexcept {
+		if (!slot.isValid()) {
+			return std::nullopt;
+		}
+		const auto next = reserved_data_slot_range_index_.upper_bound(slot.value());
+		if (next == reserved_data_slot_range_index_.begin()) {
+			return std::nullopt;
+		}
+		const auto previous = std::prev(next);
+		if (previous->second < slot.value()) {
+			return std::nullopt;
+		}
+		return PhysicalSlotRange{PhysicalSlotId(previous->first), PhysicalSlotId(previous->second)};
+	}
+
+	bool MetadataWriteBatch::isDataSlotReserved(PhysicalSlotId slot) const noexcept {
 		return slot.isValid() &&
-			   std::ranges::any_of(reserved_data_slots_, [slot](PhysicalSlotId existing) { return existing == slot; });
+			   (reserved_data_slot_index_.contains(slot.value()) || dataSlotRangeContaining(slot).has_value());
+	}
+
+	bool MetadataWriteBatch::isMetadataPoolSlot(PhysicalSlotId slot) const {
+		return slot.isValid() && std::ranges::any_of(created_pool_slots_, [slot](PhysicalSlotId existing) {
+			return existing == slot;
+		});
 	}
 
 	void MetadataWriteBatch::setCatalogRoot(PhysicalPageRef root) {
@@ -328,7 +527,26 @@ namespace graph::storage {
 
 	void MetadataWriteBatch::setPageDirectoryRoot(PhysicalPageRef root) {
 		validateOwnedRoot(root, "relocatable metadata batch has an invalid Page Directory root");
+		if (candidate_.usesPageDirectoryBootstrap()) {
+			throwMetadataBatchError(FormatError::FERR_INVALID_STATE,
+								"relocatable metadata batch must preserve the Page Directory bootstrap header");
+		}
 		candidate_.page_directory_root = root;
+	}
+
+	void MetadataWriteBatch::setPageDirectoryBootstrapRoot(PhysicalPageRef root) {
+		validateOwnedRoot(root, "relocatable metadata batch has an invalid Page Directory bootstrap root");
+		candidate_.page_directory_root = root;
+		candidate_.flags |= RSS_SUPERBLOCK_FLAG_PAGE_DIRECTORY_BOOTSTRAP;
+	}
+
+	void MetadataWriteBatch::setPendingBootstrapDataRoot(PhysicalPageRef root) {
+		validateOwnedRoot(root, "relocatable metadata batch has an invalid pending Page Directory root");
+		if (!candidate_.usesPageDirectoryBootstrap()) {
+			throwMetadataBatchError(FormatError::FERR_INVALID_STATE,
+								"relocatable metadata batch has no bootstrap header for a deferred Page Directory root");
+		}
+		pending_bootstrap_data_root_ = root;
 	}
 
 	void MetadataWriteBatch::setExtentDirectoryRoot(PhysicalPageRef root) {
@@ -422,7 +640,23 @@ namespace graph::storage {
 			published_ = true;
 		} catch (...) {
 			published_ = candidateWasPublished(bootstrap, candidate_);
+			if (metadata_frame_reservation_active_) {
+				allocator_.releaseMetadataFrames();
+				metadata_frame_reservation_active_ = false;
+			}
+			if (published_ && batch_context_active_) {
+				allocator_.endUnpublishedBatch(current_);
+				batch_context_active_ = false;
+			}
 			throw;
+		}
+		if (metadata_frame_reservation_active_) {
+			allocator_.releaseMetadataFrames();
+			metadata_frame_reservation_active_ = false;
+		}
+		if (batch_context_active_) {
+			allocator_.endUnpublishedBatch(current_);
+			batch_context_active_ = false;
 		}
 	}
 
@@ -431,7 +665,12 @@ namespace graph::storage {
 			for (auto iterator = allocated_pages_.rbegin(); iterator != allocated_pages_.rend(); ++iterator) {
 				allocator_.abandonPage(*iterator);
 			}
-			allocator_.abandonUnpublishedBatch(created_pool_slots_, reserved_data_slots_, initial_physical_file_size_);
+			allocator_.abandonUnpublishedBatch(created_pool_slots_, reserved_data_slots_, reserved_data_slot_ranges_,
+												 initial_physical_file_size_);
+		}
+		if (metadata_frame_reservation_active_) {
+			allocator_.releaseMetadataFrames();
+			metadata_frame_reservation_active_ = false;
 		}
 	}
 

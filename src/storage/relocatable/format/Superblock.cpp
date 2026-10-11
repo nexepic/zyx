@@ -57,6 +57,7 @@ namespace graph::storage {
 		constexpr size_t NEXT_LARGE_VALUE_ID_OFFSET = 328;
 		constexpr size_t METADATA_EMERGENCY_RESERVE_OFFSET = RSS_SUPERBLOCK_HEADER_BYTES;
 		constexpr size_t METADATA_EMERGENCY_RESERVE_BYTES = 32;
+		constexpr size_t PAYLOAD_RESERVED_OFFSET = METADATA_EMERGENCY_RESERVE_OFFSET + METADATA_EMERGENCY_RESERVE_BYTES;
 		constexpr uint64_t RSS_MAX_PHYSICAL_PAGE_GENERATION = std::numeric_limits<uint64_t>::max() >> 5U;
 		static_assert(METADATA_EMERGENCY_RESERVE_OFFSET + METADATA_EMERGENCY_RESERVE_BYTES <= RSS_SUPERBLOCK_BYTES);
 
@@ -251,6 +252,11 @@ namespace graph::storage {
 			LittleEndianCodec::readU32(bytes, PAYLOAD_CRC_OFFSET)) {
 			throwSuperblockError(FormatError::FERR_CHECKSUM_MISMATCH,
 								 "relocatable superblock payload checksum does not match");
+		}
+		if (std::ranges::any_of(bytes.subspan(PAYLOAD_RESERVED_OFFSET),
+								 [](std::byte byte) { return byte != std::byte{0}; })) {
+			throwSuperblockError(FormatError::FERR_RESERVED_BITS,
+								 "relocatable superblock has nonzero reserved payload bytes");
 		}
 		Superblock superblock;
 		superblock.flags = flags;

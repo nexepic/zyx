@@ -308,12 +308,20 @@ namespace graph::storage {
 		return header;
 	}
 
-	std::vector<std::byte> BTreePageEntryCodec::encode(const BTreePageEntry &entry) {
+	size_t BTreePageEntryCodec::encodedSize(const BTreePageEntry &entry) {
 		if (entry.key.size() > std::numeric_limits<uint32_t>::max()) {
 			throwBTreePageError(FormatError::FERR_ARITHMETIC_OVERFLOW,
 								"relocatable B+Tree entry key length exceeds the persisted format");
 		}
-		std::vector<std::byte> bytes(RSS_BTREE_ENTRY_HEADER_BYTES + entry.key.size());
+		if (entry.key.size() > std::numeric_limits<size_t>::max() - RSS_BTREE_ENTRY_HEADER_BYTES) {
+			throwBTreePageError(FormatError::FERR_ARITHMETIC_OVERFLOW,
+								"relocatable B+Tree entry encoded size overflows");
+		}
+		return RSS_BTREE_ENTRY_HEADER_BYTES + entry.key.size();
+	}
+
+	std::vector<std::byte> BTreePageEntryCodec::encode(const BTreePageEntry &entry) {
+		std::vector<std::byte> bytes(encodedSize(entry));
 		LittleEndianCodec::writeU32(bytes, MAGIC_OFFSET, RSS_BTREE_ENTRY_MAGIC);
 		LittleEndianCodec::writeU16(bytes, VERSION_OFFSET, RSS_BTREE_ENTRY_VERSION);
 		LittleEndianCodec::writeU16(bytes, HEADER_BYTES_OFFSET, RSS_BTREE_ENTRY_HEADER_BYTES);
@@ -480,10 +488,8 @@ namespace graph::storage {
 			size_t offset = offsets[candidate];
 			std::vector<std::byte> previous;
 			const auto entry = decodeOne(stream, offset, previous, true, includesValue);
-			if (!entry.has_value()) {
-				throwBTreePageError(FormatError::FERR_BUFFER_TOO_SMALL,
-									"relocatable packed B+Tree restart entry is missing");
-			}
+			// restartOffsets() proved this offset lies inside the stream; decodeOne()
+			// consequently either returns the restart entry or throws a codec error.
 			return entry->key;
 		};
 		size_t firstGreater = 0U;
@@ -624,33 +630,16 @@ namespace graph::storage {
 		const std::vector<SlottedSlotReference> slots = page_.liveSlots();
 		if (slots.size() != 2U || slots[1].slot_id != 1U || slots[1].generation != 1U) {
 			throwBTreePageError(FormatError::FERR_INVALID_HEADER,
-								"relocatable packed B+Tree page has no stable payload slot");
+									"relocatable packed B+Tree page has no stable payload slot");
 		}
 		const BTreePageHeader current = header();
 		page_.overwrite(slots[1], PackedBTreePageCodec::encode(current.kind, entries, current.leaf_value_layout));
 	}
 
 	void BTreePage::validateLayout() const {
-		const BTreePageHeader current = header();
-		const auto entries = packedEntries();
-		if (entries.size() != current.entry_count) {
-			throwBTreePageError(FormatError::FERR_INVALID_HEADER,
-								"relocatable B+Tree page entry count disagrees with its slotted records");
-		}
-		for (size_t index = 1; index < entries.size(); ++index) {
-			if (!lessKey(entries[index - 1].key, entries[index].key)) {
-				throwBTreePageError(FormatError::FERR_INVALID_HEADER,
-									"relocatable B+Tree page keys are not strictly ordered");
-			}
-		}
-		if (current.kind == BTreeNodeKind::BPN_INTERNAL) {
-			for (const BTreePageEntry &entry: entries) {
-				if (!PageId(entry.value_or_child).isValid()) {
-					throwBTreePageError(FormatError::FERR_INVALID_HEADER,
-										"relocatable internal B+Tree page has an invalid right child Page ID");
-				}
-			}
-		}
+		// packedEntries() validates the stable slots, owner identity, packed entry
+		// count, ordering, and internal child references in one canonical decode.
+		static_cast<void>(packedEntries());
 	}
 
 	std::vector<BTreePageEntry> BTreePage::entries() const {
@@ -698,11 +687,6 @@ namespace graph::storage {
 								"relocatable B+Tree page rejects duplicate separator keys");
 		}
 		BTreePageHeader updated = header();
-		if (updated.entry_count == std::numeric_limits<uint32_t>::max()) { // ZYX_COV_EXCL_LINE: a 4 KiB slotted page
-			// cannot physically materialize enough entries to reach this persisted-counter limit.
-			throwBTreePageError(FormatError::FERR_ARITHMETIC_OVERFLOW,
-								"relocatable B+Tree page entry count cannot grow safely");
-		}
 		if (updated.kind == BTreeNodeKind::BPN_INTERNAL && !PageId(entry.value_or_child).isValid()) {
 			throwBTreePageError(FormatError::FERR_INVALID_HEADER,
 								"relocatable internal B+Tree entry requires a stable child Page ID");

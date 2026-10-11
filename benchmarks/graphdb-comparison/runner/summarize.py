@@ -574,9 +574,9 @@ def measurement_phase_for_profile_phase(phase: str) -> str:
         or lowered.endswith(".db_close")
     ):
         return "close_checkpoint"
-    if lowered.startswith("wal."):
-        return "durable_wal_fsync"
-    if lowered.startswith("load.") or lowered.startswith("datamanager.add_"):
+    if lowered.startswith("wal.") or lowered.endswith(".commit_sync") or lowered.endswith(".publication_sync"):
+        return "durable_storage_sync"
+    if lowered.startswith("load."):
         return "load_import"
     if lowered.startswith("property.store_batch") or lowered.startswith("index."):
         return "load_import"
@@ -672,7 +672,7 @@ def write_phase_category_summary_markdown(rows: Iterable[dict[str, object]], pat
     lines = [
         "# Measurement Phase Summary",
         "",
-        "Rows group raw profile timers into benchmark semantics such as statement latency, WAL fsync, close checkpoint, and load/import.",
+        "Rows group raw profile timers into benchmark semantics such as statement latency, storage sync, close checkpoint, and load/import.",
         "",
         "| " + " | ".join(PHASE_CATEGORY_SUMMARY_FIELDS) + " |",
         "| " + " | ".join(["---"] * len(PHASE_CATEGORY_SUMMARY_FIELDS)) + " |",
@@ -692,10 +692,10 @@ def write_phase_category_summary_markdown(rows: Iterable[dict[str, object]], pat
             "## Semantic Phases",
             "",
             "- `statement_latency`: user-visible operation latency measured by the workload sample timer.",
-            "- `durable_wal_fsync`: WAL commit/sync work emitted by storage profile timers.",
+            "- `durable_storage_sync`: commit/sync work emitted by storage profile timers.",
             "- `close_checkpoint`: clean close, checkpoint, and deferred database flush work.",
             "- `load_import`: data loading, index build, and batch storage ingest work.",
-            "- `statement_commit`: commit wrapper work that is not precise enough to classify as WAL-only.",
+            "- `statement_commit`: commit wrapper work that is not precise enough to classify as storage-sync-only.",
         ]
     )
     path.write_text("\n".join(lines) + "\n")
@@ -710,6 +710,7 @@ def build_quality_gate_report(
     environment: dict[str, object] | None,
     profile_events: Iterable[ProfileEvent] = (),
     baseline_rows: Iterable[SummaryRow] = (),
+    baseline_environment: dict[str, object] | None = None,
     max_regression_ratio: float = 1.10,
 ) -> dict[str, object]:
     rows = list(rows)
@@ -849,12 +850,55 @@ def build_quality_gate_report(
             _quality_gate("zyx_profile_coverage", "skipped", "ZYX is not part of this run")
         )
 
+    baseline_rows = list(baseline_rows)
     baseline_by_key = {
         (row.database, row.workload, row.scale): row
         for row in baseline_rows
         if row.status == "ok" and row.samples > 0 and row.p50_ms > 0
     }
     if baseline_by_key:
+        provenance_fields = (
+            "benchmark_schema_version",
+            "databases",
+            "dataset_manifest",
+            "execution_mode",
+            "iterations",
+            "measurement_semantics",
+            "platform",
+            "profile",
+            "required_workloads",
+            "scale",
+            "seed",
+            "system",
+            "thread_contract",
+            "threads",
+            "warmup",
+        )
+        if not isinstance(baseline_environment, dict):
+            gates.append(
+                _quality_gate(
+                    "baseline_environment_provenance",
+                    "failed",
+                    "baseline summary requires a sibling environment.json produced by the benchmark runner",
+                )
+            )
+        else:
+            mismatched = [
+                field
+                for field in provenance_fields
+                if field not in environment
+                or field not in baseline_environment
+                or environment[field] != baseline_environment[field]
+            ]
+            gates.append(
+                _quality_gate(
+                    "baseline_environment_provenance",
+                    "passed" if not mismatched else "failed",
+                    "baseline and current run use the same dataset, execution, thread, and platform contract"
+                    if not mismatched
+                    else "mismatched or missing fields: " + ", ".join(mismatched),
+                )
+            )
         regressions: list[str] = []
         common_rows = 0
         for row in rows:
@@ -880,6 +924,13 @@ def build_quality_gate_report(
             )
         )
     else:
+        gates.append(
+            _quality_gate(
+                "baseline_environment_provenance",
+                "skipped",
+                "no successful baseline summary rows were provided",
+            )
+        )
         gates.append(
             _quality_gate(
                 "p50_regression_against_baseline",
@@ -916,6 +967,7 @@ def write_summary_outputs(
     environment: dict[str, object] | None = None,
     profile_events_path: Path | None = None,
     baseline_summary_path: Path | None = None,
+    baseline_environment: dict[str, object] | None = None,
     max_regression_ratio: float = 1.10,
 ) -> dict[str, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -956,6 +1008,7 @@ def write_summary_outputs(
             environment_payload,
             profile_events,
             read_summary_rows(baseline_summary_path),
+            baseline_environment,
             max_regression_ratio,
         ),
         quality_path,

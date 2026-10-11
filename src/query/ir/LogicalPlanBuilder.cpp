@@ -68,6 +68,7 @@ std::unique_ptr<LogicalOperator> buildAggregateProjection(
 		if (item.isTopLevelAggregate) {
 			// Case 1: Top-level aggregate function (e.g., count(n), sum(n.age))
 			auto* funcCall = static_cast<const FunctionCallExpression*>(item.expression.get());
+			ExpressionUtils::validateAggregateFunctionCall(*funcCall);
 			std::string funcName = funcCall->getFunctionName();
 			std::string funcNameLower = funcName;
 			std::transform(funcNameLower.begin(), funcNameLower.end(), funcNameLower.begin(),
@@ -81,7 +82,13 @@ std::unique_ptr<LogicalOperator> buildAggregateProjection(
 				}
 			}
 
-			aggItems.emplace_back(funcNameLower, argExpr, item.alias, funcCall->isDistinct());
+			std::shared_ptr<Expression> extraArg(nullptr);
+			if (funcNameLower == "percentiledisc" || funcNameLower == "percentilecont") {
+				const auto& arguments = funcCall->getArguments();
+				extraArg = std::shared_ptr<Expression>(arguments[1]->clone().release());
+			}
+
+			aggItems.emplace_back(funcNameLower, argExpr, item.alias, funcCall->isDistinct(), std::move(extraArg));
 		} else if (item.containsAggregate) {
 			// Case 2: Expression containing nested aggregates (e.g., count(n) + 1)
 			auto modifiedExpr = ExpressionUtils::extractAndReplaceAggregates(
@@ -678,7 +685,8 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildCreate(
 
 			auto edgeOp = std::make_unique<LogicalCreateEdge>(
 				edgeVar, chain.relationship.type,
-				chain.relationship.properties, chain.relationship.propertyExpressions, prevVar, targetVar);
+				chain.relationship.properties, chain.relationship.propertyExpressions, prevVar, targetVar,
+				nullptr, chain.relationship.direction);
 			input = chainWriteOp(std::move(input), std::move(edgeOp));
 
 			prevVar = targetVar;
@@ -799,7 +807,8 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildMerge(
 	if (elem.chain.empty()) {
 		return std::make_unique<LogicalMergeNode>(
 			elem.headNode.variable, elem.headNode.labels, headProps,
-			std::move(onCreateActions), std::move(onMatchActions), std::move(input));
+			std::move(onCreateActions), std::move(onMatchActions), std::move(input),
+			elem.headNode.propertyExpressions);
 	}
 
 	// Edge MERGE
@@ -808,7 +817,7 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildMerge(
 	std::unique_ptr<LogicalOperator> rootOp =
 		std::make_unique<LogicalMergeNode>(
 			elem.headNode.variable, elem.headNode.labels, headProps,
-			emptyActions, emptyActions, std::move(input));
+			emptyActions, emptyActions, std::move(input), elem.headNode.propertyExpressions);
 
 	std::string prevVar = elem.headNode.variable;
 
@@ -824,7 +833,7 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildMerge(
 
 		auto targetMergeOp = std::make_unique<LogicalMergeNode>(
 			target.variable, target.labels, targetProps,
-			emptyActions, emptyActions, std::move(rootOp));
+			emptyActions, emptyActions, std::move(rootOp), target.propertyExpressions);
 		rootOp = std::move(targetMergeOp);
 
 		bool isLastChain = (i == elem.chain.size() - 1);
@@ -833,7 +842,7 @@ std::unique_ptr<LogicalOperator> LogicalPlanBuilder::buildMerge(
 			rel.properties,
 			isLastChain ? std::move(onCreateActions) : emptyActions,
 			isLastChain ? std::move(onMatchActions) : emptyActions,
-			std::move(rootOp));
+			std::move(rootOp), rel.propertyExpressions);
 
 		prevVar = target.variable;
 	}

@@ -8,6 +8,9 @@
 
 #include "query/execution/LogicalGraphReadExecutorTestFixture.hpp"
 
+#include "graph/query/expressions/ListLiteralExpression.hpp"
+#include "graph/query/expressions/MapProjectionExpression.hpp"
+
 TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeFailsClosedForMalformedBoundsAndUnsupportedPlans) {
 	TestLogicalGraphBackend backend(graphData());
 	LogicalPlanReadRuntime runtime(backend);
@@ -23,6 +26,91 @@ TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeFailsClosedForMalformedBoun
 	EXPECT_THROW(static_cast<void>(runtime.execute(negativeLimit, runtimeBounds(),
 												   [](const LogicalPlanReadRow &) { return true; })),
 				 std::invalid_argument);
+}
+
+TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeRejectsProjectionOnlyItemsInMapLiterals) {
+	TestLogicalGraphBackend backend(graphData());
+	LogicalPlanReadRuntime runtime(backend);
+
+	const auto expectRejected = [&runtime](expressions::MapProjectionItemType itemType, std::string key) {
+		std::vector<expressions::MapProjectionItem> mapItems;
+		mapItems.emplace_back(itemType, std::move(key));
+		std::vector<logical::LogicalProjectItem> projectItems;
+		projectItems.emplace_back(std::make_shared<expressions::MapProjectionExpression>(std::move(mapItems)), "map");
+		logical::LogicalProject root(std::make_unique<logical::LogicalSingleRow>(), std::move(projectItems));
+		EXPECT_THROW(static_cast<void>(runtime.execute(
+					 root, runtimeBounds(), [](const LogicalPlanReadRow &) { return true; })),
+				 std::logic_error);
+	};
+
+	expectRejected(expressions::MapProjectionItemType::MPROP_PROPERTY, "property");
+	expectRejected(expressions::MapProjectionItemType::MPROP_ALL_PROPERTIES, "");
+	expectRejected(expressions::MapProjectionItemType::MPROP_LITERAL, "");
+}
+
+TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeRejectsEntityFunctionsOnNonEntityBindings) {
+	TestLogicalGraphBackend backend(graphData());
+	LogicalPlanReadRuntime runtime(backend);
+	const auto visitor = [](const LogicalPlanReadRow &) { return true; };
+
+	const auto scalarInput = [] {
+		std::vector<logical::LogicalProjectItem> items;
+		items.emplace_back(std::make_shared<expressions::LiteralExpression>(int64_t(7)), "scalar");
+		return std::make_unique<logical::LogicalProject>(std::make_unique<logical::LogicalSingleRow>(), std::move(items));
+	};
+	const auto entityFunction = [](std::string name, std::vector<std::unique_ptr<expressions::Expression>> arguments) {
+		return sharedExpression(std::make_unique<expressions::FunctionCallExpression>(std::move(name),
+																					 std::move(arguments)));
+	};
+	const auto execute = [&](std::string name, std::vector<std::unique_ptr<expressions::Expression>> arguments) {
+		std::vector<logical::LogicalProjectItem> items;
+		items.emplace_back(entityFunction(std::move(name), std::move(arguments)), "result");
+		logical::LogicalProject root(scalarInput(), std::move(items));
+		return runtime.execute(root, runtimeBounds(), visitor);
+	};
+
+	EXPECT_THROW(static_cast<void>(execute("id", {})), std::runtime_error);
+	std::vector<std::unique_ptr<expressions::Expression>> literalArgument;
+	literalArgument.push_back(std::make_unique<expressions::LiteralExpression>(int64_t(7)));
+	EXPECT_THROW(static_cast<void>(execute("id", std::move(literalArgument))), std::runtime_error);
+	for (const std::string &name: {"id", "labels", "type", "keys", "properties"}) {
+		std::vector<std::unique_ptr<expressions::Expression>> arguments;
+		arguments.push_back(std::make_unique<expressions::VariableReferenceExpression>("scalar"));
+		EXPECT_THROW(static_cast<void>(execute(name, std::move(arguments))), std::runtime_error);
+	}
+}
+
+TEST(LogicalGraphReadExecutorTest, LogicalPlanRuntimeBoundsStaticAndDynamicCollectionExpressions) {
+	TestLogicalGraphBackend backend(graphData());
+	LogicalPlanReadRuntime runtime(backend);
+	LogicalPlanReadRuntimeBounds collectionBounds = runtimeBounds();
+	collectionBounds.maximum_rows = 2U;
+	collectionBounds.maximum_property_entries = 1U;
+
+	const auto expectRejected = [&runtime, &collectionBounds](std::shared_ptr<expressions::Expression> expression) {
+		std::vector<logical::LogicalProjectItem> projectItems;
+		projectItems.emplace_back(std::move(expression), "value");
+		logical::LogicalProject root(std::make_unique<logical::LogicalSingleRow>(), std::move(projectItems));
+		EXPECT_THROW(static_cast<void>(runtime.execute(
+					 root, collectionBounds, [](const LogicalPlanReadRow &) { return true; })),
+				 std::runtime_error);
+	};
+
+	expectRejected(std::make_shared<expressions::ListLiteralExpression>(
+				PropertyValue(std::vector<PropertyValue>{PropertyValue(1), PropertyValue(2), PropertyValue(3)})));
+
+	std::vector<std::unique_ptr<expressions::Expression>> dynamicList;
+	for (int64_t value = 1; value <= 3; ++value) {
+		dynamicList.push_back(std::make_unique<expressions::LiteralExpression>(value));
+	}
+	expectRejected(std::make_shared<expressions::ListLiteralExpression>(std::move(dynamicList)));
+
+	std::vector<expressions::MapProjectionItem> mapItems;
+	mapItems.emplace_back(expressions::MapProjectionItemType::MPROP_LITERAL, "first",
+			std::make_unique<expressions::LiteralExpression>(int64_t(1)));
+	mapItems.emplace_back(expressions::MapProjectionItemType::MPROP_LITERAL, "second",
+			std::make_unique<expressions::LiteralExpression>(int64_t(2)));
+	expectRejected(std::make_shared<expressions::MapProjectionExpression>(std::move(mapItems)));
 }
 
 TEST(LogicalGraphReadExecutorTest, RejectsInvalidBoundsVisitorsAndPredicatesBeforeOpeningTheBackend) {
@@ -47,11 +135,11 @@ TEST(LogicalGraphReadExecutorTest, RejectsInvalidBoundsVisitorsAndPredicatesBefo
 	request.source_filter.required_labels.clear();
 
 	request.source_filter.property_predicates = {
-			predicate("age", VectorPredicateOp::VPO_RANGE_CLOSED, PropertyValue(1))};
+			predicate("age", LogicalPropertyPredicateOp::LPP_RANGE_CLOSED, PropertyValue(1))};
 	EXPECT_THROW(static_cast<void>(executor.execute(request, [](const LogicalGraphReadRow &) {})),
 				 std::invalid_argument);
 	request.source_filter.property_predicates = {
-			predicate("age", VectorPredicateOp::VPO_EQ, PropertyValue(1), PropertyValue(2))};
+			predicate("age", LogicalPropertyPredicateOp::LPP_EQ, PropertyValue(1), PropertyValue(2))};
 	EXPECT_THROW(static_cast<void>(executor.execute(request, [](const LogicalGraphReadRow &) {})),
 				 std::invalid_argument);
 }
@@ -90,7 +178,7 @@ TEST(LogicalGraphReadExecutorTest, RejectsBackendsThatViolateLogicalEntityAndPro
 	TestLogicalGraphBackend wrongPropertyOwner(std::move(data));
 	LogicalGraphReadExecutor propertyExecutor(wrongPropertyOwner);
 	request.source_filter.required_labels = {"VIP"};
-	request.source_filter.property_predicates = {predicate("age", VectorPredicateOp::VPO_EQ, PropertyValue(42))};
+	request.source_filter.property_predicates = {predicate("age", LogicalPropertyPredicateOp::LPP_EQ, PropertyValue(42))};
 	EXPECT_THROW(static_cast<void>(propertyExecutor.execute(request, [](const LogicalGraphReadRow &) {})),
 				 std::runtime_error);
 
@@ -172,21 +260,21 @@ TEST(LogicalGraphReadExecutorTest, RejectsEveryBoundedFilterShapeAndPredicateOpe
 	request.bounds = bounds();
 
 	request.source_filter.property_predicates = {
-			predicate("", VectorPredicateOp::VPO_EQ, PropertyValue(42))};
+			predicate("", LogicalPropertyPredicateOp::LPP_EQ, PropertyValue(42))};
 	EXPECT_THROW(static_cast<void>(executor.execute(request, [](const LogicalGraphReadRow &) {})), std::invalid_argument);
 
 	request.source_filter.property_predicates = {
-			predicate("age", static_cast<VectorPredicateOp>(255U), PropertyValue(42))};
+			predicate("age", static_cast<LogicalPropertyPredicateOp>(255U), PropertyValue(42))};
 	EXPECT_THROW(static_cast<void>(executor.execute(request, [](const LogicalGraphReadRow &) {})), std::invalid_argument);
 
-	for (const VectorPredicateOp operation: {VectorPredicateOp::VPO_NE, VectorPredicateOp::VPO_LT,
-													 VectorPredicateOp::VPO_LE, VectorPredicateOp::VPO_GT,
-													 VectorPredicateOp::VPO_GE}) {
+	for (const LogicalPropertyPredicateOp operation: {LogicalPropertyPredicateOp::LPP_NE, LogicalPropertyPredicateOp::LPP_LT,
+													 LogicalPropertyPredicateOp::LPP_LE, LogicalPropertyPredicateOp::LPP_GT,
+													 LogicalPropertyPredicateOp::LPP_GE}) {
 		request.source_filter.required_labels = {"VIP"};
 		request.source_filter.property_predicates = {predicate("age", operation, PropertyValue(42))};
 		EXPECT_EQ(executor.execute(request, [](const LogicalGraphReadRow &) {}).rows_emitted,
-				  operation == VectorPredicateOp::VPO_NE || operation == VectorPredicateOp::VPO_LT ||
-						  operation == VectorPredicateOp::VPO_GT
+				  operation == LogicalPropertyPredicateOp::LPP_NE || operation == LogicalPropertyPredicateOp::LPP_LT ||
+						  operation == LogicalPropertyPredicateOp::LPP_GT
 						  ? 0U
 						  : 1U);
 	}
@@ -196,14 +284,14 @@ TEST(LogicalGraphReadExecutorTest, RejectsEveryBoundedFilterShapeAndPredicateOpe
 	EXPECT_THROW(static_cast<void>(executor.execute(request, [](const LogicalGraphReadRow &) {})), std::invalid_argument);
 
 	request.source_filter.required_labels.clear();
-	request.source_filter.property_predicates.assign(1025U, predicate("age", VectorPredicateOp::VPO_EQ, PropertyValue(42)));
+	request.source_filter.property_predicates.assign(1025U, predicate("age", LogicalPropertyPredicateOp::LPP_EQ, PropertyValue(42)));
 	EXPECT_THROW(static_cast<void>(executor.execute(request, [](const LogicalGraphReadRow &) {})), std::invalid_argument);
 
 	request.source_filter.property_predicates.clear();
 	LogicalGraphExpansion expansion;
 	expansion.direction = LogicalGraphReadDirection::LGRD_OUTGOING;
 	expansion.edge_filter.property_predicates.assign(1025U,
-																predicate("weight", VectorPredicateOp::VPO_EQ, PropertyValue(2)));
+																predicate("weight", LogicalPropertyPredicateOp::LPP_EQ, PropertyValue(2)));
 	request.expansion = std::move(expansion);
 	EXPECT_THROW(static_cast<void>(executor.execute(request, [](const LogicalGraphReadRow &) {})), std::invalid_argument);
 
@@ -225,7 +313,7 @@ TEST(LogicalGraphReadExecutorTest, RejectsMalformedPropertyCollectionsAndLogical
 		LogicalGraphReadRequest request;
 		request.bounds = bounds();
 		request.source_filter.required_labels = {"VIP"};
-		request.source_filter.property_predicates = {predicate("age", VectorPredicateOp::VPO_EQ, PropertyValue(42))};
+		request.source_filter.property_predicates = {predicate("age", LogicalPropertyPredicateOp::LPP_EQ, PropertyValue(42))};
 		EXPECT_THROW(static_cast<void>(executor.execute(request, [](const LogicalGraphReadRow &) {})), std::runtime_error);
 	};
 
@@ -238,7 +326,7 @@ TEST(LogicalGraphReadExecutorTest, RejectsMalformedPropertyCollectionsAndLogical
 	LogicalGraphReadRequest propertyRequest;
 	propertyRequest.bounds = propertyBound;
 	propertyRequest.source_filter.required_labels = {"VIP"};
-	propertyRequest.source_filter.property_predicates = {predicate("age", VectorPredicateOp::VPO_EQ, PropertyValue(42))};
+	propertyRequest.source_filter.property_predicates = {predicate("age", LogicalPropertyPredicateOp::LPP_EQ, PropertyValue(42))};
 	EXPECT_THROW(static_cast<void>(oversizedPropertyExecutor.execute(propertyRequest, [](const LogicalGraphReadRow &) {})),
 			 std::runtime_error);
 
@@ -310,7 +398,7 @@ TEST(LogicalGraphReadExecutorTest, OmitsEdgesWithoutPropertiesAndTargetsThatMiss
 	request.source_filter.required_labels = {"VIP"};
 	LogicalGraphExpansion expansion;
 	expansion.direction = LogicalGraphReadDirection::LGRD_OUTGOING;
-	expansion.edge_filter.property_predicates = {predicate("weight", VectorPredicateOp::VPO_EQ, PropertyValue(2))};
+	expansion.edge_filter.property_predicates = {predicate("weight", LogicalPropertyPredicateOp::LPP_EQ, PropertyValue(2))};
 	request.expansion = std::move(expansion);
 	EXPECT_EQ(propertylessExecutor.execute(request, [](const LogicalGraphReadRow &) {}).rows_emitted, 0U);
 

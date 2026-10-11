@@ -17,13 +17,6 @@
 
 namespace graph::storage {
 
-	// Opening a source must return a fresh cursor over the same globally sorted
-	// sequence. The first pass plans page boundaries; the second pass writes
-	// leaves. This keeps bulk construction memory proportional to page metadata,
-	// rather than all indexed values.
-	using OrderedBTreeEntryCursor = std::function<std::optional<BTreePageEntry>()>;
-	using OrderedBTreeEntrySource = std::function<OrderedBTreeEntryCursor()>;
-
 	struct BulkBTreeBuildOptions {
 		PhysicalSlotId first_slot{};
 		PhysicalSlotId last_slot{};
@@ -60,6 +53,13 @@ namespace graph::storage {
 		planNativeTree(BTreePageStore &pages, RelocatableMetadataStore &metadata, const MetadataSnapshotPin &snapshot,
 						   uint64_t indexId, const OrderedBTreeEntrySource &source,
 						   const BulkBTreeBuildOptions &options);
+		// Plans a dense replacement for an already published root. The caller must
+		// retire that exact root in its enclosing metadata publication before the
+		// returned fresh tree becomes reachable.
+		[[nodiscard]] static BTreeInitialTreeMutationPlan
+		planNativeReplacementTree(BTreePageStore &pages, RelocatableMetadataStore &metadata,
+								 const MetadataSnapshotPin &snapshot, uint64_t indexId,
+								 const OrderedBTreeEntrySource &source, const BulkBTreeBuildOptions &options);
 		[[nodiscard]] static BulkBTreeBuildResult
 		build(BTreePageStore &pages, RelocatableMetadataStore &metadata, uint64_t indexId,
 			  const OrderedBTreeEntrySource &source, const BulkBTreeBuildOptions &options,

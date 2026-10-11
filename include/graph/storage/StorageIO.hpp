@@ -23,6 +23,8 @@
 
 namespace graph::storage {
 	class BufferPool;
+	class FileTruncator;
+	class RelocatableMetadataStore;
 
 	// The capability is explicit because a readable fstream does not expose
 	// whether it was opened with std::ios::out.  This keeps a read-only cache
@@ -30,6 +32,14 @@ namespace graph::storage {
 	enum class StorageIOAccessMode : uint8_t {
 		SIOAM_READ_WRITE = 1,
 		SIOAM_READ_ONLY = 2,
+	};
+
+	// A durable sync can either be general I/O maintenance or one of the two
+	// ordered publication fences that make a COW Superblock candidate visible.
+	enum class StorageIOSyncKind : uint8_t {
+		SIOSK_GENERAL = 1,
+		SIOSK_DATA_FENCE = 2,
+		SIOSK_SUPERBLOCK_FENCE = 3,
 	};
 
 	struct StorageIOStats {
@@ -40,6 +50,8 @@ namespace graph::storage {
 		uint64_t write_calls = 0U;
 		uint64_t reserve_calls = 0U;
 		uint64_t sync_calls = 0U;
+		uint64_t data_sync_calls = 0U;
+		uint64_t superblock_sync_calls = 0U;
 
 		constexpr bool operator==(const StorageIOStats &) const = default;
 	};
@@ -81,6 +93,18 @@ namespace graph::storage {
 			ScopedNativeWriteHookForTesting &operator=(const ScopedNativeWriteHookForTesting &) = delete;
 		};
 
+		// A process-wide hook is reserved for background-worker fault tests. The
+		// existing thread-local hook remains the default for ordinary tests.
+		class ScopedAllThreadNativeWriteHookForTesting final {
+		public:
+			explicit ScopedAllThreadNativeWriteHookForTesting(NativeWriteHookForTesting hook);
+			~ScopedAllThreadNativeWriteHookForTesting();
+
+			ScopedAllThreadNativeWriteHookForTesting(const ScopedAllThreadNativeWriteHookForTesting &) = delete;
+			ScopedAllThreadNativeWriteHookForTesting &
+			operator=(const ScopedAllThreadNativeWriteHookForTesting &) = delete;
+		};
+
 		class ScopedNativeSyncHookForTesting final {
 		public:
 			explicit ScopedNativeSyncHookForTesting(NativeSyncHookForTesting hook);
@@ -88,6 +112,16 @@ namespace graph::storage {
 
 			ScopedNativeSyncHookForTesting(const ScopedNativeSyncHookForTesting &) = delete;
 			ScopedNativeSyncHookForTesting &operator=(const ScopedNativeSyncHookForTesting &) = delete;
+		};
+
+		class ScopedAllThreadNativeSyncHookForTesting final {
+		public:
+			explicit ScopedAllThreadNativeSyncHookForTesting(NativeSyncHookForTesting hook);
+			~ScopedAllThreadNativeSyncHookForTesting();
+
+			ScopedAllThreadNativeSyncHookForTesting(const ScopedAllThreadNativeSyncHookForTesting &) = delete;
+			ScopedAllThreadNativeSyncHookForTesting &
+			operator=(const ScopedAllThreadNativeSyncHookForTesting &) = delete;
 		};
 
 		class ScopedNativeReadHookForTesting final {
@@ -127,12 +161,50 @@ namespace graph::storage {
 		void writeAt(BufferPoolPageKey key, const void *buf, size_t size);
 
 		/**
+		 * @brief Write a nonempty contiguous range of complete generation-tagged pages.
+		 *
+		 * The range must begin at a 4 KiB boundary, use one nonzero durable
+		 * generation, and contain an exact multiple of native pages.  It avoids a
+		 * lock/cache round trip per page without weakening typed cache identity.
+		 */
+		void writePages(BufferPoolPageKey firstKey, const void *buf, size_t size);
+
+		/**
+		 * @brief Write a complete typed-page range directly after invalidating cached views.
+		 *
+		 * This is for bounded, self-authenticating scratch images only. It rejects
+		 * pinned/private views and never leaves a stale dirty cache entry after a
+		 * short native write or positioned-I/O failure.
+		 */
+		void writePagesThrough(BufferPoolPageKey firstKey, const void *buf, size_t size);
+
+		/**
+		 * @brief Directly update a bounded record within one generation-tagged page.
+		 *
+		 * This is intentionally narrower than generic byte I/O: format control
+		 * records use it for an inactive, independently checksummed record.  The
+		 * method invalidates every cached view of the page before issuing the
+		 * positioned write, so a failed partial record write cannot later be
+		 * flushed back as a stale complete page.
+		 */
+		void writeControlRecord(BufferPoolPageKey key, size_t byteOffset, std::span<const std::byte> bytes);
+
+		/**
 		 * @brief Position-independent read.
 		 *
 		 * Thread-safe through native pread or the serialized fallback fstream.
 		 * @return Number of bytes actually read.
 		 */
 		size_t readAt(uint64_t offset, void *buf, size_t size) const;
+
+		/**
+		 * @brief Read one known sequential range without admitting it to the Buffer Pool.
+		 *
+		 * Callers use this only for bounded, whole-object scans that authenticate
+		 * their own immutable identity after the read. Bypassing the cache avoids
+		 * displacing hot typed pages with scan-only scratch or relocation images.
+		 */
+		size_t readAtSequential(uint64_t offset, void *buf, size_t size) const;
 
 		/**
 		 * @brief Read one complete generation-tagged native format page.
@@ -142,6 +214,14 @@ namespace graph::storage {
 		 */
 		size_t readAt(BufferPoolPageKey key, void *buf, size_t size,
 					  BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
+
+		/**
+		 * @brief Read a nonempty contiguous range of complete generation-tagged pages.
+		 *
+		 * The returned byte count can be short only for a truncated underlying file.
+		 */
+		size_t readPages(BufferPoolPageKey firstKey, void *buf, size_t size,
+						 BufferPoolReadHint hint = BufferPoolReadHint::BPRH_NORMAL) const;
 
 		/**
 		 * @brief Append data to the end of the file.
@@ -184,6 +264,10 @@ namespace graph::storage {
 		 * @brief Sync all pending writes to durable storage.
 		 */
 		void sync();
+		// Records a successful durable fence with its publication role. General
+		// callers retain sync(); only the A/B Superblock publisher classifies its
+		// ordered data and root fences.
+		void sync(StorageIOSyncKind kind);
 
 		/**
 		 * @brief Flush the fstream internal buffer.
@@ -195,24 +279,14 @@ namespace graph::storage {
 
 		[[nodiscard]] bool hasPwriteSupport() const { return writeFd_ != INVALID_FILE_HANDLE; }
 		[[nodiscard]] bool hasPreadSupport() const { return readFd_ != INVALID_FILE_HANDLE; }
-		[[nodiscard]] bool isWritable() const { return access_mode_ == StorageIOAccessMode::SIOAM_READ_WRITE; }
-
-		/**
-		 * @brief Access the underlying fstream.
-		 *
-		 * For legacy code paths that still need direct stream access
-		 * (e.g., SegmentTracker chain loading during initialization).
-		 */
-		[[nodiscard]] std::shared_ptr<std::fstream> getStream() const { return stream_; }
-
-		[[nodiscard]] file_handle_t getWriteFd() const { return writeFd_; }
-		[[nodiscard]] file_handle_t getReadFd() const { return readFd_; }
-		void setWriteFd(file_handle_t writeFd) { writeFd_ = writeFd; }
 
 		// The native storage backend configures this once at open. Capacity is in
 		// bytes and must contain at least one 4 KiB format page.
 		void enableBufferPool(size_t capacityBytes);
 		void disableBufferPool();
+		// Discard clean, unpinned cached pages after another handle has published a
+		// newer durable root. This deliberately never flushes local cache images.
+		void discardBufferPoolForExternalRebase();
 		// Best-effort cache warming for already validated native page routes. With
 		// no Buffer Pool enabled this deliberately performs no speculative I/O.
 		void prefetchPages(std::span<const BufferPoolPageKey> keys,
@@ -227,6 +301,9 @@ namespace graph::storage {
 		void resetStats();
 
 	private:
+		friend class FileTruncator;
+		friend class RelocatableStorageBackend;
+		friend class RelocatableMetadataStore;
 		friend class BufferPool;
 		// Saturation must be verified without issuing impractically large I/O.
 		friend class StorageIOTestAccess;
@@ -239,8 +316,13 @@ namespace graph::storage {
 		void ensureFileSizeUncached(uint64_t minimumSize);
 		void syncUncached();
 		void flushStreamUncached();
+		[[nodiscard]] std::shared_ptr<std::fstream> getStream() const { return stream_; }
+		[[nodiscard]] file_handle_t getWriteFd() const { return writeFd_; }
+		void setWriteFd(file_handle_t writeFd) { writeFd_ = writeFd; }
+		[[nodiscard]] bool isWritable() const { return access_mode_ == StorageIOAccessMode::SIOAM_READ_WRITE; }
 		void requireWritable(const char *operation) const;
 		static void requireTypedPageKey(BufferPoolPageKey key, size_t size, const char *operation);
+		static void requireTypedPageRange(BufferPoolPageKey firstKey, size_t size, const char *operation);
 		[[nodiscard]] std::shared_ptr<BufferPool> bufferPool() const;
 
 		std::shared_ptr<std::fstream> stream_;
@@ -259,6 +341,8 @@ namespace graph::storage {
 		std::atomic<uint64_t> write_calls_{0U};
 		std::atomic<uint64_t> reserve_calls_{0U};
 		std::atomic<uint64_t> sync_calls_{0U};
+		std::atomic<uint64_t> data_sync_calls_{0U};
+		std::atomic<uint64_t> superblock_sync_calls_{0U};
 	};
 
 } // namespace graph::storage

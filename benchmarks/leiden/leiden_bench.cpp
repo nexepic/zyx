@@ -1,375 +1,447 @@
 /**
  * @file leiden_bench.cpp
- * @author Nexepic
- * @date 2026/7/3
+ * @brief Storage-neutral Leiden benchmark over a synthetic logical snapshot.
  *
- * @copyright Copyright (c) 2026 Nexepic
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- **/
-
-// Leiden algorithm benchmark.
-//
-// Builds a synthetic graph (clique-chain or Erdős-Rényi random) directly via
-// DataManager, builds the CSR projection, runs Leiden, and reports per-phase
-// timings, peak RSS, final modularity and community count.
-//
-// Capped at 100k nodes so repeated runs stay cheap. Temp database files are
-// cleaned up automatically (RAII + glob), unless --keep is passed.
+ * Copyright (c) 2026 Nexepic
+ * Licensed under the Apache License, Version 2.0.
+ */
 
 #include <algorithm>
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/uuid_generators.hpp>
-#include <boost/uuid/uuid_io.hpp>
 #include <chrono>
 #include <cstdint>
-#include <cstdio>
 #include <filesystem>
-#include <fstream>
 #include <iostream>
+#include <limits>
 #include <random>
 #include <set>
+#include <stdexcept>
 #include <string>
-#include <sys/resource.h>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
-#include "graph/concurrent/ThreadPool.hpp"
-#include "graph/query/algorithm/CsrProjection.hpp"
-#include "graph/query/algorithm/GraphProjection.hpp"
-#include "graph/query/algorithm/LeidenEngine.hpp"
-#include "graph/storage/FileStorage.hpp"
+#if defined(__APPLE__) || defined(__linux__)
+#include <sys/resource.h>
+#elif defined(_WIN32)
+#include <psapi.h>
+#include <windows.h>
+#endif
 
-namespace fs = std::filesystem;
-using clock_type = std::chrono::steady_clock;
+#include "graph/concurrent/ThreadPool.hpp"
+#include "graph/query/gds/LogicalGraphAlgorithms.hpp"
+#include "graph/query/gds/LogicalGraphProjection.hpp"
 
 namespace {
 
-// ---- CLI parsing (minimal, no external deps) ----
+	using Clock = std::chrono::steady_clock;
+	using graph::query::gds::LogicalGraphProjection;
+	using graph::query::gds::LogicalGraphProjectionSpec;
+	using graph::query::gds::LogicalLeidenOptions;
+	using graph::storage::LogicalGraphAdjacencyContinuation;
+	using graph::storage::LogicalGraphAdjacencyPage;
+	using graph::storage::LogicalGraphEdge;
+	using graph::storage::LogicalGraphMutationFence;
+	using graph::storage::LogicalGraphNode;
+	using graph::storage::LogicalGraphNodePage;
+	using graph::storage::LogicalGraphReadDirection;
+	using graph::storage::LogicalGraphReadSnapshot;
 
-struct Args {
-	std::string scale = "small";
-	std::string graphType = "clique-chain"; // "clique-chain" | "random"
-	size_t threadCount = 0;				  // 0 = auto
-	bool keep = false;					  // keep temp db files
-	bool cleanupOnly = false;			  // clean leftover files and exit
-	bool help = false;
-};
+	struct Args {
+		std::string scale = "small";
+		std::string graph_type = "clique-chain";
+		size_t thread_count = 0U;
+		bool help = false;
+	};
 
-void printHelp() {
-	std::cerr << "Usage: leiden-bench [options]\n"
-			  << "  --scale <s>        smoke|small|medium|large (default small)\n"
-			  << "  --graph <g>        clique-chain|random (default clique-chain)\n"
-			  << "  --threads <n>      worker threads (default auto)\n"
-			  << "  --keep             keep temp database files (default: clean up)\n"
-			  << "  --cleanup-only     remove leftover leiden-bench temp files and exit\n"
-			  << "  -h, --help         show this help\n";
-}
+	struct GraphHandle {
+		size_t nodes = 0U;
+		size_t edges = 0U;
+		size_t maximum_outgoing_edges = 0U;
+	};
 
-Args parseArgs(int argc, char **argv) {
-	Args a;
-	for (int i = 1; i < argc; ++i) {
-		std::string s = argv[i];
-		auto next = [&]() -> std::string {
-			if (i + 1 >= argc) throw std::runtime_error("missing value for " + s);
-			return argv[++i];
-		};
-		if (s == "-h" || s == "--help") a.help = true;
-		else if (s == "--scale") a.scale = next();
-		else if (s == "--graph") a.graphType = next();
-		else if (s == "--threads") a.threadCount = static_cast<size_t>(std::stoll(next()));
-		else if (s == "--keep") a.keep = true;
-		else if (s == "--cleanup-only") a.cleanupOnly = true;
-		else throw std::runtime_error("unknown argument: " + s);
+	class SyntheticSnapshot final : public LogicalGraphReadSnapshot {
+	public:
+		std::vector<LogicalGraphNode> nodes;
+		std::vector<LogicalGraphEdge> edges;
+		std::vector<std::vector<size_t>> outgoing_edge_indices;
+		std::vector<std::vector<size_t>> incoming_edge_indices;
+
+		[[nodiscard]] LogicalGraphNode readNode(const uint64_t node_id) const override {
+			const auto found = std::ranges::find(nodes, node_id, &LogicalGraphNode::node_id);
+			if (found == nodes.end()) {
+				throw std::out_of_range("unknown synthetic Node");
+			}
+			return *found;
+		}
+
+		[[nodiscard]] bool containsNode(const uint64_t node_id) const override {
+			return std::ranges::find(nodes, node_id, &LogicalGraphNode::node_id) != nodes.end();
+		}
+
+		[[nodiscard]] LogicalGraphEdge readEdge(const uint64_t edge_id) const override {
+			const auto found = std::ranges::find(edges, edge_id, &LogicalGraphEdge::edge_id);
+			if (found == edges.end()) {
+				throw std::out_of_range("unknown synthetic relationship");
+			}
+			return *found;
+		}
+
+		void visitNodes(const size_t maximum_records,
+						const std::function<bool(const LogicalGraphNode &)> &visitor) const override {
+			if (nodes.size() > maximum_records) {
+				throw std::runtime_error("synthetic Node scan exceeded its caller bound");
+			}
+			for (const LogicalGraphNode &node: nodes) {
+				if (!visitor(node)) {
+					return;
+				}
+			}
+		}
+
+		[[nodiscard]] LogicalGraphNodePage scanNodesAfter(const uint64_t after_node_id, const size_t maximum_records,
+														  const size_t maximum_metadata_pages) const override {
+			if (maximum_records == 0U || maximum_metadata_pages == 0U) {
+				throw std::invalid_argument("synthetic Node scan requires positive bounds");
+			}
+			LogicalGraphNodePage page;
+			for (const LogicalGraphNode &node: nodes) {
+				if (node.node_id <= after_node_id) {
+					continue;
+				}
+				if (page.nodes.size() == maximum_records) {
+					page.may_have_more = true;
+					break;
+				}
+				page.nodes.push_back(node);
+			}
+			page.metadata_pages_visited = page.nodes.empty() ? 0U : 1U;
+			return page;
+		}
+
+		[[nodiscard]] LogicalGraphAdjacencyPage
+		scanAdjacentEdges(const uint64_t node_id, const LogicalGraphReadDirection direction,
+							  const std::optional<LogicalGraphAdjacencyContinuation> continuation,
+							  const size_t maximum_records) const override {
+			if (node_id == 0U || node_id > outgoing_edge_indices.size() || maximum_records == 0U) {
+				throw std::invalid_argument("synthetic adjacency scan requires positive valid bounds");
+			}
+			const std::vector<size_t> &indices = adjacentEdgeIndices(node_id, direction);
+			size_t first = 0U;
+			if (continuation.has_value()) {
+				if (continuation->previous_edge_id == 0U || continuation->next_edge_id == 0U) {
+					throw std::invalid_argument("synthetic adjacency continuation has an invalid Edge ID");
+				}
+				const auto next = std::ranges::find(indices, continuation->next_edge_id,
+															[&](const size_t index) { return edges[index].edge_id; });
+				if (next == indices.end() || next == indices.begin() ||
+					edges[*std::prev(next)].edge_id != continuation->previous_edge_id) {
+					throw std::runtime_error("synthetic adjacency continuation does not match the logical Edge order");
+				}
+				first = static_cast<size_t>(std::distance(indices.begin(), next));
+			}
+			LogicalGraphAdjacencyPage page;
+			page.edges.reserve(std::min(maximum_records, indices.size() - first));
+			for (size_t index = first; index < indices.size() && page.edges.size() < maximum_records; ++index) {
+				page.edges.push_back(edges[indices[index]]);
+			}
+			const size_t next = first + page.edges.size();
+			if (next < indices.size()) {
+				page.continuation = {page.edges.back().edge_id, edges[indices[next]].edge_id};
+			}
+			return page;
+		}
+
+		void visitEdges(const size_t maximum_records,
+						const std::function<bool(const LogicalGraphEdge &)> &visitor) const override {
+			if (edges.size() > maximum_records) {
+				throw std::runtime_error("synthetic relationship scan exceeded its caller bound");
+			}
+			for (const LogicalGraphEdge &edge: edges) {
+				if (!visitor(edge)) {
+					return;
+				}
+			}
+		}
+
+		void visitAdjacentEdges(const uint64_t node_id, const LogicalGraphReadDirection direction,
+								const size_t maximum_edges,
+								const std::function<bool(const LogicalGraphEdge &)> &visitor) const override {
+			if (node_id == 0U || node_id > outgoing_edge_indices.size() || maximum_edges == 0U || !visitor) {
+				throw std::invalid_argument("synthetic adjacency visit requires positive valid bounds and a visitor");
+			}
+			size_t visited = 0U;
+			const std::vector<size_t> &indices = adjacentEdgeIndices(node_id, direction);
+			for (const size_t edge_index: indices) {
+				if (visited == maximum_edges) {
+					throw std::runtime_error("synthetic adjacency scan exceeded its caller bound");
+				}
+				++visited;
+				if (!visitor(edges.at(edge_index))) {
+					return;
+				}
+			}
+		}
+
+		[[nodiscard]] std::optional<LogicalGraphMutationFence> mutationFence() const override {
+			return LogicalGraphMutationFence{.backend_token = 1U, .format_token = 1U};
+		}
+
+	private:
+		[[nodiscard]] const std::vector<size_t> &adjacentEdgeIndices(const uint64_t node_id,
+															const LogicalGraphReadDirection direction) const {
+			const size_t index = static_cast<size_t>(node_id - 1U);
+			switch (direction) {
+				case LogicalGraphReadDirection::LGRD_OUTGOING:
+					return outgoing_edge_indices.at(index);
+				case LogicalGraphReadDirection::LGRD_INCOMING:
+					return incoming_edge_indices.at(index);
+			}
+			throw std::invalid_argument("synthetic adjacency scan has an unknown direction");
+		}
+	};
+
+	void printHelp() {
+		std::cerr << "Usage: leiden-bench [options]\n"
+				  << "  --scale <s>        smoke|small|medium|large (default small)\n"
+				  << "  --graph <g>        clique-chain|random (default clique-chain)\n"
+				  << "  --threads <n>      worker threads; 0 auto-detects (default)\n"
+				  << "  -h, --help         show this help\n";
 	}
-	return a;
-}
 
-size_t nodeCountForScale(const std::string &scale) {
-	if (scale == "smoke") return 1'000;
-	if (scale == "small") return 10'000;
-	if (scale == "medium") return 50'000;
-	if (scale == "large") return 100'000;
-	throw std::runtime_error("unknown scale: " + scale + " (smoke|small|medium|large)");
-}
+	[[nodiscard]] Args parseArgs(const int argc, char **argv) {
+		Args arguments;
+		for (int index = 1; index < argc; ++index) {
+			const std::string argument = argv[index];
+			const auto next = [&]() -> std::string {
+				if (index + 1 >= argc) {
+					throw std::invalid_argument("missing value for " + argument);
+				}
+				return argv[++index];
+			};
+			if (argument == "-h" || argument == "--help") {
+				arguments.help = true;
+			} else if (argument == "--scale") {
+				arguments.scale = next();
+			} else if (argument == "--graph") {
+				arguments.graph_type = next();
+			} else if (argument == "--threads") {
+				arguments.thread_count = static_cast<size_t>(std::stoull(next()));
+			} else {
+				throw std::invalid_argument("unknown argument: " + argument);
+			}
+		}
+		return arguments;
+	}
 
-// ---- peak RSS via getrusage (BSD/macOS: ru_maxrss in KiB) ----
+	[[nodiscard]] size_t nodeCountForScale(const std::string &scale) {
+		if (scale == "smoke")
+			return 1'000U;
+		if (scale == "small")
+			return 10'000U;
+		if (scale == "medium")
+			return 50'000U;
+		if (scale == "large")
+			return 100'000U;
+		throw std::invalid_argument("unknown scale: " + scale + " (smoke|small|medium|large)");
+	}
 
-size_t peakRssKb() {
-	rusage ru {};
-	getrusage(RUSAGE_SELF, &ru);
-#ifdef __APPLE__
-	// macOS: ru_maxrss is in bytes; convert to KiB.
-	return static_cast<size_t>(ru.ru_maxrss) / 1024;
+	[[nodiscard]] size_t peakRssKiB() {
+#if defined(__APPLE__) || defined(__linux__)
+		rusage usage{};
+		if (getrusage(RUSAGE_SELF, &usage) != 0) {
+			throw std::runtime_error("getrusage failed while reading peak RSS");
+		}
+#if defined(__APPLE__)
+		return static_cast<size_t>(usage.ru_maxrss) / 1024U;
 #else
-	// Linux: ru_maxrss is already in KiB.
-	return static_cast<size_t>(ru.ru_maxrss);
+		return static_cast<size_t>(usage.ru_maxrss);
 #endif
-}
-
-double nowSec() {
-	return std::chrono::duration<double>(clock_type::now().time_since_epoch()).count();
-}
-
-// ---- Temp database with RAII cleanup ----
-
-constexpr const char *TEMP_PREFIX = "leiden_bench_";
-
-std::string tempDbPath() {
-	auto uuid = boost::uuids::random_generator()();
-	auto name = std::string(TEMP_PREFIX) + to_string(uuid) + ".dat";
-	return (fs::temp_directory_path() / name).string();
-}
-
-// Remove the main .dat file plus any sibling artifacts (.dat-wal, etc.).
-void cleanupFiles(const std::string &dbPath) {
-	if (dbPath.empty()) return;
-	fs::path base(dbPath);
-	fs::path dir = base.parent_path();
-	std::string stem = base.filename().string(); // e.g. leiden_bench_xxx.dat
-	std::error_code ec;
-	for (auto &entry : fs::directory_iterator(dir)) {
-		auto fname = entry.path().filename().string();
-		if (fname.rfind(stem, 0) == 0) fs::remove(entry.path(), ec);
-	}
-}
-
-// Sweep the temp dir for any leftover leiden_bench_*.dat* files (from crashed
-// runs) and remove them. Used by --cleanup-only and as a pre-run safety sweep.
-size_t sweepLeftovers() {
-	size_t removed = 0;
-	std::error_code ec;
-	for (auto &entry : fs::directory_iterator(fs::temp_directory_path())) {
-		auto fname = entry.path().filename().string();
-		if (fname.rfind(TEMP_PREFIX, 0) == 0) {
-			if (fs::remove(entry.path(), ec)) ++removed;
+#elif defined(_WIN32)
+		PROCESS_MEMORY_COUNTERS counters{};
+		counters.cb = sizeof(counters);
+		if (!GetProcessMemoryInfo(GetCurrentProcess(), &counters, sizeof(counters))) {
+			throw std::runtime_error("GetProcessMemoryInfo failed while reading peak RSS");
 		}
+		return static_cast<size_t>(counters.PeakWorkingSetSize / 1024U);
+#else
+		return 0U;
+#endif
 	}
-	return removed;
-}
 
-struct TempDatabase {
-	std::string path;
-	std::shared_ptr<graph::storage::FileStorage> storage;
-	bool keep;
-
-	TempDatabase(bool keep) :
-		path(tempDbPath()),
-		storage(std::make_shared<graph::storage::FileStorage>(
-				path, 10'000U, graph::storage::OpenMode::OPEN_CREATE_NEW_FILE)),
-		keep(keep) {
-		storage->open();
+	[[nodiscard]] double secondsSince(const Clock::time_point start) {
+		return std::chrono::duration<double>(Clock::now() - start).count();
 	}
-	~TempDatabase() {
-		// Close physical storage before removing benchmark artifacts.
-		try {
-			if (storage) storage->close();
-		} catch (...) { /* best effort */ }
-		if (!keep) cleanupFiles(path);
+
+	void appendEdge(SyntheticSnapshot &snapshot, uint64_t &next_edge_id, const uint64_t source, const uint64_t target,
+					std::vector<size_t> &outgoing_counts) {
+		const size_t edge_index = snapshot.edges.size();
+		snapshot.edges.emplace_back(next_edge_id++, source, target, "E");
+		snapshot.outgoing_edge_indices.at(static_cast<size_t>(source - 1U)).push_back(edge_index);
+		snapshot.incoming_edge_indices.at(static_cast<size_t>(target - 1U)).push_back(edge_index);
+		++outgoing_counts.at(static_cast<size_t>(source - 1U));
 	}
-};
 
-// ---- graph builders ----
-
-struct GraphHandle {
-	size_t nodes;
-	size_t edges;
-};
-
-// Clique-chain: nodeCount nodes split into groups of size K (10 each), fully
-// connected within a group, single bridge edge between consecutive groups.
-// Highly clusterable — verifies Leiden recovers the clique structure.
-GraphHandle buildCliqueChain(graph::storage::DataManager &dm, size_t nodeCount) {
-	constexpr size_t K = 10;
-	int64_t nLabel = dm.getOrCreateTokenId("N");
-	int64_t etype = dm.getOrCreateTokenId("E");
-	std::vector<int64_t> ids;
-	ids.reserve(nodeCount);
-	for (size_t i = 0; i < nodeCount; ++i) {
-		int64_t id = dm.getIdAllocator(graph::EntityType::Node)->allocate();
-		graph::Node node(id, nLabel);
-		dm.addNode(node);
-		ids.push_back(id);
-	}
-	size_t edges = 0;
-	int64_t prevLast = -1;
-	for (size_t g = 0; g < nodeCount; g += K) {
-		size_t end = std::min(g + K, nodeCount);
-		for (size_t i = g; i < end; ++i)
-			for (size_t j = i + 1; j < end; ++j) {
-				int64_t eid = dm.getIdAllocator(graph::EntityType::Edge)->allocate();
-				graph::Edge e(eid, ids[i], ids[j], etype);
-				dm.addEdge(e);
-				++edges;
-			}
-		if (prevLast >= 0 && g < nodeCount) {
-			int64_t eid = dm.getIdAllocator(graph::EntityType::Edge)->allocate();
-			graph::Edge e(eid, ids[prevLast], ids[g], etype);
-			dm.addEdge(e);
-			++edges;
+	[[nodiscard]] GraphHandle buildCliqueChain(SyntheticSnapshot &snapshot, const size_t node_count) {
+		constexpr size_t CLIQUE_SIZE = 10U;
+		std::vector<size_t> outgoing_counts(node_count, 0U);
+		snapshot.nodes.reserve(node_count);
+		snapshot.outgoing_edge_indices.resize(node_count);
+		snapshot.incoming_edge_indices.resize(node_count);
+		for (size_t index = 0U; index < node_count; ++index) {
+			snapshot.nodes.emplace_back(static_cast<uint64_t>(index + 1U), std::vector<std::string>{"N"});
 		}
-		if (end > g) prevLast = static_cast<int64_t>(ids[end - 1]);
-	}
-	return {nodeCount, edges};
-}
-
-// Erdős–Rényi random graph with target average degree 6 (p = 6/N). Weak
-// community structure — exercises the algorithm's cost when little merging
-// occurs. Edges are undirected (added once per pair).
-GraphHandle buildRandomGraph(graph::storage::DataManager &dm, size_t nodeCount) {
-	std::mt19937 rng(42); // fixed seed for reproducibility
-	int64_t nLabel = dm.getOrCreateTokenId("N");
-	int64_t etype = dm.getOrCreateTokenId("E");
-	std::vector<int64_t> ids;
-	ids.reserve(nodeCount);
-	for (size_t i = 0; i < nodeCount; ++i) {
-		int64_t id = dm.getIdAllocator(graph::EntityType::Node)->allocate();
-		graph::Node node(id, nLabel);
-		dm.addNode(node);
-		ids.push_back(id);
-	}
-	const double avgDeg = 6.0;
-	const double p = (nodeCount > 1) ? avgDeg / static_cast<double>(nodeCount - 1) : 0.0;
-	// Sample per candidate pair; for large N this is O(N^2) draws which is too
-	// slow at 100k. Use the binomial shortcut: pick expected edges via a
-	// geometric draw over pair offsets.
-	size_t edges = 0;
-	if (nodeCount >= 2) {
-		const double totalPairs = static_cast<double>(nodeCount) * (nodeCount - 1) / 2.0;
-		(void) p; // documented above; draws below use geom(p)
-		std::geometric_distribution<size_t> geom(p);
-		size_t pairIndex = geom(rng);
-		while (pairIndex < static_cast<size_t>(totalPairs)) {
-			// Map linear pairIndex back to (i,j) with i<j.
-			// pairIndex = i*(N-1) - i*(i+1)/2 + (j-i-1)
-			size_t lo = 0, hi = nodeCount - 1;
-			while (lo < hi) {
-				size_t mid = (lo + hi) / 2;
-				size_t startOfMid = mid * (2 * (nodeCount - 1) - mid + 1) / 2;
-				if (startOfMid <= pairIndex) lo = mid + 1;
-				else hi = mid;
+		uint64_t next_edge_id = 1U;
+		uint64_t previous_last = 0U;
+		for (size_t group_begin = 0U; group_begin < node_count; group_begin += CLIQUE_SIZE) {
+			const size_t group_end = std::min(group_begin + CLIQUE_SIZE, node_count);
+			for (size_t source = group_begin; source < group_end; ++source) {
+				for (size_t target = source + 1U; target < group_end; ++target) {
+					appendEdge(snapshot, next_edge_id, source + 1U, target + 1U, outgoing_counts);
+				}
 			}
-			size_t i = (lo > 0) ? lo - 1 : 0;
-			size_t startOfI = i * (2 * (nodeCount - 1) - i + 1) / 2;
-			size_t j = i + 1 + (pairIndex - startOfI);
-			if (j < nodeCount) {
-				int64_t eid = dm.getIdAllocator(graph::EntityType::Edge)->allocate();
-				graph::Edge e(eid, ids[i], ids[j], etype);
-				dm.addEdge(e);
-				++edges;
+			if (previous_last != 0U) {
+				appendEdge(snapshot, next_edge_id, previous_last, static_cast<uint64_t>(group_begin + 1U),
+						   outgoing_counts);
 			}
-			pairIndex += 1 + geom(rng);
+			previous_last = static_cast<uint64_t>(group_end);
 		}
+		return {.nodes = node_count,
+				.edges = snapshot.edges.size(),
+				.maximum_outgoing_edges = *std::ranges::max_element(outgoing_counts)};
 	}
-	return {nodeCount, edges};
-}
+
+	[[nodiscard]] GraphHandle buildRandomGraph(SyntheticSnapshot &snapshot, const size_t node_count) {
+		std::vector<size_t> outgoing_counts(node_count, 0U);
+		snapshot.nodes.reserve(node_count);
+		snapshot.outgoing_edge_indices.resize(node_count);
+		snapshot.incoming_edge_indices.resize(node_count);
+		for (size_t index = 0U; index < node_count; ++index) {
+			snapshot.nodes.emplace_back(static_cast<uint64_t>(index + 1U), std::vector<std::string>{"N"});
+		}
+		if (node_count < 2U) {
+			return {.nodes = node_count, .edges = 0U, .maximum_outgoing_edges = 0U};
+		}
+		std::mt19937_64 random(42U);
+		const double probability = 6.0 / static_cast<double>(node_count - 1U);
+		std::geometric_distribution<size_t> gaps(probability);
+		const size_t pair_count = node_count * (node_count - 1U) / 2U;
+		size_t pair_index = gaps(random);
+		uint64_t next_edge_id = 1U;
+		while (pair_index < pair_count) {
+			size_t low = 0U;
+			size_t high = node_count - 1U;
+			while (low < high) {
+				const size_t middle = low + (high - low) / 2U;
+				const size_t first_pair = middle * (2U * (node_count - 1U) - middle + 1U) / 2U;
+				if (first_pair <= pair_index) {
+					low = middle + 1U;
+				} else {
+					high = middle;
+				}
+			}
+			const size_t source = low == 0U ? 0U : low - 1U;
+			const size_t first_pair = source * (2U * (node_count - 1U) - source + 1U) / 2U;
+			const size_t target = source + 1U + pair_index - first_pair;
+			if (target < node_count) {
+				appendEdge(snapshot, next_edge_id, source + 1U, target + 1U, outgoing_counts);
+			}
+			const size_t gap = gaps(random);
+			if (gap > std::numeric_limits<size_t>::max() - pair_index - 1U) {
+				break;
+			}
+			pair_index += gap + 1U;
+		}
+		return {.nodes = node_count,
+				.edges = snapshot.edges.size(),
+				.maximum_outgoing_edges = *std::ranges::max_element(outgoing_counts)};
+	}
+
+	[[nodiscard]] size_t deriveWorkBudget(const size_t node_count, const size_t edge_count,
+										  const LogicalLeidenOptions &options) {
+		constexpr size_t FIXED_EDGE_PHASES = 8U;
+		if (options.maximum_iterations > std::numeric_limits<size_t>::max() - FIXED_EDGE_PHASES) {
+			throw std::overflow_error("Leiden benchmark work budget overflowed");
+		}
+		const size_t edge_phase_count = options.maximum_iterations + FIXED_EDGE_PHASES;
+		if (edge_count > std::numeric_limits<size_t>::max() / edge_phase_count) {
+			throw std::overflow_error("Leiden benchmark work budget overflowed");
+		}
+		const size_t per_level_edges = edge_count * edge_phase_count;
+		if (node_count > std::numeric_limits<size_t>::max() - per_level_edges) {
+			throw std::overflow_error("Leiden benchmark work budget overflowed");
+		}
+		const size_t per_level = std::max<size_t>(1U, node_count + per_level_edges);
+		if (options.maximum_levels > std::numeric_limits<size_t>::max() / per_level) {
+			throw std::overflow_error("Leiden benchmark work budget overflowed");
+		}
+		return per_level * options.maximum_levels;
+	}
 
 } // namespace
 
-int main(int argc, char **argv) {
-	Args args;
+int main(const int argc, char **argv) {
 	try {
-		args = parseArgs(argc, argv);
-	} catch (const std::exception &e) {
-		std::cerr << "error: " << e.what() << "\n";
+		const Args args = parseArgs(argc, argv);
+		if (args.help) {
+			printHelp();
+			return 0;
+		}
+		const size_t node_count = nodeCountForScale(args.scale);
+		SyntheticSnapshot snapshot;
+
+		const Clock::time_point build_start = Clock::now();
+		const GraphHandle graph = args.graph_type == "clique-chain" ? buildCliqueChain(snapshot, node_count)
+								  : args.graph_type == "random"
+										  ? buildRandomGraph(snapshot, node_count)
+										  : throw std::invalid_argument("unknown graph type (clique-chain|random)");
+		const double build_seconds = secondsSince(build_start);
+
+		const Clock::time_point projection_start = Clock::now();
+		LogicalGraphProjectionSpec spec;
+		spec.name = "leiden-benchmark";
+		const LogicalGraphProjection projection = LogicalGraphProjection::build(
+				snapshot, spec,
+				{.maximum_nodes = graph.nodes,
+				 .maximum_metadata_pages = 1U,
+				 .maximum_edges_per_node = std::max<size_t>(1U, graph.maximum_outgoing_edges)});
+		const double projection_seconds = secondsSince(projection_start);
+
+		const LogicalLeidenOptions options;
+		const graph::query::gds::LogicalGraphAlgorithmBounds bounds{
+				.maximum_nodes = graph.nodes,
+				.maximum_edges = projection.edgeCount(),
+				.maximum_iterations = options.maximum_iterations,
+				.maximum_work_units = deriveWorkBudget(graph.nodes, projection.edgeCount(), options),
+		};
+		graph::concurrent::ThreadPool pool(args.thread_count);
+		const size_t rss_before_leiden = peakRssKiB();
+
+		const Clock::time_point leiden_start = Clock::now();
+		const std::vector<graph::query::gds::LogicalGdsNodeCommunity> communities =
+				graph::query::gds::LogicalGraphAlgorithms::leiden(projection, options, bounds, {}, &pool);
+		const double leiden_seconds = secondsSince(leiden_start);
+		const double modularity = graph::query::gds::LogicalGraphAlgorithms::leidenModularity(projection, communities);
+		std::set<uint64_t> community_ids;
+		for (const auto &community: communities) {
+			community_ids.insert(community.community_id);
+		}
+		const size_t peak_rss = peakRssKiB();
+
+		std::cout << "leiden-bench scale=" << args.scale << " graph=" << args.graph_type << " nodes=" << graph.nodes
+				  << " relationships=" << graph.edges << " threads=" << pool.getThreadCount() << '\n';
+		std::cout << "result phase=build seconds=" << build_seconds << "\n";
+		std::cout << "result phase=projection seconds=" << projection_seconds << " csr_nodes=" << projection.nodeCount()
+				  << " csr_arcs=" << projection.edgeCount() << "\n";
+		std::cout << "result phase=leiden seconds=" << leiden_seconds << " communities=" << community_ids.size()
+				  << " modularity=" << modularity << "\n";
+		std::cout << "result peak_rss_kib=" << peak_rss
+				  << " leiden_delta_rss_kib=" << (peak_rss > rss_before_leiden ? peak_rss - rss_before_leiden : 0U)
+				  << "\n";
+		std::cout << "result total_seconds=" << build_seconds + projection_seconds + leiden_seconds << "\n";
+		return 0;
+	} catch (const std::exception &exception) {
+		std::cerr << "error: " << exception.what() << '\n';
 		printHelp();
 		return 2;
 	}
-	if (args.help) {
-		printHelp();
-		return 0;
-	}
-
-	if (args.cleanupOnly) {
-		size_t removed = sweepLeftovers();
-		std::cout << "cleanup removed " << removed << " leftover file(s) from "
-				  << fs::temp_directory_path().string() << "\n";
-		return 0;
-	}
-
-	size_t nodeCount = nodeCountForScale(args.scale);
-
-	// Pre-run safety sweep of stale files (cheap, idempotent).
-	(void) sweepLeftovers();
-
-	std::cout << "leiden-bench scale=" << args.scale
-			  << " graph=" << args.graphType
-			  << " nodes=" << nodeCount
-			  << " threads=" << args.threadCount << "\n";
-
-	TempDatabase tdb(args.keep);
-	std::shared_ptr<graph::storage::DataManager> dm = tdb.storage->getDataManager();
-
-	// ---- Phase 1: build synthetic graph ----
-	double t0 = nowSec();
-	GraphHandle gh{0, 0};
-	if (args.graphType == "clique-chain") gh = buildCliqueChain(*dm, nodeCount);
-	else if (args.graphType == "random") gh = buildRandomGraph(*dm, nodeCount);
-	else {
-		std::cerr << "error: unknown graph type (clique-chain|random)\n";
-		return 2;
-	}
-	// flush + reopen so the topology is visible to all subsystems.
-	tdb.storage->flush();
-	tdb.storage->close();
-	tdb.storage->open();
-	dm = tdb.storage->getDataManager();
-	double buildSec = nowSec() - t0;
-	std::cout << "result phase=build seconds=" << buildSec
-			  << " nodes=" << gh.nodes << " edges=" << gh.edges << "\n";
-
-	// ---- Phase 2: GraphProjection + CSR build ----
-	double t1 = nowSec();
-	auto proj = graph::query::algorithm::GraphProjection::build(dm);
-	std::unique_ptr<graph::concurrent::ThreadPool> pool;
-	graph::concurrent::ThreadPool *poolPtr = nullptr;
-	if (args.threadCount != 1) {
-		pool = std::make_unique<graph::concurrent::ThreadPool>(args.threadCount);
-		poolPtr = pool.get();
-	}
-	auto csr = graph::query::algorithm::CsrProjection::build(proj, poolPtr);
-	double csrSec = nowSec() - t1;
-	std::cout << "result phase=csr seconds=" << csrSec
-			  << " csr_nodes=" << csr->nodeCount()
-			  << " csr_edges=" << csr->edgeCount() << "\n";
-
-	size_t rssBeforeLeiden = peakRssKb();
-
-	// ---- Phase 3: Leiden run ----
-	double t2 = nowSec();
-	graph::query::algorithm::LeidenOptions opts;
-	auto res = graph::query::algorithm::LeidenEngine::run(*csr, opts, poolPtr);
-	double leidenSec = nowSec() - t2;
-
-	// ---- Phase 4: modularity + community count ----
-	std::vector<int64_t> commOf(csr->nodeCount());
-	std::unordered_map<int64_t, int64_t> toCsr;
-	for (size_t i = 0; i < csr->nodeCount(); ++i) toCsr[csr->nodeIdAt(i)] = static_cast<int64_t>(i);
-	for (const auto &nc : res) commOf[static_cast<size_t>(toCsr[nc.nodeId])] = nc.communityId;
-	double q = graph::query::algorithm::LeidenEngine::modularity(*csr, commOf);
-	std::set<int64_t> commSet;
-	for (const auto &nc : res) commSet.insert(nc.communityId);
-
-	size_t rssPeak = peakRssKb();
-	long rssDeltaKb = (rssPeak > rssBeforeLeiden) ? static_cast<long>(rssPeak - rssBeforeLeiden) : 0;
-
-	std::cout << "result phase=leiden seconds=" << leidenSec
-			  << " communities=" << commSet.size()
-			  << " modularity=" << q << "\n";
-	std::cout << "result peak_rss_kb=" << rssPeak
-			  << " leiden_delta_rss_kb=" << rssDeltaKb
-			  << " (delta=0 means algorithm fit under existing peak)\n";
-	std::cout << "result total_seconds=" << (buildSec + csrSec + leidenSec) << "\n";
-
-	return 0;
 }

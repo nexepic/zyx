@@ -75,6 +75,8 @@ RETURN n.val;
 
 :::tip
 `IN TRANSACTIONS OF N ROWS` 会按 N 行分批提交，适合大批量写入。详见[批处理操作](batch-operations)。
+
+当前原生 runtime 中，该功能仅支持无导出的仅写 `CREATE` 子查询，且只能在 autocommit 下使用。
 :::
 
 ## LOAD CSV
@@ -99,7 +101,7 @@ RETURN row.name;
 
 ### Native Runtime 边界
 
-native logical runtime 只支持拥有原生、snapshot-pinned 实现的过程。`dbms.listConfig()`、`dbms.getConfig(key)`、`dbms.setConfig(key, value)`、`dbms.showStats()` 和 `dbms.resetStats()` 当前不可用：它们会 fail closed，绝不会回退到已退休的 State-manager 路径。只有当持久化运行时配置服务能够参与与图写入相同的 metadata WAL 和原子发布边界后，才会重新提供该能力。
+native logical runtime 只支持拥有原生、snapshot-pinned 实现的过程。`dbms.listConfig()`、`dbms.getConfig(key)`、`dbms.setConfig(key, value)`、`dbms.showStats()` 和 `dbms.resetStats()` 只允许在 autocommit 模式执行，并使用 Database-owned native configuration service。durable key 经由与 graph metadata 相同的单文件 COW metadata boundary 发布；process-local `stats.enabled` 不会创建 database-file record。不支持的 key 和 explicit transaction 调用都会在产生任何 administration side effect 前 fail closed。
 
 ### 向量索引
 

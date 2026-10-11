@@ -1,57 +1,34 @@
 /**
  * @file test_CypherParserImpl_Reuse.cpp
- * @brief Tests for parser reuse — exercises the same CypherParserImpl instance
- *        across many sequential parse() / parseToLogical() calls.
- *        Direct regression test for the SIGBUS/SIGSEGV DFA cache corruption bug.
+ * @brief Native logical-parser reuse and error-recovery regressions.
+ *
+ * The ANTLR runtime keeps DFA state across calls. These tests exercise one
+ * native parser instance repeatedly so that a regression cannot be hidden by
+ * constructing a physical planner or a legacy storage backend per parse.
  **/
 
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/uuid_generators.hpp>
-#include <boost/uuid/uuid_io.hpp>
-#include <filesystem>
-#include <gtest/gtest.h>
 #include <memory>
+#include <string>
+#include <vector>
+
+#include <gtest/gtest.h>
 
 #include "CypherParserImpl.hpp"
-#include "graph/query/planner/QueryPlanner.hpp"
-#include "graph/storage/FileStorage.hpp"
-#include "graph/storage/data/DataManager.hpp"
-#include "graph/storage/indexes/IndexManager.hpp"
 
-namespace fs = std::filesystem;
+namespace graph::parser::cypher {
 
 class CypherParserReuseTest : public ::testing::Test {
 protected:
-	fs::path testFilePath;
-	std::shared_ptr<graph::storage::FileStorage> storage;
-	std::shared_ptr<graph::storage::DataManager> dataManager;
-	std::shared_ptr<graph::query::indexes::IndexManager> indexManager;
-	std::shared_ptr<graph::query::QueryPlanner> planner;
-	std::unique_ptr<graph::parser::cypher::CypherParserImpl> parser;
+	std::unique_ptr<CypherParserImpl> parser = std::make_unique<CypherParserImpl>();
 
-	void SetUp() override {
-		boost::uuids::uuid uuid = boost::uuids::random_generator()();
-		testFilePath = fs::temp_directory_path() / ("test_reuse_" + to_string(uuid) + ".zyx");
-
-		storage = std::make_shared<graph::storage::FileStorage>(
-			testFilePath.string(), 4096, graph::storage::OpenMode::OPEN_CREATE_NEW_FILE);
-		storage->open();
-		dataManager = storage->getDataManager();
-		indexManager = std::make_shared<graph::query::indexes::IndexManager>(storage);
-
-		planner = std::make_shared<graph::query::QueryPlanner>(dataManager, indexManager);
-		parser = std::make_unique<graph::parser::cypher::CypherParserImpl>(planner);
-	}
-
-	void TearDown() override {
-		if (storage) storage->close();
-		std::error_code ec;
-		if (fs::exists(testFilePath)) fs::remove(testFilePath, ec);
+	void expectLogicalPlan(const std::string &query) {
+		SCOPED_TRACE(query);
+		query::QueryPlan plan = parser->parseToLogical(query);
+		ASSERT_NE(plan.root, nullptr);
 	}
 };
 
-TEST_F(CypherParserReuseTest, ParseManyQueriesSequentially) {
-	// Direct SIGBUS regression test: 30 diverse parse() calls on one instance
+TEST_F(CypherParserReuseTest, ParsesManyQueriesSequentially) {
 	const std::vector<std::string> queries = {
 		"CREATE (n:Person {name: 'Alice'})",
 		"MATCH (n:Person) RETURN n",
@@ -85,70 +62,50 @@ TEST_F(CypherParserReuseTest, ParseManyQueriesSequentially) {
 		"MATCH (n:Temp) DELETE n",
 	};
 
-	for (size_t i = 0; i < queries.size(); ++i) {
-		SCOPED_TRACE("Query #" + std::to_string(i) + ": " + queries[i]);
-		auto plan = parser->parse(queries[i]);
-		ASSERT_NE(plan, nullptr);
+	for (const std::string &query : queries) {
+		expectLogicalPlan(query);
 	}
 }
 
-TEST_F(CypherParserReuseTest, ParseAlternatingReadWriteTypes) {
+TEST_F(CypherParserReuseTest, ParsesAlternatingReadAndWriteQueries) {
 	for (int i = 0; i < 20; ++i) {
-		SCOPED_TRACE("Iteration " + std::to_string(i));
 		if (i % 2 == 0) {
-			auto plan = parser->parse("CREATE (n:Node {i: " + std::to_string(i) + "})");
-			ASSERT_NE(plan, nullptr);
+			expectLogicalPlan("CREATE (n:Node {i: " + std::to_string(i) + "})");
 		} else {
-			auto plan = parser->parse("MATCH (n:Node) RETURN n");
-			ASSERT_NE(plan, nullptr);
+			expectLogicalPlan("MATCH (n:Node) RETURN n");
 		}
 	}
 }
 
-TEST_F(CypherParserReuseTest, ParseSameQueryRepeated) {
+TEST_F(CypherParserReuseTest, ParsesTheSameQueryRepeatedly) {
 	const std::string query = "MATCH (n:Person) WHERE n.age > 25 RETURN n.name";
 	for (int i = 0; i < 50; ++i) {
-		auto plan = parser->parse(query);
-		ASSERT_NE(plan, nullptr);
+		expectLogicalPlan(query);
 	}
 }
 
-TEST_F(CypherParserReuseTest, ParseAfterSyntaxError_Recovers) {
-	// Bad query should throw
-	EXPECT_THROW((void)parser->parse("MATC (n) RETRUN n"), std::runtime_error);
-
-	// Parser must still work after error
-	auto plan = parser->parse("MATCH (n:Person) RETURN n");
-	ASSERT_NE(plan, nullptr);
+TEST_F(CypherParserReuseTest, RecoversAfterSyntaxErrors) {
+	EXPECT_THROW((void) parser->parseToLogical("MATC (n) RETRUN n"), std::runtime_error);
+	expectLogicalPlan("MATCH (n:Person) RETURN n");
 }
 
-TEST_F(CypherParserReuseTest, ParseAfterMultipleSyntaxErrors) {
-	const std::vector<std::string> badQueries = {
-		"!!!",
-		"MATC (n)",
-		"MATCH n RETURN",
-		"CREATE",
-		"RETURN RETURN RETURN",
+TEST_F(CypherParserReuseTest, RecoversAfterMultipleSyntaxErrors) {
+	const std::vector<std::string> malformed = {
+		"!!!", "MATC (n)", "MATCH n RETURN", "CREATE", "RETURN RETURN RETURN",
 	};
-	const std::vector<std::string> goodQueries = {
-		"MATCH (n) RETURN n",
-		"CREATE (n:A {x: 1})",
-		"RETURN 42 AS val",
-		"MATCH (n:A) DELETE n",
+	const std::vector<std::string> valid = {
+		"MATCH (n) RETURN n", "CREATE (n:A {x: 1})", "RETURN 42 AS val", "MATCH (n:A) DELETE n",
 		"MERGE (n:B {y: 2})",
 	};
 
-	for (size_t i = 0; i < badQueries.size(); ++i) {
-		SCOPED_TRACE("Bad #" + std::to_string(i));
-		EXPECT_THROW((void)parser->parse(badQueries[i]), std::runtime_error);
-
-		SCOPED_TRACE("Good #" + std::to_string(i));
-		auto plan = parser->parse(goodQueries[i]);
-		ASSERT_NE(plan, nullptr);
+	ASSERT_EQ(malformed.size(), valid.size());
+	for (size_t i = 0; i < malformed.size(); ++i) {
+		EXPECT_THROW((void) parser->parseToLogical(malformed[i]), std::runtime_error);
+		expectLogicalPlan(valid[i]);
 	}
 }
 
-TEST_F(CypherParserReuseTest, ParseDiverseGrammarPaths) {
+TEST_F(CypherParserReuseTest, ParsesDiverseGrammarPaths) {
 	const std::vector<std::string> queries = {
 		"MATCH (n:A) WHERE n.x > 10 RETURN n",
 		"MATCH (n:A)-[:R]->(m:B) RETURN m",
@@ -177,34 +134,9 @@ TEST_F(CypherParserReuseTest, ParseDiverseGrammarPaths) {
 		"RETURN 3.14 AS pi",
 	};
 
-	for (size_t i = 0; i < queries.size(); ++i) {
-		SCOPED_TRACE("Query #" + std::to_string(i));
-		auto plan = parser->parse(queries[i]);
-		ASSERT_NE(plan, nullptr);
+	for (const std::string &query : queries) {
+		expectLogicalPlan(query);
 	}
 }
 
-TEST_F(CypherParserReuseTest, ParseToLogicalAndParseConsistent) {
-	const std::vector<std::string> queries = {
-		"MATCH (n:Person) RETURN n",
-		"CREATE (n:Test {x: 1})",
-		"MATCH (n) RETURN count(n) AS c",
-		"UNWIND [1, 2] AS x RETURN x",
-		"RETURN 'hello' AS msg",
-		"MATCH (a)-[r]->(b) RETURN a, r, b",
-		"MERGE (n:M {id: 99})",
-		"MATCH (n:X) SET n.val = 42",
-		"MATCH (n:Y) DELETE n",
-		"MATCH (n) RETURN n LIMIT 1",
-	};
-
-	for (size_t i = 0; i < queries.size(); ++i) {
-		SCOPED_TRACE("Round " + std::to_string(i));
-
-		// parseToLogical
-		auto logical = parser->parseToLogical(queries[i]);
-		// parse (physical)
-		auto physical = parser->parse(queries[i]);
-		ASSERT_NE(physical, nullptr);
-	}
-}
+} // namespace graph::parser::cypher

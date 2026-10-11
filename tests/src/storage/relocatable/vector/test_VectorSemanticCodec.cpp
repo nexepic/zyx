@@ -16,7 +16,7 @@
 #include <gtest/gtest.h>
 
 #include "graph/storage/relocatable/vector/VectorSemanticCodec.hpp"
-#include "graph/vector/core/BFloat16.hpp"
+#include "graph/common/VectorMath.hpp"
 
 using namespace graph;
 using namespace graph::storage;
@@ -50,8 +50,8 @@ TEST(RelocatableVectorSemanticCodecTest, EncodesCanonicalBFloat16RawRecordsAndOr
 			std::vector<PropertyValue>{PropertyValue(int64_t(-3)), PropertyValue(2.5)});
 	const std::vector<std::byte> encoded = VectorSemanticCodec::encodeBFloat16(value, 2U);
 	ASSERT_EQ(encoded.size(), 2U * sizeof(uint16_t));
-	EXPECT_EQ(LittleEndianCodec::readU16(encoded, 0U), vector::BFloat16(-3.0F).data);
-	EXPECT_EQ(LittleEndianCodec::readU16(encoded, sizeof(uint16_t)), vector::BFloat16(2.5F).data);
+	EXPECT_EQ(LittleEndianCodec::readU16(encoded, 0U), common::BFloat16(-3.0F).data);
+	EXPECT_EQ(LittleEndianCodec::readU16(encoded, sizeof(uint16_t)), common::BFloat16(2.5F).data);
 
 	const std::vector<std::byte> record = VectorSemanticCodec::rawRecord(99U, encoded);
 	ASSERT_EQ(record.size(), sizeof(uint64_t) + encoded.size());

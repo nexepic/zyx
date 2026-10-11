@@ -73,7 +73,7 @@ zyx_driver_status_t catchAbiExceptionAs(zyx_driver_error_t **out_error,
 zyx_driver_status_t validateColumn(const zyx_driver_result_t *result, uint32_t column, zyx_driver_error_t **out_error);
 zyx::Value resultValue(const zyx_driver_result_t *result, uint32_t column);
 zyx_driver_value_type_t valueType(const zyx::Value &value);
-std::string typeName(zyx_driver_value_type_t type);
+std::string typeName(uint32_t type);
 std::unordered_map<std::string, zyx::Value> paramsToMap(const zyx_driver_params_t *params);
 const std::unordered_map<std::string, zyx::Value> &paramsMapOrEmpty(const zyx_driver_params_t *params);
 zyx_driver_status_t validateNoActiveTransaction(zyx_driver_db_t *db, zyx_driver_error_t **out_error);

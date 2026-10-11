@@ -47,13 +47,15 @@ COMMIT;
 UNWIND $rows AS row
 CALL {
   WITH row
-  MERGE (:User {name: row.name})
+  CREATE (:User {name: row.name})
 } IN TRANSACTIONS OF 1000 ROWS
-RETURN count(*) AS processed;
+RETURN row;
 ```
 
 :::info
 `IN TRANSACTIONS OF N ROWS` 会将数据按 N 行分批，每批独立提交。某批失败不影响已完成批次。
+
+当前原生契约接受仅写、无导出、且使用基于 `CREATE` 的一元 mutation chain 的子查询。它会在第一次写入前受限物化外层输入，避免前一批修改图后遗漏或重复后续 batch。它还会在第一个 batch 前物化所支持的外层 `RETURN` projection，因此 projection error 不会在独立 batch 已提交后才报告失败。它不能在显式 `Transaction` 中运行，应使用 autocommit query。`OF` 必须使用正整数 literal。`MERGE`、导出变量、其他子查询 mutation 形式，以及外层 `DISTINCT`/`ORDER BY`/`SKIP`/`LIMIT` result pipeline 暂不属于这一初始原生批处理契约。每个 batch 的 publication 前都会立即检查取消和超时；若取消阻止后续 batch 发布，已经完成的 batch 保持 durable，而被中断的 batch 不会发布。需要全有或全无语义的应用应使用单个显式 transaction，而不是 `IN TRANSACTIONS`。
 :::
 
 ## 方案 C：脚本模式

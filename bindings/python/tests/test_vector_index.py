@@ -3,15 +3,14 @@
 Covers CREATE VECTOR INDEX, insert, search via db.index.vector.queryNodes,
 score semantics, manual train, persistence across reopen, and error cases.
 
-Cross-binding contract (confirmed in C++ test_VectorIndex.cpp and the Node
-binding tests):
-  - metric must be 'L2' | 'IP' | 'Cosine' (exact case); anything else (e.g.
-    'COSINE') is silently treated as L2.
+Cross-binding contract (implemented by the native relocatable vector store):
+  - metric names are ASCII-case-insensitive and normalize to l2, ip, or cosine;
+    unsupported metrics are rejected rather than silently changing semantics.
   - the query vector passed to queryNodes MUST be a literal list in the Cypher
     string; passing $param collapses to an empty value and the procedure throws
     "queryVector argument must be a List of floats.".
-  - L2 score = squared distance; IP/Cosine score = negative inner product.
-    Results sorted ascending by score (lower is closer).
+  - L2 score = squared distance, IP score = negative inner product, and Cosine
+    score = 1 - cosine similarity. Results sort ascending (lower is closer).
   - search works WITHOUT training for small graphs (flat/raw greedy search).
 """
 
@@ -68,7 +67,7 @@ def test_search_returns_up_to_k_sorted_ascending(vec_db):
     assert scores == sorted(scores)
 
 
-def test_cosine_metric_returns_negative_inner_product(vec_db):
+def test_cosine_metric_returns_angular_distance(vec_db):
     vec_db.execute("CREATE VECTOR INDEX vec_cos ON :V(embedding) OPTIONS {dimension: 2, metric: 'Cosine'}")
     vec_db.execute("CREATE (:V {id: 1, embedding: [1.0, 0.0]})")
     vec_db.execute("CREATE (:V {id: 2, embedding: [0.0, 1.0]})")
@@ -76,7 +75,7 @@ def test_cosine_metric_returns_negative_inner_product(vec_db):
     rows = list(vec_db.execute(q))
     assert len(rows) >= 1
     assert rows[0]["id"] == 1
-    assert abs(float(rows[0]["score"]) - (-1.0)) < 5e-2
+    assert abs(float(rows[0]["score"])) < 5e-2
 
 
 def test_ip_metric_equivalent_to_cosine_for_normalized(vec_db):
@@ -88,14 +87,19 @@ def test_ip_metric_equivalent_to_cosine_for_normalized(vec_db):
     assert rows[0]["id"] == 1
 
 
-def test_uppercase_cosine_silently_uses_l2(vec_db):
-    # 'COSINE' is not a recognized metric string; the engine falls back to L2.
+def test_metric_names_normalize_case_and_unsupported_metrics_are_rejected(vec_db):
+    # Uppercase input selects the same cosine metric, rather than silently L2.
     vec_db.execute("CREATE VECTOR INDEX vec_upper ON :V(embedding) OPTIONS {dimension: 2, metric: 'COSINE'}")
-    vec_db.execute("CREATE (:V {id: 1, embedding: [1.0, 0.0]})")
+    vec_db.execute("CREATE (:V {id: 1, embedding: [2.0, 0.0]})")
     q = f"CALL db.index.vector.queryNodes('vec_upper', 1, [{_query_vector([1.0, 0.0])}]) YIELD node, score RETURN node.id AS id, score"
     rows = list(vec_db.execute(q))
     assert len(rows) >= 1
     assert rows[0]["id"] == 1
+    assert abs(float(rows[0]["score"])) < 5e-2
+
+    invalid = vec_db.execute("CREATE VECTOR INDEX vec_invalid ON :V(embedding) OPTIONS {dimension: 2, metric: 'invalid'}")
+    assert not invalid.is_success
+    assert "metric" in str(invalid.error or "").lower()
 
 
 def test_insert_via_parameterized_list(vec_db):

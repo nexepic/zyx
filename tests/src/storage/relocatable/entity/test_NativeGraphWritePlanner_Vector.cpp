@@ -914,6 +914,98 @@ TEST_F(NativeGraphWritePlannerVectorTest, PublishesANewRawPoolWhenTheCurrentRawP
 	before.release();
 }
 
+TEST_F(NativeGraphWritePlannerVectorTest, MovesTheManifestToANewPoolWhenCowFramesAreExhausted) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *indexes_, plannerOptions());
+	IndexDefinition definition = vectorDefinition();
+	definition.index_id = 180U;
+	definition.name = "native-vector-manifest-cow-exhaustion";
+
+	// Every delta replaces the immutable Manifest page. Fill the initial pool
+	// using erase-only deltas so Raw-page placement cannot mask the Manifest path.
+	NativeGraphVectorBootstrapOptions bootstrapOptions = vectorOptions();
+	bootstrapOptions.maximum_vectors = RSS_PAGE_POOL_DATA_FRAME_COUNT;
+	bootstrapOptions.maximum_pages = RSS_PAGE_POOL_DATA_FRAME_COUNT + 8U;
+	NativeGraphWriteTransaction bootstrap = planner.beginTransaction();
+	std::vector<uint64_t> nodeIds;
+	std::vector<NativeGraphVectorBootstrapRecord> records;
+	nodeIds.reserve(RSS_PAGE_POOL_DATA_FRAME_COUNT);
+	records.reserve(RSS_PAGE_POOL_DATA_FRAME_COUNT);
+	for (uint32_t ordinal = 0U; ordinal < RSS_PAGE_POOL_DATA_FRAME_COUNT; ++ordinal) {
+		const uint64_t nodeId = bootstrap.createNode(std::array<uint64_t, 1U>{7U});
+		nodeIds.push_back(nodeId);
+		records.push_back(
+				{nodeId, {std::byte{0x10}, std::byte{0x30}, std::byte{0x50}, std::byte{0x70}}});
+	}
+	bootstrap.stageVectorIndexBootstrap(*indexes_, *raw_pages_, *manifests_, definition, records, bootstrapOptions);
+	ASSERT_TRUE(bootstrap.commit().committed());
+
+	NativeGraphVectorDeltaOptions deltaOptions = vectorDeltaOptions();
+	deltaOptions.rebuild_threshold = RSS_PAGE_POOL_DATA_FRAME_COUNT + 1U;
+	deltaOptions.maximum_overlay_entries = RSS_PAGE_POOL_DATA_FRAME_COUNT + 1U;
+	std::vector<MetadataSnapshotPin> pinnedGenerations;
+	pinnedGenerations.reserve(RSS_PAGE_POOL_DATA_FRAME_COUNT);
+	pinnedGenerations.push_back(metadata_->openSnapshot());
+	for (uint32_t ordinal = 0U; ordinal + 1U < RSS_PAGE_POOL_DATA_FRAME_COUNT; ++ordinal) {
+		NativeGraphWriteTransaction delta = planner.beginTransaction();
+		const std::array<NativeVectorMutation, 1U> erase = {{
+				{NativeVectorMutationKind::NVMK_ERASE, definition.index_id, nodeIds[ordinal], definition.vector_dimensions,
+				 VectorDistanceMetric::VDM_L2, {}},
+		}};
+		delta.stageVectorIndexDelta(*indexes_, *raw_pages_, *manifests_, definition, erase, deltaOptions);
+		ASSERT_TRUE(delta.commit().committed());
+		// Pin every complete generation so its Manifest frame cannot be reused
+		// before the next COW publication consumes a different frame.
+		pinnedGenerations.push_back(metadata_->openSnapshot());
+	}
+
+	const MetadataSnapshotPin &beforeMove = pinnedGenerations.back();
+	const VectorManifest beforeManifest = manifests_->read(beforeMove, definition.index_id).manifest();
+	const PageLocation beforeLocation = metadata_->findPageLocation(beforeMove, beforeManifest.page_id);
+	const CatalogEntry beforePool = metadata_->findCatalog(beforeMove, beforeLocation.segment_id);
+	ASSERT_EQ(beforePool.kind, SegmentKind::SGK_VECTOR_MANIFEST_POOL);
+	ASSERT_FALSE(manifests_->hasReplacementFrameCapacity(beforePool, 1U));
+	EXPECT_EQ(VectorDeltaMapping::findOperation(beforeMove, *indexes_, *metadata_, beforeManifest.delta_mapping_index_id,
+												 RSS_PAGE_POOL_DATA_FRAME_COUNT - 1U),
+			  std::optional(VectorDeltaOperation::VDO_ERASE));
+
+	NativeGraphWriteTransaction finalDelta = planner.beginTransaction();
+	const std::array<NativeVectorMutation, 1U> finalErase = {{
+			{NativeVectorMutationKind::NVMK_ERASE, definition.index_id, nodeIds.back(), definition.vector_dimensions,
+			 VectorDistanceMetric::VDM_L2, {}},
+	}};
+	finalDelta.stageVectorIndexDelta(*indexes_, *raw_pages_, *manifests_, definition, finalErase, deltaOptions);
+	ASSERT_TRUE(finalDelta.commit().committed());
+
+	MetadataSnapshotPin afterMove = metadata_->openSnapshot();
+	const VectorManifest afterManifest = manifests_->read(afterMove, definition.index_id).manifest();
+	const PageLocation afterLocation = metadata_->findPageLocation(afterMove, afterManifest.page_id);
+	EXPECT_EQ(afterManifest.page_id, beforeManifest.page_id);
+	EXPECT_NE(afterLocation.segment_id, beforeLocation.segment_id);
+	EXPECT_EQ(metadata_->findCatalog(afterMove, afterLocation.segment_id).kind, SegmentKind::SGK_VECTOR_MANIFEST_POOL);
+	EXPECT_FALSE(BTreeIndex(definition.index_id, *indexes_, *metadata_)
+				 .find(afterMove, VectorSemanticCodec::nodeMappingKey(nodeIds.back()))
+				 .has_value());
+	// The previous complete Manifest and delta tree remain readable through the pinned snapshot.
+	EXPECT_TRUE(BTreeIndex(definition.index_id, *indexes_, *metadata_)
+				.find(beforeMove, VectorSemanticCodec::nodeMappingKey(nodeIds.back()))
+				.has_value());
+	EXPECT_NO_THROW(static_cast<void>(RelocatableIntegrityScanner(io_, *metadata_).scan()));
+
+	afterMove.release();
+	for (MetadataSnapshotPin &snapshot: pinnedGenerations) {
+		snapshot.release();
+	}
+	reopenNativeStores();
+	MetadataSnapshotPin recovered = metadata_->openSnapshot();
+	const VectorManifest recoveredManifest = manifests_->read(recovered, definition.index_id).manifest();
+	const PageLocation recoveredLocation = metadata_->findPageLocation(recovered, recoveredManifest.page_id);
+	EXPECT_EQ(recoveredLocation.segment_id, afterLocation.segment_id);
+	EXPECT_FALSE(BTreeIndex(definition.index_id, *indexes_, *metadata_)
+				 .find(recovered, VectorSemanticCodec::nodeMappingKey(nodeIds.back()))
+				 .has_value());
+	recovered.release();
+}
+
 TEST_F(NativeGraphWritePlannerVectorTest, RejectsDeltaThatExceedsItsRawPageBudgetBeforePublication) {
 	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *indexes_, plannerOptions());
 	IndexDefinition definition = vectorDefinition();

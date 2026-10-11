@@ -50,7 +50,6 @@ protected:
     void cleanup() {
         std::error_code ec;
         fs::remove_all(dbPath, ec);
-        fs::remove(dbPath + "-wal", ec);
     }
 };
 
@@ -617,17 +616,12 @@ TEST_F(DriverAbiResultCursorTest, ScalarTypeMismatchesReportGotTypeNames) {
     zyx_driver_result_free(result);
 }
 
-TEST_F(DriverAbiResultCursorTest, ListAndMapValuesReportTypeMismatchesWhenSupported) {
+TEST_F(DriverAbiResultCursorTest, ListAndMapValuesReportTypeMismatches) {
     zyx_driver_result_t *result = nullptr;
 
-    const zyx_driver_status_t status =
-        zyx_driver_db_execute(db, "RETURN [1, 2] AS listValue, {answer: 42} AS mapValue", nullptr, &result, &error);
-    if (status == ZYX_DRIVER_EXECUTION_ERROR) {
-        zyx_driver_error_free(error);
-        error = nullptr;
-        GTEST_SKIP() << "List/map literals are not supported by the current Cypher execution path";
-    }
-    ASSERT_EQ(status, ZYX_DRIVER_OK);
+    ASSERT_EQ(zyx_driver_db_execute(db, "RETURN [1, 2] AS listValue, {answer: 42} AS mapValue", nullptr, &result,
+                                    &error),
+              ZYX_DRIVER_OK);
     ASSERT_NE(result, nullptr);
     ASSERT_EQ(zyx_driver_result_next(result, &error), ZYX_DRIVER_ROW);
 

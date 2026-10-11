@@ -47,13 +47,23 @@ Best for large-scale writes with automatic batch commits:
 UNWIND $rows AS row
 CALL {
   WITH row
-  MERGE (:User {name: row.name})
+  CREATE (:User {name: row.name})
 } IN TRANSACTIONS OF 1000 ROWS
-RETURN count(*) AS processed;
+RETURN row;
 ```
 
 :::info
 `IN TRANSACTIONS OF N ROWS` splits data into batches of N rows, each committed independently. A failed batch does not affect already-completed batches.
+
+The current native contract accepts a write-only, no-export subquery with a `CREATE`-based unary mutation chain. It
+materializes a bounded outer input before the first write, so a batch cannot be skipped or repeated if earlier batches
+modify the graph. It also materializes the supported outer `RETURN` projection before the first batch, so a projection
+error cannot report failure after an independently committed batch. It cannot run inside an explicit `Transaction`; use
+an autocommit query. `OF` requires a positive integer literal. `MERGE`, exported variables, other subquery mutation
+shapes, and outer `DISTINCT`/`ORDER BY`/`SKIP`/`LIMIT` result pipelines remain outside this initial native batching
+contract. Cancellation and timeout are checked immediately before every batch publication. A completed batch remains
+durable if cancellation prevents a later batch from publishing; the interrupted batch is not published. Applications
+that need all-or-nothing behavior must use one explicit transaction instead of `IN TRANSACTIONS`.
 :::
 
 ## Pattern C: Script Execution

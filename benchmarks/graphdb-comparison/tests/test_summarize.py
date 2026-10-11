@@ -8,6 +8,7 @@ from runner.summarize import (
     build_phase_category_summary_rows,
     build_profile_summary_rows,
     build_quality_gate_report,
+    measurement_phase_for_profile_phase,
     read_samples,
     write_summary_outputs,
 )
@@ -173,8 +174,8 @@ def test_operation_and_phase_category_summaries_make_benchmark_semantics_explici
     phase_rows = build_phase_category_summary_rows(
         [
             ProfileEvent("zyx", "point_create_node", "small", "write", 0, "warm.operation", 10.0, 1),
-            ProfileEvent("zyx", "point_create_node", "small", "write", 0, "wal.commit_sync", 2.0, 1),
-            ProfileEvent("zyx", "point_create_node", "small", "write", 0, "db.flush.wal_checkpoint", 3.0, 1),
+            ProfileEvent("zyx", "point_create_node", "small", "write", 0, "native_graph.commit_sync", 2.0, 1),
+            ProfileEvent("zyx", "point_create_node", "small", "write", 0, "db.flush.publication_checkpoint", 3.0, 1),
             ProfileEvent("zyx", "point_create_node", "small", "write", 0, "save.total", 5.0, 1),
             ProfileEvent("zyx", "load_nodes_edges", "small", "write", 0, "load.graph", 4.0, 1),
         ]
@@ -182,9 +183,14 @@ def test_operation_and_phase_category_summaries_make_benchmark_semantics_explici
 
     phases = {row["semantic_phase"]: row for row in phase_rows}
     assert phases["statement_latency"]["p50_ms"] == 10.0
-    assert phases["durable_wal_fsync"]["raw_phases"] == "wal.commit_sync"
+    assert phases["durable_storage_sync"]["raw_phases"] == "native_graph.commit_sync"
     assert phases["close_checkpoint"]["p50_ms"] == 8.0
     assert phases["load_import"]["raw_phases"] == "load.graph"
+
+
+def test_measurement_phase_classification_does_not_retain_legacy_data_manager_imports():
+    assert measurement_phase_for_profile_phase("load.graph") == "load_import"
+    assert measurement_phase_for_profile_phase("datamanager.add_nodes") == "other"
 
 
 def test_build_comparison_rows_ranks_zyx_against_best():
@@ -329,17 +335,66 @@ def test_build_quality_gate_report_detects_p50_regression_against_baseline():
         ]
     )
 
+    environment = {
+        "benchmark_schema_version": 1,
+        "databases": ["zyx"],
+        "dataset_manifest": {"scale": "smoke", "seed": 42, "counts": {"users": 100}},
+        "execution_mode": "warm",
+        "iterations": 2,
+        "measurement_semantics": {"profile": "scan"},
+        "platform": "test-platform",
+        "profile": "scan",
+        "required_workloads": ["label_scan_filter"],
+        "scale": "smoke",
+        "seed": 42,
+        "system": "TestOS",
+        "thread_contract": "fixed 1 execution thread(s)",
+        "threads": 1,
+        "warmup": 1,
+    }
     report = build_quality_gate_report(
         current_rows,
-        {
-            "databases": ["zyx"],
-            "required_workloads": ["label_scan_filter"],
-            "iterations": 2,
-        },
+        environment,
         [ProfileEvent("zyx", "label_scan_filter", "smoke", "scan", 0, "node_scan.count", 0.1, 1)],
         baseline_rows,
+        environment.copy(),
         max_regression_ratio=1.10,
     )
 
     failed_gate_names = {gate["name"] for gate in report["gates"] if gate["status"] == "failed"}
     assert "p50_regression_against_baseline" in failed_gate_names
+
+
+def test_build_quality_gate_report_rejects_baseline_with_mismatched_provenance():
+    from runner.stats import summarize_samples
+
+    rows = summarize_samples([Sample("zyx", "label_scan_filter", "smoke", 0, 10.0, equivalent_mode="api")])
+    environment = {
+        "benchmark_schema_version": 1,
+        "databases": ["zyx"],
+        "dataset_manifest": {"scale": "smoke", "seed": 42, "counts": {"users": 100}},
+        "execution_mode": "warm",
+        "iterations": 1,
+        "measurement_semantics": {"profile": "scan"},
+        "platform": "test-platform",
+        "profile": "scan",
+        "required_workloads": ["label_scan_filter"],
+        "scale": "smoke",
+        "seed": 42,
+        "system": "TestOS",
+        "thread_contract": "fixed 1 execution thread(s)",
+        "threads": 1,
+        "warmup": 1,
+    }
+    mismatched_baseline = environment | {"dataset_manifest": {"scale": "smoke", "seed": 7, "counts": {"users": 100}}}
+
+    report = build_quality_gate_report(
+        rows,
+        environment,
+        [ProfileEvent("zyx", "label_scan_filter", "smoke", "scan", 0, "node_scan.count", 0.1, 1)],
+        rows,
+        mismatched_baseline,
+    )
+
+    failed_gate_names = {gate["name"] for gate in report["gates"] if gate["status"] == "failed"}
+    assert "baseline_environment_provenance" in failed_gate_names

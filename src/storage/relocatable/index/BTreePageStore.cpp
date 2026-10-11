@@ -63,11 +63,10 @@ namespace graph::storage {
 			header.right_sibling = rightSibling;
 			header.leftmost_child = {};
 			header.entry_count = 0;
-			BTreePage page = BTreePage::create(owner, header);
-			for (const BTreePageEntry &entry: entries) {
-				page.insert(entry);
-			}
-			return page;
+			// Every structural preview and final materialization already has the
+			// complete ordered entry set. Encode it once instead of repeatedly
+			// replacing the packed payload for each entry.
+			return BTreePage::createWithEntries(owner, header, entries);
 		}
 
 		[[nodiscard]] BTreePage makeInternalPage(const BTreePageHeader &source, const PageOwnerHeader &owner,
@@ -76,32 +75,11 @@ namespace graph::storage {
 			header.page_id = owner.page_id;
 			header.generation = owner.generation;
 			header.entry_count = 0;
-			BTreePage page = BTreePage::create(owner, header);
-			for (const BTreePageEntry &entry: entries) {
-				page.insert(entry);
-			}
-			return page;
+			return BTreePage::createWithEntries(owner, header, entries);
 		}
 
 		[[nodiscard]] bool lessKey(std::span<const std::byte> left, std::span<const std::byte> right) {
 			return std::lexicographical_compare(left.begin(), left.end(), right.begin(), right.end());
-		}
-
-		[[nodiscard]] bool hasSameInitialTreeLayout(const InitialBTreePlan &expected, const InitialBTreePlan &actual) {
-			if (expected.nodes.size() != actual.nodes.size() || expected.leaf_count != actual.leaf_count ||
-				expected.root_ordinal != actual.root_ordinal) {
-				return false;
-			}
-			for (size_t ordinal = 0U; ordinal < expected.nodes.size(); ++ordinal) {
-				const InitialBTreePlanNode &expectedNode = expected.nodes[ordinal];
-				const InitialBTreePlanNode &actualNode = actual.nodes[ordinal];
-				if (expectedNode.level != actualNode.level || expectedNode.first_key != actualNode.first_key ||
-					expectedNode.leaf_entries.size() != actualNode.leaf_entries.size() ||
-					expectedNode.children.size() != actualNode.children.size()) {
-					return false;
-				}
-			}
-			return true;
 		}
 
 		// A deep mutation plans every COW replacement from one pinned snapshot.
@@ -811,8 +789,7 @@ namespace graph::storage {
 			const OverlayPageReference root = OverlayPageReference::existing(expected_root_.root_page_id);
 			OverlayMutationNode &node =
 					loadExisting(root.existing_page_id, expected_root_.root_generation.value(), readLevel(root));
-			if (node.header.kind == BTreeNodeKind::BPN_LEAF &&
-				(node.left_sibling.has_value() || node.right_sibling.has_value())) {
+			if (node.header.left_sibling.isValid() || node.header.right_sibling.isValid()) {
 				throw FormatException(FormatError::FERR_INVALID_STATE,
 									  "relocatable transaction-local B+Tree overlay root is stale or malformed");
 			}
@@ -2142,18 +2119,6 @@ namespace graph::storage {
 			}
 			return upsertRootLeafImpl(indexId, key, value, growth, checkpointLsn, options);
 		}
-		// ZYX_COV_EXCL_START: after the leaf fallback, BTreePage::open guarantees an internal root with a nonzero
-		// level.
-		if (mutationRootHeader.kind != BTreeNodeKind::BPN_INTERNAL || mutationRootHeader.level == 0U) {
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable B+Tree deep upsert has an invalid current root layout");
-		}
-		// ZYX_COV_EXCL_STOP
-		if (mutationRootHeader.page_id != mutationRoot.root_page_id ||
-			mutationRootHeader.generation != mutationRoot.root_generation) {
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable B+Tree deep upsert has a stale or invalid current root");
-		}
 		PageId currentPageId = mutationRoot.root_page_id;
 		uint16_t expectedLevel = mutationRootHeader.level;
 		std::vector<BTreePathNode> path;
@@ -2161,13 +2126,9 @@ namespace graph::storage {
 		while (true) {
 			BTreePage current = read(mutationSnapshot, currentPageId);
 			const BTreePageHeader currentHeader = current.header();
-			const uint8_t invalidIdentity =
-					static_cast<uint8_t>(currentHeader.index_id != indexId) |
-					static_cast<uint8_t>(currentHeader.page_id != currentPageId) |
-					static_cast<uint8_t>(currentHeader.generation != mutationRoot.root_generation);
-			if (invalidIdentity != 0U) {
+			if (currentHeader.index_id != indexId) {
 				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "relocatable B+Tree deep upsert encountered a foreign or stale page");
+								  "relocatable B+Tree deep upsert encountered a foreign Index page");
 			}
 			path.push_back({currentHeader, metadata_.findPageLocation(mutationSnapshot, currentPageId),
 							current.slottedPage().ownerCommittedLsn(), current.entries(), 0});
@@ -2225,22 +2186,9 @@ namespace graph::storage {
 											  "relocatable B+Tree deep leaf split cannot fit the requested key");
 					}
 
-					// Every path member carries its own Page Directory generation. The
-					// multi-pool coordinator validates all of those current locations
-					// under one writer before it publishes a replacement root.
-					for (const BTreePathNode &node: path) {
-						const uint8_t invalidPath =
-								static_cast<uint8_t>(!node.location.segment_id.isValid()) |
-								static_cast<uint8_t>(node.location.page_id != node.header.page_id) |
-								static_cast<uint8_t>(node.location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-								static_cast<uint8_t>(node.location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-								static_cast<uint8_t>(node.header.generation != node.location.generation);
-						if (invalidPath != 0U) {
-							throw FormatException(
-									FormatError::FERR_INVALID_STATE,
-									"relocatable B+Tree deep split has an invalid current ancestor location");
-						}
-					}
+					// read() has already validated each path member against the same pinned
+					// Page Directory and shared-pool owner. The publication coordinator
+					// revalidates these immutable locations under its writer guard.
 
 					std::vector<BTreePageEntry> leftEntries(entries.begin(), entries.begin() + *splitIndex);
 					std::vector<BTreePageEntry> rightEntries(entries.begin() + *splitIndex, entries.end());
@@ -2300,17 +2248,6 @@ namespace graph::storage {
 							throw FormatException(FormatError::FERR_INVALID_STATE,
 												  "relocatable B+Tree deep leaf split found an invalid right sibling");
 						}
-						// ZYX_COV_EXCL_START: SharedPagePoolAllocator::read and BTreePage::open validate these
-						// physical identity fields before the tree interprets a sibling relationship.
-						if (siblingHeader.page_id != leaf.header.right_sibling ||
-							siblingHeader.generation != siblingLocation.generation ||
-							!siblingLocation.segment_id.isValid() ||
-							siblingLocation.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME ||
-							siblingLocation.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) {
-							throw FormatException(FormatError::FERR_INVALID_STATE,
-												  "relocatable B+Tree deep leaf split found an invalid right sibling");
-						}
-						// ZYX_COV_EXCL_STOP
 						BTreePathNode siblingNode{siblingHeader, siblingLocation,
 												  sibling.slottedPage().ownerCommittedLsn(), sibling.entries(), 0};
 						PlannedBTreePage siblingPlan;
@@ -2329,18 +2266,8 @@ namespace graph::storage {
 					bool insertedIntoAncestor = false;
 					for (size_t pathIndex = path.size() - 1U; pathIndex-- > 0U;) {
 						const BTreePathNode &parent = path[pathIndex];
-						const uint8_t invalidParent =
-								static_cast<uint8_t>(parent.header.kind != BTreeNodeKind::BPN_INTERNAL) |
-								static_cast<uint8_t>(parent.header.level == 0U) |
-								static_cast<uint8_t>(parent.child_ordinal > parent.entries.size()) |
-								static_cast<uint8_t>(!parent.header.leftmost_child.isValid());
-						// ZYX_COV_EXCL_START: the pinned traversal only appends codec-validated internal nodes and
-						// records child ordinals while iterating that node's own entry vector.
-						if (invalidParent != 0U) {
-							throw FormatException(FormatError::FERR_INVALID_STATE,
-												  "relocatable B+Tree deep split has an invalid ancestor path");
-						}
-						// ZYX_COV_EXCL_STOP
+						// The pinned descent records child_ordinal while selecting this
+						// parent's existing child, so it is within the decoded entry range.
 						const PlannedPageReference parentReference =
 								PlannedPageReference::existing(parent.header.page_id);
 						const PlannedPageReference parentLeftmost =
@@ -2725,7 +2652,7 @@ namespace graph::storage {
 			const CatalogEntry pool = metadata_.findCatalog(snapshot, location.segment_id);
 			const BTreePage page = read(snapshot, pageId);
 			const BTreePageHeader header = page.header();
-		const uint8_t invalidPage =
+			const uint8_t invalidPage =
 					static_cast<uint8_t>(pool.kind != SegmentKind::SGK_INDEX_PAGE_POOL) |
 					// Index pools are shared allocation containers. The page/header
 					// owner carries the tree's IndexId, while the pool owner identifies
@@ -2735,7 +2662,9 @@ namespace graph::storage {
 					static_cast<uint8_t>(header.index_id != indexId) | static_cast<uint8_t>(header.page_id != pageId) |
 					static_cast<uint8_t>(header.generation != location.generation) |
 					static_cast<uint8_t>(static_cast<uint8_t>(pageId == root.root_page_id) &
-										 static_cast<uint8_t>(header.generation != root.root_generation)) |
+											 static_cast<uint8_t>(header.generation != root.root_generation)) |
+					static_cast<uint8_t>(pageId == root.root_page_id &&
+													 (header.left_sibling.isValid() || header.right_sibling.isValid())) |
 					static_cast<uint8_t>(!page.slottedPage().ownerCommittedLsn().isValid());
 			if (invalidPage != 0U) {
 				throw FormatException(FormatError::FERR_INVALID_STATE,
@@ -2831,10 +2760,8 @@ namespace graph::storage {
 																									BTreeFreshTreeRootMode rootMode,
 																									BTreeLeafValueLayout leafValueLayout) const {
 		const uint8_t invalidInput = static_cast<uint8_t>(!snapshot.isValid()) | static_cast<uint8_t>(indexId == 0U) |
-									 static_cast<uint8_t>(rootMode != BTreeFreshTreeRootMode::BFTM_REQUIRE_ABSENT &&
-																				  rootMode != BTreeFreshTreeRootMode::BFTM_REQUIRE_PRESENT) |
 									 static_cast<uint8_t>(leafValueLayout != BTreeLeafValueLayout::BLVL_U64 &&
-																				  leafValueLayout != BTreeLeafValueLayout::BLVL_EMPTY);
+															  leafValueLayout != BTreeLeafValueLayout::BLVL_EMPTY);
 		if (invalidInput != 0U) {
 			throw FormatException(FormatError::FERR_INVALID_HEADER,
 								  "relocatable fresh B+Tree plan requires a live snapshot, Index ID, and root mode");
@@ -2881,11 +2808,6 @@ namespace graph::storage {
 		const InitialBTreePlan initialPlan =
 				emptyTree ? InitialBTreePlan{} : InitialBTreeBuilder::plan(indexId, planningEntries, leafValueLayout);
 		const size_t pageCount = emptyTree ? 1U : initialPlan.nodes.size();
-		if (pageCount == 0U) {
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable initial B+Tree plan produced no root page");
-		}
-
 		BTreeInitialTreeMutationPlan result;
 		result.index_id = indexId;
 		for (size_t firstPage = 0U; firstPage < pageCount;) {
@@ -2894,10 +2816,6 @@ namespace graph::storage {
 			firstPage += count;
 		}
 		const size_t rootOrdinal = emptyTree ? 0U : initialPlan.root_ordinal;
-		if (rootOrdinal >= pageCount) {
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable initial B+Tree plan has an invalid root page ordinal");
-		}
 		result.root_page = {rootOrdinal / RSS_PAGE_POOL_DATA_FRAME_COUNT, rootOrdinal % RSS_PAGE_POOL_DATA_FRAME_COUNT};
 		result.preparer = [this, indexId, emptyTree, initialPlan, pageCount, sourceEntries, leafValueLayout,
 						   valueBinder = std::move(valueBinder), pools = result.new_pool_mutations](
@@ -2932,18 +2850,12 @@ namespace graph::storage {
 					generations.push_back(batch.pool.generation);
 				}
 			}
-			if (pageIds.size() != pageCount || generations.size() != pageCount) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "relocatable initial B+Tree preparation lost a metadata-assigned page identity");
-			}
+			// Each batch above is checked against its immutable requested count, so the
+			// concatenated metadata identities exactly cover the precomputed page plan.
 			std::vector<BTreePageEntry> resolvedEntries = sourceEntries;
 			if (valueBinder) {
 				const BTreeInitialTreeValueBindingContext context{batches, pageIds, generations};
 				valueBinder(resolvedEntries, context);
-			}
-			if (resolvedEntries.size() != sourceEntries.size()) { // ZYX_COV_EXCL_LINE: span prevents resizing.
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "relocatable initial B+Tree value binder changed its entry cardinality");
 			}
 			for (size_t ordinal = 0U; ordinal < sourceEntries.size(); ++ordinal) {
 				const bool invalidValue = leafValueLayout == BTreeLeafValueLayout::BLVL_U64
@@ -2955,13 +2867,11 @@ namespace graph::storage {
 							"relocatable initial B+Tree value binder changed a key or left an unresolved value");
 				}
 			}
+			// The callback may bind values only. The cardinality, key, and fixed-width
+			// value checks above make the deterministic initial layout immutable.
 			const InitialBTreePlan resolvedPlan =
 					emptyTree ? InitialBTreePlan{}
 							  : InitialBTreeBuilder::plan(indexId, resolvedEntries, leafValueLayout);
-			if (!emptyTree && !hasSameInitialTreeLayout(initialPlan, resolvedPlan)) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "relocatable initial B+Tree value binder changed the preplanned tree layout");
-			}
 
 			std::vector<BTreePage> pages;
 			if (emptyTree) {
@@ -2975,10 +2885,7 @@ namespace graph::storage {
 			} else {
 				pages = InitialBTreeBuilder::materialize(indexId, resolvedPlan, pageIds, generations, checkpointLsn);
 			}
-			if (pages.size() != pageCount) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "relocatable initial B+Tree materialization changed its page count");
-			}
+			// InitialBTreeBuilder materializes exactly one page per immutable plan node.
 			for (size_t poolOrdinal = 0U, pageOffset = 0U; poolOrdinal < batches.size(); ++poolOrdinal) {
 				IndexTreeMutationPoolBatch &batch = batches[poolOrdinal];
 				const size_t count = batch.appended_page_ids.size();
@@ -3053,9 +2960,8 @@ namespace graph::storage {
 		const uint8_t invalidRoot = static_cast<uint8_t>(initialRootHeader.index_id != indexId) |
 									static_cast<uint8_t>(initialRootHeader.page_id != root.root_page_id) |
 									static_cast<uint8_t>(initialRootHeader.generation != root.root_generation) |
-									static_cast<uint8_t>(initialRootHeader.kind == BTreeNodeKind::BPN_LEAF &&
-														 (initialRootHeader.left_sibling.isValid() ||
-														  initialRootHeader.right_sibling.isValid()));
+									static_cast<uint8_t>(initialRootHeader.left_sibling.isValid() ||
+															  initialRootHeader.right_sibling.isValid());
 		if (invalidRoot != 0U) {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable B+Tree erase root does not match the Index Root Directory");

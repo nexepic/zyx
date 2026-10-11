@@ -7,7 +7,33 @@
  **/
 #include "storage/relocatable/backend/RelocatableStorageBackendTestFixture.hpp"
 
+#include <atomic>
+#include <cerrno>
+#include <chrono>
+#include <span>
+#include <thread>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 using namespace relocatable_storage_backend_test;
+
+namespace {
+
+	template<typename Predicate>
+	bool waitUntil(Predicate predicate) {
+		const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+		while (std::chrono::steady_clock::now() < deadline) {
+			if (predicate()) {
+				return true;
+			}
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		}
+		return predicate();
+	}
+
+} // namespace
 
 TEST_F(RelocatableStorageBackendTest, CypherWriteOnlyCreateUsesTheLogicalMutationBatch) {
 	materializeNativeDatabase();
@@ -49,16 +75,592 @@ TEST_F(RelocatableStorageBackendTest, CypherWriteOnlyCreateUsesTheLogicalMutatio
 	database.close();
 }
 
+TEST_F(RelocatableStorageBackendTest, SequentialAutocommitCreateDeleteReusesCowPoolCapacity) {
+	materializeNativeDatabase();
+
+	zyx::Database database(data_path_.string());
+	database.open();
+	for (int64_t id = 0; id < 25; ++id) {
+		const zyx::Result create = database.execute("CREATE (:SequentialCow {id: " + std::to_string(id) + "})");
+		ASSERT_TRUE(create.isSuccess()) << "create #" << id << ": " << create.getError();
+	}
+	for (int64_t id = 0; id < 25; ++id) {
+		const zyx::Result erase =
+				database.execute("MATCH (node:SequentialCow {id: " + std::to_string(id) + "}) DELETE node");
+		ASSERT_TRUE(erase.isSuccess()) << "delete #" << id << ": " << erase.getError();
+	}
+	const zyx::Result remaining = database.execute("MATCH (node:SequentialCow) RETURN count(node) AS count");
+	ASSERT_TRUE(remaining.isSuccess()) << remaining.getError();
+	ASSERT_TRUE(remaining.hasNext());
+	remaining.next();
+	EXPECT_EQ(std::get<int64_t>(remaining.get("count")), 0);
+	database.close();
+}
+
+TEST_F(RelocatableStorageBackendTest, RepeatedOrdinaryAdjacencyChurnRetiresEmptyRootsAcrossReopen) {
+	materializeNativeDatabase();
+	RelocatableStorageBackendOptions options = backendOptions();
+	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableMaintenanceOptions maintenance;
+	maintenance.loop.maximum_outstanding_tasks = 2U;
+	maintenance.loop.minimum_cycle_interval = std::chrono::milliseconds(1);
+	options.maintenance = maintenance;
+	auto backend = std::make_unique<RelocatableStorageBackend>(options);
+	backend->open();
+	const std::vector<uint64_t> nodes =
+			backend->createLogicalNodes({{{"AdjacencyChurnSource"}, {}}, {{"AdjacencyChurnTarget"}, {}}});
+	ASSERT_EQ(nodes.size(), 2U);
+
+	const auto verifyReleasedPool = [&](PhysicalSlotId releasedSlot) {
+		auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
+		ASSERT_TRUE(data->is_open());
+		auto io = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		auto metadata = RelocatableMetadataStore::open(io);
+		MetadataSnapshotPin snapshot = metadata->openSnapshot();
+		EXPECT_FALSE(metadata->findIndexRootOptional(snapshot, RSS_GLOBAL_ADJACENCY_INDEX_ID).has_value());
+		EXPECT_FALSE(metadata->isPhysicalSlotAllocated(snapshot, releasedSlot));
+		snapshot.release();
+		metadata.reset();
+		io.reset();
+		data->close();
+	};
+
+	std::optional<PhysicalSlotId> previousReleasedSlot;
+	for (size_t round = 0U; round < 8U; ++round) {
+		std::vector<uint64_t> edges;
+		edges.reserve(16U);
+		for (size_t ordinal = 0U; ordinal < 16U; ++ordinal) {
+			const std::vector<uint64_t> created =
+					backend->createLogicalEdges({{nodes[0], nodes[1], "ADJACENCY_CHURN", {}}});
+			ASSERT_EQ(created.size(), 1U);
+			edges.push_back(created.front());
+		}
+		PhysicalSlotId currentPoolSlot;
+		{
+			auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
+			ASSERT_TRUE(data->is_open());
+			auto io = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+			auto metadata = RelocatableMetadataStore::open(io);
+			MetadataSnapshotPin metadataSnapshot = metadata->openSnapshot();
+			const std::optional<IndexRootLocation> root =
+					metadata->findIndexRootOptional(metadataSnapshot, RSS_GLOBAL_ADJACENCY_INDEX_ID);
+			ASSERT_TRUE(root.has_value());
+			const PageLocation location = metadata->findPageLocation(metadataSnapshot, root->root_page_id);
+			const CatalogEntry pool = metadata->findCatalog(metadataSnapshot, location.segment_id);
+			EXPECT_EQ(pool.owner_id, RSS_GLOBAL_ADJACENCY_INDEX_ID);
+			EXPECT_TRUE(metadata->isPhysicalSlotAllocated(metadataSnapshot, pool.physical_slot));
+			currentPoolSlot = pool.physical_slot;
+			if (previousReleasedSlot.has_value()) {
+				EXPECT_EQ(currentPoolSlot, *previousReleasedSlot);
+			}
+			metadataSnapshot.release();
+			metadata.reset();
+			io.reset();
+			data->close();
+		}
+
+		std::unique_ptr<LogicalGraphReadSnapshot> snapshot = backend->openLogicalGraphReadSnapshot();
+		std::optional<LogicalGraphAdjacencyContinuation> continuation;
+		size_t seen = 0U;
+		do {
+			const LogicalGraphAdjacencyPage page =
+					snapshot->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, continuation, 7U);
+			seen += page.edges.size();
+			continuation = page.continuation;
+		} while (continuation.has_value());
+		EXPECT_EQ(seen, edges.size());
+		snapshot.reset();
+
+		const uint64_t releasedBefore = backend->maintenanceMetrics().global_adjacency_pools_released;
+		for (const uint64_t edgeId: edges) {
+			backend->deleteLogicalEdges({{edgeId}});
+		}
+		ASSERT_TRUE(waitUntil([&] {
+			const RelocatableMaintenanceMetrics metrics = backend->maintenanceMetrics();
+			return metrics.global_adjacency_pools_released > releasedBefore ||
+				   metrics.loop.state == RelocatableMaintenanceLoopState::VMLS_FAULTED;
+		}));
+		if (const std::exception_ptr failure = backend->maintenanceFailure(); failure) {
+			try {
+				std::rethrow_exception(failure);
+			} catch (const std::exception &error) {
+				FAIL() << "global adjacency pool churn reclamation failed: " << error.what();
+			}
+		}
+		EXPECT_NO_THROW(static_cast<void>(backend->verifyIntegrity()));
+		backend->close();
+		verifyReleasedPool(currentPoolSlot);
+		previousReleasedSlot = currentPoolSlot;
+
+		backend = std::make_unique<RelocatableStorageBackend>(options);
+		backend->open();
+		snapshot = backend->openLogicalGraphReadSnapshot();
+		EXPECT_TRUE(snapshot->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, std::nullopt, 1U)
+							.edges.empty());
+		EXPECT_TRUE(snapshot->scanAdjacentEdges(nodes[1], LogicalGraphReadDirection::LGRD_INCOMING, std::nullopt, 1U)
+							.edges.empty());
+	}
+
+	EXPECT_NO_THROW(static_cast<void>(backend->verifyIntegrity()));
+	backend->close();
+}
+
+TEST_F(RelocatableStorageBackendTest, OrdinaryAdjacencyPoolReclamationDefersSlotReuseUntilTheOldSnapshotDrains) {
+	materializeNativeDatabase();
+	RelocatableStorageBackendOptions options = backendOptions();
+	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableMaintenanceOptions maintenance;
+	maintenance.loop.maximum_outstanding_tasks = 2U;
+	maintenance.loop.minimum_cycle_interval = std::chrono::milliseconds(1);
+	options.maintenance = maintenance;
+	RelocatableStorageBackend backend(std::move(options));
+	backend.open();
+	const std::vector<uint64_t> nodes =
+			backend.createLogicalNodes({{{"PoolReclaimSource"}, {}}, {{"PoolReclaimTarget"}, {}}});
+	ASSERT_EQ(nodes.size(), 2U);
+	const std::vector<uint64_t> edges = backend.createLogicalEdges({{nodes[0], nodes[1], "POOL_RECLAIM", {}}});
+	ASSERT_EQ(edges.size(), 1U);
+	CatalogEntry originalAdjacencyPool;
+	{
+		auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
+		ASSERT_TRUE(data->is_open());
+		auto io = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		auto metadata = RelocatableMetadataStore::open(io);
+		MetadataSnapshotPin snapshot = metadata->openSnapshot();
+		const std::optional<IndexRootLocation> root =
+				metadata->findIndexRootOptional(snapshot, RSS_GLOBAL_ADJACENCY_INDEX_ID);
+		ASSERT_TRUE(root.has_value());
+		const PageLocation rootLocation = metadata->findPageLocation(snapshot, root->root_page_id);
+		originalAdjacencyPool = metadata->findCatalog(snapshot, rootLocation.segment_id);
+		EXPECT_EQ(originalAdjacencyPool.owner_id, RSS_GLOBAL_ADJACENCY_INDEX_ID);
+		snapshot.release();
+		metadata.reset();
+		io.reset();
+		data->close();
+	}
+
+	// Keep the final-delete maintenance task queued until the old graph root is
+	// pinned. Its pool may retire, but its physical slot must not release yet.
+	backend.pauseMaintenance();
+	std::unique_ptr<LogicalGraphReadSnapshot> beforeDelete = backend.openLogicalGraphReadSnapshot();
+	backend.deleteLogicalEdges({{edges.front()}});
+	const uint64_t completedBeforeReclaim = backend.maintenanceMetrics().loop.completed_tasks;
+	backend.resumeMaintenance();
+	ASSERT_TRUE(waitUntil([&] {
+		const RelocatableMaintenanceMetrics metrics = backend.maintenanceMetrics();
+		return metrics.global_adjacency_pools_retired >= 1U ||
+			   metrics.loop.state == RelocatableMaintenanceLoopState::VMLS_FAULTED;
+	}));
+	if (const std::exception_ptr failure = backend.maintenanceFailure(); failure) {
+		try {
+			std::rethrow_exception(failure);
+		} catch (const std::exception &error) {
+			FAIL() << "global adjacency pool reclamation failed: " << error.what();
+		}
+	}
+	EXPECT_EQ(backend.maintenanceMetrics().loop.reclaimed_physical_bytes, 0U);
+	EXPECT_EQ(backend.maintenanceMetrics().global_adjacency_pools_released, 0U);
+	EXPECT_EQ(beforeDelete->scanAdjacentEdges(nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, std::nullopt, 1U)
+					  .edges.size(),
+			  1U);
+
+	beforeDelete.reset();
+	ASSERT_TRUE(waitUntil([&] {
+		const RelocatableMaintenanceLoopMetrics metrics = backend.maintenanceMetrics().loop;
+		return metrics.completed_tasks > completedBeforeReclaim ||
+			   metrics.state == RelocatableMaintenanceLoopState::VMLS_FAULTED;
+	}));
+	if (const std::exception_ptr failure = backend.maintenanceFailure(); failure) {
+		try {
+			std::rethrow_exception(failure);
+		} catch (const std::exception &error) {
+			FAIL() << "global adjacency pool release failed: " << error.what();
+		}
+	}
+	EXPECT_GE(backend.maintenanceMetrics().loop.reclaimed_physical_bytes, RSS_SEGMENT_SIZE);
+	EXPECT_GE(backend.maintenanceMetrics().global_adjacency_pools_released, 1U);
+	EXPECT_NO_THROW(static_cast<void>(backend.verifyIntegrity()));
+	backend.close();
+
+	auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
+	ASSERT_TRUE(data->is_open());
+	auto io = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+	auto metadata = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	EXPECT_FALSE(metadata->findIndexRootOptional(snapshot, RSS_GLOBAL_ADJACENCY_INDEX_ID).has_value());
+	EXPECT_FALSE(metadata->isPhysicalSlotAllocated(snapshot, originalAdjacencyPool.physical_slot));
+	for (const CatalogEntry &pool: metadata->findCurrentIndexPagePools(snapshot)) {
+		EXPECT_NE(pool.owner_id, RSS_GLOBAL_ADJACENCY_INDEX_ID);
+	}
+	snapshot.release();
+	metadata.reset();
+	io.reset();
+	data->close();
+
+	RelocatableStorageBackendOptions reopenedOptions = backendOptions();
+	reopenedOptions.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend reopened(std::move(reopenedOptions));
+	reopened.open();
+	const std::vector<uint64_t> retriedEdges =
+			reopened.createLogicalEdges({{nodes[0], nodes[1], "POOL_RECLAIM_RETRY", {}}});
+	ASSERT_EQ(retriedEdges.size(), 1U);
+	std::unique_ptr<LogicalGraphReadSnapshot> snapshotAfterReopen = reopened.openLogicalGraphReadSnapshot();
+	const LogicalGraphAdjacencyPage retriedPage = snapshotAfterReopen->scanAdjacentEdges(
+			nodes[0], LogicalGraphReadDirection::LGRD_OUTGOING, std::nullopt, 1U);
+	ASSERT_EQ(retriedPage.edges.size(), 1U);
+	EXPECT_EQ(retriedPage.edges.front().edge_id, retriedEdges.front());
+	snapshotAfterReopen.reset();
+	EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity()));
+	reopened.close();
+
+	data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
+	ASSERT_TRUE(data->is_open());
+	io = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+	metadata = RelocatableMetadataStore::open(io);
+	snapshot = metadata->openSnapshot();
+	const std::optional<IndexRootLocation> replacementRoot =
+			metadata->findIndexRootOptional(snapshot, RSS_GLOBAL_ADJACENCY_INDEX_ID);
+	ASSERT_TRUE(replacementRoot.has_value());
+	const PageLocation replacementLocation = metadata->findPageLocation(snapshot, replacementRoot->root_page_id);
+	const CatalogEntry replacementAdjacencyPool = metadata->findCatalog(snapshot, replacementLocation.segment_id);
+	EXPECT_EQ(replacementAdjacencyPool.owner_id, RSS_GLOBAL_ADJACENCY_INDEX_ID);
+	EXPECT_EQ(replacementAdjacencyPool.physical_slot, originalAdjacencyPool.physical_slot);
+	snapshot.release();
+	metadata.reset();
+	io.reset();
+	data->close();
+}
+
+TEST_F(RelocatableStorageBackendTest, OrdinaryAdjacencyPoolMaintenanceShortCandidateWriteRetainsPoolUntilReopen) {
+	materializeNativeDatabase();
+	RelocatableStorageBackendOptions options = backendOptions();
+	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableMaintenanceOptions maintenance;
+	maintenance.loop.maximum_outstanding_tasks = 2U;
+	maintenance.loop.minimum_cycle_interval = std::chrono::milliseconds(1);
+	options.maintenance = maintenance;
+	RelocatableStorageBackend backend(std::move(options));
+	backend.open();
+	const std::vector<uint64_t> nodes =
+			backend.createLogicalNodes({{{"PoolFaultSource"}, {}}, {{"PoolFaultTarget"}, {}}});
+	ASSERT_EQ(nodes.size(), 2U);
+	const std::vector<uint64_t> edges = backend.createLogicalEdges({{nodes[0], nodes[1], "POOL_FAULT", {}}});
+	ASSERT_EQ(edges.size(), 1U);
+
+	CatalogEntry adjacencyPool;
+	{
+		auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
+		ASSERT_TRUE(data->is_open());
+		auto io = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		auto metadata = RelocatableMetadataStore::open(io);
+		MetadataSnapshotPin snapshot = metadata->openSnapshot();
+		const std::optional<IndexRootLocation> root =
+				metadata->findIndexRootOptional(snapshot, RSS_GLOBAL_ADJACENCY_INDEX_ID);
+		ASSERT_TRUE(root.has_value());
+		adjacencyPool =
+				metadata->findCatalog(snapshot, metadata->findPageLocation(snapshot, root->root_page_id).segment_id);
+		snapshot.release();
+	}
+
+	backend.pauseMaintenance();
+	backend.deleteLogicalEdges({{edges.front()}});
+	std::atomic<bool> injected{false};
+	{
+		StorageIO::ScopedAllThreadNativeWriteHookForTesting shortRetirementCandidate(
+				[&injected](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+					if (byteCount == RSS_PAGE_SIZE &&
+						(offset != SuperblockFile::slotOffset(0U) && offset != SuperblockFile::slotOffset(1U)) &&
+						!injected.exchange(true, std::memory_order_relaxed)) {
+						return portable_pwrite(fd, bytes, 16U, offset);
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		backend.resumeMaintenance();
+		ASSERT_TRUE(waitUntil([&] {
+			return backend.maintenanceMetrics().loop.state == RelocatableMaintenanceLoopState::VMLS_FAULTED;
+		}));
+	}
+	EXPECT_TRUE(injected.load(std::memory_order_relaxed));
+	EXPECT_NE(backend.maintenanceFailure(), nullptr);
+	backend.close();
+
+	{
+		auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
+		ASSERT_TRUE(data->is_open());
+		auto io = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		auto metadata = RelocatableMetadataStore::open(io);
+		MetadataSnapshotPin snapshot = metadata->openSnapshot();
+		EXPECT_FALSE(metadata->findIndexRootOptional(snapshot, RSS_GLOBAL_ADJACENCY_INDEX_ID).has_value());
+		EXPECT_EQ(metadata->findCatalog(snapshot, adjacencyPool.segment_id).state, SegmentState::SGS_SEALED);
+		EXPECT_TRUE(metadata->isPhysicalSlotAllocated(snapshot, adjacencyPool.physical_slot));
+		snapshot.release();
+	}
+
+	RelocatableStorageBackendOptions reopenOptions = backendOptions();
+	reopenOptions.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	reopenOptions.maintenance = maintenance;
+	RelocatableStorageBackend reopened(std::move(reopenOptions));
+	reopened.open();
+	ASSERT_TRUE(waitUntil([&] {
+		const RelocatableMaintenanceMetrics metrics = reopened.maintenanceMetrics();
+		return metrics.global_adjacency_pools_released >= 1U ||
+			   metrics.loop.state == RelocatableMaintenanceLoopState::VMLS_FAULTED;
+	}));
+	if (const std::exception_ptr failure = reopened.maintenanceFailure(); failure) {
+		try {
+			std::rethrow_exception(failure);
+		} catch (const std::exception &error) {
+			FAIL() << "global adjacency pool recovery failed: " << error.what();
+		}
+	}
+	EXPECT_GE(reopened.maintenanceMetrics().global_adjacency_pools_released, 1U);
+	EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity()));
+	reopened.close();
+
+	auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
+	ASSERT_TRUE(data->is_open());
+	auto io = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+	auto metadata = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	EXPECT_FALSE(metadata->isPhysicalSlotAllocated(snapshot, adjacencyPool.physical_slot));
+	snapshot.release();
+}
+
+TEST_F(RelocatableStorageBackendTest, OrdinaryAdjacencyPoolMaintenanceCandidateDiskFullRetainsPoolUntilReopen) {
+	materializeNativeDatabase();
+	RelocatableStorageBackendOptions options = backendOptions();
+	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableMaintenanceOptions maintenance;
+	maintenance.loop.maximum_outstanding_tasks = 2U;
+	maintenance.loop.minimum_cycle_interval = std::chrono::milliseconds(1);
+	options.maintenance = maintenance;
+	RelocatableStorageBackend backend(std::move(options));
+	backend.open();
+	const std::vector<uint64_t> nodes =
+			backend.createLogicalNodes({{{"PoolDiskFullSource"}, {}}, {{"PoolDiskFullTarget"}, {}}});
+	ASSERT_EQ(nodes.size(), 2U);
+	const std::vector<uint64_t> edges = backend.createLogicalEdges({{nodes[0], nodes[1], "POOL_DISK_FULL", {}}});
+	ASSERT_EQ(edges.size(), 1U);
+
+	CatalogEntry adjacencyPool;
+	{
+		auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
+		ASSERT_TRUE(data->is_open());
+		auto io = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		auto metadata = RelocatableMetadataStore::open(io);
+		MetadataSnapshotPin snapshot = metadata->openSnapshot();
+		const std::optional<IndexRootLocation> root =
+				metadata->findIndexRootOptional(snapshot, RSS_GLOBAL_ADJACENCY_INDEX_ID);
+		ASSERT_TRUE(root.has_value());
+		adjacencyPool =
+				metadata->findCatalog(snapshot, metadata->findPageLocation(snapshot, root->root_page_id).segment_id);
+		snapshot.release();
+	}
+
+	backend.pauseMaintenance();
+	backend.deleteLogicalEdges({{edges.front()}});
+	std::atomic<bool> injected{false};
+	{
+		StorageIO::ScopedAllThreadNativeWriteHookForTesting failRetirementCandidate(
+				[&injected](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+					if (byteCount == RSS_PAGE_SIZE &&
+						(offset != SuperblockFile::slotOffset(0U) && offset != SuperblockFile::slotOffset(1U)) &&
+						!injected.exchange(true, std::memory_order_relaxed)) {
+#ifdef _WIN32
+						SetLastError(ERROR_DISK_FULL);
+#else
+						errno = ENOSPC;
+#endif
+						return static_cast<pwrite_ssize_t>(-1);
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		backend.resumeMaintenance();
+		ASSERT_TRUE(waitUntil([&] {
+			return backend.maintenanceMetrics().loop.state == RelocatableMaintenanceLoopState::VMLS_FAULTED;
+		}));
+	}
+	EXPECT_TRUE(injected.load(std::memory_order_relaxed));
+	EXPECT_NE(backend.maintenanceFailure(), nullptr);
+	backend.close();
+
+	{
+		auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
+		ASSERT_TRUE(data->is_open());
+		auto io = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		auto metadata = RelocatableMetadataStore::open(io);
+		MetadataSnapshotPin snapshot = metadata->openSnapshot();
+		EXPECT_FALSE(metadata->findIndexRootOptional(snapshot, RSS_GLOBAL_ADJACENCY_INDEX_ID).has_value());
+		EXPECT_EQ(metadata->findCatalog(snapshot, adjacencyPool.segment_id).state, SegmentState::SGS_SEALED);
+		EXPECT_TRUE(metadata->isPhysicalSlotAllocated(snapshot, adjacencyPool.physical_slot));
+		snapshot.release();
+	}
+
+	RelocatableStorageBackendOptions reopenOptions = backendOptions();
+	reopenOptions.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	reopenOptions.maintenance = maintenance;
+	RelocatableStorageBackend reopened(std::move(reopenOptions));
+	reopened.open();
+	ASSERT_TRUE(waitUntil([&] {
+		const RelocatableMaintenanceMetrics metrics = reopened.maintenanceMetrics();
+		return metrics.global_adjacency_pools_released >= 1U ||
+			   metrics.loop.state == RelocatableMaintenanceLoopState::VMLS_FAULTED;
+	}));
+	if (const std::exception_ptr failure = reopened.maintenanceFailure(); failure) {
+		try {
+			std::rethrow_exception(failure);
+		} catch (const std::exception &error) {
+			FAIL() << "global adjacency pool disk-full recovery failed: " << error.what();
+		}
+	}
+	EXPECT_GE(reopened.maintenanceMetrics().global_adjacency_pools_released, 1U);
+	EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity()));
+	reopened.close();
+
+	auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
+	ASSERT_TRUE(data->is_open());
+	auto io = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+	auto metadata = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	EXPECT_FALSE(metadata->isPhysicalSlotAllocated(snapshot, adjacencyPool.physical_slot));
+	snapshot.release();
+}
+
+TEST_F(RelocatableStorageBackendTest, OrdinaryAdjacencyPoolMaintenanceFinalSyncFailureResumesReleaseAfterReopen) {
+	materializeNativeDatabase();
+	RelocatableStorageBackendOptions options = backendOptions();
+	options.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableMaintenanceOptions maintenance;
+	maintenance.loop.maximum_outstanding_tasks = 2U;
+	maintenance.loop.minimum_cycle_interval = std::chrono::milliseconds(1);
+	options.maintenance = maintenance;
+	RelocatableStorageBackend backend(std::move(options));
+	backend.open();
+	const std::vector<uint64_t> nodes =
+			backend.createLogicalNodes({{{"PoolFinalSyncSource"}, {}}, {{"PoolFinalSyncTarget"}, {}}});
+	ASSERT_EQ(nodes.size(), 2U);
+	const std::vector<uint64_t> edges = backend.createLogicalEdges({{nodes[0], nodes[1], "POOL_FINAL_SYNC", {}}});
+	ASSERT_EQ(edges.size(), 1U);
+
+	CatalogEntry adjacencyPool;
+	{
+		auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
+		ASSERT_TRUE(data->is_open());
+		auto io = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		auto metadata = RelocatableMetadataStore::open(io);
+		MetadataSnapshotPin snapshot = metadata->openSnapshot();
+		const std::optional<IndexRootLocation> root =
+				metadata->findIndexRootOptional(snapshot, RSS_GLOBAL_ADJACENCY_INDEX_ID);
+		ASSERT_TRUE(root.has_value());
+		adjacencyPool =
+				metadata->findCatalog(snapshot, metadata->findPageLocation(snapshot, root->root_page_id).segment_id);
+		snapshot.release();
+	}
+
+	backend.pauseMaintenance();
+	backend.deleteLogicalEdges({{edges.front()}});
+	PhysicalPageRef preRetirementCatalogRoot;
+	{
+		auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
+		ASSERT_TRUE(data->is_open());
+		auto io = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		preRetirementCatalogRoot = SuperblockFile(io).recover().catalog_root;
+	}
+	std::atomic<bool> retirementSuperblockWritten{false};
+	std::atomic<bool> failedFinalSync{false};
+	{
+		StorageIO::ScopedAllThreadNativeWriteHookForTesting observeRetirementPublication(
+				[preRetirementCatalogRoot, &retirementSuperblockWritten](file_handle_t fd, const void *bytes,
+																		 size_t byteCount, pwrite_off_t offset) {
+					if (!retirementSuperblockWritten.load(std::memory_order_relaxed) && byteCount == RSS_PAGE_SIZE &&
+						(offset == SuperblockFile::slotOffset(0U) || offset == SuperblockFile::slotOffset(1U))) {
+						try {
+							const Superblock candidate = SuperblockCodec::decode(
+									std::span<const std::byte>(static_cast<const std::byte *>(bytes), byteCount));
+							if (candidate.catalog_root != preRetirementCatalogRoot) {
+								retirementSuperblockWritten.store(true, std::memory_order_relaxed);
+							}
+						} catch (const FormatException &) {
+							// Only a valid replacement Superblock arms the final-fence fault.
+						}
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		StorageIO::ScopedAllThreadNativeSyncHookForTesting failRetirementFinalSync(
+				[&retirementSuperblockWritten, &failedFinalSync](file_handle_t fd) {
+					if (retirementSuperblockWritten.load(std::memory_order_relaxed) &&
+						!failedFinalSync.exchange(true, std::memory_order_relaxed)) {
+#ifdef _WIN32
+						SetLastError(ERROR_WRITE_FAULT);
+#else
+						errno = EIO;
+#endif
+						return -1;
+					}
+					return portable_fsync(fd);
+				});
+		backend.resumeMaintenance();
+		ASSERT_TRUE(waitUntil([&] {
+			return backend.maintenanceMetrics().loop.state == RelocatableMaintenanceLoopState::VMLS_FAULTED;
+		}));
+	}
+	EXPECT_TRUE(retirementSuperblockWritten.load(std::memory_order_relaxed));
+	EXPECT_TRUE(failedFinalSync.load(std::memory_order_relaxed));
+	EXPECT_NE(backend.maintenanceFailure(), nullptr);
+	backend.close();
+
+	{
+		auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
+		ASSERT_TRUE(data->is_open());
+		auto io = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		auto metadata = RelocatableMetadataStore::open(io);
+		MetadataSnapshotPin snapshot = metadata->openSnapshot();
+		EXPECT_FALSE(metadata->findIndexRootOptional(snapshot, RSS_GLOBAL_ADJACENCY_INDEX_ID).has_value());
+		EXPECT_EQ(metadata->findCatalog(snapshot, adjacencyPool.segment_id).state, SegmentState::SGS_RETIRED);
+		EXPECT_TRUE(metadata->isPhysicalSlotAllocated(snapshot, adjacencyPool.physical_slot));
+		snapshot.release();
+	}
+
+	RelocatableStorageBackendOptions reopenOptions = backendOptions();
+	reopenOptions.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	reopenOptions.maintenance = maintenance;
+	RelocatableStorageBackend reopened(std::move(reopenOptions));
+	reopened.open();
+	ASSERT_TRUE(waitUntil([&] {
+		const RelocatableMaintenanceMetrics metrics = reopened.maintenanceMetrics();
+		return metrics.global_adjacency_pools_released >= 1U ||
+			   metrics.loop.state == RelocatableMaintenanceLoopState::VMLS_FAULTED;
+	}));
+	if (const std::exception_ptr failure = reopened.maintenanceFailure(); failure) {
+		try {
+			std::rethrow_exception(failure);
+		} catch (const std::exception &error) {
+			FAIL() << "global adjacency pool final-sync recovery failed: " << error.what();
+		}
+	}
+	EXPECT_EQ(reopened.maintenanceMetrics().global_adjacency_pools_retired, 0U);
+	EXPECT_GE(reopened.maintenanceMetrics().global_adjacency_pools_released, 1U);
+	EXPECT_NO_THROW(static_cast<void>(reopened.verifyIntegrity()));
+	reopened.close();
+
+	auto data = std::make_shared<std::fstream>(data_path_, std::ios::in | std::ios::out | std::ios::binary);
+	ASSERT_TRUE(data->is_open());
+	auto io = std::make_shared<StorageIO>(data, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+	auto metadata = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	EXPECT_FALSE(metadata->isPhysicalSlotAllocated(snapshot, adjacencyPool.physical_slot));
+	snapshot.release();
+}
+
 TEST_F(RelocatableStorageBackendTest, CypherCreateSetRemoveFoldsCreatedEdgeStateIntoOneNativePublication) {
 	materializeNativeDatabase();
 
 	zyx::Database database(data_path_.string());
 	database.open();
-	zyx::Result create = database.execute(
-			"CREATE (a:CreatedEdgeFold {seed: 3})-"
-			"[r:CREATED_EDGE_FOLD {temporary: true}]->(b:CreatedEdgeFold) "
-			"SET r.weight = a.seed * 2 REMOVE r.temporary "
-			"RETURN r.weight AS weight, r.temporary AS temporary");
+	zyx::Result create = database.execute("CREATE (a:CreatedEdgeFold {seed: 3})-"
+										  "[r:CREATED_EDGE_FOLD {temporary: true}]->(b:CreatedEdgeFold) "
+										  "SET r.weight = a.seed * 2 REMOVE r.temporary "
+										  "RETURN r.weight AS weight, r.temporary AS temporary");
 	ASSERT_TRUE(create.isSuccess()) << create.getError();
 	ASSERT_TRUE(create.hasNext());
 	create.next();
@@ -69,9 +671,8 @@ TEST_F(RelocatableStorageBackendTest, CypherCreateSetRemoveFoldsCreatedEdgeState
 
 	zyx::Database reopened(data_path_.string());
 	reopened.open();
-	zyx::Result visible = reopened.execute(
-			"MATCH (:CreatedEdgeFold)-[r:CREATED_EDGE_FOLD]->(:CreatedEdgeFold) "
-			"RETURN r.weight AS weight, r.temporary AS temporary");
+	zyx::Result visible = reopened.execute("MATCH (:CreatedEdgeFold)-[r:CREATED_EDGE_FOLD]->(:CreatedEdgeFold) "
+										   "RETURN r.weight AS weight, r.temporary AS temporary");
 	ASSERT_TRUE(visible.isSuccess()) << visible.getError();
 	ASSERT_TRUE(visible.hasNext());
 	visible.next();
@@ -86,9 +687,9 @@ TEST_F(RelocatableStorageBackendTest, CypherSetNullRemovesACreatedEdgePropertyDu
 
 	zyx::Database database(data_path_.string());
 	database.open();
-	zyx::Result create = database.execute(
-			"CREATE (:CreatedEdgeNull)-[r:CREATED_EDGE_NULL {temporary: true}]->(:CreatedEdgeNull) "
-			"SET r.temporary = null RETURN r.temporary AS temporary");
+	zyx::Result create =
+			database.execute("CREATE (:CreatedEdgeNull)-[r:CREATED_EDGE_NULL {temporary: true}]->(:CreatedEdgeNull) "
+							 "SET r.temporary = null RETURN r.temporary AS temporary");
 	ASSERT_TRUE(create.isSuccess()) << create.getError();
 	ASSERT_TRUE(create.hasNext());
 	create.next();
@@ -106,6 +707,82 @@ TEST_F(RelocatableStorageBackendTest, CypherSetNullRemovesACreatedEdgePropertyDu
 	EXPECT_TRUE(std::holds_alternative<std::monostate>(visible.get("temporary")));
 	EXPECT_FALSE(visible.hasNext());
 	EXPECT_NO_THROW(reopened.close());
+}
+
+TEST_F(RelocatableStorageBackendTest, CypherMergePostMutationsPublishCreatedAndMatchedLabelsDurably) {
+	materializeNativeDatabase();
+
+	zyx::Database database(data_path_.string());
+	database.open();
+	zyx::Result created = database.execute("MERGE (n:MergeLabelPerson {name: 'Ada'}) "
+										   "SET n:MergeCreatedMarker, n += {legacy: 1} RETURN n");
+	ASSERT_TRUE(created.isSuccess()) << created.getError();
+	ASSERT_TRUE(created.hasNext());
+	created.next();
+	const auto createdNode = std::get<std::shared_ptr<zyx::Node>>(created.get("n"));
+	ASSERT_NE(createdNode, nullptr);
+	EXPECT_NE(std::ranges::find(createdNode->labels, "MergeLabelPerson"), createdNode->labels.end());
+	EXPECT_NE(std::ranges::find(createdNode->labels, "MergeCreatedMarker"), createdNode->labels.end());
+	EXPECT_EQ(std::get<int64_t>(createdNode->properties.at("legacy")), 1);
+	EXPECT_FALSE(created.hasNext());
+
+	zyx::Result matched = database.execute("MERGE (n:MergeLabelPerson {name: 'Ada'}) "
+										   "SET n:MergeActive, n += {legacy: null, score: 4} "
+										   "REMOVE n:MergeCreatedMarker RETURN n");
+	ASSERT_TRUE(matched.isSuccess()) << matched.getError();
+	ASSERT_TRUE(matched.hasNext());
+	matched.next();
+	const auto matchedNode = std::get<std::shared_ptr<zyx::Node>>(matched.get("n"));
+	ASSERT_NE(matchedNode, nullptr);
+	EXPECT_NE(std::ranges::find(matchedNode->labels, "MergeLabelPerson"), matchedNode->labels.end());
+	EXPECT_NE(std::ranges::find(matchedNode->labels, "MergeActive"), matchedNode->labels.end());
+	EXPECT_EQ(std::ranges::find(matchedNode->labels, "MergeCreatedMarker"), matchedNode->labels.end());
+	EXPECT_FALSE(matchedNode->properties.contains("legacy"));
+	EXPECT_EQ(std::get<int64_t>(matchedNode->properties.at("score")), 4);
+	EXPECT_FALSE(matched.hasNext());
+	database.close();
+
+	zyx::Database reopened(data_path_.string());
+	reopened.open();
+	zyx::Result durable = reopened.execute("MATCH (n:MergeLabelPerson:MergeActive {name: 'Ada'}) "
+										   "RETURN n.legacy AS legacy, n.score AS score");
+	ASSERT_TRUE(durable.isSuccess()) << durable.getError();
+	ASSERT_TRUE(durable.hasNext());
+	durable.next();
+	EXPECT_TRUE(std::holds_alternative<std::monostate>(durable.get("legacy")));
+	EXPECT_EQ(std::get<int64_t>(durable.get("score")), 4);
+	EXPECT_FALSE(durable.hasNext());
+	const zyx::Result retired = reopened.execute("MATCH (n:MergeCreatedMarker) RETURN n");
+	ASSERT_TRUE(retired.isSuccess()) << retired.getError();
+	EXPECT_FALSE(retired.hasNext());
+	EXPECT_NO_THROW(reopened.close());
+}
+
+TEST_F(RelocatableStorageBackendTest, CypherMergeResultFailureDoesNotPublishMatchedLabelMutation) {
+	materializeNativeDatabase();
+
+	zyx::Database database(data_path_.string());
+	database.open();
+	const zyx::Result seed = database.execute("CREATE (:MergeFailureSeed {name: 'Ada'})");
+	ASSERT_TRUE(seed.isSuccess()) << seed.getError();
+
+	// MERGE must preflight its result expressions before publishing the staged
+	// label change. A failed RETURN cannot leave a partially visible mutation.
+	const zyx::Result failed = database.execute("MERGE (n:MergeFailureSeed {name: 'Ada'}) SET n:MergeFailurePublished "
+												"RETURN 1 / 0 AS invalidResult");
+	EXPECT_FALSE(failed.isSuccess());
+	EXPECT_FALSE(failed.getError().empty());
+
+	const zyx::Result original = database.execute("MATCH (n:MergeFailureSeed {name: 'Ada'}) RETURN n");
+	ASSERT_TRUE(original.isSuccess()) << original.getError();
+	ASSERT_TRUE(original.hasNext());
+	original.next();
+	const auto node = std::get<std::shared_ptr<zyx::Node>>(original.get("n"));
+	ASSERT_NE(node, nullptr);
+	EXPECT_NE(std::ranges::find(node->labels, "MergeFailureSeed"), node->labels.end());
+	EXPECT_EQ(std::ranges::find(node->labels, "MergeFailurePublished"), node->labels.end());
+	EXPECT_FALSE(original.hasNext());
+	database.close();
 }
 
 TEST_F(RelocatableStorageBackendTest, CypherDeleteUsesTheReadSnapshotFenceAndOneMutationBatch) {
@@ -203,7 +880,7 @@ TEST_F(RelocatableStorageBackendTest, CypherMultiRowPropertyWritesCoalesceShared
 	ASSERT_GT(database.createNode("MultiRowProperty", {{"score", int64_t(2)}, {"drop", int64_t(20)}}), 0);
 
 	zyx::Result set = database.execute("MATCH (n:MultiRowProperty) SET n.score = $score RETURN n.score AS score",
-										{{"score", int64_t(9)}});
+									   {{"score", int64_t(9)}});
 	ASSERT_TRUE(set.isSuccess()) << set.getError();
 	size_t setRows = 0U;
 	while (set.hasNext()) {
@@ -353,4 +1030,62 @@ TEST_F(RelocatableStorageBackendTest, DriverAbiDirectCreatesUseTheLogicalWriteAd
 	zyx_driver_result_free(result);
 	zyx_driver_db_close(database, &error);
 	EXPECT_EQ(error, nullptr);
+}
+
+TEST_F(RelocatableStorageBackendTest, ReadOnlyNativeLogicalWriteSurfaceRejectsEveryNonEmptyMutation) {
+	materializeNativeDatabase();
+	RelocatableStorageBackendOptions writerOptions = backendOptions();
+	writerOptions.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend writer(std::move(writerOptions));
+	writer.open();
+	const std::vector<uint64_t> stableNodes = writer.createLogicalNodes({{{"Stable"}, {}}});
+	ASSERT_EQ(stableNodes.size(), 1U);
+	writer.close();
+
+	RelocatableStorageBackendOptions readOnlyOptions = backendOptions();
+	readOnlyOptions.open_mode = OpenMode::OPEN_READ_ONLY_EXISTING_FILE;
+	RelocatableStorageBackend readOnly(std::move(readOnlyOptions));
+	readOnly.open();
+	RelocatableReadSnapshot snapshot = readOnly.openSnapshot();
+	EXPECT_TRUE(readOnly.containsLogicalNode(snapshot, stableNodes.front()));
+	EXPECT_NO_THROW(readOnly.beginLogicalGraphTransaction(true)->rollback());
+	EXPECT_THROW(static_cast<void>(readOnly.beginLogicalGraphTransaction(false)), std::logic_error);
+
+	const LogicalGraphNodeCreateRequest nodeRequest{{"ReadOnly"}, {}};
+	const LogicalGraphEdgeCreateRequest edgeRequest{stableNodes.front(), stableNodes.front(), "READ_ONLY", {}};
+	const LogicalGraphPropertyReplaceRequest replacement{stableNodes.front(),
+														 {{"value", graph::PropertyValue(int64_t{1})}}};
+	const LogicalGraphEdgeDeleteRequest edgeDelete{1U};
+	const LogicalGraphNodeDeleteRequest nodeDelete{stableNodes.front(), false, 0U};
+	LogicalGraphMutationBatch batch;
+	batch.node_creates.push_back(nodeRequest);
+
+	EXPECT_THROW(static_cast<void>(readOnly.reserveLogicalGraphCreationIds(1U, 0U)), std::logic_error);
+	EXPECT_THROW(static_cast<void>(readOnly.createLogicalNodes({nodeRequest})), std::logic_error);
+	EXPECT_THROW(static_cast<void>(readOnly.createLogicalEdges({edgeRequest})), std::logic_error);
+	EXPECT_THROW(readOnly.replaceLogicalNodeProperties({replacement}), std::logic_error);
+	EXPECT_THROW(readOnly.replaceLogicalEdgeProperties({replacement}), std::logic_error);
+	EXPECT_THROW(readOnly.deleteLogicalEdges({edgeDelete}), std::logic_error);
+	EXPECT_THROW(readOnly.deleteLogicalNodes({nodeDelete}), std::logic_error);
+	EXPECT_THROW(static_cast<void>(readOnly.executeLogicalGraphMutationBatch(batch)), std::logic_error);
+
+	// Empty requests do not need the write executor and are explicit no-ops.
+	EXPECT_TRUE(readOnly.createLogicalNodes({}).empty());
+	EXPECT_TRUE(readOnly.createLogicalEdges({}).empty());
+	EXPECT_NO_THROW(readOnly.replaceLogicalNodeProperties({}));
+	EXPECT_NO_THROW(readOnly.replaceLogicalEdgeProperties({}));
+	EXPECT_NO_THROW(readOnly.deleteLogicalEdges({}));
+	EXPECT_NO_THROW(readOnly.deleteLogicalNodes({}));
+	EXPECT_NO_THROW(static_cast<void>(readOnly.executeLogicalGraphMutationBatch({})));
+	snapshot.release();
+	readOnly.close();
+
+	RelocatableStorageBackendOptions reopenOptions = backendOptions();
+	reopenOptions.open_mode = OpenMode::OPEN_EXISTING_FILE;
+	RelocatableStorageBackend reopened(std::move(reopenOptions));
+	reopened.open();
+	RelocatableReadSnapshot reopenedSnapshot = reopened.openSnapshot();
+	EXPECT_TRUE(reopened.containsLogicalNode(reopenedSnapshot, stableNodes.front()));
+	reopenedSnapshot.release();
+	reopened.close();
 }

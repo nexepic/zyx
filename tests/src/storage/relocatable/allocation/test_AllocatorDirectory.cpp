@@ -7,12 +7,15 @@
  **/
 
 #include <array>
+#include <atomic>
+#include <cerrno>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <limits>
 #include <memory>
 #include <optional>
+#include <system_error>
 #include <vector>
 
 #include <boost/uuid/uuid.hpp>
@@ -21,9 +24,14 @@
 #include <gtest/gtest.h>
 
 #include "graph/storage/StorageIO.hpp"
+#include "graph/storage/PwriteHelper.hpp"
 #include "graph/storage/relocatable/allocation/AllocatorDirectory.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPagePool.hpp"
 #include "graph/storage/relocatable/metadata/MetadataWriteBatch.hpp"
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 using namespace graph::storage;
 
@@ -48,7 +56,7 @@ namespace {
 
 	class TestAllocatorPageAllocator final : public MetadataPageAllocator {
 	public:
-		PageId allocatePageId() override { return invalid_page_id ? PageId{} : PageId(next_page_id++); }
+		MetadataPageId allocateMetadataPageId() override { return invalid_page_id ? MetadataPageId{} : MetadataPageId(next_page_id++); }
 
 		MetadataPageAllocation allocatePage(Generation generation, LogSequenceNumber,
 											std::span<const PhysicalSlotId>) override {
@@ -150,6 +158,230 @@ TEST_F(RelocatableAllocatorDirectoryTest, PublishesCopyOnWriteSlotTransitionsAnd
 	EXPECT_FALSE(directory.isAllocated(released, PhysicalSlotId(1)));
 	EXPECT_TRUE(directory.isAllocated(allocated, PhysicalSlotId(1)));
 	EXPECT_NE(allocated.allocator_root, released.allocator_root);
+}
+
+TEST_F(RelocatableAllocatorDirectoryTest, NativeCandidateShortWriteRetainsOldGenerationAndAllowsRetry) {
+	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+		const Superblock initial = superblock(1U, 1U);
+		SuperblockFile bootstrap(nativeIo);
+		bootstrap.initializeNew(initial);
+		MetadataPageFile pages(nativeIo, initial);
+		MetadataPagePoolAllocator allocator(nativeIo, initial);
+		AllocatorDirectory directory(pages, allocator);
+		bool shortWriteObserved = false;
+		{
+			StorageIO::ScopedNativeWriteHookForTesting shortCandidate(
+					[&shortWriteObserved](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+						if (!shortWriteObserved && byteCount == RSS_PAGE_SIZE) {
+							shortWriteObserved = true;
+							return portable_pwrite(fd, bytes, RSS_PAGE_SIZE - 1U, offset);
+						}
+						return portable_pwrite(fd, bytes, byteCount, offset);
+					});
+			EXPECT_THROW(static_cast<void>(directory.setAllocatedAndPublish(
+						bootstrap, initial, PhysicalSlotId(1U), true, LogSequenceNumber(2U))), std::system_error);
+		}
+		EXPECT_TRUE(shortWriteObserved);
+		EXPECT_EQ(bootstrap.recover().generation, initial.generation);
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+
+	reopen();
+	SuperblockFile reopenedBootstrap(io);
+	const Superblock recovered = reopenedBootstrap.recover();
+	MetadataPageFile reopenedPages(io, recovered);
+	MetadataPagePoolAllocator reopenedAllocator(io, recovered);
+	AllocatorDirectory reopenedDirectory(reopenedPages, reopenedAllocator);
+	const Superblock published = reopenedDirectory.setAllocatedAndPublish(
+			reopenedBootstrap, recovered, PhysicalSlotId(1U), true, LogSequenceNumber(2U));
+	EXPECT_EQ(published.generation, Generation(2U));
+	EXPECT_TRUE(reopenedDirectory.isAllocated(published, PhysicalSlotId(1U)));
+}
+
+TEST_F(RelocatableAllocatorDirectoryTest,
+		NativeReleaseCandidateShortWriteRetainsAllocatedGenerationAndAllowsRetryAfterReopen) {
+	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+		SuperblockFile bootstrap(nativeIo);
+		const Superblock initial = superblock(1U, 1U);
+		bootstrap.initializeNew(initial);
+		MetadataPageFile pages(nativeIo, initial);
+		MetadataPagePoolAllocator allocator(nativeIo, initial);
+		AllocatorDirectory directory(pages, allocator);
+		const Superblock allocated = directory.setAllocatedAndPublish(
+				bootstrap, initial, PhysicalSlotId(1U), true, LogSequenceNumber(2U));
+		ASSERT_TRUE(directory.isAllocated(allocated, PhysicalSlotId(1U)));
+
+		bool shortWriteObserved = false;
+		{
+			StorageIO::ScopedNativeWriteHookForTesting shortCandidate(
+					[&shortWriteObserved](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+						if (!shortWriteObserved && byteCount == RSS_PAGE_SIZE) {
+							shortWriteObserved = true;
+							return portable_pwrite(fd, bytes, RSS_PAGE_SIZE - 1U, offset);
+						}
+						return portable_pwrite(fd, bytes, byteCount, offset);
+					});
+			EXPECT_THROW(static_cast<void>(directory.setAllocatedAndPublish(
+							bootstrap, allocated, PhysicalSlotId(1U), false, LogSequenceNumber(3U))), std::system_error);
+		}
+		EXPECT_TRUE(shortWriteObserved);
+		EXPECT_EQ(bootstrap.recover().generation, allocated.generation);
+		EXPECT_TRUE(directory.isAllocated(allocated, PhysicalSlotId(1U)));
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+
+	reopen();
+	SuperblockFile reopenedBootstrap(io);
+	const Superblock recovered = reopenedBootstrap.recover();
+	EXPECT_EQ(recovered.generation, Generation(2U));
+	MetadataPageFile reopenedPages(io, recovered);
+	MetadataPagePoolAllocator reopenedAllocator(io, recovered);
+	AllocatorDirectory reopenedDirectory(reopenedPages, reopenedAllocator);
+	EXPECT_TRUE(reopenedDirectory.isAllocated(recovered, PhysicalSlotId(1U)));
+	const Superblock released = reopenedDirectory.setAllocatedAndPublish(
+			reopenedBootstrap, recovered, PhysicalSlotId(1U), false, LogSequenceNumber(3U));
+	EXPECT_EQ(released.generation, Generation(3U));
+	EXPECT_FALSE(reopenedDirectory.isAllocated(released, PhysicalSlotId(1U)));
+}
+
+TEST_F(RelocatableAllocatorDirectoryTest, NativeCandidateDiskFullRetainsOldGenerationAndAllowsRetry) {
+	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+		const Superblock initial = superblock(1U, 1U);
+		SuperblockFile bootstrap(nativeIo);
+		bootstrap.initializeNew(initial);
+		MetadataPageFile pages(nativeIo, initial);
+		MetadataPagePoolAllocator allocator(nativeIo, initial);
+		AllocatorDirectory directory(pages, allocator);
+		bool diskFullObserved = false;
+		{
+			StorageIO::ScopedNativeWriteHookForTesting diskFullCandidate(
+					[&diskFullObserved](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+						if (!diskFullObserved && byteCount == RSS_PAGE_SIZE) {
+							diskFullObserved = true;
+#ifdef _WIN32
+							SetLastError(ERROR_DISK_FULL);
+#else
+							errno = ENOSPC;
+#endif
+							return static_cast<pwrite_ssize_t>(-1);
+						}
+						return portable_pwrite(fd, bytes, byteCount, offset);
+					});
+			EXPECT_THROW(static_cast<void>(directory.setAllocatedAndPublish(
+						bootstrap, initial, PhysicalSlotId(1U), true, LogSequenceNumber(2U))), std::system_error);
+		}
+		EXPECT_TRUE(diskFullObserved);
+		EXPECT_EQ(bootstrap.recover().generation, initial.generation);
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+
+	reopen();
+	SuperblockFile reopenedBootstrap(io);
+	const Superblock recovered = reopenedBootstrap.recover();
+	MetadataPageFile reopenedPages(io, recovered);
+	MetadataPagePoolAllocator reopenedAllocator(io, recovered);
+	AllocatorDirectory reopenedDirectory(reopenedPages, reopenedAllocator);
+	const Superblock published = reopenedDirectory.setAllocatedAndPublish(
+			reopenedBootstrap, recovered, PhysicalSlotId(1U), true, LogSequenceNumber(2U));
+	EXPECT_EQ(published.generation, Generation(2U));
+	EXPECT_TRUE(reopenedDirectory.isAllocated(published, PhysicalSlotId(1U)));
+}
+
+TEST_F(RelocatableAllocatorDirectoryTest, NativeDataFenceFailureRetainsOldGenerationAndAllowsRetry) {
+	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+		const Superblock initial = superblock(1U, 1U);
+		SuperblockFile bootstrap(nativeIo);
+		bootstrap.initializeNew(initial);
+		MetadataPageFile pages(nativeIo, initial);
+		MetadataPagePoolAllocator allocator(nativeIo, initial);
+		AllocatorDirectory directory(pages, allocator);
+		std::atomic<uint32_t> syncCalls{0U};
+		{
+			StorageIO::ScopedNativeSyncHookForTesting failDataFence([&syncCalls](file_handle_t fd) {
+				if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 0U) {
+#ifdef _WIN32
+					SetLastError(ERROR_DISK_FULL);
+#else
+					errno = ENOSPC;
+#endif
+					return -1;
+				}
+				return portable_fsync(fd);
+			});
+			EXPECT_THROW(static_cast<void>(directory.setAllocatedAndPublish(
+						bootstrap, initial, PhysicalSlotId(1U), true, LogSequenceNumber(2U))), std::runtime_error);
+		}
+		EXPECT_GE(syncCalls.load(std::memory_order_relaxed), 1U);
+		EXPECT_EQ(bootstrap.recover().generation, initial.generation);
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+
+	reopen();
+	SuperblockFile reopenedBootstrap(io);
+	const Superblock recovered = reopenedBootstrap.recover();
+	MetadataPageFile reopenedPages(io, recovered);
+	MetadataPagePoolAllocator reopenedAllocator(io, recovered);
+	AllocatorDirectory reopenedDirectory(reopenedPages, reopenedAllocator);
+	const Superblock published = reopenedDirectory.setAllocatedAndPublish(
+			reopenedBootstrap, recovered, PhysicalSlotId(1U), true, LogSequenceNumber(2U));
+	EXPECT_EQ(published.generation, Generation(2U));
+	EXPECT_TRUE(reopenedDirectory.isAllocated(published, PhysicalSlotId(1U)));
+}
+
+TEST_F(RelocatableAllocatorDirectoryTest, NativeFinalFenceFailureReopensTheCompletePublishedGeneration) {
+	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+		const Superblock initial = superblock(1U, 1U);
+		SuperblockFile bootstrap(nativeIo);
+		bootstrap.initializeNew(initial);
+		MetadataPageFile pages(nativeIo, initial);
+		MetadataPagePoolAllocator allocator(nativeIo, initial);
+		AllocatorDirectory directory(pages, allocator);
+		std::atomic<uint32_t> syncCalls{0U};
+		{
+			StorageIO::ScopedNativeSyncHookForTesting failFinalFence([&syncCalls](file_handle_t fd) {
+				if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 1U) {
+#ifdef _WIN32
+					SetLastError(ERROR_DISK_FULL);
+#else
+					errno = ENOSPC;
+#endif
+					return -1;
+				}
+				return portable_fsync(fd);
+			});
+			EXPECT_THROW(static_cast<void>(directory.setAllocatedAndPublish(
+						bootstrap, initial, PhysicalSlotId(1U), true, LogSequenceNumber(2U))), std::runtime_error);
+		}
+		EXPECT_GE(syncCalls.load(std::memory_order_relaxed), 2U);
+		const Superblock published = bootstrap.recover();
+		EXPECT_EQ(published.generation, Generation(2U));
+		EXPECT_TRUE(directory.isAllocated(published, PhysicalSlotId(1U)));
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+
+	reopen();
+	SuperblockFile reopenedBootstrap(io);
+	const Superblock recovered = reopenedBootstrap.recover();
+	EXPECT_EQ(recovered.generation, Generation(2U));
+	MetadataPageFile reopenedPages(io, recovered);
+	MetadataPagePoolAllocator reopenedAllocator(io, recovered);
+	AllocatorDirectory reopenedDirectory(reopenedPages, reopenedAllocator);
+	EXPECT_TRUE(reopenedDirectory.isAllocated(recovered, PhysicalSlotId(1U)));
 }
 
 TEST_F(RelocatableAllocatorDirectoryTest, SkipsAFullAllocatorLeafUsingThePersistedRadixSummary) {

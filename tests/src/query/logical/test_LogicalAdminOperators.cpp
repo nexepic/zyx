@@ -9,6 +9,8 @@
 #include <gtest/gtest.h>
 
 #include "graph/query/logical/LogicalOperator.hpp"
+#include "graph/query/expressions/Expression.hpp"
+#include "graph/query/logical/operators/LogicalAggregate.hpp"
 #include "graph/query/logical/operators/LogicalNodeScan.hpp"
 #include "graph/query/logical/operators/LogicalCreateIndex.hpp"
 #include "graph/query/logical/operators/LogicalDropIndex.hpp"
@@ -357,6 +359,8 @@ TEST_F(LogicalCallProcedureTest, BasicConstruction) {
     EXPECT_EQ(cp.getType(), LogicalOpType::LOP_CALL_PROCEDURE);
     EXPECT_EQ(cp.getProcedureName(), "db.stats");
     EXPECT_EQ(cp.getArgs().size(), 2u);
+    EXPECT_FALSE(cp.hasBoundArguments());
+    EXPECT_EQ(cp.resolveArguments({}), cp.getArgs());
 }
 
 TEST_F(LogicalCallProcedureTest, LeafNode) {
@@ -382,6 +386,93 @@ TEST_F(LogicalCallProcedureTest, Clone) {
 TEST_F(LogicalCallProcedureTest, ToString) {
     LogicalCallProcedure cp("db.stats", {});
     EXPECT_EQ(cp.toString(), "CallProcedure(db.stats)");
+}
+
+TEST_F(LogicalCallProcedureTest, ResolvesBoundArgumentsAndPreservesThemWhenCloned) {
+    auto call = LogicalCallProcedure::withBoundArguments("dbms.getConfig", {"key", "fallback"});
+    const std::unordered_map<std::string, graph::PropertyValue> parameters{
+            {"key", graph::PropertyValue("query.timeout_ms")}, {"fallback", graph::PropertyValue(int64_t{30})}};
+
+    EXPECT_TRUE(call->hasBoundArguments());
+    EXPECT_EQ(call->getParameterNames(), std::vector<std::string>({"key", "fallback"}));
+    const auto resolved = call->resolveArguments(parameters);
+    ASSERT_EQ(resolved.size(), 2U);
+    EXPECT_EQ(resolved[0], graph::PropertyValue("query.timeout_ms"));
+    EXPECT_EQ(resolved[1], graph::PropertyValue(int64_t{30}));
+
+    const auto cloned = call->clone();
+    const auto *boundClone = dynamic_cast<const LogicalCallProcedure *>(cloned.get());
+    ASSERT_NE(boundClone, nullptr);
+    EXPECT_TRUE(boundClone->hasBoundArguments());
+    EXPECT_EQ(boundClone->getParameterNames(), call->getParameterNames());
+    EXPECT_EQ(boundClone->resolveArguments(parameters), resolved);
+}
+
+TEST_F(LogicalCallProcedureTest, RejectsMalformedOrUnresolvedBoundArguments) {
+    const auto emptyName = LogicalCallProcedure::withBoundArguments("dbms.getConfig", {""});
+    EXPECT_THROW(static_cast<void>(emptyName->resolveArguments({})), std::logic_error);
+
+    const auto unresolved = LogicalCallProcedure::withBoundArguments("dbms.getConfig", {"missing"});
+    EXPECT_THROW(static_cast<void>(unresolved->resolveArguments({})), std::runtime_error);
+}
+
+// =============================================================================
+// LogicalAggregate
+// =============================================================================
+
+class LogicalAggregateTest : public ::testing::Test {};
+
+TEST_F(LogicalAggregateTest, PreservesGroupingAggregateAndChildContractsAcrossClone) {
+    using graph::query::expressions::LiteralExpression;
+
+    std::vector<std::shared_ptr<graph::query::expressions::Expression>> groups;
+    groups.push_back(std::make_shared<LiteralExpression>("ignored-by-alias"));
+    groups.push_back(nullptr);
+    groups.push_back(std::make_shared<LiteralExpression>(int64_t{7}));
+    std::vector<LogicalAggItem> aggregations;
+    aggregations.emplace_back("sum", std::make_shared<LiteralExpression>(int64_t{1}), "total", true,
+                              std::make_shared<LiteralExpression>(0.5));
+    aggregations.emplace_back("count", nullptr, "rows");
+    LogicalAggregate aggregate(std::make_unique<LogicalNodeScan>("n"), std::move(groups), std::move(aggregations),
+                               {"group_name", "", ""});
+
+    EXPECT_EQ(aggregate.getType(), LogicalOpType::LOP_AGGREGATE);
+    EXPECT_EQ(aggregate.toString(), "Aggregate");
+    ASSERT_EQ(aggregate.getChildren().size(), 1U);
+    EXPECT_NE(aggregate.getChildren().front(), nullptr);
+    EXPECT_EQ(aggregate.getOutputVariables(), std::vector<std::string>({"group_name", "7", "total", "rows"}));
+    ASSERT_EQ(aggregate.getAggregations().size(), 2U);
+    EXPECT_TRUE(aggregate.getAggregations()[0].distinct);
+    EXPECT_NE(aggregate.getAggregations()[0].argument, nullptr);
+    EXPECT_NE(aggregate.getAggregations()[0].extraArg, nullptr);
+    EXPECT_EQ(aggregate.getAggregations()[1].argument, nullptr);
+    EXPECT_EQ(aggregate.getAggregations()[1].extraArg, nullptr);
+
+    const auto cloned = aggregate.clone();
+    const auto *aggregateClone = dynamic_cast<const LogicalAggregate *>(cloned.get());
+    ASSERT_NE(aggregateClone, nullptr);
+    ASSERT_EQ(aggregateClone->getChildren().size(), 1U);
+    EXPECT_NE(aggregateClone->getChildren().front(), aggregate.getChildren().front());
+    ASSERT_EQ(aggregateClone->getGroupByExprs().size(), 3U);
+    EXPECT_NE(aggregateClone->getGroupByExprs()[0], aggregate.getGroupByExprs()[0]);
+    EXPECT_EQ(aggregateClone->getGroupByExprs()[1], nullptr);
+    EXPECT_NE(aggregateClone->getAggregations()[0].argument, aggregate.getAggregations()[0].argument);
+    EXPECT_NE(aggregateClone->getAggregations()[0].extraArg, aggregate.getAggregations()[0].extraArg);
+
+    EXPECT_THROW(aggregate.setChild(1U, nullptr), std::out_of_range);
+    EXPECT_THROW(static_cast<void>(aggregate.detachChild(1U)), std::out_of_range);
+    const auto detached = aggregate.detachChild(0U);
+    ASSERT_NE(detached, nullptr);
+    EXPECT_EQ(aggregate.getChildren().front(), nullptr);
+    aggregate.setChild(0U, std::make_unique<LogicalNodeScan>("replacement"));
+    EXPECT_NE(aggregate.getChildren().front(), nullptr);
+
+    const auto childless = aggregate.detachChild(0U);
+    ASSERT_NE(childless, nullptr);
+    const auto childlessClone = aggregate.clone();
+    const auto *childlessAggregate = dynamic_cast<const LogicalAggregate *>(childlessClone.get());
+    ASSERT_NE(childlessAggregate, nullptr);
+    EXPECT_EQ(childlessAggregate->getChildren().front(), nullptr);
 }
 
 // =============================================================================

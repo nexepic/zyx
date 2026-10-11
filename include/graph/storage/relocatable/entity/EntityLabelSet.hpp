@@ -10,6 +10,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <span>
 #include <vector>
 
@@ -31,8 +32,9 @@ namespace graph::storage {
 	}
 
 	static_assert(RSS_ENTITY_LABEL_SET_RECORD_ALIGNMENT != 0U);
-	static_assert((RSS_ENTITY_LABEL_SET_RECORD_ALIGNMENT & (RSS_ENTITY_LABEL_SET_RECORD_ALIGNMENT - 1U)) == 0U);
-	static_assert(RSS_ENTITY_LABEL_TOKEN_BYTES % RSS_ENTITY_LABEL_SET_RECORD_ALIGNMENT == 0U);
+static_assert((RSS_ENTITY_LABEL_SET_RECORD_ALIGNMENT & (RSS_ENTITY_LABEL_SET_RECORD_ALIGNMENT - 1U)) == 0U);
+static_assert(RSS_ENTITY_LABEL_SET_HEADER_BYTES % RSS_ENTITY_LABEL_SET_RECORD_ALIGNMENT == 0U);
+static_assert(RSS_ENTITY_LABEL_TOKEN_BYTES % RSS_ENTITY_LABEL_SET_RECORD_ALIGNMENT == 0U);
 	static_assert(RSS_ENTITY_LABEL_SET_AVAILABLE_RECORD_BYTES >=
 			  alignEntityLabelSetRecordBytes(RSS_ENTITY_LABEL_SET_HEADER_BYTES));
 
@@ -46,8 +48,11 @@ namespace graph::storage {
 			RSS_ENTITY_LABEL_SET_HEADER_BYTES + RSS_ENTITY_LABEL_SET_MAX_OVERFLOW_LABELS * RSS_ENTITY_LABEL_TOKEN_BYTES);
 	constexpr size_t RSS_ENTITY_MAX_LABELS = RSS_ENTITY_INLINE_LABEL_CAPACITY + RSS_ENTITY_LABEL_SET_MAX_OVERFLOW_LABELS;
 
-	static_assert(RSS_ENTITY_LABEL_SET_MAX_OVERFLOW_LABELS > 0U);
-	static_assert(RSS_ENTITY_LABEL_SET_MAX_RECORD_BYTES <= RSS_ENTITY_LABEL_SET_AVAILABLE_RECORD_BYTES);
+static_assert(RSS_ENTITY_LABEL_SET_MAX_OVERFLOW_LABELS > 0U);
+static_assert(RSS_ENTITY_LABEL_SET_MAX_RECORD_BYTES <= RSS_ENTITY_LABEL_SET_AVAILABLE_RECORD_BYTES);
+static_assert(RSS_ENTITY_LABEL_SET_MAX_OVERFLOW_LABELS <= std::numeric_limits<uint32_t>::max());
+static_assert(RSS_ENTITY_LABEL_SET_MAX_RECORD_BYTES - RSS_ENTITY_LABEL_SET_HEADER_BYTES <=
+			  std::numeric_limits<uint32_t>::max());
 
 	// An overflow slot stores only labels after the Node record's inline prefix.
 	// The owner Node ID is deliberately not repeated: the Node's stable

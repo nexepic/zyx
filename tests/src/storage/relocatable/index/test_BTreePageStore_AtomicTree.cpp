@@ -7,14 +7,24 @@
  **/
 
 #include <array>
+#include <atomic>
+#include <cerrno>
 #include <span>
+#include <string_view>
+#include <system_error>
 #include <vector>
 
 #include <gtest/gtest.h>
 
+#include "graph/storage/PwriteHelper.hpp"
+#include "graph/storage/StorageIO.hpp"
 #include "graph/storage/relocatable/index/BTreeIndex.hpp"
 #include "graph/storage/relocatable/index/BTreePageStore.hpp"
 #include "tests/src/storage/relocatable/index/RelocatableBTreePageStoreTestUtils.hpp"
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 using namespace graph::storage;
 using namespace relocatable_btree_test;
@@ -57,6 +67,395 @@ TEST_F(RelocatableBTreePageStoreTest, AtomicallyMaterializesNewTreePagesAndSwitc
 	EXPECT_EQ(reopenedIndex.find(reopened, std::vector<std::byte>{std::byte{'a'}}), std::optional<uint64_t>(1));
 	reopened.release();
 	EXPECT_EQ(reopenedMetadata->allocateLogicalPageId(LogSequenceNumber(5)), PageId(104));
+}
+
+TEST_F(RelocatableBTreePageStoreTest, NativeTreeMaterializationDiskFullRetainsOldRootAndCanRetry) {
+	const file_handle_t nativeHandle = portable_open_rw(dataPath.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(dataFile, nativeHandle, nativeHandle);
+		auto metadata = RelocatableMetadataStore::initializeNew(nativeIo, superblock());
+		SlottedPagePool pool(nativeIo, *metadata);
+		BTreePageStore store(pool, *metadata);
+		const SlottedPagePoolAllocationRequest request = allocationRequest();
+		ASSERT_TRUE(store.allocate(request, emptyPage(LogSequenceNumber(2U)), PhysicalSlotId(40U), PhysicalSlotId(40U),
+																				 LogSequenceNumber(2U))
+						.has_value());
+		const IndexRootLocation oldRoot{17U, request.page_id, request.generation};
+		static_cast<void>(store.publishRoots(std::span(&oldRoot, 1U), {}, LogSequenceNumber(3U)));
+
+		MetadataSnapshotPin before = metadata->openSnapshot();
+		const CatalogEntry indexPool = metadata->findCatalog(before, request.segment_id);
+		const uint64_t poolOffset =
+				PhysicalSegmentAllocator::checkedSlotOffset(before.superblock().data_region_offset, indexPool.physical_slot);
+		const uint64_t candidateOffset =
+				poolOffset + static_cast<uint64_t>(RSS_PAGE_POOL_FIRST_DATA_FRAME + 1U) * RSS_PAGE_SIZE;
+		{
+			StorageIO::ScopedNativeWriteHookForTesting failFirstCandidate(
+					[candidateOffset](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+						if (static_cast<uint64_t>(offset) == candidateOffset && byteCount == RSS_PAGE_SIZE) {
+#ifdef _WIN32
+							SetLastError(ERROR_DISK_FULL);
+#else
+							errno = ENOSPC;
+#endif
+							return static_cast<pwrite_ssize_t>(-1);
+						}
+						return portable_pwrite(fd, bytes, byteCount, offset);
+					});
+			EXPECT_THROW(static_cast<void>(store.materializeAndPublishTree(
+						 request.segment_id, 17U, 2U, 0U, LogSequenceNumber(4U),
+						 [](const CatalogEntry &poolEntry, std::span<const PageId> pageIds) {
+							 return twoPageTree(poolEntry, pageIds, LogSequenceNumber(4U));
+						 })),
+					 std::system_error);
+		}
+		before.release();
+		metadata.reset();
+
+		auto recoveredMetadata = RelocatableMetadataStore::open(nativeIo);
+		SlottedPagePool recoveredPool(nativeIo, *recoveredMetadata);
+		BTreePageStore recoveredStore(recoveredPool, *recoveredMetadata);
+		MetadataSnapshotPin recovered = recoveredMetadata->openSnapshot();
+		EXPECT_EQ(recoveredMetadata->findIndexRoot(recovered, 17U), oldRoot);
+		EXPECT_FALSE(recoveredMetadata->findPageLocationOptional(recovered, PageId(102U)).has_value());
+		recovered.release();
+
+		static_cast<void>(recoveredStore.materializeAndPublishTree(
+				request.segment_id, 17U, 2U, 0U, LogSequenceNumber(4U),
+				[](const CatalogEntry &poolEntry, std::span<const PageId> pageIds) {
+					return twoPageTree(poolEntry, pageIds, LogSequenceNumber(4U));
+				}));
+		MetadataSnapshotPin published = recoveredMetadata->openSnapshot();
+		EXPECT_EQ(recoveredMetadata->findIndexRoot(published, 17U).root_page_id, PageId(102U));
+		BTreeIndex index(17U, recoveredStore, *recoveredMetadata);
+		EXPECT_EQ(index.find(published, std::vector<std::byte>{std::byte{'a'}}), std::optional<uint64_t>(1U));
+		published.release();
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+}
+
+TEST_F(RelocatableBTreePageStoreTest, NativeTreeMaterializationShortWriteRetainsOldRootAndCanRetry) {
+	const file_handle_t nativeHandle = portable_open_rw(dataPath.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(dataFile, nativeHandle, nativeHandle);
+		auto metadata = RelocatableMetadataStore::initializeNew(nativeIo, superblock());
+		SlottedPagePool pool(nativeIo, *metadata);
+		BTreePageStore store(pool, *metadata);
+		const SlottedPagePoolAllocationRequest request = allocationRequest();
+		ASSERT_TRUE(store.allocate(request, emptyPage(LogSequenceNumber(2U)), PhysicalSlotId(40U), PhysicalSlotId(40U),
+																							 LogSequenceNumber(2U))
+						.has_value());
+		const IndexRootLocation oldRoot{17U, request.page_id, request.generation};
+		static_cast<void>(store.publishRoots(std::span(&oldRoot, 1U), {}, LogSequenceNumber(3U)));
+
+		MetadataSnapshotPin before = metadata->openSnapshot();
+		const CatalogEntry indexPool = metadata->findCatalog(before, request.segment_id);
+		const uint64_t poolOffset =
+				PhysicalSegmentAllocator::checkedSlotOffset(before.superblock().data_region_offset, indexPool.physical_slot);
+		const uint64_t candidateOffset =
+				poolOffset + static_cast<uint64_t>(RSS_PAGE_POOL_FIRST_DATA_FRAME + 1U) * RSS_PAGE_SIZE;
+		bool shortWriteObserved = false;
+		{
+			StorageIO::ScopedNativeWriteHookForTesting shortFirstCandidate(
+					[candidateOffset, &shortWriteObserved](file_handle_t fd, const void *bytes, size_t byteCount,
+																						pwrite_off_t offset) {
+						if (static_cast<uint64_t>(offset) == candidateOffset && byteCount == RSS_PAGE_SIZE) {
+							shortWriteObserved = true;
+							return portable_pwrite(fd, bytes, RSS_PAGE_OWNER_HEADER_BYTES - 1U, offset);
+						}
+						return portable_pwrite(fd, bytes, byteCount, offset);
+					});
+			EXPECT_THROW(static_cast<void>(store.materializeAndPublishTree(
+						 request.segment_id, 17U, 2U, 0U, LogSequenceNumber(4U),
+						 [](const CatalogEntry &poolEntry, std::span<const PageId> pageIds) {
+							 return twoPageTree(poolEntry, pageIds, LogSequenceNumber(4U));
+						 })),
+					 std::system_error);
+		}
+		EXPECT_TRUE(shortWriteObserved);
+		before.release();
+		metadata.reset();
+
+		auto recoveredMetadata = RelocatableMetadataStore::open(nativeIo);
+		SlottedPagePool recoveredPool(nativeIo, *recoveredMetadata);
+		BTreePageStore recoveredStore(recoveredPool, *recoveredMetadata);
+		MetadataSnapshotPin recovered = recoveredMetadata->openSnapshot();
+		EXPECT_EQ(recoveredMetadata->findIndexRoot(recovered, 17U), oldRoot);
+		EXPECT_FALSE(recoveredMetadata->findPageLocationOptional(recovered, PageId(102U)).has_value());
+		recovered.release();
+
+		static_cast<void>(recoveredStore.materializeAndPublishTree(
+				request.segment_id, 17U, 2U, 0U, LogSequenceNumber(4U),
+				[](const CatalogEntry &poolEntry, std::span<const PageId> pageIds) {
+					return twoPageTree(poolEntry, pageIds, LogSequenceNumber(4U));
+				}));
+		MetadataSnapshotPin published = recoveredMetadata->openSnapshot();
+		EXPECT_EQ(recoveredMetadata->findIndexRoot(published, 17U).root_page_id, PageId(102U));
+		BTreeIndex index(17U, recoveredStore, *recoveredMetadata);
+		EXPECT_EQ(index.find(published, std::vector<std::byte>{std::byte{'a'}}), std::optional<uint64_t>(1U));
+		published.release();
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+}
+
+TEST_F(RelocatableBTreePageStoreTest, NativeTreeMaterializationSyncFailureRetainsOldRootAndCanRetry) {
+	const file_handle_t nativeHandle = portable_open_rw(dataPath.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(dataFile, nativeHandle, nativeHandle);
+		auto metadata = RelocatableMetadataStore::initializeNew(nativeIo, superblock());
+		SlottedPagePool pool(nativeIo, *metadata);
+		BTreePageStore store(pool, *metadata);
+		const SlottedPagePoolAllocationRequest request = allocationRequest();
+		ASSERT_TRUE(store.allocate(request, emptyPage(LogSequenceNumber(2U)), PhysicalSlotId(40U), PhysicalSlotId(40U),
+																				 LogSequenceNumber(2U))
+						.has_value());
+		const IndexRootLocation oldRoot{17U, request.page_id, request.generation};
+		static_cast<void>(store.publishRoots(std::span(&oldRoot, 1U), {}, LogSequenceNumber(3U)));
+
+		std::atomic<uint32_t> syncCalls{0U};
+		{
+			StorageIO::ScopedNativeSyncHookForTesting failFirstDataFence([&syncCalls](file_handle_t fd) {
+				if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 0U) {
+#ifdef _WIN32
+					SetLastError(ERROR_DISK_FULL);
+#else
+					errno = ENOSPC;
+#endif
+					return -1;
+				}
+				return portable_fsync(fd);
+			});
+			EXPECT_THROW(static_cast<void>(store.materializeAndPublishTree(
+						 request.segment_id, 17U, 2U, 0U, LogSequenceNumber(4U),
+						 [](const CatalogEntry &poolEntry, std::span<const PageId> pageIds) {
+							 return twoPageTree(poolEntry, pageIds, LogSequenceNumber(4U));
+						 })),
+					 std::runtime_error);
+		}
+		EXPECT_GE(syncCalls.load(std::memory_order_relaxed), 1U);
+		metadata.reset();
+
+		auto recoveredMetadata = RelocatableMetadataStore::open(nativeIo);
+		SlottedPagePool recoveredPool(nativeIo, *recoveredMetadata);
+		BTreePageStore recoveredStore(recoveredPool, *recoveredMetadata);
+		MetadataSnapshotPin recovered = recoveredMetadata->openSnapshot();
+		EXPECT_EQ(recoveredMetadata->findIndexRoot(recovered, 17U), oldRoot);
+		EXPECT_FALSE(recoveredMetadata->findPageLocationOptional(recovered, PageId(102U)).has_value());
+		recovered.release();
+
+		static_cast<void>(recoveredStore.materializeAndPublishTree(
+				request.segment_id, 17U, 2U, 0U, LogSequenceNumber(4U),
+				[](const CatalogEntry &poolEntry, std::span<const PageId> pageIds) {
+					return twoPageTree(poolEntry, pageIds, LogSequenceNumber(4U));
+				}));
+		MetadataSnapshotPin published = recoveredMetadata->openSnapshot();
+		EXPECT_EQ(recoveredMetadata->findIndexRoot(published, 17U).root_page_id, PageId(102U));
+		published.release();
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+}
+
+TEST_F(RelocatableBTreePageStoreTest,
+	   NativeTreeMaterializationFinalSyncFailureReportsUncertainDurabilityAndReopensCompleteTree) {
+	const file_handle_t nativeHandle = portable_open_rw(dataPath.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(dataFile, nativeHandle, nativeHandle);
+		auto metadata = RelocatableMetadataStore::initializeNew(nativeIo, superblock());
+		SlottedPagePool pool(nativeIo, *metadata);
+		BTreePageStore store(pool, *metadata);
+		const SlottedPagePoolAllocationRequest request = allocationRequest();
+		ASSERT_TRUE(store.allocate(request, emptyPage(LogSequenceNumber(2U)), PhysicalSlotId(40U), PhysicalSlotId(40U),
+															 LogSequenceNumber(2U))
+						.has_value());
+		const IndexRootLocation oldRoot{17U, request.page_id, request.generation};
+		static_cast<void>(store.publishRoots(std::span(&oldRoot, 1U), {}, LogSequenceNumber(3U)));
+
+		std::atomic<uint32_t> syncCalls{0U};
+		{
+			StorageIO::ScopedNativeSyncHookForTesting failFinalPublicationFence([&syncCalls](file_handle_t fd) {
+				if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 1U) {
+#ifdef _WIN32
+					SetLastError(ERROR_DISK_FULL);
+#else
+					errno = ENOSPC;
+#endif
+					return -1;
+				}
+				return portable_fsync(fd);
+			});
+			EXPECT_THROW(static_cast<void>(store.materializeAndPublishTree(
+						 request.segment_id, 17U, 2U, 0U, LogSequenceNumber(4U),
+						 [](const CatalogEntry &poolEntry, std::span<const PageId> pageIds) {
+							 return twoPageTree(poolEntry, pageIds, LogSequenceNumber(4U));
+						 })),
+					 std::runtime_error);
+		}
+		EXPECT_GE(syncCalls.load(std::memory_order_relaxed), 2U);
+
+		// The inactive Superblock is already complete when its final fence fails.
+		// The call reports uncertain durability, but recovery must select the whole
+		// newly published tree rather than exposing a mixed root/page set.
+		MetadataSnapshotPin current = metadata->openSnapshot();
+		const IndexRootLocation publishedRoot = metadata->findIndexRoot(current, 17U);
+		EXPECT_EQ(publishedRoot.root_page_id, PageId(102U));
+		BTreeIndex currentIndex(17U, store, *metadata);
+		EXPECT_EQ(currentIndex.find(current, std::vector<std::byte>{std::byte{'a'}}), std::optional<uint64_t>(1U));
+		current.release();
+
+		metadata.reset();
+		auto reopenedMetadata = RelocatableMetadataStore::open(nativeIo);
+		SlottedPagePool reopenedPool(nativeIo, *reopenedMetadata);
+		BTreePageStore reopenedStore(reopenedPool, *reopenedMetadata);
+		BTreeIndex reopenedIndex(17U, reopenedStore, *reopenedMetadata);
+		MetadataSnapshotPin recovered = reopenedMetadata->openSnapshot();
+		EXPECT_EQ(reopenedMetadata->findIndexRoot(recovered, 17U), publishedRoot);
+		EXPECT_EQ(reopenedIndex.find(recovered, std::vector<std::byte>{std::byte{'a'}}), std::optional<uint64_t>(1U));
+		recovered.release();
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+}
+
+TEST_F(RelocatableBTreePageStoreTest,
+	   NativeTreeMaterializationMetadataDiskFullRetainsOldRootAndCanRetryAfterReopen) {
+	const file_handle_t nativeHandle = portable_open_rw(dataPath.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(dataFile, nativeHandle, nativeHandle);
+		auto metadata = RelocatableMetadataStore::initializeNew(nativeIo, superblock());
+		SlottedPagePool pool(nativeIo, *metadata);
+		BTreePageStore store(pool, *metadata);
+		const SlottedPagePoolAllocationRequest request = allocationRequest();
+		ASSERT_TRUE(store.allocate(request, emptyPage(LogSequenceNumber(2U)), PhysicalSlotId(40U), PhysicalSlotId(40U),
+															 LogSequenceNumber(2U))
+						.has_value());
+		const IndexRootLocation oldRoot{17U, request.page_id, request.generation};
+		static_cast<void>(store.publishRoots(std::span(&oldRoot, 1U), {}, LogSequenceNumber(3U)));
+		MetadataSnapshotPin before = metadata->openSnapshot();
+		const uint64_t metadataPoolOffset = before.superblock().data_region_offset;
+		before.release();
+
+		{
+			StorageIO::ScopedNativeWriteHookForTesting failMetadataCandidate(
+					[metadataPoolOffset](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+						const uint64_t absoluteOffset = static_cast<uint64_t>(offset);
+						if (absoluteOffset >= metadataPoolOffset + RSS_PAGE_SIZE &&
+							absoluteOffset < metadataPoolOffset + RSS_SEGMENT_SIZE && byteCount == RSS_PAGE_SIZE) {
+#ifdef _WIN32
+							SetLastError(ERROR_DISK_FULL);
+#else
+							errno = ENOSPC;
+#endif
+							return static_cast<pwrite_ssize_t>(-1);
+						}
+						return portable_pwrite(fd, bytes, byteCount, offset);
+					});
+			EXPECT_THROW(static_cast<void>(store.materializeAndPublishTree(
+						 request.segment_id, 17U, 2U, 0U, LogSequenceNumber(4U),
+						 [](const CatalogEntry &poolEntry, std::span<const PageId> pageIds) {
+							 return twoPageTree(poolEntry, pageIds, LogSequenceNumber(4U));
+						 })),
+					 std::runtime_error);
+		}
+
+		MetadataSnapshotPin current = metadata->openSnapshot();
+		EXPECT_EQ(metadata->findIndexRoot(current, 17U), oldRoot);
+		EXPECT_FALSE(metadata->findPageLocationOptional(current, PageId(102U)).has_value());
+		current.release();
+		metadata.reset();
+
+		auto reopenedMetadata = RelocatableMetadataStore::open(nativeIo);
+		SlottedPagePool reopenedPool(nativeIo, *reopenedMetadata);
+		BTreePageStore reopenedStore(reopenedPool, *reopenedMetadata);
+		MetadataSnapshotPin recovered = reopenedMetadata->openSnapshot();
+		EXPECT_EQ(reopenedMetadata->findIndexRoot(recovered, 17U), oldRoot);
+		EXPECT_FALSE(reopenedMetadata->findPageLocationOptional(recovered, PageId(102U)).has_value());
+		recovered.release();
+
+		static_cast<void>(reopenedStore.materializeAndPublishTree(
+				request.segment_id, 17U, 2U, 0U, LogSequenceNumber(4U),
+				[](const CatalogEntry &poolEntry, std::span<const PageId> pageIds) {
+					return twoPageTree(poolEntry, pageIds, LogSequenceNumber(4U));
+				}));
+		MetadataSnapshotPin published = reopenedMetadata->openSnapshot();
+		BTreeIndex index(17U, reopenedStore, *reopenedMetadata);
+		EXPECT_EQ(reopenedMetadata->findIndexRoot(published, 17U).root_page_id, PageId(102U));
+		EXPECT_EQ(index.find(published, std::vector<std::byte>{std::byte{'a'}}), std::optional<uint64_t>(1U));
+		published.release();
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+}
+
+TEST_F(RelocatableBTreePageStoreTest,
+	   NativeTreeMaterializationMetadataShortWriteRetainsOldRootAndCanRetryAfterReopen) {
+	const file_handle_t nativeHandle = portable_open_rw(dataPath.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(dataFile, nativeHandle, nativeHandle);
+		auto metadata = RelocatableMetadataStore::initializeNew(nativeIo, superblock());
+		SlottedPagePool pool(nativeIo, *metadata);
+		BTreePageStore store(pool, *metadata);
+		const SlottedPagePoolAllocationRequest request = allocationRequest();
+		ASSERT_TRUE(store.allocate(request, emptyPage(LogSequenceNumber(2U)), PhysicalSlotId(40U), PhysicalSlotId(40U),
+																							 LogSequenceNumber(2U))
+						.has_value());
+		const IndexRootLocation oldRoot{17U, request.page_id, request.generation};
+		static_cast<void>(store.publishRoots(std::span(&oldRoot, 1U), {}, LogSequenceNumber(3U)));
+		MetadataSnapshotPin before = metadata->openSnapshot();
+		const uint64_t metadataPoolOffset = before.superblock().data_region_offset;
+		before.release();
+
+		bool shortWriteObserved = false;
+		{
+			StorageIO::ScopedNativeWriteHookForTesting shortMetadataCandidate(
+					[metadataPoolOffset, &shortWriteObserved](file_handle_t fd, const void *bytes, size_t byteCount,
+																							pwrite_off_t offset) {
+						const uint64_t absoluteOffset = static_cast<uint64_t>(offset);
+						if (absoluteOffset >= metadataPoolOffset + RSS_PAGE_SIZE &&
+							absoluteOffset < metadataPoolOffset + RSS_SEGMENT_SIZE && byteCount == RSS_PAGE_SIZE) {
+							shortWriteObserved = true;
+							return portable_pwrite(fd, bytes, RSS_PAGE_SIZE - 1U, offset);
+						}
+						return portable_pwrite(fd, bytes, byteCount, offset);
+					});
+			EXPECT_THROW(static_cast<void>(store.materializeAndPublishTree(
+						 request.segment_id, 17U, 2U, 0U, LogSequenceNumber(4U),
+						 [](const CatalogEntry &poolEntry, std::span<const PageId> pageIds) {
+							 return twoPageTree(poolEntry, pageIds, LogSequenceNumber(4U));
+						 })),
+					 std::system_error);
+		}
+		EXPECT_TRUE(shortWriteObserved);
+
+		MetadataSnapshotPin current = metadata->openSnapshot();
+		EXPECT_EQ(metadata->findIndexRoot(current, 17U), oldRoot);
+		EXPECT_FALSE(metadata->findPageLocationOptional(current, PageId(102U)).has_value());
+		current.release();
+		metadata.reset();
+
+		auto reopenedMetadata = RelocatableMetadataStore::open(nativeIo);
+		SlottedPagePool reopenedPool(nativeIo, *reopenedMetadata);
+		BTreePageStore reopenedStore(reopenedPool, *reopenedMetadata);
+		MetadataSnapshotPin recovered = reopenedMetadata->openSnapshot();
+		EXPECT_EQ(reopenedMetadata->findIndexRoot(recovered, 17U), oldRoot);
+		EXPECT_FALSE(reopenedMetadata->findPageLocationOptional(recovered, PageId(102U)).has_value());
+		recovered.release();
+
+		static_cast<void>(reopenedStore.materializeAndPublishTree(
+				request.segment_id, 17U, 2U, 0U, LogSequenceNumber(4U),
+				[](const CatalogEntry &poolEntry, std::span<const PageId> pageIds) {
+					return twoPageTree(poolEntry, pageIds, LogSequenceNumber(4U));
+				}));
+		MetadataSnapshotPin published = reopenedMetadata->openSnapshot();
+		BTreeIndex index(17U, reopenedStore, *reopenedMetadata);
+		EXPECT_EQ(reopenedMetadata->findIndexRoot(published, 17U).root_page_id, PageId(102U));
+		EXPECT_EQ(index.find(published, std::vector<std::byte>{std::byte{'a'}}), std::optional<uint64_t>(1U));
+		published.release();
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
 }
 
 TEST_F(RelocatableBTreePageStoreTest, DoesNotPublishAnIncompleteTreeFactoryBatch) {
@@ -390,6 +789,37 @@ TEST_F(RelocatableBTreePageStoreTest, PublishesAndReplacesKeyOnlyFreshTreesThrou
 	current.release();
 }
 
+TEST_F(RelocatableBTreePageStoreTest, RejectsNonemptyValuesInAKeyOnlyTransactionOverlayBeforePlanningMutation) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+	SlottedPagePool pool(io, *metadata);
+	BTreePageStore store(pool, *metadata);
+	const SlottedPagePoolAllocationRequest request = allocationRequest();
+	PageOwnerHeader owner = pageOwner(LogSequenceNumber(2U));
+	BTreePageHeader header;
+	header.index_id = owner.owner_id;
+	header.page_id = owner.page_id;
+	header.generation = owner.generation;
+	header.leaf_value_layout = BTreeLeafValueLayout::BLVL_EMPTY;
+	const BTreePage emptyKeyOnlyPage = BTreePage::create(owner, header);
+	ASSERT_TRUE(store.allocate(request, emptyKeyOnlyPage, PhysicalSlotId(40U), PhysicalSlotId(40U),
+							   LogSequenceNumber(2U))
+					.has_value());
+	const IndexRootLocation root{17U, request.page_id, request.generation};
+	static_cast<void>(store.publishRoots(std::span(&root, 1U), {}, LogSequenceNumber(3U)));
+
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	const std::array operations = {BTreeScalarIndexOperation{
+				BTreeScalarIndexOperationKind::BSIOP_UPSERT, {std::byte{'a'}}, 1U}};
+	expectFormatError(
+			[&] {
+				static_cast<void>(store.planScalarIndexTransactionMutation(
+						snapshot, 17U, operations, false, false, BTreeLeafValueLayout::BLVL_EMPTY));
+			},
+			FormatError::FERR_INVALID_HEADER);
+	EXPECT_EQ(metadata->findIndexRoot(snapshot, 17U), root);
+	EXPECT_TRUE(store.read(snapshot, root.root_page_id).entries().empty());
+}
+
 TEST_F(RelocatableBTreePageStoreTest, RejectsInitialValueBindingThatChangesAKeyBeforeWritingFrames) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
 	SlottedPagePool pool(io, *metadata);
@@ -416,6 +846,57 @@ TEST_F(RelocatableBTreePageStoreTest, RejectsInitialValueBindingThatChangesAKeyB
 	snapshot.release();
 }
 
+TEST_F(RelocatableBTreePageStoreTest, RejectsInitialValueBindingsThatChangeKeysBeforeWritingFrames) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+	SlottedPagePool pool(io, *metadata);
+	BTreePageStore store(pool, *metadata);
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	const auto batchFor = [](const BTreeInitialTreeMutationPlan &plan) {
+		EXPECT_EQ(plan.new_pool_mutations.size(), 1U);
+		IndexTreeMutationPoolBatch batch;
+		batch.pool = {SegmentId(71U), PhysicalSlotId(40U), SegmentKind::SGK_INDEX_PAGE_POOL, 17U, Generation(1U),
+					  SegmentState::SGS_SEALED, LogSequenceNumber(2U)};
+		batch.newly_reserved = true;
+		const size_t pageCount = plan.new_pool_mutations.front().appended_page_count;
+		for (size_t ordinal = 0U; ordinal < pageCount; ++ordinal) {
+			const PageId pageId(101U + ordinal);
+			batch.appended_page_ids.push_back(pageId);
+			batch.appended_locations.push_back({pageId, batch.pool.segment_id, static_cast<uint16_t>(ordinal),
+												batch.pool.generation, 0U});
+		}
+		return batch;
+	};
+	const auto expectRejection = [](const BTreeInitialTreeMutationPlan &plan,
+										   std::vector<IndexTreeMutationPoolBatch> &batches, std::string_view message) {
+		try {
+			plan.preparer(batches, LogSequenceNumber(2U));
+			FAIL() << "Expected FormatException";
+		} catch (const FormatException &error) {
+			EXPECT_EQ(error.error(), FormatError::FERR_INVALID_STATE);
+			EXPECT_NE(std::string_view(error.what()).find(message), std::string_view::npos)
+					<< error.what();
+		}
+	};
+
+	std::vector<BTreePageEntry> fixedShapeEntries;
+	for (uint16_t ordinal = 100U; ordinal < 106U; ++ordinal) {
+		fixedShapeEntries.push_back({wideKey(ordinal), 0U});
+	}
+	const BTreeInitialTreeMutationPlan changedFirstKey = store.planInitialTreeMutation(
+			snapshot, 17U, fixedShapeEntries,
+			[](std::span<BTreePageEntry> entries, const BTreeInitialTreeValueBindingContext &) {
+				for (size_t ordinal = 0U; ordinal < entries.size(); ++ordinal) {
+					entries[ordinal].value_or_child = ordinal + 1U;
+				}
+				entries.front().key = wideKey(99U);
+			});
+	std::vector<IndexTreeMutationPoolBatch> batches{batchFor(changedFirstKey)};
+	expectRejection(changedFirstKey, batches, "changed a key");
+
+	EXPECT_FALSE(metadata->findIndexRootOptional(snapshot, 17U).has_value());
+	snapshot.release();
+}
+
 TEST_F(RelocatableBTreePageStoreTest, RejectsFreshTreeStagingAndTamperedPreparationBeforeWritingPages) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
 	SlottedPagePool pool(io, *metadata);
@@ -423,13 +904,21 @@ TEST_F(RelocatableBTreePageStoreTest, RejectsFreshTreeStagingAndTamperedPreparat
 	MetadataSnapshotPin snapshot = metadata->openSnapshot();
 	const std::array<BTreePageEntry, 1U> valueEntry = {BTreePageEntry{{std::byte{'a'}}, 0U}};
 	const std::array<BTreePageEntry, 1U> keyOnlyEntry = {BTreePageEntry{{std::byte{'a'}}, 0U}};
+	const std::array<BTreePageEntry, 1U> nonemptyKeyOnlyEntry = {BTreePageEntry{{std::byte{'a'}}, 1U}};
+	const std::array<BTreePageEntry, 1U> alreadyBoundEntry = {BTreePageEntry{{std::byte{'b'}}, 7U}};
 	const size_t stagedInputLimit =
 			static_cast<size_t>(RSS_PAGE_POOL_DATA_FRAME_COUNT) * RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES;
 	const std::vector<std::byte> oversizedKey(stagedInputLimit, std::byte{'x'});
 	const std::array<BTreePageEntry, 1U> oversizedEntry = {BTreePageEntry{oversizedKey, 1U}};
+	const std::vector<std::byte> halfLimitKey(stagedInputLimit / 2U, std::byte{'y'});
+	const std::array<BTreePageEntry, 2U> cumulativelyOversizedEntries = {
+			BTreePageEntry{halfLimitKey, 1U}, BTreePageEntry{halfLimitKey, 2U}};
 
 	expectFormatError([&] { static_cast<void>(store.planInitialTreeMutation(snapshot, 17U, oversizedEntry)); },
 					  FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] { static_cast<void>(store.planInitialTreeMutation(snapshot, 18U, cumulativelyOversizedEntries)); },
+			FormatError::FERR_INVALID_HEADER);
 	expectFormatError(
 			[&] {
 				static_cast<void>(store.planInitialTreeMutation(
@@ -438,12 +927,23 @@ TEST_F(RelocatableBTreePageStoreTest, RejectsFreshTreeStagingAndTamperedPreparat
 						BTreeLeafValueLayout::BLVL_EMPTY));
 			},
 			FormatError::FERR_INVALID_HEADER);
+	expectFormatError(
+			[&] {
+				static_cast<void>(store.planInitialTreeMutation(
+						snapshot, 17U, nonemptyKeyOnlyEntry, {}, BTreeLeafValueLayout::BLVL_EMPTY));
+			},
+			FormatError::FERR_INVALID_HEADER);
 
 	const BTreeInitialTreeMutationPlan plan = store.planInitialTreeMutation(
 			snapshot, 17U, valueEntry,
 			[](std::span<BTreePageEntry> boundEntries, const BTreeInitialTreeValueBindingContext &) {
 				boundEntries.front().value_or_child = 0U;
 			});
+	EXPECT_NO_THROW(static_cast<void>(store.planInitialTreeMutation(
+			snapshot, 19U, alreadyBoundEntry,
+			[](std::span<BTreePageEntry> boundEntries, const BTreeInitialTreeValueBindingContext &) {
+				boundEntries.front().value_or_child = 8U;
+			})));
 	IndexTreeMutationPoolBatch batch;
 	batch.pool = {SegmentId(71U), PhysicalSlotId(40U), SegmentKind::SGK_INDEX_PAGE_POOL, 17U, Generation(1U),
 				  SegmentState::SGS_SEALED, LogSequenceNumber(2U)};
@@ -457,9 +957,24 @@ TEST_F(RelocatableBTreePageStoreTest, RejectsFreshTreeStagingAndTamperedPreparat
 	};
 
 	expectFormatError([&] { prepareSingleBatch(batch, LogSequenceNumber{}); }, FormatError::FERR_INVALID_STATE);
-	IndexTreeMutationPoolBatch wrongKind = batch;
-	wrongKind.pool.kind = SegmentKind::SGK_PROPERTY_PAGE_POOL;
-	expectFormatError([&] { prepareSingleBatch(wrongKind, LogSequenceNumber(2U)); }, FormatError::FERR_INVALID_STATE);
+	const auto expectTamperedBatch = [&](const auto &tamper) {
+		IndexTreeMutationPoolBatch candidate = batch;
+		tamper(candidate);
+		expectFormatError([&] { prepareSingleBatch(candidate, LogSequenceNumber(2U)); }, FormatError::FERR_INVALID_STATE);
+	};
+	expectTamperedBatch([](IndexTreeMutationPoolBatch &candidate) { candidate.newly_reserved = false; });
+	expectTamperedBatch(
+			[](IndexTreeMutationPoolBatch &candidate) { candidate.pool.kind = SegmentKind::SGK_PROPERTY_PAGE_POOL; });
+	expectTamperedBatch([](IndexTreeMutationPoolBatch &candidate) { candidate.pool.owner_id = 18U; });
+	expectTamperedBatch([](IndexTreeMutationPoolBatch &candidate) { candidate.pool.generation = Generation(2U); });
+	expectTamperedBatch(
+			[](IndexTreeMutationPoolBatch &candidate) { candidate.pool.state = SegmentState::SGS_BUILDING; });
+	expectTamperedBatch(
+			[](IndexTreeMutationPoolBatch &candidate) { candidate.pool.committed_lsn = LogSequenceNumber(3U); });
+	expectTamperedBatch([](IndexTreeMutationPoolBatch &candidate) { candidate.appended_page_ids.clear(); });
+	expectTamperedBatch([](IndexTreeMutationPoolBatch &candidate) { candidate.appended_locations.clear(); });
+	std::vector<IndexTreeMutationPoolBatch> missingBatches;
+	expectFormatError([&] { plan.preparer(missingBatches, LogSequenceNumber(2U)); }, FormatError::FERR_INVALID_STATE);
 	expectFormatError([&] { prepareSingleBatch(batch, LogSequenceNumber(2U)); }, FormatError::FERR_INVALID_STATE);
 	EXPECT_FALSE(metadata->findIndexRootOptional(snapshot, 17U).has_value());
 	snapshot.release();
@@ -492,7 +1007,27 @@ TEST_F(RelocatableBTreePageStoreTest, RejectsInvalidRetirementAndFreshTreePlanni
 				  FormatError::FERR_INVALID_STATE);
 	snapshot.release();
 	expectFormatError([&] { static_cast<void>(store.planTreeRetirement(snapshot, 17U, 1U)); },
-				  FormatError::FERR_INVALID_HEADER);
+					  FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(RelocatableBTreePageStoreTest, InitialTreePlanRejectsAVisibleRootWithoutReservingCandidatePages) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+	SlottedPagePool pool(io, *metadata);
+	BTreePageStore store(pool, *metadata);
+	const SlottedPagePoolAllocationRequest request = allocationRequest();
+	ASSERT_TRUE(store.allocate(request, emptyPage(LogSequenceNumber(2U)), PhysicalSlotId(40U), PhysicalSlotId(40U),
+							   LogSequenceNumber(2U))
+					.has_value());
+	const IndexRootLocation publishedRoot{17U, request.page_id, request.generation};
+	static_cast<void>(store.publishRoots(std::span(&publishedRoot, 1U), {}, LogSequenceNumber(3U)));
+
+	const std::array<BTreePageEntry, 1U> entries = {BTreePageEntry{{std::byte{'a'}}, 1U}};
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	expectFormatError([&] { static_cast<void>(store.planInitialTreeMutation(snapshot, 17U, entries)); },
+					  FormatError::FERR_INVALID_STATE);
+	EXPECT_EQ(metadata->findIndexRoot(snapshot, 17U), publishedRoot);
+	EXPECT_EQ(metadata->findPageLocation(snapshot, request.page_id).page_id, request.page_id);
+	snapshot.release();
 }
 
 TEST_F(RelocatableBTreePageStoreTest, RejectsRootLeafWithPersistedSiblingLinkBeforeErasing) {
@@ -598,6 +1133,28 @@ TEST_F(RelocatableBTreePageStoreTest, TraversesEveryInternalTreePageWhenPlanning
 	IndexTreeMutationPoolBatch batch;
 	batch.pool = metadata->findCatalog(snapshot, request.segment_id);
 	batch.expected_retirements = retirements;
+	const auto expectTamperedRetirementBatch = [&](const auto &tamper) {
+		IndexTreeMutationPoolBatch candidate = batch;
+		tamper(candidate);
+		std::vector<IndexTreeMutationPoolBatch> candidateBatches;
+		candidateBatches.push_back(std::move(candidate));
+		expectFormatError([&] { plan.preparer(candidateBatches, LogSequenceNumber(5U)); },
+					  FormatError::FERR_INVALID_STATE);
+	};
+	std::vector<IndexTreeMutationPoolBatch> missingBatches;
+	expectFormatError([&] { plan.preparer(missingBatches, LogSequenceNumber(5U)); }, FormatError::FERR_INVALID_STATE);
+	expectTamperedRetirementBatch([](IndexTreeMutationPoolBatch &candidate) {
+		candidate.pool.segment_id = SegmentId(99U);
+	});
+	expectTamperedRetirementBatch([](IndexTreeMutationPoolBatch &candidate) {
+		candidate.expected_replacements.push_back({});
+	});
+	expectTamperedRetirementBatch([](IndexTreeMutationPoolBatch &candidate) {
+		candidate.appended_page_ids.push_back(PageId(999U));
+	});
+	expectTamperedRetirementBatch([](IndexTreeMutationPoolBatch &candidate) { candidate.newly_reserved = true; });
+	expectTamperedRetirementBatch(
+			[](IndexTreeMutationPoolBatch &candidate) { candidate.expected_retirements.clear(); });
 	std::vector<IndexTreeMutationPoolBatch> batches;
 	batches.push_back(std::move(batch));
 	EXPECT_NO_THROW(plan.preparer(batches, LogSequenceNumber(5U)));
@@ -610,6 +1167,19 @@ TEST_F(RelocatableBTreePageStoreTest, TraversesEveryInternalTreePageWhenPlanning
 	std::vector<IndexTreeMutationPoolBatch> tamperedRetirements = batches;
 	tamperedRetirements.front().expected_retirements.clear();
 	expectFormatError([&] { plan.preparer(tamperedRetirements, LogSequenceNumber(5U)); },
+				  FormatError::FERR_INVALID_STATE);
+
+	const BTreePage originalRoot = store.read(snapshot, root.root_page_id);
+	const CatalogEntry poolEntry = metadata->findCatalog(snapshot, request.segment_id);
+	BTreePageHeader corruptedHeader = originalRoot.header();
+	corruptedHeader.right_sibling = corruptedHeader.leftmost_child;
+	const std::vector<BTreePageEntry> rootEntries = originalRoot.entries();
+	snapshot.release();
+	const BTreePage corruptedRoot = rebuildPage(poolEntry, corruptedHeader, LogSequenceNumber(4U), rootEntries);
+	overwriteCurrentBTreePage(*io, *metadata, root.root_page_id,
+						  treeOwner(poolEntry, root.root_page_id, LogSequenceNumber(4U)), corruptedRoot);
+	snapshot = metadata->openSnapshot();
+	expectFormatError([&] { static_cast<void>(store.planTreeRetirement(snapshot, request.page_owner_id, 3U)); },
 				  FormatError::FERR_INVALID_STATE);
 
 	expectFormatError([&] { static_cast<void>(store.planTreeRetirement(snapshot, request.page_owner_id, 1U)); },

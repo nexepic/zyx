@@ -68,7 +68,8 @@ namespace graph::storage {
 					static_cast<uint8_t>(!header.generation.isValid()) | static_cast<uint8_t>(header.dimensions == 0U) |
 					static_cast<uint8_t>(header.subspace_count == 0U) |
 					static_cast<uint8_t>(header.subspace_count > header.dimensions) |
-					static_cast<uint8_t>(header.dimensions % header.subspace_count != 0U) |
+					static_cast<uint8_t>(header.subspace_count != 0U &&
+											 header.dimensions % header.subspace_count != 0U) |
 					static_cast<uint8_t>(header.centroid_count == 0U) |
 					static_cast<uint8_t>(header.element_bytes != requiredElementBytes(header.element_type)) |
 					static_cast<uint8_t>(header.payload_bytes != expectedPayloadBytes(header));

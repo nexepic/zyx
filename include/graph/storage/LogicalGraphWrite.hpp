@@ -12,8 +12,10 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "graph/core/PropertyTypes.hpp"
@@ -210,6 +212,10 @@ namespace graph::storage {
 		LGTTS_COMMITTED = 2,
 		LGTTS_ROLLED_BACK = 3,
 		LGTTS_CONFLICTED = 4,
+		// The final durability fence reported an error after publication may have
+		// become visible. The caller must close and reopen before deciding whether
+		// the graph is old or new; this state must never be presented as rollback.
+		LGTTS_INDETERMINATE = 5,
 	};
 
 	class LogicalGraphTransaction {
@@ -230,6 +236,73 @@ namespace graph::storage {
 		stageMutationBatch(LogicalGraphMutationBatch batch) = 0;
 		[[nodiscard]] virtual LogicalGraphMutationBatchResult commit() = 0;
 		virtual void rollback() = 0;
+	};
+
+	// A borrowed columnar view is intentionally separate from
+	// LogicalGraphMutationBatch. A bounded ingest backend consumes one caller
+	// batch synchronously and must not retain a logical request for every Edge.
+	struct LogicalGraphBulkEdgePropertyColumn {
+		std::string_view key;
+		std::span<const PropertyValue> values;
+	};
+
+	struct LogicalGraphPersistedBulkEdgeAppendRequest {
+		LogicalGraphPersistedBulkEdgeAppendRequest(
+				std::string_view edgeType, std::span<const uint64_t> sourceNodeIds,
+				std::span<const uint64_t> targetNodeIds,
+				std::span<const LogicalGraphBulkEdgePropertyColumn> propertyColumns) :
+			type(edgeType), source_node_ids(sourceNodeIds), target_node_ids(targetNodeIds),
+			property_columns(propertyColumns) {}
+		// Public C++ and Driver ABI columns use signed identifiers. Borrow them
+		// directly so the streamed path never creates a transaction-sized unsigned
+		// endpoint copy merely to cross this storage-neutral boundary.
+		LogicalGraphPersistedBulkEdgeAppendRequest(
+				std::string_view edgeType, std::span<const int64_t> sourceNodeIds,
+				std::span<const int64_t> targetNodeIds,
+				std::span<const LogicalGraphBulkEdgePropertyColumn> propertyColumns) :
+			type(edgeType), signed_source_node_ids(sourceNodeIds), signed_target_node_ids(targetNodeIds),
+			property_columns(propertyColumns) {}
+
+		[[nodiscard]] size_t sourceCount() const noexcept {
+			return signed_source_node_ids.empty() ? source_node_ids.size() : signed_source_node_ids.size();
+		}
+		[[nodiscard]] size_t targetCount() const noexcept {
+			return signed_target_node_ids.empty() ? target_node_ids.size() : signed_target_node_ids.size();
+		}
+		[[nodiscard]] uint64_t sourceNodeIdAt(size_t index) const noexcept {
+			if (!signed_source_node_ids.empty()) {
+				const int64_t value = signed_source_node_ids[index];
+				return value > 0 ? static_cast<uint64_t>(value) : 0U;
+			}
+			return source_node_ids[index];
+		}
+		[[nodiscard]] uint64_t targetNodeIdAt(size_t index) const noexcept {
+			if (!signed_target_node_ids.empty()) {
+				const int64_t value = signed_target_node_ids[index];
+				return value > 0 ? static_cast<uint64_t>(value) : 0U;
+			}
+			return target_node_ids[index];
+		}
+
+		std::string_view type;
+		std::span<const uint64_t> source_node_ids;
+		std::span<const uint64_t> target_node_ids;
+		std::span<const int64_t> signed_source_node_ids;
+		std::span<const int64_t> signed_target_node_ids;
+		std::span<const LogicalGraphBulkEdgePropertyColumn> property_columns;
+	};
+
+	// Optional capability for an Edge-only transaction that stages persisted
+	// endpoints in bounded private storage. It is deliberately distinct from the
+	// ordinary overlay: callers needing created endpoints or read-your-writes
+	// retain normal logical transaction semantics rather than silently mixing two
+	// representations.
+	class LogicalGraphBoundedBulkEdgeTransaction {
+	public:
+		virtual ~LogicalGraphBoundedBulkEdgeTransaction() = default;
+		[[nodiscard]] virtual std::vector<uint64_t>
+		appendPersistedBulkEdges(const LogicalGraphPersistedBulkEdgeAppendRequest &request) = 0;
+		[[nodiscard]] virtual bool hasStreamedBulkEdges() const = 0;
 	};
 
 	// This opt-in interface is deliberately separate from auto-commit writes.

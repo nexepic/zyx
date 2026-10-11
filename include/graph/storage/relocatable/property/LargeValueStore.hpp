@@ -9,6 +9,7 @@
 #pragma once
 
 #include <cstddef>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <span>
@@ -17,12 +18,20 @@
 #include <vector>
 
 #include "graph/storage/relocatable/allocation/SharedPagePoolAllocator.hpp"
+#include "graph/storage/relocatable/index/BTreePageStore.hpp"
 #include "graph/storage/relocatable/property/LargeValue.hpp"
 
 namespace graph::storage {
-	class BTreePageStore;
 	class PropertyCollectionRootStore;
 	class SlottedPagePool;
+
+	// A reserved content-index mutation remains separate from the enclosing
+	// graph publication. The caller composes it with the Property references and
+	// invokes the supplied preparer only after metadata assigns page identities.
+	struct LargeValueContentIndexPublicationPlan {
+		NativeGraphIndexTreeMutation mutation;
+		BTreeStructuralMutationPreparer preparer;
+	};
 
 	// Physical ranges remain a caller policy, while the store retains logical
 	// identity and publishes all selected pools under one metadata generation.
@@ -56,6 +65,25 @@ namespace graph::storage {
 		size_t candidates_scanned = 0U;
 	};
 
+	// The streamed graph coordinator assigns only logical PageIds. This request
+	// lets LargeValueStore encode one immutable value with a page-local chunk
+	// buffer and a bounded manifest frontier, without constructing the generic
+	// vector-backed transaction materialization result.
+	struct LargeValueStreamedMaterializationRequest {
+		LargeValueRef reference;
+		std::span<const std::byte> logical_bytes;
+		LargeValueCompressionOptions compression{};
+		LargeValueExtentClass extent_class = LargeValueExtentClass::LVEC_32K;
+		PageId first_data_page_id{};
+		size_t data_page_count = 0U;
+		PageId first_manifest_page_id{};
+		size_t manifest_page_count = 0U;
+	};
+
+	using LargeValueStreamedOwnerResolver = std::function<PageOwnerHeader(PageId, PageOwnerKind)>;
+	using LargeValueStreamedFrameVisitor =
+			std::function<void(const PageOwnerHeader &, std::vector<std::byte>, PageOwnerKind)>;
+
 	class LargeValueStore final {
 	public:
 		LargeValueStore(std::shared_ptr<StorageIO> io, RelocatableMetadataStore &metadata,
@@ -79,6 +107,12 @@ namespace graph::storage {
 		findContentDuplicateWithStats(const MetadataSnapshotPin &snapshot, std::span<const std::byte> bytes,
 									  LargeValueKind kind, std::string_view mediaType, size_t maximumCandidates) const;
 		[[nodiscard]] std::vector<std::byte> contentIndexKey(const LargeValueRef &reference) const;
+		// Plans the reserved content-identity index update for new immutable values.
+		// This does not publish anything; callers must place the returned mutation
+		// in the same NativeGraphDerivedStateMutation as the Property references.
+		[[nodiscard]] LargeValueContentIndexPublicationPlan planNativeGraphContentIndexMutation(
+				const MetadataSnapshotPin &snapshot, std::span<const NativeGraphLargeValueMutation> values,
+				PhysicalSlotId firstSlot, PhysicalSlotId lastSlot, bool forceFreshRebuild = false) const;
 		// Computes the immutable logical identity that a later native graph
 		// transaction will materialize. This makes codec fallback deterministic
 		// before the small Property reference becomes reachable.
@@ -92,6 +126,13 @@ namespace graph::storage {
 		[[nodiscard]] size_t
 		plannedManifestPageCount(std::span<const std::byte> bytes, const LargeValueCompressionOptions &compression,
 								 LargeValueExtentClass extentClass = LargeValueExtentClass::LVEC_32K) const;
+		// Emits data then Manifest frames for one immutable value. The caller must
+		// synchronously place each frame into an already reserved shared pool and
+		// append its directory route before returning from the visitor.
+		void materializeStreamedValue(const LargeValueStreamedMaterializationRequest &request,
+									 LogSequenceNumber checkpointLsn,
+									 const LargeValueStreamedOwnerResolver &resolveOwner,
+									 const LargeValueStreamedFrameVisitor &visit) const;
 
 		// Writes the immutable data frames and manifest before publishing their
 		// Catalog, Page Directory, and LargeValue directory roots together.

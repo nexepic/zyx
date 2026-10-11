@@ -33,6 +33,7 @@
 #include "graph/query/logical/operators/LogicalCreateNode.hpp"
 #include "graph/query/logical/operators/LogicalDelete.hpp"
 #include "graph/query/logical/operators/LogicalForeach.hpp"
+#include "graph/query/logical/operators/LogicalLimit.hpp"
 #include "graph/query/logical/operators/LogicalMergeEdge.hpp"
 #include "graph/query/logical/operators/LogicalMergeNode.hpp"
 #include "graph/query/logical/operators/LogicalNodeScan.hpp"
@@ -40,6 +41,8 @@
 #include "graph/query/logical/operators/LogicalRemove.hpp"
 #include "graph/query/logical/operators/LogicalSet.hpp"
 #include "graph/query/logical/operators/LogicalSingleRow.hpp"
+#include "graph/query/logical/operators/LogicalSkip.hpp"
+#include "graph/query/logical/operators/LogicalSort.hpp"
 #include "graph/query/logical/operators/LogicalUnwind.hpp"
 
 namespace graph::query::execution {
@@ -98,6 +101,51 @@ namespace graph::query::execution {
 			const logical::LogicalOperator *read_root = nullptr;
 		};
 
+		void validateSetOperationShape(const logical::LogicalSet &set, const char *context) {
+			if (set.getItems().empty()) {
+				throw std::logic_error(std::string(context) + " has an empty SET operator");
+			}
+			for (const logical::LogicalSetItem &item: set.getItems()) {
+				switch (item.type) {
+					case logical::SetActionType::LSET_PROPERTY:
+						if (item.variable.empty() || item.key.empty() || !item.expression) {
+							throw std::logic_error(std::string(context) + " has an invalid SET Property assignment");
+						}
+						break;
+					case logical::SetActionType::LSET_LABEL:
+						if (item.variable.empty() || item.key.empty() || item.expression) {
+							throw std::logic_error(std::string(context) + " has an invalid SET label assignment");
+						}
+						break;
+					case logical::SetActionType::LSET_MAP_MERGE:
+						if (item.variable.empty() || !item.expression) {
+							throw std::logic_error(std::string(context) + " has an invalid SET map-merge assignment");
+						}
+						break;
+					default:
+						throw std::logic_error(std::string(context) + " has an unsupported SET assignment type");
+				}
+			}
+		}
+
+		void validateRemoveOperationShape(const logical::LogicalRemove &remove, const char *context) {
+			if (remove.getItems().empty()) {
+				throw std::logic_error(std::string(context) + " has an empty REMOVE operator");
+			}
+			for (const logical::LogicalRemoveItem &item: remove.getItems()) {
+				if (item.variable.empty() || item.key.empty()) {
+					throw std::logic_error(std::string(context) + " has an invalid REMOVE item");
+				}
+				switch (item.type) {
+					case logical::LogicalRemoveActionType::LREM_PROPERTY:
+					case logical::LogicalRemoveActionType::LREM_LABEL:
+						break;
+					default:
+						throw std::logic_error(std::string(context) + " has an unsupported REMOVE item type");
+				}
+			}
+		}
+
 		[[nodiscard]] CreateSetMutationChain collectForeachMutationChain(const logical::LogicalForeach &foreach) {
 			if (foreach.getIterVar().empty() || !foreach.getListExpr() || foreach.getBody() == nullptr) {
 				throw std::logic_error(
@@ -109,17 +157,23 @@ namespace graph::query::execution {
 				const logical::LogicalOpType type = tail->getType();
 				if (type != logical::LogicalOpType::LOP_CREATE_NODE &&
 					type != logical::LogicalOpType::LOP_CREATE_EDGE && type != logical::LogicalOpType::LOP_SET &&
-					type != logical::LogicalOpType::LOP_REMOVE) {
-					throw std::logic_error("logical FOREACH currently supports only CREATE Node/relationship, SET, and "
-										   "REMOVE update chains");
+					type != logical::LogicalOpType::LOP_REMOVE && type != logical::LogicalOpType::LOP_DELETE) {
+					throw std::logic_error("logical FOREACH supports only CREATE Node/relationship, SET, REMOVE, and "
+										   "DELETE update chains");
 				}
-				if (type == logical::LogicalOpType::LOP_SET &&
-					dynamic_cast<const logical::LogicalSet *>(tail)->getItems().empty()) {
-					throw std::logic_error("logical FOREACH SET body cannot be empty");
+				if (type == logical::LogicalOpType::LOP_SET) {
+					const auto *set = dynamic_cast<const logical::LogicalSet *>(tail);
+					if (set == nullptr) {
+						throw std::logic_error("logical FOREACH SET body is malformed");
+					}
+					validateSetOperationShape(*set, "logical FOREACH SET body");
 				}
-				if (type == logical::LogicalOpType::LOP_REMOVE &&
-					dynamic_cast<const logical::LogicalRemove *>(tail)->getItems().empty()) {
-					throw std::logic_error("logical FOREACH REMOVE body cannot be empty");
+				if (type == logical::LogicalOpType::LOP_REMOVE) {
+					const auto *remove = dynamic_cast<const logical::LogicalRemove *>(tail);
+					if (remove == nullptr) {
+						throw std::logic_error("logical FOREACH REMOVE body is malformed");
+					}
+					validateRemoveOperationShape(*remove, "logical FOREACH REMOVE body");
 				}
 				chain.operations.push_back(tail);
 				const std::vector<logical::LogicalOperator *> children = tail->getChildren();
@@ -146,7 +200,7 @@ namespace graph::query::execution {
 		}
 
 		[[nodiscard]] std::optional<CreateSetMutationChain>
-		collectCreateSetMutationChain(const logical::LogicalOperator &root) {
+		collectCreateSetMutationChain(const logical::LogicalOperator &root, bool requireCreate = true) {
 			CreateSetMutationChain chain;
 			const logical::LogicalOperator *current = &root;
 			bool sawCreate = false;
@@ -155,13 +209,61 @@ namespace graph::query::execution {
 										  current->getType() == logical::LogicalOpType::LOP_SET ||
 										  current->getType() == logical::LogicalOpType::LOP_REMOVE ||
 										  current->getType() == logical::LogicalOpType::LOP_DELETE)) {
+				switch (current->getType()) {
+					case logical::LogicalOpType::LOP_CREATE_NODE:
+						// Preserve the public unary-plan error before checking the
+						// implementation-specific concrete type.
+						static_cast<void>(requireOptionalOnlyChild(*current));
+						if (dynamic_cast<const logical::LogicalCreateNode *>(current) == nullptr) {
+							throw std::logic_error("logical CREATE/SET chain has an invalid CreateNode operator");
+						}
+						break;
+					case logical::LogicalOpType::LOP_CREATE_EDGE:
+						static_cast<void>(requireOptionalOnlyChild(*current));
+						if (dynamic_cast<const logical::LogicalCreateEdge *>(current) == nullptr) {
+							throw std::logic_error("logical CREATE/SET chain has an invalid CreateEdge operator");
+						}
+						break;
+					case logical::LogicalOpType::LOP_SET: {
+						const auto *set = dynamic_cast<const logical::LogicalSet *>(current);
+						if (set == nullptr) {
+							throw std::logic_error("logical CREATE/SET chain has an invalid SET operator");
+						}
+						break;
+					}
+					case logical::LogicalOpType::LOP_REMOVE: {
+						const auto *remove = dynamic_cast<const logical::LogicalRemove *>(current);
+						if (remove == nullptr) {
+							throw std::logic_error("logical CREATE/SET chain has an invalid REMOVE operator");
+						}
+						break;
+					}
+					case logical::LogicalOpType::LOP_DELETE: {
+						const auto *deleteOperator = dynamic_cast<const logical::LogicalDelete *>(current);
+						if (deleteOperator == nullptr || deleteOperator->getVariables().empty()) {
+							throw std::logic_error("logical CREATE/SET chain has an invalid Delete operator");
+						}
+						break;
+					}
+					default:
+						throw std::logic_error("logical CREATE/SET chain has an unsupported mutation operator");
+				}
 				chain.operations.push_back(current);
 				sawCreate = sawCreate || current->getType() == logical::LogicalOpType::LOP_CREATE_NODE ||
 							current->getType() == logical::LogicalOpType::LOP_CREATE_EDGE;
 				current = requireOptionalOnlyChild(*current);
 			}
-			if (!sawCreate || chain.operations.empty()) {
+			if ((requireCreate && !sawCreate) || chain.operations.empty()) {
 				return std::nullopt;
+			}
+			for (const logical::LogicalOperator *operation: chain.operations) {
+				if (operation->getType() == logical::LogicalOpType::LOP_SET) {
+					validateSetOperationShape(*dynamic_cast<const logical::LogicalSet *>(operation),
+											  "logical CREATE/SET chain");
+				} else if (operation->getType() == logical::LogicalOpType::LOP_REMOVE) {
+					validateRemoveOperationShape(*dynamic_cast<const logical::LogicalRemove *>(operation),
+												 "logical CREATE/SET chain");
+				}
 			}
 			std::ranges::reverse(chain.operations);
 			chain.read_root = current;
@@ -174,6 +276,19 @@ namespace graph::query::execution {
 			const logical::LogicalOperator *current = &root;
 			while (current != nullptr && (current->getType() == logical::LogicalOpType::LOP_SET ||
 										  current->getType() == logical::LogicalOpType::LOP_REMOVE)) {
+				if (current->getType() == logical::LogicalOpType::LOP_SET) {
+					const auto *set = dynamic_cast<const logical::LogicalSet *>(current);
+					if (set == nullptr) {
+						throw std::logic_error("logical SET/REMOVE chain has an invalid SET operator");
+					}
+					validateSetOperationShape(*set, "logical SET/REMOVE chain");
+				} else {
+					const auto *remove = dynamic_cast<const logical::LogicalRemove *>(current);
+					if (remove == nullptr) {
+						throw std::logic_error("logical SET/REMOVE chain has an invalid REMOVE operator");
+					}
+					validateRemoveOperationShape(*remove, "logical SET/REMOVE chain");
+				}
 				chain.operations.push_back(current);
 				current = requireOptionalOnlyChild(*current);
 			}
@@ -195,43 +310,109 @@ namespace graph::query::execution {
 		}
 
 		// A write-only CALL body is planned with its own SingleRow seed. Rebind that
-		// seed to the outer pipeline so the existing bounded CREATE runtime can stage
+		// seed to the outer pipeline so the existing bounded mutation runtime can stage
 		// every outer row and publish one atomic batch. General CALL semantics stay
 		// outside this deliberately narrow mutation path.
-		[[nodiscard]] std::unique_ptr<logical::LogicalOperator>
+		struct ReboundWriteOnlyCall {
+			std::unique_ptr<logical::LogicalOperator> mutation_root;
+			std::unique_ptr<logical::LogicalProject> outer_projection;
+			std::unique_ptr<logical::LogicalProject> exported_projection;
+			const logical::LogicalSort *sort = nullptr;
+			const logical::LogicalSkip *skip = nullptr;
+			const logical::LogicalLimit *limit = nullptr;
+		};
+
+		[[nodiscard]] std::optional<ReboundWriteOnlyCall>
 		rebindWriteOnlyCallSubquery(const logical::LogicalOperator &root) {
 			const logical::LogicalProject *outerProjection = nullptr;
 			const logical::LogicalOperator *candidate = &root;
-			if (root.getType() == logical::LogicalOpType::LOP_PROJECT) {
-				outerProjection = dynamic_cast<const logical::LogicalProject *>(&root);
+			const logical::LogicalSort *sort = nullptr;
+			const logical::LogicalSkip *skip = nullptr;
+			const logical::LogicalLimit *limit = nullptr;
+			// The planner places result operators outside a mutation as
+			// LIMIT -> SKIP -> PROJECT -> SORT -> CALL. They must be kept out of
+			// the write chain so pagination cannot reduce the rows being mutated.
+			if (candidate->getType() == logical::LogicalOpType::LOP_LIMIT) {
+				limit = dynamic_cast<const logical::LogicalLimit *>(candidate);
+				if (limit == nullptr) {
+					throw std::logic_error("logical write-only CALL has an invalid Limit operator");
+				}
+				candidate = requireOptionalOnlyChild(*candidate);
+				if (candidate == nullptr) {
+					throw std::logic_error("logical write-only CALL Limit requires a child");
+				}
+			}
+			if (candidate->getType() == logical::LogicalOpType::LOP_SKIP) {
+				skip = dynamic_cast<const logical::LogicalSkip *>(candidate);
+				if (skip == nullptr) {
+					throw std::logic_error("logical write-only CALL has an invalid Skip operator");
+				}
+				candidate = requireOptionalOnlyChild(*candidate);
+				if (candidate == nullptr) {
+					throw std::logic_error("logical write-only CALL Skip requires a child");
+				}
+			}
+			if (candidate->getType() == logical::LogicalOpType::LOP_PROJECT) {
+				outerProjection = dynamic_cast<const logical::LogicalProject *>(candidate);
 				if (outerProjection == nullptr) {
 					throw std::logic_error("logical write-only CALL has an invalid Project operator");
 				}
-				candidate = requireOptionalOnlyChild(root);
+				candidate = requireOptionalOnlyChild(*candidate);
 				if (candidate == nullptr) {
 					throw std::logic_error("logical write-only CALL projection requires a child");
 				}
 			}
+			if (candidate->getType() == logical::LogicalOpType::LOP_SORT) {
+				sort = dynamic_cast<const logical::LogicalSort *>(candidate);
+				if (sort == nullptr) {
+					throw std::logic_error("logical write-only CALL has an invalid Sort operator");
+				}
+				candidate = requireOptionalOnlyChild(*candidate);
+				if (candidate == nullptr) {
+					throw std::logic_error("logical write-only CALL Sort requires a child");
+				}
+			}
 			if (candidate->getType() != logical::LogicalOpType::LOP_CALL_SUBQUERY) {
-				return nullptr;
+				return std::nullopt;
 			}
 
 			const auto *call = dynamic_cast<const logical::LogicalCallSubquery *>(candidate);
 			if (call == nullptr) {
 				throw std::logic_error("logical write-only CALL has an invalid CallSubquery operator");
 			}
-			if (call->isInTransactions() || call->getBatchSize() != 0 || !call->getImportedVars().empty() ||
-				!call->getReturnedVars().empty()) {
-				throw std::runtime_error("logical mutation runtime does not support CALL subqueries with imports, "
-										 "returned variables, or transaction batching");
+			// Batched CALL has its own execution path below; leave it available for
+			// collectInTransactionsWriteOnlyCall instead of rejecting it here.
+			if (call->isInTransactions()) {
+				return std::nullopt;
+			}
+			if (call->getBatchSize() != 0) {
+				throw std::runtime_error(
+						"logical mutation runtime does not support CALL subqueries with transaction batching");
 			}
 			if (call->getSubquery() == nullptr) {
 				throw std::logic_error("logical write-only CALL requires an update body");
 			}
 
 			std::unique_ptr<logical::LogicalOperator> reboundBody = call->getSubquery()->clone();
+			std::unique_ptr<logical::LogicalProject> exportedProjection;
+			if (!call->getReturnedVars().empty()) {
+				if (dynamic_cast<logical::LogicalProject *>(reboundBody.get()) == nullptr) {
+					throw std::runtime_error("logical write-only CALL has an invalid exported-variable projection");
+				}
+				exportedProjection = std::unique_ptr<logical::LogicalProject>(
+						static_cast<logical::LogicalProject *>(reboundBody.release()));
+				if (exportedProjection->getOutputVariables() != call->getReturnedVars()) {
+					throw std::runtime_error(
+							"logical write-only CALL exported-variable projection has invalid columns");
+				}
+				reboundBody = exportedProjection->detachChild(0U);
+				if (reboundBody == nullptr) {
+					throw std::runtime_error(
+							"logical write-only CALL exported-variable projection requires a mutation child");
+				}
+			}
 			logical::LogicalOperator *current = reboundBody.get();
-			bool sawCreate = false;
+			bool sawImportProjection = false;
 			for (;;) {
 				if (current == nullptr) {
 					throw std::logic_error("logical write-only CALL update body contains a null operator");
@@ -239,13 +420,18 @@ namespace graph::query::execution {
 				switch (current->getType()) {
 					case logical::LogicalOpType::LOP_CREATE_NODE:
 					case logical::LogicalOpType::LOP_CREATE_EDGE:
-						sawCreate = true;
+					case logical::LogicalOpType::LOP_DELETE:
 						break;
 					case logical::LogicalOpType::LOP_SET:
 					case logical::LogicalOpType::LOP_REMOVE:
 						break;
+					case logical::LogicalOpType::LOP_PROJECT:
+						// WITH preserves the subquery's explicit import boundary while the
+						// replaced seed supplies one outer row at a time.
+						sawImportProjection = true;
+						break;
 					default:
-						throw std::logic_error("logical write-only CALL supports only CREATE, SET, and REMOVE "
+						throw std::logic_error("logical write-only CALL supports only CREATE, SET, REMOVE, and DELETE "
 											   "update chains");
 				}
 
@@ -264,16 +450,89 @@ namespace graph::query::execution {
 				}
 				current = children.front();
 			}
-			if (!sawCreate) {
-				throw std::logic_error("logical write-only CALL update body requires a CREATE operation");
+			if (!call->getImportedVars().empty() && !sawImportProjection) {
+				throw std::runtime_error("logical write-only CALL imports require a WITH projection");
 			}
-
 			if (outerProjection == nullptr) {
-				return reboundBody;
+				return ReboundWriteOnlyCall{
+						std::move(reboundBody), nullptr, std::move(exportedProjection), sort, skip, limit};
 			}
-			std::unique_ptr<logical::LogicalOperator> reboundRoot = outerProjection->clone();
-			reboundRoot->setChild(0U, std::move(reboundBody));
-			return reboundRoot;
+			std::unique_ptr<logical::LogicalProject> reboundOuter(
+					dynamic_cast<logical::LogicalProject *>(outerProjection->clone().release()));
+			if (reboundOuter == nullptr) {
+				throw std::logic_error("logical write-only CALL has an invalid outer projection");
+			}
+			if (exportedProjection != nullptr) {
+				return ReboundWriteOnlyCall{std::move(reboundBody),
+											std::move(reboundOuter),
+											std::move(exportedProjection),
+											sort,
+											skip,
+											limit};
+			}
+			return ReboundWriteOnlyCall{std::move(reboundBody), std::move(reboundOuter), nullptr, sort, skip, limit};
+		}
+
+		struct InTransactionsWriteOnlyCall {
+			const logical::LogicalCallSubquery *call = nullptr;
+			const logical::LogicalProject *outer_projection = nullptr;
+			const logical::LogicalProject *exported_projection = nullptr;
+			CreateSetMutationChain mutation_chain;
+		};
+
+		[[nodiscard]] std::optional<InTransactionsWriteOnlyCall>
+		collectInTransactionsWriteOnlyCall(const logical::LogicalOperator &root) {
+			const logical::LogicalProject *outerProjection = nullptr;
+			const logical::LogicalOperator *candidate = &root;
+			if (root.getType() == logical::LogicalOpType::LOP_PROJECT) {
+				outerProjection = dynamic_cast<const logical::LogicalProject *>(&root);
+				if (outerProjection == nullptr) {
+					throw std::logic_error("logical IN TRANSACTIONS CALL has an invalid Project operator");
+				}
+				candidate = requireOptionalOnlyChild(root);
+				if (candidate == nullptr) {
+					throw std::logic_error("logical IN TRANSACTIONS CALL projection requires a child");
+				}
+			}
+			if (candidate->getType() != logical::LogicalOpType::LOP_CALL_SUBQUERY) {
+				return std::nullopt;
+			}
+			const auto *call = dynamic_cast<const logical::LogicalCallSubquery *>(candidate);
+			if (call == nullptr) {
+				throw std::logic_error("logical IN TRANSACTIONS CALL has an invalid CallSubquery operator");
+			}
+			if (!call->isInTransactions()) {
+				return std::nullopt;
+			}
+			if (call->getSubquery() == nullptr) {
+				throw std::runtime_error("logical IN TRANSACTIONS CALL requires a write-only subquery body");
+			}
+			const logical::LogicalOperator *body = call->getSubquery();
+			const logical::LogicalProject *exportedProjection = nullptr;
+			if (!call->getReturnedVars().empty()) {
+				exportedProjection = dynamic_cast<const logical::LogicalProject *>(body);
+				if (exportedProjection == nullptr || exportedProjection->isDistinct() ||
+					exportedProjection->getOutputVariables() != call->getReturnedVars()) {
+					throw std::runtime_error(
+							"logical IN TRANSACTIONS CALL has an invalid exported-variable projection");
+				}
+				const std::vector<logical::LogicalOperator *> children = exportedProjection->getChildren();
+				if (children.size() != 1U || children.front() == nullptr) {
+					throw std::runtime_error(
+							"logical IN TRANSACTIONS CALL exported-variable projection requires a mutation child");
+				}
+				body = children.front();
+				if (body == nullptr) {
+					throw std::runtime_error(
+							"logical IN TRANSACTIONS CALL exported-variable projection requires a mutation child");
+				}
+			}
+			const std::optional<CreateSetMutationChain> chain = collectCreateSetMutationChain(*body, false);
+			if (!chain.has_value()) {
+				throw std::runtime_error(
+						"logical IN TRANSACTIONS CALL requires a supported unary mutation chain");
+			}
+			return InTransactionsWriteOnlyCall{call, outerProjection, exportedProjection, *chain};
 		}
 
 		[[nodiscard]] PropertyMap
@@ -495,6 +754,8 @@ namespace graph::query::execution {
 						synchronizeEntityPropertyCache(row, entity, properties, propertyCache);
 						break;
 					}
+					default:
+						throw std::logic_error("logical SET received an unsupported assignment type");
 				}
 			}
 		}
@@ -521,15 +782,19 @@ namespace graph::query::execution {
 						synchronizeEntityPropertyCache(row, entity, properties, propertyCache);
 						break;
 					}
-					case logical::LogicalRemoveActionType::LREM_LABEL:
-						if (entity.kind == LogicalGraphMutationEntityKind::LGMK_NODE) {
-							const auto label = std::ranges::find(entity.labels, item.key);
-							if (label != entity.labels.end()) {
-								entity.labels.erase(label);
-								entity.labels_changed = true;
-							}
+					case logical::LogicalRemoveActionType::LREM_LABEL: {
+						if (entity.kind != LogicalGraphMutationEntityKind::LGMK_NODE) {
+							throw std::logic_error("logical REMOVE label assignment requires a Node");
+						}
+						const auto label = std::ranges::find(entity.labels, item.key);
+						if (label != entity.labels.end()) {
+							entity.labels.erase(label);
+							entity.labels_changed = true;
 						}
 						break;
+					}
+					default:
+						throw std::logic_error("logical REMOVE received an unsupported item type");
 				}
 			}
 		}
@@ -540,6 +805,15 @@ namespace graph::query::execution {
 			// A CREATE followed by DELETE cancels the provisional entity before
 			// publication, so an implicit result cannot expose a durable binding.
 			std::set<std::string> unavailable_implicit_entities;
+		};
+
+		// Scalar result expressions that cannot observe a newly assigned entity ID
+		// are evaluated once before publication and reused afterwards. Expressions
+		// that reference a created entity still validate before publication, then
+		// run after publication to observe the real backend ID.
+		struct CreateSetPrepublicationResultCache {
+			std::vector<std::vector<std::optional<PropertyValue>>> sort_keys;
+			std::vector<std::vector<std::optional<ResultValue>>> projection_values;
 		};
 
 		using MutationProjectionResolver = std::function<ResultValue(const LogicalPlanReadRow &, const std::string &)>;
@@ -588,19 +862,25 @@ namespace graph::query::execution {
 				storage::LogicalGraphReadSnapshot &snapshot, const LogicalPlanReadRuntimeBounds &bounds,
 				const QueryContext &context, const MutationProjectionResolver &resolveBinding);
 
-		[[nodiscard]] QueryResult
-		buildCreateSetResult(const logical::LogicalProject *projection, const std::vector<std::string> &implicitColumns,
-							 const std::vector<CreateSetRuntimeRow> &rows, storage::LogicalGraphReadSnapshot &snapshot,
-							 const LogicalGraphMutationBatch &batch,
-							 const storage::LogicalGraphMutationBatchResult &result,
-							 const MutableGraphEntities &persistedEntities, const LogicalPlanReadRuntimeBounds &bounds,
-							 const QueryContext &context);
+		[[nodiscard]] QueryResult buildCreateSetResult(
+				const logical::LogicalProject *projection, const std::vector<std::string> &implicitColumns,
+				const std::vector<CreateSetRuntimeRow> &rows, storage::LogicalGraphReadSnapshot &snapshot,
+				const LogicalGraphMutationBatch &batch, const storage::LogicalGraphMutationBatchResult &result,
+				const MutableGraphEntities &persistedEntities, const LogicalPlanReadRuntimeBounds &bounds,
+				const QueryContext &context, const logical::LogicalProject *exportedProjection = nullptr,
+				CreateSetPrepublicationResultCache *prepublicationCache = nullptr,
+				bool cachePrepublicationValues = false, const logical::LogicalSort *resultSort = nullptr,
+				const logical::LogicalSkip *resultSkip = nullptr, const logical::LogicalLimit *resultLimit = nullptr);
 
 		[[nodiscard]] QueryResult executeCreateSetMutationChain(
 				const CreateSetMutationChain &chain, const storage::LogicalGraphReadBackend &readBackend,
 				storage::LogicalGraphWriteBackend &writeBackend, const LogicalPlanReadRuntimeBounds &bounds,
 				const QueryContext &context, const logical::LogicalProject *projection,
-				const std::vector<std::string> &implicitColumns, const logical::LogicalForeach *foreach = nullptr) {
+				const std::vector<std::string> &implicitColumns, const logical::LogicalForeach *foreach = nullptr,
+				const std::vector<LogicalPlanReadRow> *injectedInputRows = nullptr,
+				const logical::LogicalProject *exportedProjection = nullptr,
+				const logical::LogicalSort *resultSort = nullptr, const logical::LogicalSkip *resultSkip = nullptr,
+				const logical::LogicalLimit *resultLimit = nullptr) {
 			if (chain.operations.empty()) {
 				throw std::logic_error("logical CREATE/SET mutation chain cannot be empty");
 			}
@@ -801,8 +1081,16 @@ namespace graph::query::execution {
 								throw std::runtime_error("logical CREATE/SET exceeded its staged mutation bound");
 							}
 							LogicalGraphBatchEdgeCreateRequest request;
-							request.source = resolveNode(edge->getSourceVar());
-							request.target = resolveNode(edge->getTargetVar());
+							const std::string &direction = edge->getDirection();
+							if (direction != "out" && direction != "in" && direction != "both") {
+								throw std::logic_error("logical CREATE/SET has an unsupported relationship direction");
+							}
+							const LogicalGraphMutationEntityReference sourceReference =
+									resolveNode(edge->getSourceVar());
+							const LogicalGraphMutationEntityReference targetReference =
+									resolveNode(edge->getTargetVar());
+							request.source = direction == "in" ? targetReference : sourceReference;
+							request.target = direction == "in" ? sourceReference : targetReference;
 							request.type = edge->getEdgeType();
 							request.properties = toLogicalProperties(edge->getProperties());
 							appendExpressionProperties(edge->getPropertyExprs(), request.properties, source, *snapshot,
@@ -836,7 +1124,8 @@ namespace graph::query::execution {
 								const LogicalGraphMutationEntityReference reference = entity->second;
 								if (item.type == logical::LogicalRemoveActionType::LREM_LABEL) {
 									if (reference.entity_kind == LogicalGraphMutationEntityKind::LGMK_EDGE) {
-										continue;
+										throw std::logic_error(
+												"logical CREATE/SET cannot remove a label from a relationship");
 									}
 									if (reference.reference_kind ==
 												LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE &&
@@ -871,6 +1160,9 @@ namespace graph::query::execution {
 									continue;
 								}
 
+								if (item.type != logical::LogicalRemoveActionType::LREM_PROPERTY) {
+									throw std::logic_error("logical CREATE/SET has an unsupported REMOVE item type");
+								}
 								if (reference.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE ||
 									reference.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_EDGE) {
 									std::vector<LogicalGraphWriteProperty> *properties = nullptr;
@@ -934,6 +1226,20 @@ namespace graph::query::execution {
 								}
 								const LogicalGraphMutationEntityReference reference = entity->second;
 								if (reference.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE) {
+									const auto isIncidentCreatedEdge =
+											[&reference](const LogicalGraphBatchEdgeCreateRequest &edge) {
+												return edge.source == reference || edge.target == reference;
+											};
+									if (deleteOperator->isDetach()) {
+										// A provisional entity has no durable adjacency to scan. Fold every
+										// already staged incident Edge into the same final-state cancellation.
+										for (size_t edgeIndex = 0U; edgeIndex < batch.edge_creates.size();
+											 ++edgeIndex) {
+											if (isIncidentCreatedEdge(batch.edge_creates[edgeIndex])) {
+												cancelledEdgeCreates.insert(edgeIndex);
+											}
+										}
+									}
 									cancelledNodeCreates.insert(static_cast<size_t>(reference.value));
 									continue;
 								}
@@ -1062,14 +1368,46 @@ namespace graph::query::execution {
 
 				LogicalPlanReadRuntimeStats stats;
 				if (foreach == nullptr) {
-					stats = reader.executeWithSnapshot(
-							*snapshot, *readRoot, bounds,
-							[&stageRow](const LogicalPlanReadRow &source) {
-								stageRow(source, true);
-								return true;
-							},
-							context);
+					if (injectedInputRows == nullptr) {
+						stats = reader.executeWithSnapshot(
+								*snapshot, *readRoot, bounds,
+								[&stageRow](const LogicalPlanReadRow &source) {
+									stageRow(source, true);
+									return true;
+								},
+								context);
+					} else {
+						if (injectedInputRows->empty() || injectedInputRows->size() > bounds.maximum_rows) {
+							throw std::logic_error(
+									"logical IN TRANSACTIONS CALL has an invalid materialized input batch");
+						}
+						for (const LogicalPlanReadRow &inputRow: *injectedInputRows) {
+							const LogicalPlanReadRuntimeStats rowStats = reader.executeWithSnapshotAndInputRow(
+									*snapshot, *readRoot, bounds, inputRow,
+									[&stageRow](const LogicalPlanReadRow &source) {
+										stageRow(source, true);
+										return true;
+									},
+									context);
+							if (rowStats.rows_emitted == 0U) {
+								throw std::runtime_error(
+										"logical IN TRANSACTIONS CALL input row was not consumed by its subquery");
+							}
+							if (stats.rows_emitted > bounds.maximum_rows - rowStats.rows_emitted ||
+								stats.nodes_scanned > bounds.maximum_node_records - rowStats.nodes_scanned ||
+								stats.edges_scanned > bounds.maximum_edges_per_node - rowStats.edges_scanned) {
+								throw std::runtime_error("logical IN TRANSACTIONS CALL exceeded a read bound");
+							}
+							stats.rows_emitted += rowStats.rows_emitted;
+							stats.nodes_scanned += rowStats.nodes_scanned;
+							stats.edges_scanned += rowStats.edges_scanned;
+							stats.property_sets_materialized += rowStats.property_sets_materialized;
+						}
+					}
 				} else {
+					if (injectedInputRows != nullptr) {
+						throw std::logic_error("logical IN TRANSACTIONS CALL does not support a FOREACH subquery body");
+					}
 					size_t iterationCount = 0U;
 					stats = reader.executeWithSnapshot(
 							*snapshot, *readRoot, bounds,
@@ -1192,17 +1530,169 @@ namespace graph::query::execution {
 						batch.node_label_replacements.push_back({reference, entity.labels});
 					}
 				}
+				// Validate the complete result surface against provisional IDs before
+				// publication. The provisional result is discarded: it exists only to
+				// ensure a failing RETURN cannot make this batch durable. A successful
+				// publication below rebuilds the result with backend-assigned IDs.
+				storage::LogicalGraphMutationBatchResult prepublicationResult;
+				prepublicationResult.created_node_ids.reserve(batch.node_creates.size());
+				for (size_t index = 0U; index < batch.node_creates.size(); ++index) {
+					prepublicationResult.created_node_ids.push_back(std::numeric_limits<uint64_t>::max() - index);
+				}
+				prepublicationResult.created_edge_ids.reserve(batch.edge_creates.size());
+				for (size_t index = 0U; index < batch.edge_creates.size(); ++index) {
+					prepublicationResult.created_edge_ids.push_back(std::numeric_limits<uint64_t>::max() - index);
+				}
+				CreateSetPrepublicationResultCache prepublicationCache;
+				static_cast<void>(buildCreateSetResult(projection, implicitColumns, projectionRows, *snapshot, batch,
+													   prepublicationResult, persistedEntities, bounds, context,
+													   exportedProjection, &prepublicationCache, true, resultSort,
+													   resultSkip, resultLimit));
 				try {
+					// A periodic checkpoint can be deferred across a small batch. Check
+					// immediately before its durable publication so an expired query never
+					// makes the current mutation batch visible.
+					context.checkGuardNow();
 					const storage::LogicalGraphMutationBatchResult result =
 							writeBackend.executeLogicalGraphMutationBatch(batch, fence);
 					return buildCreateSetResult(projection, implicitColumns, projectionRows, *snapshot, batch, result,
-												persistedEntities, bounds, context);
+												persistedEntities, bounds, context, exportedProjection,
+												&prepublicationCache, false, resultSort, resultSkip, resultLimit);
 				} catch (const storage::LogicalGraphMutationConflict &) {
 					// All created references and Property reads belong to this pinned view.
 					// Replan the complete statement after a concurrent publication.
 				}
 			}
 			throw std::runtime_error("logical CREATE/SET exceeded its optimistic conflict retry limit");
+		}
+
+		[[nodiscard]] QueryResult executeInTransactionsWriteOnlyCall(
+				const InTransactionsWriteOnlyCall &batchedCall, const storage::LogicalGraphReadBackend &readBackend,
+				storage::LogicalGraphWriteBackend &writeBackend, bool permitsIndependentBatchCommits,
+				const LogicalPlanReadRuntimeBounds &bounds, const QueryContext &context) {
+			if (!permitsIndependentBatchCommits) {
+				throw std::runtime_error(
+						"CALL { ... } IN TRANSACTIONS is not permitted inside an explicit logical transaction");
+			}
+			const logical::LogicalCallSubquery &call = *batchedCall.call;
+			if (call.getBatchSize() < 0) {
+				throw std::invalid_argument("logical IN TRANSACTIONS CALL has a negative batch size");
+			}
+			const size_t batchSize = call.getBatchSize() == 0 ? std::min<size_t>(1'000U, bounds.maximum_rows)
+															  : static_cast<size_t>(call.getBatchSize());
+			if (batchSize == 0U || batchSize > bounds.maximum_rows) {
+				throw std::invalid_argument("logical IN TRANSACTIONS CALL has an invalid batch size");
+			}
+
+			const logical::LogicalOperator *input = call.getInput();
+			std::unique_ptr<logical::LogicalSingleRow> implicitInput;
+			if (input == nullptr) {
+				implicitInput = std::make_unique<logical::LogicalSingleRow>();
+				input = implicitInput.get();
+			}
+			std::unique_ptr<storage::LogicalGraphReadSnapshot> materializationSnapshot =
+					readBackend.openLogicalGraphReadSnapshot();
+			if (!materializationSnapshot) {
+				throw std::runtime_error("logical IN TRANSACTIONS CALL could not open its input snapshot");
+			}
+			std::vector<LogicalPlanReadRow> inputRows;
+			inputRows.reserve(std::min(batchSize, bounds.maximum_rows));
+			LogicalPlanReadRuntime reader(readBackend);
+			const LogicalPlanReadRuntimeStats inputStats = reader.executeWithSnapshot(
+					*materializationSnapshot, *input, bounds,
+					[&](const LogicalPlanReadRow &row) {
+						if (inputRows.size() == bounds.maximum_rows) {
+							throw std::runtime_error(
+									"logical IN TRANSACTIONS CALL exceeded its materialized input bound");
+						}
+						inputRows.push_back(row);
+						return true;
+					},
+					context);
+			requireCompleteReadForMutation(inputStats, bounds, "logical IN TRANSACTIONS CALL input");
+
+			QueryResult result;
+			if (batchedCall.outer_projection != nullptr) {
+				result.setColumns(batchedCall.outer_projection->getOutputVariables());
+			} else if (batchedCall.exported_projection != nullptr) {
+				result.setColumns(batchedCall.exported_projection->getOutputVariables());
+			} else {
+				result.setColumns(visibleMutationOutputColumns(call));
+			}
+			result.setPipelineRowCount(inputRows.size());
+			const auto materializeProjectionValue = [&](const LogicalPlanReadValue &value) -> ResultValue {
+				if (const auto *scalar = std::get_if<PropertyValue>(&value)) {
+					return *scalar;
+				}
+				if (const auto *node = std::get_if<storage::LogicalGraphNode>(&value)) {
+					return LogicalNodeResult{node->node_id, node->labels,
+											 readInlineProperties(node->properties, bounds.maximum_property_entries)};
+				}
+				const auto &edge = std::get<storage::LogicalGraphEdge>(value);
+				return LogicalEdgeResult{edge.edge_id, edge.source_node_id, edge.target_node_id, edge.type,
+										 readInlineProperties(edge.properties, bounds.maximum_property_entries)};
+			};
+			std::vector<QueryResult::Row> precomputedProjectionRows;
+			if (batchedCall.outer_projection != nullptr && batchedCall.exported_projection == nullptr) {
+				precomputedProjectionRows.reserve(inputRows.size());
+				// Result-pipeline failures must occur before the first independently
+				// committed batch. The projection observes the materialized outer
+				// snapshot, exactly as it would after a write-only CALL preserves a row.
+				for (const LogicalPlanReadRow &row: inputRows) {
+					std::unique_ptr<logical::LogicalOperator> projection = batchedCall.outer_projection->clone();
+					projection->setChild(0U, std::make_unique<logical::LogicalSingleRow>());
+					const LogicalPlanReadRuntimeStats projectionStats = reader.executeWithSnapshotAndInputRow(
+							*materializationSnapshot, *projection, bounds, row,
+							[&](const LogicalPlanReadRow &projected) {
+								QueryResult::Row output;
+								output.reserve(result.getColumns().size());
+								for (const std::string &column: result.getColumns()) {
+									const auto value = projected.values.find(column);
+									if (value == projected.values.end() ||
+										!output.emplace(column, materializeProjectionValue(value->second)).second) {
+										throw std::logic_error(
+												"logical IN TRANSACTIONS CALL could not materialize its outer result");
+									}
+								}
+								precomputedProjectionRows.push_back(std::move(output));
+								return true;
+							},
+							context);
+					if (projectionStats.rows_emitted != 1U) {
+						throw std::runtime_error("logical IN TRANSACTIONS CALL outer projection lost an input row");
+					}
+				}
+			}
+			for (size_t offset = 0U; offset < inputRows.size(); offset += batchSize) {
+				const size_t count = std::min(batchSize, inputRows.size() - offset);
+				std::vector<LogicalPlanReadRow> batchRows;
+				batchRows.reserve(count);
+				batchRows.insert(batchRows.end(), inputRows.begin() + static_cast<std::ptrdiff_t>(offset),
+								 inputRows.begin() + static_cast<std::ptrdiff_t>(offset + count));
+				const logical::LogicalProject *batchProjection =
+						batchedCall.exported_projection != nullptr
+								? (batchedCall.outer_projection != nullptr ? batchedCall.outer_projection
+																		   : batchedCall.exported_projection)
+								: nullptr;
+				QueryResult batchResult = executeCreateSetMutationChain(
+						batchedCall.mutation_chain, readBackend, writeBackend, bounds, context, batchProjection,
+						std::vector<std::string>{}, nullptr, &batchRows, batchedCall.exported_projection);
+				if (batchResult.getPipelineRowCount() != count) {
+					throw std::runtime_error(
+							"logical IN TRANSACTIONS CALL subquery did not preserve input cardinality");
+				}
+				if (batchedCall.outer_projection != nullptr && batchedCall.exported_projection == nullptr &&
+					batchResult.rowCount() != 0U) {
+					throw std::logic_error("logical IN TRANSACTIONS CALL produced an unexpected subquery result row");
+				}
+				for (const QueryResult::Row &row: batchResult.getRows()) {
+					result.addRow(row);
+				}
+			}
+			for (QueryResult::Row &row: precomputedProjectionRows) {
+				result.addRow(std::move(row));
+			}
+			return result;
 		}
 
 		[[nodiscard]] ResultValue materializeReadBinding(const storage::LogicalGraphReadSnapshot &snapshot,
@@ -1262,7 +1752,10 @@ namespace graph::query::execution {
 							 const LogicalGraphMutationBatch &batch,
 							 const storage::LogicalGraphMutationBatchResult &result,
 							 const MutableGraphEntities &persistedEntities, const LogicalPlanReadRuntimeBounds &bounds,
-							 const QueryContext &context) {
+							 const QueryContext &context, const logical::LogicalProject *exportedProjection,
+							 CreateSetPrepublicationResultCache *prepublicationCache, bool cachePrepublicationValues,
+							 const logical::LogicalSort *resultSort, const logical::LogicalSkip *resultSkip,
+							 const logical::LogicalLimit *resultLimit) {
 			if (result.created_node_ids.size() != batch.node_creates.size() ||
 				result.created_edge_ids.size() != batch.edge_creates.size()) {
 				throw std::runtime_error("logical CREATE/SET backend returned an inconsistent creation result");
@@ -1314,6 +1807,15 @@ namespace graph::query::execution {
 				}
 				throw std::logic_error("logical CREATE/SET projection reference is invalid");
 			};
+			std::unordered_map<std::string, const logical::LogicalProjectItem *> exportedItems;
+			if (exportedProjection != nullptr) {
+				exportedItems.reserve(exportedProjection->getItems().size());
+				for (const logical::LogicalProjectItem &item: exportedProjection->getItems()) {
+					if (item.alias.empty() || !item.expression || !exportedItems.emplace(item.alias, &item).second) {
+						throw std::logic_error("logical write-only CALL has an invalid exported-variable projection");
+					}
+				}
+			}
 
 			std::vector<std::string> outputColumns =
 					projection != nullptr ? projection->getOutputVariables() : implicitColumns;
@@ -1324,26 +1826,237 @@ namespace graph::query::execution {
 					});
 				});
 			}
+			std::function<ResultValue(const CreateSetRuntimeRow &, const std::string &)> resolveForRow;
+			resolveForRow = [&](const CreateSetRuntimeRow &runtimeRow, const std::string &variable) -> ResultValue {
+				if (const auto entity = runtimeRow.entities.find(variable); entity != runtimeRow.entities.end()) {
+					if (entity->second.reference_kind != LogicalGraphMutationReferenceKind::LGRK_PERSISTED) {
+						return materializeCreated(entity->second);
+					}
+					return materializeMutableBinding(snapshot, runtimeRow.source, variable, persistedEntities, bounds);
+				}
+				const auto scalar = runtimeRow.source.values.find(variable);
+				if (scalar != runtimeRow.source.values.end() && std::holds_alternative<PropertyValue>(scalar->second)) {
+					return std::get<PropertyValue>(scalar->second);
+				}
+				if (const auto exported = exportedItems.find(variable); exported != exportedItems.end()) {
+					return evaluateMutationProjectionExpression(
+							*exported->second->expression, runtimeRow.source, snapshot, bounds, context,
+							[&resolveForRow, &runtimeRow](const LogicalPlanReadRow &,
+														  const std::string &nestedVariable) {
+								return resolveForRow(runtimeRow, nestedVariable);
+							});
+				}
+				throw std::logic_error("logical CREATE/SET RETURN could not resolve a variable");
+			};
+			std::function<bool(const CreateSetRuntimeRow &, const std::string &, std::set<std::string> &)>
+					dependsOnCreatedEntity;
+			dependsOnCreatedEntity = [&](const CreateSetRuntimeRow &runtimeRow, const std::string &variable,
+										 std::set<std::string> &resolvingExports) {
+				const auto entity = runtimeRow.entities.find(variable);
+				if (entity != runtimeRow.entities.end()) {
+					return entity->second.reference_kind != LogicalGraphMutationReferenceKind::LGRK_PERSISTED;
+				}
+				const auto exported = exportedItems.find(variable);
+				if (exported == exportedItems.end() || !resolvingExports.insert(variable).second) {
+					return false;
+				}
+				std::set<std::string> dependencies;
+				expressions::ExpressionUtils::collectVariables(exported->second->expression.get(), dependencies);
+				const bool depends = std::ranges::any_of(dependencies, [&](const std::string &dependency) {
+					return dependsOnCreatedEntity(runtimeRow, dependency, resolvingExports);
+				});
+				resolvingExports.erase(variable);
+				return depends;
+			};
+			std::vector<size_t> outputOrder;
+			outputOrder.reserve(rows.size());
+			for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
+				outputOrder.push_back(rowIndex);
+			}
+			if (resultSort != nullptr) {
+				const std::vector<logical::LogicalSortItem> &sortItems = resultSort->getSortItems();
+				if (sortItems.empty()) {
+					throw std::logic_error("logical write-only CALL ORDER BY has no sort items");
+				}
+				if (cachePrepublicationValues && prepublicationCache != nullptr) {
+					prepublicationCache->sort_keys.assign(rows.size(),
+														  std::vector<std::optional<PropertyValue>>(sortItems.size()));
+				}
+				for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
+					for (size_t itemIndex = 0U; itemIndex < sortItems.size(); ++itemIndex) {
+						const logical::LogicalSortItem &item = sortItems[itemIndex];
+						context.checkGuard();
+						if (!item.expression) {
+							throw std::logic_error("logical write-only CALL ORDER BY has an empty sort expression");
+						}
+						std::set<std::string> dependencies;
+						expressions::ExpressionUtils::collectVariables(item.expression.get(), dependencies);
+						std::set<std::string> resolvingExports;
+						const bool sortDependsOnCreatedEntity =
+								std::ranges::any_of(dependencies, [&](const std::string &variable) {
+									return dependsOnCreatedEntity(rows[rowIndex], variable, resolvingExports);
+								});
+						const ResultValue key = evaluateMutationProjectionExpression(
+								*item.expression, rows[rowIndex].source, snapshot, bounds, context,
+								[&resolveForRow, &row = rows[rowIndex]](const LogicalPlanReadRow &,
+																		const std::string &variable) {
+									return resolveForRow(row, variable);
+								});
+						if (!key.isPrimitive()) {
+							throw std::logic_error(
+									"logical write-only CALL ORDER BY expression must evaluate to a Property value");
+						}
+						if (cachePrepublicationValues && prepublicationCache != nullptr &&
+							!sortDependsOnCreatedEntity) {
+							prepublicationCache->sort_keys[rowIndex][itemIndex] = key.asPrimitive();
+						}
+					}
+				}
+				if (outputOrder.size() > 1U) {
+					struct DecoratedRow {
+						size_t index = 0U;
+						std::vector<PropertyValue> keys;
+					};
+					std::vector<DecoratedRow> decoratedRows;
+					decoratedRows.reserve(outputOrder.size());
+					for (const size_t rowIndex: outputOrder) {
+						DecoratedRow decorated{rowIndex, {}};
+						decorated.keys.reserve(sortItems.size());
+						for (size_t itemIndex = 0U; itemIndex < sortItems.size(); ++itemIndex) {
+							const logical::LogicalSortItem &item = sortItems[itemIndex];
+							std::optional<PropertyValue> cached;
+							if (!cachePrepublicationValues && prepublicationCache != nullptr &&
+								rowIndex < prepublicationCache->sort_keys.size() &&
+								itemIndex < prepublicationCache->sort_keys[rowIndex].size()) {
+								cached = prepublicationCache->sort_keys[rowIndex][itemIndex];
+							}
+							if (cached.has_value()) {
+								decorated.keys.push_back(*cached);
+								continue;
+							}
+							const ResultValue key = evaluateMutationProjectionExpression(
+									*item.expression, rows[rowIndex].source, snapshot, bounds, context,
+									[&resolveForRow, &row = rows[rowIndex]](const LogicalPlanReadRow &,
+																			const std::string &variable) {
+										return resolveForRow(row, variable);
+									});
+							if (!key.isPrimitive()) {
+								throw std::logic_error("logical write-only CALL ORDER BY expression must evaluate to a "
+													   "Property value");
+							}
+							decorated.keys.push_back(key.asPrimitive());
+						}
+						decoratedRows.push_back(std::move(decorated));
+					}
+					std::stable_sort(decoratedRows.begin(), decoratedRows.end(),
+									 [&sortItems, &context](const DecoratedRow &left, const DecoratedRow &right) {
+										 context.checkGuard();
+										 for (size_t itemIndex = 0U; itemIndex < sortItems.size(); ++itemIndex) {
+											 if (left.keys[itemIndex] == right.keys[itemIndex]) {
+												 continue;
+											 }
+											 return sortItems[itemIndex].ascending
+															? left.keys[itemIndex] < right.keys[itemIndex]
+															: left.keys[itemIndex] > right.keys[itemIndex];
+										 }
+										 return false;
+									 });
+					outputOrder.clear();
+					for (const DecoratedRow &row: decoratedRows) {
+						outputOrder.push_back(row.index);
+					}
+				}
+			}
+			if (cachePrepublicationValues && projection != nullptr && prepublicationCache != nullptr) {
+				prepublicationCache->projection_values.assign(
+						rows.size(), std::vector<std::optional<ResultValue>>(projection->getItems().size()));
+			}
+			auto evaluateProjectionValue = [&](size_t rowIndex, size_t itemIndex) -> ResultValue {
+				const logical::LogicalProjectItem &item = projection->getItems()[itemIndex];
+				if (item.alias.empty() || !item.expression) {
+					throw std::logic_error("logical CREATE/SET RETURN has an invalid output item");
+				}
+				std::set<std::string> variables;
+				expressions::ExpressionUtils::collectVariables(item.expression.get(), variables);
+				std::set<std::string> resolvingExports;
+				const bool dependsOnCreated = std::ranges::any_of(variables, [&](const std::string &variable) {
+					return dependsOnCreatedEntity(rows[rowIndex], variable, resolvingExports);
+				});
+				if (!cachePrepublicationValues && prepublicationCache != nullptr && !dependsOnCreated &&
+						rowIndex < prepublicationCache->projection_values.size() &&
+						itemIndex < prepublicationCache->projection_values[rowIndex].size() &&
+						prepublicationCache->projection_values[rowIndex][itemIndex].has_value()) {
+					return *prepublicationCache->projection_values[rowIndex][itemIndex];
+				}
+				ResultValue value = evaluateMutationProjectionExpression(
+						*item.expression, rows[rowIndex].source, snapshot, bounds, context,
+						[&resolveForRow, &row = rows[rowIndex]](const LogicalPlanReadRow &, const std::string &variable) {
+							return resolveForRow(row, variable);
+						});
+				if (cachePrepublicationValues && prepublicationCache != nullptr && !dependsOnCreated) {
+					prepublicationCache->projection_values[rowIndex][itemIndex] = value;
+				}
+				return value;
+			};
+			std::vector<std::vector<ResultValue>> distinctProjectionValues;
+			if (projection != nullptr && projection->isDistinct()) {
+				distinctProjectionValues.resize(rows.size());
+				std::vector<size_t> distinctOrder;
+				distinctOrder.reserve(outputOrder.size());
+				const auto sameResultValue = [](const ResultValue &left, const ResultValue &right) {
+					if (left.isPrimitive() || right.isPrimitive()) {
+						return left.isPrimitive() && right.isPrimitive() && left.asPrimitive() == right.asPrimitive();
+					}
+					if (left.isNode() || right.isNode()) {
+						return left.isNode() && right.isNode() && left.asNode().getId() == right.asNode().getId();
+					}
+					return left.isEdge() && right.isEdge() && left.asEdge().getId() == right.asEdge().getId();
+				};
+				for (const size_t rowIndex : outputOrder) {
+					context.checkGuard();
+					auto &values = distinctProjectionValues[rowIndex];
+					values.reserve(projection->getItems().size());
+					for (size_t itemIndex = 0U; itemIndex < projection->getItems().size(); ++itemIndex) {
+						values.push_back(evaluateProjectionValue(rowIndex, itemIndex));
+					}
+					const bool duplicate = std::ranges::any_of(distinctOrder, [&](size_t previousIndex) {
+						return std::ranges::equal(values, distinctProjectionValues[previousIndex], sameResultValue);
+					});
+					if (duplicate) {
+						continue;
+					}
+					if (distinctOrder.size() == bounds.maximum_distinct_rows) {
+						throw std::runtime_error("logical write-only CALL DISTINCT exceeded its row bound");
+					}
+					distinctOrder.push_back(rowIndex);
+				}
+				outputOrder = std::move(distinctOrder);
+			}
+			size_t first = 0U;
+			if (resultSkip != nullptr) {
+				if (resultSkip->getOffset() < 0) {
+					throw std::logic_error("logical write-only CALL SKIP cannot be negative");
+				}
+				const uint64_t offset = static_cast<uint64_t>(resultSkip->getOffset());
+				first = offset >= outputOrder.size() ? outputOrder.size() : static_cast<size_t>(offset);
+			}
+			size_t last = outputOrder.size();
+			if (resultLimit != nullptr) {
+				if (resultLimit->getLimit() < 0) {
+					throw std::logic_error("logical write-only CALL LIMIT cannot be negative");
+				}
+				const uint64_t limit = static_cast<uint64_t>(resultLimit->getLimit());
+				const size_t remaining = outputOrder.size() - first;
+				if (limit < remaining) {
+					last = first + static_cast<size_t>(limit);
+				}
+			}
 			QueryResult queryResult;
 			queryResult.setColumns(outputColumns);
-			queryResult.setPipelineRowCount(rows.size());
-			for (const CreateSetRuntimeRow &runtimeRow: rows) {
+			queryResult.setPipelineRowCount(last - first);
+			for (size_t orderedIndex = first; orderedIndex < last; ++orderedIndex) {
+				const CreateSetRuntimeRow &runtimeRow = rows[outputOrder[orderedIndex]];
 				QueryResult::Row output;
-				const auto resolve = [&](const std::string &variable) -> ResultValue {
-					if (const auto entity = runtimeRow.entities.find(variable); entity != runtimeRow.entities.end()) {
-						if (entity->second.reference_kind != LogicalGraphMutationReferenceKind::LGRK_PERSISTED) {
-							return materializeCreated(entity->second);
-						}
-						return materializeMutableBinding(snapshot, runtimeRow.source, variable, persistedEntities,
-														 bounds);
-					}
-					const auto scalar = runtimeRow.source.values.find(variable);
-					if (scalar != runtimeRow.source.values.end() &&
-						std::holds_alternative<PropertyValue>(scalar->second)) {
-						return std::get<PropertyValue>(scalar->second);
-					}
-					throw std::logic_error("logical CREATE/SET RETURN could not resolve a variable");
-				};
 				if (projection == nullptr) {
 					if (outputColumns.empty()) {
 						continue;
@@ -1351,23 +2064,27 @@ namespace graph::query::execution {
 					output.reserve(outputColumns.size());
 					for (const std::string &column: outputColumns) {
 						context.checkGuard();
-						if (!output.emplace(column, resolve(column)).second) {
+						if (!output.emplace(column, resolveForRow(runtimeRow, column)).second) {
 							throw std::logic_error("logical CREATE/SET produced duplicate output columns");
 						}
 					}
 					queryResult.addRow(std::move(output));
 					continue;
 				}
-				for (const logical::LogicalProjectItem &item: projection->getItems()) {
+				for (size_t itemIndex = 0U; itemIndex < projection->getItems().size(); ++itemIndex) {
+					const logical::LogicalProjectItem &item = projection->getItems()[itemIndex];
 					context.checkGuard();
 					if (item.alias.empty() || !item.expression) {
 						throw std::logic_error("logical CREATE/SET RETURN has an invalid output item");
 					}
-					ResultValue value = evaluateMutationProjectionExpression(
-							*item.expression, runtimeRow.source, snapshot, bounds, context,
-							[&resolve](const LogicalPlanReadRow &, const std::string &variable) {
-								return resolve(variable);
-							});
+					const size_t rowIndex = outputOrder[orderedIndex];
+					ResultValue value;
+					if (projection->isDistinct() && rowIndex < distinctProjectionValues.size() &&
+							itemIndex < distinctProjectionValues[rowIndex].size()) {
+						value = distinctProjectionValues[rowIndex][itemIndex];
+					} else {
+						value = evaluateProjectionValue(rowIndex, itemIndex);
+					}
 					if (!output.emplace(item.alias, std::move(value)).second) {
 						throw std::logic_error("logical CREATE/SET RETURN has duplicate output aliases");
 					}
@@ -1407,9 +2124,12 @@ namespace graph::query::execution {
 				storage::LogicalGraphReadSnapshot &snapshot, const LogicalPlanReadRuntimeBounds &bounds,
 				const QueryContext &context, const MutationProjectionResolver &resolveBinding) {
 			if (expression.getExpressionType() == expressions::ExpressionType::VARIABLE_REFERENCE) {
-				const auto &reference = dynamic_cast<const expressions::VariableReferenceExpression &>(expression);
-				if (!reference.hasProperty()) {
-					return resolveBinding(source, reference.getVariableName());
+				const auto *reference = dynamic_cast<const expressions::VariableReferenceExpression *>(&expression);
+				if (reference == nullptr) {
+					throw std::logic_error("logical mutation RETURN has an invalid VariableReference expression");
+				}
+				if (!reference->hasProperty()) {
+					return resolveBinding(source, reference->getVariableName());
 				}
 			}
 			LogicalPlanReadRow evaluationRow = source;
@@ -1502,6 +2222,64 @@ namespace graph::query::execution {
 			LogicalGraphMutationEntityReference reference;
 			storage::LogicalGraphEdge edge;
 			bool created = false;
+			bool resolved = false;
+		};
+
+		using MergeIdentityProperties = std::vector<std::pair<std::string, PropertyValue>>;
+
+		struct MergeNodeMatchKey {
+			const logical::LogicalMergeNode *operation = nullptr;
+			MergeIdentityProperties properties;
+
+			[[nodiscard]] bool operator<(const MergeNodeMatchKey &other) const {
+				if (std::less<const logical::LogicalMergeNode *>{}(operation, other.operation)) {
+					return true;
+				}
+				if (std::less<const logical::LogicalMergeNode *>{}(other.operation, operation)) {
+					return false;
+				}
+				return properties < other.properties;
+			}
+		};
+
+		struct MergeEdgeMatchKey {
+			const logical::LogicalMergeEdge *operation = nullptr;
+			LogicalGraphMutationEntityReference source;
+			LogicalGraphMutationEntityReference target;
+			MergeIdentityProperties properties;
+
+			[[nodiscard]] static bool referenceLess(const LogicalGraphMutationEntityReference &left,
+													const LogicalGraphMutationEntityReference &right) {
+				if (left.entity_kind != right.entity_kind) {
+					return left.entity_kind < right.entity_kind;
+				}
+				if (left.reference_kind != right.reference_kind) {
+					return left.reference_kind < right.reference_kind;
+				}
+				return left.value < right.value;
+			}
+
+			[[nodiscard]] bool operator<(const MergeEdgeMatchKey &other) const {
+				if (std::less<const logical::LogicalMergeEdge *>{}(operation, other.operation)) {
+					return true;
+				}
+				if (std::less<const logical::LogicalMergeEdge *>{}(other.operation, operation)) {
+					return false;
+				}
+				if (referenceLess(source, other.source)) {
+					return true;
+				}
+				if (referenceLess(other.source, source)) {
+					return false;
+				}
+				if (referenceLess(target, other.target)) {
+					return true;
+				}
+				if (referenceLess(other.target, target)) {
+					return false;
+				}
+				return properties < other.properties;
+			}
 		};
 
 		struct MergeExecutionState {
@@ -1513,8 +2291,8 @@ namespace graph::query::execution {
 			MutableGraphEntities modified_entities;
 			std::vector<PropertyMap> created_node_properties;
 			std::vector<PropertyMap> created_edge_properties;
-			std::unordered_map<const logical::LogicalMergeNode *, MergeNodeMatch> node_matches;
-			std::unordered_map<std::string, MergeEdgeMatch> edge_matches;
+			std::map<MergeNodeMatchKey, MergeNodeMatch> node_matches;
+			std::map<MergeEdgeMatchKey, MergeEdgeMatch> edge_matches;
 			size_t operator_count = 0U;
 
 			MergeExecutionState(storage::LogicalGraphReadSnapshot &readSnapshot,
@@ -1522,6 +2300,36 @@ namespace graph::query::execution {
 								const LogicalPlanReadRuntime &readRuntime) :
 				snapshot(readSnapshot), bounds(readBounds), context(queryContext), reader(readRuntime) {}
 		};
+
+		[[nodiscard]] MergeIdentityProperties canonicalMergeIdentityProperties(const PropertyMap &properties) {
+			MergeIdentityProperties result;
+			result.reserve(properties.size());
+			for (const auto &[key, value]: properties) {
+				result.emplace_back(key, value);
+			}
+			std::ranges::sort(result, {}, &std::pair<std::string, PropertyValue>::first);
+			return result;
+		}
+
+		[[nodiscard]] PropertyMap evaluateMergeIdentityProperties(
+				const std::unordered_map<std::string, PropertyValue> &literalProperties,
+				const std::unordered_map<std::string, std::shared_ptr<expressions::Expression>> &expressionProperties,
+				MergeRuntimeRow &row, MergeExecutionState &state) {
+			PropertyMap result = mergeProperties(literalProperties);
+			for (const auto &[key, expression]: expressionProperties) {
+				state.context.checkGuard();
+				if (key.empty() || !expression || result.contains(key)) {
+					throw std::logic_error("logical MERGE has an invalid dynamic match Property");
+				}
+				const PropertyValue value = evaluateCreatePropertyExpression(
+						*expression, state.context, row.row, state.snapshot, state.bounds, row.row.property_cache);
+				if (value.getType() == PropertyType::NULL_TYPE) {
+					throw std::runtime_error("logical MERGE cannot use NULL as an identity Property");
+				}
+				result.emplace(key, value);
+			}
+			return result;
+		}
 
 		using MergeRowVisitor = std::function<bool(MergeRuntimeRow &&)>;
 
@@ -1657,25 +2465,15 @@ namespace graph::query::execution {
 			return row.recent_nodes[row.recent_nodes.size() - (source ? 2U : 1U)];
 		}
 
-		[[nodiscard]] std::string mergeEdgeCacheKey(const logical::LogicalMergeEdge &operation,
-													const LogicalGraphMutationEntityReference &source,
-													const LogicalGraphMutationEntityReference &target) {
-			return std::to_string(reinterpret_cast<uintptr_t>(&operation)) + ":" +
-				   std::to_string(static_cast<uint8_t>(source.entity_kind)) + ":" +
-				   std::to_string(static_cast<uint8_t>(source.reference_kind)) + ":" + std::to_string(source.value) +
-				   ":" + std::to_string(static_cast<uint8_t>(target.entity_kind)) + ":" +
-				   std::to_string(static_cast<uint8_t>(target.reference_kind)) + ":" + std::to_string(target.value);
-		}
-
 		[[nodiscard]] std::optional<storage::LogicalGraphEdge>
 		findMergeEdge(const logical::LogicalMergeEdge &operation, uint64_t sourceNodeId, uint64_t targetNodeId,
 					  const PropertyMap &properties, const std::string &direction, MergeExecutionState &state) {
 			size_t remaining = state.bounds.maximum_edges_per_node;
-			std::set<uint64_t> visited;
 			const auto scanDirection = [&](storage::LogicalGraphReadDirection scanDirection,
 										   const std::function<bool(const storage::LogicalGraphEdge &)> &matches)
 					-> std::optional<storage::LogicalGraphEdge> {
 				std::optional<storage::LogicalGraphAdjacencyContinuation> continuation;
+				uint64_t previousEdgeId = 0U;
 				for (;;) {
 					if (remaining == 0U) {
 						throw std::runtime_error("logical MERGE relationship scan reached its configured bound");
@@ -1688,7 +2486,13 @@ namespace graph::query::execution {
 					}
 					for (const storage::LogicalGraphEdge &edge: page.edges) {
 						state.context.checkGuard();
-						if (edge.edge_id == 0U || !visited.insert(edge.edge_id).second) {
+						if (edge.edge_id == 0U || (previousEdgeId != 0U && edge.edge_id <= previousEdgeId)) {
+							throw std::runtime_error(
+									"logical MERGE relationship scan returned non-monotonic adjacency Edge IDs");
+						}
+						previousEdgeId = edge.edge_id;
+						if (direction == "both" && scanDirection == storage::LogicalGraphReadDirection::LGRD_INCOMING &&
+							edge.source_node_id == sourceNodeId && edge.target_node_id == sourceNodeId) {
 							continue;
 						}
 						--remaining;
@@ -1742,7 +2546,8 @@ namespace graph::query::execution {
 		void applyMergeNode(const logical::LogicalMergeNode &operation, MergeRuntimeRow &row,
 							MergeExecutionState &state) {
 			validateMergeLabels(operation.getLabels());
-			const PropertyMap matchProperties = mergeProperties(operation.getMatchProps());
+			const PropertyMap matchProperties = evaluateMergeIdentityProperties(
+					operation.getMatchProps(), operation.getMatchPropertyExpressions(), row, state);
 			if (!operation.getVariable().empty()) {
 				if (const auto existing = row.entities.find(operation.getVariable()); existing != row.entities.end()) {
 					if (existing->second.entity_kind != LogicalGraphMutationEntityKind::LGMK_NODE) {
@@ -1766,7 +2571,8 @@ namespace graph::query::execution {
 			}
 
 			MergeNodeMatch match;
-			const auto cached = state.node_matches.find(&operation);
+			const MergeNodeMatchKey cacheKey{&operation, canonicalMergeIdentityProperties(matchProperties)};
+			const auto cached = state.node_matches.find(cacheKey);
 			if (cached != state.node_matches.end()) {
 				match = cached->second;
 			} else if (const auto existing = findMergeNode(operation, matchProperties, state); existing.has_value()) {
@@ -1795,7 +2601,7 @@ namespace graph::query::execution {
 				match.node = actionNode;
 				match.created = true;
 			}
-			state.node_matches.insert_or_assign(&operation, match);
+			state.node_matches.insert_or_assign(cacheKey, match);
 			if (match.created) {
 				bindMergeNode(row, operation.getVariable(), match.reference, match.node,
 							  state.created_node_properties.at(static_cast<size_t>(match.reference.value)));
@@ -1818,10 +2624,12 @@ namespace graph::query::execution {
 		void applyMergeEdge(const logical::LogicalMergeEdge &operation, MergeRuntimeRow &row,
 							MergeExecutionState &state) {
 			const std::string direction = normalizedMergeDirection(operation.getDirection());
-			const PropertyMap matchProperties = mergeProperties(operation.getMatchProps());
+			const PropertyMap matchProperties = evaluateMergeIdentityProperties(
+					operation.getMatchProps(), operation.getMatchPropertyExpressions(), row, state);
 			const LogicalGraphMutationEntityReference source = resolveMergeNode(row, operation.getSourceVar(), true);
 			const LogicalGraphMutationEntityReference target = resolveMergeNode(row, operation.getTargetVar(), false);
-			const std::string cacheKey = mergeEdgeCacheKey(operation, source, target);
+			const MergeEdgeMatchKey cacheKey{&operation, source, target,
+											 canonicalMergeIdentityProperties(matchProperties)};
 			MergeEdgeMatch match;
 			if (const auto cached = state.edge_matches.find(cacheKey); cached != state.edge_matches.end()) {
 				match = cached->second;
@@ -1833,9 +2641,10 @@ namespace graph::query::execution {
 					match.reference = {LogicalGraphMutationEntityKind::LGMK_EDGE,
 									   LogicalGraphMutationReferenceKind::LGRK_PERSISTED, existing->edge_id};
 					match.edge = *existing;
+					match.resolved = true;
 				}
 			}
-			if (match.reference.value == 0U) {
+			if (!match.resolved) {
 				PropertyMap properties = matchProperties;
 				const size_t ordinal = state.batch.edge_creates.size();
 				const LogicalGraphMutationEntityReference reference{
@@ -1860,6 +2669,7 @@ namespace graph::query::execution {
 				match.reference = reference;
 				match.edge = actionEdge;
 				match.created = true;
+				match.resolved = true;
 			}
 			state.edge_matches.insert_or_assign(cacheKey, match);
 			if (match.created) {
@@ -1908,9 +2718,17 @@ namespace graph::query::execution {
 			const logical::LogicalOperator *child = requireOptionalOnlyChild(operation);
 			const auto apply = [&](MergeRuntimeRow &&row) {
 				if (operation.getType() == logical::LogicalOpType::LOP_MERGE_NODE) {
-					applyMergeNode(dynamic_cast<const logical::LogicalMergeNode &>(operation), row, state);
+					const auto *node = dynamic_cast<const logical::LogicalMergeNode *>(&operation);
+					if (node == nullptr) {
+						throw std::logic_error("logical MERGE tree has an invalid MergeNode operator");
+					}
+					applyMergeNode(*node, row, state);
 				} else if (operation.getType() == logical::LogicalOpType::LOP_MERGE_EDGE) {
-					applyMergeEdge(dynamic_cast<const logical::LogicalMergeEdge &>(operation), row, state);
+					const auto *edge = dynamic_cast<const logical::LogicalMergeEdge *>(&operation);
+					if (edge == nullptr) {
+						throw std::logic_error("logical MERGE tree has an invalid MergeEdge operator");
+					}
+					applyMergeEdge(*edge, row, state);
 				} else {
 					throw std::logic_error("logical MERGE tree has an unsupported operator");
 				}
@@ -1932,16 +2750,27 @@ namespace graph::query::execution {
 
 		void appendModifiedMergeEntities(MergeExecutionState &state) {
 			for (const auto &[_, entity]: state.modified_entities) {
-				if (!entity.properties_changed) {
+				if (!entity.properties_changed && !entity.labels_changed) {
 					continue;
 				}
-				if (!entity.properties.has_value()) {
-					throw std::logic_error("logical MERGE lost a staged Property collection");
+				if (entity.properties_changed) {
+					if (!entity.properties.has_value()) {
+						throw std::logic_error("logical MERGE lost a staged Property collection");
+					}
+					LogicalGraphPropertyMutationRequest replacement;
+					replacement.entity = {entity.kind, LogicalGraphMutationReferenceKind::LGRK_PERSISTED, entity.id};
+					replacement.properties = sortedProperties(*entity.properties);
+					state.batch.property_replacements.push_back(std::move(replacement));
 				}
-				LogicalGraphPropertyMutationRequest replacement;
-				replacement.entity = {entity.kind, LogicalGraphMutationReferenceKind::LGRK_PERSISTED, entity.id};
-				replacement.properties = sortedProperties(*entity.properties);
-				state.batch.property_replacements.push_back(std::move(replacement));
+				if (entity.labels_changed) {
+					if (entity.kind != LogicalGraphMutationEntityKind::LGMK_NODE) {
+						throw std::logic_error("logical MERGE has a label change for a non-Node entity");
+					}
+					state.batch.node_label_replacements.push_back(
+							{{LogicalGraphMutationEntityKind::LGMK_NODE,
+							  LogicalGraphMutationReferenceKind::LGRK_PERSISTED, entity.id},
+							 entity.labels});
+				}
 			}
 		}
 
@@ -2000,8 +2829,11 @@ namespace graph::query::execution {
 					throw std::logic_error("logical MERGE mutation chain contains a null operation");
 				}
 				if (operation->getType() == logical::LogicalOpType::LOP_SET) {
-					const auto &set = dynamic_cast<const logical::LogicalSet &>(*operation);
-					for (const logical::LogicalSetItem &item: set.getItems()) {
+					const auto *set = dynamic_cast<const logical::LogicalSet *>(operation);
+					if (set == nullptr || set->getItems().empty()) {
+						throw std::logic_error("logical MERGE mutation chain has an invalid SET operation");
+					}
+					for (const logical::LogicalSetItem &item: set->getItems()) {
 						state.context.checkGuard();
 						if (item.variable.empty()) {
 							throw std::logic_error("logical MERGE SET has an empty entity variable");
@@ -2088,8 +2920,11 @@ namespace graph::query::execution {
 				if (operation->getType() != logical::LogicalOpType::LOP_REMOVE) {
 					throw std::logic_error("logical MERGE mutation chain has an unsupported operation");
 				}
-				const auto &remove = dynamic_cast<const logical::LogicalRemove &>(*operation);
-				for (const logical::LogicalRemoveItem &item: remove.getItems()) {
+				const auto *remove = dynamic_cast<const logical::LogicalRemove *>(operation);
+				if (remove == nullptr || remove->getItems().empty()) {
+					throw std::logic_error("logical MERGE mutation chain has an invalid REMOVE operation");
+				}
+				for (const logical::LogicalRemoveItem &item: remove->getItems()) {
 					state.context.checkGuard();
 					const auto reference = row.entities.find(item.variable);
 					if (item.variable.empty() || item.key.empty() || reference == row.entities.end()) {
@@ -2140,12 +2975,39 @@ namespace graph::query::execution {
 			std::vector<const logical::LogicalOperator *> operations;
 		};
 
+		struct MergeResultPipeline {
+			MergePostMutationChain mutation_chain;
+			const logical::LogicalSort *sort = nullptr;
+			const logical::LogicalProject *projection = nullptr;
+			const logical::LogicalSkip *skip = nullptr;
+			const logical::LogicalLimit *limit = nullptr;
+		};
+
+		// Cache only values that cannot observe a newly assigned durable entity ID.
+		// This preserves publication-time IDs for created entities while avoiding a
+		// second evaluation of volatile scalar expressions in RETURN and ORDER BY.
+		struct MergePrepublicationResultCache {
+			std::vector<std::vector<std::optional<PropertyValue>>> sort_keys;
+			std::vector<std::vector<std::optional<ResultValue>>> projection_values;
+		};
+
 		[[nodiscard]] std::optional<MergePostMutationChain>
 		collectMergePostMutationChain(const logical::LogicalOperator &root) {
 			MergePostMutationChain chain;
 			const logical::LogicalOperator *current = &root;
 			while (current != nullptr && (current->getType() == logical::LogicalOpType::LOP_SET ||
 										  current->getType() == logical::LogicalOpType::LOP_REMOVE)) {
+				if (current->getType() == logical::LogicalOpType::LOP_SET) {
+					const auto *set = dynamic_cast<const logical::LogicalSet *>(current);
+					if (set == nullptr || set->getItems().empty()) {
+						throw std::logic_error("logical MERGE mutation chain has an invalid SET operation");
+					}
+				} else {
+					const auto *remove = dynamic_cast<const logical::LogicalRemove *>(current);
+					if (remove == nullptr || remove->getItems().empty()) {
+						throw std::logic_error("logical MERGE mutation chain has an invalid REMOVE operation");
+					}
+				}
 				chain.operations.push_back(current);
 				current = requireOptionalOnlyChild(*current);
 			}
@@ -2153,9 +3015,61 @@ namespace graph::query::execution {
 									   current->getType() != logical::LogicalOpType::LOP_MERGE_EDGE)) {
 				return std::nullopt;
 			}
+			if ((current->getType() == logical::LogicalOpType::LOP_MERGE_NODE &&
+				 dynamic_cast<const logical::LogicalMergeNode *>(current) == nullptr) ||
+				(current->getType() == logical::LogicalOpType::LOP_MERGE_EDGE &&
+				 dynamic_cast<const logical::LogicalMergeEdge *>(current) == nullptr)) {
+				throw std::logic_error("logical MERGE mutation chain has an invalid merge operator");
+			}
 			std::ranges::reverse(chain.operations);
 			chain.merge_root = current;
 			return chain;
+		}
+
+		[[nodiscard]] std::optional<MergeResultPipeline>
+		collectMergeResultPipeline(const logical::LogicalOperator &root) {
+			// The logical builder places mutation result operators outside the write:
+			// LIMIT -> SKIP -> PROJECT -> SORT -> MERGE.  Keep the write and output
+			// pipelines separate so pagination never reduces the set of rows mutated.
+			MergeResultPipeline pipeline;
+			const logical::LogicalOperator *current = &root;
+			if (current->getType() == logical::LogicalOpType::LOP_LIMIT) {
+				pipeline.limit = dynamic_cast<const logical::LogicalLimit *>(current);
+				if (pipeline.limit == nullptr) {
+					throw std::logic_error("logical MERGE result pipeline has an invalid Limit operator");
+				}
+				current = requireOptionalOnlyChild(*current);
+			}
+			if (current != nullptr && current->getType() == logical::LogicalOpType::LOP_SKIP) {
+				pipeline.skip = dynamic_cast<const logical::LogicalSkip *>(current);
+				if (pipeline.skip == nullptr) {
+					throw std::logic_error("logical MERGE result pipeline has an invalid Skip operator");
+				}
+				current = requireOptionalOnlyChild(*current);
+			}
+			if (current != nullptr && current->getType() == logical::LogicalOpType::LOP_PROJECT) {
+				pipeline.projection = dynamic_cast<const logical::LogicalProject *>(current);
+				if (pipeline.projection == nullptr) {
+					throw std::logic_error("logical MERGE result pipeline has an invalid Project operator");
+				}
+				current = requireOptionalOnlyChild(*current);
+			}
+			if (current != nullptr && current->getType() == logical::LogicalOpType::LOP_SORT) {
+				pipeline.sort = dynamic_cast<const logical::LogicalSort *>(current);
+				if (pipeline.sort == nullptr) {
+					throw std::logic_error("logical MERGE result pipeline has an invalid Sort operator");
+				}
+				current = requireOptionalOnlyChild(*current);
+			}
+			if (current == nullptr) {
+				return std::nullopt;
+			}
+			const std::optional<MergePostMutationChain> mutationChain = collectMergePostMutationChain(*current);
+			if (!mutationChain.has_value()) {
+				return std::nullopt;
+			}
+			pipeline.mutation_chain = *mutationChain;
+			return pipeline;
 		}
 
 		[[nodiscard]] bool mergeBatchHasMutations(const LogicalGraphMutationBatch &batch) {
@@ -2197,7 +3111,9 @@ namespace graph::query::execution {
 						changed != state.modified_entities.end() && changed->second.properties.has_value()
 								? *changed->second.properties
 								: readNodeProperties(state.snapshot, node, state.bounds.maximum_property_entries);
-				return LogicalNodeResult{node.node_id, node.labels, properties};
+				const std::vector<std::string> &labels =
+						changed != state.modified_entities.end() ? changed->second.labels : node.labels;
+				return LogicalNodeResult{node.node_id, labels, properties};
 			}
 			if (reference.entity_kind != LogicalGraphMutationEntityKind::LGMK_EDGE) {
 				throw std::logic_error("logical MERGE has an invalid projection entity kind");
@@ -2223,50 +3139,263 @@ namespace graph::query::execution {
 			return LogicalEdgeResult{edge.edge_id, edge.source_node_id, edge.target_node_id, edge.type, properties};
 		}
 
-		[[nodiscard]] QueryResult buildMergeResult(const logical::LogicalProject *projection,
+		[[nodiscard]] ResultValue
+		materializePrepublicationMergeReference(const LogicalGraphMutationEntityReference &reference,
+												const MergeExecutionState &state) {
+			const auto provisionalNodeId = [](const LogicalGraphMutationEntityReference &nodeReference) {
+				if (nodeReference.entity_kind != LogicalGraphMutationEntityKind::LGMK_NODE) {
+					throw std::logic_error("logical MERGE relationship endpoint is not a Node");
+				}
+				if (nodeReference.reference_kind == LogicalGraphMutationReferenceKind::LGRK_PERSISTED) {
+					return nodeReference.value;
+				}
+				if (nodeReference.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE) {
+					return std::numeric_limits<uint64_t>::max() - nodeReference.value;
+				}
+				throw std::logic_error("logical MERGE relationship endpoint has an invalid reference kind");
+			};
+			if (reference.entity_kind == LogicalGraphMutationEntityKind::LGMK_NODE &&
+				reference.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE) {
+				const size_t ordinal = static_cast<size_t>(reference.value);
+				return LogicalNodeResult{std::numeric_limits<uint64_t>::max() - reference.value,
+										 state.batch.node_creates.at(ordinal).labels,
+										 state.created_node_properties.at(ordinal)};
+			}
+			if (reference.entity_kind == LogicalGraphMutationEntityKind::LGMK_EDGE &&
+				reference.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_EDGE) {
+				const size_t ordinal = static_cast<size_t>(reference.value);
+				const LogicalGraphBatchEdgeCreateRequest &request = state.batch.edge_creates.at(ordinal);
+				return LogicalEdgeResult{std::numeric_limits<uint64_t>::max() - reference.value,
+										 provisionalNodeId(request.source), provisionalNodeId(request.target),
+										 request.type, state.created_edge_properties.at(ordinal)};
+			}
+			return materializeMergeReference(reference, state, {});
+		}
+
+		[[nodiscard]] bool mergeExpressionDependsOnCreatedEntity(const expressions::Expression &expression,
+																 const MergeRuntimeRow &row) {
+			std::set<std::string> variables;
+			expressions::ExpressionUtils::collectVariables(&expression, variables);
+			return std::ranges::any_of(variables, [&row](const std::string &variable) {
+				const auto entity = row.entities.find(variable);
+				return entity != row.entities.end() &&
+					   (entity->second.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE ||
+						entity->second.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_EDGE);
+			});
+		}
+
+		[[nodiscard]] MergePrepublicationResultCache
+		preflightMergeResultExpressions(const MergeResultPipeline &pipeline, const std::vector<MergeRuntimeRow> &rows,
+										const MergeExecutionState &state) {
+			MergePrepublicationResultCache cache;
+			const auto resolve = [&state](const MergeRuntimeRow &row, const std::string &variable) {
+				if (const auto entity = row.entities.find(variable); entity != row.entities.end()) {
+					return materializePrepublicationMergeReference(entity->second, state);
+				}
+				const auto scalar = row.row.values.find(variable);
+				if (scalar != row.row.values.end() && std::holds_alternative<PropertyValue>(scalar->second)) {
+					return ResultValue(std::get<PropertyValue>(scalar->second));
+				}
+				throw std::logic_error("logical MERGE RETURN could not resolve a variable");
+			};
+			const auto evaluate = [&](const expressions::Expression &expression, const MergeRuntimeRow &row) {
+				return evaluateMutationProjectionExpression(
+						expression, row.row, state.snapshot, state.bounds, state.context,
+						[&resolve, &row](const LogicalPlanReadRow &, const std::string &variable) {
+							return resolve(row, variable);
+						});
+			};
+			// Sort evaluation is deliberately deferred for a single row by the read runtime.
+			// Preserve that behavior here while still rejecting failures before publication.
+			if (pipeline.sort != nullptr && rows.size() > 1U) {
+				const std::vector<logical::LogicalSortItem> &items = pipeline.sort->getSortItems();
+				if (items.empty()) {
+					throw std::logic_error("logical MERGE ORDER BY has no sort items");
+				}
+				cache.sort_keys.assign(rows.size(), std::vector<std::optional<PropertyValue>>(items.size()));
+				for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
+					const MergeRuntimeRow &row = rows[rowIndex];
+					for (size_t itemIndex = 0U; itemIndex < items.size(); ++itemIndex) {
+						const logical::LogicalSortItem &item = items[itemIndex];
+						state.context.checkGuard();
+						if (!item.expression) {
+							throw std::logic_error("logical MERGE ORDER BY has an empty sort expression");
+						}
+						const ResultValue value = evaluate(*item.expression, row);
+						if (!value.isPrimitive()) {
+							throw std::logic_error(
+									"logical MERGE ORDER BY expression must evaluate to a Property value");
+						}
+						if (!mergeExpressionDependsOnCreatedEntity(*item.expression, row)) {
+							cache.sort_keys[rowIndex][itemIndex] = value.asPrimitive();
+						}
+					}
+				}
+			}
+			if (pipeline.projection == nullptr) {
+				return cache;
+			}
+			for (const logical::LogicalProjectItem &item: pipeline.projection->getItems()) {
+				if (item.alias.empty() || !item.expression) {
+					throw std::logic_error("logical MERGE RETURN has an invalid output item");
+				}
+			}
+			const std::vector<logical::LogicalProjectItem> &items = pipeline.projection->getItems();
+			cache.projection_values.assign(rows.size(), std::vector<std::optional<ResultValue>>(items.size()));
+			for (size_t rowIndex = 0U; rowIndex < rows.size(); ++rowIndex) {
+				const MergeRuntimeRow &row = rows[rowIndex];
+				for (size_t itemIndex = 0U; itemIndex < items.size(); ++itemIndex) {
+					const logical::LogicalProjectItem &item = items[itemIndex];
+					state.context.checkGuard();
+					ResultValue value = evaluate(*item.expression, row);
+					if (!mergeExpressionDependsOnCreatedEntity(*item.expression, row)) {
+						cache.projection_values[rowIndex][itemIndex] = std::move(value);
+					}
+				}
+			}
+			return cache;
+		}
+
+		[[nodiscard]] QueryResult buildMergeResult(const MergeResultPipeline &pipeline,
 												   const std::vector<std::string> &implicitColumns,
 												   const std::vector<MergeRuntimeRow> &rows,
 												   const MergeExecutionState &state,
-												   const storage::LogicalGraphMutationBatchResult &result) {
+												   const storage::LogicalGraphMutationBatchResult &result,
+												   const MergePrepublicationResultCache &prepublicationCache) {
 			QueryResult queryResult;
-			queryResult.setColumns(projection != nullptr ? projection->getOutputVariables() : implicitColumns);
-			queryResult.setPipelineRowCount(rows.size());
-			for (const MergeRuntimeRow &mergeRow: rows) {
-				QueryResult::Row output;
-				const auto resolve = [&](const std::string &variable) -> ResultValue {
-					if (const auto entity = mergeRow.entities.find(variable); entity != mergeRow.entities.end()) {
-						return materializeMergeReference(entity->second, state, result);
-					}
-					const auto scalar = mergeRow.row.values.find(variable);
-					if (scalar != mergeRow.row.values.end() && std::holds_alternative<PropertyValue>(scalar->second)) {
-						return std::get<PropertyValue>(scalar->second);
-					}
-					throw std::logic_error("logical MERGE RETURN could not resolve a variable");
+			queryResult.setColumns(pipeline.projection != nullptr ? pipeline.projection->getOutputVariables()
+																  : implicitColumns);
+			std::vector<size_t> outputOrder;
+			outputOrder.reserve(rows.size());
+			for (size_t index = 0U; index < rows.size(); ++index) {
+				outputOrder.push_back(index);
+			}
+			const auto resolveForRow = [&](const MergeRuntimeRow &mergeRow,
+										   const std::string &variable) -> ResultValue {
+				if (const auto entity = mergeRow.entities.find(variable); entity != mergeRow.entities.end()) {
+					return materializeMergeReference(entity->second, state, result);
+				}
+				const auto scalar = mergeRow.row.values.find(variable);
+				if (scalar != mergeRow.row.values.end() && std::holds_alternative<PropertyValue>(scalar->second)) {
+					return std::get<PropertyValue>(scalar->second);
+				}
+				throw std::logic_error("logical MERGE RETURN could not resolve a variable");
+			};
+			if (pipeline.sort != nullptr && outputOrder.size() > 1U) {
+				const std::vector<logical::LogicalSortItem> &items = pipeline.sort->getSortItems();
+				if (items.empty()) {
+					throw std::logic_error("logical MERGE ORDER BY has no sort items");
+				}
+				struct DecoratedRow {
+					size_t index = 0U;
+					std::vector<PropertyValue> keys;
 				};
-				if (projection == nullptr) {
+				std::vector<DecoratedRow> decoratedRows;
+				decoratedRows.reserve(outputOrder.size());
+				for (const size_t index: outputOrder) {
+					DecoratedRow decorated{index, {}};
+					decorated.keys.reserve(items.size());
+					for (size_t itemIndex = 0U; itemIndex < items.size(); ++itemIndex) {
+						const logical::LogicalSortItem &item = items[itemIndex];
+						state.context.checkGuard();
+						if (!item.expression) {
+							throw std::logic_error("logical MERGE ORDER BY has an empty sort expression");
+						}
+						if (index < prepublicationCache.sort_keys.size() &&
+							itemIndex < prepublicationCache.sort_keys[index].size() &&
+							prepublicationCache.sort_keys[index][itemIndex].has_value()) {
+							decorated.keys.push_back(*prepublicationCache.sort_keys[index][itemIndex]);
+							continue;
+						}
+						const ResultValue key = evaluateMutationProjectionExpression(
+								*item.expression, rows[index].row, state.snapshot, state.bounds, state.context,
+								[&resolveForRow, &mergeRow = rows[index]](const LogicalPlanReadRow &,
+																		  const std::string &variable) {
+									return resolveForRow(mergeRow, variable);
+								});
+						if (!key.isPrimitive()) {
+							throw std::logic_error(
+									"logical MERGE ORDER BY expression must evaluate to a Property value");
+						}
+						decorated.keys.push_back(key.asPrimitive());
+					}
+					decoratedRows.push_back(std::move(decorated));
+				}
+				std::stable_sort(
+						decoratedRows.begin(), decoratedRows.end(),
+						[&items, &context = state.context](const DecoratedRow &left, const DecoratedRow &right) {
+							context.checkGuard();
+							for (size_t index = 0U; index < items.size(); ++index) {
+								if (left.keys[index] == right.keys[index]) {
+									continue;
+								}
+								return items[index].ascending ? left.keys[index] < right.keys[index]
+															  : left.keys[index] > right.keys[index];
+							}
+							return false;
+						});
+				outputOrder.clear();
+				for (const DecoratedRow &row: decoratedRows) {
+					outputOrder.push_back(row.index);
+				}
+			}
+			size_t first = 0U;
+			if (pipeline.skip != nullptr) {
+				if (pipeline.skip->getOffset() < 0) {
+					throw std::logic_error("logical MERGE SKIP cannot be negative");
+				}
+				const uint64_t offset = static_cast<uint64_t>(pipeline.skip->getOffset());
+				first = offset >= outputOrder.size() ? outputOrder.size() : static_cast<size_t>(offset);
+			}
+			size_t last = outputOrder.size();
+			if (pipeline.limit != nullptr) {
+				if (pipeline.limit->getLimit() < 0) {
+					throw std::logic_error("logical MERGE LIMIT cannot be negative");
+				}
+				const uint64_t limit = static_cast<uint64_t>(pipeline.limit->getLimit());
+				const size_t remaining = outputOrder.size() - first;
+				if (limit < remaining) {
+					last = first + static_cast<size_t>(limit);
+				}
+			}
+			queryResult.setPipelineRowCount(last - first);
+			for (size_t orderedIndex = first; orderedIndex < last; ++orderedIndex) {
+				const MergeRuntimeRow &mergeRow = rows[outputOrder[orderedIndex]];
+				QueryResult::Row output;
+				if (pipeline.projection == nullptr) {
 					if (implicitColumns.empty()) {
 						continue;
 					}
 					output.reserve(implicitColumns.size());
 					for (const std::string &column: implicitColumns) {
 						state.context.checkGuard();
-						if (!output.emplace(column, resolve(column)).second) {
+						if (!output.emplace(column, resolveForRow(mergeRow, column)).second) {
 							throw std::logic_error("logical MERGE produced duplicate output columns");
 						}
 					}
 					queryResult.addRow(std::move(output));
 					continue;
 				}
-				for (const logical::LogicalProjectItem &item: projection->getItems()) {
+				const std::vector<logical::LogicalProjectItem> &items = pipeline.projection->getItems();
+				for (size_t itemIndex = 0U; itemIndex < items.size(); ++itemIndex) {
+					const logical::LogicalProjectItem &item = items[itemIndex];
 					state.context.checkGuard();
 					if (item.alias.empty() || !item.expression) {
 						throw std::logic_error("logical MERGE RETURN has an invalid output item");
 					}
-					ResultValue value = evaluateMutationProjectionExpression(
-							*item.expression, mergeRow.row, state.snapshot, state.bounds, state.context,
-							[&resolve](const LogicalPlanReadRow &, const std::string &variable) {
-								return resolve(variable);
-							});
+					ResultValue value;
+					const size_t rowIndex = outputOrder[orderedIndex];
+					if (rowIndex < prepublicationCache.projection_values.size() &&
+						itemIndex < prepublicationCache.projection_values[rowIndex].size() &&
+						prepublicationCache.projection_values[rowIndex][itemIndex].has_value()) {
+						value = *prepublicationCache.projection_values[rowIndex][itemIndex];
+					} else {
+						value = evaluateMutationProjectionExpression(
+								*item.expression, mergeRow.row, state.snapshot, state.bounds, state.context,
+								[&resolveForRow, &mergeRow](const LogicalPlanReadRow &, const std::string &variable) {
+									return resolveForRow(mergeRow, variable);
+								});
+					}
 					if (!output.emplace(item.alias, std::move(value)).second) {
 						throw std::logic_error("logical MERGE RETURN has duplicate output aliases");
 					}
@@ -2285,10 +3414,13 @@ namespace graph::query::execution {
 			throw std::invalid_argument("logical mutation runtime requires a positive mutation bound");
 		}
 		if (root.getType() == logical::LogicalOpType::LOP_AGGREGATE) {
-			const auto &aggregate = dynamic_cast<const logical::LogicalAggregate &>(root);
-			const std::vector<logical::LogicalOperator *> children = aggregate.getChildren();
-			const auto &items = aggregate.getAggregations();
-			if (children.size() != 1U || children.front() == nullptr || !aggregate.getGroupByExprs().empty() ||
+			const auto *aggregate = dynamic_cast<const logical::LogicalAggregate *>(&root);
+			if (aggregate == nullptr) {
+				throw std::logic_error("logical mutation runtime received an invalid Aggregate operator");
+			}
+			const std::vector<logical::LogicalOperator *> children = aggregate->getChildren();
+			const auto &items = aggregate->getAggregations();
+			if (children.size() != 1U || children.front() == nullptr || !aggregate->getGroupByExprs().empty() ||
 				items.size() != 1U || items.front().functionName != "count" || items.front().argument ||
 				items.front().distinct || items.front().extraArg || items.front().alias.empty()) {
 				throw std::logic_error(
@@ -2341,14 +3473,53 @@ namespace graph::query::execution {
 			result.addRow(std::move(row));
 			return result;
 		}
-		if (std::unique_ptr<logical::LogicalOperator> reboundCall = rebindWriteOnlyCallSubquery(root)) {
-			return execute(*reboundCall, bounds, context);
+		if (const std::optional<InTransactionsWriteOnlyCall> batchedCall = collectInTransactionsWriteOnlyCall(root);
+			batchedCall.has_value()) {
+			return executeInTransactionsWriteOnlyCall(*batchedCall, read_backend_, write_backend_,
+													  permits_independent_batch_commits_, bounds, context);
+		}
+		if (std::optional<ReboundWriteOnlyCall> reboundCall = rebindWriteOnlyCallSubquery(root);
+			reboundCall.has_value()) {
+			if (reboundCall->exported_projection == nullptr) {
+				const std::optional<CreateSetMutationChain> chain =
+						collectCreateSetMutationChain(*reboundCall->mutation_root);
+				if (chain.has_value()) {
+					return executeCreateSetMutationChain(
+							*chain, read_backend_, write_backend_, bounds, context, reboundCall->outer_projection.get(),
+							visibleMutationOutputColumns(*reboundCall->mutation_root), nullptr, nullptr, nullptr,
+							reboundCall->sort, reboundCall->skip, reboundCall->limit);
+				}
+				if (reboundCall->sort != nullptr || reboundCall->skip != nullptr || reboundCall->limit != nullptr) {
+					throw std::runtime_error(
+							"logical mutation runtime requires a CREATE-based write-only CALL result pipeline");
+				}
+				if (reboundCall->outer_projection != nullptr) {
+					reboundCall->outer_projection->setChild(0U, std::move(reboundCall->mutation_root));
+					return execute(*reboundCall->outer_projection, bounds, context);
+				}
+				return execute(*reboundCall->mutation_root, bounds, context);
+			}
+			const std::optional<CreateSetMutationChain> chain = collectCreateSetMutationChain(
+					*reboundCall->mutation_root, false);
+			if (!chain.has_value()) {
+				throw std::runtime_error("logical mutation runtime received an invalid exported write-only CALL body");
+			}
+			const logical::LogicalProject *finalProjection = reboundCall->outer_projection != nullptr
+																	 ? reboundCall->outer_projection.get()
+																	 : reboundCall->exported_projection.get();
+			return executeCreateSetMutationChain(
+					*chain, read_backend_, write_backend_, bounds, context, finalProjection,
+					visibleMutationOutputColumns(*reboundCall->mutation_root), nullptr, nullptr,
+					reboundCall->exported_projection.get(), reboundCall->sort, reboundCall->skip, reboundCall->limit);
 		}
 		if (root.getType() == logical::LogicalOpType::LOP_FOREACH) {
-			const auto &foreach = dynamic_cast<const logical::LogicalForeach &>(root);
-			return executeCreateSetMutationChain(collectForeachMutationChain(foreach), read_backend_, write_backend_,
-												 bounds, context, nullptr, visibleMutationOutputColumns(foreach),
-												 &foreach);
+			const auto *foreach = dynamic_cast<const logical::LogicalForeach *>(&root);
+			if (foreach == nullptr) {
+				throw std::logic_error("logical mutation runtime received an invalid Foreach operator");
+			}
+			return executeCreateSetMutationChain(collectForeachMutationChain(*foreach), read_backend_, write_backend_,
+												 bounds, context, nullptr, visibleMutationOutputColumns(*foreach),
+												 foreach);
 		}
 		const logical::LogicalProject *createSetProjection = nullptr;
 		const logical::LogicalOperator *createSetRoot = &root;
@@ -2370,10 +3541,13 @@ namespace graph::query::execution {
 		if (root.getType() == logical::LogicalOpType::LOP_PROJECT) {
 			const logical::LogicalOperator *candidate = requireOptionalOnlyChild(root);
 			if (candidate != nullptr && candidate->getType() == logical::LogicalOpType::LOP_FOREACH) {
-				const auto &foreach = dynamic_cast<const logical::LogicalForeach &>(*candidate);
-				return executeCreateSetMutationChain(collectForeachMutationChain(foreach), read_backend_,
+				const auto *foreach = dynamic_cast<const logical::LogicalForeach *>(candidate);
+				if (foreach == nullptr) {
+					throw std::logic_error("logical mutation runtime received an invalid Foreach operator");
+				}
+				return executeCreateSetMutationChain(collectForeachMutationChain(*foreach), read_backend_,
 													 write_backend_, bounds, context, createSetProjection,
-													 visibleMutationOutputColumns(foreach), &foreach);
+													 visibleMutationOutputColumns(*foreach), foreach);
 			}
 		}
 		const logical::LogicalProject *readMutationProjection = nullptr;
@@ -2416,11 +3590,18 @@ namespace graph::query::execution {
 							for (const logical::LogicalOperator *operation: chain->operations) {
 								context.checkGuard();
 								if (operation->getType() == logical::LogicalOpType::LOP_SET) {
-									applySetOperation(dynamic_cast<const logical::LogicalSet &>(*operation), row,
-													  *snapshot, bounds, context, entities, propertyCache);
+									const auto *set = dynamic_cast<const logical::LogicalSet *>(operation);
+									if (set == nullptr) {
+										throw std::logic_error("logical SET/REMOVE chain has an invalid SET operator");
+									}
+									applySetOperation(*set, row, *snapshot, bounds, context, entities, propertyCache);
 								} else {
-									applyRemoveOperation(dynamic_cast<const logical::LogicalRemove &>(*operation), row,
-														 *snapshot, bounds, entities, propertyCache);
+									const auto *remove = dynamic_cast<const logical::LogicalRemove *>(operation);
+									if (remove == nullptr) {
+										throw std::logic_error(
+												"logical SET/REMOVE chain has an invalid REMOVE operator");
+									}
+									applyRemoveOperation(*remove, row, *snapshot, bounds, entities, propertyCache);
 								}
 							}
 							LogicalPlanReadRow projected = row;
@@ -2457,12 +3638,17 @@ namespace graph::query::execution {
 					return buildImplicitMutationResult(visibleMutationOutputColumns(*readMutationRoot), projectionRows,
 													   context, resolveBinding);
 				};
+				// All bindings are snapshot-backed, so the result can be constructed
+				// before publication and reused after it. This keeps deterministic
+				// result failures outside the mutation's atomicity boundary.
+				QueryResult preparedResult = buildResult();
 				if (batch.property_replacements.empty() && batch.node_label_replacements.empty()) {
-					return buildResult();
+					return preparedResult;
 				}
 				try {
+					context.checkGuardNow();
 					static_cast<void>(write_backend_.executeLogicalGraphMutationBatch(batch, fence));
-					return buildResult();
+					return preparedResult;
 				} catch (const storage::LogicalGraphMutationConflict &) {
 					// Re-read and reapply the ordered chain against the new graph generation.
 				}
@@ -2470,9 +3656,12 @@ namespace graph::query::execution {
 			throw std::runtime_error("logical SET/REMOVE chain exceeded its optimistic conflict retry limit");
 		}
 		if (readMutationRoot->getType() == logical::LogicalOpType::LOP_DELETE) {
-			const auto &deleteOperator = dynamic_cast<const logical::LogicalDelete &>(*readMutationRoot);
-			const logical::LogicalOperator *child = requireOptionalOnlyChild(deleteOperator);
-			if (child == nullptr || deleteOperator.getVariables().empty()) {
+			const auto *deleteOperator = dynamic_cast<const logical::LogicalDelete *>(readMutationRoot);
+			if (deleteOperator == nullptr) {
+				throw std::logic_error("logical mutation runtime received an invalid Delete operator");
+			}
+			const logical::LogicalOperator *child = requireOptionalOnlyChild(*deleteOperator);
+			if (child == nullptr || deleteOperator->getVariables().empty()) {
 				throw std::logic_error("logical DELETE requires one read child and at least one entity variable");
 			}
 
@@ -2497,7 +3686,7 @@ namespace graph::query::execution {
 						[&](const LogicalPlanReadRow &row) {
 							context.checkGuard();
 							projectionRows.push_back(row);
-							for (const std::string &variable: deleteOperator.getVariables()) {
+							for (const std::string &variable: deleteOperator->getVariables()) {
 								const auto found = row.values.find(variable);
 								if (found == row.values.end()) {
 									throw std::logic_error(
@@ -2544,10 +3733,11 @@ namespace graph::query::execution {
 				}
 				batch.node_deletes.reserve(nodeIds.size());
 				for (const uint64_t nodeId: nodeIds) {
-					batch.node_deletes.push_back({nodeId, deleteOperator.isDetach(),
-												  deleteOperator.isDetach() ? bounds.maximum_edges_per_node : 0U});
+					batch.node_deletes.push_back({nodeId, deleteOperator->isDetach(),
+												  deleteOperator->isDetach() ? bounds.maximum_edges_per_node : 0U});
 				}
 				try {
+					context.checkGuardNow();
 					static_cast<void>(write_backend_.executeLogicalGraphMutationBatch(batch, fence));
 					return deleteResult;
 				} catch (const storage::LogicalGraphMutationConflict &) {
@@ -2557,20 +3747,8 @@ namespace graph::query::execution {
 			}
 			throw std::runtime_error("logical DELETE exceeded its optimistic conflict retry limit");
 		}
-		const logical::LogicalProject *projection = nullptr;
-		const logical::LogicalOperator *mutationRoot = &root;
-		if (root.getType() == logical::LogicalOpType::LOP_PROJECT) {
-			projection = dynamic_cast<const logical::LogicalProject *>(&root);
-			if (projection == nullptr) {
-				throw std::logic_error("logical mutation runtime received a malformed Project operator");
-			}
-			mutationRoot = requireOptionalOnlyChild(root);
-			if (mutationRoot == nullptr) {
-				throw std::logic_error("logical mutation projection requires a mutation child");
-			}
-		}
-		if (const std::optional<MergePostMutationChain> mergeChain = collectMergePostMutationChain(*mutationRoot);
-			mergeChain.has_value()) {
+		if (const std::optional<MergeResultPipeline> mergePipeline = collectMergeResultPipeline(root);
+			mergePipeline.has_value()) {
 			constexpr size_t MAX_CONFLICT_RETRIES = 4U;
 			for (size_t attempt = 0U; attempt < MAX_CONFLICT_RETRIES; ++attempt) {
 				std::unique_ptr<storage::LogicalGraphReadSnapshot> snapshot =
@@ -2585,26 +3763,31 @@ namespace graph::query::execution {
 				LogicalPlanReadRuntime reader(read_backend_);
 				MergeExecutionState state{*snapshot, bounds, context, reader};
 				std::vector<MergeRuntimeRow> rows;
-				const bool completed = visitMergeOperator(*mergeChain->merge_root, state, [&](MergeRuntimeRow &&row) {
-					applyMergePostMutations(mergeChain->operations, row, state);
-					if (rows.size() == bounds.maximum_rows) {
-						throw std::runtime_error("logical MERGE exceeded its row bound");
-					}
-					rows.push_back(std::move(row));
-					return true;
-				});
+				const bool completed = visitMergeOperator(
+						*mergePipeline->mutation_chain.merge_root, state, [&](MergeRuntimeRow &&row) {
+							applyMergePostMutations(mergePipeline->mutation_chain.operations, row, state);
+							rows.push_back(std::move(row));
+							return true;
+						});
 				if (!completed) {
 					throw std::runtime_error("logical MERGE did not complete its input evaluation");
 				}
 				appendModifiedMergeEntities(state);
 				synchronizeCreatedMergeEntities(state);
+				// Publication must not turn a deterministic RETURN/ORDER BY expression
+				// failure into a partially visible mutation. Validate the expression surface
+				// against the staged graph before crossing the backend write boundary.
+				const MergePrepublicationResultCache prepublicationCache =
+						preflightMergeResultExpressions(*mergePipeline, rows, state);
 				try {
+					context.checkGuardNow();
 					const storage::LogicalGraphMutationBatchResult result =
 							mergeBatchHasMutations(state.batch)
 									? write_backend_.executeLogicalGraphMutationBatch(state.batch, fence)
 									: storage::LogicalGraphMutationBatchResult{};
-					return buildMergeResult(projection, visibleMutationOutputColumns(*mutationRoot), rows, state,
-											result);
+					return buildMergeResult(*mergePipeline,
+											visibleMutationOutputColumns(*mergePipeline->mutation_chain.merge_root),
+											rows, state, result, prepublicationCache);
 				} catch (const storage::LogicalGraphMutationConflict &) {
 					// A MERGE decision is snapshot-dependent. Re-evaluate all match and
 					// creation choices rather than replaying a stale batch after a writer.

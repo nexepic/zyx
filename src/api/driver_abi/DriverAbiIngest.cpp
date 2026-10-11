@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -794,11 +795,13 @@ namespace {
 			throw;
 		} catch (const ArrowInputError &error) {
 			return setErrorAt(outError, error.status(), error.what(), error.row(), error.fieldPath());
-		} catch (const zyx::detail::BulkInputError &error) {
+		} catch (const zyx::BulkInputError &error) {
 			return setErrorAt(outError, ZYX_DRIVER_NOT_FOUND, error.what(), static_cast<int64_t>(error.rowIndex()),
 							  error.fieldPath());
 		} catch (const std::bad_alloc &) {
 			return setError(outError, ZYX_DRIVER_OUT_OF_MEMORY, "out of memory");
+		} catch (const std::system_error &error) {
+			return setError(outError, ZYX_DRIVER_IO_ERROR, error.what());
 		} catch (const std::exception &error) {
 			return setError(outError, ZYX_DRIVER_EXECUTION_ERROR, error.what());
 		} catch (...) { // ZYX_COV_EXCL_LINE: ABI boundary converts unexpected exceptions into status codes.

@@ -75,6 +75,9 @@ RETURN n.val;
 
 :::tip
 `IN TRANSACTIONS OF N ROWS` commits in batches of N rows, ideal for large-volume writes. See [Batch Operations](batch-operations).
+
+In the current native runtime, this is a write-only, no-export `CREATE` subquery feature and it is autocommit-only.
+:::
 :::
 
 ## LOAD CSV
@@ -99,7 +102,7 @@ Only local `file:///` URIs below the configured import root are accepted. Remote
 
 ### Native Runtime Boundary
 
-The native logical runtime supports only procedures with a native, snapshot-pinned implementation. `dbms.listConfig()`, `dbms.getConfig(key)`, `dbms.setConfig(key, value)`, `dbms.showStats()`, and `dbms.resetStats()` are not available: they fail closed instead of routing through the retired State-manager path. A durable runtime-configuration service will be exposed only after it can participate in the same metadata WAL and atomic publication boundary as graph writes.
+The native logical runtime supports only procedures with a native, snapshot-pinned implementation. `dbms.listConfig()`, `dbms.getConfig(key)`, `dbms.setConfig(key, value)`, `dbms.showStats()`, and `dbms.resetStats()` are available only in autocommit mode and use the Database-owned native configuration service. Durable keys publish through the same single-file COW metadata boundary as graph metadata; process-local `stats.enabled` never creates a database-file record. Unsupported keys and explicit-transaction calls fail before any administrative side effect.
 
 ### Vector Index
 

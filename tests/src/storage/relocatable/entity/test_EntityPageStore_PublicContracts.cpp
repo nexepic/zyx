@@ -8,6 +8,115 @@
 
 #include "storage/relocatable/entity/EntityPageStoreTestFixture.hpp"
 
+#include <atomic>
+#include <cerrno>
+
+#include "graph/storage/PwriteHelper.hpp"
+
+namespace {
+
+	enum class LabelPageCandidateWriteFailure {
+		LPWF_DISK_FULL,
+		LPWF_SHORT_WRITE,
+	};
+
+	void expectNativeLabelPageEvacuationCandidateFailure(
+			const std::filesystem::path &path, const std::shared_ptr<std::fstream> &file,
+			std::shared_ptr<StorageIO> &io, LabelPageCandidateWriteFailure failure) {
+		const file_handle_t nativeHandle = portable_open_rw(path.string().c_str());
+		ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+		io = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+		auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+		EntityPageStore store(io, *metadata);
+		const std::optional<EntityPageInsertResult> source =
+				store.allocateNode(newPool(31U, 901U, 101U, 40U), 1001U, node(0U, 0U), LogSequenceNumber(2U));
+		ASSERT_TRUE(source.has_value());
+		ASSERT_TRUE(
+				store.allocateNode(newPool(32U, 901U, 201U, 41U), 2001U, node(0U, 0U), LogSequenceNumber(3U)).has_value());
+
+		MetadataSnapshotPin beforeLabelPublication = metadata->openSnapshot();
+		const CatalogEntry sourcePool = metadata->findCatalog(beforeLabelPublication, SegmentId(31U));
+		const std::vector<uint64_t> labels = orderedLabels(7U, RSS_ENTITY_INLINE_LABEL_CAPACITY + 1U);
+		const LabelPagePayload labelPayload = labelPagePayload(sourcePool, PageId(102U), LogSequenceNumber(4U),
+															 std::span(labels).subspan(RSS_ENTITY_INLINE_LABEL_CAPACITY));
+		const NodeEntityRecord updated = nodeWithOverflow(labels, labelPayload.overflow);
+		const std::array<EntityPageBatchMutation, 1U> mutations{{
+				{.page_id = PageId(101U),
+				 .record_kind = EntityPageRecordKind::EPRK_NODE,
+				 .node_updates = {{1001U, updated}}},
+		}};
+		EntityPageAuxiliaryMutationBatch auxiliary;
+		auxiliary.appends.push_back(
+				{sourcePool, PageId(102U), PageOwnerKind::POK_ENTITY_LABEL, labelPayload.payload, labelPayload.free_bytes});
+		auxiliary.node_update_bindings.push_back({1001U, source->location, updated});
+		static_cast<void>(store.applyAuxiliaryEntityBatchTransaction(beforeLabelPublication, mutations, {}, {}, auxiliary,
+																					 LogSequenceNumber(4U)));
+		beforeLabelPublication.release();
+
+		MetadataSnapshotPin beforeEvacuation = metadata->openSnapshot();
+		const PageLocation sourceLocation = metadata->findPageLocation(beforeEvacuation, PageId(102U));
+		const CatalogEntry destinationPool = metadata->findCatalog(beforeEvacuation, SegmentId(32U));
+		const uint64_t destinationOffset = PhysicalSegmentAllocator::checkedSlotOffset(
+				beforeEvacuation.superblock().data_region_offset, destinationPool.physical_slot);
+		bool injected = false;
+		{
+			StorageIO::ScopedNativeWriteHookForTesting failDestinationLabelPage(
+					[&injected, destinationOffset, failure](file_handle_t fd, const void *bytes, size_t byteCount,
+																											 pwrite_off_t offset) {
+						if (!injected && offset >= 0 && byteCount == RSS_PAGE_SIZE &&
+							static_cast<uint64_t>(offset) >= destinationOffset &&
+							static_cast<uint64_t>(offset) < destinationOffset + RSS_SEGMENT_SIZE) {
+							try {
+								const auto page =
+										std::span<const std::byte>(static_cast<const std::byte *>(bytes), byteCount);
+								if (PageOwnerHeaderCodec::decode(page.first(RSS_PAGE_OWNER_HEADER_BYTES)).kind ==
+									PageOwnerKind::POK_ENTITY_LABEL) {
+									injected = true;
+									if (failure == LabelPageCandidateWriteFailure::LPWF_SHORT_WRITE) {
+										const pwrite_ssize_t partial = portable_pwrite(fd, bytes, 16U, offset);
+										return partial == 16U ? partial : static_cast<pwrite_ssize_t>(-1);
+									}
+#ifdef _WIN32
+									SetLastError(ERROR_DISK_FULL);
+#else
+									errno = ENOSPC;
+#endif
+									return static_cast<pwrite_ssize_t>(-1);
+								}
+							} catch (const FormatException &) {
+							}
+						}
+						return portable_pwrite(fd, bytes, byteCount, offset);
+					});
+			EXPECT_THROW(static_cast<void>(
+						 store.evacuatePoolPage(beforeEvacuation, PageId(102U), SegmentId(32U), LogSequenceNumber(5U))),
+					 std::system_error);
+		}
+		EXPECT_TRUE(injected);
+		EXPECT_EQ(metadata->findPageLocation(beforeEvacuation, PageId(102U)), sourceLocation);
+		beforeEvacuation.release();
+
+		metadata.reset();
+		io.reset();
+		EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+		io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+		auto reopened = RelocatableMetadataStore::open(io);
+		EntityPageStore reopenedStore(io, *reopened);
+		MetadataSnapshotPin recovered = reopened->openSnapshot();
+		EXPECT_EQ(reopened->findPageLocation(recovered, PageId(102U)), sourceLocation);
+		const EntityPageMutationResult retried =
+				reopenedStore.evacuatePoolPage(recovered, PageId(102U), SegmentId(32U), LogSequenceNumber(5U));
+		EXPECT_EQ(retried.page.segment_id, SegmentId(32U));
+		recovered.release();
+
+		MetadataSnapshotPin published = reopened->openSnapshot();
+		EXPECT_EQ(reopened->findPageLocation(published, PageId(102U)).segment_id, SegmentId(32U));
+		EXPECT_EQ(reopenedStore.readNode(published, 1001U), updated);
+		published.release();
+	}
+
+} // namespace
+
 TEST_F(RelocatableEntityPageStoreTest, ReadsDecodedLocationsAndBoundsEntityScans) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
 	EntityPageStore store(io, *metadata);
@@ -191,6 +300,104 @@ TEST_F(RelocatableEntityPageStoreTest, EvacuatesTypedLabelPageThroughThePublicPo
 	EXPECT_EQ(reopenedStore.readNode(recovered, 1001U), updated);
 	EXPECT_EQ(reopenedStore.readAuxiliaryPage(recovered, PageId(102U), PageOwnerKind::POK_ENTITY_LABEL).owner.kind,
 			  PageOwnerKind::POK_ENTITY_LABEL);
+}
+
+TEST_F(RelocatableEntityPageStoreTest,
+	   NativeLabelPageEvacuationDiskFullRetainsTheSourceAndCanRetryAfterReopen) {
+	expectNativeLabelPageEvacuationCandidateFailure(path, file, io, LabelPageCandidateWriteFailure::LPWF_DISK_FULL);
+}
+
+TEST_F(RelocatableEntityPageStoreTest,
+	   NativeLabelPageEvacuationShortWriteRetainsTheSourceAndCanRetryAfterReopen) {
+	expectNativeLabelPageEvacuationCandidateFailure(path, file, io, LabelPageCandidateWriteFailure::LPWF_SHORT_WRITE);
+}
+
+TEST_F(RelocatableEntityPageStoreTest,
+	   NativeLabelPageEvacuationFinalFenceFailureReportsUncertainDurabilityAndReopensTheDestination) {
+	const file_handle_t nativeHandle = portable_open_rw(path.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	io = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	EntityPageStore store(io, *metadata);
+	const std::optional<EntityPageInsertResult> source =
+			store.allocateNode(newPool(31U, 901U, 101U, 40U), 1001U, node(0U, 0U), LogSequenceNumber(2U));
+	ASSERT_TRUE(source.has_value());
+	ASSERT_TRUE(
+			store.allocateNode(newPool(32U, 901U, 201U, 41U), 2001U, node(0U, 0U), LogSequenceNumber(3U)).has_value());
+
+	MetadataSnapshotPin beforeLabelPublication = metadata->openSnapshot();
+	const CatalogEntry sourcePool = metadata->findCatalog(beforeLabelPublication, SegmentId(31U));
+	const std::vector<uint64_t> labels = orderedLabels(7U, RSS_ENTITY_INLINE_LABEL_CAPACITY + 1U);
+	const LabelPagePayload labelPayload = labelPagePayload(sourcePool, PageId(102U), LogSequenceNumber(4U),
+														   std::span(labels).subspan(RSS_ENTITY_INLINE_LABEL_CAPACITY));
+	const NodeEntityRecord updated = nodeWithOverflow(labels, labelPayload.overflow);
+	const std::array<EntityPageBatchMutation, 1U> mutations{{
+			{.page_id = PageId(101U),
+			 .record_kind = EntityPageRecordKind::EPRK_NODE,
+			 .node_updates = {{1001U, updated}}},
+	}};
+	EntityPageAuxiliaryMutationBatch auxiliary;
+	auxiliary.appends.push_back(
+			{sourcePool, PageId(102U), PageOwnerKind::POK_ENTITY_LABEL, labelPayload.payload, labelPayload.free_bytes});
+	auxiliary.node_update_bindings.push_back({1001U, source->location, updated});
+	static_cast<void>(store.applyAuxiliaryEntityBatchTransaction(beforeLabelPublication, mutations, {}, {}, auxiliary,
+																 LogSequenceNumber(4U)));
+	beforeLabelPublication.release();
+
+	MetadataSnapshotPin beforeEvacuation = metadata->openSnapshot();
+	std::atomic<uint32_t> inactiveSuperblockWrites{0U};
+	std::atomic<uint32_t> syncCalls{0U};
+	std::atomic<bool> failedFinalFence{false};
+	{
+		StorageIO::ScopedNativeWriteHookForTesting observeInactiveSuperblock(
+				[&inactiveSuperblockWrites](file_handle_t fd, const void *bytes, size_t byteCount,
+																									 pwrite_off_t offset) {
+					if (offset >= 0 && static_cast<uint64_t>(offset) < RSS_FILE_BOOTSTRAP_BYTES &&
+						byteCount == RSS_SUPERBLOCK_BYTES) {
+						inactiveSuperblockWrites.fetch_add(1U, std::memory_order_relaxed);
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		StorageIO::ScopedNativeSyncHookForTesting failFinalFence(
+				[&inactiveSuperblockWrites, &syncCalls, &failedFinalFence](file_handle_t fd) {
+					syncCalls.fetch_add(1U, std::memory_order_relaxed);
+					// Candidate pages can require several data fences. Fail only after the
+					// A/B write that publishes the relocated LabelSet route.
+					if (inactiveSuperblockWrites.load(std::memory_order_relaxed) >= 1U &&
+						!failedFinalFence.exchange(true, std::memory_order_relaxed)) {
+#ifdef _WIN32
+						SetLastError(ERROR_WRITE_FAULT);
+#else
+						errno = EIO;
+#endif
+						return -1;
+					}
+					return portable_fsync(fd);
+				});
+		EXPECT_THROW(static_cast<void>(store.evacuatePoolPage(beforeEvacuation, PageId(102U), SegmentId(32U),
+															  LogSequenceNumber(5U))),
+					 std::runtime_error);
+	}
+	EXPECT_GE(inactiveSuperblockWrites.load(std::memory_order_relaxed), 1U);
+	EXPECT_TRUE(failedFinalFence.load(std::memory_order_relaxed));
+	EXPECT_GE(syncCalls.load(std::memory_order_relaxed), 2U);
+	beforeEvacuation.release();
+
+	MetadataSnapshotPin current = metadata->openSnapshot();
+	EXPECT_EQ(metadata->findPageLocation(current, PageId(102U)).segment_id, SegmentId(32U));
+	EXPECT_EQ(store.readNode(current, 1001U), updated);
+	current.release();
+
+	metadata.reset();
+	io.reset();
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+	io = std::make_shared<StorageIO>(file, INVALID_FILE_HANDLE, INVALID_FILE_HANDLE);
+	auto reopened = RelocatableMetadataStore::open(io);
+	EntityPageStore reopenedStore(io, *reopened);
+	MetadataSnapshotPin recovered = reopened->openSnapshot();
+	EXPECT_EQ(reopened->findPageLocation(recovered, PageId(102U)).segment_id, SegmentId(32U));
+	EXPECT_EQ(reopenedStore.readNode(recovered, 1001U), updated);
+	recovered.release();
 }
 
 TEST_F(RelocatableEntityPageStoreTest, RejectsCorruptTypedLabelPayloadDuringPublicEvacuation) {

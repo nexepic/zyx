@@ -57,7 +57,6 @@
 #include "graph/storage/relocatable/vector/VectorPageStore.hpp"
 #include "graph/storage/relocatable/vector/VectorSemanticCodec.hpp"
 #include "graph/utils/ChecksumUtils.hpp"
-#include "graph/vector/core/BFloat16.hpp"
 
 using namespace graph::storage;
 
@@ -425,7 +424,15 @@ namespace {
 		initial.database_id = DatabaseId(options.database_id);
 		initial.generation = Generation(1U);
 		initial.checkpoint_lsn = LogSequenceNumber(1U);
-		static_cast<void>(RelocatableMetadataStore::initializeNew(dataIo, initial));
+		try {
+			static_cast<void>(RelocatableMetadataStore::initializeNewComplete(dataIo, initial));
+		} catch (...) {
+			dataIo.reset();
+			data->close();
+			std::error_code ignored;
+			static_cast<void>(std::filesystem::remove(options.data_path, ignored));
+			throw;
+		}
 		dataIo->sync();
 		dataIo.reset();
 		data->close();

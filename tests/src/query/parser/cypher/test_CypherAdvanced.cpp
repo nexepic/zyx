@@ -63,7 +63,7 @@ TEST_F(CypherAdvancedTest, Pattern_MultiplePropertiesInMatch) {
 }
 
 // ============================================================================
-// Tests for PatternBuilder coverage
+// Native logical pattern planning behavior.
 // ============================================================================
 
 TEST_F(CypherAdvancedTest, Pattern_EdgeWithLabelAndDirection) {
@@ -103,7 +103,7 @@ TEST_F(CypherAdvancedTest, Expression_NullLiteralInCreate) {
 }
 
 // ============================================================================
-// Tests for PatternBuilder SET clause coverage
+// Native logical SET behavior.
 // ============================================================================
 
 TEST_F(CypherAdvancedTest, SetClause_DoubleValueWithDecimal) {
@@ -137,7 +137,7 @@ TEST_F(CypherAdvancedTest, SetClause_NegativeIntegerValue) {
 }
 
 // ============================================================================
-// Tests for ReadingClauseHandler UNWIND coverage (ExpressionBuilder)
+// Native logical UNWIND behavior.
 // ============================================================================
 
 TEST_F(CypherAdvancedTest, Unwind_IntegerList) {
@@ -228,7 +228,7 @@ TEST_F(CypherAdvancedTest, Unwind_ListWithNull) {
 }
 
 // ============================================================================
-// Tests for PatternBuilder SET clause with various value types
+// Native logical SET behavior with diverse values.
 // ============================================================================
 
 TEST_F(CypherAdvancedTest, SetClause_ScientificNotationLowerE) {
@@ -313,7 +313,7 @@ TEST_F(CypherAdvancedTest, SetClause_MultiplePropertiesMixedTypes) {
 }
 
 // ============================================================================
-// Tests for Variable-Length Relationships (PatternBuilder Coverage)
+// Native logical variable-length traversal behavior.
 // ============================================================================
 
 TEST_F(CypherAdvancedTest, VarLengthRangeBoth) {
@@ -472,7 +472,7 @@ TEST_F(CypherAdvancedTest, CreateWithVector_ZeroValues) {
 }
 
 // ============================================================================
-// OPTIONAL MATCH Coverage (PatternBuilder lines 49-70)
+// Native logical OPTIONAL MATCH behavior.
 // ============================================================================
 
 TEST_F(CypherAdvancedTest, OptionalMatch_Basic) {
@@ -512,7 +512,7 @@ TEST_F(CypherAdvancedTest, OptionalMatch_WithWhere) {
 }
 
 // ============================================================================
-// Multiple Node Properties / Residual Filters (PatternBuilder lines 120-142)
+// Native logical multi-property filter behavior.
 // ============================================================================
 
 TEST_F(CypherAdvancedTest, MatchMultiplePropertiesOnNode) {
@@ -535,7 +535,7 @@ TEST_F(CypherAdvancedTest, MatchThreePropertiesOnNode) {
 }
 
 // ============================================================================
-// Multiple Pattern Parts with Existing Pipeline (PatternBuilder line 81-89)
+// Native logical multiple-pattern behavior.
 // ============================================================================
 
 TEST_F(CypherAdvancedTest, MultipleMatchCartesianWithTraversal) {
@@ -548,7 +548,7 @@ TEST_F(CypherAdvancedTest, MultipleMatchCartesianWithTraversal) {
 }
 
 // ============================================================================
-// MERGE Edge Pattern (PatternBuilder lines 363-453)
+// Native logical MERGE edge behavior.
 // ============================================================================
 
 TEST_F(CypherAdvancedTest, MergeEdge_Basic) {
@@ -594,7 +594,7 @@ TEST_F(CypherAdvancedTest, MergeEdge_WithOnCreate) {
 }
 
 // ============================================================================
-// SET Label Assignment (PatternBuilder lines 540-550)
+// Native logical label-assignment behavior.
 // ============================================================================
 
 TEST_F(CypherAdvancedTest, SetLabelAssignment) {
@@ -608,7 +608,7 @@ TEST_F(CypherAdvancedTest, SetLabelAssignment) {
 }
 
 // ============================================================================
-// SET Map Merge (PatternBuilder lines 493-537)
+// Native logical map-merge behavior.
 // ============================================================================
 
 TEST_F(CypherAdvancedTest, SetMapMerge) {
@@ -623,7 +623,7 @@ TEST_F(CypherAdvancedTest, SetMapMerge) {
 }
 
 // ============================================================================
-// Bidirectional/Undirected Traversal (PatternBuilder lines 158-164)
+// Native logical undirected traversal behavior.
 // ============================================================================
 
 TEST_F(CypherAdvancedTest, UndirectedTraversal) {
@@ -662,7 +662,7 @@ TEST_F(CypherAdvancedTest, VarLengthStar_NoBounds) {
 }
 
 // ============================================================================
-// Target Node Properties on Traversal (PatternBuilder lines 241-247)
+// Native logical target-property traversal behavior.
 // ============================================================================
 
 TEST_F(CypherAdvancedTest, TraversalWithTargetProperties) {
@@ -675,7 +675,7 @@ TEST_F(CypherAdvancedTest, TraversalWithTargetProperties) {
 }
 
 // ============================================================================
-// Edge Properties on Fixed-Length Traversal (PatternBuilder lines 250-258)
+// Native logical edge-property traversal behavior.
 // ============================================================================
 
 TEST_F(CypherAdvancedTest, EdgePropertyFilterMultiple) {
@@ -688,7 +688,7 @@ TEST_F(CypherAdvancedTest, EdgePropertyFilterMultiple) {
 }
 
 // ============================================================================
-// No Relationship Details (PatternBuilder line 175: relDetail is null)
+// Native logical anonymous-relationship behavior.
 // ============================================================================
 
 TEST_F(CypherAdvancedTest, TraversalNoRelDetail) {
@@ -700,7 +700,7 @@ TEST_F(CypherAdvancedTest, TraversalNoRelDetail) {
 }
 
 // ============================================================================
-// Create Pattern with Relationship Chain (PatternBuilder lines 323-354)
+// Native logical CREATE relationship-chain behavior.
 // ============================================================================
 
 TEST_F(CypherAdvancedTest, CreateWithRelNoDetail) {
@@ -725,7 +725,7 @@ TEST_F(CypherAdvancedTest, MergeWithRelNoDetail) {
 }
 
 // ============================================================================
-// WHERE Clause Exception Handling (PatternBuilder lines 275-286)
+// Native logical WHERE validation behavior.
 // ============================================================================
 
 TEST_F(CypherAdvancedTest, WhereClauseWithComplexExpression) {

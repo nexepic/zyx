@@ -8,7 +8,6 @@
 #pragma once
 
 #include "graph/query/expressions/Expression.hpp"
-#include "graph/query/expressions/PredicateFunction.hpp"
 #include <memory>
 #include <string>
 
@@ -26,8 +25,8 @@ namespace graph::query::expressions {
  * - The list expression
  * - The WHERE condition expression
  *
- * During evaluation, this expression looks up the appropriate PredicateFunction
- * and calls its evaluate method with the stored components.
+ * The logical runtime evaluates the stored components directly against each
+ * scoped list element.
  */
 class QuantifierFunctionExpression : public Expression {
 public:

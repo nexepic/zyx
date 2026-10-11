@@ -42,9 +42,6 @@ query::QueryPlan CypherToPlanVisitor::getQueryPlan() {
 		return {};
 	}
 
-	// The native logical runtime currently has no storage-bound optimizer.
-	// Its plan shape remains deterministic until a logical statistics provider
-	// replaces the discarded DataManager optimizer path.
 	auto rootType = rootOp_->getType();
 	bool isCacheable = (rootType != query::logical::LogicalOpType::LOP_TRANSACTION_CONTROL &&
 	                    rootType != query::logical::LogicalOpType::LOP_CREATE_INDEX &&
@@ -62,7 +59,9 @@ query::QueryPlan CypherToPlanVisitor::getQueryPlan() {
 	plan.mutatesData = builder_.mutatesData();
 	plan.mutatesSchema = builder_.mutatesSchema();
 	plan.cacheable = isCacheable;
-	plan.optimizable = false;
+	// Native logical rewrites are semantic-preserving, but mutating and
+	// observability/control plans retain their parser-established shape.
+	plan.optimizable = isCacheable && !plan.mutatesData && !plan.mutatesSchema;
 	return plan;
 }
 
@@ -313,6 +312,10 @@ std::any CypherToPlanVisitor::visitForeachStatement(CypherParser::ForeachStateme
 // --- CALL { subquery } ---
 std::any CypherToPlanVisitor::visitCallSubquery(CypherParser::CallSubqueryContext *ctx) {
 	auto savedRootOp = std::move(rootOp_);
+	if (!savedRootOp) {
+		// A standalone CALL still executes its body once, so it needs a real input row.
+		savedRootOp = std::make_unique<query::logical::LogicalSingleRow>();
+	}
 
 	std::unordered_set<std::string> outerVars;
 	if (savedRootOp) {
@@ -365,6 +368,11 @@ std::any CypherToPlanVisitor::visitCallSubquery(CypherParser::CallSubqueryContex
 			auto val = helpers::ExpressionBuilder::evaluateLiteralExpression(inTxnCtx->expression());
 			if (val.getType() == graph::PropertyType::INTEGER) {
 				batchSize = std::get<int64_t>(val.getVariant());
+				if (batchSize <= 0) {
+					throw std::invalid_argument("IN TRANSACTIONS OF requires a positive integer literal row count");
+				}
+			} else {
+				throw std::invalid_argument("IN TRANSACTIONS OF requires an integer literal row count");
 			}
 		}
 	}

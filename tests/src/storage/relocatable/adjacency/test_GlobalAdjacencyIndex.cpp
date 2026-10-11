@@ -41,7 +41,7 @@ namespace {
 		}
 	}
 
-	PageOwnerHeader owner(PageId pageId, BTreeLeafValueLayout layout) {
+	PageOwnerHeader owner(PageId pageId, BTreeLeafValueLayout layout, LogSequenceNumber lsn = LogSequenceNumber(2U)) {
 		static_cast<void>(layout);
 		return {pageId,
 				RSS_GLOBAL_ADJACENCY_INDEX_ID,
@@ -49,16 +49,33 @@ namespace {
 				0U,
 				RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES,
 				Generation(1U),
-				LogSequenceNumber(2U)};
+				lsn};
 	}
 
-	BTreePage leaf(PageId pageId, BTreeLeafValueLayout layout) {
+	BTreePage leaf(PageId pageId, BTreeLeafValueLayout layout, PageId leftSibling = {}, PageId rightSibling = {},
+				   LogSequenceNumber lsn = LogSequenceNumber(2U)) {
 		BTreePageHeader header;
 		header.index_id = RSS_GLOBAL_ADJACENCY_INDEX_ID;
 		header.page_id = pageId;
 		header.generation = Generation(1U);
+		header.left_sibling = leftSibling;
+		header.right_sibling = rightSibling;
 		header.leaf_value_layout = layout;
-		return BTreePage::create(owner(pageId, layout), header);
+		return BTreePage::create(owner(pageId, layout, lsn), header);
+	}
+
+	BTreePage internal(PageId pageId, PageId leftmostChild, const GlobalAdjacencyKey &separator, PageId rightChild,
+					   LogSequenceNumber lsn = LogSequenceNumber(2U)) {
+		BTreePageHeader header;
+		header.index_id = RSS_GLOBAL_ADJACENCY_INDEX_ID;
+		header.page_id = pageId;
+		header.generation = Generation(1U);
+		header.kind = BTreeNodeKind::BPN_INTERNAL;
+		header.level = 1U;
+		header.leftmost_child = leftmostChild;
+		BTreePage result = BTreePage::create(owner(pageId, BTreeLeafValueLayout::BLVL_EMPTY, lsn), header);
+		result.insert({AdjacencyKeyCodec::encode(separator), rightChild.value()});
+		return result;
 	}
 
 	SlottedPagePoolAllocationRequest allocationRequest(PageId pageId) {
@@ -71,6 +88,24 @@ namespace {
 		request.page_owner_id = RSS_GLOBAL_ADJACENCY_INDEX_ID;
 		request.page_owner_kind = PageOwnerKind::POK_INDEX;
 		return request;
+	}
+
+	SlottedPagePoolAllocationRequest allocationRequestForIndex(PageId pageId, uint64_t indexId) {
+		SlottedPagePoolAllocationRequest request = allocationRequest(pageId);
+		request.pool_owner_id = indexId;
+		request.page_owner_id = indexId;
+		return request;
+	}
+
+	BTreePage leafForIndex(PageId pageId, uint64_t indexId, BTreeLeafValueLayout layout) {
+		BTreePageHeader header;
+		header.index_id = indexId;
+		header.page_id = pageId;
+		header.generation = Generation(1U);
+		header.leaf_value_layout = layout;
+		const PageOwnerHeader pageOwner{pageId, indexId, PageOwnerKind::POK_INDEX, 0U,
+											RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES, Generation(1U), LogSequenceNumber(2U)};
+		return BTreePage::create(pageOwner, header);
 	}
 
 } // namespace
@@ -163,6 +198,208 @@ TEST_F(GlobalAdjacencyIndexTest, RejectsAValuedLeafForTheReservedAdjacencyRoot) 
 	expectFormatError(
 			[&] { static_cast<void>(index.scan(snapshot, GlobalAdjacencyDirection::GAD_OUT, 7U, 1U)); },
 			FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(GlobalAdjacencyIndexTest, RejectsForeignOwnerBeforePublishingTheReservedRoot) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+	SlottedPagePool pool(io, *metadata);
+	BTreePageStore pages(pool, *metadata);
+	constexpr uint64_t FOREIGN_INDEX_ID = 73U;
+	BTreePage root = leafForIndex(PageId(101U), FOREIGN_INDEX_ID, BTreeLeafValueLayout::BLVL_EMPTY);
+	root.insert({AdjacencyKeyCodec::encode({GlobalAdjacencyDirection::GAD_OUT, 7U, 3U}), 0U});
+	ASSERT_TRUE(pages.allocate(allocationRequestForIndex(PageId(101U), FOREIGN_INDEX_ID), root, PhysicalSlotId(40U),
+								   PhysicalSlotId(40U), LogSequenceNumber(2U))
+					.has_value());
+	const IndexRootLocation forgedRoot{RSS_GLOBAL_ADJACENCY_INDEX_ID, PageId(101U), Generation(1U)};
+	expectFormatError(
+			[&] { static_cast<void>(pages.publishRoots(std::span(&forgedRoot, 1U), {}, LogSequenceNumber(3U))); },
+			FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(GlobalAdjacencyIndexTest, RejectsMalformedKeysInTheReservedRoot) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+	SlottedPagePool pool(io, *metadata);
+	BTreePageStore pages(pool, *metadata);
+	BTreePage root = leaf(PageId(101U), BTreeLeafValueLayout::BLVL_EMPTY);
+	// This is a valid range lower bound but not a complete adjacency key because
+	// its encoded Edge ID is zero. It must fail after the B+Tree returns it.
+	root.insert({AdjacencyKeyCodec::lowerBound(GlobalAdjacencyDirection::GAD_OUT, 7U), 0U});
+	ASSERT_TRUE(pages.allocate(allocationRequest(PageId(101U)), root, PhysicalSlotId(40U), PhysicalSlotId(40U),
+								   LogSequenceNumber(2U))
+					.has_value());
+	const IndexRootLocation rootLocation{RSS_GLOBAL_ADJACENCY_INDEX_ID, PageId(101U), Generation(1U)};
+	static_cast<void>(pages.publishRoots(std::span(&rootLocation, 1U), {}, LogSequenceNumber(3U)));
+
+	GlobalAdjacencyIndex index(pages, *metadata);
+	const MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	expectFormatError(
+			[&] { static_cast<void>(index.scan(snapshot, GlobalAdjacencyDirection::GAD_OUT, 7U, 1U)); },
+			FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(GlobalAdjacencyIndexTest, RejectsAReservedAdjacencyLeafOutsideItsSeparatorRange) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+	SlottedPagePool pool(io, *metadata);
+	BTreePageStore pages(pool, *metadata);
+	BTreePage root = internal(PageId(100U), PageId(101U),
+						  {GlobalAdjacencyDirection::GAD_OUT, 7U, 5U}, PageId(102U));
+	ASSERT_TRUE(pages.allocate(allocationRequest(PageId(100U)), root, PhysicalSlotId(40U), PhysicalSlotId(40U),
+							   LogSequenceNumber(2U))
+					.has_value());
+	BTreePage left =
+			leaf(PageId(101U), BTreeLeafValueLayout::BLVL_EMPTY, {}, PageId(102U), LogSequenceNumber(3U));
+	// The key routes to the right child, but the corrupted left leaf claims it.
+	left.insert({AdjacencyKeyCodec::encode({GlobalAdjacencyDirection::GAD_OUT, 7U, 7U}), 0U});
+	BTreePage right = leaf(PageId(102U), BTreeLeafValueLayout::BLVL_EMPTY, PageId(101U), {}, LogSequenceNumber(4U));
+	right.insert({AdjacencyKeyCodec::encode({GlobalAdjacencyDirection::GAD_OUT, 7U, 9U}), 0U});
+	static_cast<void>(pages.append({SegmentId(71U), Generation(1U), PageId(101U),
+								  RSS_GLOBAL_ADJACENCY_INDEX_ID, PageOwnerKind::POK_INDEX},
+							 left, LogSequenceNumber(3U)));
+	static_cast<void>(pages.append({SegmentId(71U), Generation(1U), PageId(102U),
+								  RSS_GLOBAL_ADJACENCY_INDEX_ID, PageOwnerKind::POK_INDEX},
+							 right, LogSequenceNumber(4U)));
+	const IndexRootLocation rootLocation{RSS_GLOBAL_ADJACENCY_INDEX_ID, PageId(100U), Generation(1U)};
+	static_cast<void>(pages.publishRoots(std::span(&rootLocation, 1U), {}, LogSequenceNumber(5U)));
+
+	GlobalAdjacencyIndex index(pages, *metadata);
+	const MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	expectFormatError(
+			[&] { static_cast<void>(index.scan(snapshot, GlobalAdjacencyDirection::GAD_OUT, 7U, 8U)); },
+			FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(GlobalAdjacencyIndexTest, RejectsNonreciprocalLeafLinksOnThePublicAdjacencyReadPath) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+	SlottedPagePool pool(io, *metadata);
+	BTreePageStore pages(pool, *metadata);
+	BTreePage root = internal(PageId(100U), PageId(101U),
+						  {GlobalAdjacencyDirection::GAD_OUT, 7U, 2U}, PageId(102U));
+	ASSERT_TRUE(pages.allocate(allocationRequest(PageId(100U)), root, PhysicalSlotId(40U), PhysicalSlotId(40U),
+							   LogSequenceNumber(2U))
+					.has_value());
+	BTreePage left =
+			leaf(PageId(101U), BTreeLeafValueLayout::BLVL_EMPTY, {}, PageId(102U), LogSequenceNumber(3U));
+	left.insert({AdjacencyKeyCodec::encode({GlobalAdjacencyDirection::GAD_OUT, 7U, 1U}), 0U});
+	BTreePage right = leaf(PageId(102U), BTreeLeafValueLayout::BLVL_EMPTY, {}, {}, LogSequenceNumber(4U));
+	right.insert({AdjacencyKeyCodec::encode({GlobalAdjacencyDirection::GAD_OUT, 7U, 2U}), 0U});
+	static_cast<void>(pages.append({SegmentId(71U), Generation(1U), PageId(101U),
+								  RSS_GLOBAL_ADJACENCY_INDEX_ID, PageOwnerKind::POK_INDEX},
+							 left, LogSequenceNumber(3U)));
+	static_cast<void>(pages.append({SegmentId(71U), Generation(1U), PageId(102U),
+								  RSS_GLOBAL_ADJACENCY_INDEX_ID, PageOwnerKind::POK_INDEX},
+							 right, LogSequenceNumber(4U)));
+	const IndexRootLocation rootLocation{RSS_GLOBAL_ADJACENCY_INDEX_ID, PageId(100U), Generation(1U)};
+	static_cast<void>(pages.publishRoots(std::span(&rootLocation, 1U), {}, LogSequenceNumber(5U)));
+
+	GlobalAdjacencyIndex index(pages, *metadata);
+	const MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	expectFormatError(
+			[&] { static_cast<void>(index.scan(snapshot, GlobalAdjacencyDirection::GAD_OUT, 7U, 8U)); },
+			FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(GlobalAdjacencyIndexTest, RejectsCyclicLeafLinksOnThePublicAdjacencyReadPath) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+	SlottedPagePool pool(io, *metadata);
+	BTreePageStore pages(pool, *metadata);
+	BTreePage root = internal(PageId(100U), PageId(101U),
+						  {GlobalAdjacencyDirection::GAD_OUT, 7U, 2U}, PageId(102U));
+	ASSERT_TRUE(pages.allocate(allocationRequest(PageId(100U)), root, PhysicalSlotId(40U), PhysicalSlotId(40U),
+							   LogSequenceNumber(2U))
+					.has_value());
+	BTreePage left = leaf(PageId(101U), BTreeLeafValueLayout::BLVL_EMPTY, PageId(102U), PageId(102U),
+							LogSequenceNumber(3U));
+	left.insert({AdjacencyKeyCodec::encode({GlobalAdjacencyDirection::GAD_OUT, 7U, 1U}), 0U});
+	BTreePage right = leaf(PageId(102U), BTreeLeafValueLayout::BLVL_EMPTY, PageId(101U), PageId(101U),
+							 LogSequenceNumber(4U));
+	right.insert({AdjacencyKeyCodec::encode({GlobalAdjacencyDirection::GAD_OUT, 7U, 2U}), 0U});
+	static_cast<void>(pages.append({SegmentId(71U), Generation(1U), PageId(101U),
+								  RSS_GLOBAL_ADJACENCY_INDEX_ID, PageOwnerKind::POK_INDEX},
+							 left, LogSequenceNumber(3U)));
+	static_cast<void>(pages.append({SegmentId(71U), Generation(1U), PageId(102U),
+								  RSS_GLOBAL_ADJACENCY_INDEX_ID, PageOwnerKind::POK_INDEX},
+							 right, LogSequenceNumber(4U)));
+	const IndexRootLocation rootLocation{RSS_GLOBAL_ADJACENCY_INDEX_ID, PageId(100U), Generation(1U)};
+	static_cast<void>(pages.publishRoots(std::span(&rootLocation, 1U), {}, LogSequenceNumber(5U)));
+
+	GlobalAdjacencyIndex index(pages, *metadata);
+	const MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	expectFormatError(
+			[&] { static_cast<void>(index.scan(snapshot, GlobalAdjacencyDirection::GAD_OUT, 7U, 8U)); },
+			FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(GlobalAdjacencyIndexTest, RejectsSiblingThatIsReciprocalButOutsideTheRoutedLeafSequence) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+	SlottedPagePool pool(io, *metadata);
+	BTreePageStore pages(pool, *metadata);
+	BTreePage root = internal(PageId(100U), PageId(101U),
+						  {GlobalAdjacencyDirection::GAD_OUT, 7U, 4U}, PageId(102U));
+	ASSERT_TRUE(pages.allocate(allocationRequest(PageId(100U)), root, PhysicalSlotId(40U), PhysicalSlotId(40U),
+							   LogSequenceNumber(2U))
+					.has_value());
+	// Page 103 is owned by the same Index and its key is correctly ordered, but
+	// it is not a child reachable from the root. A leaf scan must not trust the
+	// sibling chain as an authority independent of the routed tree.
+	BTreePage left =
+			leaf(PageId(101U), BTreeLeafValueLayout::BLVL_EMPTY, {}, PageId(103U), LogSequenceNumber(3U));
+	left.insert({AdjacencyKeyCodec::encode({GlobalAdjacencyDirection::GAD_OUT, 7U, 1U}), 0U});
+	BTreePage routedRight =
+			leaf(PageId(102U), BTreeLeafValueLayout::BLVL_EMPTY, PageId(101U), {}, LogSequenceNumber(4U));
+	routedRight.insert({AdjacencyKeyCodec::encode({GlobalAdjacencyDirection::GAD_OUT, 7U, 4U}), 0U});
+	BTreePage foreign =
+			leaf(PageId(103U), BTreeLeafValueLayout::BLVL_EMPTY, PageId(101U), {}, LogSequenceNumber(5U));
+	foreign.insert({AdjacencyKeyCodec::encode({GlobalAdjacencyDirection::GAD_OUT, 7U, 2U}), 0U});
+	static_cast<void>(pages.append({SegmentId(71U), Generation(1U), PageId(101U),
+								  RSS_GLOBAL_ADJACENCY_INDEX_ID, PageOwnerKind::POK_INDEX},
+							 left, LogSequenceNumber(3U)));
+	static_cast<void>(pages.append({SegmentId(71U), Generation(1U), PageId(102U),
+								  RSS_GLOBAL_ADJACENCY_INDEX_ID, PageOwnerKind::POK_INDEX},
+							 routedRight, LogSequenceNumber(4U)));
+	static_cast<void>(pages.append({SegmentId(71U), Generation(1U), PageId(103U),
+								  RSS_GLOBAL_ADJACENCY_INDEX_ID, PageOwnerKind::POK_INDEX},
+							 foreign, LogSequenceNumber(5U)));
+	const IndexRootLocation rootLocation{RSS_GLOBAL_ADJACENCY_INDEX_ID, PageId(100U), Generation(1U)};
+	static_cast<void>(pages.publishRoots(std::span(&rootLocation, 1U), {}, LogSequenceNumber(6U)));
+
+	GlobalAdjacencyIndex index(pages, *metadata);
+	const MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	expectFormatError(
+			[&] { static_cast<void>(index.scan(snapshot, GlobalAdjacencyDirection::GAD_OUT, 7U, 8U)); },
+			FormatError::FERR_INVALID_HEADER);
+}
+
+TEST_F(GlobalAdjacencyIndexTest, RejectsReciprocalSiblingOutsideTheRoutedSeparatorRange) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, superblock());
+	SlottedPagePool pool(io, *metadata);
+	BTreePageStore pages(pool, *metadata);
+	BTreePage root = internal(PageId(100U), PageId(101U),
+						  {GlobalAdjacencyDirection::GAD_OUT, 7U, 4U}, PageId(102U));
+	ASSERT_TRUE(pages.allocate(allocationRequest(PageId(100U)), root, PhysicalSlotId(40U), PhysicalSlotId(40U),
+							   LogSequenceNumber(2U))
+					.has_value());
+	BTreePage left =
+			leaf(PageId(101U), BTreeLeafValueLayout::BLVL_EMPTY, {}, PageId(102U), LogSequenceNumber(3U));
+	left.insert({AdjacencyKeyCodec::encode({GlobalAdjacencyDirection::GAD_OUT, 7U, 1U}), 0U});
+	// Page 102 is the real right child, but its key violates the separator that
+	// routes it. The scan path must validate that leaf before returning its key.
+	BTreePage right =
+			leaf(PageId(102U), BTreeLeafValueLayout::BLVL_EMPTY, PageId(101U), {}, LogSequenceNumber(4U));
+	right.insert({AdjacencyKeyCodec::encode({GlobalAdjacencyDirection::GAD_OUT, 7U, 3U}), 0U});
+	static_cast<void>(pages.append({SegmentId(71U), Generation(1U), PageId(101U),
+								  RSS_GLOBAL_ADJACENCY_INDEX_ID, PageOwnerKind::POK_INDEX},
+							 left, LogSequenceNumber(3U)));
+	static_cast<void>(pages.append({SegmentId(71U), Generation(1U), PageId(102U),
+								  RSS_GLOBAL_ADJACENCY_INDEX_ID, PageOwnerKind::POK_INDEX},
+							 right, LogSequenceNumber(4U)));
+	const IndexRootLocation rootLocation{RSS_GLOBAL_ADJACENCY_INDEX_ID, PageId(100U), Generation(1U)};
+	static_cast<void>(pages.publishRoots(std::span(&rootLocation, 1U), {}, LogSequenceNumber(5U)));
+
+	GlobalAdjacencyIndex index(pages, *metadata);
+	const MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	expectFormatError(
+			[&] { static_cast<void>(index.scan(snapshot, GlobalAdjacencyDirection::GAD_OUT, 7U, 8U)); },
+			FormatError::FERR_INVALID_HEADER);
 }
 
 TEST_F(GlobalAdjacencyIndexTest, PlansKeyOnlyCowMutationsAndRejectsValuedOperations) {

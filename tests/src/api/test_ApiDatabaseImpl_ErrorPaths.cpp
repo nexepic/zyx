@@ -5,10 +5,6 @@
 
 #include "ApiTestFixture.hpp"
 
-#include "graph/core/Database.hpp"
-#include "graph/core/PropertyTypes.hpp"
-#include "graph/storage/data/DataManager.hpp"
-
 TEST_F(CppApiTest, TransactionExecuteOnInactiveTransaction) {
 	auto txn = db->beginTransaction();
 	txn.commit();
@@ -89,6 +85,38 @@ TEST_F(CppApiTest, RollbackExplicitTransaction) {
 	auto rbRes = db->execute("ROLLBACK");
 	EXPECT_TRUE(rbRes.isSuccess());
 	EXPECT_FALSE(db->hasActiveTransaction());
+}
+
+TEST_F(CppApiTest, CypherTransactionFailureDoesNotLeakPartialStatementWrites) {
+	auto begin = db->execute("BEGIN");
+	ASSERT_TRUE(begin.isSuccess()) << begin.getError();
+
+	auto stable = db->execute("CREATE (:CypherTxnAtomic {name: 'stable'})");
+	ASSERT_TRUE(stable.isSuccess()) << stable.getError();
+	auto failed = db->execute(
+			"FOREACH (value IN [1, 0] | CREATE (:CypherTxnAtomic {name: 'partial', quotient: 1 / value}))");
+	EXPECT_FALSE(failed.isSuccess());
+	EXPECT_TRUE(db->hasActiveTransaction());
+
+	auto staged = db->execute("MATCH (n:CypherTxnAtomic) RETURN n.name ORDER BY n.name");
+	ASSERT_TRUE(staged.isSuccess()) << staged.getError();
+	ASSERT_TRUE(staged.hasNext());
+	staged.next();
+	ASSERT_TRUE(std::holds_alternative<std::string>(staged.get("n.name")));
+	EXPECT_EQ(std::get<std::string>(staged.get("n.name")), "stable");
+	EXPECT_FALSE(staged.hasNext());
+
+	auto commit = db->execute("COMMIT");
+	ASSERT_TRUE(commit.isSuccess()) << commit.getError();
+	EXPECT_FALSE(db->hasActiveTransaction());
+
+	auto committed = db->execute("MATCH (n:CypherTxnAtomic) RETURN n.name ORDER BY n.name");
+	ASSERT_TRUE(committed.isSuccess()) << committed.getError();
+	ASSERT_TRUE(committed.hasNext());
+	committed.next();
+	ASSERT_TRUE(std::holds_alternative<std::string>(committed.get("n.name")));
+	EXPECT_EQ(std::get<std::string>(committed.get("n.name")), "stable");
+	EXPECT_FALSE(committed.hasNext());
 }
 
 TEST_F(CppApiTest, ReadOnlyTransactionExecute) {
@@ -210,6 +238,55 @@ TEST_F(CppApiTest, CreateEdgesColumnarRejectsMismatchedEndpointsAndAcceptsAnEmpt
 	EXPECT_TRUE(db->createEdgesColumnar("REL", {}, {}, {}).empty());
 }
 
+TEST_F(CppApiTest, DirectAndColumnarEdgeWritesValidateEndpointsBeforePublication) {
+	const int64_t source = db->createNode("EndpointValidation", {{"name", std::string("source")}});
+	const int64_t target = db->createNode("EndpointValidation", {{"name", std::string("target")}});
+
+	EXPECT_THROW(static_cast<void>(db->createEdge(0, target, "INVALID_ENDPOINT")), std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(db->createEdge(source, -1, "INVALID_ENDPOINT")), std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(db->createEdges(
+				"INVALID_ENDPOINT", {{source, 0, {{"position", int64_t{1}}}}})),
+			 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(db->createEdgesColumnar("INVALID_ENDPOINT", {source}, {0}, {})),
+			 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(db->createEdgesColumnar("INVALID_ENDPOINT", {source}, {target},
+				{{"", {int64_t{1}}}})),
+			 std::invalid_argument);
+	EXPECT_THROW(static_cast<void>(db->createEdgesColumnar("INVALID_ENDPOINT", {source}, {target},
+				{{"weight", {int64_t{1}}}, {"weight", {int64_t{2}}}})),
+			 std::invalid_argument);
+
+	const zyx::Result invalidRows = db->execute("MATCH ()-[edge:INVALID_ENDPOINT]->() RETURN edge");
+	ASSERT_TRUE(invalidRows.isSuccess()) << invalidRows.getError();
+	EXPECT_FALSE(invalidRows.hasNext());
+}
+
+TEST_F(CppApiTest, ColumnarEdgeWritesRejectInactiveOrUnknownEndpointsWithoutPartialPublication) {
+	const int64_t source = db->createNode("ColumnarEndpoint", {{"name", std::string("source")}});
+	const int64_t target = db->createNode("ColumnarEndpoint", {{"name", std::string("target")}});
+	const int64_t removed = db->createNode("ColumnarEndpoint", {{"name", std::string("removed")}});
+	const zyx::Result deleted = db->execute("MATCH (node:ColumnarEndpoint {name: 'removed'}) DELETE node");
+	ASSERT_TRUE(deleted.isSuccess()) << deleted.getError();
+
+	try {
+		static_cast<void>(db->createEdgesColumnar(
+				"COLUMNAR_ENDPOINT", {source, removed}, {target, source}, {{"weight", {int64_t{1}, int64_t{2}}}}));
+		FAIL() << "expected the inactive endpoint to reject the complete batch";
+	} catch (const zyx::BulkInputError &error) {
+		EXPECT_EQ(error.rowIndex(), 1U);
+		EXPECT_EQ(error.fieldPath(), "source_id");
+		EXPECT_NE(std::string(error.what()).find("does not exist or is inactive"), std::string::npos);
+	}
+
+	EXPECT_THROW(static_cast<void>(db->createEdgesColumnar(
+				"COLUMNAR_ENDPOINT", {source}, {target + 10'000}, {{"weight", {int64_t{3}}}})),
+			 zyx::BulkInputError);
+
+	const zyx::Result rows = db->execute("MATCH ()-[edge:COLUMNAR_ENDPOINT]->() RETURN edge");
+	ASSERT_TRUE(rows.isSuccess()) << rows.getError();
+	EXPECT_FALSE(rows.hasNext());
+}
+
 TEST_F(CppApiTest, MapPropertyConversionRoundTrip) {
 	auto map = std::make_shared<zyx::ValueMap>();
 	map->entries["a"] = int64_t(1);
@@ -282,8 +359,6 @@ TEST_F(CppApiTest, BeginTransactionAutoOpensClosedDb) {
 							 std::chrono::steady_clock::now().time_since_epoch().count()))).string();
 	std::error_code ec;
 	fs::remove(path, ec);
-	ec.clear();
-	fs::remove(path + ".wal", ec);
 	auto freshDb = std::make_unique<zyx::Database>(path);
 	freshDb->open();
 	freshDb->close();
@@ -294,8 +369,6 @@ TEST_F(CppApiTest, BeginTransactionAutoOpensClosedDb) {
 
 	freshDb->close();
 	fs::remove(path, ec);
-	ec.clear();
-	fs::remove(path + ".wal", ec);
 }
 
 TEST_F(CppApiTest, ReverseDotNotationFuzzyMatch) {
@@ -488,6 +561,36 @@ TEST_F(CppApiTest, ExplicitTransactionsOwnBatchAndAlgorithmOperations) {
 	txn.commit();
 }
 
+TEST_F(CppApiTest, FailedMutationDoesNotLeakPartialWritesFromAnExplicitTransaction) {
+	auto txn = db->beginTransaction();
+	ASSERT_TRUE(txn.isActive());
+
+	auto stable = txn.execute("CREATE (:ApiTxnAtomic {name: 'stable'})");
+	ASSERT_TRUE(stable.isSuccess()) << stable.getError();
+	auto failed = txn.execute(
+			"FOREACH (value IN [1, 0] | CREATE (:ApiTxnAtomic {name: 'partial', quotient: 1 / value}))");
+	EXPECT_FALSE(failed.isSuccess());
+	EXPECT_FALSE(txn.isReadOnly());
+	EXPECT_TRUE(txn.isActive());
+
+	auto staged = txn.execute("MATCH (n:ApiTxnAtomic) RETURN n.name ORDER BY n.name");
+	ASSERT_TRUE(staged.isSuccess()) << staged.getError();
+	ASSERT_TRUE(staged.hasNext());
+	staged.next();
+	ASSERT_TRUE(std::holds_alternative<std::string>(staged.get("n.name")));
+	EXPECT_EQ(std::get<std::string>(staged.get("n.name")), "stable");
+	EXPECT_FALSE(staged.hasNext());
+
+	txn.commit();
+	auto committed = db->execute("MATCH (n:ApiTxnAtomic) RETURN n.name ORDER BY n.name");
+	ASSERT_TRUE(committed.isSuccess()) << committed.getError();
+	ASSERT_TRUE(committed.hasNext());
+	committed.next();
+	ASSERT_TRUE(std::holds_alternative<std::string>(committed.get("n.name")));
+	EXPECT_EQ(std::get<std::string>(committed.get("n.name")), "stable");
+	EXPECT_FALSE(committed.hasNext());
+}
+
 TEST_F(CppApiTest, BulkTransactionAutoOpensAndDefaultTransactionFlagsAreSafe) {
 	auto movableTxn = db->beginTransaction();
 	zyx::Transaction movedTxn = std::move(movableTxn);
@@ -499,8 +602,6 @@ TEST_F(CppApiTest, BulkTransactionAutoOpensAndDefaultTransactionFlagsAreSafe) {
 														  std::chrono::steady_clock::now().time_since_epoch().count()))).string();
 	std::error_code ec;
 	fs::remove(path, ec);
-	ec.clear();
-	fs::remove(path + ".wal", ec);
 	{
 		zyx::Database freshDb(path);
 		auto txn = freshDb.beginBulkTransaction();
@@ -511,6 +612,4 @@ TEST_F(CppApiTest, BulkTransactionAutoOpensAndDefaultTransactionFlagsAreSafe) {
 	}
 
 	fs::remove(path, ec);
-	ec.clear();
-	fs::remove(path + ".wal", ec);
 }

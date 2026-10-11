@@ -593,6 +593,207 @@ TEST_F(PropertyCollectionRootStoreValidationTest, PlannerMovesGrowingRootWhenSha
 	snapshot.release();
 }
 
+TEST_F(PropertyCollectionRootStoreValidationTest, BatchCoalescesSharedPageUpdatesAgainstExistingRoots) {
+	const PropertyCollectionRoot first = root(1001U, 3U, std::string(900U, 'a'));
+	const PropertyCollectionRoot second = root(1002U, 5U, std::string(900U, 'b'));
+	publishNodeAndRoot(first);
+	MetadataSnapshotPin locationSnapshot = metadata_->openSnapshot();
+	const EntityPropertyKey firstKey{EntityPropertyOwnerKind::EPOK_NODE, first.owner_entity_id};
+	const EntityPropertyLocation firstLocation = metadata_->findEntityPropertyLocation(locationSnapshot, firstKey);
+	locationSnapshot.release();
+	const EntityPropertyKey secondKey{EntityPropertyOwnerKind::EPOK_NODE, second.owner_entity_id};
+	static_cast<void>(appendPropertyPayload(
+			firstLocation.page_id, secondKey, EntityPropertyCollectionRootCodec::encode(second)));
+
+	const PropertyCollectionRoot firstReplacement = root(1001U, 3U, std::string(1100U, 'x'));
+	const PropertyCollectionRoot secondReplacement = root(1002U, 5U, std::string(1000U, 'y'));
+	const std::array replacements{firstReplacement, secondReplacement};
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	const std::vector<EntityPropertyRootMutationPlan> plans =
+			properties_->planEntityRootReplacements(snapshot, replacements, options());
+	ASSERT_EQ(plans.size(), 1U);
+	const EntityPropertyRootMutationPlan &plan = plans.front();
+	ASSERT_EQ(plan.kind, EntityPropertyRootMutationPlanKind::EPRMPK_EXISTING_PAGE);
+	ASSERT_TRUE(plan.page_replacement.has_value());
+	EXPECT_FALSE(plan.page_replacement->retire_page);
+	ASSERT_EQ(plan.page_replacement->upserted_properties.size(), 2U);
+	EXPECT_TRUE(plan.page_replacement->erased_properties.empty());
+	EXPECT_TRUE(plan.page_replacement->relocated_properties.empty());
+
+	const SlottedPage merged = SlottedPage::open(plan.replacement_payload);
+	for (const EntityPropertyLocation &location: plan.page_replacement->upserted_properties) {
+		const PropertyCollectionRoot decoded = EntityPropertyCollectionRootCodec::decode(
+				merged.read({location.page_id, location.slot_id, location.slot_generation}));
+		EXPECT_TRUE(decoded == (location.key == firstKey ? firstReplacement : secondReplacement));
+	}
+	snapshot.release();
+}
+
+TEST_F(PropertyCollectionRootStoreValidationTest, BatchCoalescesSharedPageRootErasureAndRetiresTheEmptyPage) {
+	const PropertyCollectionRoot first = root(1001U, 3U, "first shared root");
+	const PropertyCollectionRoot second = root(1002U, 5U, "second shared root");
+	publishNodeAndRoot(first);
+	MetadataSnapshotPin locationSnapshot = metadata_->openSnapshot();
+	const EntityPropertyKey firstKey{EntityPropertyOwnerKind::EPOK_NODE, first.owner_entity_id};
+	const EntityPropertyLocation firstLocation = metadata_->findEntityPropertyLocation(locationSnapshot, firstKey);
+	locationSnapshot.release();
+	const EntityPropertyKey secondKey{EntityPropertyOwnerKind::EPOK_NODE, second.owner_entity_id};
+	static_cast<void>(appendPropertyPayload(
+			firstLocation.page_id, secondKey, EntityPropertyCollectionRootCodec::encode(second)));
+
+	PropertyCollectionRoot firstErased = first;
+	PropertyCollectionRoot secondErased = second;
+	firstErased.entries.clear();
+	secondErased.entries.clear();
+	const std::array erasures{firstErased, secondErased};
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	const std::vector<EntityPropertyRootMutationPlan> plans =
+			properties_->planEntityRootReplacements(snapshot, erasures, options());
+	ASSERT_EQ(plans.size(), 1U);
+	const EntityPropertyRootMutationPlan &plan = plans.front();
+	ASSERT_EQ(plan.kind, EntityPropertyRootMutationPlanKind::EPRMPK_EXISTING_PAGE);
+	ASSERT_TRUE(plan.page_replacement.has_value());
+	EXPECT_TRUE(plan.page_replacement->retire_page);
+	EXPECT_TRUE(plan.page_replacement->upserted_properties.empty());
+	EXPECT_TRUE(plan.page_replacement->relocated_properties.empty());
+	EXPECT_EQ(plan.page_replacement->erased_properties, (std::vector<EntityPropertyKey>{firstKey, secondKey}));
+	EXPECT_TRUE(plan.replacement_payload.empty());
+	EXPECT_EQ(plan.replacement_free_bytes, 0U);
+	snapshot.release();
+}
+
+TEST_F(PropertyCollectionRootStoreValidationTest, ReusesPublishedLargeValueForAnOversizedPropertyRoot) {
+	LargeValueStore largeValues(io_, *metadata_);
+	PropertyCollectionRootStore propertiesWithLargeValues(*pages_, largeValues, *metadata_);
+	const size_t maximumInline =
+			RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES - RSS_SLOTTED_PAGE_HEADER_BYTES - RSS_SLOTTED_PAGE_SLOT_BYTES;
+	const PropertyCollectionRoot oversized = root(1001U, 3U, std::string(maximumInline + 256U, 'v'));
+	const std::vector<std::byte> logicalBytes = EntityPropertyLargeValuePayloadCodec::encode(oversized.entries);
+	const LargeValueWriteResult published = largeValues.write(logicalBytes, largeValueOptions(), nextCheckpointLsn());
+	ASSERT_FALSE(published.content_deduplicated);
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	const EntityPropertyRootMutationPlan plan =
+			propertiesWithLargeValues.planEntityRootReplacement(snapshot, oversized, options());
+	EXPECT_EQ(plan.kind, EntityPropertyRootMutationPlanKind::EPRMPK_NEW_PAGE_REQUIRED);
+	EXPECT_TRUE(plan.large_values.empty());
+	EXPECT_EQ(plan.reused_large_values, std::vector<LargeValueRef>{published.reference});
+	EXPECT_EQ(EntityPropertyLargeValueReferenceCodec::decode(plan.encoded_root).value, published.reference);
+	snapshot.release();
+}
+
+TEST_F(PropertyCollectionRootStoreValidationTest, EmptyRootForAnUnknownOwnerIsANoOp) {
+	PropertyCollectionRoot absent = root(1001U, 3U);
+	absent.entries.clear();
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	const EntityPropertyRootMutationPlan plan = properties_->planEntityRootReplacement(snapshot, absent, options());
+	EXPECT_EQ(plan.kind, EntityPropertyRootMutationPlanKind::EPRMPK_NO_CHANGE);
+	EXPECT_FALSE(plan.page_replacement.has_value());
+	EXPECT_TRUE(plan.encoded_root.empty());
+	EXPECT_TRUE(plan.large_values.empty());
+	EXPECT_TRUE(plan.reused_large_values.empty());
+	snapshot.release();
+}
+
+TEST_F(PropertyCollectionRootStoreValidationTest,
+		PreparesRelocatedRootInFreshPoolWithoutPublishingOrInvalidatingThePinnedSource) {
+	const PropertyCollectionRoot initial = root(1001U, 3U, "small root");
+	publishNodeAndRoot(initial);
+	MetadataSnapshotPin locationSnapshot = metadata_->openSnapshot();
+	const EntityPropertyLocation initialLocation = metadata_->findEntityPropertyLocation(
+			locationSnapshot, {EntityPropertyOwnerKind::EPOK_NODE, initial.owner_entity_id});
+	locationSnapshot.release();
+
+	PropertyCollectionRoot blocker = root(1002U, 5U, "");
+	const size_t blockerBase = EntityPropertyCollectionRootCodec::encode(blocker).size();
+	blocker.entries.front().value = graph::PropertyValue(std::string(2500U - blockerBase, 'b'));
+	static_cast<void>(appendPropertyPayload(
+			initialLocation.page_id, {EntityPropertyOwnerKind::EPOK_NODE, blocker.owner_entity_id},
+			EntityPropertyCollectionRootCodec::encode(blocker)));
+	// Pin after the blocker is published so the planner must relocate the growing root.
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+
+	PropertyCollectionRoot replacement = root(1001U, 3U, "");
+	const size_t replacementBase = EntityPropertyCollectionRootCodec::encode(replacement).size();
+	replacement.entries.front().value = graph::PropertyValue(std::string(2000U - replacementBase, 'r'));
+	const EntityPropertyRootMutationPlan plan = properties_->planEntityRootReplacement(snapshot, replacement, options());
+	ASSERT_EQ(plan.kind, EntityPropertyRootMutationPlanKind::EPRMPK_NEW_PAGE_REQUIRED);
+	ASSERT_TRUE(plan.page_replacement.has_value());
+	ASSERT_FALSE(plan.page_replacement->retire_page);
+	ASSERT_FALSE(plan.encoded_root.empty());
+
+	const LogSequenceNumber checkpointLsn = nextCheckpointLsn();
+	NativeGraphPropertyPageReplacementMaterialization materialization = replacementMaterialization(plan);
+	materialization.pool = {.segment_id = SegmentId(99U),
+							 .physical_slot = PhysicalSlotId(48U),
+							 .kind = SegmentKind::SGK_PROPERTY_PAGE_POOL,
+							 .owner_id = options().page_owner_id,
+							 .generation = Generation(1U),
+							 .state = SegmentState::SGS_SEALED,
+							 .committed_lsn = checkpointLsn};
+	materialization.replacement = {initialLocation.page_id, materialization.pool.segment_id, 0U,
+								   materialization.pool.generation, 0U};
+	materialization.destination_is_new_pool = true;
+	materialization.destination_initializes_new_pool = true;
+
+	properties_->preparePlannedEntityRootReplacement(plan, materialization, checkpointLsn);
+	EXPECT_EQ(materialization.replacement.page_id, initialLocation.page_id);
+	EXPECT_EQ(materialization.replacement.segment_id, materialization.pool.segment_id);
+	EXPECT_EQ(materialization.replacement.generation, materialization.pool.generation);
+	EXPECT_EQ(properties_->readEntity(snapshot, plan.key), initial);
+	EXPECT_EQ(metadata_->findEntityPropertyLocation(snapshot, plan.key), initialLocation);
+	snapshot.release();
+}
+
+TEST_F(PropertyCollectionRootStoreValidationTest,
+		PreparesExistingRootReplacementIntoAnAlreadySealedDestinationPoolWithoutPublishingTheMove) {
+	const PropertyCollectionRoot initial = root(1001U, 3U, "source root");
+	publishNodeAndRoot(initial);
+
+	MetadataSnapshotPin sourceSnapshot = metadata_->openSnapshot();
+	const EntityPropertyLocation sourceLocation = metadata_->findEntityPropertyLocation(
+			sourceSnapshot, {EntityPropertyOwnerKind::EPOK_NODE, initial.owner_entity_id});
+	const PropertyCollectionRoot replacement = root(1001U, 3U, "replacement root");
+	const EntityPropertyRootMutationPlan plan =
+			properties_->planEntityRootReplacement(sourceSnapshot, replacement, options());
+	ASSERT_EQ(plan.kind, EntityPropertyRootMutationPlanKind::EPRMPK_EXISTING_PAGE);
+	ASSERT_TRUE(plan.page_replacement.has_value());
+	ASSERT_FALSE(plan.page_replacement->retire_page);
+
+	// The destination pool is already sealed. This exercises the production
+	// cross-pool COW preparation path rather than the fresh-pool initializer.
+	const LogSequenceNumber checkpointLsn = nextCheckpointLsn();
+	SlottedPagePoolAllocationRequest destinationRequest;
+	destinationRequest.segment_id = SegmentId(33U);
+	destinationRequest.pool_kind = SegmentKind::SGK_PROPERTY_PAGE_POOL;
+	destinationRequest.pool_owner_id = options().page_owner_id;
+	destinationRequest.generation = Generation(1U);
+	destinationRequest.page_id = PageId(202U);
+	destinationRequest.page_owner_id = options().page_owner_id;
+	destinationRequest.page_owner_kind = PageOwnerKind::POK_PROPERTY;
+	ASSERT_TRUE(pages_->allocateEmptyPage(destinationRequest, PhysicalSlotId(42U), PhysicalSlotId(42U), checkpointLsn)
+					.has_value());
+
+	MetadataSnapshotPin destinationSnapshot = metadata_->openSnapshot();
+	NativeGraphPropertyPageReplacementMaterialization materialization = replacementMaterialization(plan);
+	materialization.pool = metadata_->findCatalog(destinationSnapshot, destinationRequest.segment_id);
+	destinationSnapshot.release();
+	materialization.destination_is_new_pool = true;
+	materialization.destination_initializes_new_pool = false;
+
+	properties_->preparePlannedEntityRootReplacement(plan, materialization, checkpointLsn);
+	EXPECT_EQ(materialization.replacement.page_id, plan.page_replacement->expected_location.page_id);
+	EXPECT_EQ(materialization.replacement.segment_id, destinationRequest.segment_id);
+	EXPECT_EQ(materialization.replacement.generation, Generation(1U));
+	EXPECT_NE(materialization.replacement.page_index, 0U);
+
+	// Preparation leaves the source generation authoritative until its caller
+	// atomically publishes the replacement location and root.
+	EXPECT_EQ(properties_->readEntity(sourceSnapshot, plan.key), initial);
+	EXPECT_EQ(metadata_->findEntityPropertyLocation(sourceSnapshot, plan.key), sourceLocation);
+	sourceSnapshot.release();
+}
+
 TEST_F(PropertyCollectionRootStoreValidationTest, BatchRelocationRetiresAnEmptiedSourcePageAtomically) {
 	const auto sizedRoot = [](uint64_t nodeId, uint32_t token, size_t encodedBytes, char fill) {
 		PropertyCollectionRoot result = root(nodeId, token, "");
@@ -899,6 +1100,28 @@ TEST_F(PropertyCollectionRootStoreValidationTest, ExistingPagePreparationRejects
 	plan = baseline;
 	expectFormatError([&] { properties_->preparePlannedEntityRootReplacement(plan, materialization, {}); },
 					  FormatError::FERR_INVALID_STATE);
+
+	const std::array<std::function<void(NativeGraphPropertyPageReplacementMaterialization &)>, 3U>
+			corruptDestinationLifecycle{
+					[](auto &value) {
+						value.destination_is_new_pool = true;
+						value.pool.generation = Generation(2U);
+					},
+					[](auto &value) {
+						value.destination_is_new_pool = true;
+						value.pool.committed_lsn = LogSequenceNumber(99U);
+					},
+					[](auto &value) { value.destination_initializes_new_pool = true; },
+			};
+	for (size_t index = 0U; index < corruptDestinationLifecycle.size(); ++index) {
+		SCOPED_TRACE(::testing::Message() << "corrupt destination lifecycle " << index);
+		plan = baseline;
+		materialization = baselineMaterialization;
+		corruptDestinationLifecycle[index](materialization);
+		expectFormatError(
+				[&] { properties_->preparePlannedEntityRootReplacement(plan, materialization, LogSequenceNumber(4U)); },
+				FormatError::FERR_INVALID_STATE);
+	}
 
 	const std::array<std::function<void(NativeGraphPropertyPageReplacementRequest &)>, 10U> corruptRequests{
 			[](auto &value) { value.expected_pool.segment_id = SegmentId(99U); },

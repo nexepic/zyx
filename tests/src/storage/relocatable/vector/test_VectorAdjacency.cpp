@@ -101,3 +101,23 @@ TEST(RelocatableVectorAdjacencyTest, FailsClosedForCorruptVariableLengthRecords)
 	expectFormatError([&] { static_cast<void>(VectorAdjacencyCodec::decode(std::span(encoded).first(31U))); },
 					  FormatError::FERR_BUFFER_TOO_SMALL);
 }
+
+TEST(RelocatableVectorAdjacencyTest, RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation) {
+	const VectorAdjacencyRecord expected{17U, {3U, 5U, 9U, 13U, 21U, 34U, 55U, 89U}};
+	const std::vector<std::byte> encoded = VectorAdjacencyCodec::encode(expected);
+	for (size_t byteOffset = 0U; byteOffset < encoded.size(); ++byteOffset) {
+		for (uint8_t bit = 0U; bit < 8U; ++bit) {
+			std::vector<std::byte> mutation = encoded;
+			mutation[byteOffset] ^= std::byte{static_cast<uint8_t>(1U << bit)};
+			recalculateChecksums(mutation);
+			try {
+				const VectorAdjacencyRecord decoded = VectorAdjacencyCodec::decode(mutation);
+				EXPECT_EQ(VectorAdjacencyCodec::encode(decoded), mutation)
+						<< "vector adjacency mutation was normalized at byte " << byteOffset << ", bit "
+						<< static_cast<unsigned>(bit);
+			} catch (const FormatException &) {
+				// A checksum-valid mutation is safe only when the typed boundary rejects it.
+			}
+		}
+	}
+}

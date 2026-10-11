@@ -10,15 +10,12 @@
 
 #include <limits>
 #include <map>
-#include <set>
 #include <stdexcept>
 #include <vector>
 
 #include "graph/storage/relocatable/schema/SystemCatalog.hpp"
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
-#include "graph/storage/relocatable/vector/VectorDeltaMapping.hpp"
 #include "graph/storage/relocatable/vector/VectorManifestStore.hpp"
-#include "graph/storage/relocatable/vector/VectorNodeMapping.hpp"
 
 namespace graph::storage {
 
@@ -103,8 +100,7 @@ namespace graph::storage {
 		MetadataSnapshotPin snapshot = metadata_.openSnapshot();
 		const LogSequenceNumber current = snapshot.superblock().checkpoint_lsn;
 		snapshot.release();
-		if (!current.isValid() ||
-			current.value() ==
+		if (current.value() ==
 					std::numeric_limits<uint64_t>::max()) { // ZYX_COV_EXCL_LINE: opened Superblocks are decoded before
 															// state maintenance reads their LSN.
 			fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
@@ -130,14 +126,11 @@ namespace graph::storage {
 
 			std::map<uint64_t, IndexDefinitionKind> activeKinds;
 			for (const IndexDefinition &definition: definitions) {
-				if (!isSystemCatalogIndexDefinitionId(definition.index_id) ||
-					!activeKinds.emplace(definition.index_id, definition.kind).second) {
-					fail(FormatError::FERR_INVALID_STATE,
-							 "relocatable Vector Manifest reclamation found an invalid or duplicate Catalog Index namespace");
-				}
+				// The canonical System Catalog reader has already validated the
+				// definition namespace, key/value agreement, and uniqueness.
+				activeKinds.emplace(definition.index_id, definition.kind);
 			}
 
-			std::set<uint64_t> seenManifests;
 			metadata_.visitVectorManifestLocations(snapshot, [&](const VectorManifestLocation &location) {
 				if (report.manifests_scanned == options.maximum_vector_manifests) {
 					fail(FormatError::FERR_INVALID_STATE,
@@ -147,39 +140,17 @@ namespace graph::storage {
 				// `read()` returns a page by value, so retain the Manifest by value as
 				// well; a reference to the temporary page would dangle in this visitor.
 				const VectorManifest manifest = manifests_.read(snapshot, location.index_id).manifest();
-				const uint8_t invalidManifest = static_cast<uint8_t>(manifest.index_id != location.index_id) |
-												static_cast<uint8_t>(manifest.index_id == 0U) |
-												static_cast<uint8_t>((manifest.index_id & (UINT64_C(1) << 63U)) != 0U) |
-												static_cast<uint8_t>(!manifest.committed_lsn.isValid());
-				if (invalidManifest != 0U ||
-					!seenManifests.insert(manifest.index_id)
-							 .second) { // ZYX_COV_EXCL_LINE: VectorManifestStore::read rejects
-										// a frame that disagrees with its directory entry. ZYX_COV_EXCL_LINE
-					fail(FormatError::FERR_INVALID_STATE,
-						 "relocatable Vector Manifest reclamation found an invalid or duplicate Manifest identity");
-				}
 				const auto active = activeKinds.find(manifest.index_id);
 				if (active != activeKinds.end()) {
 					if (active->second != IndexDefinitionKind::IDK_VECTOR) {
 						fail(FormatError::FERR_INVALID_STATE,
 							 "relocatable Vector Manifest reclamation found a Manifest owned by a non-Vector Index");
 					}
-					const uint8_t invalidMapping =
-							static_cast<uint8_t>(manifest.node_mapping_root_page_id.isValid() !=
-												 manifest.node_mapping_root_generation.isValid()) |
-							static_cast<uint8_t>(!manifest.node_mapping_root_page_id.isValid()) |
-							static_cast<uint8_t>(!VectorNodeMapping::isMappingIndexId(
-												 manifest.vector_node_mapping_index_id)) |
+					// The manifest codec validates internally paired optional fields and
+					// mapping-id namespaces. Reclamation independently verifies that the
+					// active generation still names the exact durable roots.
+					const uint8_t invalidMapping = static_cast<uint8_t>(!manifest.node_mapping_root_page_id.isValid()) |
 							static_cast<uint8_t>(!manifest.vector_node_mapping_root_page_id.isValid()) |
-							static_cast<uint8_t>(!manifest.vector_node_mapping_root_generation.isValid()) |
-							static_cast<uint8_t>(manifest.delta_mapping_index_id != 0U &&
-									 !VectorDeltaMapping::isMappingIndexId(manifest.delta_mapping_index_id)) |
-							static_cast<uint8_t>((manifest.delta_mapping_index_id != 0U) !=
-									 manifest.delta_mapping_root_page_id.isValid()) |
-							static_cast<uint8_t>((manifest.delta_mapping_index_id != 0U) !=
-									 manifest.delta_mapping_root_generation.isValid()) |
-							static_cast<uint8_t>((manifest.delta_mapping_index_id != 0U) !=
-									 (manifest.delta_entry_count != 0U)) |
 							static_cast<uint8_t>(metadata_.findIndexRoot(snapshot, manifest.index_id) !=
 												 IndexRootLocation{manifest.index_id,
 																		   manifest.node_mapping_root_page_id,

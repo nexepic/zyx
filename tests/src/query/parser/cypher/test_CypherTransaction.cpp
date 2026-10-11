@@ -46,7 +46,6 @@ protected:
 		db.reset();
 		std::error_code ec;
 		fs::remove_all(testDbPath, ec);
-		fs::remove(testDbPath.string() + "-wal", ec);
 	}
 
 	fs::path testDbPath;

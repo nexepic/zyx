@@ -11,7 +11,7 @@ projectOrder: 1
 ---
 # Vector Metrics
 
-Vector similarity metrics are fundamental to vector search and machine learning operations. ZYX implements optimized distance computations with support for mixed precision (Float32/BFloat16), SIMD optimizations, and efficient integration with DiskANN and Product Quantization.
+Vector similarity metrics are fundamental to vector search and machine learning operations. ZYX implements optimized distance computations with support for mixed precision (Float32/BFloat16), SIMD optimizations, native adjacency search, and Product Quantization.
 
 ## Overview
 
@@ -30,7 +30,7 @@ Vector metrics measure the similarity or dissimilarity between two vectors in hi
 - **Zero-Allocation**: Efficient computation without dynamic memory allocation
 - **SIMD-Friendly**: Data layouts optimized for CPU vector instructions
 
-The `VectorMetric` class (source: `include/graph/vector/core/VectorMetric.hpp`) provides all distance computations as static functions. Each metric is overloaded for three precision combinations: Float32 vs Float32, Float32 vs BFloat16 (mixed precision for search), and BFloat16 vs BFloat16 (internal graph maintenance). All functions use stack-allocated accumulators only -- no dynamic memory, no virtual dispatch, no exceptions.
+The `VectorMetric` class (source: `include/graph/common/VectorMath.hpp`) provides all distance computations as static functions. Each metric is overloaded for three precision combinations: Float32 vs Float32, Float32 vs BFloat16 (mixed precision for search), and BFloat16 vs BFloat16 (native maintenance). All functions use stack-allocated accumulators only -- no dynamic memory, no virtual dispatch, no exceptions.
 
 ## Distance Metrics
 
@@ -121,7 +121,7 @@ Cosine similarity is not directly implemented as a `VectorMetric` function. Inst
 
 ## BFloat16 Format
 
-BFloat16 (Brain Floating Point) is a reduced-precision format that provides the same dynamic range as Float32 but with reduced precision. The implementation lives in `include/graph/vector/core/BFloat16.hpp`.
+BFloat16 (Brain Floating Point) is a reduced-precision format that provides the same dynamic range as Float32 but with reduced precision. The implementation lives in `include/graph/common/VectorMath.hpp`.
 
 ### Bit Layout
 
@@ -312,11 +312,11 @@ flowchart TD
 - Reason: Captures preference alignment
 - Recommendation: Ensure normalization
 
-## Integration with DiskANN
+## Native Adjacency Search
 
 ### Search Pipeline
 
-During a DiskANN search, vector metrics are used at multiple stages of the pipeline. The process starts with a Float32 query vector and progresses through progressively more accurate distance computations:
+During native adjacency search, vector metrics are used at multiple stages of the pipeline. The process starts with a Float32 query vector and progresses through progressively more accurate distance computations:
 
 ```mermaid
 flowchart TD
@@ -335,7 +335,7 @@ flowchart TD
 
 ### Hybrid Distance Strategy
 
-DiskANN dynamically selects between PQ-based approximate distance and exact BFloat16 distance depending on context:
+The native Vector generation selects between PQ-based approximate distance and exact BFloat16 distance depending on context:
 
 - **During navigation (graph traversal)**: PQ approximate distance is used for speed -- each neighbor evaluation requires only a few table lookups
 - **For final ranking**: Exact L2 squared distance (Float32 query vs BFloat16 stored vector) ensures accuracy in the results returned to the caller
@@ -411,6 +411,4 @@ The implementation uses only standard C++20 with no platform-specific intrinsics
 
 ## See Also
 
-- [DiskANN Algorithm](/en/docs/zyx/algorithms/diskann) - Graph-based vector search
 - [Product Quantization](/en/docs/zyx/algorithms/product-quantization) - Vector compression
-- [K-Means Clustering](/en/docs/zyx/algorithms/kmeans) - Clustering algorithm

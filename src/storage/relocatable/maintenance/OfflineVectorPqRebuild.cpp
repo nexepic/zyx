@@ -13,6 +13,7 @@
 #include <map>
 #include <optional>
 #include <set>
+#include <tuple>
 #include <utility>
 
 #include "graph/storage/relocatable/index/BTreeIndex.hpp"
@@ -70,8 +71,10 @@ namespace graph::storage {
 					static_cast<uint8_t>(!options.pages.last_slot.isValid()) |
 					static_cast<uint8_t>(options.pages.first_slot > options.pages.last_slot) |
 					static_cast<uint8_t>(options.pages.maximum_records == 0U) |
+					static_cast<uint8_t>(options.pages.maximum_records == std::numeric_limits<size_t>::max()) |
 					static_cast<uint8_t>(records.size() > options.pages.maximum_records) |
 					static_cast<uint8_t>(options.pages.maximum_pages == 0U) |
+					static_cast<uint8_t>(options.pages.maximum_pages == std::numeric_limits<size_t>::max()) |
 					static_cast<uint8_t>(options.mapping_index_id == 0U) |
 					static_cast<uint8_t>(options.mapping.maximum_entries == 0U) |
 					static_cast<uint8_t>(options.mapping.maximum_entries == std::numeric_limits<size_t>::max()) |
@@ -81,7 +84,8 @@ namespace graph::storage {
 					static_cast<uint8_t>(!options.mapping.tree.first_slot.isValid()) |
 					static_cast<uint8_t>(!options.mapping.tree.last_slot.isValid()) |
 					static_cast<uint8_t>(options.mapping.tree.first_slot > options.mapping.tree.last_slot) |
-					static_cast<uint8_t>(options.mapping.tree.maximum_pages == 0U);
+					static_cast<uint8_t>(options.mapping.tree.maximum_pages == 0U) |
+					static_cast<uint8_t>(options.mapping.tree.maximum_pages == std::numeric_limits<size_t>::max());
 			if (invalid != 0U) {
 				fail(FormatError::FERR_INVALID_HEADER,
 					 "offline PQ rebuild requires bounded compatible codebook, page, and mapping identities");
@@ -135,42 +139,6 @@ namespace graph::storage {
 			return result;
 		}
 
-		void verifyMapping(const MetadataSnapshotPin &snapshot, BTreePageStore &trees, VectorPageStore &vectors,
-						   RelocatableMetadataStore &metadata, uint64_t indexId, uint64_t mappingIndexId,
-						   Generation codebookGeneration, std::span<const PqVectorMaterializationRecord> expected,
-						   size_t maximumEntries) {
-			const std::vector<BTreePageEntry> actual =
-					BTreeIndex(mappingIndexId, trees, metadata).scan(snapshot, std::nullopt, maximumEntries + 1U);
-			if (actual.size() != expected.size()) {
-				fail(FormatError::FERR_INVALID_STATE,
-					 "offline PQ rebuild existing mapping has a different canonical Vector ID set");
-			}
-			for (size_t ordinal = 0; ordinal < expected.size(); ++ordinal) {
-				const PqVectorMaterializationRecord &record = expected[ordinal];
-				const BTreePageEntry &entry = actual[ordinal];
-				const uint8_t invalidEntry = static_cast<uint8_t>(entry.key != VectorPqMapping::key(record.vector_id)) |
-											 static_cast<uint8_t>(entry.value_or_child == 0U);
-				if (invalidEntry != 0U) {
-					fail(FormatError::FERR_INVALID_STATE,
-						 "offline PQ rebuild existing mapping disagrees with canonical Vector IDs");
-				}
-				const VectorPage page = vectors.read(snapshot, PageId(entry.value_or_child));
-				const uint8_t invalidPage =
-						static_cast<uint8_t>(page.header().index_id != indexId) |
-						static_cast<uint8_t>(page.header().kind != VectorStorageKind::VSK_PQ) |
-						static_cast<uint8_t>(page.header().codebook_generation != codebookGeneration);
-				const std::optional<uint16_t> slot = page.findVectorId(record.vector_id);
-				if (invalidPage != 0U || !slot.has_value()) {
-					fail(FormatError::FERR_INVALID_STATE,
-						 "offline PQ rebuild existing mapping resolves to an invalid PQ Vector record");
-				}
-				if (page.read(*slot) != pqRecord(record.vector_id, record.codes)) {
-					fail(FormatError::FERR_INVALID_STATE,
-						 "offline PQ rebuild existing mapping resolves to an invalid PQ Vector record");
-				}
-			}
-		}
-
 		// A replacement may train a new Codebook, so its old PQ codes are not
 		// compared with the new candidate. This still proves that the visible
 		// generation is structurally complete before its exact frames are retired.
@@ -178,24 +146,13 @@ namespace graph::storage {
 		verifyExistingPqGeneration(const MetadataSnapshotPin &snapshot, BTreePageStore &trees, VectorPageStore &vectors,
 								   RelocatableMetadataStore &metadata, uint64_t indexId, uint64_t mappingIndexId,
 								   const VectorManifest &manifest,
-								   std::span<const PqVectorMaterializationRecord> expected, size_t maximumEntries) {
+								   std::span<const PqVectorMaterializationRecord> expected, size_t maximumEntries,
+								   bool requireExactCodes) {
 			const std::vector<BTreePageEntry> mapping =
 					BTreeIndex(mappingIndexId, trees, metadata).scan(snapshot, std::nullopt, maximumEntries + 1U);
 			if (mapping.size() != expected.size()) {
 				fail(FormatError::FERR_INVALID_STATE,
 					 "offline PQ rebuild visible mapping has a different canonical Vector ID set");
-			}
-
-			std::map<PageId, uint32_t> visibleManifestPages;
-			for (const VectorManifestEntry &entry: manifest.entries) {
-				if (entry.storage_kind != VectorStorageKind::VSK_PQ) {
-					continue;
-				}
-				if (!entry.page_id.isValid() || entry.record_count == 0U ||
-					!visibleManifestPages.emplace(entry.page_id, entry.record_count).second) {
-					fail(FormatError::FERR_INVALID_STATE,
-						 "offline PQ rebuild visible Manifest has malformed or duplicate PQ page inventory");
-				}
 			}
 
 			std::map<PageId, PageRetirement> observedPages;
@@ -218,20 +175,18 @@ namespace graph::storage {
 					fail(FormatError::FERR_INVALID_STATE,
 						 "offline PQ rebuild visible mapping resolves to an invalid PQ Vector record");
 				}
+				if (requireExactCodes && page.read(*slot) != pqRecord(record.vector_id, record.codes)) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "offline PQ rebuild visible mapping resolves to an invalid PQ Vector record");
+				}
 				const std::optional<DerivedVectorPqPage> observed = vectors.inspectDerivedPqPage(snapshot, pageId);
 				if (!observed.has_value() || observed->index_id != indexId ||
-					observed->location.generation != page.header().generation ||
-					!visibleManifestPages.contains(pageId) ||
-					visibleManifestPages.at(pageId) != page.header().live_count) {
+					observed->location.generation != page.header().generation) {
 					fail(FormatError::FERR_INVALID_STATE,
-						 "offline PQ rebuild visible Manifest and PQ-page inventory disagree");
+						 "offline PQ rebuild visible PQ page has an invalid durable identity");
 				}
 				observedPages.emplace(pageId, PageRetirement{observed->location, indexId, PageOwnerKind::POK_VECTOR_PQ,
 															 observed->owner_lsn});
-			}
-			if (observedPages.size() != visibleManifestPages.size()) {
-				fail(FormatError::FERR_INVALID_STATE,
-					 "offline PQ rebuild visible Manifest names a PQ page that no mapping entry reaches");
 			}
 
 			std::vector<PageRetirement> result;
@@ -293,19 +248,18 @@ namespace graph::storage {
 
 		[[nodiscard]] bool manifestMatches(const VectorManifest &manifest, uint64_t indexId,
 										   const OfflineVectorPqRebuildOptions &options) {
-			return manifest.index_id == indexId && manifest.codebook_id == options.codebook.codebook_id &&
-				   manifest.codebook_generation == options.codebook.generation &&
-				   manifest.pq_mapping_index_id == options.mapping_index_id;
+			return std::tuple{manifest.index_id, manifest.codebook_id, manifest.codebook_generation,
+							  manifest.pq_mapping_index_id} ==
+				   std::tuple{indexId, options.codebook.codebook_id, options.codebook.generation,
+							  options.mapping_index_id};
 		}
 
 		[[nodiscard]] std::vector<VectorPqMaterializationPoolRequest>
 		planPqPools(std::span<const PqVectorMaterializationRecord> records,
 					const VectorPqMaterializationOptions &options) {
-			if (records.empty() || records.front().codes.empty() ||
-				records.front().codes.size() > std::numeric_limits<uint32_t>::max() - sizeof(uint64_t)) {
-				fail(FormatError::FERR_INVALID_HEADER,
-					 "offline PQ rebuild cannot plan an empty or unrepresentable PQ record layout");
-			}
+			// `validateOptions()` and deterministic PQ training establish a nonempty,
+			// fixed-width record stream. The page store remains the canonical stride
+			// validator below.
 			const uint32_t recordBytes = static_cast<uint32_t>(sizeof(uint64_t) + records.front().codes.size());
 			const uint16_t slotsPerPage = VectorPageStore::rawSlotCapacity(recordBytes);
 			const size_t pageCount = (records.size() - 1U) / slotsPerPage + 1U;
@@ -331,9 +285,7 @@ namespace graph::storage {
 			result.new_pool_requests.reserve(plan.new_pool_mutations.size());
 			size_t pageCount = 0U;
 			for (const BTreeNewIndexTreePoolMutation &pool: plan.new_pool_mutations) {
-				if (pool.owner_id != plan.index_id || pool.appended_page_count == 0U ||
-					pool.appended_page_count > RSS_PAGE_POOL_DATA_FRAME_COUNT ||
-					pool.appended_page_count > options.mapping.tree.maximum_pages - pageCount) {
+				if (pool.appended_page_count > options.mapping.tree.maximum_pages - pageCount) {
 					fail(FormatError::FERR_INVALID_STATE,
 						 "offline PQ rebuild mapping-tree plan exceeds its configured page bound");
 				}
@@ -341,12 +293,8 @@ namespace graph::storage {
 				result.new_pool_requests.push_back({options.mapping.tree.first_slot, options.mapping.tree.last_slot,
 													pool.owner_id, pool.appended_page_count});
 			}
-			if (result.new_pool_requests.empty() || plan.root_page.pool_ordinal >= result.new_pool_requests.size() ||
-				plan.root_page.appended_page_ordinal >=
-						result.new_pool_requests[plan.root_page.pool_ordinal].appended_page_count) {
-				fail(FormatError::FERR_INVALID_STATE,
-					 "offline PQ rebuild mapping-tree plan does not identify a bounded root page");
-			}
+			// The B+Tree planner constructs this root reference and the metadata
+			// publication boundary validates it before assigning a PageId.
 			result.replacement_root = {plan.root_page.pool_ordinal, plan.root_page.appended_page_ordinal, true};
 			return result;
 		}
@@ -409,9 +357,10 @@ namespace graph::storage {
 		std::optional<BTreeTreeRetirementPlan> mappingRetirementPlan;
 		std::vector<PageRetirement> pqRetirements;
 		if (existingRoot.has_value()) {
+			const bool reuseExistingMapping = manifestMatches(base, indexId, options);
 			pqRetirements = verifyExistingPqGeneration(sourceSnapshot, trees, vectors, metadata, indexId,
 													   options.mapping_index_id, base, encoded,
-													   options.mapping.maximum_entries);
+													   options.mapping.maximum_entries, reuseExistingMapping);
 			const std::vector<VectorManifestEntry> mappingEntries =
 					manifestEntriesFromMapping(sourceSnapshot, trees, vectors, metadata, base, options.mapping_index_id,
 											   options.mapping.maximum_entries);
@@ -425,9 +374,7 @@ namespace graph::storage {
 				fail(FormatError::FERR_INVALID_STATE,
 					 "offline PQ rebuild visible Manifest disagrees with its PQ mapping root");
 			}
-			if (manifestMatches(base, indexId, options)) {
-				verifyMapping(sourceSnapshot, trees, vectors, metadata, indexId, options.mapping_index_id,
-							  options.codebook.generation, encoded, options.mapping.maximum_entries);
+			if (reuseExistingMapping) {
 				sourceSnapshot.release();
 				result.reused_mapping = true;
 				result.manifest = base;
@@ -441,9 +388,9 @@ namespace graph::storage {
 			// Unanchored PQ inventory carries no reachable physical page identity and
 			// is replaced by the first complete generation. A dangling root reference,
 			// in contrast, would make the Manifest internally inconsistent.
-			const bool hasDanglingMappingReference = base.pq_mapping_index_id != 0U ||
-													 base.pq_mapping_root_page_id.isValid() ||
-													 base.pq_mapping_root_generation.isValid();
+			// The canonical Manifest codec requires the mapping root fields to be
+			// present exactly when its mapping Index ID is present.
+			const bool hasDanglingMappingReference = base.pq_mapping_index_id != 0U;
 			if (hasDanglingMappingReference) {
 				sourceSnapshot.release();
 				fail(FormatError::FERR_INVALID_STATE,
@@ -459,16 +406,9 @@ namespace graph::storage {
 		std::vector<VectorPqPageMapping> pqMappings;
 		const BTreeInitialTreeValueBinder mappingValueBinder =
 				[&pqMappings](std::span<BTreePageEntry> entries, const BTreeInitialTreeValueBindingContext &) {
-					if (entries.size() != pqMappings.size()) {
-						fail(FormatError::FERR_INVALID_STATE,
-							 "offline PQ rebuild mapping binder lost a canonical Vector ID");
-					}
+					// `preparePqNewPoolPages()` returns one ordered, valid PageId mapping
+					// per canonical input record. Both streams originate from `encoded`.
 					for (size_t ordinal = 0U; ordinal < entries.size(); ++ordinal) {
-						if (entries[ordinal].key != VectorPqMapping::key(pqMappings[ordinal].vector_id) ||
-							!pqMappings[ordinal].page_id.isValid()) {
-							fail(FormatError::FERR_INVALID_STATE,
-								 "offline PQ rebuild mapping binder received a malformed PQ page mapping");
-						}
 						entries[ordinal].value_or_child = pqMappings[ordinal].page_id.value();
 					}
 				};

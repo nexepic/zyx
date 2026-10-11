@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bitset>
 #include <limits>
 #include <map>
 #include <memory>
@@ -19,6 +20,7 @@
 
 #include "graph/storage/relocatable/allocation/SharedPagePool.hpp"
 #include "graph/storage/relocatable/metadata/MetadataPageFile.hpp"
+#include "graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp"
 #include "graph/storage/relocatable/metadata/MetadataWriteBatch.hpp"
 #include "graph/utils/ChecksumUtils.hpp"
 
@@ -58,8 +60,8 @@ namespace graph::storage {
 		[[nodiscard]] bool isLocationDirectoryType(MetadataDirectoryType type) {
 			return type == MetadataDirectoryType::MDT_PAGE || type == MetadataDirectoryType::MDT_EXTENT ||
 				   type == MetadataDirectoryType::MDT_NODE_ENTITY || type == MetadataDirectoryType::MDT_EDGE_ENTITY ||
-				   type == MetadataDirectoryType::MDT_ENTITY_PROPERTY ||
-				   type == MetadataDirectoryType::MDT_STATE || type == MetadataDirectoryType::MDT_INDEX_ROOT ||
+				   type == MetadataDirectoryType::MDT_ENTITY_PROPERTY || type == MetadataDirectoryType::MDT_STATE ||
+				   type == MetadataDirectoryType::MDT_INDEX_ROOT ||
 				   type == MetadataDirectoryType::MDT_VECTOR_LOCATION ||
 				   type == MetadataDirectoryType::MDT_VECTOR_MANIFEST ||
 				   type == MetadataDirectoryType::MDT_LARGE_VALUE_MANIFEST ||
@@ -81,15 +83,14 @@ namespace graph::storage {
 					static_cast<uint8_t>(entry.logical_id == 0U) | static_cast<uint8_t>(!entry.segment_id.isValid()) |
 					static_cast<uint8_t>(!entry.generation.isValid()) |
 					static_cast<uint8_t>(!isEntity && !isProperty && !isState && !isIndexRoot && !isVectorLocation &&
-									 !isVectorManifest && !isLargeValueManifest &&
-										 !isRetireQueue && entry.first_page < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
+										 !isVectorManifest && !isLargeValueManifest && !isRetireQueue &&
+										 entry.first_page < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
 					static_cast<uint8_t>(entry.page_count == 0U) |
 					static_cast<uint8_t>(!isEntity && !isProperty && !isState && !isIndexRoot && !isVectorLocation &&
-									 !isVectorManifest && !isLargeValueManifest &&
-										 !isRetireQueue && entry.first_page > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
+										 !isVectorManifest && !isLargeValueManifest && !isRetireQueue &&
+										 entry.first_page > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
 					static_cast<uint8_t>(!isEntity && !isProperty && !isState && !isIndexRoot && !isVectorLocation &&
-									 !isVectorManifest && !isLargeValueManifest &&
-										 !isRetireQueue &&
+										 !isVectorManifest && !isLargeValueManifest && !isRetireQueue &&
 										 entry.page_count > RSS_PAGE_POOL_DATA_FRAME_COUNT - entry.first_page + 1U) |
 					static_cast<uint8_t>((directoryType == MetadataDirectoryType::MDT_PAGE || isEntity) &&
 										 entry.page_count != 1U) |
@@ -216,10 +217,9 @@ namespace graph::storage {
 			}
 		}
 
-		[[nodiscard]] PhysicalPageRef rootFor(const Superblock &superblock, MetadataDirectoryType directoryType) {
+		[[nodiscard]] PhysicalPageRef physicalRootFor(const Superblock &superblock,
+													  MetadataDirectoryType directoryType) {
 			switch (directoryType) {
-				case MetadataDirectoryType::MDT_PAGE:
-					return superblock.page_directory_root;
 				case MetadataDirectoryType::MDT_EXTENT:
 					return superblock.extent_directory_root;
 				case MetadataDirectoryType::MDT_NODE_ENTITY:
@@ -247,6 +247,117 @@ namespace graph::storage {
 			}
 		}
 
+		[[nodiscard]] MetadataDirectoryRootOrdinal logicalRootOrdinal(MetadataDirectoryType directoryType) {
+			switch (directoryType) {
+				case MetadataDirectoryType::MDT_EXTENT:
+					return MetadataDirectoryRootOrdinal::MDRO_EXTENT;
+				case MetadataDirectoryType::MDT_NODE_ENTITY:
+					return MetadataDirectoryRootOrdinal::MDRO_NODE_ENTITY;
+				case MetadataDirectoryType::MDT_EDGE_ENTITY:
+					return MetadataDirectoryRootOrdinal::MDRO_EDGE_ENTITY;
+				case MetadataDirectoryType::MDT_ENTITY_PROPERTY:
+					return MetadataDirectoryRootOrdinal::MDRO_ENTITY_PROPERTY;
+				case MetadataDirectoryType::MDT_STATE:
+					return MetadataDirectoryRootOrdinal::MDRO_STATE;
+				case MetadataDirectoryType::MDT_INDEX_ROOT:
+					return MetadataDirectoryRootOrdinal::MDRO_INDEX_ROOT;
+				case MetadataDirectoryType::MDT_VECTOR_LOCATION:
+					return MetadataDirectoryRootOrdinal::MDRO_VECTOR_LOCATION;
+				case MetadataDirectoryType::MDT_VECTOR_MANIFEST:
+					return MetadataDirectoryRootOrdinal::MDRO_VECTOR_MANIFEST;
+				case MetadataDirectoryType::MDT_LARGE_VALUE_MANIFEST:
+					return MetadataDirectoryRootOrdinal::MDRO_LARGE_VALUE_MANIFEST;
+				case MetadataDirectoryType::MDT_RETIRE_QUEUE:
+					return MetadataDirectoryRootOrdinal::MDRO_RETIRE_QUEUE;
+				default: // ZYX_COV_EXCL_LINE: Page Directory stays physical bootstrap plumbing.
+					throwLocationDirectoryError(FormatError::FERR_INVALID_ENUM,
+												"relocatable location directory type has no logical bootstrap root");
+			}
+		}
+
+		void setPhysicalRoot(MetadataWriteBatch &batch, MetadataDirectoryType directoryType, PhysicalPageRef root) {
+			switch (directoryType) {
+				case MetadataDirectoryType::MDT_EXTENT:
+					batch.setExtentDirectoryRoot(root);
+					return;
+				case MetadataDirectoryType::MDT_NODE_ENTITY:
+					batch.setNodeEntityDirectoryRoot(root);
+					return;
+				case MetadataDirectoryType::MDT_EDGE_ENTITY:
+					batch.setEdgeEntityDirectoryRoot(root);
+					return;
+				case MetadataDirectoryType::MDT_ENTITY_PROPERTY:
+					batch.setEntityPropertyDirectoryRoot(root);
+					return;
+				case MetadataDirectoryType::MDT_STATE:
+					batch.setStateDirectoryRoot(root);
+					return;
+				case MetadataDirectoryType::MDT_INDEX_ROOT:
+					batch.setIndexRootDirectoryRoot(root);
+					return;
+				case MetadataDirectoryType::MDT_VECTOR_LOCATION:
+					batch.setVectorLocationDirectoryRoot(root);
+					return;
+				case MetadataDirectoryType::MDT_VECTOR_MANIFEST:
+					batch.setVectorManifestDirectoryRoot(root);
+					return;
+				case MetadataDirectoryType::MDT_LARGE_VALUE_MANIFEST:
+					batch.setLargeValueManifestDirectoryRoot(root);
+					return;
+				case MetadataDirectoryType::MDT_RETIRE_QUEUE:
+					batch.setRetireQueueRoot(root);
+					return;
+				default:
+					throwLocationDirectoryError(
+							FormatError::FERR_INVALID_ENUM,
+							"relocatable location directory has no logical-root publication target");
+			}
+		}
+
+		[[nodiscard]] PhysicalPageRef rootFor(MetadataPageFile &pages, const Superblock &superblock,
+											  MetadataDirectoryType directoryType,
+											  const MetadataWriteBatch *batch = nullptr) {
+			if (directoryType == MetadataDirectoryType::MDT_PAGE) {
+				if (batch != nullptr) {
+					if (const std::optional<PhysicalPageRef> pending = batch->pendingBootstrapDataRoot();
+						pending.has_value()) {
+						return *pending;
+					}
+				}
+				if (!superblock.usesPageDirectoryBootstrap() || !superblock.page_directory_root.isValid()) {
+					return superblock.page_directory_root;
+				}
+				const PageDirectoryBootstrap bootstrap =
+						pages.readPageDirectoryBootstrap(superblock.page_directory_root);
+				validateVisible(bootstrap.generation, bootstrap.committed_lsn, superblock,
+								"Page Directory bootstrap is newer than its Superblock");
+				return bootstrap.data_page_directory_root;
+			}
+
+			const PhysicalPageRef physicalRoot = physicalRootFor(superblock, directoryType);
+			if (!superblock.usesPageDirectoryBootstrap()) {
+				return physicalRoot;
+			}
+			if (!superblock.page_directory_root.isValid()) {
+				throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
+											"relocatable location bootstrap root is absent");
+			}
+			const PageDirectoryBootstrap bootstrap = pages.readPageDirectoryBootstrap(superblock.page_directory_root);
+			validateVisible(bootstrap.generation, bootstrap.committed_lsn, superblock,
+							"Page Directory bootstrap is newer than its Superblock");
+			// A COW batch retains the prior header until its final route/header
+			// publication. Its candidate physical root is authoritative meanwhile.
+			if (bootstrap.generation != superblock.generation) {
+				return physicalRoot;
+			}
+			const MetadataPageId rootId =
+					bootstrap.metadata_directory_roots[static_cast<size_t>(logicalRootOrdinal(directoryType))];
+			if (!rootId.isValid()) {
+				return {};
+			}
+			return MetadataPageRouteDirectory(pages).find(superblock, bootstrap.metadata_page_directory_root, rootId);
+		}
+
 		struct MutableLeaf final {
 			LocationLeafPage page;
 		};
@@ -264,7 +375,7 @@ namespace graph::storage {
 			node->page.kind = kind;
 			node->page.directory_type = type;
 			node->page.level = level;
-			node->page.page_id = batch.allocatePageId();
+			node->page.page_id = batch.allocateMetadataPageId();
 			node->page.generation = generation;
 			node->page.committed_lsn = lsn;
 			return node;
@@ -274,23 +385,68 @@ namespace graph::storage {
 															LogSequenceNumber lsn, MetadataWriteBatch &batch) {
 			auto leaf = std::make_unique<MutableLeaf>();
 			leaf->page.directory_type = type;
-			leaf->page.page_id = batch.allocatePageId();
+			leaf->page.page_id = batch.allocateMetadataPageId();
 			leaf->page.generation = generation;
 			leaf->page.committed_lsn = lsn;
 			return leaf;
 		}
 
+		void validateBatchVisible(PhysicalPageRef reference, Generation generation, LogSequenceNumber lsn,
+								  const MetadataWriteBatch &batch) {
+			if (batch.ownsAllocatedPage(reference)) {
+				if (generation != batch.generation() || lsn != batch.checkpointLsn()) {
+					throwLocationDirectoryError(
+							FormatError::FERR_INVALID_STATE,
+							"relocatable location directory batch frame has an invalid visibility fence");
+				}
+				return;
+			}
+			validateVisible(generation, lsn, batch.current(),
+							"relocatable location directory references a future published page");
+		}
+
+		[[nodiscard]] MetadataRadixPage readRadixForMutation(MetadataPageFile &pages, PhysicalPageRef reference,
+															 const MetadataWriteBatch &batch) {
+			const MetadataRadixPage unresolved = pages.readMetadataRadixUnresolved(reference);
+			if (!unresolved.logical_children_enabled) {
+				return pages.readMetadataRadix(reference, batch.candidate());
+			}
+			MetadataRadixPage page = unresolved;
+			const PageDirectoryBootstrap currentBootstrap =
+					pages.readPageDirectoryBootstrap(batch.current().page_directory_root);
+			for (size_t index = 0U; index < page.logical_children.size(); ++index) {
+				const MetadataPageId childId = page.logical_children[index];
+				if (!childId.isValid()) {
+					continue;
+				}
+				const auto pending = batch.pendingMetadataPageRoute(childId);
+				page.children[index] =
+						pending.has_value()
+								? *pending
+								: MetadataPageRouteDirectory(pages).find(
+										  batch.current(), currentBootstrap.metadata_page_directory_root, childId);
+			}
+			page.logical_children_resolved = true;
+			return page;
+		}
+
 		[[nodiscard]] std::unique_ptr<MutableNode> loadNode(MetadataPageFile &pages, PhysicalPageRef reference,
 															uint16_t level, MetadataDirectoryType type,
-															const Superblock &superblock) {
-			CatalogRadixPage page = pages.readMetadataRadix(reference);
+															const Superblock &superblock,
+															const MetadataWriteBatch *batch = nullptr) {
+			CatalogRadixPage page = batch != nullptr ? readRadixForMutation(pages, reference, *batch)
+													 : pages.readMetadataRadix(reference, superblock);
 			if (page.kind != CatalogRadixPageKind::CRPK_INTERNAL || page.directory_type != type ||
 				page.level != level) {
 				throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
 											"relocatable location directory has an invalid internal radix page");
 			}
-			validateVisible(page.generation, page.committed_lsn, superblock,
-							"relocatable location internal page is newer than its Superblock");
+			if (batch != nullptr) {
+				validateBatchVisible(reference, page.generation, page.committed_lsn, *batch);
+			} else {
+				validateVisible(page.generation, page.committed_lsn, superblock,
+								"relocatable location internal page is newer than its Superblock");
+			}
 			auto node = std::make_unique<MutableNode>();
 			node->page = std::move(page);
 			return node;
@@ -298,13 +454,24 @@ namespace graph::storage {
 
 		[[nodiscard]] std::unique_ptr<MutableLeaf> loadLeaf(MetadataPageFile &pages, PhysicalPageRef reference,
 															uint64_t ordinal, MetadataDirectoryType type,
-															const Superblock &superblock) {
+															const Superblock &superblock,
+															const MetadataWriteBatch *batch = nullptr) {
 			LocationLeafPage page = pages.readLocationLeaf(reference);
 			if (page.directory_type != type) {
 				throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
 											"relocatable location leaf has an unexpected directory type");
 			}
-			validateRoute(page, ordinal, superblock);
+			if (batch != nullptr) {
+				validateBatchVisible(reference, page.generation, page.committed_lsn, *batch);
+				for (const LocationLeafEntry &entry: page.entries) {
+					if (leafOrdinal(entry.logical_id) != ordinal) {
+						throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
+													"relocatable location leaf does not match its radix route");
+					}
+				}
+			} else {
+				validateRoute(page, ordinal, superblock);
+			}
 			auto leaf = std::make_unique<MutableLeaf>();
 			leaf->page = std::move(page);
 			return leaf;
@@ -338,7 +505,7 @@ namespace graph::storage {
 				if (iterator == node.leaf_children.end()) {
 					std::unique_ptr<MutableLeaf> leaf =
 							node.page.children[index].isValid()
-									? loadLeaf(pages, node.page.children[index], ordinal, type, superblock)
+									? loadLeaf(pages, node.page.children[index], ordinal, type, superblock, &batch)
 									: makeLeaf(type, generation, lsn, batch);
 					iterator = node.leaf_children.emplace(index, std::move(leaf)).first;
 				}
@@ -350,7 +517,7 @@ namespace graph::storage {
 				const uint16_t childLevel = node.page.level - 1U;
 				std::unique_ptr<MutableNode> child =
 						node.page.children[index].isValid()
-								? loadNode(pages, node.page.children[index], childLevel, type, superblock)
+								? loadNode(pages, node.page.children[index], childLevel, type, superblock, &batch)
 								: makeNode(type, CatalogRadixPageKind::CRPK_INTERNAL, childLevel, generation, lsn,
 										   batch);
 				iterator = node.node_children.emplace(index, std::move(child)).first;
@@ -359,7 +526,8 @@ namespace graph::storage {
 		}
 
 		void applyErase(MutableNode &node, uint64_t logicalId, MetadataDirectoryType type, Generation generation,
-						LogSequenceNumber lsn, const Superblock &superblock, MetadataPageFile &pages) {
+						LogSequenceNumber lsn, const Superblock &superblock, MetadataPageFile &pages,
+						const MetadataWriteBatch *batch = nullptr) {
 			node.page.generation = generation;
 			node.page.committed_lsn = lsn;
 			const uint64_t ordinal = leafOrdinal(logicalId);
@@ -374,18 +542,18 @@ namespace graph::storage {
 					const uint16_t childLevel = node.page.level - 1U;
 					iterator = node.node_children
 									   .emplace(index, loadNode(pages, node.page.children[index], childLevel, type,
-																superblock))
+																superblock, batch))
 									   .first;
 				}
-				applyErase(*iterator->second, logicalId, type, generation, lsn, superblock, pages);
+				applyErase(*iterator->second, logicalId, type, generation, lsn, superblock, pages, batch);
 				return;
 			}
 			auto iterator = node.leaf_children.find(index);
 			if (iterator == node.leaf_children.end()) {
-				iterator =
-						node.leaf_children
-								.emplace(index, loadLeaf(pages, node.page.children[index], ordinal, type, superblock))
-								.first;
+				iterator = node.leaf_children
+								   .emplace(index, loadLeaf(pages, node.page.children[index], ordinal, type, superblock,
+															batch))
+								   .first;
 			}
 			std::vector<LocationLeafEntry> &entries = iterator->second->page.entries;
 			const auto position = std::lower_bound(
@@ -410,15 +578,87 @@ namespace graph::storage {
 												MetadataPageFile &pages, MetadataWriteBatch &batch) {
 			leaf.page.generation = generation;
 			leaf.page.committed_lsn = lsn;
+			validatePage(leaf.page);
 			const PhysicalPageRef reference = batch.allocatePage();
 			pages.writeLocationLeaf(reference, leaf.page);
+			batch.registerMetadataPageRoute(leaf.page.page_id, reference);
 			return reference;
+		}
+
+		void normalizePhysicalChildren(MetadataRadixPage &page) {
+			if (!page.logical_children_enabled) {
+				return;
+			}
+			page.logical_children.fill({});
+			page.logical_children_enabled = false;
+			page.logical_children_resolved = false;
+		}
+
+		[[nodiscard]] MetadataPageId readLocationChildPageId(MetadataPageFile &pages, PhysicalPageRef reference,
+															 bool radixChild) {
+			if (!reference.isValid()) {
+				throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
+											"relocatable location radix child reference is invalid");
+			}
+			return radixChild ? pages.readMetadataRadixUnresolved(reference).page_id
+							  : pages.readLocationLeaf(reference).page_id;
+		}
+
+		void encodeLogicalChildren(MetadataRadixPage &page, MetadataPageFile &pages) {
+			for (size_t index = 0U; index < page.children.size(); ++index) {
+				const PhysicalPageRef reference = page.children[index];
+				if (!reference.isValid()) {
+					page.logical_children[index] = {};
+					continue;
+				}
+				page.logical_children[index] = readLocationChildPageId(pages, reference, page.level != 0U);
+				page.children[index] = {};
+			}
+			page.logical_children_enabled = true;
+			page.logical_children_resolved = false;
+		}
+
+		[[nodiscard]] PhysicalPageRef logicalizeOwnedInternalChildren(PhysicalPageRef reference,
+																	  MetadataDirectoryType directoryType, bool isRoot,
+																	  MetadataPageFile &pages,
+																	  MetadataWriteBatch &batch) {
+			if (!batch.ownsAllocatedPage(reference)) {
+				return reference;
+			}
+			// The final bootstrap route is not available while logicalizing a COW page.
+			MetadataRadixPage page = pages.readMetadataRadixUnresolved(reference);
+			const uint8_t invalid = static_cast<uint8_t>(page.kind != (isRoot ? CatalogRadixPageKind::CRPK_ROOT
+																			  : CatalogRadixPageKind::CRPK_INTERNAL)) |
+									static_cast<uint8_t>(page.directory_type != directoryType) |
+									static_cast<uint8_t>(page.generation != batch.generation()) |
+									static_cast<uint8_t>(page.committed_lsn != batch.checkpointLsn());
+			if (invalid != 0U) {
+				throwLocationDirectoryError(
+						FormatError::FERR_INVALID_STATE,
+						"relocatable location logical-child publication found an invalid candidate radix page");
+			}
+			if (page.logical_children_enabled) {
+				return reference;
+			}
+			if (page.level != 0U) {
+				for (PhysicalPageRef &child: page.children) {
+					if (child.isValid()) {
+						child = logicalizeOwnedInternalChildren(child, directoryType, false, pages, batch);
+					}
+				}
+			}
+			encodeLogicalChildren(page, pages);
+			const PhysicalPageRef logicalReference = batch.allocatePage();
+			pages.writeMetadataRadix(logicalReference, page);
+			batch.registerMetadataPageRoute(page.page_id, logicalReference);
+			return logicalReference;
 		}
 
 		[[nodiscard]] PhysicalPageRef writeNode(MutableNode &node, CatalogRadixPageKind kind, Generation generation,
 												LogSequenceNumber lsn, MetadataPageFile &pages,
 												MetadataWriteBatch &batch) {
 			node.page.kind = kind;
+			normalizePhysicalChildren(node.page);
 			node.page.generation = generation;
 			node.page.committed_lsn = lsn;
 			if (node.page.level == 0U) {
@@ -433,19 +673,53 @@ namespace graph::storage {
 			}
 			const PhysicalPageRef reference = batch.allocatePage();
 			pages.writeMetadataRadix(reference, node.page);
+			batch.registerMetadataPageRoute(node.page.page_id, reference);
 			return reference;
 		}
 
 		[[nodiscard]] CatalogRadixPage readRoot(MetadataPageFile &pages, const Superblock &superblock,
-												MetadataDirectoryType type) {
-			CatalogRadixPage root = pages.readMetadataRadix(rootFor(superblock, type));
+												MetadataDirectoryType type, const MetadataWriteBatch *batch = nullptr) {
+			const PhysicalPageRef reference = rootFor(pages, superblock, type, batch);
+			CatalogRadixPage root = batch != nullptr ? readRadixForMutation(pages, reference, *batch)
+													 : pages.readMetadataRadix(reference, superblock);
 			if (root.kind != CatalogRadixPageKind::CRPK_ROOT || root.directory_type != type) {
 				throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
 											"relocatable location Superblock root has an invalid directory type");
 			}
-			validateVisible(root.generation, root.committed_lsn, superblock,
-							"relocatable location root is newer than its Superblock");
+			if (batch != nullptr) {
+				validateBatchVisible(reference, root.generation, root.committed_lsn, *batch);
+			} else {
+				validateVisible(root.generation, root.committed_lsn, superblock,
+								"relocatable location root is newer than its Superblock");
+			}
 			return root;
+		}
+
+		void publishPageDirectoryRoot(MetadataWriteBatch &batch, PhysicalPageRef dataRoot) {
+			if (!batch.candidate().usesPageDirectoryBootstrap()) {
+				batch.setPageDirectoryRoot(dataRoot);
+				return;
+			}
+			batch.setPendingBootstrapDataRoot(dataRoot);
+		}
+
+		[[nodiscard]] CatalogRadixPage readAppendNode(MetadataPageFile &pages, PhysicalPageRef reference,
+													  uint16_t level, MetadataDirectoryType type,
+													  const Superblock &superblock,
+													  const MetadataWriteBatch *batch = nullptr) {
+			CatalogRadixPage page = pages.readMetadataRadix(reference, superblock);
+			if (page.kind != CatalogRadixPageKind::CRPK_INTERNAL || page.directory_type != type ||
+				page.level != level) {
+				throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
+											"relocatable streamed location append has an invalid internal radix page");
+			}
+			if (batch != nullptr) {
+				validateBatchVisible(reference, page.generation, page.committed_lsn, *batch);
+			} else {
+				validateVisible(page.generation, page.committed_lsn, superblock,
+								"relocatable streamed location append references a future radix page");
+			}
+			return page;
 		}
 
 	} // namespace
@@ -535,9 +809,16 @@ namespace graph::storage {
 			throwLocationDirectoryError(FormatError::FERR_CHECKSUM_MISMATCH,
 										"relocatable location leaf payload checksum does not match");
 		}
+		const size_t usedBytes =
+				RSS_LOCATION_LEAF_HEADER_BYTES + static_cast<size_t>(entryCount) * RSS_LOCATION_ENTRY_BYTES;
+		if (!std::all_of(bytes.begin() + usedBytes, bytes.end(),
+						 [](std::byte value) { return value == std::byte{}; })) {
+			throwLocationDirectoryError(FormatError::FERR_RESERVED_BITS,
+										"relocatable location leaf trailing bytes are nonzero");
+		}
 		LocationLeafPage page;
 		page.directory_type = static_cast<MetadataDirectoryType>(rawDirectoryType);
-		page.page_id = PageId(LittleEndianCodec::readU64(bytes, PAGE_ID_OFFSET));
+		page.page_id = MetadataPageId(LittleEndianCodec::readU64(bytes, PAGE_ID_OFFSET));
 		page.generation = Generation(LittleEndianCodec::readU64(bytes, GENERATION_OFFSET));
 		page.committed_lsn = LogSequenceNumber(LittleEndianCodec::readU64(bytes, LSN_OFFSET));
 		page.entries.reserve(entryCount);
@@ -550,6 +831,480 @@ namespace graph::storage {
 
 	LocationDirectory::LocationDirectory(MetadataPageFile &pages, MetadataPageAllocator &allocator) :
 		pages_(pages), allocator_(allocator) {}
+
+	struct LocationDirectoryAppendSession::Impl final {
+		struct PendingNode final {
+			uint64_t group = 0U;
+			MutableNode node;
+			std::bitset<RSS_CATALOG_RADIX_FANOUT> assigned_children;
+		};
+		MetadataPageFile &pages;
+		MetadataWriteBatch &batch;
+		const Superblock &current;
+		MetadataDirectoryType directoryType;
+		uint64_t expectedLogicalId;
+		uint64_t lastLogicalId;
+		size_t expectedCount;
+		size_t observed = 0U;
+		bool requireContiguous = true;
+		uint16_t targetLevel;
+		std::optional<CatalogRadixPage> sourceRoot;
+		uint16_t sourceRootLevel = 0U;
+		std::vector<std::optional<PhysicalPageRef>> grownSourceExtensions;
+		std::optional<PhysicalPageRef> grownSourceRootChild;
+		std::vector<std::optional<PendingNode>> pending;
+		uint64_t activeLeafOrdinal = 0U;
+		std::unique_ptr<MutableLeaf> activeLeaf;
+		bool finished = false;
+
+		Impl(MetadataPageFile &pageFile, MetadataPageAllocator &allocator, MetadataWriteBatch &writeBatch,
+			 MetadataDirectoryType type, uint64_t firstLogicalId, uint64_t lastLogicalId, size_t count,
+			 bool contiguous = true) :
+			// A final streamed publication appends distinct monotonic Page-ID spans
+			// (Entity, Property, then LargeValue) in one MetadataWriteBatch.  Start
+			// from the candidate so a later session extends the prior session's COW
+			// root without collecting its earlier routes in memory.
+			pages(pageFile), batch(writeBatch), current(batch.candidate()), directoryType(type),
+			expectedLogicalId(firstLogicalId), lastLogicalId(lastLogicalId), expectedCount(count),
+			requireContiguous(contiguous), targetLevel(requiredRootLevel(lastLogicalId)),
+			grownSourceExtensions(static_cast<size_t>(targetLevel)), pending(static_cast<size_t>(targetLevel) + 1U) {
+			if (!batch.usesAllocator(allocator) ||
+				(directoryType != MetadataDirectoryType::MDT_PAGE &&
+				 directoryType != MetadataDirectoryType::MDT_EDGE_ENTITY &&
+				 directoryType != MetadataDirectoryType::MDT_ENTITY_PROPERTY &&
+				 directoryType != MetadataDirectoryType::MDT_LARGE_VALUE_MANIFEST) ||
+				firstLogicalId == 0U || lastLogicalId < firstLogicalId || count == 0U ||
+				count - 1U > lastLogicalId - firstLogicalId ||
+				(requireContiguous && lastLogicalId - firstLogicalId != count - 1U)) {
+				throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
+											"relocatable streamed location append requires one exact bounded range");
+			}
+			if (rootFor(pages, current, directoryType).isValid()) {
+				sourceRoot = readRoot(pages, current, directoryType, &batch);
+				sourceRootLevel = sourceRoot->level;
+			}
+			if (sourceRoot.has_value() && sourceRootLevel > targetLevel) {
+				// A reservation can name IDs below an independently published lease.
+				// Keep the existing root height so flushing the new low-ID path cannot
+				// replace a higher-level root and orphan its other subtrees.
+				targetLevel = sourceRootLevel;
+				grownSourceExtensions.resize(static_cast<size_t>(targetLevel));
+				pending.resize(static_cast<size_t>(targetLevel) + 1U);
+			}
+			if (sourceRoot.has_value() && targetLevel > sourceRootLevel) {
+				// A root cannot become another root's child: readers require every
+				// non-top radix page to carry CRPK_INTERNAL. Persist one demoted COW
+				// copy before extending the path, while the old snapshot retains its
+				// original CRPK_ROOT frame.
+				MutableNode demotedSourceRoot;
+				demotedSourceRoot.page = *sourceRoot;
+				PhysicalPageRef preserved = writeNode(demotedSourceRoot, CatalogRadixPageKind::CRPK_INTERNAL,
+													  batch.generation(), batch.checkpointLsn(), pages, batch);
+				grownSourceExtensions[sourceRootLevel] = preserved;
+				for (uint16_t level = static_cast<uint16_t>(sourceRootLevel + 1U); level < targetLevel; ++level) {
+					MutableNode extension;
+					extension.page.kind = CatalogRadixPageKind::CRPK_INTERNAL;
+					extension.page.directory_type = directoryType;
+					extension.page.level = level;
+					extension.page.page_id = batch.allocateMetadataPageId();
+					extension.page.generation = batch.generation();
+					extension.page.committed_lsn = batch.checkpointLsn();
+					extension.page.children[0U] = preserved;
+					preserved = writeNode(extension, CatalogRadixPageKind::CRPK_INTERNAL, batch.generation(),
+										  batch.checkpointLsn(), pages, batch);
+					grownSourceExtensions[level] = preserved;
+				}
+				grownSourceRootChild = preserved;
+			}
+		}
+
+		[[nodiscard]] std::optional<CatalogRadixPage> sourceNode(uint16_t level, uint64_t group) const {
+			if (level < grownSourceExtensions.size() && grownSourceExtensions[level].has_value()) {
+				return group == 0U ? std::optional<CatalogRadixPage>(
+											 readAppendNode(pages, *grownSourceExtensions[level], level, directoryType,
+															batch.candidate(), &batch))
+								   : std::nullopt;
+			}
+			if (!sourceRoot.has_value() || sourceRootLevel < level)
+				return std::nullopt;
+			if (sourceRootLevel == level)
+				return group == 0U ? sourceRoot : std::nullopt;
+			uint64_t factor = 1U;
+			for (uint16_t index = 0U; index <= level; ++index) {
+				if (factor > std::numeric_limits<uint64_t>::max() / RSS_CATALOG_RADIX_FANOUT) {
+					throwLocationDirectoryError(
+							FormatError::FERR_ARITHMETIC_OVERFLOW,
+							"relocatable streamed location directory route overflows its radix domain");
+				}
+				factor *= RSS_CATALOG_RADIX_FANOUT;
+			}
+			if (group > std::numeric_limits<uint64_t>::max() / factor) {
+				throwLocationDirectoryError(FormatError::FERR_ARITHMETIC_OVERFLOW,
+											"relocatable streamed location directory group overflows its radix domain");
+			}
+			CatalogRadixPage node = *sourceRoot;
+			const uint64_t leaf = group * factor;
+			for (uint16_t nodeLevel = sourceRootLevel; nodeLevel > level; --nodeLevel) {
+				const PhysicalPageRef child =
+						node.children[CatalogRadixPageCodec::childIndexForLeafOrdinal(leaf, nodeLevel)];
+				if (!child.isValid())
+					return std::nullopt;
+				node = readAppendNode(pages, child, static_cast<uint16_t>(nodeLevel - 1U), directoryType, current,
+									  &batch);
+			}
+			return node;
+		}
+
+		[[nodiscard]] MutableNode beginNode(uint16_t level, uint64_t group) {
+			if (const auto source = sourceNode(level, group); source.has_value()) {
+				MutableNode result;
+				result.page = *source;
+				return result;
+			}
+			MutableNode result;
+			result.page.kind =
+					level == targetLevel ? CatalogRadixPageKind::CRPK_ROOT : CatalogRadixPageKind::CRPK_INTERNAL;
+			result.page.directory_type = directoryType;
+			result.page.level = level;
+			result.page.page_id = batch.allocateMetadataPageId();
+			result.page.generation = batch.generation();
+			result.page.committed_lsn = batch.checkpointLsn();
+			if (grownSourceRootChild.has_value() && level == targetLevel && group == 0U)
+				result.page.children[0U] = *grownSourceRootChild;
+			return result;
+		}
+
+		void appendChild(uint16_t level, uint64_t childOrdinal, PhysicalPageRef child) {
+			const uint64_t group = childOrdinal / RSS_CATALOG_RADIX_FANOUT;
+			const uint32_t childIndex = static_cast<uint32_t>(childOrdinal % RSS_CATALOG_RADIX_FANOUT);
+			if (level > targetLevel || (level == targetLevel && group != 0U)) {
+				throwLocationDirectoryError(FormatError::FERR_INVALID_STATE,
+											"relocatable streamed location append has an out-of-range radix child");
+			}
+			if (pending[level].has_value() && pending[level]->group != group)
+				flushLevel(level);
+			if (!pending[level].has_value())
+				pending[level].emplace(PendingNode{group, beginNode(level, group), {}});
+			CatalogRadixPage &page = pending[level]->node.page;
+			if (pending[level]->assigned_children.test(childIndex) && page.children[childIndex] != child) {
+				throwLocationDirectoryError(FormatError::FERR_INVALID_STATE,
+											"relocatable streamed location append assigned one radix child twice");
+			}
+			page.children[childIndex] = child;
+			pending[level]->assigned_children.set(childIndex);
+		}
+
+		void flushLevel(uint16_t level) {
+			if (!pending[level].has_value())
+				return;
+			PendingNode completed = std::move(*pending[level]);
+			pending[level].reset();
+			const PhysicalPageRef reference = writeNode(completed.node,
+														level == targetLevel ? CatalogRadixPageKind::CRPK_ROOT
+																			 : CatalogRadixPageKind::CRPK_INTERNAL,
+														batch.generation(), batch.checkpointLsn(), pages, batch);
+			if (level == targetLevel) {
+				if (completed.group != 0U) {
+					throwLocationDirectoryError(
+							FormatError::FERR_INVALID_STATE,
+							"relocatable streamed location append exceeded its planned root coverage");
+				}
+				if (directoryType == MetadataDirectoryType::MDT_PAGE)
+					publishPageDirectoryRoot(batch, reference);
+				else if (directoryType == MetadataDirectoryType::MDT_EDGE_ENTITY)
+					batch.setEdgeEntityDirectoryRoot(reference);
+				else if (directoryType == MetadataDirectoryType::MDT_ENTITY_PROPERTY)
+					batch.setEntityPropertyDirectoryRoot(reference);
+				else
+					batch.setLargeValueManifestDirectoryRoot(reference);
+				return;
+			}
+			appendChild(static_cast<uint16_t>(level + 1U), completed.group, reference);
+		}
+
+		void finishLeaf() {
+			if (activeLeaf == nullptr)
+				return;
+			const PhysicalPageRef reference =
+					writeLeaf(*activeLeaf, batch.generation(), batch.checkpointLsn(), pages, batch);
+			appendChild(0U, activeLeafOrdinal, reference);
+			activeLeaf.reset();
+		}
+
+		void append(const LocationLeafEntry &entry) {
+			const bool invalidOrder =
+					requireContiguous ? entry.logical_id != expectedLogicalId
+									  : entry.logical_id < expectedLogicalId || entry.logical_id > lastLogicalId;
+			if (finished || observed == expectedCount || invalidOrder) {
+				const char *const message =
+						directoryType == MetadataDirectoryType::MDT_PAGE
+								? "relocatable streamed Page source diverged from its immutable ID range"
+						: directoryType == MetadataDirectoryType::MDT_EDGE_ENTITY
+								? "relocatable streamed Edge source diverged from its immutable ID range"
+						: directoryType == MetadataDirectoryType::MDT_ENTITY_PROPERTY
+								? "relocatable streamed Property source diverged from its immutable ID range"
+						: directoryType == MetadataDirectoryType::MDT_LARGE_VALUE_MANIFEST
+								? "relocatable streamed LargeValue Manifest source diverged from its immutable ID range"
+								: "relocatable streamed location source diverged from its immutable ID range";
+				throwLocationDirectoryError(FormatError::FERR_INVALID_STATE, message);
+			}
+			validateEntry(entry, directoryType);
+			if (directoryType == MetadataDirectoryType::MDT_PAGE)
+				batch.observeLogicalPageId(PageId(entry.logical_id));
+			const uint64_t leaf = leafOrdinal(entry.logical_id);
+			if (activeLeaf == nullptr || activeLeafOrdinal != leaf) {
+				finishLeaf();
+				activeLeafOrdinal = leaf;
+				const uint64_t parentGroup = leaf / RSS_CATALOG_RADIX_FANOUT;
+				if (const auto parent = sourceNode(0U, parentGroup); parent.has_value()) {
+					const PhysicalPageRef reference =
+							parent->children[CatalogRadixPageCodec::childIndexForLeafOrdinal(leaf, 0U)];
+					activeLeaf = reference.isValid()
+										 ? loadLeaf(pages, reference, leaf, directoryType, current, &batch)
+										 : makeLeaf(directoryType, batch.generation(), batch.checkpointLsn(), batch);
+				} else
+					activeLeaf = makeLeaf(directoryType, batch.generation(), batch.checkpointLsn(), batch);
+			}
+			// Streamed sources are monotonic. Appending to a leaf's tail avoids a
+			// per-record search and shift for the normal bulk path, while the
+			// ordered-insert fallback preserves rebase of a lower sparse lease.
+			if (activeLeaf->page.entries.empty() || activeLeaf->page.entries.back().logical_id < entry.logical_id) {
+				activeLeaf->page.entries.push_back(entry);
+			} else {
+				auto position =
+						std::lower_bound(activeLeaf->page.entries.begin(), activeLeaf->page.entries.end(),
+										 entry.logical_id, [](const LocationLeafEntry &candidate, uint64_t logicalId) {
+											 return candidate.logical_id < logicalId;
+										 });
+				if (position != activeLeaf->page.entries.end() && position->logical_id == entry.logical_id) {
+					throwLocationDirectoryError(
+							FormatError::FERR_INVALID_STATE,
+							"relocatable streamed location append attempted to publish an existing logical ID");
+				}
+				activeLeaf->page.entries.insert(position, entry);
+			}
+			activeLeaf->page.generation = batch.generation();
+			activeLeaf->page.committed_lsn = batch.checkpointLsn();
+			// The loaded or newly created leaf was already complete, and this path
+			// validates the appended entry, route, ordering, and uniqueness above.
+			// Authenticate the complete bounded leaf once at its write boundary.
+			++observed;
+			if (entry.logical_id != std::numeric_limits<uint64_t>::max()) {
+				expectedLogicalId = entry.logical_id + 1U;
+			}
+		}
+
+		void finish() {
+			if (finished || observed != expectedCount) {
+				throwLocationDirectoryError(
+						FormatError::FERR_INVALID_STATE,
+						"relocatable streamed location append did not consume its exact bounded source");
+			}
+			finishLeaf();
+			for (uint16_t level = 0U; level <= targetLevel; ++level)
+				flushLevel(level);
+			finished = true;
+		}
+	};
+
+	LocationDirectoryAppendSession::LocationDirectoryAppendSession(std::unique_ptr<Impl> implementation) noexcept :
+		implementation_(std::move(implementation)) {}
+	LocationDirectoryAppendSession::LocationDirectoryAppendSession(LocationDirectoryAppendSession &&) noexcept =
+			default;
+	LocationDirectoryAppendSession &
+	LocationDirectoryAppendSession::operator=(LocationDirectoryAppendSession &&) noexcept = default;
+	LocationDirectoryAppendSession::~LocationDirectoryAppendSession() = default;
+	void LocationDirectoryAppendSession::append(const PageLocation &location) {
+		if (implementation_ == nullptr || implementation_->directoryType != MetadataDirectoryType::MDT_PAGE) {
+			throwLocationDirectoryError(FormatError::FERR_INVALID_STATE,
+										"relocatable Page directory append session is not active");
+		}
+		implementation_->append({location.page_id.value(), location.segment_id, location.generation,
+								 location.page_index, 1U, location.free_bytes});
+	}
+	void LocationDirectoryAppendSession::append(const EntityPageLocation &location) {
+		if (implementation_ == nullptr || implementation_->directoryType != MetadataDirectoryType::MDT_EDGE_ENTITY) {
+			throwLocationDirectoryError(FormatError::FERR_INVALID_STATE,
+										"relocatable Edge directory append session is not active");
+		}
+		implementation_->append({location.entity_id, SegmentId(location.page_id.value()),
+								 Generation(location.slot_generation), location.slot_id, 1U});
+	}
+	void LocationDirectoryAppendSession::append(const EntityPropertyLocation &location) {
+		if (implementation_ == nullptr ||
+			implementation_->directoryType != MetadataDirectoryType::MDT_ENTITY_PROPERTY || !location.key.isValid()) {
+			throwLocationDirectoryError(FormatError::FERR_INVALID_STATE,
+										"relocatable Entity Property directory append session is not active");
+		}
+		implementation_->append({location.key.directoryId(), SegmentId(location.page_id.value()),
+								 Generation(location.slot_generation), location.slot_id, 1U});
+	}
+	void LocationDirectoryAppendSession::append(const LargeValueManifestLocation &location) {
+		if (implementation_ == nullptr ||
+			implementation_->directoryType != MetadataDirectoryType::MDT_LARGE_VALUE_MANIFEST ||
+			!location.value_id.isValid() || !location.manifest_page_id.isValid() || !location.generation.isValid()) {
+			throwLocationDirectoryError(FormatError::FERR_INVALID_STATE,
+										"relocatable LargeValue Manifest directory append session is not active");
+		}
+		implementation_->append({location.value_id.value(), SegmentId(location.manifest_page_id.value()),
+								 location.generation, RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U});
+	}
+	void LocationDirectoryAppendSession::finish() {
+		if (implementation_ == nullptr)
+			throwLocationDirectoryError(FormatError::FERR_INVALID_STATE,
+										"relocatable location append session is not active");
+		implementation_->finish();
+	}
+	bool LocationDirectoryAppendSession::isFinished() const noexcept {
+		return implementation_ != nullptr && implementation_->finished;
+	}
+
+	LocationDirectoryAppendSession LocationDirectory::beginAppendPageLocations(MetadataWriteBatch &batch,
+																			   uint64_t firstPageId,
+																			   uint64_t lastPageId,
+																			   size_t expectedCount) {
+		return LocationDirectoryAppendSession(std::make_unique<LocationDirectoryAppendSession::Impl>(
+				pages_, allocator_, batch, MetadataDirectoryType::MDT_PAGE, firstPageId, lastPageId, expectedCount));
+	}
+	LocationDirectoryAppendSession LocationDirectory::beginAppendEdgePageLocations(MetadataWriteBatch &batch,
+																				   uint64_t firstEdgeId,
+																				   uint64_t lastEdgeId,
+																				   size_t expectedCount) {
+		return LocationDirectoryAppendSession(std::make_unique<LocationDirectoryAppendSession::Impl>(
+				pages_, allocator_, batch, MetadataDirectoryType::MDT_EDGE_ENTITY, firstEdgeId, lastEdgeId,
+				expectedCount, false));
+	}
+	LocationDirectoryAppendSession LocationDirectory::beginAppendEdgePropertyLocations(MetadataWriteBatch &batch,
+																					   uint64_t firstEdgeId,
+																					   uint64_t lastEdgeId,
+																					   size_t expectedCount) {
+		if (firstEdgeId == 0U || lastEdgeId < firstEdgeId || lastEdgeId > ((UINT64_C(1) << 63U) - 1U)) {
+			throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
+										"relocatable streamed Edge Property append has an invalid Edge-ID range");
+		}
+		const uint64_t mask = UINT64_C(1) << 63U;
+		return LocationDirectoryAppendSession(std::make_unique<LocationDirectoryAppendSession::Impl>(
+				pages_, allocator_, batch, MetadataDirectoryType::MDT_ENTITY_PROPERTY, firstEdgeId | mask,
+				lastEdgeId | mask, expectedCount, false));
+	}
+
+	LocationDirectoryAppendSession LocationDirectory::beginAppendLargeValueManifestLocations(MetadataWriteBatch &batch,
+																							 LargeValueId firstValueId,
+																							 LargeValueId lastValueId,
+																							 size_t expectedCount) {
+		if (!firstValueId.isValid() || !lastValueId.isValid() || lastValueId < firstValueId) {
+			throwLocationDirectoryError(
+					FormatError::FERR_INVALID_HEADER,
+					"relocatable streamed LargeValue Manifest append has an invalid value-ID range");
+		}
+		return LocationDirectoryAppendSession(std::make_unique<LocationDirectoryAppendSession::Impl>(
+				pages_, allocator_, batch, MetadataDirectoryType::MDT_LARGE_VALUE_MANIFEST, firstValueId.value(),
+				lastValueId.value(), expectedCount, false));
+	}
+
+	void LocationDirectory::prepareAppendLocations(MetadataWriteBatch &batch, MetadataDirectoryType directoryType,
+												   uint64_t firstLogicalId, uint64_t lastLogicalId,
+												   size_t expectedCount, const LocationEntryProducer &producer) {
+		if (!producer) {
+			throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
+										"relocatable streamed location append requires a source producer");
+		}
+		if (directoryType != MetadataDirectoryType::MDT_PAGE &&
+			directoryType != MetadataDirectoryType::MDT_EDGE_ENTITY) {
+			throwLocationDirectoryError(FormatError::FERR_INVALID_ENUM,
+										"relocatable streamed location append has no compatible directory session");
+		}
+		auto session = directoryType == MetadataDirectoryType::MDT_PAGE
+							   ? beginAppendPageLocations(batch, firstLogicalId, lastLogicalId, expectedCount)
+							   : beginAppendEdgePageLocations(batch, firstLogicalId, lastLogicalId, expectedCount);
+		producer([&session, directoryType](const LocationLeafEntry &entry) {
+			if (directoryType == MetadataDirectoryType::MDT_PAGE) {
+				session.append(PageLocation{PageId(entry.logical_id), entry.segment_id, entry.first_page,
+											entry.generation, entry.free_bytes});
+			} else {
+				if (entry.generation.value() > std::numeric_limits<uint32_t>::max()) {
+					throwLocationDirectoryError(
+							FormatError::FERR_INVALID_STATE,
+							"relocatable streamed Edge directory slot generation exceeds its codec");
+				}
+				session.append(EntityPageLocation{entry.logical_id, PageId(entry.segment_id.value()), entry.first_page,
+												  static_cast<uint32_t>(entry.generation.value())});
+			}
+		});
+		session.finish();
+	}
+
+	void LocationDirectory::prepareAppendEdgePageLocations(MetadataWriteBatch &batch, uint64_t firstEdgeId,
+														   uint64_t lastEdgeId, size_t expectedCount,
+														   const EdgePageLocationCursor &cursor) {
+		if (!cursor) {
+			throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
+										"relocatable streamed Edge directory append requires a source cursor");
+		}
+		const EdgePageLocationProducer producer = [&cursor](const EdgePageLocationSink &consume) {
+			for (;;) {
+				const std::optional<EntityPageLocation> location = cursor();
+				if (!location.has_value()) {
+					return;
+				}
+				consume(*location);
+			}
+		};
+		prepareAppendEdgePageLocations(batch, firstEdgeId, lastEdgeId, expectedCount, producer);
+	}
+
+	void LocationDirectory::prepareAppendEdgePageLocations(MetadataWriteBatch &batch, uint64_t firstEdgeId,
+														   uint64_t lastEdgeId, size_t expectedCount,
+														   const EdgePageLocationProducer &producer) {
+		if (!producer) {
+			throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
+										"relocatable streamed Edge directory append requires a source producer");
+		}
+		const LocationEntryProducer converted = [&producer](const LocationEntrySink &consume) {
+			producer([&consume](const EntityPageLocation &location) {
+				consume({location.entity_id, SegmentId(location.page_id.value()), Generation(location.slot_generation),
+						 location.slot_id, 1U});
+			});
+		};
+		prepareAppendLocations(batch, MetadataDirectoryType::MDT_EDGE_ENTITY, firstEdgeId, lastEdgeId, expectedCount,
+							   converted);
+	}
+
+	void LocationDirectory::prepareAppendPageLocations(MetadataWriteBatch &batch, uint64_t firstPageId,
+													   uint64_t lastPageId, size_t expectedCount,
+													   const PageLocationCursor &cursor) {
+		if (!cursor) {
+			throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
+										"relocatable streamed Page directory append requires a source cursor");
+		}
+		const PageLocationProducer producer = [&cursor](const PageLocationSink &consume) {
+			for (;;) {
+				const std::optional<PageLocation> location = cursor();
+				if (!location.has_value()) {
+					return;
+				}
+				consume(*location);
+			}
+		};
+		prepareAppendPageLocations(batch, firstPageId, lastPageId, expectedCount, producer);
+	}
+
+	void LocationDirectory::prepareAppendPageLocations(MetadataWriteBatch &batch, uint64_t firstPageId,
+													   uint64_t lastPageId, size_t expectedCount,
+													   const PageLocationProducer &producer) {
+		if (!producer) {
+			throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
+										"relocatable streamed Page directory append requires a source producer");
+		}
+		const LocationEntryProducer converted = [&producer](const LocationEntrySink &consume) {
+			producer([&consume](const PageLocation &location) {
+				consume({location.page_id.value(), location.segment_id, location.generation, location.page_index, 1U,
+						 location.free_bytes});
+			});
+		};
+		prepareAppendLocations(batch, MetadataDirectoryType::MDT_PAGE, firstPageId, lastPageId, expectedCount,
+							   converted);
+	}
 
 	void LocationDirectory::prepareUpsertPages(MetadataWriteBatch &batch, std::span<const PageLocation> entries) {
 		std::vector<LocationLeafEntry> converted;
@@ -732,16 +1487,20 @@ namespace graph::storage {
 			}
 			previous = entry.logical_id;
 		}
-		const Superblock &current = batch.current();
+		// A streamed Page append may have already built a candidate root in this
+		// batch. Later typed pages must COW from that root rather than discard it
+		// by reopening the published generation.
+		const Superblock &current =
+				directoryType == MetadataDirectoryType::MDT_PAGE ? batch.candidate() : batch.current();
 		const Generation generation = batch.generation();
 		const LogSequenceNumber lsn = batch.checkpointLsn();
 		const uint16_t targetLevel = requiredRootLevel(entries.back().logical_id);
 		std::unique_ptr<MutableNode> root;
-		if (!rootFor(current, directoryType).isValid()) {
+		if (!rootFor(pages_, current, directoryType, &batch).isValid()) {
 			root = makeNode(directoryType, CatalogRadixPageKind::CRPK_ROOT, targetLevel, generation, lsn, batch);
 		} else {
 			root = std::make_unique<MutableNode>();
-			root->page = readRoot(pages_, current, directoryType);
+			root->page = readRoot(pages_, current, directoryType, &batch);
 			while (root->page.level < targetLevel) {
 				root->page.kind = CatalogRadixPageKind::CRPK_INTERNAL;
 				root->page.generation = generation;
@@ -759,7 +1518,7 @@ namespace graph::storage {
 				writeNode(*root, CatalogRadixPageKind::CRPK_ROOT, generation, lsn, pages_, batch);
 		switch (directoryType) {
 			case MetadataDirectoryType::MDT_PAGE:
-				batch.setPageDirectoryRoot(newRoot);
+				publishPageDirectoryRoot(batch, newRoot);
 				break;
 			case MetadataDirectoryType::MDT_EXTENT:
 				batch.setExtentDirectoryRoot(newRoot);
@@ -805,11 +1564,14 @@ namespace graph::storage {
 			}
 			previousErased = logicalId;
 		}
-		const Superblock &current = batch.current();
+		// See prepareUpsert(): Page mutations in one batch compose from the
+		// candidate root so streamed routes remain reachable with later Index pages.
+		const Superblock &current =
+				directoryType == MetadataDirectoryType::MDT_PAGE ? batch.candidate() : batch.current();
 		const Generation generation = batch.generation();
 		const LogSequenceNumber lsn = batch.checkpointLsn();
 		std::unique_ptr<MutableNode> root;
-		if (!rootFor(current, directoryType).isValid()) {
+		if (!rootFor(pages_, current, directoryType, &batch).isValid()) {
 			if (entries.empty()) {
 				throwLocationDirectoryError(FormatError::FERR_INVALID_STATE,
 											"relocatable location replacement cannot erase an absent directory");
@@ -818,7 +1580,7 @@ namespace graph::storage {
 							requiredRootLevel(entries.back().logical_id), generation, lsn, batch);
 		} else {
 			root = std::make_unique<MutableNode>();
-			root->page = readRoot(pages_, current, directoryType);
+			root->page = readRoot(pages_, current, directoryType, &batch);
 			const uint16_t targetLevel =
 					entries.empty() ? root->page.level : requiredRootLevel(entries.back().logical_id);
 			while (root->page.level < targetLevel) {
@@ -835,13 +1597,13 @@ namespace graph::storage {
 			applyMutation(*root, entry, directoryType, generation, lsn, current, pages_, batch);
 		}
 		for (uint64_t logicalId: erasedLogicalIds) {
-			applyErase(*root, logicalId, directoryType, generation, lsn, current, pages_);
+			applyErase(*root, logicalId, directoryType, generation, lsn, current, pages_, &batch);
 		}
 		const PhysicalPageRef newRoot =
 				writeNode(*root, CatalogRadixPageKind::CRPK_ROOT, generation, lsn, pages_, batch);
 		switch (directoryType) {
 			case MetadataDirectoryType::MDT_PAGE:
-				batch.setPageDirectoryRoot(newRoot);
+				publishPageDirectoryRoot(batch, newRoot);
 				break;
 			case MetadataDirectoryType::MDT_EXTENT:
 				batch.setExtentDirectoryRoot(newRoot);
@@ -879,6 +1641,39 @@ namespace graph::storage {
 		}
 	}
 
+	void LocationDirectory::prepareLogicalRootChildren(MetadataWriteBatch &batch) {
+		if (!batch.candidate().usesPageDirectoryBootstrap()) {
+			return;
+		}
+		// The bootstrap owns the data-directory root's physical anchor, while the
+		// directory itself may route every descendant through stable PageIds.
+		if (const std::optional<PhysicalPageRef> dataRoot = batch.pendingBootstrapDataRoot();
+			dataRoot.has_value() && batch.ownsAllocatedPage(*dataRoot)) {
+			batch.setPendingBootstrapDataRoot(
+					logicalizeOwnedInternalChildren(*dataRoot, MetadataDirectoryType::MDT_PAGE, true, pages_, batch));
+		}
+		constexpr std::array directoryTypes = {
+				MetadataDirectoryType::MDT_EXTENT,
+				MetadataDirectoryType::MDT_NODE_ENTITY,
+				MetadataDirectoryType::MDT_EDGE_ENTITY,
+				MetadataDirectoryType::MDT_ENTITY_PROPERTY,
+				MetadataDirectoryType::MDT_STATE,
+				MetadataDirectoryType::MDT_INDEX_ROOT,
+				MetadataDirectoryType::MDT_VECTOR_LOCATION,
+				MetadataDirectoryType::MDT_VECTOR_MANIFEST,
+				MetadataDirectoryType::MDT_LARGE_VALUE_MANIFEST,
+				MetadataDirectoryType::MDT_RETIRE_QUEUE,
+		};
+		for (const MetadataDirectoryType directoryType: directoryTypes) {
+			const PhysicalPageRef rootReference = physicalRootFor(batch.candidate(), directoryType);
+			if (!rootReference.isValid() || !batch.ownsAllocatedPage(rootReference)) {
+				continue;
+			}
+			setPhysicalRoot(batch, directoryType,
+							logicalizeOwnedInternalChildren(rootReference, directoryType, true, pages_, batch));
+		}
+	}
+
 	LocationLeafEntry LocationDirectory::find(const Superblock &superblock, MetadataDirectoryType directoryType,
 											  uint64_t logicalId) const {
 		const std::optional<LocationLeafEntry> entry = findOptional(superblock, directoryType, logicalId);
@@ -896,7 +1691,7 @@ namespace graph::storage {
 		if (logicalId == 0U) {
 			throwLocationDirectoryError(FormatError::FERR_INVALID_STATE, "relocatable location lookup requires an ID");
 		}
-		if (!rootFor(superblock, directoryType).isValid()) {
+		if (!rootFor(pages_, superblock, directoryType).isValid()) {
 			return std::nullopt;
 		}
 		CatalogRadixPage node = readRoot(pages_, superblock, directoryType);
@@ -922,7 +1717,7 @@ namespace graph::storage {
 				}
 				return *position;
 			}
-			CatalogRadixPage child = pages_.readMetadataRadix(*reference);
+			CatalogRadixPage child = pages_.readMetadataRadix(*reference, superblock);
 			if (child.kind != CatalogRadixPageKind::CRPK_INTERNAL || child.directory_type != directoryType ||
 				child.level + 1U != node.level) {
 				throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
@@ -945,7 +1740,7 @@ namespace graph::storage {
 					"relocatable entity range absence proof requires a valid nonempty Node or Edge range");
 		}
 		static_cast<void>(SuperblockCodec::encode(superblock));
-		const PhysicalPageRef rootReference = rootFor(superblock, directoryType);
+		const PhysicalPageRef rootReference = rootFor(pages_, superblock, directoryType);
 		if (!rootReference.isValid()) {
 			return;
 		}
@@ -977,7 +1772,7 @@ namespace graph::storage {
 				}
 				if (node.level != 0U) {
 					const CatalogRadixPage child =
-							pages_.readMetadataRadix(childReference, BufferPoolReadHint::BPRH_SEQUENTIAL);
+							pages_.readMetadataRadix(childReference, superblock, BufferPoolReadHint::BPRH_SEQUENTIAL);
 					if (child.kind != CatalogRadixPageKind::CRPK_INTERNAL || child.directory_type != directoryType ||
 						child.level + 1U != node.level) {
 						throwLocationDirectoryError(
@@ -1034,7 +1829,7 @@ namespace graph::storage {
 			throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
 										"relocatable location directory traversal requires a visitor");
 		}
-		const PhysicalPageRef rootReference = rootFor(superblock, directoryType);
+		const PhysicalPageRef rootReference = rootFor(pages_, superblock, directoryType);
 		if (!rootReference.isValid()) {
 			return true;
 		}
@@ -1075,7 +1870,7 @@ namespace graph::storage {
 					continue;
 				}
 				const CatalogRadixPage child =
-						pages_.readMetadataRadix(childReference, BufferPoolReadHint::BPRH_SEQUENTIAL);
+						pages_.readMetadataRadix(childReference, superblock, BufferPoolReadHint::BPRH_SEQUENTIAL);
 				if (child.kind != CatalogRadixPageKind::CRPK_INTERNAL || child.directory_type != directoryType ||
 					child.level + 1U != node.level) {
 					throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
@@ -1107,7 +1902,7 @@ namespace graph::storage {
 			}
 			return true;
 		}
-		const PhysicalPageRef rootReference = rootFor(superblock, directoryType);
+		const PhysicalPageRef rootReference = rootFor(pages_, superblock, directoryType);
 		if (!rootReference.isValid()) {
 			if (visitedMetadataPages != nullptr) {
 				*visitedMetadataPages = 0U;
@@ -1170,7 +1965,7 @@ namespace graph::storage {
 					continue;
 				}
 				const CatalogRadixPage child =
-						pages_.readMetadataRadix(childReference, BufferPoolReadHint::BPRH_SEQUENTIAL);
+						pages_.readMetadataRadix(childReference, superblock, BufferPoolReadHint::BPRH_SEQUENTIAL);
 				if (child.kind != CatalogRadixPageKind::CRPK_INTERNAL || child.directory_type != directoryType ||
 					child.level + 1U != node.level) {
 					throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
@@ -1430,7 +2225,7 @@ namespace graph::storage {
 		return visitUntil(superblock, MetadataDirectoryType::MDT_NODE_ENTITY,
 						  [&visitor](const LocationLeafEntry &entry) {
 							  return visitor({entry.logical_id, PageId(entry.segment_id.value()), entry.first_page,
-														 static_cast<uint32_t>(entry.generation.value())});
+											  static_cast<uint32_t>(entry.generation.value())});
 						  });
 	}
 
@@ -1443,13 +2238,14 @@ namespace graph::storage {
 		return visitUntil(superblock, MetadataDirectoryType::MDT_EDGE_ENTITY,
 						  [&visitor](const LocationLeafEntry &entry) {
 							  return visitor({entry.logical_id, PageId(entry.segment_id.value()), entry.first_page,
-														 static_cast<uint32_t>(entry.generation.value())});
+											  static_cast<uint32_t>(entry.generation.value())});
 						  });
 	}
 
-	bool LocationDirectory::visitNodePageLocationsAfter(
-			const Superblock &superblock, uint64_t afterNodeId, size_t maximumMetadataPages,
-			const std::function<bool(const EntityPageLocation &)> &visitor, size_t *visitedMetadataPages) const {
+	bool LocationDirectory::visitNodePageLocationsAfter(const Superblock &superblock, uint64_t afterNodeId,
+														size_t maximumMetadataPages,
+														const std::function<bool(const EntityPageLocation &)> &visitor,
+														size_t *visitedMetadataPages) const {
 		if (!visitor || maximumMetadataPages == 0U) {
 			throwLocationDirectoryError(
 					FormatError::FERR_INVALID_HEADER,
@@ -1459,7 +2255,7 @@ namespace graph::storage {
 				superblock, MetadataDirectoryType::MDT_NODE_ENTITY, afterNodeId, maximumMetadataPages,
 				[&visitor](const LocationLeafEntry &entry) {
 					return visitor({entry.logical_id, PageId(entry.segment_id.value()), entry.first_page,
-												static_cast<uint32_t>(entry.generation.value())});
+									static_cast<uint32_t>(entry.generation.value())});
 				},
 				visitedMetadataPages);
 	}
@@ -1477,6 +2273,24 @@ namespace graph::storage {
 		});
 	}
 
+	bool LocationDirectory::visitEntityPropertiesAfter(
+			const Superblock &superblock, uint64_t afterDirectoryId, size_t maximumMetadataPages,
+			const std::function<bool(const EntityPropertyLocation &)> &visitor, size_t *visitedMetadataPages) const {
+		if (!visitor || maximumMetadataPages == 0U) {
+			throwLocationDirectoryError(
+					FormatError::FERR_INVALID_HEADER,
+					"relocatable resumable Entity Property traversal requires a page bound and visitor");
+		}
+		return visitAfter(
+				superblock, MetadataDirectoryType::MDT_ENTITY_PROPERTY, afterDirectoryId, maximumMetadataPages,
+				[&visitor](const LocationLeafEntry &entry) {
+					return visitor({EntityPropertyKey::fromDirectoryId(entry.logical_id),
+									PageId(entry.segment_id.value()), entry.first_page,
+									static_cast<uint32_t>(entry.generation.value())});
+				},
+				visitedMetadataPages);
+	}
+
 	void LocationDirectory::visitStates(const Superblock &superblock,
 										const std::function<void(const StateLocation &)> &visitor) const {
 		if (!visitor) {
@@ -1487,6 +2301,23 @@ namespace graph::storage {
 			visitor({entry.logical_id, PageId(entry.segment_id.value()), entry.first_page,
 					 static_cast<uint32_t>(entry.generation.value())});
 		});
+	}
+
+	bool LocationDirectory::visitStatesAfter(const Superblock &superblock, uint64_t afterStateId,
+											 size_t maximumMetadataPages,
+											 const std::function<bool(const StateLocation &)> &visitor,
+											 size_t *visitedMetadataPages) const {
+		if (!visitor || maximumMetadataPages == 0U) {
+			throwLocationDirectoryError(FormatError::FERR_INVALID_HEADER,
+										"relocatable resumable State traversal requires a page bound and visitor");
+		}
+		return visitAfter(
+				superblock, MetadataDirectoryType::MDT_STATE, afterStateId, maximumMetadataPages,
+				[&visitor](const LocationLeafEntry &entry) {
+					return visitor({entry.logical_id, PageId(entry.segment_id.value()), entry.first_page,
+									static_cast<uint32_t>(entry.generation.value())});
+				},
+				visitedMetadataPages);
 	}
 
 	void LocationDirectory::visitExtents(const Superblock &superblock,
@@ -1562,6 +2393,24 @@ namespace graph::storage {
 		visit(superblock, MetadataDirectoryType::MDT_LARGE_VALUE_MANIFEST, [&visitor](const LocationLeafEntry &entry) {
 			visitor({LargeValueId(entry.logical_id), PageId(entry.segment_id.value()), entry.generation});
 		});
+	}
+
+	bool LocationDirectory::visitLargeValueManifestsAfter(
+			const Superblock &superblock, uint64_t afterValueId, size_t maximumMetadataPages,
+			const std::function<bool(const LargeValueManifestLocation &)> &visitor,
+			size_t *visitedMetadataPages) const {
+		if (!visitor || maximumMetadataPages == 0U) {
+			throwLocationDirectoryError(
+					FormatError::FERR_INVALID_HEADER,
+					"relocatable resumable LargeValue Manifest traversal requires a page bound and visitor");
+		}
+		return visitAfter(
+				superblock, MetadataDirectoryType::MDT_LARGE_VALUE_MANIFEST, afterValueId, maximumMetadataPages,
+				[&visitor](const LocationLeafEntry &entry) {
+					return visitor(
+							{LargeValueId(entry.logical_id), PageId(entry.segment_id.value()), entry.generation});
+				},
+				visitedMetadataPages);
 	}
 
 	void LocationDirectory::visitRetireQueue(const Superblock &superblock,

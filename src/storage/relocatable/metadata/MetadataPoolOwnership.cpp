@@ -25,9 +25,7 @@ namespace graph::storage {
 
 	namespace {
 
-		[[nodiscard]] constexpr uint8_t ownershipFlag(bool condition) {
-			return static_cast<uint8_t>(condition);
-		}
+		[[nodiscard]] constexpr uint8_t ownershipFlag(bool condition) { return static_cast<uint8_t>(condition); }
 
 	} // namespace
 
@@ -63,10 +61,10 @@ namespace graph::storage {
 			const bool duplicatePoolSlot = !catalogPools.emplace(entry.physical_slot.value(), entry).second;
 			if ((invalid != 0U) | duplicatePoolSlot) {
 				throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable Catalog has an invalid or duplicate metadata-pool ownership entry");
+									  "relocatable Catalog has an invalid or duplicate metadata-pool ownership entry");
 			}
 			metadata_page_pool_.registerCatalogPool(entry.physical_slot, entry.segment_id, entry.generation,
-														entry.committed_lsn);
+													entry.committed_lsn);
 		});
 
 		for (const PhysicalSlotId slot: metadata_page_pool_.poolSlots()) {
@@ -80,15 +78,16 @@ namespace graph::storage {
 						static_cast<uint8_t>(header.generation != current.metadata_emergency_reserve.generation) |
 						static_cast<uint8_t>(header.committed_lsn != current.metadata_emergency_reserve.committed_lsn);
 				if (invalidReserve != 0U) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "relocatable metadata emergency reserve disagrees with its bootstrap descriptor");
+					throw FormatException(
+							FormatError::FERR_INVALID_STATE,
+							"relocatable metadata emergency reserve disagrees with its bootstrap descriptor");
 				}
 				continue;
 			}
 			const auto entry = catalogPools.find(slot.value());
 			if (entry == catalogPools.end()) {
 				throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable reachable metadata pool has no matching durable Catalog ownership");
+									  "relocatable reachable metadata pool has no matching durable Catalog ownership");
 			}
 			// `registerCatalogPool()` above validates this exact header identity
 			// before retaining it, so recovery has one authoritative pool-header
@@ -107,6 +106,7 @@ namespace graph::storage {
 			return false;
 		};
 		std::set<uint64_t> identitiesBoundInBatch;
+		std::set<uint64_t> catalogEntriesPreparedInBatch;
 
 		for (size_t pass = 0; pass < MAX_OWNERSHIP_PUBLICATION_PASSES; ++pass) {
 			std::vector<CatalogEntry> newEntries;
@@ -117,36 +117,51 @@ namespace graph::storage {
 						 ownershipFlag(slot == batch.current().metadata_emergency_reserve.physical_slot) &
 						 ownershipFlag(batch.candidate().metadata_emergency_reserve.isValid()) &
 						 ownershipFlag(slot != batch.candidate().metadata_emergency_reserve.physical_slot) &
-						 ownershipFlag(header.segment_id == batch.current().metadata_emergency_reserve.pool_token)) != 0U;
+						 ownershipFlag(header.segment_id == batch.current().metadata_emergency_reserve.pool_token)) !=
+						0U;
 				const bool isCandidateEmergencyReserve =
 						(ownershipFlag(batch.candidate().metadata_emergency_reserve.isValid()) &
 						 ownershipFlag(slot == batch.candidate().metadata_emergency_reserve.physical_slot)) != 0U;
 				if (isCandidateEmergencyReserve) {
 					const MetadataEmergencyReserveDescriptor &reserve = batch.candidate().metadata_emergency_reserve;
 					const uint8_t invalidReserve = static_cast<uint8_t>(header.segment_id != reserve.pool_token) |
-							static_cast<uint8_t>(header.generation != reserve.generation) |
-							static_cast<uint8_t>(header.committed_lsn != reserve.committed_lsn);
+												   static_cast<uint8_t>(header.generation != reserve.generation) |
+												   static_cast<uint8_t>(header.committed_lsn != reserve.committed_lsn);
 					if (invalidReserve != 0U) {
-						throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "relocatable metadata emergency reserve disagrees with its bootstrap descriptor");
+						throw FormatException(
+								FormatError::FERR_INVALID_STATE,
+								"relocatable metadata emergency reserve disagrees with its bootstrap descriptor");
 					}
 					continue;
 				}
 				const bool newlyCreated = createdInBatch(slot);
 				if (newlyCreated && header.segment_id == SegmentId(slot.value()) &&
-					identitiesBoundInBatch.emplace(slot.value()).second) {
+					!batch.catalogPoolIdentityBound(slot) && identitiesBoundInBatch.emplace(slot.value()).second) {
 					metadata_page_pool_.bindCatalogPoolIdentity(slot, batch.allocateLogicalSegmentId(),
-																	header.generation, header.committed_lsn);
+												header.generation, header.committed_lsn);
+					batch.markCatalogPoolIdentityBound(slot);
 					header = metadata_page_pool_.poolHeader(slot);
 				}
+				if (catalogEntriesPreparedInBatch.contains(slot.value()) ||
+					batch.catalogPoolOwnershipPrepared(slot)) {
+					// The prior pass already staged this entry in the same candidate
+					// Catalog root. Rewriting it again would consume fresh COW pages and
+					// can recursively create further pools without changing ownership.
+					continue;
+				}
 
-				const std::optional<CatalogEntry> existing = catalog_.findOptional(batch.candidate(), header.segment_id);
+				// The current root is the only route context guaranteed to be
+				// published while this batch is being assembled. New pools cannot have
+				// a current-generation entry by construction; released candidates are
+				// distinguished below using the candidate allocator bit.
+				const std::optional<CatalogEntry> existing = catalog_.findOptional(batch.current(), header.segment_id);
 				if (existing.has_value()) {
 					const bool releasedByThisCandidate =
 							(ownershipFlag(existing->state == SegmentState::SGS_OBSOLETE) &
 							 ownershipFlag(existing->kind == SegmentKind::SGK_METADATA_PAGE_POOL) &
-							 ownershipFlag(existing->physical_slot == slot) & ownershipFlag(existing->owner_id == slot.value()) &
-							 ownershipFlag(!allocator_.isAllocated(batch.candidate(), slot))) != 0U;
+							 ownershipFlag(existing->physical_slot == slot) &
+							 ownershipFlag(existing->owner_id == slot.value()) &
+														 ownershipFlag(!allocator_.isAllocatedForMutation(batch, slot))) != 0U;
 					if (releasedByThisCandidate) {
 						continue;
 					}
@@ -165,25 +180,27 @@ namespace graph::storage {
 					continue;
 				}
 				if ((ownershipFlag(batch.isDataSlotReserved(slot)) &
-					 ownershipFlag(!allocator_.isAllocated(batch.candidate(), slot))) != 0U) {
+						ownershipFlag(!allocator_.isAllocatedForMutation(batch, slot))) != 0U) {
 					// The metadata-pool reclaimer removes Catalog ownership and the
 					// allocator bit in this same batch. It retains the pool in memory
 					// until the A/B publication succeeds, so do not recreate it here.
 					continue;
 				}
 				if ((ownershipFlag(batch.current().catalog_root.isValid()) & ownershipFlag(!newlyCreated) &
-					 ownershipFlag(!promotedEmergencyReserve)) != 0U) {
+						ownershipFlag(!promotedEmergencyReserve)) != 0U) {
 					throw FormatException(
 							FormatError::FERR_INVALID_STATE,
 							"relocatable published metadata pool is missing its durable Catalog ownership");
 				}
 
-				if (!allocator_.isAllocated(batch.candidate(), slot)) {
+				if (!allocator_.isAllocatedForMutation(batch, slot)) {
 					allocator_.prepareSetAllocated(batch, slot, true);
 				}
 				newEntries.push_back(CatalogEntry{header.segment_id, slot, SegmentKind::SGK_METADATA_PAGE_POOL,
-																  slot.value(), header.generation, SegmentState::SGS_SEALED,
-																  header.committed_lsn});
+											  slot.value(), header.generation, SegmentState::SGS_SEALED,
+											  header.committed_lsn});
+				catalogEntriesPreparedInBatch.emplace(slot.value());
+				batch.markCatalogPoolOwnershipPrepared(slot);
 			}
 
 			if (newEntries.empty()) {
@@ -208,14 +225,14 @@ namespace graph::storage {
 				// to free space; a read-only open must never repair on-disk state.
 				if (read_only_) {
 					throw FormatException(
-								FormatError::FERR_INVALID_STATE,
-								"relocatable read-only metadata open found an unowned metadata pool requiring recovery");
+							FormatError::FERR_INVALID_STATE,
+							"relocatable read-only metadata open found an unowned metadata pool requiring recovery");
 				}
 				metadata_page_pool_.abandonUnpublishedPool(slot);
 				continue;
 			}
 			throw FormatException(FormatError::FERR_INVALID_STATE,
-							  "relocatable metadata pool has reachable frames without free-space ownership");
+								  "relocatable metadata pool has reachable frames without free-space ownership");
 		}
 	}
 

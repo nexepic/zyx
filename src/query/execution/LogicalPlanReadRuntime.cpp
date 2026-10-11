@@ -26,7 +26,8 @@
 #include <utility>
 
 #include "graph/core/Types.hpp"
-#include "graph/query/execution/operators/AggregateAccumulator.hpp"
+#include "graph/debug/PerfTrace.hpp"
+#include "graph/query/execution/LogicalAggregateAccumulator.hpp"
 #include "graph/query/execution/CsvReader.hpp"
 #include "graph/query/expressions/EvaluationContext.hpp"
 #include "graph/query/expressions/Expression.hpp"
@@ -118,6 +119,14 @@ namespace graph::query::execution {
 				throw std::overflow_error(message);
 			}
 			++value;
+		}
+
+		void validateAdjacentEdgeOrder(uint64_t edgeId, uint64_t &previousEdgeId, const char *context) {
+			if (edgeId == 0U || (previousEdgeId != 0U && edgeId <= previousEdgeId)) {
+				throw std::runtime_error(std::string("logical graph backend returned non-monotonic ") + context +
+								 " adjacency Edge IDs");
+			}
+			previousEdgeId = edgeId;
 		}
 
 		[[nodiscard]] int hexDigit(char value) {
@@ -292,6 +301,78 @@ namespace graph::query::execution {
 				throw std::overflow_error("logical-plan integer multiplication overflowed");
 			}
 			return left * right;
+		}
+
+		[[nodiscard]] std::pair<int, int> addMonthsToYearMonth(int year, int month, int64_t months) {
+			const int64_t zeroBasedMonth = checkedAdd(checkedMultiply(static_cast<int64_t>(year), 12LL),
+																	 checkedAdd(static_cast<int64_t>(month) - 1LL, months));
+			int64_t resultYear = zeroBasedMonth / 12LL;
+			int64_t resultMonth = zeroBasedMonth % 12LL;
+			if (resultMonth < 0LL) {
+				resultMonth += 12LL;
+				--resultYear;
+			}
+			if (resultYear < static_cast<int64_t>(std::numeric_limits<int>::min()) ||
+				resultYear > static_cast<int64_t>(std::numeric_limits<int>::max())) {
+				throw std::overflow_error("logical-plan temporal year overflowed");
+			}
+			return {static_cast<int>(resultYear), static_cast<int>(resultMonth + 1LL)};
+		}
+
+		[[nodiscard]] int64_t durationWholeDays(const TemporalDuration &duration) {
+			constexpr int64_t NANOS_PER_DAY = 86'400LL * 1'000'000'000LL;
+			return checkedAdd(duration.days, duration.nanos / NANOS_PER_DAY);
+		}
+
+		[[nodiscard]] PropertyValue addDurationToDate(const TemporalDate &date, const TemporalDuration &duration) {
+			const auto [year, month] = addMonthsToYearMonth(date.year(), date.month(), duration.months);
+			const TemporalDate monthAdjusted = TemporalDate::fromYMD(year, month, date.day());
+			const int64_t epochDays = checkedAdd(static_cast<int64_t>(monthAdjusted.epochDays), durationWholeDays(duration));
+			if (epochDays < static_cast<int64_t>(std::numeric_limits<int32_t>::min()) ||
+				epochDays > static_cast<int64_t>(std::numeric_limits<int32_t>::max())) {
+				throw std::overflow_error("logical-plan temporal date overflowed");
+			}
+			return PropertyValue(TemporalDate{static_cast<int32_t>(epochDays)});
+		}
+
+		[[nodiscard]] PropertyValue addDurationToDateTime(const TemporalDateTime &dateTime,
+																	 const TemporalDuration &duration) {
+			const auto [year, month] = addMonthsToYearMonth(dateTime.year(), dateTime.month(), duration.months);
+			TemporalDateTime result = TemporalDateTime::fromComponents(
+				year, month, dateTime.day(), dateTime.hour(), dateTime.minute(), dateTime.second());
+			constexpr int64_t MILLIS_PER_DAY = 86'400LL * 1'000LL;
+			const int64_t dayMillis = checkedMultiply(duration.days, MILLIS_PER_DAY);
+			const int64_t nanosMillis = duration.nanos / 1'000'000LL;
+			result.epochMillis = checkedAdd(result.epochMillis, checkedAdd(dayMillis, nanosMillis));
+			return PropertyValue(result);
+		}
+
+		[[nodiscard]] PropertyValue temporalComponent(const PropertyValue &value, std::string_view component) {
+			if (value.getType() == PropertyType::DATE) {
+				const TemporalDate &date = std::get<TemporalDate>(value.getVariant());
+				if (component == "year") return PropertyValue(static_cast<int64_t>(date.year()));
+				if (component == "month") return PropertyValue(static_cast<int64_t>(date.month()));
+				if (component == "day") return PropertyValue(static_cast<int64_t>(date.day()));
+				if (component == "epochDays") return PropertyValue(static_cast<int64_t>(date.epochDays));
+			}
+			if (value.getType() == PropertyType::DATETIME) {
+				const TemporalDateTime &dateTime = std::get<TemporalDateTime>(value.getVariant());
+				if (component == "year") return PropertyValue(static_cast<int64_t>(dateTime.year()));
+				if (component == "month") return PropertyValue(static_cast<int64_t>(dateTime.month()));
+				if (component == "day") return PropertyValue(static_cast<int64_t>(dateTime.day()));
+				if (component == "hour") return PropertyValue(static_cast<int64_t>(dateTime.hour()));
+				if (component == "minute") return PropertyValue(static_cast<int64_t>(dateTime.minute()));
+				if (component == "second") return PropertyValue(static_cast<int64_t>(dateTime.second()));
+				if (component == "epochMillis") return PropertyValue(dateTime.epochMillis);
+			}
+			if (value.getType() == PropertyType::DURATION) {
+				const TemporalDuration &duration = std::get<TemporalDuration>(value.getVariant());
+				if (component == "months") return PropertyValue(duration.months);
+				if (component == "days") return PropertyValue(duration.days);
+				if (component == "seconds") return PropertyValue(duration.nanos / 1'000'000'000LL);
+				if (component == "nanoseconds") return PropertyValue(duration.nanos);
+			}
+			return PropertyValue();
 		}
 
 		[[nodiscard]] PropertyValue scalarValue(const LogicalPlanReadValue &value) {
@@ -530,6 +611,10 @@ namespace graph::query::execution {
 			}
 			const LogicalPlanReadValue &binding = requireBinding(row, variable);
 			if (const PropertyValue *value = std::get_if<PropertyValue>(&binding)) {
+				if (value->getType() == PropertyType::DATE || value->getType() == PropertyType::DATETIME ||
+					value->getType() == PropertyType::DURATION) {
+					return temporalComponent(*value, key);
+				}
 				if (value->getType() != PropertyType::MAP) {
 					return PropertyValue();
 				}
@@ -616,28 +701,6 @@ namespace graph::query::execution {
 			std::optional<PropertyMap> previous_properties_;
 		};
 
-		[[nodiscard]] bool truthy(const PropertyValue &value) {
-			if (isNull(value)) {
-				return false;
-			}
-			if (const bool *boolean = std::get_if<bool>(&value.getVariant())) {
-				return *boolean;
-			}
-			if (const int64_t *integer = std::get_if<int64_t>(&value.getVariant())) {
-				return *integer != 0;
-			}
-			if (const double *number = std::get_if<double>(&value.getVariant())) {
-				return *number != 0.0;
-			}
-			if (const std::string *string = std::get_if<std::string>(&value.getVariant())) {
-				return !string->empty();
-			}
-			if (const auto *list = std::get_if<std::vector<PropertyValue>>(&value.getVariant())) {
-				return !list->empty();
-			}
-			return false;
-		}
-
 		[[nodiscard]] const std::vector<PropertyValue> &requireBoundedList(const PropertyValue &value,
 																				const ExecutionState &state,
 																				const char *operation) {
@@ -671,10 +734,9 @@ namespace graph::query::execution {
 				throw std::invalid_argument("logical-plan pattern expression has an unknown direction");
 			}
 			size_t sourceEdges = 0U;
-			std::unordered_set<uint64_t> bothDirectionEdges;
 			const auto visitDirection = [&](storage::LogicalGraphReadDirection adjacencyDirection) {
 				std::optional<storage::LogicalGraphAdjacencyContinuation> continuation;
-				std::unordered_set<uint64_t> directionEdges;
+				uint64_t previousEdgeId = 0U;
 				for (;;) {
 					if (sourceEdges == state.bounds.maximum_edges_per_node) {
 						throw std::runtime_error("logical-plan pattern expression exceeded its per-Node Edge bound");
@@ -693,9 +755,7 @@ namespace graph::query::execution {
 					for (const storage::LogicalGraphEdge &edge: page.edges) {
 						checkGuard(state);
 						validateEdge(edge);
-						if (!directionEdges.insert(edge.edge_id).second) {
-							throw std::runtime_error("logical graph backend returned a duplicate pattern-expression Edge");
-						}
+						validateAdjacentEdgeOrder(edge.edge_id, previousEdgeId, "pattern-expression");
 						const bool endpointMatches = adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
 														 ? edge.source_node_id == source.node_id
 														 : edge.target_node_id == source.node_id;
@@ -706,8 +766,12 @@ namespace graph::query::execution {
 										 "logical-plan pattern-expression per-Node Edge counter overflowed");
 						incrementBounded(state.stats.edges_scanned,
 										 "logical-plan pattern-expression Edge counter overflowed");
+						// A correct global adjacency index returns a self-loop in both directions.
+						// OUT is visited first, so omit only that duplicate without retaining a
+						// degree-sized Edge-ID set.
 						if (direction == expressions::PatternDirection::PAT_BOTH &&
-							!bothDirectionEdges.insert(edge.edge_id).second) {
+							adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_INCOMING &&
+							edge.source_node_id == source.node_id) {
 							continue;
 						}
 						if (!edgeType.empty() && edge.type != edgeType) {
@@ -772,6 +836,9 @@ namespace graph::query::execution {
 					if (literal.isDouble()) {
 						return PropertyValue(literal.getDoubleValue());
 					}
+					if (literal.isPropertyValue()) {
+						return literal.getPropertyValue();
+					}
 					return PropertyValue(literal.getStringValue());
 				}
 				case ExpressionType::VARIABLE_REFERENCE:
@@ -801,20 +868,101 @@ namespace graph::query::execution {
 					}
 					return found->second;
 				}
-				case ExpressionType::EXPR_LIST_LITERAL:
-					return dynamic_cast<const expressions::ListLiteralExpression &>(expression).getValue();
+				case ExpressionType::EXPR_LIST_LITERAL: {
+					const auto &list = dynamic_cast<const expressions::ListLiteralExpression &>(expression);
+					if (list.isStatic()) {
+						if (list.getValue().getList().size() > state.bounds.maximum_rows) {
+							throw std::runtime_error("logical-plan List literal exceeded the configured List bound");
+						}
+						return list.getValue();
+					}
+					if (list.getElements().size() > state.bounds.maximum_rows) {
+						throw std::runtime_error("logical-plan List literal exceeded the configured List bound");
+					}
+					std::vector<PropertyValue> values;
+					values.reserve(list.getElements().size());
+					for (const auto &element: list.getElements()) {
+						values.push_back(scalarValue(evaluateExpression(*element, row, state)));
+					}
+					return PropertyValue(std::move(values));
+				}
 				default:
 					return evaluateScalarExpression(expression, row, state);
 			}
 		}
 
 		[[nodiscard]] PropertyValue arithmetic(expressions::BinaryOperatorType operation, const PropertyValue &left,
-											   const PropertyValue &right) {
+																	   const PropertyValue &right) {
 			if (isNull(left) || isNull(right)) {
 				return PropertyValue();
 			}
+			const PropertyType leftType = left.getType();
+			const PropertyType rightType = right.getType();
+			if (operation == expressions::BinaryOperatorType::BOP_ADD && leftType == PropertyType::DATE &&
+				rightType == PropertyType::DURATION) {
+				return addDurationToDate(std::get<TemporalDate>(left.getVariant()),
+													 std::get<TemporalDuration>(right.getVariant()));
+			}
+			if (operation == expressions::BinaryOperatorType::BOP_ADD && leftType == PropertyType::DURATION &&
+				rightType == PropertyType::DATE) {
+				return addDurationToDate(std::get<TemporalDate>(right.getVariant()),
+													 std::get<TemporalDuration>(left.getVariant()));
+			}
+			if (operation == expressions::BinaryOperatorType::BOP_ADD && leftType == PropertyType::DATETIME &&
+				rightType == PropertyType::DURATION) {
+				return addDurationToDateTime(std::get<TemporalDateTime>(left.getVariant()),
+														 std::get<TemporalDuration>(right.getVariant()));
+			}
+			if (operation == expressions::BinaryOperatorType::BOP_ADD && leftType == PropertyType::DURATION &&
+				rightType == PropertyType::DATETIME) {
+				return addDurationToDateTime(std::get<TemporalDateTime>(right.getVariant()),
+														 std::get<TemporalDuration>(left.getVariant()));
+			}
+			if (leftType == PropertyType::DURATION && rightType == PropertyType::DURATION) {
+				const TemporalDuration &leftDuration = std::get<TemporalDuration>(left.getVariant());
+				const TemporalDuration &rightDuration = std::get<TemporalDuration>(right.getVariant());
+				if (operation == expressions::BinaryOperatorType::BOP_ADD) {
+					return PropertyValue(TemporalDuration{checkedAdd(leftDuration.months, rightDuration.months),
+							checkedAdd(leftDuration.days, rightDuration.days), checkedAdd(leftDuration.nanos, rightDuration.nanos)});
+				}
+				if (operation == expressions::BinaryOperatorType::BOP_SUBTRACT) {
+					return PropertyValue(TemporalDuration{checkedSubtract(leftDuration.months, rightDuration.months),
+							checkedSubtract(leftDuration.days, rightDuration.days),
+							checkedSubtract(leftDuration.nanos, rightDuration.nanos)});
+				}
+			}
+			if (operation == expressions::BinaryOperatorType::BOP_SUBTRACT && leftType == PropertyType::DATE &&
+				rightType == PropertyType::DURATION) {
+				const TemporalDuration &duration = std::get<TemporalDuration>(right.getVariant());
+				return addDurationToDate(std::get<TemporalDate>(left.getVariant()),
+													 TemporalDuration{checkedSubtract(0LL, duration.months),
+																		checkedSubtract(0LL, duration.days),
+																		checkedSubtract(0LL, duration.nanos)});
+			}
+			if (operation == expressions::BinaryOperatorType::BOP_SUBTRACT && leftType == PropertyType::DATETIME &&
+				rightType == PropertyType::DURATION) {
+				const TemporalDuration &duration = std::get<TemporalDuration>(right.getVariant());
+				return addDurationToDateTime(std::get<TemporalDateTime>(left.getVariant()),
+														 TemporalDuration{checkedSubtract(0LL, duration.months),
+																		 checkedSubtract(0LL, duration.days),
+																		 checkedSubtract(0LL, duration.nanos)});
+			}
+			if (operation == expressions::BinaryOperatorType::BOP_SUBTRACT && leftType == PropertyType::DATE &&
+				rightType == PropertyType::DATE) {
+				const TemporalDate &leftDate = std::get<TemporalDate>(left.getVariant());
+				const TemporalDate &rightDate = std::get<TemporalDate>(right.getVariant());
+				return PropertyValue(TemporalDuration{0LL, static_cast<int64_t>(leftDate.epochDays) - rightDate.epochDays, 0LL});
+			}
+			if (operation == expressions::BinaryOperatorType::BOP_SUBTRACT && leftType == PropertyType::DATETIME &&
+				rightType == PropertyType::DATETIME) {
+				constexpr int64_t MILLIS_PER_DAY = 86'400LL * 1'000LL;
+				const int64_t milliseconds = checkedSubtract(std::get<TemporalDateTime>(left.getVariant()).epochMillis,
+																									 std::get<TemporalDateTime>(right.getVariant()).epochMillis);
+				return PropertyValue(TemporalDuration{0LL, milliseconds / MILLIS_PER_DAY,
+																			 (milliseconds % MILLIS_PER_DAY) * 1'000'000LL});
+			}
 			if (operation == expressions::BinaryOperatorType::BOP_ADD &&
-				(left.getType() == PropertyType::STRING || right.getType() == PropertyType::STRING)) {
+				(leftType == PropertyType::STRING || rightType == PropertyType::STRING)) {
 				// Keep the logical path aligned with the established expression evaluator.
 				return PropertyValue(expressions::EvaluationContext::toString(left) +
 									 expressions::EvaluationContext::toString(right));
@@ -967,6 +1115,120 @@ namespace graph::query::execution {
 			return result;
 		}
 
+		void requireScalarFunctionArgumentType(const PropertyValue &value, const PropertyType expected,
+																std::string_view functionName, const size_t argumentIndex) {
+			if (isNull(value) || value.getType() == expected) {
+				return;
+			}
+			throw std::runtime_error("logical-plan " + std::string(functionName) + "() argument " +
+							 std::to_string(argumentIndex + 1U) + " has an invalid type");
+		}
+
+		void requireScalarFunctionArgumentOneOf(const PropertyValue &value, const PropertyType first,
+																 const PropertyType second, std::string_view functionName,
+																 const size_t argumentIndex) {
+			if (isNull(value) || value.getType() == first || value.getType() == second) {
+				return;
+			}
+			throw std::runtime_error("logical-plan " + std::string(functionName) + "() argument " +
+							 std::to_string(argumentIndex + 1U) + " has an invalid type");
+		}
+
+		// The legacy FunctionRegistry remains a storage-neutral implementation
+		// detail during retirement, but the native public path owns Cypher's typed
+		// contract. Validate it here instead of inheriting permissive display
+		// conversion behavior.
+		void validateNativeScalarFunctionTypes(const std::string_view functionName,
+																 const std::vector<PropertyValue> &arguments) {
+			const bool unaryNumeric = functionName == "abs" || functionName == "ceil" || functionName == "floor" ||
+										  functionName == "round" || functionName == "sqrt" || functionName == "sign" ||
+										  functionName == "log" || functionName == "log10" || functionName == "exp" ||
+										  functionName == "sin" || functionName == "cos" || functionName == "tan" ||
+										  functionName == "asin" || functionName == "acos" || functionName == "atan";
+			if (unaryNumeric) {
+				requireScalarFunctionArgumentOneOf(
+						arguments.front(), PropertyType::INTEGER, PropertyType::DOUBLE, functionName, 0U);
+				return;
+			}
+			if (functionName == "pow" || functionName == "atan2") {
+				for (size_t index = 0U; index < arguments.size(); ++index) {
+					requireScalarFunctionArgumentOneOf(
+							arguments[index], PropertyType::INTEGER, PropertyType::DOUBLE, functionName, index);
+				}
+				return;
+			}
+			const bool unaryString = functionName == "upper" || functionName == "lower" ||
+									 functionName == "toupper" || functionName == "tolower" ||
+									 functionName == "trim" || functionName == "ltrim" || functionName == "rtrim";
+			if (unaryString) {
+				requireScalarFunctionArgumentType(arguments.front(), PropertyType::STRING, functionName, 0U);
+				return;
+			}
+			if (functionName == "substring") {
+				requireScalarFunctionArgumentType(arguments[0], PropertyType::STRING, functionName, 0U);
+				requireScalarFunctionArgumentType(arguments[1], PropertyType::INTEGER, functionName, 1U);
+				if (arguments.size() == 3U) {
+					requireScalarFunctionArgumentType(arguments[2], PropertyType::INTEGER, functionName, 2U);
+				}
+				return;
+			}
+			if (functionName == "startswith" || functionName == "endswith" || functionName == "contains" ||
+					functionName == "split") {
+				requireScalarFunctionArgumentType(arguments[0], PropertyType::STRING, functionName, 0U);
+				requireScalarFunctionArgumentType(arguments[1], PropertyType::STRING, functionName, 1U);
+				return;
+			}
+			if (functionName == "replace") {
+				for (size_t index = 0U; index < arguments.size(); ++index) {
+					requireScalarFunctionArgumentType(arguments[index], PropertyType::STRING, functionName, index);
+				}
+				return;
+			}
+			if (functionName == "left" || functionName == "right") {
+				requireScalarFunctionArgumentType(arguments[0], PropertyType::STRING, functionName, 0U);
+				requireScalarFunctionArgumentType(arguments[1], PropertyType::INTEGER, functionName, 1U);
+				return;
+			}
+			if (functionName == "length" || functionName == "size" || functionName == "reverse") {
+				requireScalarFunctionArgumentOneOf(
+						arguments.front(), PropertyType::STRING, PropertyType::LIST, functionName, 0U);
+				return;
+			}
+			if (functionName == "head" || functionName == "tail" || functionName == "last" ||
+					functionName == "nodes" || functionName == "relationships") {
+				requireScalarFunctionArgumentType(arguments.front(), PropertyType::LIST, functionName, 0U);
+			}
+		}
+
+		[[nodiscard]] PropertyValue evaluateNativeToBoolean(const PropertyValue &argument) {
+			if (isNull(argument)) {
+				return PropertyValue();
+			}
+			if (const bool *value = std::get_if<bool>(&argument.getVariant())) {
+				return PropertyValue(*value);
+			}
+			if (const int64_t *value = std::get_if<int64_t>(&argument.getVariant())) {
+				return PropertyValue(*value != 0);
+			}
+			if (const double *value = std::get_if<double>(&argument.getVariant())) {
+				if (!std::isfinite(*value)) {
+					throw std::runtime_error("logical-plan toBoolean() requires a finite numeric argument");
+				}
+				return PropertyValue(*value != 0.0);
+			}
+			if (const std::string *value = std::get_if<std::string>(&argument.getVariant())) {
+				const std::string normalized = lowerCase(*value);
+				if (normalized == "true") {
+					return PropertyValue(true);
+				}
+				if (normalized == "false") {
+					return PropertyValue(false);
+				}
+				throw std::runtime_error("logical-plan toBoolean() requires true or false text");
+			}
+			throw std::runtime_error("logical-plan toBoolean() requires a Boolean, numeric value, or true/false text");
+		}
+
 		[[nodiscard]] PropertyValue evaluateEntityFunction(const expressions::FunctionCallExpression &function,
 																					 LogicalPlanReadRow &row,
 																					 ExecutionState &state) {
@@ -994,6 +1256,9 @@ namespace graph::query::execution {
 				if (node == nullptr) {
 					throw std::runtime_error("logical-plan labels() requires a node variable");
 				}
+				if (node->labels.size() > state.bounds.maximum_rows) {
+					throw std::runtime_error("logical-plan labels() exceeded the configured List bound");
+				}
 				std::vector<PropertyValue> labels;
 				labels.reserve(node->labels.size());
 				for (const std::string &label: node->labels) {
@@ -1018,6 +1283,9 @@ namespace graph::query::execution {
 			const PropertyMap &properties = readBindingProperties(state.snapshot, row, reference->getVariableName(), state);
 			if (name == "properties") {
 				return PropertyValue(properties);
+			}
+			if (properties.size() > state.bounds.maximum_rows) {
+				throw std::runtime_error("logical-plan keys() exceeded the configured List bound");
 			}
 			std::vector<std::string> orderedKeys;
 			orderedKeys.reserve(properties.size());
@@ -1075,8 +1343,8 @@ namespace graph::query::execution {
 		}
 
 		[[nodiscard]] PropertyValue evaluateFunctionExpression(const expressions::FunctionCallExpression &function,
-																							LogicalPlanReadRow &row,
-																							ExecutionState &state) {
+																	LogicalPlanReadRow &row,
+																	ExecutionState &state) {
 			const expressions::ScalarFunction *registered =
 					expressions::FunctionRegistry::getInstance().lookupScalarFunction(function.getFunctionName());
 			if (registered == nullptr) {
@@ -1084,6 +1352,9 @@ namespace graph::query::execution {
 			}
 			if (!registered->validateArgCount(function.getArgumentCount())) {
 				throw std::runtime_error("logical-plan scalar function has an invalid argument count");
+			}
+			if (function.getArgumentCount() > state.bounds.maximum_rows) {
+				throw std::runtime_error("logical-plan scalar function exceeded the configured argument bound");
 			}
 			if (dynamic_cast<const expressions::EntityIntrospectionFunction *>(registered) != nullptr) {
 				return evaluateEntityFunction(function, row, state);
@@ -1094,12 +1365,21 @@ namespace graph::query::execution {
 				if (argument == nullptr) {
 					throw std::logic_error("logical-plan scalar function has a null argument expression");
 				}
-				arguments.push_back(scalarValue(evaluateExpression(*argument, row, state)));
+				PropertyValue value = scalarValue(evaluateExpression(*argument, row, state));
+				if (value.getType() == PropertyType::LIST && value.getList().size() > state.bounds.maximum_rows) {
+					throw std::runtime_error("logical-plan scalar function received a List exceeding the configured List bound");
+				}
+				arguments.push_back(std::move(value));
 			}
-			if (lowerCase(function.getFunctionName()) == "range") {
+			const std::string normalizedName = lowerCase(function.getFunctionName());
+			if (normalizedName == "range") {
 				return evaluateRangeFunction(arguments, state);
 			}
-			if (lowerCase(function.getFunctionName()) == "length" && arguments.size() == 1U &&
+			if (normalizedName == "toboolean") {
+				return evaluateNativeToBoolean(arguments.front());
+			}
+			validateNativeScalarFunctionTypes(normalizedName, arguments);
+			if (normalizedName == "length" && arguments.size() == 1U &&
 				arguments.front().getType() == PropertyType::LIST) {
 				const std::vector<PropertyValue> &elements = arguments.front().getList();
 				bool isPath = !elements.empty();
@@ -1129,8 +1409,13 @@ namespace graph::query::execution {
 			const std::unordered_map<std::string, PropertyValue> emptyParameters;
 			const std::unordered_map<std::string, PropertyValue> &parameters =
 					state.context == nullptr ? emptyParameters : state.context->parameters;
-			const expressions::EvaluationContext evaluationContext(emptyRecord, parameters);
-			return registered->evaluate(arguments, evaluationContext);
+			const expressions::EvaluationContext evaluationContext(
+					emptyRecord, parameters, {.maximum_collection_elements = state.bounds.maximum_rows});
+			PropertyValue result = registered->evaluate(arguments, evaluationContext);
+			if (result.getType() == PropertyType::LIST && result.getList().size() > state.bounds.maximum_rows) {
+				throw std::runtime_error("logical-plan scalar function returned a List exceeding the configured List bound");
+			}
+			return result;
 		}
 
 		[[nodiscard]] PropertyValue evaluateScalarExpression(const expressions::Expression &expression,
@@ -1147,8 +1432,15 @@ namespace graph::query::execution {
 				case ExpressionType::BINARY_OP: {
 					const auto &binary = dynamic_cast<const expressions::BinaryOpExpression &>(expression);
 					const PropertyValue left = scalarValue(evaluateExpression(*binary.getLeft(), row, state));
-					const PropertyValue right = scalarValue(evaluateExpression(*binary.getRight(), row, state));
 					const BinaryOperatorType operation = binary.getOperator();
+					if (operation == BinaryOperatorType::BOP_AND || operation == BinaryOperatorType::BOP_OR) {
+						const std::optional<bool> leftBoolean = booleanOrNull(left);
+						if ((operation == BinaryOperatorType::BOP_AND && leftBoolean == false) ||
+							(operation == BinaryOperatorType::BOP_OR && leftBoolean == true)) {
+							return PropertyValue(*leftBoolean);
+						}
+					}
+					const PropertyValue right = scalarValue(evaluateExpression(*binary.getRight(), row, state));
 					if (expressions::isArithmeticOperator(operation)) {
 						return arithmetic(operation, left, right);
 					}
@@ -1195,28 +1487,38 @@ namespace graph::query::execution {
 				case ExpressionType::IN_LIST: {
 					const auto &in = dynamic_cast<const expressions::InExpression &>(expression);
 					const PropertyValue actual = scalarValue(evaluateExpression(*in.getValue(), row, state));
+					if (isNull(actual)) {
+						return PropertyValue();
+					}
 					if (in.hasDynamicList()) {
 						const PropertyValue candidates =
 								scalarValue(evaluateExpression(*in.getListExpression(), row, state));
 						if (isNull(candidates)) {
 							return PropertyValue();
 						}
+						bool sawNull = false;
 						for (const PropertyValue &candidate: requireBoundedList(candidates, state, "IN")) {
+							if (isNull(candidate)) {
+								sawNull = true;
+								continue;
+							}
 							if (actual == candidate) {
 								return PropertyValue(true);
 							}
 						}
-						return PropertyValue(false);
+						return sawNull ? PropertyValue() : PropertyValue(false);
 					}
-					if (isNull(actual)) {
-						return PropertyValue();
-					}
+					bool sawNull = false;
 					for (const PropertyValue &candidate: in.getListValues()) {
+						if (isNull(candidate)) {
+							sawNull = true;
+							continue;
+						}
 						if (actual == candidate) {
 							return PropertyValue(true);
 						}
 					}
-					return PropertyValue(false);
+					return sawNull ? PropertyValue() : PropertyValue(false);
 				}
 				case ExpressionType::IS_NULL: {
 					const auto &isNullExpression = dynamic_cast<const expressions::IsNullExpression &>(expression);
@@ -1247,7 +1549,9 @@ namespace graph::query::execution {
 							if (!branch.whenExpression || !branch.thenExpression) {
 								throw std::logic_error("logical-plan CASE expression has an incomplete branch");
 							}
-							if (truthy(scalarValue(evaluateExpression(*branch.whenExpression, row, state)))) {
+							const std::optional<bool> predicate = booleanOrNull(
+									scalarValue(evaluateExpression(*branch.whenExpression, row, state)));
+							if (predicate == true) {
 								return scalarValue(evaluateExpression(*branch.thenExpression, row, state));
 							}
 						}
@@ -1262,6 +1566,9 @@ namespace graph::query::execution {
 						throw std::logic_error("logical-plan List slice has no source expression");
 					}
 					const PropertyValue listValue = scalarValue(evaluateExpression(*slice.getList(), row, state));
+					if (isNull(listValue)) {
+						return PropertyValue();
+					}
 					const std::vector<PropertyValue> &list = requireBoundedList(listValue, state, "List slice");
 					if (list.size() > static_cast<size_t>(std::numeric_limits<int64_t>::max())) {
 						throw std::overflow_error("logical-plan List slice length exceeds signed index capacity");
@@ -1276,12 +1583,7 @@ namespace graph::query::execution {
 						if (const auto *integer = std::get_if<int64_t>(&value.getVariant())) {
 							return *integer;
 						}
-						if (const auto *number = std::get_if<double>(&value.getVariant()); number != nullptr &&
-							std::isfinite(*number) && *number >= static_cast<double>(std::numeric_limits<int64_t>::min()) &&
-							*number < static_cast<double>(std::numeric_limits<int64_t>::max())) {
-							return static_cast<int64_t>(*number);
-						}
-						throw std::runtime_error("logical-plan List slice index must be numeric");
+						throw std::runtime_error("logical-plan List slice index must be an integer");
 					};
 					const auto normalize = [length](int64_t index) {
 						if (index >= 0) {
@@ -1311,6 +1613,9 @@ namespace graph::query::execution {
 					}
 					const PropertyValue listValue =
 							scalarValue(evaluateExpression(*comprehension.getListExpr(), row, state));
+					if (isNull(listValue)) {
+						return PropertyValue();
+					}
 					const std::vector<PropertyValue> &list = requireBoundedList(listValue, state, "List comprehension");
 					if (comprehension.getType() == expressions::ListComprehensionExpression::ComprehensionType::COMP_REDUCE) {
 						throw std::logic_error("logical-plan List comprehension cannot use a reduce mode");
@@ -1319,9 +1624,15 @@ namespace graph::query::execution {
 					result.reserve(list.size());
 					for (const PropertyValue &element: list) {
 						ScopedRowBinding binding(row, comprehension.getVariable(), element);
-						if (comprehension.getWhereExpr() != nullptr &&
-							!truthy(scalarValue(evaluateExpression(*comprehension.getWhereExpr(), row, state)))) {
-							continue;
+						if (comprehension.getWhereExpr() != nullptr) {
+							const PropertyValue predicate =
+									scalarValue(evaluateExpression(*comprehension.getWhereExpr(), row, state));
+							if (!isNull(predicate) && predicate.getType() != PropertyType::BOOLEAN) {
+								throw std::runtime_error("logical-plan List comprehension predicate must be Boolean or NULL");
+							}
+							if (isNull(predicate) || !std::get<bool>(predicate.getVariant())) {
+								continue;
+							}
 						}
 						if (comprehension.getMapExpr() != nullptr) {
 							result.push_back(scalarValue(evaluateExpression(*comprehension.getMapExpr(), row, state)));
@@ -1339,6 +1650,9 @@ namespace graph::query::execution {
 					}
 					PropertyValue accumulator = scalarValue(evaluateExpression(*reduce.getInitialExpr(), row, state));
 					const PropertyValue listValue = scalarValue(evaluateExpression(*reduce.getListExpr(), row, state));
+					if (isNull(listValue)) {
+						return PropertyValue();
+					}
 					const std::vector<PropertyValue> &list = requireBoundedList(listValue, state, "REDUCE");
 					for (const PropertyValue &element: list) {
 						ScopedRowBinding accumulatorBinding(row, reduce.getAccumulator(), accumulator);
@@ -1355,15 +1669,28 @@ namespace graph::query::execution {
 					}
 					const PropertyValue listValue =
 							scalarValue(evaluateExpression(*quantifier.getListExpression(), row, state));
+					if (isNull(listValue)) {
+						return PropertyValue();
+					}
 					const std::vector<PropertyValue> &list = requireBoundedList(listValue, state, "quantifier");
 					const std::string function = lowerCase(quantifier.getFunctionName());
 					if (function != "all" && function != "any" && function != "none" && function != "single") {
 						throw std::runtime_error("logical-plan quantifier function is not supported");
 					}
 					size_t matches = 0U;
+					bool sawNull = false;
 					for (const PropertyValue &element: list) {
 						ScopedRowBinding binding(row, quantifier.getVariable(), element);
-						const bool matched = truthy(scalarValue(evaluateExpression(*quantifier.getWhereExpression(), row, state)));
+						const PropertyValue predicate =
+								scalarValue(evaluateExpression(*quantifier.getWhereExpression(), row, state));
+						if (isNull(predicate)) {
+							sawNull = true;
+							continue;
+						}
+						if (predicate.getType() != PropertyType::BOOLEAN) {
+							throw std::runtime_error("logical-plan quantifier predicate must be Boolean or NULL");
+						}
+						const bool matched = std::get<bool>(predicate.getVariant());
 						if (function == "all" && !matched) {
 							return PropertyValue(false);
 						}
@@ -1378,20 +1705,40 @@ namespace graph::query::execution {
 						}
 					}
 					if (function == "all" || function == "none") {
-						return PropertyValue(true);
+						return sawNull ? PropertyValue() : PropertyValue(true);
 					}
-					return PropertyValue(function == "single" && matches == 1U);
+					if (function == "any") {
+						return sawNull ? PropertyValue() : PropertyValue(false);
+					}
+					return matches == 1U ? PropertyValue(true) : (sawNull ? PropertyValue() : PropertyValue(false));
 				}
 				case ExpressionType::MAP_PROJECTION: {
 					const auto &projection = dynamic_cast<const expressions::MapProjectionExpression &>(expression);
-					if (projection.getVariable().empty()) {
+					if (!projection.isMapLiteral() && projection.getVariable().empty()) {
 						throw std::logic_error("logical-plan Map projection has an empty variable");
 					}
-					const LogicalPlanReadValue &binding = requireBinding(row, projection.getVariable());
+					if (projection.getItems().size() > state.bounds.maximum_property_entries) {
+						throw std::runtime_error("logical-plan Map projection exceeded the configured Property bound");
+					}
+					if (!projection.isMapLiteral()) {
+						const LogicalPlanReadValue &binding = requireBinding(row, projection.getVariable());
+						if (const PropertyValue *value = std::get_if<PropertyValue>(&binding)) {
+							if (value->getType() == PropertyType::NULL_TYPE) {
+								return PropertyValue();
+							}
+							if (value->getType() != PropertyType::MAP) {
+								throw std::runtime_error(
+											"logical-plan Map projection requires a node, relationship, map, or NULL variable");
+							}
+						}
+					}
 					PropertyValue::MapType result;
 					for (const expressions::MapProjectionItem &item: projection.getItems()) {
-						switch (item.type) {
+							switch (item.type) {
 							case expressions::MapProjectionItemType::MPROP_PROPERTY:
+								if (projection.isMapLiteral()) {
+									throw std::logic_error("logical-plan Map literal has a Property selector");
+								}
 								if (item.key.empty()) {
 									throw std::logic_error("logical-plan Map projection has an empty Property key");
 								}
@@ -1407,16 +1754,12 @@ namespace graph::query::execution {
 																			 : scalarValue(evaluateExpression(*item.expression, row, state)));
 								break;
 							case expressions::MapProjectionItemType::MPROP_ALL_PROPERTIES:
-								if (const PropertyValue *value = std::get_if<PropertyValue>(&binding);
-									value != nullptr && value->getType() == PropertyType::MAP) {
-									for (const auto &[key, value]: value->getMap()) {
-										result.insert_or_assign(key, value);
-									}
-								} else {
-									for (const auto &[key, value]:
+								if (projection.isMapLiteral()) {
+									throw std::logic_error("logical-plan Map literal has an all-Properties selector");
+								}
+								for (const auto &[key, value]:
 										 readBindingProperties(state.snapshot, row, projection.getVariable(), state)) {
-										result.insert_or_assign(key, value);
-									}
+									result.insert_or_assign(key, value);
 								}
 								break;
 						}
@@ -1443,11 +1786,11 @@ namespace graph::query::execution {
 								return false;
 							}
 							ScopedRowBinding binding(row, exists.getTargetVar(), *target);
-							return !exists.hasWhereClause() ||
-								   truthy(scalarValue(evaluateExpression(*exists.getWhereExpression(), row, state)));
+							return !exists.hasWhereClause() || booleanOrNull(
+										scalarValue(evaluateExpression(*exists.getWhereExpression(), row, state))) == true;
 						}
-						return !exists.hasWhereClause() ||
-							   truthy(scalarValue(evaluateExpression(*exists.getWhereExpression(), row, state)));
+						return !exists.hasWhereClause() || booleanOrNull(
+									scalarValue(evaluateExpression(*exists.getWhereExpression(), row, state))) == true;
 					};
 					const bool hasRelationship = exists.getPattern().find('-') != std::string::npos;
 					if (!hasRelationship) {
@@ -1483,8 +1826,8 @@ namespace graph::query::execution {
 					const auto appendValue = [&](const storage::LogicalGraphEdge *edge,
 												 const storage::LogicalGraphNode *target) {
 						const auto appendBoundValue = [&]() {
-							if (comprehension.hasWhereClause() &&
-								!truthy(scalarValue(evaluateExpression(*comprehension.getWhereExpression(), row, state)))) {
+							if (comprehension.hasWhereClause() && booleanOrNull(
+									scalarValue(evaluateExpression(*comprehension.getWhereExpression(), row, state))) != true) {
 								return true;
 							}
 							if (values.size() == state.bounds.maximum_rows) {
@@ -1550,11 +1893,11 @@ namespace graph::query::execution {
 					validateNode(*start);
 					validateNode(*end);
 					int maximumHops = shortest.getMaxHops();
-					if (state.context != nullptr) {
-						if (state.context->maxVarLengthDepth < 0) {
+					if (state.context != nullptr && state.context->maxVarLengthDepth.has_value()) {
+						if (*state.context->maxVarLengthDepth < 0) {
 							throw std::invalid_argument("logical-plan shortestPath has a negative query depth bound");
 						}
-						maximumHops = std::min(maximumHops, state.context->maxVarLengthDepth);
+						maximumHops = std::min(maximumHops, *state.context->maxVarLengthDepth);
 					}
 					if (maximumHops < shortest.getMinHops()) {
 						return PropertyValue();
@@ -1584,11 +1927,10 @@ namespace graph::query::execution {
 					}();
 
 					const auto visitAdjacent = [&](uint64_t nodeId, const auto &onEdge) {
-						std::unordered_set<uint64_t> bothDirectionEdges;
 						size_t sourceEdges = 0U;
 						const auto visitDirection = [&](storage::LogicalGraphReadDirection adjacencyDirection) {
 							std::optional<storage::LogicalGraphAdjacencyContinuation> continuation;
-							std::unordered_set<uint64_t> directionEdges;
+							uint64_t previousEdgeId = 0U;
 							for (;;) {
 								if (exploredEdges == maximumExploredEdges || sourceEdges == state.bounds.maximum_edges_per_node) {
 									throw std::runtime_error("logical-plan shortestPath exceeded its total Edge bound");
@@ -1608,9 +1950,7 @@ namespace graph::query::execution {
 								for (const storage::LogicalGraphEdge &edge: page.edges) {
 									checkGuard(state);
 									validateEdge(edge);
-									if (!directionEdges.insert(edge.edge_id).second) {
-										throw std::runtime_error("logical graph backend returned a duplicate shortestPath Edge");
-									}
+									validateAdjacentEdgeOrder(edge.edge_id, previousEdgeId, "shortestPath");
 									const bool endpointMatches = adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
 															 ? edge.source_node_id == nodeId
 															 : edge.target_node_id == nodeId;
@@ -1623,7 +1963,8 @@ namespace graph::query::execution {
 									incrementBounded(state.stats.edges_scanned,
 													 "logical-plan shortestPath runtime Edge counter overflowed");
 									if (shortest.getDirection() == expressions::PatternDirection::PAT_BOTH &&
-										!bothDirectionEdges.insert(edge.edge_id).second) {
+										adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_INCOMING &&
+										edge.source_node_id == nodeId) {
 										continue;
 									}
 									if (!shortest.getRelType().empty() && edge.type != shortest.getRelType()) {
@@ -1993,13 +2334,12 @@ namespace graph::query::execution {
 			return result;
 		}
 
-		[[nodiscard]] operators::AggregateFunctionType aggregateFunctionType(std::string_view name) {
+		[[nodiscard]] AggregateFunctionType aggregateFunctionType(std::string_view name) {
 			std::string normalized;
 			normalized.reserve(name.size());
 			for (const char character: name) {
 				normalized.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(character))));
 			}
-			using AggregateFunctionType = operators::AggregateFunctionType;
 			if (normalized == "count") {
 				return AggregateFunctionType::AGG_COUNT;
 			}
@@ -2033,9 +2373,18 @@ namespace graph::query::execution {
 			throw std::invalid_argument("logical-plan Aggregate has an unsupported function");
 		}
 
-		[[nodiscard]] double aggregatePercentile(const logical::LogicalAggItem &item, ExecutionState &state) {
-			if (!item.extraArg) {
+		[[nodiscard]] double aggregatePercentile(const logical::LogicalAggItem &item, AggregateFunctionType function,
+											 ExecutionState &state) {
+			const bool isPercentile = function == AggregateFunctionType::AGG_PERCENTILE_DISC ||
+									  function == AggregateFunctionType::AGG_PERCENTILE_CONT;
+			if (!isPercentile) {
+				if (item.extraArg) {
+					throw std::invalid_argument("logical-plan Aggregate has an unexpected extra argument");
+				}
 				return 0.5;
+			}
+			if (!item.extraArg) {
+				throw std::invalid_argument("logical-plan Aggregate percentile requires a percentile argument");
 			}
 			LogicalPlanReadRow emptyRow;
 			const PropertyValue value = scalarValue(evaluateExpression(*item.extraArg, emptyRow, state));
@@ -2099,11 +2448,152 @@ namespace graph::query::execution {
 					LogicalEdgeResult{edge.edge_id, edge.source_node_id, edge.target_node_id, edge.type, properties});
 		}
 
-		// An unanchored one-hop COUNT(e) has no need to materialize a Node scan or
-		// follow each adjacency pointer. Scanning the Edge directory visits every
-		// relationship exactly once and lets storage backends stream contiguous
-		// locations efficiently. Keep a bounded endpoint-validation cache so this
-		// shortcut still rejects dangling relationships without growing with input.
+		[[nodiscard]] bool visitOperator(const logical::LogicalOperator &op, ExecutionState &state,
+										 const InternalVisitor &visitor);
+
+		// An anchored one-hop COUNT(v) can use adjacency topology when the Edge
+		// predicate is empty. The source scan and any target predicates still use the
+		// ordinary bounded/index-aware runtime path.
+		[[nodiscard]] std::optional<bool> tryVisitAnchoredRelationshipCount(const logical::LogicalAggregate &aggregate,
+																			ExecutionState &state,
+																			const InternalVisitor &visitor) {
+			const auto &groupExpressions = aggregate.getGroupByExprs();
+			const auto &aggregations = aggregate.getAggregations();
+			if (!groupExpressions.empty() || aggregations.size() != 1U) {
+				return std::nullopt;
+			}
+			const logical::LogicalAggItem &count = aggregations.front();
+			if (count.functionName != "count" || count.distinct || count.alias.empty() || count.extraArg ||
+				!count.argument) {
+				return std::nullopt;
+			}
+			const auto *countVariable =
+					dynamic_cast<const expressions::VariableReferenceExpression *>(count.argument.get());
+			if (countVariable == nullptr || countVariable->hasProperty()) {
+				return std::nullopt;
+			}
+
+			const std::vector<logical::LogicalOperator *> aggregateChildren = aggregate.getChildren();
+			if (aggregateChildren.size() != 1U || aggregateChildren.front() == nullptr ||
+				aggregateChildren.front()->getType() != logical::LogicalOpType::LOP_TRAVERSAL) {
+				return std::nullopt;
+			}
+			const auto &traversal = dynamic_cast<const logical::LogicalTraversal &>(*aggregateChildren.front());
+			if (traversal.getEdgeVar().empty() || traversal.getTargetVar().empty() ||
+				countVariable->getVariableName() != traversal.getTargetVar() ||
+				!traversal.getEdgeProperties().empty()) {
+				return std::nullopt;
+			}
+			if (traversal.getDirection() != "out" && traversal.getDirection() != "in" &&
+				traversal.getDirection() != "both") {
+				return std::nullopt;
+			}
+
+			const std::vector<logical::LogicalOperator *> traversalChildren = traversal.getChildren();
+			if (traversalChildren.size() != 1U || traversalChildren.front() == nullptr ||
+				traversalChildren.front()->getType() != logical::LogicalOpType::LOP_NODE_SCAN) {
+				return std::nullopt;
+			}
+			const auto &seed = dynamic_cast<const logical::LogicalNodeScan &>(*traversalChildren.front());
+			if (seed.getVariable() != traversal.getSourceVar()) {
+				return std::nullopt;
+			}
+
+			debug::ScopedPerfTimer timer("logical_plan.anchored_relationship_count");
+			size_t inputRows = 0U;
+			const bool supportsExistenceProbes = state.snapshot.supportsNodeExistenceProbes();
+			const auto visitSource = [&](LogicalPlanReadRow row) {
+				const LogicalPlanReadValue &sourceBinding = requireBinding(row, traversal.getSourceVar());
+				const auto *source = std::get_if<storage::LogicalGraphNode>(&sourceBinding);
+				if (source == nullptr) {
+					throw std::runtime_error("logical-plan anchored relationship count source is not a Node");
+				}
+				validateNode(*source);
+				size_t sourceEdges = 0U;
+				const auto visitDirection = [&](storage::LogicalGraphReadDirection direction) {
+					if (sourceEdges == state.bounds.maximum_edges_per_node) {
+						// Ask for one bounded probe so an additional Edge is rejected rather
+						// than silently truncating the aggregate input.
+						state.snapshot.visitAdjacentEdgeTopologies(
+								source->node_id, direction, 1U,
+								[](const storage::LogicalGraphEdgeTopology &) { return true; });
+						return;
+					}
+					uint64_t previousEdgeId = 0U;
+					const size_t directionLimit = state.bounds.maximum_edges_per_node - sourceEdges;
+					state.snapshot.visitAdjacentEdgeTopologies(
+							source->node_id, direction, directionLimit,
+							[&](const storage::LogicalGraphEdgeTopology &edge) {
+								checkGuard(state);
+								if (sourceEdges == state.bounds.maximum_edges_per_node) {
+									throw std::runtime_error("logical-plan anchored relationship count exceeded its "
+															 "per-Node Edge bound");
+								}
+								validateAdjacentEdgeOrder(edge.edge_id, previousEdgeId, "anchored relationship count");
+								const bool endpointMatches =
+										direction == storage::LogicalGraphReadDirection::LGRD_OUTGOING
+												? edge.source_node_id == source->node_id
+												: edge.target_node_id == source->node_id;
+								if (!endpointMatches) {
+									throw std::runtime_error(
+											"logical graph backend returned an invalid anchored relationship topology");
+								}
+								++sourceEdges;
+								incrementBounded(state.stats.edges_scanned,
+												 "logical-plan anchored relationship Edge counter overflowed");
+								if (traversal.getDirection() == "both" &&
+									direction == storage::LogicalGraphReadDirection::LGRD_INCOMING &&
+									edge.source_node_id == source->node_id) {
+									return true;
+								}
+								if (!traversal.getEdgeType().empty() && edge.type != traversal.getEdgeType()) {
+									return true;
+								}
+								if (!traversal.getTargetLabels().empty() || !traversal.getTargetProperties().empty()) {
+									const storage::LogicalGraphNode target = readNodeCached(
+											state, direction == storage::LogicalGraphReadDirection::LGRD_OUTGOING
+														   ? edge.target_node_id
+														   : edge.source_node_id);
+									if (!nodeMatches(state.snapshot, target, traversal.getTargetLabels(),
+													 traversal.getTargetProperties(), state)) {
+										return true;
+									}
+								} else if (supportsExistenceProbes) {
+									const uint64_t targetId =
+											direction == storage::LogicalGraphReadDirection::LGRD_OUTGOING
+													? edge.target_node_id
+													: edge.source_node_id;
+									if (!state.snapshot.containsNode(targetId)) {
+										throw std::runtime_error("logical graph backend returned an Edge topology with "
+																 "a missing endpoint");
+									}
+								} else {
+									const uint64_t targetId =
+											direction == storage::LogicalGraphReadDirection::LGRD_OUTGOING
+													? edge.target_node_id
+													: edge.source_node_id;
+									validateNode(state.snapshot.readNode(targetId));
+								}
+								if (inputRows == state.bounds.maximum_rows) {
+									throw std::runtime_error("logical-plan Aggregate exceeded its input row bound");
+								}
+								incrementBounded(inputRows, "logical-plan Aggregate input counter overflowed");
+								return true;
+							});
+				};
+				visitDirection(storage::LogicalGraphReadDirection::LGRD_OUTGOING);
+				if (traversal.getDirection() == "both" || traversal.getDirection() == "in") {
+					visitDirection(storage::LogicalGraphReadDirection::LGRD_INCOMING);
+				}
+				return true;
+			};
+			const InternalVisitor sourceVisitor = visitSource;
+			static_cast<void>(visitOperator(seed, state, sourceVisitor));
+			LogicalPlanReadRow result;
+			result.values.emplace(count.alias, PropertyValue(static_cast<int64_t>(inputRows)));
+			return visitor(std::move(result));
+		}
+
 		[[nodiscard]] std::optional<bool>
 		tryVisitDirectRelationshipCount(const logical::LogicalAggregate &aggregate, ExecutionState &state,
 															const InternalVisitor &visitor) {
@@ -2124,7 +2614,8 @@ namespace graph::query::execution {
 			}
 			const auto &traversal = dynamic_cast<const logical::LogicalTraversal &>(*aggregateChildren.front());
 			if (traversal.getDirection() != "out" || traversal.getEdgeVar().empty() ||
-				!traversal.getTargetLabels().empty() || !traversal.getTargetProperties().empty()) {
+				!traversal.getTargetLabels().empty() || !traversal.getTargetProperties().empty() ||
+				!traversal.getEdgeProperties().empty()) {
 				return std::nullopt;
 			}
 			if (count.argument) {
@@ -2150,35 +2641,47 @@ namespace graph::query::execution {
 			if (state.bounds.maximum_rows == std::numeric_limits<size_t>::max()) {
 				throw std::overflow_error("logical-plan direct relationship count input bound overflowed");
 			}
+			debug::ScopedPerfTimer timer("logical_plan.direct_relationship_count");
 			constexpr size_t DIRECT_COUNT_ENDPOINT_CACHE_CAPACITY = 4'096U;
 			std::unordered_set<uint64_t> validatedEndpoints;
 			validatedEndpoints.reserve(DIRECT_COUNT_ENDPOINT_CACHE_CAPACITY);
+			const bool supportsExistenceProbes = state.snapshot.supportsNodeExistenceProbes();
 			const auto validateEndpoint = [&](uint64_t nodeId) {
 				if (validatedEndpoints.contains(nodeId)) {
 					return;
 				}
-				validateNode(state.snapshot.readNode(nodeId));
+				if (supportsExistenceProbes) {
+					if (nodeId == 0U || !state.snapshot.containsNode(nodeId)) {
+						throw std::runtime_error("logical graph backend returned an Edge topology with a missing endpoint");
+					}
+				} else {
+					validateNode(state.snapshot.readNode(nodeId));
+				}
 				if (validatedEndpoints.size() < DIRECT_COUNT_ENDPOINT_CACHE_CAPACITY) {
 					static_cast<void>(validatedEndpoints.insert(nodeId));
 				}
 			};
 
 			size_t inputRows = 0U;
-			state.snapshot.visitEdges(state.bounds.maximum_rows + 1U, [&](const storage::LogicalGraphEdge &edge) {
+			state.snapshot.visitEdgeTopologies(
+					state.bounds.maximum_rows + 1U, [&](const storage::LogicalGraphEdgeTopology &edge) {
 				checkGuard(state);
 				if (inputRows == state.bounds.maximum_rows) {
 					throw std::runtime_error("logical-plan Aggregate exceeded its input row bound");
 				}
 				incrementBounded(state.stats.edges_scanned,
 							 "logical-plan read runtime Edge counter overflowed");
-				if (!edgeMatches(state.snapshot, edge, traversal.getEdgeType(), traversal.getEdgeProperties(), state)) {
+				if (edge.edge_id == 0U || edge.source_node_id == 0U || edge.target_node_id == 0U) {
+					throw std::runtime_error("logical graph backend returned an Edge topology with invalid identity or endpoints");
+				}
+				if (!traversal.getEdgeType().empty() && edge.type != traversal.getEdgeType()) {
 					return true;
 				}
 				validateEndpoint(edge.source_node_id);
 				validateEndpoint(edge.target_node_id);
 				incrementBounded(inputRows, "logical-plan Aggregate input counter overflowed");
 				return true;
-			});
+				});
 
 			LogicalPlanReadRow result;
 			result.values.emplace(count.alias, PropertyValue(static_cast<int64_t>(inputRows)));
@@ -2208,40 +2711,59 @@ namespace graph::query::execution {
 					equalityPredicates.insert(equalityPredicates.end(), parameterPredicates->begin(), parameterPredicates->end());
 					const bool exactPropertyLookup = !equalityPredicates.empty() &&
 							scan.getRangePredicates().empty() && !scan.getCompositeEquality().has_value();
+					const bool rangePropertyLookup = equalityPredicates.empty() && scan.getRangePredicates().size() == 1U &&
+							!scan.getCompositeEquality().has_value();
+					const bool compositeRangePropertyLookup = !equalityPredicates.empty() &&
+							scan.getRangePredicates().size() == 1U && !scan.getCompositeEquality().has_value();
+					std::optional<std::vector<storage::LogicalGraphNode>> indexNodes;
 					if (exactPropertyLookup) {
-						const std::optional<std::vector<storage::LogicalGraphNode>> exact =
-								state.snapshot.findNodesByExactProperties(
-										scan.getLabels(), equalityPredicates, state.bounds.maximum_node_records,
-										state.bounds.maximum_property_entries);
-						if (exact.has_value()) {
-							if (exact->size() > state.bounds.maximum_node_records) {
-								throw std::runtime_error("logical graph exact Node lookup exceeded the Node scan bound");
-							}
-							uint64_t previousNodeId = 0U;
-							for (const storage::LogicalGraphNode &node: *exact) {
+						indexNodes = state.snapshot.findNodesByExactProperties(
+								scan.getLabels(), equalityPredicates, state.bounds.maximum_node_records,
+								state.bounds.maximum_property_entries);
+					} else if (rangePropertyLookup) {
+						const logical::RangePredicate &range = scan.getRangePredicates().front();
+						indexNodes = state.snapshot.findNodesByPropertyRange(
+								scan.getLabels(), {range.key, range.minValue, range.maxValue, range.minInclusive, range.maxInclusive},
+								state.bounds.maximum_node_records, state.bounds.maximum_property_entries);
+					} else if (compositeRangePropertyLookup) {
+						const logical::RangePredicate &range = scan.getRangePredicates().front();
+						indexNodes = state.snapshot.findNodesByCompositePropertyRange(
+								scan.getLabels(), {equalityPredicates,
+														  {range.key, range.minValue, range.maxValue, range.minInclusive, range.maxInclusive}},
+								state.bounds.maximum_node_records, state.bounds.maximum_property_entries);
+					}
+					if (indexNodes.has_value()) {
+						if (indexNodes->size() > state.bounds.maximum_node_records) {
+							throw std::runtime_error("logical graph indexed Node lookup exceeded the Node scan bound");
+						}
+						uint64_t previousNodeId = 0U;
+						for (const storage::LogicalGraphNode &node: *indexNodes) {
 								checkGuard(state);
 								validateNode(node);
 								if (node.node_id <= previousNodeId) {
 									throw std::runtime_error(
-											"logical graph exact Node lookup returned non-monotonic Node IDs");
+											"logical graph indexed Node lookup returned non-monotonic Node IDs");
 								}
 								for (const std::string &label: scan.getLabels()) {
 									if (std::ranges::find(node.labels, label) == node.labels.end()) {
 										throw std::runtime_error(
-												"logical graph exact Node lookup returned a Node outside the requested label scope");
+													"logical graph indexed Node lookup returned a Node outside the requested label scope");
 									}
 								}
 								previousNodeId = node.node_id;
 								incrementBounded(state.stats.nodes_scanned,
-											 "logical-plan exact Node lookup counter overflowed");
-								LogicalPlanReadRow row;
-								row.values.emplace(scan.getVariable(), node);
-								if (!visitor(std::move(row))) {
-									return false;
+												 "logical-plan indexed Node lookup counter overflowed");
+								// The physical index is an acceleration only. Re-evaluate all
+								// logical scan predicates before exposing an indexed candidate.
+								if (nodeScanMatches(state.snapshot, node, scan, *parameterPredicates, state)) {
+									LogicalPlanReadRow row;
+									row.values.emplace(scan.getVariable(), node);
+									if (!visitor(std::move(row))) {
+										return false;
+									}
 								}
-							}
-							return true;
 						}
+						return true;
 					}
 					uint64_t afterNodeId = 0U;
 					for (;;) {
@@ -2331,6 +2853,10 @@ namespace graph::query::execution {
 				}
 				case logical::LogicalOpType::LOP_AGGREGATE: {
 					const auto &aggregate = dynamic_cast<const logical::LogicalAggregate &>(op);
+					if (const std::optional<bool> anchored = tryVisitAnchoredRelationshipCount(aggregate, state, visitor);
+						anchored.has_value()) {
+						return *anchored;
+					}
 					if (const std::optional<bool> direct = tryVisitDirectRelationshipCount(aggregate, state, visitor);
 						direct.has_value()) {
 						return *direct;
@@ -2356,26 +2882,26 @@ namespace graph::query::execution {
 						outputAliases.push_back(alias);
 					}
 
-					std::vector<operators::AggregateFunctionType> functions;
+					std::vector<AggregateFunctionType> functions;
 					std::vector<double> percentiles;
 					functions.reserve(aggregations.size());
 					percentiles.reserve(aggregations.size());
 					for (const logical::LogicalAggItem &item: aggregations) {
-						const operators::AggregateFunctionType function = aggregateFunctionType(item.functionName);
+						const AggregateFunctionType function = aggregateFunctionType(item.functionName);
 						if (item.alias.empty() || std::ranges::find(outputAliases, item.alias) != outputAliases.end() ||
-							(function != operators::AggregateFunctionType::AGG_COUNT && !item.argument) ||
-							(function == operators::AggregateFunctionType::AGG_COUNT && !item.argument &&
+							(function != AggregateFunctionType::AGG_COUNT && !item.argument) ||
+							(function == AggregateFunctionType::AGG_COUNT && !item.argument &&
 							 item.distinct)) {
 							throw std::invalid_argument("logical-plan Aggregate has an invalid aggregate item");
 						}
 						outputAliases.push_back(item.alias);
 						functions.push_back(function);
-						percentiles.push_back(aggregatePercentile(item, state));
+						percentiles.push_back(aggregatePercentile(item, function, state));
 					}
 
 					struct AggregateGroup {
 						std::vector<PropertyValue> values;
-						std::vector<std::unique_ptr<operators::AggregateAccumulator>> accumulators;
+						std::vector<std::unique_ptr<AggregateAccumulator>> accumulators;
 						std::vector<std::unordered_set<std::string>> distinct_values;
 					};
 					std::vector<AggregateGroup> groups;
@@ -2390,8 +2916,8 @@ namespace graph::query::execution {
 						group.accumulators.reserve(aggregations.size());
 						group.distinct_values.resize(aggregations.size());
 						for (size_t index = 0U; index < aggregations.size(); ++index) {
-							std::unique_ptr<operators::AggregateAccumulator> accumulator =
-									operators::createAccumulator(functions[index], false, percentiles[index]);
+							std::unique_ptr<AggregateAccumulator> accumulator =
+									createAccumulator(functions[index], false, percentiles[index]);
 							if (!accumulator) { // aggregateFunctionType accepts exactly the factory's supported enum
 												// values.
 								throw std::logic_error("logical-plan Aggregate could not create an accumulator");
@@ -2859,12 +3385,12 @@ namespace graph::query::execution {
 						throw std::invalid_argument("logical-plan variable-length Traversal has an unknown direction");
 					}
 					int maximumHops = traversal.getMaxHops();
-					if (state.context != nullptr) {
-						if (state.context->maxVarLengthDepth < 0) {
+					if (state.context != nullptr && state.context->maxVarLengthDepth.has_value()) {
+						if (*state.context->maxVarLengthDepth < 0) {
 							throw std::invalid_argument(
 									"logical-plan variable-length Traversal has a negative query depth bound");
 						}
-						maximumHops = std::min(maximumHops, state.context->maxVarLengthDepth);
+						maximumHops = std::min(maximumHops, *state.context->maxVarLengthDepth);
 					}
 					if (static_cast<uint64_t>(maximumHops) > state.bounds.maximum_node_records) {
 						throw std::runtime_error(
@@ -2897,9 +3423,9 @@ namespace graph::query::execution {
 													   const std::function<bool(const storage::LogicalGraphEdge &,
 																				const storage::LogicalGraphNode &)>
 															   &onEdge) {
-							std::unordered_set<uint64_t> bothDirectionEdges;
 							const auto visitDirection = [&](storage::LogicalGraphReadDirection adjacencyDirection) {
 								std::optional<storage::LogicalGraphAdjacencyContinuation> continuation;
+								uint64_t previousEdgeId = 0U;
 								for (;;) {
 									if (edgeVisits == maximumEdgeVisits) {
 										throw std::runtime_error("logical-plan variable-length Traversal exceeded its "
@@ -2918,6 +3444,7 @@ namespace graph::query::execution {
 									for (const storage::LogicalGraphEdge &edge: page.edges) {
 										checkGuard(state);
 										validateEdge(edge);
+										validateAdjacentEdgeOrder(edge.edge_id, previousEdgeId, "variable-length");
 										const bool endpointMatches =
 												adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
 														? edge.source_node_id == nodeId
@@ -2929,7 +3456,9 @@ namespace graph::query::execution {
 										++edgeVisits;
 										incrementBounded(state.stats.edges_scanned,
 														 "logical-plan variable-length Edge counter overflowed");
-										if (direction == "both" && !bothDirectionEdges.insert(edge.edge_id).second) {
+										if (direction == "both" &&
+											adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_INCOMING &&
+											edge.source_node_id == nodeId) {
 											continue;
 										}
 										if (!traversal.getEdgeType().empty() && edge.type != traversal.getEdgeType()) {
@@ -3268,9 +3797,9 @@ namespace graph::query::execution {
 						}
 						validateNode(*source);
 						size_t sourceEdges = 0U;
-						std::unordered_set<uint64_t> undirectedEdges;
 						const auto visitDirection = [&](storage::LogicalGraphReadDirection adjacencyDirection) {
 							std::optional<storage::LogicalGraphAdjacencyContinuation> continuation;
+							uint64_t previousEdgeId = 0U;
 							for (;;) {
 								const size_t remaining = state.bounds.maximum_edges_per_node - sourceEdges;
 								if (remaining == 0U) { // ZYX_COV_EXCL_LINE: a full adjacency bound returns immediately
@@ -3294,6 +3823,7 @@ namespace graph::query::execution {
 								for (const storage::LogicalGraphEdge &edge: page.edges) {
 									checkGuard(state);
 									validateEdge(edge);
+									validateAdjacentEdgeOrder(edge.edge_id, previousEdgeId, "Traversal");
 									const bool endpointMatches =
 											adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_OUTGOING
 													? edge.source_node_id == source->node_id
@@ -3306,7 +3836,9 @@ namespace graph::query::execution {
 													 "logical-plan Traversal per-Node Edge counter overflowed");
 									incrementBounded(state.stats.edges_scanned,
 													 "logical-plan read runtime Edge counter overflowed");
-									if (direction == "both" && !undirectedEdges.insert(edge.edge_id).second) {
+									if (direction == "both" &&
+										adjacencyDirection == storage::LogicalGraphReadDirection::LGRD_INCOMING &&
+										edge.source_node_id == source->node_id) {
 										continue;
 									}
 									if (!edgeMatches(state.snapshot, edge, traversal.getEdgeType(),
@@ -3423,6 +3955,35 @@ namespace graph::query::execution {
 		return executeOnSnapshot(
 				snapshot, root, bounds, [&visitor](LogicalPlanReadRow &row, ExecutionState &) { return visitor(row); },
 				&context);
+	}
+
+	LogicalPlanReadRuntimeStats LogicalPlanReadRuntime::executeWithSnapshotAndInputRow(
+			storage::LogicalGraphReadSnapshot &snapshot, const logical::LogicalOperator &root,
+			const LogicalPlanReadRuntimeBounds &bounds, const LogicalPlanReadRow &inputRow,
+			const RowVisitor &visitor, const QueryContext &context) const {
+		validateBounds(bounds, static_cast<bool>(visitor));
+		LogicalPlanReadRow refreshed = inputRow;
+		for (auto &[variable, value]: refreshed.values) {
+			if (auto *node = std::get_if<storage::LogicalGraphNode>(&value)) {
+				*node = snapshot.readNode(node->node_id);
+				refreshed.property_cache.erase(variable);
+			} else if (auto *edge = std::get_if<storage::LogicalGraphEdge>(&value)) {
+				*edge = snapshot.readEdge(edge->edge_id);
+				refreshed.property_cache.erase(variable);
+			}
+		}
+		ExecutionState state{snapshot, bounds, {}, &context, &refreshed, {}};
+		const bool completed = visitOperator(root, state, [&](LogicalPlanReadRow row) {
+			if (state.stats.rows_emitted == bounds.maximum_rows) {
+				throw std::runtime_error("logical-plan read runtime exceeded its row bound");
+			}
+			incrementBounded(state.stats.rows_emitted, "logical-plan read runtime row counter overflowed");
+			return visitor(row);
+		});
+		if (!completed) {
+			throw std::runtime_error("logical-plan read runtime input-row execution was stopped by its visitor");
+		}
+		return state.stats;
 	}
 
 	LogicalPlanReadValue LogicalPlanReadRuntime::evaluateExpressionWithSnapshot(

@@ -39,7 +39,9 @@ public:
 		std::unordered_map<std::string, graph::PropertyValue> matchProps,
 		std::vector<MergeSetAction> onCreateActions,
 		std::vector<MergeSetAction> onMatchActions,
-		std::unique_ptr<LogicalOperator> child = nullptr)
+		std::unique_ptr<LogicalOperator> child = nullptr,
+		std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>>
+			matchPropertyExpressions = {})
 		: child_(std::move(child))
 		, sourceVar_(std::move(sourceVar))
 		, edgeVar_(std::move(edgeVar))
@@ -47,6 +49,7 @@ public:
 		, edgeType_(std::move(edgeType))
 		, direction_(std::move(direction))
 		, matchProps_(std::move(matchProps))
+		, matchPropertyExpressions_(std::move(matchPropertyExpressions))
 		, onCreateActions_(std::move(onCreateActions))
 		, onMatchActions_(std::move(onMatchActions)) {}
 
@@ -78,7 +81,15 @@ public:
 			matchProps_,
 			cloneActions(onCreateActions_),
 			cloneActions(onMatchActions_),
-			child_ ? child_->clone() : nullptr);
+			child_ ? child_->clone() : nullptr,
+			[&]() {
+				std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> expressions;
+				expressions.reserve(matchPropertyExpressions_.size());
+				for (const auto &[key, expression] : matchPropertyExpressions_) {
+					expressions.emplace(key, expression ? expression->clone() : nullptr);
+				}
+				return expressions;
+			}());
 	}
 
 	[[nodiscard]] std::string toString() const override {
@@ -101,6 +112,10 @@ public:
 	[[nodiscard]] const std::string &getEdgeType() const { return edgeType_; }
 	[[nodiscard]] const std::string &getDirection() const { return direction_; }
 	[[nodiscard]] const std::unordered_map<std::string, graph::PropertyValue> &getMatchProps() const { return matchProps_; }
+	[[nodiscard]] const std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> &
+	getMatchPropertyExpressions() const {
+		return matchPropertyExpressions_;
+	}
 	[[nodiscard]] const std::vector<MergeSetAction> &getOnCreateActions() const { return onCreateActions_; }
 	[[nodiscard]] const std::vector<MergeSetAction> &getOnMatchActions() const { return onMatchActions_; }
 
@@ -112,6 +127,7 @@ private:
 	std::string edgeType_;
 	std::string direction_;
 	std::unordered_map<std::string, graph::PropertyValue> matchProps_;
+	std::unordered_map<std::string, std::shared_ptr<graph::query::expressions::Expression>> matchPropertyExpressions_;
 	std::vector<MergeSetAction> onCreateActions_;
 	std::vector<MergeSetAction> onMatchActions_;
 };

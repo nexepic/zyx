@@ -39,11 +39,10 @@ protected:
         cleanup();
     }
 
-    void cleanup() {
-        std::error_code ec;
-        fs::remove_all(dbPath, ec);
-        fs::remove(dbPath + "-wal", ec);
-    }
+	void cleanup() {
+		std::error_code ec;
+		fs::remove_all(dbPath, ec);
+	}
 };
 
 TEST_F(DriverAbiGraphValuesTest, DirectCreateNodeReturnsIdAndPersistsProperties) {

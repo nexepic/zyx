@@ -45,6 +45,9 @@ namespace graph::storage {
 		EXPECT_THROW(static_cast<void>(snapshot.containsNode(7U)), std::logic_error);
 		EXPECT_EQ(snapshot.findNodesByExactProperties({"Person"}, {{"name", PropertyValue("Ada")}}, 1U, 1U),
 				  std::nullopt);
+		EXPECT_EQ(snapshot.findNodesByPropertyRange(
+					  {"Person"}, {"age", PropertyValue(int64_t{18}), PropertyValue(), true, true}, 1U, 1U),
+				  std::nullopt);
 		EXPECT_EQ(snapshot.mutationFence(), std::nullopt);
 	}
 

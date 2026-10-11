@@ -90,6 +90,46 @@ TEST_F(CypherListLiteralsTest, NestedListInNodeProperties) {
 	EXPECT_EQ(result.rowCount(), 1UL);
 }
 
+TEST_F(CypherListLiteralsTest, PersistsNestedHeterogeneousListPropertiesAcrossReopen) {
+	(void)execute(
+			"CREATE (:PersistedList {value: [[1, 'one', null], [true, 2.5, ['nested', 7]]]})");
+
+	db->close();
+	db = std::make_unique<graph::Database>(testFilePath.string());
+	db->open();
+
+	const auto result = execute("MATCH (n:PersistedList) RETURN n.value AS value");
+	ASSERT_EQ(result.rowCount(), 1UL);
+	const PropertyValue expected(std::vector<PropertyValue>{
+				PropertyValue(std::vector<PropertyValue>{PropertyValue(int64_t{1}), PropertyValue("one"), PropertyValue()}),
+				PropertyValue(std::vector<PropertyValue>{
+						PropertyValue(true), PropertyValue(2.5),
+						PropertyValue(std::vector<PropertyValue>{PropertyValue("nested"), PropertyValue(int64_t{7})})})});
+	EXPECT_EQ(result.getRows().front().at("value").asPrimitive(), expected);
+}
+
+TEST_F(CypherListLiteralsTest, PersistsNestedMapAndListPropertiesAcrossReopen) {
+	(void)execute(
+			"CREATE (:PersistedMap {value: {name: 'root', enabled: true, "
+			"children: [{id: 1}, {id: 2, tags: ['x', null]}]}})");
+
+	db->close();
+	db = std::make_unique<graph::Database>(testFilePath.string());
+	db->open();
+
+	const auto result = execute("MATCH (n:PersistedMap) RETURN n.value AS value");
+	ASSERT_EQ(result.rowCount(), 1UL);
+	const PropertyValue expected(PropertyValue::MapType{
+				{"name", PropertyValue("root")},
+				{"enabled", PropertyValue(true)},
+				{"children", PropertyValue(std::vector<PropertyValue>{
+								 PropertyValue(PropertyValue::MapType{{"id", PropertyValue(int64_t{1})}}),
+								 PropertyValue(PropertyValue::MapType{
+										 {"id", PropertyValue(int64_t{2})},
+										 {"tags", PropertyValue(std::vector<PropertyValue>{PropertyValue("x"), PropertyValue()})}})})}});
+	EXPECT_EQ(result.getRows().front().at("value").asPrimitive(), expected);
+}
+
 TEST_F(CypherListLiteralsTest, MultipleNodesWithLists) {
 	(void)execute("CREATE (n1:Test {vals: [1, 2]}), (n2:Test {vals: [3, 4]})");
 	auto result = execute("MATCH (n:Test) RETURN n.vals AS vals ORDER BY vals[0]");
@@ -102,17 +142,21 @@ TEST_F(CypherListLiteralsTest, MultipleNodesWithLists) {
 
 TEST_F(CypherListLiteralsTest, ListSlicingInReturn) {
 	auto result = execute("RETURN [1, 2, 3, 4, 5][1..3] AS sliced");
-	EXPECT_EQ(result.rowCount(), 1UL);
+	ASSERT_EQ(result.rowCount(), 1UL);
+	EXPECT_EQ(result.getRows().front().at("sliced").asPrimitive(),
+			  PropertyValue(std::vector<PropertyValue>{PropertyValue(2), PropertyValue(3)}));
 }
 
 TEST_F(CypherListLiteralsTest, ListSlicingSingleIndex) {
 	auto result = execute("RETURN [1, 2, 3][0] AS first");
-	EXPECT_EQ(result.rowCount(), 1UL);
+	ASSERT_EQ(result.rowCount(), 1UL);
+	EXPECT_EQ(result.getRows().front().at("first").asPrimitive(), PropertyValue(1));
 }
 
 TEST_F(CypherListLiteralsTest, ListSlicingNegativeIndex) {
 	auto result = execute("RETURN [1, 2, 3][-1] AS last");
-	EXPECT_EQ(result.rowCount(), 1UL);
+	ASSERT_EQ(result.rowCount(), 1UL);
+	EXPECT_EQ(result.getRows().front().at("last").asPrimitive(), PropertyValue(3));
 }
 
 TEST_F(CypherListLiteralsTest, ListSlicingOmitStart) {
@@ -193,7 +237,8 @@ TEST_F(CypherListLiteralsTest, SingleElementList) {
 
 TEST_F(CypherListLiteralsTest, OutOfBoundsIndex) {
 	auto result = execute("RETURN [1, 2, 3][10] AS outOfBounds");
-	EXPECT_EQ(result.rowCount(), 1UL);
+	ASSERT_EQ(result.rowCount(), 1UL);
+	EXPECT_EQ(result.getRows().front().at("outOfBounds").asPrimitive(), PropertyValue());
 }
 
 TEST_F(CypherListLiteralsTest, NegativeOutOfBounds) {
@@ -217,7 +262,9 @@ TEST_F(CypherListLiteralsTest, LargeList) {
 
 TEST_F(CypherListLiteralsTest, FilterComprehension) {
 	auto result = execute("RETURN [x IN [1, 2, 3, 4, 5] WHERE x % 2 = 0] AS evens");
-	EXPECT_EQ(result.rowCount(), 1UL);
+	ASSERT_EQ(result.rowCount(), 1UL);
+	EXPECT_EQ(result.getRows().front().at("evens").asPrimitive(),
+			  PropertyValue(std::vector<PropertyValue>{PropertyValue(2), PropertyValue(4)}));
 }
 
 TEST_F(CypherListLiteralsTest, FilterWithNulls) {
@@ -231,7 +278,9 @@ TEST_F(CypherListLiteralsTest, FilterWithNulls) {
 
 TEST_F(CypherListLiteralsTest, ExtractComprehension) {
 	auto result = execute("RETURN [x IN [1, 2, 3] | x * 2] AS doubled");
-	EXPECT_EQ(result.rowCount(), 1UL);
+	ASSERT_EQ(result.rowCount(), 1UL);
+	EXPECT_EQ(result.getRows().front().at("doubled").asPrimitive(),
+			  PropertyValue(std::vector<PropertyValue>{PropertyValue(2), PropertyValue(4), PropertyValue(6)}));
 }
 
 TEST_F(CypherListLiteralsTest, ExtractWithProperty) {
@@ -251,7 +300,9 @@ TEST_F(CypherListLiteralsTest, ExtractNestedComprehension) {
 
 TEST_F(CypherListLiteralsTest, FilterAndExtract) {
 	auto result = execute("RETURN [x IN [1, 2, 3, 4, 5] WHERE x % 2 = 0 | x * 10] AS result");
-	EXPECT_EQ(result.rowCount(), 1UL);
+	ASSERT_EQ(result.rowCount(), 1UL);
+	EXPECT_EQ(result.getRows().front().at("result").asPrimitive(),
+			  PropertyValue(std::vector<PropertyValue>{PropertyValue(20), PropertyValue(40)}));
 }
 
 TEST_F(CypherListLiteralsTest, ComplexComprehension) {

@@ -65,6 +65,21 @@ namespace {
 				{5, bfloat16({5.0F, 5.0F, 5.0F, 5.0F})}};
 	}
 
+	std::vector<DeterministicPqTrainingRecord> trainingRecordsSpanningPqPages(size_t count, uint32_t dimensions) {
+		std::vector<DeterministicPqTrainingRecord> records;
+		records.reserve(count);
+		for (size_t ordinal = 0U; ordinal < count; ++ordinal) {
+			std::vector<std::byte> raw(static_cast<size_t>(dimensions) * sizeof(uint16_t));
+			for (uint32_t coordinate = 0U; coordinate < dimensions; ++coordinate) {
+				const float value = static_cast<float>((ordinal + coordinate) % 23U);
+				LittleEndianCodec::writeU16(raw, static_cast<size_t>(coordinate) * sizeof(uint16_t),
+										 static_cast<uint16_t>(std::bit_cast<uint32_t>(value) >> 16U));
+			}
+			records.push_back({ordinal + 1U, std::move(raw)});
+		}
+		return records;
+	}
+
 	RawVectorMaterializationRecord rawRecord(const DeterministicPqTrainingRecord &record) {
 		RawVectorMaterializationRecord result;
 		result.vector_id = record.vector_id;
@@ -174,6 +189,23 @@ protected:
 				manifests.materialize(manifest, PhysicalSlotId(45), PhysicalSlotId(45), LogSequenceNumber(3)));
 	}
 
+	void materializeRawAndManifest(RelocatableMetadataStore &metadata, VectorPageStore &vectors,
+										 VectorManifestStore &manifests,
+										 std::span<const DeterministicPqTrainingRecord> training,
+										 const VectorRawMaterializationOptions &options) {
+		std::vector<RawVectorMaterializationRecord> raw;
+		raw.reserve(training.size());
+		for (const DeterministicPqTrainingRecord &record: training) {
+			raw.push_back(rawRecord(record));
+		}
+		static_cast<void>(vectors.materializeRaw(17U, raw, options, LogSequenceNumber(2U)));
+		VectorManifest manifest;
+		manifest.index_id = 17U;
+		manifest.dimensions = 4U;
+		static_cast<void>(
+				manifests.materialize(manifest, PhysicalSlotId(45U), PhysicalSlotId(45U), LogSequenceNumber(3U)));
+	}
+
 	void stageMapping(RelocatableMetadataStore &metadata, VectorPageStore &vectors, BTreePageStore &trees,
 					  const OfflineVectorPqRebuildOptions &options) {
 		const DeterministicProductQuantizer quantizer =
@@ -206,6 +238,25 @@ protected:
 		const auto ownerBytes = PageOwnerHeaderCodec::encode(owner);
 		io->writeAt(offset, ownerBytes.data(), ownerBytes.size());
 		io->writeAt(offset + RSS_PAGE_OWNER_HEADER_BYTES, page.serialize().data(), page.serialize().size());
+	}
+
+	void overwriteVectorPageRecord(RelocatableMetadataStore &metadata, VectorPageStore &vectors, PageId pageId,
+								   uint64_t vectorId, std::span<const std::byte> replacement) {
+		MetadataSnapshotPin snapshot = metadata.openSnapshot();
+		VectorPage page = vectors.read(snapshot, pageId);
+		const std::optional<uint16_t> slot = page.findVectorId(vectorId);
+		ASSERT_TRUE(slot.has_value());
+		ASSERT_EQ(replacement.size(), page.header().record_bytes);
+		page.overwrite(*slot, replacement);
+		const PageLocation location = metadata.findPageLocation(snapshot, pageId);
+		const CatalogEntry pool = metadata.findCatalog(snapshot, location.segment_id);
+		const uint64_t offset = PhysicalSegmentAllocator::checkedSlotOffset(snapshot.superblock().data_region_offset,
+																			pool.physical_slot) +
+								static_cast<uint64_t>(location.page_index) * RSS_PAGE_SIZE;
+		snapshot.release();
+		const std::vector<std::byte> bytes = page.serialize();
+		io->writeAt(offset + RSS_PAGE_OWNER_HEADER_BYTES, bytes.data(), bytes.size());
+		io->sync();
 	}
 
 	void pointManifestAtPqMapping(RelocatableMetadataStore &metadata, VectorManifestStore &manifests, uint64_t indexId,
@@ -341,7 +392,7 @@ TEST_F(RelocatableOfflineVectorPqRebuildTest, ReplacementRebuildRecoversAsOneCom
 	beforeInactiveWrite.manifest_publish_options.bootstrap_failpoint =
 			BootstrapPublishFailpoint::BPF_BEFORE_INACTIVE_WRITE;
 	EXPECT_THROW(static_cast<void>(OfflineVectorPqRebuild::run(trees, vectors, codebooks, manifests, *metadata, 17U,
-																	 trainingRecords(), beforeInactiveWrite)),
+																									 trainingRecords(), beforeInactiveWrite)),
 			 BootstrapPublishInterrupted);
 	MetadataSnapshotPin before = metadata->openSnapshot();
 	EXPECT_EQ(manifests.read(before, 17U).manifest(), first.manifest);
@@ -366,8 +417,8 @@ TEST_F(RelocatableOfflineVectorPqRebuildTest, ReplacementRebuildRecoversAsOneCom
 	afterInactiveWrite.manifest_publish_options.bootstrap_failpoint =
 			BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE;
 	EXPECT_THROW(static_cast<void>(OfflineVectorPqRebuild::run(afterRecordTrees, afterRecordVectors, afterRecordCodebooks,
-																	 afterRecordManifests, *afterRecord, 17U, trainingRecords(),
-																	 afterInactiveWrite)),
+																							 afterRecordManifests, *afterRecord, 17U, trainingRecords(),
+																							 afterInactiveWrite)),
 			 BootstrapPublishInterrupted);
 	afterRecord.reset();
 
@@ -870,12 +921,167 @@ TEST_F(RelocatableOfflineVectorPqRebuildTest, RejectsInvalidBoundedOptionsBefore
 															  trainingRecords(), invalid));
 			},
 			FormatError::FERR_INVALID_HEADER);
+	invalid = rebuildOptions();
+	invalid.pages.maximum_records = std::numeric_limits<size_t>::max();
+	expectFormatError(
+			[&] {
+				static_cast<void>(OfflineVectorPqRebuild::run(trees, vectors, codebooks, manifests, *metadata, 17,
+															  trainingRecords(), invalid));
+			},
+			FormatError::FERR_INVALID_HEADER);
+	invalid = rebuildOptions();
+	invalid.pages.maximum_pages = std::numeric_limits<size_t>::max();
+	expectFormatError(
+			[&] {
+				static_cast<void>(OfflineVectorPqRebuild::run(trees, vectors, codebooks, manifests, *metadata, 17,
+															  trainingRecords(), invalid));
+			},
+			FormatError::FERR_INVALID_HEADER);
+	invalid = rebuildOptions();
+	invalid.mapping.maximum_entries = std::numeric_limits<size_t>::max();
+	invalid.mapping.tree.maximum_entries = invalid.mapping.maximum_entries;
+	expectFormatError(
+			[&] {
+				static_cast<void>(OfflineVectorPqRebuild::run(trees, vectors, codebooks, manifests, *metadata, 17,
+															  trainingRecords(), invalid));
+			},
+			FormatError::FERR_INVALID_HEADER);
+	invalid = rebuildOptions();
+	invalid.mapping.tree.maximum_pages = std::numeric_limits<size_t>::max();
+	expectFormatError(
+			[&] {
+				static_cast<void>(OfflineVectorPqRebuild::run(trees, vectors, codebooks, manifests, *metadata, 17,
+															  trainingRecords(), invalid));
+			},
+			FormatError::FERR_INVALID_HEADER);
 	MetadataSnapshotPin snapshot = metadata->openSnapshot();
 	EXPECT_FALSE(metadata->findExtentLocationOptional(snapshot, VectorCodebookExtentIdCodec::manifestExtentId(
 																		rebuildOptions().codebook.codebook_id))
 						 .has_value());
 	EXPECT_FALSE(metadata->findIndexRootOptional(snapshot, rebuildOptions().mapping_index_id).has_value());
 	snapshot.release();
+}
+
+TEST_F(RelocatableOfflineVectorPqRebuildTest, RejectsPqPageBudgetBeforePublishingAnyDerivedObject) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	VectorPageStore vectors(io, *metadata);
+	VectorManifestStore manifests(io, *metadata);
+	SlottedPagePool slotted(io, *metadata);
+	BTreePageStore trees(slotted, *metadata);
+	PhysicalSegmentAllocator segments(io, *metadata);
+	VectorCodebookStore codebooks(segments, *metadata);
+
+	constexpr uint32_t dimensions = 64U;
+	const size_t pqSlotsPerPage = VectorPageStore::rawSlotCapacity(sizeof(uint64_t) + dimensions);
+	const std::vector<DeterministicPqTrainingRecord> training =
+			trainingRecordsSpanningPqPages(pqSlotsPerPage + 1U, dimensions);
+	materializeRawAndManifest(*metadata, vectors, manifests, training,
+							 {PhysicalSlotId(40U), PhysicalSlotId(44U), training.size(), 4U});
+	OfflineVectorPqRebuildOptions options = rebuildOptions();
+	options.training = {dimensions, dimensions, 1U, 1U, training.size(), training.size()};
+	options.codebook.dimensions = dimensions;
+	options.codebook.subspace_count = dimensions;
+	options.codebook.centroid_count = 1U;
+	options.pages.maximum_records = training.size();
+	options.pages.maximum_pages = 1U;
+	options.mapping.maximum_entries = training.size();
+	options.mapping.tree.maximum_entries = training.size();
+	options.mapping.tree.maximum_pages = 16U;
+
+	expectFormatError(
+			[&] {
+				static_cast<void>(
+						OfflineVectorPqRebuild::run(trees, vectors, codebooks, manifests, *metadata, 17U, training, options));
+			},
+			FormatError::FERR_INVALID_STATE);
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	EXPECT_FALSE(metadata->findExtentLocationOptional(
+					 snapshot, VectorCodebookExtentIdCodec::manifestExtentId(options.codebook.codebook_id))
+					 .has_value());
+	EXPECT_FALSE(metadata->findIndexRootOptional(snapshot, options.mapping_index_id).has_value());
+	snapshot.release();
+}
+
+TEST_F(RelocatableOfflineVectorPqRebuildTest, PublishesWhenTheCodebookWasPreparedBeforeTheRebuild) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	VectorPageStore vectors(io, *metadata);
+	VectorManifestStore manifests(io, *metadata);
+	SlottedPagePool slotted(io, *metadata);
+	BTreePageStore trees(slotted, *metadata);
+	PhysicalSegmentAllocator segments(io, *metadata);
+	VectorCodebookStore codebooks(segments, *metadata);
+	materializeRawAndManifest(*metadata, vectors, manifests);
+	const OfflineVectorPqRebuildOptions options = rebuildOptions();
+	const DeterministicProductQuantizer quantizer =
+			DeterministicProductQuantizer::train(trainingRecords(), options.training);
+	static_cast<void>(codebooks.writeImmutable(options.codebook, quantizer.codebookPayload(), options.codebook_first_slot,
+												 options.codebook_last_slot, LogSequenceNumber(4U)));
+
+	const OfflineVectorPqRebuildResult published = OfflineVectorPqRebuild::run(
+			trees, vectors, codebooks, manifests, *metadata, 17U, trainingRecords(), options);
+	EXPECT_TRUE(published.reused_codebook);
+	EXPECT_FALSE(published.reused_mapping);
+	EXPECT_FALSE(published.already_published);
+}
+
+TEST_F(RelocatableOfflineVectorPqRebuildTest, RejectsMappingTreePageBudgetBeforePublishingAnyDerivedObject) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	VectorPageStore vectors(io, *metadata);
+	VectorManifestStore manifests(io, *metadata);
+	SlottedPagePool slotted(io, *metadata);
+	BTreePageStore trees(slotted, *metadata);
+	PhysicalSegmentAllocator segments(io, *metadata);
+	VectorCodebookStore codebooks(segments, *metadata);
+
+	constexpr uint32_t dimensions = 64U;
+	const std::vector<DeterministicPqTrainingRecord> training = trainingRecordsSpanningPqPages(1000U, dimensions);
+	materializeRawAndManifest(*metadata, vectors, manifests, training,
+							 {PhysicalSlotId(40U), PhysicalSlotId(44U), training.size(), 64U});
+	OfflineVectorPqRebuildOptions options = rebuildOptions();
+	options.training = {dimensions, dimensions, 1U, 1U, training.size(), training.size()};
+	options.codebook.dimensions = dimensions;
+	options.codebook.subspace_count = dimensions;
+	options.codebook.centroid_count = 1U;
+	options.pages.maximum_records = training.size();
+	options.pages.maximum_pages = 64U;
+	options.mapping.maximum_entries = training.size();
+	options.mapping.tree.maximum_entries = training.size();
+	options.mapping.tree.maximum_pages = 1U;
+
+	expectFormatError(
+			[&] {
+				static_cast<void>(
+						OfflineVectorPqRebuild::run(trees, vectors, codebooks, manifests, *metadata, 17U, training, options));
+			},
+			FormatError::FERR_INVALID_STATE);
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	EXPECT_FALSE(metadata->findExtentLocationOptional(
+					 snapshot, VectorCodebookExtentIdCodec::manifestExtentId(options.codebook.codebook_id))
+					 .has_value());
+	EXPECT_FALSE(metadata->findIndexRootOptional(snapshot, options.mapping_index_id).has_value());
+	snapshot.release();
+}
+
+TEST_F(RelocatableOfflineVectorPqRebuildTest, RejectsAVisibleMappingWithAZeroTargetPage) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	VectorPageStore vectors(io, *metadata);
+	VectorManifestStore manifests(io, *metadata);
+	SlottedPagePool slotted(io, *metadata);
+	BTreePageStore trees(slotted, *metadata);
+	PhysicalSegmentAllocator segments(io, *metadata);
+	VectorCodebookStore codebooks(segments, *metadata);
+	materializeRawAndManifest(*metadata, vectors, manifests);
+	const OfflineVectorPqRebuildOptions options = rebuildOptions();
+	static_cast<void>(
+			OfflineVectorPqRebuild::run(trees, vectors, codebooks, manifests, *metadata, 17U, trainingRecords(), options));
+	static_cast<void>(trees.upsert(options.mapping_index_id, VectorPqMapping::key(1U), 0U, LogSequenceNumber(8U)));
+
+	expectFormatError(
+			[&] {
+				static_cast<void>(OfflineVectorPqRebuild::run(trees, vectors, codebooks, manifests, *metadata, 17U,
+																			 trainingRecords(), options));
+			},
+			FormatError::FERR_INVALID_STATE);
 }
 
 TEST_F(RelocatableOfflineVectorPqRebuildTest, RejectsAnExistingCodebookWithDifferentDeterministicContents) {
@@ -945,6 +1151,172 @@ TEST_F(RelocatableOfflineVectorPqRebuildTest, ReplacesAnyPriorPqManifestInventor
 	ASSERT_EQ(result.manifest.entries.size(), 1U);
 	EXPECT_NE(result.manifest.entries.front().page_id, PageId(901));
 	EXPECT_EQ(result.manifest.entries.front().storage_kind, VectorStorageKind::VSK_PQ);
+}
+
+TEST_F(RelocatableOfflineVectorPqRebuildTest, RetainsNonPqManifestEntriesAcrossAPublishedGenerationReplacement) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	VectorPageStore vectors(io, *metadata);
+	VectorManifestStore manifests(io, *metadata);
+	SlottedPagePool slotted(io, *metadata);
+	BTreePageStore trees(slotted, *metadata);
+	PhysicalSegmentAllocator segments(io, *metadata);
+	VectorCodebookStore codebooks(segments, *metadata);
+	materializeRawAndManifest(*metadata, vectors, manifests, true);
+
+	const OfflineVectorPqRebuildOptions initial = rebuildOptions();
+	static_cast<void>(OfflineVectorPqRebuild::run(trees, vectors, codebooks, manifests, *metadata, 17U,
+												  trainingRecords(), initial));
+	const OfflineVectorPqRebuildResult replacement = OfflineVectorPqRebuild::run(
+			trees, vectors, codebooks, manifests, *metadata, 17U, trainingRecords(), replacementRebuildOptions());
+
+	ASSERT_EQ(replacement.manifest.entries.size(), 2U);
+	const auto raw = std::ranges::find_if(replacement.manifest.entries, [](const VectorManifestEntry &entry) {
+		return entry.storage_kind == VectorStorageKind::VSK_RAW;
+	});
+	ASSERT_NE(raw, replacement.manifest.entries.end());
+	EXPECT_EQ(raw->page_id, PageId(900U));
+	EXPECT_EQ(raw->record_count, 1U);
+	EXPECT_TRUE(std::ranges::any_of(replacement.manifest.entries, [](const VectorManifestEntry &entry) {
+		return entry.storage_kind == VectorStorageKind::VSK_PQ;
+	}));
+}
+
+TEST_F(RelocatableOfflineVectorPqRebuildTest, RejectsAnAlreadyPublishedMappingWhosePqCodesWereCorrupted) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	VectorPageStore vectors(io, *metadata);
+	VectorManifestStore manifests(io, *metadata);
+	SlottedPagePool slotted(io, *metadata);
+	BTreePageStore trees(slotted, *metadata);
+	PhysicalSegmentAllocator segments(io, *metadata);
+	VectorCodebookStore codebooks(segments, *metadata);
+	materializeRawAndManifest(*metadata, vectors, manifests);
+	const OfflineVectorPqRebuildOptions options = rebuildOptions();
+	static_cast<void>(OfflineVectorPqRebuild::run(trees, vectors, codebooks, manifests, *metadata, 17U,
+												  trainingRecords(), options));
+
+	MetadataSnapshotPin snapshot = metadata->openSnapshot();
+	const std::optional<PageId> pageId =
+			VectorPqMapping::findPage(snapshot, trees, *metadata, options.mapping_index_id, 1U);
+	ASSERT_TRUE(pageId.has_value());
+	const VectorPage page = vectors.read(snapshot, *pageId);
+	const std::optional<uint16_t> slot = page.findVectorId(1U);
+	ASSERT_TRUE(slot.has_value());
+	std::vector<std::byte> corrupt = page.read(*slot);
+	ASSERT_GT(corrupt.size(), sizeof(uint64_t));
+	corrupt[sizeof(uint64_t)] ^= std::byte{0x01};
+	snapshot.release();
+	overwriteVectorPageRecord(*metadata, vectors, *pageId, 1U, corrupt);
+
+	// Reopen with a fresh metadata/cache instance so the assertion observes the
+	// coherently checksummed on-disk corruption rather than a stale page view.
+	auto reopenedMetadata = RelocatableMetadataStore::open(io);
+	VectorPageStore reopenedVectors(io, *reopenedMetadata);
+	VectorManifestStore reopenedManifests(io, *reopenedMetadata);
+	SlottedPagePool reopenedSlotted(io, *reopenedMetadata);
+	BTreePageStore reopenedTrees(reopenedSlotted, *reopenedMetadata);
+	PhysicalSegmentAllocator reopenedSegments(io, *reopenedMetadata);
+	VectorCodebookStore reopenedCodebooks(reopenedSegments, *reopenedMetadata);
+	MetadataSnapshotPin beforeRejected = reopenedMetadata->openSnapshot();
+	const Generation generation = beforeRejected.superblock().generation;
+	beforeRejected.release();
+	expectFormatError(
+			[&] {
+				static_cast<void>(OfflineVectorPqRebuild::run(reopenedTrees, reopenedVectors, reopenedCodebooks,
+															  reopenedManifests, *reopenedMetadata, 17U,
+															  trainingRecords(), options));
+			},
+			FormatError::FERR_INVALID_STATE);
+	MetadataSnapshotPin afterRejected = reopenedMetadata->openSnapshot();
+	EXPECT_EQ(afterRejected.superblock().generation, generation);
+	afterRejected.release();
+}
+
+TEST_F(RelocatableOfflineVectorPqRebuildTest, RejectsUnreachablePqManifestInventoryOnIdempotentRetry) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	VectorPageStore vectors(io, *metadata);
+	VectorManifestStore manifests(io, *metadata);
+	SlottedPagePool slotted(io, *metadata);
+	BTreePageStore trees(slotted, *metadata);
+	PhysicalSegmentAllocator segments(io, *metadata);
+	VectorCodebookStore codebooks(segments, *metadata);
+	materializeRawAndManifest(*metadata, vectors, manifests);
+	const OfflineVectorPqRebuildOptions options = rebuildOptions();
+	const OfflineVectorPqRebuildResult first = OfflineVectorPqRebuild::run(
+			trees, vectors, codebooks, manifests, *metadata, 17U, trainingRecords(), options);
+
+	VectorManifest corrupt = first.manifest;
+	// The persisted Manifest codec already rejects duplicate page IDs. Use a
+	// canonical, distinct entry that no mapping reaches to test the rebuild
+	// layer's independent inventory-to-mapping validation.
+	corrupt.entries.push_back({PageId(UINT64_C(999999)), VectorStorageKind::VSK_PQ, 1U});
+	overwriteManifest(*metadata, corrupt);
+
+	// Reopen so the retry decodes the persisted Manifest rather than a cached page view.
+	auto reopenedMetadata = RelocatableMetadataStore::open(io);
+	VectorPageStore reopenedVectors(io, *reopenedMetadata);
+	VectorManifestStore reopenedManifests(io, *reopenedMetadata);
+	SlottedPagePool reopenedSlotted(io, *reopenedMetadata);
+	BTreePageStore reopenedTrees(reopenedSlotted, *reopenedMetadata);
+	PhysicalSegmentAllocator reopenedSegments(io, *reopenedMetadata);
+	VectorCodebookStore reopenedCodebooks(reopenedSegments, *reopenedMetadata);
+	MetadataSnapshotPin beforeRejected = reopenedMetadata->openSnapshot();
+	const Generation generation = beforeRejected.superblock().generation;
+	beforeRejected.release();
+	expectFormatError(
+			[&] {
+				static_cast<void>(OfflineVectorPqRebuild::run(reopenedTrees, reopenedVectors, reopenedCodebooks,
+						reopenedManifests, *reopenedMetadata, 17U, trainingRecords(), options));
+			},
+			FormatError::FERR_INVALID_STATE);
+	MetadataSnapshotPin afterRejected = reopenedMetadata->openSnapshot();
+	EXPECT_EQ(afterRejected.superblock().generation, generation);
+	afterRejected.release();
+}
+
+TEST_F(RelocatableOfflineVectorPqRebuildTest, RejectsPqManifestRecordCountMismatchOnIdempotentRetry) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	VectorPageStore vectors(io, *metadata);
+	VectorManifestStore manifests(io, *metadata);
+	SlottedPagePool slotted(io, *metadata);
+	BTreePageStore trees(slotted, *metadata);
+	PhysicalSegmentAllocator segments(io, *metadata);
+	VectorCodebookStore codebooks(segments, *metadata);
+	materializeRawAndManifest(*metadata, vectors, manifests);
+	const OfflineVectorPqRebuildOptions options = rebuildOptions();
+	const OfflineVectorPqRebuildResult first = OfflineVectorPqRebuild::run(
+			trees, vectors, codebooks, manifests, *metadata, 17U, trainingRecords(), options);
+
+	VectorManifest corrupt = first.manifest;
+	const auto pq = std::ranges::find_if(corrupt.entries, [](const VectorManifestEntry &entry) {
+		return entry.storage_kind == VectorStorageKind::VSK_PQ;
+	});
+	ASSERT_NE(pq, corrupt.entries.end());
+	ASSERT_LT(pq->record_count, std::numeric_limits<uint32_t>::max());
+	++pq->record_count;
+	overwriteManifest(*metadata, corrupt);
+
+	// The page and the mapping remain individually valid; only their persisted
+	// accounting relationship is corrupt, so this must be rejected by the
+	// rebuild's inventory authentication.
+	auto reopenedMetadata = RelocatableMetadataStore::open(io);
+	VectorPageStore reopenedVectors(io, *reopenedMetadata);
+	VectorManifestStore reopenedManifests(io, *reopenedMetadata);
+	SlottedPagePool reopenedSlotted(io, *reopenedMetadata);
+	BTreePageStore reopenedTrees(reopenedSlotted, *reopenedMetadata);
+	PhysicalSegmentAllocator reopenedSegments(io, *reopenedMetadata);
+	VectorCodebookStore reopenedCodebooks(reopenedSegments, *reopenedMetadata);
+	MetadataSnapshotPin beforeRejected = reopenedMetadata->openSnapshot();
+	const Generation generation = beforeRejected.superblock().generation;
+	beforeRejected.release();
+	expectFormatError(
+			[&] {
+				static_cast<void>(OfflineVectorPqRebuild::run(reopenedTrees, reopenedVectors, reopenedCodebooks,
+						reopenedManifests, *reopenedMetadata, 17U, trainingRecords(), options));
+			},
+			FormatError::FERR_INVALID_STATE);
+	MetadataSnapshotPin afterRejected = reopenedMetadata->openSnapshot();
+	EXPECT_EQ(afterRejected.superblock().generation, generation);
+	afterRejected.release();
 }
 
 TEST_F(RelocatableOfflineVectorPqRebuildTest, RejectsAVisibleMappingWithDifferentRecordsOrCodes) {
@@ -1185,7 +1557,7 @@ TEST_F(RelocatableOfflineVectorPqRebuildTest, RejectsAnUnanchoredManifestThatCla
 	expectFormatError(
 			[&] {
 				static_cast<void>(OfflineVectorPqRebuild::run(trees, vectors, codebooks, manifests, *metadata, 17U,
-														  trainingRecords(), options));
+																								  trainingRecords(), options));
 			},
 			FormatError::FERR_INVALID_STATE);
 	MetadataSnapshotPin afterRejected = metadata->openSnapshot();
@@ -1204,7 +1576,7 @@ TEST_F(RelocatableOfflineVectorPqRebuildTest, RejectsPublishedPqMappingWithMissi
 	materializeRawAndManifest(*metadata, vectors, manifests);
 	const OfflineVectorPqRebuildOptions options = rebuildOptions();
 	static_cast<void>(OfflineVectorPqRebuild::run(trees, vectors, codebooks, manifests, *metadata, 17U,
-													  trainingRecords(), options));
+																					  trainingRecords(), options));
 
 	ASSERT_TRUE(trees.erase(options.mapping_index_id, VectorPqMapping::key(1U), LogSequenceNumber(8U)));
 	MetadataSnapshotPin beforeRejection = metadata->openSnapshot();

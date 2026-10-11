@@ -148,7 +148,7 @@ namespace graph::storage {
 		}
 
 		AllocatorLeafPage page;
-		page.page_id = PageId(LittleEndianCodec::readU64(bytes, PAGE_ID_OFFSET));
+		page.page_id = MetadataPageId(LittleEndianCodec::readU64(bytes, PAGE_ID_OFFSET));
 		page.first_slot = PhysicalSlotId(LittleEndianCodec::readU64(bytes, FIRST_SLOT_OFFSET));
 		page.slot_count = LittleEndianCodec::readU32(bytes, SLOT_COUNT_OFFSET);
 		page.generation = Generation(LittleEndianCodec::readU64(bytes, GENERATION_OFFSET));

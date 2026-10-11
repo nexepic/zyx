@@ -21,6 +21,7 @@
 #include <utility>
 #include <vector>
 
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
 #include "graph/storage/relocatable/allocation/SharedPagePool.hpp"
 #include "graph/storage/relocatable/allocation/SharedPagePoolAllocator.hpp"
@@ -38,8 +39,8 @@ namespace graph::storage {
 
 		[[nodiscard]] bool matchesSharedPagePoolOwnerKind(SegmentKind poolKind, PageOwnerKind ownerKind) {
 			switch (poolKind) {
-			case SegmentKind::SGK_ENTITY_PAGE_POOL:
-				return ownerKind == PageOwnerKind::POK_ENTITY || ownerKind == PageOwnerKind::POK_ENTITY_LABEL;
+				case SegmentKind::SGK_ENTITY_PAGE_POOL:
+					return ownerKind == PageOwnerKind::POK_ENTITY || ownerKind == PageOwnerKind::POK_ENTITY_LABEL;
 				case SegmentKind::SGK_PROPERTY_PAGE_POOL:
 					return ownerKind == PageOwnerKind::POK_PROPERTY;
 				case SegmentKind::SGK_INDEX_PAGE_POOL:
@@ -71,52 +72,6 @@ namespace graph::storage {
 				   ownerKind == PageOwnerKind::POK_VECTOR_PQ || ownerKind == PageOwnerKind::POK_VECTOR_ADJACENCY;
 		}
 
-		[[nodiscard]] bool isEntityPoolPageOwnerKind(PageOwnerKind ownerKind) {
-			return ownerKind == PageOwnerKind::POK_ENTITY || ownerKind == PageOwnerKind::POK_ENTITY_LABEL;
-		}
-
-		[[nodiscard]] bool hasEntityMapDelta(const EntityPageReplacementRequest &request) {
-			return !request.inserted_nodes.empty() || !request.erased_node_ids.empty() ||
-				   !request.inserted_edges.empty() || !request.erased_edge_ids.empty();
-		}
-
-		[[nodiscard]] bool hasSameNewEntityPoolIdentity(const EntityPageNewPoolBatchRequest &left,
-													const EntityPageNewPoolBatchRequest &right) {
-			const CatalogSlotReservationRequest &leftReservation = left.reservation;
-			const CatalogSlotReservationRequest &rightReservation = right.reservation;
-			return leftReservation.segment_id == rightReservation.segment_id &&
-				   leftReservation.kind == rightReservation.kind &&
-				   leftReservation.owner_id == rightReservation.owner_id &&
-				   leftReservation.segment_generation == rightReservation.segment_generation &&
-				   leftReservation.state == rightReservation.state &&
-				   leftReservation.require_absent == rightReservation.require_absent &&
-				   left.first_slot == right.first_slot && left.last_slot == right.last_slot;
-		}
-
-		[[nodiscard]] bool hasSameFreshEntityPoolIdentity(const EntityPageFreshPoolDestination &left,
-												  const EntityPageFreshPoolDestination &right) {
-			return left.segment_id == right.segment_id && left.pool_owner_id == right.pool_owner_id &&
-				   left.generation == right.generation && left.first_slot == right.first_slot &&
-				   left.last_slot == right.last_slot;
-		}
-
-		[[nodiscard]] bool hasSameFreshEntityPoolIdentity(const EntityPageFreshPoolDestination &destination,
-														  const EntityPageNewPoolBatchRequest &request) {
-			const CatalogSlotReservationRequest &reservation = request.reservation;
-			return destination.segment_id == reservation.segment_id &&
-				   destination.pool_owner_id == reservation.owner_id &&
-				   destination.generation == reservation.segment_generation &&
-				   destination.first_slot == request.first_slot && destination.last_slot == request.last_slot &&
-				   reservation.kind == SegmentKind::SGK_ENTITY_PAGE_POOL &&
-				   reservation.state == SegmentState::SGS_SEALED && reservation.require_absent;
-		}
-
-		[[nodiscard]] bool hasSameCatalogEntry(const CatalogEntry &left, const CatalogEntry &right) {
-			return left.segment_id == right.segment_id && left.physical_slot == right.physical_slot &&
-				   left.kind == right.kind && left.owner_id == right.owner_id && left.generation == right.generation &&
-				   left.state == right.state && left.committed_lsn == right.committed_lsn;
-		}
-
 	} // namespace
 
 	RelocatableMetadataStore::RelocatableMetadataStore(std::shared_ptr<StorageIO> io, const Superblock &current,
@@ -141,7 +96,7 @@ namespace graph::storage {
 	MetadataWriteGuard RelocatableMetadataStore::beginWrite() {
 		if (read_only_) {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
-							  "relocatable read-only metadata store cannot publish or reclaim metadata");
+								  "relocatable read-only metadata store cannot publish or reclaim metadata");
 		}
 		return snapshots_.beginWrite();
 	}
@@ -164,12 +119,30 @@ namespace graph::storage {
 
 	MetadataSnapshotPin RelocatableMetadataStore::openSnapshot() const { return snapshots_.openSnapshot(); }
 
-	NativeGraphLogicalIdLease RelocatableMetadataStore::reserveNativeGraphLogicalIds(uint64_t nodeCount,
-															 uint64_t edgeCount,
-															 const MetadataPublishOptions &options) {
+	void RelocatableMetadataStore::refreshAfterExternalPublication() {
+		if (read_only_) {
+			throw FormatException(FormatError::FERR_INVALID_STATE,
+								  "relocatable read-only metadata store cannot refresh a writable publication state");
+		}
+		MetadataWriteGuard writer = beginWrite();
+		if (snapshots_.activeSnapshotCount() != 0U) {
+			throw FormatException(FormatError::FERR_INVALID_STATE,
+								  "relocatable metadata refresh requires all local snapshots to be released");
+		}
+		const Superblock current = bootstrap_.recover();
+		metadata_page_pool_.rebaseToPublishedSuperblock(current);
+		pool_ownership_.restoreCatalogOwnership(current);
+		metadata_page_pool_.recover(current);
+		pool_ownership_.verifyAfterOpen(current);
+	}
+
+	NativeGraphLogicalIdLease
+	RelocatableMetadataStore::reserveNativeGraphLogicalIds(uint64_t nodeCount, uint64_t edgeCount,
+														   const MetadataPublishOptions &options) {
 		if (read_only_ || (nodeCount == 0U && edgeCount == 0U)) {
-			throw FormatException(FormatError::FERR_INVALID_HEADER,
-								  "native graph logical-ID leasing requires a writable store and positive bounded work");
+			throw FormatException(
+					FormatError::FERR_INVALID_HEADER,
+					"native graph logical-ID leasing requires a writable store and positive bounded work");
 		}
 		std::lock_guard leaseLock(logical_id_lease_mutex_);
 		// This direct, failpoint-aware API cannot silently consume a cached range:
@@ -179,7 +152,8 @@ namespace graph::storage {
 		available_edge_ids_ = {};
 		MetadataWriteGuard writer = beginWrite();
 		const Superblock current = bootstrap_.recover();
-		if (!current.checkpoint_lsn.isValid() || current.checkpoint_lsn.value() == std::numeric_limits<uint64_t>::max() ||
+		if (!current.checkpoint_lsn.isValid() ||
+			current.checkpoint_lsn.value() == std::numeric_limits<uint64_t>::max() ||
 			(current.next_logical_node_id == 0U && nodeCount != 0U) ||
 			(current.next_logical_edge_id == 0U && edgeCount != 0U) ||
 			(nodeCount != 0U && nodeCount - 1U > std::numeric_limits<uint64_t>::max() - current.next_logical_node_id) ||
@@ -189,16 +163,17 @@ namespace graph::storage {
 		}
 		MetadataWriteBatch batch(metadata_page_pool_, current, LogSequenceNumber(current.checkpoint_lsn.value() + 1U));
 		NativeGraphLogicalIdLease lease;
-		lease.nodes = {current.next_logical_node_id, nodeCount};
-		lease.edges = {current.next_logical_edge_id, edgeCount};
-		for (uint64_t ordinal = 0U; ordinal < nodeCount; ++ordinal) {
-			static_cast<void>(batch.allocateLogicalNodeId());
+		if (nodeCount != 0U) {
+			lease.nodes = {batch.allocateLogicalNodeIdRange(nodeCount), nodeCount};
 		}
-		for (uint64_t ordinal = 0U; ordinal < edgeCount; ++ordinal) {
-			static_cast<void>(batch.allocateLogicalEdgeId());
+		if (edgeCount != 0U) {
+			lease.edges = {batch.allocateLogicalEdgeIdRange(edgeCount), edgeCount};
 		}
 		// Leasing changes only durable high-water marks; it must not create a
-		// metadata-pool ownership transition or perturb graph-visible roots.
+		// metadata-pool ownership transition or perturb graph-visible roots. A
+		// bootstrap header still advances so the candidate generation retains a
+		// same-generation route context for the next graph publication.
+		prepareBootstrapRoutes(batch);
 		batch.publish(bootstrap_, options.bootstrap_failpoint);
 		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
 		if ((nodeCount != 0U && !outstanding_node_id_leases_.emplace(lease.nodes.first_id, lease.nodes.count).second) ||
@@ -210,23 +185,25 @@ namespace graph::storage {
 		return lease;
 	}
 
-	NativeGraphLogicalIdReservation RelocatableMetadataStore::acquireNativeGraphLogicalIds(
-			uint64_t nodeCount, uint64_t edgeCount, uint64_t minimumLeaseBlockSize) {
+	NativeGraphLogicalIdReservation
+	RelocatableMetadataStore::acquireNativeGraphLogicalIds(uint64_t nodeCount, uint64_t edgeCount,
+														   uint64_t minimumLeaseBlockSize) {
 		if (read_only_ || (nodeCount == 0U && edgeCount == 0U) || minimumLeaseBlockSize == 0U ||
 			minimumLeaseBlockSize == std::numeric_limits<uint64_t>::max()) {
-			throw FormatException(FormatError::FERR_INVALID_HEADER,
-								  "native graph logical-ID acquisition requires a writable store and bounded positive work");
+			throw FormatException(
+					FormatError::FERR_INVALID_HEADER,
+					"native graph logical-ID acquisition requires a writable store and bounded positive work");
 		}
 		std::lock_guard leaseLock(logical_id_lease_mutex_);
 		const auto validateRequest = [](uint64_t count, uint64_t first, const char *entityName) {
 			if (count != 0U && (first == 0U || count - 1U > std::numeric_limits<uint64_t>::max() - first)) {
 				throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW,
-								  std::string("native graph ") + entityName +
-										  " logical-ID acquisition exceeds its durable namespace");
+									  std::string("native graph ") + entityName +
+											  " logical-ID acquisition exceeds its durable namespace");
 			}
 		};
 		const auto take = [](NativeGraphLogicalIdLeaseRange &available, uint64_t &remaining,
-								std::vector<NativeGraphLogicalIdLeaseRange> &result) {
+							 std::vector<NativeGraphLogicalIdLeaseRange> &result) {
 			if (remaining == 0U || available.empty()) {
 				return;
 			}
@@ -243,13 +220,13 @@ namespace graph::storage {
 		take(available_edge_ids_, remainingEdges, result.edge_ranges);
 		const auto registerOutstanding = [this](const NativeGraphLogicalIdReservation &reservation) {
 			const auto registerRanges = [](std::map<uint64_t, uint64_t> &outstanding,
-															std::span<const NativeGraphLogicalIdLeaseRange> ranges) {
+										   std::span<const NativeGraphLogicalIdLeaseRange> ranges) {
 				for (const NativeGraphLogicalIdLeaseRange &range: ranges) {
 					if (range.first_id == 0U || range.count == 0U ||
 						range.count - 1U > std::numeric_limits<uint64_t>::max() - range.first_id ||
 						!outstanding.emplace(range.first_id, range.count).second) {
 						throw FormatException(FormatError::FERR_INVALID_STATE,
-												  "native graph logical-ID acquisition overlaps an outstanding lease");
+											  "native graph logical-ID acquisition overlaps an outstanding lease");
 					}
 				}
 			};
@@ -266,17 +243,19 @@ namespace graph::storage {
 		const Superblock current = bootstrap_.recover();
 		validateRequest(requestedNodes, current.next_logical_node_id, "Node");
 		validateRequest(requestedEdges, current.next_logical_edge_id, "Edge");
-		if (!current.checkpoint_lsn.isValid() || current.checkpoint_lsn.value() == std::numeric_limits<uint64_t>::max()) {
+		if (!current.checkpoint_lsn.isValid() ||
+			current.checkpoint_lsn.value() == std::numeric_limits<uint64_t>::max()) {
 			throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW,
 								  "native graph logical-ID acquisition cannot advance the checkpoint LSN");
 		}
 		MetadataWriteBatch batch(metadata_page_pool_, current, LogSequenceNumber(current.checkpoint_lsn.value() + 1U));
-		for (uint64_t ordinal = 0U; ordinal < requestedNodes; ++ordinal) {
-			static_cast<void>(batch.allocateLogicalNodeId());
+		if (requestedNodes != 0U) {
+			static_cast<void>(batch.allocateLogicalNodeIdRange(requestedNodes));
 		}
-		for (uint64_t ordinal = 0U; ordinal < requestedEdges; ++ordinal) {
-			static_cast<void>(batch.allocateLogicalEdgeId());
+		if (requestedEdges != 0U) {
+			static_cast<void>(batch.allocateLogicalEdgeIdRange(requestedEdges));
 		}
+		prepareBootstrapRoutes(batch);
 		batch.publish(bootstrap_);
 		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
 		if (remainingNodes != 0U) {
@@ -291,14 +270,14 @@ namespace graph::storage {
 		return result;
 	}
 
-	bool RelocatableMetadataStore::claimNativeGraphLogicalIdReservation(
-			const NativeGraphLogicalIdReservation &reservation) {
+	bool
+	RelocatableMetadataStore::claimNativeGraphLogicalIdReservation(const NativeGraphLogicalIdReservation &reservation) {
 		if (reservation.empty()) {
 			return true;
 		}
 		std::lock_guard leaseLock(logical_id_lease_mutex_);
 		const auto validateRanges = [](const std::map<uint64_t, uint64_t> &outstanding,
-														std::span<const NativeGraphLogicalIdLeaseRange> ranges) {
+									   std::span<const NativeGraphLogicalIdLeaseRange> ranges) {
 			std::set<uint64_t> firstIds;
 			for (const NativeGraphLogicalIdLeaseRange &range: ranges) {
 				const auto iterator = outstanding.find(range.first_id);
@@ -327,7 +306,7 @@ namespace graph::storage {
 		try {
 			std::lock_guard leaseLock(logical_id_lease_mutex_);
 			const auto abandonRanges = [](std::map<uint64_t, uint64_t> &outstanding,
-														  std::span<const NativeGraphLogicalIdLeaseRange> ranges) {
+										  std::span<const NativeGraphLogicalIdLeaseRange> ranges) {
 				for (const NativeGraphLogicalIdLeaseRange &range: ranges) {
 					const auto iterator = outstanding.find(range.first_id);
 					if (iterator != outstanding.end() && iterator->second == range.count) {
@@ -347,6 +326,80 @@ namespace graph::storage {
 		return snapshots_.owns(snapshot);
 	}
 
+	bool RelocatableMetadataStore::isIdentityOnlyBootstrapAdvance(const Superblock &before,
+																  const Superblock &after) const {
+		if (!before.usesPageDirectoryBootstrap() || !after.usesPageDirectoryBootstrap() ||
+			!before.page_directory_root.isValid() || !after.page_directory_root.isValid()) {
+			return false;
+		}
+		const PageDirectoryBootstrap previous = pages_.readPageDirectoryBootstrap(before.page_directory_root);
+		const PageDirectoryBootstrap current = pages_.readPageDirectoryBootstrap(after.page_directory_root);
+		return previous.data_page_directory_root == current.data_page_directory_root &&
+			   previous.metadata_page_directory_root == current.metadata_page_directory_root &&
+			   previous.metadata_directory_roots == current.metadata_directory_roots;
+	}
+
+	void RelocatableMetadataStore::prepareBootstrapRoutes(MetadataWriteBatch &batch) {
+		if (batch.candidate().usesPageDirectoryBootstrap() && !batch.bootstrapRoutePublished()) {
+			MetadataPageRouteDirectory routes(pages_);
+			if (batch.metadataPageRoutes().empty() && !batch.pendingBootstrapDataRoot().has_value() &&
+				!batch.bootstrapRouteRefreshRequested()) {
+				batch.reserveMetadataFrames(1U);
+				static_cast<void>(routes.publishIdentityOnlyBootstrap(batch));
+				return;
+			}
+			const size_t requiredFrames = routes.nextBootstrapFrameCount(batch);
+			batch.reserveMetadataFrames(requiredFrames);
+			static_cast<void>(
+					routes.publishNextBootstrap(batch, batch.pendingBootstrapDataRoot().value_or(PhysicalPageRef{})));
+		}
+	}
+
+	void RelocatableMetadataStore::publishBatch(MetadataWriteBatch &batch, const MetadataWriteGuard &writer,
+												const MetadataPublishOptions &options) {
+		// The first Catalog COW can allocate a metadata pool that was not visible
+		// while the ownership pass enumerated pools. Reconcile it while the Catalog
+		// root still uses physical children; logical route children are not visible
+		// until the final bootstrap publication.
+		pool_ownership_.preparePublication(batch);
+		catalog_.prepareLogicalRootChildren(batch);
+		// Catalog logicalization can allocate a metadata pool. Reconcile it while
+		// the allocator root is still physical so setting its ownership bit composes
+		// with all data-pool allocations already staged in this batch.
+		pool_ownership_.preparePublication(batch);
+		allocator_.prepareLogicalRootChildren(batch);
+		locations_.prepareLogicalRootChildren(batch);
+		// Any metadata pool created by allocator or location-root logicalization is
+		// reconciled through the pending route overlay before the final publication.
+		pool_ownership_.preparePublication(batch);
+		if (batch.candidate().usesPageDirectoryBootstrap()) {
+			MetadataPageRouteDirectory routes(pages_);
+			for (size_t pass = 0U; pass < 8U; ++pass) {
+				const bool identityOnly = batch.metadataPageRoutes().empty() &&
+										  !batch.pendingBootstrapDataRoot().has_value() &&
+										  !batch.bootstrapRouteRefreshRequested();
+				const size_t frameCount = identityOnly ? 1U : routes.nextBootstrapFrameCount(batch);
+				if (batch.ensureMetadataFrameCapacity(frameCount) == 0U) {
+					break;
+				}
+				// A capacity pool is private until this Catalog publication. Logicalize
+				// the resulting COW root before calculating the final route budget again.
+				pool_ownership_.preparePublication(batch);
+				catalog_.prepareLogicalRootChildren(batch);
+				allocator_.prepareLogicalRootChildren(batch);
+				locations_.prepareLogicalRootChildren(batch);
+				if (pass == 7U) {
+					throw FormatException(FormatError::FERR_INVALID_STATE,
+										  "relocatable metadata route-capacity publication did not converge");
+				}
+			}
+		}
+		prepareBootstrapRoutes(batch);
+		batch.publish(bootstrap_, options.bootstrap_failpoint);
+		pages_.rebindSuperblock(batch.candidate());
+		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+	}
+
 	Superblock RelocatableMetadataStore::upsertCatalog(std::span<const CatalogEntry> entries,
 													   LogSequenceNumber checkpointLsn,
 													   const MetadataPublishOptions &options) {
@@ -358,9 +411,7 @@ namespace graph::storage {
 			batch.observeLogicalSegmentId(entry.segment_id);
 		}
 		catalog_.prepareUpsert(batch, entries);
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		publishBatch(batch, writer, options);
 		return batch.candidate();
 	}
 
@@ -434,9 +485,7 @@ namespace graph::storage {
 		if (!edges.empty() || !erasedEdgeIds.empty()) {
 			locations_.prepareReplaceEdgePageLocations(batch, edges, erasedEdgeIds);
 		}
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		publishBatch(batch, writer, options);
 		return batch.candidate();
 	}
 
@@ -473,9 +522,7 @@ namespace graph::storage {
 		}
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
 		locations_.prepareReplaceEntityProperties(batch, locations, erasedKeys);
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		publishBatch(batch, writer, options);
 		return batch.candidate();
 	}
 
@@ -548,10 +595,139 @@ namespace graph::storage {
 		catalog_.prepareUpsert(batch, std::span(&pool, 1));
 		locations_.prepareUpsertPages(batch, std::span(&page, 1));
 		locations_.prepareReplaceEntityProperties(batch, std::span(&location, 1), {});
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		publishBatch(batch, writer, options);
 		return EntityPropertyPagePoolMaterialization{batch.candidate(), pool, page, location};
+	}
+
+	std::optional<StatePagePoolMaterialization>
+	RelocatableMetadataStore::materializeStatePagePool(uint64_t pageOwnerId, uint64_t stateId, PhysicalSlotId firstSlot,
+													   PhysicalSlotId lastSlot, LogSequenceNumber checkpointLsn,
+													   const StatePagePoolPreparer &preparer,
+													   const MetadataPublishOptions &options) {
+		const uint8_t invalidInput = static_cast<uint8_t>(pageOwnerId == 0U) | static_cast<uint8_t>(stateId == 0U) |
+									 static_cast<uint8_t>(!firstSlot.isValid()) |
+									 static_cast<uint8_t>(!lastSlot.isValid()) |
+									 static_cast<uint8_t>(firstSlot > lastSlot) |
+									 static_cast<uint8_t>(!checkpointLsn.isValid()) | static_cast<uint8_t>(!preparer);
+		if (invalidInput != 0U) {
+			throw FormatException(FormatError::FERR_INVALID_HEADER,
+								  "relocatable State page materialization requires an owner, State ID, slot range, "
+								  "LSN, and preparer");
+		}
+
+		MetadataWriteGuard writer = beginWrite();
+		const Superblock current = bootstrap_.recover();
+		if (locations_.findStateOptional(current, stateId).has_value()) {
+			throw FormatException(FormatError::FERR_INVALID_STATE,
+								  "relocatable State page materialization cannot replace an existing State ID");
+		}
+		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
+		const SegmentId segmentId = batch.allocateLogicalSegmentId();
+		const PageId pageId = batch.allocateLogicalPageId();
+		if (catalog_.findOptional(current, segmentId).has_value() ||
+			locations_.findPageOptional(current, pageId).has_value()) {
+			throw FormatException(FormatError::FERR_INVALID_STATE,
+								  "relocatable State page materialization allocated a published logical identity");
+		}
+		const std::optional<PhysicalSlotId> physicalSlot =
+				allocator_.prepareReserveFirstFree(batch, firstSlot, lastSlot);
+		if (!physicalSlot.has_value()) {
+			return std::nullopt;
+		}
+
+		CatalogEntry pool;
+		pool.segment_id = segmentId;
+		pool.physical_slot = *physicalSlot;
+		pool.kind = SegmentKind::SGK_STATE_PAGE_POOL;
+		pool.owner_id = pageOwnerId;
+		pool.generation = Generation(1);
+		pool.state = SegmentState::SGS_SEALED;
+		pool.committed_lsn = checkpointLsn;
+		batch.observeLogicalSegmentId(segmentId);
+
+		PageLocation page{pageId, segmentId, 0U, pool.generation, 0U};
+		StateLocation state{stateId, pageId, 0U, 0U};
+		preparer(pool, pageId, page, state);
+		const uint8_t invalidPrepared = static_cast<uint8_t>(page.page_id != pageId) |
+										static_cast<uint8_t>(page.segment_id != pool.segment_id) |
+										static_cast<uint8_t>(page.generation != pool.generation) |
+										static_cast<uint8_t>(page.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
+										static_cast<uint8_t>(page.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
+										static_cast<uint8_t>(page.free_bytes > RSS_PAGE_SIZE) |
+										static_cast<uint8_t>(state.state_id != stateId) |
+										static_cast<uint8_t>(state.page_id != pageId) |
+										static_cast<uint8_t>(state.slot_id == std::numeric_limits<uint16_t>::max()) |
+										static_cast<uint8_t>(state.slot_generation == 0U);
+		if (invalidPrepared != 0U) {
+			throw FormatException(FormatError::FERR_INVALID_STATE,
+								  "relocatable State page preparer returned an invalid page or directory location");
+		}
+
+		catalog_.prepareUpsert(batch, std::span(&pool, 1));
+		locations_.prepareUpsertPages(batch, std::span(&page, 1));
+		locations_.prepareReplaceStates(batch, std::span(&state, 1), {});
+		publishBatch(batch, writer, options);
+		return StatePagePoolMaterialization{batch.candidate(), pool, page, state};
+	}
+
+	Superblock RelocatableMetadataStore::replaceStatePageAndUpsertLocation(const PageLocation &expectedPage,
+																		   StateLocation state,
+																		   LogSequenceNumber checkpointLsn,
+																		   const StatePageReplacementPreparer &preparer,
+																		   const MetadataPublishOptions &options) {
+		const uint8_t invalidInput = static_cast<uint8_t>(!expectedPage.page_id.isValid()) |
+									 static_cast<uint8_t>(!expectedPage.segment_id.isValid()) |
+									 static_cast<uint8_t>(!expectedPage.generation.isValid()) |
+									 static_cast<uint8_t>(expectedPage.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
+									 static_cast<uint8_t>(expectedPage.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
+									 static_cast<uint8_t>(state.state_id == 0U) |
+									 static_cast<uint8_t>(!checkpointLsn.isValid()) | static_cast<uint8_t>(!preparer);
+		if (invalidInput != 0U) {
+			throw FormatException(
+					FormatError::FERR_INVALID_HEADER,
+					"relocatable State page replacement requires a current page, State ID, LSN, and preparer");
+		}
+
+		MetadataWriteGuard writer = beginWrite();
+		const Superblock current = bootstrap_.recover();
+		const PageLocation currentPage = locations_.findPage(current, expectedPage.page_id);
+		const CatalogEntry pool = catalog_.find(current, currentPage.segment_id);
+		const std::optional<StateLocation> visibleState = locations_.findStateOptional(current, state.state_id);
+		const uint8_t invalidCurrent =
+				static_cast<uint8_t>(currentPage != expectedPage) |
+				static_cast<uint8_t>(pool.kind != SegmentKind::SGK_STATE_PAGE_POOL) |
+				static_cast<uint8_t>(pool.state != SegmentState::SGS_SEALED) |
+				static_cast<uint8_t>(pool.generation != currentPage.generation) |
+				static_cast<uint8_t>(!allocator_.isAllocated(current, pool.physical_slot)) |
+				static_cast<uint8_t>(visibleState.has_value() && *visibleState != state);
+		if (invalidCurrent != 0U) {
+			throw FormatException(
+					FormatError::FERR_INVALID_STATE,
+					"relocatable State page replacement has a stale page, non-State pool, or State route");
+		}
+
+		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
+		PageLocation replacement = expectedPage;
+		preparer(pool, expectedPage, replacement, state);
+		const uint8_t invalidPrepared = static_cast<uint8_t>(replacement.page_id != expectedPage.page_id) |
+										static_cast<uint8_t>(replacement.segment_id != pool.segment_id) |
+										static_cast<uint8_t>(replacement.generation != pool.generation) |
+										static_cast<uint8_t>(replacement.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
+										static_cast<uint8_t>(replacement.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
+										static_cast<uint8_t>(replacement.free_bytes > RSS_PAGE_SIZE) |
+										static_cast<uint8_t>(state.page_id != expectedPage.page_id) |
+										static_cast<uint8_t>(state.slot_id == std::numeric_limits<uint16_t>::max()) |
+										static_cast<uint8_t>(state.slot_generation == 0U);
+		if (invalidPrepared != 0U) {
+			throw FormatException(
+					FormatError::FERR_INVALID_STATE,
+					"relocatable State page replacement preparer returned an invalid page or directory location");
+		}
+
+		locations_.prepareReplacePages(batch, std::span(&replacement, 1), {});
+		locations_.prepareReplaceStates(batch, std::span(&state, 1), {});
+		publishBatch(batch, writer, options);
+		return batch.candidate();
 	}
 
 	Superblock RelocatableMetadataStore::upsertStateLocations(std::span<const StateLocation> locations,
@@ -582,9 +758,7 @@ namespace graph::storage {
 		}
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
 		locations_.prepareReplaceStates(batch, locations, erasedStateIds);
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		publishBatch(batch, writer, options);
 		return batch.candidate();
 	}
 
@@ -617,9 +791,7 @@ namespace graph::storage {
 		}
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
 		locations_.prepareReplaceVectorLocations(batch, locations, erasedVectorIds);
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		publishBatch(batch, writer, options);
 		return batch.candidate();
 	}
 
@@ -652,9 +824,7 @@ namespace graph::storage {
 		}
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
 		locations_.prepareReplaceVectorManifests(batch, manifests, erasedIndexIds);
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		publishBatch(batch, writer, options);
 		return batch.candidate();
 	}
 
@@ -691,9 +861,7 @@ namespace graph::storage {
 		}
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
 		locations_.prepareReplaceIndexRoots(batch, roots, erasedIndexIds);
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		publishBatch(batch, writer, options);
 		return batch.candidate();
 	}
 
@@ -762,9 +930,7 @@ namespace graph::storage {
 		const IndexRootLocation root{indexId, pageIds[rootPageOrdinal], pool.generation};
 		locations_.prepareUpsertPages(batch, locations);
 		locations_.prepareReplaceIndexRoots(batch, std::span(&root, 1), {});
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		publishBatch(batch, writer, options);
 		return batch.candidate();
 	}
 
@@ -885,1350 +1051,10 @@ namespace graph::storage {
 		std::ranges::sort(publishedLocations, {}, &PageLocation::page_id);
 		locations_.prepareUpsertPages(batch, publishedLocations);
 		locations_.prepareReplaceIndexRoots(batch, std::span(&root, 1), {});
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		publishBatch(batch, writer, options);
 		return batch.candidate();
 	}
 
-	Superblock RelocatableMetadataStore::materializeNewVectorRawPagesAcrossPools(
-			std::span<const VectorRawMaterializationPoolRequest> pools, uint64_t indexId,
-			LogSequenceNumber checkpointLsn, const VectorRawMultiPoolMaterializationPreparer &preparer,
-			const MetadataPublishOptions &options) {
-		const uint8_t invalidInput = static_cast<uint8_t>(pools.empty()) | static_cast<uint8_t>(indexId == 0U) |
-									 static_cast<uint8_t>(!checkpointLsn.isValid()) | static_cast<uint8_t>(!preparer);
-		if (invalidInput != 0U) {
-			throw FormatException(
-					FormatError::FERR_INVALID_HEADER,
-					"relocatable raw Vector materialization requires pools, an index, an LSN, and a preparer");
-		}
-
-		size_t totalPageCount = 0;
-		for (const VectorRawMaterializationPoolRequest &request: pools) {
-			const uint8_t invalidPool = static_cast<uint8_t>(!request.first_slot.isValid()) |
-										static_cast<uint8_t>(!request.last_slot.isValid()) |
-										static_cast<uint8_t>(request.first_slot > request.last_slot) |
-										static_cast<uint8_t>(request.page_count == 0U) |
-										static_cast<uint8_t>(request.page_count > RSS_PAGE_POOL_DATA_FRAME_COUNT);
-			if (invalidPool != 0U || request.page_count > std::numeric_limits<size_t>::max() - totalPageCount) {
-				throw FormatException(FormatError::FERR_INVALID_HEADER,
-									  "relocatable raw Vector materialization has an invalid pool range or page count");
-			}
-			totalPageCount += request.page_count;
-		}
-
-		MetadataWriteGuard writer = beginWrite();
-		const Superblock current = bootstrap_.recover();
-		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
-
-		std::vector<VectorRawMaterializationPoolBatch> batches;
-		std::vector<CatalogEntry> catalogEntries;
-		batches.reserve(pools.size());
-		catalogEntries.reserve(pools.size());
-		for (const VectorRawMaterializationPoolRequest &request: pools) {
-			const std::optional<PhysicalSlotId> physicalSlot =
-					allocator_.prepareReserveFirstFree(batch, request.first_slot, request.last_slot);
-			if (!physicalSlot.has_value()) {
-				throw FormatException(
-						FormatError::FERR_INVALID_STATE,
-						"relocatable raw Vector materialization has no free physical slot in a requested range");
-			}
-			CatalogEntry pool;
-			pool.segment_id = batch.allocateLogicalSegmentId();
-			pool.physical_slot = *physicalSlot;
-			pool.kind = SegmentKind::SGK_VECTOR_RAW_POOL;
-			pool.owner_id = indexId;
-			pool.generation = Generation(1);
-			pool.state = SegmentState::SGS_SEALED;
-			pool.committed_lsn = checkpointLsn;
-			catalogEntries.push_back(pool);
-			batches.push_back({pool, {}, {}});
-		}
-		catalog_.prepareUpsert(batch, catalogEntries);
-
-		for (size_t poolOrdinal = 0; poolOrdinal < batches.size(); ++poolOrdinal) {
-			VectorRawMaterializationPoolBatch &pool = batches[poolOrdinal];
-			const size_t pageCount = pools[poolOrdinal].page_count;
-			pool.page_ids.reserve(pageCount);
-			pool.locations.reserve(pageCount);
-			for (size_t pageOrdinal = 0; pageOrdinal < pageCount; ++pageOrdinal) {
-				const PageId pageId = batch.allocateLogicalPageId();
-				if (locations_.findPageOptional(current, pageId)
-							.has_value()) { // ZYX_COV_EXCL_LINE: durable page IDs are never reused.
-					throw FormatException(
-							FormatError::FERR_INVALID_STATE,
-							"relocatable raw Vector materialization allocated an already reachable Page ID");
-				}
-				pool.page_ids.push_back(pageId);
-				pool.locations.push_back({pageId, pool.pool.segment_id, 0, pool.pool.generation, 0});
-			}
-		}
-
-		std::vector<VectorLocation> vectorLocations;
-		preparer(batches, vectorLocations);
-
-		std::set<PageId> uniquePageIds;
-		std::set<std::pair<uint64_t, uint16_t>> uniqueFrames;
-		std::set<uint64_t> uniqueVectorIds;
-		std::set<std::pair<PageId, uint16_t>> uniqueVectorSlots;
-		std::vector<PageLocation> publishedPages;
-		publishedPages.reserve(totalPageCount);
-		for (const VectorRawMaterializationPoolBatch &pool: batches) {
-			if (pool.locations.size() != pool.page_ids.size()) { // ZYX_COV_EXCL_LINE: typed Vector materialization
-																 // preserves metadata-assigned cardinality.
-				throw FormatException(
-						FormatError::FERR_INVALID_STATE,
-						"relocatable raw Vector materialization preparer changed a page batch cardinality");
-			}
-			for (size_t pageOrdinal = 0; pageOrdinal < pool.locations.size(); ++pageOrdinal) {
-				const PageLocation &location = pool.locations[pageOrdinal];
-				const uint8_t invalidLocation =
-						static_cast<uint8_t>(location.page_id != pool.page_ids[pageOrdinal]) |
-						static_cast<uint8_t>(location.segment_id != pool.pool.segment_id) |
-						static_cast<uint8_t>(location.generation != pool.pool.generation) |
-						static_cast<uint8_t>(location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-						static_cast<uint8_t>(location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-						static_cast<uint8_t>(location.free_bytes > RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES);
-				const std::pair<uint64_t, uint16_t> frame{location.segment_id.value(), location.page_index};
-				if (invalidLocation != 0U || !uniquePageIds.insert(location.page_id).second ||
-					!uniqueFrames.insert(frame)
-							 .second) { // ZYX_COV_EXCL_LINE: typed preparation uses one new frame per assigned page.
-					throw FormatException(
-							FormatError::FERR_INVALID_STATE,
-							"relocatable raw Vector materialization returned invalid or duplicate page locations");
-				}
-				publishedPages.push_back(location);
-			}
-		}
-		for (const VectorLocation &location: vectorLocations) {
-			const bool knownPage = std::ranges::any_of(
-					publishedPages, [&location](const PageLocation &page) { return page.page_id == location.page_id; });
-			const uint8_t invalidLocation =
-					static_cast<uint8_t>(location.vector_id == 0U) | static_cast<uint8_t>(!location.page_id.isValid()) |
-					static_cast<uint8_t>(location.slot_id == std::numeric_limits<uint16_t>::max()) |
-					static_cast<uint8_t>(location.slot_generation == 0U) | static_cast<uint8_t>(!knownPage) |
-					static_cast<uint8_t>(current.next_logical_vector_id == 0U) |
-					static_cast<uint8_t>(location.vector_id < current.next_logical_vector_id) |
-					static_cast<uint8_t>(
-							locations_.findVectorLocationOptional(current, location.vector_id).has_value());
-			if (invalidLocation != 0U || !uniqueVectorIds.insert(location.vector_id).second ||
-				!uniqueVectorSlots.insert({location.page_id, location.slot_id}).second) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "relocatable raw Vector materialization returned an invalid, duplicate, or "
-									  "already-published Vector ID");
-			}
-		}
-
-		std::ranges::sort(publishedPages, {}, &PageLocation::page_id);
-		std::ranges::sort(vectorLocations, {}, &VectorLocation::vector_id);
-		for (const VectorLocation &location: vectorLocations) {
-			batch.observeLogicalVectorId(location.vector_id);
-		}
-		locations_.prepareUpsertPages(batch, publishedPages);
-		locations_.prepareReplaceVectorLocations(batch, vectorLocations, {});
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
-		return batch.candidate();
-	}
-
-	Superblock RelocatableMetadataStore::materializeNewVectorPqPagesAcrossPools(
-			std::span<const VectorPqMaterializationPoolRequest> pools, uint64_t indexId,
-			LogSequenceNumber checkpointLsn, const VectorPqMultiPoolMaterializationPreparer &preparer,
-			const MetadataPublishOptions &options) {
-		const uint8_t invalidInput = static_cast<uint8_t>(pools.empty()) | static_cast<uint8_t>(indexId == 0U) |
-									 static_cast<uint8_t>(!checkpointLsn.isValid()) | static_cast<uint8_t>(!preparer);
-		if (invalidInput != 0U) {
-			throw FormatException(
-					FormatError::FERR_INVALID_HEADER,
-					"relocatable PQ Vector materialization requires pools, an index, an LSN, and a preparer");
-		}
-
-		size_t totalPageCount = 0U;
-		for (const VectorPqMaterializationPoolRequest &request: pools) {
-			const uint8_t invalidPool = static_cast<uint8_t>(!request.first_slot.isValid()) |
-										static_cast<uint8_t>(!request.last_slot.isValid()) |
-										static_cast<uint8_t>(request.first_slot > request.last_slot) |
-										static_cast<uint8_t>(request.page_count == 0U) |
-										static_cast<uint8_t>(request.page_count > RSS_PAGE_POOL_DATA_FRAME_COUNT);
-			if (invalidPool != 0U || request.page_count > std::numeric_limits<size_t>::max() - totalPageCount) {
-				throw FormatException(FormatError::FERR_INVALID_HEADER,
-									  "relocatable PQ Vector materialization has an invalid pool range or page count");
-			}
-			totalPageCount += request.page_count;
-		}
-
-		MetadataWriteGuard writer = beginWrite();
-		const Superblock current = bootstrap_.recover();
-		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
-		std::vector<VectorPqMaterializationPoolBatch> batches;
-		std::vector<CatalogEntry> catalogEntries;
-		batches.reserve(pools.size());
-		catalogEntries.reserve(pools.size());
-		for (const VectorPqMaterializationPoolRequest &request: pools) {
-			const std::optional<PhysicalSlotId> physicalSlot =
-					allocator_.prepareReserveFirstFree(batch, request.first_slot, request.last_slot);
-			if (!physicalSlot.has_value()) {
-				throw FormatException(
-						FormatError::FERR_INVALID_STATE,
-						"relocatable PQ Vector materialization has no free physical slot in a requested range");
-			}
-			CatalogEntry pool;
-			pool.segment_id = batch.allocateLogicalSegmentId();
-			pool.physical_slot = *physicalSlot;
-			pool.kind = SegmentKind::SGK_VECTOR_PQ_POOL;
-			pool.owner_id = indexId;
-			pool.generation = Generation(1);
-			pool.state = SegmentState::SGS_SEALED;
-			pool.committed_lsn = checkpointLsn;
-			catalogEntries.push_back(pool);
-			batches.push_back({pool, {}, {}});
-		}
-		catalog_.prepareUpsert(batch, catalogEntries);
-
-		for (size_t poolOrdinal = 0; poolOrdinal < batches.size(); ++poolOrdinal) {
-			VectorPqMaterializationPoolBatch &pool = batches[poolOrdinal];
-			const size_t pageCount = pools[poolOrdinal].page_count;
-			pool.page_ids.reserve(pageCount);
-			pool.locations.reserve(pageCount);
-			for (size_t pageOrdinal = 0; pageOrdinal < pageCount; ++pageOrdinal) {
-				const PageId pageId = batch.allocateLogicalPageId();
-				if (locations_.findPageOptional(current, pageId)
-							.has_value()) { // ZYX_COV_EXCL_LINE: durable IDs are never reused.
-					throw FormatException(
-							FormatError::FERR_INVALID_STATE,
-							"relocatable PQ Vector materialization allocated an already reachable Page ID");
-				}
-				pool.page_ids.push_back(pageId);
-				pool.locations.push_back({pageId, pool.pool.segment_id, 0, pool.pool.generation, 0});
-			}
-		}
-
-		preparer(batches);
-		std::set<PageId> uniquePageIds;
-		std::set<std::pair<uint64_t, uint16_t>> uniqueFrames;
-		std::vector<PageLocation> publishedPages;
-		publishedPages.reserve(totalPageCount);
-		for (const VectorPqMaterializationPoolBatch &pool: batches) {
-			if (pool.locations.size() !=
-				pool.page_ids.size()) { // ZYX_COV_EXCL_LINE: typed preparation preserves cardinality.
-				throw FormatException(
-						FormatError::FERR_INVALID_STATE,
-						"relocatable PQ Vector materialization preparer changed a page batch cardinality");
-			}
-			for (size_t pageOrdinal = 0; pageOrdinal < pool.locations.size(); ++pageOrdinal) {
-				const PageLocation &location = pool.locations[pageOrdinal];
-				const uint8_t invalidLocation =
-						static_cast<uint8_t>(location.page_id != pool.page_ids[pageOrdinal]) |
-						static_cast<uint8_t>(location.segment_id != pool.pool.segment_id) |
-						static_cast<uint8_t>(location.generation != pool.pool.generation) |
-						static_cast<uint8_t>(location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-						static_cast<uint8_t>(location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-						static_cast<uint8_t>(location.free_bytes > RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES);
-				const std::pair<uint64_t, uint16_t> frame{location.segment_id.value(), location.page_index};
-				if (invalidLocation != 0U || !uniquePageIds.insert(location.page_id).second ||
-					!uniqueFrames.insert(frame)
-							 .second) { // ZYX_COV_EXCL_LINE: typed preparation assigns one frame per page.
-					throw FormatException(
-							FormatError::FERR_INVALID_STATE,
-							"relocatable PQ Vector materialization returned invalid or duplicate page locations");
-				}
-				publishedPages.push_back(location);
-			}
-		}
-		std::ranges::sort(publishedPages, {}, &PageLocation::page_id);
-		locations_.prepareUpsertPages(batch, publishedPages);
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
-		return batch.candidate();
-	}
-
-	Superblock RelocatableMetadataStore::publishOfflineVectorDerivedRebuild(
-			const OfflineVectorDerivedRebuildMetadataMutation &mutation, LogSequenceNumber checkpointLsn,
-			const OfflineVectorDerivedRebuildMetadataPreparer &preparer, const MetadataPublishOptions &options) {
-		const NativeGraphIndexTreeMutation &mapping = mutation.mapping_tree;
-		const NativeGraphIndexTreeMutation &adjacencyMapping = mutation.adjacency_mapping_tree;
-		const bool replacesExistingMapping = mutation.expected_mapping_root.has_value();
-		const bool hasAdjacency = !mutation.adjacency_pools.empty();
-		const bool replacesExistingAdjacencyMapping = mutation.expected_adjacency_mapping_root.has_value();
-		const bool retiresDeltaMapping = mutation.expected_delta_mapping_root.has_value();
-		const uint8_t malformed =
-				static_cast<uint8_t>(mutation.index_id == 0U) | static_cast<uint8_t>(!checkpointLsn.isValid()) |
-				static_cast<uint8_t>(!preparer) |
-				static_cast<uint8_t>(!mutation.expected_manifest_pool.segment_id.isValid()) |
-				static_cast<uint8_t>(mutation.expected_manifest_pool.kind != SegmentKind::SGK_VECTOR_MANIFEST_POOL) |
-				static_cast<uint8_t>(mutation.expected_manifest_pool.owner_id != mutation.index_id) |
-				static_cast<uint8_t>(mutation.expected_manifest_pool.state != SegmentState::SGS_SEALED) |
-				static_cast<uint8_t>(!mutation.expected_manifest_location.page_id.isValid()) |
-				static_cast<uint8_t>(mutation.expected_manifest_location.segment_id !=
-									 mutation.expected_manifest_pool.segment_id) |
-				static_cast<uint8_t>(mutation.expected_manifest_location.generation !=
-									 mutation.expected_manifest_pool.generation) |
-				static_cast<uint8_t>(mutation.expected_manifest.index_id != mutation.index_id) |
-				static_cast<uint8_t>(mutation.expected_manifest.manifest_page_id !=
-									 mutation.expected_manifest_location.page_id) |
-				static_cast<uint8_t>(mutation.expected_manifest.generation !=
-									 mutation.expected_manifest_location.generation) |
-				static_cast<uint8_t>(!mutation.expected_manifest_owner_lsn.isValid()) |
-				static_cast<uint8_t>(mutation.codebook_reservations.empty() != mutation.codebook_extents.empty()) |
-				static_cast<uint8_t>(!mutation.codebook_reservations.empty() &&
-									 (!mutation.codebook_first_slot.isValid() ||
-									  !mutation.codebook_last_slot.isValid() ||
-									  mutation.codebook_first_slot > mutation.codebook_last_slot)) |
-				static_cast<uint8_t>(mutation.pq_pools.empty()) | static_cast<uint8_t>(mapping.index_id == 0U) |
-				static_cast<uint8_t>(mapping.index_id != 0U && !VectorPqMapping::isMappingIndexId(mapping.index_id)) |
-				static_cast<uint8_t>(mapping.expected_root.has_value()) | static_cast<uint8_t>(mapping.retire_root) |
-				static_cast<uint8_t>(!mapping.pool_requests.empty()) |
-				static_cast<uint8_t>(mapping.new_pool_requests.empty()) |
-				static_cast<uint8_t>(!mapping.replacement_root.has_value()) |
-				static_cast<uint8_t>(mapping.replacement_root.has_value() &&
-									 !mapping.replacement_root->newly_reserved) |
-				static_cast<uint8_t>(mapping.stable_replacement_root.has_value()) |
-				static_cast<uint8_t>(replacesExistingMapping &&
-									 (mutation.expected_mapping_root->index_id != mapping.index_id ||
-									  !mutation.expected_mapping_root->root_page_id.isValid() ||
-									  !mutation.expected_mapping_root->root_generation.isValid())) |
-				static_cast<uint8_t>(!replacesExistingMapping &&
-									 (!mutation.pq_retirements.empty() || !mutation.mapping_retirement_pools.empty())) |
-				static_cast<uint8_t>(replacesExistingMapping &&
-									 (mutation.pq_retirements.empty() || mutation.mapping_retirement_pools.empty())) |
-				static_cast<uint8_t>(hasAdjacency && adjacencyMapping.index_id == 0U) |
-				static_cast<uint8_t>(hasAdjacency &&
-									 !VectorAdjacencyMapping::isMappingIndexId(adjacencyMapping.index_id)) |
-				static_cast<uint8_t>(hasAdjacency && adjacencyMapping.expected_root.has_value()) |
-				static_cast<uint8_t>(hasAdjacency && adjacencyMapping.retire_root) |
-				static_cast<uint8_t>(hasAdjacency && !adjacencyMapping.pool_requests.empty()) |
-				static_cast<uint8_t>(hasAdjacency && adjacencyMapping.new_pool_requests.empty()) |
-				static_cast<uint8_t>(hasAdjacency && !adjacencyMapping.replacement_root.has_value()) |
-				static_cast<uint8_t>(hasAdjacency && adjacencyMapping.replacement_root.has_value() &&
-									 !adjacencyMapping.replacement_root->newly_reserved) |
-				static_cast<uint8_t>(hasAdjacency && adjacencyMapping.stable_replacement_root.has_value()) |
-				static_cast<uint8_t>(replacesExistingAdjacencyMapping &&
-									 (mutation.expected_adjacency_mapping_root->index_id != adjacencyMapping.index_id ||
-									  !mutation.expected_adjacency_mapping_root->root_page_id.isValid() ||
-									  !mutation.expected_adjacency_mapping_root->root_generation.isValid())) |
-				static_cast<uint8_t>(hasAdjacency && !replacesExistingAdjacencyMapping &&
-									 (!mutation.adjacency_retirements.empty() ||
-									  !mutation.adjacency_mapping_retirement_pools.empty())) |
-				static_cast<uint8_t>(replacesExistingAdjacencyMapping &&
-									 (mutation.adjacency_retirements.empty() ||
-									  mutation.adjacency_mapping_retirement_pools.empty())) |
-				static_cast<uint8_t>(!hasAdjacency &&
-									 (!mutation.adjacency_retirements.empty() || replacesExistingAdjacencyMapping ||
-									  !mutation.adjacency_mapping_retirement_pools.empty() ||
-									  adjacencyMapping.index_id != 0U || !adjacencyMapping.new_pool_requests.empty())) |
-				static_cast<uint8_t>(
-						retiresDeltaMapping &&
-						(mutation.expected_delta_mapping_root->index_id == 0U ||
-						 !mutation.expected_delta_mapping_root->root_page_id.isValid() ||
-						 !mutation.expected_delta_mapping_root->root_generation.isValid() ||
-						 !VectorDeltaMapping::isMappingIndexId(mutation.expected_delta_mapping_root->index_id) ||
-						 mutation.delta_mapping_retirement_pools.empty())) |
-				static_cast<uint8_t>(!retiresDeltaMapping && !mutation.delta_mapping_retirement_pools.empty());
-		if (malformed != 0U) {
-			throw FormatException(
-					FormatError::FERR_INVALID_HEADER,
-					"offline PQ rebuild has an invalid Manifest fence, Codebook candidate, or mapping-tree plan");
-		}
-
-		size_t totalPqPages = 0U;
-		for (const VectorPqMaterializationPoolRequest &request: mutation.pq_pools) {
-			const uint8_t invalidPool = static_cast<uint8_t>(!request.first_slot.isValid()) |
-										static_cast<uint8_t>(!request.last_slot.isValid()) |
-										static_cast<uint8_t>(request.first_slot > request.last_slot) |
-										static_cast<uint8_t>(request.page_count == 0U) |
-										static_cast<uint8_t>(request.page_count > RSS_PAGE_POOL_DATA_FRAME_COUNT);
-			if (invalidPool != 0U || request.page_count > std::numeric_limits<size_t>::max() - totalPqPages) {
-				throw FormatException(FormatError::FERR_INVALID_HEADER,
-									  "offline PQ rebuild has an invalid PQ pool placement or page count");
-			}
-			totalPqPages += request.page_count;
-		}
-		size_t totalAdjacencyPages = 0U;
-		for (const VectorAdjacencyMaterializationPoolRequest &request: mutation.adjacency_pools) {
-			const uint8_t invalidPool = static_cast<uint8_t>(!request.first_slot.isValid()) |
-										static_cast<uint8_t>(!request.last_slot.isValid()) |
-										static_cast<uint8_t>(request.first_slot > request.last_slot) |
-										static_cast<uint8_t>(request.page_count == 0U) |
-										static_cast<uint8_t>(request.page_count > RSS_PAGE_POOL_DATA_FRAME_COUNT);
-			if (invalidPool != 0U || request.page_count > std::numeric_limits<size_t>::max() - totalAdjacencyPages) {
-				throw FormatException(FormatError::FERR_INVALID_HEADER,
-									  "offline Vector rebuild has an invalid adjacency pool placement or page count");
-			}
-			totalAdjacencyPages += request.page_count;
-		}
-		for (const NewIndexTreePoolRequest &request: mapping.new_pool_requests) {
-			const uint8_t invalidPool =
-					static_cast<uint8_t>(!request.first_slot.isValid()) |
-					static_cast<uint8_t>(!request.last_slot.isValid()) |
-					static_cast<uint8_t>(request.first_slot > request.last_slot) |
-					static_cast<uint8_t>(request.owner_id != mapping.index_id) |
-					static_cast<uint8_t>(request.appended_page_count == 0U) |
-					static_cast<uint8_t>(request.appended_page_count > RSS_PAGE_POOL_DATA_FRAME_COUNT);
-			if (invalidPool != 0U) {
-				throw FormatException(FormatError::FERR_INVALID_HEADER,
-									  "offline PQ rebuild has an invalid first-use mapping-tree pool request");
-			}
-		}
-		for (const NewIndexTreePoolRequest &request: adjacencyMapping.new_pool_requests) {
-			const uint8_t invalidPool =
-					static_cast<uint8_t>(!request.first_slot.isValid()) |
-					static_cast<uint8_t>(!request.last_slot.isValid()) |
-					static_cast<uint8_t>(request.first_slot > request.last_slot) |
-					static_cast<uint8_t>(request.owner_id != adjacencyMapping.index_id) |
-					static_cast<uint8_t>(request.appended_page_count == 0U) |
-					static_cast<uint8_t>(request.appended_page_count > RSS_PAGE_POOL_DATA_FRAME_COUNT);
-			if (invalidPool != 0U) {
-				throw FormatException(FormatError::FERR_INVALID_HEADER,
-									  "offline Vector rebuild has an invalid adjacency mapping-tree pool request");
-			}
-		}
-		if (mapping.replacement_root->pool_ordinal >= mapping.new_pool_requests.size() ||
-			mapping.replacement_root->appended_page_ordinal >=
-					mapping.new_pool_requests[mapping.replacement_root->pool_ordinal].appended_page_count) {
-			throw FormatException(FormatError::FERR_INVALID_HEADER,
-								  "offline PQ rebuild mapping-tree root does not name a candidate PageId");
-		}
-		if (hasAdjacency &&
-			(adjacencyMapping.replacement_root->pool_ordinal >= adjacencyMapping.new_pool_requests.size() ||
-			 adjacencyMapping.replacement_root->appended_page_ordinal >=
-					 adjacencyMapping.new_pool_requests[adjacencyMapping.replacement_root->pool_ordinal]
-							 .appended_page_count)) {
-			throw FormatException(
-					FormatError::FERR_INVALID_HEADER,
-					"offline Vector rebuild adjacency mapping-tree root does not name a candidate PageId");
-		}
-
-		uint64_t previousPqRetirementPageId = 0U;
-		std::set<uint64_t> retiredPageIds;
-		for (const PageRetirement &retirement: mutation.pq_retirements) {
-			const PageLocation &location = retirement.location;
-			const uint8_t invalidRetirement =
-					static_cast<uint8_t>(!location.page_id.isValid()) |
-					static_cast<uint8_t>(location.page_id.value() <= previousPqRetirementPageId) |
-					static_cast<uint8_t>(!location.segment_id.isValid()) |
-					static_cast<uint8_t>(!location.generation.isValid()) |
-					static_cast<uint8_t>(location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-					static_cast<uint8_t>(location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-					static_cast<uint8_t>(retirement.expected_owner_id != mutation.index_id) |
-					static_cast<uint8_t>(retirement.expected_owner_kind != PageOwnerKind::POK_VECTOR_PQ) |
-					static_cast<uint8_t>(!retirement.expected_owner_lsn.isValid()) |
-					static_cast<uint8_t>(!retiredPageIds.insert(location.page_id.value()).second);
-			if (invalidRetirement != 0U) {
-				throw FormatException(FormatError::FERR_INVALID_HEADER,
-									  "offline PQ rebuild has an invalid or non-canonical retired PQ source page");
-			}
-			previousPqRetirementPageId = location.page_id.value();
-		}
-		uint64_t previousAdjacencyRetirementPageId = 0U;
-		for (const PageRetirement &retirement: mutation.adjacency_retirements) {
-			const PageLocation &location = retirement.location;
-			const uint8_t invalidRetirement =
-					static_cast<uint8_t>(!location.page_id.isValid()) |
-					static_cast<uint8_t>(location.page_id.value() <= previousAdjacencyRetirementPageId) |
-					static_cast<uint8_t>(!location.segment_id.isValid()) |
-					static_cast<uint8_t>(!location.generation.isValid()) |
-					static_cast<uint8_t>(location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-					static_cast<uint8_t>(location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-					static_cast<uint8_t>(retirement.expected_owner_id != (mutation.index_id | (UINT64_C(1) << 63U))) |
-					static_cast<uint8_t>(retirement.expected_owner_kind != PageOwnerKind::POK_VECTOR_ADJACENCY) |
-					static_cast<uint8_t>(!retirement.expected_owner_lsn.isValid()) |
-					static_cast<uint8_t>(!retiredPageIds.insert(location.page_id.value()).second);
-			if (invalidRetirement != 0U) {
-				throw FormatException(
-						FormatError::FERR_INVALID_HEADER,
-						"offline Vector rebuild has an invalid or non-canonical retired adjacency source page");
-			}
-			previousAdjacencyRetirementPageId = location.page_id.value();
-		}
-
-		uint64_t previousRetirementSegmentId = 0U;
-		bool retiresExpectedMappingRoot = false;
-		for (const IndexTreeMutationPoolRequest &request: mutation.mapping_retirement_pools) {
-			const uint8_t invalidRequest =
-					static_cast<uint8_t>(!request.segment_id.isValid()) |
-					static_cast<uint8_t>(request.segment_id.value() <= previousRetirementSegmentId) |
-					static_cast<uint8_t>(!request.expected_replacements.empty()) |
-					static_cast<uint8_t>(request.appended_page_count != 0U) |
-					static_cast<uint8_t>(request.expected_retirements.empty());
-			if (invalidRequest != 0U) {
-				throw FormatException(FormatError::FERR_INVALID_HEADER,
-									  "offline PQ rebuild has an invalid or unordered mapping-tree retirement pool");
-			}
-			uint64_t previousRetirementPageId = 0U;
-			for (const IndexTreePageRetirement &retirement: request.expected_retirements) {
-				const PageLocation &location = retirement.location;
-				const uint8_t invalidRetirement =
-						static_cast<uint8_t>(!location.page_id.isValid()) |
-						static_cast<uint8_t>(location.page_id.value() <= previousRetirementPageId) |
-						static_cast<uint8_t>(location.segment_id != request.segment_id) |
-						static_cast<uint8_t>(!location.generation.isValid()) |
-						static_cast<uint8_t>(location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-						static_cast<uint8_t>(location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-						static_cast<uint8_t>(!retirement.expected_owner_lsn.isValid()) |
-						static_cast<uint8_t>(!retiredPageIds.insert(location.page_id.value()).second);
-				if (invalidRetirement != 0U) {
-					throw FormatException(FormatError::FERR_INVALID_HEADER,
-										  "offline PQ rebuild has an invalid, duplicate, or non-canonical mapping-tree "
-										  "retirement page");
-				}
-				if (replacesExistingMapping && location.page_id == mutation.expected_mapping_root->root_page_id &&
-					location.generation == mutation.expected_mapping_root->root_generation) {
-					retiresExpectedMappingRoot = true;
-				}
-				previousRetirementPageId = location.page_id.value();
-			}
-			previousRetirementSegmentId = request.segment_id.value();
-		}
-		if (replacesExistingMapping && !retiresExpectedMappingRoot) {
-			throw FormatException(FormatError::FERR_INVALID_HEADER,
-								  "offline PQ rebuild replacement does not retire its expected mapping-tree root");
-		}
-		const auto validateAdditionalMappingRetirements =
-				[&retiredPageIds](std::span<const IndexTreeMutationPoolRequest> requests,
-								  const std::optional<IndexRootLocation> &expectedRoot, const char *message) {
-					uint64_t previousSegmentId = 0U;
-					bool retiresExpectedRoot = !expectedRoot.has_value();
-					for (const IndexTreeMutationPoolRequest &request: requests) {
-						const uint8_t invalidRequest =
-								static_cast<uint8_t>(!request.segment_id.isValid()) |
-								static_cast<uint8_t>(request.segment_id.value() <= previousSegmentId) |
-								static_cast<uint8_t>(!request.expected_replacements.empty()) |
-								static_cast<uint8_t>(request.appended_page_count != 0U) |
-								static_cast<uint8_t>(request.expected_retirements.empty());
-						if (invalidRequest != 0U) {
-							throw FormatException(FormatError::FERR_INVALID_HEADER, message);
-						}
-						uint64_t previousPageId = 0U;
-						for (const IndexTreePageRetirement &retirement: request.expected_retirements) {
-							const PageLocation &location = retirement.location;
-							const uint8_t invalidRetirement =
-									static_cast<uint8_t>(!location.page_id.isValid()) |
-									static_cast<uint8_t>(location.page_id.value() <= previousPageId) |
-									static_cast<uint8_t>(location.segment_id != request.segment_id) |
-									static_cast<uint8_t>(!location.generation.isValid()) |
-									static_cast<uint8_t>(location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-									static_cast<uint8_t>(location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-									static_cast<uint8_t>(!retirement.expected_owner_lsn.isValid()) |
-									static_cast<uint8_t>(!retiredPageIds.insert(location.page_id.value()).second);
-							if (invalidRetirement != 0U) {
-								throw FormatException(FormatError::FERR_INVALID_HEADER, message);
-							}
-							if (expectedRoot.has_value() && location.page_id == expectedRoot->root_page_id &&
-								location.generation == expectedRoot->root_generation) {
-								retiresExpectedRoot = true;
-							}
-							previousPageId = location.page_id.value();
-						}
-						previousSegmentId = request.segment_id.value();
-					}
-					if (!retiresExpectedRoot) {
-						throw FormatException(FormatError::FERR_INVALID_HEADER, message);
-					}
-				};
-		if (hasAdjacency) {
-			validateAdditionalMappingRetirements(
-					mutation.adjacency_mapping_retirement_pools, mutation.expected_adjacency_mapping_root,
-					"offline Vector rebuild does not retire its expected adjacency mapping-tree root");
-		}
-		if (retiresDeltaMapping) {
-			validateAdditionalMappingRetirements(
-					mutation.delta_mapping_retirement_pools, mutation.expected_delta_mapping_root,
-					"offline Vector rebuild does not retire its expected delta mapping-tree root");
-		}
-
-		std::set<uint64_t> codebookSegmentIds;
-		std::set<uint64_t> codebookExtentIds;
-		for (size_t index = 0U; index < mutation.codebook_reservations.size(); ++index) {
-			const CatalogSlotReservationRequest &request = mutation.codebook_reservations[index];
-			const ExtentLocation &extent = mutation.codebook_extents[index];
-			const uint8_t invalidCodebook =
-					static_cast<uint8_t>(!request.segment_id.isValid()) |
-					static_cast<uint8_t>(request.kind != SegmentKind::SGK_CODEBOOK_EXTENT) |
-					static_cast<uint8_t>(request.owner_id == 0U) |
-					static_cast<uint8_t>(!request.segment_generation.isValid()) |
-					static_cast<uint8_t>(request.state != SegmentState::SGS_SEALED) |
-					static_cast<uint8_t>(!request.require_absent) |
-					static_cast<uint8_t>(extent.segment_id != request.segment_id) |
-					static_cast<uint8_t>(extent.generation != request.segment_generation) |
-					static_cast<uint8_t>(!extent.extent_id.isValid()) |
-					static_cast<uint8_t>(extent.first_page != RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-					static_cast<uint8_t>(extent.page_count != RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-					static_cast<uint8_t>(!codebookSegmentIds.insert(request.segment_id.value()).second) |
-					static_cast<uint8_t>(!codebookExtentIds.insert(extent.extent_id.value()).second);
-			if (invalidCodebook != 0U) {
-				throw FormatException(
-						FormatError::FERR_INVALID_HEADER,
-						"offline PQ rebuild has duplicate or malformed immutable Codebook extent identities");
-			}
-		}
-
-		MetadataWriteGuard writer = beginWrite();
-		const Superblock current = bootstrap_.recover();
-		const VectorManifestLocation visibleManifest = locations_.findVectorManifest(current, mutation.index_id);
-		const PageLocation visibleManifestPage =
-				locations_.findPage(current, mutation.expected_manifest_location.page_id);
-		const CatalogEntry visibleManifestPool = catalog_.find(current, visibleManifestPage.segment_id);
-		const std::optional<IndexRootLocation> visibleMappingRoot =
-				locations_.findIndexRootOptional(current, mapping.index_id);
-		const std::optional<IndexRootLocation> visibleAdjacencyMappingRoot =
-				hasAdjacency ? locations_.findIndexRootOptional(current, adjacencyMapping.index_id) : std::nullopt;
-		const std::optional<IndexRootLocation> visibleDeltaMappingRoot =
-				retiresDeltaMapping
-						? locations_.findIndexRootOptional(current, mutation.expected_delta_mapping_root->index_id)
-						: std::nullopt;
-		const uint8_t stale =
-				static_cast<uint8_t>(visibleManifest != mutation.expected_manifest) |
-				static_cast<uint8_t>(visibleManifestPage != mutation.expected_manifest_location) |
-				static_cast<uint8_t>(!hasSameCatalogEntry(visibleManifestPool, mutation.expected_manifest_pool)) |
-				static_cast<uint8_t>(!allocator_.isAllocated(current, visibleManifestPool.physical_slot)) |
-				static_cast<uint8_t>(
-						replacesExistingMapping &&
-						(!visibleMappingRoot.has_value() || *visibleMappingRoot != *mutation.expected_mapping_root)) |
-				static_cast<uint8_t>(!replacesExistingMapping && visibleMappingRoot.has_value());
-		const uint8_t derivedStale =
-				static_cast<uint8_t>(hasAdjacency && replacesExistingAdjacencyMapping &&
-									 (!visibleAdjacencyMappingRoot.has_value() ||
-									  *visibleAdjacencyMappingRoot != *mutation.expected_adjacency_mapping_root)) |
-				static_cast<uint8_t>(hasAdjacency && !replacesExistingAdjacencyMapping &&
-									 visibleAdjacencyMappingRoot.has_value()) |
-				static_cast<uint8_t>(retiresDeltaMapping &&
-									 (!visibleDeltaMappingRoot.has_value() ||
-									  *visibleDeltaMappingRoot != *mutation.expected_delta_mapping_root));
-		if (stale != 0U || derivedStale != 0U) {
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "offline PQ rebuild has a stale Manifest fence or mapping-root transition");
-		}
-
-		std::map<uint64_t, ExistingPoolPageRetirementBatch> pqRetirementBatchesBySegment;
-		for (const PageRetirement &retirement: mutation.pq_retirements) {
-			const PageLocation visible = locations_.findPage(current, retirement.location.page_id);
-			const CatalogEntry pool = catalog_.find(current, retirement.location.segment_id);
-			const uint8_t invalidCurrent = static_cast<uint8_t>(visible != retirement.location) |
-										   static_cast<uint8_t>(pool.kind != SegmentKind::SGK_VECTOR_PQ_POOL) |
-										   static_cast<uint8_t>(pool.owner_id != mutation.index_id) |
-										   static_cast<uint8_t>(pool.generation != retirement.location.generation) |
-										   static_cast<uint8_t>(pool.state != SegmentState::SGS_SEALED) |
-										   static_cast<uint8_t>(!allocator_.isAllocated(current, pool.physical_slot));
-			if (invalidCurrent != 0U) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "offline PQ rebuild has a stale, foreign, or unavailable retired PQ source page");
-			}
-			auto [iterator, inserted] = pqRetirementBatchesBySegment.try_emplace(pool.segment_id.value());
-			if (inserted) {
-				iterator->second.pool = pool;
-			}
-			iterator->second.retirements.push_back(retirement);
-		}
-		std::map<uint64_t, ExistingPoolPageRetirementBatch> adjacencyRetirementBatchesBySegment;
-		for (const PageRetirement &retirement: mutation.adjacency_retirements) {
-			const PageLocation visible = locations_.findPage(current, retirement.location.page_id);
-			const CatalogEntry pool = catalog_.find(current, retirement.location.segment_id);
-			const uint8_t invalidCurrent = static_cast<uint8_t>(visible != retirement.location) |
-										   static_cast<uint8_t>(pool.kind != SegmentKind::SGK_VECTOR_ADJACENCY_POOL) |
-										   static_cast<uint8_t>(pool.owner_id != mutation.index_id) |
-										   static_cast<uint8_t>(pool.generation != retirement.location.generation) |
-										   static_cast<uint8_t>(pool.state != SegmentState::SGS_SEALED) |
-										   static_cast<uint8_t>(!allocator_.isAllocated(current, pool.physical_slot));
-			if (invalidCurrent != 0U) {
-				throw FormatException(
-						FormatError::FERR_INVALID_STATE,
-						"offline Vector rebuild has a stale, foreign, or unavailable retired adjacency source page");
-			}
-			auto [iterator, inserted] = adjacencyRetirementBatchesBySegment.try_emplace(pool.segment_id.value());
-			if (inserted) {
-				iterator->second.pool = pool;
-			}
-			iterator->second.retirements.push_back(retirement);
-		}
-
-		std::vector<IndexTreeMutationPoolBatch> mappingRetirementBatches;
-		mappingRetirementBatches.reserve(mutation.mapping_retirement_pools.size());
-		for (const IndexTreeMutationPoolRequest &request: mutation.mapping_retirement_pools) {
-			const CatalogEntry pool = catalog_.find(current, request.segment_id);
-			// Existing Index pools can be shared by several logical mapping trees.
-			// The immutable retirement plan and page headers authenticate the tree;
-			// the Catalog owner identifies only the allocation namespace.
-			const uint8_t invalidPool = static_cast<uint8_t>(pool.kind != SegmentKind::SGK_INDEX_PAGE_POOL) |
-													static_cast<uint8_t>(pool.owner_id == 0U) |
-										static_cast<uint8_t>(pool.state != SegmentState::SGS_SEALED) |
-										static_cast<uint8_t>(!allocator_.isAllocated(current, pool.physical_slot));
-			if (invalidPool != 0U) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "offline PQ rebuild requires current owned mapping-tree retirement pools");
-			}
-			for (const IndexTreePageRetirement &retirement: request.expected_retirements) {
-				const PageLocation visible = locations_.findPage(current, retirement.location.page_id);
-				const uint8_t invalidCurrent = static_cast<uint8_t>(visible != retirement.location) |
-											   static_cast<uint8_t>(retirement.location.generation != pool.generation);
-				if (invalidCurrent != 0U) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "offline PQ rebuild has a stale or foreign mapping-tree retirement page");
-				}
-			}
-			mappingRetirementBatches.push_back({pool, {}, {}, {}, {}, false, request.expected_retirements});
-		}
-		const auto materializeTreeRetirementBatches = [this,
-													   &current](std::span<const IndexTreeMutationPoolRequest> requests,
-																 uint64_t expectedIndexId, const char *message) {
-			std::vector<IndexTreeMutationPoolBatch> result;
-			result.reserve(requests.size());
-			for (const IndexTreeMutationPoolRequest &request: requests) {
-				const CatalogEntry pool = catalog_.find(current, request.segment_id);
-					// `expectedIndexId` identifies the B+Tree pages, not the shared
-					// allocation namespace that owns this Index pool.
-					const uint8_t invalidPool = static_cast<uint8_t>(pool.kind != SegmentKind::SGK_INDEX_PAGE_POOL) |
-													static_cast<uint8_t>(pool.owner_id == 0U) |
-											static_cast<uint8_t>(pool.state != SegmentState::SGS_SEALED) |
-											static_cast<uint8_t>(!allocator_.isAllocated(current, pool.physical_slot));
-				if (invalidPool != 0U) {
-					throw FormatException(FormatError::FERR_INVALID_STATE, message);
-				}
-				for (const IndexTreePageRetirement &retirement: request.expected_retirements) {
-					const PageLocation visible = locations_.findPage(current, retirement.location.page_id);
-					if (visible != retirement.location || retirement.location.generation != pool.generation) {
-						throw FormatException(FormatError::FERR_INVALID_STATE, message);
-					}
-				}
-				result.push_back({pool, {}, {}, {}, {}, false, request.expected_retirements});
-			}
-			return result;
-		};
-		std::vector<IndexTreeMutationPoolBatch> adjacencyMappingRetirementBatches;
-		if (hasAdjacency) {
-			adjacencyMappingRetirementBatches = materializeTreeRetirementBatches(
-					mutation.adjacency_mapping_retirement_pools, adjacencyMapping.index_id,
-					"offline Vector rebuild requires current owned adjacency mapping-tree retirement pools");
-		}
-		std::vector<IndexTreeMutationPoolBatch> deltaMappingRetirementBatches;
-		if (retiresDeltaMapping) {
-			deltaMappingRetirementBatches = materializeTreeRetirementBatches(
-					mutation.delta_mapping_retirement_pools, mutation.expected_delta_mapping_root->index_id,
-					"offline Vector rebuild requires current owned delta mapping-tree retirement pools");
-		}
-		for (size_t index = 0U; index < mutation.codebook_reservations.size(); ++index) {
-			if (catalog_.findOptional(current, mutation.codebook_reservations[index].segment_id).has_value()) {
-				throw FormatException(
-						FormatError::FERR_INVALID_STATE,
-						"offline PQ rebuild Codebook candidate reuses a reachable Catalog segment identity");
-			}
-			if (locations_.findExtentOptional(current, mutation.codebook_extents[index].extent_id).has_value()) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "offline PQ rebuild Codebook candidate reuses a reachable Extent identity");
-			}
-		}
-
-		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
-		OfflineVectorDerivedRebuildMetadataMaterialization materialization;
-		materialization.codebook_extents.reserve(mutation.codebook_reservations.size());
-		materialization.pq_retirement_pools.reserve(pqRetirementBatchesBySegment.size());
-		for (auto &[segmentId, retirementBatch]: pqRetirementBatchesBySegment) {
-			static_cast<void>(segmentId);
-			materialization.pq_retirement_pools.push_back(std::move(retirementBatch));
-		}
-		materialization.adjacency_retirement_pools.reserve(adjacencyRetirementBatchesBySegment.size());
-		for (auto &[segmentId, retirementBatch]: adjacencyRetirementBatchesBySegment) {
-			static_cast<void>(segmentId);
-			materialization.adjacency_retirement_pools.push_back(std::move(retirementBatch));
-		}
-		materialization.mapping_retirement_pools = std::move(mappingRetirementBatches);
-		materialization.adjacency_mapping_retirement_pools = std::move(adjacencyMappingRetirementBatches);
-		materialization.delta_mapping_retirement_pools = std::move(deltaMappingRetirementBatches);
-		std::vector<CatalogEntry> catalogEntries;
-		catalogEntries.reserve(mutation.codebook_reservations.size() + mutation.pq_pools.size() +
-							   mapping.new_pool_requests.size() + mutation.adjacency_pools.size() +
-							   adjacencyMapping.new_pool_requests.size());
-		for (const CatalogSlotReservationRequest &request: mutation.codebook_reservations) {
-			const std::optional<PhysicalSlotId> slot = allocator_.prepareReserveFirstFree(
-					batch, mutation.codebook_first_slot, mutation.codebook_last_slot);
-			if (!slot.has_value()) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "offline PQ rebuild has no free physical slot for an immutable Codebook extent");
-			}
-			CatalogEntry entry{request.segment_id,		   *slot,		  request.kind, request.owner_id,
-							   request.segment_generation, request.state, checkpointLsn};
-			batch.observeLogicalSegmentId(entry.segment_id);
-			materialization.codebook_extents.push_back(entry);
-			catalogEntries.push_back(entry);
-		}
-
-		materialization.pq_pools.reserve(mutation.pq_pools.size());
-		for (const VectorPqMaterializationPoolRequest &request: mutation.pq_pools) {
-			const std::optional<PhysicalSlotId> slot =
-					allocator_.prepareReserveFirstFree(batch, request.first_slot, request.last_slot);
-			if (!slot.has_value()) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "offline PQ rebuild has no free physical slot for a PQ Vector page pool");
-			}
-			CatalogEntry pool{batch.allocateLogicalSegmentId(),
-							  *slot,
-							  SegmentKind::SGK_VECTOR_PQ_POOL,
-							  mutation.index_id,
-							  Generation(1U),
-							  SegmentState::SGS_SEALED,
-							  checkpointLsn};
-			materialization.pq_pools.push_back({pool, {}, {}});
-			catalogEntries.push_back(pool);
-		}
-		materialization.adjacency_pools.reserve(mutation.adjacency_pools.size());
-		for (const VectorAdjacencyMaterializationPoolRequest &request: mutation.adjacency_pools) {
-			const std::optional<PhysicalSlotId> slot =
-					allocator_.prepareReserveFirstFree(batch, request.first_slot, request.last_slot);
-			if (!slot.has_value()) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "offline Vector rebuild has no free physical slot for an adjacency page pool");
-			}
-			CatalogEntry pool{batch.allocateLogicalSegmentId(),
-							  *slot,
-							  SegmentKind::SGK_VECTOR_ADJACENCY_POOL,
-							  mutation.index_id,
-							  Generation(1U),
-							  SegmentState::SGS_SEALED,
-							  checkpointLsn};
-			materialization.adjacency_pools.push_back({pool, {}, {}});
-			catalogEntries.push_back(pool);
-		}
-
-		materialization.mapping_tree_pools.reserve(mapping.new_pool_requests.size());
-		for (const NewIndexTreePoolRequest &request: mapping.new_pool_requests) {
-			const std::optional<PhysicalSlotId> slot =
-					allocator_.prepareReserveFirstFree(batch, request.first_slot, request.last_slot);
-			if (!slot.has_value()) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "offline PQ rebuild has no free physical slot for a PQ mapping-tree page pool");
-			}
-			CatalogEntry pool{batch.allocateLogicalSegmentId(),
-							  *slot,
-							  SegmentKind::SGK_INDEX_PAGE_POOL,
-							  request.owner_id,
-							  Generation(1U),
-							  SegmentState::SGS_SEALED,
-							  checkpointLsn};
-			IndexTreeMutationPoolBatch treePool;
-			treePool.pool = pool;
-			treePool.newly_reserved = true;
-			treePool.appended_page_ids.reserve(request.appended_page_count);
-			treePool.appended_locations.reserve(request.appended_page_count);
-			materialization.mapping_tree_pools.push_back(std::move(treePool));
-			catalogEntries.push_back(pool);
-		}
-		materialization.adjacency_mapping_tree_pools.reserve(adjacencyMapping.new_pool_requests.size());
-		for (const NewIndexTreePoolRequest &request: adjacencyMapping.new_pool_requests) {
-			const std::optional<PhysicalSlotId> slot =
-					allocator_.prepareReserveFirstFree(batch, request.first_slot, request.last_slot);
-			if (!slot.has_value()) {
-				throw FormatException(
-						FormatError::FERR_INVALID_STATE,
-						"offline Vector rebuild has no free physical slot for an adjacency mapping-tree page pool");
-			}
-			CatalogEntry pool{batch.allocateLogicalSegmentId(),
-							  *slot,
-							  SegmentKind::SGK_INDEX_PAGE_POOL,
-							  request.owner_id,
-							  Generation(1U),
-							  SegmentState::SGS_SEALED,
-							  checkpointLsn};
-			IndexTreeMutationPoolBatch treePool;
-			treePool.pool = pool;
-			treePool.newly_reserved = true;
-			treePool.appended_page_ids.reserve(request.appended_page_count);
-			treePool.appended_locations.reserve(request.appended_page_count);
-			materialization.adjacency_mapping_tree_pools.push_back(std::move(treePool));
-			catalogEntries.push_back(pool);
-		}
-		for (VectorPqMaterializationPoolBatch &pool: materialization.pq_pools) {
-			const auto request = mutation.pq_pools[&pool - materialization.pq_pools.data()];
-			pool.page_ids.reserve(request.page_count);
-			pool.locations.reserve(request.page_count);
-			for (size_t pageOrdinal = 0U; pageOrdinal < request.page_count; ++pageOrdinal) {
-				const PageId pageId = batch.allocateLogicalPageId();
-				if (locations_.findPageOptional(current, pageId).has_value()) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "offline PQ rebuild allocated an already reachable PQ PageId");
-				}
-				pool.page_ids.push_back(pageId);
-				pool.locations.push_back({pageId, pool.pool.segment_id, 0U, pool.pool.generation, 0U});
-			}
-		}
-		for (size_t poolOrdinal = 0U; poolOrdinal < materialization.adjacency_pools.size(); ++poolOrdinal) {
-			VectorAdjacencyMaterializationPoolBatch &pool = materialization.adjacency_pools[poolOrdinal];
-			const VectorAdjacencyMaterializationPoolRequest &request = mutation.adjacency_pools[poolOrdinal];
-			pool.page_ids.reserve(request.page_count);
-			pool.locations.reserve(request.page_count);
-			for (size_t pageOrdinal = 0U; pageOrdinal < request.page_count; ++pageOrdinal) {
-				const PageId pageId = batch.allocateLogicalPageId();
-				if (locations_.findPageOptional(current, pageId).has_value()) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "offline Vector rebuild allocated an already reachable adjacency PageId");
-				}
-				pool.page_ids.push_back(pageId);
-				pool.locations.push_back({pageId, pool.pool.segment_id, 0U, pool.pool.generation, 0U});
-			}
-		}
-		for (size_t poolOrdinal = 0U; poolOrdinal < materialization.mapping_tree_pools.size(); ++poolOrdinal) {
-			IndexTreeMutationPoolBatch &pool = materialization.mapping_tree_pools[poolOrdinal];
-			const NewIndexTreePoolRequest &request = mapping.new_pool_requests[poolOrdinal];
-			for (size_t pageOrdinal = 0U; pageOrdinal < request.appended_page_count; ++pageOrdinal) {
-				const PageId pageId = batch.allocateLogicalPageId();
-				if (locations_.findPageOptional(current, pageId).has_value()) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "offline PQ rebuild allocated an already reachable mapping-tree PageId");
-				}
-				pool.appended_page_ids.push_back(pageId);
-				pool.appended_locations.push_back({pageId, pool.pool.segment_id, 0U, pool.pool.generation, 0U});
-			}
-		}
-		for (size_t poolOrdinal = 0U; poolOrdinal < materialization.adjacency_mapping_tree_pools.size();
-			 ++poolOrdinal) {
-			IndexTreeMutationPoolBatch &pool = materialization.adjacency_mapping_tree_pools[poolOrdinal];
-			const NewIndexTreePoolRequest &request = adjacencyMapping.new_pool_requests[poolOrdinal];
-			for (size_t pageOrdinal = 0U; pageOrdinal < request.appended_page_count; ++pageOrdinal) {
-				const PageId pageId = batch.allocateLogicalPageId();
-				if (locations_.findPageOptional(current, pageId).has_value()) {
-					throw FormatException(
-							FormatError::FERR_INVALID_STATE,
-							"offline Vector rebuild allocated an already reachable adjacency mapping PageId");
-				}
-				pool.appended_page_ids.push_back(pageId);
-				pool.appended_locations.push_back({pageId, pool.pool.segment_id, 0U, pool.pool.generation, 0U});
-			}
-		}
-		const IndexTreeMutationPoolBatch &rootPool =
-				materialization.mapping_tree_pools[mapping.replacement_root->pool_ordinal];
-		materialization.mapping_root = {mapping.index_id,
-										rootPool.appended_page_ids[mapping.replacement_root->appended_page_ordinal],
-										rootPool.pool.generation};
-		if (hasAdjacency) {
-			const IndexTreeMutationPoolBatch &adjacencyRootPool =
-					materialization.adjacency_mapping_tree_pools[adjacencyMapping.replacement_root->pool_ordinal];
-			materialization.adjacency_mapping_root = {
-					adjacencyMapping.index_id,
-					adjacencyRootPool.appended_page_ids[adjacencyMapping.replacement_root->appended_page_ordinal],
-					adjacencyRootPool.pool.generation};
-		}
-		materialization.manifest_replacement = {mutation.expected_manifest_location.page_id,
-												mutation.expected_manifest_pool.segment_id, 0U,
-												mutation.expected_manifest_pool.generation, 0U};
-		std::ranges::sort(catalogEntries, {}, &CatalogEntry::segment_id);
-		catalog_.prepareUpsert(batch, catalogEntries);
-
-		const OfflineVectorDerivedRebuildMetadataMaterialization planned = materialization;
-		preparer(materialization);
-		const bool changedCodebookEntries =
-				materialization.codebook_extents.size() != planned.codebook_extents.size() ||
-				!std::ranges::equal(materialization.codebook_extents, planned.codebook_extents, hasSameCatalogEntry);
-		const auto hasSamePqRetirementBatches = [](std::span<const ExistingPoolPageRetirementBatch> actual,
-												   std::span<const ExistingPoolPageRetirementBatch> expected) {
-			if (actual.size() != expected.size()) {
-				return false;
-			}
-			for (size_t ordinal = 0U; ordinal < actual.size(); ++ordinal) {
-				if (!hasSameCatalogEntry(actual[ordinal].pool, expected[ordinal].pool) ||
-					actual[ordinal].retirements.size() != expected[ordinal].retirements.size()) {
-					return false;
-				}
-				for (size_t retirementOrdinal = 0U; retirementOrdinal < actual[ordinal].retirements.size();
-					 ++retirementOrdinal) {
-					const PageRetirement &left = actual[ordinal].retirements[retirementOrdinal];
-					const PageRetirement &right = expected[ordinal].retirements[retirementOrdinal];
-					if (left.location != right.location || left.expected_owner_id != right.expected_owner_id ||
-						left.expected_owner_kind != right.expected_owner_kind ||
-						left.expected_owner_lsn != right.expected_owner_lsn) {
-						return false;
-					}
-				}
-			}
-			return true;
-		};
-		const auto hasSameMappingRetirementBatches = [](std::span<const IndexTreeMutationPoolBatch> actual,
-														std::span<const IndexTreeMutationPoolBatch> expected) {
-			if (actual.size() != expected.size()) {
-				return false;
-			}
-			for (size_t ordinal = 0U; ordinal < actual.size(); ++ordinal) {
-				const IndexTreeMutationPoolBatch &left = actual[ordinal];
-				const IndexTreeMutationPoolBatch &right = expected[ordinal];
-				if (!hasSameCatalogEntry(left.pool, right.pool) || !left.expected_replacements.empty() ||
-					!left.appended_page_ids.empty() || left.newly_reserved != right.newly_reserved ||
-					left.expected_retirements != right.expected_retirements || !left.replacement_locations.empty() ||
-					!left.appended_locations.empty()) {
-					return false;
-				}
-			}
-			return true;
-		};
-		if (changedCodebookEntries) {
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "offline PQ rebuild preparer changed a metadata-owned Codebook identity");
-		}
-		if (materialization.mapping_root != planned.mapping_root ||
-			materialization.pq_pools.size() != planned.pq_pools.size() ||
-			materialization.mapping_tree_pools.size() != planned.mapping_tree_pools.size() ||
-			materialization.adjacency_mapping_root != planned.adjacency_mapping_root ||
-			materialization.adjacency_pools.size() != planned.adjacency_pools.size() ||
-			materialization.adjacency_mapping_tree_pools.size() != planned.adjacency_mapping_tree_pools.size()) {
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "offline PQ rebuild preparer changed a metadata-owned mapping or pool identity");
-		}
-		if (!hasSamePqRetirementBatches(materialization.pq_retirement_pools, planned.pq_retirement_pools)) {
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "offline PQ rebuild preparer changed a metadata-owned PQ retirement plan");
-		}
-		if (!hasSamePqRetirementBatches(materialization.adjacency_retirement_pools,
-										planned.adjacency_retirement_pools)) {
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "offline Vector rebuild preparer changed a metadata-owned adjacency retirement plan");
-		}
-		if (!hasSameMappingRetirementBatches(materialization.mapping_retirement_pools,
-											 planned.mapping_retirement_pools)) {
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "offline PQ rebuild preparer changed a metadata-owned mapping-tree retirement plan");
-		}
-		if (!hasSameMappingRetirementBatches(materialization.adjacency_mapping_retirement_pools,
-											 planned.adjacency_mapping_retirement_pools) ||
-			!hasSameMappingRetirementBatches(materialization.delta_mapping_retirement_pools,
-											 planned.delta_mapping_retirement_pools)) {
-			throw FormatException(
-					FormatError::FERR_INVALID_STATE,
-					"offline Vector rebuild preparer changed a metadata-owned derived mapping-tree retirement plan");
-		}
-
-		size_t mappingPageCount = 0U;
-		for (const IndexTreeMutationPoolBatch &pool: materialization.mapping_tree_pools) {
-			mappingPageCount += pool.appended_page_ids.size();
-		}
-		size_t adjacencyMappingPageCount = 0U;
-		for (const IndexTreeMutationPoolBatch &pool: materialization.adjacency_mapping_tree_pools) {
-			adjacencyMappingPageCount += pool.appended_page_ids.size();
-		}
-		std::vector<PageLocation> publishedPages;
-		publishedPages.reserve(totalPqPages + totalAdjacencyPages + mappingPageCount + adjacencyMappingPageCount + 1U);
-		std::set<uint64_t> pageIds;
-		std::set<std::pair<uint64_t, uint16_t>> frames;
-		for (size_t poolOrdinal = 0U; poolOrdinal < materialization.pq_pools.size(); ++poolOrdinal) {
-			const VectorPqMaterializationPoolBatch &actual = materialization.pq_pools[poolOrdinal];
-			const VectorPqMaterializationPoolBatch &expected = planned.pq_pools[poolOrdinal];
-			if (!hasSameCatalogEntry(actual.pool, expected.pool) || actual.page_ids != expected.page_ids ||
-				actual.locations.size() != expected.locations.size()) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "offline PQ rebuild preparer changed a PQ pool identity or PageId shape");
-			}
-			for (size_t pageOrdinal = 0U; pageOrdinal < actual.locations.size(); ++pageOrdinal) {
-				const PageLocation &location = actual.locations[pageOrdinal];
-				const uint8_t invalidLocation =
-						static_cast<uint8_t>(location.page_id != actual.page_ids[pageOrdinal]) |
-						static_cast<uint8_t>(location.segment_id != actual.pool.segment_id) |
-						static_cast<uint8_t>(location.generation != actual.pool.generation) |
-						static_cast<uint8_t>(location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-						static_cast<uint8_t>(location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-						static_cast<uint8_t>(location.free_bytes > RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES);
-				if (invalidLocation != 0U || retiredPageIds.contains(location.page_id.value()) ||
-					!pageIds.insert(location.page_id.value()).second ||
-					!frames.emplace(location.segment_id.value(), location.page_index).second) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "offline PQ rebuild preparer returned an invalid or duplicate PQ page frame");
-				}
-				publishedPages.push_back(location);
-			}
-		}
-		for (size_t poolOrdinal = 0U; poolOrdinal < materialization.adjacency_pools.size(); ++poolOrdinal) {
-			const VectorAdjacencyMaterializationPoolBatch &actual = materialization.adjacency_pools[poolOrdinal];
-			const VectorAdjacencyMaterializationPoolBatch &expected = planned.adjacency_pools[poolOrdinal];
-			if (!hasSameCatalogEntry(actual.pool, expected.pool) || actual.page_ids != expected.page_ids ||
-				actual.locations.size() != expected.locations.size()) {
-				throw FormatException(
-						FormatError::FERR_INVALID_STATE,
-						"offline Vector rebuild preparer changed an adjacency pool identity or PageId shape");
-			}
-			for (size_t pageOrdinal = 0U; pageOrdinal < actual.locations.size(); ++pageOrdinal) {
-				const PageLocation &location = actual.locations[pageOrdinal];
-				const uint8_t invalidLocation =
-						static_cast<uint8_t>(location.page_id != actual.page_ids[pageOrdinal]) |
-						static_cast<uint8_t>(location.segment_id != actual.pool.segment_id) |
-						static_cast<uint8_t>(location.generation != actual.pool.generation) |
-						static_cast<uint8_t>(location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-						static_cast<uint8_t>(location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-						static_cast<uint8_t>(location.free_bytes > RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES);
-				if (invalidLocation != 0U || retiredPageIds.contains(location.page_id.value()) ||
-					!pageIds.insert(location.page_id.value()).second ||
-					!frames.emplace(location.segment_id.value(), location.page_index).second) {
-					throw FormatException(
-							FormatError::FERR_INVALID_STATE,
-							"offline Vector rebuild preparer returned an invalid or duplicate adjacency frame");
-				}
-				publishedPages.push_back(location);
-			}
-		}
-		for (size_t poolOrdinal = 0U; poolOrdinal < materialization.mapping_tree_pools.size(); ++poolOrdinal) {
-			const IndexTreeMutationPoolBatch &actual = materialization.mapping_tree_pools[poolOrdinal];
-			const IndexTreeMutationPoolBatch &expected = planned.mapping_tree_pools[poolOrdinal];
-			if (!hasSameCatalogEntry(actual.pool, expected.pool) || actual.newly_reserved != expected.newly_reserved ||
-				actual.appended_page_ids != expected.appended_page_ids ||
-				actual.appended_locations.size() != expected.appended_locations.size()) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "offline PQ rebuild preparer changed a mapping-tree identity or PageId shape");
-			}
-			for (size_t pageOrdinal = 0U; pageOrdinal < actual.appended_locations.size(); ++pageOrdinal) {
-				const PageLocation &location = actual.appended_locations[pageOrdinal];
-				const uint8_t invalidLocation =
-						static_cast<uint8_t>(location.page_id != actual.appended_page_ids[pageOrdinal]) |
-						static_cast<uint8_t>(location.segment_id != actual.pool.segment_id) |
-						static_cast<uint8_t>(location.generation != actual.pool.generation) |
-						static_cast<uint8_t>(location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-						static_cast<uint8_t>(location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-						static_cast<uint8_t>(location.free_bytes > RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES);
-				if (invalidLocation != 0U || retiredPageIds.contains(location.page_id.value()) ||
-					!pageIds.insert(location.page_id.value()).second ||
-					!frames.emplace(location.segment_id.value(), location.page_index).second) {
-					throw FormatException(
-							FormatError::FERR_INVALID_STATE,
-							"offline PQ rebuild preparer returned an invalid or duplicate mapping-tree frame");
-				}
-				publishedPages.push_back(location);
-			}
-		}
-		for (size_t poolOrdinal = 0U; poolOrdinal < materialization.adjacency_mapping_tree_pools.size();
-			 ++poolOrdinal) {
-			const IndexTreeMutationPoolBatch &actual = materialization.adjacency_mapping_tree_pools[poolOrdinal];
-			const IndexTreeMutationPoolBatch &expected = planned.adjacency_mapping_tree_pools[poolOrdinal];
-			if (!hasSameCatalogEntry(actual.pool, expected.pool) || actual.newly_reserved != expected.newly_reserved ||
-				actual.appended_page_ids != expected.appended_page_ids ||
-				actual.appended_locations.size() != expected.appended_locations.size()) {
-				throw FormatException(
-						FormatError::FERR_INVALID_STATE,
-						"offline Vector rebuild preparer changed an adjacency mapping-tree identity or PageId shape");
-			}
-			for (size_t pageOrdinal = 0U; pageOrdinal < actual.appended_locations.size(); ++pageOrdinal) {
-				const PageLocation &location = actual.appended_locations[pageOrdinal];
-				const uint8_t invalidLocation =
-						static_cast<uint8_t>(location.page_id != actual.appended_page_ids[pageOrdinal]) |
-						static_cast<uint8_t>(location.segment_id != actual.pool.segment_id) |
-						static_cast<uint8_t>(location.generation != actual.pool.generation) |
-						static_cast<uint8_t>(location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-						static_cast<uint8_t>(location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-						static_cast<uint8_t>(location.free_bytes > RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES);
-				if (invalidLocation != 0U || retiredPageIds.contains(location.page_id.value()) ||
-					!pageIds.insert(location.page_id.value()).second ||
-					!frames.emplace(location.segment_id.value(), location.page_index).second) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "offline Vector rebuild preparer returned an invalid or duplicate adjacency "
-										  "mapping-tree frame");
-				}
-				publishedPages.push_back(location);
-			}
-		}
-		const PageLocation &manifest = materialization.manifest_replacement;
-		const uint8_t invalidManifest =
-				static_cast<uint8_t>(manifest.page_id != mutation.expected_manifest_location.page_id) |
-				static_cast<uint8_t>(manifest.segment_id != mutation.expected_manifest_pool.segment_id) |
-				static_cast<uint8_t>(manifest.generation != mutation.expected_manifest_pool.generation) |
-				static_cast<uint8_t>(manifest.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-				static_cast<uint8_t>(manifest.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-				static_cast<uint8_t>(manifest.page_index == mutation.expected_manifest_location.page_index) |
-				static_cast<uint8_t>(manifest.free_bytes > RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES);
-		if (invalidManifest != 0U || retiredPageIds.contains(manifest.page_id.value()) ||
-			!pageIds.insert(manifest.page_id.value()).second ||
-			!frames.emplace(manifest.segment_id.value(), manifest.page_index).second) {
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "offline PQ rebuild preparer returned an invalid Manifest replacement frame");
-		}
-		publishedPages.push_back(manifest);
-		std::ranges::sort(publishedPages, {}, &PageLocation::page_id);
-		const std::vector<uint64_t> erasedPageIds(retiredPageIds.begin(), retiredPageIds.end());
-		locations_.prepareReplacePages(batch, publishedPages, erasedPageIds);
-		if (!mutation.codebook_extents.empty()) {
-			locations_.prepareUpsertExtents(batch, mutation.codebook_extents);
-		}
-		std::array<IndexRootLocation, 2U> replacementRoots{materialization.mapping_root,
-														   materialization.adjacency_mapping_root};
-		const std::span<const IndexRootLocation> publishedRoots(replacementRoots.data(), hasAdjacency ? 2U : 1U);
-		const std::array<uint64_t, 1U> erasedDeltaRoot{
-				{retiresDeltaMapping ? mutation.expected_delta_mapping_root->index_id : 0U}};
-		const std::span<const uint64_t> erasedRoots =
-				retiresDeltaMapping ? std::span<const uint64_t>(erasedDeltaRoot) : std::span<const uint64_t>{};
-		locations_.prepareReplaceIndexRoots(batch, publishedRoots, erasedRoots);
-		const VectorManifestLocation replacementManifest{mutation.index_id, manifest.page_id, manifest.generation};
-		locations_.prepareReplaceVectorManifests(batch, std::span(&replacementManifest, 1U), {});
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
-		return batch.candidate();
-	}
-
-	Superblock RelocatableMetadataStore::materializeNewVectorAdjacencyPagesAcrossPools(
-			std::span<const VectorAdjacencyMaterializationPoolRequest> pools, uint64_t indexId,
-			LogSequenceNumber checkpointLsn, const VectorAdjacencyMultiPoolMaterializationPreparer &preparer,
-			const MetadataPublishOptions &options) {
-		const uint8_t invalidInput = static_cast<uint8_t>(pools.empty()) | static_cast<uint8_t>(indexId == 0U) |
-									 static_cast<uint8_t>(!checkpointLsn.isValid()) | static_cast<uint8_t>(!preparer);
-		if (invalidInput != 0U) {
-			throw FormatException(
-					FormatError::FERR_INVALID_HEADER,
-					"relocatable adjacency materialization requires pools, an index, an LSN, and a preparer");
-		}
-
-		size_t totalPageCount = 0U;
-		for (const VectorAdjacencyMaterializationPoolRequest &request: pools) {
-			const uint8_t invalidPool = static_cast<uint8_t>(!request.first_slot.isValid()) |
-										static_cast<uint8_t>(!request.last_slot.isValid()) |
-										static_cast<uint8_t>(request.first_slot > request.last_slot) |
-										static_cast<uint8_t>(request.page_count == 0U) |
-										static_cast<uint8_t>(request.page_count > RSS_PAGE_POOL_DATA_FRAME_COUNT);
-			if (invalidPool != 0U || request.page_count > std::numeric_limits<size_t>::max() - totalPageCount) {
-				throw FormatException(FormatError::FERR_INVALID_HEADER,
-									  "relocatable adjacency materialization has an invalid pool range or page count");
-			}
-			totalPageCount += request.page_count;
-		}
-
-		MetadataWriteGuard writer = beginWrite();
-		const Superblock current = bootstrap_.recover();
-		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
-		std::vector<VectorAdjacencyMaterializationPoolBatch> batches;
-		std::vector<CatalogEntry> catalogEntries;
-		batches.reserve(pools.size());
-		catalogEntries.reserve(pools.size());
-		for (const VectorAdjacencyMaterializationPoolRequest &request: pools) {
-			const std::optional<PhysicalSlotId> physicalSlot =
-					allocator_.prepareReserveFirstFree(batch, request.first_slot, request.last_slot);
-			if (!physicalSlot.has_value()) {
-				throw FormatException(
-						FormatError::FERR_INVALID_STATE,
-						"relocatable adjacency materialization has no free physical slot in a requested range");
-			}
-			CatalogEntry pool;
-			pool.segment_id = batch.allocateLogicalSegmentId();
-			pool.physical_slot = *physicalSlot;
-			pool.kind = SegmentKind::SGK_VECTOR_ADJACENCY_POOL;
-			pool.owner_id = indexId;
-			pool.generation = Generation(1);
-			pool.state = SegmentState::SGS_SEALED;
-			pool.committed_lsn = checkpointLsn;
-			catalogEntries.push_back(pool);
-			batches.push_back({pool, {}, {}});
-		}
-		catalog_.prepareUpsert(batch, catalogEntries);
-
-		for (size_t poolOrdinal = 0; poolOrdinal < batches.size(); ++poolOrdinal) {
-			VectorAdjacencyMaterializationPoolBatch &pool = batches[poolOrdinal];
-			const size_t pageCount = pools[poolOrdinal].page_count;
-			pool.page_ids.reserve(pageCount);
-			pool.locations.reserve(pageCount);
-			for (size_t pageOrdinal = 0; pageOrdinal < pageCount; ++pageOrdinal) {
-				const PageId pageId = batch.allocateLogicalPageId();
-				if (locations_.findPageOptional(current, pageId)
-							.has_value()) { // ZYX_COV_EXCL_LINE: durable IDs are never reused.
-					throw FormatException(
-							FormatError::FERR_INVALID_STATE,
-							"relocatable adjacency materialization allocated an already reachable Page ID");
-				}
-				pool.page_ids.push_back(pageId);
-				pool.locations.push_back({pageId, pool.pool.segment_id, 0, pool.pool.generation, 0});
-			}
-		}
-
-		preparer(batches);
-		std::set<PageId> uniquePageIds;
-		std::set<std::pair<uint64_t, uint16_t>> uniqueFrames;
-		std::vector<PageLocation> publishedPages;
-		publishedPages.reserve(totalPageCount);
-		for (const VectorAdjacencyMaterializationPoolBatch &pool: batches) {
-			if (pool.locations.size() !=
-				pool.page_ids.size()) { // ZYX_COV_EXCL_LINE: typed preparation preserves cardinality.
-				throw FormatException(
-						FormatError::FERR_INVALID_STATE,
-						"relocatable adjacency materialization preparer changed a page batch cardinality");
-			}
-			for (size_t pageOrdinal = 0; pageOrdinal < pool.locations.size(); ++pageOrdinal) {
-				const PageLocation &location = pool.locations[pageOrdinal];
-				const uint8_t invalidLocation =
-						static_cast<uint8_t>(location.page_id != pool.page_ids[pageOrdinal]) |
-						static_cast<uint8_t>(location.segment_id != pool.pool.segment_id) |
-						static_cast<uint8_t>(location.generation != pool.pool.generation) |
-						static_cast<uint8_t>(location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-						static_cast<uint8_t>(location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-						static_cast<uint8_t>(location.free_bytes > RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES);
-				const std::pair<uint64_t, uint16_t> frame{location.segment_id.value(), location.page_index};
-				if (invalidLocation != 0U || !uniquePageIds.insert(location.page_id).second ||
-					!uniqueFrames.insert(frame)
-							 .second) { // ZYX_COV_EXCL_LINE: typed preparation assigns one unique frame per page.
-					throw FormatException(
-							FormatError::FERR_INVALID_STATE,
-							"relocatable adjacency materialization returned invalid or duplicate page locations");
-				}
-				publishedPages.push_back(location);
-			}
-		}
-		std::ranges::sort(publishedPages, {}, &PageLocation::page_id);
-		locations_.prepareUpsertPages(batch, publishedPages);
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
-		return batch.candidate();
-	}
-
-	Superblock RelocatableMetadataStore::materializeNewVectorManifestPage(uint64_t indexId, PhysicalSlotId firstSlot,
-																		  PhysicalSlotId lastSlot,
-																		  LogSequenceNumber checkpointLsn,
-																		  const NewVectorManifestPagePreparer &preparer,
-																		  const MetadataPublishOptions &options) {
-		const uint8_t invalidInput = static_cast<uint8_t>(indexId == 0U) | static_cast<uint8_t>(!firstSlot.isValid()) |
-									 static_cast<uint8_t>(!lastSlot.isValid()) |
-									 static_cast<uint8_t>(firstSlot > lastSlot) |
-									 static_cast<uint8_t>(!checkpointLsn.isValid()) | static_cast<uint8_t>(!preparer);
-		if (invalidInput != 0U) {
-			throw FormatException(
-					FormatError::FERR_INVALID_HEADER,
-					"relocatable Vector Manifest materialization requires an index, placement, LSN, and preparer");
-		}
-
-		MetadataWriteGuard writer = beginWrite();
-		const Superblock current = bootstrap_.recover();
-		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
-		const std::optional<PhysicalSlotId> physicalSlot =
-				allocator_.prepareReserveFirstFree(batch, firstSlot, lastSlot);
-		if (!physicalSlot.has_value()) {
-			throw FormatException(
-					FormatError::FERR_INVALID_STATE,
-					"relocatable Vector Manifest materialization has no free physical slot in its requested range");
-		}
-		CatalogEntry pool;
-		pool.segment_id = batch.allocateLogicalSegmentId();
-		pool.physical_slot = *physicalSlot;
-		pool.kind = SegmentKind::SGK_VECTOR_MANIFEST_POOL;
-		pool.owner_id = indexId;
-		pool.generation = Generation(1);
-		pool.state = SegmentState::SGS_SEALED;
-		pool.committed_lsn = checkpointLsn;
-		catalog_.prepareUpsert(batch, std::span(&pool, 1));
-
-		const PageId pageId = batch.allocateLogicalPageId();
-		if (locations_.findPageOptional(current, pageId)
-					.has_value()) { // ZYX_COV_EXCL_LINE: logical page IDs are never reused.
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "relocatable Vector Manifest materialization allocated an already reachable Page ID");
-		}
-		PageLocation location{pageId, pool.segment_id, 0, pool.generation, 0};
-		preparer(pool, pageId, location);
-		const uint8_t invalidLocation = static_cast<uint8_t>(location.page_id != pageId) |
-										static_cast<uint8_t>(location.segment_id != pool.segment_id) |
-										static_cast<uint8_t>(location.generation != pool.generation) |
-										static_cast<uint8_t>(location.page_index != RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-										static_cast<uint8_t>(location.free_bytes != 0U);
-		if (invalidLocation != 0U) { // ZYX_COV_EXCL_LINE: the typed writer prepares exactly this one dedicated frame.
-			throw FormatException(
-					FormatError::FERR_INVALID_STATE,
-					"relocatable Vector Manifest materialization preparer returned an invalid Page Directory location");
-		}
-		const VectorManifestLocation manifest{indexId, pageId, pool.generation};
-		locations_.prepareUpsertPages(batch, std::span(&location, 1));
-		locations_.prepareReplaceVectorManifests(batch, std::span(&manifest, 1), {});
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
-		return batch.candidate();
-	}
 
 	Superblock RelocatableMetadataStore::mutateIndexTreePagesAcrossPools(
 			std::span<const IndexTreeMutationPoolRequest> requests,
@@ -2543,183 +1369,8 @@ namespace graph::storage {
 			locations_.prepareReplacePages(batch, publishedLocations, retiredPageIds);
 		}
 		locations_.prepareReplaceIndexRoots(batch, std::span(&publishedRoot, 1), {});
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		publishBatch(batch, writer, options);
 		return batch.candidate();
-	}
-
-	PageId RelocatableMetadataStore::allocateLogicalPageId(LogSequenceNumber checkpointLsn,
-														   const MetadataPublishOptions &options) {
-		MetadataWriteGuard writer = beginWrite();
-		const Superblock current = bootstrap_.recover();
-		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
-		const PageId pageId = batch.allocateLogicalPageId();
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
-		return pageId;
-	}
-
-	std::vector<PageId> RelocatableMetadataStore::allocateLogicalPageIds(size_t count, LogSequenceNumber checkpointLsn,
-																		 const MetadataPublishOptions &options) {
-		if (count == 0U || !checkpointLsn.isValid()) {
-			throw FormatException(
-					FormatError::FERR_INVALID_HEADER,
-					"relocatable logical Page ID reservation requires a positive count and checkpoint LSN");
-		}
-		MetadataWriteGuard writer = beginWrite();
-		const Superblock current = bootstrap_.recover();
-		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
-		std::vector<PageId> pageIds;
-		pageIds.reserve(count);
-		for (size_t ordinal = 0U; ordinal < count; ++ordinal) {
-			pageIds.push_back(batch.allocateLogicalPageId());
-		}
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
-		return pageIds;
-	}
-
-	std::vector<SegmentId> RelocatableMetadataStore::allocateLogicalSegmentIds(size_t count,
-																			   LogSequenceNumber checkpointLsn,
-																			   const MetadataPublishOptions &options) {
-		if (count == 0U || !checkpointLsn.isValid()) {
-			throw FormatException(
-					FormatError::FERR_INVALID_HEADER,
-					"relocatable logical Segment ID reservation requires a positive count and checkpoint LSN");
-		}
-		MetadataWriteGuard writer = beginWrite();
-		const Superblock current = bootstrap_.recover();
-		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
-		std::vector<SegmentId> segmentIds;
-		segmentIds.reserve(count);
-		for (size_t ordinal = 0U; ordinal < count; ++ordinal) {
-			segmentIds.push_back(batch.allocateLogicalSegmentId());
-		}
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
-		return segmentIds;
-	}
-
-	uint64_t RelocatableMetadataStore::allocateLogicalNodeId(LogSequenceNumber checkpointLsn,
-															 const MetadataPublishOptions &options) {
-		MetadataWriteGuard writer = beginWrite();
-		const Superblock current = bootstrap_.recover();
-		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
-		const uint64_t nodeId = batch.allocateLogicalNodeId();
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
-		return nodeId;
-	}
-
-	uint64_t RelocatableMetadataStore::allocateLogicalEdgeId(LogSequenceNumber checkpointLsn,
-															 const MetadataPublishOptions &options) {
-		MetadataWriteGuard writer = beginWrite();
-		const Superblock current = bootstrap_.recover();
-		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
-		const uint64_t edgeId = batch.allocateLogicalEdgeId();
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
-		return edgeId;
-	}
-
-	uint64_t RelocatableMetadataStore::allocateLogicalVectorId(LogSequenceNumber checkpointLsn,
-															   const MetadataPublishOptions &options) {
-		MetadataWriteGuard writer = beginWrite();
-		const Superblock current = bootstrap_.recover();
-		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
-		const uint64_t vectorId = batch.allocateLogicalVectorId();
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
-		return vectorId;
-	}
-
-	uint32_t RelocatableMetadataStore::allocatePropertyKeyToken(LogSequenceNumber checkpointLsn,
-																const MetadataPublishOptions &options) {
-		MetadataWriteGuard writer = beginWrite();
-		const Superblock current = bootstrap_.recover();
-		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
-		const uint32_t token = batch.allocatePropertyKeyToken();
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
-		return token;
-	}
-
-	void RelocatableMetadataStore::advancePropertyKeyTokenFloor(uint32_t token, LogSequenceNumber checkpointLsn,
-																const MetadataPublishOptions &options) {
-		if (token == 0U || !checkpointLsn.isValid()) {
-			throw FormatException(FormatError::FERR_INVALID_HEADER,
-								  "relocatable Property-key Token floor requires a nonzero Token and checkpoint LSN");
-		}
-		MetadataWriteGuard writer = beginWrite();
-		const Superblock current = bootstrap_.recover();
-		if (current.next_property_key_token == 0U || current.next_property_key_token > token) {
-			return;
-		}
-		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
-		batch.observePropertyKeyToken(token);
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
-	}
-
-	uint64_t RelocatableMetadataStore::allocateSchemaTokenId(LogSequenceNumber checkpointLsn,
-															 const MetadataPublishOptions &options) {
-		MetadataWriteGuard writer = beginWrite();
-		const Superblock current = bootstrap_.recover();
-		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
-		const uint64_t tokenId = batch.allocateSchemaTokenId();
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
-		return tokenId;
-	}
-
-	void RelocatableMetadataStore::advanceSchemaTokenIdFloor(uint64_t tokenId, LogSequenceNumber checkpointLsn,
-															 const MetadataPublishOptions &options) {
-		if (tokenId == 0U || !checkpointLsn.isValid()) {
-			throw FormatException(FormatError::FERR_INVALID_HEADER,
-								  "relocatable schema Token floor requires a nonzero Token ID and checkpoint LSN");
-		}
-		MetadataWriteGuard writer = beginWrite();
-		const Superblock current = bootstrap_.recover();
-		if (current.next_schema_token_id == 0U || current.next_schema_token_id > tokenId) {
-			return;
-		}
-		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
-		batch.observeSchemaTokenId(tokenId);
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
-	}
-
-	RetiredPhysicalSlotReclamation
-	RelocatableMetadataStore::reclaimRetiredPhysicalSlots(LogSequenceNumber checkpointLsn,
-														  const MetadataPublishOptions &options) {
-		if (!checkpointLsn.isValid()) {
-			throw FormatException(FormatError::FERR_INVALID_HEADER,
-								  "relocatable Retire Queue reclamation requires a checkpoint LSN");
-		}
-		MetadataWriteGuard writer = beginWrite();
-		const Superblock current = bootstrap_.recover();
-		const std::vector<RetireQueueEntry> reclaimable = retire_queue_reclaimer_.collectReclaimable(current, writer);
-		if (reclaimable.empty()) {
-			return {current, 0U};
-		}
-
-		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
-		retire_queue_reclaimer_.prepareReclamation(batch, reclaimable);
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
-		return {batch.candidate(), static_cast<uint64_t>(reclaimable.size())};
 	}
 
 	Superblock RelocatableMetadataStore::appendPageToExistingPool(const CatalogEntry &expectedPool, PageLocation page,
@@ -2759,9 +1410,7 @@ namespace graph::storage {
 		preparer(visible, page);
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
 		locations_.prepareUpsertPages(batch, std::span(&page, 1));
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		publishBatch(batch, writer, options);
 		return batch.candidate();
 	}
 
@@ -2839,9 +1488,7 @@ namespace graph::storage {
 		} else {
 			locations_.prepareReplaceEdgePageLocations(batch, edges, {});
 		}
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		publishBatch(batch, writer, options);
 		return batch.candidate();
 	}
 
@@ -2901,9 +1548,7 @@ namespace graph::storage {
 		}
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
 		locations_.prepareUpsertPages(batch, std::span(&replacement, 1));
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		publishBatch(batch, writer, options);
 		return batch.candidate();
 	}
 
@@ -3015,9 +1660,7 @@ namespace graph::storage {
 		if (!edges.empty() || !erasedEdgeIds.empty()) {
 			locations_.prepareReplaceEdgePageLocations(batch, edges, erasedEdgeIds);
 		}
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		publishBatch(batch, writer, options);
 		return batch.candidate();
 	}
 
@@ -3078,8 +1721,8 @@ namespace graph::storage {
 		const NativeGraphVectorBootstrapPreparer noVectorBootstrapPreparer{};
 		const NativeGraphVectorDeltaPreparer noVectorDeltaPreparer{};
 		return mutateNativeGraphPagesWithLargeValues(
-				requests, appendRequests, newPoolRequests, propertyReplacements, propertyPageBatchRequests, noLargeValues,
-				derivedState, checkpointLsn,
+				requests, appendRequests, newPoolRequests, propertyReplacements, propertyPageBatchRequests,
+				noLargeValues, derivedState, checkpointLsn,
 				[&preparer](std::span<EntityPageReplacementMaterialization> replacements,
 							std::span<EntityPageAppendBatchMaterialization> appends,
 							std::span<EntityPageNewPoolBatchMaterialization> newPools,
@@ -3096,2733 +1739,6 @@ namespace graph::storage {
 				logicalIdReservation);
 	}
 
-	Superblock RelocatableMetadataStore::mutateNativeGraphPagesWithLargeValues(
-			std::span<const EntityPageReplacementRequest> requests,
-			std::span<const EntityPageAppendBatchRequest> appendRequests,
-			std::span<const EntityPageNewPoolBatchRequest> newPoolRequests,
-			std::span<const NativeGraphPropertyPageReplacementRequest> propertyReplacements,
-			std::span<const NativeGraphPropertyPageBatchRequest> propertyPageBatchRequests,
-			std::span<const NativeGraphLargeValueMutation> largeValues,
-			const NativeGraphDerivedStateMutation &derivedState, LogSequenceNumber checkpointLsn,
-			const NativeGraphPageTransactionWithLargeValuesPreparer &preparer,
-			const NativeGraphDerivedStatePreparer &derivedStatePreparer,
-			const NativeGraphVectorBootstrapPreparer &vectorBootstrapPreparer,
-			const NativeGraphVectorDeltaPreparer &vectorDeltaPreparer,
-			std::span<const PageRetirement> retiredLargeValuePages, std::span<const LargeValueId> erasedLargeValueIds,
-			const ExistingPoolPagesRetirementPreparer &largeValueRetirementPreparer,
-			const MetadataPublishOptions &options, NativeGraphLogicalIdReservation logicalIdReservation,
-			std::optional<Generation> expectedMetadataGeneration) {
-		const bool hasLargeValueRetirements = !retiredLargeValuePages.empty() || !erasedLargeValueIds.empty();
-		if (!preparer ||
-			(requests.empty() && appendRequests.empty() && newPoolRequests.empty() && propertyReplacements.empty() &&
-			 propertyPageBatchRequests.empty() && largeValues.empty() && !hasLargeValueRetirements &&
-			 derivedState.empty() && logicalIdReservation.empty()) ||
-			!checkpointLsn.isValid()) {
-			throw FormatException(FormatError::FERR_INVALID_HEADER,
-								  "native graph page transaction requires work, a checkpoint LSN, and a preparer");
-		}
-		if (hasLargeValueRetirements &&
-			(retiredLargeValuePages.empty() || erasedLargeValueIds.empty() || !largeValueRetirementPreparer)) {
-			throw FormatException(
-					FormatError::FERR_INVALID_HEADER,
-					"native graph LargeValue retirement requires pages, manifest IDs, and a typed preparer");
-		}
-		uint64_t previousErasedLargeValueId = 0U;
-		for (const LargeValueId valueId: erasedLargeValueIds) {
-			if (!valueId.isValid() || valueId.value() <= previousErasedLargeValueId) {
-				throw FormatException(FormatError::FERR_INVALID_HEADER,
-									  "native graph LargeValue retirement has unordered Manifest identities");
-			}
-			previousErasedLargeValueId = valueId.value();
-		}
-		uint64_t previousRetiredLargeValuePageId = 0U;
-		for (const PageRetirement &retirement: retiredLargeValuePages) {
-			const PageLocation &location = retirement.location;
-			const bool validOwner = retirement.expected_owner_kind == PageOwnerKind::POK_LARGE_VALUE_DATA ||
-									retirement.expected_owner_kind == PageOwnerKind::POK_LARGE_VALUE_MANIFEST;
-			const uint8_t invalid =
-					static_cast<uint8_t>(!location.page_id.isValid()) |
-					static_cast<uint8_t>(location.page_id.value() <= previousRetiredLargeValuePageId) |
-					static_cast<uint8_t>(!location.segment_id.isValid()) |
-					static_cast<uint8_t>(!location.generation.isValid()) |
-					static_cast<uint8_t>(location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-					static_cast<uint8_t>(location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-					static_cast<uint8_t>(retirement.expected_owner_id == 0U) | static_cast<uint8_t>(!validOwner) |
-					static_cast<uint8_t>(!retirement.expected_owner_lsn.isValid()) |
-					static_cast<uint8_t>(
-							!std::ranges::binary_search(erasedLargeValueIds, retirement.expected_owner_id, {},
-														[](LargeValueId valueId) { return valueId.value(); }));
-			if (invalid != 0U) {
-				throw FormatException(FormatError::FERR_INVALID_HEADER,
-									  "native graph LargeValue retirement has an invalid or unrelated Page frame");
-			}
-			previousRetiredLargeValuePageId = location.page_id.value();
-		}
-		if (!derivedState.empty() && !derivedStatePreparer) {
-			throw FormatException(FormatError::FERR_INVALID_HEADER,
-								  "native graph derived-state publication requires a typed page preparer");
-		}
-		if ((!derivedState.vector_bootstraps.empty() && !vectorBootstrapPreparer) ||
-			(derivedState.vector_bootstraps.empty() && vectorBootstrapPreparer)) {
-			throw FormatException(FormatError::FERR_INVALID_HEADER,
-								  "native graph Vector bootstrap publication requires an exact typed preparer");
-		}
-		if ((!derivedState.vector_deltas.empty() && !vectorDeltaPreparer) ||
-			(derivedState.vector_deltas.empty() && vectorDeltaPreparer)) {
-			throw FormatException(FormatError::FERR_INVALID_HEADER,
-								  "native graph Vector delta publication requires an exact typed preparer");
-		}
-		uint64_t previousReusedLargeValueId = 0U;
-		for (const LargeValueRef &reference: derivedState.reused_large_values) {
-			if (!reference.value_id.isValid() || reference.value_id.value() <= previousReusedLargeValueId) {
-				throw FormatException(FormatError::FERR_INVALID_HEADER,
-									  "native graph reused LargeValue references must have unique ordered identities");
-			}
-			static_cast<void>(LargeValueRefCodec::encode(reference));
-			previousReusedLargeValueId = reference.value_id.value();
-		}
-		uint64_t previousIndexId = 0U;
-		std::set<uint64_t> derivedSourcePageIds;
-		std::set<uint64_t> derivedRetirementPageIds;
-		for (const NativeGraphIndexTreeMutation &mutation: derivedState.index_tree_mutations) {
-			const std::optional<IndexRootLocation> &expectedRoot = mutation.expected_root;
-			const bool retiresRoot = mutation.retire_root;
-			const uint8_t invalidRoot =
-					static_cast<uint8_t>(mutation.index_id == 0U) |
-					static_cast<uint8_t>(mutation.index_id <= previousIndexId) |
-					static_cast<uint8_t>(expectedRoot.has_value() && (expectedRoot->index_id != mutation.index_id ||
-																	  !expectedRoot->root_page_id.isValid() ||
-																	  !expectedRoot->root_generation.isValid())) |
-					static_cast<uint8_t>(!retiresRoot && mutation.pool_requests.empty() &&
-										 mutation.new_pool_requests.empty()) |
-					static_cast<uint8_t>(mutation.replacement_root.has_value() &&
-										 mutation.stable_replacement_root.has_value());
-			if (invalidRoot != 0U) {
-				throw FormatException(FormatError::FERR_INVALID_HEADER,
-									  "native graph derived-state mutation has an invalid or unordered Index root");
-			}
-			// A fresh logical root may only use fresh physical pools. This keeps
-			// first publication independent of an unrelated current pool and makes
-			// a failed creation completely unreachable.
-			if (!retiresRoot && !expectedRoot.has_value() &&
-				(!mutation.pool_requests.empty() || !mutation.replacement_root.has_value() ||
-				 !mutation.replacement_root->newly_reserved || mutation.stable_replacement_root.has_value())) {
-				throw FormatException(
-						FormatError::FERR_INVALID_HEADER,
-						"native graph derived-state root creation must publish one newly reserved Index page");
-			}
-			previousIndexId = mutation.index_id;
-
-			std::set<uint64_t> mutationPoolIds;
-			for (const IndexTreeMutationPoolRequest &pool: mutation.pool_requests) {
-				const uint8_t invalidPool =
-						static_cast<uint8_t>(!pool.segment_id.isValid()) |
-						static_cast<uint8_t>(pool.expected_replacements.empty() && pool.appended_page_count == 0U &&
-											 pool.expected_retirements.empty()) |
-						static_cast<uint8_t>(pool.appended_page_count > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-						static_cast<uint8_t>(!mutationPoolIds.insert(pool.segment_id.value()).second);
-				if (invalidPool != 0U) {
-					throw FormatException(FormatError::FERR_INVALID_HEADER,
-										  "native graph derived-state mutation has an invalid or duplicate Index pool");
-				}
-				for (const PageLocation &location: pool.expected_replacements) {
-					const uint8_t invalidLocation =
-							static_cast<uint8_t>(!location.page_id.isValid()) |
-							static_cast<uint8_t>(!derivedSourcePageIds.insert(location.page_id.value()).second) |
-							static_cast<uint8_t>(derivedRetirementPageIds.contains(location.page_id.value()));
-					if (invalidLocation != 0U) {
-						throw FormatException(FormatError::FERR_INVALID_HEADER,
-											  "native graph derived-state mutation has an invalid or duplicate Index "
-											  "replacement page");
-					}
-				}
-				for (const IndexTreePageRetirement &retirement: pool.expected_retirements) {
-					const uint8_t invalidRetirement =
-							static_cast<uint8_t>(!retirement.location.page_id.isValid()) |
-							static_cast<uint8_t>(!retirement.expected_owner_lsn.isValid()) |
-							static_cast<uint8_t>(derivedSourcePageIds.contains(retirement.location.page_id.value())) |
-							static_cast<uint8_t>(
-									!derivedRetirementPageIds.insert(retirement.location.page_id.value()).second);
-					if (invalidRetirement != 0U) {
-						throw FormatException(FormatError::FERR_INVALID_HEADER,
-											  "native graph derived-state mutation has an invalid or duplicate Index "
-											  "retirement page");
-					}
-				}
-			}
-			for (const NewIndexTreePoolRequest &pool: mutation.new_pool_requests) {
-				const uint8_t invalidPool =
-						static_cast<uint8_t>(!pool.first_slot.isValid()) |
-						static_cast<uint8_t>(!pool.last_slot.isValid()) |
-						static_cast<uint8_t>(pool.first_slot > pool.last_slot) |
-						static_cast<uint8_t>(pool.owner_id == 0U) |
-						static_cast<uint8_t>(pool.appended_page_count == 0U) |
-						static_cast<uint8_t>(pool.appended_page_count > RSS_PAGE_POOL_DATA_FRAME_COUNT);
-				if (invalidPool != 0U) {
-					throw FormatException(FormatError::FERR_INVALID_HEADER,
-										  "native graph derived-state mutation has an invalid new Index pool request");
-				}
-			}
-			if (mutation.replacement_root.has_value()) {
-				const NativeGraphIndexTreeAppendedPageReference &reference = *mutation.replacement_root;
-				const size_t poolCount =
-						reference.newly_reserved ? mutation.new_pool_requests.size() : mutation.pool_requests.size();
-				const size_t appendedCount = [&]() {
-					if (reference.pool_ordinal >= poolCount) {
-						return size_t{0U};
-					}
-					return reference.newly_reserved
-								   ? mutation.new_pool_requests[reference.pool_ordinal].appended_page_count
-								   : mutation.pool_requests[reference.pool_ordinal].appended_page_count;
-				}();
-				if (reference.pool_ordinal >= poolCount || reference.appended_page_ordinal >= appendedCount) {
-					throw FormatException(
-							FormatError::FERR_INVALID_HEADER,
-							"native graph derived-state mutation has an invalid appended Index root reference");
-				}
-			}
-			if (mutation.stable_replacement_root.has_value() &&
-				(!mutation.stable_replacement_root->isValid() ||
-				 derivedRetirementPageIds.contains(mutation.stable_replacement_root->value()))) {
-				throw FormatException(FormatError::FERR_INVALID_HEADER,
-									  "native graph derived-state mutation has an invalid stable Index root reference");
-			}
-			if (retiresRoot) {
-				const bool invalidRetirement = !expectedRoot.has_value() || !mutation.new_pool_requests.empty() ||
-											   mutation.replacement_root.has_value() ||
-											   mutation.stable_replacement_root.has_value() ||
-											   mutation.pool_requests.empty();
-				bool rootRetired = false;
-				for (const IndexTreeMutationPoolRequest &pool: mutation.pool_requests) {
-					if (!pool.expected_replacements.empty() || pool.appended_page_count != 0U) {
-						throw FormatException(FormatError::FERR_INVALID_HEADER,
-											  "native graph root retirement cannot replace or append Index pages");
-					}
-					for (const IndexTreePageRetirement &retirement: pool.expected_retirements) {
-						rootRetired = rootRetired || (expectedRoot.has_value() &&
-													  retirement.location.page_id == expectedRoot->root_page_id &&
-													  retirement.location.generation == expectedRoot->root_generation);
-					}
-				}
-				if (invalidRetirement || !rootRetired) {
-					throw FormatException(FormatError::FERR_INVALID_HEADER,
-										  "native graph root retirement does not contain its pinned root page");
-				}
-			}
-		}
-		uint64_t previousVectorIndexId = 0U;
-		for (const NativeGraphVectorBootstrapMutation &mutation: derivedState.vector_bootstraps) {
-			const bool knownMetric = mutation.metric == VectorDistanceMetric::VDM_L2 ||
-									 mutation.metric == VectorDistanceMetric::VDM_COSINE ||
-									 mutation.metric == VectorDistanceMetric::VDM_INNER_PRODUCT;
-			const uint8_t malformed =
-					static_cast<uint8_t>(mutation.index_id == 0U) |
-					static_cast<uint8_t>(mutation.index_id <= previousVectorIndexId) |
-					static_cast<uint8_t>(mutation.vector_node_mapping_index_id == 0U) |
-					static_cast<uint8_t>(mutation.vector_node_mapping_index_id == mutation.index_id) |
-					static_cast<uint8_t>(mutation.first_vector_id == 0U) |
-					static_cast<uint8_t>(mutation.vector_count == 0U) |
-					static_cast<uint8_t>(mutation.dimensions == 0U) | static_cast<uint8_t>(!knownMetric) |
-					static_cast<uint8_t>(mutation.raw_page_count == 0U) |
-					static_cast<uint8_t>(!mutation.first_slot.isValid()) |
-					static_cast<uint8_t>(!mutation.last_slot.isValid()) |
-					static_cast<uint8_t>(mutation.first_slot > mutation.last_slot) |
-					static_cast<uint8_t>(mutation.dimensions > (std::numeric_limits<uint32_t>::max() -
-																static_cast<uint32_t>(sizeof(uint64_t))) /
-																	   sizeof(uint16_t));
-			if (malformed != 0U) {
-				throw FormatException(
-						FormatError::FERR_INVALID_HEADER,
-						"native graph Vector bootstrap has an invalid identity, metric, resource bound, or stride");
-			}
-			const uint32_t recordBytes =
-					static_cast<uint32_t>(sizeof(uint64_t)) + mutation.dimensions * sizeof(uint16_t);
-			const uint16_t capacity = VectorPageStore::rawSlotCapacity(recordBytes);
-			if (capacity == 0U) {
-				throw FormatException(FormatError::FERR_INVALID_HEADER,
-									  "native graph Vector bootstrap Raw record does not fit a typed Vector page");
-			}
-			const uint64_t expectedPages = (mutation.vector_count - 1U) / static_cast<uint64_t>(capacity) + 1U;
-			if (expectedPages != mutation.raw_page_count) {
-				throw FormatException(FormatError::FERR_INVALID_HEADER,
-									  "native graph Vector bootstrap has a noncanonical Raw-page cardinality");
-			}
-			const auto hasFreshRoot = [&derivedState](uint64_t indexId) {
-				const auto found = std::ranges::find(derivedState.index_tree_mutations, indexId,
-													 &NativeGraphIndexTreeMutation::index_id);
-				return found != derivedState.index_tree_mutations.end() && !found->expected_root.has_value() &&
-					   !found->retire_root && found->replacement_root.has_value() &&
-					   found->replacement_root->newly_reserved;
-			};
-			if (!hasFreshRoot(mutation.index_id) || !hasFreshRoot(mutation.vector_node_mapping_index_id)) {
-				throw FormatException(FormatError::FERR_INVALID_HEADER,
-									  "native graph Vector bootstrap requires two first-use immutable mapping roots");
-			}
-			previousVectorIndexId = mutation.index_id;
-		}
-		std::set<uint64_t> vectorPublicationIndexIds;
-		for (const NativeGraphVectorBootstrapMutation &mutation: derivedState.vector_bootstraps) {
-			vectorPublicationIndexIds.insert(mutation.index_id);
-		}
-		previousVectorIndexId = 0U;
-		for (const NativeGraphVectorDeltaMutation &mutation: derivedState.vector_deltas) {
-			const bool knownMetric = mutation.metric == VectorDistanceMetric::VDM_L2 ||
-									 mutation.metric == VectorDistanceMetric::VDM_COSINE ||
-									 mutation.metric == VectorDistanceMetric::VDM_INNER_PRODUCT;
-			const bool hasInserts = mutation.inserted_vector_count != 0U;
-			const bool hasExpectedDelta = mutation.expected_delta_mapping_index_id != 0U;
-			const bool publishesDelta = mutation.delta_mapping_index_id != 0U;
-			const uint8_t malformed =
-					static_cast<uint8_t>(mutation.index_id == 0U) |
-					static_cast<uint8_t>(mutation.index_id <= previousVectorIndexId) |
-					static_cast<uint8_t>(!vectorPublicationIndexIds.insert(mutation.index_id).second) |
-					static_cast<uint8_t>(mutation.vector_node_mapping_index_id == 0U) |
-					static_cast<uint8_t>(mutation.vector_node_mapping_index_id == mutation.index_id) |
-					static_cast<uint8_t>(hasExpectedDelta != mutation.expected_delta_mapping_root.has_value()) |
-					static_cast<uint8_t>(hasExpectedDelta && !VectorDeltaMapping::isMappingIndexId(
-																	 mutation.expected_delta_mapping_index_id)) |
-					static_cast<uint8_t>(mutation.expected_delta_mapping_root.has_value() &&
-										 mutation.expected_delta_mapping_root->index_id !=
-												 mutation.expected_delta_mapping_index_id) |
-					static_cast<uint8_t>(mutation.expected_delta_mapping_root.has_value() &&
-										 (!mutation.expected_delta_mapping_root->root_page_id.isValid() ||
-										  !mutation.expected_delta_mapping_root->root_generation.isValid())) |
-					static_cast<uint8_t>(publishesDelta != (mutation.delta_entry_count != 0U)) |
-					static_cast<uint8_t>(publishesDelta &&
-										 !VectorDeltaMapping::isMappingIndexId(mutation.delta_mapping_index_id)) |
-					static_cast<uint8_t>(mutation.expected_node_mapping_root.index_id != mutation.index_id) |
-					static_cast<uint8_t>(mutation.expected_vector_node_mapping_root.index_id !=
-										 mutation.vector_node_mapping_index_id) |
-					static_cast<uint8_t>(!mutation.expected_node_mapping_root.root_page_id.isValid()) |
-					static_cast<uint8_t>(!mutation.expected_node_mapping_root.root_generation.isValid()) |
-					static_cast<uint8_t>(!mutation.expected_vector_node_mapping_root.root_page_id.isValid()) |
-					static_cast<uint8_t>(!mutation.expected_vector_node_mapping_root.root_generation.isValid()) |
-					static_cast<uint8_t>(!mutation.expected_manifest_pool.segment_id.isValid()) |
-					static_cast<uint8_t>(!mutation.expected_manifest_location.page_id.isValid()) |
-					static_cast<uint8_t>(!mutation.expected_manifest_location.generation.isValid()) |
-					static_cast<uint8_t>(mutation.expected_manifest.index_id != mutation.index_id) |
-					static_cast<uint8_t>(mutation.expected_manifest.manifest_page_id !=
-										 mutation.expected_manifest_location.page_id) |
-					static_cast<uint8_t>(mutation.expected_manifest.generation !=
-										 mutation.expected_manifest_location.generation) |
-					static_cast<uint8_t>(!mutation.expected_manifest_owner_lsn.isValid()) |
-					static_cast<uint8_t>(mutation.dimensions == 0U) | static_cast<uint8_t>(!knownMetric) |
-					static_cast<uint8_t>(hasInserts && mutation.first_vector_id == 0U) |
-					static_cast<uint8_t>(!hasInserts && mutation.first_vector_id != 0U) |
-					static_cast<uint8_t>(hasInserts &&
-										 mutation.inserted_vector_count - 1U >
-												 std::numeric_limits<uint64_t>::max() - mutation.first_vector_id) |
-					static_cast<uint8_t>(!mutation.first_slot.isValid()) |
-					static_cast<uint8_t>(!mutation.last_slot.isValid()) |
-					static_cast<uint8_t>(mutation.first_slot > mutation.last_slot);
-			if (malformed != 0U) {
-				throw FormatException(FormatError::FERR_INVALID_HEADER,
-									  "native graph Vector delta has an invalid identity, fence, or resource bound");
-			}
-			const auto expectedMappingMutation = [&derivedState](uint64_t indexId, const IndexRootLocation &root) {
-				const auto found = std::ranges::find(derivedState.index_tree_mutations, indexId,
-													 &NativeGraphIndexTreeMutation::index_id);
-				return found != derivedState.index_tree_mutations.end() && !found->retire_root &&
-					   found->expected_root.has_value() && *found->expected_root == root;
-			};
-			const auto freshMappingMutation = [&derivedState](uint64_t indexId) {
-				const auto found = std::ranges::find(derivedState.index_tree_mutations, indexId,
-													 &NativeGraphIndexTreeMutation::index_id);
-				return found != derivedState.index_tree_mutations.end() && !found->retire_root &&
-					   !found->expected_root.has_value() && found->replacement_root.has_value() &&
-					   found->replacement_root->newly_reserved;
-			};
-			const auto retirementMutation = [&derivedState](uint64_t indexId, const IndexRootLocation &root) {
-				const auto found = std::ranges::find(derivedState.index_tree_mutations, indexId,
-													 &NativeGraphIndexTreeMutation::index_id);
-				return found != derivedState.index_tree_mutations.end() && found->retire_root &&
-					   found->expected_root.has_value() && *found->expected_root == root;
-			};
-			if (!expectedMappingMutation(mutation.index_id, mutation.expected_node_mapping_root) ||
-				!expectedMappingMutation(mutation.vector_node_mapping_index_id,
-										 mutation.expected_vector_node_mapping_root) ||
-				(hasExpectedDelta && publishesDelta &&
-				 (!expectedMappingMutation(mutation.delta_mapping_index_id, *mutation.expected_delta_mapping_root) ||
-				  mutation.delta_mapping_index_id != mutation.expected_delta_mapping_index_id)) ||
-				(!hasExpectedDelta && publishesDelta && !freshMappingMutation(mutation.delta_mapping_index_id)) ||
-				(hasExpectedDelta && !publishesDelta &&
-				 !retirementMutation(mutation.expected_delta_mapping_index_id,
-									 *mutation.expected_delta_mapping_root))) {
-				throw FormatException(
-						FormatError::FERR_INVALID_HEADER,
-						"native graph Vector delta requires matching semantic and overlay mapping-tree transitions");
-			}
-			uint64_t previousErasedVectorId = 0U;
-			for (const uint64_t vectorId: mutation.erased_vector_ids) {
-				if (vectorId == 0U || vectorId <= previousErasedVectorId) {
-					throw FormatException(FormatError::FERR_INVALID_HEADER,
-										  "native graph Vector delta has unordered erased Vector IDs");
-				}
-				previousErasedVectorId = vectorId;
-			}
-			uint64_t insertedRecords = 0U;
-			uint32_t expectedPageOrdinal = 0U;
-			for (const NativeGraphVectorDeltaRawPageMutation &raw: mutation.raw_pages) {
-				const bool cow = raw.placement == NativeGraphVectorDeltaRawPlacement::NGVDRP_COW_TAIL;
-				const bool append = raw.placement == NativeGraphVectorDeltaRawPlacement::NGVDRP_APPEND_TO_CURRENT_POOL;
-				const bool fresh = raw.placement == NativeGraphVectorDeltaRawPlacement::NGVDRP_NEW_POOL;
-				const uint8_t invalidRaw = static_cast<uint8_t>(!cow && !append && !fresh) |
-										   static_cast<uint8_t>(raw.page_ordinal != expectedPageOrdinal++) |
-										   static_cast<uint8_t>(raw.inserted_record_count == 0U) |
-										   static_cast<uint8_t>(cow && (!raw.expected_pool.segment_id.isValid() ||
-																		!raw.expected_location.page_id.isValid() ||
-																		!raw.expected_owner_lsn.isValid())) |
-										   static_cast<uint8_t>(append && !raw.expected_pool.segment_id.isValid()) |
-										   static_cast<uint8_t>(fresh && (raw.expected_pool.segment_id.isValid() ||
-																		  raw.new_pool_ordinal == 0U));
-				if (invalidRaw != 0U ||
-					raw.inserted_record_count > std::numeric_limits<uint64_t>::max() - insertedRecords) {
-					throw FormatException(FormatError::FERR_INVALID_HEADER,
-										  "native graph Vector delta has an invalid Raw-page transition");
-				}
-				insertedRecords += raw.inserted_record_count;
-			}
-			if (insertedRecords != mutation.inserted_vector_count) {
-				throw FormatException(
-						FormatError::FERR_INVALID_HEADER,
-						"native graph Vector delta Raw-page transitions do not cover its inserted Vector IDs");
-			}
-			previousVectorIndexId = mutation.index_id;
-		}
-
-		MetadataWriteGuard writer = beginWrite();
-		const Superblock current = bootstrap_.recover();
-		if (expectedMetadataGeneration.has_value() && current.generation != *expectedMetadataGeneration) {
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "native graph metadata publication no longer matches its pinned generation");
-		}
-		for (const LargeValueRef &reference: derivedState.reused_large_values) {
-			// A prior snapshot authenticated the bytes. This writer-side fence only
-			// proves that the immutable Manifest remains current before its small
-			// Property reference can be made reachable.
-			if (!locations_.findLargeValueManifestOptional(current, reference.value_id).has_value()) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "native graph reused LargeValue Manifest was retired before publication");
-			}
-		}
-		uint64_t expectedVectorId = current.next_logical_vector_id;
-		for (const NativeGraphVectorBootstrapMutation &mutation: derivedState.vector_bootstraps) {
-			const uint8_t stale =
-					static_cast<uint8_t>(expectedVectorId == 0U) |
-					static_cast<uint8_t>(mutation.first_vector_id != expectedVectorId) |
-					static_cast<uint8_t>(mutation.vector_count - 1U >
-										 std::numeric_limits<uint64_t>::max() - mutation.first_vector_id) |
-					static_cast<uint8_t>(locations_.findVectorManifestOptional(current, mutation.index_id).has_value());
-			if (stale != 0U) {
-				throw FormatException(
-						FormatError::FERR_INVALID_STATE,
-						"native graph Vector bootstrap has a stale Manifest or noncontiguous Vector-ID reservation");
-			}
-			for (uint64_t offset = 0U; offset < mutation.vector_count; ++offset) {
-				if (locations_.findVectorLocationOptional(current, mutation.first_vector_id + offset).has_value()) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "native graph Vector bootstrap reuses a published logical Vector ID");
-				}
-			}
-			const uint64_t lastVectorId = mutation.first_vector_id + mutation.vector_count - 1U;
-			expectedVectorId = lastVectorId == std::numeric_limits<uint64_t>::max() ? 0U : lastVectorId + 1U;
-		}
-		std::vector<const NativeGraphVectorDeltaMutation *> vectorDeltasByVectorRange;
-		vectorDeltasByVectorRange.reserve(derivedState.vector_deltas.size());
-		for (const NativeGraphVectorDeltaMutation &mutation: derivedState.vector_deltas) {
-			vectorDeltasByVectorRange.push_back(&mutation);
-		}
-		std::ranges::sort(vectorDeltasByVectorRange, [](const NativeGraphVectorDeltaMutation *left,
-														const NativeGraphVectorDeltaMutation *right) {
-			const uint64_t leftFirst =
-					left->inserted_vector_count == 0U ? std::numeric_limits<uint64_t>::max() : left->first_vector_id;
-			const uint64_t rightFirst =
-					right->inserted_vector_count == 0U ? std::numeric_limits<uint64_t>::max() : right->first_vector_id;
-			return std::tuple<uint64_t, uint64_t>{leftFirst, left->index_id} <
-				   std::tuple<uint64_t, uint64_t>{rightFirst, right->index_id};
-		});
-		for (const NativeGraphVectorDeltaMutation *mutation: vectorDeltasByVectorRange) {
-			const std::optional<IndexRootLocation> nodeRoot =
-					locations_.findIndexRootOptional(current, mutation->index_id);
-			const std::optional<IndexRootLocation> reverseRoot =
-					locations_.findIndexRootOptional(current, mutation->vector_node_mapping_index_id);
-			const std::optional<IndexRootLocation> deltaRoot =
-					mutation->expected_delta_mapping_root.has_value()
-							? locations_.findIndexRootOptional(current, mutation->expected_delta_mapping_index_id)
-							: std::nullopt;
-			const std::optional<VectorManifestLocation> manifestDirectory =
-					locations_.findVectorManifestOptional(current, mutation->index_id);
-			const PageLocation manifestLocation =
-					locations_.findPage(current, mutation->expected_manifest_location.page_id);
-			const CatalogEntry manifestPool = catalog_.find(current, manifestLocation.segment_id);
-			const uint8_t stale =
-					static_cast<uint8_t>(!nodeRoot.has_value() || *nodeRoot != mutation->expected_node_mapping_root) |
-					static_cast<uint8_t>(!reverseRoot.has_value() ||
-										 *reverseRoot != mutation->expected_vector_node_mapping_root) |
-					static_cast<uint8_t>(mutation->expected_delta_mapping_root.has_value() != deltaRoot.has_value()) |
-					static_cast<uint8_t>(deltaRoot.has_value() &&
-										 *deltaRoot != *mutation->expected_delta_mapping_root) |
-					static_cast<uint8_t>(!manifestDirectory.has_value() ||
-										 *manifestDirectory != mutation->expected_manifest) |
-					static_cast<uint8_t>(manifestLocation != mutation->expected_manifest_location) |
-					static_cast<uint8_t>(!hasSameCatalogEntry(manifestPool, mutation->expected_manifest_pool)) |
-					static_cast<uint8_t>(manifestPool.kind != SegmentKind::SGK_VECTOR_MANIFEST_POOL) |
-					static_cast<uint8_t>(manifestPool.owner_id != mutation->index_id) |
-					static_cast<uint8_t>(manifestPool.state != SegmentState::SGS_SEALED) |
-					static_cast<uint8_t>(!allocator_.isAllocated(current, manifestPool.physical_slot));
-			if (stale != 0U) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "native graph Vector delta has a stale Manifest or mapping-root fence");
-			}
-			for (const uint64_t vectorId: mutation->erased_vector_ids) {
-				if (!locations_.findVectorLocationOptional(current, vectorId).has_value()) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "native graph Vector delta erases an unreachable logical Vector ID");
-				}
-			}
-			if (mutation->inserted_vector_count == 0U) {
-				continue;
-			}
-			const uint8_t invalidRange =
-					static_cast<uint8_t>(expectedVectorId == 0U) |
-					static_cast<uint8_t>(mutation->first_vector_id != expectedVectorId) |
-					static_cast<uint8_t>(mutation->inserted_vector_count - 1U >
-										 std::numeric_limits<uint64_t>::max() - mutation->first_vector_id);
-			if (invalidRange != 0U) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "native graph Vector delta has a noncontiguous logical Vector-ID reservation");
-			}
-			for (uint64_t offset = 0U; offset < mutation->inserted_vector_count; ++offset) {
-				if (locations_.findVectorLocationOptional(current, mutation->first_vector_id + offset).has_value()) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "native graph Vector delta reuses a published logical Vector ID");
-				}
-			}
-			const uint64_t lastVectorId = mutation->first_vector_id + mutation->inserted_vector_count - 1U;
-			expectedVectorId = lastVectorId == std::numeric_limits<uint64_t>::max() ? 0U : lastVectorId + 1U;
-		}
-		uint64_t expectedLargeValueId = current.next_large_value_id;
-		for (const NativeGraphLargeValueMutation &mutation: largeValues) {
-			const bool validCodec = mutation.reference.codec == LargeValueCodec::LVC_RAW ||
-									mutation.reference.codec == LargeValueCodec::LVC_LZ4 ||
-									mutation.reference.codec == LargeValueCodec::LVC_ZSTD ||
-									mutation.reference.codec == LargeValueCodec::LVC_MIXED;
-			const uint8_t invalid =
-					static_cast<uint8_t>(expectedLargeValueId == 0U) |
-					static_cast<uint8_t>(mutation.reference.value_id.value() != expectedLargeValueId) |
-					static_cast<uint8_t>(mutation.reference.generation != Generation(1U)) |
-					static_cast<uint8_t>(mutation.reference.logical_bytes != mutation.logical_bytes.size()) |
-					static_cast<uint8_t>(mutation.planned_manifest_page_count == 0U) |
-					static_cast<uint8_t>(!validCodec) |
-					static_cast<uint8_t>(mutation.logical_bytes.empty() != (mutation.planned_data_page_count == 0U)) |
-					static_cast<uint8_t>(!mutation.first_data_slot.isValid()) |
-					static_cast<uint8_t>(!mutation.last_data_slot.isValid()) |
-					static_cast<uint8_t>(mutation.first_data_slot > mutation.last_data_slot) |
-					static_cast<uint8_t>(!mutation.first_manifest_slot.isValid()) |
-					static_cast<uint8_t>(!mutation.last_manifest_slot.isValid()) |
-					static_cast<uint8_t>(mutation.first_manifest_slot > mutation.last_manifest_slot) |
-					static_cast<uint8_t>(utils::Sha256::digest(mutation.logical_bytes) !=
-										 mutation.reference.content_hash) |
-					static_cast<uint8_t>(locations_.findLargeValueManifestOptional(current, mutation.reference.value_id)
-												 .has_value());
-			if (invalid != 0U) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "native graph LargeValue mutation is stale, malformed, or already reachable");
-			}
-			static_cast<void>(LargeValueRefCodec::encode(mutation.reference));
-			if (expectedLargeValueId == std::numeric_limits<uint64_t>::max()) {
-				if (&mutation != &largeValues.back()) {
-					throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW,
-										  "native graph LargeValue mutation exhausts the logical value ID space");
-				}
-			} else {
-				++expectedLargeValueId;
-			}
-		}
-		std::set<uint64_t> pageIds;
-		std::vector<ExistingPoolPageRetirementBatch> largeValueRetirementBatches;
-		if (hasLargeValueRetirements) {
-			for (const LargeValueId valueId: erasedLargeValueIds) {
-				const LargeValueManifestLocation manifest = locations_.findLargeValueManifest(current, valueId);
-				const auto retirement = std::ranges::find_if(
-						retiredLargeValuePages, [&manifest, valueId](const PageRetirement &candidate) {
-							return candidate.location.page_id == manifest.manifest_page_id &&
-								   candidate.expected_owner_id == valueId.value() &&
-								   candidate.expected_owner_kind == PageOwnerKind::POK_LARGE_VALUE_MANIFEST;
-						});
-				if (retirement == retiredLargeValuePages.end()) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "native graph LargeValue retirement omits one current Manifest frame");
-				}
-			}
-			std::map<uint64_t, ExistingPoolPageRetirementBatch> batchesBySegment;
-			for (const PageRetirement &retirement: retiredLargeValuePages) {
-				const PageLocation visibleLocation = locations_.findPage(current, retirement.location.page_id);
-				const CatalogEntry pool = catalog_.find(current, retirement.location.segment_id);
-				const SegmentKind expectedKind = retirement.expected_owner_kind == PageOwnerKind::POK_LARGE_VALUE_DATA
-												 ? SegmentKind::SGK_LARGE_VALUE_DATA_POOL
-												 : SegmentKind::SGK_LARGE_VALUE_MANIFEST_POOL;
-				const uint64_t expectedPoolOwner =
-						retirement.expected_owner_kind == PageOwnerKind::POK_LARGE_VALUE_DATA
-								? RSS_LARGE_VALUE_SHARED_DATA_POOL_OWNER_ID
-								: RSS_LARGE_VALUE_SHARED_MANIFEST_POOL_OWNER_ID;
-				const uint8_t invalid =
-						static_cast<uint8_t>(visibleLocation != retirement.location) |
-						static_cast<uint8_t>(pool.kind != expectedKind) |
-						static_cast<uint8_t>(pool.owner_id != expectedPoolOwner) |
-						static_cast<uint8_t>(pool.generation != retirement.location.generation) |
-						static_cast<uint8_t>(pool.state != SegmentState::SGS_SEALED) |
-						static_cast<uint8_t>(!allocator_.isAllocated(current, pool.physical_slot)) |
-						static_cast<uint8_t>(!pageIds.insert(retirement.location.page_id.value()).second);
-				if (invalid != 0U) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "native graph LargeValue retirement has a stale or unavailable Page frame");
-				}
-				auto [iterator, inserted] = batchesBySegment.try_emplace(pool.segment_id.value());
-				if (inserted) {
-					iterator->second.pool = pool;
-				}
-				iterator->second.retirements.push_back(retirement);
-			}
-			largeValueRetirementBatches.reserve(batchesBySegment.size());
-			for (auto &[segmentId, batch]: batchesBySegment) {
-				static_cast<void>(segmentId);
-				largeValueRetirementBatches.push_back(std::move(batch));
-			}
-		}
-		std::set<uint64_t> insertedNodeIds;
-		std::set<uint64_t> erasedNodeIds;
-		std::set<uint64_t> insertedEdgeIds;
-		std::set<uint64_t> erasedEdgeIds;
-		std::vector<EntityPageLocation> insertedNodes;
-		std::vector<uint64_t> erasedNodes;
-		std::vector<EntityPageLocation> insertedEdges;
-		std::vector<uint64_t> erasedEdges;
-		std::vector<uint64_t> retiredPageIds;
-		retiredPageIds.reserve(retiredLargeValuePages.size());
-		for (const PageRetirement &retirement: retiredLargeValuePages) {
-			retiredPageIds.push_back(retirement.location.page_id.value());
-		}
-		std::vector<EntityPageReplacementMaterialization> materializations;
-		std::vector<std::optional<EntityPageFreshPoolDestination>> replacementFreshDestinations;
-		std::vector<EntityPageAppendBatchMaterialization> appendMaterializations;
-		std::vector<EntityPageNewPoolBatchMaterialization> newPoolMaterializations;
-		std::vector<NativeGraphPropertyPageReplacementMaterialization> propertyMaterializations;
-		std::vector<NativeGraphPropertyPageBatchMaterialization> propertyPageBatchMaterializations;
-		std::vector<LargeValueMaterializationResult> largeValueMaterializations;
-		materializations.reserve(requests.size());
-		replacementFreshDestinations.reserve(requests.size());
-		appendMaterializations.reserve(appendRequests.size());
-		newPoolMaterializations.reserve(newPoolRequests.size());
-		propertyMaterializations.reserve(propertyReplacements.size());
-		propertyPageBatchMaterializations.reserve(propertyPageBatchRequests.size());
-		largeValueMaterializations.reserve(largeValues.size());
-
-		// Revalidate the pinned B+Tree roots and every existing page/pool fence
-		// while this writer owns the current metadata generation. New pools and
-		// PageIds are assigned later from the same MetadataWriteBatch as Entity
-		// and Property work, so none can become visible independently.
-		std::vector<std::vector<IndexTreeMutationPoolBatch>> derivedIndexBatches;
-		derivedIndexBatches.reserve(derivedState.index_tree_mutations.size());
-		for (const NativeGraphIndexTreeMutation &mutation: derivedState.index_tree_mutations) {
-			const std::optional<IndexRootLocation> visibleRoot =
-					locations_.findIndexRootOptional(current, mutation.index_id);
-			if (mutation.expected_root.has_value()) {
-				if (!visibleRoot.has_value() || *visibleRoot != *mutation.expected_root) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "native graph derived-state mutation has a stale Index root mapping");
-				}
-				const PageLocation rootLocation = locations_.findPage(current, mutation.expected_root->root_page_id);
-				const CatalogEntry rootPool = catalog_.find(current, rootLocation.segment_id);
-				const uint8_t invalidRoot =
-						static_cast<uint8_t>(rootPool.kind != SegmentKind::SGK_INDEX_PAGE_POOL) |
-						static_cast<uint8_t>(rootPool.owner_id == 0U) |
-						static_cast<uint8_t>(rootPool.state != SegmentState::SGS_SEALED) |
-						static_cast<uint8_t>(rootPool.generation != rootLocation.generation) |
-						static_cast<uint8_t>(rootLocation.generation != mutation.expected_root->root_generation) |
-						static_cast<uint8_t>(!allocator_.isAllocated(current, rootPool.physical_slot));
-				if (invalidRoot != 0U) {
-					throw FormatException(
-							FormatError::FERR_INVALID_STATE,
-							"native graph derived-state mutation root does not resolve to one current Index pool");
-				}
-			} else if (visibleRoot.has_value()) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "native graph derived-state root creation found an already published Index root");
-			}
-
-			std::vector<IndexTreeMutationPoolBatch> batches;
-			batches.reserve(mutation.pool_requests.size() + mutation.new_pool_requests.size());
-			for (const IndexTreeMutationPoolRequest &request: mutation.pool_requests) {
-				const CatalogEntry pool = catalog_.find(current, request.segment_id);
-				const uint8_t invalidPool = static_cast<uint8_t>(pool.kind != SegmentKind::SGK_INDEX_PAGE_POOL) |
-											static_cast<uint8_t>(pool.owner_id == 0U) |
-											static_cast<uint8_t>(pool.state != SegmentState::SGS_SEALED) |
-											static_cast<uint8_t>(!allocator_.isAllocated(current, pool.physical_slot));
-				if (invalidPool != 0U) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "native graph derived-state mutation requires current owned Index pools");
-				}
-				const auto validateSource = [this, &current, &pool, &pageIds](const PageLocation &location,
-																			  const char *message) {
-					const PageLocation visible = locations_.findPage(current, location.page_id);
-					const uint8_t invalid = static_cast<uint8_t>(visible != location) |
-											static_cast<uint8_t>(location.segment_id != pool.segment_id) |
-											static_cast<uint8_t>(location.generation != pool.generation) |
-											static_cast<uint8_t>(location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-											static_cast<uint8_t>(location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-											static_cast<uint8_t>(!pageIds.insert(location.page_id.value()).second);
-					if (invalid != 0U) {
-						throw FormatException(FormatError::FERR_INVALID_STATE, message);
-					}
-				};
-				for (const PageLocation &location: request.expected_replacements) {
-					validateSource(
-							location,
-							"native graph derived-state mutation has a stale or duplicate Index replacement page");
-				}
-				for (const IndexTreePageRetirement &retirement: request.expected_retirements) {
-					validateSource(
-							retirement.location,
-							"native graph derived-state mutation has a stale or duplicate Index retirement page");
-				}
-				batches.push_back({pool,
-								   request.expected_replacements,
-								   {},
-								   request.expected_replacements,
-								   {},
-								   false,
-								   request.expected_retirements});
-			}
-			derivedIndexBatches.push_back(std::move(batches));
-		}
-
-		const auto validateInserted = [this, &current](std::span<const EntityPageLocation> locations, PageId pageId,
-													   bool nodes, std::set<uint64_t> &seen, const char *message) {
-			uint64_t previous = 0U;
-			for (const EntityPageLocation &location: locations) {
-				const std::optional<EntityPageLocation> existing =
-						nodes ? locations_.findNodePageLocationOptional(current, location.entity_id)
-							  : locations_.findEdgePageLocationOptional(current, location.entity_id);
-				const uint8_t invalid = static_cast<uint8_t>(location.entity_id == 0U) |
-										static_cast<uint8_t>(location.entity_id <= previous) |
-										static_cast<uint8_t>(location.page_id != pageId) |
-										static_cast<uint8_t>(location.slot_id == std::numeric_limits<uint16_t>::max()) |
-										static_cast<uint8_t>(location.slot_generation == 0U) |
-										static_cast<uint8_t>(existing.has_value()) |
-										static_cast<uint8_t>(!seen.insert(location.entity_id).second);
-				if (invalid != 0U) {
-					throw FormatException(FormatError::FERR_INVALID_STATE, message);
-				}
-				previous = location.entity_id;
-			}
-		};
-		const auto validateErasures = [this, &current](std::span<const uint64_t> entityIds, PageId pageId, bool nodes,
-													   std::set<uint64_t> &seen, const char *message) {
-			uint64_t previous = 0U;
-			for (const uint64_t entityId: entityIds) {
-				const std::optional<EntityPageLocation> existing =
-						nodes ? locations_.findNodePageLocationOptional(current, entityId)
-							  : locations_.findEdgePageLocationOptional(current, entityId);
-				const uint8_t invalid = static_cast<uint8_t>(entityId == 0U) |
-										static_cast<uint8_t>(entityId <= previous) |
-										static_cast<uint8_t>(!existing.has_value()) |
-										static_cast<uint8_t>(existing.has_value() && existing->page_id != pageId) |
-										static_cast<uint8_t>(!seen.insert(entityId).second);
-				if (invalid != 0U) {
-					throw FormatException(FormatError::FERR_INVALID_STATE, message);
-				}
-				previous = entityId;
-			}
-		};
-
-		std::map<uint64_t, EntityPageFreshPoolDestination> freshReplacementPools;
-		for (const EntityPageReplacementRequest &request: requests) {
-			const CatalogEntry visible = catalog_.find(current, request.expected_pool.segment_id);
-			const bool hasReplacementPool = request.replacement_pool.segment_id.isValid();
-			const bool hasFreshReplacementPool = request.replacement_new_pool.has_value();
-			const bool malformedAbsentReplacementPool =
-					!hasReplacementPool && !hasFreshReplacementPool &&
-					(request.replacement_pool.physical_slot.isValid() ||
-					 request.replacement_pool.kind != SegmentKind::SGK_NONE ||
-					 request.replacement_pool.owner_id != 0U || request.replacement_pool.generation.isValid() ||
-					 request.replacement_pool.state != SegmentState::SGS_FREE ||
-					 request.replacement_pool.committed_lsn.isValid());
-			const CatalogEntry replacementPool =
-					hasReplacementPool ? catalog_.find(current, request.replacement_pool.segment_id) : visible;
-			const EntityPageFreshPoolDestination freshPool =
-					hasFreshReplacementPool ? *request.replacement_new_pool : EntityPageFreshPoolDestination{};
-			const uint8_t invalidFreshReplacementPool = static_cast<uint8_t>(
-					hasFreshReplacementPool &&
-					(!freshPool.segment_id.isValid() ||
-					 freshPool.segment_id.value() < RSS_FIRST_ALLOCATABLE_SEGMENT_ID || freshPool.pool_owner_id == 0U ||
-					 !freshPool.generation.isValid() || !freshPool.first_slot.isValid() ||
-					 !freshPool.last_slot.isValid() || freshPool.first_slot > freshPool.last_slot ||
-					 catalog_.findOptional(current, freshPool.segment_id).has_value()));
-			if (invalidFreshReplacementPool != 0U) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "relocatable Entity page batch fresh replacement pool is malformed or published");
-			}
-			if (hasFreshReplacementPool) {
-				auto [iterator, inserted] = freshReplacementPools.emplace(freshPool.segment_id.value(), freshPool);
-				if (!inserted && !hasSameFreshEntityPoolIdentity(iterator->second, freshPool)) {
-					throw FormatException(
-							FormatError::FERR_INVALID_STATE,
-							"relocatable Entity page batch reuses a fresh replacement Segment ID inconsistently");
-				}
-			}
-			const PageLocation currentLocation = locations_.findPage(current, request.expected_location.page_id);
-			const bool changesNodes = !request.inserted_nodes.empty() || !request.erased_node_ids.empty();
-			const bool changesEdges = !request.inserted_edges.empty() || !request.erased_edge_ids.empty();
-			const bool isAuxiliaryPage = request.owner_kind != PageOwnerKind::POK_ENTITY;
-			const bool invalidRetirement =
-					request.retire_page &&
-					(isAuxiliaryPage ? hasEntityMapDelta(request)
-									 : (!request.inserted_nodes.empty() || !request.inserted_edges.empty() ||
-										(!request.erased_node_ids.empty() == !request.erased_edge_ids.empty())));
-			const uint8_t invalid =
-					static_cast<uint8_t>(visible.segment_id != request.expected_pool.segment_id) |
-					static_cast<uint8_t>(visible.physical_slot != request.expected_pool.physical_slot) |
-					static_cast<uint8_t>(visible.kind != request.expected_pool.kind) |
-					static_cast<uint8_t>(visible.owner_id != request.expected_pool.owner_id) |
-					static_cast<uint8_t>(visible.generation != request.expected_pool.generation) |
-					static_cast<uint8_t>(visible.committed_lsn != request.expected_pool.committed_lsn) |
-					static_cast<uint8_t>(visible.kind != SegmentKind::SGK_ENTITY_PAGE_POOL) |
-					static_cast<uint8_t>(visible.state != SegmentState::SGS_SEALED) |
-					static_cast<uint8_t>(!allocator_.isAllocated(current, visible.physical_slot)) |
-					static_cast<uint8_t>(malformedAbsentReplacementPool) |
-					static_cast<uint8_t>(hasReplacementPool && hasFreshReplacementPool) |
-					static_cast<uint8_t>(hasReplacementPool &&
-										 request.replacement_pool.physical_slot != replacementPool.physical_slot) |
-					static_cast<uint8_t>(hasReplacementPool && request.replacement_pool.kind != replacementPool.kind) |
-					static_cast<uint8_t>(hasReplacementPool &&
-										 request.replacement_pool.owner_id != replacementPool.owner_id) |
-					static_cast<uint8_t>(hasReplacementPool &&
-										 request.replacement_pool.generation != replacementPool.generation) |
-					static_cast<uint8_t>(hasReplacementPool &&
-										 request.replacement_pool.state != replacementPool.state) |
-					static_cast<uint8_t>(hasReplacementPool &&
-										 request.replacement_pool.committed_lsn != replacementPool.committed_lsn) |
-					static_cast<uint8_t>(replacementPool.kind != SegmentKind::SGK_ENTITY_PAGE_POOL) |
-					static_cast<uint8_t>(replacementPool.owner_id != visible.owner_id) |
-					static_cast<uint8_t>(hasFreshReplacementPool && freshPool.pool_owner_id != visible.owner_id) |
-					static_cast<uint8_t>(replacementPool.state != SegmentState::SGS_SEALED) |
-					static_cast<uint8_t>(!replacementPool.generation.isValid()) |
-					static_cast<uint8_t>(!allocator_.isAllocated(current, replacementPool.physical_slot)) |
-					static_cast<uint8_t>(currentLocation != request.expected_location) |
-					static_cast<uint8_t>(request.expected_location.segment_id != visible.segment_id) |
-					static_cast<uint8_t>(request.expected_location.generation != visible.generation) |
-					static_cast<uint8_t>(request.expected_location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-					static_cast<uint8_t>(request.expected_location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-					static_cast<uint8_t>(!isEntityPoolPageOwnerKind(request.owner_kind)) |
-					static_cast<uint8_t>(isAuxiliaryPage && hasEntityMapDelta(request)) |
-					static_cast<uint8_t>(changesNodes && changesEdges) | static_cast<uint8_t>(invalidRetirement) |
-					static_cast<uint8_t>(request.retire_page && (hasReplacementPool || hasFreshReplacementPool)) |
-					static_cast<uint8_t>(!pageIds.insert(request.expected_location.page_id.value()).second);
-			if (invalid != 0U) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "relocatable Entity page batch replacement has a stale pool, duplicate page, or "
-									  "invalid map delta");
-			}
-			validateInserted(
-					request.inserted_nodes, request.expected_location.page_id, true, insertedNodeIds,
-					"relocatable Entity page batch replacement has an invalid or published Node Entity Map entry");
-			validateErasures(
-					request.erased_node_ids, request.expected_location.page_id, true, erasedNodeIds,
-					"relocatable Entity page batch replacement erases an absent or foreign Node Entity Map entry");
-			validateInserted(
-					request.inserted_edges, request.expected_location.page_id, false, insertedEdgeIds,
-					"relocatable Entity page batch replacement has an invalid or published Edge Entity Map entry");
-			validateErasures(
-					request.erased_edge_ids, request.expected_location.page_id, false, erasedEdgeIds,
-					"relocatable Entity page batch replacement erases an absent or foreign Edge Entity Map entry");
-			insertedNodes.insert(insertedNodes.end(), request.inserted_nodes.begin(), request.inserted_nodes.end());
-			erasedNodes.insert(erasedNodes.end(), request.erased_node_ids.begin(), request.erased_node_ids.end());
-			insertedEdges.insert(insertedEdges.end(), request.inserted_edges.begin(), request.inserted_edges.end());
-			erasedEdges.insert(erasedEdges.end(), request.erased_edge_ids.begin(), request.erased_edge_ids.end());
-			materializations.push_back({replacementPool, currentLocation,
-										request.retire_page
-												? PageLocation{}
-												: PageLocation{currentLocation.page_id, replacementPool.segment_id, 0U,
-															   replacementPool.generation, 0U},
-										request.retire_page, hasFreshReplacementPool, request.owner_kind});
-			replacementFreshDestinations.push_back(request.replacement_new_pool);
-		}
-		for (const EntityPageAppendBatchRequest &request: appendRequests) {
-			const CatalogEntry visible = catalog_.find(current, request.expected_pool.segment_id);
-			const bool isAuxiliaryPage = request.owner_kind != PageOwnerKind::POK_ENTITY;
-			const bool invalidMapShape = isAuxiliaryPage
-												 ? (!request.inserted_nodes.empty() || !request.inserted_edges.empty())
-												 : (request.inserted_nodes.empty() == request.inserted_edges.empty());
-			const bool invalid =
-					!request.page_id.isValid() || invalidMapShape || !isEntityPoolPageOwnerKind(request.owner_kind) ||
-					visible.segment_id != request.expected_pool.segment_id ||
-					visible.physical_slot != request.expected_pool.physical_slot ||
-					visible.kind != request.expected_pool.kind || visible.owner_id != request.expected_pool.owner_id ||
-					visible.generation != request.expected_pool.generation ||
-					visible.committed_lsn != request.expected_pool.committed_lsn ||
-					visible.kind != SegmentKind::SGK_ENTITY_PAGE_POOL || visible.state != SegmentState::SGS_SEALED ||
-					!allocator_.isAllocated(current, visible.physical_slot) ||
-					locations_.findPageOptional(current, request.page_id).has_value() ||
-					!pageIds.insert(request.page_id.value()).second;
-			if (invalid) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "relocatable Entity page batch append has a stale pool, published Page ID, or "
-									  "invalid map delta");
-			}
-			validateInserted(request.inserted_nodes, request.page_id, true, insertedNodeIds,
-							 "relocatable Entity page batch append has an invalid or published Node Entity Map entry");
-			validateInserted(request.inserted_edges, request.page_id, false, insertedEdgeIds,
-							 "relocatable Entity page batch append has an invalid or published Edge Entity Map entry");
-			insertedNodes.insert(insertedNodes.end(), request.inserted_nodes.begin(), request.inserted_nodes.end());
-			insertedEdges.insert(insertedEdges.end(), request.inserted_edges.begin(), request.inserted_edges.end());
-			appendMaterializations.push_back(
-					{visible, {request.page_id, visible.segment_id, 0U, visible.generation, 0U}, request.owner_kind});
-		}
-		// A fresh Entity pool may start with several typed pages (for example, a
-		// Node page and a LabelSet page). They share exactly one Catalog identity
-		// and physical slot, while every PageId remains independently validated.
-		std::map<uint64_t, size_t> firstNewPoolRequestBySegment;
-		std::map<uint64_t, size_t> newPoolInitialFrameCounts;
-		for (size_t requestOrdinal = 0U; requestOrdinal < newPoolRequests.size(); ++requestOrdinal) {
-			const EntityPageNewPoolBatchRequest &request = newPoolRequests[requestOrdinal];
-			const CatalogSlotReservationRequest &reservation = request.reservation;
-			const bool isAuxiliaryPage = request.owner_kind != PageOwnerKind::POK_ENTITY;
-			const bool invalidMapShape = isAuxiliaryPage
-												 ? (!request.inserted_nodes.empty() || !request.inserted_edges.empty())
-												 : (request.inserted_nodes.empty() == request.inserted_edges.empty());
-			const auto [firstRequest, firstForSegment] =
-					firstNewPoolRequestBySegment.try_emplace(reservation.segment_id.value(), requestOrdinal);
-			const bool conflictingPoolIdentity =
-					!firstForSegment && !hasSameNewEntityPoolIdentity(request, newPoolRequests[firstRequest->second]);
-			const size_t initialFrameCount = ++newPoolInitialFrameCounts[reservation.segment_id.value()];
-			const bool invalid = !reservation.segment_id.isValid() ||
-								 reservation.segment_id.value() < RSS_FIRST_ALLOCATABLE_SEGMENT_ID ||
-								 reservation.kind != SegmentKind::SGK_ENTITY_PAGE_POOL || reservation.owner_id == 0U ||
-								 !reservation.segment_generation.isValid() ||
-								 reservation.state != SegmentState::SGS_SEALED || !reservation.require_absent ||
-								 !request.page_id.isValid() || !request.first_slot.isValid() ||
-								 !request.last_slot.isValid() || request.first_slot > request.last_slot ||
-								 invalidMapShape || !isEntityPoolPageOwnerKind(request.owner_kind) ||
-								 catalog_.findOptional(current, reservation.segment_id).has_value() ||
-								 conflictingPoolIdentity || initialFrameCount > RSS_PAGE_POOL_DATA_FRAME_COUNT ||
-								 locations_.findPageOptional(current, request.page_id).has_value() ||
-								 !pageIds.insert(request.page_id.value()).second;
-			if (invalid) {
-				throw FormatException(
-						FormatError::FERR_INVALID_STATE,
-						"relocatable Entity page new-pool batch has a published identity or invalid pool request");
-			}
-			validateInserted(
-					request.inserted_nodes, request.page_id, true, insertedNodeIds,
-					"relocatable Entity page new-pool batch has an invalid or published Node Entity Map entry");
-			validateInserted(
-					request.inserted_edges, request.page_id, false, insertedEdgeIds,
-					"relocatable Entity page new-pool batch has an invalid or published Edge Entity Map entry");
-			insertedNodes.insert(insertedNodes.end(), request.inserted_nodes.begin(), request.inserted_nodes.end());
-			insertedEdges.insert(insertedEdges.end(), request.inserted_edges.begin(), request.inserted_edges.end());
-		}
-		std::set<uint64_t> deletedEntityPropertyIds;
-		const auto registerDeletedEntityProperties = [&deletedEntityPropertyIds](std::span<const uint64_t> entityIds,
-																				 EntityPropertyOwnerKind ownerKind) {
-			for (const uint64_t entityId: entityIds) {
-				const EntityPropertyKey key{ownerKind, entityId};
-				if (!key.isValid() || !deletedEntityPropertyIds.insert(key.directoryId()).second) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "native graph page transaction has duplicate deleted Entity Property owners");
-				}
-			}
-		};
-		registerDeletedEntityProperties(erasedNodes, EntityPropertyOwnerKind::EPOK_NODE);
-		registerDeletedEntityProperties(erasedEdges, EntityPropertyOwnerKind::EPOK_EDGE);
-		const auto ownerSurvivesTransaction = [this, &current, &insertedNodeIds, &erasedNodeIds, &insertedEdgeIds,
-											   &erasedEdgeIds](const EntityPropertyKey &key) {
-			switch (key.owner_kind) {
-				case EntityPropertyOwnerKind::EPOK_NODE:
-					return !erasedNodeIds.contains(key.entity_id) &&
-						   (insertedNodeIds.contains(key.entity_id) ||
-							locations_.findNodePageLocationOptional(current, key.entity_id).has_value());
-				case EntityPropertyOwnerKind::EPOK_EDGE:
-					return !erasedEdgeIds.contains(key.entity_id) &&
-						   (insertedEdgeIds.contains(key.entity_id) ||
-							locations_.findEdgePageLocationOptional(current, key.entity_id).has_value());
-			}
-			return false;
-		};
-
-		std::set<uint64_t> touchedPropertyKeys;
-		std::set<std::pair<uint64_t, uint16_t>> publishedPropertySlots;
-		std::vector<EntityPropertyLocation> upsertedEntityProperties;
-		std::vector<EntityPropertyKey> explicitlyErasedEntityProperties;
-		std::map<uint64_t, EntityPropertyLocation> relocatedPropertySources;
-		for (const NativeGraphPropertyPageReplacementRequest &request: propertyReplacements) {
-			const CatalogEntry visible = catalog_.find(current, request.expected_pool.segment_id);
-			const PageLocation currentLocation = locations_.findPage(current, request.expected_location.page_id);
-			const bool invalidRetirement = request.retire_page &&
-					(!request.upserted_properties.empty() ||
-					 (request.erased_properties.empty() && request.relocated_properties.empty()));
-			const uint8_t invalidSource =
-					static_cast<uint8_t>(visible.segment_id != request.expected_pool.segment_id) |
-					static_cast<uint8_t>(visible.physical_slot != request.expected_pool.physical_slot) |
-					static_cast<uint8_t>(visible.kind != request.expected_pool.kind) |
-					static_cast<uint8_t>(visible.owner_id != request.expected_pool.owner_id) |
-					static_cast<uint8_t>(visible.generation != request.expected_pool.generation) |
-					static_cast<uint8_t>(visible.committed_lsn != request.expected_pool.committed_lsn) |
-					static_cast<uint8_t>(visible.kind != SegmentKind::SGK_PROPERTY_PAGE_POOL) |
-					static_cast<uint8_t>(visible.state != SegmentState::SGS_SEALED) |
-					static_cast<uint8_t>(!allocator_.isAllocated(current, visible.physical_slot)) |
-					static_cast<uint8_t>(currentLocation != request.expected_location) |
-					static_cast<uint8_t>(request.expected_location.segment_id != visible.segment_id) |
-					static_cast<uint8_t>(request.expected_location.generation != visible.generation) |
-					static_cast<uint8_t>(request.expected_location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-					static_cast<uint8_t>(request.expected_location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-					static_cast<uint8_t>(request.expected_page_owner_id == 0U) |
-					static_cast<uint8_t>(!request.expected_owner_lsn.isValid()) |
-					static_cast<uint8_t>(request.upserted_properties.empty() && request.erased_properties.empty() &&
-									 request.relocated_properties.empty()) |
-					static_cast<uint8_t>(invalidRetirement) |
-					static_cast<uint8_t>(!pageIds.insert(request.expected_location.page_id.value()).second);
-			if (invalidSource != 0U) {
-				throw FormatException(
-						FormatError::FERR_INVALID_STATE,
-						"native graph page transaction has a stale or invalid Property page replacement source");
-			}
-			for (const EntityPropertyLocation &location: request.upserted_properties) {
-				const std::optional<EntityPropertyLocation> existing =
-						locations_.findEntityPropertyOptional(current, location.key);
-				const uint8_t invalidLocation =
-						static_cast<uint8_t>(!location.key.isValid()) |
-						static_cast<uint8_t>(!ownerSurvivesTransaction(location.key)) |
-						static_cast<uint8_t>(location.page_id != request.expected_location.page_id) |
-						static_cast<uint8_t>(location.slot_id == std::numeric_limits<uint16_t>::max()) |
-						static_cast<uint8_t>(location.slot_generation == 0U) |
-						static_cast<uint8_t>(existing.has_value() &&
-											 existing->page_id != request.expected_location.page_id) |
-						static_cast<uint8_t>(deletedEntityPropertyIds.contains(location.key.directoryId())) |
-						static_cast<uint8_t>(relocatedPropertySources.contains(location.key.directoryId())) |
-						static_cast<uint8_t>(!touchedPropertyKeys.insert(location.key.directoryId()).second) |
-						static_cast<uint8_t>(
-								!publishedPropertySlots.emplace(location.page_id.value(), location.slot_id).second);
-				if (invalidLocation != 0U) {
-					throw FormatException(
-							FormatError::FERR_INVALID_STATE,
-							"native graph page transaction has an invalid or conflicting Property directory upsert");
-				}
-				upsertedEntityProperties.push_back(location);
-			}
-			for (const EntityPropertyKey &key: request.erased_properties) {
-				const std::optional<EntityPropertyLocation> existing =
-						locations_.findEntityPropertyOptional(current, key);
-				const uint8_t invalidErase =
-						static_cast<uint8_t>(!key.isValid()) | static_cast<uint8_t>(!existing.has_value()) |
-						static_cast<uint8_t>(existing.has_value() &&
-											 existing->page_id != request.expected_location.page_id) |
-						static_cast<uint8_t>(relocatedPropertySources.contains(key.directoryId())) |
-						static_cast<uint8_t>(!touchedPropertyKeys.insert(key.directoryId()).second);
-				if (invalidErase != 0U) {
-					throw FormatException(
-							FormatError::FERR_INVALID_STATE,
-							"native graph page transaction has an invalid or conflicting Property directory deletion");
-				}
-				explicitlyErasedEntityProperties.push_back(key);
-			}
-			for (const EntityPropertyKey &key: request.relocated_properties) {
-				const std::optional<EntityPropertyLocation> existing =
-						locations_.findEntityPropertyOptional(current, key);
-				const uint64_t directoryId = key.isValid() ? key.directoryId() : 0U;
-				const bool invalidRelocation =
-						!key.isValid() || !ownerSurvivesTransaction(key) || !existing.has_value() ||
-						(existing.has_value() && existing->page_id != request.expected_location.page_id) ||
-						deletedEntityPropertyIds.contains(directoryId) || touchedPropertyKeys.contains(directoryId) ||
-						relocatedPropertySources.contains(directoryId);
-				if (invalidRelocation) {
-					throw FormatException(
-							FormatError::FERR_INVALID_STATE,
-							"native graph page transaction has an invalid or conflicting Property relocation source");
-				}
-				relocatedPropertySources.emplace(directoryId, *existing);
-			}
-			propertyMaterializations.push_back(
-					{visible, currentLocation,
-					 request.retire_page
-							 ? PageLocation{}
-							 : PageLocation{currentLocation.page_id, visible.segment_id, 0U, visible.generation, 0U},
-					 request.expected_page_owner_id, request.expected_owner_lsn, request.retire_page});
-		}
-		std::set<uint64_t> matchedPropertyRelocations;
-		std::map<uint64_t, size_t> propertyReplacementFramesByPool;
-		for (const NativeGraphPropertyPageReplacementRequest &request: propertyReplacements) {
-			if (!request.retire_page) {
-				++propertyReplacementFramesByPool[request.expected_pool.segment_id.value()];
-			}
-		}
-		std::set<uint64_t> appendedPropertyPools;
-		for (const NativeGraphPropertyPageBatchRequest &request: propertyPageBatchRequests) {
-			const bool appendsExisting =
-					request.kind == NativeGraphPropertyPageBatchKind::NGPBK_APPEND_EXISTING_POOL;
-			const bool createsPool = request.kind == NativeGraphPropertyPageBatchKind::NGPBK_CREATE_POOL;
-			const bool emptyExpectedPool =
-					!request.expected_pool.segment_id.isValid() && !request.expected_pool.physical_slot.isValid() &&
-					request.expected_pool.kind == SegmentKind::SGK_NONE && request.expected_pool.owner_id == 0U &&
-					!request.expected_pool.generation.isValid() &&
-					request.expected_pool.state == SegmentState::SGS_FREE &&
-					!request.expected_pool.committed_lsn.isValid();
-			const uint8_t invalidRequest =
-					static_cast<uint8_t>(!appendsExisting && !createsPool) |
-					static_cast<uint8_t>(request.page_owner_id == 0U) |
-					static_cast<uint8_t>(request.page_property_keys.empty()) |
-					static_cast<uint8_t>(request.page_property_keys.size() > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-					static_cast<uint8_t>(appendsExisting &&
-									 (request.first_slot.isValid() || request.last_slot.isValid())) |
-					static_cast<uint8_t>(createsPool && !emptyExpectedPool) |
-					static_cast<uint8_t>(createsPool && !request.first_slot.isValid()) |
-					static_cast<uint8_t>(createsPool && !request.last_slot.isValid()) |
-					static_cast<uint8_t>(createsPool && request.first_slot > request.last_slot);
-			if (invalidRequest != 0U) {
-				throw FormatException(
-						FormatError::FERR_INVALID_HEADER,
-						"native graph Property page batch has an invalid kind, owner, pool, slot range, or page set");
-			}
-			if (appendsExisting) {
-				const CatalogEntry visible = catalog_.find(current, request.expected_pool.segment_id);
-				const size_t replacementFrames =
-						propertyReplacementFramesByPool[visible.segment_id.value()];
-				const size_t availableFrames = SharedPagePoolAllocator::availableFrameCountUnderWrite(
-						*io_, current.data_region_offset, visible);
-				const bool invalidCapacity = request.page_property_keys.size() > availableFrames ||
-						replacementFrames > availableFrames - request.page_property_keys.size();
-				const uint8_t invalidPool =
-						static_cast<uint8_t>(!hasSameCatalogEntry(visible, request.expected_pool)) |
-						static_cast<uint8_t>(visible.kind != SegmentKind::SGK_PROPERTY_PAGE_POOL) |
-						static_cast<uint8_t>(visible.owner_id != request.page_owner_id) |
-						static_cast<uint8_t>(visible.state != SegmentState::SGS_SEALED) |
-						static_cast<uint8_t>(!allocator_.isAllocated(current, visible.physical_slot)) |
-						static_cast<uint8_t>(invalidCapacity) |
-						static_cast<uint8_t>(!appendedPropertyPools.insert(visible.segment_id.value()).second);
-				if (invalidPool != 0U) {
-					throw FormatException(
-							FormatError::FERR_INVALID_STATE,
-							"native graph Property append batch has a stale, duplicate, or capacity-exhausted pool");
-				}
-			}
-			uint64_t previousKey = 0U;
-			for (const std::vector<EntityPropertyKey> &pageKeys: request.page_property_keys) {
-				if (pageKeys.empty()) {
-					throw FormatException(FormatError::FERR_INVALID_HEADER,
-									  "native graph Property page batch contains an empty page");
-				}
-				for (const EntityPropertyKey &key: pageKeys) {
-					const std::optional<EntityPropertyLocation> existing =
-							locations_.findEntityPropertyOptional(current, key);
-					const uint64_t directoryId = key.isValid() ? key.directoryId() : 0U;
-					const auto relocation = relocatedPropertySources.find(directoryId);
-					const bool relocatesExisting = existing.has_value();
-					const bool invalidKey =
-							!key.isValid() || !ownerSurvivesTransaction(key) || directoryId <= previousKey ||
-							deletedEntityPropertyIds.contains(directoryId) ||
-							(relocatesExisting &&
-							 (relocation == relocatedPropertySources.end() || relocation->second != *existing)) ||
-							(!relocatesExisting && relocation != relocatedPropertySources.end());
-					if (invalidKey || !touchedPropertyKeys.insert(directoryId).second ||
-						(relocatesExisting && !matchedPropertyRelocations.insert(directoryId).second)) {
-						throw FormatException(
-								FormatError::FERR_INVALID_STATE,
-								"native graph Property page batch has an unmatched, unordered, or conflicting owner key");
-					}
-					previousKey = directoryId;
-				}
-			}
-		}
-		if (matchedPropertyRelocations.size() != relocatedPropertySources.size()) {
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-							  "native graph Property relocation is missing its destination root publication");
-		}
-
-		std::ranges::sort(insertedNodes, {}, &EntityPageLocation::entity_id);
-		std::ranges::sort(erasedNodes);
-		std::ranges::sort(insertedEdges, {}, &EntityPageLocation::entity_id);
-		std::ranges::sort(erasedEdges);
-		const auto validateLeaseRanges = [](std::span<const NativeGraphLogicalIdLeaseRange> ranges,
-														 uint64_t currentHighWater, const char *entityName) {
-			uint64_t previousLast = 0U;
-			for (const NativeGraphLogicalIdLeaseRange &range: ranges) {
-				if (range.first_id == 0U || range.count == 0U ||
-					range.count - 1U > std::numeric_limits<uint64_t>::max() - range.first_id) {
-					throw FormatException(FormatError::FERR_INVALID_HEADER,
-										  std::string("native graph ") + entityName +
-												  " lease range is invalid or overflows the logical ID space");
-				}
-				const uint64_t last = range.first_id + range.count - 1U;
-				if ((previousLast != 0U && range.first_id <= previousLast) ||
-					(currentHighWater != 0U && last >= currentHighWater)) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  std::string("native graph ") + entityName +
-												  " lease range is not durably reserved by the current high-water mark");
-				}
-				previousLast = last;
-			}
-		};
-		const auto validateLeasedInsertions = [](std::span<const EntityPageLocation> inserted,
-																 std::span<const NativeGraphLogicalIdLeaseRange> ranges,
-																 uint64_t currentHighWater, const char *entityName) {
-			if (inserted.empty()) {
-				return;
-			}
-			// Lower typed-store callers that do not use the graph planner retain the
-			// original contiguous high-water reservation path. They can never insert a
-			// stale ID below the current high-water mark; planner transactions always
-			// provide durable ranges to support later rebases.
-			if (ranges.empty()) {
-				if (currentHighWater == 0U ||
-					std::ranges::any_of(inserted, [currentHighWater](const EntityPageLocation &location) {
-						return location.entity_id < currentHighWater;
-					})) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  std::string("native graph ") + entityName +
-												  " insertion lies below the current logical-ID high-water mark");
-				}
-				return;
-			}
-			if (std::ranges::any_of(inserted, [&ranges](const EntityPageLocation &location) {
-					return !std::ranges::any_of(ranges, [&location](const NativeGraphLogicalIdLeaseRange &range) {
-						return range.contains(location.entity_id);
-					});
-				})) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  std::string("native graph ") + entityName +
-											  " insertion lies outside its durable logical-ID lease");
-			}
-		};
-		validateLeaseRanges(logicalIdReservation.node_ranges, current.next_logical_node_id, "Node");
-		validateLeaseRanges(logicalIdReservation.edge_ranges, current.next_logical_edge_id, "Edge");
-		validateLeasedInsertions(insertedNodes, logicalIdReservation.node_ranges, current.next_logical_node_id, "Node");
-		validateLeasedInsertions(insertedEdges, logicalIdReservation.edge_ranges, current.next_logical_edge_id, "Edge");
-		// Entity-keyed Property roots are part of an Entity's logical lifetime,
-		// not a second independently visible object. Remove their directory entries
-		// with the Entity Map deletion so a new snapshot cannot resolve Properties
-		// for an Entity that is already absent. The old Property-directory root
-		// remains reachable through existing snapshot pins until normal reclamation.
-		std::vector<EntityPropertyKey> erasedEntityProperties;
-		erasedEntityProperties.reserve(erasedNodes.size() + erasedEdges.size());
-		std::set<uint64_t> explicitlyErasedEntityPropertyIds;
-		for (const EntityPropertyKey &key: explicitlyErasedEntityProperties) {
-			if (!explicitlyErasedEntityPropertyIds.insert(key.directoryId()).second) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "native graph page transaction has duplicate explicit Entity Property deletion");
-			}
-		}
-		const auto collectErasedEntityProperties = [this, &current, &touchedPropertyKeys, &erasedEntityProperties,
-													&explicitlyErasedEntityPropertyIds](
-														   std::span<const uint64_t> entityIds,
-														   EntityPropertyOwnerKind ownerKind) {
-			for (const uint64_t entityId: entityIds) {
-				const EntityPropertyKey key{ownerKind, entityId};
-				if (key.isValid() && locations_.findEntityPropertyOptional(current, key).has_value()) {
-					if (explicitlyErasedEntityPropertyIds.contains(key.directoryId())) {
-						// The matching Property-page COW has already claimed this
-						// directory erase, so do not emit a duplicate deletion.
-						continue;
-					}
-					if (!touchedPropertyKeys.insert(key.directoryId()).second) {
-						throw FormatException(FormatError::FERR_INVALID_STATE,
-											  "native graph page transaction has overlapping Entity Property deletion");
-					}
-					erasedEntityProperties.push_back(key);
-				}
-			}
-		};
-		collectErasedEntityProperties(erasedNodes, EntityPropertyOwnerKind::EPOK_NODE);
-		collectErasedEntityProperties(erasedEdges, EntityPropertyOwnerKind::EPOK_EDGE);
-		std::ranges::sort(erasedEntityProperties, {}, &EntityPropertyKey::directoryId);
-		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
-		for (const EntityPageLocation &location: insertedNodes) {
-			batch.observeLogicalNodeId(location.entity_id);
-		}
-		for (const EntityPageLocation &location: insertedEdges) {
-			batch.observeLogicalEdgeId(location.entity_id);
-		}
-		for (const uint64_t pageId: pageIds) {
-			batch.observeLogicalPageId(PageId(pageId));
-		}
-		std::set<uint64_t> reservedNewPoolSlots;
-		std::vector<CatalogEntry> newPoolEntries;
-		newPoolEntries.reserve(newPoolRequests.size() + freshReplacementPools.size());
-		std::map<uint64_t, size_t> newPoolEntryBySegment;
-		for (const EntityPageNewPoolBatchRequest &request: newPoolRequests) {
-			const auto fresh = freshReplacementPools.find(request.reservation.segment_id.value());
-			if (fresh != freshReplacementPools.end() && !hasSameFreshEntityPoolIdentity(fresh->second, request)) {
-				throw FormatException(
-						FormatError::FERR_INVALID_STATE,
-						"relocatable Entity page transaction conflicts with its fresh COW-pool reservation");
-			}
-		}
-		for (const EntityPageNewPoolBatchRequest &request: newPoolRequests) {
-			const auto existing = newPoolEntryBySegment.find(request.reservation.segment_id.value());
-			if (existing != newPoolEntryBySegment.end()) {
-				const CatalogEntry &entry = newPoolEntries[existing->second];
-				newPoolMaterializations.push_back(
-						{entry, {request.page_id, entry.segment_id, 0U, entry.generation, 0U}, request.owner_kind});
-				continue;
-			}
-
-			PhysicalSlotId candidate = request.first_slot;
-			std::optional<PhysicalSlotId> physicalSlot;
-			while (candidate <= request.last_slot) {
-				physicalSlot = allocator_.findFirstFree(current, candidate, request.last_slot);
-				if (!physicalSlot.has_value() || reservedNewPoolSlots.insert(physicalSlot->value()).second) {
-					break;
-				}
-				if (*physicalSlot == request.last_slot ||
-					physicalSlot->value() == std::numeric_limits<uint64_t>::max()) {
-					physicalSlot.reset();
-					break;
-				}
-				candidate = PhysicalSlotId(physicalSlot->value() + 1U);
-			}
-			if (!physicalSlot.has_value()) {
-				throw FormatException(
-						FormatError::FERR_INVALID_STATE,
-						"relocatable Entity page new-pool batch has no free physical slot in its request range");
-			}
-			CatalogEntry entry;
-			entry.segment_id = request.reservation.segment_id;
-			entry.physical_slot = *physicalSlot;
-			entry.kind = request.reservation.kind;
-			entry.owner_id = request.reservation.owner_id;
-			entry.generation = request.reservation.segment_generation;
-			entry.state = request.reservation.state;
-			entry.committed_lsn = checkpointLsn;
-			batch.observeLogicalSegmentId(entry.segment_id);
-			batch.reserveDataSlot(entry.physical_slot);
-			newPoolEntryBySegment.emplace(entry.segment_id.value(), newPoolEntries.size());
-			newPoolEntries.push_back(entry);
-			newPoolMaterializations.push_back(
-					{entry, {request.page_id, entry.segment_id, 0U, entry.generation, 0U}, request.owner_kind});
-		}
-		for (const auto &[segmentId, destination]: freshReplacementPools) {
-			if (newPoolEntryBySegment.contains(segmentId)) {
-				continue;
-			}
-			PhysicalSlotId candidate = destination.first_slot;
-			std::optional<PhysicalSlotId> physicalSlot;
-			while (candidate <= destination.last_slot) {
-				physicalSlot = allocator_.findFirstFree(current, candidate, destination.last_slot);
-				if (!physicalSlot.has_value() || reservedNewPoolSlots.insert(physicalSlot->value()).second) {
-					break;
-				}
-				if (*physicalSlot == destination.last_slot ||
-					physicalSlot->value() == std::numeric_limits<uint64_t>::max()) {
-					physicalSlot.reset();
-					break;
-				}
-				candidate = PhysicalSlotId(physicalSlot->value() + 1U);
-			}
-			if (!physicalSlot.has_value()) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "relocatable Entity page fresh COW destination has no free physical slot");
-			}
-			CatalogEntry entry;
-			entry.segment_id = destination.segment_id;
-			entry.physical_slot = *physicalSlot;
-			entry.kind = SegmentKind::SGK_ENTITY_PAGE_POOL;
-			entry.owner_id = destination.pool_owner_id;
-			entry.generation = destination.generation;
-			entry.state = SegmentState::SGS_SEALED;
-			entry.committed_lsn = checkpointLsn;
-			batch.observeLogicalSegmentId(entry.segment_id);
-			batch.reserveDataSlot(entry.physical_slot);
-			newPoolEntryBySegment.emplace(segmentId, newPoolEntries.size());
-			newPoolEntries.push_back(entry);
-		}
-		for (size_t ordinal = 0U; ordinal < replacementFreshDestinations.size(); ++ordinal) {
-			if (!replacementFreshDestinations[ordinal].has_value()) {
-				continue;
-			}
-			const EntityPageFreshPoolDestination &destination = *replacementFreshDestinations[ordinal];
-			const auto entryOrdinal = newPoolEntryBySegment.find(destination.segment_id.value());
-			if (entryOrdinal == newPoolEntryBySegment.end()) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "relocatable Entity page fresh COW destination was not materialized");
-			}
-			const CatalogEntry &entry = newPoolEntries[entryOrdinal->second];
-			EntityPageReplacementMaterialization &materialization = materializations[ordinal];
-			materialization.pool = entry;
-			materialization.replacement = {materialization.expected_location.page_id, entry.segment_id, 0U,
-										   entry.generation, 0U};
-		}
-		std::vector<CatalogEntry> newPropertyPoolEntries;
-		newPropertyPoolEntries.reserve(propertyPageBatchRequests.size());
-		for (const NativeGraphPropertyPageBatchRequest &request: propertyPageBatchRequests) {
-			CatalogEntry entry = request.expected_pool;
-			if (request.kind == NativeGraphPropertyPageBatchKind::NGPBK_CREATE_POOL) {
-				PhysicalSlotId candidate = request.first_slot;
-				std::optional<PhysicalSlotId> physicalSlot;
-				while (candidate <= request.last_slot) {
-					physicalSlot = allocator_.findFirstFree(current, candidate, request.last_slot);
-					if (!physicalSlot.has_value() || reservedNewPoolSlots.insert(physicalSlot->value()).second) {
-						break;
-					}
-					if (*physicalSlot == request.last_slot ||
-						physicalSlot->value() == std::numeric_limits<uint64_t>::max()) {
-						physicalSlot.reset();
-						break;
-					}
-					candidate = PhysicalSlotId(physicalSlot->value() + 1U);
-				}
-				if (!physicalSlot.has_value()) {
-					throw FormatException(
-							FormatError::FERR_INVALID_STATE,
-							"native graph Property pool creation has no free physical slot in its request range");
-				}
-				entry.segment_id = batch.allocateLogicalSegmentId();
-				entry.physical_slot = *physicalSlot;
-				entry.kind = SegmentKind::SGK_PROPERTY_PAGE_POOL;
-				entry.owner_id = request.page_owner_id;
-				entry.generation = Generation(1U);
-				entry.state = SegmentState::SGS_SEALED;
-				entry.committed_lsn = checkpointLsn;
-				if (catalog_.findOptional(current, entry.segment_id).has_value()) {
-					throw FormatException(
-							FormatError::FERR_INVALID_STATE,
-							"native graph Property pool creation allocated a published logical Segment ID");
-				}
-				batch.reserveDataSlot(entry.physical_slot);
-				newPropertyPoolEntries.push_back(entry);
-			}
-
-			std::vector<NativeGraphPropertyPageInitialMaterialization> initialPages;
-			initialPages.reserve(request.page_property_keys.size());
-			for (const std::vector<EntityPropertyKey> &pageKeys: request.page_property_keys) {
-				const PageId pageId = batch.allocateLogicalPageId();
-				if (locations_.findPageOptional(current, pageId).has_value() ||
-					!pageIds.insert(pageId.value()).second) {
-					throw FormatException(
-							FormatError::FERR_INVALID_STATE,
-							"native graph Property page batch allocated a published logical Page ID");
-				}
-				std::vector<EntityPropertyLocation> properties;
-				properties.reserve(pageKeys.size());
-				for (const EntityPropertyKey &key: pageKeys) {
-					properties.push_back({key, pageId, std::numeric_limits<uint16_t>::max(), 0U});
-				}
-				initialPages.push_back(
-						{{pageId, entry.segment_id, 0U, entry.generation, 0U}, std::move(properties)});
-			}
-			propertyPageBatchMaterializations.push_back(
-					{request.kind, entry, request.page_owner_id, std::move(initialPages)});
-		}
-		const auto reserveDistinctNewPoolSlot = [this, &current, &reservedNewPoolSlots](PhysicalSlotId first,
-																						PhysicalSlotId last,
-																						const char *message) {
-			PhysicalSlotId candidate = first;
-			while (candidate <= last) {
-				const std::optional<PhysicalSlotId> found = allocator_.findFirstFree(current, candidate, last);
-				if (!found.has_value()) {
-					break;
-				}
-				if (reservedNewPoolSlots.insert(found->value()).second) {
-					return *found;
-				}
-				if (*found == last || found->value() == std::numeric_limits<uint64_t>::max()) {
-					break;
-				}
-				candidate = PhysicalSlotId(found->value() + 1U);
-			}
-			throw FormatException(FormatError::FERR_INVALID_STATE, message);
-		};
-		struct SharedLargeValuePoolCapacity {
-			CatalogEntry pool;
-			size_t available_frames = 0U;
-			size_t prepared_frames = 0U;
-			bool is_new_pool = false;
-		};
-		std::vector<SharedLargeValuePoolCapacity> sharedLargeValueDataPools;
-		std::vector<SharedLargeValuePoolCapacity> sharedLargeValueManifestPools;
-		if (!largeValues.empty()) {
-			// Publication owns the writer lock, so a regular snapshot acquisition would
-			// self-deadlock. This pin reads the already fenced root without reacquiring
-			// the reader lock; the header checks below remain fail-closed.
-			MetadataSnapshotPin poolSnapshot = snapshots_.pinCurrentUnderWrite(writer, current);
-			for (const CatalogEntry &pool: findCurrentLargeValueDataPagePools(poolSnapshot)) {
-				if (!allocator_.isAllocated(current, pool.physical_slot)) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "native graph LargeValue capacity query found an unallocated pool slot");
-				}
-				sharedLargeValueDataPools.push_back({pool, SharedPagePoolAllocator::availableFrameCountUnderWrite(
-															   *io_, current.data_region_offset, pool)});
-			}
-			for (const CatalogEntry &pool: findCurrentLargeValueManifestPagePools(poolSnapshot)) {
-				if (!allocator_.isAllocated(current, pool.physical_slot)) {
-					throw FormatException(
-							FormatError::FERR_INVALID_STATE,
-							"native graph LargeValue Manifest capacity query found an unallocated pool slot");
-				}
-				sharedLargeValueManifestPools.push_back(
-						{pool, SharedPagePoolAllocator::availableFrameCountUnderWrite(
-								   *io_, current.data_region_offset, pool)});
-			}
-			poolSnapshot.release();
-		}
-		std::vector<CatalogEntry> newLargeValuePoolEntries;
-		const auto allocateSharedLargeValuePages = [this, &batch, &current, &pageIds](
-				std::vector<SharedLargeValuePoolCapacity> &candidates, size_t &remainingPages,
-				std::vector<LargeValueDataMaterializationPoolBatch> &destination, const char *duplicatePageMessage) {
-			for (SharedLargeValuePoolCapacity &candidate: candidates) {
-				if (remainingPages == 0U) {
-					break;
-				}
-				if (candidate.available_frames == 0U) {
-					continue;
-				}
-				const size_t pages = std::min(remainingPages, candidate.available_frames);
-				const size_t preparedPrefix = candidate.is_new_pool ? candidate.prepared_frames : 0U;
-				LargeValueDataMaterializationPoolBatch poolBatch{
-						candidate.pool, {}, {}, candidate.is_new_pool, preparedPrefix};
-				poolBatch.page_ids.reserve(pages);
-				poolBatch.locations.reserve(pages);
-				for (size_t pageOrdinal = 0U; pageOrdinal < pages; ++pageOrdinal) {
-					const PageId pageId = batch.allocateLogicalPageId();
-					if (locations_.findPageOptional(current, pageId).has_value() ||
-						!pageIds.insert(pageId.value()).second) {
-						throw FormatException(FormatError::FERR_INVALID_STATE, duplicatePageMessage);
-					}
-					poolBatch.page_ids.push_back(pageId);
-					poolBatch.locations.push_back(
-							{pageId, candidate.pool.segment_id, 0U, candidate.pool.generation, 0U});
-				}
-				destination.push_back(std::move(poolBatch));
-				candidate.available_frames -= pages;
-				if (candidate.is_new_pool) {
-					candidate.prepared_frames += pages;
-				}
-				remainingPages -= pages;
-			}
-		};
-		for (const NativeGraphLargeValueMutation &mutation: largeValues) {
-			LargeValueMaterializationResult materialization;
-			materialization.value_id = batch.allocateLargeValueId();
-			if (materialization.value_id != mutation.reference.value_id) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "native graph LargeValue allocation does not match its pinned logical value ID");
-			}
-			size_t remainingDataPages = mutation.planned_data_page_count;
-			materialization.data_pools.reserve((remainingDataPages + RSS_PAGE_POOL_DATA_FRAME_COUNT - 1U) /
-											   RSS_PAGE_POOL_DATA_FRAME_COUNT);
-			allocateSharedLargeValuePages(
-					sharedLargeValueDataPools, remainingDataPages, materialization.data_pools,
-					"native graph LargeValue allocation reused a published shared-pool data Page ID");
-			while (remainingDataPages != 0U) {
-				CatalogEntry pool;
-				pool.segment_id = batch.allocateLogicalSegmentId();
-				pool.physical_slot = reserveDistinctNewPoolSlot(
-						mutation.first_data_slot, mutation.last_data_slot,
-						"native graph LargeValue materialization has no free data-pool slot");
-				pool.kind = SegmentKind::SGK_LARGE_VALUE_DATA_POOL;
-				pool.owner_id = RSS_LARGE_VALUE_SHARED_DATA_POOL_OWNER_ID;
-				pool.generation = mutation.reference.generation;
-				pool.state = SegmentState::SGS_SEALED;
-				pool.committed_lsn = checkpointLsn;
-				if (catalog_.findOptional(current, pool.segment_id).has_value()) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "native graph LargeValue allocation reused a published logical Segment ID");
-				}
-				batch.reserveDataSlot(pool.physical_slot);
-				newLargeValuePoolEntries.push_back(pool);
-				sharedLargeValueDataPools.push_back(
-						{pool, RSS_PAGE_POOL_DATA_FRAME_COUNT, 0U, true});
-				allocateSharedLargeValuePages(
-						sharedLargeValueDataPools, remainingDataPages, materialization.data_pools,
-						"native graph LargeValue allocation reused a published logical data Page ID");
-			}
-			size_t remainingManifestPages = mutation.planned_manifest_page_count;
-			materialization.manifest_pools.reserve(
-					(remainingManifestPages + RSS_PAGE_POOL_DATA_FRAME_COUNT - 1U) /
-					RSS_PAGE_POOL_DATA_FRAME_COUNT);
-			allocateSharedLargeValuePages(
-					sharedLargeValueManifestPools, remainingManifestPages, materialization.manifest_pools,
-					"native graph LargeValue allocation reused a published shared-pool Manifest Page ID");
-			while (remainingManifestPages != 0U) {
-				CatalogEntry pool;
-				pool.segment_id = batch.allocateLogicalSegmentId();
-				pool.physical_slot = reserveDistinctNewPoolSlot(
-						mutation.first_manifest_slot, mutation.last_manifest_slot,
-						"native graph LargeValue materialization has no free manifest-pool slot");
-				pool.kind = SegmentKind::SGK_LARGE_VALUE_MANIFEST_POOL;
-				pool.owner_id = RSS_LARGE_VALUE_SHARED_MANIFEST_POOL_OWNER_ID;
-				pool.generation = mutation.reference.generation;
-				pool.state = SegmentState::SGS_SEALED;
-				pool.committed_lsn = checkpointLsn;
-				if (catalog_.findOptional(current, pool.segment_id).has_value()) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "native graph LargeValue allocation reused a published manifest Segment ID");
-				}
-				batch.reserveDataSlot(pool.physical_slot);
-				newLargeValuePoolEntries.push_back(pool);
-				sharedLargeValueManifestPools.push_back(
-						{pool, RSS_PAGE_POOL_DATA_FRAME_COUNT, 0U, true});
-				allocateSharedLargeValuePages(
-						sharedLargeValueManifestPools, remainingManifestPages, materialization.manifest_pools,
-						"native graph LargeValue allocation reused a published manifest Page ID");
-			}
-			materialization.manifest_pool = materialization.manifest_pools.front().pool;
-			materialization.manifest_page_id = materialization.manifest_pools.front().page_ids.front();
-			materialization.manifest_location = materialization.manifest_pools.front().locations.front();
-			largeValueMaterializations.push_back(std::move(materialization));
-		}
-		// Allocate every fresh derived Index pool from this same candidate batch.
-		// Its logical Segment/Page IDs and physical slot reservation therefore have
-		// exactly the same visibility boundary as the Node, Edge, and Property work.
-		std::vector<CatalogEntry> newDerivedIndexPoolEntries;
-		for (size_t mutationOrdinal = 0U; mutationOrdinal < derivedState.index_tree_mutations.size();
-			 ++mutationOrdinal) {
-			const NativeGraphIndexTreeMutation &mutation = derivedState.index_tree_mutations[mutationOrdinal];
-			std::vector<IndexTreeMutationPoolBatch> &batches = derivedIndexBatches[mutationOrdinal];
-			for (const NewIndexTreePoolRequest &request: mutation.new_pool_requests) {
-				PhysicalSlotId candidate = request.first_slot;
-				std::optional<PhysicalSlotId> physicalSlot;
-				while (candidate <= request.last_slot) {
-					physicalSlot = allocator_.findFirstFree(current, candidate, request.last_slot);
-					if (!physicalSlot.has_value() || reservedNewPoolSlots.insert(physicalSlot->value()).second) {
-						break;
-					}
-					if (*physicalSlot == request.last_slot ||
-						physicalSlot->value() == std::numeric_limits<uint64_t>::max()) {
-						physicalSlot.reset();
-						break;
-					}
-					candidate = PhysicalSlotId(physicalSlot->value() + 1U);
-				}
-				if (!physicalSlot.has_value()) {
-					throw FormatException(
-							FormatError::FERR_INVALID_STATE,
-							"native graph derived-state mutation has no free physical slot for a new Index pool");
-				}
-				const SegmentId segmentId = batch.allocateLogicalSegmentId();
-				if (catalog_.findOptional(current, segmentId).has_value()) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "native graph derived-state mutation allocated a published Index Segment ID");
-				}
-				CatalogEntry pool;
-				pool.segment_id = segmentId;
-				pool.physical_slot = *physicalSlot;
-				pool.kind = SegmentKind::SGK_INDEX_PAGE_POOL;
-				pool.owner_id = request.owner_id;
-				pool.generation = Generation(1U);
-				pool.state = SegmentState::SGS_SEALED;
-				pool.committed_lsn = checkpointLsn;
-				batch.reserveDataSlot(pool.physical_slot);
-
-				IndexTreeMutationPoolBatch materialization;
-				materialization.pool = pool;
-				materialization.newly_reserved = true;
-				materialization.appended_page_ids.reserve(request.appended_page_count);
-				materialization.appended_locations.reserve(request.appended_page_count);
-				for (size_t pageOrdinal = 0U; pageOrdinal < request.appended_page_count; ++pageOrdinal) {
-					const PageId pageId = batch.allocateLogicalPageId();
-					if (locations_.findPageOptional(current, pageId).has_value() ||
-						!pageIds.insert(pageId.value()).second) {
-						throw FormatException(
-								FormatError::FERR_INVALID_STATE,
-								"native graph derived-state mutation allocated a published Index Page ID");
-					}
-					materialization.appended_page_ids.push_back(pageId);
-					materialization.appended_locations.push_back({pageId, pool.segment_id, 0U, pool.generation, 0U});
-				}
-				newDerivedIndexPoolEntries.push_back(pool);
-				batches.push_back(std::move(materialization));
-			}
-		}
-		std::vector<NativeGraphVectorBootstrapMaterialization> vectorBootstrapMaterializations;
-		std::vector<CatalogEntry> newVectorBootstrapPoolEntries;
-		vectorBootstrapMaterializations.reserve(derivedState.vector_bootstraps.size());
-		const auto resolveFreshDerivedRoot = [&derivedState, &derivedIndexBatches](uint64_t indexId) {
-			const auto mutation = std::ranges::find(derivedState.index_tree_mutations, indexId,
-													&NativeGraphIndexTreeMutation::index_id);
-			if (mutation == derivedState.index_tree_mutations.end() || !mutation->replacement_root.has_value() ||
-				!mutation->replacement_root->newly_reserved) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "native graph Vector bootstrap lost a freshly allocated mapping root");
-			}
-			const size_t mutationOrdinal = static_cast<size_t>(mutation - derivedState.index_tree_mutations.begin());
-			const NativeGraphIndexTreeAppendedPageReference &reference = *mutation->replacement_root;
-			const size_t poolOrdinal = mutation->pool_requests.size() + reference.pool_ordinal;
-			if (mutationOrdinal >= derivedIndexBatches.size() ||
-				poolOrdinal >= derivedIndexBatches[mutationOrdinal].size() ||
-				reference.appended_page_ordinal >=
-						derivedIndexBatches[mutationOrdinal][poolOrdinal].appended_locations.size()) {
-				throw FormatException(
-						FormatError::FERR_INVALID_STATE,
-						"native graph Vector bootstrap has an invalid freshly allocated mapping-root location");
-			}
-			const PageLocation &location = derivedIndexBatches[mutationOrdinal][poolOrdinal]
-												   .appended_locations[reference.appended_page_ordinal];
-			return IndexRootLocation{indexId, location.page_id, location.generation};
-		};
-		for (const NativeGraphVectorBootstrapMutation &mutation: derivedState.vector_bootstraps) {
-			NativeGraphVectorBootstrapMaterialization materialization;
-			materialization.mutation = mutation;
-			materialization.node_mapping_root = resolveFreshDerivedRoot(mutation.index_id);
-			materialization.vector_node_mapping_root = resolveFreshDerivedRoot(mutation.vector_node_mapping_index_id);
-			for (uint64_t offset = 0U; offset < mutation.vector_count; ++offset) {
-				if (batch.allocateLogicalVectorId() != mutation.first_vector_id + offset) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "native graph Vector bootstrap lost its reserved logical Vector-ID range");
-				}
-			}
-			const size_t rawPoolCount =
-					(static_cast<size_t>(mutation.raw_page_count) - 1U) / RSS_PAGE_POOL_DATA_FRAME_COUNT + 1U;
-			materialization.raw_pools.reserve(rawPoolCount);
-			materialization.raw_pages.reserve(mutation.raw_page_count);
-			for (size_t poolOrdinal = 0U; poolOrdinal < rawPoolCount; ++poolOrdinal) {
-				CatalogEntry pool;
-				pool.segment_id = batch.allocateLogicalSegmentId();
-				pool.physical_slot = reserveDistinctNewPoolSlot(
-						mutation.first_slot, mutation.last_slot,
-						"native graph Vector bootstrap has no free physical slot for a Raw pool");
-				pool.kind = SegmentKind::SGK_VECTOR_RAW_POOL;
-				pool.owner_id = mutation.index_id;
-				pool.generation = Generation(1U);
-				pool.state = SegmentState::SGS_SEALED;
-				pool.committed_lsn = checkpointLsn;
-				if (catalog_.findOptional(current, pool.segment_id).has_value()) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "native graph Vector bootstrap allocated a published Raw-pool Segment ID");
-				}
-				batch.reserveDataSlot(pool.physical_slot);
-				materialization.raw_pools.push_back(pool);
-				newVectorBootstrapPoolEntries.push_back(pool);
-			}
-			for (size_t pageOrdinal = 0U; pageOrdinal < mutation.raw_page_count; ++pageOrdinal) {
-				const PageId pageId = batch.allocateLogicalPageId();
-				if (locations_.findPageOptional(current, pageId).has_value() ||
-					!pageIds.insert(pageId.value()).second) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "native graph Vector bootstrap allocated a published Raw Page ID");
-				}
-				const CatalogEntry &pool = materialization.raw_pools[pageOrdinal / RSS_PAGE_POOL_DATA_FRAME_COUNT];
-				materialization.raw_pages.push_back({pageId, pool.segment_id, 0U, pool.generation, 0U});
-			}
-			materialization.manifest_pool.segment_id = batch.allocateLogicalSegmentId();
-			materialization.manifest_pool.physical_slot = reserveDistinctNewPoolSlot(
-					mutation.first_slot, mutation.last_slot,
-					"native graph Vector bootstrap has no free physical slot for a Manifest pool");
-			materialization.manifest_pool.kind = SegmentKind::SGK_VECTOR_MANIFEST_POOL;
-			materialization.manifest_pool.owner_id = mutation.index_id;
-			materialization.manifest_pool.generation = Generation(1U);
-			materialization.manifest_pool.state = SegmentState::SGS_SEALED;
-			materialization.manifest_pool.committed_lsn = checkpointLsn;
-			if (catalog_.findOptional(current, materialization.manifest_pool.segment_id).has_value()) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "native graph Vector bootstrap allocated a published Manifest-pool Segment ID");
-			}
-			batch.reserveDataSlot(materialization.manifest_pool.physical_slot);
-			materialization.manifest_page.page_id = batch.allocateLogicalPageId();
-			materialization.manifest_page.segment_id = materialization.manifest_pool.segment_id;
-			materialization.manifest_page.generation = materialization.manifest_pool.generation;
-			if (locations_.findPageOptional(current, materialization.manifest_page.page_id).has_value() ||
-				!pageIds.insert(materialization.manifest_page.page_id.value()).second) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "native graph Vector bootstrap allocated a published Manifest Page ID");
-			}
-			materialization.manifest_location = {mutation.index_id, materialization.manifest_page.page_id,
-												 materialization.manifest_page.generation};
-			newVectorBootstrapPoolEntries.push_back(materialization.manifest_pool);
-			vectorBootstrapMaterializations.push_back(std::move(materialization));
-		}
-		for (const NativeGraphVectorDeltaMutation *mutation: vectorDeltasByVectorRange) {
-			for (uint64_t offset = 0U; offset < mutation->inserted_vector_count; ++offset) {
-				if (batch.allocateLogicalVectorId() != mutation->first_vector_id + offset) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "native graph Vector delta lost its reserved logical Vector-ID range");
-				}
-			}
-		}
-		std::vector<NativeGraphVectorDeltaMaterialization> vectorDeltaMaterializations;
-		std::vector<CatalogEntry> newVectorDeltaPoolEntries;
-		vectorDeltaMaterializations.reserve(derivedState.vector_deltas.size());
-		for (const NativeGraphVectorDeltaMutation &mutation: derivedState.vector_deltas) {
-			NativeGraphVectorDeltaMaterialization materialization;
-			materialization.mutation = mutation;
-			std::map<uint32_t, size_t> rawNewPoolOrdinals;
-			for (const NativeGraphVectorDeltaRawPageMutation &rawMutation: mutation.raw_pages) {
-				NativeGraphVectorDeltaRawPageMaterialization raw;
-				raw.mutation = rawMutation;
-				if (rawMutation.placement == NativeGraphVectorDeltaRawPlacement::NGVDRP_COW_TAIL) {
-					raw.pool = rawMutation.expected_pool;
-					raw.location = rawMutation.expected_location;
-				} else if (rawMutation.placement == NativeGraphVectorDeltaRawPlacement::NGVDRP_APPEND_TO_CURRENT_POOL) {
-					raw.pool = rawMutation.expected_pool;
-					const PageId pageId = batch.allocateLogicalPageId();
-					if (locations_.findPageOptional(current, pageId).has_value() ||
-						!pageIds.insert(pageId.value()).second) {
-						throw FormatException(FormatError::FERR_INVALID_STATE,
-											  "native graph Vector delta allocated a published Raw Page ID");
-					}
-					raw.location = {pageId, raw.pool.segment_id, 0U, raw.pool.generation, 0U};
-				} else {
-					auto [position, inserted] = rawNewPoolOrdinals.try_emplace(rawMutation.new_pool_ordinal,
-																			   materialization.raw_new_pools.size());
-					if (inserted) {
-						CatalogEntry pool;
-						pool.segment_id = batch.allocateLogicalSegmentId();
-						pool.physical_slot = reserveDistinctNewPoolSlot(
-								mutation.first_slot, mutation.last_slot,
-								"native graph Vector delta has no free physical slot for a Raw pool");
-						pool.kind = SegmentKind::SGK_VECTOR_RAW_POOL;
-						pool.owner_id = mutation.index_id;
-						pool.generation = Generation(1U);
-						pool.state = SegmentState::SGS_SEALED;
-						pool.committed_lsn = checkpointLsn;
-						if (catalog_.findOptional(current, pool.segment_id).has_value()) {
-							throw FormatException(
-									FormatError::FERR_INVALID_STATE,
-									"native graph Vector delta allocated a published Raw-pool Segment ID");
-						}
-						batch.reserveDataSlot(pool.physical_slot);
-						newVectorDeltaPoolEntries.push_back(pool);
-						materialization.raw_new_pools.push_back(pool);
-					}
-					raw.pool = materialization.raw_new_pools[position->second];
-					const PageId pageId = batch.allocateLogicalPageId();
-					if (locations_.findPageOptional(current, pageId).has_value() ||
-						!pageIds.insert(pageId.value()).second) {
-						throw FormatException(FormatError::FERR_INVALID_STATE,
-											  "native graph Vector delta allocated a published fresh Raw Page ID");
-					}
-					raw.location = {pageId, raw.pool.segment_id, 0U, raw.pool.generation, 0U};
-				}
-				materialization.raw_pages.push_back(std::move(raw));
-			}
-			if (mutation.manifest_in_new_pool) {
-				materialization.manifest_new_pool.segment_id = batch.allocateLogicalSegmentId();
-				materialization.manifest_new_pool.physical_slot = reserveDistinctNewPoolSlot(
-						mutation.first_slot, mutation.last_slot,
-						"native graph Vector delta has no free physical slot for a Manifest pool");
-				materialization.manifest_new_pool.kind = SegmentKind::SGK_VECTOR_MANIFEST_POOL;
-				materialization.manifest_new_pool.owner_id = mutation.index_id;
-				materialization.manifest_new_pool.generation = Generation(1U);
-				materialization.manifest_new_pool.state = SegmentState::SGS_SEALED;
-				materialization.manifest_new_pool.committed_lsn = checkpointLsn;
-				if (catalog_.findOptional(current, materialization.manifest_new_pool.segment_id).has_value()) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "native graph Vector delta allocated a published Manifest-pool Segment ID");
-				}
-				batch.reserveDataSlot(materialization.manifest_new_pool.physical_slot);
-				newVectorDeltaPoolEntries.push_back(materialization.manifest_new_pool);
-			}
-			const CatalogEntry &manifestPool =
-					mutation.manifest_in_new_pool ? materialization.manifest_new_pool : mutation.expected_manifest_pool;
-			materialization.manifest_replacement = {mutation.expected_manifest_location.page_id,
-													manifestPool.segment_id, 0U, manifestPool.generation, 0U};
-			materialization.manifest_location = {mutation.index_id, materialization.manifest_replacement.page_id,
-												 materialization.manifest_replacement.generation};
-			vectorDeltaMaterializations.push_back(std::move(materialization));
-		}
-		std::vector<CatalogEntry> allNewPoolEntries;
-		allNewPoolEntries.reserve(newPoolEntries.size() + newPropertyPoolEntries.size() +
-								  newLargeValuePoolEntries.size() + newDerivedIndexPoolEntries.size() +
-								  newVectorBootstrapPoolEntries.size() + newVectorDeltaPoolEntries.size());
-		allNewPoolEntries.insert(allNewPoolEntries.end(), newPoolEntries.begin(), newPoolEntries.end());
-		allNewPoolEntries.insert(allNewPoolEntries.end(), newPropertyPoolEntries.begin(), newPropertyPoolEntries.end());
-		allNewPoolEntries.insert(allNewPoolEntries.end(), newLargeValuePoolEntries.begin(),
-								 newLargeValuePoolEntries.end());
-		allNewPoolEntries.insert(allNewPoolEntries.end(), newDerivedIndexPoolEntries.begin(),
-								 newDerivedIndexPoolEntries.end());
-		allNewPoolEntries.insert(allNewPoolEntries.end(), newVectorBootstrapPoolEntries.begin(),
-								 newVectorBootstrapPoolEntries.end());
-		allNewPoolEntries.insert(allNewPoolEntries.end(), newVectorDeltaPoolEntries.begin(),
-								 newVectorDeltaPoolEntries.end());
-		for (const CatalogEntry &entry: allNewPoolEntries) {
-			allocator_.prepareSetAllocated(batch, entry.physical_slot, true);
-		}
-		if (!allNewPoolEntries.empty()) {
-			std::ranges::sort(allNewPoolEntries, {}, &CatalogEntry::segment_id);
-			catalog_.prepareUpsert(batch, allNewPoolEntries);
-		}
-		for (size_t mutationOrdinal = 0U; mutationOrdinal < derivedState.index_tree_mutations.size();
-			 ++mutationOrdinal) {
-			const NativeGraphIndexTreeMutation &mutation = derivedState.index_tree_mutations[mutationOrdinal];
-			std::vector<IndexTreeMutationPoolBatch> &batches = derivedIndexBatches[mutationOrdinal];
-			for (size_t poolOrdinal = 0U; poolOrdinal < mutation.pool_requests.size(); ++poolOrdinal) {
-				IndexTreeMutationPoolBatch &pool = batches[poolOrdinal];
-				const size_t appendedCount = mutation.pool_requests[poolOrdinal].appended_page_count;
-				pool.appended_page_ids.reserve(appendedCount);
-				pool.appended_locations.reserve(appendedCount);
-				for (size_t pageOrdinal = 0U; pageOrdinal < appendedCount; ++pageOrdinal) {
-					const PageId pageId = batch.allocateLogicalPageId();
-					if (locations_.findPageOptional(current, pageId).has_value() ||
-						!pageIds.insert(pageId.value()).second) {
-						throw FormatException(
-								FormatError::FERR_INVALID_STATE,
-								"native graph derived-state mutation allocated a published appended Index Page ID");
-					}
-					pool.appended_page_ids.push_back(pageId);
-					pool.appended_locations.push_back({pageId, pool.pool.segment_id, 0U, pool.pool.generation, 0U});
-				}
-			}
-		}
-
-		const std::vector<EntityPageReplacementMaterialization> plannedMaterializations = materializations;
-		const std::vector<EntityPageAppendBatchMaterialization> plannedAppendMaterializations = appendMaterializations;
-		const std::vector<EntityPageNewPoolBatchMaterialization> plannedNewPoolMaterializations =
-				newPoolMaterializations;
-		const std::vector<NativeGraphPropertyPageReplacementMaterialization> plannedPropertyMaterializations =
-				propertyMaterializations;
-		const std::vector<NativeGraphPropertyPageBatchMaterialization> plannedPropertyPageBatchMaterializations =
-				propertyPageBatchMaterializations;
-		const std::vector<LargeValueMaterializationResult> plannedLargeValueMaterializations =
-				largeValueMaterializations;
-		const std::vector<std::vector<IndexTreeMutationPoolBatch>> plannedDerivedIndexBatches = derivedIndexBatches;
-		const std::vector<NativeGraphVectorBootstrapMaterialization> plannedVectorBootstrapMaterializations =
-				vectorBootstrapMaterializations;
-		if (hasLargeValueRetirements) {
-			largeValueRetirementPreparer(largeValueRetirementBatches);
-		}
-		preparer(materializations, appendMaterializations, newPoolMaterializations, propertyMaterializations,
-				 propertyPageBatchMaterializations, largeValueMaterializations);
-		if (!derivedState.empty()) {
-			derivedStatePreparer(derivedIndexBatches);
-		}
-		if (!vectorBootstrapMaterializations.empty()) {
-			vectorBootstrapPreparer(vectorBootstrapMaterializations);
-		}
-		std::set<std::pair<uint64_t, uint8_t>> destinationFrames;
-		for (size_t ordinal = 0U; ordinal < materializations.size(); ++ordinal) {
-			const EntityPageReplacementMaterialization &materialization = materializations[ordinal];
-			const EntityPageReplacementMaterialization &planned = plannedMaterializations[ordinal];
-			const uint8_t invalid =
-					static_cast<uint8_t>(materialization.pool.segment_id != planned.pool.segment_id) |
-					static_cast<uint8_t>(materialization.pool.physical_slot != planned.pool.physical_slot) |
-					static_cast<uint8_t>(materialization.pool.kind != planned.pool.kind) |
-					static_cast<uint8_t>(materialization.pool.owner_id != planned.pool.owner_id) |
-					static_cast<uint8_t>(materialization.pool.generation != planned.pool.generation) |
-					static_cast<uint8_t>(materialization.pool.state != planned.pool.state) |
-					static_cast<uint8_t>(materialization.pool.committed_lsn != planned.pool.committed_lsn) |
-					static_cast<uint8_t>(materialization.expected_location != planned.expected_location) |
-					static_cast<uint8_t>(materialization.retire_page != planned.retire_page) |
-					static_cast<uint8_t>(materialization.destination_is_new_pool != planned.destination_is_new_pool) |
-					static_cast<uint8_t>(materialization.owner_kind != planned.owner_kind) |
-					static_cast<uint8_t>(materialization.pool.kind != SegmentKind::SGK_ENTITY_PAGE_POOL) |
-					static_cast<uint8_t>(materialization.pool.state != SegmentState::SGS_SEALED) |
-					static_cast<uint8_t>(!isEntityPoolPageOwnerKind(materialization.owner_kind));
-			if (invalid != 0U) {
-				throw FormatException(
-						FormatError::FERR_INVALID_STATE,
-						"relocatable Entity page batch replacement callback returned an invalid destination frame");
-			}
-			if (materialization.retire_page) {
-				const uint8_t invalidRetirement =
-						static_cast<uint8_t>(materialization.replacement.page_id.isValid()) |
-						static_cast<uint8_t>(materialization.replacement.segment_id.isValid()) |
-						static_cast<uint8_t>(materialization.replacement.page_index != 0U) |
-						static_cast<uint8_t>(materialization.replacement.generation.isValid()) |
-						static_cast<uint8_t>(materialization.replacement.free_bytes != 0U);
-				if (invalidRetirement != 0U) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "relocatable Entity page retirement callback returned a replacement frame");
-				}
-				retiredPageIds.push_back(materialization.expected_location.page_id.value());
-				continue;
-			}
-			const uint8_t invalidReplacement =
-					static_cast<uint8_t>(materialization.replacement.page_id !=
-										 materialization.expected_location.page_id) |
-					static_cast<uint8_t>(materialization.replacement.segment_id != materialization.pool.segment_id) |
-					static_cast<uint8_t>(materialization.replacement.generation != materialization.pool.generation) |
-					static_cast<uint8_t>(materialization.replacement.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-					static_cast<uint8_t>(materialization.replacement.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-					static_cast<uint8_t>(
-							materialization.replacement.segment_id == materialization.expected_location.segment_id &&
-							materialization.replacement.page_index == materialization.expected_location.page_index) |
-					static_cast<uint8_t>(!destinationFrames
-												  .emplace(materialization.pool.segment_id.value(),
-														   materialization.replacement.page_index)
-												  .second);
-			if (invalidReplacement != 0U) {
-				throw FormatException(
-						FormatError::FERR_INVALID_STATE,
-						"relocatable Entity page batch replacement callback returned an invalid destination frame");
-			}
-		}
-		for (size_t ordinal = 0U; ordinal < appendMaterializations.size(); ++ordinal) {
-			const EntityPageAppendBatchMaterialization &materialization = appendMaterializations[ordinal];
-			const EntityPageAppendBatchMaterialization &planned = plannedAppendMaterializations[ordinal];
-			const uint8_t invalid =
-					static_cast<uint8_t>(materialization.pool.segment_id != planned.pool.segment_id) |
-					static_cast<uint8_t>(materialization.pool.physical_slot != planned.pool.physical_slot) |
-					static_cast<uint8_t>(materialization.pool.kind != planned.pool.kind) |
-					static_cast<uint8_t>(materialization.pool.owner_id != planned.pool.owner_id) |
-					static_cast<uint8_t>(materialization.pool.generation != planned.pool.generation) |
-					static_cast<uint8_t>(materialization.pool.state != planned.pool.state) |
-					static_cast<uint8_t>(materialization.pool.committed_lsn != planned.pool.committed_lsn) |
-					static_cast<uint8_t>(materialization.owner_kind != planned.owner_kind) |
-					static_cast<uint8_t>(materialization.appended_location.page_id !=
-										 planned.appended_location.page_id) |
-					static_cast<uint8_t>(materialization.appended_location.segment_id !=
-										 materialization.pool.segment_id) |
-					static_cast<uint8_t>(materialization.appended_location.generation !=
-										 materialization.pool.generation) |
-					static_cast<uint8_t>(materialization.appended_location.page_index <
-										 RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-					static_cast<uint8_t>(materialization.appended_location.page_index >
-										 RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-					static_cast<uint8_t>(!isEntityPoolPageOwnerKind(materialization.owner_kind)) |
-					static_cast<uint8_t>(!destinationFrames
-												  .emplace(materialization.pool.segment_id.value(),
-														   materialization.appended_location.page_index)
-												  .second);
-			if (invalid != 0U) {
-				throw FormatException(
-						FormatError::FERR_INVALID_STATE,
-						"relocatable Entity page batch append callback returned an invalid destination frame");
-			}
-		}
-		for (size_t ordinal = 0U; ordinal < newPoolMaterializations.size(); ++ordinal) {
-			const EntityPageNewPoolBatchMaterialization &materialization = newPoolMaterializations[ordinal];
-			const EntityPageNewPoolBatchMaterialization &planned = plannedNewPoolMaterializations[ordinal];
-			const uint8_t invalid =
-					static_cast<uint8_t>(materialization.pool.segment_id != planned.pool.segment_id) |
-					static_cast<uint8_t>(materialization.pool.physical_slot != planned.pool.physical_slot) |
-					static_cast<uint8_t>(materialization.pool.kind != planned.pool.kind) |
-					static_cast<uint8_t>(materialization.pool.owner_id != planned.pool.owner_id) |
-					static_cast<uint8_t>(materialization.pool.generation != planned.pool.generation) |
-					static_cast<uint8_t>(materialization.pool.state != planned.pool.state) |
-					static_cast<uint8_t>(materialization.pool.committed_lsn != planned.pool.committed_lsn) |
-					static_cast<uint8_t>(materialization.owner_kind != planned.owner_kind) |
-					static_cast<uint8_t>(materialization.initial_location.page_id != planned.initial_location.page_id) |
-					static_cast<uint8_t>(materialization.initial_location.segment_id !=
-										 materialization.pool.segment_id) |
-					static_cast<uint8_t>(materialization.initial_location.generation !=
-										 materialization.pool.generation) |
-					static_cast<uint8_t>(materialization.initial_location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-					static_cast<uint8_t>(materialization.initial_location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-					static_cast<uint8_t>(!isEntityPoolPageOwnerKind(materialization.owner_kind)) |
-					static_cast<uint8_t>(!destinationFrames
-												  .emplace(materialization.pool.segment_id.value(),
-														   materialization.initial_location.page_index)
-												  .second);
-			if (invalid != 0U) {
-				throw FormatException(
-						FormatError::FERR_INVALID_STATE,
-						"relocatable Entity page new-pool callback returned an invalid initial page frame");
-			}
-		}
-		for (size_t ordinal = 0U; ordinal < propertyMaterializations.size(); ++ordinal) {
-			const NativeGraphPropertyPageReplacementMaterialization &materialization =
-					propertyMaterializations[ordinal];
-			const NativeGraphPropertyPageReplacementMaterialization &planned = plannedPropertyMaterializations[ordinal];
-			const bool invalidReplacement =
-					materialization.replacement.page_id != materialization.expected_location.page_id ||
-					materialization.replacement.segment_id != materialization.pool.segment_id ||
-					materialization.replacement.generation != materialization.pool.generation ||
-					materialization.replacement.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME ||
-					materialization.replacement.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT ||
-					materialization.replacement.page_index == materialization.expected_location.page_index ||
-					!destinationFrames
-							 .emplace(materialization.pool.segment_id.value(), materialization.replacement.page_index)
-							 .second;
-			const uint8_t invalid =
-					static_cast<uint8_t>(materialization.pool.segment_id != planned.pool.segment_id) |
-					static_cast<uint8_t>(materialization.pool.physical_slot != planned.pool.physical_slot) |
-					static_cast<uint8_t>(materialization.pool.kind != planned.pool.kind) |
-					static_cast<uint8_t>(materialization.pool.owner_id != planned.pool.owner_id) |
-					static_cast<uint8_t>(materialization.pool.generation != planned.pool.generation) |
-					static_cast<uint8_t>(materialization.pool.state != planned.pool.state) |
-					static_cast<uint8_t>(materialization.pool.committed_lsn != planned.pool.committed_lsn) |
-					static_cast<uint8_t>(materialization.expected_location != planned.expected_location) |
-					static_cast<uint8_t>(materialization.page_owner_id != planned.page_owner_id) |
-					static_cast<uint8_t>(materialization.expected_owner_lsn != planned.expected_owner_lsn) |
-					static_cast<uint8_t>(materialization.retire_page != planned.retire_page) |
-					static_cast<uint8_t>(materialization.pool.kind != SegmentKind::SGK_PROPERTY_PAGE_POOL) |
-					static_cast<uint8_t>(materialization.pool.state != SegmentState::SGS_SEALED) |
-					static_cast<uint8_t>(materialization.page_owner_id == 0U) |
-					static_cast<uint8_t>(!materialization.expected_owner_lsn.isValid()) |
-					static_cast<uint8_t>(!materialization.retire_page && invalidReplacement);
-			if (invalid != 0U) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "native graph page transaction callback returned an invalid Property page frame");
-			}
-			if (materialization.retire_page) {
-				const uint8_t invalidRetirement =
-						static_cast<uint8_t>(materialization.replacement.page_id.isValid()) |
-						static_cast<uint8_t>(materialization.replacement.segment_id.isValid()) |
-						static_cast<uint8_t>(materialization.replacement.page_index != 0U) |
-						static_cast<uint8_t>(materialization.replacement.generation.isValid()) |
-						static_cast<uint8_t>(materialization.replacement.free_bytes != 0U);
-				if (invalidRetirement != 0U) {
-					throw FormatException(
-							FormatError::FERR_INVALID_STATE,
-							"native graph Property page retirement callback returned a replacement frame");
-				}
-				retiredPageIds.push_back(materialization.expected_location.page_id.value());
-			}
-		}
-		for (size_t ordinal = 0U; ordinal < propertyPageBatchMaterializations.size(); ++ordinal) {
-			const NativeGraphPropertyPageBatchMaterialization &materialization =
-					propertyPageBatchMaterializations[ordinal];
-			const NativeGraphPropertyPageBatchMaterialization &planned =
-					plannedPropertyPageBatchMaterializations[ordinal];
-			const uint8_t invalidPool =
-					static_cast<uint8_t>(materialization.kind != planned.kind) |
-					static_cast<uint8_t>(!hasSameCatalogEntry(materialization.pool, planned.pool)) |
-					static_cast<uint8_t>(materialization.pool.kind != SegmentKind::SGK_PROPERTY_PAGE_POOL) |
-					static_cast<uint8_t>(materialization.pool.state != SegmentState::SGS_SEALED) |
-					static_cast<uint8_t>(materialization.page_owner_id != planned.page_owner_id) |
-					static_cast<uint8_t>(materialization.page_owner_id == 0U) |
-					static_cast<uint8_t>(materialization.pages.size() != planned.pages.size()) |
-					static_cast<uint8_t>(materialization.pages.empty()) |
-					static_cast<uint8_t>(materialization.pages.size() > RSS_PAGE_POOL_DATA_FRAME_COUNT);
-			if (invalidPool != 0U) {
-				throw FormatException(
-						FormatError::FERR_INVALID_STATE,
-						"native graph page transaction callback changed a Property page-batch identity");
-			}
-			for (size_t pageOrdinal = 0U; pageOrdinal < materialization.pages.size(); ++pageOrdinal) {
-				const NativeGraphPropertyPageInitialMaterialization &page = materialization.pages[pageOrdinal];
-				const NativeGraphPropertyPageInitialMaterialization &expectedPage = planned.pages[pageOrdinal];
-				const uint8_t invalidPage =
-						static_cast<uint8_t>(page.location.page_id != expectedPage.location.page_id) |
-						static_cast<uint8_t>(page.location.segment_id != materialization.pool.segment_id) |
-						static_cast<uint8_t>(page.location.generation != materialization.pool.generation) |
-						static_cast<uint8_t>(page.location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-						static_cast<uint8_t>(page.location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-						static_cast<uint8_t>(page.location.free_bytes > RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES) |
-						static_cast<uint8_t>(page.upserted_properties.size() !=
-										 expectedPage.upserted_properties.size()) |
-						static_cast<uint8_t>(
-								!destinationFrames.emplace(materialization.pool.segment_id.value(),
-														 page.location.page_index)
-									 .second);
-				if (invalidPage != 0U) {
-					throw FormatException(
-							FormatError::FERR_INVALID_STATE,
-							"native graph page transaction callback returned an invalid Property page frame");
-				}
-				for (size_t propertyOrdinal = 0U; propertyOrdinal < page.upserted_properties.size();
-					 ++propertyOrdinal) {
-					const EntityPropertyLocation &property = page.upserted_properties[propertyOrdinal];
-					const EntityPropertyLocation &expected = expectedPage.upserted_properties[propertyOrdinal];
-					const uint8_t invalidProperty =
-							static_cast<uint8_t>(property.key != expected.key) |
-							static_cast<uint8_t>(property.page_id != page.location.page_id) |
-							static_cast<uint8_t>(property.slot_id == std::numeric_limits<uint16_t>::max()) |
-							static_cast<uint8_t>(property.slot_generation == 0U) |
-							static_cast<uint8_t>(!publishedPropertySlots
-											  .emplace(property.page_id.value(), property.slot_id)
-											  .second);
-					if (invalidProperty != 0U) {
-						throw FormatException(
-								FormatError::FERR_INVALID_STATE,
-								"native graph Property page callback returned an invalid directory location");
-					}
-					upsertedEntityProperties.push_back(property);
-				}
-			}
-		}
-		std::vector<PageLocation> publishedLargeValuePages;
-		std::vector<LargeValueManifestLocation> publishedLargeValueManifests;
-		for (size_t ordinal = 0U; ordinal < largeValueMaterializations.size(); ++ordinal) {
-			const LargeValueMaterializationResult &materialization = largeValueMaterializations[ordinal];
-			const LargeValueMaterializationResult &planned = plannedLargeValueMaterializations[ordinal];
-			const NativeGraphLargeValueMutation &mutation = largeValues[ordinal];
-			const bool hasManifestPool = !materialization.manifest_pools.empty();
-			const uint8_t invalidManifest =
-					static_cast<uint8_t>(materialization.value_id != planned.value_id) |
-					static_cast<uint8_t>(materialization.value_id != mutation.reference.value_id) |
-					static_cast<uint8_t>(materialization.data_pools.size() != planned.data_pools.size()) |
-					static_cast<uint8_t>(materialization.manifest_pools.size() != planned.manifest_pools.size()) |
-					static_cast<uint8_t>(!hasSameCatalogEntry(materialization.manifest_pool, planned.manifest_pool)) |
-					static_cast<uint8_t>(materialization.manifest_page_id != planned.manifest_page_id) |
-					static_cast<uint8_t>(materialization.manifest_location.page_id != planned.manifest_page_id) |
-					static_cast<uint8_t>(materialization.manifest_location.segment_id !=
-										 materialization.manifest_pool.segment_id) |
-					static_cast<uint8_t>(materialization.manifest_location.generation !=
-										 mutation.reference.generation) |
-					static_cast<uint8_t>(materialization.manifest_location.page_index <
-										 RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-					static_cast<uint8_t>(materialization.manifest_location.page_index >
-										 RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-					static_cast<uint8_t>(materialization.manifest_location.free_bytes != 0U) |
-					static_cast<uint8_t>(!hasManifestPool);
-			if (invalidManifest != 0U) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "native graph LargeValue preparer changed its manifest identity or frame");
-			}
-			const LargeValueManifestMaterializationPoolBatch &firstManifestPool =
-					materialization.manifest_pools.front();
-			const uint8_t invalidManifestRoot =
-					static_cast<uint8_t>(!hasSameCatalogEntry(materialization.manifest_pool, firstManifestPool.pool)) |
-					static_cast<uint8_t>(firstManifestPool.page_ids.empty()) |
-					static_cast<uint8_t>(firstManifestPool.locations.empty()) |
-					static_cast<uint8_t>(firstManifestPool.page_ids.front() != materialization.manifest_page_id) |
-					static_cast<uint8_t>(firstManifestPool.locations.front() != materialization.manifest_location);
-			if (invalidManifestRoot != 0U) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "native graph LargeValue preparer changed its manifest root frame");
-			}
-			for (size_t poolOrdinal = 0U; poolOrdinal < materialization.data_pools.size(); ++poolOrdinal) {
-				const LargeValueDataMaterializationPoolBatch &pool = materialization.data_pools[poolOrdinal];
-				const LargeValueDataMaterializationPoolBatch &expected = planned.data_pools[poolOrdinal];
-				const uint8_t invalidPool = static_cast<uint8_t>(!hasSameCatalogEntry(pool.pool, expected.pool)) |
-											static_cast<uint8_t>(pool.page_ids != expected.page_ids) |
-											static_cast<uint8_t>(pool.is_new_pool != expected.is_new_pool) |
-											static_cast<uint8_t>(pool.prepared_prefix_count !=
-															 expected.prepared_prefix_count) |
-											static_cast<uint8_t>(!pool.is_new_pool &&
-															 pool.prepared_prefix_count != 0U) |
-											static_cast<uint8_t>(pool.page_ids.size() >
-															 RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-											static_cast<uint8_t>(pool.is_new_pool &&
-															 (pool.prepared_prefix_count > RSS_PAGE_POOL_DATA_FRAME_COUNT ||
-															  pool.page_ids.size() >
-																	  RSS_PAGE_POOL_DATA_FRAME_COUNT -
-																			  std::min(pool.prepared_prefix_count,
-																					   static_cast<size_t>(RSS_PAGE_POOL_DATA_FRAME_COUNT)))) |
-											static_cast<uint8_t>(pool.locations.size() != pool.page_ids.size());
-				if (invalidPool != 0U) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "native graph LargeValue preparer changed a data-pool identity or Page IDs");
-				}
-				for (size_t pageOrdinal = 0U; pageOrdinal < pool.locations.size(); ++pageOrdinal) {
-					const PageLocation &location = pool.locations[pageOrdinal];
-					const uint8_t invalidLocation =
-							static_cast<uint8_t>(location.page_id != pool.page_ids[pageOrdinal]) |
-							static_cast<uint8_t>(location.segment_id != pool.pool.segment_id) |
-							static_cast<uint8_t>(location.generation != pool.pool.generation) |
-							static_cast<uint8_t>(location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-							static_cast<uint8_t>(location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-								static_cast<uint8_t>(location.free_bytes != 0U) |
-								static_cast<uint8_t>(pool.is_new_pool &&
-													 location.page_index !=
-															 pool.prepared_prefix_count + pageOrdinal + 1U) |
-								static_cast<uint8_t>(
-									!destinationFrames.emplace(location.segment_id.value(), location.page_index)
-											 .second);
-					if (invalidLocation != 0U) {
-						throw FormatException(
-								FormatError::FERR_INVALID_STATE,
-								"native graph LargeValue preparer returned an invalid or duplicate data frame");
-					}
-					publishedLargeValuePages.push_back(location);
-				}
-			}
-			for (size_t poolOrdinal = 0U; poolOrdinal < materialization.manifest_pools.size(); ++poolOrdinal) {
-				const LargeValueManifestMaterializationPoolBatch &pool = materialization.manifest_pools[poolOrdinal];
-				const LargeValueManifestMaterializationPoolBatch &expected = planned.manifest_pools[poolOrdinal];
-				const uint8_t invalidPool = static_cast<uint8_t>(!hasSameCatalogEntry(pool.pool, expected.pool)) |
-											static_cast<uint8_t>(pool.page_ids != expected.page_ids) |
-											static_cast<uint8_t>(pool.is_new_pool != expected.is_new_pool) |
-											static_cast<uint8_t>(pool.prepared_prefix_count !=
-															 expected.prepared_prefix_count) |
-											static_cast<uint8_t>(!pool.is_new_pool &&
-															 pool.prepared_prefix_count != 0U) |
-											static_cast<uint8_t>(pool.page_ids.size() >
-															 RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-											static_cast<uint8_t>(pool.is_new_pool &&
-															 (pool.prepared_prefix_count > RSS_PAGE_POOL_DATA_FRAME_COUNT ||
-															  pool.page_ids.size() >
-																	  RSS_PAGE_POOL_DATA_FRAME_COUNT -
-																			  std::min(pool.prepared_prefix_count,
-																					   static_cast<size_t>(RSS_PAGE_POOL_DATA_FRAME_COUNT)))) |
-											static_cast<uint8_t>(pool.locations.size() != pool.page_ids.size());
-				if (invalidPool != 0U) {
-					throw FormatException(
-							FormatError::FERR_INVALID_STATE,
-							"native graph LargeValue preparer changed a manifest-pool identity or Page IDs");
-				}
-				for (size_t pageOrdinal = 0U; pageOrdinal < pool.locations.size(); ++pageOrdinal) {
-					const PageLocation &location = pool.locations[pageOrdinal];
-					const uint8_t invalidLocation =
-							static_cast<uint8_t>(location.page_id != pool.page_ids[pageOrdinal]) |
-							static_cast<uint8_t>(location.segment_id != pool.pool.segment_id) |
-							static_cast<uint8_t>(location.generation != pool.pool.generation) |
-							static_cast<uint8_t>(location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-							static_cast<uint8_t>(location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-								static_cast<uint8_t>(location.free_bytes != 0U) |
-								static_cast<uint8_t>(pool.is_new_pool &&
-													 location.page_index !=
-															 pool.prepared_prefix_count + pageOrdinal + 1U) |
-								static_cast<uint8_t>(
-									!destinationFrames.emplace(location.segment_id.value(), location.page_index)
-											 .second);
-					if (invalidLocation != 0U) {
-						throw FormatException(
-								FormatError::FERR_INVALID_STATE,
-								"native graph LargeValue preparer returned an invalid or duplicate manifest frame");
-					}
-					publishedLargeValuePages.push_back(location);
-				}
-			}
-			publishedLargeValueManifests.push_back({mutation.reference.value_id, materialization.manifest_page_id,
-													materialization.manifest_pool.generation});
-		}
-
-		std::vector<PageLocation> publishedDerivedIndexPages;
-		std::vector<IndexRootLocation> publishedDerivedIndexRoots;
-		std::vector<uint64_t> erasedDerivedIndexRootIds;
-		publishedDerivedIndexRoots.reserve(derivedState.index_tree_mutations.size());
-		erasedDerivedIndexRootIds.reserve(derivedState.index_tree_mutations.size());
-		for (size_t mutationOrdinal = 0U; mutationOrdinal < derivedState.index_tree_mutations.size();
-			 ++mutationOrdinal) {
-			const NativeGraphIndexTreeMutation &mutation = derivedState.index_tree_mutations[mutationOrdinal];
-			const std::vector<IndexTreeMutationPoolBatch> &planned = plannedDerivedIndexBatches[mutationOrdinal];
-			const std::vector<IndexTreeMutationPoolBatch> &materialized = derivedIndexBatches[mutationOrdinal];
-			if (materialized.size() != planned.size()) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "native graph derived-state preparer changed its Index pool batch cardinality");
-			}
-			for (size_t poolOrdinal = 0U; poolOrdinal < materialized.size(); ++poolOrdinal) {
-				const IndexTreeMutationPoolBatch &expected = planned[poolOrdinal];
-				const IndexTreeMutationPoolBatch &actual = materialized[poolOrdinal];
-				const bool invalidShape =
-						actual.pool.segment_id != expected.pool.segment_id ||
-						actual.pool.physical_slot != expected.pool.physical_slot ||
-						actual.pool.kind != SegmentKind::SGK_INDEX_PAGE_POOL ||
-						actual.pool.kind != expected.pool.kind || actual.pool.owner_id != expected.pool.owner_id ||
-						actual.pool.generation != expected.pool.generation ||
-						actual.pool.state != SegmentState::SGS_SEALED || actual.pool.state != expected.pool.state ||
-						actual.pool.committed_lsn != expected.pool.committed_lsn ||
-						actual.expected_replacements != expected.expected_replacements ||
-						actual.appended_page_ids != expected.appended_page_ids ||
-						actual.expected_retirements != expected.expected_retirements ||
-						actual.newly_reserved != expected.newly_reserved ||
-						actual.prepared_new_pool_prefix_count != expected.prepared_new_pool_prefix_count ||
-						actual.replacement_locations.size() != expected.replacement_locations.size() ||
-						actual.appended_locations.size() != expected.appended_locations.size();
-				if (invalidShape) {
-					throw FormatException(
-							FormatError::FERR_INVALID_STATE,
-							"native graph derived-state preparer changed an Index pool identity or page shape");
-				}
-				const auto validatePublishedLocation = [&destinationFrames, &publishedDerivedIndexPages,
-														&actual](const PageLocation &location, PageId expectedPageId) {
-					const uint8_t invalid =
-							static_cast<uint8_t>(location.page_id != expectedPageId) |
-							static_cast<uint8_t>(location.segment_id != actual.pool.segment_id) |
-							static_cast<uint8_t>(location.generation != actual.pool.generation) |
-							static_cast<uint8_t>(location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-							static_cast<uint8_t>(location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-							static_cast<uint8_t>(location.free_bytes > RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES) |
-							static_cast<uint8_t>(
-									!destinationFrames.emplace(location.segment_id.value(), location.page_index)
-											 .second);
-					if (invalid != 0U) {
-						throw FormatException(
-								FormatError::FERR_INVALID_STATE,
-								"native graph derived-state preparer returned an invalid Index page frame");
-					}
-					publishedDerivedIndexPages.push_back(location);
-				};
-				for (size_t pageOrdinal = 0U; pageOrdinal < actual.replacement_locations.size(); ++pageOrdinal) {
-					validatePublishedLocation(actual.replacement_locations[pageOrdinal],
-											  actual.expected_replacements[pageOrdinal].page_id);
-				}
-				for (size_t pageOrdinal = 0U; pageOrdinal < actual.appended_locations.size(); ++pageOrdinal) {
-					validatePublishedLocation(actual.appended_locations[pageOrdinal],
-											  actual.appended_page_ids[pageOrdinal]);
-				}
-				for (const IndexTreePageRetirement &retirement: actual.expected_retirements) {
-					retiredPageIds.push_back(retirement.location.page_id.value());
-				}
-			}
-			if (mutation.retire_root) {
-				erasedDerivedIndexRootIds.push_back(mutation.index_id);
-				continue;
-			}
-
-			IndexRootLocation publishedRoot{mutation.index_id, {}, {}};
-			if (mutation.expected_root.has_value()) {
-				publishedRoot = *mutation.expected_root;
-			}
-			if (mutation.replacement_root.has_value()) {
-				const NativeGraphIndexTreeAppendedPageReference &reference = *mutation.replacement_root;
-				const size_t poolOrdinal = reference.newly_reserved
-												   ? mutation.pool_requests.size() + reference.pool_ordinal
-												   : reference.pool_ordinal;
-				const IndexTreeMutationPoolBatch &pool = materialized[poolOrdinal];
-				const PageLocation &location = pool.appended_locations[reference.appended_page_ordinal];
-				publishedRoot.root_page_id = location.page_id;
-				publishedRoot.root_generation = location.generation;
-			} else if (mutation.stable_replacement_root.has_value()) {
-				const PageId pageId = *mutation.stable_replacement_root;
-				const auto published = std::ranges::find(publishedDerivedIndexPages, pageId, &PageLocation::page_id);
-				const PageLocation location = published == publishedDerivedIndexPages.end()
-													  ? locations_.findPage(current, pageId)
-													  : *published;
-				const auto newPool =
-						std::ranges::find(newDerivedIndexPoolEntries, location.segment_id, &CatalogEntry::segment_id);
-				const CatalogEntry &pool = newPool == newDerivedIndexPoolEntries.end()
-												   ? catalog_.find(current, location.segment_id)
-												   : *newPool;
-				const uint8_t invalidStableRoot =
-						static_cast<uint8_t>(pool.kind != SegmentKind::SGK_INDEX_PAGE_POOL) |
-						static_cast<uint8_t>(pool.owner_id == 0U) |
-						static_cast<uint8_t>(pool.state != SegmentState::SGS_SEALED) |
-						static_cast<uint8_t>(pool.generation != location.generation) |
-						static_cast<uint8_t>(newPool == newDerivedIndexPoolEntries.end() &&
-											 !allocator_.isAllocated(current, pool.physical_slot));
-				if (invalidStableRoot != 0U) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "native graph derived-state mutation resolved an invalid stable Index root");
-				}
-				publishedRoot.root_page_id = pageId;
-				publishedRoot.root_generation = location.generation;
-			}
-			publishedDerivedIndexRoots.push_back(publishedRoot);
-		}
-
-		for (NativeGraphVectorDeltaMaterialization &materialization: vectorDeltaMaterializations) {
-			const auto nodeRoot = std::ranges::find(publishedDerivedIndexRoots, materialization.mutation.index_id,
-													&IndexRootLocation::index_id);
-			const auto reverseRoot =
-					std::ranges::find(publishedDerivedIndexRoots, materialization.mutation.vector_node_mapping_index_id,
-									  &IndexRootLocation::index_id);
-			const auto deltaRoot = materialization.mutation.delta_mapping_index_id == 0U
-										   ? publishedDerivedIndexRoots.end()
-										   : std::ranges::find(publishedDerivedIndexRoots,
-															   materialization.mutation.delta_mapping_index_id,
-															   &IndexRootLocation::index_id);
-			if (nodeRoot == publishedDerivedIndexRoots.end() || reverseRoot == publishedDerivedIndexRoots.end() ||
-				(materialization.mutation.delta_mapping_index_id != 0U &&
-				 deltaRoot == publishedDerivedIndexRoots.end())) {
-				throw FormatException(
-						FormatError::FERR_INVALID_STATE,
-						"native graph Vector delta lost a published semantic or overlay mapping-tree root");
-			}
-			materialization.node_mapping_root = *nodeRoot;
-			materialization.vector_node_mapping_root = *reverseRoot;
-			if (deltaRoot != publishedDerivedIndexRoots.end()) {
-				materialization.delta_mapping_root = *deltaRoot;
-			}
-		}
-		const std::vector<NativeGraphVectorDeltaMaterialization> plannedVectorDeltaMaterializations =
-				vectorDeltaMaterializations;
-		if (!vectorDeltaMaterializations.empty()) {
-			vectorDeltaPreparer(vectorDeltaMaterializations);
-		}
-
-		std::vector<PageLocation> publishedVectorBootstrapPages;
-		std::vector<VectorLocation> publishedVectorBootstrapLocations;
-		std::vector<VectorManifestLocation> publishedVectorBootstrapManifests;
-		std::set<std::pair<uint64_t, uint16_t>> publishedVectorBootstrapSlots;
-		for (size_t mutationOrdinal = 0U; mutationOrdinal < vectorBootstrapMaterializations.size(); ++mutationOrdinal) {
-			const NativeGraphVectorBootstrapMaterialization &actual = vectorBootstrapMaterializations[mutationOrdinal];
-			const NativeGraphVectorBootstrapMaterialization &planned =
-					plannedVectorBootstrapMaterializations[mutationOrdinal];
-			const NativeGraphVectorBootstrapMutation &mutation = planned.mutation;
-			const uint8_t invalidIdentity =
-					static_cast<uint8_t>(actual.mutation.index_id != mutation.index_id) |
-					static_cast<uint8_t>(actual.mutation.vector_node_mapping_index_id !=
-										 mutation.vector_node_mapping_index_id) |
-					static_cast<uint8_t>(actual.mutation.first_vector_id != mutation.first_vector_id) |
-					static_cast<uint8_t>(actual.mutation.vector_count != mutation.vector_count) |
-					static_cast<uint8_t>(actual.mutation.dimensions != mutation.dimensions) |
-					static_cast<uint8_t>(actual.mutation.metric != mutation.metric) |
-					static_cast<uint8_t>(actual.node_mapping_root != planned.node_mapping_root) |
-					static_cast<uint8_t>(actual.vector_node_mapping_root != planned.vector_node_mapping_root) |
-					static_cast<uint8_t>(actual.raw_pools.size() != planned.raw_pools.size()) |
-					static_cast<uint8_t>(actual.raw_pages.size() != planned.raw_pages.size()) |
-					static_cast<uint8_t>(actual.vector_locations.size() != mutation.vector_count) |
-					static_cast<uint8_t>(actual.manifest_location != planned.manifest_location);
-			if (invalidIdentity != 0U || !hasSameCatalogEntry(actual.manifest_pool, planned.manifest_pool)) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "native graph Vector bootstrap preparer changed a metadata-owned identity");
-			}
-			for (size_t poolOrdinal = 0U; poolOrdinal < actual.raw_pools.size(); ++poolOrdinal) {
-				if (!hasSameCatalogEntry(actual.raw_pools[poolOrdinal], planned.raw_pools[poolOrdinal])) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "native graph Vector bootstrap preparer changed a Raw-pool identity");
-				}
-			}
-			std::set<uint64_t> rawPageIds;
-			for (size_t pageOrdinal = 0U; pageOrdinal < actual.raw_pages.size(); ++pageOrdinal) {
-				const PageLocation &location = actual.raw_pages[pageOrdinal];
-				const PageLocation &expected = planned.raw_pages[pageOrdinal];
-				const CatalogEntry &pool = actual.raw_pools[pageOrdinal / RSS_PAGE_POOL_DATA_FRAME_COUNT];
-				const uint8_t invalidLocation =
-						static_cast<uint8_t>(location.page_id != expected.page_id) |
-						static_cast<uint8_t>(location.segment_id != pool.segment_id) |
-						static_cast<uint8_t>(location.generation != pool.generation) |
-						static_cast<uint8_t>(location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-						static_cast<uint8_t>(location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-						static_cast<uint8_t>(location.free_bytes > RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES) |
-						static_cast<uint8_t>(!rawPageIds.insert(location.page_id.value()).second) |
-						static_cast<uint8_t>(
-								!destinationFrames.emplace(location.segment_id.value(), location.page_index).second);
-				if (invalidLocation != 0U) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "native graph Vector bootstrap preparer returned an invalid Raw page frame");
-				}
-				publishedVectorBootstrapPages.push_back(location);
-			}
-			const PageLocation &manifest = actual.manifest_page;
-			const uint8_t invalidManifest =
-					static_cast<uint8_t>(manifest.page_id != planned.manifest_page.page_id) |
-					static_cast<uint8_t>(manifest.segment_id != actual.manifest_pool.segment_id) |
-					static_cast<uint8_t>(manifest.generation != actual.manifest_pool.generation) |
-					static_cast<uint8_t>(manifest.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-					static_cast<uint8_t>(manifest.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-					static_cast<uint8_t>(manifest.free_bytes > RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES) |
-					static_cast<uint8_t>(
-							!destinationFrames.emplace(manifest.segment_id.value(), manifest.page_index).second);
-			if (invalidManifest != 0U) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "native graph Vector bootstrap preparer returned an invalid Manifest page frame");
-			}
-			for (size_t vectorOrdinal = 0U; vectorOrdinal < actual.vector_locations.size(); ++vectorOrdinal) {
-				const VectorLocation &location = actual.vector_locations[vectorOrdinal];
-				const uint8_t invalidLocation =
-						static_cast<uint8_t>(location.vector_id != mutation.first_vector_id + vectorOrdinal) |
-						static_cast<uint8_t>(location.slot_generation == 0U) |
-						static_cast<uint8_t>(!rawPageIds.contains(location.page_id.value())) |
-						static_cast<uint8_t>(
-								!publishedVectorBootstrapSlots.emplace(location.page_id.value(), location.slot_id)
-										 .second);
-				if (invalidLocation != 0U) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "native graph Vector bootstrap preparer returned an invalid Vector location");
-				}
-				publishedVectorBootstrapLocations.push_back(location);
-			}
-			publishedVectorBootstrapPages.push_back(manifest);
-			publishedVectorBootstrapManifests.push_back(actual.manifest_location);
-		}
-
-		std::vector<PageLocation> publishedVectorDeltaPages;
-		std::vector<VectorLocation> publishedVectorDeltaLocations;
-		std::vector<uint64_t> erasedVectorDeltaIds;
-		std::vector<VectorManifestLocation> publishedVectorDeltaManifests;
-		std::set<std::pair<uint64_t, uint16_t>> publishedVectorDeltaSlots;
-		for (size_t mutationOrdinal = 0U; mutationOrdinal < vectorDeltaMaterializations.size(); ++mutationOrdinal) {
-			const NativeGraphVectorDeltaMaterialization &actual = vectorDeltaMaterializations[mutationOrdinal];
-			const NativeGraphVectorDeltaMaterialization &planned = plannedVectorDeltaMaterializations[mutationOrdinal];
-			const NativeGraphVectorDeltaMutation &mutation = planned.mutation;
-			const uint8_t invalidIdentity =
-					static_cast<uint8_t>(actual.mutation.index_id != mutation.index_id) |
-					static_cast<uint8_t>(actual.mutation.vector_node_mapping_index_id !=
-										 mutation.vector_node_mapping_index_id) |
-					static_cast<uint8_t>(actual.mutation.expected_delta_mapping_index_id !=
-										 mutation.expected_delta_mapping_index_id) |
-					static_cast<uint8_t>(actual.mutation.delta_mapping_index_id != mutation.delta_mapping_index_id) |
-					static_cast<uint8_t>(actual.mutation.expected_delta_mapping_root !=
-										 mutation.expected_delta_mapping_root) |
-					static_cast<uint8_t>(actual.mutation.delta_entry_count != mutation.delta_entry_count) |
-					static_cast<uint8_t>(actual.mutation.first_vector_id != mutation.first_vector_id) |
-					static_cast<uint8_t>(actual.mutation.inserted_vector_count != mutation.inserted_vector_count) |
-					static_cast<uint8_t>(actual.mutation.erased_vector_ids != mutation.erased_vector_ids) |
-					static_cast<uint8_t>(actual.node_mapping_root != planned.node_mapping_root) |
-					static_cast<uint8_t>(actual.vector_node_mapping_root != planned.vector_node_mapping_root) |
-					static_cast<uint8_t>(actual.delta_mapping_root != planned.delta_mapping_root) |
-					static_cast<uint8_t>(actual.raw_new_pools.size() != planned.raw_new_pools.size()) |
-					static_cast<uint8_t>(actual.raw_pages.size() != planned.raw_pages.size()) |
-					static_cast<uint8_t>(actual.vector_locations.size() != mutation.inserted_vector_count) |
-					static_cast<uint8_t>(actual.manifest_location.index_id != mutation.index_id) |
-					static_cast<uint8_t>(actual.manifest_location.manifest_page_id !=
-										 actual.manifest_replacement.page_id) |
-					static_cast<uint8_t>(actual.manifest_location.generation != actual.manifest_replacement.generation);
-			if (invalidIdentity != 0U) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "native graph Vector delta preparer changed a metadata-owned identity");
-			}
-			for (size_t poolOrdinal = 0U; poolOrdinal < actual.raw_new_pools.size(); ++poolOrdinal) {
-				if (!hasSameCatalogEntry(actual.raw_new_pools[poolOrdinal], planned.raw_new_pools[poolOrdinal])) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "native graph Vector delta preparer changed a fresh Raw-pool identity");
-				}
-			}
-			if (mutation.manifest_in_new_pool &&
-				!hasSameCatalogEntry(actual.manifest_new_pool, planned.manifest_new_pool)) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "native graph Vector delta preparer changed a fresh Manifest-pool identity");
-			}
-			std::set<uint64_t> rawPageIds;
-			for (size_t pageOrdinal = 0U; pageOrdinal < actual.raw_pages.size(); ++pageOrdinal) {
-				const NativeGraphVectorDeltaRawPageMaterialization &raw = actual.raw_pages[pageOrdinal];
-				const NativeGraphVectorDeltaRawPageMaterialization &expected = planned.raw_pages[pageOrdinal];
-				const bool cow = expected.mutation.placement == NativeGraphVectorDeltaRawPlacement::NGVDRP_COW_TAIL;
-				const uint8_t invalidRaw =
-						static_cast<uint8_t>(raw.mutation.placement != expected.mutation.placement) |
-						static_cast<uint8_t>(raw.mutation.page_ordinal != expected.mutation.page_ordinal) |
-						static_cast<uint8_t>(raw.mutation.inserted_record_count !=
-											 expected.mutation.inserted_record_count) |
-						static_cast<uint8_t>(!hasSameCatalogEntry(raw.pool, expected.pool)) |
-						static_cast<uint8_t>(raw.location.page_id != expected.location.page_id) |
-						static_cast<uint8_t>(raw.location.segment_id != raw.pool.segment_id) |
-						static_cast<uint8_t>(raw.location.generation != raw.pool.generation) |
-						static_cast<uint8_t>(raw.location.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-						static_cast<uint8_t>(raw.location.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-						static_cast<uint8_t>(cow && raw.location.page_index == expected.location.page_index) |
-						static_cast<uint8_t>(!rawPageIds.insert(raw.location.page_id.value()).second) |
-						static_cast<uint8_t>(
-								!destinationFrames.emplace(raw.location.segment_id.value(), raw.location.page_index)
-										 .second);
-				if (invalidRaw != 0U) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "native graph Vector delta preparer returned an invalid Raw page frame");
-				}
-				publishedVectorDeltaPages.push_back(raw.location);
-			}
-			const PageLocation &manifest = actual.manifest_replacement;
-			const uint8_t invalidManifest =
-					static_cast<uint8_t>(manifest.page_id != planned.manifest_replacement.page_id) |
-					static_cast<uint8_t>(manifest.segment_id != planned.manifest_replacement.segment_id) |
-					static_cast<uint8_t>(manifest.generation != planned.manifest_replacement.generation) |
-					static_cast<uint8_t>(manifest.page_index < RSS_PAGE_POOL_FIRST_DATA_FRAME) |
-					static_cast<uint8_t>(manifest.page_index > RSS_PAGE_POOL_DATA_FRAME_COUNT) |
-					static_cast<uint8_t>(
-							!destinationFrames.emplace(manifest.segment_id.value(), manifest.page_index).second);
-			if (invalidManifest != 0U) {
-				throw FormatException(FormatError::FERR_INVALID_STATE,
-									  "native graph Vector delta preparer returned an invalid Manifest frame");
-			}
-			for (size_t vectorOrdinal = 0U; vectorOrdinal < actual.vector_locations.size(); ++vectorOrdinal) {
-				const VectorLocation &location = actual.vector_locations[vectorOrdinal];
-				const uint8_t invalidLocation =
-						static_cast<uint8_t>(location.vector_id != mutation.first_vector_id + vectorOrdinal) |
-						static_cast<uint8_t>(location.slot_generation == 0U) |
-						static_cast<uint8_t>(!rawPageIds.contains(location.page_id.value())) |
-						static_cast<uint8_t>(
-								!publishedVectorDeltaSlots.emplace(location.page_id.value(), location.slot_id).second);
-				if (invalidLocation != 0U) {
-					throw FormatException(FormatError::FERR_INVALID_STATE,
-										  "native graph Vector delta preparer returned an invalid Vector Location");
-				}
-				publishedVectorDeltaLocations.push_back(location);
-			}
-			publishedVectorDeltaPages.push_back(manifest);
-			publishedVectorDeltaManifests.push_back(actual.manifest_location);
-			erasedVectorDeltaIds.insert(erasedVectorDeltaIds.end(), mutation.erased_vector_ids.begin(),
-										mutation.erased_vector_ids.end());
-		}
-
-		std::vector<PageLocation> publishedPages;
-		size_t propertyPageCount = 0U;
-		for (const NativeGraphPropertyPageBatchMaterialization &materialization:
-			 propertyPageBatchMaterializations) {
-			propertyPageCount += materialization.pages.size();
-		}
-		publishedPages.reserve(materializations.size() + appendMaterializations.size() +
-							   newPoolMaterializations.size() + propertyMaterializations.size() +
-							   propertyPageCount + publishedLargeValuePages.size() +
-							   publishedDerivedIndexPages.size() + publishedVectorBootstrapPages.size() +
-							   publishedVectorDeltaPages.size());
-		for (const EntityPageReplacementMaterialization &materialization: materializations) {
-			if (!materialization.retire_page) {
-				publishedPages.push_back(materialization.replacement);
-			}
-		}
-		for (const EntityPageAppendBatchMaterialization &materialization: appendMaterializations) {
-			publishedPages.push_back(materialization.appended_location);
-		}
-		for (const EntityPageNewPoolBatchMaterialization &materialization: newPoolMaterializations) {
-			publishedPages.push_back(materialization.initial_location);
-		}
-		for (const NativeGraphPropertyPageReplacementMaterialization &materialization: propertyMaterializations) {
-			if (!materialization.retire_page) {
-				publishedPages.push_back(materialization.replacement);
-			}
-		}
-		for (const NativeGraphPropertyPageBatchMaterialization &materialization: propertyPageBatchMaterializations) {
-			for (const NativeGraphPropertyPageInitialMaterialization &page: materialization.pages) {
-				publishedPages.push_back(page.location);
-			}
-		}
-		publishedPages.insert(publishedPages.end(), publishedLargeValuePages.begin(), publishedLargeValuePages.end());
-		publishedPages.insert(publishedPages.end(), publishedDerivedIndexPages.begin(),
-							  publishedDerivedIndexPages.end());
-		publishedPages.insert(publishedPages.end(), publishedVectorBootstrapPages.begin(),
-							  publishedVectorBootstrapPages.end());
-		publishedPages.insert(publishedPages.end(), publishedVectorDeltaPages.begin(), publishedVectorDeltaPages.end());
-		std::ranges::sort(publishedPages, {}, &PageLocation::page_id);
-		std::ranges::sort(retiredPageIds);
-		const bool duplicatePublishedPage =
-				std::ranges::adjacent_find(publishedPages, {}, &PageLocation::page_id) != publishedPages.end();
-		const bool duplicateRetiredPage = std::ranges::adjacent_find(retiredPageIds) != retiredPageIds.end();
-		const bool publishedAndRetired =
-				std::ranges::any_of(publishedPages, [&retiredPageIds](const PageLocation &page) {
-					return std::ranges::binary_search(retiredPageIds, page.page_id.value());
-				});
-		if (duplicatePublishedPage || duplicateRetiredPage || publishedAndRetired) {
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "native graph publication has duplicate or contradictory Page Directory mutations");
-		}
-		// A transaction may publish only a durable logical-ID reservation after a
-		// provisional graph result is cancelled. That advances the Superblock
-		// high-water marks, but it must not manufacture an empty Page Directory
-		// mutation merely to satisfy the generic graph publication path.
-		if (!publishedPages.empty() || !retiredPageIds.empty()) {
-			if (retiredPageIds.empty()) {
-				locations_.prepareUpsertPages(batch, publishedPages);
-			} else {
-				locations_.prepareReplacePages(batch, publishedPages, retiredPageIds);
-			}
-		}
-		if (!insertedNodes.empty() || !erasedNodes.empty()) {
-			locations_.prepareReplaceNodePageLocations(batch, insertedNodes, erasedNodes);
-		}
-		if (!insertedEdges.empty() || !erasedEdges.empty()) {
-			locations_.prepareReplaceEdgePageLocations(batch, insertedEdges, erasedEdges);
-		}
-		std::vector<EntityPropertyKey> erasedProperties;
-		erasedProperties.reserve(explicitlyErasedEntityProperties.size() + erasedEntityProperties.size());
-		erasedProperties.insert(erasedProperties.end(), explicitlyErasedEntityProperties.begin(),
-								explicitlyErasedEntityProperties.end());
-		erasedProperties.insert(erasedProperties.end(), erasedEntityProperties.begin(), erasedEntityProperties.end());
-		std::ranges::sort(upsertedEntityProperties, {},
-						  [](const EntityPropertyLocation &location) { return location.key.directoryId(); });
-		std::ranges::sort(erasedProperties, {}, &EntityPropertyKey::directoryId);
-		if (!upsertedEntityProperties.empty() || !erasedProperties.empty()) {
-			locations_.prepareReplaceEntityProperties(batch, upsertedEntityProperties, erasedProperties);
-		}
-		if (!publishedDerivedIndexRoots.empty() || !erasedDerivedIndexRootIds.empty()) {
-			locations_.prepareReplaceIndexRoots(batch, publishedDerivedIndexRoots, erasedDerivedIndexRootIds);
-		}
-		std::vector<VectorLocation> publishedVectorLocations;
-		publishedVectorLocations.reserve(publishedVectorBootstrapLocations.size() +
-										 publishedVectorDeltaLocations.size());
-		publishedVectorLocations.insert(publishedVectorLocations.end(), publishedVectorBootstrapLocations.begin(),
-										publishedVectorBootstrapLocations.end());
-		publishedVectorLocations.insert(publishedVectorLocations.end(), publishedVectorDeltaLocations.begin(),
-										publishedVectorDeltaLocations.end());
-		std::ranges::sort(publishedVectorLocations, {}, &VectorLocation::vector_id);
-		std::ranges::sort(erasedVectorDeltaIds);
-		if (std::ranges::adjacent_find(publishedVectorLocations, {}, &VectorLocation::vector_id) !=
-					publishedVectorLocations.end() ||
-			std::ranges::adjacent_find(erasedVectorDeltaIds) != erasedVectorDeltaIds.end() ||
-			std::ranges::any_of(publishedVectorLocations, [&erasedVectorDeltaIds](const VectorLocation &location) {
-				return std::ranges::binary_search(erasedVectorDeltaIds, location.vector_id);
-			})) {
-			throw FormatException(
-					FormatError::FERR_INVALID_STATE,
-					"native graph Vector publication has duplicate or contradictory Vector Location mutations");
-		}
-		if (!publishedVectorLocations.empty() || !erasedVectorDeltaIds.empty()) {
-			locations_.prepareReplaceVectorLocations(batch, publishedVectorLocations, erasedVectorDeltaIds);
-		}
-		std::vector<VectorManifestLocation> publishedVectorManifests;
-		publishedVectorManifests.reserve(publishedVectorBootstrapManifests.size() +
-										 publishedVectorDeltaManifests.size());
-		publishedVectorManifests.insert(publishedVectorManifests.end(), publishedVectorBootstrapManifests.begin(),
-										publishedVectorBootstrapManifests.end());
-		publishedVectorManifests.insert(publishedVectorManifests.end(), publishedVectorDeltaManifests.begin(),
-										publishedVectorDeltaManifests.end());
-		std::ranges::sort(publishedVectorManifests, {}, &VectorManifestLocation::index_id);
-		if (std::ranges::adjacent_find(publishedVectorManifests, {}, &VectorManifestLocation::index_id) !=
-			publishedVectorManifests.end()) {
-			throw FormatException(FormatError::FERR_INVALID_STATE,
-								  "native graph Vector publication has duplicate Manifest mutations");
-		}
-		if (!publishedVectorManifests.empty()) {
-			locations_.prepareReplaceVectorManifests(batch, publishedVectorManifests, {});
-		}
-		if (!publishedLargeValueManifests.empty() || !erasedLargeValueIds.empty()) {
-			locations_.prepareReplaceLargeValueManifests(batch, publishedLargeValueManifests, erasedLargeValueIds);
-		}
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
-		return batch.candidate();
-	}
 
 	Superblock RelocatableMetadataStore::mutateEntityPagesInExistingPools(
 			std::span<const EntityPageReplacementRequest> requests,
@@ -5944,9 +1860,7 @@ namespace graph::storage {
 			const std::array<EntityPageLocation, 0> noEdges{};
 			locations_.prepareReplaceEdgePageLocations(batch, noEdges, erasedEdgeIds);
 		}
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		publishBatch(batch, writer, options);
 		return batch.candidate();
 	}
 
@@ -6006,17 +1920,17 @@ namespace graph::storage {
 		const std::array<uint64_t, 1> erasedIndexIds{expectedManifest.index_id};
 		locations_.prepareReplacePages(batch, noPages, erasedPageIds);
 		locations_.prepareReplaceVectorManifests(batch, noManifests, erasedIndexIds);
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		publishBatch(batch, writer, options);
 		return batch.candidate();
 	}
 
-	Superblock RelocatableMetadataStore::retirePagesInExistingPools(
-			Generation expectedMetadataGeneration, std::span<const IndexRootLocation> erasedRoots,
-			std::span<const PageRetirement> retirements, LogSequenceNumber checkpointLsn,
-			const ExistingPoolPagesRetirementPreparer &preparer, const MetadataPublishOptions &options,
-			std::span<const uint64_t> erasedVectorIds) {
+	Superblock RelocatableMetadataStore::retirePagesInExistingPools(Generation expectedMetadataGeneration,
+																	std::span<const IndexRootLocation> erasedRoots,
+																	std::span<const PageRetirement> retirements,
+																	LogSequenceNumber checkpointLsn,
+																	const ExistingPoolPagesRetirementPreparer &preparer,
+																	const MetadataPublishOptions &options,
+																	std::span<const uint64_t> erasedVectorIds) {
 		const uint8_t invalidInput = static_cast<uint8_t>(!expectedMetadataGeneration.isValid()) |
 									 static_cast<uint8_t>(retirements.empty()) |
 									 static_cast<uint8_t>(!checkpointLsn.isValid()) | static_cast<uint8_t>(!preparer);
@@ -6082,8 +1996,7 @@ namespace graph::storage {
 			const PageLocation visibleLocation = locations_.findPage(current, retirement.location.page_id);
 			const CatalogEntry pool = catalog_.find(current, retirement.location.segment_id);
 			const bool largeValueData = retirement.expected_owner_kind == PageOwnerKind::POK_LARGE_VALUE_DATA;
-			const bool largeValueManifest =
-					retirement.expected_owner_kind == PageOwnerKind::POK_LARGE_VALUE_MANIFEST;
+			const bool largeValueManifest = retirement.expected_owner_kind == PageOwnerKind::POK_LARGE_VALUE_MANIFEST;
 			const uint8_t invalidCurrent =
 					static_cast<uint8_t>(visibleLocation != retirement.location) |
 					static_cast<uint8_t>(pool.segment_id != retirement.location.segment_id) |
@@ -6152,9 +2065,7 @@ namespace graph::storage {
 			const std::array<VectorLocation, 0> noVectorLocations{};
 			locations_.prepareReplaceVectorLocations(batch, noVectorLocations, erasedVectorIds);
 		}
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		publishBatch(batch, writer, options);
 		return batch.candidate();
 	}
 
@@ -6239,9 +2150,7 @@ namespace graph::storage {
 		retirement_.prepareQueueInsertions(batch, queued);
 		const std::array<ExtentLocation, 0> noExtents{};
 		locations_.prepareReplaceExtents(batch, noExtents, erasedExtentIds);
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		publishBatch(batch, writer, options);
 		return batch.candidate();
 	}
 
@@ -6452,9 +2361,7 @@ namespace graph::storage {
 		if (largeValueManifestRebind) {
 			locations_.prepareReplaceLargeValueManifests(batch, std::span(&*replacementLargeValueManifest, 1), {});
 		}
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		publishBatch(batch, writer, options);
 		return batch.candidate();
 	}
 
@@ -6557,9 +2464,7 @@ namespace graph::storage {
 		if (preparer != nullptr) {
 			(*preparer)();
 		}
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		publishBatch(batch, writer, options);
 		return batch.candidate();
 	}
 
@@ -6578,9 +2483,7 @@ namespace graph::storage {
 			batch.reserveDataSlot(slot);
 		}
 		allocator_.prepareSetAllocated(batch, slot, allocated);
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		publishBatch(batch, writer, options);
 		return batch.candidate();
 	}
 
@@ -6596,17 +2499,15 @@ namespace graph::storage {
 		if (!physicalSlot.has_value()) {
 			return std::nullopt;
 		}
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		publishBatch(batch, writer, options);
 		return AllocatorReservation{batch.candidate(), *physicalSlot};
 	}
 
 	std::optional<CatalogSlotReservations> RelocatableMetadataStore::reserveFirstFreeAndUpsertCatalog(
 			std::span<const CatalogSlotReservationRequest> requests, PhysicalSlotId firstSlot, PhysicalSlotId lastSlot,
 			LogSequenceNumber checkpointLsn, const MetadataPublishOptions &options) {
-		return reserveFirstFreeAndUpsertCatalogImpl(requests, {}, {}, {}, {}, {}, firstSlot, lastSlot,
-													checkpointLsn, nullptr, nullptr, {}, options);
+		return reserveFirstFreeAndUpsertCatalogImpl(requests, {}, {}, {}, {}, {}, firstSlot, lastSlot, checkpointLsn,
+													nullptr, nullptr, {}, options);
 	}
 
 	std::optional<CatalogSlotReservations> RelocatableMetadataStore::reserveFirstFreeAndUpsertCatalog(
@@ -6617,8 +2518,8 @@ namespace graph::storage {
 			throw FormatException(FormatError::FERR_INVALID_HEADER,
 								  "relocatable prepared Catalog reservation requires a data preparation callback");
 		}
-		return reserveFirstFreeAndUpsertCatalogImpl(requests, {}, {}, {}, {}, {}, firstSlot, lastSlot,
-													checkpointLsn, &preparer, nullptr, {}, options);
+		return reserveFirstFreeAndUpsertCatalogImpl(requests, {}, {}, {}, {}, {}, firstSlot, lastSlot, checkpointLsn,
+													&preparer, nullptr, {}, options);
 	}
 
 	std::optional<CatalogSlotReservations> RelocatableMetadataStore::reserveFirstFreeAndUpsertCatalogAndLocations(
@@ -6671,23 +2572,20 @@ namespace graph::storage {
 			std::span<const CatalogSlotReservationRequest> requests, std::span<const PageLocation> pages,
 			std::span<const ExtentLocation> extents, std::span<const EntityPageLocation> entityPageNodes,
 			std::span<const EntityPageLocation> entityPageEdges, std::span<const VectorManifestLocation> manifests,
-			PhysicalSlotId firstSlot, PhysicalSlotId lastSlot,
-			LogSequenceNumber checkpointLsn, const CatalogSlotReservationPreparer *preparer,
-			const EntityPagePoolReservationPreparer *entityPagePreparer, std::span<PageLocation> mutableEntityPages,
-			const MetadataPublishOptions &options) {
+			PhysicalSlotId firstSlot, PhysicalSlotId lastSlot, LogSequenceNumber checkpointLsn,
+			const CatalogSlotReservationPreparer *preparer, const EntityPagePoolReservationPreparer *entityPagePreparer,
+			std::span<PageLocation> mutableEntityPages, const MetadataPublishOptions &options) {
 		MetadataWriteGuard writer = beginWrite();
 		const Superblock current = bootstrap_.recover();
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
 		const CatalogReservationPublicationRequest request{
-				requests,	 pages,		extents,  entityPageNodes, entityPageEdges,	   manifests,
-				firstSlot, lastSlot, preparer,		   entityPagePreparer, mutableEntityPages};
+				requests,  pages,	 extents,  entityPageNodes,	   entityPageEdges,	  manifests,
+				firstSlot, lastSlot, preparer, entityPagePreparer, mutableEntityPages};
 		std::optional<std::vector<CatalogEntry>> entries = reservation_coordinator_.prepare(batch, request);
 		if (!entries.has_value()) {
 			return std::nullopt;
 		}
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		publishBatch(batch, writer, options);
 		return CatalogSlotReservations{batch.candidate(), std::move(*entries)};
 	}
 
@@ -6705,13 +2603,23 @@ namespace graph::storage {
 	Superblock RelocatableMetadataStore::retireCatalogSegment(SegmentId segmentId, Generation expectedGeneration,
 															  LogSequenceNumber checkpointLsn,
 															  const MetadataPublishOptions &options) {
+		const std::array requests{CatalogSegmentRetirementRequest{segmentId, expectedGeneration}};
+		return retireCatalogSegments(requests, checkpointLsn, options);
+	}
+
+	Superblock
+	RelocatableMetadataStore::retireCatalogSegments(std::span<const CatalogSegmentRetirementRequest> requests,
+													LogSequenceNumber checkpointLsn,
+													const MetadataPublishOptions &options) {
+		if (requests.empty() || !checkpointLsn.isValid()) {
+			throw FormatException(FormatError::FERR_INVALID_HEADER,
+								  "relocatable Catalog retirement batch requires segments and a checkpoint LSN");
+		}
 		MetadataWriteGuard writer = beginWrite();
 		const Superblock current = bootstrap_.recover();
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
-		segment_retirement_coordinator_.prepareRetirement(batch, segmentId, expectedGeneration);
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		segment_retirement_coordinator_.prepareRetirements(batch, requests);
+		publishBatch(batch, writer, options);
 		return batch.candidate();
 	}
 
@@ -6730,9 +2638,7 @@ namespace graph::storage {
 		}
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
 		segment_retirement_coordinator_.prepareRetiredRelease(batch, retirement);
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		publishBatch(batch, writer, options);
 		return batch.candidate();
 	}
 
@@ -6748,9 +2654,7 @@ namespace graph::storage {
 		if (!plan.has_value()) {
 			return std::nullopt;
 		}
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		publishBatch(batch, writer, options);
 		return CatalogSlotRelocation{batch.candidate(), plan->source, plan->destination};
 	}
 
@@ -6766,9 +2670,7 @@ namespace graph::storage {
 		if (!plan.has_value()) {
 			return std::nullopt;
 		}
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		publishBatch(batch, writer, options);
 		return CatalogSlotRelocation{batch.candidate(), plan->source, plan->destination};
 	}
 
@@ -6787,9 +2689,7 @@ namespace graph::storage {
 		}
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
 		segment_relocation_coordinator_.prepareRelocatedSourceRelease(batch, retirement);
-		pool_ownership_.preparePublication(batch);
-		batch.publish(bootstrap_, options.bootstrap_failpoint);
-		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		publishBatch(batch, writer, options);
 		return batch.candidate();
 	}
 
@@ -6866,6 +2766,7 @@ namespace graph::storage {
 		}
 		catalog_.prepareErase(batch, candidateSegmentIds);
 		pool_ownership_.preparePublication(batch);
+		prepareBootstrapRoutes(batch);
 
 		try {
 			batch.publish(bootstrap_, options.bootstrap_failpoint);
@@ -6896,11 +2797,6 @@ namespace graph::storage {
 		}
 
 		MetadataWriteGuard writer = beginWrite();
-		// Moving a source frame before every local reader has left its old root
-		// would invalidate that reader. The writer guard keeps this count stable.
-		if (snapshots_.activeSnapshotCount() != 0U) {
-			return MetadataPagePoolEvacuation{bootstrap_.recover(), {}, 0U};
-		}
 		const Superblock current = bootstrap_.recover();
 		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, current);
 		if (!current.catalog_root.isValid()) {
@@ -6910,8 +2806,26 @@ namespace graph::storage {
 		}
 
 		std::optional<CatalogEntry> source;
+		std::optional<MetadataPagePoolHeader> sourceHeader;
 		uint32_t sourceLiveFrames = 0U;
-		catalog_.visit(current, [this, &current, maxLiveFrames, &source, &sourceLiveFrames](const CatalogEntry &entry) {
+		std::optional<CatalogEntry> pageLocalSource;
+		std::optional<MetadataPagePoolHeader> pageLocalSourceHeader;
+		uint32_t pageLocalSourceLiveFrames = 0U;
+		std::optional<CatalogEntry> mixedRoutedSource;
+		std::optional<MetadataPagePoolHeader> mixedRoutedSourceHeader;
+		uint32_t mixedRoutedSourceLiveFrames = 0U;
+		std::optional<CatalogEntry> routeBranchSource;
+		std::optional<MetadataPagePoolHeader> routeBranchSourceHeader;
+		uint32_t routeBranchSourceLiveFrames = 0U;
+		std::optional<CatalogEntry> bootstrapHeaderSource;
+		std::optional<MetadataPagePoolHeader> bootstrapHeaderSourceHeader;
+		uint32_t bootstrapHeaderSourceLiveFrames = 0U;
+		catalog_.visit(current, [this, &current, maxLiveFrames, &source, &sourceHeader, &sourceLiveFrames,
+								 &pageLocalSource, &pageLocalSourceHeader, &pageLocalSourceLiveFrames,
+								 &mixedRoutedSource, &mixedRoutedSourceHeader, &mixedRoutedSourceLiveFrames,
+								 &routeBranchSource, &routeBranchSourceHeader, &routeBranchSourceLiveFrames,
+								 &bootstrapHeaderSource, &bootstrapHeaderSourceHeader,
+								 &bootstrapHeaderSourceLiveFrames](const CatalogEntry &entry) {
 			if (entry.kind != SegmentKind::SGK_METADATA_PAGE_POOL || entry.state == SegmentState::SGS_OBSOLETE) {
 				return;
 			}
@@ -6930,42 +2844,140 @@ namespace graph::storage {
 									  "relocatable metadata-pool evacuation found a Catalog/header identity mismatch");
 			}
 			const uint32_t liveFrames = std::popcount(header.allocated_frames);
-			if (liveFrames == 0U || liveFrames > maxLiveFrames ||
-				(source.has_value() &&
-				 (liveFrames > sourceLiveFrames ||
-				  (liveFrames == sourceLiveFrames && entry.physical_slot >= source->physical_slot)))) {
+			if (liveFrames == 0U || liveFrames > maxLiveFrames) {
 				return;
 			}
-			source = entry;
-			sourceLiveFrames = liveFrames;
+			const auto shouldReplace = [&entry, liveFrames](const std::optional<CatalogEntry> &selected,
+															uint32_t selectedFrames) {
+				return !selected.has_value() || liveFrames < selectedFrames ||
+					   (liveFrames == selectedFrames && entry.physical_slot < selected->physical_slot);
+			};
+			if (shouldReplace(source, sourceLiveFrames)) {
+				source = entry;
+				sourceHeader = header;
+				sourceLiveFrames = liveFrames;
+			}
+			if (canRelocateRoutedMetadataPoolPages(pages_, current, entry.physical_slot, header.allocated_frames) &&
+				shouldReplace(pageLocalSource, pageLocalSourceLiveFrames)) {
+				pageLocalSource = entry;
+				pageLocalSourceHeader = header;
+				pageLocalSourceLiveFrames = liveFrames;
+			}
+			if (canEvacuateMixedRoutedMetadataPool(pages_, current, entry.physical_slot, header.allocated_frames) &&
+				shouldReplace(mixedRoutedSource, mixedRoutedSourceLiveFrames)) {
+				mixedRoutedSource = entry;
+				mixedRoutedSourceHeader = header;
+				mixedRoutedSourceLiveFrames = liveFrames;
+			}
+			if (canRefreshMetadataRouteBranchForEvacuation(pages_, current, entry.physical_slot,
+														   header.allocated_frames) &&
+				shouldReplace(routeBranchSource, routeBranchSourceLiveFrames)) {
+				routeBranchSource = entry;
+				routeBranchSourceHeader = header;
+				routeBranchSourceLiveFrames = liveFrames;
+			}
+			if (canRefreshBootstrapHeaderForEvacuation(pages_, current, entry.physical_slot, header.allocated_frames) &&
+				shouldReplace(bootstrapHeaderSource, bootstrapHeaderSourceLiveFrames)) {
+				bootstrapHeaderSource = entry;
+				bootstrapHeaderSourceHeader = header;
+				bootstrapHeaderSourceLiveFrames = liveFrames;
+			}
 		});
-		if (!source.has_value()) {
+		if (pageLocalSource.has_value()) {
+			source = pageLocalSource;
+			sourceHeader = pageLocalSourceHeader;
+			sourceLiveFrames = pageLocalSourceLiveFrames;
+		} else if (mixedRoutedSource.has_value()) {
+			source = mixedRoutedSource;
+			sourceHeader = mixedRoutedSourceHeader;
+			sourceLiveFrames = mixedRoutedSourceLiveFrames;
+		} else if (routeBranchSource.has_value()) {
+			source = routeBranchSource;
+			sourceHeader = routeBranchSourceHeader;
+			sourceLiveFrames = routeBranchSourceLiveFrames;
+		} else if (bootstrapHeaderSource.has_value()) {
+			source = bootstrapHeaderSource;
+			sourceHeader = bootstrapHeaderSourceHeader;
+			sourceLiveFrames = bootstrapHeaderSourceLiveFrames;
+		}
+		if (!source.has_value() || !sourceHeader.has_value()) {
 			return MetadataPagePoolEvacuation{current, {}, 0U};
+		}
+		// A snapshot-pinned reader can retain either stable PageId targets or an
+		// old physical route branch in its pinned bootstrap header. The legacy
+		// whole-directory clone still relies on mixed physical roots, so keep it blocked.
+		const bool hasActiveSnapshots = snapshots_.activeSnapshotCount() != 0U;
+		if (hasActiveSnapshots && !pageLocalSource.has_value() && !mixedRoutedSource.has_value() &&
+			!routeBranchSource.has_value() && !bootstrapHeaderSource.has_value()) {
+			return MetadataPagePoolEvacuation{current, {}, 0U};
+		}
+		if (hasActiveSnapshots) {
+			metadata_page_pool_.protectPoolUntilSnapshotsDrain(source->physical_slot);
 		}
 
 		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
 		// Exclude the source before the first COW allocation. In particular the
 		// Catalog or Allocator root rewrite must never refill the pool it evicts.
 		batch.reserveDataSlot(source->physical_slot);
-		cloneMetadataDirectoryRootsForEvacuation(pages_, batch, current);
+		const std::optional<uint32_t> pageLocalRelocation = relocateRoutedMetadataPoolPages(
+				pages_, batch, current, source->physical_slot, sourceHeader->allocated_frames);
+		const std::optional<uint32_t> mixedRoutedRelocation =
+				pageLocalRelocation.has_value()
+						? std::nullopt
+						: evacuateMixedRoutedMetadataPool(pages_, batch, current, source->physical_slot,
+														  sourceHeader->allocated_frames);
+		const std::optional<uint32_t> routeBranchRefresh =
+				pageLocalRelocation.has_value() || mixedRoutedRelocation.has_value()
+						? std::nullopt
+						: refreshMetadataRouteBranchForEvacuation(pages_, batch, current, source->physical_slot,
+																  sourceHeader->allocated_frames);
+		const std::optional<uint32_t> bootstrapHeaderRefresh =
+				pageLocalRelocation.has_value() || mixedRoutedRelocation.has_value() || routeBranchRefresh.has_value()
+						? std::nullopt
+						: refreshBootstrapHeaderForEvacuation(pages_, batch, current, source->physical_slot,
+															  sourceHeader->allocated_frames);
+		if (!pageLocalRelocation.has_value() && !mixedRoutedRelocation.has_value() && !routeBranchRefresh.has_value() &&
+			!bootstrapHeaderRefresh.has_value()) {
+			// Pre-bootstrap roots and any directory with an unpublishable route
+			// identity still use the conservative clone.
+			cloneMetadataDirectoryRootsForEvacuation(pages_, batch, current);
+		}
 		pool_ownership_.preparePublication(batch);
+		catalog_.prepareLogicalRootChildren(batch);
+		allocator_.prepareLogicalRootChildren(batch);
+		locations_.prepareLogicalRootChildren(batch);
+		prepareBootstrapRoutes(batch);
 		try {
 			batch.publish(bootstrap_, options.bootstrap_failpoint);
-		} catch (const BootstrapPublishInterrupted &) {
+		} catch (...) {
+			// A final durable fence can report an uncertain outcome after its complete
+			// candidate Superblock is readable. Reclaim only after this independent
+			// recovery check confirms that the new root became current.
 			if (bootstrap_.recover() == batch.candidate()) {
 				snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
 			}
 			throw;
 		}
+		// The evacuation clone can preserve v5 logical children. Bind their
+		// resolver to the published route branch before any subsequent read.
+		pages_.rebindSuperblock(batch.candidate());
 		// Only the durable new root makes the source frames unreachable. This
 		// reconciliation is the publication-safe transition to an empty pool;
 		// the next reclaimer transaction removes its Catalog ownership and bit.
 		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
-		if (!metadata_page_pool_.isMetadataPoolEmpty(source->physical_slot)) {
+		const bool sourceEmpty = metadata_page_pool_.isMetadataPoolEmpty(source->physical_slot);
+		if (!hasActiveSnapshots && !sourceEmpty) {
 			throw FormatException(FormatError::FERR_INVALID_STATE,
 								  "relocatable metadata-pool evacuation left reachable frames in its source pool");
 		}
-		return MetadataPagePoolEvacuation{batch.candidate(), source->physical_slot, sourceLiveFrames};
+		if (hasActiveSnapshots && sourceEmpty) {
+			throw FormatException(FormatError::FERR_INVALID_STATE,
+								  "relocatable metadata-pool evacuation reclaimed frames visible to a snapshot");
+		}
+		return MetadataPagePoolEvacuation{
+				batch.candidate(), source->physical_slot,
+				pageLocalRelocation.value_or(mixedRoutedRelocation.value_or(
+						routeBranchRefresh.value_or(bootstrapHeaderRefresh.value_or(sourceLiveFrames))))};
 	}
 
 	MetadataEmergencyReserveRotation
@@ -6990,7 +3002,29 @@ namespace graph::storage {
 		const SegmentId successorToken = batch.allocateLogicalSegmentId();
 		MetadataEmergencyReserveDescriptor successor;
 		try {
-			successor = metadata_page_pool_.rotateEmergencyReserve(successorToken, batch.generation(), checkpointLsn);
+			const uint64_t fileSize = metadata_page_pool_.physicalFileSize();
+			const uint8_t invalidTail =
+					static_cast<uint8_t>(fileSize < current.data_region_offset) |
+					static_cast<uint8_t>((fileSize - current.data_region_offset) % RSS_SEGMENT_SIZE != 0U) |
+					static_cast<uint8_t>(fileSize - current.data_region_offset >
+										 (std::numeric_limits<uint64_t>::max() - 1U) / RSS_SEGMENT_SIZE);
+			if (invalidTail != 0U) {
+				throw FormatException(FormatError::FERR_ARITHMETIC_OVERFLOW,
+									  "relocatable metadata emergency reserve has an invalid physical tail");
+			}
+			const uint64_t tailSlotValue = (fileSize - current.data_region_offset) / RSS_SEGMENT_SIZE;
+			PhysicalSlotId successorSlot(tailSlotValue + 1U);
+			if (tailSlotValue != 0U) {
+				const PhysicalSlotId physicalTail(tailSlotValue);
+				// A root-free final slot can only be an already-reclaimed tail or an
+				// interrupted unpublished candidate. Reusing it avoids making a
+				// permanent single-file hole while never overwriting reachable data.
+				if (allocator_.findFirstFree(current, physicalTail, physicalTail).has_value()) {
+					successorSlot = physicalTail;
+				}
+			}
+			successor = metadata_page_pool_.rotateEmergencyReserve(successorToken, batch.generation(), checkpointLsn,
+																   successorSlot);
 			batch.trackUnpublishedPool(successor.physical_slot);
 			batch.setMetadataEmergencyReserve(successor);
 			// The successor has no Catalog entry by design, but its physical slot is
@@ -6999,6 +3033,7 @@ namespace graph::storage {
 			// The former reserve retains its permanent token and is now added as a
 			// normal Catalog-owned pool in this same COW generation.
 			pool_ownership_.preparePublication(batch);
+			prepareBootstrapRoutes(batch);
 			batch.publish(bootstrap_, options.bootstrap_failpoint);
 		} catch (const BootstrapPublishInterrupted &) {
 			if (bootstrap_.recover() != batch.candidate()) {
@@ -7432,6 +3467,18 @@ namespace graph::storage {
 		locations_.visitEntityProperties(snapshot.superblock(), visitor);
 	}
 
+	bool RelocatableMetadataStore::visitEntityPropertyLocationsAfter(
+			const MetadataSnapshotPin &snapshot, uint64_t afterDirectoryId, size_t maximumMetadataPages,
+			const std::function<bool(const EntityPropertyLocation &)> &visitor, size_t *visitedMetadataPages) const {
+		if (!snapshots_.owns(snapshot) || !visitor || maximumMetadataPages == 0U) {
+			throw FormatException(FormatError::FERR_INVALID_STATE, "relocatable resumable Entity Property traversal "
+																   "requires this store's active snapshot, page bound, "
+																   "and visitor");
+		}
+		return locations_.visitEntityPropertiesAfter(snapshot.superblock(), afterDirectoryId, maximumMetadataPages,
+													 visitor, visitedMetadataPages);
+	}
+
 	void
 	RelocatableMetadataStore::visitStateLocations(const MetadataSnapshotPin &snapshot,
 												  const std::function<void(const StateLocation &)> &visitor) const {
@@ -7441,6 +3488,19 @@ namespace graph::storage {
 					"relocatable State directory traversal requires this store's active snapshot and a visitor");
 		}
 		locations_.visitStates(snapshot.superblock(), visitor);
+	}
+
+	bool RelocatableMetadataStore::visitStateLocationsAfter(const MetadataSnapshotPin &snapshot, uint64_t afterStateId,
+															size_t maximumMetadataPages,
+															const std::function<bool(const StateLocation &)> &visitor,
+															size_t *visitedMetadataPages) const {
+		if (!snapshots_.owns(snapshot) || !visitor || maximumMetadataPages == 0U) {
+			throw FormatException(FormatError::FERR_INVALID_STATE,
+								  "relocatable resumable State traversal requires this store's active snapshot, page "
+								  "bound, and visitor");
+		}
+		return locations_.visitStatesAfter(snapshot.superblock(), afterStateId, maximumMetadataPages, visitor,
+										   visitedMetadataPages);
 	}
 
 	void
@@ -7497,6 +3557,20 @@ namespace graph::storage {
 								  "snapshot and a visitor");
 		}
 		locations_.visitLargeValueManifests(snapshot.superblock(), visitor);
+	}
+
+	bool RelocatableMetadataStore::visitLargeValueManifestLocationsAfter(
+			const MetadataSnapshotPin &snapshot, uint64_t afterValueId, size_t maximumMetadataPages,
+			const std::function<bool(const LargeValueManifestLocation &)> &visitor,
+			size_t *visitedMetadataPages) const {
+		if (!snapshots_.owns(snapshot) || !visitor || maximumMetadataPages == 0U) {
+			throw FormatException(FormatError::FERR_INVALID_STATE,
+								  "relocatable resumable LargeValue Manifest traversal requires this store's active "
+								  "snapshot, page bound, "
+								  "and visitor");
+		}
+		return locations_.visitLargeValueManifestsAfter(snapshot.superblock(), afterValueId, maximumMetadataPages,
+														visitor, visitedMetadataPages);
 	}
 
 	EntityPropertyLocation RelocatableMetadataStore::findEntityPropertyLocation(const MetadataSnapshotPin &snapshot,
@@ -7689,12 +3763,24 @@ namespace graph::storage {
 		if (nativeHandle == INVALID_FILE_HANDLE) {
 			return {RelocatableTailTruncationStatus::VTTS_NATIVE_IO_REQUIRED, originalBytes, originalBytes, 0};
 		}
-		io_->flushStream();
-		io_->sync();
-		if (portable_ftruncate(nativeHandle, retainedBytes) != 0) {
+		try {
+			io_->flushStream();
+			// A failed pre-truncate fence guarantees the operating system has not
+			// shortened the tail, so callers can safely retry unchanged.
+			io_->sync();
+			// Keep Buffer Pool tail invalidation and native truncate fault handling in
+			// the common StorageIO boundary before the final durability fence.
+			io_->truncate(retainedBytes);
+		} catch (const std::runtime_error &) {
 			return {RelocatableTailTruncationStatus::VTTS_IO_ERROR, originalBytes, originalBytes, 0};
 		}
-		io_->sync();
+		try {
+			io_->sync();
+		} catch (const std::runtime_error &) {
+			// The truncate already succeeded locally, but its durability is unknown.
+			// It is still safe to reopen because this was an already-free suffix.
+			return {RelocatableTailTruncationStatus::VTTS_IO_ERROR, originalBytes, retainedBytes, 0};
+		}
 		return {RelocatableTailTruncationStatus::VTTS_TRUNCATED, originalBytes, retainedBytes,
 				physicalSlots - retainedSlots};
 	}
@@ -7720,6 +3806,78 @@ namespace graph::storage {
 	}
 
 	MetadataPagePoolStats RelocatableMetadataStore::pagePoolStats() const { return metadata_page_pool_.stats(); }
+
+	Superblock RelocatableMetadataStore::migratePageDirectoryToBootstrap(LogSequenceNumber checkpointLsn,
+																		 const MetadataPublishOptions &options) {
+		if (read_only_) {
+			throw FormatException(FormatError::FERR_INVALID_STATE,
+								  "relocatable read-only metadata store cannot migrate the Page Directory");
+		}
+		MetadataWriteGuard writer = beginWrite();
+		const Superblock current = bootstrap_.recover();
+		if (current.usesPageDirectoryBootstrap()) {
+			throw FormatException(FormatError::FERR_INVALID_STATE,
+								  "relocatable Page Directory bootstrap migration was already published");
+		}
+		MetadataPageRouteDirectory routes(pages_);
+		const size_t requiredFrames = routes.initialBootstrapFrameCount(current);
+		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
+		batch.reserveMetadataFrames(requiredFrames);
+		static_cast<void>(routes.prepareInitialBootstrapMigration(batch));
+		batch.publish(bootstrap_, options.bootstrap_failpoint);
+		return batch.candidate();
+	}
+
+	std::unique_ptr<RelocatableMetadataStore>
+	RelocatableMetadataStore::initializeNewComplete(std::shared_ptr<StorageIO> io, const Superblock &initial) {
+		if (!initial.checkpoint_lsn.isValid() ||
+			initial.checkpoint_lsn.value() == std::numeric_limits<uint64_t>::max()) {
+			throw FormatException(FormatError::FERR_INVALID_HEADER,
+								  "relocatable complete initialization requires a non-terminal checkpoint LSN");
+		}
+		auto metadata = initializeNew(std::move(io), initial);
+		static_cast<void>(metadata->convergeInitialBootstrap(LogSequenceNumber(initial.checkpoint_lsn.value() + 1U)));
+		return metadata;
+	}
+
+	Superblock RelocatableMetadataStore::convergeInitialBootstrap(LogSequenceNumber checkpointLsn,
+																  const MetadataPublishOptions &options) {
+		if (read_only_) {
+			throw FormatException(FormatError::FERR_INVALID_STATE,
+								  "relocatable read-only metadata store cannot converge initial bootstrap");
+		}
+		MetadataWriteGuard writer = beginWrite();
+		const Superblock current = bootstrap_.recover();
+		if (current.usesPageDirectoryBootstrap() || current.catalog_root.isValid()) {
+			throw FormatException(FormatError::FERR_INVALID_STATE,
+								  "relocatable initial bootstrap convergence requires an empty pre-bootstrap Catalog");
+		}
+
+		MetadataWriteBatch batch(metadata_page_pool_, current, checkpointLsn);
+		// A capacity preflight may create an empty metadata pool. Reconcile that
+		// pool into the candidate Catalog before calculating the final route set;
+		// otherwise a newly created file can expose route frames without durable
+		// pool ownership after the first later metadata COW.
+		pool_ownership_.preparePublication(batch);
+		MetadataPageRouteDirectory routes(pages_);
+		for (size_t pass = 0U; pass < 8U; ++pass) {
+			const size_t requiredFrames = routes.initialBootstrapFrameCount(batch);
+			if (batch.ensureMetadataFrameCapacity(requiredFrames) == 0U) {
+				break;
+			}
+			pool_ownership_.preparePublication(batch);
+			if (pass == 7U) {
+				throw FormatException(FormatError::FERR_INVALID_STATE,
+									  "relocatable initial bootstrap route capacity did not converge");
+			}
+		}
+		batch.reserveMetadataFrames(routes.initialBootstrapFrameCount(batch));
+		static_cast<void>(routes.prepareInitialBootstrapMigration(batch));
+		batch.publish(bootstrap_, options.bootstrap_failpoint);
+		pages_.rebindSuperblock(batch.candidate());
+		snapshots_.reclaimAfterPublication(writer, metadata_page_pool_, batch.candidate());
+		return batch.candidate();
+	}
 
 	uint64_t RelocatableMetadataStore::activeSnapshotCount() const { return snapshots_.activeSnapshotCount(); }
 

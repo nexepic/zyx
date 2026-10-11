@@ -17,24 +17,11 @@ namespace zyx {
 	namespace detail {
 
 		// Columnar ingest is an API-boundary representation. Keeping it here
-		// prevents the logical native path from depending on the retired
-		// DataManager subsystem solely for a value container.
+		// prevents the logical native path from depending on a retired physical
+		// storage subsystem solely for a value container.
 		struct BulkPropertyColumn {
 			std::string key;
 			std::vector<graph::PropertyValue> values;
-		};
-
-		class BulkInputError final : public std::invalid_argument {
-		public:
-			BulkInputError(size_t rowIndex, std::string fieldPath, std::string message) :
-					std::invalid_argument(std::move(message)), rowIndex_(rowIndex), fieldPath_(std::move(fieldPath)) {}
-
-			[[nodiscard]] size_t rowIndex() const noexcept { return rowIndex_; }
-			[[nodiscard]] const std::string &fieldPath() const noexcept { return fieldPath_; }
-
-		private:
-			size_t rowIndex_;
-			std::string fieldPath_;
 		};
 
 		/**

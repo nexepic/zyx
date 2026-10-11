@@ -77,6 +77,31 @@ TEST_F(IntegrationQueryTest, SimpleMatchQuery) {
 }
 
 /**
+ * EXPLAIN is a read-only public statement and must expose the logical plan
+ * rows without executing the underlying graph mutation or read.
+ */
+TEST_F(IntegrationQueryTest, ExplainReturnsLogicalPlanRows) {
+	const auto result = execute("EXPLAIN MATCH (n:Person) RETURN n.name");
+	ASSERT_GT(result.rowCount(), 0UL);
+	ASSERT_EQ(result.getColumns(), (std::vector<std::string>{"operator", "details"}));
+	EXPECT_FALSE(result.getRows().front().at("operator").asPrimitive().toString().empty());
+	EXPECT_FALSE(result.getRows().front().at("details").asPrimitive().toString().empty());
+}
+
+/**
+ * PROFILE preserves the query result and appends one logical execution
+ * summary row at the public QueryEngine boundary.
+ */
+TEST_F(IntegrationQueryTest, ProfileReturnsRowsAndSummary) {
+	const auto result = execute("PROFILE RETURN 42 AS answer");
+	ASSERT_EQ(result.rowCount(), 2UL);
+	EXPECT_EQ(result.getRows().front().at("answer").asPrimitive(), PropertyValue(42));
+	EXPECT_EQ(result.getRows().back().at("phase").asPrimitive(), PropertyValue("logical_plan"));
+	EXPECT_EQ(result.getRows().back().at("calls").asPrimitive(), PropertyValue(1));
+	EXPECT_GE(result.getDuration(), 0.0);
+}
+
+/**
  * Test MATCH with WHERE clause
  */
 TEST_F(IntegrationQueryTest, MatchWithWhere) {
@@ -875,12 +900,12 @@ TEST_F(IntegrationQueryTest, SetPropertyMap) {
 }
 
 // ============================================================================
-// Additional integration tests for QueryExecutor and Database branch coverage
+// Additional logical-query and Database branch-coverage integration tests
 // ============================================================================
 
 /**
- * Test DELETE node after creation within same session (covers QueryExecutor
- * delete paths and FileStorage deletion flush paths)
+ * Test DELETE node after creation within the same session (covers logical runtime
+ * delete paths and native persistence)
  */
 TEST_F(IntegrationQueryTest, DeleteNodeAfterCreation) {
 	(void) execute("CREATE (n:DelNode {name: 'ToDelete'})");
@@ -914,7 +939,7 @@ TEST_F(IntegrationQueryTest, DeleteEdgeOnly) {
 }
 
 /**
- * Test bulk node creation and deletion (exercises many FileStorage save paths)
+ * Test bulk node creation and deletion (exercises native persistence paths)
  */
 TEST_F(IntegrationQueryTest, BulkCreateAndDelete) {
 	for (int i = 0; i < 20; ++i) {
@@ -932,7 +957,7 @@ TEST_F(IntegrationQueryTest, BulkCreateAndDelete) {
 
 /**
  * Test DETACH DELETE on node with multiple edges
- * (covers RelationshipTraversal unlinkEdge paths)
+ * (covers native adjacency unlink paths)
  */
 TEST_F(IntegrationQueryTest, DetachDeleteNodeWithMultipleEdges) {
 	(void) execute("CREATE (c:Center {name: 'Hub'})");
@@ -959,7 +984,7 @@ TEST_F(IntegrationQueryTest, DetachDeleteNodeWithMultipleEdges) {
 }
 
 /**
- * Test query returning edge values (covers QueryExecutor edge result path)
+ * Test query returning edge values through the logical runtime result path
  */
 TEST_F(IntegrationQueryTest, QueryReturnsEdgeValues) {
 	(void) execute("CREATE (a:EV1 {name: 'A'})-[:EV_REL {weight: 42, tag: 'test'}]->(b:EV2 {name: 'B'})");
@@ -995,7 +1020,7 @@ TEST_F(IntegrationQueryTest, QueryWithNullValues) {
 }
 
 /**
- * Test close-reopen-query cycle (covers Database close/reopen with WAL)
+ * Test close-reopen-query cycle for native single-file persistence.
  */
 TEST_F(IntegrationQueryTest, CloseReopenQuery) {
 	(void) execute("CREATE (n:ReOpenNode {val: 100})");
@@ -1010,7 +1035,7 @@ TEST_F(IntegrationQueryTest, CloseReopenQuery) {
 
 /**
  * Test multiple close-reopen cycles with data modification
- * (covers FileStorage flush/close/reopen sequences and WAL recovery)
+ * (covers native flush/close/reopen durability)
  */
 TEST_F(IntegrationQueryTest, MultipleCloseReopenWithModification) {
 	// Cycle 1: Create

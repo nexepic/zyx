@@ -9,11 +9,24 @@
 #include "storage/relocatable/metadata/RelocatableMetadataStoreTestFixture.hpp"
 
 #include <algorithm>
+#include <atomic>
+#include <cerrno>
+#include <map>
+#include <system_error>
+#include <vector>
 
 #include "graph/storage/PreadHelper.hpp"
 #include "graph/storage/PwriteHelper.hpp"
+#include "graph/storage/relocatable/allocation/AllocatorDirectory.hpp"
 #include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
 #include "graph/storage/relocatable/index/BTreePageStore.hpp"
+#include "graph/storage/relocatable/metadata/CatalogTree.hpp"
+#include "graph/storage/relocatable/metadata/MetadataPageFile.hpp"
+#include "graph/storage/relocatable/metadata/MetadataPageRouteDirectory.hpp"
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 TEST_F(RelocatableMetadataStoreTest, SerializesCatalogPublicationSnapshotsReclamationAndReopen) {
 	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
@@ -80,6 +93,459 @@ TEST_F(RelocatableMetadataStoreTest, ReopenFollowsPublishedRootsInsteadOfScannin
 	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
 }
 
+TEST_F(RelocatableMetadataStoreTest, PerformsInitialPageDirectoryBootstrapMigrationAsAStandaloneTransaction) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	static_cast<void>(store->upsertCatalog(std::vector{entry(100, 2, 2)}, LogSequenceNumber(2)));
+	const Superblock migrated = store->migratePageDirectoryToBootstrap(LogSequenceNumber(3));
+	EXPECT_TRUE(migrated.usesPageDirectoryBootstrap());
+	MetadataSnapshotPin snapshot = store->openSnapshot();
+	EXPECT_EQ(snapshot.superblock(), migrated);
+	EXPECT_EQ(store->findCatalog(snapshot, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot,
+			  PhysicalSlotId(100));
+
+	auto reopened = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin reopenedSnapshot = reopened->openSnapshot();
+	EXPECT_TRUE(reopenedSnapshot.superblock().usesPageDirectoryBootstrap());
+	EXPECT_EQ(reopened->findCatalog(reopenedSnapshot, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot,
+			  PhysicalSlotId(100));
+	EXPECT_THROW(static_cast<void>(reopened->migratePageDirectoryToBootstrap(LogSequenceNumber(4))), FormatException);
+}
+
+TEST_F(RelocatableMetadataStoreTest, UpdatesTypedMetadataRouteBranchAcrossPostMigrationCatalogCowAndReopen) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	static_cast<void>(store->upsertCatalog(std::vector{entry(100, 2, 2)}, LogSequenceNumber(2)));
+	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3)));
+	const Superblock updated = store->upsertCatalog(std::vector{entry(101, 4, 4)}, LogSequenceNumber(4));
+	EXPECT_TRUE(updated.usesPageDirectoryBootstrap());
+	MetadataPageFile pages(io, updated);
+	const CatalogRadixPage root = pages.readCatalogRadix(updated.catalog_root);
+	EXPECT_TRUE(root.logical_children_enabled);
+	EXPECT_TRUE(root.logical_children[0].isValid());
+	EXPECT_TRUE(root.children[0].isValid());
+	MetadataSnapshotPin current = store->openSnapshot();
+	EXPECT_EQ(current.superblock(), updated);
+	EXPECT_EQ(store->findCatalog(current, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot,
+			  PhysicalSlotId(101));
+	current.release();
+	MetadataSnapshotPin oldSnapshot = store->openSnapshot();
+	const Superblock rewritten = store->upsertCatalog(std::vector{entry(102, 5, 5)}, LogSequenceNumber(5));
+	EXPECT_EQ(store->findCatalog(oldSnapshot, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot,
+			  PhysicalSlotId(101));
+	oldSnapshot.release();
+	pages.rebindSuperblock(rewritten);
+	const CatalogRadixPage rewrittenRoot = pages.readCatalogRadix(rewritten.catalog_root);
+	EXPECT_TRUE(rewrittenRoot.logical_children_enabled);
+	EXPECT_TRUE(rewrittenRoot.logical_children[0].isValid());
+	MetadataSnapshotPin rewrittenSnapshot = store->openSnapshot();
+	EXPECT_EQ(store->findCatalog(rewrittenSnapshot, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot,
+			  PhysicalSlotId(102));
+	rewrittenSnapshot.release();
+
+	auto reopened = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin recovered = reopened->openSnapshot();
+	EXPECT_TRUE(recovered.superblock().usesPageDirectoryBootstrap());
+	EXPECT_EQ(reopened->findCatalog(recovered, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot,
+			  PhysicalSlotId(102));
+}
+
+TEST_F(RelocatableMetadataStoreTest, CatalogLogicalizesOwnedInternalChildrenAfterBootstrapPublication) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	std::vector<CatalogEntry> entries = catalogEntriesForLeafCount(RSS_CATALOG_RADIX_FANOUT + 1U);
+	static_cast<void>(store->upsertCatalog(entries, LogSequenceNumber(2)));
+	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3)));
+
+	CatalogEntry replacement = entries.front();
+	replacement.physical_slot = PhysicalSlotId(5000U);
+	replacement.committed_lsn = LogSequenceNumber(4U);
+	const Superblock updated = store->upsertCatalog(std::span(&replacement, 1U), LogSequenceNumber(4));
+	MetadataPageFile pages(io, updated);
+	const CatalogRadixPage root = pages.readCatalogRadix(updated.catalog_root);
+	ASSERT_GT(root.level, 0U);
+	ASSERT_TRUE(root.logical_children_enabled);
+	const uint32_t rootIndex = CatalogRadixPageCodec::childIndex(replacement.segment_id, root.level);
+	ASSERT_TRUE(root.logical_children[rootIndex].isValid());
+	ASSERT_TRUE(root.children[rootIndex].isValid());
+	const CatalogRadixPage internal = pages.readCatalogRadix(root.children[rootIndex]);
+	EXPECT_EQ(internal.kind, CatalogRadixPageKind::CRPK_INTERNAL);
+	EXPECT_TRUE(internal.logical_children_enabled);
+
+	MetadataSnapshotPin current = store->openSnapshot();
+	EXPECT_EQ(store->findCatalog(current, replacement.segment_id).physical_slot, replacement.physical_slot);
+	EXPECT_EQ(store->findCatalog(current, entries.back().segment_id).physical_slot, entries.back().physical_slot);
+	current.release();
+
+	store.reset();
+	auto reopened = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin recovered = reopened->openSnapshot();
+	EXPECT_EQ(reopened->findCatalog(recovered, replacement.segment_id).physical_slot, replacement.physical_slot);
+	EXPECT_EQ(reopened->findCatalog(recovered, entries.back().segment_id).physical_slot, entries.back().physical_slot);
+}
+
+TEST_F(RelocatableMetadataStoreTest, UpdatesTypedMetadataRouteBranchAcrossPostMigrationAllocatorCow) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	static_cast<void>(store->upsertCatalog(std::vector{entry(100, 2, 2)}, LogSequenceNumber(2)));
+	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3)));
+	const Superblock updated = store->setPhysicalSlotAllocated(PhysicalSlotId(40), true, LogSequenceNumber(4));
+	EXPECT_TRUE(updated.usesPageDirectoryBootstrap());
+	MetadataPageFile pages(io, updated);
+	const MetadataRadixPage root = pages.readMetadataRadix(updated.allocator_root);
+	EXPECT_TRUE(root.logical_children_enabled);
+	EXPECT_TRUE(root.logical_children[0].isValid());
+	EXPECT_TRUE(root.children[0].isValid());
+	MetadataSnapshotPin current = store->openSnapshot();
+	EXPECT_TRUE(store->isPhysicalSlotAllocated(current, PhysicalSlotId(40)));
+	current.release();
+	MetadataSnapshotPin oldSnapshot = store->openSnapshot();
+	const Superblock rewritten = store->setPhysicalSlotAllocated(PhysicalSlotId(41), true, LogSequenceNumber(5));
+	EXPECT_TRUE(store->isPhysicalSlotAllocated(oldSnapshot, PhysicalSlotId(40)));
+	EXPECT_FALSE(store->isPhysicalSlotAllocated(oldSnapshot, PhysicalSlotId(41)));
+	oldSnapshot.release();
+	pages.rebindSuperblock(rewritten);
+	const MetadataRadixPage rewrittenRoot = pages.readMetadataRadix(rewritten.allocator_root);
+	EXPECT_TRUE(rewrittenRoot.logical_children_enabled);
+	EXPECT_TRUE(rewrittenRoot.logical_children[0].isValid());
+	MetadataSnapshotPin rewrittenSnapshot = store->openSnapshot();
+	EXPECT_TRUE(store->isPhysicalSlotAllocated(rewrittenSnapshot, PhysicalSlotId(41)));
+	rewrittenSnapshot.release();
+
+	auto reopened = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin recovered = reopened->openSnapshot();
+	EXPECT_TRUE(recovered.superblock().usesPageDirectoryBootstrap());
+	EXPECT_TRUE(reopened->isPhysicalSlotAllocated(recovered, PhysicalSlotId(40)));
+	EXPECT_TRUE(reopened->isPhysicalSlotAllocated(recovered, PhysicalSlotId(41)));
+}
+
+TEST_F(RelocatableMetadataStoreTest, AllocatorLogicalizesOwnedInternalChildrenAfterBootstrapPublication) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	const PhysicalSlotId firstSlot(RSS_ALLOCATOR_PAGE_SLOT_CAPACITY * RSS_CATALOG_RADIX_FANOUT + 1U);
+	static_cast<void>(store->setPhysicalSlotAllocated(firstSlot, true, LogSequenceNumber(2)));
+	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3)));
+	const PhysicalSlotId replacementSlot(firstSlot.value() + 1U);
+	const Superblock updated = store->setPhysicalSlotAllocated(replacementSlot, true, LogSequenceNumber(4));
+	MetadataPageFile pages(io, updated);
+	const MetadataRadixPage root = pages.readMetadataRadix(updated.allocator_root);
+	ASSERT_GT(root.level, 0U);
+	ASSERT_TRUE(root.logical_children_enabled);
+	bool foundLogicalInternal = false;
+	bool foundPhysicalInternal = false;
+	for (const PhysicalPageRef child: root.children) {
+		if (!child.isValid()) {
+			continue;
+		}
+		const MetadataRadixPage internal = pages.readMetadataRadix(child);
+		EXPECT_EQ(internal.kind, CatalogRadixPageKind::CRPK_INTERNAL);
+		foundLogicalInternal |= internal.logical_children_enabled;
+		foundPhysicalInternal |= !internal.logical_children_enabled;
+	}
+	EXPECT_TRUE(foundLogicalInternal);
+	EXPECT_TRUE(foundPhysicalInternal);
+
+	MetadataSnapshotPin current = store->openSnapshot();
+	EXPECT_TRUE(store->isPhysicalSlotAllocated(current, firstSlot));
+	EXPECT_TRUE(store->isPhysicalSlotAllocated(current, replacementSlot));
+	current.release();
+
+	store.reset();
+	auto reopened = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin recovered = reopened->openSnapshot();
+	EXPECT_TRUE(reopened->isPhysicalSlotAllocated(recovered, firstSlot));
+	EXPECT_TRUE(reopened->isPhysicalSlotAllocated(recovered, replacementSlot));
+}
+
+TEST_F(RelocatableMetadataStoreTest, UpdatesTypedMetadataRouteBranchAcrossPostMigrationLocationCowAndReopen) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	const ExtentLocation original{ExtentId(1), SegmentId(20), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, Generation(1)};
+	static_cast<void>(store->upsertLocations({}, std::span(&original, 1), LogSequenceNumber(2)));
+	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3)));
+	const ExtentLocation inserted{ExtentId(2), SegmentId(21), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, Generation(1)};
+	const Superblock updated = store->upsertLocations({}, std::span(&inserted, 1), LogSequenceNumber(4));
+	EXPECT_TRUE(updated.usesPageDirectoryBootstrap());
+	MetadataPageFile pages(io, updated);
+	const MetadataRadixPage root = pages.readMetadataRadix(updated.extent_directory_root);
+	EXPECT_TRUE(root.logical_children_enabled);
+	EXPECT_TRUE(root.logical_children[0].isValid());
+	EXPECT_TRUE(root.children[0].isValid());
+	MetadataSnapshotPin current = store->openSnapshot();
+	EXPECT_EQ(store->findExtentLocation(current, inserted.extent_id), inserted);
+	current.release();
+
+	MetadataSnapshotPin oldSnapshot = store->openSnapshot();
+	const ExtentLocation replacement{ExtentId(2), SegmentId(22), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, Generation(1)};
+	const Superblock rewritten = store->upsertLocations({}, std::span(&replacement, 1), LogSequenceNumber(5));
+	EXPECT_EQ(store->findExtentLocation(oldSnapshot, inserted.extent_id), inserted);
+	oldSnapshot.release();
+	pages.rebindSuperblock(rewritten);
+	const MetadataRadixPage rewrittenRoot = pages.readMetadataRadix(rewritten.extent_directory_root);
+	EXPECT_TRUE(rewrittenRoot.logical_children_enabled);
+	EXPECT_TRUE(rewrittenRoot.logical_children[0].isValid());
+	MetadataSnapshotPin rewrittenSnapshot = store->openSnapshot();
+	EXPECT_EQ(store->findExtentLocation(rewrittenSnapshot, replacement.extent_id), replacement);
+	rewrittenSnapshot.release();
+
+	auto reopened = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin recovered = reopened->openSnapshot();
+	EXPECT_TRUE(recovered.superblock().usesPageDirectoryBootstrap());
+	EXPECT_EQ(reopened->findExtentLocation(recovered, original.extent_id), original);
+	EXPECT_EQ(reopened->findExtentLocation(recovered, replacement.extent_id), replacement);
+}
+
+TEST_F(RelocatableMetadataStoreTest, LogicalizesDataPageDirectoryChildrenAfterBootstrapPublication) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	const PageLocation original{PageId(1U), SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, Generation(1U), 512U};
+	static_cast<void>(store->upsertLocations(std::span(&original, 1U), {}, LogSequenceNumber(2U)));
+	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3U)));
+
+	PageLocation replacement = original;
+	replacement.segment_id = SegmentId(21U);
+	const Superblock updated = store->upsertLocations(std::span(&replacement, 1U), {}, LogSequenceNumber(4U));
+	MetadataPageFile pages(io, updated);
+	const PageDirectoryBootstrap bootstrap = pages.readPageDirectoryBootstrap(updated.page_directory_root);
+	ASSERT_TRUE(bootstrap.data_page_directory_root.isValid());
+	const MetadataRadixPage root = pages.readMetadataRadix(bootstrap.data_page_directory_root);
+	EXPECT_TRUE(root.logical_children_enabled);
+	EXPECT_TRUE(root.logical_children[0].isValid());
+	EXPECT_TRUE(root.children[0].isValid());
+
+	MetadataSnapshotPin current = store->openSnapshot();
+	EXPECT_EQ(store->findPageLocation(current, replacement.page_id), replacement);
+	current.release();
+	MetadataSnapshotPin oldSnapshot = store->openSnapshot();
+	PageLocation rewritten = replacement;
+	rewritten.segment_id = SegmentId(22U);
+	static_cast<void>(store->upsertLocations(std::span(&rewritten, 1U), {}, LogSequenceNumber(5U)));
+	EXPECT_EQ(store->findPageLocation(oldSnapshot, replacement.page_id), replacement);
+	oldSnapshot.release();
+	MetadataSnapshotPin rewrittenSnapshot = store->openSnapshot();
+	EXPECT_EQ(store->findPageLocation(rewrittenSnapshot, rewritten.page_id), rewritten);
+	rewrittenSnapshot.release();
+
+	store.reset();
+	auto reopened = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin recovered = reopened->openSnapshot();
+	EXPECT_EQ(reopened->findPageLocation(recovered, rewritten.page_id), rewritten);
+}
+
+TEST_F(RelocatableMetadataStoreTest, LocationLogicalizesOwnedInternalChildrenAfterBootstrapPublication) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	const ExtentId extentId(RSS_LOCATION_LEAF_MAX_ENTRIES * RSS_CATALOG_RADIX_FANOUT + 1U);
+	const ExtentLocation original{extentId, SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, Generation(1U)};
+	static_cast<void>(store->upsertLocations({}, std::span(&original, 1U), LogSequenceNumber(2)));
+	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3)));
+	ExtentLocation replacement = original;
+	replacement.segment_id = SegmentId(21U);
+	const Superblock updated = store->upsertLocations({}, std::span(&replacement, 1U), LogSequenceNumber(4));
+	MetadataPageFile pages(io, updated);
+	const MetadataRadixPage root = pages.readMetadataRadix(updated.extent_directory_root);
+	ASSERT_GT(root.level, 0U);
+	ASSERT_TRUE(root.logical_children_enabled);
+	bool foundLogicalInternal = false;
+	for (const PhysicalPageRef child: root.children) {
+		if (!child.isValid()) {
+			continue;
+		}
+		const MetadataRadixPage internal = pages.readMetadataRadix(child);
+		EXPECT_EQ(internal.kind, CatalogRadixPageKind::CRPK_INTERNAL);
+		foundLogicalInternal |= internal.logical_children_enabled;
+	}
+	EXPECT_TRUE(foundLogicalInternal);
+
+	MetadataSnapshotPin current = store->openSnapshot();
+	EXPECT_EQ(store->findExtentLocation(current, replacement.extent_id), replacement);
+	current.release();
+
+	store.reset();
+	auto reopened = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin recovered = reopened->openSnapshot();
+	EXPECT_EQ(reopened->findExtentLocation(recovered, replacement.extent_id), replacement);
+}
+
+TEST_F(RelocatableMetadataStoreTest, ReclaimsSupersededTypedRouteBranchAfterSnapshotRelease) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	static_cast<void>(store->upsertCatalog(std::vector{entry(100, 2, 2)}, LogSequenceNumber(2)));
+	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3)));
+	MetadataSnapshotPin retainedMigration = store->openSnapshot();
+	const uint64_t beforeUpdate = store->pagePoolStats().allocated_pages;
+	static_cast<void>(store->upsertCatalog(std::vector{entry(101, 4, 4)}, LogSequenceNumber(4)));
+	const uint64_t afterUpdate = store->pagePoolStats().allocated_pages;
+	EXPECT_GT(afterUpdate, beforeUpdate);
+	EXPECT_EQ(store->findCatalog(retainedMigration, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot,
+			  PhysicalSlotId(100));
+	retainedMigration.release();
+	EXPECT_EQ(store->activeSnapshotCount(), 0U);
+	store->collectMetadataGarbage();
+	const uint64_t afterReclaim = store->pagePoolStats().allocated_pages;
+	EXPECT_LT(afterReclaim, afterUpdate);
+	MetadataSnapshotPin current = store->openSnapshot();
+	EXPECT_TRUE(current.superblock().usesPageDirectoryBootstrap());
+	EXPECT_EQ(store->findCatalog(current, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot,
+			  PhysicalSlotId(101));
+}
+
+TEST_F(RelocatableMetadataStoreTest, InitialBootstrapMigrationBeforeInactiveWriteKeepsTheOldGenerationAndCanRetry) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	static_cast<void>(store->upsertCatalog(std::vector{entry(100, 2, 2)}, LogSequenceNumber(2)));
+	const MetadataPublishOptions options = withBootstrapFailpoint(BootstrapPublishFailpoint::BPF_BEFORE_INACTIVE_WRITE);
+	EXPECT_THROW(static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3), options)),
+				 BootstrapPublishInterrupted);
+	MetadataSnapshotPin beforeRetry = store->openSnapshot();
+	EXPECT_EQ(beforeRetry.superblock().generation, Generation(2));
+	EXPECT_FALSE(beforeRetry.superblock().usesPageDirectoryBootstrap());
+	beforeRetry.release();
+
+	const Superblock retried = store->migratePageDirectoryToBootstrap(LogSequenceNumber(3));
+	EXPECT_TRUE(retried.usesPageDirectoryBootstrap());
+}
+
+TEST_F(RelocatableMetadataStoreTest, InitialBootstrapMigrationPartialInactiveWriteLeavesTheOldGenerationReadable) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	static_cast<void>(store->upsertCatalog(std::vector{entry(100, 2, 2)}, LogSequenceNumber(2)));
+	const MetadataPublishOptions options =
+			withBootstrapFailpoint(BootstrapPublishFailpoint::BPF_AFTER_PARTIAL_INACTIVE_WRITE);
+	EXPECT_THROW(static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3), options)),
+				 BootstrapPublishInterrupted);
+	MetadataSnapshotPin snapshot = store->openSnapshot();
+	EXPECT_EQ(snapshot.superblock().generation, Generation(2));
+	EXPECT_FALSE(snapshot.superblock().usesPageDirectoryBootstrap());
+	EXPECT_EQ(store->findCatalog(snapshot, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot,
+			  PhysicalSlotId(100));
+}
+
+TEST_F(RelocatableMetadataStoreTest, InitialBootstrapMigrationDataPageShortWriteKeepsTheOldGenerationAndCanRetry) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	static_cast<void>(store->upsertCatalog(std::vector{entry(100, 2, 2)}, LogSequenceNumber(2)));
+	store.reset();
+
+	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	io = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+	store = RelocatableMetadataStore::open(io);
+	bool interrupted = false;
+	{
+		StorageIO::ScopedNativeWriteHookForTesting shortRoutePage(
+				[&interrupted](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+					if (!interrupted && byteCount == RSS_PAGE_SIZE &&
+						static_cast<uint64_t>(offset) >= RSS_FILE_BOOTSTRAP_BYTES) {
+						interrupted = true;
+						return portable_pwrite(fd, bytes, byteCount - 1U, offset);
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		EXPECT_THROW(static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3))),
+					 std::system_error);
+	}
+	EXPECT_TRUE(interrupted);
+	MetadataSnapshotPin beforeRetry = store->openSnapshot();
+	EXPECT_EQ(beforeRetry.superblock().generation, Generation(2));
+	EXPECT_FALSE(beforeRetry.superblock().usesPageDirectoryBootstrap());
+	beforeRetry.release();
+	const Superblock retried = store->migratePageDirectoryToBootstrap(LogSequenceNumber(3));
+	EXPECT_TRUE(retried.usesPageDirectoryBootstrap());
+	store.reset();
+	io.reset();
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+}
+
+TEST_F(RelocatableMetadataStoreTest, InitialBootstrapMigrationDataPageEnospcKeepsTheOldGenerationAndCanRetry) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	static_cast<void>(store->upsertCatalog(std::vector{entry(100, 2, 2)}, LogSequenceNumber(2)));
+	store.reset();
+
+	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	io = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+	store = RelocatableMetadataStore::open(io);
+	bool interrupted = false;
+	{
+		StorageIO::ScopedNativeWriteHookForTesting failRoutePage(
+				[&interrupted](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+					if (!interrupted && byteCount == RSS_PAGE_SIZE &&
+						static_cast<uint64_t>(offset) >= RSS_FILE_BOOTSTRAP_BYTES) {
+						interrupted = true;
+#ifdef _WIN32
+						SetLastError(ERROR_DISK_FULL);
+#else
+						errno = ENOSPC;
+#endif
+						return static_cast<pwrite_ssize_t>(-1);
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		EXPECT_THROW(static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3))),
+					 std::system_error);
+	}
+	EXPECT_TRUE(interrupted);
+	MetadataSnapshotPin beforeRetry = store->openSnapshot();
+	EXPECT_EQ(beforeRetry.superblock().generation, Generation(2));
+	EXPECT_FALSE(beforeRetry.superblock().usesPageDirectoryBootstrap());
+	beforeRetry.release();
+	const Superblock retried = store->migratePageDirectoryToBootstrap(LogSequenceNumber(3));
+	EXPECT_TRUE(retried.usesPageDirectoryBootstrap());
+	store.reset();
+	io.reset();
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+}
+
+TEST_F(RelocatableMetadataStoreTest, InitialBootstrapMigrationFinalSyncFailureReopensEitherOldOrCompleteGeneration) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	static_cast<void>(store->upsertCatalog(std::vector{entry(100, 2, 2)}, LogSequenceNumber(2)));
+	store.reset();
+
+	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	io = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+	store = RelocatableMetadataStore::open(io);
+	std::atomic<uint32_t> syncCalls{0U};
+	{
+		StorageIO::ScopedNativeSyncHookForTesting failPublicationFence([&syncCalls](file_handle_t fd) {
+			if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 1U) {
+#ifdef _WIN32
+				SetLastError(ERROR_WRITE_FAULT);
+#else
+				errno = EIO;
+#endif
+				return -1;
+			}
+			return portable_fsync(fd);
+		});
+		EXPECT_THROW(static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3))),
+					 std::system_error);
+	}
+	EXPECT_EQ(syncCalls.load(std::memory_order_relaxed), 2U);
+	store.reset();
+	auto recovered = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin snapshot = recovered->openSnapshot();
+	if (snapshot.superblock().generation == Generation(2)) {
+		EXPECT_FALSE(snapshot.superblock().usesPageDirectoryBootstrap());
+		snapshot.release();
+		const Superblock retried = recovered->migratePageDirectoryToBootstrap(LogSequenceNumber(3));
+		EXPECT_TRUE(retried.usesPageDirectoryBootstrap());
+	} else {
+		EXPECT_EQ(snapshot.superblock().generation, Generation(3));
+		EXPECT_TRUE(snapshot.superblock().usesPageDirectoryBootstrap());
+		EXPECT_EQ(recovered->findCatalog(snapshot, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot,
+				  PhysicalSlotId(100));
+	}
+	recovered.reset();
+	io.reset();
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+}
+
+TEST_F(RelocatableMetadataStoreTest, InitialBootstrapMigrationAfterInactiveWriteReopensTheCompleteCandidate) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	static_cast<void>(store->upsertCatalog(std::vector{entry(100, 2, 2)}, LogSequenceNumber(2)));
+	const MetadataPublishOptions options = withBootstrapFailpoint(BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE);
+	EXPECT_THROW(static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3), options)),
+				 BootstrapPublishInterrupted);
+	store.reset();
+
+	auto recovered = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin snapshot = recovered->openSnapshot();
+	EXPECT_EQ(snapshot.superblock().generation, Generation(3));
+	EXPECT_TRUE(snapshot.superblock().usesPageDirectoryBootstrap());
+	EXPECT_EQ(recovered->findCatalog(snapshot, SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID)).physical_slot,
+			  PhysicalSlotId(100));
+}
+
 TEST_F(RelocatableMetadataStoreTest, SerializesAllocatorReservationAndReusesReleasedSnapshotPages) {
 	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
 	const std::optional<AllocatorReservation> first =
@@ -104,6 +570,83 @@ TEST_F(RelocatableMetadataStoreTest, SerializesAllocatorReservationAndReusesRele
 	store->collectMetadataGarbage();
 	EXPECT_EQ(store->pagePoolStats().allocated_pages, 4U);
 	EXPECT_FALSE(store->reserveFirstFreeSlot(PhysicalSlotId(40), PhysicalSlotId(40), LogSequenceNumber(4)).has_value());
+}
+
+TEST_F(RelocatableMetadataStoreTest, BootstrapReservationExhaustionDoesNotPublishPartialGeneration) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(2)));
+
+	const std::optional<AllocatorReservation> first =
+			store->reserveFirstFreeSlot(PhysicalSlotId(40), PhysicalSlotId(41), LogSequenceNumber(3));
+	ASSERT_TRUE(first.has_value());
+	EXPECT_EQ(first->physical_slot, PhysicalSlotId(40));
+	const std::optional<AllocatorReservation> second =
+			store->reserveFirstFreeSlot(PhysicalSlotId(40), PhysicalSlotId(41), LogSequenceNumber(4));
+	ASSERT_TRUE(second.has_value());
+	EXPECT_EQ(second->physical_slot, PhysicalSlotId(41));
+
+	const MetadataPagePoolStats beforeExhaustion = store->pagePoolStats();
+	EXPECT_FALSE(store->reserveFirstFreeSlot(PhysicalSlotId(40), PhysicalSlotId(41), LogSequenceNumber(5)).has_value());
+	EXPECT_EQ(store->pagePoolStats().allocated_pages, beforeExhaustion.allocated_pages);
+	MetadataSnapshotPin exhausted = store->openSnapshot();
+	EXPECT_EQ(exhausted.superblock().generation, Generation(4));
+	EXPECT_TRUE(exhausted.superblock().usesPageDirectoryBootstrap());
+	EXPECT_TRUE(store->isPhysicalSlotAllocated(exhausted, PhysicalSlotId(40)));
+	EXPECT_TRUE(store->isPhysicalSlotAllocated(exhausted, PhysicalSlotId(41)));
+	exhausted.release();
+	store.reset();
+
+	auto reopened = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin recovered = reopened->openSnapshot();
+	EXPECT_EQ(recovered.superblock().generation, Generation(4));
+	EXPECT_TRUE(reopened->isPhysicalSlotAllocated(recovered, PhysicalSlotId(40)));
+	EXPECT_TRUE(reopened->isPhysicalSlotAllocated(recovered, PhysicalSlotId(41)));
+	recovered.release();
+	EXPECT_FALSE(
+			reopened->reserveFirstFreeSlot(PhysicalSlotId(40), PhysicalSlotId(41), LogSequenceNumber(5)).has_value());
+}
+
+TEST_F(RelocatableMetadataStoreTest, BootstrapCatalogReaderResolvesTheLogicalRootWithoutSuperblockPhysicalRoot) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	const CatalogEntry expected = entry(100U, 1U, 2U);
+	static_cast<void>(store->upsertCatalog(std::span(&expected, 1U), LogSequenceNumber(2U)));
+	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(3U)));
+	MetadataSnapshotPin snapshot = store->openSnapshot();
+	Superblock routed = snapshot.superblock();
+	ASSERT_TRUE(routed.usesPageDirectoryBootstrap());
+	routed.catalog_root = {};
+	snapshot.release();
+	store.reset();
+
+	MetadataPageFile pages(io, routed);
+	MetadataPagePoolAllocator allocator(io, routed, MetadataPagePoolOpenMode::CPOM_ROOT_RECOVER);
+	CatalogTree catalog(pages, allocator);
+	const CatalogEntry resolved = catalog.find(routed, expected.segment_id);
+	EXPECT_EQ(resolved.segment_id, expected.segment_id);
+	EXPECT_EQ(resolved.physical_slot, expected.physical_slot);
+	EXPECT_EQ(resolved.kind, expected.kind);
+	EXPECT_EQ(resolved.owner_id, expected.owner_id);
+	EXPECT_EQ(resolved.generation, expected.generation);
+	EXPECT_EQ(resolved.state, expected.state);
+	EXPECT_EQ(resolved.committed_lsn, expected.committed_lsn);
+}
+
+TEST_F(RelocatableMetadataStoreTest, BootstrapAllocatorReaderResolvesTheLogicalRootWithoutSuperblockPhysicalRoot) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(2U)));
+	MetadataSnapshotPin snapshot = store->openSnapshot();
+	Superblock routed = snapshot.superblock();
+	ASSERT_TRUE(routed.usesPageDirectoryBootstrap());
+	routed.allocator_root = {};
+	snapshot.release();
+	store.reset();
+
+	MetadataPageFile pages(io, routed);
+	MetadataPagePoolAllocator allocator(io, routed, MetadataPagePoolOpenMode::CPOM_ROOT_RECOVER);
+	AllocatorDirectory directory(pages, allocator);
+	EXPECT_TRUE(directory.isAllocated(routed, PhysicalSlotId(1U)));
+	EXPECT_TRUE(directory.isAllocated(routed, PhysicalSlotId(2U)));
+	EXPECT_FALSE(directory.isAllocated(routed, PhysicalSlotId(40U)));
 }
 
 TEST_F(RelocatableMetadataStoreTest, AllocatesLogicalNodeAndEdgeIdsDurablyAndIndependently) {
@@ -209,6 +752,52 @@ TEST_F(RelocatableMetadataStoreTest, EntityPropertyPoolPublicationIsAtomicAcross
 	EXPECT_EQ(recovered->findEntityPropertyLocation(after, key), (EntityPropertyLocation{key, PageId(1), 0U, 1U}));
 	EXPECT_TRUE(recovered->isPhysicalSlotAllocated(after, PhysicalSlotId(40)));
 	after.release();
+}
+
+TEST_F(RelocatableMetadataStoreTest, ValidatesAndRemovesOwnerKeyedPropertyLocationsThroughThePublicDirectoryBoundary) {
+	const EntityPropertyKey key{EntityPropertyOwnerKind::EPOK_NODE, 71U};
+	const EntityPropertyPagePoolPreparer preparer = [](const CatalogEntry &pool, PageId pageId, PageLocation &page,
+													   EntityPropertyLocation &property) {
+		page = {pageId, pool.segment_id, RSS_PAGE_POOL_FIRST_DATA_FRAME, pool.generation, 0U};
+		property = {property.key, pageId, 0U, 1U};
+	};
+
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	const std::optional<EntityPropertyPagePoolMaterialization> materialized =
+			store->materializeEntityPropertyPagePool(PhysicalSlotId(701U).value(), key, PhysicalSlotId(40U),
+													 PhysicalSlotId(40U), LogSequenceNumber(2U), preparer);
+	ASSERT_TRUE(materialized.has_value());
+
+	EntityPropertyLocation invalidLocation = materialized->property;
+	invalidLocation.key = {};
+	expectFormatError(
+			[&] {
+				static_cast<void>(store->upsertEntityPropertyLocations(std::span(&invalidLocation, 1U), {},
+																	   LogSequenceNumber(3U)));
+			},
+			FormatError::FERR_INVALID_STATE);
+	const EntityPropertyKey invalidKey{};
+	expectFormatError(
+			[&] {
+				static_cast<void>(
+						store->upsertEntityPropertyLocations({}, std::span(&invalidKey, 1U), LogSequenceNumber(3U)));
+			},
+			FormatError::FERR_INVALID_HEADER);
+
+	MetadataSnapshotPin beforeRemoval = store->openSnapshot();
+	EXPECT_EQ(store->findEntityPropertyLocation(beforeRemoval, key), materialized->property);
+	beforeRemoval.release();
+	static_cast<void>(store->upsertEntityPropertyLocations({}, std::span(&key, 1U), LogSequenceNumber(3U)));
+
+	MetadataSnapshotPin afterRemoval = store->openSnapshot();
+	EXPECT_FALSE(store->findEntityPropertyLocationOptional(afterRemoval, key).has_value());
+	afterRemoval.release();
+	store.reset();
+
+	auto reopened = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin recovered = reopened->openSnapshot();
+	EXPECT_FALSE(reopened->findEntityPropertyLocationOptional(recovered, key).has_value());
+	recovered.release();
 }
 
 TEST_F(RelocatableMetadataStoreTest, ExistingPoolAppendRejectsMissingCallbacksStalePoolsAndInvalidPageIds) {
@@ -1107,8 +1696,29 @@ TEST_F(RelocatableMetadataStoreTest, EvacuatesASparseMetadataPoolThenReclaimsAnd
 	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
 	const std::vector<CatalogEntry> entries = entriesThatRequireAnotherMetadataPool();
 	static_cast<void>(store->upsertCatalog(entries, LogSequenceNumber(2)));
+	auto catalogPathPageIds = [&](const Superblock &superblock) {
+		MetadataPageFile pages(io, superblock);
+		std::vector<MetadataPageId> pageIds;
+		PhysicalPageRef reference = superblock.catalog_root;
+		while (reference.isValid()) {
+			const MetadataRadixPage radix = pages.readMetadataRadix(reference);
+			pageIds.push_back(radix.page_id);
+			EXPECT_LT(radix.level, RSS_CATALOG_RADIX_MAX_LEVEL + 1U);
+			if (!radix.children[0].isValid()) {
+				EXPECT_TRUE(false);
+				break;
+			}
+			if (radix.level == 0U) {
+				pageIds.push_back(pages.readCatalogLeaf(radix.children[0]).page_id);
+				break;
+			}
+			reference = radix.children[0];
+		}
+		return pageIds;
+	};
 
 	MetadataSnapshotPin pinned = store->openSnapshot();
+	const std::vector<MetadataPageId> originalCatalogPath = catalogPathPageIds(pinned.superblock());
 	const MetadataPagePoolEvacuation blocked = store->evacuateSparseMetadataPagePool(LogSequenceNumber(3), 8U);
 	EXPECT_EQ(blocked.superblock, pinned.superblock());
 	EXPECT_FALSE(blocked.source_pool_slot.isValid());
@@ -1119,13 +1729,20 @@ TEST_F(RelocatableMetadataStoreTest, EvacuatesASparseMetadataPoolThenReclaimsAnd
 	ASSERT_TRUE(evacuation.source_pool_slot.isValid());
 	EXPECT_EQ(evacuation.superblock.generation, Generation(3));
 	EXPECT_GT(evacuation.relocated_metadata_pages, 0U);
+	EXPECT_EQ(catalogPathPageIds(evacuation.superblock), originalCatalogPath);
 	const uint64_t sourceHeaderOffset = evacuation.superblock.data_region_offset +
 										(evacuation.source_pool_slot.value() - 1U) * RSS_SEGMENT_SIZE +
 										RSS_ENVELOPE_BYTES;
-	std::array<std::byte, RSS_METADATA_PAGE_POOL_HEADER_BYTES> sourceHeaderBytes{};
+	std::array<std::byte, RSS_METADATA_PAGE_POOL_HEADER_BYTES * 2U> sourceHeaderBytes{};
 	ASSERT_EQ(io->readAt(sourceHeaderOffset, sourceHeaderBytes.data(), sourceHeaderBytes.size()),
 			  sourceHeaderBytes.size());
-	EXPECT_EQ(MetadataPagePoolHeaderCodec::decode(sourceHeaderBytes).allocated_frames, 0U);
+	const MetadataPagePoolHeader firstHeader = MetadataPagePoolHeaderCodec::decode(
+			std::span<const std::byte>(sourceHeaderBytes).first(RSS_METADATA_PAGE_POOL_HEADER_BYTES));
+	const MetadataPagePoolHeader secondHeader = MetadataPagePoolHeaderCodec::decode(
+			std::span<const std::byte>(sourceHeaderBytes).subspan(RSS_METADATA_PAGE_POOL_HEADER_BYTES));
+	const MetadataPagePoolHeader &currentHeader =
+			firstHeader.control_sequence >= secondHeader.control_sequence ? firstHeader : secondHeader;
+	EXPECT_EQ(currentHeader.allocated_frames, 0U);
 
 	MetadataSnapshotPin evacuatedSnapshot = store->openSnapshot();
 	const CatalogEntry evacuatedEntry = store->findCatalog(evacuatedSnapshot, entries.front().segment_id);
@@ -1168,6 +1785,559 @@ TEST_F(RelocatableMetadataStoreTest, SparseMetadataPoolEvacuationPreservesTheOld
 	EXPECT_EQ(published.superblock.generation, Generation(3));
 }
 
+TEST_F(RelocatableMetadataStoreTest, SparseMetadataPoolEvacuationPreservesLogicalCatalogChildrenAndReopens) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	std::vector<MetadataSnapshotPin> retained = createReclaimableMetadataPool(*store);
+	for (MetadataSnapshotPin &snapshot: retained) {
+		snapshot.release();
+	}
+	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(7)));
+	const CatalogEntry replacement = entry(200, 2, 8);
+	static_cast<void>(store->upsertCatalog(std::span(&replacement, 1), LogSequenceNumber(8)));
+	const ExtentLocation extent{ExtentId(1), SegmentId(20), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, Generation(1)};
+	static_cast<void>(store->upsertLocations({}, std::span(&extent, 1), LogSequenceNumber(9)));
+	EXPECT_THROW(static_cast<void>(store->evacuateSparseMetadataPagePool(
+						 LogSequenceNumber(10), RSS_PAGE_POOL_DATA_FRAME_COUNT,
+						 withBootstrapFailpoint(BootstrapPublishFailpoint::BPF_BEFORE_INACTIVE_WRITE))),
+				 BootstrapPublishInterrupted);
+	MetadataSnapshotPin unpublished = store->openSnapshot();
+	EXPECT_EQ(unpublished.superblock().generation, Generation(9));
+	EXPECT_EQ(store->findCatalog(unpublished, replacement.segment_id).physical_slot, replacement.physical_slot);
+	EXPECT_EQ(store->findExtentLocation(unpublished, extent.extent_id), extent);
+	unpublished.release();
+
+	const MetadataPagePoolEvacuation evacuation =
+			store->evacuateSparseMetadataPagePool(LogSequenceNumber(10), RSS_PAGE_POOL_DATA_FRAME_COUNT);
+	ASSERT_TRUE(evacuation.source_pool_slot.isValid());
+	MetadataPageFile pages(io, evacuation.superblock);
+	const CatalogRadixPage root = pages.readCatalogRadix(evacuation.superblock.catalog_root);
+	EXPECT_TRUE(root.logical_children_enabled);
+	EXPECT_TRUE(root.logical_children[0].isValid());
+	EXPECT_TRUE(root.children[0].isValid());
+	const MetadataRadixPage extentRoot = pages.readMetadataRadix(evacuation.superblock.extent_directory_root);
+	EXPECT_TRUE(extentRoot.logical_children_enabled);
+	EXPECT_TRUE(extentRoot.logical_children[0].isValid());
+	EXPECT_TRUE(extentRoot.children[0].isValid());
+	MetadataSnapshotPin snapshot = store->openSnapshot();
+	EXPECT_EQ(store->findCatalog(snapshot, replacement.segment_id).physical_slot, replacement.physical_slot);
+	EXPECT_EQ(store->findExtentLocation(snapshot, extent.extent_id), extent);
+	snapshot.release();
+
+	auto reopened = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin recovered = reopened->openSnapshot();
+	EXPECT_EQ(reopened->findCatalog(recovered, replacement.segment_id).physical_slot, replacement.physical_slot);
+	EXPECT_EQ(reopened->findExtentLocation(recovered, extent.extent_id), extent);
+}
+
+TEST_F(RelocatableMetadataStoreTest,
+	   EvacuatesRoutedTargetsWhileAnOlderSnapshotRemainsReadableThenReclaimsAndReusesTheSourcePool) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	std::vector<MetadataSnapshotPin> retained = createReclaimableMetadataPool(*store);
+	for (MetadataSnapshotPin &snapshot: retained) {
+		snapshot.release();
+	}
+	static_cast<void>(store->migratePageDirectoryToBootstrap(LogSequenceNumber(7)));
+
+	CatalogEntry catalog = entry(200U, 2U, 8U);
+	static_cast<void>(store->upsertCatalog(std::span(&catalog, 1U), LogSequenceNumber(8)));
+	const ExtentLocation original{ExtentId(1U), SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, Generation(1U)};
+	static_cast<void>(store->upsertLocations({}, std::span(&original, 1U), LogSequenceNumber(9)));
+	const auto currentRoutes = [&](const Superblock &superblock) {
+		MetadataPageFile pages(io, superblock);
+		const PageDirectoryBootstrap bootstrap = pages.readPageDirectoryBootstrap(superblock.page_directory_root);
+		std::map<uint64_t, PhysicalPageRef> routes;
+		for (const MetadataPageRoute &route: MetadataPageRouteDirectory(pages).collectRoutesFromRouteBranch(
+					 superblock, bootstrap.metadata_page_directory_root)) {
+			routes.emplace(route.page_id.value(), route.physical_reference);
+		}
+		return routes;
+	};
+	MetadataSnapshotPin beforeEvacuation = store->openSnapshot();
+	const std::map<uint64_t, PhysicalPageRef> routesBeforeEvacuation = currentRoutes(beforeEvacuation.superblock());
+	const MetadataPagePoolEvacuation evacuation =
+			store->evacuateSparseMetadataPagePool(LogSequenceNumber(10), RSS_PAGE_POOL_DATA_FRAME_COUNT);
+	ASSERT_TRUE(evacuation.source_pool_slot.isValid());
+	ASSERT_GT(evacuation.relocated_metadata_pages, 0U);
+	const std::map<uint64_t, PhysicalPageRef> routesAfterEvacuation = currentRoutes(evacuation.superblock);
+	ASSERT_EQ(routesAfterEvacuation.size(), routesBeforeEvacuation.size());
+	uint32_t replacedRoutes = 0U;
+	for (const auto &[pageId, reference]: routesBeforeEvacuation) {
+		const auto replacement = routesAfterEvacuation.find(pageId);
+		ASSERT_NE(replacement, routesAfterEvacuation.end());
+		if (reference.physical_slot == evacuation.source_pool_slot) {
+			EXPECT_NE(replacement->second, reference);
+			EXPECT_NE(replacement->second.physical_slot, evacuation.source_pool_slot);
+			++replacedRoutes;
+		} else {
+			EXPECT_EQ(replacement->second, reference);
+		}
+	}
+	EXPECT_EQ(replacedRoutes, evacuation.relocated_metadata_pages);
+	EXPECT_GT(replacedRoutes, 0U);
+	EXPECT_EQ(store->findCatalog(beforeEvacuation, catalog.segment_id).physical_slot, catalog.physical_slot);
+	EXPECT_EQ(store->findExtentLocation(beforeEvacuation, original.extent_id), original);
+	EXPECT_TRUE(std::ranges::any_of(routesBeforeEvacuation, [&evacuation](const auto &route) {
+		return route.second.physical_slot == evacuation.source_pool_slot;
+	}));
+	const auto sourceAllocatedFrames = [&] {
+		const uint64_t sourceHeaderOffset = evacuation.superblock.data_region_offset +
+											(evacuation.source_pool_slot.value() - 1U) * RSS_SEGMENT_SIZE +
+											RSS_ENVELOPE_BYTES;
+		std::array<std::byte, RSS_METADATA_PAGE_POOL_HEADER_BYTES * 2U> headerBytes{};
+		EXPECT_EQ(io->readAt(sourceHeaderOffset, headerBytes.data(), headerBytes.size()), headerBytes.size());
+		const MetadataPagePoolHeader first = MetadataPagePoolHeaderCodec::decode(
+				std::span<const std::byte>(headerBytes).first(RSS_METADATA_PAGE_POOL_HEADER_BYTES));
+		const MetadataPagePoolHeader second = MetadataPagePoolHeaderCodec::decode(
+				std::span<const std::byte>(headerBytes).subspan(RSS_METADATA_PAGE_POOL_HEADER_BYTES));
+		return (first.control_sequence >= second.control_sequence ? first : second).allocated_frames;
+	};
+	EXPECT_NE(sourceAllocatedFrames(), 0U);
+
+	MetadataSnapshotPin relocated = store->openSnapshot();
+	EXPECT_EQ(store->findCatalog(relocated, catalog.segment_id).physical_slot, catalog.physical_slot);
+	EXPECT_EQ(store->findExtentLocation(relocated, original.extent_id), original);
+	relocated.release();
+
+	const MetadataPagePoolReclamation blockedReclamation = store->reclaimEmptyMetadataPagePools(LogSequenceNumber(11));
+	EXPECT_EQ(std::find(blockedReclamation.released_pool_slots.begin(), blockedReclamation.released_pool_slots.end(),
+						evacuation.source_pool_slot),
+			  blockedReclamation.released_pool_slots.end());
+	for (const auto &[pageId, reference]: currentRoutes(blockedReclamation.superblock)) {
+		EXPECT_NE(reference.physical_slot, evacuation.source_pool_slot) << "page ID " << pageId;
+	}
+	EXPECT_TRUE(store->isPhysicalSlotAllocated(beforeEvacuation, evacuation.source_pool_slot));
+	EXPECT_NE(sourceAllocatedFrames(), 0U);
+	beforeEvacuation.release();
+	store->collectMetadataGarbage();
+	EXPECT_EQ(sourceAllocatedFrames(), 0U);
+
+	const MetadataPagePoolReclamation reclamation = store->reclaimEmptyMetadataPagePools(LogSequenceNumber(12));
+	EXPECT_NE(std::find(reclamation.released_pool_slots.begin(), reclamation.released_pool_slots.end(),
+						evacuation.source_pool_slot),
+			  reclamation.released_pool_slots.end());
+	const CatalogSlotReservationRequest request = reservationRequest(10000U, 1U);
+	const std::optional<CatalogSlotReservation> reused = store->reserveFirstFreeAndUpsertCatalog(
+			request, evacuation.source_pool_slot, evacuation.source_pool_slot, LogSequenceNumber(13));
+	ASSERT_TRUE(reused.has_value());
+	EXPECT_EQ(reused->entry.physical_slot, evacuation.source_pool_slot);
+
+	catalog.physical_slot = PhysicalSlotId(201U);
+	catalog.committed_lsn = LogSequenceNumber(14U);
+	static_cast<void>(store->upsertCatalog(std::span(&catalog, 1U), LogSequenceNumber(14)));
+	ExtentLocation replacement = original;
+	replacement.segment_id = SegmentId(21U);
+	static_cast<void>(store->upsertLocations({}, std::span(&replacement, 1U), LogSequenceNumber(15)));
+	MetadataSnapshotPin current = store->openSnapshot();
+	EXPECT_EQ(store->findCatalog(current, catalog.segment_id).physical_slot, catalog.physical_slot);
+	EXPECT_EQ(store->findExtentLocation(current, replacement.extent_id), replacement);
+	current.release();
+
+	store.reset();
+	auto reopened = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin recovered = reopened->openSnapshot();
+	EXPECT_EQ(reopened->findCatalog(recovered, catalog.segment_id).physical_slot, catalog.physical_slot);
+	EXPECT_EQ(reopened->findExtentLocation(recovered, replacement.extent_id), replacement);
+	EXPECT_EQ(reopened->findCatalog(recovered, request.segment_id).physical_slot, evacuation.source_pool_slot);
+}
+
+TEST_F(RelocatableMetadataStoreTest,
+	   RoutedMetadataPoolRelocationAfterPublicationKeepsPinnedSnapshotReadableUntilReclamation) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	prepareRoutedMetadataPoolForEvacuation(*store);
+	MetadataSnapshotPin beforePublication = store->openSnapshot();
+	const auto routesFor = [this](const Superblock &superblock) {
+		MetadataPageFile pages(io, superblock);
+		const PageDirectoryBootstrap bootstrap = pages.readPageDirectoryBootstrap(superblock.page_directory_root);
+		std::map<uint64_t, PhysicalPageRef> routes;
+		for (const MetadataPageRoute &route: MetadataPageRouteDirectory(pages).collectRoutesFromRouteBranch(
+					 superblock, bootstrap.metadata_page_directory_root)) {
+			routes.emplace(route.page_id.value(), route.physical_reference);
+		}
+		return routes;
+	};
+	const std::map<uint64_t, PhysicalPageRef> beforeRoutes = routesFor(beforePublication.superblock());
+
+	EXPECT_THROW(static_cast<void>(store->evacuateSparseMetadataPagePool(
+						 LogSequenceNumber(10U), RSS_PAGE_POOL_DATA_FRAME_COUNT,
+						 withBootstrapFailpoint(BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE))),
+				 BootstrapPublishInterrupted);
+
+	EXPECT_EQ(beforePublication.superblock().generation, Generation(9U));
+	EXPECT_EQ(store->findCatalog(beforePublication, SegmentId(200U)).physical_slot, PhysicalSlotId(2U));
+	EXPECT_EQ(store->findExtentLocation(beforePublication, ExtentId(1U)),
+			  (ExtentLocation{ExtentId(1U), SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, Generation(1U)}));
+
+	MetadataSnapshotPin published = store->openSnapshot();
+	EXPECT_EQ(published.superblock().generation, Generation(10U));
+	EXPECT_EQ(store->findCatalog(published, SegmentId(200U)).physical_slot, PhysicalSlotId(2U));
+	EXPECT_EQ(store->findExtentLocation(published, ExtentId(1U)),
+			  (ExtentLocation{ExtentId(1U), SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, Generation(1U)}));
+	const std::map<uint64_t, PhysicalPageRef> publishedRoutes = routesFor(published.superblock());
+	ASSERT_EQ(publishedRoutes.size(), beforeRoutes.size());
+	uint32_t relocatedRoutes = 0U;
+	PhysicalSlotId sourcePoolSlot;
+	for (const auto &[pageId, before]: beforeRoutes) {
+		const auto after = publishedRoutes.find(pageId);
+		ASSERT_NE(after, publishedRoutes.end());
+		if (after->second != before) {
+			if (!sourcePoolSlot.isValid()) {
+				sourcePoolSlot = before.physical_slot;
+			} else {
+				EXPECT_EQ(before.physical_slot, sourcePoolSlot);
+			}
+			++relocatedRoutes;
+		}
+	}
+	EXPECT_GT(relocatedRoutes, 0U);
+	ASSERT_TRUE(sourcePoolSlot.isValid());
+	published.release();
+
+	const MetadataPagePoolReclamation blocked = store->reclaimEmptyMetadataPagePools(LogSequenceNumber(11U));
+	EXPECT_EQ(std::find(blocked.released_pool_slots.begin(), blocked.released_pool_slots.end(), sourcePoolSlot),
+			  blocked.released_pool_slots.end());
+	beforePublication.release();
+	store->collectMetadataGarbage();
+	const MetadataPagePoolReclamation reclaimed = store->reclaimEmptyMetadataPagePools(LogSequenceNumber(12U));
+	EXPECT_NE(std::find(reclaimed.released_pool_slots.begin(), reclaimed.released_pool_slots.end(), sourcePoolSlot),
+			  reclaimed.released_pool_slots.end());
+
+	store.reset();
+	auto reopened = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin recovered = reopened->openSnapshot();
+	EXPECT_EQ(recovered.superblock().generation, Generation(12U));
+	EXPECT_EQ(reopened->findCatalog(recovered, SegmentId(200U)).physical_slot, PhysicalSlotId(2U));
+	EXPECT_EQ(reopened->findExtentLocation(recovered, ExtentId(1U)),
+			  (ExtentLocation{ExtentId(1U), SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, Generation(1U)}));
+}
+
+TEST_F(RelocatableMetadataStoreTest, RoutedMetadataPoolRelocationChurnReclaimsAndReusesMetadataCapacityAcrossReopen) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	prepareRoutedMetadataPoolForEvacuation(*store);
+
+	constexpr uint64_t CHURN_ROUNDS = 32U;
+	constexpr uint64_t REQUIRED_STABLE_ROUNDS = 8U;
+	uint64_t previousFileBytes = 0U;
+	uint64_t convergedFileBytes = 0U;
+	uint64_t roundsAfterConvergence = 0U;
+	bool converged = false;
+	for (uint64_t round = 0U; round < CHURN_ROUNDS; ++round) {
+		const uint64_t evacuationLsn = 10U + round * 4U;
+		const MetadataPagePoolEvacuation evacuation =
+				store->evacuateSparseMetadataPagePool(LogSequenceNumber(evacuationLsn), RSS_PAGE_POOL_DATA_FRAME_COUNT);
+		ASSERT_TRUE(evacuation.source_pool_slot.isValid()) << "round " << round;
+		ASSERT_GT(evacuation.relocated_metadata_pages, 0U) << "round " << round;
+
+		store->collectMetadataGarbage();
+		const MetadataPagePoolReclamation reclamation =
+				store->reclaimEmptyMetadataPagePools(LogSequenceNumber(evacuationLsn + 1U));
+		EXPECT_NE(std::find(reclamation.released_pool_slots.begin(), reclamation.released_pool_slots.end(),
+							evacuation.source_pool_slot),
+				  reclamation.released_pool_slots.end())
+				<< "round " << round;
+
+		CatalogEntry catalog = entry(200U + round, 2U + round, evacuationLsn + 2U);
+		catalog.segment_id = SegmentId(200U);
+		catalog.owner_id = 77U;
+		static_cast<void>(store->upsertCatalog(std::span(&catalog, 1U), LogSequenceNumber(evacuationLsn + 2U)));
+		const ExtentLocation extent{ExtentId(1U), SegmentId(20U + round), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U,
+									Generation(1U)};
+		static_cast<void>(store->upsertLocations({}, std::span(&extent, 1U), LogSequenceNumber(evacuationLsn + 3U)));
+
+		const uint64_t fileBytes = io->fileSize();
+		if (converged) {
+			// A released source slot is eligible for the next COW pool, so later
+			// churn must converge instead of extending the physical metadata tail.
+			EXPECT_EQ(fileBytes, convergedFileBytes) << "round " << round;
+			++roundsAfterConvergence;
+		} else if (round != 0U && fileBytes == previousFileBytes) {
+			converged = true;
+			convergedFileBytes = fileBytes;
+		}
+		previousFileBytes = fileBytes;
+
+		store.reset();
+		store = RelocatableMetadataStore::open(io);
+		MetadataSnapshotPin reopened = store->openSnapshot();
+		EXPECT_EQ(store->findCatalog(reopened, catalog.segment_id).physical_slot, catalog.physical_slot);
+		EXPECT_EQ(store->findExtentLocation(reopened, extent.extent_id), extent);
+		reopened.release();
+	}
+	EXPECT_TRUE(converged);
+	EXPECT_GE(roundsAfterConvergence, REQUIRED_STABLE_ROUNDS);
+}
+
+TEST_F(RelocatableMetadataStoreTest,
+	   NativeRoutedMetadataPoolRelocationCandidateShortWriteKeepsTheOldGenerationAndCanRetry) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	prepareRoutedMetadataPoolForEvacuation(*store);
+	store.reset();
+
+	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	io = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+	store = RelocatableMetadataStore::open(io);
+	bool interrupted = false;
+	{
+		StorageIO::ScopedNativeWriteHookForTesting shortRelocatedCatalogTarget(
+				[&interrupted](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+					bool catalogLeaf = false;
+					if (!interrupted && offset >= 0 && static_cast<uint64_t>(offset) >= RSS_FILE_BOOTSTRAP_BYTES &&
+						byteCount == RSS_PAGE_SIZE) {
+						try {
+							static_cast<void>(CatalogLeafPageCodec::decode(
+									std::span<const std::byte>(static_cast<const std::byte *>(bytes), byteCount)));
+							catalogLeaf = true;
+						} catch (const FormatException &) {
+							// Route and other metadata candidates have distinct typed codecs.
+						}
+					}
+					if (catalogLeaf) {
+						interrupted = true;
+						return portable_pwrite(fd, bytes, byteCount - 1U, offset);
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		EXPECT_THROW(static_cast<void>(store->evacuateSparseMetadataPagePool(LogSequenceNumber(10U),
+																			 RSS_PAGE_POOL_DATA_FRAME_COUNT)),
+					 std::system_error);
+	}
+	EXPECT_TRUE(interrupted);
+	MetadataSnapshotPin beforeRetry = store->openSnapshot();
+	EXPECT_EQ(beforeRetry.superblock().generation, Generation(9U));
+	EXPECT_EQ(store->findCatalog(beforeRetry, SegmentId(200U)).physical_slot, PhysicalSlotId(2U));
+	EXPECT_EQ(store->findExtentLocation(beforeRetry, ExtentId(1U)),
+			  (ExtentLocation{ExtentId(1U), SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, Generation(1U)}));
+	beforeRetry.release();
+
+	const MetadataPagePoolEvacuation retried =
+			store->evacuateSparseMetadataPagePool(LogSequenceNumber(10U), RSS_PAGE_POOL_DATA_FRAME_COUNT);
+	EXPECT_EQ(retried.superblock.generation, Generation(10U));
+	EXPECT_GT(retried.relocated_metadata_pages, 0U);
+	store.reset();
+
+	auto reopened = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin persisted = reopened->openSnapshot();
+	EXPECT_EQ(persisted.superblock().generation, Generation(10U));
+	EXPECT_EQ(reopened->findCatalog(persisted, SegmentId(200U)).physical_slot, PhysicalSlotId(2U));
+	io.reset();
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+}
+
+TEST_F(RelocatableMetadataStoreTest,
+	   NativeRoutedMetadataPoolRelocationCandidateEnospcKeepsTheOldGenerationAndCanRetry) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	prepareRoutedMetadataPoolForEvacuation(*store);
+	store.reset();
+
+	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	io = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+	store = RelocatableMetadataStore::open(io);
+	bool interrupted = false;
+	{
+		StorageIO::ScopedNativeWriteHookForTesting failRelocatedCatalogTarget(
+				[&interrupted](file_handle_t fd, const void *bytes, size_t byteCount, pwrite_off_t offset) {
+					bool catalogLeaf = false;
+					if (!interrupted && offset >= 0 && static_cast<uint64_t>(offset) >= RSS_FILE_BOOTSTRAP_BYTES &&
+						byteCount == RSS_PAGE_SIZE) {
+						try {
+							static_cast<void>(CatalogLeafPageCodec::decode(
+									std::span<const std::byte>(static_cast<const std::byte *>(bytes), byteCount)));
+							catalogLeaf = true;
+						} catch (const FormatException &) {
+							// Route and other metadata candidates have distinct typed codecs.
+						}
+					}
+					if (catalogLeaf) {
+						interrupted = true;
+#ifdef _WIN32
+						SetLastError(ERROR_DISK_FULL);
+#else
+						errno = ENOSPC;
+#endif
+						return static_cast<pwrite_ssize_t>(-1);
+					}
+					return portable_pwrite(fd, bytes, byteCount, offset);
+				});
+		EXPECT_THROW(static_cast<void>(store->evacuateSparseMetadataPagePool(LogSequenceNumber(10U),
+																			 RSS_PAGE_POOL_DATA_FRAME_COUNT)),
+					 std::system_error);
+	}
+	EXPECT_TRUE(interrupted);
+	MetadataSnapshotPin beforeRetry = store->openSnapshot();
+	EXPECT_EQ(beforeRetry.superblock().generation, Generation(9U));
+	EXPECT_EQ(store->findCatalog(beforeRetry, SegmentId(200U)).physical_slot, PhysicalSlotId(2U));
+	EXPECT_EQ(store->findExtentLocation(beforeRetry, ExtentId(1U)),
+			  (ExtentLocation{ExtentId(1U), SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, Generation(1U)}));
+	beforeRetry.release();
+
+	const MetadataPagePoolEvacuation retried =
+			store->evacuateSparseMetadataPagePool(LogSequenceNumber(10U), RSS_PAGE_POOL_DATA_FRAME_COUNT);
+	EXPECT_EQ(retried.superblock.generation, Generation(10U));
+	EXPECT_GT(retried.relocated_metadata_pages, 0U);
+	store.reset();
+
+	auto reopened = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin persisted = reopened->openSnapshot();
+	EXPECT_EQ(persisted.superblock().generation, Generation(10U));
+	EXPECT_EQ(reopened->findCatalog(persisted, SegmentId(200U)).physical_slot, PhysicalSlotId(2U));
+	io.reset();
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+}
+
+TEST_F(RelocatableMetadataStoreTest,
+	   NativeRoutedMetadataPoolRelocationFinalFenceReportsUncertainDurabilityAndReopensTheCompleteRoute) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	prepareRoutedMetadataPoolForEvacuation(*store);
+	store.reset();
+
+	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	io = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+	store = RelocatableMetadataStore::open(io);
+	std::atomic<uint32_t> syncCalls{0U};
+	{
+		StorageIO::ScopedNativeSyncHookForTesting failFinalFence([&syncCalls](file_handle_t fd) {
+			if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 1U) {
+#ifdef _WIN32
+				SetLastError(ERROR_WRITE_FAULT);
+#else
+				errno = EIO;
+#endif
+				return -1;
+			}
+			return portable_fsync(fd);
+		});
+		EXPECT_THROW(static_cast<void>(store->evacuateSparseMetadataPagePool(LogSequenceNumber(10U),
+																			 RSS_PAGE_POOL_DATA_FRAME_COUNT)),
+					 std::runtime_error);
+	}
+	EXPECT_GE(syncCalls.load(std::memory_order_relaxed), 2U);
+	MetadataSnapshotPin current = store->openSnapshot();
+	EXPECT_EQ(current.superblock().generation, Generation(10U));
+	EXPECT_EQ(store->findCatalog(current, SegmentId(200U)).physical_slot, PhysicalSlotId(2U));
+	EXPECT_EQ(store->findExtentLocation(current, ExtentId(1U)),
+			  (ExtentLocation{ExtentId(1U), SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, Generation(1U)}));
+	current.release();
+
+	store.reset();
+	auto reopened = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin persisted = reopened->openSnapshot();
+	EXPECT_EQ(persisted.superblock().generation, Generation(10U));
+	EXPECT_EQ(reopened->findCatalog(persisted, SegmentId(200U)).physical_slot, PhysicalSlotId(2U));
+	EXPECT_EQ(reopened->findExtentLocation(persisted, ExtentId(1U)),
+			  (ExtentLocation{ExtentId(1U), SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, Generation(1U)}));
+	io.reset();
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+}
+
+TEST_F(RelocatableMetadataStoreTest,
+	   NativeRoutedMetadataPoolRelocationDataFenceFailureKeepsTheOldGenerationAndCanRetryAfterReopen) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	prepareRoutedMetadataPoolForEvacuation(*store);
+	store.reset();
+
+	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	io = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+	store = RelocatableMetadataStore::open(io);
+	std::atomic<uint32_t> syncCalls{0U};
+	{
+		StorageIO::ScopedNativeSyncHookForTesting failDataFence([&syncCalls](file_handle_t fd) {
+			if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 0U) {
+#ifdef _WIN32
+				SetLastError(ERROR_DISK_FULL);
+#else
+				errno = ENOSPC;
+#endif
+				return -1;
+			}
+			return portable_fsync(fd);
+		});
+		EXPECT_THROW(static_cast<void>(store->evacuateSparseMetadataPagePool(LogSequenceNumber(10U),
+																			 RSS_PAGE_POOL_DATA_FRAME_COUNT)),
+					 std::runtime_error);
+	}
+	EXPECT_GE(syncCalls.load(std::memory_order_relaxed), 1U);
+	store.reset();
+	io.reset();
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+
+	const file_handle_t reopenedHandle = portable_open_rw(testFilePath.string().c_str());
+	ASSERT_NE(reopenedHandle, INVALID_FILE_HANDLE);
+	io = std::make_shared<StorageIO>(file, reopenedHandle, reopenedHandle);
+	store = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin beforeRetry = store->openSnapshot();
+	EXPECT_EQ(beforeRetry.superblock().generation, Generation(9U));
+	EXPECT_EQ(store->findCatalog(beforeRetry, SegmentId(200U)).physical_slot, PhysicalSlotId(2U));
+	EXPECT_EQ(store->findExtentLocation(beforeRetry, ExtentId(1U)),
+			  (ExtentLocation{ExtentId(1U), SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, Generation(1U)}));
+	beforeRetry.release();
+
+	const MetadataPagePoolEvacuation retried =
+			store->evacuateSparseMetadataPagePool(LogSequenceNumber(10U), RSS_PAGE_POOL_DATA_FRAME_COUNT);
+	EXPECT_EQ(retried.superblock.generation, Generation(10U));
+	EXPECT_GT(retried.relocated_metadata_pages, 0U);
+	store.reset();
+
+	auto reopened = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin persisted = reopened->openSnapshot();
+	EXPECT_EQ(persisted.superblock().generation, Generation(10U));
+	EXPECT_EQ(reopened->findCatalog(persisted, SegmentId(200U)).physical_slot, PhysicalSlotId(2U));
+	persisted.release();
+	reopened.reset();
+	io.reset();
+	EXPECT_EQ(portable_close_rw(reopenedHandle), 0);
+}
+
+TEST_F(RelocatableMetadataStoreTest,
+	   NativeRoutedMetadataPoolRelocationFinalFenceEnospcReportsUncertainDurabilityAndReopensTheCompleteRoute) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	prepareRoutedMetadataPoolForEvacuation(*store);
+	store.reset();
+
+	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	io = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+	store = RelocatableMetadataStore::open(io);
+	std::atomic<uint32_t> syncCalls{0U};
+	{
+		StorageIO::ScopedNativeSyncHookForTesting failFinalFence([&syncCalls](file_handle_t fd) {
+			if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 1U) {
+#ifdef _WIN32
+				SetLastError(ERROR_DISK_FULL);
+#else
+				errno = ENOSPC;
+#endif
+				return -1;
+			}
+			return portable_fsync(fd);
+		});
+		EXPECT_THROW(static_cast<void>(store->evacuateSparseMetadataPagePool(LogSequenceNumber(10U),
+																			 RSS_PAGE_POOL_DATA_FRAME_COUNT)),
+					 std::runtime_error);
+	}
+	EXPECT_GE(syncCalls.load(std::memory_order_relaxed), 2U);
+	MetadataSnapshotPin current = store->openSnapshot();
+	EXPECT_EQ(current.superblock().generation, Generation(10U));
+	EXPECT_EQ(store->findCatalog(current, SegmentId(200U)).physical_slot, PhysicalSlotId(2U));
+	EXPECT_EQ(store->findExtentLocation(current, ExtentId(1U)),
+			  (ExtentLocation{ExtentId(1U), SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, Generation(1U)}));
+	current.release();
+
+	store.reset();
+	auto reopened = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin persisted = reopened->openSnapshot();
+	EXPECT_EQ(persisted.superblock().generation, Generation(10U));
+	EXPECT_EQ(reopened->findCatalog(persisted, SegmentId(200U)).physical_slot, PhysicalSlotId(2U));
+	EXPECT_EQ(reopened->findExtentLocation(persisted, ExtentId(1U)),
+			  (ExtentLocation{ExtentId(1U), SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U, Generation(1U)}));
+	persisted.release();
+	reopened.reset();
+	io.reset();
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
+}
+
 TEST_F(RelocatableMetadataStoreTest, SparseMetadataPoolEvacuationRecoversTheDurableNewRootAfterPublication) {
 	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
 	const std::vector<CatalogEntry> entries = entriesThatRequireAnotherMetadataPool();
@@ -1184,6 +2354,51 @@ TEST_F(RelocatableMetadataStoreTest, SparseMetadataPoolEvacuationRecoversTheDura
 	EXPECT_EQ(reopened->findCatalog(snapshot, entries.front().segment_id).physical_slot, entries.front().physical_slot);
 	snapshot.release();
 	EXPECT_GT(reopened->reclaimEmptyMetadataPagePools(LogSequenceNumber(4)).reclaimed_pool_slots, 0U);
+}
+
+TEST_F(RelocatableMetadataStoreTest,
+	   NativeSparseMetadataPoolEvacuationFinalFenceReportsUncertainDurabilityAndReopensTheCompleteRoot) {
+	const file_handle_t nativeHandle = portable_open_rw(testFilePath.string().c_str());
+	ASSERT_NE(nativeHandle, INVALID_FILE_HANDLE);
+	{
+		auto nativeIo = std::make_shared<StorageIO>(file, nativeHandle, nativeHandle);
+		auto store = RelocatableMetadataStore::initializeNew(nativeIo, superblock(1, 1));
+		const std::vector<CatalogEntry> entries = entriesThatRequireAnotherMetadataPool();
+		static_cast<void>(store->upsertCatalog(entries, LogSequenceNumber(2)));
+
+		std::atomic<uint32_t> syncCalls{0U};
+		{
+			StorageIO::ScopedNativeSyncHookForTesting failFinalFence([&syncCalls](file_handle_t fd) {
+				if (syncCalls.fetch_add(1U, std::memory_order_relaxed) == 1U) {
+#ifdef _WIN32
+					SetLastError(ERROR_WRITE_FAULT);
+#else
+					errno = EIO;
+#endif
+					return -1;
+				}
+				return portable_fsync(fd);
+			});
+			EXPECT_THROW(static_cast<void>(store->evacuateSparseMetadataPagePool(LogSequenceNumber(3), 8U)),
+						 std::runtime_error);
+		}
+		EXPECT_GE(syncCalls.load(std::memory_order_relaxed), 2U);
+
+		MetadataSnapshotPin current = store->openSnapshot();
+		EXPECT_EQ(current.superblock().generation, Generation(3));
+		EXPECT_EQ(store->findCatalog(current, entries.front().segment_id).physical_slot, entries.front().physical_slot);
+		current.release();
+
+		store.reset();
+		auto reopened = RelocatableMetadataStore::open(nativeIo);
+		MetadataSnapshotPin recovered = reopened->openSnapshot();
+		EXPECT_EQ(recovered.superblock().generation, Generation(3));
+		EXPECT_EQ(reopened->findCatalog(recovered, entries.back().segment_id).physical_slot,
+				  entries.back().physical_slot);
+		recovered.release();
+		EXPECT_GT(reopened->reclaimEmptyMetadataPagePools(LogSequenceNumber(4)).reclaimed_pool_slots, 0U);
+	}
+	EXPECT_EQ(portable_close_rw(nativeHandle), 0);
 }
 
 TEST_F(RelocatableMetadataStoreTest, SparseMetadataPoolEvacuationValidatesItsRequestAndSkipsBootstrapOnlyState) {
@@ -1262,7 +2477,7 @@ TEST_F(RelocatableMetadataStoreTest, SparseMetadataPoolEvacuationClonesEveryType
 						 Generation(1)},
 	};
 	ASSERT_TRUE(store->reserveFirstFreeAndUpsertCatalog(requests, PhysicalSlotId(40), PhysicalSlotId(45),
-																					 LogSequenceNumber(2))
+														LogSequenceNumber(2))
 						.has_value());
 	static_cast<void>(store->upsertLocations(pages, {}, LogSequenceNumber(3)));
 	const ExtentLocation extent{ExtentId(1), SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID + 1U),
@@ -1788,5 +3003,40 @@ TEST_F(RelocatableMetadataStoreTest, LeasesLogicalGraphIdsFromDurableRangesWitho
 	MetadataSnapshotPin snapshot = store->openSnapshot();
 	EXPECT_EQ(snapshot.superblock().next_logical_node_id, 6U);
 	EXPECT_EQ(snapshot.superblock().next_logical_edge_id, 6U);
+	snapshot.release();
+}
+
+TEST_F(RelocatableMetadataStoreTest, RebasesASequentialWriterOnlyAfterItsLocalSnapshotsAreReleased) {
+	auto firstWriter = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	auto sequentialWriter = RelocatableMetadataStore::open(io);
+
+	CatalogEntry firstEntry = entry(100U, 1U, 2U);
+	static_cast<void>(firstWriter->upsertCatalog(std::span(&firstEntry, 1U), LogSequenceNumber(2U)));
+
+	// A rebase replaces process-local metadata-pool state, so its old snapshot
+	// must be released before this handle may continue from the newer root.
+	MetadataSnapshotPin staleSnapshot = sequentialWriter->openSnapshot();
+	expectFormatError([&] { sequentialWriter->refreshAfterExternalPublication(); }, FormatError::FERR_INVALID_STATE);
+	staleSnapshot.release();
+	EXPECT_NO_THROW(sequentialWriter->refreshAfterExternalPublication());
+
+	const NativeGraphLogicalIdLease lease = sequentialWriter->reserveNativeGraphLogicalIds(2U, 1U);
+	EXPECT_EQ(lease.nodes, (NativeGraphLogicalIdLeaseRange{1U, 2U}));
+	EXPECT_EQ(lease.edges, (NativeGraphLogicalIdLeaseRange{1U, 1U}));
+
+	CatalogEntry secondEntry = entry(101U, 1U, 4U);
+	secondEntry.segment_id = SegmentId(RSS_FIRST_ALLOCATABLE_SEGMENT_ID + 1U);
+	static_cast<void>(sequentialWriter->upsertCatalog(std::span(&secondEntry, 1U), LogSequenceNumber(4U)));
+
+	auto reopened = RelocatableMetadataStore::open(io);
+	MetadataSnapshotPin snapshot = reopened->openSnapshot();
+	const CatalogEntry recoveredFirst = reopened->findCatalog(snapshot, firstEntry.segment_id);
+	const CatalogEntry recoveredSecond = reopened->findCatalog(snapshot, secondEntry.segment_id);
+	EXPECT_EQ(recoveredFirst.physical_slot, firstEntry.physical_slot);
+	EXPECT_EQ(recoveredFirst.owner_id, firstEntry.owner_id);
+	EXPECT_EQ(recoveredSecond.physical_slot, secondEntry.physical_slot);
+	EXPECT_EQ(recoveredSecond.owner_id, secondEntry.owner_id);
+	EXPECT_EQ(snapshot.superblock().next_logical_node_id, 3U);
+	EXPECT_EQ(snapshot.superblock().next_logical_edge_id, 2U);
 	snapshot.release();
 }

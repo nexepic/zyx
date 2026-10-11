@@ -22,7 +22,9 @@
 #include "graph/storage/StorageFormat.hpp"
 #include "graph/storage/StorageIO.hpp"
 #include "graph/storage/relocatable/backend/RelocatableStorageBackend.hpp"
+#include "graph/storage/relocatable/format/Superblock.hpp"
 #include "graph/storage/relocatable/format/SuperblockFile.hpp"
+#include "graph/utils/ChecksumUtils.hpp"
 
 using namespace graph::storage;
 
@@ -41,8 +43,24 @@ namespace {
 	}
 
 	constexpr std::array<std::byte, 8> HISTORICAL_FILE_MAGIC = {std::byte{0x3C}, std::byte{0x5A}, std::byte{0x59},
-																std::byte{0x58}, std::byte{0x2D}, std::byte{0x44},
-																std::byte{0x42}, std::byte{0x3E}};
+																									std::byte{0x58}, std::byte{0x2D}, std::byte{0x44},
+																									std::byte{0x42}, std::byte{0x3E}};
+
+	constexpr size_t SUPERBLOCK_FORMAT_VERSION_OFFSET = 4U;
+	constexpr size_t SUPERBLOCK_RESERVED_HEADER_OFFSET = 12U;
+	constexpr size_t SUPERBLOCK_PAYLOAD_CRC_OFFSET = 112U;
+	constexpr size_t SUPERBLOCK_HEADER_CRC_OFFSET = 116U;
+	constexpr size_t SUPERBLOCK_PAYLOAD_RESERVED_OFFSET = RSS_SUPERBLOCK_HEADER_BYTES + 32U;
+
+	void resealSuperblock(std::array<std::byte, RSS_SUPERBLOCK_BYTES> &bytes) {
+		LittleEndianCodec::writeU32(bytes, SUPERBLOCK_HEADER_CRC_OFFSET, 0U);
+		LittleEndianCodec::writeU32(
+				bytes, SUPERBLOCK_PAYLOAD_CRC_OFFSET,
+				graph::utils::calculateCrc(bytes.data() + RSS_SUPERBLOCK_HEADER_BYTES,
+										bytes.size() - RSS_SUPERBLOCK_HEADER_BYTES));
+		LittleEndianCodec::writeU32(bytes, SUPERBLOCK_HEADER_CRC_OFFSET,
+								graph::utils::calculateCrc(bytes.data(), RSS_SUPERBLOCK_HEADER_BYTES));
+	}
 
 } // namespace
 
@@ -66,10 +84,6 @@ protected:
 		file.reset();
 		std::error_code error;
 		std::filesystem::remove(path, error);
-		error.clear();
-		std::filesystem::remove(path.string() + ".wal", error);
-		error.clear();
-		std::filesystem::remove(path.string() + ".migration", error);
 	}
 
 	void closeFixtureFile() {
@@ -216,7 +230,7 @@ TEST_F(StorageFormatTest, DatabaseFactoryCreatesAndOpensANewRelocatableDatabase)
 	EXPECT_NO_THROW(creation.backend->close());
 }
 
-TEST_F(StorageFormatTest, DatabaseFactoryCreatesNoMetadataWalOrMigrationSidecar) {
+TEST_F(StorageFormatTest, DatabaseFactoryCreatesNoMetadataWalShmOrMigrationSidecar) {
 	closeFixtureFile();
 	ASSERT_TRUE(std::filesystem::remove(path));
 
@@ -228,6 +242,8 @@ TEST_F(StorageFormatTest, DatabaseFactoryCreatesNoMetadataWalOrMigrationSidecar)
 
 	const std::array sidecars = {std::filesystem::path(path.string() + ".wal"),
 								 std::filesystem::path(path.string() + "-wal"),
+								 std::filesystem::path(path.string() + ".shm"),
+								 std::filesystem::path(path.string() + "-shm"),
 								 std::filesystem::path(path.string() + ".migration")};
 	for (const std::filesystem::path &sidecar: sidecars) {
 		std::error_code error;
@@ -277,6 +293,56 @@ TEST_F(StorageFormatTest, DatabaseFactoryRejectsUnrecognizedExistingFiles) {
 	io->writeAt(0, unknown.data(), unknown.size());
 	io->sync();
 
+	EXPECT_THROW(static_cast<void>(StorageBackendFactory::create(path.string(), 4096U, OpenMode::OPEN_EXISTING_FILE)),
+				 std::runtime_error);
+}
+
+TEST_F(StorageFormatTest, DatabaseFactoryRejectsChecksumValidButNonCanonicalBootstraps) {
+	const auto assertRejected = [this](std::array<std::byte, RSS_SUPERBLOCK_BYTES> invalid) {
+		// Both A/B slots contain a recognizable but structurally invalid image.
+		// This verifies that format selection cannot treat checksum-valid junk as a
+		// recoverable native database.
+		static_cast<void>(io->reserveAppendSpace(RSS_FILE_BOOTSTRAP_BYTES));
+		io->writeAt(0U, invalid.data(), invalid.size());
+		io->writeAt(RSS_SUPERBLOCK_BYTES, invalid.data(), invalid.size());
+		io->sync();
+		EXPECT_EQ(StorageFormatProbe::inspect(*io).kind, StorageFormatKind::SFM_RELOCATABLE_INCOMPLETE);
+
+		closeFixtureFile();
+		EXPECT_THROW(static_cast<void>(StorageBackendFactory::create(path.string(), 4096U,
+																						 OpenMode::OPEN_EXISTING_FILE)),
+					 std::runtime_error);
+	};
+
+	auto unsupportedVersion = SuperblockCodec::encode(initialSuperblock());
+	LittleEndianCodec::writeU16(unsupportedVersion, SUPERBLOCK_FORMAT_VERSION_OFFSET,
+								RSS_SUPERBLOCK_VERSION + 1U);
+	resealSuperblock(unsupportedVersion);
+	assertRejected(unsupportedVersion);
+
+	resetFile();
+	auto reservedHeader = SuperblockCodec::encode(initialSuperblock());
+	LittleEndianCodec::writeU32(reservedHeader, SUPERBLOCK_RESERVED_HEADER_OFFSET, 1U);
+	resealSuperblock(reservedHeader);
+	assertRejected(reservedHeader);
+
+	resetFile();
+	auto reservedPayload = SuperblockCodec::encode(initialSuperblock());
+	reservedPayload[SUPERBLOCK_PAYLOAD_RESERVED_OFFSET] = std::byte{0x01U};
+	resealSuperblock(reservedPayload);
+	assertRejected(reservedPayload);
+}
+
+TEST_F(StorageFormatTest, DatabaseFactoryRejectsBootstrapsWithNoValidChecksum) {
+	auto corrupted = SuperblockCodec::encode(initialSuperblock());
+	corrupted[RSS_SUPERBLOCK_HEADER_BYTES] ^= std::byte{0x01U};
+	static_cast<void>(io->reserveAppendSpace(RSS_FILE_BOOTSTRAP_BYTES));
+	io->writeAt(0U, corrupted.data(), corrupted.size());
+	io->writeAt(RSS_SUPERBLOCK_BYTES, corrupted.data(), corrupted.size());
+	io->sync();
+
+	EXPECT_EQ(StorageFormatProbe::inspect(*io).kind, StorageFormatKind::SFM_RELOCATABLE_INCOMPLETE);
+	closeFixtureFile();
 	EXPECT_THROW(static_cast<void>(StorageBackendFactory::create(path.string(), 4096U, OpenMode::OPEN_EXISTING_FILE)),
 				 std::runtime_error);
 }

@@ -1,6 +1,6 @@
 ---
 title: Optimization Strategies
-description: Query optimizer rules, index selection, and execution-layer performance techniques.
+description: Current logical-plan, native access-path, and storage-I/O optimization boundaries.
 category: Performance
 categoryOrder: 5
 order: 9
@@ -11,83 +11,58 @@ projectOrder: 1
 ---
 # Optimization Strategies
 
-Performance optimization in ZYX occurs at three layers: logical optimization, physical execution strategy, and storage I/O path.
+Optimization is correctness-constrained: an optimization may reduce work, but it cannot weaken validation, alter observable Cypher semantics, or bypass pinned-snapshot storage checks. The current native implementation has three layers: logical-plan rewrites, validated native access paths, and relocatable storage I/O.
 
-## Logical Optimization Rules
+## Logical Plan Rewrites
 
-The optimizer applies rules in a fixed order, iterating until the plan converges or a maximum iteration count is reached:
-
-| Rule | Effect |
-|------|--------|
-| **PredicateSimplification** | Simplifies boolean expressions (e.g., `true AND x` → `x`, `x OR true` → `true`) |
-| **FilterPushdown** | Moves filter predicates closer to scan operators, reducing the number of rows processed downstream |
-| **ProjectionPushdown** | Removes columns that are never used in later operators, reducing tuple width |
-| **EnhancedIndexSelection** | Evaluates available indexes and selects the most selective one for each scan |
-| **JoinReorder** | Reorders join operations to minimize intermediate result sizes |
+`LogicalPlanOptimizer` runs after parsing an optimizable logical plan and before runtime dispatch. It has bounded pass and depth limits, recursively validates non-null children, and stops only at a fixed point. It is storage-neutral; an optional `LogicalStatisticsProvider` supplies bounded estimates without exposing pages or physical operators.
 
 ```mermaid
 graph LR
-    A["Original Logical Plan"] --> B["PredicateSimplification"]
-    B --> C["FilterPushdown"]
-    C --> D["ProjectionPushdown"]
-    D --> E["EnhancedIndexSelection"]
-    E --> F["JoinReorder"]
-    F --> G["Optimized Logical Plan"]
-    G -->|"Not converged"| B
+    A["Logical plan"] --> B["Validate children and bounds"]
+    B --> C["Safe predicate and window rewrites"]
+    C --> D["Optional cardinality-based join order"]
+    D --> E["Fixed point or bounded failure"]
+    E --> F["Logical runtime"]
 ```
 
-## Scan Strategy Selection
+The implemented rewrites are intentionally small and explicit:
 
-When `NodeScanOperator` executes, it evaluates available indexes and statistics to choose the optimal access path:
+| Rewrite | Preconditions and retained guarantee |
+|---|---|
+| Equality scan hint | A direct node scan has a static, non-null, property-right literal equality. The filter remains in the plan. |
+| Range scan hint | A direct node scan has compatible literal bounds for one property; an equality prefix may precede a trailing range. The filter remains in the plan. |
+| Cartesian join order | Both sides have valid estimates and the left side is strictly smaller, because the runtime materializes the right side. Ties and missing estimates preserve order. |
+| `LIMIT` through project | The limit is non-negative and the project is non-`DISTINCT` with valid items. |
+| Adjacent windows | Nested `LIMIT`, nested `SKIP`, and positive `LIMIT(Skip(...))` normalize only for non-negative, non-overflowing values. `LIMIT 0`, invalid, and overflowing windows retain runtime behavior. |
+
+The optimizer does not claim generic filter or projection pushdown. It rejects or leaves unchanged reversed operands, null equality, ambiguous range combinations, invalid existing scan predicates, unsafe `SKIP` movement, ties, and unknown statistics. This conservative policy avoids changing row ordering, expression failures, or null behavior.
+
+## Native Access Paths
+
+The read runtime remains the semantic authority. A logical node-scan hint may use native B+Tree scalar, range, or composite equality-prefix/trailing-range lookup only when the storage reader can validate it within one pinned snapshot.
 
 ```mermaid
 graph TD
-    A["Scan request for :Person"] --> B{Label index exists?}
-    B -->|Yes| C["Label index scan → node ID list"]
-    B -->|No| D["Full segment scan"]
-
-    C --> E{Property filter present?}
-    D --> E
-
-    E -->|"Property index available"| F["Property index scan (B-tree or hash)"]
-    E -->|"Range filter + B-tree"| G["Range scan on property index"]
-    E -->|"No index for filter"| H["Residual filter on scanned rows"]
-
-    F --> I["Return matching nodes"]
-    G --> I
-    H --> I
+    A["Logical node scan + retained filter"] --> B{"Validated native index shape?"}
+    B -->|"yes"| C["Bounded B+Tree lookup in pinned snapshot"]
+    B -->|"no"| D["Bounded logical scan"]
+    C --> E["Validate owner, label, property, value, and entity ID"]
+    D --> F["Evaluate logical predicate"]
+    E --> F
+    F --> G["Emit matching rows"]
 ```
 
-Conditions not absorbed by the chosen index are applied as **residual filters** after the scan.
+Unavailable indexes fall back only where the runtime supports a bounded logical scan. Malformed, stale, mismatched, or over-limit index state fails closed. An unknown property produces an empty result rather than an inferred match. Native statistics are advisory and must never cause a planning-time graph scan.
 
-## Execution-Layer Techniques
+## Execution And Resource Bounds
 
-### Multi-Label Filtering
+The logical runtimes stream reads where possible and install a `QueryGuard` with database policy defaults when the caller provides none. Runtime bounds cap node records, metadata pages, adjacency records, properties, rows, distinct rows, vector work, and GDS work. A transaction-owned overlay keeps staged writes private until its owner commits; it is not an independent autocommit optimization path.
 
-When a query specifies multiple labels (e.g., `MATCH (n:A:B)`), the scan operator selects the label with the smallest cardinality as the primary index lookup, then applies the remaining labels as residual filters.
+Vector search and maintenance use the native relocatable vector path. Current smoke calibration proves source-set and report wiring only; production Recall, QPS, build-time, memory, update, and recovery targets remain acceptance gates, not documented performance claims.
 
-### Batch Entity Loading
+## Storage I/O And Cache
 
-`DataManager.bulkLoadEntities()` reads entire segment chains in sequential order, which is significantly faster than per-entity random access. This is used internally during index building and recovery.
+`StorageIO` provides checked, typed file I/O for the relocatable backend. Metadata is read through pinned snapshots, and the generation-aware `BufferPool` caches validated pages without making stale mappings visible. Publication uses the single-file A/B Superblock protocol described in the native storage plan; queries and optimizations must not bypass codec, owner, generation, checksum, or snapshot validation.
 
-### Vector Query Optimization
-
-Vector similarity queries use dedicated operators (`VectorSearchOperator`) that leverage the HNSW index structure for approximate nearest neighbor search, avoiding full-database scans.
-
-### Parallel Execution
-
-When a thread pool is configured, certain operations (parallel segment scans, index building) can distribute work across multiple threads.
-
-## Storage I/O Optimization
-
-### StorageIO Abstraction
-
-`StorageIO` uses platform-native `pread`/`pwrite` syscalls where available (Linux, macOS), falling back to `fstream` seek on platforms without native support. The dual file descriptor model (separate read/write handles) enables concurrent reads without blocking writes.
-
-### PageBufferPool
-
-The segment-level LRU cache avoids redundant disk reads for hot segments. Targeted invalidation (`invalidateDirtySegments`) after flush preserves cache entries for unmodified segments.
-
-### WAL Group Commit
-
-Multiple transaction commits are batched into a single `fsync` call, reducing the most expensive I/O operation from per-transaction to per-group. The default group window is 1 millisecond.
+The retired segment-chain `DataManager`, `PageBufferPool`, external-WAL group commit, and HNSW execution descriptions are historical migration material. They are not current performance architecture and remain subject to the roadmap's replacement and retirement gates.

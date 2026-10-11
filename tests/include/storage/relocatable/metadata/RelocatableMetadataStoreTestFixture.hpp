@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -17,6 +18,7 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <vector>
 
@@ -25,8 +27,9 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <gtest/gtest.h>
 
-#include "graph/storage/StorageHeaders.hpp"
 #include "graph/storage/StorageIO.hpp"
+#include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
+#include "graph/storage/relocatable/allocation/SharedPagePool.hpp"
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
 
 using namespace graph::storage;
@@ -35,12 +38,12 @@ namespace {
 
 	[[maybe_unused]] void expectFormatError(const std::function<void()> &operation, FormatError expected) {
 		try {
-			operation();
-			FAIL() << "Expected FormatException";
-		} catch (const FormatException &error) {
-			EXPECT_EQ(error.error(), expected);
-		}
+		operation();
+		FAIL() << "Expected FormatException";
+	} catch (const FormatException &error) {
+		EXPECT_EQ(error.error(), expected) << error.what();
 	}
+}
 
 	Superblock superblock(uint64_t generation, uint64_t checkpointLsn) {
 		Superblock result;
@@ -127,10 +130,98 @@ namespace {
 		return retained;
 	}
 
+	// Establish a fully published v5 route branch with a sparse routed source
+	// pool. Tests can then exercise page-local evacuation without relying on
+	// the physical-root fallback.
+	[[maybe_unused]] void prepareRoutedMetadataPoolForEvacuation(RelocatableMetadataStore &store) {
+		std::vector<MetadataSnapshotPin> retained = createReclaimableMetadataPool(store);
+		for (MetadataSnapshotPin &snapshot: retained) {
+			snapshot.release();
+		}
+		static_cast<void>(store.migratePageDirectoryToBootstrap(LogSequenceNumber(7U)));
+		CatalogEntry catalog = entry(2U, 1U, 8U);
+		catalog.segment_id = SegmentId(200U);
+		catalog.owner_id = 77U;
+		static_cast<void>(store.upsertCatalog(std::span(&catalog, 1U), LogSequenceNumber(8U)));
+		const ExtentLocation extent{ExtentId(1U), SegmentId(20U), RSS_PAGE_POOL_FIRST_DATA_FRAME, 1U,
+									Generation(1U)};
+		static_cast<void>(store.upsertLocations({}, std::span(&extent, 1U), LogSequenceNumber(9U)));
+	}
+
 	[[maybe_unused]] MetadataPublishOptions withBootstrapFailpoint(BootstrapPublishFailpoint failpoint) {
 		MetadataPublishOptions options;
 		options.bootstrap_failpoint = failpoint;
 		return options;
+	}
+
+	// Low-level metadata tests use the publication coordinator directly.  Give
+	// those tests real typed pool bytes so the coordinator's pre-publication
+	// authentication exercises the same envelope and owner invariants as a
+	// production Entity/Property writer.
+	[[maybe_unused]] void initializeTestSharedPagePool(StorageIO &io, uint64_t dataRegionOffset,
+														  const CatalogEntry &pool) {
+		if (!isSharedPagePoolSegmentKind(pool.kind) || pool.state != SegmentState::SGS_SEALED ||
+			!pool.segment_id.isValid() || !pool.physical_slot.isValid() || !pool.generation.isValid() ||
+			!pool.committed_lsn.isValid()) {
+			throw std::invalid_argument("test shared page-pool has an invalid Catalog identity");
+		}
+		SegmentEnvelope envelope;
+		envelope.header_bytes = RSS_PAGE_SIZE;
+		envelope.kind = pool.kind;
+		envelope.state = pool.state;
+		envelope.segment_id = pool.segment_id;
+		envelope.owner_id = pool.owner_id;
+		envelope.generation = pool.generation;
+		envelope.committed_lsn = pool.committed_lsn;
+		std::array<std::byte, RSS_PAGE_SIZE> page{};
+		const auto envelopeBytes = SegmentEnvelopeCodec::encode(envelope);
+		std::copy(envelopeBytes.begin(), envelopeBytes.end(), page.begin());
+		SharedPagePoolHeader active{pool.segment_id, 0U, pool.generation, pool.committed_lsn, 1U};
+		SharedPagePoolHeader inactive{pool.segment_id, 0U, pool.generation, pool.committed_lsn, 0U};
+		const auto activeBytes = SharedPagePoolHeaderCodec::encode(active);
+		const auto inactiveBytes = SharedPagePoolHeaderCodec::encode(inactive);
+		std::copy(activeBytes.begin(), activeBytes.end(), page.begin() + RSS_ENVELOPE_BYTES);
+		std::copy(inactiveBytes.begin(), inactiveBytes.end(),
+				  page.begin() + RSS_ENVELOPE_BYTES + RSS_SHARED_PAGE_POOL_HEADER_BYTES);
+		const uint64_t offset = PhysicalSegmentAllocator::checkedSlotOffset(dataRegionOffset, pool.physical_slot);
+		io.writeAt({offset, pool.generation.value()}, page.data(), page.size());
+	}
+
+	[[maybe_unused]] void prepareTestSharedPageFrame(StorageIO &io, uint64_t dataRegionOffset, const CatalogEntry &pool,
+									 PageId pageId, uint8_t frameIndex, uint64_t ownerId, PageOwnerKind ownerKind,
+									 LogSequenceNumber ownerLsn) {
+		if (!pageId.isValid() || frameIndex < RSS_PAGE_POOL_FIRST_DATA_FRAME ||
+			frameIndex > RSS_PAGE_POOL_DATA_FRAME_COUNT || ownerId == 0U || ownerKind == PageOwnerKind::POK_NONE ||
+			!ownerLsn.isValid()) {
+			throw std::invalid_argument("test shared page frame has an invalid typed identity");
+		}
+		const uint64_t poolOffset = PhysicalSegmentAllocator::checkedSlotOffset(dataRegionOffset, pool.physical_slot);
+		std::array<std::byte, RSS_PAGE_SIZE> control{};
+		if (io.readAt({poolOffset, pool.generation.value()}, control.data(), control.size()) != control.size()) {
+			throw std::runtime_error("test shared page-pool control page is truncated");
+		}
+		const SharedPagePoolHeader first = SharedPagePoolHeaderCodec::decode(
+				std::span<const std::byte>(control).subspan(RSS_ENVELOPE_BYTES, RSS_SHARED_PAGE_POOL_HEADER_BYTES));
+		const SharedPagePoolHeader second = SharedPagePoolHeaderCodec::decode(std::span<const std::byte>(control).subspan(
+				RSS_ENVELOPE_BYTES + RSS_SHARED_PAGE_POOL_HEADER_BYTES, RSS_SHARED_PAGE_POOL_HEADER_BYTES));
+		const bool firstIsActive = first.control_sequence >= second.control_sequence;
+		SharedPagePoolHeader updated = firstIsActive ? first : second;
+		if (updated.control_sequence == std::numeric_limits<uint64_t>::max()) {
+			throw std::overflow_error("test shared page-pool control sequence overflow");
+		}
+		updated.allocated_frames |= 1U << (frameIndex - RSS_PAGE_POOL_FIRST_DATA_FRAME);
+		++updated.control_sequence;
+		const auto updatedBytes = SharedPagePoolHeaderCodec::encode(updated);
+		const size_t inactiveOffset = firstIsActive ? RSS_ENVELOPE_BYTES + RSS_SHARED_PAGE_POOL_HEADER_BYTES
+													 : RSS_ENVELOPE_BYTES;
+		io.writeControlRecord({poolOffset, pool.generation.value()}, inactiveOffset, updatedBytes);
+
+		PageOwnerHeader owner{pageId, ownerId, ownerKind, 0U, 0U, pool.generation, ownerLsn};
+		std::array<std::byte, RSS_PAGE_SIZE> frame{};
+		const auto ownerBytes = PageOwnerHeaderCodec::encode(owner);
+		std::copy(ownerBytes.begin(), ownerBytes.end(), frame.begin());
+		io.writeAt({poolOffset + static_cast<uint64_t>(frameIndex) * RSS_PAGE_SIZE, pool.generation.value()},
+				   frame.data(), frame.size());
 	}
 
 } // namespace

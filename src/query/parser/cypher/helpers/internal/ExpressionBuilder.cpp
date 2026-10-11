@@ -21,6 +21,8 @@
 #include "../ExpressionBuilder.hpp"
 
 #include <limits>
+#include <stdexcept>
+#include <vector>
 
 #include "generated/CypherLexer.h"
 #include "graph/query/expressions/Expression.hpp"
@@ -119,6 +121,8 @@ PropertyValue ExpressionBuilder::evaluateLiteralExpression(CypherParser::Express
 			return PropertyValue(litExpr->getDoubleValue());
 		} else if (litExpr->isString()) {
 			return PropertyValue(litExpr->getStringValue());
+		} else if (litExpr->isPropertyValue()) {
+			return litExpr->getPropertyValue();
 		}
 	}
 
@@ -288,18 +292,22 @@ std::unique_ptr<Expression> ExpressionBuilder::buildComparisonExpression(CypherP
 						if (!rhsUnaryList.empty() && rhsUnaryList[0]->atom() && rhsUnaryList[0]->atom()->listLiteral()) {
 							std::vector<PropertyValue> listValues;
 							auto listLit = rhsUnaryList[0]->atom()->listLiteral();
+							bool isStaticList = true;
 							for (auto itemExpr : listLit->expression()) {
 								auto itemAtom = getAtomFromExpression(itemExpr);
 								if (itemAtom && itemAtom->literal()) {
 									listValues.push_back(parseValue(itemAtom->literal()));
 								} else {
-									throw std::runtime_error("IN list only supports literal values");
+									isStaticList = false;
+									break;
 								}
 							}
-							left = std::make_unique<InExpression>(std::move(left), std::move(listValues));
-							hasPendingOp = false;
-							arithIdx++;
-							continue;
+							if (isStaticList) {
+								left = std::make_unique<InExpression>(std::move(left), std::move(listValues));
+								hasPendingOp = false;
+								arithIdx++;
+								continue;
+							}
 						}
 					}
 					// Dynamic list: variable or expression as RHS
@@ -359,48 +367,60 @@ std::unique_ptr<Expression> ExpressionBuilder::buildArithmeticExpression(CypherP
 
 	auto powerExprs = ctx->powerExpression();
 	if (powerExprs.empty()) {
-		return buildPowerExpression(ctx->powerExpression(0));
+		return nullptr;
 	}
 
-	// Handle arithmetic operators: power (PLUS|MINUS|MULTIPLY|DIVIDE|MODULO power)*
-	auto left = buildPowerExpression(powerExprs[0]);
-
-	// Walk children in parse order to determine operator type by position
-	size_t powerIdx = 0;
-	BinaryOperatorType pendingOp = BinaryOperatorType::BOP_ADD;
-	bool hasPendingOp = false;
-
+	std::vector<BinaryOperatorType> operators;
+	operators.reserve(powerExprs.size() - 1U);
 	for (auto* child : ctx->children) {
 		auto* termNode = dynamic_cast<antlr4::tree::TerminalNode*>(child);
 		if (!termNode) {
-			// This is a rule context (powerExpression)
-			if (powerIdx == 0) {
-				powerIdx++;
-				continue; // Skip the first power expression (already in 'left')
-			}
-			if (!hasPendingOp) {
-				powerIdx++;
-				continue;
-			}
-			auto right = buildPowerExpression(powerExprs[powerIdx]);
-			left = std::make_unique<BinaryOpExpression>(std::move(left), pendingOp, std::move(right));
-			hasPendingOp = false;
-			powerIdx++;
 			continue;
 		}
 
-		// Terminal node - determine operator type
+		// The grammar keeps these binary operators in one rule, so record them
+		// first and apply Cypher precedence while building the AST below.
 		switch (termNode->getSymbol()->getType()) {
-			case CypherLexer::PLUS: pendingOp = BinaryOperatorType::BOP_ADD; hasPendingOp = true; break;
-			case CypherLexer::MINUS: pendingOp = BinaryOperatorType::BOP_SUBTRACT; hasPendingOp = true; break;
-			case CypherLexer::MULTIPLY: pendingOp = BinaryOperatorType::BOP_MULTIPLY; hasPendingOp = true; break;
-			case CypherLexer::DIVIDE: pendingOp = BinaryOperatorType::BOP_DIVIDE; hasPendingOp = true; break;
-			case CypherLexer::MODULO: pendingOp = BinaryOperatorType::BOP_MODULO; hasPendingOp = true; break;
+			case CypherLexer::PLUS: operators.push_back(BinaryOperatorType::BOP_ADD); break;
+			case CypherLexer::MINUS: operators.push_back(BinaryOperatorType::BOP_SUBTRACT); break;
+			case CypherLexer::MULTIPLY: operators.push_back(BinaryOperatorType::BOP_MULTIPLY); break;
+			case CypherLexer::DIVIDE: operators.push_back(BinaryOperatorType::BOP_DIVIDE); break;
+			case CypherLexer::MODULO: operators.push_back(BinaryOperatorType::BOP_MODULO); break;
 			default: break;
 		}
 	}
 
-	return left;
+	if (operators.size() + 1U != powerExprs.size()) {
+		throw std::logic_error("arithmetic expression has mismatched operands and operators");
+	}
+
+	// Fold multiplicative groups first. Addition and subtraction then remain
+	// left-associative across the resulting groups.
+	auto group = buildPowerExpression(powerExprs[0]);
+	std::vector<std::unique_ptr<Expression>> additiveTerms;
+	std::vector<BinaryOperatorType> additiveOperators;
+	additiveTerms.reserve(operators.size() + 1U);
+	additiveOperators.reserve(operators.size());
+	for (size_t index = 0U; index < operators.size(); ++index) {
+		auto right = buildPowerExpression(powerExprs[index + 1U]);
+		const BinaryOperatorType op = operators[index];
+		if (op == BinaryOperatorType::BOP_MULTIPLY || op == BinaryOperatorType::BOP_DIVIDE ||
+			op == BinaryOperatorType::BOP_MODULO) {
+			group = std::make_unique<BinaryOpExpression>(std::move(group), op, std::move(right));
+			continue;
+		}
+		additiveTerms.push_back(std::move(group));
+		additiveOperators.push_back(op);
+		group = std::move(right);
+	}
+	additiveTerms.push_back(std::move(group));
+
+	auto result = std::move(additiveTerms[0]);
+	for (size_t index = 0U; index < additiveOperators.size(); ++index) {
+		result = std::make_unique<BinaryOpExpression>(std::move(result), additiveOperators[index],
+																 std::move(additiveTerms[index + 1U]));
+	}
+	return result;
 }
 
 std::unique_ptr<Expression> ExpressionBuilder::buildPowerExpression(CypherParser::PowerExpressionContext *ctx) {
@@ -430,13 +450,18 @@ std::unique_ptr<Expression> ExpressionBuilder::buildUnaryExpression(CypherParser
 		return nullptr;
 	}
 
-	// Handle property access and variable reference
-	// Accessors are attached to UnaryExpression
+	// Build variable/property operands before applying unary syntax. Returning
+	// early here would silently discard the leading '-' in expressions such as
+	// -node.weight.
+	std::unique_ptr<Expression> atomExpr;
 	if (ctx->atom() && ctx->atom()->variable()) {
-		return buildVariableOrProperty(ctx);
+		atomExpr = buildVariableOrProperty(ctx);
+		if (!ctx->MINUS()) {
+			return atomExpr;
+		}
+	} else {
+		atomExpr = buildAtomExpression(ctx->atom());
 	}
-
-	auto atomExpr = buildAtomExpression(ctx->atom());
 
 	// Handle unary plus/minus (single TerminalNode pointers, not arrays)
 	if (ctx->PLUS() || ctx->MINUS()) {
@@ -484,6 +509,32 @@ std::unique_ptr<Expression> ExpressionBuilder::buildAtomExpression(CypherParser:
 
 	// Literal
 	if (ctx->literal()) {
+		if (CypherParser::MapLiteralContext *map = ctx->literal()->mapLiteral()) {
+			const auto keys = map->propertyKeyName();
+			const auto values = map->expression();
+			if (keys.size() != values.size()) {
+				throw std::runtime_error("map literal has mismatched keys and values");
+			}
+			std::vector<MapProjectionItem> items;
+			items.reserve(keys.size());
+			bool isStatic = true;
+			for (size_t index = 0U; index < keys.size(); ++index) {
+				auto value = buildExpression(values[index]);
+				if (!value) {
+					throw std::runtime_error("map literal has an invalid value expression");
+				}
+				const auto *nestedList = dynamic_cast<const ListLiteralExpression *>(value.get());
+				if (value->getExpressionType() != ExpressionType::LITERAL &&
+					(nestedList == nullptr || !nestedList->isStatic())) {
+					isStatic = false;
+				}
+				items.emplace_back(MapProjectionItemType::MPROP_LITERAL,
+						normalizeSymbolicName(keys[index]->getText()), std::move(value));
+			}
+			if (!isStatic) {
+				return std::make_unique<MapProjectionExpression>(std::move(items));
+			}
+		}
 		auto lit = parseValue(ctx->literal());
 		if (std::holds_alternative<std::monostate>(lit.getVariant())) {
 			return std::make_unique<LiteralExpression>();
@@ -496,8 +547,7 @@ std::unique_ptr<Expression> ExpressionBuilder::buildAtomExpression(CypherParser:
 		} else if (std::holds_alternative<std::string>(lit.getVariant())) {
 			return std::make_unique<LiteralExpression>(std::get<std::string>(lit.getVariant()));
 		} else if (lit.getType() == PropertyType::MAP) {
-			// Map literals: {key: value, ...} - wrap in ListLiteralExpression (generic value wrapper)
-			return std::make_unique<ListLiteralExpression>(std::move(lit));
+			return std::make_unique<LiteralExpression>(std::move(lit));
 		}
 	}
 
@@ -669,11 +719,26 @@ std::unique_ptr<Expression> ExpressionBuilder::buildListLiteral(CypherParser::Li
 		return nullptr;
 	}
 
-	// Parse the list literal into a PropertyValue
-	PropertyValue listValue = parseListLiteral(ctx);
+	std::vector<std::unique_ptr<Expression>> elements;
+	elements.reserve(ctx->expression().size());
+	bool isStatic = true;
+	for (CypherParser::ExpressionContext *elementContext: ctx->expression()) {
+		auto element = buildExpression(elementContext);
+		if (!element) {
+			throw std::runtime_error("list literal has an invalid element expression");
+		}
+		const auto *nestedList = dynamic_cast<const ListLiteralExpression *>(element.get());
+		if (element->getExpressionType() != ExpressionType::LITERAL &&
+			(nestedList == nullptr || !nestedList->isStatic())) {
+			isStatic = false;
+		}
+		elements.push_back(std::move(element));
+	}
 
-	// Create and return a ListLiteralExpression
-	return std::make_unique<ListLiteralExpression>(listValue);
+	if (isStatic) {
+		return std::make_unique<ListLiteralExpression>(parseListLiteral(ctx));
+	}
+	return std::make_unique<ListLiteralExpression>(std::move(elements));
 }
 
 std::unique_ptr<Expression> ExpressionBuilder::buildFunctionCall(CypherParser::FunctionInvocationContext *ctx) {
@@ -1066,11 +1131,19 @@ std::unique_ptr<Expression> ExpressionBuilder::buildListSliceFromAccessor(
     if (hasRange) {
         // Has '..' - range slice: [start..end] or [..end] or [start..]
         size_t exprCount = expressions.size();
-        if (exprCount > 0) {
+        if (exprCount == 2U) {
             startExpr = buildExpression(expressions[0]);
-        }
-        if (exprCount > 1) {
             endExpr = buildExpression(expressions[1]);
+        } else if (exprCount == 1U) {
+            // The single expression belongs to the side of the range token on
+            // which it appears: [start..] versus [..end].
+            const size_t rangeToken = ctx->RANGE()->getSymbol()->getTokenIndex();
+            const size_t expressionToken = expressions[0]->getStart()->getTokenIndex();
+            if (expressionToken < rangeToken) {
+                startExpr = buildExpression(expressions[0]);
+            } else {
+                endExpr = buildExpression(expressions[0]);
+            }
         }
     } else {
         // Single index: [index]

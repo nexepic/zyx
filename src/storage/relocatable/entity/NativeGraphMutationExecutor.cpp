@@ -20,6 +20,7 @@
 
 #include "graph/core/Edge.hpp"
 #include "graph/core/Node.hpp"
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/relocatable/entity/EntityPage.hpp"
 #include "graph/storage/relocatable/entity/NativeScalarIndexMutationPlanner.hpp"
 #include "graph/storage/relocatable/entity/NativeVectorMutationPlanner.hpp"
@@ -43,13 +44,6 @@ namespace graph::storage {
 
 		struct ResolvedNodeCreate {
 			std::vector<uint64_t> labels;
-			ResolvedProperties properties;
-		};
-
-		struct ResolvedEdgeCreate {
-			LogicalGraphMutationEntityReference source;
-			LogicalGraphMutationEntityReference target;
-			uint64_t type_token = RSS_UNTYPED_RELATIONSHIP_TYPE_TOKEN;
 			ResolvedProperties properties;
 		};
 
@@ -305,7 +299,7 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] uint64_t resolveSupportEntityId(const ConstraintSupportTreeMutationPlan &plan,
-													  const LogicalGraphMutationBatchResult &result) {
+														  const LogicalGraphMutationBatchResult &result) {
 			switch (plan.entity_reference_kind) {
 				case ConstraintSupportTreeEntityReferenceKind::CSTREK_PERSISTED_NODE:
 				case ConstraintSupportTreeEntityReferenceKind::CSTREK_PERSISTED_EDGE:
@@ -316,6 +310,25 @@ namespace graph::storage {
 					return result.created_edge_ids.at(static_cast<size_t>(plan.entity_reference_value));
 			}
 			throw std::logic_error("native constraint support plan has an unknown entity reference kind");
+		}
+
+		[[nodiscard]] uint64_t checkedCardinalityDelta(uint64_t current, size_t additions, size_t removals,
+															 const char *name) {
+			if (additions > std::numeric_limits<uint64_t>::max() ||
+				removals > std::numeric_limits<uint64_t>::max()) {
+				fail(FormatError::FERR_ARITHMETIC_OVERFLOW,
+					 "native graph cardinality mutation exceeds the persisted counter width");
+			}
+			const uint64_t added = static_cast<uint64_t>(additions);
+			const uint64_t removed = static_cast<uint64_t>(removals);
+			if (added > std::numeric_limits<uint64_t>::max() - current) {
+				fail(FormatError::FERR_ARITHMETIC_OVERFLOW, name);
+			}
+			const uint64_t expanded = current + added;
+			if (removed > expanded) {
+				fail(FormatError::FERR_INVALID_STATE, name);
+			}
+			return expanded - removed;
 		}
 
 	} // namespace
@@ -350,7 +363,8 @@ namespace graph::storage {
 
 	NativeGraphMutationExecutionResult
 	NativeGraphMutationExecutor::execute(const LogicalGraphMutationBatch &batch,
-										 const NativeGraphMutationFenceValidator &expectedFence) const {
+									 const NativeGraphMutationFenceValidator &expectedFence) const {
+		debug::ScopedPerfTimer timer("native_graph.execute");
 		validateShape(batch);
 		NativeGraphWriteTransaction transaction = writer_.beginTransaction();
 		if (expectedFence && !expectedFence(transaction.baseSuperblock())) {
@@ -416,16 +430,16 @@ namespace graph::storage {
 		nodes.reserve(batch.node_creates.size());
 		for (const LogicalGraphNodeCreateRequest &request: batch.node_creates) {
 			nodes.push_back({resolveLabels(request.labels,
-										   [&resolveSchemaToken](std::string_view name) {
-											   return resolveSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_LABEL,
+											   [&resolveSchemaToken](std::string_view name) {
+												   return resolveSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_LABEL,
 																		 name);
-										   }),
+											   }),
 							 resolveProperties(request.properties, resolvePropertyKey)});
 		}
-		std::vector<ResolvedEdgeCreate> edges;
-		edges.reserve(batch.edge_creates.size());
+		// Validate each Edge before the first graph mutation consumes a durable
+		// logical-ID lease. The resolved values are intentionally transient: keeping
+		// an all-edge resolved copy was a second O(batch) payload allocation.
 		for (const LogicalGraphBatchEdgeCreateRequest &request: batch.edge_creates) {
-			uint64_t typeToken = RSS_UNTYPED_RELATIONSHIP_TYPE_TOKEN;
 			if (!request.type.empty()) {
 				const std::optional<uint64_t> resolved =
 						resolveSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, request.type);
@@ -433,14 +447,15 @@ namespace graph::storage {
 					fail(FormatError::FERR_INVALID_STATE,
 						 "native logical graph mutation could not resolve a relationship-type Token in its snapshot");
 				}
-				typeToken = *resolved;
 			}
-			edges.push_back({request.source, request.target, typeToken,
-							 resolveProperties(request.properties, resolvePropertyKey)});
+			static_cast<void>(resolveProperties(request.properties, resolvePropertyKey));
 		}
-
 		std::unordered_map<uint64_t, PersistedNodeMutation> persistedNodes;
 		std::unordered_map<uint64_t, ResolvedProperties> persistedEdges;
+		// Do not materialize a second full resolved-edge batch. Bulk edge ingest
+		// already owns the logical request list; only statement-local property
+		// replacements need an additional sparse override map.
+		std::unordered_map<uint64_t, ResolvedProperties> createdEdgeProperties;
 		for (const LogicalGraphPropertyMutationRequest &request: batch.property_replacements) {
 			const ResolvedProperties resolved = resolveProperties(request.properties, resolvePropertyKey);
 			if (request.entity.reference_kind == LogicalGraphMutationReferenceKind::LGRK_PERSISTED) {
@@ -452,7 +467,7 @@ namespace graph::storage {
 			} else if (request.entity.reference_kind == LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE) {
 				nodes.at(static_cast<size_t>(request.entity.value)).properties = resolved;
 			} else {
-				edges.at(static_cast<size_t>(request.entity.value)).properties = resolved;
+				createdEdgeProperties.insert_or_assign(request.entity.value, resolved);
 			}
 		}
 		for (const LogicalGraphNodeLabelMutationRequest &request: batch.node_label_replacements) {
@@ -472,6 +487,15 @@ namespace graph::storage {
 		for (const LogicalGraphEdgeDeleteRequest &request: batch.edge_deletes) {
 			deletedEdges.insert(request.edge_id);
 		}
+		// DETACH planning must see the batch's final topology. Stage explicit Edge
+		// removals before discovering a Node's remaining incident Edges; otherwise
+		// an already deleted Edge can incorrectly consume the detach bound.
+		std::unordered_set<uint64_t> topologyDeletedEdges;
+		topologyDeletedEdges.reserve(deletedEdges.size());
+		for (const uint64_t edgeId: deletedEdges) {
+			transaction.eraseEdge(edgeId);
+			topologyDeletedEdges.insert(edgeId);
+		}
 		LogicalGraphMutationBatch constraintBatch = batch;
 		for (const LogicalGraphNodeDeleteRequest &request: batch.node_deletes) {
 			if (!request.detach) {
@@ -482,6 +506,11 @@ namespace graph::storage {
 				if (deletedEdges.insert(edgeId).second) {
 					constraintBatch.edge_deletes.push_back({edgeId});
 				}
+			}
+		}
+		for (const uint64_t edgeId: deletedEdges) {
+			if (topologyDeletedEdges.insert(edgeId).second) {
+				transaction.eraseEdge(edgeId);
 			}
 		}
 
@@ -592,20 +621,35 @@ namespace graph::storage {
 			}
 			hasStagedWork = true;
 		}
-		result.created_edge_ids.reserve(edges.size());
-		for (size_t ordinal = 0U; ordinal < edges.size(); ++ordinal) {
-			const uint64_t sourceNodeId = resolveEntityId(edges[ordinal].source, result);
-			const uint64_t targetNodeId = resolveEntityId(edges[ordinal].target, result);
+		result.created_edge_ids.reserve(batch.edge_creates.size());
+		for (size_t ordinal = 0U; ordinal < batch.edge_creates.size(); ++ordinal) {
+			const LogicalGraphBatchEdgeCreateRequest &request = batch.edge_creates[ordinal];
+			const uint64_t sourceNodeId = resolveEntityId(request.source, result);
+			const uint64_t targetNodeId = resolveEntityId(request.target, result);
+			uint64_t typeToken = RSS_UNTYPED_RELATIONSHIP_TYPE_TOKEN;
+			if (!request.type.empty()) {
+				const std::optional<uint64_t> resolved =
+						resolveSchemaToken(SystemCatalogSchemaTokenKind::SCSTK_RELATIONSHIP_TYPE, request.type);
+				if (!resolved.has_value() || *resolved == 0U) {
+					fail(FormatError::FERR_INVALID_STATE,
+						 "native logical graph mutation could not resolve a relationship-type Token in its snapshot");
+				}
+				typeToken = *resolved;
+			}
+			ResolvedProperties properties = resolveProperties(request.properties, resolvePropertyKey);
+			if (const auto override = createdEdgeProperties.find(ordinal); override != createdEdgeProperties.end()) {
+				properties = override->second;
+			}
 			const uint64_t edgeId =
 					batch.creation_identity_plan.has_value()
 							? transaction.createEdgeWithReservedId(batch.creation_identity_plan->edge_ids.at(ordinal),
-																   sourceNodeId, targetNodeId,
-																   edges[ordinal].type_token)
-							: transaction.createEdge(sourceNodeId, targetNodeId, edges[ordinal].type_token);
+															   sourceNodeId, targetNodeId,
+															   typeToken)
+							: transaction.createEdge(sourceNodeId, targetNodeId, typeToken);
 			result.created_edge_ids.push_back(edgeId);
-			scalar.stageEdgeType(transaction, edgeId, edges[ordinal].type_token, false);
-			if (!edges[ordinal].properties.entries.empty()) {
-				PropertyCollectionRoot root = edgeRoot(edgeId, edges[ordinal].properties.entries);
+			scalar.stageEdgeType(transaction, edgeId, typeToken, false);
+			if (!properties.entries.empty()) {
+				PropertyCollectionRoot root = edgeRoot(edgeId, properties.entries);
 				transaction.replaceEdgeProperty(root);
 				scalar.stageProperties(transaction, IndexDefinitionEntityKind::IDEK_EDGE, edgeId, {}, root, false);
 			}
@@ -674,7 +718,6 @@ namespace graph::storage {
 			scalar.stageEdgeType(transaction, edgeId, old.type_id, true);
 			scalar.stageProperties(transaction, IndexDefinitionEntityKind::IDEK_EDGE, edgeId, {},
 								   edgeRoot(edgeId, old.properties), true);
-			transaction.eraseEdge(edgeId);
 			hasStagedWork = true;
 		}
 		for (const LogicalGraphNodeDeleteRequest &request: batch.node_deletes) {
@@ -686,6 +729,24 @@ namespace graph::storage {
 								   old.label_token_ids, oldRoot, true);
 			transaction.eraseNode(request.node_id);
 			hasStagedWork = true;
+		}
+
+		if (catalogSession.has_value() &&
+			(!nodes.empty() || !batch.edge_creates.empty() || !orderedErasedEdges.empty() || !batch.node_deletes.empty())) {
+			const std::optional<NativeGraphCardinalityStatistics> current =
+					system_catalog_->readGraphCardinalityStatistics(snapshot);
+			// Older files that already have a Catalog root but no complete record stay
+			// estimate-free. Backfilling them requires a separately bounded maintenance
+			// operation; silently seeding from an ID high-water mark would be wrong.
+			if (current.has_value() ||
+				!metadata_.findIndexRootOptional(snapshot, RSS_SYSTEM_CATALOG_INDEX_ID).has_value()) {
+				const NativeGraphCardinalityStatistics base = current.value_or(NativeGraphCardinalityStatistics{});
+				catalogSession->setGraphCardinalityStatistics(
+						{checkedCardinalityDelta(base.node_count, nodes.size(), batch.node_deletes.size(),
+													"native graph Node cardinality counter overflowed or underflowed"),
+						 checkedCardinalityDelta(base.edge_count, batch.edge_creates.size(), orderedErasedEdges.size(),
+													"native graph Edge cardinality counter overflowed or underflowed")});
+			}
 		}
 
 		for (const ConstraintSupportTreeMutationPlan &plan: supportPlans) {

@@ -3,7 +3,7 @@
  * @brief Durable A/B relocatable superblock storage over the cross-platform I/O layer.
  *
  * This is an isolated relocatable bootstrap component. It is not wired into the
- * current FileStorage header and therefore cannot reinterpret a legacy file.
+ * retired fixed-record header and therefore cannot reinterpret a legacy file.
  *
  * @copyright Copyright (c) 2026 Nexepic
  * @license Apache-2.0
@@ -45,7 +45,7 @@ namespace graph::storage {
 	private:
 		[[nodiscard]] SuperblockPair::Slots readSlotsLocked() const;
 		[[nodiscard]] uint8_t inactiveSlotLocked(const SuperblockPair::Slots &slots) const;
-		void writeSlotLocked(uint8_t slot, const SuperblockPair::SlotBytes &bytes) const;
+		void writeSlotLocked(uint8_t slot, const SuperblockPair::SlotBytes &bytes, Generation generation) const;
 
 		std::shared_ptr<StorageIO> io_;
 		mutable std::mutex mutex_;

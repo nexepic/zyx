@@ -80,6 +80,14 @@ Not all clauses are required — a minimal query can be just `RETURN`. The diagr
 | Quantifier | `all`, `any`, `none`, `single` |
 | Utility | `coalesce`, `timestamp`, `randomUUID`, `exists((pattern))`, `reduce(...)` |
 
+### Conversion Behavior
+
+All conversion functions propagate `NULL`. `toInteger` accepts Boolean, integer, finite double, or a complete decimal
+integer string; it rejects a non-finite or out-of-range floating value before conversion. `toFloat` accepts Boolean,
+integer, finite double, or a complete finite numeric string. `toBoolean` accepts Boolean, a finite numeric value, or the
+case-insensitive strings `true` and `false`. Other input types and malformed text fail instead of being silently coerced
+through display-string or container truthiness rules.
+
 ## Temporal Types
 
 ZYX supports three temporal types: **Date**, **DateTime**, and **Duration**.

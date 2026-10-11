@@ -180,7 +180,9 @@ namespace graph::storage {
 					parentNode.children.push_back(childOrdinal);
 					continue;
 				}
-				if (!canInsert(parent, {childFirstKey, PageId(1U).value()})) {
+				// Use the maximum varint width during planning. Metadata-assigned
+				// logical Page IDs are not guaranteed to fit in the one-byte test ID.
+				if (!canInsert(parent, {childFirstKey, std::numeric_limits<uint64_t>::max()})) {
 					appendNode(result, std::move(parentNode));
 					nextLevel.push_back(result.nodes.size() - 1U);
 					parent = measuringPage(indexId, BTreeNodeKind::BPN_INTERNAL, level, BTreeLeafValueLayout::BLVL_U64);

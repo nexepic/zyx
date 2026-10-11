@@ -129,7 +129,7 @@ TEST_F(RelocatableMetadataStoreTest, EntityPageAndEntityMapPublishTogetherAcross
 	static_cast<void>(store->appendEntityPageToExistingPool(
 			reservation->entries.front(), firstPage, std::span(&firstNode, 1), {}, LogSequenceNumber(3U),
 			[](const CatalogEntry &, PageLocation &page) { page.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME; }));
-	const MetadataSnapshotPin original = store->openSnapshot();
+	MetadataSnapshotPin original = store->openSnapshot();
 	const PageLocation expected = store->findPageLocation(original, firstPage.page_id);
 	EXPECT_EQ(store->findNodePageLocation(original, firstNode.entity_id), firstNode);
 
@@ -309,34 +309,43 @@ TEST_F(RelocatableMetadataStoreTest, EntityPageRetirementRejectsStaleOrForeignMa
 
 TEST_F(RelocatableMetadataStoreTest, EntityPageBatchReplacementPublishesSeveralPagesAndMapsAtomically) {
 	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	const uint64_t dataRegionOffset = store->openSnapshot().superblock().data_region_offset;
 	CatalogSlotReservationRequest nodeRequest = reservationRequest(31U, 1U);
 	nodeRequest.require_absent = true;
 	const std::optional<CatalogSlotReservations> nodeReservation = store->reserveFirstFreeAndUpsertCatalog(
 			std::span(&nodeRequest, 1), PhysicalSlotId(40U), PhysicalSlotId(40U), LogSequenceNumber(2U),
 			[](std::span<const CatalogEntry>) {});
 	ASSERT_TRUE(nodeReservation.has_value());
+	initializeTestSharedPagePool(*io, dataRegionOffset, nodeReservation->entries.front());
 	CatalogSlotReservationRequest edgeRequest = reservationRequest(32U, 1U);
 	edgeRequest.require_absent = true;
 	const std::optional<CatalogSlotReservations> edgeReservation = store->reserveFirstFreeAndUpsertCatalog(
 			std::span(&edgeRequest, 1), PhysicalSlotId(41U), PhysicalSlotId(41U), LogSequenceNumber(3U),
 			[](std::span<const CatalogEntry>) {});
 	ASSERT_TRUE(edgeReservation.has_value());
+	initializeTestSharedPagePool(*io, dataRegionOffset, edgeReservation->entries.front());
 	const EntityPageLocation firstNode{101U, PageId(91U), 0U, 1U};
 	PageLocation nodePage{firstNode.page_id, nodeReservation->entries.front().segment_id, 0U,
 						  nodeReservation->entries.front().generation};
 	static_cast<void>(store->appendEntityPageToExistingPool(nodeReservation->entries.front(), nodePage,
 															std::span(&firstNode, 1), {}, LogSequenceNumber(4U),
-															[](const CatalogEntry &, PageLocation &prepared) {
-																prepared.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME;
-															}));
+														[this, dataRegionOffset](const CatalogEntry &pool, PageLocation &prepared) {
+															prepared.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME;
+															prepareTestSharedPageFrame(*io, dataRegionOffset, pool, prepared.page_id,
+																			   prepared.page_index, pool.owner_id, PageOwnerKind::POK_ENTITY,
+																			   LogSequenceNumber(4U));
+														}));
 	const EntityPageLocation firstEdge{201U, PageId(92U), 0U, 1U};
 	PageLocation edgePage{firstEdge.page_id, edgeReservation->entries.front().segment_id, 0U,
 						  edgeReservation->entries.front().generation};
 	static_cast<void>(store->appendEntityPageToExistingPool(edgeReservation->entries.front(), edgePage, {},
 															std::span(&firstEdge, 1), LogSequenceNumber(5U),
-															[](const CatalogEntry &, PageLocation &prepared) {
-																prepared.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME;
-															}));
+														[this, dataRegionOffset](const CatalogEntry &pool, PageLocation &prepared) {
+															prepared.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME;
+															prepareTestSharedPageFrame(*io, dataRegionOffset, pool, prepared.page_id,
+																			   prepared.page_index, pool.owner_id, PageOwnerKind::POK_ENTITY,
+																			   LogSequenceNumber(5U));
+														}));
 	MetadataSnapshotPin original = store->openSnapshot();
 	const PageLocation originalNodePage = store->findPageLocation(original, firstNode.page_id);
 	const PageLocation originalEdgePage = store->findPageLocation(original, firstEdge.page_id);
@@ -354,10 +363,13 @@ TEST_F(RelocatableMetadataStoreTest, EntityPageBatchReplacementPublishesSeveralP
 	const std::array mutations{nodeMutation, edgeMutation};
 	bool prepared = false;
 	static_cast<void>(store->replaceEntityPagesInExistingPools(
-			mutations, LogSequenceNumber(6U), [&prepared](std::span<EntityPageReplacementMaterialization> pages) {
+			mutations, LogSequenceNumber(6U), [this, dataRegionOffset, &prepared](std::span<EntityPageReplacementMaterialization> pages) {
 				prepared = pages.size() == 2U;
 				for (EntityPageReplacementMaterialization &page: pages) {
 					page.replacement.page_index = static_cast<uint8_t>(page.expected_location.page_index + 1U);
+					prepareTestSharedPageFrame(*io, dataRegionOffset, page.pool, page.replacement.page_id,
+													 page.replacement.page_index, page.pool.owner_id, page.owner_kind,
+													 LogSequenceNumber(6U));
 				}
 			}));
 	EXPECT_TRUE(prepared);
@@ -416,35 +428,44 @@ TEST_F(RelocatableMetadataStoreTest, EntityPageBatchReplacementPublishesSeveralP
 
 TEST_F(RelocatableMetadataStoreTest, EntityPageBatchMutationAtomicallyReplacesAndAppendsAcrossPools) {
 	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	const uint64_t dataRegionOffset = store->openSnapshot().superblock().data_region_offset;
 	CatalogSlotReservationRequest nodeRequest = reservationRequest(31U, 1U);
 	nodeRequest.require_absent = true;
 	const std::optional<CatalogSlotReservations> nodeReservation = store->reserveFirstFreeAndUpsertCatalog(
 			std::span(&nodeRequest, 1), PhysicalSlotId(40U), PhysicalSlotId(40U), LogSequenceNumber(2U),
 			[](std::span<const CatalogEntry>) {});
 	ASSERT_TRUE(nodeReservation.has_value());
+	initializeTestSharedPagePool(*io, dataRegionOffset, nodeReservation->entries.front());
 	CatalogSlotReservationRequest edgeRequest = reservationRequest(32U, 1U);
 	edgeRequest.require_absent = true;
 	const std::optional<CatalogSlotReservations> edgeReservation = store->reserveFirstFreeAndUpsertCatalog(
 			std::span(&edgeRequest, 1), PhysicalSlotId(41U), PhysicalSlotId(41U), LogSequenceNumber(3U),
 			[](std::span<const CatalogEntry>) {});
 	ASSERT_TRUE(edgeReservation.has_value());
+	initializeTestSharedPagePool(*io, dataRegionOffset, edgeReservation->entries.front());
 
 	const EntityPageLocation firstNode{101U, PageId(91U), 0U, 1U};
 	PageLocation nodePage{firstNode.page_id, nodeReservation->entries.front().segment_id, 0U,
 						  nodeReservation->entries.front().generation};
 	static_cast<void>(store->appendEntityPageToExistingPool(nodeReservation->entries.front(), nodePage,
 															std::span(&firstNode, 1), {}, LogSequenceNumber(4U),
-															[](const CatalogEntry &, PageLocation &prepared) {
-																prepared.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME;
-															}));
+														[this, dataRegionOffset](const CatalogEntry &pool, PageLocation &prepared) {
+															prepared.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME;
+															prepareTestSharedPageFrame(*io, dataRegionOffset, pool, prepared.page_id,
+																			   prepared.page_index, pool.owner_id, PageOwnerKind::POK_ENTITY,
+																			   LogSequenceNumber(4U));
+														}));
 	const EntityPageLocation firstEdge{201U, PageId(92U), 0U, 1U};
 	PageLocation edgePage{firstEdge.page_id, edgeReservation->entries.front().segment_id, 0U,
 						  edgeReservation->entries.front().generation};
 	static_cast<void>(store->appendEntityPageToExistingPool(edgeReservation->entries.front(), edgePage, {},
 															std::span(&firstEdge, 1), LogSequenceNumber(5U),
-															[](const CatalogEntry &, PageLocation &prepared) {
-																prepared.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME;
-															}));
+														[this, dataRegionOffset](const CatalogEntry &pool, PageLocation &prepared) {
+															prepared.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME;
+															prepareTestSharedPageFrame(*io, dataRegionOffset, pool, prepared.page_id,
+																			   prepared.page_index, pool.owner_id, PageOwnerKind::POK_ENTITY,
+																			   LogSequenceNumber(5U));
+														}));
 
 	MetadataSnapshotPin original = store->openSnapshot();
 	EntityPageReplacementRequest nodeReplacement;
@@ -460,13 +481,22 @@ TEST_F(RelocatableMetadataStoreTest, EntityPageBatchMutationAtomicallyReplacesAn
 	bool prepared = false;
 	const Superblock published = store->mutateEntityPagesInExistingPools(
 			std::span(&nodeReplacement, 1), std::span(&edgeAppend, 1), LogSequenceNumber(6U),
-			[&prepared](std::span<EntityPageReplacementMaterialization> replacements,
+			[this, dataRegionOffset, &prepared](std::span<EntityPageReplacementMaterialization> replacements,
 						std::span<EntityPageAppendBatchMaterialization> appends) {
 				prepared = replacements.size() == 1U && appends.size() == 1U;
 				replacements.front().replacement.page_index =
 						static_cast<uint8_t>(replacements.front().expected_location.page_index + 1U);
 				// Frames are scoped to a pool, so both pools may independently use frame 2.
 				appends.front().appended_location.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME + 1U;
+				prepareTestSharedPageFrame(*io, dataRegionOffset, replacements.front().pool,
+											   replacements.front().replacement.page_id,
+											   replacements.front().replacement.page_index,
+											   replacements.front().pool.owner_id, replacements.front().owner_kind,
+											   LogSequenceNumber(6U));
+				prepareTestSharedPageFrame(*io, dataRegionOffset, appends.front().pool,
+											   appends.front().appended_location.page_id,
+											   appends.front().appended_location.page_index, appends.front().pool.owner_id,
+											   appends.front().owner_kind, LogSequenceNumber(6U));
 			});
 	EXPECT_TRUE(prepared);
 	EXPECT_EQ(published.generation, Generation(6U));
@@ -515,10 +545,14 @@ TEST_F(RelocatableMetadataStoreTest, EntityPageBatchMutationAtomicallyReplacesAn
 	interruptedAppend.inserted_edges.push_back({203U, interruptedAppend.page_id, 0U, 1U});
 	EXPECT_THROW(static_cast<void>(store->mutateEntityPagesInExistingPools(
 						 {}, std::span(&interruptedAppend, 1), LogSequenceNumber(7U),
-						 [](std::span<EntityPageReplacementMaterialization>,
-							std::span<EntityPageAppendBatchMaterialization> appends) {
-							 appends.front().appended_location.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME + 2U;
-						 },
+							 [this, dataRegionOffset](std::span<EntityPageReplacementMaterialization>,
+														std::span<EntityPageAppendBatchMaterialization> appends) {
+								 appends.front().appended_location.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME + 2U;
+								 prepareTestSharedPageFrame(*io, dataRegionOffset, appends.front().pool,
+															appends.front().appended_location.page_id,
+															appends.front().appended_location.page_index, appends.front().pool.owner_id,
+															appends.front().owner_kind, LogSequenceNumber(7U));
+							 },
 						 withBootstrapFailpoint(BootstrapPublishFailpoint::BPF_BEFORE_INACTIVE_WRITE))),
 				 BootstrapPublishInterrupted);
 	MetadataSnapshotPin afterInterrupted = store->openSnapshot();
@@ -528,20 +562,25 @@ TEST_F(RelocatableMetadataStoreTest, EntityPageBatchMutationAtomicallyReplacesAn
 
 TEST_F(RelocatableMetadataStoreTest, EntityPoolTransactionPublishesLabelPagesWithoutEntityMapDeltas) {
 	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	const uint64_t dataRegionOffset = store->openSnapshot().superblock().data_region_offset;
 	CatalogSlotReservationRequest request = reservationRequest(31U, 1U);
 	request.require_absent = true;
 	const std::optional<CatalogSlotReservations> reservation =
 			store->reserveFirstFreeAndUpsertCatalog(std::span(&request, 1), PhysicalSlotId(40U), PhysicalSlotId(40U),
 													LogSequenceNumber(2U), [](std::span<const CatalogEntry>) {});
 	ASSERT_TRUE(reservation.has_value());
+	initializeTestSharedPagePool(*io, dataRegionOffset, reservation->entries.front());
 	const EntityPageLocation node{101U, PageId(91U), 0U, 1U};
 	PageLocation nodePage{node.page_id, reservation->entries.front().segment_id, 0U,
 						  reservation->entries.front().generation};
 	static_cast<void>(store->appendEntityPageToExistingPool(reservation->entries.front(), nodePage, std::span(&node, 1),
 															{}, LogSequenceNumber(3U),
-															[](const CatalogEntry &, PageLocation &prepared) {
-																prepared.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME;
-															}));
+														[this, dataRegionOffset](const CatalogEntry &pool, PageLocation &prepared) {
+															prepared.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME;
+															prepareTestSharedPageFrame(*io, dataRegionOffset, pool, prepared.page_id,
+																			   prepared.page_index, pool.owner_id, PageOwnerKind::POK_ENTITY,
+																			   LogSequenceNumber(3U));
+														}));
 
 	MetadataSnapshotPin original = store->openSnapshot();
 	EntityPageReplacementRequest nodeReplacement;
@@ -554,12 +593,21 @@ TEST_F(RelocatableMetadataStoreTest, EntityPoolTransactionPublishesLabelPagesWit
 
 	const Superblock published = store->mutateEntityPagesInExistingPools(
 			std::span(&nodeReplacement, 1), std::span(&labelAppend, 1), LogSequenceNumber(4U),
-			[](std::span<EntityPageReplacementMaterialization> replacements,
+			[this, dataRegionOffset](std::span<EntityPageReplacementMaterialization> replacements,
 			   std::span<EntityPageAppendBatchMaterialization> appends) {
 				ASSERT_EQ(replacements.front().owner_kind, PageOwnerKind::POK_ENTITY);
 				ASSERT_EQ(appends.front().owner_kind, PageOwnerKind::POK_ENTITY_LABEL);
 				replacements.front().replacement.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME + 1U;
 				appends.front().appended_location.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME + 2U;
+				prepareTestSharedPageFrame(*io, dataRegionOffset, replacements.front().pool,
+											   replacements.front().replacement.page_id,
+											   replacements.front().replacement.page_index,
+											   replacements.front().pool.owner_id, replacements.front().owner_kind,
+											   LogSequenceNumber(4U));
+				prepareTestSharedPageFrame(*io, dataRegionOffset, appends.front().pool,
+											   appends.front().appended_location.page_id,
+											   appends.front().appended_location.page_index, appends.front().pool.owner_id,
+											   appends.front().owner_kind, LogSequenceNumber(4U));
 			});
 	EXPECT_EQ(published.generation, Generation(4U));
 	MetadataSnapshotPin current = store->openSnapshot();
@@ -585,20 +633,25 @@ TEST_F(RelocatableMetadataStoreTest, EntityPoolTransactionPublishesLabelPagesWit
 
 TEST_F(RelocatableMetadataStoreTest, EntityPageTransactionAtomicallyReplacesAndAllocatesNewPool) {
 	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	const uint64_t dataRegionOffset = store->openSnapshot().superblock().data_region_offset;
 	CatalogSlotReservationRequest originalRequest = reservationRequest(31U, 1U);
 	originalRequest.require_absent = true;
 	const std::optional<CatalogSlotReservations> originalReservation = store->reserveFirstFreeAndUpsertCatalog(
 			std::span(&originalRequest, 1), PhysicalSlotId(40U), PhysicalSlotId(40U), LogSequenceNumber(2U),
 			[](std::span<const CatalogEntry>) {});
 	ASSERT_TRUE(originalReservation.has_value());
+	initializeTestSharedPagePool(*io, dataRegionOffset, originalReservation->entries.front());
 	const EntityPageLocation originalNode{101U, PageId(91U), 0U, 1U};
 	PageLocation originalPage{originalNode.page_id, originalReservation->entries.front().segment_id, 0U,
 							  originalReservation->entries.front().generation};
 	static_cast<void>(store->appendEntityPageToExistingPool(originalReservation->entries.front(), originalPage,
 															std::span(&originalNode, 1), {}, LogSequenceNumber(3U),
-															[](const CatalogEntry &, PageLocation &prepared) {
-																prepared.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME;
-															}));
+														[this, dataRegionOffset](const CatalogEntry &pool, PageLocation &prepared) {
+															prepared.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME;
+															prepareTestSharedPageFrame(*io, dataRegionOffset, pool, prepared.page_id,
+																			   prepared.page_index, pool.owner_id, PageOwnerKind::POK_ENTITY,
+																			   LogSequenceNumber(3U));
+														}));
 	MetadataSnapshotPin original = store->openSnapshot();
 
 	EntityPageReplacementRequest replacement;
@@ -618,13 +671,23 @@ TEST_F(RelocatableMetadataStoreTest, EntityPageTransactionAtomicallyReplacesAndA
 	bool prepared = false;
 	const Superblock published = store->mutateEntityPages(
 			std::span(&replacement, 1), {}, std::span(&newPool, 1), LogSequenceNumber(4U),
-			[&prepared](std::span<EntityPageReplacementMaterialization> replacements,
+			[this, dataRegionOffset, &prepared](std::span<EntityPageReplacementMaterialization> replacements,
 						std::span<EntityPageAppendBatchMaterialization> appends,
 						std::span<EntityPageNewPoolBatchMaterialization> pools) {
 				prepared = replacements.size() == 1U && appends.empty() && pools.size() == 1U &&
 						   pools.front().pool.physical_slot == PhysicalSlotId(41U);
 				replacements.front().replacement.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME + 1U;
 				pools.front().initial_location.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME;
+				prepareTestSharedPageFrame(*io, dataRegionOffset, replacements.front().pool,
+											   replacements.front().replacement.page_id,
+											   replacements.front().replacement.page_index,
+											   replacements.front().pool.owner_id, replacements.front().owner_kind,
+											   LogSequenceNumber(4U));
+				initializeTestSharedPagePool(*io, dataRegionOffset, pools.front().pool);
+				prepareTestSharedPageFrame(*io, dataRegionOffset, pools.front().pool,
+											   pools.front().initial_location.page_id,
+											   pools.front().initial_location.page_index, pools.front().pool.owner_id,
+											   pools.front().owner_kind, LogSequenceNumber(4U));
 			});
 	EXPECT_TRUE(prepared);
 	EXPECT_EQ(published.generation, Generation(4U));
@@ -650,9 +713,15 @@ TEST_F(RelocatableMetadataStoreTest, EntityPageTransactionAtomicallyReplacesAndA
 	EXPECT_THROW(
 			static_cast<void>(store->mutateEntityPages(
 					{}, {}, std::span(&interruptedPool, 1), LogSequenceNumber(5U),
-					[](std::span<EntityPageReplacementMaterialization>, std::span<EntityPageAppendBatchMaterialization>,
-					   std::span<EntityPageNewPoolBatchMaterialization> pools) {
+					[this, dataRegionOffset](std::span<EntityPageReplacementMaterialization>,
+										 std::span<EntityPageAppendBatchMaterialization>,
+										 std::span<EntityPageNewPoolBatchMaterialization> pools) {
 						pools.front().initial_location.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME;
+						initializeTestSharedPagePool(*io, dataRegionOffset, pools.front().pool);
+						prepareTestSharedPageFrame(*io, dataRegionOffset, pools.front().pool,
+											   pools.front().initial_location.page_id,
+											   pools.front().initial_location.page_index, pools.front().pool.owner_id,
+											   pools.front().owner_kind, LogSequenceNumber(5U));
 					},
 					withBootstrapFailpoint(BootstrapPublishFailpoint::BPF_BEFORE_INACTIVE_WRITE))),
 			BootstrapPublishInterrupted);
@@ -665,18 +734,24 @@ TEST_F(RelocatableMetadataStoreTest, EntityPageTransactionAtomicallyReplacesAndA
 
 TEST_F(RelocatableMetadataStoreTest, NativeGraphPageTransactionPublishesEntityAndPropertyDirectoriesTogether) {
 	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	const uint64_t dataRegionOffset = store->openSnapshot().superblock().data_region_offset;
 	CatalogSlotReservationRequest entityRequest = reservationRequest(RSS_FIRST_ALLOCATABLE_SEGMENT_ID, 1U);
 	entityRequest.require_absent = true;
 	const std::optional<CatalogSlotReservations> entityReservation = store->reserveFirstFreeAndUpsertCatalog(
 			std::span(&entityRequest, 1), PhysicalSlotId(40U), PhysicalSlotId(40U), LogSequenceNumber(2U),
 			[](std::span<const CatalogEntry>) {});
 	ASSERT_TRUE(entityReservation.has_value());
+	initializeTestSharedPagePool(*io, dataRegionOffset, entityReservation->entries.front());
 	const EntityPageLocation node{101U, PageId(91U), 0U, 1U};
 	PageLocation entityPageLocation{node.page_id, entityReservation->entries.front().segment_id, 0U,
 									entityReservation->entries.front().generation, 0U};
 	static_cast<void>(store->appendEntityPageToExistingPool(
 			entityReservation->entries.front(), entityPageLocation, std::span(&node, 1), {}, LogSequenceNumber(3U),
-			[](const CatalogEntry &, PageLocation &page) { page.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME; }));
+			[this, dataRegionOffset](const CatalogEntry &pool, PageLocation &page) {
+				page.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME;
+				prepareTestSharedPageFrame(*io, dataRegionOffset, pool, page.page_id, page.page_index, pool.owner_id,
+											   PageOwnerKind::POK_ENTITY, LogSequenceNumber(3U));
+			}));
 
 	const EntityPropertyKey propertyKey{EntityPropertyOwnerKind::EPOK_NODE, node.entity_id};
 	const std::optional<EntityPropertyPagePoolMaterialization> propertyMaterialization =
@@ -687,6 +762,10 @@ TEST_F(RelocatableMetadataStoreTest, NativeGraphPageTransactionPublishesEntityAn
 						property = {property.key, pageId, 0U, 1U};
 					});
 	ASSERT_TRUE(propertyMaterialization.has_value());
+	initializeTestSharedPagePool(*io, dataRegionOffset, propertyMaterialization->pool);
+	prepareTestSharedPageFrame(*io, dataRegionOffset, propertyMaterialization->pool,
+								propertyMaterialization->page.page_id, propertyMaterialization->page.page_index, 701U,
+								PageOwnerKind::POK_PROPERTY, LogSequenceNumber(4U));
 	MetadataSnapshotPin original = store->openSnapshot();
 	const PageLocation originalEntityPage = store->findPageLocation(original, node.page_id);
 	const PageLocation originalPropertyPage = store->findPageLocation(original, propertyMaterialization->page.page_id);
@@ -706,7 +785,7 @@ TEST_F(RelocatableMetadataStoreTest, NativeGraphPageTransactionPublishesEntityAn
 	bool prepared = false;
 	const Superblock published = store->mutateNativeGraphPages(
 			std::span(&entityReplacement, 1), {}, {}, std::span(&propertyReplacement, 1), {}, LogSequenceNumber(5U),
-			[&prepared](std::span<EntityPageReplacementMaterialization> entities,
+			[this, dataRegionOffset, &prepared](std::span<EntityPageReplacementMaterialization> entities,
 						std::span<EntityPageAppendBatchMaterialization> appends,
 						std::span<EntityPageNewPoolBatchMaterialization> newPools,
 						std::span<NativeGraphPropertyPageReplacementMaterialization> properties,
@@ -717,6 +796,14 @@ TEST_F(RelocatableMetadataStoreTest, NativeGraphPageTransactionPublishesEntityAn
 						static_cast<uint8_t>(entities.front().expected_location.page_index + 1U);
 				properties.front().replacement.page_index =
 						static_cast<uint8_t>(properties.front().expected_location.page_index + 1U);
+				prepareTestSharedPageFrame(*io, dataRegionOffset, entities.front().pool,
+											   entities.front().replacement.page_id,
+											   entities.front().replacement.page_index, entities.front().pool.owner_id,
+											   entities.front().owner_kind, LogSequenceNumber(5U));
+				prepareTestSharedPageFrame(*io, dataRegionOffset, properties.front().pool,
+											   properties.front().replacement.page_id,
+											   properties.front().replacement.page_index, properties.front().page_owner_id,
+											   PageOwnerKind::POK_PROPERTY, LogSequenceNumber(5U));
 			});
 	EXPECT_TRUE(prepared);
 	EXPECT_EQ(published.generation, Generation(5U));
@@ -769,18 +856,24 @@ TEST_F(RelocatableMetadataStoreTest, NativeGraphPageTransactionPublishesEntityAn
 
 TEST_F(RelocatableMetadataStoreTest, NativeGraphPageTransactionPublishesOnlyCompleteEntityAndPropertyGeneration) {
 	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	const uint64_t dataRegionOffset = store->openSnapshot().superblock().data_region_offset;
 	CatalogSlotReservationRequest entityRequest = reservationRequest(RSS_FIRST_ALLOCATABLE_SEGMENT_ID, 1U);
 	entityRequest.require_absent = true;
 	const std::optional<CatalogSlotReservations> entityReservation = store->reserveFirstFreeAndUpsertCatalog(
 			std::span(&entityRequest, 1), PhysicalSlotId(40U), PhysicalSlotId(40U), LogSequenceNumber(2U),
 			[](std::span<const CatalogEntry>) {});
 	ASSERT_TRUE(entityReservation.has_value());
+	initializeTestSharedPagePool(*io, dataRegionOffset, entityReservation->entries.front());
 	const EntityPageLocation node{101U, PageId(91U), 0U, 1U};
 	PageLocation entityPageLocation{node.page_id, entityReservation->entries.front().segment_id, 0U,
 									entityReservation->entries.front().generation, 0U};
 	static_cast<void>(store->appendEntityPageToExistingPool(
 			entityReservation->entries.front(), entityPageLocation, std::span(&node, 1), {}, LogSequenceNumber(3U),
-			[](const CatalogEntry &, PageLocation &page) { page.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME; }));
+			[this, dataRegionOffset](const CatalogEntry &pool, PageLocation &page) {
+				page.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME;
+				prepareTestSharedPageFrame(*io, dataRegionOffset, pool, page.page_id, page.page_index, pool.owner_id,
+											   PageOwnerKind::POK_ENTITY, LogSequenceNumber(3U));
+			}));
 
 	const EntityPropertyKey propertyKey{EntityPropertyOwnerKind::EPOK_NODE, node.entity_id};
 	const std::optional<EntityPropertyPagePoolMaterialization> propertyMaterialization =
@@ -791,7 +884,11 @@ TEST_F(RelocatableMetadataStoreTest, NativeGraphPageTransactionPublishesOnlyComp
 						property = {property.key, pageId, 0U, 1U};
 					});
 	ASSERT_TRUE(propertyMaterialization.has_value());
-	const MetadataSnapshotPin original = store->openSnapshot();
+	initializeTestSharedPagePool(*io, dataRegionOffset, propertyMaterialization->pool);
+	prepareTestSharedPageFrame(*io, dataRegionOffset, propertyMaterialization->pool,
+								propertyMaterialization->page.page_id, propertyMaterialization->page.page_index, 701U,
+								PageOwnerKind::POK_PROPERTY, LogSequenceNumber(4U));
+	MetadataSnapshotPin original = store->openSnapshot();
 	const PageLocation originalEntityPage = store->findPageLocation(original, node.page_id);
 	const PageLocation originalPropertyPage = store->findPageLocation(original, propertyMaterialization->page.page_id);
 	const EntityPropertyLocation originalProperty = store->findEntityPropertyLocation(original, propertyKey);
@@ -805,7 +902,7 @@ TEST_F(RelocatableMetadataStoreTest, NativeGraphPageTransactionPublishesOnlyComp
 	propertyReplacement.expected_page_owner_id = 701U;
 	propertyReplacement.expected_owner_lsn = LogSequenceNumber(4U);
 	propertyReplacement.upserted_properties = {{propertyKey, originalPropertyPage.page_id, 1U, 2U}};
-	const auto prepareBothPages = [](std::span<EntityPageReplacementMaterialization> entities,
+	const auto prepareBothPages = [this, dataRegionOffset](std::span<EntityPageReplacementMaterialization> entities,
 										std::span<EntityPageAppendBatchMaterialization> appends,
 										std::span<EntityPageNewPoolBatchMaterialization> newPools,
 										std::span<NativeGraphPropertyPageReplacementMaterialization> properties,
@@ -819,6 +916,13 @@ TEST_F(RelocatableMetadataStoreTest, NativeGraphPageTransactionPublishesOnlyComp
 				static_cast<uint8_t>(entities.front().expected_location.page_index + 1U);
 		properties.front().replacement.page_index =
 				static_cast<uint8_t>(properties.front().expected_location.page_index + 1U);
+		prepareTestSharedPageFrame(*io, dataRegionOffset, entities.front().pool, entities.front().replacement.page_id,
+											entities.front().replacement.page_index, entities.front().pool.owner_id,
+											entities.front().owner_kind, LogSequenceNumber(5U));
+		prepareTestSharedPageFrame(*io, dataRegionOffset, properties.front().pool,
+											properties.front().replacement.page_id,
+											properties.front().replacement.page_index, properties.front().page_owner_id,
+											PageOwnerKind::POK_PROPERTY, LogSequenceNumber(5U));
 	};
 
 	EXPECT_THROW(static_cast<void>(store->mutateNativeGraphPages(
@@ -833,6 +937,12 @@ TEST_F(RelocatableMetadataStoreTest, NativeGraphPageTransactionPublishesOnlyComp
 	EXPECT_EQ(store->findNodePageLocation(beforePublication, node.entity_id), node);
 	EXPECT_EQ(store->findEntityPropertyLocation(beforePublication, propertyKey), originalProperty);
 	beforePublication.release();
+	// A failed metadata COW publication intentionally poisons the in-memory
+	// allocator. Reopen from the surviving Superblock before attempting a
+	// second crash boundary; that is the production recovery contract.
+	original.release();
+	store.reset();
+	store = RelocatableMetadataStore::open(io);
 
 	EXPECT_THROW(static_cast<void>(store->mutateNativeGraphPages(
 					 std::span(&entityReplacement, 1), {}, {}, std::span(&propertyReplacement, 1), {},
@@ -853,18 +963,24 @@ TEST_F(RelocatableMetadataStoreTest, NativeGraphPageTransactionPublishesOnlyComp
 
 TEST_F(RelocatableMetadataStoreTest, NativeGraphPropertyPoolBecomesReachableOnlyWithPublishedGeneration) {
 	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1U, 1U));
+	const uint64_t dataRegionOffset = store->openSnapshot().superblock().data_region_offset;
 	CatalogSlotReservationRequest entityRequest = reservationRequest(RSS_FIRST_ALLOCATABLE_SEGMENT_ID, 1U);
 	entityRequest.require_absent = true;
 	const std::optional<CatalogSlotReservations> entityReservation = store->reserveFirstFreeAndUpsertCatalog(
 			std::span(&entityRequest, 1), PhysicalSlotId(41U), PhysicalSlotId(41U), LogSequenceNumber(2U),
 			[](std::span<const CatalogEntry>) {});
 	ASSERT_TRUE(entityReservation.has_value());
+	initializeTestSharedPagePool(*io, dataRegionOffset, entityReservation->entries.front());
 	const EntityPageLocation node{101U, PageId(91U), 0U, 1U};
 	PageLocation entityPageLocation{node.page_id, entityReservation->entries.front().segment_id, 0U,
 									entityReservation->entries.front().generation, 0U};
 	static_cast<void>(store->appendEntityPageToExistingPool(
 			entityReservation->entries.front(), entityPageLocation, std::span(&node, 1), {}, LogSequenceNumber(3U),
-			[](const CatalogEntry &, PageLocation &page) { page.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME; }));
+			[this, dataRegionOffset](const CatalogEntry &pool, PageLocation &page) {
+				page.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME;
+				prepareTestSharedPageFrame(*io, dataRegionOffset, pool, page.page_id, page.page_index, pool.owner_id,
+											   PageOwnerKind::POK_ENTITY, LogSequenceNumber(3U));
+			}));
 	const EntityPropertyKey propertyKey{EntityPropertyOwnerKind::EPOK_NODE, 101U};
 	NativeGraphPropertyPageBatchRequest request;
 	request.page_owner_id = 701U;
@@ -872,7 +988,7 @@ TEST_F(RelocatableMetadataStoreTest, NativeGraphPropertyPoolBecomesReachableOnly
 	request.last_slot = PhysicalSlotId(40U);
 	request.page_property_keys = {{propertyKey}};
 	std::optional<NativeGraphPropertyPageBatchMaterialization> candidate;
-	const auto prepareNewPool = [&candidate](std::span<EntityPageReplacementMaterialization> entities,
+	const auto prepareNewPool = [this, dataRegionOffset, &candidate](std::span<EntityPageReplacementMaterialization> entities,
 										  std::span<EntityPageAppendBatchMaterialization> appends,
 										  std::span<EntityPageNewPoolBatchMaterialization> newPools,
 										  std::span<NativeGraphPropertyPageReplacementMaterialization> properties,
@@ -887,6 +1003,10 @@ TEST_F(RelocatableMetadataStoreTest, NativeGraphPropertyPoolBecomesReachableOnly
 		initial.location.page_index = RSS_PAGE_POOL_FIRST_DATA_FRAME;
 		initial.upserted_properties.front() =
 				{initial.upserted_properties.front().key, initial.location.page_id, 0U, 1U};
+		initializeTestSharedPagePool(*io, dataRegionOffset, propertyPools.front().pool);
+		prepareTestSharedPageFrame(*io, dataRegionOffset, propertyPools.front().pool, initial.location.page_id,
+											initial.location.page_index, propertyPools.front().page_owner_id,
+											PageOwnerKind::POK_PROPERTY, LogSequenceNumber(4U));
 		candidate = propertyPools.front();
 	};
 
@@ -906,6 +1026,10 @@ TEST_F(RelocatableMetadataStoreTest, NativeGraphPropertyPoolBecomesReachableOnly
 	beforePublication.release();
 
 	candidate.reset();
+	// The interrupted COW allocator never resumes in memory. Reopen restores
+	// the last complete generation before exercising the published boundary.
+	store.reset();
+	store = RelocatableMetadataStore::open(io);
 	EXPECT_THROW(static_cast<void>(store->mutateNativeGraphPages(
 					 {}, {}, {}, {}, std::span(&request, 1), LogSequenceNumber(4U), prepareNewPool,
 					 withBootstrapFailpoint(BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE))),

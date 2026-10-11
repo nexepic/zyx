@@ -26,7 +26,7 @@ Product Quantization works by decomposing high-dimensional vectors into lower-di
 
 - **Memory Efficiency**: 768-dimensional vectors compressed from 3KB to ~100 bytes
 - **Search Speed**: Distance computation reduced from O(dim) to O(numSubspaces)
-- **DiskANN Integration**: Seamless integration with graph-based ANN search
+- **Native adjacency integration**: Atomically published derived adjacency data for bounded ANN search
 - **Zero-Copy Operations**: Efficient memory layout for cache-friendly access
 
 ### PQ Pipeline
@@ -84,9 +84,9 @@ Where:
 - K = number of centroids per subspace (typically 256 = 2^8)
 - c_mi in R^Di (i-th centroid in m-th subspace)
 
-Training applies K-Means clustering independently to each subspace. For each of the M subspaces, the training data is sliced into sub-vectors covering that subspace's dimensions, and K-Means runs with a fixed seed of 42 and a maximum of 15 iterations. The resulting K centroids form the codebook for that subspace.
+Training applies deterministic Lloyd-style clustering independently to each subspace. The native implementation selects a stable bounded sample by Vector ID, slices each record into sub-vectors, and runs the configured finite number of iterations. The resulting K centroids form the codebook for that subspace.
 
-The `NativeProductQuantizer` class (defined in `include/graph/vector/core/NativeProductQuantizer.hpp`) manages this process: it iterates over all M subspaces, extracts the corresponding sub-vectors from the training set, invokes `KMeans::run` from `include/graph/vector/core/KMeans.hpp`, and stores the resulting centroids.
+The `DeterministicProductQuantizer` class (defined in `include/graph/storage/relocatable/vector/DeterministicProductQuantizer.hpp`) manages this process. It validates the bounded input shape, trains deterministic subspace centroids, and produces an explicit little-endian codebook payload for the native Vector store.
 
 ### Encoding
 
@@ -102,7 +102,7 @@ Where q_m in [0, K-1] is the index of the nearest centroid in subspace m:
 q_m = argmin_i ||x_m - c_mi||^2
 ```
 
-Here x_m is the sub-vector of x corresponding to subspace m. Concretely, for each subspace m, the encoder takes the Di-dimensional sub-vector at offset `m * subDim`, computes the squared L2 distance to every centroid in codebook m using `VectorMetric::computeL2Sqr` (from `include/graph/vector/core/VectorMetric.hpp`), and records the index of the closest centroid as a `uint8_t`. Because K = 256, each code fits in exactly one byte, yielding a total of M bytes per vector.
+Here x_m is the sub-vector of x corresponding to subspace m. For each subspace m, the encoder computes squared distance to every centroid and records the first closest centroid as a `uint8_t`; deterministic tie handling makes re-encoding independent of host scheduling. Because K is bounded by 256, each code fits in one byte, yielding M bytes per vector.
 
 ### Decoding
 
@@ -212,7 +212,7 @@ Given PQ codes for a database vector x, the approximate distance is the sum of t
 d(q, x) = Sum over m of T[m][codes[m]]
 ```
 
-Each term is a single array access: index into row m at column `codes[m]`. The `NativeProductQuantizer` applies 4-way loop unrolling to amortize loop overhead and improve pipeline utilization. For M = 96, this reduces to roughly 24 unrolled iterations plus a small remainder loop.
+Each term is a single array access: index into row m at column `codes[m]`. The native implementation keeps codebook and PQ payload shapes explicit and bounds all reads before performing this lookup.
 
 ### ADC Distance Table Lookup
 
@@ -272,11 +272,11 @@ K-Means clustering is used to train codebooks for each subspace.
 
 ### Algorithm
 
-The K-Means implementation (`include/graph/vector/core/KMeans.hpp`) follows the standard Expectation-Maximization (EM) approach:
+The native deterministic trainer (`include/graph/storage/relocatable/vector/DeterministicProductQuantizer.hpp`) follows a bounded Lloyd-style expectation/maximization approach:
 
-1. **Initialization**: K centroids are seeded by randomly selecting K data points. The random number generator uses a fixed seed of 42 for reproducibility.
+1. **Initialization**: K centroids are selected deterministically from the stable bounded sample.
 
-2. **E-Step (Assignment)**: Each data point is assigned to the nearest centroid based on squared L2 distance, computed via `VectorMetric::computeL2Sqr`. If no assignments change compared to the previous iteration, training converges early.
+2. **E-Step (Assignment)**: Each data point is assigned to the nearest centroid based on squared L2 distance, with the first centroid winning ties.
 
 3. **M-Step (Update)**: Each centroid is recomputed as the mean of all points assigned to it. If a cluster becomes empty (no assigned points), its centroid is re-initialized to a randomly chosen data point.
 
@@ -299,7 +299,7 @@ For n = 10,000 training vectors, M = 96, K = 256, Di = 8, iterations = 15:
 
 ### Parameters
 
-The `NativeProductQuantizer` is configured with three parameters:
+The `DeterministicProductQuantizer` is configured with dimensions, subspaces, centroids, a finite iteration count, and explicit record/sample bounds:
 
 - **dim** -- Total dimensionality of the input vectors (e.g., 768)
 - **numSubspaces** -- Number of subspaces M into which the vector is decomposed
@@ -330,13 +330,13 @@ For D = 768:
 - **Representative**: Training data should match query distribution
 - **Random sampling**: Use uniform random sampling from dataset
 
-Training data is sampled from the dataset using a random number generator with a fixed seed (42), selecting vectors uniformly at random to form the training set.
+Training samples are selected by a stable rank of Vector ID and are capped by the configured record and sample bounds.
 
-## Integration with DiskANN
+## Native Adjacency Integration
 
 ### Hybrid Search Strategy
 
-ZYX uses a hybrid approach combining PQ and raw vectors within the DiskANN search pipeline. When computing the distance between a query and a candidate vector, the system first checks whether PQ is trained and PQ codes are available for that vector. If so, it uses the fast PQ distance via the precomputed distance table. Otherwise, it falls back to computing the exact distance from the raw vector.
+ZYX combines PQ and raw vectors within a native derived adjacency generation. When computing the distance between a query and a candidate vector, the system uses PQ codes when the published generation provides them and falls back to bounded exact raw-vector scoring where required.
 
 ### Search Workflow
 
@@ -350,7 +350,7 @@ flowchart TD
 ```
 
 1. **Distance Table**: The query vector is used to precompute the PQ distance table (M x K entries).
-2. **Graph Traversal**: During greedy search on the DiskANN graph, PQ distances guide navigation toward promising regions. Each neighbor comparison requires only M table lookups.
+2. **Graph Traversal**: During native adjacency traversal, PQ distances guide navigation toward promising regions. Each neighbor comparison requires only M table lookups.
 3. **Candidate Selection**: The beam search collects candidate vectors using approximate PQ distances.
 4. **Re-ranking**: The top candidates are re-scored using exact L2 distances computed from raw vectors, ensuring the final ranking is accurate.
 
@@ -368,7 +368,7 @@ PQ codebooks are serialized for persistence using the `utils::Serializer` utilit
 1. **Header**: dimension, number of subspaces, number of centroids, and a trained flag (4 POD values).
 2. **Codebook data**: If the trained flag is true, all M codebooks are written sequentially. Each codebook contains K centroids, and each centroid contains Di float values.
 
-Deserialization reads the header back, reconstructs a `NativeProductQuantizer` instance, and -- if the trained flag was set -- restores the full codebook array by reading M x K x Di floats.
+The native Vector store validates the declared codebook shape before decoding its explicit little-endian float payload and rejects malformed or stale derived metadata.
 
 The total serialized size for a trained 768D quantizer with M=96, K=256 is approximately 786 KB (the codebook data) plus a small fixed-size header.
 
@@ -458,7 +458,4 @@ Quantization error depends on:
 
 ## See Also
 
-- [DiskANN Algorithm](/en/docs/zyx/algorithms/diskann) - Graph-based ANN search with PQ
-- [K-Means Clustering](/en/docs/zyx/algorithms/kmeans) - PQ training algorithm
 - [Vector Metrics](/en/docs/zyx/algorithms/vector-metrics) - Distance metric implementations
-- [Compression Algorithm](/en/docs/zyx/algorithms/compression) - Lossless compression techniques

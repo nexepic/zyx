@@ -132,6 +132,10 @@ namespace graph::storage {
 		[[nodiscard]] EntityPage rebindOwner(const PageOwnerHeader &owner) const;
 		[[nodiscard]] uint16_t insert(const NodeEntityRecord &record);
 		[[nodiscard]] uint16_t insert(const EdgeEntityRecord &record);
+		// Inserts no more than one fixed-page worth of Edge records. It validates
+		// every input before changing the page, then refreshes the durable page
+		// checksums once for the complete page image.
+		[[nodiscard]] std::vector<uint16_t> insertEdges(std::span<const EdgeEntityRecord> records);
 		[[nodiscard]] std::optional<NodeEntityRecord> findNode(uint16_t slot) const;
 		[[nodiscard]] std::optional<NodeEntityRecord> findNode(uint16_t slot, uint32_t expectedSlotGeneration) const;
 		[[nodiscard]] std::optional<EdgeEntityRecord> findEdge(uint16_t slot) const;

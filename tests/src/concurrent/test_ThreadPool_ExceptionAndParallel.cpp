@@ -1210,3 +1210,53 @@ TEST(ThreadPoolExceptionAndParallelTest, AdaptivePolicyReturnsBestReliableWorker
 
 	EXPECT_EQ(state.recommendWorkerCount(estimate, 4, 4), 4UL);
 }
+
+TEST(ThreadPoolExceptionAndParallelTest, AdaptivePolicyClassifiesShallowStatefulAdjacencyAndRejectsNonFiniteStats) {
+	using namespace graph::concurrent;
+	const ParallelWorkEstimate shallowStatefulAdjacency{
+			.workloadKind = ParallelWorkloadKind::PWK_ADJACENCY_TRAVERSAL,
+			.estimatedItems = 1024,
+			.estimatedStateBytesPerItem = 32};
+	EXPECT_EQ(detail::shapeBucket(shallowStatefulAdjacency), 1UL);
+
+	const ParallelAdaptiveStats nonFiniteStats{
+			.samples = 2,
+			.throughputEwma = std::numeric_limits<double>::quiet_NaN()};
+	EXPECT_FALSE(detail::hasReliableThroughput(nonFiniteStats, ParallelAdaptivePolicyConfig{}));
+}
+
+TEST(ThreadPoolExceptionAndParallelTest, AdaptivePolicySkipsInadmissibleLowerCandidatesDuringSaturatedExploration) {
+	using namespace graph::concurrent;
+	AdaptiveParallelPolicyState state;
+	const ParallelWorkEstimate estimate{
+			.workloadKind = ParallelWorkloadKind::PWK_CPU_BOUND,
+			.partitions = 1,
+			.estimatedItems = 1024};
+	for (int sample = 0; sample < 2; ++sample) {
+		state.record(ParallelExecutionTelemetry{
+				.estimate = estimate,
+				.workerCount = 4,
+				.elapsedNs = 100,
+				.completed = true});
+	}
+
+	EXPECT_EQ(state.recommendWorkerCount(estimate, 4, 4), 1UL);
+}
+
+TEST(ThreadPoolExceptionAndParallelTest, AdaptivePolicyTreatsTwoWorkerHardLimitAsUnsaturated) {
+	using namespace graph::concurrent;
+	AdaptiveParallelPolicyState state;
+	const ParallelWorkEstimate estimate{
+			.workloadKind = ParallelWorkloadKind::PWK_CPU_BOUND,
+			.partitions = 8,
+			.estimatedItems = 1024};
+	for (int sample = 0; sample < 2; ++sample) {
+		state.record(ParallelExecutionTelemetry{
+				.estimate = estimate,
+				.workerCount = 2,
+				.elapsedNs = 100,
+				.completed = true});
+	}
+
+	EXPECT_EQ(state.recommendWorkerCount(estimate, 2, 2), 2UL);
+}

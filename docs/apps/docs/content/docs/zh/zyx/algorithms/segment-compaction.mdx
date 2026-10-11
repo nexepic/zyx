@@ -14,7 +14,7 @@ projectOrder: 1
 
 原生逻辑存储格式回收空间时，不会改变 Node ID、Edge ID、`SegmentId`、`PageId` 或外部 property 引用。压缩只会将稳定逻辑身份到新物理位置的目录绑定切换为新一代。这与已退休的物理段链实现完全不同；后者移动记录后还需要重写引用。
 
-旧的 `FileStorage` / `DataManager` compactor 不是原生逻辑数据库所使用的压缩机制。尤其是，native logical query 不得通过 `dbms.setConfigValue`、`dbms.setConfig` 或 System State key 启用压缩。在配置变更能够参与与图写入相同的 metadata WAL 发布之前，运行时配置过程会刻意 fail closed。
+旧的 `FileStorage` / `DataManager` compactor 不是原生逻辑数据库所使用的压缩机制。native code 绝不得通过 `dbms.setConfigValue` 或 System State key 控制它。embedding 若 opt-in native maintenance，可用 autocommit `dbms.setConfig('storage.compaction.enabled', <Boolean>)`；该服务会围绕同一个单文件 COW metadata publication boundary pause/resume 有界 maintenance worker，并在不存在 native maintenance owner 时拒绝此 key。
 
 ## 存储身份
 
@@ -62,7 +62,7 @@ flowchart LR
 1. 打开 metadata snapshot，验证 source 与 destination 都是 sealed、兼容、当前有效，并由已分配的 physical slot 支撑。
 2. 收集并排序 source page，确认 destination 拥有完成请求的有界迁移所需的 frame。空间不足时返回 `VCS_NO_DESTINATION_CAPACITY`，且 source 不发生变化。
 3. 在每次类型化迁移之前，用新 snapshot 重新验证规划的 page。过期的 directory binding 会 fail closed，不会迁移意外的 page。
-4. 准备新 bytes，使数据持久化，然后通过 metadata WAL 和 Superblock 发布边界发布 Catalog 与相关 directory 的 COW root。
+4. 准备新 bytes，使数据持久化，然后通过 native metadata COW 和 Superblock 发布边界发布 Catalog 与相关 directory 的 COW root。
 5. source 变空后将其 retire。只有 snapshot-retention 检查成功时，才回收其 physical slot。
 
 ```mermaid
@@ -94,7 +94,7 @@ cache 的有效性必须基于逻辑身份和解析到的 generation，而不是
 
 1. 验证类型特定的 source 与 destination；
 2. 写入并同步完整的 destination bytes；
-3. 持久化 WAL metadata publication；
+3. 持久化 metadata COW publication；
 4. 发布 Superblock root；
 5. 只在 snapshot retention 允许时使旧 source 可回收。
 

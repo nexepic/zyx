@@ -45,7 +45,7 @@ flowchart TB
     LI["标签索引"]
     PI["属性索引\n(B+Tree)"]
     CI["组合索引"]
-    VI["向量索引\n(DiskANN + PQ)"]
+    VI["向量索引\n(原生邻接 + PQ)"]
   end
 
   API --> QE
@@ -64,7 +64,7 @@ flowchart TB
 | 存储格式 | 分段式，CRC32 校验 + zlib 压缩 |
 | 段大小 | 128 KB 固定大小段，按实体类型链表组织 |
 | 文件 I/O | 跨平台 `pread`/`pwrite`（POSIX）+ `fstream` 回退（Windows） |
-| 完整性 | `verifyIntegrity()` 逐段校验 CRC |
+| 完整性 | 原生完整性扫描器校验 checksum、owner 和可达根 |
 | 压缩 | 可选的后台段压缩 |
 
 ### Cypher 查询语言
@@ -123,7 +123,7 @@ flowchart LR
     A["标签索引\nO(1) 标签查找"]
     B["属性索引\nB+Tree 精确/范围查询"]
     C["组合索引\n多键, 前缀匹配"]
-    D["向量索引\nDiskANN + PQ"]
+    D["向量索引\n原生邻接 + PQ"]
   end
 ```
 
@@ -132,15 +132,15 @@ flowchart LR
 | 标签 | 按标签快速查找节点/边 | `CREATE INDEX FOR (n:Person) ON (n.name)` |
 | 属性 (B+Tree) | 精确匹配和范围扫描 | `CREATE INDEX FOR (n:Person) ON (n.age)` |
 | 组合 | 多属性联合查找, 前缀匹配 | `CREATE INDEX FOR (n:Person) ON (n.lastName, n.firstName)` |
-| 向量 (DiskANN) | 近似最近邻检索 | `CREATE VECTOR INDEX movie_emb FOR (n:Movie) ON (n.embedding) OPTIONS {dimension: 128, metric: "Cosine"}` |
+| 向量 | 近似最近邻检索 | `CREATE VECTOR INDEX movie_emb FOR (n:Movie) ON (n.embedding) OPTIONS {dimension: 128, metric: "Cosine"}` |
 
 ### 向量检索
 
-ZYX 内置基于 DiskANN 算法和 Product Quantization (PQ) 压缩的生产级向量检索引擎。
+ZYX 提供原生 relocatable 向量检索，邻接与 Product Quantization（PQ）派生数据通过原子 publication 发布。
 
 | 特性 | 说明 |
 |------|------|
-| 算法 | DiskANN — 基于 alpha 剪枝的可导航小世界图 |
+| 算法 | 受预算约束的原生邻接遍历与原子发布的派生 generation |
 | 距离度量 | L2（欧氏距离）、内积、余弦相似度 |
 | 存储 | BFloat16（每维 2 字节，相比 float32 压缩 50%） |
 | 量化 | Product Quantization，每子空间 256 个质心 |
@@ -203,7 +203,7 @@ flowchart LR
     R2["只读事务 2\n(快照)"]
     R3["只读事务 N\n(快照)"]
   end
-  W --> |"WAL + fsync"| D["持久存储"]
+  W --> |"单文件发布 + sync"| D["持久存储"]
   R1 -.-> S["已提交快照"]
   R2 -.-> S
   R3 -.-> S
@@ -211,13 +211,13 @@ flowchart LR
 
 | 属性 | 实现方式 |
 |------|----------|
-| **原子性** | UndoLog 在回滚时撤销所有变更 |
+| **原子性** | 回滚会丢弃事务 overlay 并恢复其捕获的已提交快照 |
 | **一致性** | 每次插入/更新/删除均校验约束 |
 | **隔离性** | 单写多读；只读事务获取不可变快照 |
-| **持久性** | WAL + `fsync` 提交；组提交窗口 1 ms |
+| **持久性** | 在提交返回前同步已提交的单文件 generation |
 
-:::info WAL 效率
-WAL 文件延迟到首次写事务时才创建。纯只读负载不会接触 WAL 文件。自动检查点在 1 MB 阈值时触发（可配置）。
+:::info 原生存储
+原生格式在一个数据库文件中持久化已提交的 generation。只读负载不会创建 WAL 或 recovery sidecar 文件。
 :::
 
 ### 约束 (Schema Constraints)
@@ -272,11 +272,11 @@ ZYX 内置线程池，支持并行查询执行：
 | 组件 | 并行化方式 |
 |------|-----------|
 | 查询算子 | NodeScan、Filter、Sort 并行执行 |
-| 批量写入 | `FileStorage::save()` 并行段准备 |
+| 批量写入 | 原生逻辑写入规划和单文件 COW generation publication |
 | PQ 训练 | K-means 跨子空间并行训练 |
-| 向量检索 | DiskANN 重排序和 PQ 距离计算并行 |
+| 向量检索 | 原生邻接遍历、PQ 评分和有界精排 |
 
-对于 native logical runtime，请在执行查询前由嵌入应用设置线程池策略。在原生配置更新具备统一的持久化 metadata transaction 边界之前，已退休的 `dbms.setConfig` 过程会保持不可用。
+对于 native logical runtime，请在执行查询前由嵌入应用设置线程池策略。`thread.pool.size` 仍是 Database-instance 启动选项，`dbms.setConfig` 会有意拒绝它；运行中调整线程池不是 database-file 配置变更。
 
 :::info WASM 模式
 编译为 WebAssembly 时，ZYX 自动以单线程模式运行，无需额外配置。
@@ -284,7 +284,7 @@ ZYX 内置线程池，支持并行查询执行：
 
 ### 运行时配置
 
-native logical runtime 当前不通过 Cypher 暴露配置或统计更新。`dbms.listConfig`、`dbms.getConfig`、`dbms.setConfig`、`dbms.showStats` 和 `dbms.resetStats` 会 fail closed，而不会使用已退休的 State-manager 存储路径。这可避免配置写入绕过 metadata WAL 恢复和图发布 fence。
+native logical runtime 通过仅 autocommit 的 `dbms.listConfig`、`dbms.getConfig`、`dbms.setConfig`、`dbms.showStats` 和 `dbms.resetStats` 暴露配置与统计。持久化 query limit 和 slow-query policy 使用与 graph metadata 相同的单文件 COW metadata publication；不支持的 key 会在写入前 fail closed。`stats.enabled` 是 process-local，只控制 QueryEngine runtime counter，绝不抑制 storage I/O 或 Buffer Pool diagnostic。`storage.compaction.enabled` 只在 embedding 显式启用 native maintenance support 时可用。
 
 ## 多语言 API
 

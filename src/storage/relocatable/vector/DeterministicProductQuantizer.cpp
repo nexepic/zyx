@@ -24,6 +24,12 @@ namespace graph::storage {
 
 		[[noreturn]] void fail(FormatError error, const char *message) { throw FormatException(error, message); }
 
+		void checkCancellation(const CancellationCheckpoint *cancellation) {
+			if (cancellation != nullptr) {
+				cancellation->check();
+			}
+		}
+
 		[[nodiscard]] uint64_t stableRank(uint64_t value) {
 			// SplitMix64 gives a stable full-width ranking without keeping all source
 			// records in memory. It is a sampling order, not a security primitive.
@@ -37,7 +43,8 @@ namespace graph::storage {
 			const uint8_t invalid = static_cast<uint8_t>(options.dimensions == 0U) |
 									static_cast<uint8_t>(options.subspace_count == 0U) |
 									static_cast<uint8_t>(options.subspace_count > options.dimensions) |
-									static_cast<uint8_t>(options.dimensions % options.subspace_count != 0U) |
+									static_cast<uint8_t>(options.subspace_count != 0U &&
+													 options.dimensions % options.subspace_count != 0U) |
 									static_cast<uint8_t>(options.centroid_count == 0U) |
 									static_cast<uint8_t>(options.centroid_count > UINT8_MAX + 1U) |
 									static_cast<uint8_t>(options.iteration_count == 0U) |
@@ -129,7 +136,8 @@ namespace graph::storage {
 		};
 
 		[[nodiscard]] std::vector<std::vector<float>>
-		selectSamples(std::span<const DeterministicPqTrainingRecord> records, const DeterministicPqOptions &options) {
+		selectSamples(std::span<const DeterministicPqTrainingRecord> records, const DeterministicPqOptions &options,
+					  const CancellationCheckpoint *cancellation) {
 			if (records.empty() || records.size() > options.maximum_records) {
 				fail(FormatError::FERR_INVALID_HEADER,
 					 "relocatable deterministic PQ training record count is empty or exceeds its configured bound");
@@ -137,6 +145,7 @@ namespace graph::storage {
 			std::priority_queue<Candidate> selected;
 			uint64_t previousId = 0U;
 			for (const DeterministicPqTrainingRecord &record: records) {
+				checkCancellation(cancellation);
 				if (record.vector_id == 0U || record.vector_id <= previousId) {
 					fail(FormatError::FERR_INVALID_HEADER,
 						 "relocatable deterministic PQ training records are not strictly ordered by Vector ID");
@@ -185,10 +194,12 @@ namespace graph::storage {
 		}
 
 		[[nodiscard]] std::vector<float> trainCentroids(const std::vector<std::vector<float>> &samples,
-														const DeterministicPqOptions &options) {
+														const DeterministicPqOptions &options,
+														const CancellationCheckpoint *cancellation) {
 			const uint32_t subspaceDimensions = options.dimensions / options.subspace_count;
 			std::vector<float> centroids(static_cast<size_t>(options.dimensions) * options.centroid_count);
 			for (uint32_t subspace = 0; subspace < options.subspace_count; ++subspace) {
+				checkCancellation(cancellation);
 				const size_t sampleOffset = static_cast<size_t>(subspace) * subspaceDimensions;
 				for (uint32_t centroid = 0; centroid < options.centroid_count; ++centroid) {
 					const size_t sourceIndex = static_cast<size_t>(centroid) * samples.size() / options.centroid_count;
@@ -199,10 +210,13 @@ namespace graph::storage {
 			}
 
 			for (uint32_t iteration = 0; iteration < options.iteration_count; ++iteration) {
+				checkCancellation(cancellation);
 				std::vector<double> sums(centroids.size(), 0.0);
 				std::vector<uint64_t> counts(static_cast<size_t>(options.subspace_count) * options.centroid_count, 0U);
 				for (const std::vector<float> &sample: samples) {
+					checkCancellation(cancellation);
 					for (uint32_t subspace = 0; subspace < options.subspace_count; ++subspace) {
+						checkCancellation(cancellation);
 						const size_t sampleOffset = static_cast<size_t>(subspace) * subspaceDimensions;
 						uint32_t bestCentroid = 0U;
 						double bestDistance =
@@ -231,6 +245,7 @@ namespace graph::storage {
 					}
 				}
 				for (uint32_t subspace = 0; subspace < options.subspace_count; ++subspace) {
+					checkCancellation(cancellation);
 					const size_t sampleOffset = static_cast<size_t>(subspace) * subspaceDimensions;
 					for (uint32_t centroid = 0; centroid < options.centroid_count; ++centroid) {
 						const size_t countIndex = static_cast<size_t>(subspace) * options.centroid_count + centroid;
@@ -270,13 +285,15 @@ namespace graph::storage {
 
 	DeterministicProductQuantizer
 	DeterministicProductQuantizer::train(std::span<const DeterministicPqTrainingRecord> records,
-										 const DeterministicPqOptions &options) {
+										 const DeterministicPqOptions &options,
+										 const CancellationCheckpoint *cancellation) {
 		validateOptions(options);
-		std::vector<std::vector<float>> samples = selectSamples(records, options);
-		return DeterministicProductQuantizer(options, trainCentroids(samples, options));
+		checkCancellation(cancellation);
+		std::vector<std::vector<float>> samples = selectSamples(records, options, cancellation);
+		return DeterministicProductQuantizer(options, trainCentroids(samples, options, cancellation));
 	}
 
-	std::vector<std::byte> DeterministicProductQuantizer::codebookPayload() const {
+	std::vector<std::byte> DeterministicProductQuantizer::codebookPayload(const CancellationCheckpoint *cancellation) const {
 		validateOptions(options_);
 		if (centroids_.size() !=
 			static_cast<size_t>(options_.dimensions) * options_.centroid_count) { // ZYX_COV_EXCL_LINE:
@@ -286,6 +303,7 @@ namespace graph::storage {
 		}
 		std::vector<std::byte> bytes(centroids_.size() * sizeof(float));
 		for (size_t index = 0; index < centroids_.size(); ++index) {
+			checkCancellation(cancellation);
 			if (!std::isfinite(
 						centroids_[index])) { // ZYX_COV_EXCL_LINE: valid private state contains only checked means.
 				fail(FormatError::FERR_INVALID_STATE,
@@ -296,7 +314,8 @@ namespace graph::storage {
 		return bytes;
 	}
 
-	std::vector<uint8_t> DeterministicProductQuantizer::encode(std::span<const std::byte> rawBfloat16) const {
+	std::vector<uint8_t> DeterministicProductQuantizer::encode(std::span<const std::byte> rawBfloat16,
+														 const CancellationCheckpoint *cancellation) const {
 		validateOptions(options_);
 		if (centroids_.size() !=
 			static_cast<size_t>(options_.dimensions) * options_.centroid_count) { // ZYX_COV_EXCL_LINE:
@@ -308,11 +327,13 @@ namespace graph::storage {
 		const uint32_t subspaceDimensions = options_.dimensions / options_.subspace_count;
 		std::vector<uint8_t> codes(options_.subspace_count);
 		for (uint32_t subspace = 0; subspace < options_.subspace_count; ++subspace) {
+			checkCancellation(cancellation);
 			const size_t sampleOffset = static_cast<size_t>(subspace) * subspaceDimensions;
 			uint32_t bestCentroid = 0U;
 			double bestDistance = squaredDistance(vector, sampleOffset, centroids_,
 												  centroidOffset(options_, subspace, 0U), subspaceDimensions);
 			for (uint32_t centroid = 1U; centroid < options_.centroid_count; ++centroid) {
+				checkCancellation(cancellation);
 				const double distance =
 						squaredDistance(vector, sampleOffset, centroids_, centroidOffset(options_, subspace, centroid),
 										subspaceDimensions);

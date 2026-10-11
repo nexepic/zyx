@@ -9,10 +9,12 @@
 #include "graph/storage/relocatable/entity/PageBackedGraphReadAdapter.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <limits>
 #include <stdexcept>
 #include <utility>
 
+#include "graph/debug/PerfTrace.hpp"
 #include "graph/storage/relocatable/format/Format.hpp"
 #include "graph/storage/relocatable/index/BTreePageStore.hpp"
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
@@ -26,6 +28,7 @@ namespace graph::storage {
 		// keeps visitor traversal responsive to early termination even for a
 		// supernode that spans many packed leaves.
 		constexpr size_t ADJACENCY_VISIT_BATCH_ENTRIES = 256U;
+		constexpr size_t TOPOLOGY_ENTITY_SCAN_THRESHOLD = 512U;
 
 		[[noreturn]] void throwAdapterError(FormatError error, const char *message) {
 			throw FormatException(error, message);
@@ -40,6 +43,11 @@ namespace graph::storage {
 			}
 			throwAdapterError(FormatError::FERR_INVALID_HEADER,
 							  "page-backed graph adjacency scan has an unknown direction");
+		}
+
+		[[nodiscard]] uint64_t elapsedNanoseconds(const std::chrono::steady_clock::time_point start) {
+			return static_cast<uint64_t>(
+					std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start).count());
 		}
 
 	} // namespace
@@ -148,12 +156,47 @@ namespace graph::storage {
 			throwAdapterError(FormatError::FERR_INVALID_HEADER,
 							  "page-backed graph Edge scan requires a nonzero record bound and visitor");
 		}
+		debug::ScopedPerfTimer timer("native_graph.read.edge_native_scan");
+		const bool tracing = debug::PerfTrace::isEnabled();
+		uint64_t materializationNanoseconds = 0U;
+		uint64_t visitorNanoseconds = 0U;
+		uint64_t records = 0U;
 		PropertyCollectionRootScanCursor propertyCursor = properties_.openScanCursor(snapshot);
-		return entities_.visitEdgesUntil(
+		const bool exhausted = entities_.visitEdgesUntil(
 				snapshot, maximumRecords,
-				[this, &snapshot, &visitor, &propertyCursor](uint64_t edgeId, const EdgeEntityRecord &record) {
-					return visitor(materializeEdge(snapshot, edgeId, record, &propertyCursor));
+				[this, &snapshot, &visitor, &propertyCursor, tracing, &materializationNanoseconds, &visitorNanoseconds,
+				 &records](uint64_t edgeId, const EdgeEntityRecord &record) {
+					const auto materializationStart = tracing ? std::chrono::steady_clock::now()
+																	 : std::chrono::steady_clock::time_point{};
+					PageBackedGraphEdge edge = materializeEdge(snapshot, edgeId, record, &propertyCursor);
+					if (tracing) {
+						materializationNanoseconds += elapsedNanoseconds(materializationStart);
+					}
+					const auto visitorStart = tracing ? std::chrono::steady_clock::now()
+																	 : std::chrono::steady_clock::time_point{};
+					const bool keepGoing = visitor(edge);
+					if (tracing) {
+						visitorNanoseconds += elapsedNanoseconds(visitorStart);
+						++records;
+					}
+					return keepGoing;
 				});
+		if (tracing) {
+			debug::PerfTrace::addDurationBatch("native_graph.read.edge_native_materialization",
+											 materializationNanoseconds, records);
+			debug::PerfTrace::addDurationBatch("native_graph.read.edge_logical_visitor", visitorNanoseconds, records);
+		}
+		return exhausted;
+	}
+
+	bool PageBackedGraphReadAdapter::visitEdgeTopologiesUntil(
+			const MetadataSnapshotPin &snapshot, size_t maximumRecords,
+			const std::function<bool(uint64_t edgeId, const EdgeEntityRecord &)> &visitor) const {
+		if (maximumRecords == 0U || !visitor) {
+			throwAdapterError(FormatError::FERR_INVALID_HEADER,
+							  "page-backed graph Edge topology scan requires a nonzero record bound and visitor");
+		}
+		return entities_.visitEdgesUntil(snapshot, maximumRecords, visitor);
 	}
 
 	PageBackedGraphNodePage PageBackedGraphReadAdapter::scanNodesAfter(const MetadataSnapshotPin &snapshot,
@@ -300,6 +343,79 @@ namespace graph::storage {
 			}
 			continuation = page.continuation;
 		}
+	}
+
+	bool PageBackedGraphReadAdapter::visitAdjacentEdgeTopologiesUntil(
+			const MetadataSnapshotPin &snapshot, uint64_t nodeId, PageBackedGraphReadDirection direction,
+			size_t maximumRecords, const std::function<bool(uint64_t, const EdgeEntityRecord &)> &visitor) const {
+		if (nodeId == 0U || maximumRecords == 0U || maximumRecords == std::numeric_limits<size_t>::max() || !visitor) {
+			throwAdapterError(FormatError::FERR_INVALID_HEADER,
+							  "page-backed graph adjacency topology traversal requires a Node ID, bound, and visitor");
+		}
+		const GlobalAdjacencyDirection adjacencyDirection = globalDirection(direction);
+		static_cast<void>(entities_.readNode(snapshot, nodeId));
+		const GlobalAdjacencyRange edgeIds = adjacency_.scan(snapshot, adjacencyDirection, nodeId, maximumRecords);
+		if (edgeIds.continuation.has_value()) {
+			throwAdapterError(FormatError::FERR_INVALID_STATE,
+							  "page-backed graph adjacency topology exceeded its caller-supplied edge bound");
+		}
+		if (edgeIds.edge_ids.size() <= TOPOLOGY_ENTITY_SCAN_THRESHOLD) {
+			for (const uint64_t edgeId: edgeIds.edge_ids) {
+				const EdgeEntityRecord edge = entities_.readEdge(snapshot, edgeId);
+				const bool endpointMatches = direction == PageBackedGraphReadDirection::PBGRD_OUTGOING
+													 ? edge.source_node_id == nodeId
+													 : edge.target_node_id == nodeId;
+				if (!endpointMatches) {
+					throwAdapterError(FormatError::FERR_INVALID_STATE,
+									  "page-backed graph adjacency topology has an inconsistent endpoint");
+				}
+				if (!visitor(edgeId, edge)) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		// Large topology-only counts are sorted by Edge ID in both directories. A
+		// single sequential Entity Map pass avoids one metadata lookup per Edge,
+		// while the adjacency result remains bounded by the caller.
+		size_t requested = 0U;
+		bool stoppedByVisitor = false;
+		static_cast<void>(entities_.visitEdgesUntil(
+				snapshot, std::numeric_limits<size_t>::max(), [&](uint64_t edgeId, const EdgeEntityRecord &edge) {
+					if (requested == edgeIds.edge_ids.size()) {
+						return false;
+					}
+					const uint64_t wanted = edgeIds.edge_ids[requested];
+					if (edgeId < wanted) {
+						return true;
+					}
+					if (edgeId > wanted) {
+						throwAdapterError(FormatError::FERR_INVALID_STATE,
+										  "page-backed graph adjacency topology references a missing Edge");
+					}
+					const bool endpointMatches = direction == PageBackedGraphReadDirection::PBGRD_OUTGOING
+														 ? edge.source_node_id == nodeId
+														 : edge.target_node_id == nodeId;
+					if (!endpointMatches) {
+						throwAdapterError(FormatError::FERR_INVALID_STATE,
+										  "page-backed graph adjacency topology has an inconsistent endpoint");
+					}
+					if (!visitor(edgeId, edge)) {
+						stoppedByVisitor = true;
+						return false;
+					}
+					++requested;
+					return requested < edgeIds.edge_ids.size();
+				}));
+		if (stoppedByVisitor) {
+			return false;
+		}
+		if (requested != edgeIds.edge_ids.size()) {
+			throwAdapterError(FormatError::FERR_INVALID_STATE,
+							  "page-backed graph adjacency topology Entity Map is missing an Edge");
+		}
+		return true;
 	}
 
 } // namespace graph::storage

@@ -28,12 +28,18 @@
 #include <unordered_map>
 #include <variant>
 
-namespace graph::storage { class DataManager; }
-
 namespace graph::query::expressions {
 
 // Forward declaration
 class Expression;
+
+// Limits propagated by the native logical runtime to scalar functions that
+// materialize collection values. A zero value preserves the legacy direct
+// evaluator's unconstrained unit-test contract; native query execution always
+// supplies a positive bound from its read policy.
+struct ScalarFunctionEvaluationLimits {
+	size_t maximum_collection_elements = 0U;
+};
 
 /**
  * @class ExpressionEvaluationException
@@ -105,25 +111,11 @@ public:
 	explicit EvaluationContext(const execution::Record &record);
 
 	/**
-	 * @brief Constructs an evaluation context with DataManager access.
-	 * @param record The record to evaluate expressions against
-	 * @param dataManager Optional DataManager for label resolution
-	 */
-	EvaluationContext(const execution::Record &record,
-	                  storage::DataManager *dataManager);
-
-	/**
 	 * @brief Constructs an evaluation context with parameters.
 	 */
 	EvaluationContext(const execution::Record &record,
-	                  const std::unordered_map<std::string, PropertyValue> &parameters);
-
-	/**
-	 * @brief Constructs an evaluation context with DataManager and parameters.
-	 */
-	EvaluationContext(const execution::Record &record,
-	                  storage::DataManager *dataManager,
-	                  const std::unordered_map<std::string, PropertyValue> &parameters);
+	                  const std::unordered_map<std::string, PropertyValue> &parameters,
+	                  ScalarFunctionEvaluationLimits limits = {});
 
 	/**
 	 * @brief Resolves a query parameter ($name) to its PropertyValue.
@@ -154,12 +146,6 @@ public:
 	 * @brief Gets the underlying record.
 	 */
 	[[nodiscard]] const execution::Record &getRecord() const { return record_; }
-
-	/**
-	 * @brief Gets the optional DataManager for label resolution.
-	 * @return DataManager pointer, or nullptr if not available
-	 */
-	[[nodiscard]] storage::DataManager *getDataManager() const { return dataManager_; }
 
 	/**
 	 * @brief Sets a temporary variable for list comprehension iteration.
@@ -249,10 +235,17 @@ public:
 	 */
 	[[nodiscard]] static bool isNull(const PropertyValue &value);
 
+	[[nodiscard]] size_t maximumCollectionElements() const { return limits_.maximum_collection_elements; }
+
+	// A zero limit is reserved for legacy direct-evaluator callers. The native
+	// logical runtime provides a nonzero value and must fail before a scalar
+	// function grows an unbounded materialized List.
+	void requireCollectionCapacity(size_t nextSize, const char *functionName) const;
+
 private:
 	const execution::Record &record_;
-	storage::DataManager *dataManager_ = nullptr;
 	const std::unordered_map<std::string, PropertyValue> *parameters_ = nullptr;
+	ScalarFunctionEvaluationLimits limits_;
 	mutable std::unordered_map<std::string, PropertyValue> temporaryVariables_;
 };
 

@@ -96,31 +96,6 @@ namespace {
 		return root;
 	}
 
-	NativeGraphDerivedStateMutation stableRootLeafMutation(const BTreeRootLeafMutationPlan &plan) {
-		NativeGraphIndexTreeMutation treeMutation;
-		treeMutation.index_id = plan.expected_root.index_id;
-		treeMutation.expected_root = plan.expected_root;
-		treeMutation.pool_requests.push_back({plan.expected_pool.segment_id, {plan.expected_location}, 0U, {}});
-		treeMutation.stable_replacement_root = plan.expected_root.root_page_id;
-		NativeGraphDerivedStateMutation result;
-		result.index_tree_mutations.push_back(std::move(treeMutation));
-		return result;
-	}
-
-	NativeGraphDerivedStatePreparer stableRootLeafPreparer(BTreePageStore &indexes,
-														   const BTreeRootLeafMutationPlan &plan,
-														   LogSequenceNumber checkpointLsn) {
-		return [&indexes, plan, checkpointLsn](std::vector<std::vector<IndexTreeMutationPoolBatch>> &batches) {
-			if (batches.size() != 1U || batches.front().size() != 1U ||
-				batches.front().front().expected_replacements.size() != 1U) {
-				throw std::runtime_error("test root-leaf derived-state materialization received an invalid batch");
-			}
-			IndexTreeMutationPoolBatch &batch = batches.front().front();
-			indexes.prepareRootLeafMutation(plan, batch.pool, batch.expected_replacements.front(),
-											batch.replacement_locations.front(), checkpointLsn);
-		};
-	}
-
 	NativeGraphMutationTokenResolvers mutationTokens() {
 		NativeGraphMutationTokenResolvers result;
 		result.schema_token = [](const MetadataSnapshotPin &, SystemCatalogSchemaTokenKind,
@@ -282,6 +257,36 @@ TEST_F(NativeGraphWritePlannerTest, ExecutesLogicalBatchThroughNativePagesWithou
 								   {EntityPropertyOwnerKind::EPOK_NODE, executed.result.created_node_ids.front()})
 					  .owner_entity_id,
 			  executed.result.created_node_ids.front());
+	snapshot.release();
+}
+
+TEST_F(NativeGraphWritePlannerTest, AppliesSparseCreatedEdgePropertyReplacementWithoutAResolvedEdgeBatch) {
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	PageBackedGraphReadAdapter graph(*metadata_, *entities_, *labels_, *properties_, *btree_pages_);
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	NativeGraphMutationExecutor executor(
+			planner, graph, indexes, *vector_pages_, *vector_manifests_, *metadata_, mutationTokens(),
+			[](const MetadataSnapshotPin &) { return std::vector<IndexDefinition>{}; },
+			[](const MetadataSnapshotPin &) { return std::vector<ConstraintDefinition>{}; }, mutationExecutorOptions());
+
+	LogicalGraphMutationBatch batch;
+	batch.node_creates = {{{"Person"}, {}}, {{"Person"}, {}}};
+	batch.edge_creates = {
+			{{LogicalGraphMutationEntityKind::LGMK_NODE, LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE, 0U},
+			 {LogicalGraphMutationEntityKind::LGMK_NODE, LogicalGraphMutationReferenceKind::LGRK_CREATED_NODE, 1U},
+			 "KNOWS",
+			 {}}};
+	batch.property_replacements = {
+			{{LogicalGraphMutationEntityKind::LGMK_EDGE, LogicalGraphMutationReferenceKind::LGRK_CREATED_EDGE, 0U},
+			 {{"age", PropertyValue(int64_t(7))}}}};
+
+	const NativeGraphMutationExecutionResult executed = executor.execute(batch);
+	ASSERT_TRUE(executed.committed());
+	ASSERT_EQ(executed.result.created_edge_ids.size(), 1U);
+
+	MetadataSnapshotPin snapshot = metadata_->openSnapshot();
+	EXPECT_EQ(graph.readEdge(snapshot, executed.result.created_edge_ids.front()).properties,
+			  (std::vector<PropertyCollectionRootEntry>{{17U, PropertyValue(int64_t(7))}}));
 	snapshot.release();
 }
 
@@ -575,6 +580,7 @@ TEST_F(NativeGraphWritePlannerTest, RebasesDisjointLeasedNodeCreationsWithoutDup
 TEST_F(NativeGraphWritePlannerTest, PersistsCancelledLogicalIdReservationsWithoutPlaceholderEntities) {
 	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
 	MetadataSnapshotPin before = metadata_->openSnapshot();
+	const Generation firstReservationGeneration = before.superblock().generation;
 	const uint64_t firstNodeId = before.superblock().next_logical_node_id;
 	const uint64_t firstEdgeId = before.superblock().next_logical_edge_id;
 	before.release();
@@ -582,9 +588,18 @@ TEST_F(NativeGraphWritePlannerTest, PersistsCancelledLogicalIdReservationsWithou
 	NativeGraphWriteTransaction cancelled = planner.beginTransaction();
 	cancelled.reserveNodeIds(2U);
 	cancelled.reserveEdgeIds(3U);
+	MetadataSnapshotPin leased = metadata_->openSnapshot();
+	const Generation reservationGeneration = leased.superblock().generation;
+	EXPECT_GT(reservationGeneration.value(), firstReservationGeneration.value());
+	EXPECT_EQ(leased.superblock().next_logical_node_id, firstNodeId + 2U);
+	EXPECT_EQ(leased.superblock().next_logical_edge_id, firstEdgeId + 3U);
+	leased.release();
 	ASSERT_TRUE(cancelled.commit().committed());
 
 	MetadataSnapshotPin reserved = metadata_->openSnapshot();
+	// Leases advance durable high-water marks; the reservation-only commit must
+	// not publish an otherwise empty graph generation after those leases.
+	EXPECT_EQ(reserved.superblock().generation, reservationGeneration);
 	EXPECT_EQ(reserved.superblock().next_logical_node_id, firstNodeId + 2U);
 	EXPECT_EQ(reserved.superblock().next_logical_edge_id, firstEdgeId + 3U);
 	EXPECT_FALSE(metadata_->findNodePageLocationOptional(reserved, firstNodeId).has_value());
@@ -593,6 +608,7 @@ TEST_F(NativeGraphWritePlannerTest, PersistsCancelledLogicalIdReservationsWithou
 	reopenNativeStores();
 
 	MetadataSnapshotPin reopened = metadata_->openSnapshot();
+	EXPECT_EQ(reopened.superblock().generation, reservationGeneration);
 	EXPECT_EQ(reopened.superblock().next_logical_node_id, firstNodeId + 2U);
 	EXPECT_EQ(reopened.superblock().next_logical_edge_id, firstEdgeId + 3U);
 	EXPECT_FALSE(metadata_->findNodePageLocationOptional(reopened, firstNodeId).has_value());
@@ -1378,6 +1394,46 @@ TEST_F(NativeGraphWritePlannerTest, RejectsOtherStreamingBulkSecondPassMismatche
 	after.release();
 }
 
+TEST_F(NativeGraphWritePlannerTest, RejectsANonMonotonicNativeBulkSecondPassAfterTheFirstLeafBoundary) {
+	BTreePageStore indexes(*slotted_pages_, *metadata_);
+	const auto pass = std::make_shared<size_t>(0U);
+	const OrderedBTreeEntrySource source = [pass] {
+		const std::vector<BTreePageEntry> firstPass = {
+				{{std::byte{'a'}}, 1U},
+				{{std::byte{'b'}}, 2U},
+				{{std::byte{'c'}}, 3U},
+		};
+		const std::vector<BTreePageEntry> secondPass = {
+				{{std::byte{'a'}}, 1U},
+				{{std::byte{'c'}}, 3U},
+				{{std::byte{'b'}}, 2U},
+		};
+		auto values = std::make_shared<std::vector<BTreePageEntry>>((*pass)++ == 0U ? firstPass : secondPass);
+		auto ordinal = std::make_shared<size_t>(0U);
+		return OrderedBTreeEntryCursor{[values, ordinal]() -> std::optional<BTreePageEntry> {
+			if (*ordinal == values->size()) {
+				return std::nullopt;
+			}
+			return (*values)[(*ordinal)++];
+		}};
+	};
+
+	MetadataSnapshotPin before = metadata_->openSnapshot();
+	const BulkBTreeBuildOptions options{PhysicalSlotId(40U), PhysicalSlotId(40U), 17U, 3U, 8U};
+	const BTreeInitialTreeMutationPlan plan =
+			BulkBTreeBuilder::planNativeTree(indexes, *metadata_, before, 17U, source, options);
+	NativeGraphWritePlanner planner(*metadata_, *entities_, *labels_, *properties_, *btree_pages_, plannerOptions());
+	NativeGraphWriteTransaction transaction = planner.beginTransaction();
+	transaction.stageScalarIndexCreate(indexes, plan);
+	EXPECT_THROW(static_cast<void>(transaction.commit()), FormatException);
+	EXPECT_FALSE(metadata_->findIndexRootOptional(before, 17U).has_value());
+	before.release();
+
+	MetadataSnapshotPin after = metadata_->openSnapshot();
+	EXPECT_FALSE(metadata_->findIndexRootOptional(after, 17U).has_value());
+	after.release();
+}
+
 TEST_F(NativeGraphWritePlannerTest, RecoversOldGenerationWhenInitialScalarIndexPublicationStopsBeforeSuperblock) {
 	const std::array<uint64_t, 0U> noLabels{};
 	const std::array<std::byte, 1U> key = {std::byte{'o'}};
@@ -1775,7 +1831,7 @@ TEST_F(NativeGraphWritePlannerTest, AdaptsOwnerKeyedNativePagesForSharedConstrai
 	snapshot.release();
 }
 
-TEST_F(NativeGraphWritePlannerTest, RebuildsOneScalarIndexWhenStagedIndexesShareACurrentPool) {
+TEST_F(NativeGraphWritePlannerTest, PublishesScalarIndexesIntoDistinctFramesOfOneSharedCurrentPool) {
 	BTreePageStore indexes(*slotted_pages_, *metadata_);
 	const IndexRootLocation firstRoot = allocateEmptyIndexRoot(indexes);
 	SlottedPagePoolAppendRequest secondRequest;
@@ -1817,12 +1873,20 @@ TEST_F(NativeGraphWritePlannerTest, RebuildsOneScalarIndexWhenStagedIndexesShare
 	MetadataSnapshotPin current = metadata_->openSnapshot();
 	EXPECT_EQ(first.find(current, firstKey), std::optional<uint64_t>(1001U));
 	EXPECT_EQ(second.find(current, secondKey), std::optional<uint64_t>(2002U));
-	EXPECT_EQ(metadata_->findIndexRoot(current, firstRoot.index_id).root_page_id, firstRoot.root_page_id);
-	EXPECT_NE(metadata_->findIndexRoot(current, secondRoot.index_id).root_page_id, secondRoot.root_page_id);
+	// Root PageIds stay stable for ordinary COW replacements. The distinct
+	// physical locations prove the two callbacks received separate frames from
+	// their shared Index pool instead of overwriting one another.
+	const PageLocation firstLocation =
+			metadata_->findPageLocation(current, metadata_->findIndexRoot(current, firstRoot.index_id).root_page_id);
+	const PageLocation secondLocation = metadata_->findPageLocation(
+			current, metadata_->findIndexRoot(current, secondRoot.index_id).root_page_id);
+	EXPECT_EQ(firstLocation.segment_id, SegmentId(71U));
+	EXPECT_EQ(secondLocation.segment_id, SegmentId(71U));
+	EXPECT_NE(firstLocation.page_index, secondLocation.page_index);
 	current.release();
 }
 
-TEST_F(NativeGraphWritePlannerTest, RebuildsOneScalarIndexIntoAFreshPoolWhenPinnedSnapshotsLeaveOneSharedFrame) {
+TEST_F(NativeGraphWritePlannerTest, ReclaimsFramesBeforeSharingAConstrainedCurrentPool) {
 	BTreePageStore indexes(*slotted_pages_, *metadata_);
 	const IndexRootLocation firstRoot = allocateEmptyIndexRoot(indexes);
 	SlottedPagePoolAppendRequest secondRequest;
@@ -1864,9 +1928,9 @@ TEST_F(NativeGraphWritePlannerTest, RebuildsOneScalarIndexIntoAFreshPoolWhenPinn
 
 	const std::array<std::byte, 1U> secondKey = {std::byte{'s'}};
 	NativeGraphWriteTransaction transaction = planner.beginTransaction();
-	// Each standalone plan sees one usable frame. Together they require two, so
-	// one deterministically selected Index must be rebuilt into an immutable
-	// fresh pool without exposing an exhausted shared pool.
+	// The old snapshot retains the original root frame but not intermediate COW
+	// versions. The graph planner must reclaim those now-unreachable frames
+	// before budgeting both scalar callbacks against this shared current pool.
 	transaction.stageScalarIndexUpsert(indexes, secondRoot.index_id, secondKey, 2002U);
 	transaction.stageScalarIndexUpsert(indexes, firstRoot.index_id, firstKey, 1001U);
 	ASSERT_TRUE(transaction.commit().committed());
@@ -1878,7 +1942,8 @@ TEST_F(NativeGraphWritePlannerTest, RebuildsOneScalarIndexIntoAFreshPoolWhenPinn
 			metadata_->findPageLocation(current, currentFirst.root_page_id).segment_id == originalPool.segment_id;
 	const bool secondUsesOriginalPool =
 			metadata_->findPageLocation(current, currentSecond.root_page_id).segment_id == originalPool.segment_id;
-	EXPECT_NE(firstUsesOriginalPool, secondUsesOriginalPool);
+	EXPECT_TRUE(firstUsesOriginalPool);
+	EXPECT_TRUE(secondUsesOriginalPool);
 	BTreeIndex first(firstRoot.index_id, indexes, *metadata_);
 	BTreeIndex second(secondRoot.index_id, indexes, *metadata_);
 	EXPECT_EQ(first.find(current, firstKey), std::optional<uint64_t>(1001U));
@@ -1926,116 +1991,4 @@ TEST_F(NativeGraphWritePlannerTest, PublishesStructuralScalarIndexSplitThroughNa
 	EXPECT_EQ(index.find(collapsed, keys.back()), std::optional<uint64_t>(96U));
 	EXPECT_FALSE(index.find(collapsed, keys.front()).has_value());
 	collapsed.release();
-}
-
-TEST_F(NativeGraphWritePlannerTest, RecoversOldEntityAndIndexWhenDerivedPublicationIsInterruptedBeforeSuperblock) {
-	const std::array<std::byte, 1U> key = {std::byte{'b'}};
-	{
-		BTreePageStore indexes(*slotted_pages_, *metadata_);
-		const IndexRootLocation root = allocateEmptyIndexRoot(indexes);
-		MetadataSnapshotPin before = metadata_->openSnapshot();
-		const BTreeRootLeafMutationPlan indexPlan = indexes.planRootLeafUpsert(before, root.index_id, key, 1001U);
-		const NativeGraphDerivedStateMutation derived = stableRootLeafMutation(indexPlan);
-		const NativeGraphDerivedStatePreparer prepare =
-				stableRootLeafPreparer(indexes, indexPlan, LogSequenceNumber(4U));
-		const std::array<EntityPageBatchNewPool, 1U> newNodePool{{
-				{.request = {SegmentId(81U), 901U, Generation(1U), PageId(201U), PhysicalSlotId(41U),
-							 PhysicalSlotId(41U)},
-				 .record_kind = EntityPageRecordKind::EPRK_NODE,
-				 .node_insertions = {{1001U, {}}}},
-		}};
-		const std::array<EntityPageBatchMutation, 0U> noMutations{};
-		const std::array<EntityPageBatchAppend, 0U> noAppends{};
-		const std::array<EntityPropertyRootMutationPlan, 0U> noPropertyPlans{};
-		const EntityPageAuxiliaryMutationBatch noAuxiliaryPages;
-		EXPECT_THROW(static_cast<void>(entities_->applyNativeGraphBatchTransaction(
-							 before, noMutations, noAppends, newNodePool, noPropertyPlans, *properties_,
-							 plannerOptions().property_roots, noAuxiliaryPages, derived, prepare, LogSequenceNumber(4U),
-							 withBootstrapFailpoint(BootstrapPublishFailpoint::BPF_BEFORE_INACTIVE_WRITE))),
-					 BootstrapPublishInterrupted);
-
-		BTreeIndex index(root.index_id, indexes, *metadata_);
-		MetadataSnapshotPin current = metadata_->openSnapshot();
-		EXPECT_EQ(current.superblock().generation, Generation(3U));
-		EXPECT_THROW(static_cast<void>(entities_->readNode(current, 1001U)), FormatException);
-		EXPECT_FALSE(index.find(current, key).has_value());
-		current.release();
-		before.release();
-	}
-
-	properties_.reset();
-	labels_.reset();
-	slotted_pages_.reset();
-	entities_.reset();
-	metadata_.reset();
-	metadata_ = RelocatableMetadataStore::open(io_);
-	entities_ = std::make_unique<EntityPageStore>(io_, *metadata_);
-	slotted_pages_ = std::make_unique<SlottedPagePool>(io_, *metadata_);
-	labels_ = std::make_unique<EntityLabelSetStore>(io_, *metadata_, *slotted_pages_);
-	properties_ = std::make_unique<PropertyCollectionRootStore>(*slotted_pages_, *metadata_);
-
-	BTreePageStore reopenedIndexes(*slotted_pages_, *metadata_);
-	BTreeIndex reopenedIndex(17U, reopenedIndexes, *metadata_);
-	MetadataSnapshotPin recovered = metadata_->openSnapshot();
-	EXPECT_EQ(recovered.superblock().generation, Generation(3U));
-	EXPECT_THROW(static_cast<void>(entities_->readNode(recovered, 1001U)), FormatException);
-	EXPECT_FALSE(reopenedIndex.find(recovered, key).has_value());
-	recovered.release();
-}
-
-TEST_F(NativeGraphWritePlannerTest, RecoversNewEntityAndIndexWhenDerivedPublicationIsInterruptedAfterSuperblock) {
-	const std::array<std::byte, 1U> key = {std::byte{'a'}};
-	{
-		BTreePageStore indexes(*slotted_pages_, *metadata_);
-		const IndexRootLocation root = allocateEmptyIndexRoot(indexes);
-		MetadataSnapshotPin before = metadata_->openSnapshot();
-		const BTreeRootLeafMutationPlan indexPlan = indexes.planRootLeafUpsert(before, root.index_id, key, 1001U);
-		const NativeGraphDerivedStateMutation derived = stableRootLeafMutation(indexPlan);
-		const NativeGraphDerivedStatePreparer prepare =
-				stableRootLeafPreparer(indexes, indexPlan, LogSequenceNumber(4U));
-		const std::array<EntityPageBatchNewPool, 1U> newNodePool{{
-				{.request = {SegmentId(81U), 901U, Generation(1U), PageId(201U), PhysicalSlotId(41U),
-							 PhysicalSlotId(41U)},
-				 .record_kind = EntityPageRecordKind::EPRK_NODE,
-				 .node_insertions = {{1001U, {}}}},
-		}};
-		const std::array<EntityPageBatchMutation, 0U> noMutations{};
-		const std::array<EntityPageBatchAppend, 0U> noAppends{};
-		const std::array<EntityPropertyRootMutationPlan, 0U> noPropertyPlans{};
-		const EntityPageAuxiliaryMutationBatch noAuxiliaryPages;
-		EXPECT_THROW(static_cast<void>(entities_->applyNativeGraphBatchTransaction(
-							 before, noMutations, noAppends, newNodePool, noPropertyPlans, *properties_,
-							 plannerOptions().property_roots, noAuxiliaryPages, derived, prepare, LogSequenceNumber(4U),
-							 withBootstrapFailpoint(BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE))),
-					 BootstrapPublishInterrupted);
-
-		BTreeIndex index(root.index_id, indexes, *metadata_);
-		EXPECT_THROW(static_cast<void>(entities_->readNode(before, 1001U)), FormatException);
-		EXPECT_FALSE(index.find(before, key).has_value());
-		MetadataSnapshotPin current = metadata_->openSnapshot();
-		EXPECT_EQ(current.superblock().generation, Generation(4U));
-		EXPECT_EQ(entities_->readNode(current, 1001U), newNodePool.front().node_insertions.front().record);
-		EXPECT_EQ(index.find(current, key), std::optional<uint64_t>(1001U));
-		current.release();
-		before.release();
-	}
-
-	properties_.reset();
-	labels_.reset();
-	slotted_pages_.reset();
-	entities_.reset();
-	metadata_.reset();
-	metadata_ = RelocatableMetadataStore::open(io_);
-	entities_ = std::make_unique<EntityPageStore>(io_, *metadata_);
-	slotted_pages_ = std::make_unique<SlottedPagePool>(io_, *metadata_);
-	labels_ = std::make_unique<EntityLabelSetStore>(io_, *metadata_, *slotted_pages_);
-	properties_ = std::make_unique<PropertyCollectionRootStore>(*slotted_pages_, *metadata_);
-
-	BTreePageStore reopenedIndexes(*slotted_pages_, *metadata_);
-	BTreeIndex reopenedIndex(17U, reopenedIndexes, *metadata_);
-	MetadataSnapshotPin recovered = metadata_->openSnapshot();
-	EXPECT_EQ(recovered.superblock().generation, Generation(4U));
-	EXPECT_EQ(entities_->readNode(recovered, 1001U), NodeEntityRecord{});
-	EXPECT_EQ(reopenedIndex.find(recovered, key), std::optional<uint64_t>(1001U));
-	recovered.release();
 }

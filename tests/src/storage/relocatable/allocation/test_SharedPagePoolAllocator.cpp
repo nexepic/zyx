@@ -43,6 +43,31 @@ namespace graph::storage {
 			allocator.prepareNewPoolPages(pool, pages, locations, checkpointLsn, preparedPrefixCount);
 		}
 
+		static void prepareAppendPages(const SharedPagePoolAllocator &allocator, const CatalogEntry &pool,
+								   std::span<const SharedPagePoolPreparedAppend> pages,
+								   std::span<PageLocation> locations, LogSequenceNumber checkpointLsn) {
+			allocator.prepareAppendPages(pool, pages, locations, checkpointLsn);
+		}
+
+		static void prepareAppendPagesUnderWrite(StorageIO &io, uint64_t dataRegionOffset, const CatalogEntry &pool,
+																 std::span<const SharedPagePoolPreparedAppend> pages,
+																 std::span<PageLocation> locations,
+																 LogSequenceNumber checkpointLsn) {
+			SharedPagePoolAllocator::prepareAppendPagesUnderWrite(io, dataRegionOffset, pool, pages, locations,
+																		 checkpointLsn);
+		}
+
+		static void prepareMutationPages(const SharedPagePoolAllocator &allocator, const CatalogEntry &pool,
+									 std::span<const PageLocation> expectedReplacements,
+									 std::span<const SharedPagePoolPreparedReplacement> replacements,
+									 std::span<const SharedPagePoolPreparedAppend> appends,
+									 std::span<PageLocation> replacementLocations,
+									 std::span<PageLocation> appendLocations, LogSequenceNumber checkpointLsn,
+									 std::span<const SharedPagePoolPreparedRetirement> retirements = {}) {
+			allocator.prepareMutationPages(pool, expectedReplacements, replacements, appends, replacementLocations,
+										   appendLocations, checkpointLsn, retirements);
+		}
+
 		static void
 		prepareCrossPoolReplacementPages(const SharedPagePoolAllocator &allocator, const CatalogEntry &destinationPool,
 										 std::span<const SharedPagePoolPreparedCrossPoolReplacement> replacements,
@@ -55,6 +80,13 @@ namespace graph::storage {
 		static uint8_t availableFrameCountUnderWrite(const StorageIO &io, uint64_t dataRegionOffset,
 													 const CatalogEntry &pool) {
 			return SharedPagePoolAllocator::availableFrameCountUnderWrite(io, dataRegionOffset, pool);
+		}
+
+		static void validatePreparedPublicationsUnderWrite(
+				const StorageIO &io, uint64_t dataRegionOffset, const CatalogEntry &pool,
+				std::span<const SharedPagePoolPreparedPublication> publications) {
+			SharedPagePoolAllocator::validatePreparedPublicationsUnderWrite(io, dataRegionOffset, pool,
+																				 publications);
 		}
 	};
 
@@ -225,6 +257,11 @@ TEST_F(RelocatableSharedPagePoolAllocatorTest, RejectsInvalidTypedPrefetchContra
 					  FormatError::FERR_INVALID_HEADER);
 	expectFormatError([&] { SharedPagePoolAllocatorTestAccess::prefetch(allocator, snapshot, invalidPageIds); },
 					  FormatError::FERR_INVALID_HEADER);
+	ASSERT_TRUE(
+			allocator.allocateNewPoolPage(request(31, 91), PhysicalSlotId(40), PhysicalSlotId(40), LogSequenceNumber(2))
+					.has_value());
+	const MetadataSnapshotPin currentSnapshot = store->openSnapshot();
+	EXPECT_NO_THROW(SharedPagePoolAllocatorTestAccess::prefetch(allocator, currentSnapshot, validPageIds));
 }
 
 TEST_F(RelocatableSharedPagePoolAllocatorTest, MaterializesAValidatedSuffixAfterAPreparedFreshPoolPrefix) {
@@ -252,9 +289,14 @@ TEST_F(RelocatableSharedPagePoolAllocatorTest, MaterializesAValidatedSuffixAfter
 			PhysicalSegmentAllocator::checkedSlotOffset(snapshot.superblock().data_region_offset, pool.physical_slot);
 	std::array<std::byte, RSS_PAGE_SIZE> page{};
 	ASSERT_EQ(io->readAt({poolOffset, pool.generation.value()}, page.data(), page.size()), page.size());
-	std::array<std::byte, RSS_SHARED_PAGE_POOL_HEADER_BYTES> poolHeaderBytes{};
-	std::copy_n(page.begin() + RSS_ENVELOPE_BYTES, poolHeaderBytes.size(), poolHeaderBytes.begin());
-	EXPECT_EQ(SharedPagePoolHeaderCodec::decode(poolHeaderBytes).allocated_frames, 3U);
+	std::array<std::byte, RSS_SHARED_PAGE_POOL_HEADER_BYTES> firstControlRecord{};
+	std::array<std::byte, RSS_SHARED_PAGE_POOL_HEADER_BYTES> secondControlRecord{};
+	std::copy_n(page.begin() + RSS_ENVELOPE_BYTES, firstControlRecord.size(), firstControlRecord.begin());
+	std::copy_n(page.begin() + RSS_ENVELOPE_BYTES + RSS_SHARED_PAGE_POOL_HEADER_BYTES,
+				secondControlRecord.size(), secondControlRecord.begin());
+	EXPECT_EQ(std::max(SharedPagePoolHeaderCodec::decode(firstControlRecord).allocated_frames,
+						   SharedPagePoolHeaderCodec::decode(secondControlRecord).allocated_frames),
+			  3U);
 
 	const uint64_t pageOffset = poolOffset + static_cast<uint64_t>(location.page_index) * RSS_PAGE_SIZE;
 	ASSERT_EQ(io->readAt({pageOffset, pool.generation.value()}, page.data(), page.size()), page.size());
@@ -263,6 +305,163 @@ TEST_F(RelocatableSharedPagePoolAllocatorTest, MaterializesAValidatedSuffixAfter
 	EXPECT_EQ(PageOwnerHeaderCodec::decode(ownerBytes).page_id, PageId(92));
 	EXPECT_TRUE(std::equal(payload.begin(), payload.end(), page.begin() + RSS_PAGE_OWNER_HEADER_BYTES));
 	EXPECT_EQ(allocator.read(snapshot, PageId(91)).owner.page_id, PageId(91));
+}
+
+TEST_F(RelocatableSharedPagePoolAllocatorTest, AuthenticatesBoundedPreparedPublicationFrames) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	SharedPagePoolAllocator allocator(io, *store);
+	ASSERT_TRUE(
+			allocator.allocateNewPoolPage(request(31, 91), PhysicalSlotId(40), PhysicalSlotId(40), LogSequenceNumber(2))
+					.has_value());
+	const MetadataSnapshotPin snapshot = store->openSnapshot();
+	const CatalogEntry pool = store->findCatalog(snapshot, SegmentId(31));
+	const PageLocation location = store->findPageLocation(snapshot, PageId(91));
+	const SharedPagePoolPreparedPublication publication{
+			location, 99U, PageOwnerKind::POK_INDEX, LogSequenceNumber(2U)};
+	EXPECT_NO_THROW(SharedPagePoolAllocatorTestAccess::validatePreparedPublicationsUnderWrite(
+				*io, snapshot.superblock().data_region_offset, pool, std::span(&publication, 1U)));
+
+	SharedPagePoolPreparedPublication wrongOwner = publication;
+	wrongOwner.expected_owner_id = 100U;
+	expectFormatError(
+			[&] {
+				SharedPagePoolAllocatorTestAccess::validatePreparedPublicationsUnderWrite(
+						*io, snapshot.superblock().data_region_offset, pool, std::span(&wrongOwner, 1U));
+			},
+			FormatError::FERR_INVALID_STATE);
+	SharedPagePoolPreparedPublication staleLsn = publication;
+	staleLsn.expected_owner_lsn = LogSequenceNumber(3U);
+	expectFormatError(
+			[&] {
+				SharedPagePoolAllocatorTestAccess::validatePreparedPublicationsUnderWrite(
+						*io, snapshot.superblock().data_region_offset, pool, std::span(&staleLsn, 1U));
+			},
+			FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(RelocatableSharedPagePoolAllocatorTest, MaterializesPrivateAppendAndMutationPlansBeforePublication) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	SharedPagePoolAllocator allocator(io, *store);
+	const std::array initialPayload = {std::byte{0x11}};
+	ASSERT_TRUE(allocator
+						.allocateNewPoolPage(request(31, 91, initialPayload), PhysicalSlotId(40), PhysicalSlotId(40),
+										 LogSequenceNumber(2))
+						.has_value());
+	const MetadataSnapshotPin snapshot = store->openSnapshot();
+	const CatalogEntry pool = store->findCatalog(snapshot, SegmentId(31));
+	const PageLocation initialLocation = store->findPageLocation(snapshot, PageId(91));
+
+	const std::array appendedPayload = {std::byte{0x21}, std::byte{0x22}};
+	const SharedPagePoolPreparedAppend append{.owner = {.page_id = PageId(92),
+															.owner_id = 99,
+															.kind = PageOwnerKind::POK_INDEX,
+															.payload_bytes = static_cast<uint32_t>(appendedPayload.size()),
+															.generation = pool.generation,
+															.committed_lsn = pool.committed_lsn},
+														 .payload = std::vector<std::byte>(appendedPayload.begin(), appendedPayload.end())};
+	PageLocation appendLocation{.page_id = PageId(92), .segment_id = pool.segment_id, .generation = pool.generation};
+	SharedPagePoolAllocatorTestAccess::prepareAppendPages(allocator, pool, std::span(&append, 1),
+														  std::span(&appendLocation, 1), pool.committed_lsn);
+	EXPECT_EQ(appendLocation.page_index, 2U);
+
+	const std::array replacementPayload = {std::byte{0x31}, std::byte{0x32}, std::byte{0x33}};
+	const SharedPagePoolPreparedReplacement replacement{
+				.expected_owner_lsn = LogSequenceNumber(2),
+				.owner = {.page_id = PageId(91),
+							  .owner_id = 99,
+							  .kind = PageOwnerKind::POK_INDEX,
+							  .payload_bytes = static_cast<uint32_t>(replacementPayload.size()),
+							  .generation = pool.generation,
+							  .committed_lsn = LogSequenceNumber(3)},
+				.payload = std::vector<std::byte>(replacementPayload.begin(), replacementPayload.end())};
+	const std::array mutationAppendPayload = {std::byte{0x41}};
+	const SharedPagePoolPreparedAppend mutationAppend{
+				.owner = {.page_id = PageId(93),
+							  .owner_id = 99,
+							  .kind = PageOwnerKind::POK_INDEX,
+							  .payload_bytes = static_cast<uint32_t>(mutationAppendPayload.size()),
+							  .generation = pool.generation,
+							  .committed_lsn = LogSequenceNumber(3)},
+				.payload = std::vector<std::byte>(mutationAppendPayload.begin(), mutationAppendPayload.end())};
+	PageLocation replacementLocation;
+	PageLocation mutationAppendLocation{.page_id = PageId(93), .segment_id = pool.segment_id,
+													.generation = pool.generation};
+	const SharedPagePoolPreparedRetirement retirement{.location = appendLocation,
+															.expected_owner_id = 99,
+															.expected_owner_kind = PageOwnerKind::POK_INDEX,
+															.expected_owner_lsn = pool.committed_lsn};
+	SharedPagePoolAllocatorTestAccess::prepareMutationPages(
+			allocator, pool, std::span(&initialLocation, 1), std::span(&replacement, 1),
+			std::span(&mutationAppend, 1), std::span(&replacementLocation, 1), std::span(&mutationAppendLocation, 1),
+			LogSequenceNumber(3), std::span(&retirement, 1));
+	EXPECT_EQ(replacementLocation.page_index, 3U);
+	EXPECT_EQ(mutationAppendLocation.page_index, 4U);
+
+	const uint64_t poolOffset =
+			PhysicalSegmentAllocator::checkedSlotOffset(snapshot.superblock().data_region_offset, pool.physical_slot);
+	const auto readOwnerAt = [&](uint8_t frame) {
+		std::array<std::byte, RSS_PAGE_SIZE> pageBytes{};
+		EXPECT_EQ(io->readAt({poolOffset + static_cast<uint64_t>(frame) * RSS_PAGE_SIZE, pool.generation.value()},
+								pageBytes.data(), pageBytes.size()),
+				  pageBytes.size());
+		std::array<std::byte, RSS_PAGE_OWNER_HEADER_BYTES> ownerBytes{};
+		std::copy_n(pageBytes.begin(), ownerBytes.size(), ownerBytes.begin());
+		return PageOwnerHeaderCodec::decode(ownerBytes);
+	};
+	EXPECT_EQ(readOwnerAt(replacementLocation.page_index).committed_lsn, LogSequenceNumber(3));
+	EXPECT_EQ(readOwnerAt(mutationAppendLocation.page_index).page_id, PageId(93));
+}
+
+TEST_F(RelocatableSharedPagePoolAllocatorTest, MaterializesAppendUnderAnExistingWriterFence) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	SharedPagePoolAllocator allocator(io, *store);
+	ASSERT_TRUE(
+			allocator.allocateNewPoolPage(request(31, 91), PhysicalSlotId(40), PhysicalSlotId(40), LogSequenceNumber(2))
+					.has_value());
+	const MetadataSnapshotPin snapshot = store->openSnapshot();
+	const CatalogEntry pool = store->findCatalog(snapshot, SegmentId(31));
+	const std::array payload = {std::byte{0xA5}, std::byte{0x5A}};
+	const SharedPagePoolPreparedAppend append{
+			.owner = {.page_id = PageId(92),
+					  .owner_id = 99,
+					  .kind = PageOwnerKind::POK_INDEX,
+					  .payload_bytes = static_cast<uint32_t>(payload.size()),
+					  .generation = pool.generation,
+					  .committed_lsn = pool.committed_lsn},
+			.payload = std::vector<std::byte>(payload.begin(), payload.end())};
+	PageLocation location{.page_id = PageId(92), .segment_id = pool.segment_id, .generation = pool.generation};
+
+	SharedPagePoolAllocatorTestAccess::prepareAppendPagesUnderWrite(
+				*io, snapshot.superblock().data_region_offset, pool, std::span(&append, 1), std::span(&location, 1),
+				pool.committed_lsn);
+	EXPECT_EQ(location.page_index, RSS_PAGE_POOL_FIRST_DATA_FRAME + 1U);
+	EXPECT_EQ(location.free_bytes, 0U);
+
+	const uint64_t poolOffset =
+			PhysicalSegmentAllocator::checkedSlotOffset(snapshot.superblock().data_region_offset, pool.physical_slot);
+	std::array<std::byte, RSS_PAGE_SIZE> page{};
+	ASSERT_EQ(io->readAt({poolOffset + static_cast<uint64_t>(location.page_index) * RSS_PAGE_SIZE,
+						  pool.generation.value()},
+					 page.data(), page.size()),
+			  page.size());
+	std::array<std::byte, RSS_PAGE_OWNER_HEADER_BYTES> ownerBytes{};
+	std::copy_n(page.begin(), ownerBytes.size(), ownerBytes.begin());
+	const PageOwnerHeader owner = PageOwnerHeaderCodec::decode(ownerBytes);
+	EXPECT_EQ(owner.page_id, PageId(92));
+	EXPECT_EQ(owner.owner_id, 99U);
+	EXPECT_EQ(owner.committed_lsn, pool.committed_lsn);
+	EXPECT_TRUE(std::equal(payload.begin(), payload.end(), page.begin() + RSS_PAGE_OWNER_HEADER_BYTES));
+
+	std::array<std::byte, RSS_PAGE_SIZE> control{};
+	ASSERT_EQ(io->readAt({poolOffset, pool.generation.value()}, control.data(), control.size()), control.size());
+	std::array<std::byte, RSS_SHARED_PAGE_POOL_HEADER_BYTES> firstControlRecord{};
+	std::array<std::byte, RSS_SHARED_PAGE_POOL_HEADER_BYTES> secondControlRecord{};
+	std::copy_n(control.begin() + RSS_ENVELOPE_BYTES, firstControlRecord.size(), firstControlRecord.begin());
+	std::copy_n(control.begin() + RSS_ENVELOPE_BYTES + RSS_SHARED_PAGE_POOL_HEADER_BYTES,
+				secondControlRecord.size(), secondControlRecord.begin());
+	EXPECT_EQ(std::max(SharedPagePoolHeaderCodec::decode(firstControlRecord).allocated_frames,
+					   SharedPagePoolHeaderCodec::decode(secondControlRecord).allocated_frames),
+			  UINT32_C(3));
 }
 
 TEST_F(RelocatableSharedPagePoolAllocatorTest, RejectsASuffixWhoseDeclaredFreshPoolPrefixIsNotDurable) {
@@ -404,6 +603,100 @@ TEST_F(RelocatableSharedPagePoolAllocatorTest, RejectsStaleOrCapacityInvalidCros
 	expectInvalid(valid);
 }
 
+TEST_F(RelocatableSharedPagePoolAllocatorTest, MaterializesCrossPoolAndSamePoolPreparedReplacements) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	SharedPagePoolAllocator allocator(io, *store);
+	const std::array sourcePayload = {std::byte{0x51}, std::byte{0x52}};
+	SharedPagePoolAllocationRequest sourceRequest = request(31, 91, sourcePayload);
+	sourceRequest.pool_owner_id = sourceRequest.page_owner_id;
+	SharedPagePoolAllocationRequest destinationRequest = request(32, 92);
+	destinationRequest.pool_owner_id = sourceRequest.page_owner_id;
+	ASSERT_TRUE(allocator
+						.allocateNewPoolPage(sourceRequest, PhysicalSlotId(40), PhysicalSlotId(40), LogSequenceNumber(2))
+						.has_value());
+	ASSERT_TRUE(allocator
+						.allocateNewPoolPage(destinationRequest, PhysicalSlotId(41), PhysicalSlotId(41), LogSequenceNumber(3))
+						.has_value());
+	const MetadataSnapshotPin snapshot = store->openSnapshot();
+	const CatalogEntry sourcePool = store->findCatalog(snapshot, SegmentId(31));
+	const CatalogEntry destinationPool = store->findCatalog(snapshot, SegmentId(32));
+	const PageLocation sourceLocation = store->findPageLocation(snapshot, PageId(91));
+	const std::array firstPayload = {std::byte{0x61}, std::byte{0x62}, std::byte{0x63}};
+	SharedPagePoolPreparedCrossPoolReplacement crossPool{
+				.source_pool = sourcePool,
+				.source_location = sourceLocation,
+				.expected_owner_lsn = LogSequenceNumber(2),
+				.owner = {.page_id = PageId(91),
+							  .owner_id = destinationPool.owner_id,
+							  .kind = PageOwnerKind::POK_INDEX,
+							  .payload_bytes = static_cast<uint32_t>(firstPayload.size()),
+							  .generation = destinationPool.generation,
+							  .committed_lsn = LogSequenceNumber(4)},
+				.payload = std::vector<std::byte>(firstPayload.begin(), firstPayload.end())};
+	PageLocation firstReplacement;
+	SharedPagePoolAllocatorTestAccess::prepareCrossPoolReplacementPages(
+			allocator, destinationPool, std::span(&crossPool, 1), std::span(&firstReplacement, 1), LogSequenceNumber(4));
+	EXPECT_EQ(firstReplacement.segment_id, destinationPool.segment_id);
+	EXPECT_EQ(firstReplacement.page_index, 2U);
+
+	const std::array secondPayload = {std::byte{0x71}};
+	SharedPagePoolPreparedCrossPoolReplacement samePool = crossPool;
+	samePool.source_pool = destinationPool;
+	samePool.source_location = firstReplacement;
+	samePool.expected_owner_lsn = LogSequenceNumber(4);
+	samePool.owner.committed_lsn = LogSequenceNumber(5);
+	samePool.payload.assign(secondPayload.begin(), secondPayload.end());
+	samePool.owner.payload_bytes = static_cast<uint32_t>(secondPayload.size());
+	PageLocation secondReplacement;
+	SharedPagePoolAllocatorTestAccess::prepareCrossPoolReplacementPages(
+			allocator, destinationPool, std::span(&samePool, 1), std::span(&secondReplacement, 1), LogSequenceNumber(5));
+	EXPECT_EQ(secondReplacement.segment_id, destinationPool.segment_id);
+	EXPECT_EQ(secondReplacement.page_index, 3U);
+}
+
+TEST_F(RelocatableSharedPagePoolAllocatorTest, EvacuatesIndexPageWithoutAnIndexRootBinding) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	SharedPagePoolAllocator allocator(io, *store);
+	const std::array sourcePayload = {std::byte{0x81}, std::byte{0x82}};
+	ASSERT_TRUE(allocator
+						.allocateNewPoolPage(request(31, 91, sourcePayload), PhysicalSlotId(40), PhysicalSlotId(40),
+										 LogSequenceNumber(2))
+						.has_value());
+	ASSERT_TRUE(
+			allocator.allocateNewPoolPage(request(32, 92), PhysicalSlotId(41), PhysicalSlotId(41), LogSequenceNumber(3))
+					.has_value());
+	const std::array replacementPayload = {std::byte{0x91}, std::byte{0x92}, std::byte{0x93}};
+	SharedPagePoolEvacuationRequest evacuation;
+	evacuation.source_segment_id = SegmentId(31);
+	evacuation.source_generation = Generation(1);
+	evacuation.destination_segment_id = SegmentId(32);
+	evacuation.destination_generation = Generation(1);
+	evacuation.page_id = PageId(91);
+	evacuation.expected_owner_lsn = LogSequenceNumber(2);
+	evacuation.page_owner_id = 99;
+	evacuation.page_owner_kind = PageOwnerKind::POK_INDEX;
+	evacuation.payload.assign(replacementPayload.begin(), replacementPayload.end());
+	const SharedPagePoolAllocation result =
+			allocator.evacuateIndexPage(evacuation, std::nullopt, std::nullopt, LogSequenceNumber(4));
+	EXPECT_EQ(result.pool.segment_id, SegmentId(32));
+	EXPECT_EQ(result.location.page_index, 2U);
+	const MetadataSnapshotPin snapshot = store->openSnapshot();
+	EXPECT_EQ(allocator.read(snapshot, PageId(91)).payload,
+			  std::vector<std::byte>(replacementPayload.begin(), replacementPayload.end()));
+}
+
+TEST_F(RelocatableSharedPagePoolAllocatorTest, RejectsAnUnpairedIndexRootBindingBeforeEvacuation) {
+	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
+	SharedPagePoolAllocator allocator(io, *store);
+	expectFormatError(
+			[&] {
+				static_cast<void>(allocator.evacuateIndexPage(SharedPagePoolEvacuationRequest{},
+																	 std::optional<IndexRootLocation>(IndexRootLocation{}), std::nullopt,
+																	 LogSequenceNumber(1)));
+			},
+			FormatError::FERR_INVALID_HEADER);
+}
+
 TEST_F(RelocatableSharedPagePoolAllocatorTest, OwnsPayloadBeforeMetadataPublication) {
 	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
 	SharedPagePoolAllocator allocator(io, *store);
@@ -459,6 +752,9 @@ TEST_F(RelocatableSharedPagePoolAllocatorTest, PreservesEveryDeclaredSharedPoolA
 			PoolCase{SegmentKind::SGK_VECTOR_PQ_POOL, PageOwnerKind::POK_VECTOR_PQ},
 			PoolCase{SegmentKind::SGK_VECTOR_ADJACENCY_POOL, PageOwnerKind::POK_VECTOR_ADJACENCY},
 			PoolCase{SegmentKind::SGK_VECTOR_MANIFEST_POOL, PageOwnerKind::POK_VECTOR_MANIFEST},
+			PoolCase{SegmentKind::SGK_STATE_PAGE_POOL, PageOwnerKind::POK_STATE},
+			PoolCase{SegmentKind::SGK_LARGE_VALUE_DATA_POOL, PageOwnerKind::POK_LARGE_VALUE_DATA},
+			PoolCase{SegmentKind::SGK_LARGE_VALUE_MANIFEST_POOL, PageOwnerKind::POK_LARGE_VALUE_MANIFEST},
 	};
 	for (size_t index = 0; index < cases.size(); ++index) {
 		SharedPagePoolAllocationRequest first = request(31U + index, 91U + index * 2U);
@@ -1331,15 +1627,24 @@ TEST_F(RelocatableSharedPagePoolAllocatorTest, RejectsCorruptPoolAndOwnerHeaders
 	MetadataSnapshotPin snapshot = store->openSnapshot();
 	const uint64_t poolOffset =
 			PhysicalSegmentAllocator::checkedSlotOffset(snapshot.superblock().data_region_offset, PhysicalSlotId(40));
-	std::array<std::byte, RSS_SHARED_PAGE_POOL_HEADER_BYTES> originalPoolHeader{};
-	ASSERT_EQ(io->readAt(poolOffset + RSS_ENVELOPE_BYTES, originalPoolHeader.data(), originalPoolHeader.size()),
-			  originalPoolHeader.size());
+	std::array<std::byte, RSS_SHARED_PAGE_POOL_HEADER_BYTES> originalFirstControlRecord{};
+	std::array<std::byte, RSS_SHARED_PAGE_POOL_HEADER_BYTES> originalSecondControlRecord{};
+	ASSERT_EQ(io->readAt(poolOffset + RSS_ENVELOPE_BYTES, originalFirstControlRecord.data(),
+						originalFirstControlRecord.size()),
+			  originalFirstControlRecord.size());
+	ASSERT_EQ(io->readAt(poolOffset + RSS_ENVELOPE_BYTES + RSS_SHARED_PAGE_POOL_HEADER_BYTES,
+						originalSecondControlRecord.data(), originalSecondControlRecord.size()),
+			  originalSecondControlRecord.size());
 	const std::byte corrupt{0xFF};
 	io->writeAt(poolOffset + RSS_ENVELOPE_BYTES, &corrupt, sizeof(corrupt));
+	io->writeAt(poolOffset + RSS_ENVELOPE_BYTES + RSS_SHARED_PAGE_POOL_HEADER_BYTES, &corrupt, sizeof(corrupt));
 	expectFormatError([&] { static_cast<void>(allocator.read(snapshot, PageId(91))); },
 					  FormatError::FERR_CHECKSUM_MISMATCH);
 	snapshot.release();
-	io->writeAt(poolOffset + RSS_ENVELOPE_BYTES, originalPoolHeader.data(), originalPoolHeader.size());
+	io->writeAt(poolOffset + RSS_ENVELOPE_BYTES, originalFirstControlRecord.data(),
+				originalFirstControlRecord.size());
+	io->writeAt(poolOffset + RSS_ENVELOPE_BYTES + RSS_SHARED_PAGE_POOL_HEADER_BYTES,
+				originalSecondControlRecord.data(), originalSecondControlRecord.size());
 
 	store.reset();
 	auto reopened = RelocatableMetadataStore::open(io);
@@ -1360,6 +1665,7 @@ TEST_F(RelocatableSharedPagePoolAllocatorTest, RequiresTheMetadataDataStorageHan
 TEST_F(RelocatableSharedPagePoolAllocatorTest, SupportsOnlyDeclaredOpenModes) {
 	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
 	EXPECT_NO_THROW(SharedPagePoolAllocator(io, *store, SharedPagePoolOpenMode::SPPOM_READ_ONLY));
+	EXPECT_NO_THROW(SharedPagePoolAllocator(io, *store, SharedPagePoolOpenMode::SPPOM_DEFER_RECONCILIATION));
 	EXPECT_THROW(SharedPagePoolAllocator(io, *store, static_cast<SharedPagePoolOpenMode>(0)), std::invalid_argument);
 }
 
@@ -1501,11 +1807,11 @@ TEST_F(RelocatableSharedPagePoolAllocatorTest, RejectsTruncatedPoolFramesWithout
 					  FormatError::FERR_BUFFER_TOO_SMALL);
 }
 
-TEST_F(RelocatableSharedPagePoolAllocatorTest, RejectsPoolKindsAboveTheSharedPoolRange) {
+TEST_F(RelocatableSharedPagePoolAllocatorTest, RejectsNonSharedPoolKindsIncludingTransactionPrivateBulkScratch) {
 	auto store = RelocatableMetadataStore::initializeNew(io, superblock(1, 1));
 	SharedPagePoolAllocator allocator(io, *store);
 	SharedPagePoolAllocationRequest invalid = request(31, 91);
-	invalid.pool_kind = SegmentKind::SGK_METADATA_PAGE_POOL;
+	invalid.pool_kind = SegmentKind::SGK_BULK_SCRATCH;
 	expectFormatError(
 			[&] {
 				static_cast<void>(allocator.allocateNewPoolPage(invalid, PhysicalSlotId(40), PhysicalSlotId(40),

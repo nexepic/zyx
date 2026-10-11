@@ -26,6 +26,11 @@ namespace graph::storage {
 	class ScalarIndexTreeReachabilityReclaimer;
 	class TransactionBTreeOverlay;
 
+	// A fresh cursor over a globally ordered logical entry stream. Both the
+	// bottom-up builder and snapshot readers use this storage-neutral contract.
+	using OrderedBTreeEntryCursor = std::function<std::optional<BTreePageEntry>()>;
+	using OrderedBTreeEntrySource = std::function<OrderedBTreeEntryCursor()>;
+
 	// A validated B+Tree page scheduled for snapshot-safe retirement. The
 	// neutral type serves both vector-derived mappings and public scalar trees.
 	struct RetiredIndexTreePage {
@@ -115,6 +120,10 @@ namespace graph::storage {
 	// plan retires that current root in its same generation.
 	struct BTreeInitialTreeMutationPlan {
 		uint64_t index_id = 0U;
+		// The planner records the logical cardinality as well as the physical
+		// layout so callers that require root absence for an empty tree can retain
+		// that invariant without materializing a temporary empty root.
+		uint64_t entry_count = 0U;
 		std::vector<BTreeNewIndexTreePoolMutation> new_pool_mutations;
 		IndexTreeMutationAppendedPageReference root_page;
 		BTreeStructuralMutationPreparer preparer;

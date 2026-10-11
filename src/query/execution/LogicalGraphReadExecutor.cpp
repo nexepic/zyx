@@ -26,24 +26,24 @@ namespace graph::query::execution {
 
 		using LogicalProperties = std::unordered_map<std::string, PropertyValue>;
 
-		void validatePredicate(const VectorizedPropertyPredicate &predicate) {
-			if (predicate.propertyKey.empty()) {
+		void validatePredicate(const LogicalPropertyPredicate &predicate) {
+			if (predicate.property_key.empty()) {
 				throw std::invalid_argument("logical graph Property predicate requires a nonempty key");
 			}
 			switch (predicate.op) {
-				case VectorPredicateOp::VPO_EQ:
-				case VectorPredicateOp::VPO_NE:
-				case VectorPredicateOp::VPO_LT:
-				case VectorPredicateOp::VPO_LE:
-				case VectorPredicateOp::VPO_GT:
-				case VectorPredicateOp::VPO_GE:
-					if (predicate.upperValue.has_value()) {
+				case LogicalPropertyPredicateOp::LPP_EQ:
+				case LogicalPropertyPredicateOp::LPP_NE:
+				case LogicalPropertyPredicateOp::LPP_LT:
+				case LogicalPropertyPredicateOp::LPP_LE:
+				case LogicalPropertyPredicateOp::LPP_GT:
+				case LogicalPropertyPredicateOp::LPP_GE:
+					if (predicate.upper_value.has_value()) {
 						throw std::invalid_argument(
 								"logical graph non-range Property predicate cannot carry an upper bound");
 					}
 					return;
-				case VectorPredicateOp::VPO_RANGE_CLOSED:
-					if (!predicate.upperValue.has_value()) {
+				case LogicalPropertyPredicateOp::LPP_RANGE_CLOSED:
+					if (!predicate.upper_value.has_value()) {
 						throw std::invalid_argument(
 								"logical graph closed-range Property predicate requires an upper bound");
 					}
@@ -64,7 +64,7 @@ namespace graph::query::execution {
 					throw std::invalid_argument("logical graph Node filter has an empty or duplicate label");
 				}
 			}
-			for (const VectorizedPropertyPredicate &predicate: filter.property_predicates) {
+			for (const LogicalPropertyPredicate &predicate: filter.property_predicates) {
 				validatePredicate(predicate);
 			}
 		}
@@ -75,7 +75,7 @@ namespace graph::query::execution {
 			if (filter.property_predicates.size() > MAXIMUM_FILTER_TERMS) {
 				throw std::invalid_argument("logical graph Edge filter exceeds the bounded predicate count");
 			}
-			for (const VectorizedPropertyPredicate &predicate: filter.property_predicates) {
+			for (const LogicalPropertyPredicate &predicate: filter.property_predicates) {
 				validatePredicate(predicate);
 			}
 		}
@@ -142,12 +142,12 @@ namespace graph::query::execution {
 		}
 
 		[[nodiscard]] bool matchesPredicates(const LogicalProperties &properties,
-													 const std::vector<VectorizedPropertyPredicate> &predicates) {
-			for (const VectorizedPropertyPredicate &predicate: predicates) {
-				const auto iterator = properties.find(predicate.propertyKey);
+															 const std::vector<LogicalPropertyPredicate> &predicates) {
+			for (const LogicalPropertyPredicate &predicate: predicates) {
+				const auto iterator = properties.find(predicate.property_key);
 				const std::optional<PropertyValue> value =
 						iterator == properties.end() ? std::nullopt : std::optional<PropertyValue>(iterator->second);
-				if (!evaluatePredicateValue(value, predicate)) {
+				if (!evaluateLogicalPropertyPredicate(value, predicate)) {
 					return false;
 				}
 			}

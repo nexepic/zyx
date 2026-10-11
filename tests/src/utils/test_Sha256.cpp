@@ -68,3 +68,18 @@ TEST(Sha256Test, ProcessesAFullInputBlockBeforePaddingAndHandlesSubspans) {
 	std::fill(source.begin() + 1, source.begin() + 65, std::byte{'a'});
 	EXPECT_EQ(asUnsigned(graph::utils::Sha256::digest(std::span(source).subspan(1U, 64U))), EXPECTED);
 }
+
+TEST(Sha256Test, IncrementalDigestMatchesOneShotAcrossBlockAndPaddingBoundaries) {
+	std::vector<std::byte> message(257U);
+	for (size_t index = 0U; index < message.size(); ++index) {
+		message[index] = static_cast<std::byte>(index);
+	}
+	graph::utils::Sha256 hasher;
+	hasher.update(std::span(message).first(1U));
+	hasher.update(std::span(message).subspan(1U, 63U));
+	hasher.update(std::span(message).subspan(64U, 57U));
+	const auto beforeFinalChunk = hasher.finalize();
+	EXPECT_EQ(beforeFinalChunk, graph::utils::Sha256::digest(std::span(message).first(121U)));
+	hasher.update(std::span(message).subspan(121U));
+	EXPECT_EQ(hasher.finalize(), graph::utils::Sha256::digest(message));
+}

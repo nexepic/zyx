@@ -57,7 +57,7 @@ def _measurement_semantics(profile: str, execution_mode: str) -> dict[str, objec
                 "statement/autocommit API returns."
             ),
             "phase_contract": (
-                "Statement latency, commit wrapper work, WAL fsync timers, close/checkpoint timers, and load/import "
+                "Statement latency, commit wrapper work, storage sync timers, close/checkpoint timers, and load/import "
                 "timers are reported separately in phase_category_summary.* when the adapter emits profile events."
             ),
         }
@@ -68,14 +68,14 @@ def _measurement_semantics(profile: str, execution_mode: str) -> dict[str, objec
                 "Each measured write includes an adapter-defined durability barrier before the timer stops."
             ),
             "barrier_by_database": {
-                "zyx": "No extra adapter call: ZYX auto-commit fsyncs the WAL commit record; the main database checkpoint may be deferred until the WAL threshold or clean close.",
+                "zyx": "No extra adapter call: ZYX commits one single-file generation and synchronizes its publication before returning.",
                 "kuzu": "CHECKPOINT after each measured write.",
                 "neo4j": "No adapter-added barrier; service autocommit durability is engine/configuration defined.",
                 "memgraph": "No adapter-added barrier; service autocommit durability is engine/configuration defined.",
             },
             "phase_contract": (
                 "Durability barriers are included in sample latency; raw profile timers are additionally grouped into "
-                "statement_latency, durable_wal_fsync, close_checkpoint, and load_import categories."
+                "statement_latency, durable_storage_sync, close_checkpoint, and load_import categories."
             ),
         }
     elif profile == "operational_dynamic":
@@ -242,6 +242,20 @@ def _environment(
     return environment
 
 
+def _read_baseline_environment(baseline_summary: Path) -> dict[str, object]:
+    baseline_environment = baseline_summary.parent / "environment.json"
+    if not baseline_environment.is_file():
+        raise ValueError(f"baseline environment does not exist: {baseline_environment}")
+    try:
+        # COSEC: parse only JSON data and reject a non-object baseline manifest.
+        payload = json.loads(baseline_environment.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"baseline environment is not valid JSON: {baseline_environment}") from error
+    if not isinstance(payload, dict):
+        raise ValueError(f"baseline environment must be a JSON object: {baseline_environment}")
+    return payload
+
+
 def _adapter_for(
     database: str,
     dataset_dir: Path,
@@ -300,6 +314,7 @@ def run_benchmark(
         raise ValueError("threads must be >= 0")
     if baseline_summary is not None and not baseline_summary.exists():
         raise ValueError(f"baseline summary does not exist: {baseline_summary}")
+    baseline_environment = _read_baseline_environment(baseline_summary) if baseline_summary is not None else None
 
     result_dir = _create_result_dir(output_root, databases, scale, profile)
     dataset_dir = result_dir / "dataset"
@@ -400,6 +415,7 @@ def run_benchmark(
         environment,
         profile_path if profile_path.exists() else None,
         baseline_summary,
+        baseline_environment,
         max_regression_ratio,
     )
     quality_report = json.loads(outputs["quality"].read_text())

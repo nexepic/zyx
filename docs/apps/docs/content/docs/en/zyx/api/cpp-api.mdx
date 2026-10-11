@@ -87,7 +87,7 @@ auto result = roTx.execute("MATCH (n) RETURN count(n)");
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | `beginTransaction` | `Transaction beginTransaction()` | Begin an optimistic read-write transaction with a pinned snapshot. |
-| `beginBulkTransaction` | `Transaction beginBulkTransaction()` | Begin a read-write transaction optimized for large direct API imports. Commit is WAL-durable; the main DB checkpoint may be deferred until `save()` or clean `close()`. |
+| `beginBulkTransaction` | `Transaction beginBulkTransaction()` | Begin a read-write transaction for large direct API imports. Commit atomically publishes one durable native single-file generation; it does not create a WAL sidecar. |
 | `beginReadOnlyTransaction` | `Transaction beginReadOnlyTransaction()` | Begin a read-only transaction with snapshot isolation. Multiple can run concurrently. |
 | `hasActiveTransaction` | `bool hasActiveTransaction() const` | Check whether any public transaction is currently active. |
 
@@ -152,6 +152,10 @@ auto columnarEdgeIds = db.createEdgesColumnar(
 | `createEdge` | `int64_t createEdge(int64_t sourceId, int64_t targetId, const string& edgeType, const unordered_map<string, Value>& props = {}) const` | Create an edge by node IDs. An empty `edgeType` creates an untyped edge. Returns edge ID. |
 | `createEdges` | `vector<int64_t> createEdges(const string& edgeType, const vector<tuple<int64_t, int64_t, unordered_map<string, Value>>>& edges) const` | Batch-create edges of the same type; an empty type creates untyped edges. Returns list of edge IDs. |
 | `createEdgesColumnar` | `vector<int64_t> createEdgesColumnar(const string& edgeType, const vector<int64_t>& sourceIds, const vector<int64_t>& targetIds, const vector<PropertyColumn>& columns = {}) const` | Batch-create edges from source/target ID columns and property columns; an empty type creates untyped edges. |
+
+Columnar methods validate the full input batch before they publish mutations. A malformed column shape throws
+`std::invalid_argument`. An inactive or unknown edge endpoint throws `zyx::BulkInputError`, whose stable
+`rowIndex()` and `fieldPath()` identify the rejected input cell without requiring callers to parse an error message.
 
 ### Binary Values
 
@@ -262,54 +266,60 @@ double ms = result.getDuration();
 `QueryBuilder` provides a fluent, programmatic way to construct queries without writing Cypher strings:
 
 ```cpp
-auto plan = db.query()
-    .match_("n", "Person", "name", std::string("Alice"))
-    .return_({"n"})
+zyx::PreparedQuery query = db.query()
+    .match("n", "Person", "name", std::string("Alice"))
+    .returning({"n"})
     .build();
+zyx::Result result = db.execute(query);
 ```
+
+`PreparedQuery` is move-only and reusable. It contains a typed logical plan and bound values, not Cypher text, storage
+handles, a planner, or physical operators. `Transaction::query()` and `Transaction::execute(query)` use the transaction's
+logical overlay, so they preserve read-your-writes visibility. Identifiers use the supported ASCII identifier grammar and
+are rejected by `build()` when invalid; values are typed bindings and are never escaped into a Cypher string.
 
 ### Building Read Queries
 
 | Method | Description |
 |--------|-------------|
-| `match_(variable, label, key, value)` | Add a MATCH pattern for a single-label node with an optional property filter. |
-| `match_(variable, labels, key, value)` | Same, but with multiple labels. |
-| `where_(variable, key, value)` | Add a WHERE filter. |
-| `return_(variables)` | Set the RETURN clause. |
-| `skip_(offset)` | Set SKIP. |
-| `limit_(count)` | Set LIMIT. |
-| `orderBy_(items)` | Set ORDER BY with `SortOrder{variable, property, ascending}`. |
+| `match(variable, label, key, value)` | Add a MATCH pattern for a single-label node with an optional property filter. |
+| `match(variable, labels, key, value)` | Same, but with multiple labels. |
+| `where(variable, key, value)` | Add a WHERE equality filter. |
+| `returning(variables)` | Set the RETURN variables. |
+| `skip(offset)` | Set SKIP. |
+| `limit(count)` | Set LIMIT. |
+| `orderBy(items)` | Set ORDER BY with `QueryBuilder::SortOrder{variable, property, ascending}`. |
 
 ### Building Write Queries
 
 | Method | Description |
 |--------|-------------|
-| `create_(variable, label, props)` | Create a node. |
-| `create_(variable, labels, props)` | Create a node with multiple labels. |
-| `create_(variable, type, sourceVar, targetVar, props)` | Create an edge between two variables. |
-| `delete_(variables, detach)` | Delete variables (`detach = true` for DETACH DELETE). |
-| `set_(variable, key, value)` | Set a property. |
-| `setLabel_(variable, label)` | Add a label to a node. |
-| `remove_(variable, key, isLabel)` | Remove a property (or label if `isLabel = true`). |
+| `createNode(variable, label, props)` | Create a node. |
+| `createNode(variable, labels, props)` | Create a node with multiple labels. |
+| `createEdge(variable, type, sourceVariable, targetVariable, props)` | Create an edge between two variables. |
+| `deleteEntities(variables, detach)` | Delete variables (`detach = true` for DETACH DELETE). |
+| `setProperty(variable, key, value)` | Set a property. |
+| `addLabel(variable, label)` | Add a label to a node. |
+| `remove(variable, key, isLabel)` | Remove a property (or label if `isLabel = true`). |
 
 ### Index Management
 
 | Method | Description |
 |--------|-------------|
-| `createIndex_(label, property, indexName)` | Create a property index. |
-| `dropIndex_(indexName)` | Drop index by name. |
-| `dropIndex_(label, property)` | Drop index by label + property. |
-| `showIndexes_()` | List all indexes. |
+| `createIndex(label, property, indexName)` | Create a property index. |
+| `dropIndex(indexName)` | Drop index by name. |
+| `dropIndex(label, property)` | Drop index by label + property. |
+| `showIndexes()` | List all indexes. |
 
 ### Procedures
 
 | Method | Description |
 |--------|-------------|
-| `call_(procedure, args)` | Call a stored procedure (e.g., vector index operations). |
+| `call(procedure, args)` | Call a stored procedure (e.g., vector index operations). |
 | `unwind(list, alias)` | Add an UNWIND clause. |
 
 ### Finalization
 
 | Method | Description |
 |--------|-------------|
-| `build()` | Compile the builder into a `unique_ptr<PhysicalOperator>` ready for execution. |
+| `build()` | Return a move-only `PreparedQuery`; execute it with `Database::execute` or `Transaction::execute`. |

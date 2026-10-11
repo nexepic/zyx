@@ -314,3 +314,48 @@ TEST_F(NodeTest, HasPropertyEntityRequiresStorageTypeAndEntityId) {
 	meta.propertyEntityId = 0;
 	EXPECT_FALSE(node.hasPropertyEntity());
 }
+
+TEST_F(NodeTest, LabelRemovalPreservesOrderAndReportsAbsentLabels) {
+	graph::Node node;
+	ASSERT_TRUE(node.addLabelId(10));
+	ASSERT_TRUE(node.addLabelId(20));
+	ASSERT_TRUE(node.addLabelId(30));
+	EXPECT_TRUE(node.hasLabelId(10));
+	EXPECT_TRUE(node.hasLabelId(20));
+	EXPECT_FALSE(node.hasLabelId(99));
+
+	EXPECT_TRUE(node.removeLabelId(20));
+	EXPECT_EQ(node.getLabelIds(), (std::vector<int64_t>{10, 30}));
+	EXPECT_FALSE(node.hasLabelId(20));
+	EXPECT_FALSE(node.removeLabelId(99));
+	EXPECT_TRUE(node.removeLabelId(10));
+	EXPECT_TRUE(node.removeLabelId(30));
+	EXPECT_TRUE(node.getLabelIds().empty());
+}
+
+TEST_F(NodeTest, PropertyTransfersAndBufferDeserializationPreserveMetadata) {
+	graph::Node node(42, 7);
+	node.setFirstOutEdgeId(51);
+	node.setFirstInEdgeId(52);
+	node.setPropertyEntityId(53, graph::PropertyStorageType::PROPERTY_ENTITY);
+	node.addLabelId(8);
+	node.markInactive();
+
+	std::unordered_map<std::string, graph::PropertyValue> properties{{"name", graph::PropertyValue("Ada")}};
+	node.setProperties(properties);
+	EXPECT_EQ(node.getProperties(), properties);
+	auto taken = node.takeProperties();
+	EXPECT_EQ(taken, properties);
+	EXPECT_TRUE(node.getProperties().empty());
+
+	std::stringstream stream;
+	node.serialize(stream);
+	const std::string bytes = stream.str();
+	const graph::Node decoded = graph::Node::deserializeFromBuffer(bytes.data());
+	EXPECT_EQ(decoded.getId(), 42);
+	EXPECT_EQ(decoded.getFirstOutEdgeId(), 51);
+	EXPECT_EQ(decoded.getFirstInEdgeId(), 52);
+	EXPECT_EQ(decoded.getPropertyEntityId(), 53);
+	EXPECT_EQ(decoded.getLabelIds(), (std::vector<int64_t>{7, 8}));
+	EXPECT_FALSE(decoded.isActive());
+}

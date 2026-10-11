@@ -32,9 +32,11 @@ namespace graph::storage {
 	// Crash injection must leave this checksum untouched so a torn inactive
 	// Superblock can never validate as a complete metadata generation.
 	constexpr uint32_t RSS_SUPERBLOCK_HEADER_CRC_OFFSET = 116;
-	// All lifecycle state is represented by the A/B Superblocks and their roots.
-	// A nonzero flag is reserved for a future incompatible format version.
-	constexpr uint32_t RSS_SUPERBLOCK_KNOWN_FLAGS = 0U;
+	// A set bit changes page_directory_root from a Page Directory radix root to
+	// the typed physical bootstrap header. Older readers reject this formerly
+	// reserved bit rather than decoding a header as a radix page.
+	constexpr uint32_t RSS_SUPERBLOCK_FLAG_PAGE_DIRECTORY_BOOTSTRAP = 1U << 0U;
+	constexpr uint32_t RSS_SUPERBLOCK_KNOWN_FLAGS = RSS_SUPERBLOCK_FLAG_PAGE_DIRECTORY_BOOTSTRAP;
 	static_assert(RSS_FILE_BOOTSTRAP_BYTES >= 2U * RSS_SUPERBLOCK_BYTES);
 	struct MetadataEmergencyReserveDescriptor {
 		PhysicalSlotId physical_slot{};
@@ -105,6 +107,9 @@ namespace graph::storage {
 		// token representation; schema Token IDs retain a full 64-bit namespace.
 		uint64_t next_property_key_token = 1;
 		uint64_t next_schema_token_id = 1;
+		[[nodiscard]] constexpr bool usesPageDirectoryBootstrap() const {
+			return (flags & RSS_SUPERBLOCK_FLAG_PAGE_DIRECTORY_BOOTSTRAP) != 0U;
+		}
 		constexpr bool operator==(const Superblock &) const = default;
 	};
 

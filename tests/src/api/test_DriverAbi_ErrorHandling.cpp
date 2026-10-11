@@ -12,8 +12,8 @@
 
 namespace fs = std::filesystem;
 
-const zyx_driver_error_t &staticErrorFor(zyx_driver_status_t code) noexcept;
-void setStaticError(zyx_driver_error_t **out_error, zyx_driver_status_t code) noexcept;
+const zyx_driver_error_t &staticErrorFor(uint32_t code) noexcept;
+void setStaticError(zyx_driver_error_t **out_error, uint32_t code) noexcept;
 zyx_driver_status_t internalError(zyx_driver_error_t **out_error, const char *message) noexcept;
 zyx_driver_status_t transactionExceptionStatus(const std::exception &ex);
 
@@ -88,7 +88,7 @@ TEST(DriverAbiErrorHandlingTest, StaticErrorsCoverAllStatusCodes) {
         EXPECT_NE(zyx_driver_error_message(&error), nullptr);
     }
 
-    const auto &unknown = staticErrorFor(static_cast<zyx_driver_status_t>(9999));
+    const auto &unknown = staticErrorFor(9999U);
     EXPECT_EQ(unknown.code, ZYX_DRIVER_INTERNAL_ERROR);
 }
 
@@ -315,7 +315,7 @@ TEST(DriverAbiErrorHandlingTest, ResultStringBufferHelperStoresStableStrings) {
 	ASSERT_EQ(result.string_buffers.size(), 2u);
 	EXPECT_EQ(result.string_buffers.front(), "alpha");
 	EXPECT_EQ(result.string_buffers.back(), "beta");
-	EXPECT_EQ(typeName(static_cast<zyx_driver_value_type_t>(999)), "unknown");
+	EXPECT_EQ(typeName(999U), "unknown");
 }
 
 TEST(DriverAbiErrorHandlingTest, TransactionInternalHelpersCoverRawPaths) {

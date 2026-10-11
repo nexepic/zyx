@@ -147,7 +147,7 @@ inline int portable_file_size(file_handle_t fd, uint64_t *outSize) {
  *
  * F_FULLFSYNC is a macOS-specific hardware-cache barrier. It is materially
  * stronger and slower than the durable filesystem contract used by the other
- * supported platforms, so ordinary database WAL publication uses fsync there.
+ * supported platforms, so ordinary database publication uses fsync there.
  */
 inline int portable_fsync(file_handle_t fd) {
 	if (fd == INVALID_FILE_HANDLE) return -1;

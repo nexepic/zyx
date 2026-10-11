@@ -68,6 +68,15 @@ namespace {
 
 	std::vector<std::byte> record(std::byte marker) { return std::vector<std::byte>(16U, marker); }
 
+	void recalculateChecksums(std::vector<std::byte> &bytes) {
+		LittleEndianCodec::writeU32(bytes, 48U,
+								 graph::utils::calculateCrc(bytes.data() + RSS_VECTOR_PAGE_HEADER_BYTES,
+															bytes.size() - RSS_VECTOR_PAGE_HEADER_BYTES));
+		LittleEndianCodec::writeU32(bytes, 52U, 0U);
+		LittleEndianCodec::writeU32(bytes, 52U,
+								 graph::utils::calculateCrc(bytes.data(), RSS_VECTOR_PAGE_HEADER_BYTES));
+	}
+
 } // namespace
 
 TEST(RelocatableVectorPageTest, StoresFixedRawRecordsWithStableSlotOrdinals) {
@@ -193,6 +202,36 @@ TEST(RelocatableVectorPageTest, RejectsCorruptChecksumsBitmapAndTrailingPadding)
 	VectorPage exhausted = VectorPage::open(owner(initial), corrupt);
 	expectFormatError([&] { static_cast<void>(exhausted.insert(record(std::byte{0x33}))); },
 					  FormatError::FERR_ARITHMETIC_OVERFLOW);
+}
+
+TEST(RelocatableVectorPageTest, RejectsOrExactlyRoundTripsEveryChecksumValidSingleBitMutation) {
+	for (const VectorStorageKind kind : {VectorStorageKind::VSK_RAW, VectorStorageKind::VSK_PQ}) {
+		const VectorPageHeader initial = header(kind);
+		VectorPage page = VectorPage::create(owner(initial), initial);
+		static_cast<void>(page.insert(record(std::byte{0x11U})));
+		static_cast<void>(page.insert(record(std::byte{0x22U})));
+		const std::vector<std::byte> canonical = page.serialize();
+		ASSERT_EQ(canonical.size(), RSS_PAGE_OWNER_MAX_PAYLOAD_BYTES);
+
+		for (size_t byteOffset = 0U; byteOffset < canonical.size(); ++byteOffset) {
+			for (uint8_t bit = 0U; bit < 8U; ++bit) {
+				auto mutation = canonical;
+				mutation[byteOffset] ^= std::byte{static_cast<uint8_t>(1U << bit)};
+				recalculateChecksums(mutation);
+				try {
+					const VectorPage decoded = VectorPage::open(owner(initial), mutation);
+					if (decoded.serialize() != mutation) {
+						ADD_FAILURE() << "vector page mutation was normalized for "
+									  << (kind == VectorStorageKind::VSK_RAW ? "raw" : "PQ") << " vector page at byte "
+									  << byteOffset << ", bit " << static_cast<unsigned>(bit);
+						return;
+					}
+				} catch (const FormatException &) {
+					// Every non-canonical page image must fail at the typed format boundary.
+				}
+			}
+		}
+	}
 }
 
 TEST(RelocatableVectorPageTest, RejectsMalformedLayoutsAndSupportsMoveOnlyOwnership) {

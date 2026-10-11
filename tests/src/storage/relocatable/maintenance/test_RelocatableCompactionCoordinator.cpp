@@ -379,6 +379,93 @@ TEST_F(RelocatableCompactionCoordinatorTest, RetainsRetiredPoolUntilTheLastSnaps
 }
 
 TEST_F(RelocatableCompactionCoordinatorTest,
+		ReopensTheRetiredPoolAndRetriesReleaseAfterAnInterruptedInactiveSuperblockWrite) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	SlottedPagePool pages(io, *metadata);
+	SlottedPage sourcePage = SlottedPage::create(propertyOwner(PageId(101), LogSequenceNumber(2)));
+	const SlottedSlotReference slot = sourcePage.insert(TestSlottedPageRecordCodec::encode(testRecord(501)));
+	ASSERT_TRUE(pages.allocatePage(propertyRequest(SegmentId(71), PageId(101)), sourcePage, PhysicalSlotId(40),
+								   PhysicalSlotId(40), LogSequenceNumber(2))
+					.has_value());
+	SlottedPage destinationPage = SlottedPage::create(propertyOwner(PageId(102), LogSequenceNumber(3)));
+	ASSERT_TRUE(pages.allocatePage(propertyRequest(SegmentId(72), PageId(102)), destinationPage, PhysicalSlotId(41),
+								   PhysicalSlotId(41), LogSequenceNumber(3))
+					.has_value());
+
+	MetadataSnapshotPin oldSnapshot = metadata->openSnapshot();
+	RelocatableCompactionCoordinator coordinator(pages, *metadata);
+	const RelocatableSlottedPoolCompactionResult compacted =
+			coordinator.compactSlottedPool({SegmentId(71), SegmentId(72), 1U, LogSequenceNumber(4)});
+	ASSERT_TRUE(compacted.source_retired);
+	ASSERT_FALSE(compacted.source_released);
+	EXPECT_EQ(TestSlottedPageRecordCodec::decode(pages.read(oldSnapshot, PageId(101)).read(slot)).logical_id, 501U);
+	oldSnapshot.release();
+
+	MetadataPublishOptions interrupted;
+	interrupted.bootstrap_failpoint = BootstrapPublishFailpoint::BPF_BEFORE_INACTIVE_WRITE;
+	EXPECT_THROW(static_cast<void>(coordinator.releaseRetiredSlottedPool(
+				 SegmentId(71), Generation(1), compacted.next_lsn, interrupted)),
+			 BootstrapPublishInterrupted);
+
+	metadata.reset();
+	auto reopened = RelocatableMetadataStore::open(io);
+	SlottedPagePool reopenedPages(io, *reopened);
+	RelocatableCompactionCoordinator reopenedCoordinator(reopenedPages, *reopened);
+	MetadataSnapshotPin retired = reopened->openSnapshot();
+	EXPECT_EQ(reopened->findCatalog(retired, SegmentId(71)).state, SegmentState::SGS_RETIRED);
+	EXPECT_TRUE(reopened->isPhysicalSlotAllocated(retired, PhysicalSlotId(40)));
+	retired.release();
+
+	EXPECT_TRUE(reopenedCoordinator.releaseRetiredSlottedPool(SegmentId(71), Generation(1), compacted.next_lsn));
+	MetadataSnapshotPin released = reopened->openSnapshot();
+	EXPECT_EQ(reopened->findCatalog(released, SegmentId(71)).state, SegmentState::SGS_OBSOLETE);
+	EXPECT_FALSE(reopened->isPhysicalSlotAllocated(released, PhysicalSlotId(40)));
+}
+
+TEST_F(RelocatableCompactionCoordinatorTest,
+		ReopensTheReleasedPoolAfterAnInterruptedPostPublicationSuperblockWrite) {
+	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
+	SlottedPagePool pages(io, *metadata);
+	SlottedPage sourcePage = SlottedPage::create(propertyOwner(PageId(101), LogSequenceNumber(2)));
+	ASSERT_TRUE(pages.allocatePage(propertyRequest(SegmentId(71), PageId(101)), sourcePage, PhysicalSlotId(40),
+								   PhysicalSlotId(40), LogSequenceNumber(2))
+					.has_value());
+	SlottedPage destinationPage = SlottedPage::create(propertyOwner(PageId(102), LogSequenceNumber(3)));
+	ASSERT_TRUE(pages.allocatePage(propertyRequest(SegmentId(72), PageId(102)), destinationPage, PhysicalSlotId(41),
+								   PhysicalSlotId(41), LogSequenceNumber(3))
+					.has_value());
+
+	MetadataSnapshotPin oldSnapshot = metadata->openSnapshot();
+	RelocatableCompactionCoordinator coordinator(pages, *metadata);
+	const RelocatableSlottedPoolCompactionResult compacted =
+			coordinator.compactSlottedPool({SegmentId(71), SegmentId(72), 1U, LogSequenceNumber(4)});
+	ASSERT_TRUE(compacted.source_retired);
+	ASSERT_FALSE(compacted.source_released);
+	oldSnapshot.release();
+
+	MetadataPublishOptions interrupted;
+	interrupted.bootstrap_failpoint = BootstrapPublishFailpoint::BPF_AFTER_INACTIVE_WRITE;
+	EXPECT_THROW(static_cast<void>(coordinator.releaseRetiredSlottedPool(
+				 SegmentId(71), Generation(1), compacted.next_lsn, interrupted)),
+			 BootstrapPublishInterrupted);
+
+	metadata.reset();
+	auto reopened = RelocatableMetadataStore::open(io);
+	SlottedPagePool reopenedPages(io, *reopened);
+	MetadataSnapshotPin released = reopened->openSnapshot();
+	EXPECT_EQ(reopened->findCatalog(released, SegmentId(71)).state, SegmentState::SGS_OBSOLETE);
+	EXPECT_FALSE(reopened->isPhysicalSlotAllocated(released, PhysicalSlotId(40)));
+	released.release();
+
+	SlottedPage reusedPage = SlottedPage::create(propertyOwner(PageId(103), LogSequenceNumber(7)));
+	EXPECT_TRUE(reopenedPages.allocatePage(propertyRequest(SegmentId(73), PageId(103)), reusedPage, PhysicalSlotId(40),
+											 PhysicalSlotId(40), LogSequenceNumber(7))
+					.has_value());
+	MetadataSnapshotPin reused = reopened->openSnapshot();
+	EXPECT_EQ(reopened->findCatalog(reused, SegmentId(73)).physical_slot, PhysicalSlotId(40));
+}
+
+TEST_F(RelocatableCompactionCoordinatorTest,
 		LargeValueCompactionEvacuatesDataAndManifestPoolsAndPreservesSnapshots) {
 	auto metadata = RelocatableMetadataStore::initializeNew(io, initialSuperblock());
 	LargeValueStore values(io, *metadata);

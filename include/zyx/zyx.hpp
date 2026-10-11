@@ -24,8 +24,11 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <stdexcept>
 #include <string>
+#include <tuple>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 #include "value.hpp"
 
@@ -33,9 +36,14 @@ namespace zyx {
 
 	class Database;
 	class Result;
+	class PreparedQuery;
+	class QueryBuilder;
 
 	namespace detail {
 		class DatabaseBulkInternal;
+		class PreparedQueryImpl;
+		class QueryBuilderImpl;
+		QueryBuilderImpl &requireQueryBuilderImpl(QueryBuilder &builder);
 		Value getTypedResultValue(const Result &result, int index);
 	}
 
@@ -44,6 +52,94 @@ namespace zyx {
 	class DatabaseImpl;
 	class ResultImpl;
 	class TransactionImpl;
+
+	/**
+	 * @brief An immutable, storage-neutral query prepared by QueryBuilder.
+	 *
+	 * A prepared query stores only a typed logical plan and bound values. It
+	 * never contains Cypher text, a planner, storage handles, or physical
+	 * operators, so it is safe to reuse across executions of the same Database.
+	 */
+	class PreparedQuery {
+	public:
+		~PreparedQuery();
+		PreparedQuery(PreparedQuery &&) noexcept;
+		PreparedQuery &operator=(PreparedQuery &&) noexcept;
+		PreparedQuery(const PreparedQuery &) = delete;
+		PreparedQuery &operator=(const PreparedQuery &) = delete;
+
+		[[nodiscard]] bool empty() const noexcept;
+
+	private:
+		std::unique_ptr<detail::PreparedQueryImpl> impl_;
+
+		explicit PreparedQuery(std::unique_ptr<detail::PreparedQueryImpl> impl);
+		friend class QueryBuilder;
+		friend class Database;
+		friend class Transaction;
+	};
+
+	/**
+	 * @brief Fluent builder for the native logical query boundary.
+	 *
+	 * All identifiers are validated when build() is called. Values are retained
+	 * as typed bound values and are never formatted into a Cypher string.
+	 */
+	class QueryBuilder {
+	public:
+		struct SortOrder {
+			std::string variable;
+			std::string property;
+			bool ascending = true;
+		};
+
+		~QueryBuilder();
+		QueryBuilder(QueryBuilder &&) noexcept;
+		QueryBuilder &operator=(QueryBuilder &&) noexcept;
+		QueryBuilder(const QueryBuilder &) = delete;
+		QueryBuilder &operator=(const QueryBuilder &) = delete;
+
+		QueryBuilder &match(const std::string &variable, const std::string &label = "",
+							const std::string &key = "", const Value &value = Value{});
+		QueryBuilder &match(const std::string &variable, const std::vector<std::string> &labels,
+							const std::string &key = "", const Value &value = Value{});
+		QueryBuilder &where(const std::string &variable, const std::string &key, const Value &value);
+
+		QueryBuilder &createNode(const std::string &variable, const std::string &label,
+								 const std::unordered_map<std::string, Value> &properties = {});
+		QueryBuilder &createNode(const std::string &variable, const std::vector<std::string> &labels,
+								 const std::unordered_map<std::string, Value> &properties = {});
+		QueryBuilder &createEdge(const std::string &variable, const std::string &type,
+								 const std::string &sourceVariable, const std::string &targetVariable,
+								 const std::unordered_map<std::string, Value> &properties = {});
+		QueryBuilder &deleteEntities(const std::vector<std::string> &variables, bool detach = false);
+		QueryBuilder &setProperty(const std::string &variable, const std::string &key, const Value &value);
+		QueryBuilder &addLabel(const std::string &variable, const std::string &label);
+		QueryBuilder &remove(const std::string &variable, const std::string &key, bool isLabel = false);
+
+		QueryBuilder &createIndex(const std::string &label, const std::string &property,
+								  const std::string &indexName = "");
+		QueryBuilder &dropIndex(const std::string &indexName);
+		QueryBuilder &dropIndex(const std::string &label, const std::string &property);
+		QueryBuilder &showIndexes();
+
+		QueryBuilder &call(const std::string &procedure, const std::vector<Value> &arguments = {});
+		QueryBuilder &returning(const std::vector<std::string> &variables);
+		QueryBuilder &skip(int64_t offset);
+		QueryBuilder &limit(int64_t maximumRows);
+		QueryBuilder &orderBy(const std::vector<SortOrder> &items);
+		QueryBuilder &unwind(const std::vector<Value> &values, const std::string &alias);
+
+		[[nodiscard]] PreparedQuery build() const;
+
+	private:
+		std::unique_ptr<detail::QueryBuilderImpl> impl_;
+
+		QueryBuilder();
+		friend class Database;
+		friend class Transaction;
+		friend detail::QueryBuilderImpl &detail::requireQueryBuilderImpl(QueryBuilder &builder);
+	};
 
 	/**
 	 * @brief One property column for columnar bulk inserts.
@@ -55,6 +151,26 @@ namespace zyx {
 	struct PropertyColumn {
 		std::string name;
 		std::vector<Value> values;
+	};
+
+	/**
+	 * @brief Describes the row and field that invalidated a columnar bulk write.
+	 *
+	 * Both the C++ API and Driver ABI validate a complete batch before it can
+	 * publish graph mutations. Callers can use this type to report a stable,
+	 * structured diagnostic instead of parsing an implementation error string.
+	 */
+	class BulkInputError final : public std::invalid_argument {
+	public:
+		BulkInputError(size_t rowIndex, std::string fieldPath, std::string message) :
+				std::invalid_argument(std::move(message)), rowIndex_(rowIndex), fieldPath_(std::move(fieldPath)) {}
+
+		[[nodiscard]] size_t rowIndex() const noexcept { return rowIndex_; }
+		[[nodiscard]] const std::string &fieldPath() const noexcept { return fieldPath_; }
+
+	private:
+		size_t rowIndex_;
+		std::string fieldPath_;
 	};
 
 	/**
@@ -118,6 +234,8 @@ namespace zyx {
 
 		Result execute(const std::string &cypher) const;
 		Result execute(const std::string &cypher, const std::unordered_map<std::string, Value> &params) const;
+		[[nodiscard]] QueryBuilder query() const;
+		[[nodiscard]] Result execute(const PreparedQuery &query) const;
 
 		// Transaction-bound direct writes keep their provisional IDs and
 		// read-your-writes visibility inside this transaction only.
@@ -179,8 +297,8 @@ namespace zyx {
 
 		// Transaction support
 		[[nodiscard]] Transaction beginTransaction();
-		// For large direct API imports: commit is WAL-durable, while the main
-		// database-file checkpoint may be deferred to save() or clean close().
+		// For large direct API imports. Commit atomically publishes one durable
+		// native single-file generation through the A/B Superblock pair.
 		[[nodiscard]] Transaction beginBulkTransaction();
 		[[nodiscard]] Transaction beginReadOnlyTransaction();
 		[[nodiscard]] bool hasActiveTransaction() const;
@@ -195,6 +313,11 @@ namespace zyx {
 		// Execute parameterized Cypher query
 		[[nodiscard]] Result execute(const std::string &cypher,
 									 const std::unordered_map<std::string, Value> &params) const;
+
+		/** @brief Starts a typed, storage-neutral native query. */
+		[[nodiscard]] QueryBuilder query() const;
+		/** @brief Executes a typed query through the native logical runtime. */
+		[[nodiscard]] Result execute(const PreparedQuery &query) const;
 
 		// High-performance direct insert APIs
 

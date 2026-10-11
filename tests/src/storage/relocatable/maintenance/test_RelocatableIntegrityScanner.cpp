@@ -678,7 +678,7 @@ TEST_F(RelocatableIntegrityScannerTest, ScansStateDirectoryRecordsAndRejectsStal
 	const StateRecord record{
 			11, "system.config", StateRecordStorageKind::SRS_INLINE, LargeValueId{}, {std::byte{0x31}, std::byte{0x32}}};
 	const StateRecordStoreOptions options{PhysicalSlotId(40), PhysicalSlotId(40), 800};
-	const StateLocation location = states.ensure(record, options);
+	const StateLocation location = states.upsert(record, options);
 	RelocatableIntegrityScanner scanner(io, *metadata);
 	EXPECT_EQ(scanner.scan().state_locations, 1U);
 
@@ -693,7 +693,7 @@ TEST_F(RelocatableIntegrityScannerTest, RejectsStateDirectoryIdsWithoutMatchingR
 	StateRecordStore states(pages, *metadata);
 	const StateRecord record{15, "system.audit", StateRecordStorageKind::SRS_INLINE, LargeValueId{}, {std::byte{0x61}}};
 	const StateRecordStoreOptions options{PhysicalSlotId(40), PhysicalSlotId(40), 804};
-	const StateLocation location = states.ensure(record, options);
+	const StateLocation location = states.upsert(record, options);
 	const StateLocation absent{99, location.page_id, location.slot_id, location.slot_generation};
 	static_cast<void>(metadata->upsertStateLocations(std::span(&absent, 1), {}, nextCheckpointLsn(*metadata)));
 	RelocatableIntegrityScanner scanner(io, *metadata);
@@ -706,7 +706,7 @@ TEST_F(RelocatableIntegrityScannerTest, RejectsStatePagesWithStaleFreeSpaceOrRec
 	StateRecordStore states(pages, *metadata);
 	const StateRecord record{13, "system.cache", StateRecordStorageKind::SRS_INLINE, LargeValueId{}, {std::byte{0x41}}};
 	const StateRecordStoreOptions options{PhysicalSlotId(40), PhysicalSlotId(40), 802};
-	const StateLocation location = states.ensure(record, options);
+	const StateLocation location = states.upsert(record, options);
 	MetadataSnapshotPin snapshot = metadata->openSnapshot();
 	const PageLocation current = metadata->findPageLocation(snapshot, location.page_id);
 	snapshot.release();
@@ -727,7 +727,7 @@ TEST_F(RelocatableIntegrityScannerTest, RejectsStateReferencesToMissingLargeValu
 	StateRecordStore states(pages, *metadata);
 	const StateRecord external{12, "system.payload", StateRecordStorageKind::SRS_LARGE_VALUE, LargeValueId(77), {}};
 	const StateRecordStoreOptions options{PhysicalSlotId(40), PhysicalSlotId(40), 801};
-	static_cast<void>(states.ensure(external, options));
+	static_cast<void>(states.upsert(external, options));
 	RelocatableIntegrityScanner scanner(io, *metadata);
 	EXPECT_THROW(static_cast<void>(scanner.scan()), FormatException);
 }
@@ -748,7 +748,7 @@ TEST_F(RelocatableIntegrityScannerTest, ScansStateReferencesToExistingLargeValue
 	StateRecordStore states(pages, *metadata);
 	const StateRecord external{14, "system.backup", StateRecordStorageKind::SRS_LARGE_VALUE, written.reference.value_id, {}};
 	const StateRecordStoreOptions options{PhysicalSlotId(101), PhysicalSlotId(101), 803};
-	static_cast<void>(states.ensure(external, options));
+	static_cast<void>(states.upsert(external, options));
 	RelocatableIntegrityScanner scanner(io, *metadata);
 	EXPECT_EQ(scanner.scan().state_locations, 1U);
 }
@@ -766,7 +766,7 @@ TEST_F(RelocatableIntegrityScannerTest, RejectsStateReferencesToLargeValuesWithA
 	const LargeValueWriteResult written = values.write(std::array{std::byte{0x51}}, writeOptions, LogSequenceNumber(2));
 	SlottedPagePool pages(io, *metadata);
 	StateRecordStore states(pages, *metadata);
-	static_cast<void>(states.ensure(
+	static_cast<void>(states.upsert(
 			{14, "system.wrong-namespace", StateRecordStorageKind::SRS_LARGE_VALUE, written.reference.value_id, {}},
 			{PhysicalSlotId(101), PhysicalSlotId(101), 803}));
 	RelocatableIntegrityScanner scanner(io, *metadata);
@@ -1483,7 +1483,7 @@ TEST_F(RelocatableIntegrityScannerTest, RejectsDuplicateStateRecordsAcrossStateP
 	SlottedPagePool pages(io, *metadata);
 	StateRecordStore states(pages, *metadata);
 	const StateRecord record{91U, "system.duplicate", StateRecordStorageKind::SRS_INLINE, LargeValueId{}, {std::byte{0x5A}}};
-	static_cast<void>(states.ensure(record, {PhysicalSlotId(40U), PhysicalSlotId(40U), 801U}));
+	static_cast<void>(states.upsert(record, {PhysicalSlotId(40U), PhysicalSlotId(40U), 801U}));
 	const LogSequenceNumber duplicateLsn = nextCheckpointLsn(*metadata);
 
 	const PageOwnerHeader duplicateOwner{

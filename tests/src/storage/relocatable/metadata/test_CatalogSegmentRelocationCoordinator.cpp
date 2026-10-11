@@ -182,6 +182,80 @@ TEST_F(RelocatableMetadataStoreTest, CatalogSegmentRelocationCoordinatorRejectsI
 			FormatError::FERR_INVALID_STATE);
 }
 
+TEST_F(RelocatableMetadataStoreTest, CatalogSegmentRelocationCoordinatorRejectsStaleRetirementGeneration) {
+	CatalogSlotReservationRequest request = reservationRequest(RSS_FIRST_ALLOCATABLE_SEGMENT_ID, 1U);
+	request.kind = SegmentKind::SGK_PROPERTY_PAGE_POOL;
+	request.require_absent = true;
+	const Superblock current = publishReservedSegment(io, request);
+	CatalogRelocationComponents components(io, current);
+
+	MetadataWriteBatch relocationBatch(components.pools, current, LogSequenceNumber(3U));
+	ASSERT_TRUE(components.coordinator
+						.prepareSegmentRelocation(relocationBatch, request.segment_id, request.segment_generation,
+												  PhysicalSlotId(41U), PhysicalSlotId(41U),
+												  [](const CatalogEntry &, const CatalogEntry &) {})
+						.has_value());
+	relocationBatch.publish(components.bootstrap);
+	const Superblock relocated = relocationBatch.candidate();
+	const RetireQueueEntry source =
+			components.coordinator.validateRelocatedSourceRelease(relocated, request.segment_id, Generation(2U));
+
+	// A queue generation below the current Catalog generation cannot describe
+	// the publication that made this source unreachable.
+	RetireQueueEntry stale = source;
+	stale.retired_generation = Generation(1U);
+	MetadataWriteBatch corruptBatch(components.pools, relocated, LogSequenceNumber(4U));
+	components.locations.prepareReplaceRetireQueue(corruptBatch, std::span(&stale, 1U), {});
+	corruptBatch.publish(components.bootstrap);
+	const Superblock corrupted = corruptBatch.candidate();
+
+	expectFormatError(
+			[&] {
+				static_cast<void>(components.coordinator.validateRelocatedSourceRelease(corrupted, request.segment_id,
+																						Generation(2U)));
+			},
+			FormatError::FERR_INVALID_STATE);
+	MetadataWriteBatch releaseBatch(components.pools, corrupted, LogSequenceNumber(5U));
+	expectFormatError([&] { components.coordinator.prepareRelocatedSourceRelease(releaseBatch, stale); },
+					  FormatError::FERR_INVALID_STATE);
+}
+
+TEST_F(RelocatableMetadataStoreTest, CatalogSegmentRelocationCoordinatorRejectsFutureRetirementGeneration) {
+	CatalogSlotReservationRequest request = reservationRequest(RSS_FIRST_ALLOCATABLE_SEGMENT_ID, 1U);
+	request.kind = SegmentKind::SGK_PROPERTY_PAGE_POOL;
+	request.require_absent = true;
+	const Superblock current = publishReservedSegment(io, request);
+	CatalogRelocationComponents components(io, current);
+
+	MetadataWriteBatch relocationBatch(components.pools, current, LogSequenceNumber(3U));
+	ASSERT_TRUE(components.coordinator
+						.prepareSegmentRelocation(relocationBatch, request.segment_id, request.segment_generation,
+											  PhysicalSlotId(41U), PhysicalSlotId(41U),
+											  [](const CatalogEntry &, const CatalogEntry &) {})
+						.has_value());
+	relocationBatch.publish(components.bootstrap);
+	const Superblock relocated = relocationBatch.candidate();
+	const RetireQueueEntry source =
+			components.coordinator.validateRelocatedSourceRelease(relocated, request.segment_id, Generation(2U));
+
+	MetadataWriteBatch corruptBatch(components.pools, relocated, LogSequenceNumber(4U));
+	RetireQueueEntry future = source;
+	future.retired_generation = Generation(corruptBatch.generation().value() + 1U);
+	components.locations.prepareReplaceRetireQueue(corruptBatch, std::span(&future, 1U), {});
+	corruptBatch.publish(components.bootstrap);
+	const Superblock corrupted = corruptBatch.candidate();
+
+	expectFormatError(
+			[&] {
+				static_cast<void>(components.coordinator.validateRelocatedSourceRelease(corrupted, request.segment_id,
+																					Generation(2U)));
+			},
+			FormatError::FERR_INVALID_STATE);
+	MetadataWriteBatch releaseBatch(components.pools, corrupted, LogSequenceNumber(5U));
+	expectFormatError([&] { components.coordinator.prepareRelocatedSourceRelease(releaseBatch, future); },
+					  FormatError::FERR_INVALID_STATE);
+}
+
 TEST_F(RelocatableMetadataStoreTest, CatalogSegmentRelocationCoordinatorRebindsOnlyCurrentFullExtent) {
 	CatalogSlotReservationRequest request = reservationRequest(RSS_FIRST_ALLOCATABLE_SEGMENT_ID, 1U);
 	request.kind = SegmentKind::SGK_CODEBOOK_EXTENT;

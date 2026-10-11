@@ -35,9 +35,9 @@ TEST_F(CypherBasicTest, BytesFunctionAcceptsHexAndByteListLiterals) {
 }
 
 TEST_F(CypherBasicTest, BytesFunctionRejectsMalformedHexAndOutOfRangeListValues) {
-	EXPECT_THROW((void) execute("RETURN bytes('0')"), std::runtime_error);
-	EXPECT_THROW((void) execute("RETURN bytes('zz')"), std::runtime_error);
-	EXPECT_THROW((void) execute("RETURN bytes([256])"), std::runtime_error);
+	EXPECT_THROW((void) execute("RETURN bytes('0')"), std::invalid_argument);
+	EXPECT_THROW((void) execute("RETURN bytes('zz')"), std::invalid_argument);
+	EXPECT_THROW((void) execute("RETURN bytes([256])"), std::invalid_argument);
 }
 
 // --- Basic CRUD ---

@@ -42,10 +42,14 @@ struct QueryContext {
 	std::unordered_map<std::string, PropertyValue> parameters;
 	ExecMode execMode = ExecMode::EM_FULL;
 	QueryGuard *guard = nullptr;
-	int maxVarLengthDepth = 50;
+	// An unset value delegates to the Database-owned policy. A caller can supply
+	// a smaller value for one execution, but QueryEngine never lets it raise the
+	// durable database ceiling.
+	std::optional<int> maxVarLengthDepth;
 	CsvImportPolicy csv_import_policy;
 
 	void checkGuard() const;
+	void checkGuardNow() const;
 };
 
 } // namespace graph::query

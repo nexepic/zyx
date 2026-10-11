@@ -216,6 +216,57 @@ namespace graph::query::execution {
 		EXPECT_THROW(static_cast<void>(execute(smallFileLimit)), std::runtime_error);
 	}
 
+	TEST_F(LogicalPlanLoadCsvRuntimeTest, RejectsAmbiguousLocalUrisAndInvalidImportRoots) {
+		const fs::path csv = writeFile("valid.csv", "value\nentry\n");
+		CsvOnlyBackend backend;
+		LogicalPlanReadRuntime runtime(backend);
+		QueryPlan plan = parse("LOAD CSV FROM $uri AS row RETURN row");
+		ASSERT_NE(plan.root, nullptr);
+		const auto execute = [&runtime, &plan](const QueryContext &queryContext) {
+			return runtime.executeToQueryResult(*plan.root, bounds(), queryContext);
+		};
+
+		for (const std::string &uri: {"file://relative.csv", "file:///valid.csv?query", "file:///valid.csv#fragment"}) {
+			QueryContext invalidUri = context();
+			invalidUri.parameters.emplace("uri", PropertyValue(uri));
+			EXPECT_THROW(static_cast<void>(execute(invalidUri)), std::invalid_argument) << uri;
+		}
+
+		QueryContext rootIsFile = context();
+		rootIsFile.csv_import_policy.import_root = csv;
+		rootIsFile.parameters.emplace("uri", PropertyValue(fileUri(csv)));
+		EXPECT_THROW(static_cast<void>(execute(rootIsFile)), std::runtime_error);
+
+		QueryContext directoryIsNotFile = context();
+		directoryIsNotFile.parameters.emplace("uri", PropertyValue(fileUri(root_)));
+		EXPECT_THROW(static_cast<void>(execute(directoryIsNotFile)), std::runtime_error);
+	}
+
+	TEST_F(LogicalPlanLoadCsvRuntimeTest, RejectsEveryInconsistentImportLimitBeforeOpeningTheFile) {
+		const fs::path csv = writeFile("limits.csv", "value\nentry\n");
+		CsvOnlyBackend backend;
+		LogicalPlanReadRuntime runtime(backend);
+		QueryPlan plan = parse("LOAD CSV FROM $uri AS row RETURN row");
+		ASSERT_NE(plan.root, nullptr);
+		const auto execute = [&runtime, &plan](const QueryContext &queryContext) {
+			return runtime.executeToQueryResult(*plan.root, bounds(), queryContext);
+		};
+
+		const auto reject = [&](const std::function<void(QueryContext &)> &configure) {
+			QueryContext invalid = context();
+			invalid.parameters.emplace("uri", PropertyValue(fileUri(csv)));
+			configure(invalid);
+			EXPECT_THROW(static_cast<void>(execute(invalid)), std::invalid_argument);
+		};
+
+		reject([](QueryContext &value) { value.csv_import_policy.maximum_file_bytes = 0U; });
+		reject([](QueryContext &value) { value.csv_import_policy.maximum_record_bytes = 0U; });
+		reject([](QueryContext &value) { value.csv_import_policy.maximum_record_bytes = 64U; value.csv_import_policy.maximum_file_bytes = 63U; });
+		reject([](QueryContext &value) { value.csv_import_policy.maximum_columns = 0U; });
+		reject([](QueryContext &value) { value.csv_import_policy.maximum_field_bytes = 0U; });
+		reject([](QueryContext &value) { value.csv_import_policy.maximum_field_bytes = 64U; value.csv_import_policy.maximum_file_bytes = 63U; });
+	}
+
 	TEST_F(LogicalPlanLoadCsvRuntimeTest, RejectsResourceExhaustionAndAmbiguousHeaders) {
 		const fs::path rows = writeFile("rows.csv", "A\nB\n");
 		CsvOnlyBackend backend;

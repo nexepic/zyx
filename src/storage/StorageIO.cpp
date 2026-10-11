@@ -14,6 +14,7 @@
 #include <exception>
 #include <fstream>
 #include <limits>
+#include <mutex>
 #include <span>
 #include <system_error>
 #include "graph/storage/PreadHelper.hpp"
@@ -25,8 +26,12 @@ namespace graph::storage {
 
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
 		thread_local StorageIO::NativeWriteHookForTesting nativeWriteHookForTesting;
+		std::mutex allThreadNativeWriteHookMutex;
+		StorageIO::NativeWriteHookForTesting allThreadNativeWriteHookForTesting;
 		thread_local StorageIO::NativeReadHookForTesting nativeReadHookForTesting;
 		thread_local StorageIO::NativeSyncHookForTesting nativeSyncHookForTesting;
+		std::mutex allThreadNativeSyncHookMutex;
+		StorageIO::NativeSyncHookForTesting allThreadNativeSyncHookForTesting;
 		thread_local StorageIO::NativeTruncateHookForTesting nativeTruncateHookForTesting;
 #endif
 
@@ -43,7 +48,7 @@ namespace graph::storage {
 			}
 		}
 
-		[[noreturn]] void throwNativeWriteError(uint64_t offset) {
+		[[noreturn]] void throwNativeIoError(std::string operation) {
 #ifdef _WIN32
 			const DWORD nativeError = GetLastError();
 			const std::error_code error = nativeError == ERROR_SUCCESS ? std::make_error_code(std::errc::io_error)
@@ -54,7 +59,7 @@ namespace graph::storage {
 			const std::error_code error = nativeError == 0 ? std::make_error_code(std::errc::io_error)
 														   : std::error_code(nativeError, std::generic_category());
 #endif
-			throw std::system_error(error, "StorageIO::writeAt pwrite failed at offset " + std::to_string(offset));
+			throw std::system_error(error, std::move(operation));
 		}
 
 	} // namespace
@@ -94,6 +99,23 @@ namespace graph::storage {
 
 	StorageIO::ScopedNativeWriteHookForTesting::~ScopedNativeWriteHookForTesting() { nativeWriteHookForTesting = {}; }
 
+	StorageIO::ScopedAllThreadNativeWriteHookForTesting::ScopedAllThreadNativeWriteHookForTesting(
+			NativeWriteHookForTesting hook) {
+		if (!hook) {
+			throw std::invalid_argument("StorageIO all-thread native write test hook is empty");
+		}
+		std::lock_guard lock(allThreadNativeWriteHookMutex);
+		if (allThreadNativeWriteHookForTesting) {
+			throw std::logic_error("StorageIO all-thread native write test hook is already active");
+		}
+		allThreadNativeWriteHookForTesting = std::move(hook);
+	}
+
+	StorageIO::ScopedAllThreadNativeWriteHookForTesting::~ScopedAllThreadNativeWriteHookForTesting() {
+		std::lock_guard lock(allThreadNativeWriteHookMutex);
+		allThreadNativeWriteHookForTesting = {};
+	}
+
 	StorageIO::ScopedNativeReadHookForTesting::ScopedNativeReadHookForTesting(NativeReadHookForTesting hook) {
 		if (!hook) {
 			throw std::invalid_argument("StorageIO native read test hook is empty");
@@ -117,6 +139,23 @@ namespace graph::storage {
 	}
 
 	StorageIO::ScopedNativeSyncHookForTesting::~ScopedNativeSyncHookForTesting() { nativeSyncHookForTesting = {}; }
+
+	StorageIO::ScopedAllThreadNativeSyncHookForTesting::ScopedAllThreadNativeSyncHookForTesting(
+			NativeSyncHookForTesting hook) {
+		if (!hook) {
+			throw std::invalid_argument("StorageIO all-thread native sync test hook is empty");
+		}
+		std::lock_guard lock(allThreadNativeSyncHookMutex);
+		if (allThreadNativeSyncHookForTesting) {
+			throw std::logic_error("StorageIO all-thread native sync test hook is already active");
+		}
+		allThreadNativeSyncHookForTesting = std::move(hook);
+	}
+
+	StorageIO::ScopedAllThreadNativeSyncHookForTesting::~ScopedAllThreadNativeSyncHookForTesting() {
+		std::lock_guard lock(allThreadNativeSyncHookMutex);
+		allThreadNativeSyncHookForTesting = {};
+	}
 
 	StorageIO::ScopedNativeTruncateHookForTesting::ScopedNativeTruncateHookForTesting(
 			NativeTruncateHookForTesting hook) {
@@ -168,6 +207,15 @@ namespace graph::storage {
 		requireAddressableRange(key.page_offset, size, operation);
 	}
 
+	void StorageIO::requireTypedPageRange(BufferPoolPageKey firstKey, size_t size, const char *operation) {
+		if (firstKey.generation == 0U || size == 0U || size % RSS_BUFFER_POOL_PAGE_BYTES != 0U ||
+			firstKey.page_offset % RSS_BUFFER_POOL_PAGE_BYTES != 0U) {
+			throw std::invalid_argument(std::string("StorageIO::") + operation +
+										" requires a nonempty aligned complete typed-page range");
+		}
+		requireAddressableRange(firstKey.page_offset, size, operation);
+	}
+
 	void StorageIO::writeAt(uint64_t offset, const void *buf, size_t size) {
 		if (!buf || size == 0)
 			return;
@@ -198,6 +246,58 @@ namespace graph::storage {
 		recordWrite(size);
 	}
 
+	void StorageIO::writePages(BufferPoolPageKey firstKey, const void *buf, size_t size) {
+		if (buf == nullptr) {
+			throw std::invalid_argument("StorageIO::writePages typed page buffer is null");
+		}
+		requireTypedPageRange(firstKey, size, "writePages");
+		requireWritable("writePages");
+		if (const std::shared_ptr<BufferPool> pool = bufferPool()) {
+			pool->writePages(firstKey, {static_cast<const std::byte *>(buf), size});
+			recordWrite(size);
+			return;
+		}
+		writeAtUncached(firstKey.page_offset, buf, size);
+		recordWrite(size);
+	}
+
+	void StorageIO::writePagesThrough(BufferPoolPageKey firstKey, const void *buf, size_t size) {
+		if (buf == nullptr) {
+			throw std::invalid_argument("StorageIO::writePagesThrough typed page buffer is null");
+		}
+		requireTypedPageRange(firstKey, size, "writePagesThrough");
+		requireWritable("writePagesThrough");
+		if (const std::shared_ptr<BufferPool> pool = bufferPool()) {
+			pool->writePagesThrough(firstKey, {static_cast<const std::byte *>(buf), size});
+			recordWrite(size);
+			return;
+		}
+		writeAtUncached(firstKey.page_offset, buf, size);
+		recordWrite(size);
+	}
+
+	void StorageIO::writeControlRecord(BufferPoolPageKey key, size_t byteOffset, std::span<const std::byte> bytes) {
+		if (bytes.empty() || byteOffset > RSS_BUFFER_POOL_PAGE_BYTES ||
+			bytes.size() > RSS_BUFFER_POOL_PAGE_BYTES - byteOffset) {
+			throw std::invalid_argument("StorageIO::writeControlRecord range is outside one native page");
+		}
+		// This operation preserves a previously complete control record.  It must
+		// never route through generic byte I/O, which has generation zero and could
+		// silently replace the generation-tagged cache entry for this page.
+		requireTypedPageKey(key, RSS_BUFFER_POOL_PAGE_BYTES, "writeControlRecord");
+		requireWritable("writeControlRecord");
+		const uint64_t offset = key.page_offset + static_cast<uint64_t>(byteOffset);
+		requireAddressableRange(offset, bytes.size(), "writeControlRecord");
+		if (const std::shared_ptr<BufferPool> pool = bufferPool()) {
+			// Invalidation also flushes an earlier complete page image before the
+			// exact-record write.  On failure no stale cache entry remains that could
+			// overwrite the surviving control record during a later flush.
+			pool->invalidateRange(key.page_offset, RSS_BUFFER_POOL_PAGE_BYTES);
+		}
+		writeAtUncached(offset, bytes.data(), bytes.size());
+		recordWrite(bytes.size());
+	}
+
 	void StorageIO::writeAtUncached(uint64_t offset, const void *buf, size_t size) {
 		if (!buf || size == 0U) {
 			return;
@@ -207,15 +307,26 @@ namespace graph::storage {
 
 		if (writeFd_ != INVALID_FILE_HANDLE) {
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
+			NativeWriteHookForTesting allThreadHook;
+			if (!nativeWriteHookForTesting) {
+				std::lock_guard lock(allThreadNativeWriteHookMutex);
+				allThreadHook = allThreadNativeWriteHookForTesting;
+			}
 			const pwrite_ssize_t written =
 					nativeWriteHookForTesting
 							? nativeWriteHookForTesting(writeFd_, buf, size, static_cast<pwrite_off_t>(offset))
-							: portable_pwrite(writeFd_, buf, size, static_cast<pwrite_off_t>(offset));
+					: allThreadHook ? allThreadHook(writeFd_, buf, size, static_cast<pwrite_off_t>(offset))
+									: portable_pwrite(writeFd_, buf, size, static_cast<pwrite_off_t>(offset));
 #else
 			const pwrite_ssize_t written = portable_pwrite(writeFd_, buf, size, static_cast<pwrite_off_t>(offset));
 #endif
-			if (written < 0 || static_cast<size_t>(written) != size) {
-				throwNativeWriteError(offset);
+			if (written < 0) {
+				throwNativeIoError("StorageIO::writeAt pwrite failed at offset " + std::to_string(offset));
+			}
+			if (static_cast<size_t>(written) != size) {
+				throw std::system_error(std::make_error_code(std::errc::io_error),
+										"StorageIO::writeAt native write was incomplete at offset " +
+												std::to_string(offset));
 			}
 		} else {
 			std::lock_guard lock(stream_mutex_);
@@ -244,6 +355,16 @@ namespace graph::storage {
 		return result;
 	}
 
+	size_t StorageIO::readAtSequential(uint64_t offset, void *buf, size_t size) const {
+		if (!buf || size == 0U) {
+			return 0U;
+		}
+		requireAddressableRange(offset, size, "readAtSequential");
+		const size_t result = readAtUncached(offset, buf, size);
+		recordRead(result);
+		return result;
+	}
+
 	size_t StorageIO::readAt(BufferPoolPageKey key, void *buf, size_t size, BufferPoolReadHint hint) const {
 		if (buf == nullptr) {
 			throw std::invalid_argument("StorageIO::readAt typed page buffer is null");
@@ -258,6 +379,21 @@ namespace graph::storage {
 			return result;
 		}
 		const size_t result = readAtUncached(key.page_offset, buf, size);
+		recordRead(result);
+		return result;
+	}
+
+	size_t StorageIO::readPages(BufferPoolPageKey firstKey, void *buf, size_t size, BufferPoolReadHint hint) const {
+		if (buf == nullptr) {
+			throw std::invalid_argument("StorageIO::readPages typed page buffer is null");
+		}
+		requireTypedPageRange(firstKey, size, "readPages");
+		if (const std::shared_ptr<BufferPool> pool = bufferPool()) {
+			const size_t result = pool->readPages(firstKey, {static_cast<std::byte *>(buf), size}, hint);
+			recordRead(result);
+			return result;
+		}
+		const size_t result = readAtUncached(firstKey.page_offset, buf, size);
 		recordRead(result);
 		return result;
 	}
@@ -369,7 +505,7 @@ namespace graph::storage {
 				portable_ftruncate(writeFd_, size);
 #endif
 		if (truncateResult != 0) {
-			throwNativeWriteError(size);
+			throwNativeIoError("StorageIO::truncate native truncate failed at size " + std::to_string(size));
 		}
 	}
 
@@ -396,23 +532,45 @@ namespace graph::storage {
 		return static_cast<uint64_t>(endPosition);
 	}
 
-	void StorageIO::sync() {
+	void StorageIO::sync() { sync(StorageIOSyncKind::SIOSK_GENERAL); }
+
+	void StorageIO::sync(StorageIOSyncKind kind) {
+		if (kind != StorageIOSyncKind::SIOSK_GENERAL && kind != StorageIOSyncKind::SIOSK_DATA_FENCE &&
+			kind != StorageIOSyncKind::SIOSK_SUPERBLOCK_FENCE) {
+			throw std::invalid_argument("StorageIO::sync requires a known sync kind");
+		}
 		if (const std::shared_ptr<BufferPool> pool = bufferPool()) {
 			pool->flush();
 		}
 		syncUncached();
 		saturatingAdd(sync_calls_, 1U);
+		if (kind == StorageIOSyncKind::SIOSK_DATA_FENCE) {
+			saturatingAdd(data_sync_calls_, 1U);
+		} else if (kind == StorageIOSyncKind::SIOSK_SUPERBLOCK_FENCE) {
+			saturatingAdd(superblock_sync_calls_, 1U);
+		}
 	}
 
 	void StorageIO::syncUncached() {
 		if (writeFd_ != INVALID_FILE_HANDLE) {
 #ifdef ZYX_ENABLE_STORAGE_TEST_HOOKS
-			const int result = nativeSyncHookForTesting ? nativeSyncHookForTesting(writeFd_) : portable_fsync(writeFd_);
+			if (nativeSyncHookForTesting) {
+				if (nativeSyncHookForTesting(writeFd_) != 0) {
+					throwNativeIoError("StorageIO::sync native durable sync failed");
+				}
+				return;
+			}
+			NativeSyncHookForTesting allThreadHook;
+			{
+				std::lock_guard lock(allThreadNativeSyncHookMutex);
+				allThreadHook = allThreadNativeSyncHookForTesting;
+			}
+			const int result = allThreadHook ? allThreadHook(writeFd_) : portable_fsync(writeFd_);
 #else
 			const int result = portable_fsync(writeFd_);
 #endif
 			if (result != 0) {
-				throw std::runtime_error("StorageIO::sync native durable sync failed");
+				throwNativeIoError("StorageIO::sync native durable sync failed");
 			}
 		} else if (stream_) {
 			std::lock_guard lock(stream_mutex_);
@@ -471,6 +629,12 @@ namespace graph::storage {
 		}
 	}
 
+	void StorageIO::discardBufferPoolForExternalRebase() {
+		if (const std::shared_ptr<BufferPool> pool = bufferPool()) {
+			pool->discardForExternalRebase();
+		}
+	}
+
 	void StorageIO::prefetchPages(std::span<const BufferPoolPageKey> keys, BufferPoolReadHint admissionHint) const {
 		if (keys.empty()) {
 			return;
@@ -505,10 +669,11 @@ namespace graph::storage {
 	}
 
 	StorageIOStats StorageIO::stats() const {
-		return {read_bytes_.load(std::memory_order_relaxed),	 write_bytes_.load(std::memory_order_relaxed),
-				reserved_bytes_.load(std::memory_order_relaxed), read_calls_.load(std::memory_order_relaxed),
-				write_calls_.load(std::memory_order_relaxed),	 reserve_calls_.load(std::memory_order_relaxed),
-				sync_calls_.load(std::memory_order_relaxed)};
+		return {read_bytes_.load(std::memory_order_relaxed),		   write_bytes_.load(std::memory_order_relaxed),
+				reserved_bytes_.load(std::memory_order_relaxed),	   read_calls_.load(std::memory_order_relaxed),
+				write_calls_.load(std::memory_order_relaxed),		   reserve_calls_.load(std::memory_order_relaxed),
+				sync_calls_.load(std::memory_order_relaxed),		   data_sync_calls_.load(std::memory_order_relaxed),
+				superblock_sync_calls_.load(std::memory_order_relaxed)};
 	}
 
 	void StorageIO::resetStats() {
@@ -519,6 +684,8 @@ namespace graph::storage {
 		write_calls_.store(0U, std::memory_order_relaxed);
 		reserve_calls_.store(0U, std::memory_order_relaxed);
 		sync_calls_.store(0U, std::memory_order_relaxed);
+		data_sync_calls_.store(0U, std::memory_order_relaxed);
+		superblock_sync_calls_.store(0U, std::memory_order_relaxed);
 	}
 
 } // namespace graph::storage

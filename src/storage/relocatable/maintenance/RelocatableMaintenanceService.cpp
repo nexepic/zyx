@@ -7,6 +7,9 @@
  **/
 
 #include "graph/storage/relocatable/maintenance/RelocatableMaintenanceService.hpp"
+#include "graph/storage/relocatable/maintenance/SingleWriterSaturatingCounter.hpp"
+#include "graph/storage/relocatable/maintenance/LargeValueMaintenanceJournal.hpp"
+#include "graph/storage/relocatable/maintenance/LargeValueReachabilityReclaimer.hpp"
 
 #include <algorithm>
 #include <limits>
@@ -21,6 +24,7 @@
 #include "graph/storage/relocatable/allocation/PhysicalSegmentAllocator.hpp"
 #include "graph/storage/relocatable/allocation/SlottedPagePool.hpp"
 #include "graph/storage/relocatable/metadata/RelocatableMetadataStore.hpp"
+#include "graph/storage/relocatable/metadata/StateRecordStore.hpp"
 #include "graph/storage/relocatable/vector/VectorCodebookStore.hpp"
 #include "graph/storage/relocatable/vector/VectorManifestStore.hpp"
 #include "graph/storage/relocatable/vector/VectorPageStore.hpp"
@@ -45,25 +49,49 @@ namespace graph::storage {
 			uint64_t vector_after_index_id = 0U;
 		};
 
-		void saturatingIncrement(std::atomic<uint64_t> &counter) {
-			uint64_t current = counter.load(std::memory_order_relaxed);
-			while (current != std::numeric_limits<uint64_t>::max() &&
-				   !counter.compare_exchange_weak(current, current + 1U, std::memory_order_relaxed,
-																					 std::memory_order_relaxed)) {
+		struct GlobalAdjacencyPoolReclaimTaskState {
+			RelocatableGlobalAdjacencyPoolReclaimCandidate candidate{};
+			bool awaiting_release = false;
+		};
+
+		constexpr uint64_t GLOBAL_ADJACENCY_POOL_RECLAIM_DEDUPLICATION_KEY = 0x47415052U;
+		constexpr uint64_t LARGE_VALUE_REACHABILITY_RECLAIM_DEDUPLICATION_KEY = 0x4C565252U;
+
+		[[nodiscard]] uint64_t largeValueReclamationReservation(
+				const LargeValueReachabilityReclaimOptions &options,
+				const RelocatableMaintenanceLoopPolicy &policy) {
+			if (options.maximum_retirements >
+				(std::numeric_limits<uint64_t>::max() - RSS_PAGE_SIZE) / RSS_PAGE_SIZE) {
+				throw std::overflow_error("LargeValue maintenance retirement bound overflows its admission budget");
 			}
+			// Charge one page for every possible retirement plus one State-page
+			// journal publication. Queue admission must cover durable progress, not
+			// just the eventual LargeValue retirement.
+			const uint64_t retirementBytes =
+				static_cast<uint64_t>(options.maximum_retirements) * RSS_PAGE_SIZE + RSS_PAGE_SIZE;
+			const uint64_t reservedBytes = std::max<uint64_t>(RSS_SEGMENT_SIZE, retirementBytes);
+			const uint64_t cycleBudget = std::min(policy.maximum_rewrite_bytes_per_cycle,
+					policy.maximum_outstanding_rewrite_bytes);
+			if (reservedBytes > cycleBudget) {
+				throw std::length_error(
+						"LargeValue maintenance retirement bound exceeds the configured maintenance cycle budget");
+			}
+			return reservedBytes;
 		}
 
-		void saturatingAdd(std::atomic<uint64_t> &counter, uint64_t increment) {
-			uint64_t current = counter.load(std::memory_order_relaxed);
-			while (current != std::numeric_limits<uint64_t>::max()) {
-				const uint64_t updated = increment > std::numeric_limits<uint64_t>::max() - current
-													 ? std::numeric_limits<uint64_t>::max()
-													 : current + increment;
-				if (counter.compare_exchange_weak(current, updated, std::memory_order_relaxed,
-												  std::memory_order_relaxed)) {
-					return;
-				}
+		[[nodiscard]] LargeValueMaintenanceJournalStoreOptions largeValueJournalOptions(
+				const LargeValueReachabilityReclaimOptions &options) {
+			const uint8_t invalid = static_cast<uint8_t>(!options.first_journal_state_slot.isValid()) |
+									static_cast<uint8_t>(!options.last_journal_state_slot.isValid()) |
+									static_cast<uint8_t>(options.first_journal_state_slot > options.last_journal_state_slot) |
+									static_cast<uint8_t>(options.journal_state_page_owner_id == 0U) |
+									static_cast<uint8_t>(options.journal_state_id == 0U);
+			if (invalid != 0U) {
+				throw std::invalid_argument(
+						"LargeValue maintenance requires an explicit reserved State journal owner, ID, and slot range");
 			}
+			return {{options.first_journal_state_slot, options.last_journal_state_slot,
+					 options.journal_state_page_owner_id}, options.journal_state_id};
 		}
 
 		[[nodiscard]] RelocatableMaintenanceTaskResult pageResult(const RelocatablePageCompactionRunResult &run) {
@@ -129,12 +157,16 @@ namespace graph::storage {
 			VectorManifestStore &vectorManifests, EntityPageStore &entities, VectorCodebookStore &codebooks,
 			LargeValueStore &largeValues, PhysicalSegmentAllocator &physical, RelocatableMetadataStore &metadata,
 			std::mutex &publicationMutex, RelocatableMaintenanceOptions options,
-			RelocatableMaintenanceFailureHandler failureHandler, std::function<bool()> writeAllowed,
+		RelocatableMaintenanceFailureHandler failureHandler, std::function<bool()> writeAllowed,
 		RelocatableVectorRebuildExecutor vectorRebuild,
-		RelocatableVectorRebuildDebtScanner vectorRebuildDebtScanner) :
-		options_(validatedOptions(std::move(options))), metadata_(metadata), entities_(entities), publication_mutex_(publicationMutex),
+		RelocatableVectorRebuildDebtScanner vectorRebuildDebtScanner,
+		RelocatableGlobalAdjacencyPoolReclaimCandidateScanner globalAdjacencyPoolReclaimCandidateScanner) :
+		options_(validatedOptions(std::move(options))), pages_(pages), large_values_(largeValues), metadata_(metadata),
+			entities_(entities),
+			publication_mutex_(publicationMutex),
 			write_allowed_(std::move(writeAllowed)), vector_rebuild_(std::move(vectorRebuild)),
 			vector_rebuild_debt_scanner_(std::move(vectorRebuildDebtScanner)),
+			global_adjacency_pool_reclaim_candidate_scanner_(std::move(globalAdjacencyPoolReclaimCandidateScanner)),
 		property_coordinator_(pages, metadata),
 		entity_coordinator_(pages, entities, metadata),
 		btree_coordinator_(pages, btreePages, metadata), vector_coordinator_(pages, vectorPages, metadata),
@@ -193,9 +225,77 @@ namespace graph::storage {
 		return enqueuePageCompaction(entity_scheduler_, entity_coordinator_, source, destination, pageBudget);
 	}
 
-	uint64_t RelocatableMaintenanceService::enqueueLargeValuePageCompaction(SegmentId source, SegmentId destination,
-																		 uint32_t pageBudget) {
+	uint64_t RelocatableMaintenanceService::enqueueLargeValuePageCompaction(SegmentId source, SegmentId destination, uint32_t pageBudget) {
 		return enqueuePageCompaction(large_value_scheduler_, large_value_coordinator_, source, destination, pageBudget);
+	}
+
+	uint64_t RelocatableMaintenanceService::enqueueLargeValueReachabilityReclamation(
+			const LargeValueReachabilityReclaimOptions &options) {
+		const LargeValueMaintenanceJournalStoreOptions journalOptions = largeValueJournalOptions(options);
+		const uint64_t reservedBytes = largeValueReclamationReservation(options, options_.loop);
+		return loop_.submit(reservedBytes, [this, options, journalOptions, reservedBytes] {
+			ensureWritesAllowed();
+			std::lock_guard publicationLock(publication_mutex_);
+			ensureWritesAllowed();
+			StateRecordStore states(pages_, metadata_);
+			LargeValueMaintenanceJournalStore journalStore(states, metadata_, journalOptions);
+			LargeValueReachabilityReclaimer reclaimer(large_values_, pages_, metadata_);
+			MetadataSnapshotPin snapshot = metadata_.openSnapshot();
+			const std::optional<LargeValueMaintenanceJournal> persisted = journalStore.load(snapshot);
+			LargeValueMaintenanceJournal journal;
+			const bool resuming = persisted.has_value() &&
+					persisted->scan_generation == snapshot.superblock().generation;
+			if (resuming) {
+				journal = *persisted;
+			} else {
+				journal.scan_generation = snapshot.superblock().generation;
+			}
+			const LargeValueMaintenanceJournalAdvance advancement = reclaimer.advanceJournal(snapshot, journal, options);
+			if (advancement.completed_without_candidates) {
+				if (persisted.has_value()) {
+					LargeValueMaintenanceJournal reset;
+					reset.scan_generation = snapshot.superblock().generation;
+					static_cast<void>(journalStore.saveAfterScan(snapshot, reset));
+				}
+				snapshot.release();
+				return RelocatableMaintenanceTaskResult{RelocatableMaintenanceTaskStatus::VMTS_COMPLETED,
+						persisted.has_value() ? RSS_PAGE_SIZE : 0U, 0U};
+			}
+			// The first RECLAIM-phase record must be durable before it can authorize
+			// deletion. A crash after the final State scan therefore resumes from
+			// evidence, never from an in-memory phase transition.
+			if (journal.phase != LargeValueMaintenanceJournalPhase::LVMJP_RECLAIM) {
+				static_cast<void>(journalStore.saveAfterScan(snapshot, advancement.journal));
+				snapshot.release();
+				return RelocatableMaintenanceTaskResult{RelocatableMaintenanceTaskStatus::VMTS_DEFERRED, RSS_PAGE_SIZE, 0U};
+			}
+
+			const LargeValueReachabilityReclaimReport report =
+					reclaimer.reclaimJournal(snapshot, advancement.journal, options, nextCheckpointLsn());
+			const uint64_t retiredPages = report.retired_manifest_pages + report.retired_data_pages;
+			if (retiredPages > std::numeric_limits<uint64_t>::max() / RSS_PAGE_SIZE) {
+				throw std::overflow_error("LargeValue maintenance reclaimed-page byte count overflow");
+			}
+			const uint64_t retiredBytes = retiredPages * RSS_PAGE_SIZE;
+			if (retiredBytes > reservedBytes - RSS_PAGE_SIZE) {
+				throw std::logic_error("LargeValue maintenance exceeded its admitted retirement budget");
+			}
+			MetadataSnapshotPin resetSnapshot = metadata_.openSnapshot();
+			LargeValueMaintenanceJournal reset;
+			reset.scan_generation = resetSnapshot.superblock().generation;
+			if (!advancement.journal.manifest_scan_exhausted) {
+				reset.manifest_after_value_id = advancement.journal.manifest_after_value_id;
+			}
+			static_cast<void>(journalStore.saveAfterScan(resetSnapshot, reset));
+			resetSnapshot.release();
+			// Retired frames and the durable journal update are charged against the
+			// same bounded work budget used by rewrite tasks.
+			return RelocatableMaintenanceTaskResult{
+					advancement.journal.manifest_scan_exhausted ? RelocatableMaintenanceTaskStatus::VMTS_COMPLETED
+																					 : RelocatableMaintenanceTaskStatus::VMTS_DEFERRED,
+					retiredBytes + RSS_PAGE_SIZE,
+					retiredBytes};
+		}, LARGE_VALUE_REACHABILITY_RECLAIM_DEDUPLICATION_KEY);
 	}
 
 	uint64_t RelocatableMaintenanceService::enqueueBTreePageCompaction(SegmentId source, SegmentId destination,
@@ -209,8 +309,69 @@ namespace graph::storage {
 	}
 
 	uint64_t RelocatableMaintenanceService::enqueueVectorManifestCompaction(SegmentId source, SegmentId destination,
-																	  uint32_t pageBudget) {
+																 uint32_t pageBudget) {
 		return enqueuePageCompaction(manifest_scheduler_, manifest_coordinator_, source, destination, pageBudget);
+	}
+
+	uint64_t RelocatableMaintenanceService::enqueueGlobalAdjacencyPoolReclamation() {
+		if (!global_adjacency_pool_reclaim_candidate_scanner_) {
+			throw std::logic_error(
+					"relocatable maintenance has no global adjacency pool reclamation candidate scanner");
+		}
+		auto state = std::make_shared<GlobalAdjacencyPoolReclaimTaskState>();
+		return loop_.submit(RSS_SEGMENT_SIZE, [this, state] {
+			ensureWritesAllowed();
+			std::lock_guard publicationLock(publication_mutex_);
+			ensureWritesAllowed();
+			if (state->awaiting_release) {
+				if (!btree_coordinator_.releaseRetiredSlottedPool(
+							state->candidate.segment_id, state->candidate.generation, nextCheckpointLsn())) {
+					return RelocatableMaintenanceTaskResult{RelocatableMaintenanceTaskStatus::VMTS_DEFERRED, 0U, 0U};
+				}
+				state->candidate = {};
+				state->awaiting_release = false;
+				global_adjacency_pools_released_.increment();
+				// Keep this one bounded task admitted while it drains the next pool.
+				return RelocatableMaintenanceTaskResult{
+						RelocatableMaintenanceTaskStatus::VMTS_DEFERRED, 0U, RSS_SEGMENT_SIZE};
+			}
+
+			const std::optional<RelocatableGlobalAdjacencyPoolReclaimCandidate> candidate =
+					global_adjacency_pool_reclaim_candidate_scanner_();
+			if (!candidate.has_value()) {
+				return RelocatableMaintenanceTaskResult{};
+			}
+			if (!candidate->segment_id.isValid() || !candidate->generation.isValid()) {
+				throw std::logic_error(
+						"relocatable global adjacency pool reclamation received an invalid candidate identity");
+			}
+			switch (candidate->state) {
+				case RelocatableGlobalAdjacencyPoolReclaimState::RGAPRS_SEALED:
+					pages_.reclaimRetiredFrames(candidate->segment_id);
+					static_cast<void>(
+							pages_.retireEmptyPool(candidate->segment_id, candidate->generation, nextCheckpointLsn()));
+					global_adjacency_pools_retired_.increment();
+					break;
+				case RelocatableGlobalAdjacencyPoolReclaimState::RGAPRS_RETIRED:
+					// A previous process made retirement durable; only its deferred
+					// snapshot-safe physical-slot release remains.
+					break;
+				default:
+					throw std::logic_error(
+							"relocatable global adjacency pool reclamation received an invalid candidate state");
+			}
+			state->candidate = *candidate;
+			state->awaiting_release = true;
+			if (!btree_coordinator_.releaseRetiredSlottedPool(
+						candidate->segment_id, candidate->generation, nextCheckpointLsn())) {
+				return RelocatableMaintenanceTaskResult{RelocatableMaintenanceTaskStatus::VMTS_DEFERRED, 0U, 0U};
+			}
+			state->candidate = {};
+			state->awaiting_release = false;
+			global_adjacency_pools_released_.increment();
+			return RelocatableMaintenanceTaskResult{RelocatableMaintenanceTaskStatus::VMTS_DEFERRED, 0U,
+																RSS_SEGMENT_SIZE};
+		}, GLOBAL_ADJACENCY_POOL_RECLAIM_DEDUPLICATION_KEY);
 	}
 
 	uint64_t RelocatableMaintenanceService::enqueuePageCompaction(RelocatablePageCompactionScheduler &scheduler,
@@ -353,11 +514,12 @@ namespace graph::storage {
 			if (scan.scanned_metadata_pages > options_.vector_rebuild_recovery_metadata_pages_per_cycle ||
 				(scan.last_scanned_index_id != 0U && scan.last_scanned_index_id <= state->vector_after_index_id) ||
 				(scan.index_id.has_value() &&
-					(*scan.index_id <= state->vector_after_index_id || scan.last_scanned_index_id != *scan.index_id))) {
+					(*scan.index_id == 0U || scan.last_scanned_index_id != *scan.index_id)) ||
+				(!scan.index_id.has_value() && !scan.exhausted && scan.last_scanned_index_id == 0U)) {
 				throw std::logic_error(
-						"relocatable Vector rebuild recovery scanner returned a nonmonotonic or unbounded result");
+						"relocatable Vector rebuild recovery scanner returned a nonmonotonic, unbounded, or stalled result");
 			}
-			saturatingAdd(vector_rebuild_recovery_scanned_metadata_pages_, scan.scanned_metadata_pages);
+			vector_rebuild_recovery_scanned_metadata_pages_.add(scan.scanned_metadata_pages);
 			if (!scan.index_id.has_value()) {
 				state->vector_after_index_id = scan.exhausted ? 0U : scan.last_scanned_index_id;
 				return RelocatableMaintenanceTaskResult{RelocatableMaintenanceTaskStatus::VMTS_DEFERRED, 0U, 0U};
@@ -374,7 +536,7 @@ namespace graph::storage {
 				return result;
 			}
 			state->vector_after_index_id = scan.last_scanned_index_id;
-			saturatingIncrement(vector_rebuild_recovery_completed_rebuild_attempts_);
+			vector_rebuild_recovery_completed_rebuild_attempts_.increment();
 			// This persistent scheduler remains queued after each completed rebuild so
 			// newly committed durable debt does not rely on transient queue admission.
 			return RelocatableMaintenanceTaskResult{
@@ -391,8 +553,9 @@ namespace graph::storage {
 				manifest_scheduler_.metrics(),
 				large_value_scheduler_.metrics(),
 				segment_scheduler_.metrics(),
-				vector_rebuild_recovery_scanned_metadata_pages_.load(std::memory_order_relaxed),
-				vector_rebuild_recovery_completed_rebuild_attempts_.load(std::memory_order_relaxed)};
+			vector_rebuild_recovery_scanned_metadata_pages_.load(),
+			vector_rebuild_recovery_completed_rebuild_attempts_.load(),
+			global_adjacency_pools_retired_.load(), global_adjacency_pools_released_.load()};
 	}
 
 	std::exception_ptr RelocatableMaintenanceService::lastFailure() const { return loop_.lastFailure(); }

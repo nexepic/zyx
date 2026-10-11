@@ -108,7 +108,7 @@ namespace graph::storage {
 
 		[[nodiscard]] bool isKnownSegmentKind(SegmentKind kind) {
 			return kind >= SegmentKind::SGK_ENTITY_PAGE_POOL &&
-				   kind <= SegmentKind::SGK_LARGE_VALUE_MANIFEST_POOL;
+				   kind <= SegmentKind::SGK_BULK_SCRATCH;
 		}
 
 		void requireCurrentGeneration(const CatalogEntry &entry, Generation expectedGeneration) {

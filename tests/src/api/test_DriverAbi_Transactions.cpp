@@ -50,7 +50,6 @@ protected:
     void cleanup() {
         std::error_code ec;
         fs::remove_all(dbPath, ec);
-        fs::remove(dbPath + "-wal", ec);
     }
 
     int64_t countPeopleNamed(const char *name) {
